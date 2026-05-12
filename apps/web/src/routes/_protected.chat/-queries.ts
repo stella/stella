@@ -9,6 +9,9 @@ import {
 import { panic } from "better-result";
 import { v7 as uuidv7 } from "uuid";
 
+import { CHAT_SEND_MODE, isChatSendMode } from "@stll/anonymize-chat";
+import type { ChatSendMode } from "@stll/anonymize-chat";
+
 import type {
   ChatUITools,
   PersistedChatMessage,
@@ -21,6 +24,7 @@ import { env } from "@/env";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
+import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
 import { useDevStore } from "@/lib/dev-store";
 import { APIError, toAPIError } from "@/lib/errors";
@@ -84,7 +88,7 @@ type ChatThreadOptionsContext = {
    * next send carries the latest set.
    */
   getContextMatterIds?: (() => string[]) | undefined;
-  getAnonymized?: (() => boolean) | undefined;
+  getSendMode?: (() => ChatSendMode) | undefined;
   getUserContext?: (() => ChatUserContext) | undefined;
   handleActiveDocxEditToolCall?:
     | ((
@@ -206,10 +210,12 @@ export const buildSendRequestBody = ({
   context,
   key,
   messages,
+  requestBody,
 }: {
   context: ChatThreadOptionsContext | undefined;
   key: ChatThreadKey;
   messages: PersistedChatMessage[];
+  requestBody?: object | undefined;
 }) => {
   const message = messages.at(-1);
   if (!message) {
@@ -220,15 +226,21 @@ export const buildSendRequestBody = ({
     activeDecision?: ActiveDecisionContext | undefined;
     activeExternal?: ActiveExternalContext | undefined;
     activeFile?: ActiveFileContext | undefined;
-    anonymized?: boolean | undefined;
     contextMatterIds?: string[] | undefined;
     devModelId?: string | undefined;
     message: PersistedChatMessage;
+    sendMode: ChatSendMode;
     threadId: string;
     userContext?: ChatUserContext | undefined;
     workspaceId?: string | undefined;
   } = {
     message,
+    sendMode: resolveChatRequestSendMode({
+      context,
+      key,
+      messages,
+      requestBody,
+    }),
     threadId: key.threadId,
   };
 
@@ -261,11 +273,6 @@ export const buildSendRequestBody = ({
     body.contextMatterIds = contextMatterIds;
   }
 
-  const anonymized = context?.getAnonymized?.();
-  if (anonymized !== undefined) {
-    body.anonymized = anonymized;
-  }
-
   if (import.meta.env.DEV) {
     const devModelId = useDevStore.getState().chatModelId;
     if (devModelId) {
@@ -274,6 +281,61 @@ export const buildSendRequestBody = ({
   }
 
   return body;
+};
+
+const getRequestSendMode = (
+  requestBody: object | undefined,
+): ChatSendMode | null => {
+  if (!requestBody || !("sendMode" in requestBody)) {
+    return null;
+  }
+
+  return isChatSendMode(requestBody.sendMode) ? requestBody.sendMode : null;
+};
+
+type ResolveChatRequestSendModeProps = {
+  context: ChatThreadOptionsContext | undefined;
+  key: ChatThreadKey;
+  messages: readonly PersistedChatMessage[];
+  requestBody: object | undefined;
+};
+
+const resolveChatRequestSendMode = ({
+  context,
+  key,
+  messages,
+  requestBody,
+}: ResolveChatRequestSendModeProps): ChatSendMode => {
+  const explicitSendMode = getRequestSendMode(requestBody);
+  const threadKey = getChatThreadKey(key);
+  const userMessageId = getLatestUserMessageId(messages);
+  const activeTurn = activeTurnSendModes.get(threadKey);
+  const sendMode =
+    explicitSendMode ??
+    (activeTurn?.userMessageId === userMessageId
+      ? activeTurn.sendMode
+      : null) ??
+    context?.getSendMode?.() ??
+    CHAT_SEND_MODE.rawOverride;
+
+  if (userMessageId) {
+    activeTurnSendModes.set(threadKey, { sendMode, userMessageId });
+  }
+
+  return sendMode;
+};
+
+const getLatestUserMessageId = (
+  messages: readonly PersistedChatMessage[],
+): string | null => {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages.at(index);
+    if (message?.role === "user") {
+      return message.id;
+    }
+  }
+
+  return null;
 };
 
 // Per-thread guard against empty-completion auto-resubmit storms.
@@ -285,15 +347,77 @@ export const buildSendRequestBody = ({
 // tool-state fingerprint breaks that loop while still allowing the
 // same assistant message to advance through multiple sequential
 // tool calls.
-export const createSendAutomaticallyPredicate = () => {
-  let lastFiredFingerprint: string | null = null;
-  return ({ messages }: { messages: PersistedChatMessage[] }) => {
+//
+// State lives at module scope (keyed by the thread's first message
+// id) instead of inside the predicate's closure: the chat-thread
+// query gets invalidated after every successful turn and the
+// queryFn recreates the `Chat` + a fresh predicate. A purely
+// closure-scoped fingerprint resets every time, which let the loop
+// re-arm itself. Module scope survives invalidation; the cap is a
+// hard ceiling per fingerprint regardless of how many Chat
+// instances exist for the same thread.
+//
+// Cap of 1 mirrors the original "fire once per fingerprint"
+// semantic; legitimate sequential tool calls advance the
+// fingerprint (each new tool result adds a part), so each gets its
+// own one-fire budget. Anything higher would just reopen the loop
+// the closure version used to suffer from.
+const MAX_AUTO_FIRES_PER_FINGERPRINT = 1;
+type ThreadAutoFireState = {
+  fingerprint: string | null;
+  fires: number;
+};
+const threadAutoFireState = new Map<string, ThreadAutoFireState>();
+const activeTurnSendModes = new Map<
+  string,
+  { sendMode: ChatSendMode; userMessageId: string }
+>();
+
+/**
+ * Test-only escape hatch. The module-level cache is intentionally
+ * not cleared automatically; this helper resets it between unit
+ * tests so each one starts hermetically.
+ */
+export const __resetChatRequestStateForTests = (): void => {
+  activeTurnSendModes.clear();
+  threadAutoFireState.clear();
+};
+
+const getThreadAutoFireKey = (
+  messages: readonly PersistedChatMessage[],
+): string | null => messages[0]?.id ?? null;
+
+export const createSendAutomaticallyPredicate =
+  () =>
+  ({ messages }: { messages: PersistedChatMessage[] }) => {
     if (hasApprovedActiveDocxEditAwaitingClientOutput({ messages })) {
       return false;
     }
     const lastMessage = messages.at(-1);
     const fingerprint = getAutoSendFingerprint(lastMessage);
-    if (!fingerprint || fingerprint === lastFiredFingerprint) {
+    if (!fingerprint) {
+      return false;
+    }
+    const threadKey = getThreadAutoFireKey(messages);
+    if (!threadKey) {
+      return false;
+    }
+    const state = threadAutoFireState.get(threadKey) ?? {
+      fingerprint: null,
+      fires: 0,
+    };
+    // Different fingerprint → fresh tail, reset the counter.
+    if (state.fingerprint !== fingerprint) {
+      state.fingerprint = fingerprint;
+      state.fires = 0;
+    }
+    // Hard cap: any future regression that reopens the loop hits
+    // this ceiling and stops automatically. 3 covers the
+    // legitimate sequential-tool-call case (each tool result lands
+    // with a new fingerprint, so each new fingerprint gets its own
+    // budget).
+    if (state.fires >= MAX_AUTO_FIRES_PER_FINGERPRINT) {
+      threadAutoFireState.set(threadKey, state);
       return false;
     }
     const shouldFire =
@@ -301,11 +425,11 @@ export const createSendAutomaticallyPredicate = () => {
       lastAssistantMessageIsCompleteWithApprovalResponses({ messages }) ||
       lastAssistantMessageIsCompleteWithToolCalls({ messages });
     if (shouldFire) {
-      lastFiredFingerprint = fingerprint;
+      state.fires += 1;
     }
+    threadAutoFireState.set(threadKey, state);
     return shouldFire;
   };
-};
 
 const getAutoSendFingerprint = (
   message: PersistedChatMessage | undefined,
@@ -386,11 +510,15 @@ export const chatThreadOptions = ({ key, context }: ChatThreadOptionsInput) =>
         transport: new DefaultChatTransport({
           api: getChatApiPath(),
           credentials: "include",
-          prepareSendMessagesRequest: ({ messages: nextMessages }) => ({
+          prepareSendMessagesRequest: ({
+            body: requestBody,
+            messages: nextMessages,
+          }) => ({
             body: buildSendRequestBody({
               context,
               key,
               messages: nextMessages,
+              requestBody,
             }),
           }),
         }),

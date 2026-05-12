@@ -4,8 +4,10 @@ import type { ComponentProps } from "react";
 import { isToolUIPart } from "ai";
 import type { FileUIPart } from "ai";
 import { CopyIcon, FileTextIcon, RotateCcwIcon } from "lucide-react";
+import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
+import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
@@ -15,10 +17,13 @@ import {
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message";
+import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import { AskUserCard } from "@/components/chat/ask-user-card";
 import type {
   ApprovalToolName,
   AskUserOutput,
+  ChatAnonRestoration,
+  ChatPart,
   ChatUITools,
   PersistedChatMessage,
   ToolApprovalGrant,
@@ -26,6 +31,7 @@ import type {
 import { isApprovalPart } from "@/components/chat/chat-ui-tools";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
+import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { SourceChips } from "@/components/chat/source-chips";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
@@ -41,6 +47,58 @@ const USER_STREAMDOWN_COMPONENTS = {
 
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const collectAnonRestorations = (
+  parts: readonly ChatPart[],
+): readonly ChatAnonRestoration[] => {
+  // De-dupe placeholder→original pairs across multiple parts in a
+  // single assistant message so the rehype plugin builds one
+  // pattern per stream.
+  const seen = new Map<string, string>();
+  for (const part of parts) {
+    if (part.type !== "data-stella-anon-restorations") {
+      continue;
+    }
+    for (const pair of part.data.pairs) {
+      if (!seen.has(pair.placeholder)) {
+        seen.set(pair.placeholder, pair.original);
+      }
+    }
+  }
+  return [...seen.entries()].map(([placeholder, original]) => ({
+    placeholder,
+    original,
+  }));
+};
+
+const EMPTY_RESTORATION_PAIRS: readonly ChatAnonRestoration[] = Object.freeze(
+  [],
+);
+
+/**
+ * Resolve the restoration pairs that match what *this user
+ * message* actually sent. Walks forward to the next assistant
+ * message (skipping any intervening user messages — the AI SDK
+ * persists in chronological order) and uses its server-emitted
+ * `data-stella-anon-restorations` pairs, which were produced by
+ * the same `PipelineContext` the request body crossed. Returns an
+ * empty array while the assistant is still streaming or if the
+ * turn was sent raw — both cases render the user message without
+ * pills, which matches the audit story (no anonymization → no
+ * audit cue).
+ */
+const getFollowingAssistantRestorations = (
+  messages: readonly PersistedChatMessage[],
+  userMessageIndex: number,
+): readonly ChatAnonRestoration[] => {
+  for (let i = userMessageIndex + 1; i < messages.length; i += 1) {
+    const candidate = messages[i];
+    if (candidate?.role === "assistant") {
+      return collectAnonRestorations(candidate.parts);
+    }
+  }
+  return EMPTY_RESTORATION_PAIRS;
+};
 
 const getMentionTagAttr = (attrs: string, name: string) => {
   const attrName = escapeRegExp(name);
@@ -184,6 +242,7 @@ const CHAT_ERROR_TRANSLATION_KEYS = {
 
 type ChatErrorTranslationKey =
   | (typeof CHAT_ERROR_TRANSLATION_KEYS)[keyof typeof CHAT_ERROR_TRANSLATION_KEYS]
+  | "chat.sendErrorAnonymizationBlocked"
   | "chat.sendError";
 
 const isMappedChatErrorKind = (
@@ -192,6 +251,9 @@ const isMappedChatErrorKind = (
   message in CHAT_ERROR_TRANSLATION_KEYS;
 
 const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
+  if (isThirdPartyBoundaryRefusalError(error)) {
+    return "chat.sendErrorAnonymizationBlocked";
+  }
   if (isMappedChatErrorKind(error.message)) {
     return CHAT_ERROR_TRANSLATION_KEYS[error.message];
   }
@@ -202,30 +264,50 @@ export const ChatErrorMessage = ({
   error,
   isGenerating,
   onResend,
+  onSendWithoutAnonymization,
 }: {
   error: Error;
   isGenerating: boolean;
-  onResend?: (() => void | PromiseLike<void>) | undefined;
+  onResend?:
+    | ((options?: ChatResendOptions) => void | PromiseLike<void>)
+    | undefined;
+  onSendWithoutAnonymization?: (() => void | PromiseLike<void>) | undefined;
 }) => {
   const t = useTranslations();
+  const canSendWithoutAnonymization =
+    onSendWithoutAnonymization !== undefined &&
+    isThirdPartyBoundaryRefusalError(error);
 
   return (
     <Message from="assistant">
       <MessageContent className="bg-destructive/10 border-destructive/20 text-destructive max-w-md rounded-lg border px-3 py-2">
         <p className="text-sm">{t(chatErrorTranslationKey(error))}</p>
-        {onResend && (
-          <Button
-            className="self-start"
-            disabled={isGenerating}
-            onClick={() => {
-              void onResend();
-            }}
-            size="sm"
-            variant="destructive-outline"
-          >
-            {t("chat.resend")}
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {canSendWithoutAnonymization && (
+            <Button
+              disabled={isGenerating}
+              onClick={() => {
+                void onSendWithoutAnonymization();
+              }}
+              size="sm"
+              variant="destructive-outline"
+            >
+              {t("chat.sendWithoutAnonymization")}
+            </Button>
+          )}
+          {onResend && (
+            <Button
+              disabled={isGenerating}
+              onClick={() => {
+                void onResend();
+              }}
+              size="sm"
+              variant="destructive-outline"
+            >
+              {t("chat.resend")}
+            </Button>
+          )}
+        </div>
       </MessageContent>
     </Message>
   );
@@ -282,7 +364,9 @@ const AssistantMessageActions = ({
   isGenerating: boolean;
   isLatestAssistantMessage: boolean;
   message: PersistedChatMessage;
-  onResend?: ((messageId?: string) => void | PromiseLike<void>) | undefined;
+  onResend?:
+    | ((options?: ChatResendOptions) => void | PromiseLike<void>)
+    | undefined;
 }) => {
   const t = useTranslations();
   const text = useMemo(() => getMessageText(message), [message]);
@@ -324,7 +408,7 @@ const AssistantMessageActions = ({
           aria-label={t("common.retry")}
           className="text-muted-foreground h-6 px-1.5 text-xs"
           onClick={() => {
-            void onResend?.(message.id);
+            void onResend?.({ messageId: message.id });
           }}
           size="xs"
           variant="ghost"
@@ -369,7 +453,10 @@ type ChatThreadMessagesProps = {
   error?: Error | undefined;
   isGenerating?: boolean | undefined;
   messages: PersistedChatMessage[];
-  onResend?: ((messageId?: string) => void | PromiseLike<void>) | undefined;
+  onResend?:
+    | ((options?: ChatResendOptions) => void | PromiseLike<void>)
+    | undefined;
+  onSendWithoutAnonymization?: (() => void | PromiseLike<void>) | undefined;
   onAskUserSubmit: (
     toolCallId: string,
     output: AskUserOutput,
@@ -392,8 +479,15 @@ type ChatThreadMessagesProps = {
   showToolCalls?: boolean | undefined;
   streamdownComponents: {
     a: (props: ComponentProps<"a">) => React.ReactNode;
+    "stll-anon"?: (
+      props: ComponentProps<"button"> & { ph?: string },
+    ) => React.ReactNode;
   };
   workspaceId?: string | undefined;
+};
+
+type ChatResendOptions = {
+  messageId?: string | undefined;
 };
 
 export const ChatThreadMessages = ({
@@ -409,6 +503,7 @@ export const ChatThreadMessages = ({
   isGenerating = false,
   messages,
   onResend,
+  onSendWithoutAnonymization,
   onAskUserSubmit,
   onCreateDocumentResolve,
   onOpenCreatedDocument,
@@ -428,7 +523,7 @@ export const ChatThreadMessages = ({
 
   return (
     <>
-      {messages.map((message) => (
+      {messages.map((message, index) => (
         <Message
           className={cn(
             "transition-opacity duration-200",
@@ -442,73 +537,26 @@ export const ChatThreadMessages = ({
           <MessageContent>
             {message.role === "assistant" ? (
               <>
-                {message.parts.map((part, index) => {
-                  if (part.type === "text") {
-                    return (
-                      <MessageResponse
-                        components={streamdownComponents}
-                        key={`${message.id}-text-${index}`}
-                      >
-                        {part.text}
-                      </MessageResponse>
-                    );
+                <AssistantMessageParts
+                  alwaysApprovedTools={alwaysApprovedTools}
+                  blockedApprovalTools={blockedApprovalTools}
+                  conversationApprovedTools={conversationApprovedTools}
+                  createDocumentMatters={createDocumentMatters}
+                  handleAllowInConversation={handleAllowInConversation}
+                  handleAlwaysAllow={handleAlwaysAllow}
+                  handleApprove={handleApprove}
+                  handleDeny={handleDeny}
+                  isLoadingCreateDocumentMatters={
+                    isLoadingCreateDocumentMatters
                   }
-
-                  if (part.type === "tool-ask-user") {
-                    return (
-                      <AskUserCard
-                        key={part.toolCallId}
-                        onSubmit={(toolCallId, output) => {
-                          void onAskUserSubmit(toolCallId, output);
-                        }}
-                        part={part}
-                        workspaceId={workspaceId}
-                      />
-                    );
-                  }
-
-                  if (part.type === "tool-create-document") {
-                    return (
-                      <NeedsMatterCard
-                        isLoadingMatters={isLoadingCreateDocumentMatters}
-                        key={part.toolCallId}
-                        matters={createDocumentMatters}
-                        onOpenCreated={onOpenCreatedDocument}
-                        onResolve={onCreateDocumentResolve}
-                        part={part}
-                      />
-                    );
-                  }
-
-                  if (isApprovalPart(part)) {
-                    return (
-                      <ToolApprovalCard
-                        alwaysApprovedTools={alwaysApprovedTools}
-                        blockedApprovalTools={blockedApprovalTools}
-                        conversationApprovedTools={conversationApprovedTools}
-                        key={part.toolCallId}
-                        onAllowInConversation={handleAllowInConversation}
-                        onAlwaysAllow={handleAlwaysAllow}
-                        onApprove={handleApprove}
-                        onDeny={handleDeny}
-                        part={part}
-                        workspaceId={workspaceId}
-                      />
-                    );
-                  }
-
-                  if (isToolUIPart(part)) {
-                    return (
-                      <ToolCallCard
-                        key={part.toolCallId}
-                        part={part}
-                        showDetails={shouldShowToolCalls}
-                      />
-                    );
-                  }
-
-                  return null;
-                })}
+                  message={message}
+                  onAskUserSubmit={onAskUserSubmit}
+                  onCreateDocumentResolve={onCreateDocumentResolve}
+                  onOpenCreatedDocument={onOpenCreatedDocument}
+                  shouldShowToolCalls={shouldShowToolCalls}
+                  streamdownComponents={streamdownComponents}
+                  workspaceId={workspaceId}
+                />
                 <SourceChips
                   messageId={message.id}
                   parts={message.parts}
@@ -535,14 +583,16 @@ export const ChatThreadMessages = ({
 
                   return <UserAttachments parts={fileParts} />;
                 })()}
-                {message.parts.map((part, index) =>
+                {message.parts.map((part, partIndex) =>
                   part.type === "text" ? (
-                    <MessageResponse
-                      components={USER_STREAMDOWN_COMPONENTS}
-                      key={`${message.id}-user-text-${index}`}
-                    >
-                      {normalizeUserMessageTextForDisplay(part.text)}
-                    </MessageResponse>
+                    <UserMessageText
+                      key={`${message.id}-user-text-${partIndex}`}
+                      restorationPairs={getFollowingAssistantRestorations(
+                        messages,
+                        index,
+                      )}
+                      text={normalizeUserMessageTextForDisplay(part.text)}
+                    />
                   ) : null,
                 )}
               </>
@@ -555,11 +605,212 @@ export const ChatThreadMessages = ({
           error={error}
           isGenerating={isGenerating}
           onResend={onResend}
+          onSendWithoutAnonymization={onSendWithoutAnonymization}
         />
       )}
       {showThinkingIndicator &&
         isGenerating &&
         !hasVisibleContent(messages) && <ThinkingIndicator />}
     </>
+  );
+};
+
+type AssistantMessagePartsProps = Pick<
+  ChatThreadMessagesProps,
+  | "alwaysApprovedTools"
+  | "blockedApprovalTools"
+  | "conversationApprovedTools"
+  | "createDocumentMatters"
+  | "handleAllowInConversation"
+  | "handleAlwaysAllow"
+  | "handleApprove"
+  | "handleDeny"
+  | "isLoadingCreateDocumentMatters"
+  | "onAskUserSubmit"
+  | "onCreateDocumentResolve"
+  | "onOpenCreatedDocument"
+  | "streamdownComponents"
+  | "workspaceId"
+> & {
+  message: PersistedChatMessage;
+  shouldShowToolCalls: boolean;
+};
+
+/**
+ * Renders the body of an assistant message. Splitting this out of
+ * the parent `messages.map` lets React Compiler memoize the
+ * `restorationPairs` snapshot per-message — without the split,
+ * `collectAnonRestorations` re-runs on every render in the parent
+ * and the resulting array identity churns, forcing Streamdown to
+ * remount on every streaming text delta.
+ */
+const AssistantMessageParts = ({
+  alwaysApprovedTools,
+  blockedApprovalTools,
+  conversationApprovedTools,
+  createDocumentMatters,
+  handleAllowInConversation,
+  handleAlwaysAllow,
+  handleApprove,
+  handleDeny,
+  isLoadingCreateDocumentMatters,
+  message,
+  onAskUserSubmit,
+  onCreateDocumentResolve,
+  onOpenCreatedDocument,
+  shouldShowToolCalls,
+  streamdownComponents,
+  workspaceId,
+}: AssistantMessagePartsProps) => {
+  const restorationPairs = collectAnonRestorations(message.parts);
+  return (
+    <>
+      {message.parts.map((part, index) => {
+        if (part.type === "text") {
+          return (
+            <AssistantTextPart
+              components={streamdownComponents}
+              key={`${message.id}-text-${index}`}
+              restorationPairs={restorationPairs}
+              text={part.text}
+            />
+          );
+        }
+
+        if (part.type === "tool-ask-user") {
+          return (
+            <AskUserCard
+              key={part.toolCallId}
+              onSubmit={(toolCallId, output) => {
+                void onAskUserSubmit(toolCallId, output);
+              }}
+              part={part}
+              restorationPairs={restorationPairs}
+              workspaceId={workspaceId}
+            />
+          );
+        }
+
+        if (part.type === "tool-create-document") {
+          return (
+            <NeedsMatterCard
+              isLoadingMatters={isLoadingCreateDocumentMatters}
+              key={part.toolCallId}
+              matters={createDocumentMatters}
+              onOpenCreated={onOpenCreatedDocument}
+              onResolve={onCreateDocumentResolve}
+              part={part}
+            />
+          );
+        }
+
+        if (isApprovalPart(part)) {
+          return (
+            <ToolApprovalCard
+              alwaysApprovedTools={alwaysApprovedTools}
+              blockedApprovalTools={blockedApprovalTools}
+              conversationApprovedTools={conversationApprovedTools}
+              key={part.toolCallId}
+              onAllowInConversation={handleAllowInConversation}
+              onAlwaysAllow={handleAlwaysAllow}
+              onApprove={handleApprove}
+              onDeny={handleDeny}
+              part={part}
+              workspaceId={workspaceId}
+            />
+          );
+        }
+
+        if (isToolUIPart(part)) {
+          return (
+            <ToolCallCard
+              key={part.toolCallId}
+              part={part}
+              showDetails={shouldShowToolCalls}
+            />
+          );
+        }
+
+        return null;
+      })}
+    </>
+  );
+};
+
+const AssistantTextPart = ({
+  components,
+  restorationPairs,
+  text,
+}: {
+  components: ChatThreadMessagesProps["streamdownComponents"];
+  restorationPairs: readonly ChatAnonRestoration[];
+  text: string;
+}) => {
+  // Stable identity so MessageResponse memo can short-circuit when
+  // nothing actually changed; recomputes only when the pairs array
+  // identity changes (i.e. a fresh stream emitted new restorations).
+  const rehypePlugins = useMemo<PluggableList | undefined>(
+    () =>
+      restorationPairs.length > 0
+        ? [[rehypeAnonSpans, restorationPairs]]
+        : undefined,
+    [restorationPairs],
+  );
+  if (rehypePlugins === undefined) {
+    return <MessageResponse components={components}>{text}</MessageResponse>;
+  }
+  return (
+    <MessageResponse components={components} rehypePlugins={rehypePlugins}>
+      {text}
+    </MessageResponse>
+  );
+};
+
+const USER_TEXT_STREAMDOWN_COMPONENTS = {
+  ...USER_STREAMDOWN_COMPONENTS,
+  "stll-anon": (props: ComponentProps<"button"> & { ph?: string }) => (
+    <AnonymizedSpan {...props} />
+  ),
+};
+
+const UserMessageText = ({
+  text,
+  restorationPairs,
+}: {
+  text: string;
+  /**
+   * Server-side placeholder → original pairs from the *following*
+   * assistant message's `data-stella-anon-restorations` part.
+   * Using those guarantees the pill rendering matches what
+   * actually crossed the boundary on this turn: any pair listed
+   * here was minted by the server's shared `PipelineContext`, so
+   * the placeholder id is accurate. Reading the live store and
+   * rerunning the client-side wasm pipeline used to produce both
+   * the wrong id (fresh counter) and false positives/negatives
+   * after toggling anonymized mode post-send.
+   */
+  restorationPairs: readonly ChatAnonRestoration[];
+}) => {
+  const rehypePlugins = useMemo<PluggableList | undefined>(
+    () =>
+      restorationPairs.length > 0
+        ? [[rehypeAnonSpans, restorationPairs]]
+        : undefined,
+    [restorationPairs],
+  );
+  if (rehypePlugins === undefined) {
+    return (
+      <MessageResponse components={USER_TEXT_STREAMDOWN_COMPONENTS}>
+        {text}
+      </MessageResponse>
+    );
+  }
+  return (
+    <MessageResponse
+      components={USER_TEXT_STREAMDOWN_COMPONENTS}
+      rehypePlugins={rehypePlugins}
+    >
+      {text}
+    </MessageResponse>
   );
 };

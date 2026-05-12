@@ -62,6 +62,9 @@ jobs:
           # exceptions package-scoped; do not add namespace/group exceptions.
           allow-dependencies-licenses: >-
             pkg:npm/@ai-sdk/provider-utils,
+            pkg:npm/@stll/anonymize-chat,
+            pkg:npm/@stll/anonymize-wasm,
             pkg:npm/@stll/docx-core,
-            pkg:npm/jszip
+            pkg:npm/jszip,
+            pkg:npm/valibot
           comment-summary-in-pr: always

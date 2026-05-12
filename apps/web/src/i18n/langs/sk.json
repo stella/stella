@@ -304,6 +304,9 @@
     "anonymizedMode": "Anonymizovaný režim AI",
     "anonymizedModeDisabled": "Anonymizovaný režim AI je vypnutý",
     "anonymizedModeEnabled": "Anonymizovaný režim AI je zapnutý",
+    "anonymizedSpan": {
+      "tooltip": "Modelu odoslané ako {placeholder}."
+    },
     "applyMode": {
       "description": "Word ukladá, kto urobil každú zmenu. Vašu voľbu si zapamätáme.",
       "direct": "Nie, použiť priamo",
@@ -407,9 +410,11 @@
     "resend": "Odoslať znova",
     "send": "Odoslať správu",
     "sendError": "Pri odosielaní správy nastal problém. Ak chyba pretrváva, kontaktujte podporu.",
+    "sendErrorAnonymizationBlocked": "Stella nedokázala anonymizovať jednu prílohu, takže sa nič neodoslalo. Odstráňte súbor alebo odošlite správu bez anonymizácie.",
     "sendErrorInsufficientCredits": "AI poskytovateľ potrebuje doplniť kredity. Požiadajte správcu pracovného priestoru o navýšenie zostatku.",
     "sendErrorProviderUnavailable": "AI poskytovateľ je dočasne nedostupný. Skúste to prosím o chvíľu znova.",
     "sendErrorQuotaExhausted": "Kvóta AI poskytovateľa je vyčerpaná. Skúste to o chvíľu znova alebo požiadajte správcu pracovného priestoru o navýšenie plánu.",
+    "sendWithoutAnonymization": "Odoslať bez anonymizácie",
     "thinking": "Pracujem s kontextom",
     "threads": "História",
     "tool": {

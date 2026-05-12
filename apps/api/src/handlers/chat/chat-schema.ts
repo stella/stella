@@ -4,6 +4,8 @@ import { panic, Result } from "better-result";
 import type { Static } from "elysia";
 import { t } from "elysia";
 
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+
 import type { SafeDb, SafeDbError } from "@/api/db";
 import type { StoredFileRef } from "@/api/handlers/chat/attachment-validation";
 import {
@@ -77,7 +79,10 @@ export const activeExternalSchema = t.Object({
 export const sendMessageBodySchema = t.Object({
   threadId: tSafeId("chatThread"),
   workspaceId: t.Optional(tSafeId("workspace")),
-  anonymized: t.Optional(t.Boolean()),
+  sendMode: t.Union([
+    t.Literal(CHAT_SEND_MODE.anonymized),
+    t.Literal(CHAT_SEND_MODE.rawOverride),
+  ]),
   /**
    * Matters the chat draws context from. Empty (or omitted) means
    * "no matters pinned" — the AI discovers matters lazily via the

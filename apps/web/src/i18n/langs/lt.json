@@ -304,6 +304,9 @@
     "anonymizedMode": "Anonimizuotas DI režimas",
     "anonymizedModeDisabled": "Anonimizuotas DI režimas išjungtas",
     "anonymizedModeEnabled": "Anonimizuotas DI režimas įjungtas",
+    "anonymizedSpan": {
+      "tooltip": "Modeliui išsiųsta kaip {placeholder}."
+    },
     "applyMode": {
       "description": "Word stores who made each change. We will remember your choice.",
       "direct": "No, apply directly",
@@ -407,9 +410,11 @@
     "resend": "Siųsti dar kartą",
     "send": "Siųsti žinutę",
     "sendError": "Siunčiant žinutę kilo problema. Jei klaida kartojasi, susisiekite su palaikymo komanda.",
+    "sendErrorAnonymizationBlocked": "Stella nepavyko anonimizuoti vieno priedo, todėl niekas nebuvo išsiųsta. Pašalinkite failą arba siųskite šią žinutę be anonimizavimo.",
     "sendErrorInsufficientCredits": "AI teikėjui reikia daugiau kreditų. Paprašykite darbo srities administratoriaus papildyti sąskaitą.",
     "sendErrorProviderUnavailable": "AI teikėjas laikinai nepasiekiamas. Pabandykite po akimirkos dar kartą.",
     "sendErrorQuotaExhausted": "AI teikėjo kvota išnaudota. Pabandykite po minutės dar kartą arba paprašykite darbo srities administratoriaus atnaujinti planą.",
+    "sendWithoutAnonymization": "Siųsti be anonimizavimo",
     "thinking": "Dirbama su kontekstu",
     "threads": "Istorija",
     "tool": {

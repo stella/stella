@@ -5,6 +5,8 @@ import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import * as v from "valibot";
 
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+
 import { TEXT_PLAIN_MIME_TYPE } from "@/api/handlers/chat/attachment-validation";
 import {
   applyChatToolPolicy,
@@ -17,14 +19,32 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const anonymizeTextFieldsMock = mock(
-  async ({ fields }: { fields: string[] }) => ({
-    entityCount: fields.length,
-    fields: fields.map((field) =>
-      field
-        .replaceAll("Jan Novák", "[PERSON_1]")
-        .replaceAll("Secret", "[CUSTOM_1]"),
-    ),
-  }),
+  async ({ fields }: { fields: string[] }) => {
+    const swaps: [string, string][] = [
+      ["[PERSON_1]", "Jan Novák"],
+      ["[CUSTOM_1]", "Secret"],
+    ];
+    const seen = new Set<string>();
+    const redactionMap = new Map<string, string>();
+    const anonymized = fields.map((field) => {
+      let next = field;
+      for (const [placeholder, original] of swaps) {
+        if (next.includes(original)) {
+          next = next.replaceAll(original, placeholder);
+          if (!seen.has(placeholder)) {
+            redactionMap.set(placeholder, original);
+            seen.add(placeholder);
+          }
+        }
+      }
+      return next;
+    });
+    return {
+      entityCount: fields.length,
+      fields: anonymized,
+      redactionMap,
+    };
+  },
 );
 
 const {
@@ -38,13 +58,13 @@ const createBoundary = () => {
   const { scopedDb } = createScopedDbMock({});
 
   return createChatThirdPartyBoundary({
-    anonymized: true,
     anonymizeFields: anonymizeTextFieldsMock,
     anonymizationScopeId: "workspace-A",
     organizationId: toSafeId<"organization">(
       "11111111-1111-4111-8111-111111111111",
     ),
     scopedDb,
+    sendMode: CHAT_SEND_MODE.anonymized,
   });
 };
 
@@ -52,13 +72,13 @@ const createRawBoundary = () => {
   const { scopedDb } = createScopedDbMock({});
 
   return createChatThirdPartyBoundary({
-    anonymized: false,
     anonymizeFields: anonymizeTextFieldsMock,
     anonymizationScopeId: "workspace-A",
     organizationId: toSafeId<"organization">(
       "11111111-1111-4111-8111-111111111111",
     ),
     scopedDb,
+    sendMode: CHAT_SEND_MODE.rawOverride,
   });
 };
 
@@ -187,6 +207,66 @@ describe("chat third-party anonymization boundary", () => {
     );
   });
 
+  test("removes restoration metadata before provider preparation", async () => {
+    const boundary = createBoundary();
+    const messages: ChatMessage[] = [
+      {
+        id: "msg_1",
+        role: "assistant",
+        parts: [
+          {
+            type: "data-stella-anon-restorations",
+            data: {
+              pairs: [{ placeholder: "[PERSON_1]", original: "Jan Novák" }],
+            },
+          },
+          {
+            type: "text",
+            text: "Visible answer.",
+          },
+        ],
+      },
+      {
+        id: "msg_2",
+        role: "assistant",
+        parts: [
+          {
+            type: "data-stella-anon-restorations",
+            data: {
+              pairs: [{ placeholder: "[CUSTOM_1]", original: "Secret" }],
+            },
+          },
+        ],
+      },
+    ];
+
+    const prepared = await prepareMessagesForThirdParty({
+      boundary,
+      messages,
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+
+    expect(prepared.value).toEqual([
+      {
+        id: "msg_1",
+        role: "assistant",
+        parts: [{ type: "text", text: "Visible answer." }],
+      },
+    ]);
+    expect(boundary.type).toBe("anonymized");
+    if (boundary.type === "anonymized") {
+      expect(boundary.redactionMap.size).toBe(0);
+    }
+    expect(anonymizeTextFieldsMock).toHaveBeenCalledTimes(1);
+    expect(anonymizeTextFieldsMock.mock.calls.at(0)?.[0].fields).toEqual([
+      "Visible answer.",
+    ]);
+  });
+
   test("returns anonymized live tool output values", async () => {
     const boundary = createBoundary();
     const tools = {
@@ -195,6 +275,7 @@ describe("chat third-party anonymization boundary", () => {
           documentId: "doc_123",
           ids: ["person_456"],
           nationalId: "Secret-123",
+          participants: ["Jan Novák", "Secret"],
           text: "Secret notes for Jan Novák",
         }),
       },
@@ -215,6 +296,7 @@ describe("chat third-party anonymization boundary", () => {
       documentId: "doc_123",
       ids: ["person_456"],
       nationalId: "[CUSTOM_1]-123",
+      participants: ["[PERSON_1]", "[CUSTOM_1]"],
       text: "[CUSTOM_1] notes for [PERSON_1]",
     });
   });
@@ -316,5 +398,180 @@ describe("chat third-party anonymization boundary", () => {
     expect(output).toEqual({
       query: "Jan Novák",
     });
+  });
+
+  test("round-trips placeholders so outgoing text is restored to originals", async () => {
+    const { deanonymizeFromBoundary, deanonymizeUnknownStringsFromBoundary } =
+      await import("@/api/handlers/chat/third-party-boundary");
+    const boundary = createBoundary();
+
+    // Anonymize on the inbound path so the boundary accumulates a map.
+    const inbound = await prepareTextForThirdParty({
+      boundary,
+      text: "Jan Novák signed the Secret addendum.",
+    });
+    expect(Result.isOk(inbound)).toBe(true);
+
+    if (boundary.type !== "anonymized") {
+      throw new Error("Expected anonymized boundary");
+    }
+    expect(boundary.redactionMap.get("[PERSON_1]")).toBe("Jan Novák");
+    expect(boundary.redactionMap.get("[CUSTOM_1]")).toBe("Secret");
+
+    expect(
+      deanonymizeFromBoundary({
+        boundary,
+        text: "[PERSON_1] confirms [CUSTOM_1].",
+      }),
+    ).toBe("Jan Novák confirms Secret.");
+
+    expect(
+      deanonymizeUnknownStringsFromBoundary(boundary, {
+        signed: ["[PERSON_1]", "[UNKNOWN_99]"],
+        nested: { note: "Audit on [CUSTOM_1] still pending." },
+      }),
+    ).toEqual({
+      signed: ["Jan Novák", "[UNKNOWN_99]"],
+      nested: { note: "Audit on Secret still pending." },
+    });
+  });
+
+  test("round-trip helpers are no-ops on raw boundaries", async () => {
+    const { deanonymizeFromBoundary } =
+      await import("@/api/handlers/chat/third-party-boundary");
+    const boundary = createRawBoundary();
+    expect(
+      deanonymizeFromBoundary({ boundary, text: "[PERSON_1] is here" }),
+    ).toBe("[PERSON_1] is here");
+  });
+
+  test("deanonymizes input for internal tools so DB lookups hit real values", async () => {
+    const boundary = createBoundary();
+    // Seed the boundary's redaction map by anonymizing a message
+    // first — the model would have seen `[PERSON_1]` and now passes
+    // it back as a tool argument.
+    await prepareTextForThirdParty({
+      boundary,
+      text: "Find Jan Novák in contacts.",
+    });
+
+    const seenInputs: unknown[] = [];
+    const tools = {
+      list_contacts: {
+        execute: async (input: { query: string }) => {
+          seenInputs.push(input);
+          return { items: [{ name: input.query, id: "c1" }] };
+        },
+      },
+    };
+    const prepared = prepareToolsForThirdParty({
+      boundary,
+      // SAFETY: the helper only reads and wraps execute() in this unit test.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      tools: tools as unknown as ToolSet,
+    });
+    // SAFETY: the test fixture above defines this execute signature.
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion
+    const executable = prepared["list_contacts"] as
+      | {
+          execute?:
+            | ((input: { query: string }) => Promise<unknown>)
+            | undefined;
+        }
+      | undefined;
+
+    const output = await executable?.execute?.({ query: "[PERSON_1]" });
+
+    // The internal tool ran with the deanonymized real value…
+    expect(seenInputs).toEqual([{ query: "Jan Novák" }]);
+    // …and its output came back to the model anonymized again.
+    expect(output).toEqual({ items: [{ name: "[PERSON_1]", id: "c1" }] });
+  });
+
+  test("deanonymizes bare placeholder inner forms in tool input", async () => {
+    // Reproduces the bug where the model emits
+    // `listContacts({query: "PERSON_1"})` (no brackets) inside a
+    // JSON tool call — strict bracket matching would let it through
+    // unchanged and the DB lookup would search for the literal
+    // string "PERSON_1".
+    const boundary = createBoundary();
+    await prepareTextForThirdParty({
+      boundary,
+      text: "Find Jan Novák in contacts.",
+    });
+
+    const seenInputs: unknown[] = [];
+    const tools = {
+      run_query: {
+        execute: async (input: { code: string }) => {
+          seenInputs.push(input);
+          return { value: { items: [] } };
+        },
+      },
+    };
+    const prepared = prepareToolsForThirdParty({
+      boundary,
+      // SAFETY: the helper only reads and wraps execute() in this unit test.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      tools: tools as unknown as ToolSet,
+    });
+    // SAFETY: the test fixture above defines this execute signature.
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion
+    const executable = prepared["run_query"] as
+      | {
+          execute?: ((input: { code: string }) => Promise<unknown>) | undefined;
+        }
+      | undefined;
+
+    await executable?.execute?.({
+      code: 'return await read.listContacts({query: "PERSON_1"});',
+    });
+
+    expect(seenInputs).toEqual([
+      {
+        code: 'return await read.listContacts({query: "Jan Novák"});',
+      },
+    ]);
+  });
+
+  test("does not deanonymize input for external tools", async () => {
+    const boundary = createBoundary();
+    await prepareTextForThirdParty({
+      boundary,
+      text: "Search for Jan Novák.",
+    });
+
+    const seenInputs: unknown[] = [];
+    const externalTool = applyChatToolPolicy(
+      tool({
+        inputSchema: valibotSchema(v.strictObject({ query: v.string() })),
+        execute: async (input: { query: string }) => {
+          seenInputs.push(input);
+          return { hits: [] };
+        },
+      }),
+      CHAT_TOOL_POLICY_KIND.external,
+    );
+    const prepared = prepareToolsForThirdParty({
+      boundary,
+      // SAFETY: the helper only reads and wraps execute() in this unit test.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      tools: { external_search: externalTool } as unknown as ToolSet,
+    });
+    // SAFETY: the test fixture above defines this execute signature.
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion
+    const executable = prepared["external_search"] as
+      | {
+          execute?:
+            | ((input: { query: string }) => Promise<unknown>)
+            | undefined;
+        }
+      | undefined;
+
+    await executable?.execute?.({ query: "[PERSON_1]" });
+
+    // External tool got the raw placeholder — real names never
+    // leave Stella for third parties.
+    expect(seenInputs).toEqual([{ query: "[PERSON_1]" }]);
   });
 });

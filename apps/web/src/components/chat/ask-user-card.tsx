@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { ToolUIPart } from "ai";
@@ -8,16 +9,20 @@ import {
   PencilIcon,
 } from "lucide-react";
 import { Streamdown } from "streamdown";
+import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/lib/utils";
 
+import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import type {
   AskUserInput,
   AskUserOutput,
+  ChatAnonRestoration,
   ChatUITools,
 } from "@/components/chat/chat-ui-tools";
 import { EntityLink } from "@/components/chat/entity-link";
+import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 
 type AskUserPart = ToolUIPart<Pick<ChatUITools, "ask-user">>;
 
@@ -25,21 +30,104 @@ type AskUserCardProps = {
   part: AskUserPart;
   onSubmit: (toolCallId: string, output: AskUserOutput) => void;
   workspaceId?: string | undefined;
+  /**
+   * Placeholder → original pairs from the assistant message's
+   * `data-stella-anon-restorations` parts. Used to paint green
+   * pills around restored names inside the question text and
+   * option labels — same audit cue the markdown text body shows.
+   */
+  restorationPairs?: readonly ChatAnonRestoration[] | undefined;
+};
+
+const REGEX_SPECIALS = /[\\^$.*+?()[\]{}|]/g;
+const escapeRegex = (value: string) => value.replaceAll(REGEX_SPECIALS, "\\$&");
+
+const EMPTY_RESTORATION_PAIRS: readonly ChatAnonRestoration[] = Object.freeze(
+  [],
+);
+
+/**
+ * Walk a plain string and wrap every `original` substring in an
+ * `<AnonymizedSpan>`. Used for the ask-user question + option
+ * labels — the rehype plugin handles the markdown `analysis` body
+ * but the questions/options are rendered as plain text nodes, so
+ * they need their own pass.
+ *
+ * `interactive` propagates to `<AnonymizedSpan>`: pass `false`
+ * when the call site is already inside another interactive
+ * element (option `<button>`) to avoid invalid nested-button
+ * markup; the pill renders as a styled `<span>` without tooltip.
+ */
+const renderAnonPills = (
+  text: string,
+  pairs: readonly ChatAnonRestoration[],
+  options: { interactive?: boolean } = {},
+): ReactNode => {
+  if (pairs.length === 0 || text.length === 0) {
+    return text;
+  }
+  const sorted = [...pairs].sort(
+    (a, b) => b.original.length - a.original.length,
+  );
+  const lookup = new Map(
+    sorted.map((pair) => [pair.original, pair.placeholder]),
+  );
+  const pattern = new RegExp(
+    sorted.map((pair) => escapeRegex(pair.original)).join("|"),
+    "g",
+  );
+  const nodes: ReactNode[] = [];
+  let lastEnd = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastEnd) {
+      nodes.push(text.slice(lastEnd, match.index));
+    }
+    const original = match[0];
+    nodes.push(
+      <AnonymizedSpan
+        interactive={options.interactive ?? true}
+        key={`${match.index}-${original}`}
+        ph={lookup.get(original)}
+      >
+        {original}
+      </AnonymizedSpan>,
+    );
+    lastEnd = match.index + original.length;
+  }
+  if (lastEnd < text.length) {
+    nodes.push(text.slice(lastEnd));
+  }
+  return nodes.length === 1 && typeof nodes[0] === "string" ? nodes[0] : nodes;
 };
 
 export const AskUserCard = ({
   part,
   onSubmit,
   workspaceId,
+  restorationPairs,
 }: AskUserCardProps) => {
   const t = useTranslations();
+  // Stable empty fallback so useMemo deps don't churn when the
+  // caller doesn't pass any pairs.
+  const pairs: readonly ChatAnonRestoration[] =
+    restorationPairs ?? EMPTY_RESTORATION_PAIRS;
   const analysisComponents = useMemo(
     () => ({
       a: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
         <EntityLink {...props} workspaceId={workspaceId} />
       ),
+      "stll-anon": (
+        props: React.ComponentProps<"button"> & { ph?: string },
+      ) => <AnonymizedSpan {...props} />,
     }),
     [workspaceId],
+  );
+  // Stable rehype-plugins identity so Streamdown's internal memo
+  // can short-circuit when nothing actually changed.
+  const analysisRehypePlugins = useMemo<PluggableList | undefined>(
+    () => (pairs.length > 0 ? [[rehypeAnonSpans, pairs]] : undefined),
+    [pairs],
   );
   const answeredOutput = part.state === "output-available" ? part.output : null;
   const isLoading = part.state === "input-streaming";
@@ -151,9 +239,22 @@ export const AskUserCard = ({
       {/* Analysis */}
       {input.analysis && (
         <div className="border-border/50 text-muted-foreground border-t px-3 py-2 text-xs [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
-          <Streamdown components={analysisComponents}>
-            {input.analysis}
-          </Streamdown>
+          {analysisRehypePlugins ? (
+            <Streamdown
+              allowedTags={{ "stll-anon": ["ph"] }}
+              components={analysisComponents}
+              rehypePlugins={analysisRehypePlugins}
+            >
+              {input.analysis}
+            </Streamdown>
+          ) : (
+            <Streamdown
+              allowedTags={{ "stll-anon": ["ph"] }}
+              components={analysisComponents}
+            >
+              {input.analysis}
+            </Streamdown>
+          )}
         </div>
       )}
 
@@ -162,7 +263,7 @@ export const AskUserCard = ({
         {input.questions.map((q, i) => (
           <div className="space-y-1.5" key={q.question}>
             <p className="text-xs font-medium">
-              {i + 1}. {q.question}
+              {i + 1}. {renderAnonPills(q.question, pairs)}
             </p>
 
             {!isDone && q.options && !customMode[i] && (
@@ -180,7 +281,7 @@ export const AskUserCard = ({
                     onClick={() => setAnswer(i, opt)}
                     type="button"
                   >
-                    {opt}
+                    {renderAnonPills(opt, pairs, { interactive: false })}
                   </button>
                 ))}
                 <button
@@ -217,9 +318,12 @@ export const AskUserCard = ({
 
             {isDone && (
               <p className="text-muted-foreground text-xs">
-                {answeredOutput?.answers[i]?.answer ||
-                  answers[i] ||
-                  t("chat.askUser.noAnswer")}
+                {renderAnonPills(
+                  answeredOutput?.answers[i]?.answer ||
+                    answers[i] ||
+                    t("chat.askUser.noAnswer"),
+                  pairs,
+                )}
               </p>
             )}
           </div>

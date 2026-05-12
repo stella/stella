@@ -49,8 +49,18 @@ export type ChatMentionsData = {
 
 export type ChatUserFileUrl = UserFileUrl;
 
+export type ChatAnonRestoration = {
+  placeholder: string;
+  original: string;
+};
+
+export type ChatAnonRestorationsData = {
+  pairs: ChatAnonRestoration[];
+};
+
 export type ChatUITools = InferUITools<ChatTools>;
 export type ChatUIDataTypes = {
+  "stella-anon-restorations": ChatAnonRestorationsData;
   "stella-mentions": ChatMentionsData;
   "stella-source-document": ChatSourceDocument;
 };

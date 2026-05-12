@@ -15,3 +15,13 @@
   p.is-editor-empty:first-child::before {
   content: "";
 }
+
+/* Round-tripped anonymization spans inside the live editor.
+   Mirrors the look of <AnonymizedSpan> on rendered messages. */
+.chat-editor .tiptap .stll-anon-highlight {
+  background-color: rgb(from var(--color-success) r g b / 0.12);
+  color: var(--color-success);
+  border-radius: 0.25rem;
+  padding-inline: 0.125rem;
+  padding-block: 0.0625rem;
+}

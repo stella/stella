@@ -2,6 +2,9 @@ import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import type { Static } from "elysia";
 
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import type { ChatSendMode } from "@stll/anonymize-chat";
+
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -35,7 +38,10 @@ import {
   planMessagePersistence,
 } from "@/api/handlers/chat/persist-message";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
-import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
+import {
+  buildAnonymizedSystemHint,
+  createChatThirdPartyBoundary,
+} from "@/api/handlers/chat/third-party-boundary";
 import {
   intersectAccessibleWorkspaceIds,
   resolveToolWorkspaceIds,
@@ -50,7 +56,11 @@ import type {
   ChatMessage,
   ChatMessageContent,
 } from "@/api/handlers/chat/types";
-import { uploadMessageFiles } from "@/api/handlers/chat/upload-files";
+import {
+  deleteUploadedChatFiles,
+  uploadMessageFiles,
+} from "@/api/handlers/chat/upload-files";
+import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { requireAIAvailable } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -212,13 +222,13 @@ const sendMessage = createSafeRootHandler(
     }
 
     const thirdPartyBoundary = createChatThirdPartyBoundary({
-      anonymized: body.anonymized ?? false,
       anonymizationScopeId: workspaceId ?? body.threadId,
       organizationId: session.activeOrganizationId,
       scopedDb,
+      sendMode: body.sendMode,
     });
 
-    const uploadedMessage = yield* Result.await(
+    const uploadResult = yield* Result.await(
       uploadMessageFilesWithRollback({
         message: validatedMessage.message,
         safeDb,
@@ -230,7 +240,7 @@ const sendMessage = createSafeRootHandler(
 
     const parsedMessage = parseMessage({
       accessibleWorkspaceIds,
-      message: uploadedMessage,
+      message: uploadResult.message,
     });
 
     const latestMessagePlan = planMessagePersistence({
@@ -239,22 +249,36 @@ const sendMessage = createSafeRootHandler(
     });
 
     const messageWindow = latestMessagePlan.messages.slice(-MESSAGE_WINDOW);
-    const chatContext = yield* Result.await(
-      prepareChatContext({
-        activeDecision: body.activeDecision,
-        activeExternal: body.activeExternal,
-        activeFile: body.activeFile,
-        contextMatterIds: effectiveContextMatterIds,
-        messageWindow,
-        organizationId: session.activeOrganizationId,
-        refuseNonPlainTextFiles: thirdPartyBoundary.type === "anonymized",
+    const chatContextResult = await prepareChatContext({
+      activeDecision: body.activeDecision,
+      activeExternal: body.activeExternal,
+      activeFile: body.activeFile,
+      contextMatterIds: effectiveContextMatterIds,
+      messageWindow,
+      organizationId: session.activeOrganizationId,
+      safeDb,
+      sendMode: body.sendMode,
+      userContext: body.userContext,
+      userId: user.id,
+      workspaceId,
+      refRegistry,
+    });
+    if (Result.isError(chatContextResult)) {
+      const rollbackResult = await rollbackUnpersistedChatSideEffects({
         safeDb,
-        userContext: body.userContext,
+        threadId: body.threadId,
+        threadState: thread,
+        uploadedFiles: uploadResult.uploadedFiles,
         userId: user.id,
-        workspaceId,
-        refRegistry,
-      }),
-    );
+      });
+      if (Result.isError(rollbackResult)) {
+        captureError(chatContextResult.error, { threadId: body.threadId });
+        return yield* Result.err(rollbackResult.error);
+      }
+
+      return yield* Result.err(chatContextResult.error);
+    }
+    const chatContext = chatContextResult.value;
 
     // Widen the thread's data scope BEFORE persisting the incoming
     // message so any workspace IDs it embeds are recorded on the
@@ -334,9 +358,21 @@ const sendMessage = createSafeRootHandler(
     const externalMcpSystemHint = buildExternalMcpSystemHint(
       externalMcpTools.connectors,
     );
-    const system = externalMcpSystemHint
-      ? `${chatContext.system}\n\n${externalMcpSystemHint}`
-      : chatContext.system;
+    const anonymizedSystemHint =
+      body.sendMode === CHAT_SEND_MODE.anonymized
+        ? buildAnonymizedSystemHint()
+        : null;
+    // The "safe" half is whatever the prompt builder declared
+    // safe plus our own static anonymized-mode instructions. The
+    // external MCP catalog is organization/user-configured text, so
+    // it rides with the dynamic suffix and crosses the boundary in
+    // anonymized mode.
+    const systemSafe = [chatContext.systemSafe, anonymizedSystemHint]
+      .filter((part): part is string => part !== null && part.length > 0)
+      .join("\n\n");
+    const systemUntrusted = [chatContext.systemUntrusted, externalMcpSystemHint]
+      .filter((part) => part.length > 0)
+      .join("\n\n");
     let externalMcpToolsClosed = false;
     const closeExternalMcpTools = async () => {
       if (externalMcpToolsClosed) {
@@ -354,6 +390,7 @@ const sendMessage = createSafeRootHandler(
             const chatResponse = await streamChat({
               abortSignal: request.signal,
               messages: chatContext.hydratedMessages,
+              latestMessageId: parsedMessage.message.id,
               onFinish: async ({ isAborted, responseMessage }) => {
                 try {
                   const resolvedMessages = resolveAssistantMessageRefs({
@@ -444,7 +481,8 @@ const sendMessage = createSafeRootHandler(
               thirdPartyBoundary,
               threadId: body.threadId,
               tools: chatTools,
-              system,
+              systemSafe,
+              systemUntrusted,
             });
 
             if (!isChatStreamResponse(chatResponse)) {
@@ -671,7 +709,10 @@ type UploadMessageFilesWithRollbackProps = {
 };
 
 type UploadMessageFilesWithRollbackResult = Result<
-  ChatMessage,
+  {
+    message: ChatMessage;
+    uploadedFiles: UploadedChatFile[];
+  },
   HandlerError<400 | 422 | 500> | SafeDbError
 >;
 
@@ -689,13 +730,21 @@ const uploadMessageFilesWithRollback = async ({
     userId,
   });
 
-  if (threadState.type !== "created" || Result.isOk(uploadResult)) {
+  if (Result.isOk(uploadResult)) {
     return uploadResult;
   }
 
-  const rollbackResult = await safeDb((tx) =>
-    tx.delete(chatThreads).where(eq(chatThreads.id, threadId)),
-  );
+  if (threadState.type !== "created") {
+    return uploadResult;
+  }
+
+  const rollbackResult = await rollbackUnpersistedChatSideEffects({
+    safeDb,
+    threadId,
+    threadState,
+    uploadedFiles: [],
+    userId,
+  });
 
   if (Result.isOk(rollbackResult)) {
     return Result.err(uploadResult.error);
@@ -703,6 +752,40 @@ const uploadMessageFilesWithRollback = async ({
 
   captureError(uploadResult.error, { threadId });
   return Result.err(rollbackResult.error);
+};
+
+const rollbackUnpersistedChatSideEffects = async ({
+  safeDb,
+  threadId,
+  threadState,
+  uploadedFiles,
+  userId,
+}: {
+  safeDb: SafeDb;
+  threadId: SafeId<"chatThread">;
+  threadState: LoadThreadResult;
+  uploadedFiles: UploadedChatFile[];
+  userId: SafeId<"user">;
+}): Promise<Result<void, HandlerError<500> | SafeDbError>> => {
+  const fileRollbackResult = await deleteUploadedChatFiles({
+    files: uploadedFiles,
+    safeDb,
+    threadId,
+    userId,
+  });
+  if (Result.isError(fileRollbackResult)) {
+    return fileRollbackResult;
+  }
+
+  if (threadState.type !== "created") {
+    return Result.ok();
+  }
+
+  const threadRollbackResult = await safeDb((tx) =>
+    tx.delete(chatThreads).where(eq(chatThreads.id, threadId)),
+  );
+
+  return threadRollbackResult.andThen(() => Result.ok());
 };
 
 type PrepareChatContextProps = {
@@ -713,8 +796,8 @@ type PrepareChatContextProps = {
   messageWindow: ChatMessage[];
   organizationId: SafeId<"organization">;
   refRegistry: ReturnType<typeof createChatRefRegistry>;
-  refuseNonPlainTextFiles: boolean;
   safeDb: SafeDb;
+  sendMode: ChatSendMode;
   userContext: IncomingUserContext | undefined;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
@@ -724,7 +807,17 @@ type PrepareChatContextResult = Result<
   {
     hydratedMessages: ChatMessage[];
     promptCacheKey: string;
-    system: string;
+    /**
+     * Server-built scaffold. Safe to send to the LLM verbatim.
+     */
+    systemSafe: string;
+    /**
+     * Dynamic user-supplied context (active file body, decision
+     * text, external source, matter labels). Pass through the
+     * boundary in anonymized mode before concatenating with
+     * `systemSafe`.
+     */
+    systemUntrusted: string;
   },
   HandlerError<422 | 500> | SafeDbError
 >;
@@ -737,8 +830,8 @@ const prepareChatContext = async ({
   messageWindow,
   organizationId,
   refRegistry,
-  refuseNonPlainTextFiles,
   safeDb,
+  sendMode,
   userContext,
   userId,
   workspaceId,
@@ -768,8 +861,8 @@ const prepareChatContext = async ({
       }),
       hydrateMessages({
         messages: messageWindow,
-        refuseNonPlainTextFiles,
         safeDb,
+        sendMode,
         userId,
       }),
     ]);
@@ -786,7 +879,8 @@ const prepareChatContext = async ({
 
     return Result.ok({
       promptCacheKey: buildChatPromptCacheKey(systemPrompt.cacheStablePrefix),
-      system: systemPrompt.fullPrompt,
+      systemSafe: systemPrompt.safePrompt,
+      systemUntrusted: systemPrompt.untrustedSuffix,
       hydratedMessages: hydrateAssistantMessageRefs({
         messages: hydratedMessages,
         refRegistry,

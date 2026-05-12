@@ -54,6 +54,7 @@ import type {
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import { useAIKeyGate } from "@/components/require-ai-key";
+import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
@@ -888,6 +889,11 @@ const FileChatOverlayInner = ({
         </div>
       )}
 
+      <ChatAnonymizationLayer
+        editor={editorController.editor}
+        enabled={false}
+        workspaceId={workspaceId ?? threadRef.threadId}
+      />
       <PromptBar
         attentionPulseSeq={attentionPulseSeq}
         canSubmitNow={canSubmitWithCurrentDocxSnapshot}

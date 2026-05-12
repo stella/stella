@@ -1,6 +1,7 @@
 import { loadNameDictionaries } from "@stll/anonymize-data";
 import {
   createPipelineContext,
+  DEFAULT_OPERATOR_CONFIG,
   redactText,
   runPipeline,
 } from "@stll/anonymize-wasm";
@@ -11,6 +12,7 @@ import { anonymizeTextFieldsWithDependencies } from "@/api/mcp/anonymization-cor
 
 const anonymizeTextFieldsDependencies = {
   createPipelineContext,
+  defaultOperatorConfig: DEFAULT_OPERATOR_CONFIG,
   loadAnonymizationGazetteerEntries,
   loadNameDictionaries,
   redactText,

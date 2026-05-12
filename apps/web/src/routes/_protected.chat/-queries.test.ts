@@ -1,16 +1,19 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
+
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import {
+  __resetChatRequestStateForTests,
   buildSendRequestBody,
   chatKeys,
   createSendAutomaticallyPredicate,
   matchesChatThreadAcrossScopes,
 } from "@/routes/_protected.chat/-queries";
 
-const createMessage = (): PersistedChatMessage => ({
-  id: "message-A",
+const createMessage = (id = "message-A"): PersistedChatMessage => ({
+  id,
   role: "user",
   parts: [{ type: "text", text: "Hello" }],
 });
@@ -94,22 +97,96 @@ describe("matchesChatThreadAcrossScopes", () => {
 });
 
 describe("buildSendRequestBody", () => {
-  test("includes anonymized mode when the chat surface enables it", () => {
+  beforeEach(() => {
+    __resetChatRequestStateForTests();
+  });
+
+  test("includes the preferred send mode from the chat surface", () => {
     const threadId = toChatThreadId("thread-A");
     expect(
       buildSendRequestBody({
-        context: { getAnonymized: () => true },
+        context: { getSendMode: () => CHAT_SEND_MODE.anonymized },
         key: { scope: "global", threadId },
         messages: [createMessage()],
       }),
     ).toMatchObject({
-      anonymized: true,
+      sendMode: CHAT_SEND_MODE.anonymized,
+      threadId: "thread-A",
+    });
+  });
+
+  test("preserves a raw override across continuation requests in the same turn", () => {
+    const threadId = toChatThreadId("thread-A");
+    const key = { scope: "global", threadId } as const;
+
+    expect(
+      buildSendRequestBody({
+        context: { getSendMode: () => CHAT_SEND_MODE.anonymized },
+        key,
+        messages: [createMessage()],
+        requestBody: { sendMode: CHAT_SEND_MODE.rawOverride },
+      }),
+    ).toMatchObject({
+      sendMode: CHAT_SEND_MODE.rawOverride,
+      threadId: "thread-A",
+    });
+    expect(
+      buildSendRequestBody({
+        context: { getSendMode: () => CHAT_SEND_MODE.anonymized },
+        key,
+        messages: [
+          createMessage(),
+          {
+            id: "assistant-A",
+            role: "assistant",
+            parts: [
+              {
+                input: { query: "Acme" },
+                output: { content: [] },
+                state: "output-available",
+                toolCallId: "tool-call-A",
+                toolName: "run-stella-query",
+                type: "dynamic-tool",
+              },
+            ],
+          },
+        ],
+      }),
+    ).toMatchObject({
+      sendMode: CHAT_SEND_MODE.rawOverride,
+      threadId: "thread-A",
+    });
+  });
+
+  test("replaces the remembered send mode when the next user turn starts", () => {
+    const threadId = toChatThreadId("thread-A");
+    const key = { scope: "global", threadId } as const;
+
+    buildSendRequestBody({
+      context: { getSendMode: () => CHAT_SEND_MODE.anonymized },
+      key,
+      messages: [createMessage("message-A")],
+      requestBody: { sendMode: CHAT_SEND_MODE.rawOverride },
+    });
+
+    expect(
+      buildSendRequestBody({
+        context: { getSendMode: () => CHAT_SEND_MODE.anonymized },
+        key,
+        messages: [createMessage("message-A"), createMessage("message-B")],
+      }),
+    ).toMatchObject({
+      sendMode: CHAT_SEND_MODE.anonymized,
       threadId: "thread-A",
     });
   });
 });
 
 describe("createSendAutomaticallyPredicate", () => {
+  beforeEach(() => {
+    __resetChatRequestStateForTests();
+  });
+
   test("allows sequential auto sends inside the same assistant message", () => {
     const shouldSendAutomatically = createSendAutomaticallyPredicate();
     const baseMessage = {

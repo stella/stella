@@ -1,6 +1,9 @@
 import { describe, expect, mock, test } from "bun:test";
 
-import { createPipelineContext } from "@stll/anonymize-wasm";
+import {
+  createPipelineContext,
+  DEFAULT_OPERATOR_CONFIG,
+} from "@stll/anonymize-wasm";
 
 import type { ScopedDb } from "@/api/db";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -59,6 +62,7 @@ describe("anonymizeTextFields", () => {
       });
     const dependencies = {
       createPipelineContext,
+      defaultOperatorConfig: DEFAULT_OPERATOR_CONFIG,
       loadAnonymizationGazetteerEntries: async () => [],
       loadNameDictionaries: loadNameDictionariesMock,
       redactText: (fullText: string) => ({

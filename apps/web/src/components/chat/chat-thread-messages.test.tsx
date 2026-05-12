@@ -221,4 +221,43 @@ describe("chat thread messages", () => {
     expect(html).toContain("Resend");
     expect(html).not.toContain("provider details must stay hidden");
   });
+
+  test("offers a raw-send override when anonymization blocks an attachment", () => {
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        alwaysApprovedTools={new Set()}
+        approvalPendingMessageId={null}
+        conversationApprovedTools={new Set()}
+        error={
+          new Error(
+            JSON.stringify({
+              code: "third_party_boundary_refusal",
+              message:
+                "Cannot send this attachment to the AI in anonymized mode because Stella cannot extract and anonymize it safely.",
+            }),
+          )
+        }
+        handleAllowInConversation={() => {}}
+        handleAlwaysAllow={() => {}}
+        handleApprove={() => {}}
+        handleDeny={() => {}}
+        messages={[]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        createDocumentMatters={[]}
+        isLoadingCreateDocumentMatters={false}
+        onResend={() => {}}
+        onSendWithoutAnonymization={() => {}}
+        showToolCallDetails={false}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    expect(html).toContain("Stella could not anonymize one attachment");
+    expect(html).toContain("Send without anonymization");
+    expect(html).not.toContain("Cannot send this attachment");
+  });
 });

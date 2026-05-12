@@ -2,26 +2,38 @@ import type { InferUIMessageChunk } from "ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { createPipelineContext } from "@stll/anonymize-wasm";
+
+import type { ScopedDb } from "@/api/db";
+import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { toUserFileUrl } from "@/api/handlers/user-files/types";
 import { toSafeId } from "@/api/lib/branded-types";
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-import { hydrateMessages, resolveRefsInTextStream } from "./stream-chat";
+import {
+  collectInitialRestorationPlaceholders,
+  deanonymizeOutgoingStream,
+  hydrateMessages,
+  resolveRefsInTextStream,
+} from "./stream-chat";
+
+type ChatChunk = InferUIMessageChunk<ChatMessage>;
 
 const collectChunks = async (
-  stream: ReadableStream<InferUIMessageChunk<ChatMessage>>,
-) => {
-  const chunks: InferUIMessageChunk<ChatMessage>[] = [];
+  stream: ReadableStream<ChatChunk>,
+): Promise<ChatChunk[]> => {
+  const chunks: ChatChunk[] = [];
   for await (const chunk of stream) {
     chunks.push(chunk);
   }
   return chunks;
 };
 
-const collectText = (chunks: InferUIMessageChunk<ChatMessage>[]) => {
+const collectText = (chunks: readonly ChatChunk[]) => {
   let text = "";
   for (const chunk of chunks) {
     if (chunk.type === "text-delta") {
@@ -31,9 +43,37 @@ const collectText = (chunks: InferUIMessageChunk<ChatMessage>[]) => {
   return text;
 };
 
+const scopedDb: ScopedDb = async () => {
+  throw new Error("Expected stream deanonymization test not to access DB");
+};
+
+const createBoundary = (
+  pairs: readonly (readonly [string, string])[],
+): Extract<ChatThirdPartyBoundary, { type: "anonymized" }> => ({
+  anonymizationScopeId: "workspace-A",
+  gazetteerEntries: Promise.resolve([]),
+  organizationId: toSafeId<"organization">("org_test"),
+  pipelineContext: createPipelineContext(),
+  redactionMap: new Map(pairs),
+  scopedDb,
+  type: "anonymized",
+});
+
+const streamChunks = (
+  chunks: readonly ChatChunk[],
+): ReadableStream<ChatChunk> =>
+  new ReadableStream<ChatChunk>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(chunk);
+      }
+      controller.close();
+    },
+  });
+
 describe("chat stream refs", () => {
   test("resolves assistant text refs across streamed chunk boundaries", async () => {
-    const chunks: InferUIMessageChunk<ChatMessage>[] = [
+    const chunks: ChatChunk[] = [
       { id: "text_1", type: "text-start" },
       {
         delta: "Open [Document](",
@@ -53,17 +93,8 @@ describe("chat stream refs", () => {
       { id: "text_1", type: "text-end" },
     ];
 
-    const stream = new ReadableStream<InferUIMessageChunk<ChatMessage>>({
-      start(controller) {
-        for (const chunk of chunks) {
-          controller.enqueue(chunk);
-        }
-        controller.close();
-      },
-    });
-
     const resolvedChunks = await collectChunks(
-      resolveRefsInTextStream(stream, (text) =>
+      resolveRefsInTextStream(streamChunks(chunks), (text) =>
         text.replace(
           "#stella-entity-ref=ent_1",
           "#stella-entity=workspace_1:entity_1",
@@ -88,7 +119,7 @@ describe("chat stream refs", () => {
       workspaceId,
     });
 
-    const chunks: InferUIMessageChunk<ChatMessage>[] = [
+    const chunks: ChatChunk[] = [
       { id: "text_1", type: "text-start" },
       {
         delta: `Utworzyłem nowy dokument ${mention}.`,
@@ -98,18 +129,9 @@ describe("chat stream refs", () => {
       { id: "text_1", type: "text-end" },
     ];
 
-    const stream = new ReadableStream<InferUIMessageChunk<ChatMessage>>({
-      start(controller) {
-        for (const chunk of chunks) {
-          controller.enqueue(chunk);
-        }
-        controller.close();
-      },
-    });
-
     const resolvedChunks = await collectChunks(
       resolveRefsInTextStream(
-        stream,
+        streamChunks(chunks),
         registry.resolveAssistantTextRefs,
         registry.resolveAssistantValueRefs,
       ),
@@ -133,7 +155,7 @@ describe("chat stream refs", () => {
       workspaceId,
     });
 
-    const chunks: InferUIMessageChunk<ChatMessage>[] = [
+    const chunks: ChatChunk[] = [
       {
         type: "tool-output-available",
         toolCallId: "tool_1",
@@ -146,18 +168,9 @@ describe("chat stream refs", () => {
       },
     ];
 
-    const stream = new ReadableStream<InferUIMessageChunk<ChatMessage>>({
-      start(controller) {
-        for (const chunk of chunks) {
-          controller.enqueue(chunk);
-        }
-        controller.close();
-      },
-    });
-
     const [resolvedChunk] = await collectChunks(
       resolveRefsInTextStream(
-        stream,
+        streamChunks(chunks),
         registry.resolveAssistantTextRefs,
         registry.resolveAssistantValueRefs,
       ),
@@ -178,7 +191,7 @@ describe("chat stream refs", () => {
 });
 
 describe("chat message hydration", () => {
-  test("refuses stored DOCX attachments for anonymized third-party sends", async () => {
+  test("refuses stored attachments that cannot be text-hydrated for anonymized third-party sends", async () => {
     const userFileId = toSafeId<"userFile">(
       "11111111-1111-4111-8111-111111111111",
     );
@@ -194,8 +207,8 @@ describe("chat message hydration", () => {
               id: userFileId,
               userId,
               threadId,
-              fileName: "draft.docx",
-              mimeType: DOCX_MIME_TYPE,
+              fileName: "draft.pdf",
+              mimeType: PDF_MIME_TYPE,
               s3Key: "user/file",
             },
           ],
@@ -211,21 +224,21 @@ describe("chat message hydration", () => {
           parts: [
             {
               type: "file",
-              filename: "draft.docx",
-              mediaType: DOCX_MIME_TYPE,
+              filename: "draft.pdf",
+              mediaType: PDF_MIME_TYPE,
               url: toUserFileUrl(userFileId),
             },
           ],
         },
       ],
-      refuseNonPlainTextFiles: true,
       safeDb,
+      sendMode: CHAT_SEND_MODE.anonymized,
       userId,
     });
 
     expect(Result.isError(result)).toBe(true);
     if (Result.isOk(result)) {
-      throw new Error("Expected DOCX hydration refusal");
+      throw new Error("Expected PDF hydration refusal");
     }
 
     if (!("status" in result.error)) {
@@ -233,5 +246,117 @@ describe("chat message hydration", () => {
     }
 
     expect(result.error.status).toBe(422);
+  });
+});
+
+describe("anonymized outgoing chat stream", () => {
+  test("seeds restorations from the current provider-visible message only", () => {
+    const placeholders = collectInitialRestorationPlaceholders({
+      latestMessageId: "current",
+      messages: [
+        {
+          id: "previous",
+          role: "assistant",
+          parts: [{ type: "text", text: "Earlier [PERSON_3]" }],
+        },
+        {
+          id: "current",
+          role: "user",
+          parts: [
+            {
+              type: "text",
+              text: "Does [PERSON_1] involve [PERSON_2]?",
+            },
+          ],
+        },
+      ],
+      redactionMap: new Map([
+        ["[PERSON_1]", "System and user shared name"],
+        ["[PERSON_2]", "Current user only"],
+        ["[PERSON_3]", "Prior assistant only"],
+      ]),
+    });
+
+    expect([...placeholders]).toEqual(["[PERSON_1]", "[PERSON_2]"]);
+  });
+
+  test("does not emit system-context-only restoration pairs", async () => {
+    const boundary = createBoundary([
+      ["[PERSON_1]", "System Only"],
+      ["[PERSON_2]", "Jan Novak"],
+    ]);
+    const stream = deanonymizeOutgoingStream(
+      streamChunks([
+        { type: "text-delta", id: "text-1", delta: "Hello" },
+        { type: "text-end", id: "text-1" },
+      ]),
+      boundary,
+      {
+        initialRestorationPlaceholders: new Set(["[PERSON_2]"]),
+      },
+    );
+
+    expect(await collectChunks(stream)).toEqual([
+      {
+        type: "data-stella-anon-restorations",
+        data: { pairs: [{ placeholder: "[PERSON_2]", original: "Jan Novak" }] },
+      },
+      { type: "text-delta", id: "text-1", delta: "Hello" },
+      { type: "text-end", id: "text-1" },
+    ]);
+  });
+
+  test("emits a restoration pair when assistant text uses a placeholder", async () => {
+    const boundary = createBoundary([["[PERSON_1]", "Jan Novak"]]);
+    const stream = deanonymizeOutgoingStream(
+      streamChunks([
+        { type: "text-delta", id: "text-1", delta: "[PERSON_1]" },
+        { type: "text-end", id: "text-1" },
+      ]),
+      boundary,
+    );
+
+    expect(await collectChunks(stream)).toEqual([
+      {
+        type: "data-stella-anon-restorations",
+        data: { pairs: [{ placeholder: "[PERSON_1]", original: "Jan Novak" }] },
+      },
+      { type: "text-delta", id: "text-1", delta: "Jan Novak" },
+      { type: "text-end", id: "text-1" },
+    ]);
+  });
+
+  test("restores bracketless placeholders in user-visible tool input", async () => {
+    const boundary = createBoundary([["[PERSON_1]", "Jan Novak"]]);
+    const stream = deanonymizeOutgoingStream(
+      streamChunks([
+        {
+          type: "tool-input-available",
+          toolCallId: "tool_1",
+          toolName: "ask-user",
+          input: {
+            options: ["Call PERSON_1", "Email [PERSON_1]"],
+            question: "How should PERSON_1 be contacted?",
+          },
+        },
+      ]),
+      boundary,
+    );
+
+    expect(await collectChunks(stream)).toEqual([
+      {
+        type: "data-stella-anon-restorations",
+        data: { pairs: [{ placeholder: "[PERSON_1]", original: "Jan Novak" }] },
+      },
+      {
+        type: "tool-input-available",
+        toolCallId: "tool_1",
+        toolName: "ask-user",
+        input: {
+          options: ["Call Jan Novak", "Email Jan Novak"],
+          question: "How should Jan Novak be contacted?",
+        },
+      },
+    ]);
   });
 });

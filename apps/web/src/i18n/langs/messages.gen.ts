@@ -307,6 +307,9 @@ type Messages = {
     "anonymizedMode": "Anonymized AI mode";
     "anonymizedModeDisabled": "Anonymized AI mode is off";
     "anonymizedModeEnabled": "Anonymized AI mode is on";
+    "anonymizedSpan": {
+      "tooltip": "Sent to the model as {placeholder}.";
+    };
     "applyMode": {
       "description": "Word stores who made each change. We'll remember your choice.";
       "direct": "No, apply directly";
@@ -410,9 +413,11 @@ type Messages = {
     "resend": "Resend";
     "send": "Send message";
     "sendError": "There was an issue sending your message. Contact support if the error persists.";
+    "sendErrorAnonymizationBlocked": "Stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.";
     "sendErrorInsufficientCredits": "The AI provider needs more credits. Contact your workspace admin to top up the account.";
     "sendErrorProviderUnavailable": "The AI provider is temporarily unavailable. Please try again in a moment.";
     "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin to upgrade the plan.";
+    "sendWithoutAnonymization": "Send without anonymization";
     "thinking": "Working with context";
     "threads": "History";
     "tool": {

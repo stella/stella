@@ -304,6 +304,9 @@
     "anonymizedMode": "Mode IA anonymisé",
     "anonymizedModeDisabled": "Le mode IA anonymisé est désactivé",
     "anonymizedModeEnabled": "Le mode IA anonymisé est activé",
+    "anonymizedSpan": {
+      "tooltip": "Envoyé au modèle sous la forme {placeholder}."
+    },
     "applyMode": {
       "description": "Word stores who made each change. We will remember your choice.",
       "direct": "No, apply directly",
@@ -407,9 +410,11 @@
     "resend": "Renvoyer",
     "send": "Envoyer le message",
     "sendError": "Un problème est survenu lors de l’envoi de ton message. Contacte le support si l’erreur persiste.",
+    "sendErrorAnonymizationBlocked": "Stella n’a pas pu anonymiser une pièce jointe, donc rien n’a été envoyé. Retire le fichier ou envoie ce message sans anonymisation.",
     "sendErrorInsufficientCredits": "Le fournisseur d’IA a besoin de crédits supplémentaires. Demande à l’administrateur de l’espace de travail de recharger le compte.",
     "sendErrorProviderUnavailable": "Le fournisseur d’IA est temporairement indisponible. Réessaie dans un instant.",
     "sendErrorQuotaExhausted": "Le quota du fournisseur d’IA est épuisé. Réessaie dans une minute, ou demande à l’administrateur de l’espace de travail de passer à un plan supérieur.",
+    "sendWithoutAnonymization": "Envoyer sans anonymisation",
     "thinking": "Traitement du contexte",
     "threads": "Historique",
     "tool": {

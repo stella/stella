@@ -5,6 +5,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Maximize2Icon, PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { Button, buttonVariants } from "@stll/ui/components/button";
 
 import {
@@ -20,7 +21,9 @@ import { getUserMessageHtmlHistory } from "@/components/chat/chat-ui-tools";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
+import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import {
+  getChatSendMode,
   useChatAnonymized,
   useSetChatAnonymized,
 } from "@/lib/chat-anonymized-store";
@@ -73,7 +76,7 @@ export const ChatThreadPage = ({
   const anonymized = useChatAnonymized(threadRef);
   const setAnonymized = useSetChatAnonymized(threadRef);
   const getContextMatterIds = useEffectEvent(() => contextMatterIds ?? []);
-  const getAnonymized = useEffectEvent(() => anonymized);
+  const getSendMode = useEffectEvent(() => getChatSendMode(threadRef));
 
   const { data } = useSuspenseQuery(
     chatThreadOptions({
@@ -86,7 +89,7 @@ export const ChatThreadPage = ({
         allowMissingThread: true,
         getUserContext,
         getContextMatterIds,
-        getAnonymized,
+        getSendMode,
       },
     }),
   );
@@ -170,6 +173,9 @@ export const ChatThreadPage = ({
     editor.commands.setContent(prompt.body);
     editor.commands.focus("end");
   };
+  const sendWithoutAnonymization = useEffectEvent(async () => {
+    await resendLatestMessage({ sendMode: CHAT_SEND_MODE.rawOverride });
+  });
 
   return (
     <div className="flex w-full max-w-5xl flex-1 flex-col overflow-hidden">
@@ -244,6 +250,7 @@ export const ChatThreadPage = ({
               createDocumentMatters={createDocumentMatters}
               isLoadingCreateDocumentMatters={isLoadingCreateDocumentMatters}
               onResend={resendLatestMessage}
+              onSendWithoutAnonymization={sendWithoutAnonymization}
               showThinkingIndicator
               showToolCallDetails={showToolCallDetails}
               streamdownComponents={streamdownComponents}
@@ -254,8 +261,14 @@ export const ChatThreadPage = ({
         <ConversationScrollButton />
       </Conversation>
 
+      <ChatAnonymizationLayer
+        editor={controller.editor}
+        enabled={anonymized}
+        workspaceId={workspaceId ?? threadRef.threadId}
+      />
       <div className="p-4">
         <ChatInputSurface
+          anonymized={anonymized}
           autoFocus
           controller={controller}
           isGenerating={isGenerating}

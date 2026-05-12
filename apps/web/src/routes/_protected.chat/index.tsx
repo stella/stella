@@ -22,8 +22,9 @@ import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import { useI18nStore } from "@/i18n/i18n-store";
+import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import {
-  getChatAnonymized,
+  getChatSendMode,
   useChatAnonymized,
   useSetChatAnonymized,
 } from "@/lib/chat-anonymized-store";
@@ -71,7 +72,7 @@ function ChatIndex() {
   const { data: groupedThreads } = useQuery(groupedChatThreadsOptions());
   const anonymized = useChatAnonymized(threadRef);
   const setAnonymized = useSetChatAnonymized(threadRef);
-  const getAnonymized = useEffectEvent(() => getChatAnonymized(threadRef));
+  const getSendMode = useEffectEvent(() => getChatSendMode(threadRef));
   const openInspectorChat = useInspectorStore((s) => s.openChat);
   const [contextMatterIds, setContextMatterIds] = useState<string[]>([]);
   const getContextMatterIds = useEffectEvent(() => contextMatterIds);
@@ -199,7 +200,13 @@ function ChatIndex() {
             </p>
           </div>
           <div className="w-full">
+            <ChatAnonymizationLayer
+              editor={controller.editor}
+              enabled={anonymized}
+              workspaceId={threadRef.threadId}
+            />
             <ChatInputSurface
+              anonymized={anonymized}
               autoFocus
               controller={controller}
               onSubmit={async (draft) => {
@@ -219,7 +226,7 @@ function ChatIndex() {
                       allowMissingThread: true,
                       getUserContext,
                       getContextMatterIds,
-                      getAnonymized,
+                      getSendMode,
                     },
                   }),
                 );

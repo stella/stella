@@ -304,6 +304,9 @@
     "anonymizedMode": "Anonymisierter KI-Modus",
     "anonymizedModeDisabled": "Anonymisierter KI-Modus ist aus",
     "anonymizedModeEnabled": "Anonymisierter KI-Modus ist an",
+    "anonymizedSpan": {
+      "tooltip": "An das Modell gesendet als {placeholder}."
+    },
     "applyMode": {
       "description": "Word stores who made each change. We will remember your choice.",
       "direct": "No, apply directly",
@@ -407,9 +410,11 @@
     "resend": "Erneut senden",
     "send": "Nachricht senden",
     "sendError": "Beim Senden deiner Nachricht ist ein Problem aufgetreten. Wende dich an den Support, wenn der Fehler weiterhin auftritt.",
+    "sendErrorAnonymizationBlocked": "Stella konnte einen Anhang nicht anonymisieren, daher wurde nichts gesendet. Entferne die Datei oder sende diese Nachricht ohne Anonymisierung.",
     "sendErrorInsufficientCredits": "Der KI-Provider benötigt mehr Guthaben. Bitte deinen Workspace-Admin, das Konto aufzuladen.",
     "sendErrorProviderUnavailable": "Der KI-Provider ist vorübergehend nicht verfügbar. Bitte versuche es gleich noch einmal.",
     "sendErrorQuotaExhausted": "Das Kontingent des KI-Providers ist aufgebraucht. Versuche es gleich noch einmal oder bitte deinen Workspace-Admin, das Paket zu erweitern.",
+    "sendWithoutAnonymization": "Ohne Anonymisierung senden",
     "thinking": "Arbeite mit Kontext",
     "threads": "Verlauf",
     "tool": {

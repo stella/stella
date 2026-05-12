@@ -20,6 +20,7 @@ import { parseStellaMentionHref } from "@/components/chat/chat-mention-href";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
+import { InlinePill } from "@/components/inline-pill";
 import { PDF_MIME_TYPE } from "@/consts";
 import { DOCX_MIME } from "@/lib/consts";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
@@ -48,12 +49,6 @@ const CATEGORY_ICON: Record<
   workspace: LayersIcon,
 };
 
-const CHIP_CLASS_NAME = cn(
-  "inline-flex max-w-56 items-center gap-0.5 align-middle",
-  "bg-accent rounded px-1 py-0.5",
-  "text-accent-foreground text-xs font-medium",
-);
-
 const DOCUMENT_MIME_BY_EXTENSION: Record<string, string> = {
   csv: "text/csv",
   doc: "application/msword",
@@ -73,10 +68,6 @@ const DOCUMENT_MIME_BY_EXTENSION: Record<string, string> = {
 const ENTITY_EXTENSION_RE = /\.([A-Za-z0-9]{1,8})$/;
 const FOLDER_LABEL_RE = /^(?:folder|složka|priečinok)\b/i;
 const TASK_LABEL_RE = /^(?:task|úkol|úloha)\b/i;
-
-const MentionChipLabel = ({ children }: { children: React.ReactNode }) => (
-  <span className="min-w-0 truncate">{children}</span>
-);
 
 const getPlainText = (node: React.ReactNode): string | null => {
   if (typeof node === "string" || typeof node === "number") {
@@ -213,14 +204,109 @@ const EntityChipIcon = ({
   return <FileTextIcon className="size-3 shrink-0" />;
 };
 
-const MentionChip = ({
+type MentionChipProps = {
+  label: React.ReactNode;
+  href: string;
+  interactive: boolean;
+  workspaceId?: string | undefined;
+};
+
+const DecisionChip = ({
+  decisionRef,
   label,
-  href,
+  interactive,
+}: {
+  decisionRef: string;
+  label: React.ReactNode;
+  interactive: boolean;
+}) => {
+  const navigate = useNavigate();
+  return (
+    <InlinePill
+      leadingIcon={<LandmarkIcon className="size-3 shrink-0" />}
+      onActivate={
+        interactive
+          ? () => void openCaseLawDecision(decisionRef, navigate)
+          : undefined
+      }
+      truncate
+    >
+      {label}
+    </InlinePill>
+  );
+};
+
+const EntityRefChip = ({
+  rawId,
+  label,
+  fallbackWorkspaceId,
+}: {
+  rawId: string;
+  label: React.ReactNode;
+  fallbackWorkspaceId?: string | undefined;
+}) => {
+  const separator = rawId.indexOf(":");
+  const refWorkspaceId =
+    separator !== -1 ? rawId.slice(0, separator) : fallbackWorkspaceId;
+  const refEntityId = separator !== -1 ? rawId.slice(separator + 1) : rawId;
+  return (
+    <InlinePill
+      leadingIcon={
+        <EntityChipIcon
+          entityId={refEntityId}
+          label={label}
+          workspaceId={refWorkspaceId}
+        />
+      }
+      truncate
+    >
+      {getEntityDisplayLabel(label)}
+    </InlinePill>
+  );
+};
+
+const WorkspaceRefChip = ({ label }: { label: React.ReactNode }) => (
+  <InlinePill leadingIcon={<LayersIcon className="size-3 shrink-0" />} truncate>
+    {label}
+  </InlinePill>
+);
+
+const buildParsedEntityActivate =
+  ({
+    navigate,
+    pathname,
+    id,
+    textLabel,
+    workspaceId,
+  }: {
+    navigate: ReturnType<typeof useNavigate>;
+    pathname: string;
+    id: string;
+    textLabel: string;
+    workspaceId: string;
+  }) =>
+  () => {
+    void (async () => {
+      const result = await openEntityInInspector(id, textLabel, workspaceId);
+      if (result.type === "folder") {
+        await navigateToWorkspaceFolder({
+          folderId: result.entityId,
+          navigate,
+          pathname,
+          targetWorkspaceId: result.workspaceId,
+        });
+      }
+    })();
+  };
+
+const ParsedMentionChip = ({
+  parsed,
+  label,
   interactive,
   workspaceId,
 }: {
+  parsed: NonNullable<ReturnType<typeof parseStellaMentionHref>>;
   label: React.ReactNode;
-  href: string;
   interactive: boolean;
   workspaceId?: string | undefined;
 }) => {
@@ -228,70 +314,6 @@ const MentionChip = ({
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
-
-  if (href.startsWith(DECISION_HASH_PREFIX)) {
-    const decisionRef = href.slice(DECISION_HASH_PREFIX.length);
-    const content = (
-      <>
-        <LandmarkIcon className="size-3 shrink-0" />
-        <MentionChipLabel>{label}</MentionChipLabel>
-      </>
-    );
-
-    if (!interactive) {
-      return <span className={CHIP_CLASS_NAME}>{content}</span>;
-    }
-
-    return (
-      <button
-        className={cn(CHIP_CLASS_NAME, "hover:bg-accent/80 cursor-pointer")}
-        onClick={() => void openCaseLawDecision(decisionRef, navigate)}
-        type="button"
-      >
-        {content}
-      </button>
-    );
-  }
-
-  if (
-    href.startsWith(ENTITY_REF_HASH_PREFIX) ||
-    href.startsWith(WORKSPACE_REF_HASH_PREFIX)
-  ) {
-    const isEntity = href.startsWith(ENTITY_REF_HASH_PREFIX);
-    const rawId = isEntity
-      ? href.slice(ENTITY_REF_HASH_PREFIX.length)
-      : href.slice(WORKSPACE_REF_HASH_PREFIX.length);
-    const separator = rawId.indexOf(":");
-    const refWorkspaceId =
-      isEntity && separator !== -1 ? rawId.slice(0, separator) : workspaceId;
-    const refEntityId = isEntity
-      ? separator !== -1
-        ? rawId.slice(separator + 1)
-        : rawId
-      : undefined;
-    const icon = isEntity ? (
-      <EntityChipIcon
-        entityId={refEntityId}
-        label={label}
-        workspaceId={refWorkspaceId}
-      />
-    ) : (
-      <LayersIcon className="size-3 shrink-0" />
-    );
-    const displayLabel = isEntity ? getEntityDisplayLabel(label) : label;
-
-    return (
-      <span className={CHIP_CLASS_NAME}>
-        {icon}
-        <MentionChipLabel>{displayLabel}</MentionChipLabel>
-      </span>
-    );
-  }
-
-  const parsed = parseStellaMentionHref(href);
-  if (!parsed) {
-    return null;
-  }
 
   const { category, id: rawId } = parsed;
   const separator = rawId.indexOf(":");
@@ -301,82 +323,124 @@ const MentionChip = ({
       : workspaceId;
   const id = separator !== -1 ? rawId.slice(separator + 1) : rawId;
   const textLabel = typeof label === "string" ? label : "Reference";
-  const icon =
-    category === "entity" ? (
+
+  if (category === "entity") {
+    const icon = (
       <EntityChipIcon
         entityId={id}
         label={label}
         workspaceId={mentionWorkspaceId}
       />
-    ) : (
-      (() => {
-        const Icon = CATEGORY_ICON[category];
-        return (
-          <Icon
-            className="size-3 shrink-0"
-            {...(category === "workspace"
-              ? { style: { color: getMatterColor(id) } }
-              : {})}
-          />
-        );
-      })()
     );
-  const displayLabel =
-    category === "entity" ? getEntityDisplayLabel(label) : label;
-
-  if (!interactive || (category === "entity" && !mentionWorkspaceId)) {
+    const displayLabel = getEntityDisplayLabel(label);
+    if (!interactive || !mentionWorkspaceId) {
+      return (
+        <InlinePill leadingIcon={icon} truncate>
+          {displayLabel}
+        </InlinePill>
+      );
+    }
     return (
-      <span className={CHIP_CLASS_NAME}>
-        {icon}
-        <MentionChipLabel>{displayLabel}</MentionChipLabel>
-      </span>
-    );
-  }
-
-  if (category === "entity") {
-    return (
-      <button
-        className={cn(CHIP_CLASS_NAME, "hover:bg-accent/80 cursor-pointer")}
-        onClick={() => {
-          void (async () => {
-            const result = await openEntityInInspector(
-              id,
-              textLabel,
-              mentionWorkspaceId,
-            );
-
-            if (result.type === "folder") {
-              await navigateToWorkspaceFolder({
-                folderId: result.entityId,
-                navigate,
-                pathname,
-                targetWorkspaceId: result.workspaceId,
-              });
-            }
-          })();
-        }}
-        type="button"
+      <InlinePill
+        leadingIcon={icon}
+        onActivate={buildParsedEntityActivate({
+          navigate,
+          pathname,
+          id,
+          textLabel,
+          workspaceId: mentionWorkspaceId,
+        })}
+        truncate
       >
-        {icon}
-        <MentionChipLabel>{displayLabel}</MentionChipLabel>
-      </button>
+        {displayLabel}
+      </InlinePill>
     );
   }
 
+  const icon = <CategoryIcon category={category} id={id} />;
+  if (!interactive) {
+    return (
+      <InlinePill leadingIcon={icon} truncate>
+        {label}
+      </InlinePill>
+    );
+  }
   return (
-    <button
-      className={cn(CHIP_CLASS_NAME, "hover:bg-accent/80 cursor-pointer")}
-      onClick={() =>
+    <InlinePill
+      leadingIcon={icon}
+      onActivate={() =>
         void navigate({
           to: "/workspaces/$workspaceId",
           params: { workspaceId: id },
         })
       }
-      type="button"
+      truncate
     >
-      {icon}
-      <MentionChipLabel>{displayLabel}</MentionChipLabel>
-    </button>
+      {label}
+    </InlinePill>
+  );
+};
+
+const CategoryIcon = ({
+  category,
+  id,
+}: {
+  category: Exclude<MentionCategory, "entity">;
+  id: string;
+}) => {
+  const Icon = CATEGORY_ICON[category];
+  return (
+    <Icon
+      className="size-3 shrink-0"
+      {...(category === "workspace"
+        ? { style: { color: getMatterColor(id) } }
+        : {})}
+    />
+  );
+};
+
+const MentionChip = ({
+  label,
+  href,
+  interactive,
+  workspaceId,
+}: MentionChipProps) => {
+  if (href.startsWith(DECISION_HASH_PREFIX)) {
+    return (
+      <DecisionChip
+        decisionRef={href.slice(DECISION_HASH_PREFIX.length)}
+        interactive={interactive}
+        label={label}
+      />
+    );
+  }
+
+  if (href.startsWith(ENTITY_REF_HASH_PREFIX)) {
+    return (
+      <EntityRefChip
+        fallbackWorkspaceId={workspaceId}
+        label={label}
+        rawId={href.slice(ENTITY_REF_HASH_PREFIX.length)}
+      />
+    );
+  }
+
+  if (href.startsWith(WORKSPACE_REF_HASH_PREFIX)) {
+    return <WorkspaceRefChip label={label} />;
+  }
+
+  const parsed = parseStellaMentionHref(href);
+  if (!parsed) {
+    return null;
+  }
+
+  return (
+    <ParsedMentionChip
+      interactive={interactive}
+      label={label}
+      parsed={parsed}
+      workspaceId={workspaceId}
+    />
   );
 };
 
@@ -515,23 +579,15 @@ const FolioBlockChip = ({
   // the raw scheme — it's an internal protocol, not user copy.
   const displayedChildren = useFolioChipChildren(children, blockId);
 
-  if (!interactive) {
-    return <span className={CHIP_CLASS_NAME}>{displayedChildren}</span>;
-  }
-
   return (
-    <button
-      className={cn(
-        CHIP_CLASS_NAME,
-        "hover:bg-accent/80 cursor-pointer transition-colors",
-      )}
+    <InlinePill
       data-block-id={blockId}
-      onClick={handleClick}
-      type="button"
+      leadingIcon={<FileTextIcon className="size-3 shrink-0" />}
+      onActivate={interactive ? handleClick : undefined}
+      truncate
     >
-      <FileTextIcon className="size-3 shrink-0" />
-      <MentionChipLabel>{displayedChildren}</MentionChipLabel>
-    </button>
+      {displayedChildren}
+    </InlinePill>
   );
 };
 

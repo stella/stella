@@ -31,6 +31,8 @@ export type {
 } from "@/api/lib/search/types";
 
 export type {
+  ChatAnonRestoration,
+  ChatAnonRestorationsData,
   ChatMention,
   ChatMentionCategory,
   ChatMentionHref,
