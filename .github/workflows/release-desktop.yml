@@ -141,16 +141,29 @@ jobs:
             exit 1
           fi
 
+          git fetch --no-tags origin "refs/tags/${REF}:refs/tags/${REF}" main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$RELEASE_SHA" origin/main; then
+            echo "::error::Release tag $REF is not reachable from protected main"
+            exit 1
+          fi
+
+          if ! gh release view "$REF" >/dev/null 2>&1; then
+            echo "::error::GitHub Release $REF does not exist; refusing to run signing jobs"
+            exit 1
+          fi
+
           # Resolve the channel via the shared script so the
           # in-binary updater endpoint, the manifest mirror path,
           # and the CloudFront invalidation key all derive from
           # exactly the same logic. See scripts/release-channel.sh.
           CHANNEL=$(bash scripts/release-channel.sh "$REF")
 
-          echo "value=$REF" >> "$GITHUB_OUTPUT"
-          echo "sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
-          echo "version=${REF#v}" >> "$GITHUB_OUTPUT"
-          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          {
+            echo "value=$REF"
+            echo "sha=$RELEASE_SHA"
+            echo "version=${REF#v}"
+            echo "channel=$CHANNEL"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6

@@ -6,16 +6,24 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Non-run-ci label events intentionally skip below. Keep them out of
+  # the main CI concurrency group so an incidental label cannot cancel
+  # real checks and replace the required status with a skipped pass.
+  group: >-
+    ${{ github.workflow }}-${{ github.ref }}-${{
+      github.event_name == 'pull_request'
+      && github.event.action == 'labeled'
+      && github.event.label.name != 'run-ci'
+      && format('label-{0}-{1}', github.event.label.name, github.run_id)
+      || 'checks'
+    }}
   cancel-in-progress: true
 
 jobs:
   trust-check:
     # Skip draft PRs (CI runs when marked ready for review via
     # `reopened`). Also skip irrelevant label events: only the
-    # "run-ci" label matters — without this gate, adding any
-    # label (e.g. priority, triage) would cancel an in-progress
-    # CI run due to cancel-in-progress.
+    # "run-ci" label matters.
     if: >-
       github.event_name == 'workflow_dispatch'
       || (github.event.pull_request.draft != true
