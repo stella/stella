@@ -379,7 +379,7 @@ describe("manifest stripped from filled output", () => {
 // ── Header/footer placeholders ───────────────────────────
 
 describe("header and footer placeholders", () => {
-  test("patchDocument fills placeholders in headers", async () => {
+  test("owned patcher fills placeholders in headers", async () => {
     const body = WRAP(P("Body: {{body_text}}"));
     const header = HEADER_WRAP(P("Header: {{header_text}}"));
     const footer = FOOTER_WRAP(P("Footer: {{footer_text}}"));

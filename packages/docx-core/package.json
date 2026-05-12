@@ -1,0 +1,25 @@
+{
+  "name": "@stll/docx-core",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./model": "./src/model/document.ts"
+  },
+  "scripts": {
+    "test": "bun test src",
+    "typecheck": "tsc --noEmit",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts packages/docx-core",
+    "format": "oxfmt ."
+  },
+  "dependencies": {
+    "jszip": "catalog:"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  }
+}

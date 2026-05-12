@@ -236,7 +236,7 @@ function RouteComponentInner({
     (s) => s.setActiveJustification,
   );
   const resetPdfViewerState = useWorkspaceStore((s) => s.resetPdfViewerState);
-  const openPdfForEntity = useInspectorStore((s) => s.openPdfForEntity);
+  const openFileForEntity = useInspectorStore((s) => s.openFileForEntity);
   const currentFileFieldIdsByPropertyRef = useRef(new Map<string, string>());
   const navigate = Route.useNavigate();
 
@@ -273,12 +273,12 @@ function RouteComponentInner({
         }
 
         if (tab.metadataLane === "expanded" && tab.facet === "suggestions") {
-          inspectorState.setPdfFacet(fieldId, "metadata");
+          inspectorState.setFileFacet(fieldId, "metadata");
         }
         break;
       }
 
-      inspectorState.setPdfMetadataLane(fieldId, "closed");
+      inspectorState.setFileMetadataLane(fieldId, "closed");
     },
     [fieldId],
   );
@@ -379,7 +379,7 @@ function RouteComponentInner({
     setActiveFieldId(latestFileFieldForProperty.id);
     useInspectorStore
       .getState()
-      .replacePdfFieldId(fieldId, latestFileFieldForProperty.id);
+      .replaceFileFieldId(fieldId, latestFileFieldForProperty.id);
     void navigate({
       replace: true,
       search: (prev) => ({
@@ -395,7 +395,7 @@ function RouteComponentInner({
       return;
     }
 
-    openPdfForEntity({
+    openFileForEntity({
       id: fieldId,
       entityId,
       label: activeFileLabel,
@@ -412,7 +412,7 @@ function RouteComponentInner({
     entityId,
     fieldId,
     filePropertyId,
-    openPdfForEntity,
+    openFileForEntity,
     workspaceId,
   ]);
 

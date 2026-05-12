@@ -1,6 +1,6 @@
 /**
  * One-off script: inserts {{placeholder}} tags into the SPA DOCX
- * for testing patchDocument. Replaces specific text patterns
+ * for testing template filling. Replaces specific text patterns
  * (party names, prices, dates) with placeholder tags.
  *
  * Run: bun apps/api/src/handlers/docx/prepare-spa-template.ts
@@ -19,7 +19,7 @@ const OUTPUT = new URL(
 /**
  * Replacements: [search text, placeholder tag].
  * We pick a few representative ones across different parts
- * of the document to test the patchDocument flow.
+ * of the document to test the fill flow.
  */
 // For text split across runs, we do sequential replacement:
 // each "xxxxx" occurrence maps to a share price placeholder.

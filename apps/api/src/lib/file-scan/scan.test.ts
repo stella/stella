@@ -1,8 +1,9 @@
 import { PDF } from "@libpdf/core";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { Document, Packer, Paragraph, TextRun } from "docx";
 import JSZip from "jszip";
+
+import { compileLegalSourceToDocx } from "@stll/docx-core";
 
 import { scanFile } from "./scan";
 
@@ -28,20 +29,18 @@ const makePdf = async (payload?: string): Promise<Uint8Array> => {
   return buf;
 };
 
-/** Creates a valid DOCX via the `docx` library. */
+/** Creates a valid DOCX via Stella's owned DOCX core. */
 const makeCleanDocx = async (): Promise<Uint8Array> => {
-  const doc = new Document({
-    sections: [
-      {
-        children: [
-          new Paragraph({
-            children: [new TextRun("test")],
-          }),
-        ],
-      },
-    ],
-  });
-  return new Uint8Array(await Packer.toBuffer(doc));
+  const result = await compileLegalSourceToDocx(
+    ["@title Test", "", "@paragraph", "test"].join("\n"),
+    {
+      titleFallback: "Test",
+    },
+  );
+  if (result.status !== "ok") {
+    throw new Error("Failed to compile clean DOCX fixture");
+  }
+  return new Uint8Array(result.buffer);
 };
 
 type ThreatDocxOpts = {

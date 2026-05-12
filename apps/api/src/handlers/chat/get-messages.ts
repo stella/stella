@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
+import { normalizeLegacyToolInputs } from "@/api/handlers/chat/legacy-tool-compat";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -86,7 +87,7 @@ const getMessages = createSafeRootHandler(
       messages: thread.messages.map((row) => ({
         id: row.id,
         role: row.role,
-        parts: row.content.data,
+        parts: normalizeLegacyToolInputs(row.content.data),
       })),
       contextMatterIds: thread.contextMatterIds,
     });

@@ -309,7 +309,7 @@ export const KanbanCard = ({
             isActivePeek && "ring-primary/30 ring-2",
           )}
           onClick={() =>
-            useInspectorStore.getState().openPdf({
+            useInspectorStore.getState().openFile({
               id: file.fieldId,
               entityId: file.entityId,
               label: name,
@@ -321,7 +321,7 @@ export const KanbanCard = ({
           }
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
-              useInspectorStore.getState().openPdf({
+              useInspectorStore.getState().openFile({
                 id: file.fieldId,
                 entityId: file.entityId,
                 label: name,

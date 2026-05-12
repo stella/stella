@@ -27,7 +27,6 @@ import type {
   ChatUITools,
   ToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
-import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import type { WorkspaceProperty } from "@/lib/types";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
@@ -44,8 +43,6 @@ const DOCX_MIME =
   ".wordprocessingml.document";
 
 type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
-type CreateDocumentInput = ChatUITools["create-document"]["input"];
-type CreateDocumentOutput = ChatUITools["create-document"]["output"];
 type ActiveDocxEditInput = ChatUITools["apply-active-docx-edits"]["input"];
 
 /** Guess a mime type from a file name extension. */
@@ -214,34 +211,6 @@ const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
           <span className="truncate">{entityName}</span>
         </div>
       )}
-    </div>
-  );
-};
-
-// -- Create document summary --
-
-type CreateSummaryProps = {
-  input: CreateDocumentInput;
-  output?: CreateDocumentOutput | undefined;
-};
-
-const CreateSummary = ({ input, output }: CreateSummaryProps) => {
-  const name = `${input.name}.docx`;
-
-  if (output && output.success) {
-    return (
-      <div className="border-border/50 text-muted-foreground flex items-center gap-1.5 border-t px-3 py-2 text-xs">
-        <StreamdownMentionLink href={output.href} interactive>
-          {output.fileName}
-        </StreamdownMentionLink>
-      </div>
-    );
-  }
-
-  return (
-    <div className="border-border/50 text-muted-foreground flex items-center gap-1.5 border-t px-3 py-2 text-xs">
-      <DocumentIcon className="size-3.5 shrink-0" mimeType={DOCX_MIME} />
-      <span className="truncate">{name}</span>
     </div>
   );
 };
@@ -480,7 +449,7 @@ export const ToolApprovalCard = ({
             return;
           }
           inspector.setActive(tab.id);
-          inspector.setPdfFacet(tab.id, "suggestions", { pulse: true });
+          inspector.setFileFacet(tab.id, "suggestions", { pulse: true });
         }
       : null;
 
@@ -529,14 +498,6 @@ export const ToolApprovalCard = ({
         part.state !== "input-streaming" &&
         part.input !== undefined && (
           <UpdateSummary input={part.input} workspaceId={workspaceId} />
-        )}
-      {part.type === "tool-create-document" &&
-        part.state !== "input-streaming" &&
-        part.input !== undefined && (
-          <CreateSummary
-            input={part.input}
-            output={part.state === "output-available" ? part.output : undefined}
-          />
         )}
       {part.type === "tool-apply-active-docx-edits" &&
         part.state !== "input-streaming" &&

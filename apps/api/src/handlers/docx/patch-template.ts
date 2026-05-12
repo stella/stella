@@ -1,16 +1,14 @@
 /**
  * Template filling: replaces {{placeholder}} tags in a DOCX
- * template using `patchDocument`. Returns diagnostics about
- * unmatched placeholders and unused values.
+ * template by mutating WordprocessingML directly. Returns
+ * diagnostics about unmatched placeholders and unused values.
  *
  * When the template contains block directives ({{#if}},
  * {{#each}}), a pre-processing step manipulates the OOXML
- * DOM before `patchDocument()` runs.
+ * DOM before value replacement runs.
  */
 
 import { panic } from "better-result";
-import { patchDocument } from "docx";
-import type { IPatch } from "docx";
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
@@ -20,8 +18,8 @@ import {
   processBlockDirectives,
 } from "./block-directives";
 import { discoverPlaceholders } from "./discover-placeholders";
-import { W_NS } from "./ooxml";
-import { buildPatch } from "./rich-patch";
+import { HEADER_FOOTER_RE, W_NS } from "./ooxml";
+import { patchXmlPart } from "./rich-patch";
 import { readManifestFromZip, stripManifest } from "./template-manifest";
 import type {
   FillTemplateResult,
@@ -39,23 +37,29 @@ const isPatchValues = (
   value: PatchValues | TemplateData,
 ): value is PatchValues => Object.values(value).every(isPatchableValue);
 
-/**
- * Fill values into a template buffer using `patchDocument`.
- * This is the value-only path (no block directives).
- */
 const fillTemplateWithValues = async (
   data: Buffer,
   values: PatchValues,
 ): Promise<Buffer> => {
-  const patches: Record<string, IPatch> = {};
-  for (const [key, value] of Object.entries(values)) {
-    patches[key] = buildPatch(value);
+  const zip = await JSZip.loadAsync(data);
+  const partNames = Object.keys(zip.files).filter(
+    (name) => name === "word/document.xml" || HEADER_FOOTER_RE.test(name),
+  );
+
+  for (const partName of partNames) {
+    const entry = zip.file(partName);
+    if (!entry) {
+      continue;
+    }
+    const xml = await entry.async("string");
+    const patched = patchXmlPart(xml, values);
+    if (patched.changed) {
+      zip.file(partName, patched.xml);
+    }
   }
 
-  const result = await patchDocument({
-    outputType: "uint8array",
-    data,
-    patches,
+  const result = await zip.generateAsync({
+    type: "nodebuffer",
   });
 
   return Buffer.from(result);

@@ -334,6 +334,17 @@
     "caseLawGreeting": "Stelle Fragen zu dieser Entscheidung — der vollständige Text ist hier verfügbar.",
     "chatAbout": "In AI-Chat einfügen",
     "contextPlaceholder": "Chat über {context}, / für Skills, @ für Kontext",
+    "createDocument": {
+      "continue": "Create document",
+      "created": "Document created",
+      "failedHeader": "Could not create document",
+      "headerReady": "Document ready",
+      "headerStreaming": "Document being created",
+      "openInFolio": "Open in editor",
+      "pickMatterPrompt": "Choose a matter to save this document into.",
+      "previewName": "Document: {name}",
+      "previewWaiting": "Waiting for content…"
+    },
     "deleteThread": "Konversation löschen",
     "documentView": {
       "original": "Original",

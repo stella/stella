@@ -30,6 +30,7 @@
     "@fontsource/carlito": "^5.2.8",
     "@fontsource/cousine": "^5.2.7",
     "@fontsource/tinos": "^5.2.7",
+    "@stll/docx-core": "workspace:*",
     "@stll/docx-utils": "workspace:*",
     "@stll/ui": "workspace:*",
     "fast-xml-parser": "^5.7.2",

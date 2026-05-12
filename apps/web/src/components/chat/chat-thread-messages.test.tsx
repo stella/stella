@@ -52,6 +52,10 @@ describe("chat thread messages", () => {
         handleDeny={() => {}}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        createDocumentMatters={[]}
+        isLoadingCreateDocumentMatters={false}
         showToolCalls={false}
         streamdownComponents={{
           a: ({ children, ...props }) => <a {...props}>{children}</a>,
@@ -89,6 +93,10 @@ describe("chat thread messages", () => {
         handleDeny={() => {}}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        createDocumentMatters={[]}
+        isLoadingCreateDocumentMatters={false}
         onResend={() => {}}
         showToolCalls={false}
         streamdownComponents={{
@@ -128,6 +136,10 @@ describe("chat thread messages", () => {
         handleDeny={() => {}}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        createDocumentMatters={[]}
+        isLoadingCreateDocumentMatters={false}
         onResend={() => {}}
         showToolCalls={false}
         streamdownComponents={{
@@ -163,6 +175,10 @@ describe("chat thread messages", () => {
         isGenerating
         messages={chatMessages}
         onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        createDocumentMatters={[]}
+        isLoadingCreateDocumentMatters={false}
         onResend={() => {}}
         showToolCalls={false}
         streamdownComponents={{
@@ -189,6 +205,10 @@ describe("chat thread messages", () => {
         handleDeny={() => {}}
         messages={[]}
         onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        createDocumentMatters={[]}
+        isLoadingCreateDocumentMatters={false}
         onResend={() => {}}
         showToolCallDetails={false}
         streamdownComponents={{

@@ -3,7 +3,7 @@ import { eq, sql } from "drizzle-orm";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { chatThreads } from "@/api/db/schema";
-import type { ChatMention } from "@/api/handlers/chat/types";
+import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 
@@ -26,6 +26,24 @@ export const extractMentionWorkspaceIds = (
     }
   }
   return Array.from(ids);
+};
+
+export const extractIncomingMessageWorkspaceIds = ({
+  mentions,
+  message,
+}: {
+  mentions: readonly ChatMention[];
+  message: ChatMessage;
+}): SafeId<"workspace">[] => {
+  if (message.role === "user") {
+    return extractMentionWorkspaceIds(mentions);
+  }
+
+  if (message.role === "assistant") {
+    return extractAssistantWorkspaceIds(message.parts);
+  }
+
+  return [];
 };
 
 // Walks an assistant message's parts for workspace-scoped data

@@ -21,6 +21,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   CopyIcon,
+  DownloadIcon,
   ExternalLinkIcon,
   FileTextIcon,
   LayersIcon,
@@ -99,7 +100,7 @@ import { EntityMetadataPanel } from "@/routes/_protected.workspaces/$workspaceId
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import type {
   InspectorTab,
-  PdfTab,
+  FileTab,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import {
   InspectorTabHeader,
@@ -117,6 +118,7 @@ import {
   PeekSuspenseFallback,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer";
 import { TaskDetailPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel";
+import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { useSyncJustifications } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
 import { useRenameEntity } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -183,8 +185,8 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const minimized = useInspectorStore((s) => s.minimized);
   const setMinimized = useInspectorStore((s) => s.setMinimized);
   const openChat = useInspectorStore((s) => s.openChat);
-  const openPdf = useInspectorStore((s) => s.openPdf);
-  const setPdfFacet = useInspectorStore((s) => s.setPdfFacet);
+  const openFile = useInspectorStore((s) => s.openFile);
+  const setFileFacet = useInspectorStore((s) => s.setFileFacet);
   // The inspector pane mounts under non-workspace routes too
   // (e.g. /chat for a global chat tab). All callers below use
   // absolute `to:` paths, so we don't need a `from` template —
@@ -404,7 +406,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     [],
   );
 
-  const startRename = useCallback((tab: PdfTab) => {
+  const startRename = useCallback((tab: FileTab) => {
     const dotIndex = tab.label.lastIndexOf(".");
     setEditValue(dotIndex > 0 ? tab.label.slice(0, dotIndex) : tab.label);
     setEditingTabId(tab.id);
@@ -422,7 +424,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
       return;
     }
     const target = tabs.find(
-      (candidate): candidate is PdfTab =>
+      (candidate): candidate is FileTab =>
         candidate.type === "pdf" && candidate.id === pendingRenameTabId,
     );
     if (target) {
@@ -431,8 +433,45 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     }
   }, [pendingRenameTabId, tabs, startRename, clearRenameRequest]);
 
+  // Honour edit-on-mount requests for DOCX tabs (e.g. the chat's
+  // "Open in editor" affordance). Wait until the tab is known and
+  // its compatibility check has resolved before kicking off
+  // `handleStartDocxEdit` — that helper short-circuits on
+  // pending/unsafe compatibility.
+  const pendingDocxEditTabId = useInspectorStore((s) => s.pendingDocxEditTabId);
+  const clearDocxEditRequest = useInspectorStore((s) => s.clearDocxEditRequest);
+  useEffect(() => {
+    if (pendingDocxEditTabId === null) {
+      return;
+    }
+    const target = tabs.find(
+      (candidate): candidate is FileTab =>
+        candidate.type === "pdf" && candidate.id === pendingDocxEditTabId,
+    );
+    if (!target || target.mimeType !== DOCX_MIME) {
+      return;
+    }
+    if (editingDocxTabId === target.id) {
+      clearDocxEditRequest();
+      return;
+    }
+    const compatibility = docxCompatibilityByTab.get(target.id);
+    if (!compatibility) {
+      return;
+    }
+    void handleStartDocxEdit(target.id);
+    clearDocxEditRequest();
+  }, [
+    pendingDocxEditTabId,
+    tabs,
+    editingDocxTabId,
+    docxCompatibilityByTab,
+    handleStartDocxEdit,
+    clearDocxEditRequest,
+  ]);
+
   const commitRename = useCallback(
-    (tab: PdfTab) => {
+    (tab: FileTab) => {
       const trimmed = editValue.trim();
       if (!trimmed) {
         setEditingTabId(null);
@@ -523,23 +562,25 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
       // Switch the surviving tab into "metadata-only" persona only
       // after full-view navigation succeeds; otherwise side peek stays
       // visually intact on rejected or aborted transitions.
-      useInspectorStore.getState().setPdfMetadataLane(activeTab.id, "expanded");
+      useInspectorStore
+        .getState()
+        .setFileMetadataLane(activeTab.id, "expanded");
     } catch (error) {
       setPdfViewerState(previousPdfViewer);
       useInspectorStore
         .getState()
-        .setPdfMetadataLane(activeTab.id, previousMetadataLane);
+        .setFileMetadataLane(activeTab.id, previousMetadataLane);
       throw error;
     }
   }, [activeTab, editingDocxTabId, navigate, setPdfViewerState]);
 
   const handleMinimizeFromFullView = useCallback(
-    (tab: PdfTab) => {
+    (tab: FileTab) => {
       // Drop back to side-peek persona and return to the screen
       // where the file was maximized from. Full-view internal file
       // switches use replace navigation, so browser back lands on
       // the original table/overview/filesystem context.
-      useInspectorStore.getState().setPdfMetadataLane(tab.id, "closed");
+      useInspectorStore.getState().setFileMetadataLane(tab.id, "closed");
       if (hasInAppHistoryEntry()) {
         window.history.back();
         return;
@@ -559,7 +600,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const [recentPdfIds, setRecentPdfIds] = useState<string[]>([]);
 
   const pdfTabs = useMemo(
-    () => tabs.filter((tab): tab is PdfTab => tab.type === "pdf"),
+    () => tabs.filter((tab): tab is FileTab => tab.type === "pdf"),
     [tabs],
   );
 
@@ -901,7 +942,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
               <FullViewPreviewGuard
                 facet={tab.facet}
                 flashMinimize={flashMinimizeButton}
-                setPdfFacet={setPdfFacet}
+                setFileFacet={setFileFacet}
                 tabId={tab.id}
               />
               <InspectorTabHeader
@@ -964,7 +1005,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                 fieldId={tab.id}
                 mimeType={tab.mimeType}
                 onChange={(next) => {
-                  setPdfFacet(tab.id, next);
+                  setFileFacet(tab.id, next);
                   if (next === "suggestions") {
                     // Glow the chat input under the file viewer so
                     // the user sees the suggestions they're reading
@@ -987,7 +1028,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                       onAiFieldClick={({ fieldId, propertyId }) => {
                         // Keep the inspector tab in sync so
                         // peek-back lands on the same selection.
-                        openPdf({
+                        openFile({
                           ...tab,
                           justificationFieldId: fieldId,
                           propertyId,
@@ -1108,8 +1149,35 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           </Button>
         );
 
+        const downloadButton = (
+          <Tooltip
+            content={t("common.download")}
+            render={
+              <Button
+                aria-label={t("common.download")}
+                onClick={() => {
+                  void downloadTabOriginalFile({
+                    fieldId: tab.id,
+                    fileName: tab.label,
+                    workspaceId: tab.workspaceId,
+                    onError: (message) => {
+                      stellaToast.add({ title: message, type: "error" });
+                    },
+                  });
+                }}
+                size="xs"
+                variant="ghost"
+              >
+                <DownloadIcon className="size-3.5" />
+              </Button>
+            }
+            side="bottom"
+          />
+        );
+
         const fileActions = (
           <>
+            {downloadButton}
             {desktopOpenButton}
             {isPreviewFacet && editToggle}
             {fullViewButton}
@@ -1233,7 +1301,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                   });
                   useInspectorStore
                     .getState()
-                    .replacePdfFieldId(tab.id, fieldId);
+                    .replaceFileFieldId(tab.id, fieldId);
                 }
               }}
               onScrollTopChange={handleDocxScrollTopChange}
@@ -1310,7 +1378,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             fieldId={tab.id}
             mimeType={tab.mimeType}
             onChange={(next) => {
-              setPdfFacet(tab.id, next);
+              setFileFacet(tab.id, next);
             }}
             pulseSeq={tab.facetPulseSeq}
             workspaceId={tab.workspaceId}
@@ -1335,7 +1403,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                     entityId={tab.entityId}
                     fileFieldId={tab.id}
                     onAiFieldClick={({ fieldId, propertyId }) => {
-                      openPdf({
+                      openFile({
                         ...tab,
                         justificationFieldId: fieldId,
                         propertyId,
@@ -1395,7 +1463,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                           // route's inspector lands directly on
                           // this panel instead of the default
                           // Preview.
-                          setPdfFacet(tab.id, "suggestions");
+                          setFileFacet(tab.id, "suggestions");
                           // Replace the current history entry
                           // rather than pushing a new one. This is
                           // an automatic, user-didn't-click-anything
@@ -1626,9 +1694,9 @@ const MeasuredPdfProvider = ({
   );
 };
 
-// ── Facet bar (PdfTab sub-views) ──────────────────
+// ── Facet bar (FileTab sub-views) ──────────────────
 
-type Facet = NonNullable<PdfTab["facet"]>;
+type Facet = NonNullable<FileTab["facet"]>;
 
 type FacetBarProps = {
   facet: Facet;
@@ -1677,15 +1745,15 @@ const FULLVIEW_FACETS: readonly Facet[] = [
  */
 type FullViewPreviewGuardProps = {
   tabId: string;
-  facet: PdfTab["facet"];
-  setPdfFacet: (tabId: string, facet: NonNullable<PdfTab["facet"]>) => void;
+  facet: FileTab["facet"];
+  setFileFacet: (tabId: string, facet: NonNullable<FileTab["facet"]>) => void;
   flashMinimize: (tabId: string) => void;
 };
 
 const FullViewPreviewGuard = ({
   tabId,
   facet,
-  setPdfFacet,
+  setFileFacet,
   flashMinimize,
 }: FullViewPreviewGuardProps) => {
   const t = useTranslations();
@@ -1693,10 +1761,10 @@ const FullViewPreviewGuard = ({
     if (facet !== "preview") {
       return;
     }
-    setPdfFacet(tabId, "metadata");
+    setFileFacet(tabId, "metadata");
     stellaToast.info(t("inspector.facet.previewInFullViewToast"));
     flashMinimize(tabId);
-  }, [facet, tabId, setPdfFacet, flashMinimize, t]);
+  }, [facet, tabId, setFileFacet, flashMinimize, t]);
   return null;
 };
 
@@ -1904,13 +1972,13 @@ const DocumentAiSourceBar = ({
   isActiveTab,
   workspaceId,
 }: {
-  activeTab: PdfTab;
+  activeTab: FileTab;
   fieldId: string;
   isActiveTab: boolean;
   workspaceId: string;
 }) => {
   const t = useTranslations();
-  const openPdf = useInspectorStore((s) => s.openPdf);
+  const openFile = useInspectorStore((s) => s.openFile);
 
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const { data: entity } = useSuspenseQuery(
@@ -2210,7 +2278,7 @@ const DocumentAiSourceBar = ({
             if (!prevSlot) {
               return;
             }
-            openPdf({
+            openFile({
               id: activeTab.id,
               entityId: activeTab.entityId,
               label: activeTab.label,
@@ -2235,7 +2303,7 @@ const DocumentAiSourceBar = ({
             if (!nextSlot) {
               return;
             }
-            openPdf({
+            openFile({
               id: activeTab.id,
               entityId: activeTab.entityId,
               label: activeTab.label,
@@ -3216,6 +3284,42 @@ const getTabAbbrev = (label: string): string => {
   const dot = label.lastIndexOf(".");
   const stem = dot === -1 ? label : label.slice(0, dot);
   return stem.slice(0, 3);
+};
+
+type DownloadTabFileProps = {
+  fieldId: string;
+  fileName: string;
+  workspaceId: string;
+  onError: (message: string) => void;
+};
+
+// Pulls a presigned URL for the file behind this tab's field and
+// downloads the original (DOCX, PDF, etc.) — same path the row
+// actions use, just exposed in the inspector header so users have
+// a one-click download next to Edit / Full view.
+const downloadTabOriginalFile = async ({
+  fieldId,
+  fileName,
+  workspaceId,
+  onError,
+}: DownloadTabFileProps) => {
+  const response = await api
+    .files({ workspaceId: toSafeId<"workspace">(workspaceId) })
+    .url({ fieldId: toSafeId<"field">(fieldId) })
+    .get({ query: { purpose: "download" } });
+
+  if (response.error) {
+    onError(toAPIError(response.error).message);
+    return;
+  }
+
+  const fetched = await fetch(response.data.presignedUrl);
+  if (!fetched.ok) {
+    onError(`Download failed (HTTP ${fetched.status}).`);
+    return;
+  }
+
+  downloadFile(await fetched.blob(), fileName);
 };
 
 type VerticalTabIconProps = {

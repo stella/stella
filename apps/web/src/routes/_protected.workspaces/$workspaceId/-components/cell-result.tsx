@@ -151,7 +151,7 @@ const FileCell = ({
   propertyId,
 }: FileCellProps) => {
   const isDisplayable = isFileDisplayable({ mimeType, pdfFileId, encrypted });
-  const openPdf = useInspectorStore((s) => s.openPdf);
+  const openFile = useInspectorStore((s) => s.openFile);
 
   if (isDisplayable) {
     return (
@@ -161,7 +161,7 @@ const FileCell = ({
           <button
             className="bg-muted grid max-w-full min-w-0 cursor-pointer grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5 text-start"
             onClick={() =>
-              openPdf({
+              openFile({
                 id: fieldId,
                 entityId,
                 label: fileName,

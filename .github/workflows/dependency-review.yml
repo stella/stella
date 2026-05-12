@@ -56,4 +56,12 @@ jobs:
             MPL-2.0,
             Python-2.0,
             Zlib
+          # GitHub's dependency snapshot currently reports some Bun
+          # workspace/catalog entries as license "Null" in PR summaries even
+          # though the package manifests declare allowed licenses. Keep these
+          # exceptions package-scoped; do not add namespace/group exceptions.
+          allow-dependencies-licenses: >-
+            pkg:npm/@ai-sdk/provider-utils,
+            pkg:npm/@stll/docx-core,
+            pkg:npm/jszip
           comment-summary-in-pr: always

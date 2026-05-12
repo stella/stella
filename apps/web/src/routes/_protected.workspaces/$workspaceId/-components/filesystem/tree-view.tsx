@@ -1456,7 +1456,7 @@ const FilesystemRow = ({
       return () => {
         const store = useInspectorStore.getState();
         for (const tab of navigables) {
-          store.openPdf(tab);
+          store.openFile(tab);
         }
       };
     }
@@ -1465,7 +1465,7 @@ const FilesystemRow = ({
     }
     if (navigable && file !== undefined) {
       return () =>
-        useInspectorStore.getState().openPdf({
+        useInspectorStore.getState().openFile({
           id: file.fieldId,
           entityId: file.entityId,
           label: name,

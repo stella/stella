@@ -10,12 +10,13 @@ import type { ComponentProps } from "react";
 import { useChat } from "@ai-sdk/react";
 import type { Chat } from "@ai-sdk/react";
 import { useQuery } from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
+import { useNavigate, useRouteContext } from "@tanstack/react-router";
 import { isToolUIPart } from "ai";
 
 import type {
   ApprovalToolName,
   AskUserOutput,
+  ChatUITools,
   PersistedChatMessage,
   ToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
@@ -28,8 +29,21 @@ import {
   isExternalMcpToolName,
   isToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
+import { openEntityInInspector } from "@/components/chat/entity-open";
+import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
+import { api } from "@/lib/api";
+import { toChatThreadId } from "@/lib/chat-thread-ref";
+import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
+
+type CreateDocumentInput = ChatUITools["create-document"]["input"];
+type CreateDocumentOutput = ChatUITools["create-document"]["output"];
+type CreateDocumentSuccess = Extract<CreateDocumentOutput, { success: true }>;
 
 type UseChatSessionOptions = {
   chat: Chat<PersistedChatMessage>;
@@ -50,6 +64,7 @@ export const useChatSession = ({
   conversationId,
   workspaceId,
 }: UseChatSessionOptions) => {
+  const navigate = useNavigate();
   const organizationId = useRouteContext({
     from: "/_protected",
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -159,6 +174,112 @@ export const useChatSession = ({
       }),
     [addToolOutput],
   );
+
+  const { data: workspacesNavigation, isPending: isLoadingMatters } = useQuery(
+    workspacesNavigationOptions,
+  );
+  const createDocumentMatters: readonly NeedsMatterMatter[] = useMemo(
+    () =>
+      workspacesNavigation?.workspaces.map((w) => ({
+        id: w.id,
+        name: w.name,
+        color: w.color,
+        client: w.client?.displayName
+          ? { displayName: w.client.displayName }
+          : null,
+      })) ?? [],
+    [workspacesNavigation],
+  );
+
+  const handleCreateDocumentResolve = useCallback(
+    async (
+      toolCallId: string,
+      matterId: string,
+      input: CreateDocumentInput,
+    ) => {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(matterId) })
+        ["create-from-legal-source"].post({
+          queryKey: entitiesKeys.all(matterId),
+          name: input.name,
+          source: input.source,
+        });
+
+      if (response.error) {
+        const apiError = toAPIError(response.error);
+        const failure: CreateDocumentOutput = {
+          success: false,
+          message: apiError.message,
+        };
+        await addToolOutput({
+          tool: "create-document",
+          toolCallId,
+          output: failure,
+        });
+        return;
+      }
+
+      await addToolOutput({
+        tool: "create-document",
+        toolCallId,
+        output: response.data,
+      });
+    },
+    [addToolOutput],
+  );
+
+  const handleOpenCreatedDocument = useCallback(
+    async (output: CreateDocumentSuccess) => {
+      // Old chat threads predate `entityId`/`workspaceId` on the
+      // tool output. Without them we can't construct a route, so
+      // skip the navigation — the card surfaces this by hiding the
+      // open affordance.
+      if (!output.entityId || !output.workspaceId) {
+        return;
+      }
+      // Pin this chat thread in the workspace inspector. Inherit
+      // the thread's existing scope (`workspaceId` arg from the
+      // session, may be undefined for a global thread) — claiming
+      // the destination matter as the thread's owner triggers a
+      // server-side scope-mismatch error in fetchThreadMessages.
+      // Seed the chat's matter context so the AI keeps the picked
+      // matter in scope without forcing thread ownership.
+      const inspector = useInspectorStore.getState();
+      inspector.openChat({
+        id: toChatThreadId(conversationId),
+        ...(workspaceId !== undefined && { workspaceId }),
+        contextMatterIds: [output.workspaceId],
+      });
+      // Navigate to the workspace shell (not the fullscreen document
+      // route) so the inspector is the surface that hosts the file —
+      // the user wanted to land with the chat tucked into the right
+      // panel, not on the dedicated document page.
+      await navigate({
+        to: "/workspaces/$workspaceId/$viewId",
+        params: { workspaceId: output.workspaceId, viewId: "all" },
+      });
+      // Open the entity in the inspector, then ask the panel to
+      // start folio edit mode for whichever PDF tab carries the
+      // entity. `openEntityInInspector` resolves the file field
+      // and synchronously calls `openFile`, so the tab is in the
+      // store by the time we read it.
+      await openEntityInInspector(
+        output.entityId,
+        output.fileName,
+        output.workspaceId,
+      );
+      const tab = useInspectorStore
+        .getState()
+        .tabs.find(
+          (candidate) =>
+            candidate.type === "pdf" && candidate.entityId === output.entityId,
+        );
+      if (tab) {
+        useInspectorStore.getState().requestDocxEdit(tab.id);
+      }
+    },
+    [conversationId, navigate, workspaceId],
+  );
   const streamdownComponents = useMemo(
     () => ({
       a: (props: ComponentProps<"a">) =>
@@ -250,6 +371,10 @@ export const useChatSession = ({
     handleDeny,
     handleAskUserSubmit,
     handleAlwaysAllow,
+    handleCreateDocumentResolve,
+    handleOpenCreatedDocument,
+    createDocumentMatters,
+    isLoadingCreateDocumentMatters: isLoadingMatters,
     addToolOutput,
     streamdownComponents,
     approvalPendingMessageId,

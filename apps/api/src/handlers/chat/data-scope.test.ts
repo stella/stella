@@ -3,7 +3,7 @@ import { describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
-import type { ChatMention } from "@/api/handlers/chat/types";
+import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -11,6 +11,7 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import {
   expandThreadDataScope,
   extractAssistantWorkspaceIds,
+  extractIncomingMessageWorkspaceIds,
   extractMentionWorkspaceIds,
 } from "./data-scope";
 
@@ -227,6 +228,40 @@ describe("extractAssistantWorkspaceIds", () => {
       },
     ];
     expect(extractAssistantWorkspaceIds(parts)).toEqual([]);
+  });
+});
+
+describe("extractIncomingMessageWorkspaceIds", () => {
+  test("assistant create-document outputs widen the data scope", () => {
+    const message = {
+      id: "assistant-created-doc",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-create-document",
+          toolCallId: "tool-call-1",
+          state: "output-available",
+          input: {
+            name: "Generated Agreement",
+            source: "@title Generated Agreement",
+          },
+          output: {
+            success: true,
+            fileName: "Generated Agreement.docx",
+            entityId: "00000000-0000-0000-0000-0000000000ee",
+            workspaceId: wsA,
+            entityRef: "ent_1",
+            matterRef: "mat_1",
+            href: `#stella-entity=${wsA}:00000000-0000-0000-0000-0000000000ee`,
+            mention: "[Generated Agreement](#stella-entity-ref=ent_1)",
+          },
+        },
+      ],
+    } satisfies ChatMessage;
+
+    expect(
+      extractIncomingMessageWorkspaceIds({ message, mentions: [] }),
+    ).toEqual([wsA]);
   });
 });
 

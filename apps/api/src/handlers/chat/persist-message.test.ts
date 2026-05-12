@@ -32,9 +32,8 @@ const createDocumentApprovalRespondedMessage = {
       toolCallId: "tool-create-document-1",
       state: "approval-responded",
       input: {
-        workspaceId,
         name: "Draft agreement",
-        markdown: "# Draft agreement",
+        source: "@title Draft agreement",
       },
       approval: {
         id: "approval-1",
@@ -52,13 +51,14 @@ const createDocumentFinishedMessage = {
       toolCallId: "tool-create-document-1",
       state: "output-available",
       input: {
-        workspaceId,
         name: "Draft agreement",
-        markdown: "# Draft agreement",
+        source: "@title Draft agreement",
       },
       output: {
         success: true,
         fileName: "Draft agreement.docx",
+        entityId,
+        workspaceId,
         entityRef: entityId,
         matterRef: workspaceId,
         href: `#stella-entity=${workspaceId}:${entityId}`,

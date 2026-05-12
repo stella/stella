@@ -1,3 +1,4 @@
+import { normalizeLegacyToolInputs } from "@/api/handlers/chat/legacy-tool-compat";
 import type {
   ChatMessage,
   ChatMessageContent,
@@ -37,7 +38,7 @@ export const planMessagePersistence = ({
   const messages = storedMessages.map((m) => ({
     id: m.id,
     role: m.role,
-    parts: m.content.data,
+    parts: normalizeLegacyToolInputs(m.content.data),
   }));
 
   if (message.role === "user") {

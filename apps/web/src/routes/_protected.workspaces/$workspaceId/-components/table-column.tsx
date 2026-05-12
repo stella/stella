@@ -194,9 +194,9 @@ const WithOpenEntityButton = ({
   children,
 }: PropsWithChildren<WithOpenEntityButtonProps>) => {
   const t = useTranslations();
-  const openPdf = useInspectorStore((s) => s.openPdf);
+  const openFile = useInspectorStore((s) => s.openFile);
   const handleOpenPreview = () => {
-    openPdf({
+    openFile({
       id: fieldId,
       entityId,
       label,
