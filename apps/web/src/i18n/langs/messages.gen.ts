@@ -1156,11 +1156,13 @@ type Messages = {
     "agentSkills": {
       "builtInBadge": "Built in";
       "builtInSection": "Built-in skills";
+      "chooseFile": "Choose a file or drag it here";
       "deleteConfirmDescription": "\"{name}\" will be removed from this workspace.";
       "deleteConfirmTitle": "Delete skill?";
       "description": "Install SKILL.md packs that add specialist methods and read-only resources to chat.";
       "disableSkill": "Disable skill";
       "disabled": "Disabled";
+      "dropFile": "Drop SKILL.md or .zip here";
       "emptyDescription": "Upload a SKILL.md file, a zipped skill folder, or import a public GitHub skill URL.";
       "emptyTitle": "Install your first skill";
       "enableSkill": "Enable skill";
@@ -1174,6 +1176,7 @@ type Messages = {
       "scope": "Visibility";
       "scopePrivate": "Only me";
       "scopeTeam": "Everyone in the organisation";
+      "selectedFile": "Selected: {name}";
       "sourceUpload": "Uploaded";
       "sourceUrl": "Public URL";
       "teamSection": "Team skills";

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
@@ -420,9 +421,30 @@ function UploadSkillDialog({
 }: SkillFormDialogProps) {
   const t = useTranslations();
   const tSkills = useTranslations("knowledge.agentSkills");
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [scope, setScope] = useState<SkillScope>("private");
   const [saving, setSaving] = useState(false);
+
+  const setFirstFile = (files: FileList | null) => {
+    const selectedFile = files?.item(0);
+    if (!selectedFile) {
+      return;
+    }
+
+    setFile(selectedFile);
+  };
+
+  const markFileDragActive = (event: React.DragEvent<HTMLButtonElement>) => {
+    if (!Array.from(event.dataTransfer.types).includes("Files")) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setIsDraggingFile(true);
+  };
 
   const submit = async () => {
     if (!file) {
@@ -451,6 +473,7 @@ function UploadSkillDialog({
     }
 
     onChanged();
+    setFile(null);
     onOpenChange(false);
   };
 
@@ -464,9 +487,43 @@ function UploadSkillDialog({
           <p className="text-muted-foreground text-sm">
             {tSkills("uploadHelp")}
           </p>
-          <Input
+          <button
+            className={cn(
+              "border-border bg-muted/20 flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed p-6 text-center transition-colors",
+              "focus-visible:ring-ring/24 outline-none focus-visible:ring-3",
+              isDraggingFile && "border-ring bg-muted/40 ring-ring/24 ring-3",
+            )}
+            onDragEnter={markFileDragActive}
+            onDragLeave={(event) => {
+              event.preventDefault();
+              setIsDraggingFile(false);
+            }}
+            onDragOver={markFileDragActive}
+            onClick={() => fileInputRef.current?.click()}
+            onDrop={(event) => {
+              event.preventDefault();
+              setIsDraggingFile(false);
+              setFirstFile(event.dataTransfer.files);
+            }}
+            type="button"
+          >
+            <FileUpIcon className="text-muted-foreground size-7" />
+            <span className="text-foreground mt-3 text-sm font-medium">
+              {tSkills("dropFile")}
+            </span>
+            <span className="text-muted-foreground mt-1 max-w-full truncate text-sm">
+              {file
+                ? tSkills("selectedFile", { name: file.name })
+                : tSkills("chooseFile")}
+            </span>
+          </button>
+          <input
+            ref={fileInputRef}
+            aria-hidden="true"
             accept=".md,.zip"
-            onChange={(event) => setFile(event.target.files?.item(0) ?? null)}
+            className="sr-only"
+            onChange={(event) => setFirstFile(event.target.files)}
+            tabIndex={-1}
             type="file"
           />
           <ScopeField
