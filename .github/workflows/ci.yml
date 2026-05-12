@@ -220,7 +220,7 @@ jobs:
           run=false
           for file in "${changed_files[@]}"; do
             case "$file" in
-              apps/web/*|packages/*|bun.lock|package.json|.github/workflows/ci.yml)
+              apps/web/*|packages/*|VERSION|bun.lock|package.json|.github/workflows/ci.yml)
                 run=true
                 break
                 ;;
