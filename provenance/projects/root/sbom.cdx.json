@@ -20,7 +20,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/ai-models.ts#19"
+            "location": "apps/api/src/lib/ai-models.ts#22"
           }
         ]
       },
@@ -59,6 +59,63 @@
       "version": "3.0.74"
     },
     {
+      "bom-ref": "pkg:npm/@ai-sdk/azure@3.0.62",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@ai-sdk/azure/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@ai-sdk/azure/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/ai-models.ts#23"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://ai-sdk.dev/docs"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/vercel/ai"
+        }
+      ],
+      "group": "@ai-sdk",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "azure",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@ai-sdk/azure/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40ai-sdk/azure@3.0.62",
+      "scope": "required",
+      "tags": [
+        "framework"
+      ],
+      "type": "framework",
+      "version": "3.0.62"
+    },
+    {
       "bom-ref": "pkg:npm/@ai-sdk/devtools@0.0.17",
       "evidence": {
         "identity": [
@@ -77,7 +134,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/ai-models.ts#20"
+            "location": "apps/api/src/lib/ai-models.ts#24"
           }
         ]
       },
@@ -134,7 +191,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/ai-models.ts#22"
+            "location": "apps/api/src/lib/ai-models.ts#26"
           }
         ]
       },
@@ -200,7 +257,7 @@
             "location": "apps/api/src/handlers/search/ai.ts#1"
           },
           {
-            "location": "apps/api/src/lib/ai-models.ts#21"
+            "location": "apps/api/src/lib/ai-models.ts#25"
           },
           {
             "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#1"
@@ -302,6 +359,63 @@
       "version": "1.0.39"
     },
     {
+      "bom-ref": "pkg:npm/@ai-sdk/mistral@3.0.35",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@ai-sdk/mistral/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@ai-sdk/mistral/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/ai-models.ts#27"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://ai-sdk.dev/docs"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/vercel/ai"
+        }
+      ],
+      "group": "@ai-sdk",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "mistral",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@ai-sdk/mistral/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40ai-sdk/mistral@3.0.35",
+      "scope": "required",
+      "tags": [
+        "framework"
+      ],
+      "type": "framework",
+      "version": "3.0.35"
+    },
+    {
       "bom-ref": "pkg:npm/@ai-sdk/openai@3.0.58",
       "evidence": {
         "identity": [
@@ -320,7 +434,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/ai-models.ts#23"
+            "location": "apps/api/src/lib/ai-models.ts#28"
           }
         ]
       },
@@ -358,6 +472,64 @@
       ],
       "type": "framework",
       "version": "3.0.58"
+    },
+    {
+      "bom-ref": "pkg:npm/@ai-sdk/openai@3.0.61",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@ai-sdk/azure/node_modules/@ai-sdk/openai/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@ai-sdk/azure/node_modules/@ai-sdk/openai/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/ai-models.ts#28"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://ai-sdk.dev/docs"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/vercel/ai"
+        }
+      ],
+      "group": "@ai-sdk",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "openai",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@ai-sdk/azure/node_modules/@ai-sdk/openai/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40ai-sdk/openai@3.0.61",
+      "scope": "required",
+      "tags": [
+        "framework",
+        "ml"
+      ],
+      "type": "framework",
+      "version": "3.0.61"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/provider-utils@4.0.26",
@@ -5422,7 +5594,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/ai-models.ts#24"
+            "location": "apps/api/src/lib/ai-models.ts#29"
           }
         ]
       },
@@ -9036,7 +9208,7 @@
             "location": "apps/landing/src/components/react/ProductShowcase.tsx#1"
           },
           {
-            "location": "apps/web/src/components/ai-config-role-model-picker.tsx#19"
+            "location": "apps/web/src/components/ai-config-role-model-picker.tsx#20"
           },
           {
             "location": "apps/web/src/components/ai-elements/conversation.tsx#9"
@@ -9507,6 +9679,9 @@
             "location": "apps/web/src/components/ai-config-providers-editor.tsx#6"
           },
           {
+            "location": "apps/web/src/components/ai-config-role-model-picker.tsx#12"
+          },
+          {
             "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#26"
           },
           {
@@ -9672,7 +9847,7 @@
             "location": "apps/web/src/components/ai-config-providers-editor.tsx#13"
           },
           {
-            "location": "apps/web/src/components/ai-config-role-model-picker.tsx#18"
+            "location": "apps/web/src/components/ai-config-role-model-picker.tsx#19"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#38"
@@ -14356,10 +14531,10 @@
             "location": "apps/api/src/lib/ai-error.ts#9"
           },
           {
-            "location": "apps/api/src/lib/ai-models.ts#25"
+            "location": "apps/api/src/lib/ai-models.ts#30"
           },
           {
-            "location": "apps/api/src/lib/ai-models.ts#26"
+            "location": "apps/api/src/lib/ai-models.ts#31"
           },
           {
             "location": "apps/api/src/lib/analytics/ai.ts#6"
@@ -15362,7 +15537,7 @@
             "location": "apps/api/src/handlers/workspaces/workspace-members-remove.ts#1"
           },
           {
-            "location": "apps/api/src/lib/ai-models.ts#27"
+            "location": "apps/api/src/lib/ai-models.ts#32"
           },
           {
             "location": "apps/api/src/lib/anonymization-blacklist.ts#1"
@@ -19075,6 +19250,9 @@
       ],
       "purl": "pkg:npm/lucide-react@1.14.0",
       "scope": "required",
+      "tags": [
+        "cloud"
+      ],
       "type": "library",
       "version": "1.14.0"
     },
