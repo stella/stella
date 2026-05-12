@@ -51,6 +51,7 @@ import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-a
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { StatusMessage } from "@/components/route-components";
 import Tooltip from "@/components/tooltip";
+import { anonymizeChatText } from "@/lib/anonymize/chat-anonymize";
 import { chatThreadIdFromFileFieldId } from "@/lib/chat-thread-ref";
 import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
 import { anonymizationTermsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-terms";
@@ -180,18 +181,78 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   const anonymizationTermsQuery = useQuery(
     anonymizationTermsOptions(workspaceId),
   );
-  const anonymizationTerms: AnonymizationTerm[] =
+  const workspaceAnonymizationTerms: AnonymizationTerm[] =
     anonymizationTermsQuery.data?.entries.map((entry) => ({
       canonical: entry.canonical,
       label: entry.label,
       variants: entry.variants,
     })) ?? [];
+  // Detected-entity highlights — runs the wasm anonymization
+  // pipeline against the live doc text and exposes each detected
+  // entity as a Folio decoration term. Combined with workspace
+  // vocabulary so the editor shows everything that *would* be
+  // anonymized right now, not only the curated catalogue.
+  //
+  // Re-runs when the doc text changes (debounced inside the
+  // effect) so edits and reloads pick up new entities without
+  // re-running on every keystroke.
+  const [detectedAnonymizationTerms, setDetectedAnonymizationTerms] =
+    useState<AnonymizationTerm[]>([]);
   useEffect(() => {
     const view = editorViewForAnonymization;
     if (!view) return;
-    const { key, payload } = setAnonymizationTermsMeta(anonymizationTerms);
+    let cancelled = false;
+    const run = () => {
+      const text = view.state.doc.textContent;
+      if (text.length === 0) {
+        setDetectedAnonymizationTerms([]);
+        return;
+      }
+      anonymizeChatText({ text, workspaceId })
+        .then((result) => {
+          if (cancelled) return;
+          const byCanonical = new Map<string, AnonymizationTerm>();
+          for (const pair of result.pairs) {
+            // Placeholder is `[LABEL_N]` — pull the LABEL out.
+            const match = /^\[([A-Z][A-Z0-9_]*)_\d+]$/.exec(pair.placeholder);
+            const label = match
+              ? match[1]!.toLowerCase().replace(/_/g, " ")
+              : "misc";
+            const key = `${label} ${pair.original.toLowerCase()}`;
+            if (!byCanonical.has(key)) {
+              byCanonical.set(key, {
+                canonical: pair.original,
+                label,
+              });
+            }
+          }
+          setDetectedAnonymizationTerms([...byCanonical.values()]);
+        })
+        .catch(() => {
+          // Detection is a visual aid only; swallow failures rather
+          // than surfacing a toast on every keystroke.
+        });
+    };
+    const initialTimer = setTimeout(run, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(initialTimer);
+    };
+  }, [editorViewForAnonymization, workspaceId]);
+  useEffect(() => {
+    const view = editorViewForAnonymization;
+    if (!view) return;
+    const merged: AnonymizationTerm[] = [
+      ...workspaceAnonymizationTerms,
+      ...detectedAnonymizationTerms,
+    ];
+    const { key, payload } = setAnonymizationTermsMeta(merged);
     view.dispatch(view.state.tr.setMeta(key, payload));
-  }, [editorViewForAnonymization, anonymizationTerms]);
+  }, [
+    editorViewForAnonymization,
+    workspaceAnonymizationTerms,
+    detectedAnonymizationTerms,
+  ]);
   const didOpenRef = useRef(false);
   const errorToastShownRef = useRef(false);
   const lastStyleLabelRef = useRef("Normal");
