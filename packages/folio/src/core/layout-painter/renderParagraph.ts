@@ -1329,10 +1329,21 @@ export function renderParagraphFragment(
     borderBox.style.position = "absolute";
     borderBox.style.pointerEvents = "none";
     borderBox.style.boxSizing = "border-box";
-    borderBox.style.left = `${indentLeft - (borders.left?.space ?? 0)}px`;
-    borderBox.style.right = `${indentRight - (borders.right?.space ?? 0)}px`;
-    borderBox.style.top = `${-(renderedTopBorder?.space ?? 0)}px`;
-    borderBox.style.bottom = `${-(renderedBottomBorder?.space ?? 0)}px`;
+    // With box-sizing: border-box, the border paints inside the box, so each
+    // side's outer edge must shift outward by both `space` (text↔border gap
+    // in OOXML §17.3.1.24) and the border width to keep the visible gap.
+    borderBox.style.left = `${
+      indentLeft - (borders.left?.space ?? 0) - (borders.left?.width ?? 0)
+    }px`;
+    borderBox.style.right = `${
+      indentRight - (borders.right?.space ?? 0) - (borders.right?.width ?? 0)
+    }px`;
+    borderBox.style.top = `${
+      -(renderedTopBorder?.space ?? 0) - (renderedTopBorder?.width ?? 0)
+    }px`;
+    borderBox.style.bottom = `${
+      -(renderedBottomBorder?.space ?? 0) - (renderedBottomBorder?.width ?? 0)
+    }px`;
 
     if (renderedTopBorder) {
       borderBox.style.borderTop = borderToCss(renderedTopBorder);
