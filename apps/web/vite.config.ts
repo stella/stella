@@ -50,6 +50,15 @@ export default defineConfig(({ mode }) => {
         "Cross-Origin-Embedder-Policy": "credentialless",
       },
     },
+    // Default worker output is "iife", which forbids top-level await.
+    // The @stll/*-wasm packages we own emit a loader with top-level
+    // `await fetch(__wasmUrl)`, so any Web Worker importing them fails
+    // `vite build` with [UNSUPPORTED_FEATURE]. Switch to ES module
+    // workers, which support top-level await and match the modern
+    // browser target the rest of the build already assumes (es2025).
+    worker: {
+      format: "es",
+    },
     build: {
       target: "es2025",
       rollupOptions: {
