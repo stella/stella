@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   DownloadIcon,
@@ -80,14 +80,19 @@ function SkillsPage() {
   const t = useTranslations();
   const tSkills = useTranslations("knowledge.agentSkills");
   const queryClient = useQueryClient();
-  const { data, isLoading } = useQuery(skillsOptions());
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
+    useInfiniteQuery(skillsOptions());
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<InstalledSkill | null>(null);
-  const canManageTeam = data?.canManageTeam ?? false;
-  const installed = data?.installed ?? [];
-  const builtIn = data?.builtIn ?? [];
+  const firstPage = data?.pages.at(0);
+  const canManageTeam = firstPage?.canManageTeam ?? false;
+  const installed = useMemo(
+    () => data?.pages.flatMap((page) => page.installed) ?? [],
+    [data],
+  );
+  const builtIn = firstPage?.builtIn ?? [];
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: knowledgeKeys.skills.all });
@@ -212,6 +217,20 @@ function SkillsPage() {
             />
           ))}
         </SkillSection>
+      )}
+
+      {hasNextPage && (
+        <div className="mb-8 flex justify-center">
+          <Button
+            disabled={isFetchingNextPage}
+            onClick={() => {
+              void fetchNextPage();
+            }}
+            variant="outline"
+          >
+            {isFetchingNextPage ? t("common.loading") : t("common.loadMore")}
+          </Button>
+        </div>
       )}
 
       {builtIn.length > 0 && (

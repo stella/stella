@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { and, desc, eq, or } from "drizzle-orm";
+import { t } from "elysia";
 
 import { listSkillMetadata, listSkillResources } from "@stll/skills";
 
@@ -8,14 +9,28 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
 
+const listSkillsQuerySchema = t.Object({
+  limit: t.Optional(
+    t.Integer({
+      minimum: 1,
+      maximum: LIMITS.agentSkillsPageSizeMax,
+    }),
+  ),
+  offset: t.Optional(t.Integer({ minimum: 0 })),
+});
+
 const config = {
   permissions: { workspace: ["read"] },
+  query: listSkillsQuerySchema,
 } satisfies HandlerConfig;
 
 const listSkills = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, user, memberRole }) {
-    const installed = yield* Result.await(
+  async function* ({ safeDb, session, user, memberRole, query }) {
+    const limit = query.limit ?? LIMITS.agentSkillsPageSizeDefault;
+    const offset = query.offset ?? 0;
+
+    const installedRows = yield* Result.await(
       safeDb((tx) =>
         tx
           .select({
@@ -48,10 +63,14 @@ const listSkills = createSafeRootHandler(
             desc(agentSkills.enabled),
             agentSkills.scope,
             agentSkills.name,
+            agentSkills.id,
           )
-          .limit(LIMITS.agentSkillsListLimit),
+          .limit(limit + 1)
+          .offset(offset),
       ),
     );
+    const hasMore = installedRows.length > limit;
+    const installed = hasMore ? installedRows.slice(0, limit) : installedRows;
 
     return Result.ok({
       canManageTeam: ["admin", "owner"].includes(memberRole.role),
@@ -69,6 +88,7 @@ const listSkills = createSafeRootHandler(
         resourceCount: listSkillResources(skill.name).length,
       })),
       installed,
+      nextOffset: hasMore ? offset + installed.length : null,
     });
   },
 );

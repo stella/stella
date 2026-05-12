@@ -13,7 +13,7 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
   .use(permissionMacro)
   .use(invalidateQuery)
   .guard({ validateAuth: true })
-  .get("/", listSkills.handler)
+  .get("/", listSkills.handler, { query: listSkills.config.query })
   .post("/upload", uploadSkill.handler, {
     body: uploadSkill.config.body,
     invalidateQuery: true,

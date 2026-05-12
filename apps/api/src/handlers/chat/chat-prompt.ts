@@ -358,6 +358,7 @@ type BuildWorkspacePromptProps = {
   practiceJurisdictions?: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
+  skillMetadata?: readonly SkillMetadata[] | undefined;
   userContext: UserContext | null;
   workspaceId: SafeId<"workspace">;
 };
@@ -366,6 +367,7 @@ const buildWorkspacePromptPartsFromDb = async ({
   practiceJurisdictions = [],
   refRegistry,
   safeDb,
+  skillMetadata = getChatSkillMetadata(),
   userContext,
   workspaceId,
 }: BuildWorkspacePromptProps): Promise<Result<ChatPromptParts, SafeDbError>> =>
@@ -382,7 +384,7 @@ const buildWorkspacePromptPartsFromDb = async ({
         entityCount: workspacePromptData.entityCount,
         practiceJurisdictions,
         refRegistry,
-        skillMetadata: getChatSkillMetadata(),
+        skillMetadata,
         userContext,
         workspaceId,
         workspaceName: workspacePromptData.workspaceName,

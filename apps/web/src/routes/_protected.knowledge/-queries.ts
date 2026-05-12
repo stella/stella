@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { STALE_TIME } from "@/lib/consts";
@@ -8,6 +8,12 @@ import { toSafeId } from "@/lib/safe-id";
 
 // ── Key factory ─────────────────────────────────────
 
+const SKILLS_PAGE_SIZE = 100;
+
+type SkillsPageKey = {
+  limit: number;
+};
+
 export const knowledgeKeys = {
   shortcuts: {
     all: ["shortcuts"] as const,
@@ -15,7 +21,8 @@ export const knowledgeKeys = {
   },
   skills: {
     all: ["skills"] as const,
-    list: () => [...knowledgeKeys.skills.all, "list"] as const,
+    list: (key: SkillsPageKey) =>
+      [...knowledgeKeys.skills.all, "list", key] as const,
   },
   templates: {
     all: ["templates"] as const,
@@ -242,15 +249,23 @@ export const shortcutsOptions = () =>
 // ── Skills queries ───────────────────────────────────
 
 export const skillsOptions = () =>
-  queryOptions({
-    queryKey: knowledgeKeys.skills.list(),
-    queryFn: async ({ signal }) => {
-      const response = await api.skills.get({ fetch: { signal } });
+  infiniteQueryOptions({
+    queryKey: knowledgeKeys.skills.list({ limit: SKILLS_PAGE_SIZE }),
+    queryFn: async ({ pageParam, signal }) => {
+      const response = await api.skills.get({
+        query: {
+          limit: SKILLS_PAGE_SIZE,
+          offset: pageParam,
+        },
+        fetch: { signal },
+      });
       if (response.error) {
         throw toAPIError(response.error);
       }
       return response.data;
     },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => lastPage.nextOffset ?? undefined,
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 

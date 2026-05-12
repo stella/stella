@@ -53,10 +53,20 @@ type GithubSkillPath = {
   rootPath: string;
 };
 
-type GithubTreeItem = {
+type GithubContentItem = {
   path: string;
   type: string;
 };
+
+const SKILL_RESOURCE_ROOTS = new Set([
+  "assets",
+  "knowledge",
+  "prompts",
+  "reference",
+  "references",
+  "scripts",
+  "templates",
+]);
 
 export const parseUploadedSkillPackage = async (
   file: File,
@@ -303,71 +313,241 @@ const fetchGithubSkillPackage = async (
   target: GithubSkillPath,
   originalUrl: string,
 ): Promise<ParsedSkillPackage> => {
-  const treeUrl = new URL(
-    `https://api.github.com/repos/${target.owner}/${target.repo}/git/trees/${target.ref}`,
-  );
-  treeUrl.searchParams.set("recursive", "1");
-
-  const response = await fetchSafeBytes(treeUrl);
-  const tree = parseGithubTreeResponse(JSON.parse(decodeUtf8(response.body)));
-  const rootPrefix = target.rootPath ? `${target.rootPath}/` : "";
-  const wanted = tree
-    .filter((item) => item.type === "blob")
-    .filter((item) =>
-      rootPrefix.length === 0
-        ? item.path === SKILL_FILE_NAME ||
-          item.path.startsWith("references/") ||
-          item.path.startsWith("reference/") ||
-          item.path.startsWith("knowledge/") ||
-          item.path.startsWith("prompts/") ||
-          item.path.startsWith("templates/") ||
-          item.path.startsWith("assets/") ||
-          item.path.startsWith("scripts/")
-        : item.path.startsWith(rootPrefix),
-    )
-    .filter((item) => {
-      const relative =
-        rootPrefix.length > 0 ? item.path.slice(rootPrefix.length) : item.path;
-      return (
-        relative === SKILL_FILE_NAME ||
-        isAllowedResourcePath(normalizeResourcePath(relative))
-      );
-    })
-    .slice(0, LIMITS.agentSkillResourcesPerSkill + 2);
-  const wantedResourceCount = wanted.filter((item) => {
-    const relative =
-      rootPrefix.length > 0 ? item.path.slice(rootPrefix.length) : item.path;
-    return relative !== SKILL_FILE_NAME;
-  }).length;
-  if (wantedResourceCount > LIMITS.agentSkillResourcesPerSkill) {
-    throw new HandlerError({
-      status: 400,
-      message: "Skill has too many resources",
-    });
-  }
-
-  const files = await Promise.all(
-    wanted.map(async (item): Promise<SkillFile> => {
-      const rawUrl = githubRawUrl({
-        owner: target.owner,
-        path: item.path,
-        ref: target.ref,
-        repo: target.repo,
-      });
-      const raw = await fetchSafeBytes(rawUrl);
-      const content = decodeUtf8(raw.body);
-      const relativePath =
-        rootPrefix.length > 0 ? item.path.slice(rootPrefix.length) : item.path;
-      return {
-        content,
-        path: relativePath,
-        sizeBytes: encodedSize(content),
-      };
-    }),
-  );
-
+  const files = await fetchGithubSkillFiles(target);
   const parsed = parseSkillFiles(files);
   return { ...parsed, sourceUrl: originalUrl };
+};
+
+const fetchGithubSkillFiles = async (
+  target: GithubSkillPath,
+): Promise<SkillFile[]> => {
+  const files: SkillFile[] = [];
+  const pendingDirectories = [target.rootPath];
+  const queuedDirectories = new Set(pendingDirectories);
+
+  while (pendingDirectories.length > 0) {
+    const directory = pendingDirectories.shift();
+    if (directory === undefined) {
+      break;
+    }
+
+    const contents = await fetchGithubContents({ target, path: directory });
+    for (const item of contents) {
+      const relativePath = relativeGithubSkillPath({
+        path: item.path,
+        rootPath: target.rootPath,
+      });
+      if (relativePath === null) {
+        continue;
+      }
+
+      if (item.type === "dir") {
+        if (
+          shouldTraverseGithubSkillDirectory(relativePath) &&
+          !queuedDirectories.has(item.path)
+        ) {
+          queuedDirectories.add(item.path);
+          pendingDirectories.push(item.path);
+        }
+        continue;
+      }
+
+      if (item.type !== "file") {
+        continue;
+      }
+
+      const normalizedPath = normalizePackageFilePath(relativePath);
+      if (
+        !normalizedPath ||
+        (normalizedPath !== SKILL_FILE_NAME &&
+          !isAllowedResourcePath(normalizedPath))
+      ) {
+        continue;
+      }
+
+      const raw = await fetchSafeBytes(
+        githubRawUrl({
+          owner: target.owner,
+          path: item.path,
+          ref: target.ref,
+          repo: target.repo,
+        }),
+      );
+      files.push({
+        content: decodeUtf8(raw.body),
+        path: normalizedPath,
+        sizeBytes: raw.body.byteLength,
+      });
+      assertGithubResourceLimit(files);
+    }
+  }
+
+  return files;
+};
+
+const fetchGithubContents = async ({
+  path,
+  target,
+}: {
+  path: string;
+  target: GithubSkillPath;
+}): Promise<GithubContentItem[]> => {
+  const response = await fetchSafeBytes(
+    githubContentsUrl({
+      owner: target.owner,
+      path,
+      ref: target.ref,
+      repo: target.repo,
+    }),
+  );
+  return parseGithubContentsResponse(JSON.parse(decodeUtf8(response.body)));
+};
+
+const relativeGithubSkillPath = ({
+  path,
+  rootPath,
+}: {
+  path: string;
+  rootPath: string;
+}): string | null => {
+  if (!rootPath) {
+    return path;
+  }
+
+  if (path === rootPath) {
+    return path.split("/").at(-1) ?? path;
+  }
+
+  const rootPrefix = `${rootPath}/`;
+  return path.startsWith(rootPrefix) ? path.slice(rootPrefix.length) : null;
+};
+
+const shouldTraverseGithubSkillDirectory = (relativePath: string): boolean => {
+  const normalizedPath = normalizePackageFilePath(relativePath);
+  if (!normalizedPath || normalizedPath === ".") {
+    return false;
+  }
+
+  const root = normalizedPath.split("/").at(0);
+  return root !== undefined && SKILL_RESOURCE_ROOTS.has(root);
+};
+
+const assertGithubResourceLimit = (files: readonly SkillFile[]) => {
+  const resourceCount = files.filter(
+    (file) => file.path !== SKILL_FILE_NAME,
+  ).length;
+  if (resourceCount <= LIMITS.agentSkillResourcesPerSkill) {
+    return;
+  }
+
+  throw new HandlerError({
+    status: 400,
+    message: "Skill has too many resources",
+  });
+};
+
+const githubContentsUrl = ({
+  owner,
+  path,
+  ref,
+  repo,
+}: {
+  owner: string;
+  path: string;
+  ref: string;
+  repo: string;
+}) => {
+  const encodedPath = path
+    .split("/")
+    .filter((part) => part.length > 0)
+    .map(encodeURIComponent)
+    .join("/");
+  const url = new URL(
+    encodedPath.length > 0
+      ? `https://api.github.com/repos/${owner}/${repo}/contents/${encodedPath}`
+      : `https://api.github.com/repos/${owner}/${repo}/contents`,
+  );
+  url.searchParams.set("ref", ref);
+  return url;
+};
+
+const githubRawUrl = ({
+  owner,
+  path,
+  ref,
+  repo,
+}: {
+  owner: string;
+  path: string;
+  ref: string;
+  repo: string;
+}) =>
+  new URL(
+    `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${path
+      .split("/")
+      .map(encodeURIComponent)
+      .join("/")}`,
+  );
+
+const pathParts = (url: URL): string[] =>
+  url.pathname.split("/").filter((part) => part.length > 0);
+
+const normalizePackageFilePath = (path: string): string | null => {
+  try {
+    return normalizeResourcePath(path);
+  } catch {
+    return null;
+  }
+};
+
+const parseGithubContentsResponse = (value: unknown): GithubContentItem[] => {
+  if (Array.isArray(value)) {
+    return parseGithubContentItems(value);
+  }
+
+  if (isRecord(value)) {
+    return parseGithubContentItems([value]);
+  }
+
+  throw new HandlerError({
+    status: 400,
+    message: "GitHub skill contents response is invalid",
+  });
+};
+
+const parseGithubContentItems = (
+  items: readonly unknown[],
+): GithubContentItem[] => {
+  const parsed: GithubContentItem[] = [];
+  for (const item of items) {
+    if (!isRecord(item)) {
+      continue;
+    }
+    const path = item["path"];
+    const type = item["type"];
+    if (typeof path === "string" && typeof type === "string") {
+      parsed.push({ path, type });
+    }
+  }
+  return parsed;
+};
+
+const hashSkillPackage = ({
+  resources,
+  source,
+}: {
+  resources: readonly ParsedSkillResource[];
+  source: string;
+}) => {
+  const hasher = new Bun.CryptoHasher("sha256");
+  hasher.update(source);
+  for (const resource of resources) {
+    hasher.update("\0");
+    hasher.update(resource.path);
+    hasher.update("\0");
+    hasher.update(resource.content);
+  }
+  return hasher.digest("hex");
 };
 
 const fetchSafeBytes = async (url: URL) => {
@@ -433,75 +613,6 @@ const parseGithubSkillPath = (rawUrl: string): GithubSkillPath | null => {
       ? path.slice(0, -1).join("/")
       : path.join("/");
   return { owner, ref, repo, rootPath };
-};
-
-const parseGithubTreeResponse = (value: unknown): GithubTreeItem[] => {
-  if (!isRecord(value) || !Array.isArray(value["tree"])) {
-    throw new HandlerError({
-      status: 400,
-      message: "GitHub skill tree response is invalid",
-    });
-  }
-
-  const items: GithubTreeItem[] = [];
-  for (const item of value["tree"]) {
-    if (!isRecord(item)) {
-      continue;
-    }
-    const path = item["path"];
-    const type = item["type"];
-    if (typeof path === "string" && typeof type === "string") {
-      items.push({ path, type });
-    }
-  }
-  return items;
-};
-
-const githubRawUrl = ({
-  owner,
-  path,
-  ref,
-  repo,
-}: {
-  owner: string;
-  path: string;
-  ref: string;
-  repo: string;
-}) =>
-  new URL(
-    `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${path
-      .split("/")
-      .map(encodeURIComponent)
-      .join("/")}`,
-  );
-
-const pathParts = (url: URL): string[] =>
-  url.pathname.split("/").filter((part) => part.length > 0);
-
-const normalizePackageFilePath = (path: string): string | null => {
-  try {
-    return normalizeResourcePath(path);
-  } catch {
-    return null;
-  }
-};
-
-const hashSkillPackage = ({
-  resources,
-  source,
-}: {
-  resources: readonly ParsedSkillResource[];
-  source: string;
-}) => {
-  const hasher = new Bun.CryptoHasher("sha256");
-  hasher.update(source);
-  for (const resource of resources) {
-    hasher.update("\0");
-    hasher.update(resource.path);
-    hasher.update("\0");
-    hasher.update(resource.content);
-  }
-  return hasher.digest("hex");
 };
 
 const isZipFile = ({ buffer, name }: { buffer: ArrayBuffer; name: string }) => {

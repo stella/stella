@@ -12,6 +12,7 @@ import type { SkillMetadata, SkillResource, StellaSkill } from "@stll/skills";
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 
 type AvailableChatSkill = SkillMetadata & {
   id: string;
@@ -55,7 +56,9 @@ export const listAvailableChatSkillMetadata = async ({
           eq(agentSkills.enabled, true),
           or(eq(agentSkills.scope, "team"), eq(agentSkills.userId, userId)),
         ),
-      ),
+      )
+      .orderBy(agentSkills.scope, agentSkills.slug, agentSkills.id)
+      .limit(LIMITS.agentSkillsChatMetadataMax),
   );
 
   if (Result.isError(rows)) {
