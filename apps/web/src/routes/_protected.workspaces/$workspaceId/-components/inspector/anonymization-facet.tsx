@@ -13,7 +13,7 @@
  * actions, and "download anonymized" land in follow-up commits.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
@@ -72,6 +72,36 @@ export const AnonymizationFacet = ({
 
   const [pendingValue, setPendingValue] = useState("");
   const [pendingLabel, setPendingLabel] = useState<LabelOption>(DEFAULT_LABEL);
+
+  // Selection bridge — when the user highlights text anywhere in
+  // the file preview while this facet is mounted, prefill the
+  // "Add term" input. Lets the workflow be "select in document →
+  // add" without a floating popover. Works for PDF text layer
+  // and Folio/DOCX since both produce a standard window Selection.
+  // Only fires for short, single-line selections to keep accidental
+  // multi-paragraph picks out of the input.
+  useEffect(() => {
+    const handler = () => {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) {
+        return;
+      }
+      const raw = selection.toString();
+      if (raw.length === 0) {
+        return;
+      }
+      const single = raw.replace(/\s+/g, " ").trim();
+      if (single.length < 2 || single.length > 200) {
+        return;
+      }
+      if (single.includes("\n")) {
+        return;
+      }
+      setPendingValue(single);
+    };
+    document.addEventListener("selectionchange", handler);
+    return () => document.removeEventListener("selectionchange", handler);
+  }, []);
 
   const submitTerm = () => {
     const canonical = pendingValue.trim();
