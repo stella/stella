@@ -64,7 +64,7 @@
     "@stll/template-conditions": "workspace:*",
     "@stll/transactional": "workspace:*",
     "@t3-oss/env-core": "catalog:",
-    "@valibot/to-json-schema": "^1.6.0",
+    "@valibot/to-json-schema": "^1.7.0",
     "ai": "^6.0.174",
     "better-auth": "catalog:",
     "better-result": "catalog:",
