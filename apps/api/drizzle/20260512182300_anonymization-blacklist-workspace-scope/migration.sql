@@ -1,10 +1,4 @@
--- stella-migration-safety: reviewed destructive-change - the dropped
--- index is immediately re-created as a partial index with the same
--- columns plus a `WHERE workspace_id IS NULL` clause, so existing
--- org-wide uniqueness coverage is preserved. The new partial index
--- splits the org-wide guarantee from the workspace-scope one so the
--- same canonical can exist in different workspaces without colliding
--- with the org-wide entry.
+-- stella-migration-safety: reviewed destructive-change - the dropped index is recreated immediately below as a partial unique index on (organization_id, lower(canonical)) WHERE workspace_id IS NULL, preserving the existing org-wide uniqueness guarantee. The split into two partial indexes lets the same canonical exist per-workspace without colliding with the org-wide row; rollback is the inverse drop + recreate of the full index.
 
 -- Adds a nullable workspace_id column to anonymization_blacklist_entries so
 -- the same table can hold both org-wide entries (workspace_id IS NULL,
