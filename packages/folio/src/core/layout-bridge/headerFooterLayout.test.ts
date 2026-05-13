@@ -9,6 +9,7 @@ import type {
 import type { HeaderFooter } from "../types/document";
 import type { HeaderFooterMetrics } from "./headerFooterLayout";
 import {
+  calculateHeaderFooterMarginPushBounds,
   calculateHeaderFooterVisualBounds,
   convertHeaderFooterToContent,
   normalizeHeaderFooterMeasureBlocks,
@@ -143,6 +144,128 @@ describe("calculateHeaderFooterVisualBounds", () => {
     );
 
     expect(bounds).toEqual({ visualTop: 0, visualBottom: 70 });
+  });
+
+  test("includes behindDoc images in visualBottom (render+hash signal)", () => {
+    // Full-page letterhead: anchored to "margin", posOffset -1460500 EMU
+    // (≈ -153px) places the image just above the body margin and its 1117px
+    // height covers the whole page. `visualBottom` keeps tracking the
+    // image so the renderer's option hash invalidates when the letterhead
+    // changes.
+    const blocks: FlowBlock[] = [
+      {
+        kind: "paragraph",
+        id: "letterhead",
+        runs: [
+          {
+            kind: "image",
+            src: "letterhead.png",
+            width: 790,
+            height: 1117,
+            wrapType: "behind",
+            position: {
+              horizontal: { relativeTo: "margin", posOffset: -702_422 },
+              vertical: { relativeTo: "margin", posOffset: -1_460_500 },
+            },
+          },
+        ],
+      },
+    ];
+
+    const bounds = calculateHeaderFooterVisualBounds(
+      blocks,
+      [{ kind: "paragraph", lines: [], totalHeight: 0 }],
+      0,
+      metrics,
+    );
+
+    // marginTop 100 + emuToPixels(-1_460_500) -153 - flowTop 48 = -101;
+    // image bottom = top + 1117 = 1016.
+    expect(bounds).toEqual({ visualTop: -101, visualBottom: 1016 });
+  });
+});
+
+describe("calculateHeaderFooterMarginPushBounds", () => {
+  test("excludes behindDoc image runs so the body margin doesn't reserve a full-page letterhead", () => {
+    const blocks: FlowBlock[] = [
+      {
+        kind: "paragraph",
+        id: "letterhead",
+        runs: [
+          {
+            kind: "image",
+            src: "letterhead.png",
+            width: 790,
+            height: 1117,
+            wrapType: "behind",
+            position: {
+              horizontal: { relativeTo: "margin", posOffset: -702_422 },
+              vertical: { relativeTo: "margin", posOffset: -1_460_500 },
+            },
+          },
+        ],
+      },
+    ];
+
+    const bounds = calculateHeaderFooterMarginPushBounds(
+      blocks,
+      [{ kind: "paragraph", lines: [], totalHeight: 0 }],
+      0,
+      metrics,
+    );
+
+    expect(bounds).toEqual({ top: 0, bottom: 0 });
+  });
+
+  test("excludes behindDoc image blocks anchored at block level", () => {
+    const blocks: FlowBlock[] = [
+      {
+        kind: "image",
+        id: "block-letterhead",
+        src: "letterhead.png",
+        width: 790,
+        height: 1117,
+        anchor: { isAnchored: true, behindDoc: true },
+      },
+    ];
+
+    const bounds = calculateHeaderFooterMarginPushBounds(
+      blocks,
+      [{ kind: "image", width: 790, height: 1117 }],
+      0,
+      metrics,
+    );
+
+    expect(bounds).toEqual({ top: 0, bottom: 0 });
+  });
+
+  test("still counts flowing content (paragraph + in-flow image block)", () => {
+    const blocks: FlowBlock[] = [
+      {
+        kind: "paragraph",
+        id: "title",
+        runs: [{ kind: "text", text: "Header title" }],
+      },
+      {
+        kind: "image",
+        id: "inline-logo",
+        src: "logo.png",
+        width: 120,
+        height: 40,
+      },
+    ];
+
+    const bounds = calculateHeaderFooterMarginPushBounds(
+      blocks,
+      [
+        { kind: "paragraph", lines: [], totalHeight: 12 },
+        { kind: "image", width: 120, height: 40 },
+      ],
+      52,
+      metrics,
+    );
+
+    expect(bounds).toEqual({ top: 0, bottom: 52 });
   });
 });
 

@@ -23,17 +23,24 @@ type EffectiveHeaderFooterMarginsInput = {
 export type PageMarginsExtender = (margins: PageMargins) => PageMargins;
 
 function headerHeight(content: HeaderFooterContent | undefined): number {
-  return content ? (content.visualBottom ?? content.height) : 0;
+  if (!content) {
+    return 0;
+  }
+  // Prefer the margin-push bounds (excludes behindDoc images that paint
+  // behind body content) so a full-page letterhead doesn't reserve itself
+  // as body push-down. Fall back to visualBottom for callers that predate
+  // the field.
+  return content.marginPushBottom ?? content.visualBottom ?? content.height;
 }
 
 function footerHeight(content: HeaderFooterContent | undefined): number {
   if (!content) {
     return 0;
   }
-  return Math.max(
-    (content.visualBottom ?? content.height) - (content.visualTop ?? 0),
-    content.height,
-  );
+  const bottom =
+    content.marginPushBottom ?? content.visualBottom ?? content.height;
+  const top = content.marginPushTop ?? content.visualTop ?? 0;
+  return Math.max(bottom - top, content.height);
 }
 
 /**
