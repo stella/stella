@@ -18,7 +18,7 @@ jobs:
     # cap the reusable's GITHUB_TOKEN to no scopes (intersection rule).
     permissions:
       contents: read
-    uses: stella/.github/.github/workflows/audit-branch-protection.yml@9aba86f19b0d72fb02344c49342d7f0b0c9700b0
+    uses: stella/.github/.github/workflows/audit-branch-protection.yml@a80fc97388b8f833fb08104e6031e2258dee549a
     with:
       expected-config-path: .github/branch-protection/ruleset-main.json
     secrets:
