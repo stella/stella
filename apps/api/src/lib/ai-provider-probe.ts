@@ -104,9 +104,15 @@ export const probeProvider = async (
   apiKey: string,
   endpoint?: string,
   apiVersion?: string,
+  expectedAzureDeployments?: readonly string[],
 ): Promise<ProviderProbeResult> => {
   if (provider === "azure_foundry") {
-    return await probeAzureFoundry(apiKey, endpoint, apiVersion);
+    return await probeAzureFoundry(
+      apiKey,
+      endpoint,
+      apiVersion,
+      expectedAzureDeployments,
+    );
   }
 
   const signal = AbortSignal.timeout(VALIDATION_TIMEOUT_MS);
@@ -131,6 +137,7 @@ const probeAzureFoundry = async (
   apiKey: string,
   endpoint: string | undefined,
   apiVersion: string | undefined,
+  expectedDeployments: readonly string[] | undefined,
 ): Promise<ProviderProbeResult> => {
   if (!endpoint?.trim()) {
     return {
@@ -152,18 +159,59 @@ const probeAzureFoundry = async (
     signal,
   });
 
-  if (response.ok) {
+  if (!response.ok) {
+    const detail = await extractDetail(response);
+    return {
+      valid: false,
+      error: detail
+        ? `Azure Foundry rejected the key or endpoint (HTTP ${response.status}): ${detail}`
+        : `Azure Foundry rejected the key or endpoint (HTTP ${response.status})`,
+    };
+  }
+
+  if (!expectedDeployments || expectedDeployments.length === 0) {
     return { valid: true };
   }
 
-  const detail = await extractDetail(response);
-  return {
-    valid: false,
-    error: detail
-      ? `Azure Foundry rejected the key or endpoint (HTTP ${response.status}): ${detail}`
-      : `Azure Foundry rejected the key or endpoint (HTTP ${response.status})`,
-  };
+  const deployments = await extractAzureDeployments(response);
+  const missing = expectedDeployments.filter(
+    (deployment) => !deployments.has(deployment),
+  );
+  if (missing.length > 0) {
+    return {
+      valid: false,
+      error: `Azure Foundry deployment not found: ${missing.join(", ")}`,
+    };
+  }
+  return { valid: true };
 };
+
+const extractAzureDeployments = async (
+  response: Response,
+): Promise<ReadonlySet<string>> =>
+  await response
+    .clone()
+    .json()
+    .then((body: unknown) => {
+      if (
+        typeof body !== "object" ||
+        body === null ||
+        !("data" in body) ||
+        !Array.isArray(body.data)
+      ) {
+        return new Set<string>();
+      }
+      const ids = body.data.flatMap((entry: unknown) =>
+        typeof entry === "object" &&
+        entry !== null &&
+        "id" in entry &&
+        typeof entry.id === "string"
+          ? [entry.id]
+          : [],
+      );
+      return new Set<string>(ids);
+    })
+    .catch(() => new Set<string>());
 
 const resolveAzureApiVersion = (apiVersion: string | undefined): string =>
   apiVersion?.trim() ||

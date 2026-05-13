@@ -147,7 +147,8 @@ const updateAIConfig = createSafeRootHandler(
 
     const validationResults = await Promise.all(
       providersToValidate.map(
-        async (providerConfig) => await validateProviderKey(providerConfig),
+        async (providerConfig) =>
+          await validateProviderKey(providerConfig, modelResult.overrideModels),
       ),
     );
 
@@ -485,9 +486,12 @@ const shouldValidateProviderConfig = ({
  * Validate a provider API key via the shared lightweight probe
  * (provider's own auth/list-models endpoint). No token cost and
  * avoids per-model quirks like reasoning-model token minimums.
+ * For Azure Foundry, also verifies each role's deployment name
+ * exists, since those are free-text values typed by the user.
  */
 const validateProviderKey = async (
   providerConfig: OrgAIProviderConfig & { provider: BYOKProvider },
+  overrideModels: Record<ModelRole, OrgAIModelSelection>,
 ): Promise<ValidationResult> => {
   const result = await Result.tryPromise({
     try: async () =>
@@ -499,6 +503,9 @@ const validateProviderKey = async (
           : undefined,
         providerConfig.provider === "azure_foundry"
           ? providerConfig.apiVersion
+          : undefined,
+        providerConfig.provider === "azure_foundry"
+          ? collectAzureDeployments(overrideModels)
           : undefined,
       ),
     catch: (error: unknown) =>
@@ -513,5 +520,18 @@ const validateProviderKey = async (
   }
   return { valid: true };
 };
+
+const collectAzureDeployments = (
+  overrideModels: Record<ModelRole, OrgAIModelSelection>,
+): readonly string[] =>
+  Array.from(
+    new Set(
+      MODEL_ROLES.flatMap((role) =>
+        overrideModels[role].provider === "azure_foundry"
+          ? [overrideModels[role].modelId]
+          : [],
+      ),
+    ),
+  );
 
 export default updateAIConfig;
