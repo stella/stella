@@ -1,0 +1,6 @@
+Contact: mailto:security@stll.app
+Contact: https://github.com/stella/stella/security/advisories/new
+Expires: 2027-05-13T00:00:00.000Z
+Preferred-Languages: en, cs
+Policy: https://github.com/stella/stella/blob/main/SECURITY.md
+Canonical: https://stll.app/.well-known/security.txt

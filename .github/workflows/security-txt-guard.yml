@@ -1,0 +1,68 @@
+name: security.txt Expiry Guard
+
+# RFC 9116 requires an Expires: field; clients SHOULD ignore the file
+# past that date. Fail when the value is within 30 days so the file gets
+# bumped before scanners and Scorecard start treating it as stale.
+
+on:
+  pull_request:
+    paths:
+      - "apps/landing/public/.well-known/security.txt"
+      - ".github/workflows/security-txt-guard.yml"
+  schedule:
+    - cron: "0 9 * * 1" # Monday 09:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: security-txt-guard
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Verify Expires is at least 30 days out
+        run: |
+          set -euo pipefail
+          file="apps/landing/public/.well-known/security.txt"
+          line="$(grep '^Expires:' "$file" || true)"
+          if [[ -z "$line" ]]; then
+            echo "::error file=$file::Missing required Expires: field (RFC 9116)."
+            exit 1
+          fi
+          expires="${line#Expires:}"
+          expires="${expires// /}"
+          if ! expires_ts="$(date -d "$expires" +%s 2>/dev/null)"; then
+            echo "::error file=$file::Cannot parse Expires value: $expires"
+            exit 1
+          fi
+          now_ts="$(date +%s)"
+          if (( expires_ts < now_ts )); then
+            echo "::error file=$file::Expires ($expires) is already past. Bump it now."
+            exit 1
+          fi
+          cutoff_ts="$(date -d '+30 days' +%s)"
+          if (( expires_ts < cutoff_ts )); then
+            days_left=$(( (expires_ts - now_ts) / 86400 ))
+            echo "::error file=$file::Expires ($expires) is in $days_left day(s); bump it."
+            exit 1
+          fi
+          # RFC 9116: Expires SHOULD be at most one year out. +1 day of
+          # slack absorbs leap-year and timezone fuzz so a value set to
+          # exactly +1 year does not trip the check.
+          max_ts="$(date -d '+1 year +1 day' +%s)"
+          if (( expires_ts > max_ts )); then
+            days_out=$(( (expires_ts - now_ts) / 86400 ))
+            echo "::error file=$file::Expires ($expires) is $days_out day(s) out; RFC 9116 caps it at one year."
+            exit 1
+          fi
+          days_left=$(( (expires_ts - now_ts) / 86400 ))
+          echo "security.txt Expires OK ($expires, $days_left days left)."
