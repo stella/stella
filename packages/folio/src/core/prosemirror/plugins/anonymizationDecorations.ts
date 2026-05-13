@@ -61,17 +61,25 @@ const buildMatcher = (
 ): CompiledTerm[] => {
   const escapeChar = (value: string): string =>
     value.replaceAll(/[\\^$.*+?()[\]{}|]/g, "\\$&");
-  // Build the regex for a single surface so each "word" in a
-  // multi-word term gets its own trailing-suffix slot. That way
-  // a term like "First Last" matches "Firstem Lastou" (Czech /
-  // Slovak / German declension on each word independently), not
-  // only inflection on the last word.
+  // A "stem" is the word with its last letter dropped (when long
+  // enough), so the trailing suffix slot can cover Czech / Slovak
+  // declension endings that replace the final stem vowel rather
+  // than just append to it ("Braňka" → "Braňkou": the final 'a'
+  // is gone, not extended). Words shorter than 4 chars stay
+  // whole; words whose last character is not a letter
+  // ("Ing.", "č.") stay whole so we don't strip the abbreviation
+  // dot.
+  const stem = (word: string): string => {
+    if (word.length < 4) return word;
+    const last = word.charAt(word.length - 1);
+    return /[\p{L}]/u.test(last) ? word.slice(0, -1) : word;
+  };
   const SUFFIX = "[\\p{L}\\p{M}\\p{N}]*";
   const surfaceToPattern = (surface: string): string =>
     surface
       .split(/\s+/)
       .filter((word) => word.length > 0)
-      .map((word) => `${escapeChar(word)}${SUFFIX}`)
+      .map((word) => `${escapeChar(stem(word))}${SUFFIX}`)
       .join("\\s+");
 
   // One regex per term (canonical + variants combined). Letting
