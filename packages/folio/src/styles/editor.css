@@ -708,20 +708,34 @@
   background-color: color-mix(in oklch, var(--doc-bg-hover) 90%, transparent);
 }
 
-/* Workspace anonymization term highlights — subtle bracket-ish
-   block so a lawyer scanning the doc can see at a glance which
-   strings are in the workspace's PII vocabulary. Renders nothing
-   unless the host pushes a term list through the plugin. */
+/* Anonymization term highlights — visible block so a lawyer
+   scanning the doc immediately sees what would be redacted.
+   Renders nothing unless the host pushes a term list through
+   the plugin. Per-label modifier classes tint by entity type
+   so person/org/date/etc. are visually distinguishable. */
 .folio-anonymization-term {
-  background-color: color-mix(
-    in oklch,
-    var(--doc-error, currentColor) 12%,
-    transparent
-  );
-  box-shadow: inset 0 -1px 0 0
-    color-mix(in oklch, var(--doc-error, currentColor) 45%, transparent);
+  background-color: rgb(254 240 138 / 0.75); /* yellow-200 */
+  box-shadow: inset 0 -2px 0 0 rgb(202 138 4 / 0.55); /* yellow-600 */
   border-radius: 2px;
   padding: 0 1px;
+}
+.folio-anonymization-term--person {
+  background-color: rgb(252 231 243 / 0.8); /* pink-100 */
+  box-shadow: inset 0 -2px 0 0 rgb(190 24 93 / 0.55); /* pink-700 */
+}
+.folio-anonymization-term--organization {
+  background-color: rgb(219 234 254 / 0.8); /* blue-100 */
+  box-shadow: inset 0 -2px 0 0 rgb(29 78 216 / 0.55); /* blue-700 */
+}
+.folio-anonymization-term--address,
+.folio-anonymization-term--land-parcel {
+  background-color: rgb(220 252 231 / 0.85); /* green-100 */
+  box-shadow: inset 0 -2px 0 0 rgb(21 128 61 / 0.55); /* green-700 */
+}
+.folio-anonymization-term--date,
+.folio-anonymization-term--date-of-birth {
+  background-color: rgb(243 232 255 / 0.85); /* purple-100 */
+  box-shadow: inset 0 -2px 0 0 rgb(126 34 206 / 0.55); /* purple-700 */
 }
 
 /* AI prompt-bar caret suppression lives in apps/web (the bar is no
