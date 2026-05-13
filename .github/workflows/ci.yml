@@ -20,6 +20,8 @@ concurrency:
     }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
   trust-check:
     # Skip draft PRs (CI runs when marked ready for review via
