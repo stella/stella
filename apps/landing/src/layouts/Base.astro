@@ -27,6 +27,7 @@ const socialImageUrl = new URL(socialImage, Astro.site);
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
     <title>{title}</title>
 
     <!-- Canonical -->
@@ -79,22 +80,38 @@ const socialImageUrl = new URL(socialImage, Astro.site);
     <!-- Structured data -->
     <script is:inline type="application/ld+json" set:html={JSON.stringify({
       "@context": "https://schema.org",
-      "@type": "SoftwareApplication",
-      "name": "stella",
-      "applicationCategory": "BusinessApplication",
-      "operatingSystem": "Web",
-      "description": description,
-      "url": "https://stll.app",
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD",
-      },
-      "author": {
-        "@type": "Organization",
-        "name": "stella labs, s.r.o.",
-        "url": "https://stll.app/imprint",
-      },
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://stll.app/#organization",
+          "name": "stella labs, s.r.o.",
+          "url": "https://stll.app",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://stll.app/images/stella-logo.svg",
+          },
+          "sameAs": [
+            "https://github.com/stella/stella",
+            "https://x.com/stll_app",
+            "https://www.linkedin.com/company/stella-app",
+          ],
+        },
+        {
+          "@type": "SoftwareApplication",
+          "@id": "https://stll.app/#software",
+          "name": "stella",
+          "applicationCategory": "BusinessApplication",
+          "operatingSystem": "Web",
+          "description": description,
+          "url": "https://stll.app",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD",
+          },
+          "publisher": { "@id": "https://stll.app/#organization" },
+        },
+      ],
     })} />
 
     <style is:global>

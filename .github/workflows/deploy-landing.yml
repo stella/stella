@@ -95,3 +95,34 @@ jobs:
             --repo "$PRIVATE_WORKFLOWS_REPO" \
             --compact \
             --exit-status
+
+      - name: Ping IndexNow with sitemap URLs
+        # The key file is hosted at apps/landing/public/<key>.txt so
+        # search engines can verify ownership. The key is intentionally
+        # public (it's served at https://stll.app/<key>.txt), so the
+        # gitleaks generic-api-key match below is a false positive.
+        env:
+          INDEXNOW_KEY: 4a9799deb8f64ac9be5f9b9e140407ca # gitleaks:allow
+          HOST: stll.app
+        run: |
+          mapfile -t urls < <(
+            curl -fsSL "https://${HOST}/sitemap-0.xml" \
+              | grep -oE '<loc>[^<]+</loc>' \
+              | sed -E 's#</?loc>##g'
+          )
+          if [[ ${#urls[@]} -eq 0 ]]; then
+            echo "No URLs found in sitemap; skipping IndexNow ping." >&2
+            exit 0
+          fi
+          payload="$(
+            jq -n \
+              --arg host "$HOST" \
+              --arg key "$INDEXNOW_KEY" \
+              --arg keyLocation "https://${HOST}/${INDEXNOW_KEY}.txt" \
+              --argjson urlList "$(printf '%s\n' "${urls[@]}" | jq -R . | jq -s .)" \
+              '{host: $host, key: $key, keyLocation: $keyLocation, urlList: $urlList}'
+          )"
+          curl -fsSL -X POST \
+            -H "Content-Type: application/json; charset=utf-8" \
+            -d "$payload" \
+            https://api.indexnow.org/indexnow
