@@ -708,34 +708,14 @@
   background-color: color-mix(in oklch, var(--doc-bg-hover) 90%, transparent);
 }
 
-/* Anonymization term highlights — visible block so a lawyer
-   scanning the doc immediately sees what would be redacted.
-   Renders nothing unless the host pushes a term list through
-   the plugin. Per-label modifier classes tint by entity type
-   so person/org/date/etc. are visually distinguishable. */
+/* Anonymization term marker — single thin blue underline
+   under every span the wasm pipeline (or workspace catalog)
+   would redact. No fill so the doc stays readable; entity
+   type still travels through data-folio-anonymization-label
+   for downstream tooling that wants it. */
 .folio-anonymization-term {
-  background-color: rgb(254 240 138 / 0.75); /* yellow-200 */
-  box-shadow: inset 0 -2px 0 0 rgb(202 138 4 / 0.55); /* yellow-600 */
-  border-radius: 2px;
-  padding: 0 1px;
-}
-.folio-anonymization-term--person {
-  background-color: rgb(252 231 243 / 0.8); /* pink-100 */
-  box-shadow: inset 0 -2px 0 0 rgb(190 24 93 / 0.55); /* pink-700 */
-}
-.folio-anonymization-term--organization {
-  background-color: rgb(219 234 254 / 0.8); /* blue-100 */
-  box-shadow: inset 0 -2px 0 0 rgb(29 78 216 / 0.55); /* blue-700 */
-}
-.folio-anonymization-term--address,
-.folio-anonymization-term--land-parcel {
-  background-color: rgb(220 252 231 / 0.85); /* green-100 */
-  box-shadow: inset 0 -2px 0 0 rgb(21 128 61 / 0.55); /* green-700 */
-}
-.folio-anonymization-term--date,
-.folio-anonymization-term--date-of-birth {
-  background-color: rgb(243 232 255 / 0.85); /* purple-100 */
-  box-shadow: inset 0 -2px 0 0 rgb(126 34 206 / 0.55); /* purple-700 */
+  background-color: transparent;
+  box-shadow: inset 0 -2px 0 0 rgb(37 99 235 / 0.8); /* blue-600 */
 }
 
 /* AI prompt-bar caret suppression lives in apps/web (the bar is no
