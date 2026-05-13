@@ -11,6 +11,7 @@ import { AIConfigRoleModelPicker } from "@/components/ai-config-role-model-picke
 import {
   ensureRoleModelsForProviders,
   getProviderValues,
+  PROVIDER_LABELS,
   serializeOverrideModels,
 } from "@/components/ai-config-role-models.logic";
 import type {
@@ -200,7 +201,7 @@ export const AIStep = ({
         }));
         stellaToast.add({
           title: tOrganization("aiConfig.providerKeyInvalid", {
-            provider: tOrganization(`aiConfig.providers.${draft.provider}`),
+            provider: PROVIDER_LABELS[draft.provider],
           }),
           type: "warning",
         });
@@ -217,7 +218,7 @@ export const AIStep = ({
           toastedRef.current.add(toastKey);
           stellaToast.add({
             title: tOrganization("aiConfig.providerKeyInvalid", {
-              provider: tOrganization(`aiConfig.providers.${draft.provider}`),
+              provider: PROVIDER_LABELS[draft.provider],
             }),
             description: response.data.error,
             type: "warning",

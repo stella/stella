@@ -1371,14 +1371,6 @@
       "providerForRole": "{role} teikėjas",
       "providerKeyInvalid": "{provider} atmetė raktą. Prieš išsaugodami patikrinkite.",
       "providerKeyInvalidShort": "Negaliojantis",
-      "providers": {
-        "anthropic": "Anthropic",
-        "azure_foundry": "Azure Foundry",
-        "google": "Google",
-        "mistral": "Mistral",
-        "openai": "ChatGPT",
-        "openrouter": "OpenRouter"
-      },
       "providersDescription": "Pridėkite teikėjų prisijungimo duomenis, kuriuos Stella turėtų naudoti.",
       "providersPanel": "Teikėjai",
       "regions": {
