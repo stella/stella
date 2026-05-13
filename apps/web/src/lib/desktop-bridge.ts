@@ -180,7 +180,7 @@ const waitForDesktopEditHandoffOpened = async ({
   workspaceId: string;
 }) => {
   const parsedDeadline = Date.parse(expiresAt);
-  const deadline = Number.isFinite(parsedDeadline)
+  let deadline = Number.isFinite(parsedDeadline)
     ? parsedDeadline
     : Date.now() + 30_000;
 
@@ -196,6 +196,11 @@ const waitForDesktopEditHandoffOpened = async ({
 
     if (handoffStatus.status === "expired") {
       break;
+    }
+
+    const nextDeadline = Date.parse(handoffStatus.expiresAt);
+    if (Number.isFinite(nextDeadline) && nextDeadline > deadline) {
+      deadline = nextDeadline;
     }
 
     await wait(

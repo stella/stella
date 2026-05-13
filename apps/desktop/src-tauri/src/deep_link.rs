@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use tokio::sync::Mutex;
 
+use crate::config;
 use crate::session_manager::{
   download_docx_standalone, normalize_api_base_url, SessionManager,
 };
@@ -34,11 +35,15 @@ fn normalize_and_validate_api_base_url(value: &str) -> Result<String, String> {
     host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "::1"
   });
 
-  if parsed.scheme() == "https" || (parsed.scheme() == "http" && is_loopback) {
+  let is_debug_loopback =
+    cfg!(debug_assertions) && parsed.scheme() == "http" && is_loopback;
+  let is_trusted = config::resolve_trusted_api_base_urls().contains(&normalized);
+
+  if (parsed.scheme() == "https" && is_trusted) || is_debug_loopback {
     return Ok(normalized);
   }
 
-  Err("Desktop edit API URL must use HTTPS.".to_string())
+  Err("Desktop edit API URL is not trusted.".to_string())
 }
 
 fn parse_deep_link(raw_url: &str) -> Option<DeepLinkAction> {
@@ -284,6 +289,15 @@ mod tests {
   fn rejects_plain_http_non_loopback_api_url() {
     let action = parse_deep_link(
       "stella://desktop-edit/open?handoff=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&apiBaseUrl=http%3A%2F%2Fexample.com",
+    );
+
+    assert_eq!(action, None);
+  }
+
+  #[test]
+  fn rejects_untrusted_https_api_url() {
+    let action = parse_deep_link(
+      "stella://desktop-edit/open?handoff=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&apiBaseUrl=https%3A%2F%2Fexample.com",
     );
 
     assert_eq!(action, None);

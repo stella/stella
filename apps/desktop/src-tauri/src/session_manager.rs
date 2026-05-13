@@ -13,6 +13,7 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
 use crate::config;
+pub use crate::config::normalize_api_base_url;
 use crate::session_store::{self, PersistedDesktopSession, StoreLoadIssue};
 use crate::types::*;
 
@@ -167,16 +168,6 @@ pub struct SessionManager {
 
 fn session_key(workspace_id: &str, entity_id: &str, property_id: &str) -> String {
   format!("{workspace_id}:{entity_id}:{property_id}")
-}
-
-pub fn normalize_api_base_url(url: &str) -> String {
-  let normalized = url.strip_suffix('/').unwrap_or(url);
-  match normalized {
-    "https://app.stll.app" | "https://my.stll.app" => {
-      "https://api.stll.app".to_string()
-    }
-    _ => normalized.to_string(),
-  }
 }
 
 fn build_http_client() -> reqwest::Client {

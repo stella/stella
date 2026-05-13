@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use crate::types::DEFAULT_BRIDGE_PORT;
 
 const DEFAULT_WEB_PORT: u16 = 3000;
+const PRODUCTION_API_BASE_URL: &str = "https://api.stll.app";
 
 // Comma-separated origins baked into the binary at compile time. Distribution
 // builds set STELLA_DESKTOP_DEFAULT_ORIGINS so the shipped client trusts the
@@ -11,6 +12,8 @@ const DEFAULT_WEB_PORT: u16 = 3000;
 // the runtime STELLA_DESKTOP_ALLOWED_ORIGINS variable.
 const BUILD_TIME_DEFAULT_ORIGINS: Option<&str> =
   option_env!("STELLA_DESKTOP_DEFAULT_ORIGINS");
+const BUILD_TIME_DEFAULT_API_BASE_URLS: Option<&str> =
+  option_env!("STELLA_DESKTOP_DEFAULT_API_BASE_URLS");
 
 fn parse_port(value: Option<String>, fallback: u16) -> u16 {
   value
@@ -26,6 +29,16 @@ fn parse_origins(value: Option<String>) -> Vec<String> {
     .map(|s| s.trim().to_string())
     .filter(|s| !s.is_empty())
     .collect()
+}
+
+pub fn normalize_api_base_url(url: &str) -> String {
+  let normalized = url.trim_end_matches('/');
+  match normalized {
+    "https://app.stll.app" | "https://my.stll.app" => {
+      "https://api.stll.app".to_string()
+    }
+    _ => normalized.to_string(),
+  }
 }
 
 pub fn resolve_bridge_port() -> u16 {
@@ -51,4 +64,23 @@ pub fn resolve_allowed_origins() -> HashSet<String> {
   }
 
   origins
+}
+
+pub fn resolve_trusted_api_base_urls() -> HashSet<String> {
+  let mut urls = HashSet::new();
+  urls.insert(PRODUCTION_API_BASE_URL.to_string());
+
+  for origin in resolve_allowed_origins() {
+    urls.insert(normalize_api_base_url(&origin));
+  }
+
+  for url in parse_origins(BUILD_TIME_DEFAULT_API_BASE_URLS.map(str::to_string)) {
+    urls.insert(normalize_api_base_url(&url));
+  }
+
+  for url in parse_origins(std::env::var("STELLA_DESKTOP_ALLOWED_API_BASE_URLS").ok()) {
+    urls.insert(normalize_api_base_url(&url));
+  }
+
+  urls
 }

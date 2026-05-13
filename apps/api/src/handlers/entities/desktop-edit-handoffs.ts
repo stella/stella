@@ -26,6 +26,8 @@ import { logger } from "@/api/lib/observability/logger";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcast } from "@/api/lib/sse";
 
+import type { DesktopEditHandoffStatusResponse } from "./desktop-edit-handoffs.logic";
+import { resolveDesktopEditHandoffStatus } from "./desktop-edit-handoffs.logic";
 import { openDesktopEditSessionHandler } from "./open-desktop-edit-session";
 
 const HANDOFF_TOKEN_PATTERN = "^[0-9a-f]{64}$";
@@ -93,11 +95,6 @@ type BuildDesktopEditHandoffDeepLinkProps = {
   apiBaseUrl: string;
   handoffToken: string;
 };
-
-type DesktopEditHandoffStatusResponse =
-  | { status: "expired"; expiresAt: string }
-  | { status: "opened"; sessionId: string }
-  | { status: "pending"; expiresAt: string };
 
 export const buildDesktopEditHandoffDeepLink = ({
   apiBaseUrl,
@@ -172,6 +169,7 @@ export const readDesktopEditHandoffStatus = createSafeHandler<
         async (tx) =>
           await tx
             .select({
+              consumedAt: desktopEditHandoffs.consumedAt,
               desktopSessionId: desktopEditHandoffs.desktopSessionId,
               expiresAt: desktopEditHandoffs.expiresAt,
               openedAt: desktopEditHandoffs.openedAt,
@@ -198,24 +196,15 @@ export const readDesktopEditHandoffStatus = createSafeHandler<
       );
     }
 
-    if (handoff.openedAt && handoff.desktopSessionId) {
-      return Result.ok({
-        status: "opened" as const,
-        sessionId: handoff.desktopSessionId,
-      } satisfies DesktopEditHandoffStatusResponse);
-    }
-
-    if (handoff.expiresAt.getTime() <= Date.now()) {
-      return Result.ok({
-        status: "expired" as const,
-        expiresAt: handoff.expiresAt.toISOString(),
-      } satisfies DesktopEditHandoffStatusResponse);
-    }
-
-    return Result.ok({
-      status: "pending" as const,
-      expiresAt: handoff.expiresAt.toISOString(),
-    } satisfies DesktopEditHandoffStatusResponse);
+    return Result.ok(
+      resolveDesktopEditHandoffStatus({
+        consumedAt: handoff.consumedAt,
+        desktopSessionId: handoff.desktopSessionId,
+        expiresAt: handoff.expiresAt,
+        now: new Date(),
+        openedAt: handoff.openedAt,
+      }),
+    );
   },
 );
 
@@ -250,8 +239,8 @@ export const redeemDesktopEditHandoffHandler = async ({
     workspaceId: handoff.workspaceId,
   });
 
-  const result = await Result.gen(() =>
-    openDesktopEditSessionHandler({
+  const result = await Result.gen(async function* () {
+    return yield* openDesktopEditSessionHandler({
       body: {
         entityId: handoff.entityId,
         ...(handoff.forceTakeover && { force: true }),
@@ -261,8 +250,8 @@ export const redeemDesktopEditHandoffHandler = async ({
       safeDb,
       userId: brandPersistedUserId(handoff.createdBy),
       workspaceId: handoff.workspaceId,
-    }),
-  );
+    });
+  });
 
   if (Result.isError(result)) {
     const error = result.error;
