@@ -60,32 +60,17 @@ const buildMatcher = (
   terms: readonly AnonymizationTerm[],
 ): CompiledTerm[] => {
   const escapeChar = (value: string): string =>
-    value.replaceAll(/[\\^$.*+?()[\]{}|]/g, "\\$&");
-  // A "stem" is the word with its last letter dropped (when long
-  // enough), so the trailing suffix slot can cover Czech / Slovak
-  // declension endings that replace the final stem vowel rather
-  // than just append to it ("Braňka" → "Braňkou": the final 'a'
-  // is gone, not extended). Words shorter than 4 chars stay
-  // whole; words whose last character is not a letter
-  // ("Ing.", "č.") stay whole so we don't strip the abbreviation
-  // dot.
-  const stem = (word: string): string => {
-    if (word.length < 4) return word;
-    const last = word.charAt(word.length - 1);
-    return /[\p{L}]/u.test(last) ? word.slice(0, -1) : word;
-  };
-  const SUFFIX = "[\\p{L}\\p{M}\\p{N}]*";
-  const surfaceToPattern = (surface: string): string =>
-    surface
-      .split(/\s+/)
-      .filter((word) => word.length > 0)
-      .map((word) => `${escapeChar(stem(word))}${SUFFIX}`)
-      .join("\\s+");
+    value
+      .replaceAll(/[\\^$.*+?()[\]{}|]/g, "\\$&")
+      // A typed whitespace run matches the non-breaking, narrow
+      // no-break and figure spaces typography commonly inserts —
+      // purely a normalisation concern, not language logic.
+      .replaceAll(/\s+/g, "\\s+");
 
-  // One regex per term (canonical + variants combined). Letting
-  // every term carry its own pattern keeps the lookup direct —
-  // each match comes with its term object — at the cost of a
-  // few extra RegExp instances per workspace.
+  // One regex per term (canonical + variants). The plugin only
+  // does literal, word-bounded matching; morphology and other
+  // form expansion belong upstream in the anonymisation package
+  // (variants on the gazetteer entry).
   const compiled: CompiledTerm[] = [];
   const seen = new Set<string>();
   for (const term of terms) {
@@ -93,17 +78,15 @@ const buildMatcher = (
       (surface) => surface.length > 0,
     );
     if (surfaces.length === 0) continue;
-    // Sort longest first so the alternation prefers the most
-    // specific surface inside its own term.
     surfaces.sort((a, b) => b.length - a.length);
     const key = surfaces.join("|").toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    const alternation = surfaces.map(surfaceToPattern).join("|");
+    const alternation = surfaces.map(escapeChar).join("|");
     compiled.push({
       term,
       regex: new RegExp(
-        `(?<![\\p{L}\\p{N}])(?:${alternation})`,
+        `(?<![\\p{L}\\p{N}])(?:${alternation})(?![\\p{L}\\p{N}])`,
         "giu",
       ),
     });
