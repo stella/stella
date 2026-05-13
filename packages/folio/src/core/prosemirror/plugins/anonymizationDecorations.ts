@@ -87,13 +87,16 @@ const buildMatcher = (
       // titles, names, and units.
       .replaceAll(/\s+/g, "\\s+");
   const alternation = entries.map(({ surface }) => escape(surface)).join("|");
-  // Strict word-bounded match: a term only highlights when it
-  // appears as a whole word in the document. Keeping the matcher
-  // simple matches what users expect when they paste a term —
-  // morphological declension is a separate feature.
+  // Leading word boundary stays strict so a term doesn't match
+  // inside an unrelated longer word. Trailing boundary is open:
+  // we consume any word-character suffix so a single nominative
+  // entry matches the declined forms that show up in Czech /
+  // Slovak / German texts without the user having to enter each
+  // case explicitly. Capture group 1 carries the surface for
+  // the lookup; the full match is what gets highlighted.
   return {
     regex: new RegExp(
-      `(?<![\\p{L}\\p{N}])(?:${alternation})(?![\\p{L}\\p{N}])`,
+      `(?<![\\p{L}\\p{N}])(${alternation})[\\p{L}\\p{M}\\p{N}]*`,
       "giu",
     ),
     bySurface,
@@ -113,7 +116,11 @@ const buildMatches = (
     matcher.regex.lastIndex = 0;
     let match: RegExpExecArray | null = matcher.regex.exec(text);
     while (match !== null) {
-      const surfaceKey = match[0].replaceAll(/\s+/g, " ").toLowerCase();
+      // Capture group 1 is the surface (one of the alternation
+      // entries); match[0] is that surface plus an optional
+      // declensional suffix the matcher swept up.
+      const surface = match[1] ?? "";
+      const surfaceKey = surface.replaceAll(/\s+/g, " ").toLowerCase();
       const term = matcher.bySurface.get(surfaceKey);
       if (term) {
         const from = pos + match.index;

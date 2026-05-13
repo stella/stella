@@ -86,12 +86,24 @@ export const AnonymizationFacet = ({
   // "Add term" input. Lets the workflow be "select in document →
   // add" without a floating popover. Works for PDF text layer
   // and Folio/DOCX since both produce a standard window Selection.
-  // Only fires for short, single-line selections to keep accidental
-  // multi-paragraph picks out of the input.
+  // Folio breaks lines for the paged renderer so multi-line picks
+  // are normal even for short single-name selections; collapse
+  // any whitespace run (incl. newlines) into a single space
+  // rather than dropping the selection. Skip selections that look
+  // like they live inside an input/textarea so typing into the
+  // term field itself doesn't keep overwriting the value.
   useEffect(() => {
     const handler = () => {
       const selection = window.getSelection();
       if (!selection || selection.rangeCount === 0) {
+        return;
+      }
+      const anchorNode = selection.anchorNode;
+      const anchorEl =
+        anchorNode instanceof Element
+          ? anchorNode
+          : anchorNode?.parentElement ?? null;
+      if (anchorEl?.closest("input, textarea, [contenteditable]")) {
         return;
       }
       const raw = selection.toString();
@@ -100,9 +112,6 @@ export const AnonymizationFacet = ({
       }
       const single = raw.replace(/\s+/g, " ").trim();
       if (single.length < 2 || single.length > 200) {
-        return;
-      }
-      if (single.includes("\n")) {
         return;
       }
       setPendingValue(single);
