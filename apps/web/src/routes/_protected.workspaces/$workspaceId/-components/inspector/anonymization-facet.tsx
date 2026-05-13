@@ -20,6 +20,14 @@ import { Trash2 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import {
+  Combobox,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxPopup,
+} from "@stll/ui/components/combobox";
 import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 
@@ -162,25 +170,34 @@ export const AnonymizationFacet = ({
           value={pendingValue}
         />
         <div className="flex items-center gap-2">
-          <select
-            className="border-input bg-background h-9 flex-1 rounded-md border px-2 text-xs"
+          <Combobox<LabelOption>
+            autoHighlight
             disabled={createMutation.isPending}
-            onChange={(event) => {
-              const next = LABEL_OPTIONS.find(
-                (option) => option === event.target.value,
-              );
-              if (next) {
-                setPendingLabel(next);
-              }
+            items={[...LABEL_OPTIONS]}
+            itemToStringLabel={(option) => option}
+            onValueChange={(next) => {
+              if (next) setPendingLabel(next);
             }}
             value={pendingLabel}
           >
-            {LABEL_OPTIONS.map((label) => (
-              <option key={label} value={label}>
-                {label}
-              </option>
-            ))}
-          </select>
+            <ComboboxInput
+              aria-label={t("inspector.anonymization.labelPickerAriaLabel")}
+              className="h-9 min-w-0 flex-1 text-xs"
+              placeholder={t("inspector.anonymization.labelPickerPlaceholder")}
+            />
+            <ComboboxPopup>
+              <ComboboxList>
+                {(option: LabelOption) => (
+                  <ComboboxItem key={option} value={option}>
+                    {option}
+                  </ComboboxItem>
+                )}
+              </ComboboxList>
+              <ComboboxEmpty>
+                {t("inspector.anonymization.labelPickerEmpty")}
+              </ComboboxEmpty>
+            </ComboboxPopup>
+          </Combobox>
           <Button
             disabled={
               pendingValue.trim().length === 0 || createMutation.isPending

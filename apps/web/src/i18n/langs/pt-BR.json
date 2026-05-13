@@ -1073,6 +1073,9 @@
       "deleteAction": "Delete term",
       "description": "Terms added here are masked everywhere this workspace sends data — chat to external AI, PDF inspector, exports. Org-wide defaults are managed in Organization settings.",
       "emptyState": "No workspace-specific terms yet. Add one above.",
+      "labelPickerAriaLabel": "Entity label",
+      "labelPickerEmpty": "No matching label.",
+      "labelPickerPlaceholder": "Label",
       "termAddedToast": "Added \"{value}\" to workspace anonymization terms.",
       "title": "Anonymization vocabulary",
       "workspaceTermsHeading": "Workspace terms ({count})"
