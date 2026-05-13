@@ -118,7 +118,15 @@ import {
   computeFirstPageHeaderFooterMarginExtender,
   computeHeaderFooterMarginExtender,
 } from "./headerFooterMargins";
+import {
+  anonymizationDecorationsKey,
+  type AnonymizationMatch,
+} from "../core/prosemirror/plugins/anonymizationDecorations";
 // Internal components
+import {
+  AnonymizationRectsOverlay,
+  type AnonymizationRectGroup,
+} from "./AnonymizationRectsOverlay";
 import { HiddenProseMirror } from "./HiddenProseMirror";
 import type { HiddenProseMirrorRef } from "./HiddenProseMirror";
 import { ImageSelectionOverlay } from "./ImageSelectionOverlay";
@@ -1393,6 +1401,13 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     const [caretPosition, setCaretPosition] = useState<CaretPosition | null>(
       null,
     );
+    const [anonymizationRectGroups, setAnonymizationRectGroups] = useState<
+      AnonymizationRectGroup[]
+    >([]);
+    // Plain ref to the latest match list so the recompute effect
+    // doesn't depend on a state setter callback that would trigger
+    // its own re-run.
+    const anonymizationMatchesRef = useRef<readonly AnonymizationMatch[]>([]);
     const suppressSelectionOverlayRef = useRef(false);
     const revealSelectionOverlayTimerRef = useRef<number | null>(null);
 
@@ -2391,6 +2406,65 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       // NOTE: onSelectionChange removed from dependencies - accessed via ref to prevent infinite loops
     );
 
+    // Re-project anonymization match ranges onto container-space
+    // rectangles whenever layout settles or the match list updates.
+    // Mirrors the layout-fallback branch of updateSelectionOverlay
+    // (no DOM-rect shortcut: PM decoration spans live off-screen and
+    // would give us a -9999 x coordinate).
+    const updateAnonymizationOverlay = useCallback(() => {
+      if (!layout || blocks.length === 0) {
+        setAnonymizationRectGroups([]);
+        return;
+      }
+      const matches = anonymizationMatchesRef.current;
+      if (matches.length === 0) {
+        setAnonymizationRectGroups([]);
+        return;
+      }
+      const pagesContainer = pagesContainerRef.current;
+      if (!pagesContainer) {
+        setAnonymizationRectGroups([]);
+        return;
+      }
+      const overlay = pagesContainer.parentElement?.querySelector(
+        '[data-testid="selection-overlay"]',
+      );
+      const firstPage = pagesContainer.querySelector(".layout-page");
+      if (!overlay || !firstPage) {
+        setAnonymizationRectGroups([]);
+        return;
+      }
+      const overlayRect = overlay.getBoundingClientRect();
+      const pageRect = firstPage.getBoundingClientRect();
+      const pageOffsetX = (pageRect.left - overlayRect.left) / zoom;
+      const pageOffsetY = (pageRect.top - overlayRect.top) / zoom;
+
+      const groups: AnonymizationRectGroup[] = [];
+      for (const match of matches) {
+        const rects = selectionToRects(
+          layout,
+          blocks,
+          measures,
+          match.from,
+          match.to,
+        ).map((rect) => ({
+          height: rect.height,
+          pageIndex: rect.pageIndex,
+          width: rect.width,
+          x: rect.x + pageOffsetX,
+          y: rect.y + pageOffsetY,
+        }));
+        if (rects.length > 0) {
+          groups.push({
+            rects,
+            label: match.label,
+            canonical: match.canonical,
+          });
+        }
+      }
+      setAnonymizationRectGroups(groups);
+    }, [layout, blocks, measures, zoom]);
+
     const hideSelectionOverlayDuringInput = useCallback(
       (state: EditorState) => {
         suppressSelectionOverlayRef.current = true;
@@ -2429,6 +2503,20 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
      */
     const handleTransaction = useCallback(
       (transaction: Transaction, newState: EditorState) => {
+        // Keep the anonymization match list mirrored in a ref so the
+        // overlay recompute reads the latest set without depending on
+        // a state setter inside its useCallback closure. We pull off
+        // the plugin's state on every transaction; if the matches
+        // identity changes (term meta or doc edit), schedule a paint.
+        const nextMatches =
+          anonymizationDecorationsKey.getState(newState)?.matches ?? [];
+        const matchesChanged =
+          nextMatches !== anonymizationMatchesRef.current;
+        anonymizationMatchesRef.current = nextMatches;
+        if (matchesChanged) {
+          updateAnonymizationOverlay();
+        }
+
         if (transaction.docChanged) {
           // Increment state sequence to signal document changed
           syncCoordinator.incrementStateSeq();
@@ -2458,6 +2546,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         scheduleDocumentChangeNotification,
         hideSelectionOverlayDuringInput,
         updateSelectionOverlay,
+        updateAnonymizationOverlay,
         syncCoordinator,
       ],
       // NOTE: onDocumentChange removed from dependencies - accessed via ref to prevent infinite loops
@@ -4202,6 +4291,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       (view: EditorView) => {
         runLayoutPipeline(view.state);
         updateSelectionOverlay(view.state);
+        anonymizationMatchesRef.current =
+          anonymizationDecorationsKey.getState(view.state)?.matches ?? [];
+        updateAnonymizationOverlay();
 
         // Auto-focus the editor so the user can start typing immediately
         if (!readOnly) {
@@ -4212,8 +4304,20 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           });
         }
       },
-      [runLayoutPipeline, updateSelectionOverlay, readOnly],
+      [
+        runLayoutPipeline,
+        updateSelectionOverlay,
+        updateAnonymizationOverlay,
+        readOnly,
+      ],
     );
+
+    // Re-paint anonymization overlay whenever a fresh layout lands;
+    // selectionToRects needs the latest layout/blocks/measures to
+    // place rectangles correctly after a doc edit or zoom change.
+    useEffect(() => {
+      updateAnonymizationOverlay();
+    }, [updateAnonymizationOverlay]);
 
     // Re-layout when web fonts finish loading to fix measurements that were
     // computed against fallback fonts during initial render.
@@ -4463,6 +4567,15 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               onClick={handlePagesClick}
               onContextMenu={handlePagesContextMenu}
               aria-hidden="true" // Visual only, PM provides semantic content
+            />
+
+            {/* Anonymization highlights — paints on top of the
+                rendered pages so PII spans the wasm pipeline would
+                redact are visible inline. Always mounted, renders
+                nothing when no terms are pushed. */}
+            <AnonymizationRectsOverlay
+              groups={anonymizationRectGroups}
+              pageGap={pageGap}
             />
 
             {/* Selection overlay */}

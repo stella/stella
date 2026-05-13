@@ -1,28 +1,41 @@
 /**
- * Anonymization Decorations Plugin
+ * Anonymization Match Plugin
  *
- * Paints a subtle inline highlight over every text occurrence of a
- * workspace anonymization term so the lawyer can see which strings
- * in the open document are already on the workspace's PII list.
+ * Owns the "what to highlight" half of the anonymization
+ * overlay: the host pushes a list of terms via the
+ * `setAnonymizationTermsMeta` meta, this plugin scans text
+ * nodes for each surface form, and exposes the resulting
+ * match ranges through its state.
  *
- * Unlike the AI suggestion plugin which gets pre-resolved ranges,
- * this one is fed *terms* (canonical + variants) and scans text
- * nodes itself. The host pushes the term list via the
- * `setAnonymizationTermsMeta` meta whenever the workspace catalog
- * changes; the document itself is never mutated.
+ * The plugin does **not** produce ProseMirror decorations.
+ * Folio's editor lives off-screen (HiddenProseMirror) and PM
+ * decorations never reach the visible paged DOM. The visible
+ * highlights are painted by {@link AnonymizationRectsOverlay},
+ * which reads the match ranges from this plugin's state and
+ * projects them through `selectionToRects` to coordinates on
+ * the paged canvas. Single source of truth for the ranges,
+ * one painter.
  */
 
 import type { Node as PMNode } from "prosemirror-model";
 import { Plugin, PluginKey } from "prosemirror-state";
-import { Decoration, DecorationSet } from "prosemirror-view";
 
 export type AnonymizationTerm = {
-  /** Canonical surface form, displayed in the title tooltip. */
+  /** Canonical surface form, displayed in tooltips. */
   canonical: string;
-  /** Label slug (e.g. "person", "organization"); used as a CSS modifier. */
+  /** Label slug (e.g. "person", "organization"). */
   label: string;
   /** Optional alternate surface forms also matched verbatim. */
   variants?: readonly string[];
+};
+
+export type AnonymizationMatch = {
+  /** Inclusive PM doc position of the match start. */
+  from: number;
+  /** Exclusive PM doc position of the match end. */
+  to: number;
+  label: string;
+  canonical: string;
 };
 
 export const anonymizationDecorationsKey =
@@ -32,10 +45,10 @@ const SET_META = "set";
 
 type AnonymizationDecorationState = {
   terms: readonly AnonymizationTerm[];
-  decorationSet: DecorationSet;
+  matches: readonly AnonymizationMatch[];
 };
 
-const slugLabel = (label: string): string =>
+export const slugAnonymizationLabel = (label: string): string =>
   label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
 const buildMatcher = (
@@ -52,11 +65,9 @@ const buildMatcher = (
       }
     }
   }
-  if (entries.length === 0) {
-    return null;
-  }
-  // Longest first so a variant that's a substring of another doesn't
-  // shadow the longer match.
+  if (entries.length === 0) return null;
+  // Longest first so a shorter variant nested inside a canonical
+  // doesn't shadow the longer match.
   entries.sort((a, b) => b.surface.length - a.surface.length);
   const bySurface = new Map<string, AnonymizationTerm>();
   for (const { surface, term } of entries) {
@@ -68,31 +79,25 @@ const buildMatcher = (
   const escape = (value: string): string =>
     value.replaceAll(/[\\^$.*+?()[\]{}|]/g, "\\$&");
   const alternation = entries.map(({ surface }) => escape(surface)).join("|");
-  // 'gi' so we walk every match and ignore case; lookarounds keep
-  // matches at word-character boundaries on ASCII so we don't paint
-  // a highlight inside a longer unrelated word.
   return {
-    regex: new RegExp(`(?<![\\p{L}\\p{N}])(?:${alternation})(?![\\p{L}\\p{N}])`, "giu"),
+    regex: new RegExp(
+      `(?<![\\p{L}\\p{N}])(?:${alternation})(?![\\p{L}\\p{N}])`,
+      "giu",
+    ),
     bySurface,
   };
 };
 
-const buildDecorationSet = (
+const buildMatches = (
   doc: PMNode,
   terms: readonly AnonymizationTerm[],
-): DecorationSet => {
+): AnonymizationMatch[] => {
   const matcher = buildMatcher(terms);
-  if (!matcher) {
-    return DecorationSet.empty;
-  }
-  const decorations: Decoration[] = [];
+  if (!matcher) return [];
+  const matches: AnonymizationMatch[] = [];
   doc.descendants((node, pos) => {
-    if (!node.isText || node.text === undefined) {
-      return true;
-    }
+    if (!node.isText || node.text === undefined) return true;
     const text = node.text;
-    // Fresh exec loop per text node so global-regex state can't
-    // leak across nodes.
     matcher.regex.lastIndex = 0;
     let match: RegExpExecArray | null = matcher.regex.exec(text);
     while (match !== null) {
@@ -101,17 +106,12 @@ const buildDecorationSet = (
       if (term) {
         const from = pos + match.index;
         const to = from + match[0].length;
-        decorations.push(
-          Decoration.inline(from, to, {
-            class: [
-              "folio-anonymization-term",
-              `folio-anonymization-term--${slugLabel(term.label)}`,
-            ].join(" "),
-            "data-folio-anonymization-canonical": term.canonical,
-            "data-folio-anonymization-label": term.label,
-            title: `Anonymized: ${term.canonical}`,
-          }),
-        );
+        matches.push({
+          from,
+          to,
+          label: term.label,
+          canonical: term.canonical,
+        });
       }
       if (matcher.regex.lastIndex === match.index) {
         matcher.regex.lastIndex += 1;
@@ -120,24 +120,22 @@ const buildDecorationSet = (
     }
     return true;
   });
-  return DecorationSet.create(doc, decorations);
+  return matches;
 };
 
 /**
- * ProseMirror plugin that renders workspace anonymization terms as
- * inline decorations. Always installed; renders nothing until a
- * non-empty term list is pushed in via {@link setAnonymizationTermsMeta}.
+ * Plugin that keeps a list of anonymization-term match ranges
+ * synced with the document. Host pushes terms via
+ * {@link setAnonymizationTermsMeta}; the paged-editor reads
+ * the matches and paints the overlay.
  */
 export const createAnonymizationDecorationsPlugin =
   (): Plugin<AnonymizationDecorationState> =>
     new Plugin<AnonymizationDecorationState>({
       key: anonymizationDecorationsKey,
       state: {
-        init(_, state): AnonymizationDecorationState {
-          return {
-            terms: [],
-            decorationSet: buildDecorationSet(state.doc, []),
-          };
+        init(): AnonymizationDecorationState {
+          return { terms: [], matches: [] };
         },
         apply(tr, prev, _oldState, newState): AnonymizationDecorationState {
           const setMeta = tr.getMeta(anonymizationDecorationsKey) as
@@ -147,30 +145,19 @@ export const createAnonymizationDecorationsPlugin =
           if (setMeta?.type === SET_META) {
             return {
               terms: setMeta.terms,
-              decorationSet: buildDecorationSet(newState.doc, setMeta.terms),
+              matches: buildMatches(newState.doc, setMeta.terms),
             };
           }
 
           if (tr.docChanged) {
-            // Rebuild from scratch on doc change rather than map: the
-            // matcher is regex-based so a typing keystroke that breaks
-            // or creates a match needs a re-scan; the cost is
-            // proportional to doc size and runs on each keystroke,
-            // which is acceptable for a single decoration set on
-            // documents this editor already handles.
+            // Doc edits move text around; rebuild ranges from scratch
+            // rather than try to map regex matches through a mapping.
             return {
               terms: prev.terms,
-              decorationSet: buildDecorationSet(newState.doc, prev.terms),
+              matches: buildMatches(newState.doc, prev.terms),
             };
           }
           return prev;
-        },
-      },
-      props: {
-        decorations(state) {
-          return (
-            anonymizationDecorationsKey.getState(state)?.decorationSet ?? null
-          );
         },
       },
     });
