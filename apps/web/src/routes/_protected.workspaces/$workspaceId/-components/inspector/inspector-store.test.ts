@@ -304,7 +304,7 @@ describe("replaceFileFieldId", () => {
     expect(pdfTabs[0]?.entityId).toBe("entity-B");
   });
 
-  test("preserves the pdf tab render id across version replacement", () => {
+  test("bumps the pdf tab render id across version replacement", () => {
     useInspectorStore.getState().openFile({
       id: "field-old",
       entityId: "entity-1",
@@ -322,6 +322,7 @@ describe("replaceFileFieldId", () => {
     if (before?.type !== "pdf") {
       throw new Error("expected pdf tab");
     }
+    const beforeRenderId = before.renderId;
 
     useInspectorStore.getState().replaceFileFieldId("field-old", "field-new");
 
@@ -332,7 +333,7 @@ describe("replaceFileFieldId", () => {
       throw new Error("expected pdf tab");
     }
 
-    expect(after.renderId).toBe(before.renderId);
+    expect(after.renderId).not.toBe(beforeRenderId);
     expect(useInspectorStore.getState().activeId).toBe("field-new");
   });
 

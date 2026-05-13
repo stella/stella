@@ -976,7 +976,11 @@ export const useInspectorStore = create<State & Actions>()(
         state.tabs = state.tabs.filter(
           (t) => t.id === oldFieldId || t.id !== next.id,
         );
+        const idChanged = tab.id !== next.id;
         tab.id = next.id;
+        if (idChanged) {
+          tab.renderId = uuidv7();
+        }
         if (tab.justificationFieldId === oldFieldId) {
           tab.justificationFieldId = next.id;
         }
