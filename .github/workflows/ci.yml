@@ -254,7 +254,11 @@ jobs:
         if: steps.changed.outputs.run == 'true'
         run: bun ci
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the secret to install-time lifecycle scripts. The token is
+          # only required when publishing — never to read from the public
+          # npm registry. Match the ci-checks / landing-build pattern.
+          NPM_TOKEN: ""
 
       - name: Prepare environment
         if: steps.changed.outputs.run == 'true'

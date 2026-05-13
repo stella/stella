@@ -276,7 +276,13 @@ jobs:
       - name: Install dependencies
         run: bun ci
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # Signing-key secrets are loaded into later steps in this job.
+          # Keep NPM_TOKEN out of the install-time environment so a
+          # compromised transitive dep's lifecycle script cannot
+          # exfiltrate it alongside the signing material.
+          # Public npm reads work without auth; the token is only used
+          # when publishing.
+          NPM_TOKEN: ""
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # stable
