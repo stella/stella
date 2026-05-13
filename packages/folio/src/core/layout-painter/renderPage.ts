@@ -144,6 +144,14 @@ export type HeaderFooterContent = {
   visualTop?: number;
   /** Bottom-most visual extent relative to the nominal flow origin. */
   visualBottom?: number;
+  /**
+   * Flow-only bounds used by `computeHeaderFooterMarginExtender` to push
+   * body margins clear of HF overflow. Excludes `behindDoc` images that
+   * the renderer paints behind body content; including them would reserve
+   * a full-page letterhead as body push-down.
+   */
+  marginPushTop?: number;
+  marginPushBottom?: number;
 };
 
 /**

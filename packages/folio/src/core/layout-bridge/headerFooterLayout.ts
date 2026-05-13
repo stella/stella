@@ -327,6 +327,19 @@ function resolveHeaderFooterFloatingTableVisualTop(
   return sourceY;
 }
 
+/**
+ * Image is rendered "behind" body content (full-page letterhead, watermark).
+ * The renderer lifts these out of the HF container to the page root, so they
+ * must not push body margins down — they paint underneath the body by design.
+ */
+function isBehindDocImageRun(run: Run): boolean {
+  return run.kind === "image" && run.wrapType === "behind";
+}
+
+function isBehindDocImageBlock(block: FlowBlock): boolean {
+  return block.kind === "image" && block.anchor?.behindDoc === true;
+}
+
 export function calculateHeaderFooterVisualBounds(
   blocks: FlowBlock[],
   measures: Measure[],
@@ -363,15 +376,6 @@ export function calculateHeaderFooterVisualBounds(
         // and `computeHeaderFooterMarginExtender` wouldn't reserve enough
         // body push-down — the image would overlap body text.
         if (!run.position && !isFloatingImageRun(run)) {
-          continue;
-        }
-        // behindDoc images (full-page letterheads, watermarks) paint behind
-        // body content by design and are lifted out of the HF container to
-        // the page root at render time. They must not contribute to the
-        // header's visualBottom — otherwise `computeHeaderFooterMarginExtender`
-        // reserves the entire image as body push-down, and the body (plus
-        // the image's own margin-anchored position) cascades off the page.
-        if (run.wrapType === "behind") {
           continue;
         }
         const runTop = resolveHeaderFooterVisualTop(
@@ -430,6 +434,105 @@ export function calculateHeaderFooterVisualBounds(
   }
 
   return { visualTop, visualBottom };
+}
+
+/**
+ * Compute the header/footer bounds used by `computeHeaderFooterMarginExtender`
+ * to push body margins clear of HF overflow. Excludes `behindDoc` images
+ * (full-page letterheads, watermarks): the renderer lifts them out of the HF
+ * container onto the page root and paints them behind body content, so they
+ * must not reserve body push-down. Keeping them in `visualBottom` is still
+ * correct for the renderer (and for the page-hash invalidation signal), but
+ * the margin extender needs the flow-only extent.
+ */
+export function calculateHeaderFooterMarginPushBounds(
+  blocks: FlowBlock[],
+  measures: Measure[],
+  flowHeight: number,
+  metrics: HeaderFooterMetrics,
+): { top: number; bottom: number } {
+  let top = 0;
+  let bottom = flowHeight;
+  let cursorY = 0;
+
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    const measure = measures[i];
+    if (!block || !measure) {
+      continue;
+    }
+
+    if (block.kind === "paragraph" && measure.kind === "paragraph") {
+      const paragraphStartY = cursorY;
+      const paragraphBottomY = paragraphStartY + measure.totalHeight;
+      top = Math.min(top, paragraphStartY);
+      bottom = Math.max(bottom, paragraphBottomY);
+
+      for (const run of block.runs) {
+        if (run.kind !== "image") {
+          continue;
+        }
+        if (!run.position && !isFloatingImageRun(run)) {
+          continue;
+        }
+        if (isBehindDocImageRun(run)) {
+          continue;
+        }
+        const runTop = resolveHeaderFooterVisualTop(
+          run,
+          paragraphStartY,
+          flowHeight,
+          metrics,
+        );
+        top = Math.min(top, runTop);
+        bottom = Math.max(bottom, runTop + run.height);
+      }
+
+      cursorY = paragraphBottomY;
+    } else if (isBehindDocImageBlock(block)) {
+      // ImageBlock with anchor.behindDoc: skip entirely for the same reason
+      // as run-level behindDoc images. Does not advance cursorY because
+      // anchored images don't participate in HF flow either.
+      continue;
+    } else {
+      let blockHeight = 0;
+      let advancesCursor = true;
+      if (block.kind === "table" && measure.kind === "table") {
+        blockHeight = measure.totalHeight;
+        if (block.floating) {
+          advancesCursor = false;
+        }
+      } else if (block.kind === "image" && measure.kind === "image") {
+        blockHeight = measure.height;
+      } else if (block.kind === "textBox" && measure.kind === "textBox") {
+        blockHeight = measure.height;
+      } else {
+        continue;
+      }
+      if (advancesCursor) {
+        const blockBottomY = cursorY + blockHeight;
+        top = Math.min(top, cursorY);
+        bottom = Math.max(bottom, blockBottomY);
+        cursorY = blockBottomY;
+      } else if (
+        block.kind === "table" &&
+        block.floating &&
+        measure.kind === "table"
+      ) {
+        const blockTop = resolveHeaderFooterFloatingTableVisualTop(
+          block.floating,
+          measure,
+          cursorY,
+          flowHeight,
+          metrics,
+        );
+        top = Math.min(top, blockTop);
+        bottom = Math.max(bottom, blockTop + blockHeight);
+      }
+    }
+  }
+
+  return { top, bottom };
 }
 
 // =============================================================================
@@ -516,6 +619,13 @@ export function convertHeaderFooterToContent(
     totalHeight,
     metrics,
   );
+  const { top: marginPushTop, bottom: marginPushBottom } =
+    calculateHeaderFooterMarginPushBounds(
+      blocks,
+      measures,
+      totalHeight,
+      metrics,
+    );
 
   return {
     blocks,
@@ -523,5 +633,7 @@ export function convertHeaderFooterToContent(
     height: totalHeight,
     visualTop,
     visualBottom,
+    marginPushTop,
+    marginPushBottom,
   };
 }
