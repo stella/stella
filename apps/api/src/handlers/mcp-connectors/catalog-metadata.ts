@@ -39,6 +39,97 @@ export const NATIVE_TOOL_SLUGS: readonly string[] = NATIVE_TOOL_CATALOG.map(
   (tool) => tool.slug,
 );
 
+const toPracticeCountryCodeSet = (
+  practiceJurisdictions: readonly PracticeJurisdiction[],
+): ReadonlySet<string> =>
+  new Set(
+    practiceJurisdictions.map((jurisdiction) =>
+      jurisdiction.countryCode.toUpperCase(),
+    ),
+  );
+
+const intersectsJurisdictions = (
+  recommendedJurisdictions: readonly string[],
+  practiceCountryCodes: ReadonlySet<string>,
+): boolean => {
+  if (recommendedJurisdictions.length === 0) {
+    return true;
+  }
+  return recommendedJurisdictions.some((countryCode) =>
+    practiceCountryCodes.has(countryCode.toUpperCase()),
+  );
+};
+
+/**
+ * Default-on iff the tool's recommended jurisdictions intersect the
+ * org's practice jurisdictions (or the tool has no jurisdiction
+ * recommendation, meaning it's globally relevant).
+ */
+const isNativeToolDefaultEnabledForCodes = (
+  slug: string,
+  practiceCountryCodes: ReadonlySet<string>,
+): boolean => {
+  const tool = NATIVE_TOOL_CATALOG.find((entry) => entry.slug === slug);
+  if (!tool) {
+    return false;
+  }
+  return intersectsJurisdictions(
+    tool.recommendedJurisdictions,
+    practiceCountryCodes,
+  );
+};
+
+const isNativeToolEnabledForCodes = (
+  slug: string,
+  practiceCountryCodes: ReadonlySet<string>,
+  nativeToolOverrides: Readonly<Record<string, boolean>>,
+): boolean => {
+  const override = nativeToolOverrides[slug];
+  if (typeof override === "boolean") {
+    return override;
+  }
+  return isNativeToolDefaultEnabledForCodes(slug, practiceCountryCodes);
+};
+
+/**
+ * Effective enabled state for a native tool. Explicit per-slug
+ * overrides win over the jurisdiction-derived default, so a Czech
+ * lawyer can still disable ARES and a Spanish lawyer can still
+ * enable it on demand.
+ */
+export const isNativeToolEnabledForOrg = ({
+  slug,
+  practiceJurisdictions,
+  nativeToolOverrides,
+}: {
+  slug: string;
+  practiceJurisdictions: readonly PracticeJurisdiction[];
+  nativeToolOverrides: Readonly<Record<string, boolean>>;
+}): boolean =>
+  isNativeToolEnabledForCodes(
+    slug,
+    toPracticeCountryCodeSet(practiceJurisdictions),
+    nativeToolOverrides,
+  );
+
+export const getDisabledNativeToolSlugs = ({
+  practiceJurisdictions,
+  nativeToolOverrides,
+}: {
+  practiceJurisdictions: readonly PracticeJurisdiction[];
+  nativeToolOverrides: Readonly<Record<string, boolean>>;
+}): readonly string[] => {
+  const practiceCountryCodes = toPracticeCountryCodeSet(practiceJurisdictions);
+  return NATIVE_TOOL_CATALOG.filter(
+    (tool) =>
+      !isNativeToolEnabledForCodes(
+        tool.slug,
+        practiceCountryCodes,
+        nativeToolOverrides,
+      ),
+  ).map((tool) => tool.slug);
+};
+
 export const mcpConnectorCatalogMetadata = (
   _connector: McpConnectorCatalogSource,
 ): McpConnectorCatalogMetadata => ({ recommendedJurisdictions: [] });
@@ -55,14 +146,10 @@ export const isMcpConnectorRecommendedForPractice = ({
     return false;
   }
 
-  const practiceCountryCodes = new Set(
-    practiceJurisdictions.map((jurisdiction) =>
-      jurisdiction.countryCode.toUpperCase(),
-    ),
-  );
+  const practiceCountryCodes = toPracticeCountryCodeSet(practiceJurisdictions);
 
   return metadata.recommendedJurisdictions.some((countryCode) =>
-    practiceCountryCodes.has(countryCode),
+    practiceCountryCodes.has(countryCode.toUpperCase()),
   );
 };
 
@@ -71,11 +158,7 @@ export const getNativeToolCatalog = ({
 }: {
   practiceJurisdictions: readonly PracticeJurisdiction[];
 }) => {
-  const practiceCountryCodes = new Set(
-    practiceJurisdictions.map((jurisdiction) =>
-      jurisdiction.countryCode.toUpperCase(),
-    ),
-  );
+  const practiceCountryCodes = toPracticeCountryCodeSet(practiceJurisdictions);
 
   return NATIVE_TOOL_CATALOG.map((tool) => ({
     description: tool.description,
@@ -83,7 +166,7 @@ export const getNativeToolCatalog = ({
     documentationUrl: tool.documentationUrl,
     iconUrl: tool.iconUrl,
     isRecommended: tool.recommendedJurisdictions.some((countryCode) =>
-      practiceCountryCodes.has(countryCode),
+      practiceCountryCodes.has(countryCode.toUpperCase()),
     ),
     recommendedJurisdictions: tool.recommendedJurisdictions,
     slug: tool.slug,

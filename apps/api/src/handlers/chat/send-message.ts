@@ -64,6 +64,7 @@ import {
 } from "@/api/handlers/chat/upload-files";
 import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { createFileKey } from "@/api/handlers/files/utils";
+import { getDisabledNativeToolSlugs } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import { requireAIAvailable } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -333,12 +334,17 @@ const sendMessage = createSafeRootHandler(
           where: {
             organizationId: { eq: session.activeOrganizationId },
           },
-          columns: { disabledNativeTools: true },
+          columns: {
+            practiceJurisdictions: true,
+            nativeToolOverrides: true,
+          },
         }),
       ),
     );
-    const disabledNativeToolSlugs =
-      orgSettingsForChat?.disabledNativeTools ?? [];
+    const disabledNativeToolSlugs = getDisabledNativeToolSlugs({
+      practiceJurisdictions: orgSettingsForChat?.practiceJurisdictions ?? [],
+      nativeToolOverrides: orgSettingsForChat?.nativeToolOverrides ?? {},
+    });
     // Streaming tools mirror the surface the user is on: only the
     // DOCX file-overlay client knows how to satisfy
     // apply-active-docx-edits (it queues into the review store and

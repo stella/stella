@@ -31,16 +31,20 @@ const updateNativeTool = createSafeRootHandler(
       );
     }
 
-    // Atomic upsert: the INSERT carries the post-mutation value as a
-    // one- or zero-element array; the ON CONFLICT branch derives the
-    // next list from the row's current value via JSONB operators
-    // under PG's row lock, so concurrent toggles can't overwrite
-    // each other (no read-modify-write on the application side).
+    // Atomic upsert: the INSERT seeds the overrides map with a
+    // single key; the ON CONFLICT branch merges over the row's
+    // current value via JSONB concatenation under PG's row lock,
+    // so concurrent toggles can't overwrite each other (no
+    // read-modify-write on the application side). Keep the legacy
+    // disabled_native_tools list in sync until the rollout-safe
+    // follow-up migration drops it.
     const slug = params.slug;
-    const insertValue = body.enabled
+    const overrideEntry = sql`jsonb_build_object(${slug}::text, ${body.enabled}::boolean)`;
+    const updateExpr = sql`coalesce("organization_settings"."native_tool_overrides", '{}'::jsonb) || ${overrideEntry}`;
+    const legacyInsertValue = body.enabled
       ? sql`'[]'::jsonb`
       : sql`jsonb_build_array(${slug}::text)`;
-    const updateExpr = body.enabled
+    const legacyUpdateExpr = body.enabled
       ? sql`coalesce("organization_settings"."disabled_native_tools" - ${slug}::text, '[]'::jsonb)`
       : sql`(
           select coalesce(jsonb_agg(distinct value), '[]'::jsonb)
@@ -56,12 +60,14 @@ const updateNativeTool = createSafeRootHandler(
           .insert(organizationSettings)
           .values({
             organizationId: session.activeOrganizationId,
-            disabledNativeTools: insertValue,
+            nativeToolOverrides: overrideEntry,
+            disabledNativeTools: legacyInsertValue,
           })
           .onConflictDoUpdate({
             target: organizationSettings.organizationId,
             set: {
-              disabledNativeTools: updateExpr,
+              nativeToolOverrides: updateExpr,
+              disabledNativeTools: legacyUpdateExpr,
               updatedAt: new Date(),
             },
           })
