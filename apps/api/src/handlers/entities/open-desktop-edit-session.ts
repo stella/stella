@@ -26,13 +26,13 @@ import {
   readVersionDocxTarget,
 } from "./desktop-edit-session-utils";
 
-const openDesktopEditSessionBodySchema = t.Object({
+export const openDesktopEditSessionBodySchema = t.Object({
   entityId: tSafeId("entity"),
   force: t.Optional(t.Boolean()),
   propertyId: tSafeId("property"),
 });
 
-type OpenDesktopEditSessionResponse = {
+export type OpenDesktopEditSessionResponse = {
   baseVersionNumber: number;
   downloadUrl: string;
   fileName: string;
@@ -199,7 +199,7 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
   } satisfies OpenDesktopEditSessionResponse;
 };
 
-const openDesktopEditSessionHandler = async function* ({
+export const openDesktopEditSessionHandler = async function* ({
   body: { entityId, force, propertyId },
   organizationId,
   safeDb,

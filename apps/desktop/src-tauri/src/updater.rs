@@ -6,6 +6,8 @@
 //
 // - On startup, run a delayed background check (so the launch path
 //   isn't blocked by network I/O).
+// - While the app keeps running, repeat that background check so
+//   long-lived desktop sessions still pick up new releases.
 // - When the tray "Check for updates" item is clicked, run the same
 //   check synchronously and notify whether an update was found.
 // - When an update is found, download + install + restart. The
@@ -19,6 +21,7 @@ use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_updater::UpdaterExt;
 
 const STARTUP_CHECK_DELAY: Duration = Duration::from_secs(10);
+const BACKGROUND_CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 
 // Outcome of an update check that *did not* apply an update. The
 // "update applied" path doesn't appear here because the install
@@ -31,15 +34,25 @@ pub enum CheckOutcome {
 }
 
 pub fn schedule_startup_check(handle: AppHandle) {
+  if cfg!(debug_assertions) {
+    tracing::debug!("background updater skipped in debug build");
+    return;
+  }
+
   async_runtime::spawn(async move {
     tokio::time::sleep(STARTUP_CHECK_DELAY).await;
-    match run_check(&handle).await {
-      CheckOutcome::UpToDate => {
-        tracing::debug!("background updater: up to date");
+
+    loop {
+      match run_check(&handle).await {
+        CheckOutcome::UpToDate => {
+          tracing::debug!("background updater: up to date");
+        }
+        CheckOutcome::Failed(err) => {
+          tracing::warn!(error = %err, "background updater check failed");
+        }
       }
-      CheckOutcome::Failed(err) => {
-        tracing::warn!(error = %err, "background updater check failed");
-      }
+
+      tokio::time::sleep(BACKGROUND_CHECK_INTERVAL).await;
     }
   });
 }

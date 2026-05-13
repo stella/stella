@@ -48,6 +48,7 @@ import { api } from "@/lib/api";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { DOCX_MIME } from "@/lib/consts";
 import { openDocxInDesktop } from "@/lib/desktop-bridge";
+import { showDesktopEditOpenResultToast } from "@/lib/desktop-edit-status-toast";
 import { ClientOperationError, isUnauthorizedError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceCellMetadata, WorkspaceEntity } from "@/lib/types";
@@ -220,12 +221,10 @@ export const RowActions = ({
         ...(isLockedByMe ? { force: true as const } : {}),
       };
 
-      await openDocxInDesktop(desktopInput);
-
-      stellaToast.add({
-        description: t("workspaces.files.desktopEdit.openedDescription"),
-        title: t("workspaces.files.desktopEdit.openedTitle"),
-        type: "success",
+      const openResult = await openDocxInDesktop(desktopInput);
+      await showDesktopEditOpenResultToast({
+        result: openResult,
+        t,
       });
     } catch (error) {
       if (error instanceof Error && isUnauthorizedError(error)) {
@@ -254,7 +253,7 @@ export const RowActions = ({
 
     const linkedAccount = await getFreshLinkedAccount();
 
-    await openDocxInDesktop({
+    const openResult = await openDocxInDesktop({
       apiBaseUrl: env.VITE_API_URL,
       entityId: file.entityId,
       force: true,
@@ -263,10 +262,9 @@ export const RowActions = ({
       workspaceId,
     });
 
-    stellaToast.add({
-      description: t("workspaces.files.desktopEdit.openedDescription"),
-      title: t("workspaces.files.desktopEdit.openedTitle"),
-      type: "success",
+    await showDesktopEditOpenResultToast({
+      result: openResult,
+      t,
     });
   };
 

@@ -1102,6 +1102,68 @@ export const desktopEditSessions = p.pgTable(
   ],
 );
 
+export type DesktopEditLinkedAccountSnapshot = {
+  email: string;
+  name: string | null;
+  verifiedAt: string;
+};
+
+export const desktopEditHandoffs = p.pgTable(
+  "desktop_edit_handoffs",
+  {
+    id: pUuid<"desktopEditHandoff">().primaryKey(),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    entityId: safeUuid<"entity">("entity_id").notNull(),
+    propertyId: safeUuid<"property">("property_id").notNull(),
+    createdBy: p
+      .text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    tokenHash: p.varchar("token_hash", { length: 64 }).notNull(),
+    apiBaseUrl: p.text("api_base_url").notNull(),
+    linkedAccount: jsonb("linked_account").$type<
+      DesktopEditLinkedAccountSnapshot | null
+    >(),
+    forceTakeover: p.boolean("force_takeover").notNull().default(false),
+    expiresAt: p.timestamp("expires_at").notNull(),
+    consumedAt: p.timestamp("consumed_at"),
+    desktopSessionId: safeUuid<"desktopEditSession">("desktop_session_id")
+      .references(() => desktopEditSessions.id, { onDelete: "set null" }),
+    openedAt: p.timestamp("opened_at"),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p
+      .timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    p.index("desktop_edit_handoffs_workspace_id_idx").on(table.workspaceId),
+    p.index("desktop_edit_handoffs_expires_at_idx").on(table.expiresAt),
+    p
+      .index("desktop_edit_handoffs_workspace_created_by_idx")
+      .on(table.workspaceId, table.createdBy),
+    p
+      .uniqueIndex("desktop_edit_handoffs_token_hash_uidx")
+      .on(table.tokenHash),
+    p
+      .foreignKey({
+        columns: [table.entityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.propertyId, table.workspaceId],
+        foreignColumns: [properties.id, properties.workspaceId],
+      })
+      .onDelete("cascade"),
+    ...wsPolicies(),
+  ],
+);
+
 export const fields = p.pgTable(
   "fields",
   {
@@ -2695,6 +2757,7 @@ export const relations = defineRelations(
     entityVersions,
     entityVersionAiSummaries,
     desktopEditSessions,
+    desktopEditHandoffs,
     fields,
     justifications,
     templates,
@@ -3036,6 +3099,24 @@ export const relations = defineRelations(
       }),
       createdByUser: r.one.user({
         from: r.desktopEditSessions.createdBy,
+        to: r.user.id,
+      }),
+    },
+    desktopEditHandoffs: {
+      workspace: r.one.workspaces({
+        from: r.desktopEditHandoffs.workspaceId,
+        to: r.workspaces.id,
+      }),
+      entity: r.one.entities({
+        from: r.desktopEditHandoffs.entityId,
+        to: r.entities.id,
+      }),
+      property: r.one.properties({
+        from: r.desktopEditHandoffs.propertyId,
+        to: r.properties.id,
+      }),
+      createdByUser: r.one.user({
+        from: r.desktopEditHandoffs.createdBy,
         to: r.user.id,
       }),
     },

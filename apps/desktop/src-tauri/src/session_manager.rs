@@ -169,7 +169,7 @@ fn session_key(workspace_id: &str, entity_id: &str, property_id: &str) -> String
   format!("{workspace_id}:{entity_id}:{property_id}")
 }
 
-fn normalize_api_base_url(url: &str) -> String {
+pub fn normalize_api_base_url(url: &str) -> String {
   let normalized = url.strip_suffix('/').unwrap_or(url);
   match normalized {
     "https://app.stll.app" | "https://my.stll.app" => {
@@ -2123,11 +2123,8 @@ async fn show_takeover_dialog(
       // Register a per-dialog response channel
       let rx = register_takeover_dialog(&label);
 
-      // Wait for the dialog button click (or window close = deny)
-      match rx.await {
-        Ok(approved) => approved,
-        Err(_) => false, // sender dropped (window closed without clicking)
-      }
+      // Wait for the dialog button click. A closed dialog drops the sender and denies.
+      rx.await.unwrap_or_default()
     }
     Err(e) => {
       tracing::warn!(error = %e, "failed to open takeover dialog");

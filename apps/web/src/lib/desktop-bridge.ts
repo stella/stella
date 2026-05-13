@@ -5,6 +5,7 @@ import { toSafeId } from "@/lib/safe-id";
 
 const DESKTOP_BRIDGE_PORT = env.VITE_DESKTOP_BRIDGE_PORT;
 const DESKTOP_BRIDGE_URL = `http://127.0.0.1:${String(DESKTOP_BRIDGE_PORT)}`;
+const DESKTOP_HANDOFF_POLL_INTERVAL_MS = 750;
 
 export class DesktopBridgeUnavailableError extends Error {
   public constructor() {
@@ -29,6 +30,21 @@ type RemoteDesktopSession = {
   sessionToken: string;
   tookOverExistingSession: boolean;
 };
+
+type DesktopEditHandoff = {
+  deepLinkUrl: string;
+  expiresAt: string;
+  handoffId: string;
+};
+
+type DesktopEditHandoffStatus =
+  | { status: "expired"; expiresAt: string }
+  | { status: "opened"; sessionId: string }
+  | { status: "pending"; expiresAt: string };
+
+export type OpenDocxInDesktopResult =
+  | { type: "opened" }
+  | { type: "handoff-pending"; waitUntilOpened: Promise<void> };
 
 type OpenDocxInDesktopInput = {
   apiBaseUrl: string;
@@ -66,40 +82,8 @@ const checkBridgeHealth = async (timeoutMs: number): Promise<boolean> => {
   }
 };
 
-const isMacOS = () => navigator.userAgent.includes("Mac");
-
-/**
- * Try to launch the desktop app via the stella:// deep link (macOS only),
- * then poll the bridge health endpoint until it responds (or give up).
- */
-const launchViaDeepLink = async (): Promise<boolean> => {
-  if (!isMacOS()) {
-    return false;
-  }
-
-  // Trigger the OS "open app" dialog
-  window.location.href = "stella://ping";
-
-  // Poll for up to ~6 seconds (the app needs time to start)
-  for (let i = 0; i < 6; i++) {
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 1000);
-    });
-    if (await checkBridgeHealth(1000)) {
-      return true;
-    }
-  }
-
-  return false;
-};
-
 const assertDesktopBridgeReady = async () => {
   if (await checkBridgeHealth(3000)) {
-    return;
-  }
-
-  // Bridge not reachable — try deep link launch (macOS only)
-  if (await launchViaDeepLink()) {
     return;
   }
 
@@ -132,6 +116,99 @@ const openRemoteDesktopSession = async ({
   return response.data satisfies RemoteDesktopSession;
 };
 
+const createDesktopEditHandoff = async ({
+  entityId,
+  force,
+  linkedAccount,
+  propertyId,
+  workspaceId,
+}: OpenDocxInDesktopInput) => {
+  const response = await api
+    .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+    ["desktop-edit-handoffs"].post({
+      entityId: toSafeId<"entity">(entityId),
+      ...(force && { force }),
+      linkedAccount,
+      propertyId: toSafeId<"property">(propertyId),
+    });
+
+  if (response.error) {
+    throw toAPIError(response.error);
+  }
+
+  return response.data satisfies DesktopEditHandoff;
+};
+
+const readDesktopEditHandoffStatus = async ({
+  handoffId,
+  workspaceId,
+}: {
+  handoffId: string;
+  workspaceId: string;
+}) => {
+  const response = await api
+    .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+    ["desktop-edit-handoffs"]({
+      handoffId: toSafeId<"desktopEditHandoff">(handoffId),
+    })
+    .status.get();
+
+  if (response.error) {
+    throw toAPIError(response.error);
+  }
+
+  return response.data satisfies DesktopEditHandoffStatus;
+};
+
+const launchDesktopEditHandoff = (deepLinkUrl: string) => {
+  window.location.href = deepLinkUrl;
+};
+
+const wait = async (milliseconds: number) => {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+};
+
+const waitForDesktopEditHandoffOpened = async ({
+  expiresAt,
+  handoffId,
+  workspaceId,
+}: {
+  expiresAt: string;
+  handoffId: string;
+  workspaceId: string;
+}) => {
+  const parsedDeadline = Date.parse(expiresAt);
+  const deadline = Number.isFinite(parsedDeadline)
+    ? parsedDeadline
+    : Date.now() + 30_000;
+
+  while (Date.now() < deadline) {
+    const handoffStatus = await readDesktopEditHandoffStatus({
+      handoffId,
+      workspaceId,
+    });
+
+    if (handoffStatus.status === "opened") {
+      return;
+    }
+
+    if (handoffStatus.status === "expired") {
+      break;
+    }
+
+    await wait(
+      Math.max(
+        0,
+        Math.min(DESKTOP_HANDOFF_POLL_INTERVAL_MS, deadline - Date.now()),
+      ),
+    );
+  }
+
+  throw new DesktopBridgeUnavailableError();
+};
+
 /**
  * Check if the desktop bridge is reachable (app is running).
  * Returns true/false without throwing.
@@ -156,6 +233,26 @@ export const openDocxInDesktop = async ({
   propertyId,
   workspaceId,
 }: OpenDocxInDesktopInput) => {
+  if (!(await checkBridgeHealth(500))) {
+    const handoff = await createDesktopEditHandoff({
+      apiBaseUrl,
+      entityId,
+      linkedAccount,
+      propertyId,
+      workspaceId,
+      ...(force && { force }),
+    });
+    launchDesktopEditHandoff(handoff.deepLinkUrl);
+    return {
+      type: "handoff-pending",
+      waitUntilOpened: waitForDesktopEditHandoffOpened({
+        expiresAt: handoff.expiresAt,
+        handoffId: handoff.handoffId,
+        workspaceId,
+      }),
+    } satisfies OpenDocxInDesktopResult;
+  }
+
   await assertDesktopBridgeReady();
 
   const remoteSession = await openRemoteDesktopSession({
@@ -196,5 +293,5 @@ export const openDocxInDesktop = async ({
     throw new DesktopBridgeUnavailableError();
   }
 
-  return response;
+  return { type: "opened" } satisfies OpenDocxInDesktopResult;
 };

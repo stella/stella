@@ -8,6 +8,9 @@ import createEntities from "@/api/handlers/entities/create";
 import createFromLegalSource from "@/api/handlers/entities/create-from-legal-source";
 import deleteEntities from "@/api/handlers/entities/delete";
 import deleteVersion from "@/api/handlers/entities/delete-version";
+import createDesktopEditHandoff, {
+  readDesktopEditHandoffStatus,
+} from "@/api/handlers/entities/desktop-edit-handoffs";
 import downloadZip from "@/api/handlers/entities/download-zip";
 import duplicateEntity from "@/api/handlers/entities/duplicate";
 import listFiles from "@/api/handlers/entities/list-files";
@@ -69,6 +72,16 @@ export const entitiesRoute = new Elysia({
   .post("/desktop-edit-sessions/open", openDesktopEditSession.handler, {
     body: openDesktopEditSession.config.body,
   })
+  .post("/desktop-edit-handoffs", createDesktopEditHandoff.handler, {
+    body: createDesktopEditHandoff.config.body,
+  })
+  .get(
+    "/desktop-edit-handoffs/:handoffId/status",
+    readDesktopEditHandoffStatus.handler,
+    {
+      params: readDesktopEditHandoffStatus.config.params,
+    },
+  )
   .post("/desktop-edit-sessions/release", releaseDesktopEditLock.handler, {
     body: releaseDesktopEditLock.config.body,
     invalidateQuery: true,

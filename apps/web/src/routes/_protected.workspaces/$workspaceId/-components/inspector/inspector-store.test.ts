@@ -335,6 +335,39 @@ describe("replaceFileFieldId", () => {
     expect(after.renderId).toBe(before.renderId);
     expect(useInspectorStore.getState().activeId).toBe("field-new");
   });
+
+  test("refreshes file tab metadata across version replacement", () => {
+    useInspectorStore.getState().openFile({
+      id: "field-old",
+      entityId: "entity-1",
+      label: "Contract.docx",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      pdfFileId: null,
+      propertyId: "property-1",
+      workspaceId: "workspace-1",
+    });
+
+    useInspectorStore.getState().replaceFileFieldId("field-old", {
+      id: "field-new",
+      label: "Contract revised.docx",
+      mimeType: "application/pdf",
+      pdfFileId: "pdf-1",
+      propertyId: "property-2",
+    });
+
+    const tab = useInspectorStore
+      .getState()
+      .tabs.find((item) => item.id === "field-new");
+    if (tab?.type !== "pdf") {
+      throw new Error("expected pdf tab");
+    }
+
+    expect(tab.label).toBe("Contract revised.docx");
+    expect(tab.mimeType).toBe("application/pdf");
+    expect(tab.pdfFileId).toBe("pdf-1");
+    expect(tab.propertyId).toBe("property-2");
+  });
 });
 
 describe("Inspector tab broadcast", () => {

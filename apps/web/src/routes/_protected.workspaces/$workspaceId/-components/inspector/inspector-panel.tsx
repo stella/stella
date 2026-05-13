@@ -76,6 +76,7 @@ import {
   TOOLBAR_ROW_HEIGHT,
 } from "@/lib/consts";
 import { openDocxInDesktop } from "@/lib/desktop-bridge";
+import { showDesktopEditOpenResultToast } from "@/lib/desktop-edit-status-toast";
 import { APIError, isUnauthorizedError, toAPIError } from "@/lib/errors";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
@@ -900,6 +901,13 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         </div>
       )}
 
+      {pdfTabs.map((tab) => (
+        <CurrentFileFieldSync
+          key={`${tab.workspaceId}:${tab.entityId}`}
+          tab={tab}
+        />
+      ))}
+
       {/* Document content — render all open document tabs, show only the active one.
          Keeping inactive viewers mounted avoids the blink on tab switch
          (no unmount → Suspense fallback → remount cycle). */}
@@ -1558,6 +1566,75 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   );
 };
 
+const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
+  const replaceFileFieldId = useInspectorStore((s) => s.replaceFileFieldId);
+  const currentFileFieldIdsByPropertyRef = useRef(new Map<string, string>());
+  const { data: entity } = useQuery(
+    entityOptions(tab.workspaceId, tab.entityId),
+  );
+
+  const activeFileField = entity?.fields.find((field) => {
+    if (field.content.type !== "file") {
+      return false;
+    }
+    return field.id === tab.id;
+  });
+  const latestFileFieldForProperty =
+    tab.propertyId === undefined
+      ? undefined
+      : entity?.fields.findLast(
+          (field) =>
+            field.propertyId === tab.propertyId &&
+            field.content.type === "file",
+        );
+
+  useEffect(() => {
+    if (activeFileField === undefined) {
+      return;
+    }
+
+    currentFileFieldIdsByPropertyRef.current.set(
+      activeFileField.propertyId,
+      activeFileField.id,
+    );
+  }, [activeFileField]);
+
+  useEffect(() => {
+    if (
+      latestFileFieldForProperty === undefined ||
+      latestFileFieldForProperty.id === tab.id
+    ) {
+      return;
+    }
+
+    const previousCurrentFieldId = currentFileFieldIdsByPropertyRef.current.get(
+      latestFileFieldForProperty.propertyId,
+    );
+    if (previousCurrentFieldId !== tab.id) {
+      return;
+    }
+
+    const latestFileContent = latestFileFieldForProperty.content;
+    if (latestFileContent.type !== "file") {
+      return;
+    }
+
+    currentFileFieldIdsByPropertyRef.current.set(
+      latestFileFieldForProperty.propertyId,
+      latestFileFieldForProperty.id,
+    );
+    replaceFileFieldId(tab.id, {
+      id: latestFileFieldForProperty.id,
+      label: latestFileContent.fileName,
+      mimeType: latestFileContent.mimeType,
+      pdfFileId: latestFileContent.pdfFileId,
+      propertyId: latestFileFieldForProperty.propertyId,
+    });
+  }, [latestFileFieldForProperty, replaceFileFieldId, tab.id]);
+
+  return null;
+};
+
 const DocxDesktopOpenButton = ({
   entityId,
   propertyId,
@@ -1579,7 +1656,7 @@ const DocxDesktopOpenButton = ({
     setIsOpening(true);
     try {
       const linkedAccount = await getFreshLinkedAccount();
-      await openDocxInDesktop({
+      const openResult = await openDocxInDesktop({
         apiBaseUrl: env.VITE_API_URL,
         entityId,
         linkedAccount,
@@ -1587,10 +1664,9 @@ const DocxDesktopOpenButton = ({
         workspaceId,
       });
 
-      stellaToast.add({
-        description: t("workspaces.files.desktopEdit.openedDescription"),
-        title: t("workspaces.files.desktopEdit.openedTitle"),
-        type: "success",
+      await showDesktopEditOpenResultToast({
+        result: openResult,
+        t,
       });
     } catch (error) {
       if (error instanceof Error && isUnauthorizedError(error)) {
