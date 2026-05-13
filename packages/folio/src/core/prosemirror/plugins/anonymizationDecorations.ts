@@ -51,78 +51,72 @@ type AnonymizationDecorationState = {
 export const slugAnonymizationLabel = (label: string): string =>
   label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
+type CompiledTerm = {
+  regex: RegExp;
+  term: AnonymizationTerm;
+};
+
 const buildMatcher = (
   terms: readonly AnonymizationTerm[],
-): { regex: RegExp; bySurface: Map<string, AnonymizationTerm> } | null => {
-  const entries: Array<{ surface: string; term: AnonymizationTerm }> = [];
+): CompiledTerm[] => {
+  const escapeChar = (value: string): string =>
+    value.replaceAll(/[\\^$.*+?()[\]{}|]/g, "\\$&");
+  // Build the regex for a single surface so each "word" in a
+  // multi-word term gets its own trailing-suffix slot. That way
+  // a term like "First Last" matches "Firstem Lastou" (Czech /
+  // Slovak / German declension on each word independently), not
+  // only inflection on the last word.
+  const SUFFIX = "[\\p{L}\\p{M}\\p{N}]*";
+  const surfaceToPattern = (surface: string): string =>
+    surface
+      .split(/\s+/)
+      .filter((word) => word.length > 0)
+      .map((word) => `${escapeChar(word)}${SUFFIX}`)
+      .join("\\s+");
+
+  // One regex per term (canonical + variants combined). Letting
+  // every term carry its own pattern keeps the lookup direct —
+  // each match comes with its term object — at the cost of a
+  // few extra RegExp instances per workspace.
+  const compiled: CompiledTerm[] = [];
+  const seen = new Set<string>();
   for (const term of terms) {
-    if (term.canonical.length > 0) {
-      entries.push({ surface: term.canonical, term });
-    }
-    for (const variant of term.variants ?? []) {
-      if (variant.length > 0) {
-        entries.push({ surface: variant, term });
-      }
-    }
+    const surfaces = [term.canonical, ...(term.variants ?? [])].filter(
+      (surface) => surface.length > 0,
+    );
+    if (surfaces.length === 0) continue;
+    // Sort longest first so the alternation prefers the most
+    // specific surface inside its own term.
+    surfaces.sort((a, b) => b.length - a.length);
+    const key = surfaces.join("|").toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const alternation = surfaces.map(surfaceToPattern).join("|");
+    compiled.push({
+      term,
+      regex: new RegExp(
+        `(?<![\\p{L}\\p{N}])(?:${alternation})`,
+        "giu",
+      ),
+    });
   }
-  if (entries.length === 0) return null;
-  // Longest first so a shorter variant nested inside a canonical
-  // doesn't shadow the longer match.
-  entries.sort((a, b) => b.surface.length - a.surface.length);
-  const normalizeKey = (value: string): string =>
-    value.replaceAll(/\s+/g, " ").toLowerCase();
-  const bySurface = new Map<string, AnonymizationTerm>();
-  for (const { surface, term } of entries) {
-    const key = normalizeKey(surface);
-    if (!bySurface.has(key)) {
-      bySurface.set(key, term);
-    }
-  }
-  const escape = (value: string): string =>
-    value
-      .replaceAll(/[\\^$.*+?()[\]{}|]/g, "\\$&")
-      // Treat any whitespace run as `\s+` so a term typed with
-      // regular spaces still matches the non-breaking spaces and
-      // typographic spaces real DOCX content often uses between
-      // titles, names, and units.
-      .replaceAll(/\s+/g, "\\s+");
-  const alternation = entries.map(({ surface }) => escape(surface)).join("|");
-  // Leading word boundary stays strict so a term doesn't match
-  // inside an unrelated longer word. Trailing boundary is open:
-  // we consume any word-character suffix so a single nominative
-  // entry matches the declined forms that show up in Czech /
-  // Slovak / German texts without the user having to enter each
-  // case explicitly. Capture group 1 carries the surface for
-  // the lookup; the full match is what gets highlighted.
-  return {
-    regex: new RegExp(
-      `(?<![\\p{L}\\p{N}])(${alternation})[\\p{L}\\p{M}\\p{N}]*`,
-      "giu",
-    ),
-    bySurface,
-  };
+  return compiled;
 };
 
 const buildMatches = (
   doc: PMNode,
   terms: readonly AnonymizationTerm[],
 ): AnonymizationMatch[] => {
-  const matcher = buildMatcher(terms);
-  if (!matcher) return [];
+  const compiled = buildMatcher(terms);
+  if (compiled.length === 0) return [];
   const matches: AnonymizationMatch[] = [];
   doc.descendants((node, pos) => {
     if (!node.isText || node.text === undefined) return true;
     const text = node.text;
-    matcher.regex.lastIndex = 0;
-    let match: RegExpExecArray | null = matcher.regex.exec(text);
-    while (match !== null) {
-      // Capture group 1 is the surface (one of the alternation
-      // entries); match[0] is that surface plus an optional
-      // declensional suffix the matcher swept up.
-      const surface = match[1] ?? "";
-      const surfaceKey = surface.replaceAll(/\s+/g, " ").toLowerCase();
-      const term = matcher.bySurface.get(surfaceKey);
-      if (term) {
+    for (const { regex, term } of compiled) {
+      regex.lastIndex = 0;
+      let match: RegExpExecArray | null = regex.exec(text);
+      while (match !== null) {
         const from = pos + match.index;
         const to = from + match[0].length;
         matches.push({
@@ -131,15 +125,29 @@ const buildMatches = (
           label: term.label,
           canonical: term.canonical,
         });
+        if (regex.lastIndex === match.index) {
+          regex.lastIndex += 1;
+        }
+        match = regex.exec(text);
       }
-      if (matcher.regex.lastIndex === match.index) {
-        matcher.regex.lastIndex += 1;
-      }
-      match = matcher.regex.exec(text);
     }
     return true;
   });
-  return matches;
+  // De-duplicate overlapping matches: shorter spans nested inside
+  // longer ones get dropped so a single occurrence of "First Last"
+  // does not paint twice (once for the full name, once for the
+  // canonical word inside it).
+  matches.sort((a, b) =>
+    a.from !== b.from ? a.from - b.from : b.to - a.to,
+  );
+  const result: AnonymizationMatch[] = [];
+  let cursor = -1;
+  for (const m of matches) {
+    if (m.from < cursor) continue;
+    result.push(m);
+    cursor = m.to;
+  }
+  return result;
 };
 
 /**
