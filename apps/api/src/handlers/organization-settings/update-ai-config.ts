@@ -482,6 +482,12 @@ const shouldValidateProviderConfig = ({
   );
 };
 
+// Settings save tolerates a slower upstream than onboarding's probe:
+// a one-shot save shouldn't fail a healthy key because the provider
+// took 6 s instead of 4 s to answer list-models. Onboarding uses the
+// shorter default and soft-passes 502s at the frontend.
+const SETTINGS_PROBE_TIMEOUT_MS = 20_000;
+
 /**
  * Validate a provider API key via the shared lightweight probe
  * (provider's own auth/list-models endpoint). No token cost and
@@ -507,6 +513,7 @@ const validateProviderKey = async (
         providerConfig.provider === "azure_foundry"
           ? collectAzureDeployments(overrideModels)
           : undefined,
+        SETTINGS_PROBE_TIMEOUT_MS,
       ),
     catch: (error: unknown) =>
       `API key validation failed: ${error instanceof Error ? error.message : "Unknown error"}`,
