@@ -19,5 +19,5 @@ jobs:
       app_id: ${{ secrets.PROVENANCE_APP_ID }}
       app_private_key: ${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}
     with:
-      install-command: bun install --frozen-lockfile
+      install-command: bun install --frozen-lockfile --ignore-scripts
       provenance-version: v0.1.3

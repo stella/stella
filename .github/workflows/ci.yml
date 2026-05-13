@@ -120,11 +120,23 @@ jobs:
 
       - name: Install dependencies
         if: steps.changed-files.outputs.package_checks_required == 'true'
-        run: bun ci
+        run: bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
+
+      - name: Workspace hygiene
+        # Restored from the bun postinstall lifecycle, which is bypassed
+        # by `--ignore-scripts` above. sherif catches cross-package
+        # dependency drift and workspace-hygiene.ts catches misnamed
+        # apps/* and packages/* directories. ci-checks is the only job
+        # that needs this — its trigger (any non-workflow file changes)
+        # is a superset of web-build, landing-build, db-migrations, and
+        # nightly-typecheck, so coverage is identical to running it in
+        # each install.
+        if: steps.changed-files.outputs.package_checks_required == 'true'
+        run: bun run lint:ws
 
       - name: Prepare environment
         if: steps.changed-files.outputs.package_checks_required == 'true'
@@ -252,7 +264,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.changed.outputs.run == 'true'
-        run: bun ci
+        run: bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the secret to install-time lifecycle scripts. The token is
@@ -322,7 +334,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.changed.outputs.run == 'true'
-        run: bun ci
+        run: bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
