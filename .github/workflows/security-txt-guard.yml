@@ -52,7 +52,16 @@ jobs:
           cutoff_ts="$(date -d '+30 days' +%s)"
           if (( expires_ts < cutoff_ts )); then
             days_left=$(( (expires_ts - now_ts) / 86400 ))
-            echo "::error file=$file::Expires ($expires) is in $days_left day(s); bump it (RFC 9116 max one year out)."
+            echo "::error file=$file::Expires ($expires) is in $days_left day(s); bump it."
+            exit 1
+          fi
+          # RFC 9116: Expires SHOULD be at most one year out. +1 day of
+          # slack absorbs leap-year and timezone fuzz so a value set to
+          # exactly +1 year does not trip the check.
+          max_ts="$(date -d '+1 year +1 day' +%s)"
+          if (( expires_ts > max_ts )); then
+            days_out=$(( (expires_ts - now_ts) / 86400 ))
+            echo "::error file=$file::Expires ($expires) is $days_out day(s) out; RFC 9116 caps it at one year."
             exit 1
           fi
           days_left=$(( (expires_ts - now_ts) / 86400 ))
