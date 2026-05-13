@@ -11,16 +11,30 @@ concurrency:
 
 permissions: {}
 
+# Reusable workflow declares `permissions: contents: read` and runs
+# actions/checkout. The callers' `permissions: {}` would otherwise
+# cap the reusable's GITHUB_TOKEN to no scopes (intersection rule).
+# Each job audits exactly one expected ruleset; the reusable matches
+# by `.name` and ignores other live rulesets, so running the reusable
+# multiple times in parallel is safe.
+
 jobs:
-  audit:
-    # Reusable workflow declares `permissions: contents: read` and runs
-    # actions/checkout. The caller's `permissions: {}` would otherwise
-    # cap the reusable's GITHUB_TOKEN to no scopes (intersection rule).
+  audit-branch:
     permissions:
       contents: read
     uses: stella/.github/.github/workflows/audit-branch-protection.yml@a80fc97388b8f833fb08104e6031e2258dee549a
     with:
       expected-config-path: .github/branch-protection/ruleset-main.json
+    secrets:
+      BRANCH_PROTECTION_APP_ID: ${{ secrets.BRANCH_PROTECTION_APP_ID }}
+      BRANCH_PROTECTION_APP_KEY: ${{ secrets.BRANCH_PROTECTION_APP_KEY }}
+
+  audit-tag:
+    permissions:
+      contents: read
+    uses: stella/.github/.github/workflows/audit-branch-protection.yml@a80fc97388b8f833fb08104e6031e2258dee549a
+    with:
+      expected-config-path: .github/branch-protection/tags-v.json
     secrets:
       BRANCH_PROTECTION_APP_ID: ${{ secrets.BRANCH_PROTECTION_APP_ID }}
       BRANCH_PROTECTION_APP_KEY: ${{ secrets.BRANCH_PROTECTION_APP_KEY }}
