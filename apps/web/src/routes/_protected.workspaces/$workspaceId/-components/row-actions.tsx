@@ -47,7 +47,10 @@ import { env } from "@/env";
 import { api } from "@/lib/api";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { DOCX_MIME } from "@/lib/consts";
-import { openDocxInDesktop } from "@/lib/desktop-bridge";
+import {
+  DesktopBridgeIncompatibleError,
+  openDocxInDesktop,
+} from "@/lib/desktop-bridge";
 import { showDesktopEditOpenResultToast } from "@/lib/desktop-edit-status-toast";
 import { ClientOperationError, isUnauthorizedError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
@@ -238,6 +241,17 @@ export const RowActions = ({
         return;
       }
 
+      if (error instanceof DesktopBridgeIncompatibleError) {
+        stellaToast.add({
+          description: t(
+            "workspaces.files.desktopEdit.updateRequiredDescription",
+          ),
+          title: t("workspaces.files.desktopEdit.updateRequiredTitle"),
+          type: "error",
+        });
+        return;
+      }
+
       stellaToast.add({
         description: t("workspaces.files.desktopEdit.unavailableDescription"),
         title: t("workspaces.files.desktopEdit.unavailableTitle"),
@@ -319,6 +333,17 @@ export const RowActions = ({
               "workspaces.files.desktopEdit.authRequiredDescription",
             ),
             title: t("workspaces.files.desktopEdit.authRequiredTitle"),
+            type: "error",
+          });
+          return;
+        }
+
+        if (forceError instanceof DesktopBridgeIncompatibleError) {
+          stellaToast.add({
+            description: t(
+              "workspaces.files.desktopEdit.updateRequiredDescription",
+            ),
+            title: t("workspaces.files.desktopEdit.updateRequiredTitle"),
             type: "error",
           });
           return;

@@ -10,7 +10,9 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::session_manager::SessionManager;
-use crate::types::{is_safe_session_id, OpenDocxRequest};
+use crate::types::{
+  is_safe_session_id, OpenDocxRequest, BRIDGE_CAPABILITIES, BRIDGE_VERSION,
+};
 
 #[derive(Clone)]
 pub struct BridgeState {
@@ -89,7 +91,12 @@ async fn health(
 
   json_response(
     StatusCode::OK,
-    serde_json::json!({ "ok": true, "bridgePort": state.bridge_port }),
+    serde_json::json!({
+      "ok": true,
+      "bridgePort": state.bridge_port,
+      "bridgeVersion": BRIDGE_VERSION,
+      "capabilities": BRIDGE_CAPABILITIES,
+    }),
     origin_ref,
     is_allowed_origin(&state, origin_ref),
   )
@@ -305,6 +312,29 @@ mod tests {
       },
       "workspaceId": "33333333-3333-3333-3333-333333333333",
     })
+  }
+
+  #[tokio::test]
+  async fn health_advertises_bridge_contract() {
+    let app = build_router(test_state());
+    let request = Request::builder()
+      .method("GET")
+      .uri("/health")
+      .header("origin", "http://localhost:3000")
+      .body(Body::empty())
+      .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = to_bytes(response.into_body(), 65_536).await.unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(value["ok"], serde_json::json!(true));
+    assert_eq!(value["bridgeVersion"], serde_json::json!(BRIDGE_VERSION));
+    assert_eq!(
+      value["capabilities"],
+      serde_json::json!(BRIDGE_CAPABILITIES)
+    );
   }
 
   async fn post_open_docx(state: BridgeState, body: serde_json::Value) -> StatusCode {

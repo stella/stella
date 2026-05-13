@@ -8,11 +8,19 @@ const DESKTOP_BRIDGE_URL = `http://127.0.0.1:${String(DESKTOP_BRIDGE_PORT)}`;
 const DESKTOP_HANDOFF_POLL_INTERVAL_MS = 750;
 const DESKTOP_BRIDGE_START_POLL_INTERVAL_MS = 1000;
 const DESKTOP_BRIDGE_START_TIMEOUT_MS = 6000;
+const MIN_DESKTOP_BRIDGE_VERSION = 3;
 
 export class DesktopBridgeUnavailableError extends Error {
   public constructor() {
     super("desktop_bridge_unavailable");
     this.name = "DesktopBridgeUnavailableError";
+  }
+}
+
+export class DesktopBridgeIncompatibleError extends Error {
+  public constructor() {
+    super("desktop_bridge_incompatible");
+    this.name = "DesktopBridgeIncompatibleError";
   }
 }
 
@@ -60,8 +68,17 @@ type BridgeResponse = {
   message?: string;
 };
 
+type BridgeHealth = {
+  bridgeVersion?: number;
+};
+
 const isBridgeResponse = (value: unknown): value is BridgeResponse =>
   typeof value === "object" && value !== null;
+
+const isBridgeHealth = (value: unknown): value is BridgeHealth =>
+  typeof value === "object" &&
+  value !== null &&
+  (!("bridgeVersion" in value) || typeof value.bridgeVersion === "number");
 
 const parseBridgeResponse = async (response: Response) => {
   try {
@@ -72,48 +89,66 @@ const parseBridgeResponse = async (response: Response) => {
   }
 };
 
-const checkBridgeHealth = async (timeoutMs: number): Promise<boolean> => {
+const readBridgeHealth = async (
+  timeoutMs: number,
+): Promise<BridgeHealth | null> => {
   try {
     const response = await fetch(`${DESKTOP_BRIDGE_URL}/health`, {
       method: "GET",
       signal: AbortSignal.timeout(timeoutMs),
     });
-    return response.ok;
-  } catch {
-    return false;
-  }
-};
-
-const isMacOS = () => navigator.userAgent.includes("Mac");
-
-const launchDesktopBridgeFallback = async (): Promise<boolean> => {
-  if (!isMacOS()) {
-    return false;
-  }
-
-  window.location.href = "stella://ping";
-
-  const deadline = Date.now() + DESKTOP_BRIDGE_START_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    await wait(
-      Math.min(DESKTOP_BRIDGE_START_POLL_INTERVAL_MS, deadline - Date.now()),
-    );
-
-    if (await checkBridgeHealth(1000)) {
-      return true;
+    if (!response.ok) {
+      return null;
     }
-  }
 
-  return false;
+    const payload: unknown = await response.json();
+    return isBridgeHealth(payload) ? payload : {};
+  } catch {
+    return null;
+  }
 };
 
-const assertDesktopBridgeReady = async () => {
-  if (await checkBridgeHealth(3000)) {
+const isCompatibleDesktopBridge = (health: BridgeHealth) =>
+  typeof health.bridgeVersion === "number" &&
+  health.bridgeVersion >= MIN_DESKTOP_BRIDGE_VERSION;
+
+const signalDesktopUpdateCheck = () => {
+  window.location.href = "stella://ping";
+};
+
+const assertCompatibleDesktopBridge = (
+  health: BridgeHealth,
+  { signalUpdateCheck = true }: { signalUpdateCheck?: boolean } = {},
+) => {
+  if (isCompatibleDesktopBridge(health)) {
     return;
   }
 
-  throw new DesktopBridgeUnavailableError();
+  if (signalUpdateCheck) {
+    signalDesktopUpdateCheck();
+  }
+
+  throw new DesktopBridgeIncompatibleError();
 };
+
+const wakeDesktopAndReadBridgeHealth =
+  async (): Promise<BridgeHealth | null> => {
+    signalDesktopUpdateCheck();
+
+    const deadline = Date.now() + DESKTOP_BRIDGE_START_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      await wait(
+        Math.min(DESKTOP_BRIDGE_START_POLL_INTERVAL_MS, deadline - Date.now()),
+      );
+
+      const health = await readBridgeHealth(1000);
+      if (health) {
+        return health;
+      }
+    }
+
+    return null;
+  };
 
 const openRemoteDesktopSession = async ({
   entityId,
@@ -243,17 +278,8 @@ const waitForDesktopEditHandoffOpened = async ({
  * Check if the desktop bridge is reachable (app is running).
  * Returns true/false without throwing.
  */
-export const isDesktopBridgeReachable = async (): Promise<boolean> => {
-  try {
-    const response = await fetch(`${DESKTOP_BRIDGE_URL}/health`, {
-      method: "GET",
-      signal: AbortSignal.timeout(500),
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
-};
+export const isDesktopBridgeReachable = async (): Promise<boolean> =>
+  (await readBridgeHealth(500)) !== null;
 
 const openDocxViaBridge = async ({
   apiBaseUrl,
@@ -263,8 +289,6 @@ const openDocxViaBridge = async ({
   propertyId,
   workspaceId,
 }: OpenDocxInDesktopInput) => {
-  await assertDesktopBridgeReady();
-
   const remoteSession = await openRemoteDesktopSession({
     force,
     entityId,
@@ -314,19 +338,11 @@ export const openDocxInDesktop = async ({
   propertyId,
   workspaceId,
 }: OpenDocxInDesktopInput) => {
-  if (!(await checkBridgeHealth(500))) {
-    if (await launchDesktopBridgeFallback()) {
-      return await openDocxViaBridge({
-        apiBaseUrl,
-        entityId,
-        linkedAccount,
-        propertyId,
-        workspaceId,
-        ...(force && { force }),
-      });
-    }
+  const bridgeHealth = await readBridgeHealth(500);
+  if (bridgeHealth) {
+    assertCompatibleDesktopBridge(bridgeHealth);
 
-    const handoff = await createDesktopEditHandoff({
+    return await openDocxViaBridge({
       apiBaseUrl,
       entityId,
       linkedAccount,
@@ -334,32 +350,25 @@ export const openDocxInDesktop = async ({
       workspaceId,
       ...(force && { force }),
     });
-    launchDesktopEditHandoff(handoff.deepLinkUrl);
-    return {
-      type: "handoff-pending",
-      waitUntilOpened: waitForDesktopEditHandoffOpened({
-        expiresAt: handoff.expiresAt,
-        handoffId: handoff.handoffId,
-        workspaceId,
-      }).catch(async (error: unknown) => {
-        if (await checkBridgeHealth(500)) {
-          await openDocxViaBridge({
-            apiBaseUrl,
-            entityId,
-            linkedAccount,
-            propertyId,
-            workspaceId,
-            ...(force && { force }),
-          });
-          return;
-        }
-
-        throw error;
-      }),
-    } satisfies OpenDocxInDesktopResult;
   }
 
-  return await openDocxViaBridge({
+  const awakenedBridgeHealth = await wakeDesktopAndReadBridgeHealth();
+  if (awakenedBridgeHealth) {
+    assertCompatibleDesktopBridge(awakenedBridgeHealth, {
+      signalUpdateCheck: false,
+    });
+
+    return await openDocxViaBridge({
+      apiBaseUrl,
+      entityId,
+      linkedAccount,
+      propertyId,
+      workspaceId,
+      ...(force && { force }),
+    });
+  }
+
+  const handoff = await createDesktopEditHandoff({
     apiBaseUrl,
     entityId,
     linkedAccount,
@@ -367,4 +376,20 @@ export const openDocxInDesktop = async ({
     workspaceId,
     ...(force && { force }),
   });
+  launchDesktopEditHandoff(handoff.deepLinkUrl);
+  return {
+    type: "handoff-pending",
+    waitUntilOpened: waitForDesktopEditHandoffOpened({
+      expiresAt: handoff.expiresAt,
+      handoffId: handoff.handoffId,
+      workspaceId,
+    }).catch(async (error: unknown) => {
+      const lateBridgeHealth = await readBridgeHealth(500);
+      if (lateBridgeHealth) {
+        assertCompatibleDesktopBridge(lateBridgeHealth);
+      }
+
+      throw error;
+    }),
+  } satisfies OpenDocxInDesktopResult;
 };

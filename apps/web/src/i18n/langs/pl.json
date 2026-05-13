@@ -1774,7 +1774,9 @@
         "takeoverWaiting": "Oczekiwanie na odpowiedź",
         "takeoverWaitingDescription": "Proszenie {name} o zwolnienie blokady...",
         "unavailableDescription": "Przed użyciem edycji na komputerze uruchom stella desktop i pozostaw go włączonego.",
-        "unavailableTitle": "Stella desktop jest niedostępny."
+        "unavailableTitle": "Stella desktop jest niedostępny.",
+        "updateRequiredDescription": "stella desktop wymaga aktualizacji. Powinna uruchomić się automatycznie; spróbuj ponownie po restarcie.",
+        "updateRequiredTitle": "Zaktualizuj stella desktop"
       },
       "downloadAsZip": "Pobierz plik .zip",
       "downloadOriginal": "Oryginalny plik",

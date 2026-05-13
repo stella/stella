@@ -1774,7 +1774,9 @@
         "takeoverWaiting": "Čakanie na odpoveď",
         "takeoverWaitingDescription": "Žiadame {name} o uvoľnenie zámku...",
         "unavailableDescription": "Pred použitím úprav v desktopovej aplikácii spustite stella desktop a nechajte ho bežať.",
-        "unavailableTitle": "Stella desktop nie je k dispozícii."
+        "unavailableTitle": "Stella desktop nie je k dispozícii.",
+        "updateRequiredDescription": "stella desktop vyžaduje aktualizáciu. Mala by prebehnúť automaticky; skúste to znova po reštarte.",
+        "updateRequiredTitle": "Aktualizujte stella desktop"
       },
       "downloadAsZip": "Stiahnuť .zip súbor",
       "downloadOriginal": "Pôvodný súbor",

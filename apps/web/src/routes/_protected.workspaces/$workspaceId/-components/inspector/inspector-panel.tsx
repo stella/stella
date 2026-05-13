@@ -75,7 +75,10 @@ import {
   SIDE_RAIL_WIDTH,
   TOOLBAR_ROW_HEIGHT,
 } from "@/lib/consts";
-import { openDocxInDesktop } from "@/lib/desktop-bridge";
+import {
+  DesktopBridgeIncompatibleError,
+  openDocxInDesktop,
+} from "@/lib/desktop-bridge";
 import { showDesktopEditOpenResultToast } from "@/lib/desktop-edit-status-toast";
 import { APIError, isUnauthorizedError, toAPIError } from "@/lib/errors";
 import { resolveMatterColor } from "@/lib/matter-colors";
@@ -1675,6 +1678,17 @@ const DocxDesktopOpenButton = ({
             "workspaces.files.desktopEdit.authRequiredDescription",
           ),
           title: t("workspaces.files.desktopEdit.authRequiredTitle"),
+          type: "error",
+        });
+        return;
+      }
+
+      if (error instanceof DesktopBridgeIncompatibleError) {
+        stellaToast.add({
+          description: t(
+            "workspaces.files.desktopEdit.updateRequiredDescription",
+          ),
+          title: t("workspaces.files.desktopEdit.updateRequiredTitle"),
           type: "error",
         });
         return;

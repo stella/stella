@@ -1774,7 +1774,9 @@
         "takeoverWaiting": "Válaszra várás",
         "takeoverWaitingDescription": "{name} felkérése a zárolás feloldására...",
         "unavailableDescription": "Az asztali szerkesztés használata előtt indítsd el a stella desktop alkalmazást, és hagyd futni.",
-        "unavailableTitle": "A stella desktop nem érhető el."
+        "unavailableTitle": "A stella desktop nem érhető el.",
+        "updateRequiredDescription": "A stella desktop frissítést igényel. Automatikusan frissülnie kell; próbálja újra az újraindítás után.",
+        "updateRequiredTitle": "stella desktop frissítése"
       },
       "downloadAsZip": ".zip fájl letöltése",
       "downloadOriginal": "Eredeti fájl",

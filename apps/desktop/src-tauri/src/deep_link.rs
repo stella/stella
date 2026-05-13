@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use tauri::AppHandle;
 use tokio::sync::Mutex;
 
 use crate::config;
@@ -8,6 +9,7 @@ use crate::session_manager::{
   download_docx_standalone, normalize_api_base_url, SessionManager,
 };
 use crate::types::{is_safe_session_id, ErrorResponse, OpenDocxRequest};
+use crate::updater;
 
 const REDEEM_TIMEOUT: Duration = Duration::from_secs(20);
 const ACKNOWLEDGE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -84,10 +86,29 @@ fn parse_deep_link(raw_url: &str) -> Option<DeepLinkAction> {
   })
 }
 
-pub fn handle_url(raw_url: &str, manager: Arc<Mutex<SessionManager>>) {
+pub fn handle_url(
+  raw_url: &str,
+  manager: Arc<Mutex<SessionManager>>,
+  app_handle: AppHandle,
+) {
   match parse_deep_link(raw_url) {
     Some(DeepLinkAction::Ping) => {
       tracing::info!("deep link ping received");
+      tauri::async_runtime::spawn(async move {
+        if cfg!(debug_assertions) {
+          tracing::debug!("deep link updater check skipped in debug build");
+          return;
+        }
+
+        match updater::run_check(&app_handle).await {
+          updater::CheckOutcome::UpToDate => {
+            tracing::debug!("deep link updater check: up to date");
+          }
+          updater::CheckOutcome::Failed(error) => {
+            tracing::warn!(error = %error, "deep link updater check failed");
+          }
+        }
+      });
     }
     Some(DeepLinkAction::OpenDesktopEdit {
       api_base_url,
