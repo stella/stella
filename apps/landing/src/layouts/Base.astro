@@ -83,12 +83,12 @@ const socialImageUrl = new URL(socialImage, Astro.site);
       "@graph": [
         {
           "@type": "Organization",
-          "@id": "https://stll.app/#organization",
+          "@id": new URL("#organization", Astro.site).href,
           "name": "stella labs, s.r.o.",
-          "url": "https://stll.app",
+          "url": new URL("/", Astro.site).href,
           "logo": {
             "@type": "ImageObject",
-            "url": "https://stll.app/images/stella-logo.svg",
+            "url": new URL("/images/stella-logo.svg", Astro.site).href,
           },
           "sameAs": [
             "https://github.com/stella/stella",
@@ -98,18 +98,18 @@ const socialImageUrl = new URL(socialImage, Astro.site);
         },
         {
           "@type": "SoftwareApplication",
-          "@id": "https://stll.app/#software",
+          "@id": new URL("#software", Astro.site).href,
           "name": "stella",
           "applicationCategory": "BusinessApplication",
           "operatingSystem": "Web",
           "description": description,
-          "url": "https://stll.app",
+          "url": new URL("/", Astro.site).href,
           "offers": {
             "@type": "Offer",
             "price": "0",
             "priceCurrency": "USD",
           },
-          "publisher": { "@id": "https://stll.app/#organization" },
+          "publisher": { "@id": new URL("#organization", Astro.site).href },
         },
       ],
     })} />
