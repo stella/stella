@@ -1374,14 +1374,6 @@ type Messages = {
       "providerForRole": "{role} provider";
       "providerKeyInvalid": "{provider} rejected the key. Double-check it before saving.";
       "providerKeyInvalidShort": "Invalid";
-      "providers": {
-        "anthropic": "Anthropic";
-        "azure_foundry": "Azure Foundry";
-        "google": "Google";
-        "mistral": "Mistral";
-        "openai": "ChatGPT";
-        "openrouter": "OpenRouter";
-      };
       "providersDescription": "Add the provider credentials you want Stella to use.";
       "providersPanel": "Providers";
       "regions": {

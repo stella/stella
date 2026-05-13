@@ -1371,14 +1371,6 @@
       "providerForRole": "{role} pakalpojumu sniedzējs",
       "providerKeyInvalid": "{provider} atteica atslēgu. Pārbaudiet to pirms saglabāšanas.",
       "providerKeyInvalidShort": "Nederīgs",
-      "providers": {
-        "anthropic": "Anthropic",
-        "azure_foundry": "Azure Foundry",
-        "google": "Google",
-        "mistral": "Mistral",
-        "openai": "ChatGPT",
-        "openrouter": "OpenRouter"
-      },
       "providersDescription": "Pievienojiet to pakalpojumu sniedzēju akreditācijas datus, kurus Stella izmantos.",
       "providersPanel": "Pakalpojumu sniedzēji",
       "regions": {

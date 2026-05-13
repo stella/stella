@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { PROVIDER_LABELS } from "@/components/ai-config-role-models.logic";
 import type {
   ProviderPreview,
   ProviderValidationStatus,
@@ -185,7 +186,7 @@ export const SidebarPreview = ({
               >
                 <ProviderIcon className="text-foreground size-3.5 shrink-0" />
                 <span className="text-foreground text-xs font-medium">
-                  {tOrganization(`aiConfig.providers.${provider}`)}
+                  {PROVIDER_LABELS[provider]}
                 </span>
                 <span className="ms-auto flex items-center gap-1.5">
                   <span

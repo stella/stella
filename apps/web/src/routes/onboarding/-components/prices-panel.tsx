@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import {
   encodeModelSelection,
   MODEL_OPTIONS_BY_PROVIDER,
+  PROVIDER_LABELS,
   ROLE_KEYS,
 } from "@/components/ai-config-role-models.logic";
 import type {
@@ -258,7 +259,7 @@ export const PricesPanel = ({ providers, roleModels }: PricesPanelProps) => {
               <div className="bg-muted/30 flex items-center gap-2 px-5 py-2">
                 <ProviderIcon className="text-foreground size-4 shrink-0" />
                 <span className="text-foreground text-sm font-medium">
-                  {tOrganization(`aiConfig.providers.${provider}`)}
+                  {PROVIDER_LABELS[provider]}
                 </span>
               </div>
               {rows.length === 0 && (

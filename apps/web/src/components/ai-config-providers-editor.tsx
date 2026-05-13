@@ -19,6 +19,7 @@ import {
   isProviderValue,
   isRegionValue,
   PROVIDER_KEYS,
+  PROVIDER_LABELS,
   REGION_KEYS,
   REGIONAL_PROVIDERS,
 } from "@/components/ai-config-role-models.logic";
@@ -173,7 +174,7 @@ export const AIConfigProvidersEditor = ({
                   <SelectPopup alignItemWithTrigger={false}>
                     {providerOptions.map((provider) => (
                       <SelectItem key={provider} value={provider}>
-                        {t(`aiConfig.providers.${provider}`)}
+                        {PROVIDER_LABELS[provider]}
                       </SelectItem>
                     ))}
                   </SelectPopup>
@@ -338,7 +339,7 @@ export const AIConfigProvidersEditor = ({
                     <SelectPopup alignItemWithTrigger={false}>
                       {providerOptions.map((provider) => (
                         <SelectItem key={provider} value={provider}>
-                          {t(`aiConfig.providers.${provider}`)}
+                          {PROVIDER_LABELS[provider]}
                         </SelectItem>
                       ))}
                     </SelectPopup>

@@ -1371,14 +1371,6 @@
       "providerForRole": "Poskytovateľ pre {role}",
       "providerKeyInvalid": "{provider} odmietol kľúč. Skontrolujte ho pred uložením.",
       "providerKeyInvalidShort": "Neplatný",
-      "providers": {
-        "anthropic": "Anthropic",
-        "azure_foundry": "Azure Foundry",
-        "google": "Google",
-        "mistral": "Mistral",
-        "openai": "ChatGPT",
-        "openrouter": "OpenRouter"
-      },
       "providersDescription": "Pridajte prihlasovacie údaje poskytovateľov, ktoré má Stella používať.",
       "providersPanel": "Poskytovatelia",
       "regions": {

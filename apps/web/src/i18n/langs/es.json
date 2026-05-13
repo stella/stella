@@ -1371,14 +1371,6 @@
       "providerForRole": "Proveedor para {role}",
       "providerKeyInvalid": "{provider} rechazó la clave. Compruébela antes de guardar.",
       "providerKeyInvalidShort": "No válida",
-      "providers": {
-        "anthropic": "Anthropic",
-        "azure_foundry": "Azure Foundry",
-        "google": "Google",
-        "mistral": "Mistral",
-        "openai": "ChatGPT",
-        "openrouter": "OpenRouter"
-      },
       "providersDescription": "Añade las credenciales de los proveedores que quieres que use Stella.",
       "providersPanel": "Proveedores",
       "regions": {

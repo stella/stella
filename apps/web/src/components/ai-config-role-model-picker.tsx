@@ -25,6 +25,7 @@ import {
   getRolePickerRows,
   isProviderValue,
   MODEL_OPTIONS_BY_PROVIDER,
+  PROVIDER_LABELS,
 } from "@/components/ai-config-role-models.logic";
 import type {
   ModelSelection,
@@ -123,7 +124,7 @@ export const AIConfigRoleModelPicker = ({
                 <SelectPopup alignItemWithTrigger={false}>
                   {providers.map((provider) => (
                     <SelectItem key={provider} value={provider}>
-                      {t(`aiConfig.providers.${provider}`)}
+                      {PROVIDER_LABELS[provider]}
                     </SelectItem>
                   ))}
                 </SelectPopup>

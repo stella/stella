@@ -7,6 +7,15 @@ export const PROVIDER_KEYS = [
   "openrouter",
 ] as const;
 
+export const PROVIDER_LABELS = {
+  google: "Google",
+  anthropic: "Anthropic",
+  mistral: "Mistral",
+  openai: "OpenAI",
+  azure_foundry: "Azure Foundry",
+  openrouter: "OpenRouter",
+} as const satisfies Record<(typeof PROVIDER_KEYS)[number], string>;
+
 export const REGION_KEYS = ["global", "eu", "ch"] as const;
 
 export const ROLE_KEYS = ["chat", "fast", "reasoning", "pdf"] as const;

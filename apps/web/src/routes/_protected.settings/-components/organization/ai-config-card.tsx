@@ -21,6 +21,7 @@ import {
   roleModelsFromOverrideModels,
   serializeOverrideModels,
   isProviderValue,
+  PROVIDER_LABELS,
 } from "@/components/ai-config-role-models.logic";
 import type {
   ModelSelection,
@@ -243,7 +244,7 @@ export const AIConfigCard = () => {
               >
                 <span className="font-medium">
                   {isProviderValue(providerConfig.provider)
-                    ? t(`aiConfig.providers.${providerConfig.provider}`)
+                    ? PROVIDER_LABELS[providerConfig.provider]
                     : providerConfig.provider}
                 </span>{" "}
                 <span className="text-muted-foreground font-mono">
