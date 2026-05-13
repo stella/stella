@@ -14,7 +14,7 @@ pre-commit:
       run: bun run secrets:check:staged
     lint:
       glob: "**/*.{ts,tsx,js,jsx}"
-      run: bun --bun oxlint -c oxlint.config.ts --type-aware --fix {staged_files}
+      run: bun --bun oxlint -c oxlint.config.ts --threads=2 --type-aware --fix {staged_files}
       stage_fixed: true
     format:
       glob: "**/*.{ts,tsx,js,jsx,json,css}"
@@ -29,14 +29,14 @@ pre-commit:
       run: bash scripts/check-ai-skill-sources.sh
 
 pre-push:
-  parallel: true
+  parallel: false
   commands:
     typecheck:
-      run: bun run typecheck
+      run: bun run typecheck --concurrency=2
     lint:
-      run: bun run lint
+      run: bun run lint --concurrency=2 -- --threads=2
     format:
-      run: bun run format:check
+      run: bun run format --concurrency=2 -- --check
     i18n:
       run: bun run i18n:check
     ai-skills:
