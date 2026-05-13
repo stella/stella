@@ -8,5 +8,8 @@ import { defineConfig } from "astro/config";
 // Astro pipes it. PostCSS sidesteps the broken resolve pathway.
 export default defineConfig({
   site: "https://stll.app",
-  integrations: [sitemap(), react()],
+  // `new Date()` is captured at build time, so every deploy stamps the
+  // sitemap with the build timestamp — Google uses lastmod to schedule
+  // recrawls.
+  integrations: [sitemap({ changefreq: "weekly", lastmod: new Date() }), react()],
 });
