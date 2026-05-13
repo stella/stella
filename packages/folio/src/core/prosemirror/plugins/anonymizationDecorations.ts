@@ -69,16 +69,28 @@ const buildMatcher = (
   // Longest first so a shorter variant nested inside a canonical
   // doesn't shadow the longer match.
   entries.sort((a, b) => b.surface.length - a.surface.length);
+  const normalizeKey = (value: string): string =>
+    value.replaceAll(/\s+/g, " ").toLowerCase();
   const bySurface = new Map<string, AnonymizationTerm>();
   for (const { surface, term } of entries) {
-    const key = surface.toLowerCase();
+    const key = normalizeKey(surface);
     if (!bySurface.has(key)) {
       bySurface.set(key, term);
     }
   }
   const escape = (value: string): string =>
-    value.replaceAll(/[\\^$.*+?()[\]{}|]/g, "\\$&");
+    value
+      .replaceAll(/[\\^$.*+?()[\]{}|]/g, "\\$&")
+      // Treat any whitespace run as `\s+` so a term typed with
+      // regular spaces still matches the non-breaking spaces and
+      // typographic spaces real DOCX content often uses between
+      // titles, names, and units.
+      .replaceAll(/\s+/g, "\\s+");
   const alternation = entries.map(({ surface }) => escape(surface)).join("|");
+  // Strict word-bounded match: a term only highlights when it
+  // appears as a whole word in the document. Keeping the matcher
+  // simple matches what users expect when they paste a term —
+  // morphological declension is a separate feature.
   return {
     regex: new RegExp(
       `(?<![\\p{L}\\p{N}])(?:${alternation})(?![\\p{L}\\p{N}])`,
@@ -101,7 +113,7 @@ const buildMatches = (
     matcher.regex.lastIndex = 0;
     let match: RegExpExecArray | null = matcher.regex.exec(text);
     while (match !== null) {
-      const surfaceKey = match[0].toLowerCase();
+      const surfaceKey = match[0].replaceAll(/\s+/g, " ").toLowerCase();
       const term = matcher.bySurface.get(surfaceKey);
       if (term) {
         const from = pos + match.index;
