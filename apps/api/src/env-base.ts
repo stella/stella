@@ -10,6 +10,8 @@
 import { createEnv } from "@t3-oss/env-core";
 import * as v from "valibot";
 
+import { resolveDatabaseUrl } from "@/api/db-url";
+
 export const envBase = createEnv({
   server: {
     DATABASE_URL: v.pipe(v.string(), v.url()),
@@ -35,5 +37,5 @@ export const envBase = createEnv({
     isDev: v.optional(v.boolean(), process.env.NODE_ENV !== "production"),
   },
   emptyStringAsUndefined: true,
-  runtimeEnv: process.env,
+  runtimeEnv: { ...process.env, DATABASE_URL: resolveDatabaseUrl() },
 });

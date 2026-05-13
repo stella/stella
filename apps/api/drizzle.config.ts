@@ -1,8 +1,10 @@
 import { defineConfig } from "drizzle-kit";
 
-// Fallback keeps knip and CI happy when DATABASE_URL is unset.
+import { resolveDatabaseUrl } from "./src/db-url";
+
+// Fallback keeps knip and CI happy when no DB env is set.
 // drizzle-kit push/generate will fail fast on connection, not silently.
-const url = process.env.DATABASE_URL ?? "postgresql://invalid";
+const url = resolveDatabaseUrl() ?? "postgresql://invalid";
 
 export default defineConfig({
   out: "./drizzle",
