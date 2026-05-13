@@ -13,6 +13,11 @@ permissions: {}
 
 jobs:
   audit:
+    # Reusable workflow declares `permissions: contents: read` and runs
+    # actions/checkout. The caller's `permissions: {}` would otherwise
+    # cap the reusable's GITHUB_TOKEN to no scopes (intersection rule).
+    permissions:
+      contents: read
     uses: stella/.github/.github/workflows/audit-branch-protection.yml@9aba86f19b0d72fb02344c49342d7f0b0c9700b0
     with:
       expected-config-path: .github/branch-protection/ruleset-main.json
