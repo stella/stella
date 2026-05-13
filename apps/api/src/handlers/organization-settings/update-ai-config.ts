@@ -1,4 +1,3 @@
-import { generateText } from "ai";
 import { panic, Result } from "better-result";
 import { t } from "elysia";
 
@@ -9,8 +8,6 @@ import {
   maskApiKey,
 } from "@/api/lib/ai-config-crypto";
 import {
-  getModelForRole,
-  getTemperatureForRole,
   isAllowedBYOKModel,
   MODEL_ROLES,
   supportsRegion,
@@ -23,6 +20,7 @@ import type {
   OrgAIModelSelection,
   OrgAIProviderConfig,
 } from "@/api/lib/ai-models";
+import { probeProvider } from "@/api/lib/ai-provider-probe";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -149,8 +147,7 @@ const updateAIConfig = createSafeRootHandler(
 
     const validationResults = await Promise.all(
       providersToValidate.map(
-        async (providerConfig) =>
-          await validateProviderKey(providerConfig, modelResult.overrideModels),
+        async (providerConfig) => await validateProviderKey(providerConfig),
       ),
     );
 
@@ -441,15 +438,6 @@ const normalizeOverrideModels = (
   };
 };
 
-const getValidationRole = (
-  provider: AIProvider,
-  overrideModels: Record<ModelRole, OrgAIModelSelection>,
-): ModelRole =>
-  MODEL_ROLES.find((role) => overrideModels[role].provider === provider) ??
-  panic(
-    `validateProviderKey called for ${provider} but no role is bound to it`,
-  );
-
 type ShouldValidateProviderConfigOptions = {
   existingConfig: OrgAIConfig | undefined;
   newKeyProviders: ReadonlySet<AIProvider>;
@@ -493,45 +481,35 @@ const shouldValidateProviderConfig = ({
   );
 };
 
-// Provider first-call latency can exceed 10 s and we don't want a
-// healthy key flagged invalid by a slow upstream. Validations run in
-// parallel, so the worst-case settings-save wait is bounded by this
-// single ceiling regardless of how many providers are configured.
-const VALIDATION_TIMEOUT_MS = 20_000;
-
 /**
- * Validate a provider API key by making a minimal API call.
- * Uses a tiny prompt to minimize cost. Always exercises a
- * model the user explicitly chose for this provider —
- * orphan providers are rejected upstream.
+ * Validate a provider API key via the shared lightweight probe
+ * (provider's own auth/list-models endpoint). No token cost and
+ * avoids per-model quirks like reasoning-model token minimums.
  */
 const validateProviderKey = async (
-  providerConfig: OrgAIProviderConfig,
-  overrideModels: Record<ModelRole, OrgAIModelSelection>,
+  providerConfig: OrgAIProviderConfig & { provider: BYOKProvider },
 ): Promise<ValidationResult> => {
-  const role = getValidationRole(providerConfig.provider, overrideModels);
-  const tempConfig: OrgAIConfig = {
-    providers: [providerConfig],
-    overrideModels,
-  };
-
   const result = await Result.tryPromise({
-    try: async () => {
-      const model = getModelForRole(role, tempConfig);
-      return await generateText({
-        model,
-        temperature: getTemperatureForRole(role),
-        prompt: "Say OK",
-        maxOutputTokens: 3,
-        abortSignal: AbortSignal.timeout(VALIDATION_TIMEOUT_MS),
-      });
-    },
+    try: async () =>
+      await probeProvider(
+        providerConfig.provider,
+        providerConfig.apiKey,
+        providerConfig.provider === "azure_foundry"
+          ? providerConfig.baseURL
+          : undefined,
+        providerConfig.provider === "azure_foundry"
+          ? providerConfig.apiVersion
+          : undefined,
+      ),
     catch: (error: unknown) =>
       `API key validation failed: ${error instanceof Error ? error.message : "Unknown error"}`,
   });
 
   if (result.isErr()) {
     return { valid: false, error: result.error };
+  }
+  if (!result.value.valid) {
+    return { valid: false, error: result.value.error ?? "Unknown error" };
   }
   return { valid: true };
 };
