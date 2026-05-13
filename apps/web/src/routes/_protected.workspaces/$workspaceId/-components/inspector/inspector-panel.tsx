@@ -906,7 +906,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
 
       {pdfTabs.map((tab) => (
         <CurrentFileFieldSync
-          key={`${tab.workspaceId}:${tab.entityId}`}
+          key={`${tab.workspaceId}:${tab.entityId}:${tab.propertyId ?? tab.id}`}
           tab={tab}
         />
       ))}
