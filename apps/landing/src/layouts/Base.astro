@@ -27,6 +27,7 @@ const socialImageUrl = new URL(socialImage, Astro.site);
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
     <title>{title}</title>
 
     <!-- Canonical -->
@@ -79,22 +80,38 @@ const socialImageUrl = new URL(socialImage, Astro.site);
     <!-- Structured data -->
     <script is:inline type="application/ld+json" set:html={JSON.stringify({
       "@context": "https://schema.org",
-      "@type": "SoftwareApplication",
-      "name": "stella",
-      "applicationCategory": "BusinessApplication",
-      "operatingSystem": "Web",
-      "description": description,
-      "url": "https://stll.app",
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD",
-      },
-      "author": {
-        "@type": "Organization",
-        "name": "stella labs, s.r.o.",
-        "url": "https://stll.app/imprint",
-      },
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": new URL("#organization", Astro.site).href,
+          "name": "stella labs, s.r.o.",
+          "url": new URL("/", Astro.site).href,
+          "logo": {
+            "@type": "ImageObject",
+            "url": new URL("/images/stella-logo.svg", Astro.site).href,
+          },
+          "sameAs": [
+            "https://github.com/stella/stella",
+            "https://x.com/stll_app",
+            "https://www.linkedin.com/company/stella-app",
+          ],
+        },
+        {
+          "@type": "SoftwareApplication",
+          "@id": new URL("#software", Astro.site).href,
+          "name": "stella",
+          "applicationCategory": "BusinessApplication",
+          "operatingSystem": "Web",
+          "description": description,
+          "url": new URL("/", Astro.site).href,
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD",
+          },
+          "publisher": { "@id": new URL("#organization", Astro.site).href },
+        },
+      ],
     })} />
 
     <style is:global>
