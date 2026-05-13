@@ -412,22 +412,6 @@ const normalizeOverrideModels = (
     return pdf;
   }
 
-  const referencedProviders = new Set<AIProvider>([
-    chat.selection.provider,
-    fast.selection.provider,
-    reasoning.selection.provider,
-    pdf.selection.provider,
-  ]);
-
-  for (const provider of configuredProviders) {
-    if (!referencedProviders.has(provider)) {
-      return {
-        valid: false,
-        error: `Provider ${provider} is configured but not used by any role`,
-      };
-    }
-  }
-
   return {
     valid: true,
     overrideModels: {

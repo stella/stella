@@ -534,8 +534,8 @@ export type OrgAIConfig = {
   providers: OrgAIProviderConfig[];
   /**
    * Per-role model selection. Every role must resolve to a
-   * configured provider; the update endpoint enforces this
-   * and rejects orphan providers (configured but unused).
+   * configured provider. Additional configured providers may
+   * be stored for later assignment.
    */
   overrideModels: Record<ModelRole, OrgAIModelSelection>;
 };

@@ -370,16 +370,6 @@ export const serializeOverrideModels = ({
     return null;
   }
 
-  // Reject orphan providers — every configured provider
-  // must drive at least one role. Mirrors the API check;
-  // gating it here keeps the save button honest.
-  const referencedProviders = new Set(
-    selections.map((selection) => selection.provider),
-  );
-  if (providers.some((provider) => !referencedProviders.has(provider))) {
-    return null;
-  }
-
   return {
     chat: normalizeModelSelection(chat),
     fast: normalizeModelSelection(fast),
