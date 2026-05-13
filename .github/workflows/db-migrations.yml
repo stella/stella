@@ -40,7 +40,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
-        run: bun ci
+        run: bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -95,7 +95,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
-        run: bun ci
+        run: bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.

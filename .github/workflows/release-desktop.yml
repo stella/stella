@@ -274,7 +274,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
-        run: bun ci
+        run: bun ci --ignore-scripts
         env:
           # Signing-key secrets are loaded into later steps in this job.
           # Keep NPM_TOKEN out of the install-time environment so a

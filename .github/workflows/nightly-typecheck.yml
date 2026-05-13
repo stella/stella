@@ -25,7 +25,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
-        run: bun ci
+        run: bun ci --ignore-scripts
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
