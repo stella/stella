@@ -44,17 +44,15 @@ const overlayStyles: React.CSSProperties = {
 export const AnonymizationRectsOverlay = ({
   groups,
 }: AnonymizationRectsOverlayProps) => {
-  if (groups.length === 0) return null;
+  if (groups.length === 0) {
+    return null;
+  }
 
   return (
     <div style={overlayStyles} data-folio-anonymization-overlay="">
       {groups.flatMap((group) =>
         group.rects.map((rect, idx) => (
           <span
-            // SAFETY: groups are produced from a stable iteration of
-            // the plugin's decoration list; index within a group is
-            // adequately unique per render.
-            // oxlint-disable-next-line react/no-array-index-key
             key={`${group.label}:${group.canonical}:${idx}:${rect.pageIndex}:${rect.x}:${rect.y}`}
             className={`folio-anonymization-term folio-anonymization-term--${slugAnonymizationLabel(group.label)}`}
             data-folio-anonymization-label={group.label}

@@ -74,6 +74,8 @@ export {
 } from "./core/prosemirror/plugins/aiCitationDecorations";
 export {
   anonymizationDecorationsKey,
+  getAnonymizationMatches,
   setAnonymizationTermsMeta,
+  type AnonymizationMatch,
   type AnonymizationTerm,
 } from "./core/prosemirror/plugins/anonymizationDecorations";

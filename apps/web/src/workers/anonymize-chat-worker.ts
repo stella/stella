@@ -28,6 +28,7 @@ type AnonRequest = {
   text: string;
   workspaceId: string;
   gazetteerEntries?: GazetteerEntry[];
+  excludedCanonicals?: readonly string[];
 };
 
 type AnonResponse =
@@ -47,7 +48,13 @@ const getDictionaries = (): Promise<
 };
 
 const handle = async (request: AnonRequest): Promise<AnonResponse> => {
-  const { id, text, workspaceId, gazetteerEntries = [] } = request;
+  const {
+    id,
+    text,
+    workspaceId,
+    gazetteerEntries = [],
+    excludedCanonicals,
+  } = request;
   try {
     const dictionaries = await getDictionaries();
     const { redactedText, pairs, redactionMap, entityCount } =
@@ -62,6 +69,7 @@ const handle = async (request: AnonRequest): Promise<AnonResponse> => {
         text,
         workspaceId,
         gazetteerEntries,
+        excludedCanonicals,
       });
     return { id, ok: true, redactedText, pairs, redactionMap, entityCount };
   } catch (error) {

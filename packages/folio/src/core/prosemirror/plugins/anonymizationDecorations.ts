@@ -38,15 +38,33 @@ export type AnonymizationMatch = {
   canonical: string;
 };
 
-export const anonymizationDecorationsKey =
-  new PluginKey<AnonymizationDecorationState>("anonymizationDecorations");
-
 const SET_META = "set";
 
 type AnonymizationDecorationState = {
   terms: readonly AnonymizationTerm[];
   matches: readonly AnonymizationMatch[];
 };
+
+// Pin the PluginKey to a process-wide symbol on `globalThis` so
+// every module evaluation resolves to the *same* key instance.
+// Vite's dev server occasionally serves this file twice — once
+// to the bundle that registers the plugin (Folio's relative
+// import path) and once to an external consumer (`@stll/folio`
+// re-export). A fresh `new PluginKey()` per evaluation would mean
+// the host can't read the plugin's state by key identity, even
+// though both copies of the file look identical. The `Symbol.for`
+// lookup deduplicates across all module instances; the key string
+// "anonymizationDecorations" is metadata for the PM debug name.
+const KEY_HOLDER_SYMBOL = Symbol.for("stll.folio.anonymizationDecorationsKey");
+type KeyHolder = {
+  [KEY_HOLDER_SYMBOL]?: PluginKey<AnonymizationDecorationState>;
+};
+const keyHolder = globalThis as unknown as KeyHolder;
+export const anonymizationDecorationsKey: PluginKey<AnonymizationDecorationState> =
+  keyHolder[KEY_HOLDER_SYMBOL] ??
+  (keyHolder[KEY_HOLDER_SYMBOL] = new PluginKey<AnonymizationDecorationState>(
+    "anonymizationDecorations",
+  ));
 
 export const slugAnonymizationLabel = (label: string): string =>
   label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
@@ -56,9 +74,7 @@ type CompiledTerm = {
   term: AnonymizationTerm;
 };
 
-const buildMatcher = (
-  terms: readonly AnonymizationTerm[],
-): CompiledTerm[] => {
+const buildMatcher = (terms: readonly AnonymizationTerm[]): CompiledTerm[] => {
   const escapeChar = (value: string): string =>
     value
       .replaceAll(/[\\^$.*+?()[\]{}|]/g, "\\$&")
@@ -77,10 +93,14 @@ const buildMatcher = (
     const surfaces = [term.canonical, ...(term.variants ?? [])].filter(
       (surface) => surface.length > 0,
     );
-    if (surfaces.length === 0) continue;
+    if (surfaces.length === 0) {
+      continue;
+    }
     surfaces.sort((a, b) => b.length - a.length);
     const key = surfaces.join("|").toLowerCase();
-    if (seen.has(key)) continue;
+    if (seen.has(key)) {
+      continue;
+    }
     seen.add(key);
     const alternation = surfaces.map(escapeChar).join("|");
     compiled.push({
@@ -94,22 +114,75 @@ const buildMatcher = (
   return compiled;
 };
 
+type TextChunk = {
+  text: string;
+  /** PM doc position where this chunk's first char lives. */
+  start: number;
+};
+
+/**
+ * Collect every block-level node's text content as a single joined
+ * string plus a mapping from joined-string offsets back to PM doc
+ * positions. We need this because PM splits text across nodes at
+ * every formatting boundary (e.g. a bold-only prefix produces a
+ * separate text node), and a regex run per text node misses any
+ * surface form that straddles that boundary.
+ */
+const collectBlockChunks = (doc: PMNode): TextChunk[][] => {
+  const blocks: TextChunk[][] = [];
+  doc.descendants((node, pos) => {
+    if (node.isTextblock) {
+      const chunks: TextChunk[] = [];
+      node.descendants((child, offset) => {
+        if (child.isText && child.text !== undefined) {
+          // pos is the textblock's PM position; +1 accounts for the
+          // textblock's opening token, +offset is the position of
+          // this text node inside the textblock.
+          chunks.push({ text: child.text, start: pos + 1 + offset });
+        }
+        return true;
+      });
+      if (chunks.length > 0) {
+        blocks.push(chunks);
+      }
+      return false;
+    }
+    return true;
+  });
+  return blocks;
+};
+
+/** Map a joined-string offset back to its PM doc position. */
+const offsetToDocPos = (chunks: TextChunk[], offset: number): number => {
+  let consumed = 0;
+  for (const chunk of chunks) {
+    if (offset <= consumed + chunk.text.length) {
+      return chunk.start + (offset - consumed);
+    }
+    consumed += chunk.text.length;
+  }
+  // Past the end: clamp to the final chunk's last position.
+  const last = chunks.at(-1);
+  return last ? last.start + last.text.length : 0;
+};
+
 const buildMatches = (
   doc: PMNode,
   terms: readonly AnonymizationTerm[],
 ): AnonymizationMatch[] => {
   const compiled = buildMatcher(terms);
-  if (compiled.length === 0) return [];
+  if (compiled.length === 0) {
+    return [];
+  }
   const matches: AnonymizationMatch[] = [];
-  doc.descendants((node, pos) => {
-    if (!node.isText || node.text === undefined) return true;
-    const text = node.text;
+  for (const chunks of collectBlockChunks(doc)) {
+    const joined = chunks.map((c) => c.text).join("");
     for (const { regex, term } of compiled) {
       regex.lastIndex = 0;
-      let match: RegExpExecArray | null = regex.exec(text);
+      let match: RegExpExecArray | null = regex.exec(joined);
       while (match !== null) {
-        const from = pos + match.index;
-        const to = from + match[0].length;
+        const from = offsetToDocPos(chunks, match.index);
+        const to = offsetToDocPos(chunks, match.index + match[0].length);
         matches.push({
           from,
           to,
@@ -119,22 +192,21 @@ const buildMatches = (
         if (regex.lastIndex === match.index) {
           regex.lastIndex += 1;
         }
-        match = regex.exec(text);
+        match = regex.exec(joined);
       }
     }
-    return true;
-  });
+  }
   // De-duplicate overlapping matches: shorter spans nested inside
   // longer ones get dropped so a single occurrence of "First Last"
   // does not paint twice (once for the full name, once for the
   // canonical word inside it).
-  matches.sort((a, b) =>
-    a.from !== b.from ? a.from - b.from : b.to - a.to,
-  );
+  matches.sort((a, b) => (a.from !== b.from ? a.from - b.from : b.to - a.to));
   const result: AnonymizationMatch[] = [];
   let cursor = -1;
   for (const m of matches) {
-    if (m.from < cursor) continue;
+    if (m.from < cursor) {
+      continue;
+    }
     result.push(m);
     cursor = m.to;
   }
@@ -147,9 +219,24 @@ const buildMatches = (
  * {@link setAnonymizationTermsMeta}; the paged-editor reads
  * the matches and paints the overlay.
  */
-export const createAnonymizationDecorationsPlugin =
-  (): Plugin<AnonymizationDecorationState> =>
-    new Plugin<AnonymizationDecorationState>({
+export type AnonymizationPluginOptions = {
+  /**
+   * Push-side bridge for hosts that need to mirror the current
+   * match list outside the PM state tree (e.g. an inspector
+   * facet showing a "N highlighted" counter, or per-doc analytics).
+   * Called on plugin init, after every transaction that changes
+   * the match set, and on plugin teardown (with an empty list).
+   * The same list is reachable via `getAnonymizationMatches`;
+   * use the callback when you need updates without polling.
+   */
+  onMatchesChange?: (matches: readonly AnonymizationMatch[]) => void;
+};
+
+export const createAnonymizationDecorationsPlugin = ({
+  onMatchesChange,
+}: AnonymizationPluginOptions = {}): Plugin<AnonymizationDecorationState> => {
+  const spec: import("prosemirror-state").PluginSpec<AnonymizationDecorationState> =
+    {
       key: anonymizationDecorationsKey,
       state: {
         init(): AnonymizationDecorationState {
@@ -178,7 +265,34 @@ export const createAnonymizationDecorationsPlugin =
           return prev;
         },
       },
-    });
+    };
+  if (onMatchesChange) {
+    spec.view = (view) => {
+      // Emit the initial match list (init() ran above with the
+      // empty doc-and-terms baseline; for restored sessions
+      // matches may already be populated).
+      let last = anonymizationDecorationsKey.getState(view.state)?.matches;
+      if (last) {
+        onMatchesChange(last);
+      }
+      return {
+        update(updatedView) {
+          const next = anonymizationDecorationsKey.getState(
+            updatedView.state,
+          )?.matches;
+          if (next && next !== last) {
+            last = next;
+            onMatchesChange(next);
+          }
+        },
+        destroy() {
+          onMatchesChange([]);
+        },
+      };
+    };
+  }
+  return new Plugin<AnonymizationDecorationState>(spec);
+};
 
 export const setAnonymizationTermsMeta = (
   terms: readonly AnonymizationTerm[],
@@ -189,3 +303,16 @@ export const setAnonymizationTermsMeta = (
   key: anonymizationDecorationsKey,
   payload: { type: SET_META, terms },
 });
+
+/**
+ * Read the plugin's current match list out of a Folio editor
+ * view. Lives inside the same module as the plugin key so a host
+ * that imports it via `@stll/folio` gets the *same* key instance
+ * as the plugin registration — bypassing the dev-HMR hazard
+ * where re-evaluating the plugin module would create a second
+ * PluginKey and break key-based lookups.
+ */
+export const getAnonymizationMatches = (
+  state: import("prosemirror-state").EditorState,
+): readonly AnonymizationMatch[] =>
+  anonymizationDecorationsKey.getState(state)?.matches ?? [];

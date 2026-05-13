@@ -525,9 +525,19 @@ function WorkspaceInspectorSidePanel() {
 
   useEffect(() => {
     document.documentElement.style.setProperty(TOAST_RIGHT_OFFSET_VAR, widthPx);
+    // Keep Folio's find/replace dialog out from under the right inspector
+    // pane. Folio reads --folio-find-replace-right on the overlay so the
+    // dialog lands over the document, not behind the sidebar.
+    document.documentElement.style.setProperty(
+      "--folio-find-replace-right",
+      widthPx,
+    );
 
     return () => {
       document.documentElement.style.removeProperty(TOAST_RIGHT_OFFSET_VAR);
+      document.documentElement.style.removeProperty(
+        "--folio-find-replace-right",
+      );
     };
   }, [widthPx]);
 

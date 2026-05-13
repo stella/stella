@@ -1081,7 +1081,11 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                   <SuggestionsFacet entityId={tab.entityId} />
                 )}
                 {tab.facet === "anonymization" && (
-                  <AnonymizationFacet workspaceId={tab.workspaceId} />
+                  <AnonymizationFacet
+                    activeFieldId={tab.id}
+                    entityId={tab.entityId}
+                    workspaceId={tab.workspaceId}
+                  />
                 )}
                 {/* No preview branch in fullscreen: the main view
                  *  IS the preview. FullViewPreviewGuard above swaps
@@ -1515,7 +1519,22 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                 />
               )}
               {sidepeekFacet === "anonymization" && (
-                <AnonymizationFacet workspaceId={tab.workspaceId} />
+                // Sidepeek shows the file as a thumbnail-sized preview
+                // without an interactive Folio editor underneath, so
+                // there's no per-document match data to display. Pass
+                // `activeFieldId={null}` so the facet renders the
+                // "open full view first" hint instead of a zero count
+                // that the user can't act on from here.
+                <AnonymizationFacet
+                  activeFieldId={null}
+                  entityId={tab.entityId}
+                  onOpenFullView={() => {
+                    handleOpenFullView().catch(() => {
+                      /* fire-and-forget */
+                    });
+                  }}
+                  workspaceId={tab.workspaceId}
+                />
               )}
             </div>
           );

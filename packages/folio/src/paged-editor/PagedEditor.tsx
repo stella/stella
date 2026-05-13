@@ -105,6 +105,8 @@ import type {
 // Table commands (for quick-action insert buttons)
 import { addRowBelow, addColumnRight } from "../core/prosemirror";
 import type { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
+import { anonymizationDecorationsKey } from "../core/prosemirror/plugins/anonymizationDecorations";
+import type { AnonymizationMatch } from "../core/prosemirror/plugins/anonymizationDecorations";
 import type { Footnote } from "../core/types/content";
 // Types
 import type {
@@ -114,19 +116,13 @@ import type {
   SectionProperties,
   HeaderFooter,
 } from "../core/types/document";
+// Internal components
+import { AnonymizationRectsOverlay } from "./AnonymizationRectsOverlay";
+import type { AnonymizationRectGroup } from "./AnonymizationRectsOverlay";
 import {
   computeFirstPageHeaderFooterMarginExtender,
   computeHeaderFooterMarginExtender,
 } from "./headerFooterMargins";
-import {
-  anonymizationDecorationsKey,
-  type AnonymizationMatch,
-} from "../core/prosemirror/plugins/anonymizationDecorations";
-// Internal components
-import {
-  AnonymizationRectsOverlay,
-  type AnonymizationRectGroup,
-} from "./AnonymizationRectsOverlay";
 import { HiddenProseMirror } from "./HiddenProseMirror";
 import type { HiddenProseMirrorRef } from "./HiddenProseMirror";
 import { ImageSelectionOverlay } from "./ImageSelectionOverlay";
@@ -2406,16 +2402,15 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       // NOTE: onSelectionChange removed from dependencies - accessed via ref to prevent infinite loops
     );
 
-    // Re-project anonymization match ranges onto container-space
-    // rectangles whenever layout settles or the match list updates.
-    // Mirrors the layout-fallback branch of updateSelectionOverlay
-    // (no DOM-rect shortcut: PM decoration spans live off-screen and
-    // would give us a -9999 x coordinate).
+    // Project anonymization match ranges onto container-space
+    // rectangles. Mirrors the SelectionOverlay flow: prefer real
+    // DOM rects from the painted page spans (correct for indents,
+    // tabs, justified text, line wraps) and fall back to the
+    // layout-coord projection only when the DOM spans aren't
+    // mounted yet (initial paint, off-screen pages). The hidden
+    // ProseMirror's spans are not used — they sit at -9999px and
+    // would yield bogus coordinates.
     const updateAnonymizationOverlay = useCallback(() => {
-      if (!layout || blocks.length === 0) {
-        setAnonymizationRectGroups([]);
-        return;
-      }
       const matches = anonymizationMatchesRef.current;
       if (matches.length === 0) {
         setAnonymizationRectGroups([]);
@@ -2438,22 +2433,93 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       const pageRect = firstPage.getBoundingClientRect();
       const pageOffsetX = (pageRect.left - overlayRect.left) / zoom;
       const pageOffsetY = (pageRect.top - overlayRect.top) / zoom;
+      const pmSpans = findBodyPmSpans(pagesContainer);
+
+      const rectsForMatch = (
+        from: number,
+        to: number,
+      ): AnonymizationRectGroup["rects"] => {
+        const domRects: AnonymizationRectGroup["rects"] = [];
+        for (const spanEl of pmSpans) {
+          const pmStart = Number(spanEl.dataset["pmStart"]);
+          const pmEnd = Number(spanEl.dataset["pmEnd"]);
+          if (!(pmEnd > from && pmStart < to)) {
+            continue;
+          }
+          if (spanEl.classList.contains("layout-run-tab")) {
+            const spanRect = spanEl.getBoundingClientRect();
+            const pageEl = spanEl.closest(".layout-page");
+            const pageIndex = pageEl
+              ? Number((pageEl as HTMLElement).dataset["pageNumber"]) - 1
+              : 0;
+            domRects.push({
+              x: (spanRect.left - overlayRect.left) / zoom,
+              y: (spanRect.top - overlayRect.top) / zoom,
+              width: spanRect.width / zoom,
+              height: spanRect.height / zoom,
+              pageIndex,
+            });
+            continue;
+          }
+          let textNode: Text | null = null;
+          if (spanEl.firstChild?.nodeType === Node.TEXT_NODE) {
+            textNode = spanEl.firstChild as Text;
+          } else if (
+            spanEl.firstChild?.nodeType === Node.ELEMENT_NODE &&
+            (spanEl.firstChild as HTMLElement).tagName === "A" &&
+            spanEl.firstChild.firstChild?.nodeType === Node.TEXT_NODE
+          ) {
+            textNode = spanEl.firstChild.firstChild as Text;
+          }
+          if (!textNode) {
+            continue;
+          }
+          const ownerDoc = spanEl.ownerDocument;
+          if (!ownerDoc) {
+            continue;
+          }
+          const startChar = Math.max(0, from - pmStart);
+          const endChar = Math.min(textNode.length, to - pmStart);
+          if (!(startChar < endChar)) {
+            continue;
+          }
+          const range = ownerDoc.createRange();
+          range.setStart(textNode, startChar);
+          range.setEnd(textNode, endChar);
+          for (const rect of Array.from(range.getClientRects())) {
+            const pageEl = spanEl.closest(".layout-page");
+            const pageIndex = pageEl
+              ? Number((pageEl as HTMLElement).dataset["pageNumber"]) - 1
+              : 0;
+            domRects.push({
+              x: (rect.left - overlayRect.left) / zoom,
+              y: (rect.top - overlayRect.top) / zoom,
+              width: rect.width / zoom,
+              height: rect.height / zoom,
+              pageIndex,
+            });
+          }
+        }
+        if (domRects.length > 0) {
+          return domRects;
+        }
+        if (!layout || blocks.length === 0) {
+          return [];
+        }
+        return selectionToRects(layout, blocks, measures, from, to).map(
+          (rect) => ({
+            height: rect.height,
+            pageIndex: rect.pageIndex,
+            width: rect.width,
+            x: rect.x + pageOffsetX,
+            y: rect.y + pageOffsetY,
+          }),
+        );
+      };
 
       const groups: AnonymizationRectGroup[] = [];
       for (const match of matches) {
-        const rects = selectionToRects(
-          layout,
-          blocks,
-          measures,
-          match.from,
-          match.to,
-        ).map((rect) => ({
-          height: rect.height,
-          pageIndex: rect.pageIndex,
-          width: rect.width,
-          x: rect.x + pageOffsetX,
-          y: rect.y + pageOffsetY,
-        }));
+        const rects = rectsForMatch(match.from, match.to);
         if (rects.length > 0) {
           groups.push({
             rects,
@@ -2510,8 +2576,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         // identity changes (term meta or doc edit), schedule a paint.
         const nextMatches =
           anonymizationDecorationsKey.getState(newState)?.matches ?? [];
-        const matchesChanged =
-          nextMatches !== anonymizationMatchesRef.current;
+        const matchesChanged = nextMatches !== anonymizationMatchesRef.current;
         anonymizationMatchesRef.current = nextMatches;
         if (matchesChanged) {
           updateAnonymizationOverlay();
