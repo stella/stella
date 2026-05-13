@@ -28,7 +28,6 @@ export type AnonymizationRectGroup = {
 
 export type AnonymizationRectsOverlayProps = {
   groups: AnonymizationRectGroup[];
-  pageGap?: number;
 };
 
 const overlayStyles: React.CSSProperties = {
@@ -44,7 +43,6 @@ const overlayStyles: React.CSSProperties = {
 
 export const AnonymizationRectsOverlay = ({
   groups,
-  pageGap = 0,
 }: AnonymizationRectsOverlayProps) => {
   if (groups.length === 0) return null;
 
@@ -65,7 +63,7 @@ export const AnonymizationRectsOverlay = ({
             style={{
               position: "absolute",
               left: rect.x,
-              top: rect.y + rect.pageIndex * pageGap,
+              top: rect.y,
               width: rect.width,
               height: rect.height,
             }}

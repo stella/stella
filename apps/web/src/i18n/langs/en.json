@@ -1038,7 +1038,7 @@
     "redoShortcut": "Redo (Ctrl+Y)",
     "rejectChange": "Reject Change",
     "removeLink": "Remove link",
-    "renderErrorDescription": "An error occurred while rendering this component. Please try again or contact support if the problem persists.",
+    "renderErrorDescription": "Something went wrong showing this part of the document. Reload the page — if it keeps happening, let us know.",
     "saveCheckpointFailedDescription": "The DOCX was created locally, but stella could not upload the checkpoint. Keep the editor open and try saving again.",
     "saveCheckpointFailedTitle": "Could not upload save",
     "saveEditorUnavailableDescription": "The editor is not ready yet. Wait for the document to finish loading, then try saving again.",

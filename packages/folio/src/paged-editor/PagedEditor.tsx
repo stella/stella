@@ -4573,10 +4573,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                 rendered pages so PII spans the wasm pipeline would
                 redact are visible inline. Always mounted, renders
                 nothing when no terms are pushed. */}
-            <AnonymizationRectsOverlay
-              groups={anonymizationRectGroups}
-              pageGap={pageGap}
-            />
+            <AnonymizationRectsOverlay groups={anonymizationRectGroups} />
 
             {/* Selection overlay */}
             <SelectionOverlay
