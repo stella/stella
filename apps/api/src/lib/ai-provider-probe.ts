@@ -11,7 +11,7 @@ import {
   normalizeAzureFoundryBaseURL,
 } from "@/api/lib/azure-foundry";
 
-const VALIDATION_TIMEOUT_MS = 5000;
+const DEFAULT_VALIDATION_TIMEOUT_MS = 5000;
 
 export const PROVIDER_PROBE_VALUES = [
   "google",
@@ -105,6 +105,7 @@ export const probeProvider = async (
   endpoint?: string,
   apiVersion?: string,
   expectedAzureDeployments?: readonly string[],
+  timeoutMs: number = DEFAULT_VALIDATION_TIMEOUT_MS,
 ): Promise<ProviderProbeResult> => {
   if (provider === "azure_foundry") {
     return await probeAzureFoundry(
@@ -112,10 +113,11 @@ export const probeProvider = async (
       endpoint,
       apiVersion,
       expectedAzureDeployments,
+      timeoutMs,
     );
   }
 
-  const signal = AbortSignal.timeout(VALIDATION_TIMEOUT_MS);
+  const signal = AbortSignal.timeout(timeoutMs);
   const target = PROBE_TARGETS[provider](apiKey);
   const response = await fetch(target.url, { ...target.init, signal });
 
@@ -138,6 +140,7 @@ const probeAzureFoundry = async (
   endpoint: string | undefined,
   apiVersion: string | undefined,
   expectedDeployments: readonly string[] | undefined,
+  timeoutMs: number,
 ): Promise<ProviderProbeResult> => {
   if (!endpoint?.trim()) {
     return {
@@ -151,7 +154,7 @@ const probeAzureFoundry = async (
     return { valid: false, error: normalized.error };
   }
 
-  const signal = AbortSignal.timeout(VALIDATION_TIMEOUT_MS);
+  const signal = AbortSignal.timeout(timeoutMs);
   const url = new URL(`${normalized.baseURL}/v1/models`);
   url.searchParams.set("api-version", resolveAzureApiVersion(apiVersion));
   const response = await fetch(url, {
