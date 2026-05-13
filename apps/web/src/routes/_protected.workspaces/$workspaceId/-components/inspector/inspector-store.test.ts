@@ -304,7 +304,7 @@ describe("replaceFileFieldId", () => {
     expect(pdfTabs[0]?.entityId).toBe("entity-B");
   });
 
-  test("preserves the pdf tab render id across version replacement", () => {
+  test("bumps the pdf tab render id across version replacement", () => {
     useInspectorStore.getState().openFile({
       id: "field-old",
       entityId: "entity-1",
@@ -322,6 +322,7 @@ describe("replaceFileFieldId", () => {
     if (before?.type !== "pdf") {
       throw new Error("expected pdf tab");
     }
+    const beforeRenderId = before.renderId;
 
     useInspectorStore.getState().replaceFileFieldId("field-old", "field-new");
 
@@ -332,8 +333,41 @@ describe("replaceFileFieldId", () => {
       throw new Error("expected pdf tab");
     }
 
-    expect(after.renderId).toBe(before.renderId);
+    expect(after.renderId).not.toBe(beforeRenderId);
     expect(useInspectorStore.getState().activeId).toBe("field-new");
+  });
+
+  test("refreshes file tab metadata across version replacement", () => {
+    useInspectorStore.getState().openFile({
+      id: "field-old",
+      entityId: "entity-1",
+      label: "Contract.docx",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      pdfFileId: null,
+      propertyId: "property-1",
+      workspaceId: "workspace-1",
+    });
+
+    useInspectorStore.getState().replaceFileFieldId("field-old", {
+      id: "field-new",
+      label: "Contract revised.docx",
+      mimeType: "application/pdf",
+      pdfFileId: "pdf-1",
+      propertyId: "property-2",
+    });
+
+    const tab = useInspectorStore
+      .getState()
+      .tabs.find((item) => item.id === "field-new");
+    if (tab?.type !== "pdf") {
+      throw new Error("expected pdf tab");
+    }
+
+    expect(tab.label).toBe("Contract revised.docx");
+    expect(tab.mimeType).toBe("application/pdf");
+    expect(tab.pdfFileId).toBe("pdf-1");
+    expect(tab.propertyId).toBe("property-2");
   });
 });
 

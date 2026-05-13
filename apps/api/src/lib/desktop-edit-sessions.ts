@@ -48,6 +48,12 @@ export const SESSION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 export const computeTokenExpiresAt = () =>
   new Date(Date.now() + SESSION_TOKEN_TTL_MS);
 
+/** Handoff tokens are only for browser-to-desktop launch. */
+export const DESKTOP_EDIT_HANDOFF_TTL_MS = 2 * 60 * 1000;
+
+export const computeDesktopEditHandoffExpiresAt = () =>
+  new Date(Date.now() + DESKTOP_EDIT_HANDOFF_TTL_MS);
+
 const SESSION_TOKEN_PART_LENGTH = 32;
 
 export const DESKTOP_EDIT_SESSION_TAKEN_OVER_CODE =
@@ -61,6 +67,10 @@ export const createDesktopEditSessionToken = () =>
 
 export const hashDesktopEditSessionToken = (sessionToken: string) =>
   new Bun.CryptoHasher("sha256").update(sessionToken).digest("hex");
+
+export const createDesktopEditHandoffToken = createDesktopEditSessionToken;
+
+export const hashDesktopEditHandoffToken = hashDesktopEditSessionToken;
 
 const ADMIN_BYPASS_ROLES = new Set<MemberRole>(["owner", "admin"]);
 

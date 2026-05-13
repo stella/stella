@@ -113,7 +113,7 @@ impl Default for DesktopUpdateSnapshot {
 /// new bridge endpoint or backwards-compatible field is added so
 /// the web side can gate features on `snapshot.bridgeVersion >= N`
 /// without coupling to the desktop's literal app version.
-pub const BRIDGE_VERSION: u32 = 2;
+pub const BRIDGE_VERSION: u32 = 3;
 
 /// Feature flags advertised to the web app. Add a string here
 /// whenever a new capability lands on the bridge so the web app
@@ -142,6 +142,8 @@ pub struct AppSnapshot {
 pub struct OpenDocxRequest {
   pub api_base_url: String,
   pub entity_id: String,
+  #[serde(default)]
+  pub handoff_id: Option<String>,
   pub linked_account: Option<LinkedAccountSnapshot>,
   pub property_id: String,
   pub remote_session: OpenDocxRemoteSession,
@@ -311,6 +313,7 @@ mod tests {
     let req = OpenDocxRequest {
       api_base_url: "https://api.example.com".into(),
       entity_id: "ent-1".into(),
+      handoff_id: None,
       linked_account: None,
       property_id: "prop-1".into(),
       remote_session: OpenDocxRemoteSession {

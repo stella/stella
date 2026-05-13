@@ -232,7 +232,10 @@ type Actions = {
   /** Clear the docx-edit flag once the inspector panel has consumed it. */
   clearDocxEditRequest: () => void;
   clearTaskNewFlag: (taskId: string) => void;
-  replaceFileFieldId: (oldFieldId: string, newFieldId: string) => void;
+  replaceFileFieldId: (
+    oldFieldId: string,
+    replacement: string | FileFieldReplacement,
+  ) => void;
   setFileMetadataLane: (
     tabId: string,
     metadataLane: FileTab["metadataLane"],
@@ -258,6 +261,14 @@ type Actions = {
    *  Cleared after the editor consumes it. */
   requestBlockScroll: (tabId: string, blockId: string) => void;
   clearPendingBlockScroll: () => void;
+};
+
+type FileFieldReplacement = {
+  id: string;
+  label?: string | undefined;
+  mimeType?: string | undefined;
+  pdfFileId?: string | null | undefined;
+  propertyId?: string | undefined;
 };
 
 type InspectorBroadcastScope = {
@@ -950,7 +961,7 @@ export const useInspectorStore = create<State & Actions>()(
         }
       }),
 
-    replaceFileFieldId: (oldFieldId, newFieldId) =>
+    replaceFileFieldId: (oldFieldId, replacement) =>
       set((state) => {
         const tab = state.tabs.find(
           (t) => t.type === "pdf" && t.id === oldFieldId,
@@ -959,16 +970,34 @@ export const useInspectorStore = create<State & Actions>()(
           return;
         }
 
+        const next =
+          typeof replacement === "string" ? { id: replacement } : replacement;
         // Keep the renamed tab, but drop any stale tab already using the target id.
         state.tabs = state.tabs.filter(
-          (t) => t.id === oldFieldId || t.id !== newFieldId,
+          (t) => t.id === oldFieldId || t.id !== next.id,
         );
-        tab.id = newFieldId;
+        const idChanged = tab.id !== next.id;
+        tab.id = next.id;
+        if (idChanged) {
+          tab.renderId = uuidv7();
+        }
         if (tab.justificationFieldId === oldFieldId) {
-          tab.justificationFieldId = newFieldId;
+          tab.justificationFieldId = next.id;
+        }
+        if (next.label) {
+          tab.label = next.label;
+        }
+        if (next.mimeType !== undefined) {
+          tab.mimeType = next.mimeType;
+        }
+        if (next.pdfFileId !== undefined) {
+          tab.pdfFileId = next.pdfFileId;
+        }
+        if (next.propertyId !== undefined) {
+          tab.propertyId = next.propertyId;
         }
         if (state.activeId === oldFieldId) {
-          state.activeId = newFieldId;
+          state.activeId = next.id;
         }
       }),
 

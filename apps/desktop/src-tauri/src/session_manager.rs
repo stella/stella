@@ -13,6 +13,7 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
 use crate::config;
+pub use crate::config::normalize_api_base_url;
 use crate::session_store::{self, PersistedDesktopSession, StoreLoadIssue};
 use crate::types::*;
 
@@ -167,16 +168,6 @@ pub struct SessionManager {
 
 fn session_key(workspace_id: &str, entity_id: &str, property_id: &str) -> String {
   format!("{workspace_id}:{entity_id}:{property_id}")
-}
-
-fn normalize_api_base_url(url: &str) -> String {
-  let normalized = url.strip_suffix('/').unwrap_or(url);
-  match normalized {
-    "https://app.stll.app" | "https://my.stll.app" => {
-      "https://api.stll.app".to_string()
-    }
-    _ => normalized.to_string(),
-  }
 }
 
 fn build_http_client() -> reqwest::Client {
@@ -782,6 +773,13 @@ impl SessionManager {
 
   pub fn session_exists(&self, session_id: &str) -> bool {
     self.sessions.contains_key(session_id)
+  }
+
+  pub fn has_active_edit_sessions(&self) -> bool {
+    self
+      .sessions
+      .values()
+      .any(|session| !session.takeover_detected)
   }
 
   pub async fn mark_session_taken_over_public(
@@ -2123,11 +2121,8 @@ async fn show_takeover_dialog(
       // Register a per-dialog response channel
       let rx = register_takeover_dialog(&label);
 
-      // Wait for the dialog button click (or window close = deny)
-      match rx.await {
-        Ok(approved) => approved,
-        Err(_) => false, // sender dropped (window closed without clicking)
-      }
+      // Wait for the dialog button click. A closed dialog drops the sender and denies.
+      rx.await.unwrap_or_default()
     }
     Err(e) => {
       tracing::warn!(error = %e, "failed to open takeover dialog");

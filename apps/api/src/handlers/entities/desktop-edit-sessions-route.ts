@@ -6,6 +6,13 @@ import {
   checkpointDesktopEditSessionParamsSchema,
 } from "@/api/handlers/entities/checkpoint-desktop-edit-session";
 import {
+  acknowledgeDesktopEditHandoffOpenedBodySchema,
+  acknowledgeDesktopEditHandoffOpenedHandler,
+  acknowledgeDesktopEditHandoffOpenedParamsSchema,
+  redeemDesktopEditHandoffBodySchema,
+  redeemDesktopEditHandoffHandler,
+} from "@/api/handlers/entities/desktop-edit-handoffs";
+import {
   desktopEditSessionEventsHandler,
   desktopEditSessionEventsHeadersSchema,
   desktopEditSessionEventsParamsSchema,
@@ -29,10 +36,26 @@ import {
 } from "@/api/handlers/entities/status-desktop-edit-session";
 
 export const desktopEditSessionsRoute = new Elysia({
-  prefix: "/desktop-edit-sessions",
+  prefix: "",
 })
+  .post(
+    "/desktop-edit-handoffs/redeem",
+    async ({ body }) => await redeemDesktopEditHandoffHandler({ body }),
+    {
+      body: redeemDesktopEditHandoffBodySchema,
+    },
+  )
+  .post(
+    "/desktop-edit-handoffs/:handoffId/opened",
+    async ({ body, params }) =>
+      await acknowledgeDesktopEditHandoffOpenedHandler({ body, params }),
+    {
+      body: acknowledgeDesktopEditHandoffOpenedBodySchema,
+      params: acknowledgeDesktopEditHandoffOpenedParamsSchema,
+    },
+  )
   .get(
-    "/:sessionId/status",
+    "/desktop-edit-sessions/:sessionId/status",
     async ({ headers, params, query }) =>
       await statusDesktopEditSessionHandler({
         headers,
@@ -46,7 +69,7 @@ export const desktopEditSessionsRoute = new Elysia({
     },
   )
   .get(
-    "/:sessionId/events",
+    "/desktop-edit-sessions/:sessionId/events",
     async ({ headers, params, query }) =>
       await desktopEditSessionEventsHandler({
         headers,
@@ -60,7 +83,7 @@ export const desktopEditSessionsRoute = new Elysia({
     },
   )
   .post(
-    "/:sessionId/checkpoint",
+    "/desktop-edit-sessions/:sessionId/checkpoint",
     async ({ body, params }) =>
       await checkpointDesktopEditSessionHandler({
         body,
@@ -72,7 +95,7 @@ export const desktopEditSessionsRoute = new Elysia({
     },
   )
   .post(
-    "/:sessionId/finalize",
+    "/desktop-edit-sessions/:sessionId/finalize",
     async ({ body, params }) =>
       await finalizeDesktopEditSessionHandler({
         body,
@@ -84,7 +107,7 @@ export const desktopEditSessionsRoute = new Elysia({
     },
   )
   .post(
-    "/:sessionId/respond-takeover",
+    "/desktop-edit-sessions/:sessionId/respond-takeover",
     async ({ body, params }) =>
       await respondDesktopEditTakeoverHandler({
         body,

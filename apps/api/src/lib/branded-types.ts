@@ -20,6 +20,7 @@ export type SafeIdType =
   | "clauseVersion"
   | "contact"
   | "contactRelationship"
+  | "desktopEditHandoff"
   | "desktopEditSession"
   | "document"
   | "documentCounter"

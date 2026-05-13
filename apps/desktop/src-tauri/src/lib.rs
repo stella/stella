@@ -1,6 +1,7 @@
 mod bridge;
 mod commands;
 mod config;
+mod deep_link;
 mod i18n;
 mod keychain;
 mod session_manager;
@@ -33,8 +34,24 @@ pub fn run() {
   let allowed_origins = config::resolve_allowed_origins();
 
   let manager = Arc::new(Mutex::new(SessionManager::new()));
+  #[cfg(target_os = "macos")]
+  let manager_for_single_instance = Arc::clone(&manager);
 
   tauri::Builder::default()
+    .plugin(tauri_plugin_single_instance::init(
+      move |_app, _args, _cwd| {
+        #[cfg(target_os = "macos")]
+        for arg in _args {
+          if arg.starts_with("stella://") {
+            deep_link::handle_url(
+              &arg,
+              Arc::clone(&manager_for_single_instance),
+              _app.clone(),
+            );
+          }
+        }
+      },
+    ))
     .plugin(tauri_plugin_autostart::init(
       MacosLauncher::LaunchAgent,
       None,
@@ -110,7 +127,18 @@ pub fn run() {
                 ensure_main_window(&handle, tab);
               }
               tray::MenuAction::CheckForUpdates => {
-                match updater::run_check(&handle).await {
+                let active_edit_sessions = {
+                  let mgr = manager.lock().await;
+                  mgr.has_active_edit_sessions()
+                };
+
+                match updater::run_check(&handle, active_edit_sessions).await {
+                  updater::CheckOutcome::Deferred { version } => {
+                    tracing::info!(
+                        version = %version,
+                        "tray-triggered updater check deferred while desktop edits are active"
+                    );
+                  }
                   updater::CheckOutcome::UpToDate => {
                     if let Err(err) = handle
                       .notification()
@@ -196,7 +224,7 @@ pub fn run() {
       }
 
       // Check for updates in the background after launch settles.
-      updater::schedule_startup_check(handle.clone());
+      updater::schedule_startup_check(handle.clone(), Arc::clone(&manager));
 
       // Hide dock icon on macOS (tray-only app)
       #[cfg(target_os = "macos")]
@@ -207,13 +235,39 @@ pub fn run() {
       // Register deep link handler
       {
         use tauri_plugin_deep_link::DeepLinkExt;
+        let manager_for_deep_link = Arc::clone(&manager);
+        let handle_for_deep_link = handle.clone();
+        let handle_deep_link_urls = move |urls: Vec<reqwest::Url>| {
+          for url in urls {
+            tracing::info!(
+                scheme = %url.scheme(),
+                "deep link received"
+            );
+            deep_link::handle_url(
+              url.as_str(),
+              Arc::clone(&manager_for_deep_link),
+              handle_for_deep_link.clone(),
+            );
+          }
+        };
+
+        if let Some(urls) = app.deep_link().get_current()? {
+          handle_deep_link_urls(urls);
+        }
+
+        let manager_for_deep_link = Arc::clone(&manager);
+        let handle_for_deep_link = handle.clone();
         let _ = app.deep_link().on_open_url(move |event| {
           for url in event.urls() {
             tracing::info!(
                 scheme = %url.scheme(),
                 "deep link received"
             );
-            // stella://ping — no-op, just proves the app is running
+            deep_link::handle_url(
+              url.as_str(),
+              Arc::clone(&manager_for_deep_link),
+              handle_for_deep_link.clone(),
+            );
           }
         });
       }

@@ -36,6 +36,10 @@ Runtime bridge configuration:
   - Comma-separated exact web origins allowed to call the privileged localhost bridge
   - Read at runtime; appended to the built-in defaults (loopback + hosted SPA)
   - Use this for selfhost or staging origins
+- `STELLA_DESKTOP_ALLOWED_API_BASE_URLS`
+  - Comma-separated exact API base URLs allowed for desktop-edit deep links
+  - Read at runtime; appended to the built-in hosted API default
+  - Use HTTPS URLs for selfhost or staging APIs
 - `STELLA_DESKTOP_BRIDGE_PORT`
   - Optional override for the localhost bridge port during development
 - `STELLA_DESKTOP_VIEW_PORT`
