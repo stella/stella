@@ -46,11 +46,74 @@ describe("probeProvider", () => {
     expect(result).toEqual({ valid: true });
     expect(captured.url?.searchParams.get("api-version")).toBe("v1");
   });
+
+  test("Azure probe accepts when every expected deployment is listed", async () => {
+    mockAzureListModelsResponse([
+      { id: "gpt-5-chat" },
+      { id: "gpt-5-mini" },
+      { id: "gpt-5-reasoning" },
+    ]);
+
+    const result = await probeProvider(
+      "azure_foundry",
+      "azure-key",
+      "https://example.openai.azure.com/openai/v1",
+      undefined,
+      ["gpt-5-chat", "gpt-5-mini"],
+    );
+
+    expect(result).toEqual({ valid: true });
+  });
+
+  test("Azure probe rejects when an expected deployment is missing", async () => {
+    mockAzureListModelsResponse([{ id: "gpt-5-chat" }]);
+
+    const result = await probeProvider(
+      "azure_foundry",
+      "azure-key",
+      "https://example.openai.azure.com/openai/v1",
+      undefined,
+      ["gpt-5-chat", "typo-deployment"],
+    );
+
+    expect(result).toEqual({
+      valid: false,
+      error: "Azure Foundry deployment not found: typo-deployment",
+    });
+  });
+
+  test("Azure probe treats a malformed list-models body as zero deployments", async () => {
+    mockAzureListModelsResponse("not-an-object");
+
+    const result = await probeProvider(
+      "azure_foundry",
+      "azure-key",
+      "https://example.openai.azure.com/openai/v1",
+      undefined,
+      ["any-deployment"],
+    );
+
+    expect(result).toEqual({
+      valid: false,
+      error: "Azure Foundry deployment not found: any-deployment",
+    });
+  });
 });
 
 type CapturedAzureProbeRequest = {
   apiKey?: string | null;
   url?: URL;
+};
+
+const mockAzureListModelsResponse = (data: unknown): void => {
+  const body = Array.isArray(data)
+    ? JSON.stringify({ object: "list", data })
+    : JSON.stringify(data);
+  const mockFetch: typeof fetch = Object.assign(
+    async () => new Response(body, { status: 200 }),
+    { preconnect: originalFetch.preconnect },
+  );
+  globalThis.fetch = mockFetch;
 };
 
 const captureAzureProbeRequest = (): CapturedAzureProbeRequest => {
