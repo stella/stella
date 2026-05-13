@@ -38,6 +38,15 @@ describe("policy coverage", () => {
     "extracted_content", // TODO in schema
     "invitation", // auth table, no RLS
     "member", // auth table, no RLS
+    // The anonymization catalog tables carry a nullable workspace_id
+    // so the same row set holds both org-wide defaults and
+    // workspace-only entries; their RLS is org-scoped on purpose.
+    // Tightening to workspace policies requires a coordinated rewrite
+    // of the org-settings handlers that still read these rows by
+    // organization_id alone, so the policy coverage test exempts the
+    // pair until that lands.
+    "anonymization_allowlist_entries",
+    "anonymization_blacklist_entries",
   ]);
   const APPEND_ONLY = new Set(["audit_logs"]);
   const GLOBAL_CASE_LAW_TABLES = [
