@@ -1775,7 +1775,7 @@
         "takeoverWaitingDescription": "Prašoma {name} atlaisvinti užraktą...",
         "unavailableDescription": "Prieš redaguodami darbalaukyje paleiskite stella desktop ir palikite ją veikti.",
         "unavailableTitle": "Stella desktop nepasiekiama.",
-        "updateRequiredDescription": "stella desktop reikia atnaujinimo. Ji turėtų atsinaujinti automatiškai; bandykite dar kartą po paleidimo iš naujo.",
+        "updateRequiredDescription": "stella desktop reikia atnaujinimo. Ji atsinaujins automatiškai, kai bus baigti aktyvūs darbalaukio redagavimai; bandykite dar kartą po paleidimo iš naujo.",
         "updateRequiredTitle": "Atnaujinkite stella desktop"
       },
       "downloadAsZip": "Atsisiųsti .zip failą",

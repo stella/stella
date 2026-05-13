@@ -1775,7 +1775,7 @@
         "takeoverWaitingDescription": "Pidiendo a {name} que libere el bloqueo...",
         "unavailableDescription": "Inicia stella desktop y mantenlo abierto antes de usar la edición de escritorio.",
         "unavailableTitle": "Stella desktop no está disponible.",
-        "updateRequiredDescription": "stella desktop necesita una actualización. Debería actualizarse automáticamente; inténtalo de nuevo después de que se reinicie.",
+        "updateRequiredDescription": "stella desktop necesita una actualización. Se actualizará automáticamente cuando terminen las ediciones de escritorio activas; inténtalo de nuevo después de que se reinicie.",
         "updateRequiredTitle": "Actualiza stella desktop"
       },
       "downloadAsZip": "Descargar archivo .zip",

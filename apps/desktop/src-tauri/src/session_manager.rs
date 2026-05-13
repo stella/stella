@@ -775,6 +775,13 @@ impl SessionManager {
     self.sessions.contains_key(session_id)
   }
 
+  pub fn has_active_edit_sessions(&self) -> bool {
+    self
+      .sessions
+      .values()
+      .any(|session| !session.takeover_detected)
+  }
+
   pub async fn mark_session_taken_over_public(
     &mut self,
     session_id: &str,

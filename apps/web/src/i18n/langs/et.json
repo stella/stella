@@ -1775,7 +1775,7 @@
         "takeoverWaitingDescription": "Palume {name} lukku vabastada...",
         "unavailableDescription": "Käivita stella desktop ja hoia see töös enne töölaual redigeerimise kasutamist.",
         "unavailableTitle": "Stella desktop pole saadaval.",
-        "updateRequiredDescription": "stella desktop vajab värskendust. See peaks värskenduma automaatselt; proovige pärast taaskäivitumist uuesti.",
+        "updateRequiredDescription": "stella desktop vajab värskendust. See värskendub automaatselt, kui aktiivsed töölauamuudatused on lõpetatud; proovige pärast taaskäivitumist uuesti.",
         "updateRequiredTitle": "Värskendage stella desktop"
       },
       "downloadAsZip": "Laadi alla .zip-fail",

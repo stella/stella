@@ -127,7 +127,18 @@ pub fn run() {
                 ensure_main_window(&handle, tab);
               }
               tray::MenuAction::CheckForUpdates => {
-                match updater::run_check(&handle).await {
+                let active_edit_sessions = {
+                  let mgr = manager.lock().await;
+                  mgr.has_active_edit_sessions()
+                };
+
+                match updater::run_check(&handle, active_edit_sessions).await {
+                  updater::CheckOutcome::Deferred { version } => {
+                    tracing::info!(
+                        version = %version,
+                        "tray-triggered updater check deferred while desktop edits are active"
+                    );
+                  }
                   updater::CheckOutcome::UpToDate => {
                     if let Err(err) = handle
                       .notification()
@@ -213,7 +224,7 @@ pub fn run() {
       }
 
       // Check for updates in the background after launch settles.
-      updater::schedule_startup_check(handle.clone());
+      updater::schedule_startup_check(handle.clone(), Arc::clone(&manager));
 
       // Hide dock icon on macOS (tray-only app)
       #[cfg(target_os = "macos")]

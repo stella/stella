@@ -1775,7 +1775,7 @@
         "takeoverWaitingDescription": "{name} wird gebeten, die Sperre freizugeben...",
         "unavailableDescription": "Starten Sie stella desktop und lassen Sie die App geöffnet, bevor Sie die Desktop-Bearbeitung verwenden.",
         "unavailableTitle": "Stella desktop ist nicht verfügbar.",
-        "updateRequiredDescription": "stella desktop muss aktualisiert werden. Die Aktualisierung sollte automatisch starten; versuchen Sie es nach dem Neustart erneut.",
+        "updateRequiredDescription": "stella desktop muss aktualisiert werden. Die Aktualisierung erfolgt automatisch, sobald aktive Desktop-Bearbeitungen abgeschlossen sind; versuchen Sie es nach dem Neustart erneut.",
         "updateRequiredTitle": "stella desktop aktualisieren"
       },
       "downloadAsZip": "Als .zip herunterladen",

@@ -1778,7 +1778,7 @@ type Messages = {
         "takeoverWaitingDescription": "Asking {name} to release the lock...";
         "unavailableDescription": "Start stella desktop and keep it running before using desktop editing.";
         "unavailableTitle": "Stella desktop is not available.";
-        "updateRequiredDescription": "stella desktop needs an update. It should update automatically; try again after it restarts.";
+        "updateRequiredDescription": "stella desktop needs an update. It will update automatically when active desktop edits are finished; try again after it restarts.";
         "updateRequiredTitle": "Update stella desktop";
       };
       "downloadAsZip": "Download as ZIP";

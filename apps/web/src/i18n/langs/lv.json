@@ -1775,7 +1775,7 @@
         "takeoverWaitingDescription": "Lūdzam {name} atbrīvot bloķēšanu...",
         "unavailableDescription": "Pirms rediģēšanas datora lietotnē palaidiet stella desktop un atstājiet to ieslēgtu.",
         "unavailableTitle": "Stella desktop nav pieejams.",
-        "updateRequiredDescription": "stella desktop ir jāatjaunina. Atjaunināšanai būtu jānotiek automātiski; mēģiniet vēlreiz pēc restartēšanas.",
+        "updateRequiredDescription": "stella desktop ir jāatjaunina. Tas atjaunināsies automātiski, kad aktīvie darbvirsmas labojumi būs pabeigti; mēģiniet vēlreiz pēc restartēšanas.",
         "updateRequiredTitle": "Atjauniniet stella desktop"
       },
       "downloadAsZip": "Lejupielādēt .zip failu",

@@ -100,7 +100,18 @@ pub fn handle_url(
           return;
         }
 
-        match updater::run_check(&app_handle).await {
+        let active_edit_sessions = {
+          let mgr = manager.lock().await;
+          mgr.has_active_edit_sessions()
+        };
+
+        match updater::run_check(&app_handle, active_edit_sessions).await {
+          updater::CheckOutcome::Deferred { version } => {
+            tracing::debug!(
+                version = %version,
+                "deep link updater check deferred while desktop edits are active"
+            );
+          }
           updater::CheckOutcome::UpToDate => {
             tracing::debug!("deep link updater check: up to date");
           }

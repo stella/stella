@@ -1775,7 +1775,7 @@
         "takeoverWaitingDescription": "Demande à {name} de libérer le verrou...",
         "unavailableDescription": "Lancez stella desktop et laissez-le ouvert avant d’utiliser l’édition sur le bureau.",
         "unavailableTitle": "Stella desktop n’est pas disponible.",
-        "updateRequiredDescription": "stella desktop doit être mis à jour. La mise à jour devrait se lancer automatiquement; réessayez après son redémarrage.",
+        "updateRequiredDescription": "stella desktop doit être mis à jour. La mise à jour se lancera automatiquement lorsque les modifications desktop actives seront terminées; réessayez après son redémarrage.",
         "updateRequiredTitle": "Mettre à jour stella desktop"
       },
       "downloadAsZip": "Télécharger en .zip",
