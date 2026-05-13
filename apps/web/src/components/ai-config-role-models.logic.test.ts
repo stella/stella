@@ -230,13 +230,18 @@ describe("BYOK provider and model configuration", () => {
     ).toBeNull();
   });
 
-  test("blocks serialization when a configured provider is unused", () => {
+  test("allows configured providers that are not assigned to a role", () => {
     expect(
       serializeOverrideModels({
         providers: ["openai", "anthropic"],
         roleModels: createDefaultRoleModels(["openai"]),
       }),
-    ).toBeNull();
+    ).toEqual({
+      chat: { provider: "openai", modelId: "gpt-5.4-mini" },
+      fast: { provider: "openai", modelId: "gpt-5.4-nano" },
+      reasoning: { provider: "openai", modelId: "gpt-5.4" },
+      pdf: { provider: "openai", modelId: "gpt-5.4" },
+    });
   });
 
   test("keeps selected models only while their provider remains configured", () => {
