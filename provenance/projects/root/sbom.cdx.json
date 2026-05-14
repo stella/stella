@@ -416,7 +416,7 @@
       "version": "3.0.35"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/openai@3.0.58",
+      "bom-ref": "pkg:npm/@ai-sdk/openai@3.0.61",
       "evidence": {
         "identity": [
           {
@@ -462,64 +462,6 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@ai-sdk/openai/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40ai-sdk/openai@3.0.58",
-      "scope": "required",
-      "tags": [
-        "framework",
-        "ml"
-      ],
-      "type": "framework",
-      "version": "3.0.58"
-    },
-    {
-      "bom-ref": "pkg:npm/@ai-sdk/openai@3.0.61",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@ai-sdk/azure/node_modules/@ai-sdk/openai/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@ai-sdk/azure/node_modules/@ai-sdk/openai/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/lib/ai-models.ts#28"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://ai-sdk.dev/docs"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/vercel/ai"
-        }
-      ],
-      "group": "@ai-sdk",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-          }
-        }
-      ],
-      "name": "openai",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@ai-sdk/azure/node_modules/@ai-sdk/openai/package.json"
         }
       ],
       "purl": "pkg:npm/%40ai-sdk/openai@3.0.61",
@@ -3987,7 +3929,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1041.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1045.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -4036,13 +3978,13 @@
           "value": "node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1041.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1045.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1041.0"
+      "version": "3.1045.0"
     },
     {
       "authors": [
@@ -5778,7 +5720,7 @@
           "name": "OpenTelemetry Authors"
         }
       ],
-      "bom-ref": "pkg:npm/@opentelemetry/api-logs@0.216.0",
+      "bom-ref": "pkg:npm/@opentelemetry/api-logs@0.217.0",
       "description": "Public logs API for OpenTelemetry",
       "evidence": {
         "identity": [
@@ -5826,13 +5768,13 @@
           "value": "node_modules/@opentelemetry/api-logs/package.json"
         }
       ],
-      "purl": "pkg:npm/%40opentelemetry/api-logs@0.216.0",
+      "purl": "pkg:npm/%40opentelemetry/api-logs@0.217.0",
       "scope": "required",
       "tags": [
         "api"
       ],
       "type": "library",
-      "version": "0.216.0"
+      "version": "0.217.0"
     },
     {
       "authors": [
@@ -7550,7 +7492,7 @@
       "version": "0.0.5"
     },
     {
-      "bom-ref": "pkg:npm/@stll/anonymize-wasm@1.1.1",
+      "bom-ref": "pkg:npm/@stll/anonymize-wasm@1.2.0",
       "description": "PII detection and anonymization for browsers via WebAssembly. Same API as @stll/anonymize.",
       "evidence": {
         "identity": [
@@ -7631,13 +7573,13 @@
           "value": "node_modules/@stll/anonymize-wasm/package.json"
         }
       ],
-      "purl": "pkg:npm/%40stll/anonymize-wasm@1.1.1",
+      "purl": "pkg:npm/%40stll/anonymize-wasm@1.2.0",
       "scope": "required",
       "tags": [
         "api"
       ],
       "type": "library",
-      "version": "1.1.1"
+      "version": "1.2.0"
     },
     {
       "bom-ref": "pkg:npm/@stll/api@0.0.0",
@@ -8578,6 +8520,9 @@
           },
           {
             "location": "apps/web/src/lib/auth.ts#12"
+          },
+          {
+            "location": "apps/web/src/lib/desktop-edit-status-toast.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.organization/-mutations.ts#4"
@@ -12116,7 +12061,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-router@1.169.1",
+      "bom-ref": "pkg:npm/@tanstack/react-router@1.169.2",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -12480,10 +12425,10 @@
           "value": "node_modules/@tanstack/react-router/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-router@1.169.1",
+      "purl": "pkg:npm/%40tanstack/react-router@1.169.2",
       "scope": "required",
       "type": "library",
-      "version": "1.169.1"
+      "version": "1.169.2"
     },
     {
       "authors": [
@@ -14678,7 +14623,7 @@
           "name": "Fabian Hiller"
         }
       ],
-      "bom-ref": "pkg:npm/@valibot/to-json-schema@1.6.0",
+      "bom-ref": "pkg:npm/@valibot/to-json-schema@1.7.0",
       "description": "The official JSON schema converter for Valibot",
       "evidence": {
         "identity": [
@@ -14733,13 +14678,13 @@
           "value": "node_modules/@valibot/to-json-schema/package.json"
         }
       ],
-      "purl": "pkg:npm/%40valibot/to-json-schema@1.6.0",
+      "purl": "pkg:npm/%40valibot/to-json-schema@1.7.0",
       "scope": "required",
       "tags": [
         "json"
       ],
       "type": "library",
-      "version": "1.6.0"
+      "version": "1.7.0"
     },
     {
       "bom-ref": "pkg:npm/ai@6.0.174",
@@ -14943,7 +14888,7 @@
           "name": "withastro"
         }
       ],
-      "bom-ref": "pkg:npm/astro@6.2.1",
+      "bom-ref": "pkg:npm/astro@6.3.1",
       "description": "Astro is a modern site builder with web best practices, performance, and DX front-of-mind.",
       "evidence": {
         "identity": [
@@ -14998,13 +14943,13 @@
           "value": "node_modules/astro/package.json"
         }
       ],
-      "purl": "pkg:npm/astro@6.2.1",
+      "purl": "pkg:npm/astro@6.3.1",
       "scope": "required",
       "tags": [
         "web"
       ],
       "type": "library",
-      "version": "6.2.1"
+      "version": "6.3.1"
     },
     {
       "bom-ref": "pkg:npm/better-auth@1.6.9",
@@ -15115,7 +15060,7 @@
           "name": "Dillon Mulroy <dillon.mulroy@gmail.com> (https://github.com/dmmulroy)"
         }
       ],
-      "bom-ref": "pkg:npm/better-result@2.9.1",
+      "bom-ref": "pkg:npm/better-result@2.9.2",
       "description": "Lightweight Result type with generator-based composition",
       "evidence": {
         "identity": [
@@ -15357,6 +15302,9 @@
           },
           {
             "location": "apps/api/src/handlers/entities/delete.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/desktop-edit-handoffs.ts#1"
           },
           {
             "location": "apps/api/src/handlers/entities/download-zip.ts#1"
@@ -16058,10 +16006,10 @@
           "value": "node_modules/better-result/package.json"
         }
       ],
-      "purl": "pkg:npm/better-result@2.9.1",
+      "purl": "pkg:npm/better-result@2.9.2",
       "scope": "required",
       "type": "library",
-      "version": "2.9.1"
+      "version": "2.9.2"
     },
     {
       "authors": [
@@ -16939,6 +16887,9 @@
             "location": "apps/api/src/handlers/entities/delete.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/entities/desktop-edit-handoffs.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/entities/desktop-edit-session-utils.ts#1"
           },
           {
@@ -17300,6 +17251,9 @@
           },
           {
             "location": "apps/api/src/lib/db/assert-migrations-applied.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/desktop-edit-handoffs.ts#1"
           },
           {
             "location": "apps/api/src/lib/desktop-edit-sessions.ts#1"
@@ -17744,6 +17698,12 @@
           },
           {
             "location": "apps/api/src/handlers/entities/delete.ts#4"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/desktop-edit-handoffs.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/desktop-edit-handoffs.ts#4"
           },
           {
             "location": "apps/api/src/handlers/entities/desktop-edit-session-events.ts#1"
@@ -20848,7 +20808,7 @@
       "version": "0.32.0"
     },
     {
-      "bom-ref": "pkg:npm/react-dom@19.2.5",
+      "bom-ref": "pkg:npm/react-dom@19.2.6",
       "description": "React package for working with the DOM.",
       "evidence": {
         "identity": [
@@ -20924,16 +20884,16 @@
           "value": "node_modules/react-dom/package.json"
         }
       ],
-      "purl": "pkg:npm/react-dom@19.2.5",
+      "purl": "pkg:npm/react-dom@19.2.6",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "19.2.5"
+      "version": "19.2.6"
     },
     {
-      "bom-ref": "pkg:npm/react@19.2.5",
+      "bom-ref": "pkg:npm/react@19.2.6",
       "description": "React is a JavaScript library for building user interfaces.",
       "evidence": {
         "identity": [
@@ -22035,13 +21995,13 @@
           "value": "node_modules/react/package.json"
         }
       ],
-      "purl": "pkg:npm/react@19.2.5",
+      "purl": "pkg:npm/react@19.2.6",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "19.2.5"
+      "version": "19.2.6"
     },
     {
       "authors": [
@@ -23285,7 +23245,7 @@
           "name": "Fabian Hiller"
         }
       ],
-      "bom-ref": "pkg:npm/valibot@1.3.1",
+      "bom-ref": "pkg:npm/valibot@1.4.0",
       "description": "The modular and type safe schema library for validating structural data",
       "evidence": {
         "identity": [
@@ -23490,10 +23450,10 @@
           "value": "node_modules/valibot/package.json"
         }
       ],
-      "purl": "pkg:npm/valibot@1.3.1",
+      "purl": "pkg:npm/valibot@1.4.0",
       "scope": "required",
       "type": "library",
-      "version": "1.3.1"
+      "version": "1.4.0"
     },
     {
       "authors": [
@@ -23501,7 +23461,7 @@
           "name": "Paul Henschel"
         }
       ],
-      "bom-ref": "pkg:npm/zustand@5.0.12",
+      "bom-ref": "pkg:npm/zustand@5.0.13",
       "description": "🐻 Bear necessities for state management in React",
       "evidence": {
         "identity": [
@@ -23754,13 +23714,13 @@
           "value": "node_modules/zustand/package.json"
         }
       ],
-      "purl": "pkg:npm/zustand@5.0.12",
+      "purl": "pkg:npm/zustand@5.0.13",
       "scope": "required",
       "tags": [
         "middleware"
       ],
       "type": "library",
-      "version": "5.0.12"
+      "version": "5.0.13"
     }
   ],
   "compositions": [
