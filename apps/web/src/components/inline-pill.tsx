@@ -34,7 +34,7 @@ import Tooltip from "@/components/tooltip";
  * text, no box) or the source-chip tray above message bodies
  * (different shell shape and lives outside the prose flow).
  */
-export type InlinePillTone = "accent" | "success";
+export type InlinePillTone = "accent" | "info" | "success";
 export type InlinePillSize = "chip" | "inherit";
 
 type InlinePillProps = {
@@ -63,16 +63,19 @@ type InlinePillProps = {
 
 const TONE_BASE: Record<InlinePillTone, string> = {
   accent: "bg-accent text-accent-foreground",
+  info: "bg-info/12 text-info",
   success: "bg-success/12 text-success",
 };
 
 const TONE_INTERACTIVE: Record<InlinePillTone, string> = {
   accent: "hover:bg-accent/80",
+  info: "hover:bg-info/20",
   success: "hover:bg-success/20",
 };
 
 const TONE_FOCUS_RING: Record<InlinePillTone, string> = {
   accent: "focus-visible:ring-accent/50",
+  info: "focus-visible:ring-info/50",
   success: "focus-visible:ring-success/50",
 };
 

@@ -47,6 +47,7 @@ import { Route as ProtectedWorkspacesWorkspaceIdInvoicesRouteImport } from './ro
 import { Route as ProtectedWorkspacesWorkspaceIdExpensesRouteImport } from './routes/_protected.workspaces/$workspaceId/expenses'
 import { Route as ProtectedSettingsOrganizationMembersRouteImport } from './routes/_protected.settings/organization.members'
 import { Route as ProtectedSettingsOrganizationMatterNumberingRouteImport } from './routes/_protected.settings/organization.matter-numbering'
+import { Route as ProtectedSettingsOrganizationAnonymizationRouteImport } from './routes/_protected.settings/organization.anonymization'
 import { Route as ProtectedSettingsOrganizationAiRouteImport } from './routes/_protected.settings/organization.ai'
 import { Route as ProtectedSettingsAccountProfileRouteImport } from './routes/_protected.settings/account.profile'
 import { Route as ProtectedSettingsAccountDesktopRouteImport } from './routes/_protected.settings/account.desktop'
@@ -265,6 +266,12 @@ const ProtectedSettingsOrganizationMatterNumberingRoute =
     path: '/matter-numbering',
     getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
   } as any)
+const ProtectedSettingsOrganizationAnonymizationRoute =
+  ProtectedSettingsOrganizationAnonymizationRouteImport.update({
+    id: '/anonymization',
+    path: '/anonymization',
+    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
+  } as any)
 const ProtectedSettingsOrganizationAiRoute =
   ProtectedSettingsOrganizationAiRouteImport.update({
     id: '/ai',
@@ -367,6 +374,7 @@ export interface FileRoutesByFullPath {
   '/settings/account/desktop': typeof ProtectedSettingsAccountDesktopRoute
   '/settings/account/profile': typeof ProtectedSettingsAccountProfileRoute
   '/settings/organization/ai': typeof ProtectedSettingsOrganizationAiRoute
+  '/settings/organization/anonymization': typeof ProtectedSettingsOrganizationAnonymizationRoute
   '/settings/organization/matter-numbering': typeof ProtectedSettingsOrganizationMatterNumberingRoute
   '/settings/organization/members': typeof ProtectedSettingsOrganizationMembersRoute
   '/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
@@ -409,6 +417,7 @@ export interface FileRoutesByTo {
   '/settings/account/desktop': typeof ProtectedSettingsAccountDesktopRoute
   '/settings/account/profile': typeof ProtectedSettingsAccountProfileRoute
   '/settings/organization/ai': typeof ProtectedSettingsOrganizationAiRoute
+  '/settings/organization/anonymization': typeof ProtectedSettingsOrganizationAnonymizationRoute
   '/settings/organization/matter-numbering': typeof ProtectedSettingsOrganizationMatterNumberingRoute
   '/settings/organization/members': typeof ProtectedSettingsOrganizationMembersRoute
   '/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
@@ -461,6 +470,7 @@ export interface FileRoutesById {
   '/_protected/settings/account/desktop': typeof ProtectedSettingsAccountDesktopRoute
   '/_protected/settings/account/profile': typeof ProtectedSettingsAccountProfileRoute
   '/_protected/settings/organization/ai': typeof ProtectedSettingsOrganizationAiRoute
+  '/_protected/settings/organization/anonymization': typeof ProtectedSettingsOrganizationAnonymizationRoute
   '/_protected/settings/organization/matter-numbering': typeof ProtectedSettingsOrganizationMatterNumberingRoute
   '/_protected/settings/organization/members': typeof ProtectedSettingsOrganizationMembersRoute
   '/_protected/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
@@ -513,6 +523,7 @@ export interface FileRouteTypes {
     | '/settings/account/desktop'
     | '/settings/account/profile'
     | '/settings/organization/ai'
+    | '/settings/organization/anonymization'
     | '/settings/organization/matter-numbering'
     | '/settings/organization/members'
     | '/workspaces/$workspaceId/expenses'
@@ -555,6 +566,7 @@ export interface FileRouteTypes {
     | '/settings/account/desktop'
     | '/settings/account/profile'
     | '/settings/organization/ai'
+    | '/settings/organization/anonymization'
     | '/settings/organization/matter-numbering'
     | '/settings/organization/members'
     | '/workspaces/$workspaceId/expenses'
@@ -606,6 +618,7 @@ export interface FileRouteTypes {
     | '/_protected/settings/account/desktop'
     | '/_protected/settings/account/profile'
     | '/_protected/settings/organization/ai'
+    | '/_protected/settings/organization/anonymization'
     | '/_protected/settings/organization/matter-numbering'
     | '/_protected/settings/organization/members'
     | '/_protected/workspaces/$workspaceId/expenses'
@@ -900,6 +913,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedSettingsOrganizationMatterNumberingRouteImport
       parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
     }
+    '/_protected/settings/organization/anonymization': {
+      id: '/_protected/settings/organization/anonymization'
+      path: '/anonymization'
+      fullPath: '/settings/organization/anonymization'
+      preLoaderRoute: typeof ProtectedSettingsOrganizationAnonymizationRouteImport
+      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
+    }
     '/_protected/settings/organization/ai': {
       id: '/_protected/settings/organization/ai'
       path: '/ai'
@@ -1063,6 +1083,7 @@ const ProtectedKnowledgeRouteRouteWithChildren =
 
 interface ProtectedSettingsOrganizationRouteRouteChildren {
   ProtectedSettingsOrganizationAiRoute: typeof ProtectedSettingsOrganizationAiRoute
+  ProtectedSettingsOrganizationAnonymizationRoute: typeof ProtectedSettingsOrganizationAnonymizationRoute
   ProtectedSettingsOrganizationMatterNumberingRoute: typeof ProtectedSettingsOrganizationMatterNumberingRoute
   ProtectedSettingsOrganizationMembersRoute: typeof ProtectedSettingsOrganizationMembersRoute
   ProtectedSettingsOrganizationIndexRoute: typeof ProtectedSettingsOrganizationIndexRoute
@@ -1071,6 +1092,8 @@ interface ProtectedSettingsOrganizationRouteRouteChildren {
 const ProtectedSettingsOrganizationRouteRouteChildren: ProtectedSettingsOrganizationRouteRouteChildren =
   {
     ProtectedSettingsOrganizationAiRoute: ProtectedSettingsOrganizationAiRoute,
+    ProtectedSettingsOrganizationAnonymizationRoute:
+      ProtectedSettingsOrganizationAnonymizationRoute,
     ProtectedSettingsOrganizationMatterNumberingRoute:
       ProtectedSettingsOrganizationMatterNumberingRoute,
     ProtectedSettingsOrganizationMembersRoute:

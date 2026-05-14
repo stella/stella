@@ -52,6 +52,7 @@ const createBoundary = (
 ): Extract<ChatThirdPartyBoundary, { type: "anonymized" }> => ({
   anonymizationScopeId: "workspace-A",
   gazetteerEntries: Promise.resolve([]),
+  excludedCanonicals: Promise.resolve([]),
   organizationId: toSafeId<"organization">("org_test"),
   pipelineContext: createPipelineContext(),
   redactionMap: new Map(pairs),

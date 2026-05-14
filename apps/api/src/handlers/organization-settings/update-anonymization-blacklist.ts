@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
@@ -39,6 +39,10 @@ const updateAnonymizationBlacklist = createSafeRootHandler(
       return Result.err(entries.error);
     }
 
+    // Restrict every read/write below to org-wide rows
+    // (workspace_id IS NULL). Workspace-scoped terms created from
+    // the inspector live in the same table and must not be visible
+    // to — or deletable by — the firm-wide settings page.
     yield* Result.await(
       safeDb(async (tx) => {
         const existingRows = await tx
@@ -48,9 +52,12 @@ const updateAnonymizationBlacklist = createSafeRootHandler(
           })
           .from(anonymizationBlacklistEntries)
           .where(
-            eq(
-              anonymizationBlacklistEntries.organizationId,
-              session.activeOrganizationId,
+            and(
+              eq(
+                anonymizationBlacklistEntries.organizationId,
+                session.activeOrganizationId,
+              ),
+              isNull(anonymizationBlacklistEntries.workspaceId),
             ),
           );
 
@@ -77,6 +84,7 @@ const updateAnonymizationBlacklist = createSafeRootHandler(
                   anonymizationBlacklistEntries.organizationId,
                   session.activeOrganizationId,
                 ),
+                isNull(anonymizationBlacklistEntries.workspaceId),
                 inArray(anonymizationBlacklistEntries.id, idsToDelete),
               ),
             );
@@ -111,6 +119,7 @@ const updateAnonymizationBlacklist = createSafeRootHandler(
                     anonymizationBlacklistEntries.organizationId,
                     session.activeOrganizationId,
                   ),
+                  isNull(anonymizationBlacklistEntries.workspaceId),
                 ),
               );
             continue;

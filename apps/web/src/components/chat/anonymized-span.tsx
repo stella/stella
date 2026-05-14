@@ -51,7 +51,7 @@ export const AnonymizedSpan = ({
       <span
         aria-label={label}
         className={cn(
-          "bg-success/12 text-success rounded px-1 align-baseline select-all",
+          "bg-info/12 text-info rounded px-1 align-baseline select-all",
           className,
         )}
         title={label}
@@ -67,7 +67,7 @@ export const AnonymizedSpan = ({
       className={cn("align-baseline select-all", className)}
       size="inherit"
       title={label}
-      tone="success"
+      tone="info"
       tooltip={label}
     >
       {children}

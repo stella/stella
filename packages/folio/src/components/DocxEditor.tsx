@@ -154,6 +154,7 @@ import {
 import { createStarterKit } from "../core/prosemirror/extensions/StarterKit";
 import { createAICitationDecorationsPlugin } from "../core/prosemirror/plugins/aiCitationDecorations";
 import { createAISuggestionDecorationsPlugin } from "../core/prosemirror/plugins/aiSuggestionDecorations";
+import { createAnonymizationDecorationsPlugin } from "../core/prosemirror/plugins/anonymizationDecorations";
 import {
   createSuggestionModePlugin,
   setSuggestionMode,
@@ -372,6 +373,16 @@ export type DocxEditorProps = {
    * (decoration meta, apply, scroll-to) from outside the editor.
    */
   onEditorViewReady?: (view: EditorView | null) => void;
+  /**
+   * Fires with the current anonymization match list every time
+   * the decoration plugin recomputes it (initial mount, term
+   * push, doc edit, async DOCX load). The host uses this to
+   * mirror per-document counts and "matching workspace terms"
+   * to the inspector facet without polling the plugin state.
+   */
+  onAnonymizationMatchesChange?: (
+    matches: readonly import("../core/prosemirror/plugins/anonymizationDecorations").AnonymizationMatch[],
+  ) => void;
 };
 
 /**
@@ -675,6 +686,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       onReadonlyEditAttempt,
       onCompatibilityChange,
       onEditorViewReady,
+      onAnonymizationMatchesChange,
     },
     ref,
   ) {
@@ -977,9 +989,41 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       () => createAICitationDecorationsPlugin(),
       [],
     );
+    // Workspace anonymization-term highlights. Always installed;
+    // renders nothing until the host pushes a term list via
+    // `setAnonymizationTermsMeta`.
+    // Hold the callback in a ref so the plugin instance is stable
+    // across re-renders even when the parent passes a fresh
+    // closure each time. The ref always points at the latest
+    // function, so the plugin's view spec calls into the most
+    // recent host implementation without forcing PM to swap
+    // plugins (which would reset its state).
+    const onAnonymizationMatchesChangeRef = useRef(
+      onAnonymizationMatchesChange,
+    );
+    onAnonymizationMatchesChangeRef.current = onAnonymizationMatchesChange;
+    const anonymizationDecorationsPlugin = useMemo(
+      () =>
+        createAnonymizationDecorationsPlugin({
+          onMatchesChange: (matches) => {
+            onAnonymizationMatchesChangeRef.current?.(matches);
+          },
+        }),
+      [],
+    );
     const editorPlugins = useMemo(
-      () => [suggestionPlugin, aiSuggestionPlugin, aiCitationPlugin],
-      [suggestionPlugin, aiSuggestionPlugin, aiCitationPlugin],
+      () => [
+        suggestionPlugin,
+        aiSuggestionPlugin,
+        aiCitationPlugin,
+        anonymizationDecorationsPlugin,
+      ],
+      [
+        suggestionPlugin,
+        aiSuggestionPlugin,
+        aiCitationPlugin,
+        anonymizationDecorationsPlugin,
+      ],
     );
 
     // Surface the live PM view to the host for AI overlay wiring.

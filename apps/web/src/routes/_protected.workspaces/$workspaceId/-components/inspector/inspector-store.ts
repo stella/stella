@@ -44,7 +44,13 @@ export type FileTab = {
    * Auto-flips to `"suggestions"` when the AI queues edits;
    * remembered across switches so the user keeps their place.
    */
-  facet?: "preview" | "metadata" | "versions" | "suggestions" | undefined;
+  facet?:
+    | "preview"
+    | "metadata"
+    | "versions"
+    | "suggestions"
+    | "anonymization"
+    | undefined;
   /**
    * Monotonic counter bumped whenever the facet auto-switches
    * (e.g. AI queued new suggestions). The facet bar reads this to
@@ -529,7 +535,8 @@ const isPdfFacet = (
   value === "preview" ||
   value === "metadata" ||
   value === "versions" ||
-  value === "suggestions";
+  value === "suggestions" ||
+  value === "anonymization";
 
 const isMetadataLane = (value: unknown): value is FileTab["metadataLane"] =>
   value === undefined || value === "closed" || value === "expanded";

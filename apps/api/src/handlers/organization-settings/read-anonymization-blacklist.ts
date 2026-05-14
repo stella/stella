@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -9,6 +9,9 @@ const config = {
   permissions: { organizationSettings: ["update"] },
 } satisfies HandlerConfig;
 
+// Restrict to org-wide rows (workspace_id IS NULL). Workspace-scoped
+// terms created from the inspector live in the same table but are
+// managed per-workspace and must not surface in firm-wide settings.
 const readAnonymizationBlacklist = createSafeRootHandler(
   config,
   async function* ({ safeDb, session }) {
@@ -24,9 +27,12 @@ const readAnonymizationBlacklist = createSafeRootHandler(
           })
           .from(anonymizationBlacklistEntries)
           .where(
-            eq(
-              anonymizationBlacklistEntries.organizationId,
-              session.activeOrganizationId,
+            and(
+              eq(
+                anonymizationBlacklistEntries.organizationId,
+                session.activeOrganizationId,
+              ),
+              isNull(anonymizationBlacklistEntries.workspaceId),
             ),
           )
           .orderBy(asc(anonymizationBlacklistEntries.canonical)),
