@@ -18,17 +18,41 @@ type HandleMcpHttpRequest = (
   options?: { mode?: McpMode },
 ) => Promise<Response>;
 
+type RouteSet = {
+  headers: Record<string, string | number | boolean | undefined>;
+  status?: number | string;
+};
+
 const applyHeaders = ({
   headers,
   set,
 }: {
   headers: Headers;
-  set: { headers: Record<string, string | number | boolean | undefined> };
+  set: RouteSet;
 }) => {
   for (const [key, value] of headers) {
     set.headers[key] = value;
   }
 };
+
+const discoveryOptionsHandler = ({ set }: { set: RouteSet }) => {
+  applyHeaders({
+    headers: createMcpMetadataHeaders(),
+    set,
+  });
+  set.status = 204;
+  return "";
+};
+
+const discoveryHandler =
+  (mode?: McpMode) =>
+  ({ set }: { set: RouteSet }) => {
+    applyHeaders({
+      headers: createMcpMetadataHeaders(),
+      set,
+    });
+    return getMcpProtectedResourceMetadata(mode);
+  };
 
 export const createMcpRoute = ({
   handleMcpHttpRequest,
@@ -36,83 +60,17 @@ export const createMcpRoute = ({
   handleMcpHttpRequest: HandleMcpHttpRequest;
 }) =>
   new Elysia()
-    .options(ROOT_MCP_DISCOVERY_PATH, ({ set }) => {
-      applyHeaders({
-        headers: createMcpMetadataHeaders(),
-        set,
-      });
-      set.status = 204;
-      return "";
-    })
-    .get(ROOT_MCP_DISCOVERY_PATH, ({ set }) => {
-      applyHeaders({
-        headers: createMcpMetadataHeaders(),
-        set,
-      });
-      return getMcpProtectedResourceMetadata();
-    })
-    .options(MCP_ANONYMIZED_DISCOVERY_PATH, ({ set }) => {
-      applyHeaders({
-        headers: createMcpMetadataHeaders(),
-        set,
-      });
-      set.status = 204;
-      return "";
-    })
-    .get(MCP_ANONYMIZED_DISCOVERY_PATH, ({ set }) => {
-      applyHeaders({
-        headers: createMcpMetadataHeaders(),
-        set,
-      });
-      return getMcpProtectedResourceMetadata("anonymized");
-    })
-    .options(MCP_DISCOVERY_PATH, ({ set }) => {
-      applyHeaders({
-        headers: createMcpMetadataHeaders(),
-        set,
-      });
-      set.status = 204;
-      return "";
-    })
-    .get(MCP_DISCOVERY_PATH, ({ set }) => {
-      applyHeaders({
-        headers: createMcpMetadataHeaders(),
-        set,
-      });
-      return getMcpProtectedResourceMetadata();
-    })
-    .options(
+    .options(ROOT_MCP_DISCOVERY_PATH, discoveryOptionsHandler)
+    .get(ROOT_MCP_DISCOVERY_PATH, discoveryHandler())
+    .options(MCP_ANONYMIZED_DISCOVERY_PATH, discoveryOptionsHandler)
+    .get(MCP_ANONYMIZED_DISCOVERY_PATH, discoveryHandler("anonymized"))
+    .options(MCP_DISCOVERY_PATH, discoveryOptionsHandler)
+    .get(MCP_DISCOVERY_PATH, discoveryHandler())
+    .all(
       MCP_HTTP_PATH,
       async ({ request }) => await handleMcpHttpRequest(request),
     )
-    .get(
-      MCP_HTTP_PATH,
-      async ({ request }) => await handleMcpHttpRequest(request),
-    )
-    .post(
-      MCP_HTTP_PATH,
-      async ({ request }) => await handleMcpHttpRequest(request),
-    )
-    .delete(
-      MCP_HTTP_PATH,
-      async ({ request }) => await handleMcpHttpRequest(request),
-    )
-    .options(
-      MCP_ANONYMIZED_HTTP_PATH,
-      async ({ request }) =>
-        await handleMcpHttpRequest(request, { mode: "anonymized" }),
-    )
-    .get(
-      MCP_ANONYMIZED_HTTP_PATH,
-      async ({ request }) =>
-        await handleMcpHttpRequest(request, { mode: "anonymized" }),
-    )
-    .post(
-      MCP_ANONYMIZED_HTTP_PATH,
-      async ({ request }) =>
-        await handleMcpHttpRequest(request, { mode: "anonymized" }),
-    )
-    .delete(
+    .all(
       MCP_ANONYMIZED_HTTP_PATH,
       async ({ request }) =>
         await handleMcpHttpRequest(request, { mode: "anonymized" }),
