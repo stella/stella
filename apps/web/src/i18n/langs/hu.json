@@ -1811,6 +1811,21 @@
     "archiveMatter": "Archiválás",
     "archived": "Archivált",
     "archivedBadge": "Archived",
+    "copyToMatter": {
+      "copied": "Copied to matter",
+      "copyOption": "Copy (keep original)",
+      "description": "Copy or move \"{name}\" to another matter",
+      "menuItem": "Copy/Move to matter",
+      "moveButton": "Move",
+      "moveOption": "Move (delete original)",
+      "moved": "Moved to matter",
+      "noOtherMatters": "No other matters available",
+      "operation": "Operation",
+      "rootFolder": "(Root folder)",
+      "targetFolder": "Target folder (optional)",
+      "targetMatter": "Target matter",
+      "title": "Copy to matter"
+    },
     "create": {
       "ownerTypeToggle": "Ügy típusa",
       "personalDescription": "A személyes ügyek privátak és nem igényelnek ügyfelet. Később előléptethetők, hogy megoszthassa a csapattal."

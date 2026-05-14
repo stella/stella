@@ -1811,6 +1811,21 @@
     "archiveMatter": "Archiver",
     "archived": "Archivé",
     "archivedBadge": "Archived",
+    "copyToMatter": {
+      "copied": "Copied to matter",
+      "copyOption": "Copy (keep original)",
+      "description": "Copy or move \"{name}\" to another matter",
+      "menuItem": "Copy/Move to matter",
+      "moveButton": "Move",
+      "moveOption": "Move (delete original)",
+      "moved": "Moved to matter",
+      "noOtherMatters": "No other matters available",
+      "operation": "Operation",
+      "rootFolder": "(Root folder)",
+      "targetFolder": "Target folder (optional)",
+      "targetMatter": "Target matter",
+      "title": "Copy to matter"
+    },
     "create": {
       "ownerTypeToggle": "Type de dossier",
       "personalDescription": "Les dossiers personnels sont privés et ne nécessitent pas de client. Vous pourrez les promouvoir plus tard pour les partager avec l'équipe."
