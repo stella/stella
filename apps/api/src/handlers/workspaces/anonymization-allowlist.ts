@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { t } from "elysia";
 
-import { anonymizationAllowlistEntries } from "@/api/db/schema";
+import { anonymizationAllowlistEntries, entities } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -113,6 +113,23 @@ export const createWorkspaceAnonymizationAllowlistEntry = createSafeHandler(
     }
     const result = yield* Result.await(
       safeDb(async (tx) => {
+        // Org-scoped RLS lets a workspace editor see entity IDs
+        // outside their workspace, so doc-scope inserts MUST
+        // confirm the entity actually belongs to the URL's
+        // workspace. Without this, a caller could pin a doc-level
+        // ignore on another workspace's file (the entity_canonical
+        // unique index would then block the rightful owner from
+        // ever toggling their own override).
+        if (scope === "document" && body.entityId) {
+          const owner = await tx
+            .select({ workspaceId: entities.workspaceId })
+            .from(entities)
+            .where(eq(entities.id, body.entityId))
+            .limit(1);
+          if (owner.length === 0 || owner[0]?.workspaceId !== workspaceId) {
+            return { inserted: 0 };
+          }
+        }
         const id = createSafeId<"anonymizationAllowlistEntry">();
         const values = {
           id,
