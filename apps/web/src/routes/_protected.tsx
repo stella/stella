@@ -51,6 +51,11 @@ import {
   useSidebar,
 } from "@/components/sidebar";
 import { getAnalytics } from "@/lib/analytics/provider";
+import {
+  SIDE_RAIL_ICON_BUTTON_SIZE,
+  SIDE_RAIL_WIDTH,
+  TOOLBAR_ROW_HEIGHT,
+} from "@/lib/consts";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
@@ -72,6 +77,41 @@ const LazyInspectorPanel = lazy(
     await import("@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel").then(
       (m) => ({ default: m.InspectorPanel }),
     ),
+);
+
+// Visual shell for the inspector rail while the panel chunk is
+// loading. Mirrors the real rail's chrome (top toggle, bottom
+// "new chat") so the rail doesn't render as an empty strip during
+// the lazy chunk fetch. Buttons are inert; they activate once the
+// real panel mounts.
+const InspectorRailFallback = () => (
+  <div className="bg-background flex h-full border-s shadow-lg">
+    <div
+      className={`bg-muted/50 flex shrink-0 flex-col border-e ${SIDE_RAIL_WIDTH}`}
+    >
+      <div
+        aria-hidden="true"
+        className={`text-muted-foreground flex w-full shrink-0 items-center justify-center border-b ${TOOLBAR_ROW_HEIGHT}`}
+      >
+        <span
+          className={`flex items-center justify-center ${SIDE_RAIL_ICON_BUTTON_SIZE}`}
+        >
+          <PanelRightIcon className="size-4" />
+        </span>
+      </div>
+      <div className="flex-1" />
+      <div
+        aria-hidden="true"
+        className={`text-muted-foreground flex w-full shrink-0 items-center justify-center border-t ${TOOLBAR_ROW_HEIGHT}`}
+      >
+        <span
+          className={`flex items-center justify-center ${SIDE_RAIL_ICON_BUTTON_SIZE}`}
+        >
+          <MessageSquarePlusIcon className="size-4" />
+        </span>
+      </div>
+    </div>
+  </div>
 );
 
 export const Route = createFileRoute("/_protected")({
@@ -561,7 +601,7 @@ function WorkspaceInspectorSidePanel() {
           />
         )}
         <div className="bg-sidebar flex h-full w-full flex-col">
-          <Suspense>
+          <Suspense fallback={<InspectorRailFallback />}>
             <LazyInspectorPanel workspaceId={activeWorkspaceId ?? undefined} />
           </Suspense>
         </div>
