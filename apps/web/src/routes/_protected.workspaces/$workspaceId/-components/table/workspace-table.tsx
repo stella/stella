@@ -91,7 +91,7 @@ const TABLE_ROW_ESTIMATE_PX = TOOLBAR_ROW_HEIGHT_PX;
 const TABLE_ROW_OVERSCAN = 16;
 const TABLE_COLUMN_DRAG_TYPE = "workspace-table-column";
 const TABLE_END_FILLER_LINE =
-  "color-mix(in srgb, var(--color-border) 60%, transparent)";
+  "color-mix(in srgb, var(--color-border) 30%, transparent)";
 const TABLE_END_FILLER_BACKGROUND = `repeating-linear-gradient(
   to bottom,
   transparent 0,

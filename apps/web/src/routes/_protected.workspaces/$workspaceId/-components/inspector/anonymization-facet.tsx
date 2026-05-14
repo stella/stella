@@ -434,7 +434,7 @@ export const AnonymizationFacet = ({
       {noOpenDocument ? (
         onOpenFullView ? (
           <Button
-            className="border-muted-foreground/30 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground h-auto w-full justify-start rounded-md border border-dashed px-3 py-2 text-start text-xs whitespace-normal"
+            className="border-muted-foreground/30 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground h-auto w-full justify-start rounded-md border border-dashed px-3 py-2 text-start text-xs whitespace-normal sm:h-auto"
             onClick={onOpenFullView}
             type="button"
             variant="ghost"
