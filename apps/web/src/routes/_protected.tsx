@@ -460,7 +460,11 @@ function ProtectedContent({
 const INSPECTOR_PANE_DEFAULT_WIDTH = 512;
 const INSPECTOR_PANE_MIN_WIDTH = 320;
 const INSPECTOR_PANE_MAX_WIDTH = 800;
-const INSPECTOR_RAIL_WIDTH = 40;
+// Matches SIDE_RAIL_WIDTH (`w-12` = 48px) so the wrapper width
+// equals the rail's actual rendered width. Earlier this was 40,
+// leaving the rail 8px wider than its wrapper and pushing the
+// toast / find-replace right-offset CSS vars under the visible rail.
+const INSPECTOR_RAIL_WIDTH = 48;
 
 /**
  * Workspace inspector pane — file viewers + chat tabs. Mounted at
