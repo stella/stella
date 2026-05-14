@@ -23,10 +23,6 @@ const dbWhereMock = mock(() => ({ limit: dbLimitMock }));
 const dbFromMock = mock(() => ({ where: dbWhereMock }));
 const dbSelectMock = mock(() => ({ from: dbFromMock }));
 
-void mock.module("@/api/lib/search/index-global", () => ({
-  searchGlobal: searchGlobalMock,
-}));
-
 void mock.module("@/api/db/root", () => ({
   db: {
     select: dbSelectMock,
@@ -114,6 +110,7 @@ describe("search summary chat", () => {
       },
       organizationId,
       safeDb,
+      search: searchGlobalMock,
       scopedDb,
       userId: toSafeId<"user">("user_1"),
     });
@@ -185,6 +182,7 @@ describe("search summary chat", () => {
       },
       organizationId,
       safeDb,
+      search: searchGlobalMock,
       scopedDb,
       userId: toSafeId<"user">("user_1"),
     });
@@ -271,6 +269,7 @@ describe("search summary chat", () => {
       },
       organizationId,
       safeDb,
+      search: searchGlobalMock,
       scopedDb,
       userId: toSafeId<"user">("user_1"),
     });
@@ -349,6 +348,7 @@ describe("search summary chat", () => {
       },
       organizationId,
       safeDb,
+      search: searchGlobalMock,
       scopedDb,
       userId: toSafeId<"user">("user_1"),
     });

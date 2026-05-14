@@ -9,6 +9,11 @@ import type {
   ContactPhone,
 } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  contactWorkspaceAccessSql,
+  resolveWorkspaceScope,
+} from "@/api/lib/search/contact-workspace-access-sql";
+import type { WorkspaceScopeArgs } from "@/api/lib/search/contact-workspace-access-sql";
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { mapEntityHit } from "@/api/lib/search/global-search-mappers";
 import {
@@ -194,26 +199,6 @@ const headlineRegconfig = sql`
   'public.stella_unaccent'::regconfig
 `;
 
-type WorkspaceScopeArgs = {
-  accessibleWorkspaceIds: readonly SafeId<"workspace">[];
-  selectedWorkspaceIds: readonly SafeId<"workspace">[];
-};
-
-const resolveWorkspaceScope = ({
-  accessibleWorkspaceIds,
-  selectedWorkspaceIds,
-}: WorkspaceScopeArgs): readonly SafeId<"workspace">[] | null => {
-  if (accessibleWorkspaceIds.length === 0) {
-    return null;
-  }
-  if (selectedWorkspaceIds.length === 0) {
-    return accessibleWorkspaceIds;
-  }
-  const accessSet = new Set(accessibleWorkspaceIds);
-  const intersection = selectedWorkspaceIds.filter((id) => accessSet.has(id));
-  return intersection.length > 0 ? intersection : null;
-};
-
 const workspaceAccessSql = ({
   column = sql`workspace_id`,
   ...scope
@@ -317,30 +302,7 @@ const emptyWorkspaceFacetQuery = sql`
   SELECT NULL::uuid AS value, NULL::text AS label WHERE false
 `;
 
-export const contactWorkspaceAccessSql = ({
-  organizationId,
-  ...scope
-}: {
-  organizationId: SafeId<"organization">;
-} & WorkspaceScopeArgs): SQL => {
-  const effective = resolveWorkspaceScope(scope);
-  if (effective === null) {
-    return sql`AND false`;
-  }
-
-  return sql`AND EXISTS (
-        SELECT 1
-        FROM workspaces w
-        LEFT JOIN workspace_contacts wc
-          ON wc.workspace_id = w.id
-        WHERE w.id = ANY(${typedPgArray(effective, "uuid")})
-          AND w.organization_id = ${organizationId}
-          AND (
-            w.client_id = csd.contact_id
-            OR wc.contact_id = csd.contact_id
-          )
-      )`;
-};
+export { contactWorkspaceAccessSql };
 
 const toStringFacetMap = (
   rows: RawRow[],

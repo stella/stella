@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { contactWorkspaceAccessSql } from "@/api/lib/search/contact-workspace-access-sql";
 import { mapEntityHit } from "@/api/lib/search/global-search-mappers";
 import { clearRootDbMocks } from "@/api/tests/helpers/mock-root-db";
 
@@ -15,7 +16,6 @@ describe("global search SQL scope", () => {
   });
 
   test("always constrains contact search to accessible workspaces", async () => {
-    const { contactWorkspaceAccessSql } = await import("./index-global");
     const dialect = new PgDialect();
     const compiled = dialect.sqlToQuery(
       contactWorkspaceAccessSql({
@@ -34,7 +34,6 @@ describe("global search SQL scope", () => {
   });
 
   test("intersects the user's selection with the accessible allowlist", async () => {
-    const { contactWorkspaceAccessSql } = await import("./index-global");
     const dialect = new PgDialect();
     const compiled = dialect.sqlToQuery(
       contactWorkspaceAccessSql({
