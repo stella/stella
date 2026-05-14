@@ -1084,6 +1084,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                   <AnonymizationFacet
                     activeFieldId={tab.id}
                     entityId={tab.entityId}
+                    isVisible={isActive}
                     workspaceId={tab.workspaceId}
                   />
                 )}

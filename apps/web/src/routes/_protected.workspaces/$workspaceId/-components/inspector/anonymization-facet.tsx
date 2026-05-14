@@ -109,6 +109,15 @@ type AnonymizationFacetProps = {
    */
   entityId: string | null;
   /**
+   * True when this facet's tab is the currently visible inspector
+   * tab. Inactive document tabs stay mounted (just hidden), so
+   * without this gate every parked Anonymization facet would
+   * keep the global active counter bumped and the worker
+   * heartbeat firing even after the user switched away.
+   * Sidepeek leaves this defaulted (always visible).
+   */
+  isVisible?: boolean;
+  /**
    * Invoked when the user clicks the "open full view" hint shown
    * while `activeFieldId` is null. Lets the side-peek caller wire
    * the same handler the ribbon's Full view button uses, so the
@@ -122,6 +131,7 @@ export const AnonymizationFacet = ({
   workspaceId,
   activeFieldId,
   entityId,
+  isVisible = true,
   onOpenFullView,
 }: AnonymizationFacetProps) => {
   const t = useTranslations();
@@ -135,11 +145,20 @@ export const AnonymizationFacet = ({
   // Tell the document editor to paint the in-document highlight
   // overlay while this facet is on screen; the overlay clears as
   // soon as the user switches to another inspector tab.
+  //
+  // Inspector tabs stay mounted (just hidden) when the user
+  // switches between them, so gate on `isVisible` — without it,
+  // every parked Anonymization facet kept the global active
+  // counter bumped and the detection worker firing even after
+  // the user moved on to a different document.
   useEffect(() => {
+    if (!isVisible) {
+      return undefined;
+    }
     const { acquire, release } = useAnonymizationActiveStore.getState();
     acquire();
     return release;
-  }, []);
+  }, [isVisible]);
 
   // Selection bridge — when the user highlights text inside the
   // file preview while this facet is mounted, prefill the "Add
