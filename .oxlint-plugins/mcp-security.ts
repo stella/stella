@@ -9,30 +9,15 @@
 //   2. OAuth client joins must stay behind the typed chat-time MCP connection
 //      loader, which normalizes raw nullable DB rows into a discriminated union.
 
+import { getPropertyName, isCallTo, isIdentifier } from "./utils.ts";
+
 const MCP_OAUTH_CLIENTS = "mcpOAuthClients";
 const OAUTH_CLIENT_JOIN_ALLOWED_FILES = [
   "apps/api/src/handlers/chat/tools/external-mcp-tools.ts",
 ];
 
-const getPropertyName = (node) => {
-  if (!node) {
-    return null;
-  }
-  if (node.type === "Identifier") {
-    return node.name;
-  }
-  if (node.type === "Literal" && typeof node.value === "string") {
-    return node.value;
-  }
-  return null;
-};
-
-const isIdentifier = (node, name) =>
-  node?.type === "Identifier" && node.name === name;
-
 const isRedactionCall = (node) =>
-  node?.type === "CallExpression" &&
-  isIdentifier(node.callee, "redactMcpOAuthRegistrationResponse");
+  isCallTo(node, "redactMcpOAuthRegistrationResponse");
 
 const isJoinCall = (node) => {
   if (node.type !== "CallExpression") {

@@ -3,6 +3,8 @@
 // Backend code runs on Bun; use Bun.randomUUIDv7() so generated
 // UUIDs are Bun-native and database-friendly for ordered inserts.
 
+import { getImportedName, isIdentifier } from "./utils.ts";
+
 const CRYPTO_MODULES = new Set(["crypto", "node:crypto"]);
 
 export default {
@@ -46,8 +48,7 @@ export default {
 
               if (
                 specifier.type === "ImportSpecifier" &&
-                specifier.imported.type === "Identifier" &&
-                specifier.imported.name === "randomUUID"
+                getImportedName(specifier) === "randomUUID"
               ) {
                 randomUuidAliases.add(specifier.local.name);
                 context.report({
@@ -62,10 +63,7 @@ export default {
           CallExpression(node) {
             const callee = node.callee;
 
-            if (
-              callee.type === "Identifier" &&
-              randomUuidAliases.has(callee.name)
-            ) {
+            if (isIdentifier(callee) && randomUuidAliases.has(callee.name)) {
               context.report({
                 node,
                 messageId: "noCryptoRandomUuid",
@@ -76,9 +74,8 @@ export default {
             if (
               callee.type !== "MemberExpression" ||
               callee.computed ||
-              callee.object.type !== "Identifier" ||
-              callee.property.type !== "Identifier" ||
-              callee.property.name !== "randomUUID" ||
+              !isIdentifier(callee.object) ||
+              !isIdentifier(callee.property, "randomUUID") ||
               !cryptoAliases.has(callee.object.name)
             ) {
               return;

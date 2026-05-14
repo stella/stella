@@ -16,6 +16,13 @@
 //   logger.error("request.failed", { "error.message": error.message })
 //   process.stderr.write(`worker error: ${error.message}\n`)
 
+import {
+  getPropertyName,
+  isCallTo,
+  isIdentifier,
+  isMemberAccess,
+} from "./utils.ts";
+
 const LOGGER_METHODS = new Set(["debug", "error", "info", "warn"]);
 const RAW_ERROR_PROPERTY_NAMES = new Set([
   "cause",
@@ -28,27 +35,13 @@ const RAW_ERROR_PROPERTY_NAMES = new Set([
 const RAW_ERROR_IDENTIFIERS = new Set(["cause", "error", "stack"]);
 const RAW_ERROR_MEMBER_PROPERTIES = new Set(["cause", "message", "stack"]);
 
-const getPropertyName = (node) => {
-  if (!node) {
-    return null;
-  }
-  if (node.type === "Identifier") {
-    return node.name;
-  }
-  if (node.type === "Literal" && typeof node.value === "string") {
-    return node.value;
-  }
-  return null;
-};
-
 const isLoggerCall = (node) => {
   const callee = node.callee;
   return (
     callee.type === "MemberExpression" &&
     !callee.computed &&
-    callee.object.type === "Identifier" &&
-    callee.object.name === "logger" &&
-    callee.property.type === "Identifier" &&
+    isIdentifier(callee.object, "logger") &&
+    isIdentifier(callee.property) &&
     LOGGER_METHODS.has(callee.property.name)
   );
 };
@@ -58,41 +51,30 @@ const isStderrWriteCall = (node) => {
   if (
     callee.type !== "MemberExpression" ||
     callee.computed ||
-    callee.property.type !== "Identifier" ||
-    callee.property.name !== "write"
+    !isIdentifier(callee.property, "write")
   ) {
     return false;
   }
 
-  const object = callee.object;
-  return (
-    object.type === "MemberExpression" &&
-    !object.computed &&
-    object.object.type === "Identifier" &&
-    object.object.name === "process" &&
-    object.property.type === "Identifier" &&
-    object.property.name === "stderr"
-  );
+  return isMemberAccess(callee.object, "process", "stderr");
 };
 
 const isStringErrorCall = (node) =>
-  node.type === "CallExpression" &&
-  node.callee.type === "Identifier" &&
-  node.callee.name === "String" &&
-  node.arguments.some(isRawErrorExpression);
+  isCallTo(node, "String") && node.arguments.some(isRawErrorExpression);
 
 const isRawErrorMember = (node) => {
   if (
     node.type !== "MemberExpression" ||
     node.computed ||
-    node.property.type !== "Identifier" ||
+    !isIdentifier(node.property) ||
     !RAW_ERROR_MEMBER_PROPERTIES.has(node.property.name)
   ) {
     return false;
   }
 
-  const object = node.object;
-  return object.type === "Identifier" && RAW_ERROR_IDENTIFIERS.has(object.name);
+  return (
+    isIdentifier(node.object) && RAW_ERROR_IDENTIFIERS.has(node.object.name)
+  );
 };
 
 const isRawErrorExpression = (node) => {

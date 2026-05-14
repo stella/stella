@@ -17,13 +17,11 @@
 // Protocol, public, streaming, and dev-only routes should disable this rule in
 // oxlint.config.ts with a short justification.
 
+import { getPropertyName } from "./utils.ts";
+
 const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete"]);
 
 type AstNode = Record<string, unknown> & { type: string };
-
-type IdentifierNode = AstNode & { name: string };
-
-type LiteralNode = AstNode & { value: string };
 
 type MemberExpressionNode = AstNode & {
   computed: boolean;
@@ -49,14 +47,6 @@ const isAstNode = (node: unknown): node is AstNode =>
   "type" in node &&
   typeof node.type === "string";
 
-const isIdentifier = (node: unknown): node is IdentifierNode =>
-  isAstNode(node) &&
-  node.type === "Identifier" &&
-  typeof node.name === "string";
-
-const isStringLiteral = (node: unknown): node is LiteralNode =>
-  isAstNode(node) && node.type === "Literal" && typeof node.value === "string";
-
 const isMemberExpression = (node: unknown): node is MemberExpressionNode =>
   isAstNode(node) &&
   node.type === "MemberExpression" &&
@@ -69,22 +59,9 @@ const isCallExpression = (node: unknown): node is CallExpressionNode =>
   Array.isArray(node.arguments) &&
   "callee" in node;
 
-const getPropertyName = (node: unknown) => {
-  if (isIdentifier(node)) {
-    return node.name;
-  }
-
-  if (isStringLiteral(node)) {
-    return node.value;
-  }
-
-  return null;
-};
-
 const isSafeHandlerMember = (node: unknown) =>
   isMemberExpression(node) &&
-  !
-  node.computed &&
+  !node.computed &&
   getPropertyName(node.property) === "handler";
 
 export default {
@@ -108,11 +85,7 @@ export default {
               return;
             }
 
-            if (
-              !isMemberExpression(node.callee) ||
-              
-              node.callee.computed
-            ) {
+            if (!isMemberExpression(node.callee) || node.callee.computed) {
               return;
             }
 
@@ -122,7 +95,7 @@ export default {
               return;
             }
 
-            const routeHandler = node.arguments.at(1);
+            const routeHandler = node.arguments[1];
 
             if (
               routeHandler === undefined ||
