@@ -113,10 +113,7 @@ export const SidebarPreview = ({
       <div className="border-b px-4 py-2.5">
         <span className="text-foreground text-sm font-medium">
           {organizationName ? (
-            <span
-              key={organizationName}
-              className="animate-slide-in inline-block"
-            >
+            <span className="animate-slide-in inline-block">
               {organizationName}
             </span>
           ) : (
