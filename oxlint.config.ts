@@ -191,6 +191,20 @@ export default defineConfig({
   overrides: [
     ...(core.overrides ?? []),
     {
+      // Custom oxlint plugin rules traverse AST nodes that the runtime
+      // delivers as untyped (effectively `any`). Strict any-flow rules
+      // produce noise without real safety here.
+      files: [".oxlint-plugins/**/*.ts"],
+      rules: {
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/no-unsafe-call": "off",
+        "typescript/no-unsafe-return": "off",
+        "typescript/no-unsafe-argument": "off",
+        "typescript/strict-boolean-expressions": "off",
+      },
+    },
+    {
       files: ["**/scripts/**"],
       rules: {
         "no-console": "off",

@@ -9,11 +9,9 @@
 // Catches both standalone calls (useParams()) and route-
 // scoped calls (Route.useParams()).
 
-const HOOKS = new Set([
-  "useParams",
-  "useSearch",
-  "useRouteContext",
-]);
+import { isIdentifier } from "./utils.ts";
+
+const HOOKS = new Set(["useParams", "useSearch", "useRouteContext"]);
 
 export default {
   meta: { name: "require-router-select" },
@@ -35,10 +33,7 @@ export default {
             let hookName: string | null = null;
 
             // useParams(...)
-            if (
-              callee.type === "Identifier" &&
-              HOOKS.has(callee.name)
-            ) {
+            if (isIdentifier(callee) && HOOKS.has(callee.name)) {
               hookName = callee.name;
             }
 
@@ -46,7 +41,7 @@ export default {
             if (
               callee.type === "MemberExpression" &&
               !callee.computed &&
-              callee.property.type === "Identifier" &&
+              isIdentifier(callee.property) &&
               HOOKS.has(callee.property.name)
             ) {
               hookName = callee.property.name;
@@ -56,11 +51,12 @@ export default {
               return;
             }
 
-            const kind = hookName === "useParams"
-              ? "params"
-              : hookName === "useSearch"
-                ? "search"
-                : "context";
+            const kind =
+              hookName === "useParams"
+                ? "params"
+                : hookName === "useSearch"
+                  ? "search"
+                  : "context";
 
             const firstArg = node.arguments[0];
 
@@ -89,9 +85,7 @@ export default {
             // Inline object argument — check for `select`
             const hasSelect = firstArg.properties.some(
               (prop) =>
-                prop.type === "Property" &&
-                prop.key.type === "Identifier" &&
-                prop.key.name === "select",
+                prop.type === "Property" && isIdentifier(prop.key, "select"),
             );
             if (!hasSelect) {
               context.report({

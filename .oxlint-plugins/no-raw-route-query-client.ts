@@ -1,26 +1,9 @@
-const RAW_QUERY_CLIENT_METHODS = new Set([
-  "ensureQueryData",
-  "prefetchQuery",
-]);
+import { getPropertyName } from "./utils.ts";
+
+const RAW_QUERY_CLIENT_METHODS = new Set(["ensureQueryData", "prefetchQuery"]);
 const RAW_QUERY_CLIENT_RECEIVERS = new Set(["qc", "queryClient"]);
 
 const ROUTE_LOADER_HOOKS = new Set(["beforeLoad", "loader"]);
-
-const getPropertyName = (node) => {
-  if (!node) {
-    return null;
-  }
-
-  if (node.type === "Identifier") {
-    return node.name;
-  }
-
-  if (node.type === "Literal" && typeof node.value === "string") {
-    return node.value;
-  }
-
-  return null;
-};
 
 const isQueryClientReceiver = (node) => {
   if (!node) {
@@ -86,10 +69,7 @@ export default {
 
             const method = getPropertyName(node.callee.property);
 
-            if (
-              method === null ||
-              !RAW_QUERY_CLIENT_METHODS.has(method)
-            ) {
+            if (method === null || !RAW_QUERY_CLIENT_METHODS.has(method)) {
               return;
             }
 

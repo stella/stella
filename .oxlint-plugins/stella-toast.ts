@@ -4,6 +4,8 @@
 // That wrapper applies default timeouts and keeps app code away from
 // raw Base UI toast managers.
 
+import { getImportedName } from "./utils.ts";
+
 const STELLA_TOAST_MODULE = "@stll/ui/components/toast";
 const RAW_TOAST_MODULE = "@base-ui/react/toast";
 
@@ -72,22 +74,7 @@ export default {
             }
 
             for (const specifier of node.specifiers) {
-              if (
-                specifier.type !== "ImportSpecifier" ||
-                specifier.imported === undefined
-              ) {
-                continue;
-              }
-
-              const imported = specifier.imported;
-              const name =
-                imported.type === "Identifier"
-                  ? imported.name
-                  : imported.type === "Literal" &&
-                      typeof imported.value === "string"
-                    ? imported.value
-                    : null;
-
+              const name = getImportedName(specifier);
               if (name === null || !DISALLOWED_STELLA_IMPORTS.has(name)) {
                 continue;
               }

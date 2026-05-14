@@ -5,6 +5,8 @@
 //
 // Safe: var(--token), transparent, inherit, currentColor, none, unset, initial.
 
+import { getPropertyName } from "./utils.ts";
+
 // Hex color pattern anywhere in a string
 const HEX_IN_STRING = /#[0-9a-f]{3,8}\b/i;
 
@@ -20,7 +22,9 @@ const CSS_PROP_FALSE_POSITIVES = /\bwhite-space\b/gi;
 
 // Strings that are entirely safe — skip these
 function isSafe(value: string): boolean {
-  if (value.startsWith("var(")) return true;
+  if (value.startsWith("var(")) {
+    return true;
+  }
   const lower = value.toLowerCase().trim();
   if (
     lower === "transparent" ||
@@ -30,8 +34,9 @@ function isSafe(value: string): boolean {
     lower === "initial" ||
     lower === "none" ||
     lower === "auto"
-  )
+  ) {
     return true;
+  }
   return false;
 }
 
@@ -42,16 +47,16 @@ function stripVarExpressions(value: string): string {
   let i = 0;
   while (i < value.length) {
     // Look for "var("
-    if (
-      value[i] === "v" &&
-      value.substring(i, i + 4) === "var("
-    ) {
+    if (value[i] === "v" && value.slice(i, i + 4) === "var(") {
       // Skip past the matching closing paren
       let depth = 1;
       i += 4; // skip "var("
       while (i < value.length && depth > 0) {
-        if (value[i] === "(") depth++;
-        else if (value[i] === ")") depth--;
+        if (value[i] === "(") {
+          depth++;
+        } else if (value[i] === ")") {
+          depth--;
+        }
         i++;
       }
     } else {
@@ -63,23 +68,31 @@ function stripVarExpressions(value: string): string {
 }
 
 function containsHardcodedColor(value: string): string | null {
-  if (isSafe(value)) return null;
+  if (isSafe(value)) {
+    return null;
+  }
 
   // Strip var(...) expressions so fallback colors inside them are not flagged
   const stripped = stripVarExpressions(value);
 
   // Check for hex colors
-  const hexMatch = stripped.match(HEX_IN_STRING);
-  if (hexMatch) return hexMatch[0];
+  const hexMatch = HEX_IN_STRING.exec(stripped);
+  if (hexMatch) {
+    return hexMatch[0];
+  }
 
   // Check for color functions
-  const funcMatch = stripped.match(COLOR_FUNC_IN_STRING);
-  if (funcMatch) return funcMatch[0];
+  const funcMatch = COLOR_FUNC_IN_STRING.exec(stripped);
+  if (funcMatch) {
+    return funcMatch[0];
+  }
 
   // Check for named colors — first remove CSS property false positives
   const sanitized = stripped.replace(CSS_PROP_FALSE_POSITIVES, "");
-  const namedMatch = sanitized.match(NAMED_COLOR_PATTERN);
-  if (namedMatch) return namedMatch[0];
+  const namedMatch = NAMED_COLOR_PATTERN.exec(sanitized);
+  if (namedMatch) {
+    return namedMatch[0];
+  }
 
   return null;
 }
@@ -101,14 +114,12 @@ export default {
           // Check every Property node — any object property with a
           // string value containing a hardcoded color is flagged.
           Property(node) {
-            const key = node.key;
-            let propName: string = "?";
-            if (key.type === "Identifier") propName = key.name;
-            else if (key.type === "Literal" && typeof key.value === "string")
-              propName = key.value;
+            const propName = getPropertyName(node.key) ?? "?";
 
             const val = node.value;
-            if (val.type !== "Literal" || typeof val.value !== "string") return;
+            if (val.type !== "Literal" || typeof val.value !== "string") {
+              return;
+            }
 
             const match = containsHardcodedColor(val.value);
             if (match) {

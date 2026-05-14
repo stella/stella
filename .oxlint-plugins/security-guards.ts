@@ -5,6 +5,13 @@
 //   2. no-unsanitized-href    — dynamic href without sanitization
 //   3. no-unscoped-user-query — user table import without member scoping
 
+import {
+  getImportedName,
+  getPropertyName,
+  isCallTo,
+  isIdentifier,
+} from "./utils.ts";
+
 // ── Rule 1: no-raw-filename-write ──────────────────────────────
 //
 // User-supplied filenames can contain path traversal segments
@@ -73,10 +80,7 @@ const isSafeTemplateLiteral = (node): boolean => {
   );
 };
 
-const isSanitizeHrefCall = (node): boolean =>
-  node.type === "CallExpression" &&
-  node.callee.type === "Identifier" &&
-  node.callee.name === "sanitizeHref";
+const isSanitizeHrefCall = (node): boolean => isCallTo(node, "sanitizeHref");
 
 // ── Rule 3: no-unscoped-user-query ─────────────────────────────
 //
@@ -108,15 +112,7 @@ export default {
         return {
           Property(node) {
             // Only check property assignments named "fileName"
-            const keyName =
-              node.key.type === "Identifier"
-                ? node.key.name
-                : node.key.type === "Literal" &&
-                    typeof node.key.value === "string"
-                  ? node.key.value
-                  : null;
-
-            if (keyName !== "fileName") {
+            if (getPropertyName(node.key) !== "fileName") {
               return;
             }
 
@@ -136,7 +132,7 @@ export default {
             if (value.type === "Literal" && value.value === null) {
               return;
             }
-            if (value.type === "Identifier" && value.name === "undefined") {
+            if (isIdentifier(value, "undefined")) {
               return;
             }
 
@@ -151,11 +147,7 @@ export default {
             }
 
             // Allow sanitizeFilename() calls
-            if (
-              value.type === "CallExpression" &&
-              value.callee.type === "Identifier" &&
-              value.callee.name === "sanitizeFilename"
-            ) {
+            if (isCallTo(value, "sanitizeFilename")) {
               return;
             }
 
@@ -164,17 +156,13 @@ export default {
             if (
               value.type === "MemberExpression" &&
               !value.computed &&
-              value.property.type === "Identifier" &&
-              value.property.name === "value"
+              isIdentifier(value.property, "value")
             ) {
               return;
             }
 
             // Allow variables whose name indicates prior sanitization
-            if (
-              value.type === "Identifier" &&
-              /sanitize/i.test(value.name)
-            ) {
+            if (isIdentifier(value) && /sanitize/i.test(value.name)) {
               return;
             }
 
@@ -184,19 +172,13 @@ export default {
               return;
             }
 
-            const obj = value.object;
-            const prop = value.property;
-
-            if (
-              obj.type !== "Identifier" ||
-              prop.type !== "Identifier"
-            ) {
+            if (!isIdentifier(value.object) || !isIdentifier(value.property)) {
               return;
             }
 
             if (
-              RAW_INPUT_OBJECTS.has(obj.name) &&
-              RAW_NAME_PROPS.has(prop.name)
+              RAW_INPUT_OBJECTS.has(value.object.name) &&
+              RAW_NAME_PROPS.has(value.property.name)
             ) {
               context.report({
                 node,
@@ -233,18 +215,12 @@ export default {
 
             // Verify this is on an <a> element
             const opening = node.parent;
-            if (
-              !opening ||
-              opening.type !== "JSXOpeningElement"
-            ) {
+            if (!opening || opening.type !== "JSXOpeningElement") {
               return;
             }
 
             const tag = opening.name;
-            if (
-              tag.type !== "JSXIdentifier" ||
-              tag.name !== "a"
-            ) {
+            if (tag.type !== "JSXIdentifier" || tag.name !== "a") {
               return;
             }
 
@@ -345,14 +321,10 @@ export default {
             }
 
             for (const spec of node.specifiers) {
-              if (spec.type !== "ImportSpecifier") {
+              const importedName = getImportedName(spec);
+              if (importedName === null) {
                 continue;
               }
-
-              const importedName =
-                spec.imported.type === "Identifier"
-                  ? spec.imported.name
-                  : spec.imported.value;
 
               if (importedName === "user" && !userImportNode) {
                 userImportNode = spec;

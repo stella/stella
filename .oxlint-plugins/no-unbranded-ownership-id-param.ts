@@ -26,6 +26,8 @@
 // (defaults below). Skipped contexts: test files / fixtures,
 // configured via oxlint.config.ts overrides.
 
+import { getPropertyName as getIdentifierName } from "./utils.ts";
+
 const DEFAULT_NAMES = new Set(["workspaceId", "organizationId", "userId"]);
 
 const SAFE_HANDLER_FACTORIES = new Set([
@@ -35,18 +37,13 @@ const SAFE_HANDLER_FACTORIES = new Set([
 
 const CONTEXT_TYPED_PROPERTY_NAMES = new Set(["execute"]);
 
-const getIdentifierName = (node) => {
-  if (!node) return null;
-  if (node.type === "Identifier") return node.name;
-  if (node.type === "Literal" && typeof node.value === "string") {
-    return node.value;
-  }
-  return null;
-};
-
 const containsBareString = (typeNode) => {
-  if (!typeNode) return false;
-  if (typeNode.type === "TSStringKeyword") return true;
+  if (!typeNode) {
+    return false;
+  }
+  if (typeNode.type === "TSStringKeyword") {
+    return true;
+  }
   if (
     typeNode.type === "TSUnionType" ||
     typeNode.type === "TSIntersectionType"
@@ -61,7 +58,9 @@ const isBareStringAnnotation = (typeAnnotation) => {
   // Sensitive ownership ID params need explicit annotations. Otherwise
   // default values and other inference contexts can still infer `string`
   // and bypass the sink-side brand check.
-  if (!inner) return true;
+  if (!inner) {
+    return true;
+  }
   // Any bare `string` in the type — including `SafeId<X> | string` —
   // is a loophole: a caller can still pass an unvalidated string and
   // satisfy the union. The brand is only structural if `string` is
@@ -70,8 +69,12 @@ const isBareStringAnnotation = (typeAnnotation) => {
 };
 
 const getCalleeName = (callee) => {
-  if (!callee) return null;
-  if (callee.type === "Identifier") return callee.name;
+  if (!callee) {
+    return null;
+  }
+  if (callee.type === "Identifier") {
+    return callee.name;
+  }
   if (callee.type === "MemberExpression" && !callee.computed) {
     return getIdentifierName(callee.property);
   }
@@ -80,7 +83,9 @@ const getCalleeName = (callee) => {
 
 const isKnownValidatedContextParam = (functionNode) => {
   const parent = functionNode.parent;
-  if (!parent) return false;
+  if (!parent) {
+    return false;
+  }
 
   if (
     parent.type === "CallExpression" &&
@@ -110,9 +115,13 @@ const checkUnannotatedObjectPattern = (
   }
 
   for (const property of objectPattern.properties ?? []) {
-    if (property.type !== "Property") continue;
+    if (property.type !== "Property") {
+      continue;
+    }
     const keyName = getIdentifierName(property.key);
-    if (!keyName || !triggerNames.has(keyName)) continue;
+    if (!keyName || !triggerNames.has(keyName)) {
+      continue;
+    }
     context.report({
       node: property,
       messageId: "unbrandedParam",
@@ -136,10 +145,16 @@ const checkObjectPattern = (context, objectPattern, triggerNames, options) => {
     return;
   }
   for (const member of typeAnnotation.members) {
-    if (member.type !== "TSPropertySignature") continue;
+    if (member.type !== "TSPropertySignature") {
+      continue;
+    }
     const keyName = getIdentifierName(member.key);
-    if (!keyName || !triggerNames.has(keyName)) continue;
-    if (!isBareStringAnnotation(member.typeAnnotation)) continue;
+    if (!keyName || !triggerNames.has(keyName)) {
+      continue;
+    }
+    if (!isBareStringAnnotation(member.typeAnnotation)) {
+      continue;
+    }
     context.report({
       node: member,
       messageId: "unbrandedParam",
@@ -150,8 +165,12 @@ const checkObjectPattern = (context, objectPattern, triggerNames, options) => {
 
 const checkParam = (context, param, triggerNames) => {
   if (param.type === "Identifier") {
-    if (!triggerNames.has(param.name)) return;
-    if (!isBareStringAnnotation(param.typeAnnotation)) return;
+    if (!triggerNames.has(param.name)) {
+      return;
+    }
+    if (!isBareStringAnnotation(param.typeAnnotation)) {
+      return;
+    }
     context.report({
       node: param,
       messageId: "unbrandedParam",
@@ -205,7 +224,9 @@ export default {
             : DEFAULT_NAMES;
 
         const visitFunctionLike = (node) => {
-          if (!Array.isArray(node.params)) return;
+          if (!Array.isArray(node.params)) {
+            return;
+          }
           const allowContextualObjectPattern =
             isKnownValidatedContextParam(node);
           for (const param of node.params) {

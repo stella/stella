@@ -9,6 +9,8 @@
 //
 // Replaces: scripts/lint-untyped-updates.sh
 
+import { isIdentifier } from "./utils.ts";
+
 export default {
   meta: { name: "no-untyped-updates" },
   rules: {
@@ -27,18 +29,22 @@ export default {
           VariableDeclarator(node) {
             // Match: const/let foo: Record<string, unknown> =
             // The type annotation is on the id node
-            const typeAnnotation =
-              node.id.typeAnnotation?.typeAnnotation;
-            if (!typeAnnotation) {return;}
-            if (!node.init) {return;}
+            const typeAnnotation = node.id.typeAnnotation?.typeAnnotation;
+            if (!typeAnnotation) {
+              return;
+            }
+            if (!node.init) {
+              return;
+            }
 
             if (
               typeAnnotation.type === "TSTypeReference" &&
-              typeAnnotation.typeName?.type === "Identifier" &&
-              typeAnnotation.typeName.name === "Record"
+              isIdentifier(typeAnnotation.typeName, "Record")
             ) {
               const params = typeAnnotation.typeArguments?.params;
-              if (!params || params.length !== 2) {return;}
+              if (!params || params.length !== 2) {
+                return;
+              }
 
               const [keyType, valueType] = params;
 
