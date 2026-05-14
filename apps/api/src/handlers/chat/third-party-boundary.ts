@@ -20,6 +20,7 @@ import {
   getChatToolPolicy,
 } from "@/api/handlers/chat/tools/tool-policy";
 import type { ChatMessage } from "@/api/handlers/chat/types";
+import { loadAnonymizationAllowlistCanonicals } from "@/api/lib/anonymization-allowlist";
 import { loadAnonymizationGazetteerEntries } from "@/api/lib/anonymization-blacklist";
 import type { SafeId } from "@/api/lib/branded-types";
 import { parseDataUrl, toDataUrl } from "@/api/lib/data-url";
@@ -32,6 +33,14 @@ export type ChatThirdPartyBoundary =
       anonymizeFields?: typeof anonymizeTextFields | undefined;
       anonymizationScopeId: string;
       gazetteerEntries: ReturnType<typeof loadAnonymizationGazetteerEntries>;
+      /**
+       * Canonicals the user marked as "ignore" in the inspector
+       * allowlist (workspace and org scopes). Pre-loaded once on
+       * boundary creation so we don't hit the DB per anonymize
+       * call. Doc-scope ignores are skipped here — chat threads
+       * aren't tied to a specific entity in the current shape.
+       */
+      excludedCanonicals: Promise<string[]>;
       organizationId: SafeId<"organization">;
       /**
        * Shared pipeline context for every anonymization call on
@@ -108,6 +117,13 @@ export const createChatThirdPartyBoundary = ({
           : loadAnonymizationGazetteerEntries({
               organizationId,
               workspaceId,
+              scopedDb,
+            }),
+        excludedCanonicals: anonymizeFields
+          ? Promise.resolve([])
+          : loadAnonymizationAllowlistCanonicals({
+              organizationId,
+              scopeId: workspaceId,
               scopedDb,
             }),
         organizationId,
@@ -299,6 +315,7 @@ export const prepareTextForThirdParty = async ({
         context: boundary.pipelineContext,
         fields: [text],
         gazetteerEntries: await boundary.gazetteerEntries,
+        excludedCanonicals: await boundary.excludedCanonicals,
         organizationId: boundary.organizationId,
         scopedDb: boundary.scopedDb,
         workspaceId: boundary.anonymizationScopeId,
@@ -338,6 +355,7 @@ const prepareTextBatchForThirdParty = async ({
         context: boundary.pipelineContext,
         fields,
         gazetteerEntries: await boundary.gazetteerEntries,
+        excludedCanonicals: await boundary.excludedCanonicals,
         organizationId: boundary.organizationId,
         scopedDb: boundary.scopedDb,
         workspaceId: boundary.anonymizationScopeId,

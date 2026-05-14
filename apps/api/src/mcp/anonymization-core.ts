@@ -15,6 +15,13 @@ import { buildFieldMarkers } from "@/api/mcp/field-markers";
 export type AnonymizeTextFieldsInput = {
   fields: string[];
   gazetteerEntries?: GazetteerEntry[] | undefined;
+  /**
+   * Canonicals the user has flagged as false positives. The
+   * dependency loader fills this in from the allowlist table
+   * when omitted, so callers that already resolved the list
+   * (test seams, batch jobs) can pass it directly.
+   */
+  excludedCanonicals?: readonly string[] | undefined;
   organizationId: SafeId<"organization">;
   scopedDb: ScopedDb;
   workspaceId: string;
@@ -34,6 +41,18 @@ export type AnonymizeTextFieldsDependencies = ChatAnonRuntime & {
     organizationId: SafeId<"organization">;
     scopedDb: ScopedDb;
   }) => Promise<GazetteerEntry[]>;
+  loadAnonymizationAllowlistCanonicals: (input: {
+    organizationId: SafeId<"organization">;
+    /**
+     * Plain string (rather than SafeId) so the production chat
+     * boundary, which historically falls back to the thread id
+     * when no workspace is active, can pass its anonymization
+     * scope through unchanged. The loader brands the value
+     * before issuing the workspace-scoped query.
+     */
+    scopeId?: string | undefined;
+    scopedDb: ScopedDb;
+  }) => Promise<string[]>;
   loadNameDictionaries: () => Promise<
     NonNullable<PipelineConfig["dictionaries"]>
   >;
@@ -82,6 +101,7 @@ export const anonymizeTextFieldsWithDependencies = async ({
   dependencies,
   fields,
   gazetteerEntries,
+  excludedCanonicals,
   organizationId,
   scopedDb,
   workspaceId,
@@ -112,6 +132,13 @@ export const anonymizeTextFieldsWithDependencies = async ({
       organizationId,
       scopedDb,
     }));
+  const allowlist =
+    excludedCanonicals ??
+    (await dependencies.loadAnonymizationAllowlistCanonicals({
+      organizationId,
+      scopeId: workspaceId,
+      scopedDb,
+    }));
   const dictionaries = await dependencies.loadNameDictionaries();
 
   const result = await runChatAnonPipeline({
@@ -120,6 +147,7 @@ export const anonymizeTextFieldsWithDependencies = async ({
     text: combinedText,
     workspaceId,
     gazetteerEntries: entries,
+    excludedCanonicals: allowlist,
     context,
   });
 

@@ -37,7 +37,7 @@ export const ChatAnonymizedToggle = ({
           <Icon
             className={cn(
               size === "icon-xs" ? "size-3.5" : "size-4",
-              enabled && "text-success",
+              enabled && "text-info",
             )}
           />
         </Button>

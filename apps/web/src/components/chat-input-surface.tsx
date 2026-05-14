@@ -30,7 +30,7 @@ type ChatInputSurfaceProps = {
   onStop?: () => void;
   /**
    * Whether this surface will send the next request anonymized.
-   * Drives the green-ring "shield active" treatment so the cue
+   * Drives the blue-ring "shield active" treatment so the cue
    * matches what gets sent. The shared input is mounted from
    * surfaces with different toggle scopes (per-thread store on
    * `/chat`, local state in the inspector tab, none in the file
@@ -132,10 +132,10 @@ export const ChatInputSurface = ({
         "transition-colors",
         // Default focus border (gray) only when not in anonymized
         // mode — otherwise the gray border landed on top of the
-        // green ring and read as a double-ring on click.
+        // blue ring and read as a double-ring on click.
         !inputDisabled && !anonymized && "focus-within:border-ring",
         anonymized &&
-          "ring-success/40 border-success/40 focus-within:border-success/60 shadow-[0_0_0_4px_rgb(from_var(--color-success)_r_g_b_/_0.08)] ring-1",
+          "ring-info/40 border-info/40 focus-within:border-info/60 shadow-[0_0_0_4px_rgb(from_var(--color-info)_r_g_b_/_0.08)] ring-1",
         className,
       )}
       onBlurCapture={handleBlur}
