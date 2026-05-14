@@ -23,6 +23,9 @@ type RouteSet = {
   status?: number | string;
 };
 
+const MCP_HTTP_METHOD_ALLOW_HEADER = "OPTIONS, GET, POST, DELETE";
+const MCP_HTTP_METHODS = new Set(MCP_HTTP_METHOD_ALLOW_HEADER.split(", "));
+
 const applyHeaders = ({
   headers,
   set,
@@ -58,8 +61,22 @@ export const createMcpRoute = ({
   handleMcpHttpRequest,
 }: {
   handleMcpHttpRequest: HandleMcpHttpRequest;
-}) =>
-  new Elysia()
+}) => {
+  const handleMcpTransportRoute = async (
+    request: Request,
+    options?: { mode?: McpMode },
+  ) => {
+    if (!MCP_HTTP_METHODS.has(request.method)) {
+      return new Response("Method Not Allowed", {
+        headers: { Allow: MCP_HTTP_METHOD_ALLOW_HEADER },
+        status: 405,
+      });
+    }
+
+    return await handleMcpHttpRequest(request, options);
+  };
+
+  return new Elysia()
     .options(ROOT_MCP_DISCOVERY_PATH, discoveryOptionsHandler)
     .get(ROOT_MCP_DISCOVERY_PATH, discoveryHandler())
     .options(MCP_ANONYMIZED_DISCOVERY_PATH, discoveryOptionsHandler)
@@ -68,10 +85,11 @@ export const createMcpRoute = ({
     .get(MCP_DISCOVERY_PATH, discoveryHandler())
     .all(
       MCP_HTTP_PATH,
-      async ({ request }) => await handleMcpHttpRequest(request),
+      async ({ request }) => await handleMcpTransportRoute(request),
     )
     .all(
       MCP_ANONYMIZED_HTTP_PATH,
       async ({ request }) =>
-        await handleMcpHttpRequest(request, { mode: "anonymized" }),
+        await handleMcpTransportRoute(request, { mode: "anonymized" }),
     );
+};

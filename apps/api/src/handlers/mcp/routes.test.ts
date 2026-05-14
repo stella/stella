@@ -108,4 +108,29 @@ describe("MCP protected resource discovery routes", () => {
       { method: "DELETE", mode: "anonymized" },
     ]);
   });
+
+  test("rejects unsupported MCP HTTP methods before transport handling", async () => {
+    let calls = 0;
+    const route = createMcpRoute({
+      handleMcpHttpRequest: async () => {
+        calls += 1;
+        return new Response("unexpected");
+      },
+    });
+
+    for (const path of [MCP_HTTP_PATH, MCP_ANONYMIZED_HTTP_PATH]) {
+      for (const method of ["PATCH", "PUT"]) {
+        const response = await route.handle(
+          new Request(`http://localhost${path}`, { method }),
+        );
+
+        expect(response.status).toBe(405);
+        expect(response.headers.get("Allow")).toBe(
+          "OPTIONS, GET, POST, DELETE",
+        );
+      }
+    }
+
+    expect(calls).toBe(0);
+  });
 });

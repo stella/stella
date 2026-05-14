@@ -98,6 +98,7 @@ type SearchHandlerProps = {
   organizationId: SafeId<"organization">;
   accessibleWorkspaceIds: SafeId<"workspace">[];
   body: SearchBodySchema;
+  search?: typeof searchGlobal;
 };
 
 export const searchHandler = async ({
@@ -105,6 +106,7 @@ export const searchHandler = async ({
   organizationId,
   accessibleWorkspaceIds,
   body,
+  search = searchGlobal,
 }: SearchHandlerProps) => {
   const resolved = await resolveSelectedWorkspaceIds({
     scopedDb,
@@ -118,7 +120,7 @@ export const searchHandler = async ({
 
   const types = body.types.length > 0 ? body.types : body.kinds;
 
-  return await searchGlobal({
+  return await search({
     query: body.query,
     organizationId,
     accessibleWorkspaceIds,
