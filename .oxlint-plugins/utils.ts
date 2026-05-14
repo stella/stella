@@ -63,9 +63,14 @@ export const isCallTo = (node: unknown, name: string): boolean =>
   isIdentifier(node.callee, name);
 
 // Resolve the dot-notation name of a callee: an Identifier, or a
-// non-computed MemberExpression chain rooted at an Identifier
-// (e.g. `t.String`, `Schema.is`, `process.stderr.write`). Returns null
-// when the chain is computed or rooted at a non-Identifier.
+// non-computed MemberExpression chain (e.g. `t.String`, `Schema.is`,
+// `process.stderr.write`). Returns null when the chain is computed
+// or the property name itself can't be resolved.
+//
+// If the chain is rooted at a non-Identifier expression (e.g. `foo().bar`),
+// returns the bare property name ("bar") rather than null. Callers that
+// match the result against a fixed allowlist must consider whether they
+// need to distinguish `foo().createSafeHandler` from `createSafeHandler`.
 export const getCalleeName = (callee: unknown): string | null => {
   if (isIdentifier(callee)) {
     return callee.name;
