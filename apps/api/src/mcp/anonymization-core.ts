@@ -26,6 +26,15 @@ export type AnonymizeTextFieldsInput = {
   scopedDb: ScopedDb;
   workspaceId: string;
   /**
+   * Document the text belongs to, when the caller knows it (MCP
+   * search results, file-aware tool outputs). When set, the
+   * allowlist loader pulls doc-scoped ignores in addition to the
+   * workspace + org tiers, so a "ignore on this file" override
+   * applies to server anonymization too — not just the inspector
+   * overlay. Chat boundaries leave this undefined.
+   */
+  entityId?: SafeId<"entity"> | undefined;
+  /**
    * Optional shared `PipelineContext`. When set, the placeholder
    * counter continues across calls so independent batches don't
    * collide on `[PERSON_1]`. Chat boundaries pass the same context
@@ -51,6 +60,7 @@ export type AnonymizeTextFieldsDependencies = ChatAnonRuntime & {
      * before issuing the workspace-scoped query.
      */
     scopeId?: string | undefined;
+    entityId?: SafeId<"entity"> | undefined;
     scopedDb: ScopedDb;
   }) => Promise<string[]>;
   loadNameDictionaries: () => Promise<
@@ -105,6 +115,7 @@ export const anonymizeTextFieldsWithDependencies = async ({
   organizationId,
   scopedDb,
   workspaceId,
+  entityId,
   context: providedContext,
 }: AnonymizeTextFieldsInput & {
   dependencies: AnonymizeTextFieldsDependencies;
@@ -137,6 +148,7 @@ export const anonymizeTextFieldsWithDependencies = async ({
     (await dependencies.loadAnonymizationAllowlistCanonicals({
       organizationId,
       scopeId: workspaceId,
+      entityId,
       scopedDb,
     }));
   const dictionaries = await dependencies.loadNameDictionaries();
