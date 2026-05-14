@@ -518,9 +518,11 @@ export const createSearchSummaryChatThread = async ({
   organizationId,
   safeDb,
   scopedDb,
+  search = searchGlobal,
   userId,
 }: SearchSummaryChatContext & {
   body: SearchSummaryChatBody;
+  search?: typeof searchGlobal;
 }) => {
   const resolved = await resolveSelectedWorkspaceIds({
     scopedDb,
@@ -538,6 +540,7 @@ export const createSearchSummaryChatThread = async ({
     organizationId,
     selectedWorkspaceIds: resolved.ids,
     scopedDb,
+    search,
   });
 
   if (!Array.isArray(contextsResult)) {
@@ -644,6 +647,7 @@ const loadSummaryContexts = async ({
   accessibleWorkspaceIds,
   filters,
   organizationId,
+  search = searchGlobal,
   selectedWorkspaceIds,
   scopedDb,
 }: {
@@ -659,10 +663,11 @@ const loadSummaryContexts = async ({
     | "updatedTo"
   >;
   organizationId: SafeId<"organization">;
+  search?: typeof searchGlobal;
   selectedWorkspaceIds: readonly SafeId<"workspace">[];
   scopedDb: ScopedDb;
 }) => {
-  const searchResult = await searchGlobal({
+  const searchResult = await search({
     query: filters.query,
     organizationId,
     accessibleWorkspaceIds,

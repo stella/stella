@@ -1,16 +1,11 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { ScopedDb, Transaction } from "@/api/db";
+import { searchHandler } from "@/api/handlers/search/search";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 
 const searchMock = mock();
-
-void mock.module("@/api/lib/search/index-global", () => ({
-  searchGlobal: searchMock,
-}));
-
-const { searchHandler } = await import("@/api/handlers/search/search");
 
 const realDateNow = Date.now;
 
@@ -70,6 +65,7 @@ describe("search handler workspace scoping", () => {
         query: "closing memo",
       },
       organizationId,
+      search: searchMock,
       scopedDb: unusedScopedDb,
     });
 
@@ -100,6 +96,7 @@ describe("search handler workspace scoping", () => {
         workspaceIds: [workspaceId],
       },
       organizationId,
+      search: searchMock,
       scopedDb: createWorkspaceLookupScopedDb(findManyMock),
     });
 
@@ -133,6 +130,7 @@ describe("search handler workspace scoping", () => {
         workspaceIds: [workspaceId, workspaceId, workspaceId],
       },
       organizationId,
+      search: searchMock,
       scopedDb: createWorkspaceLookupScopedDb(findManyMock),
     });
 
@@ -160,6 +158,7 @@ describe("search handler workspace scoping", () => {
         workspaceIds: [toSafeId<"workspace">("ws_other")],
       },
       organizationId,
+      search: searchMock,
       scopedDb: unusedScopedDb,
     });
 
@@ -182,6 +181,7 @@ describe("search handler workspace scoping", () => {
         updatedTo: "2026-04-30T12:00:00.000Z",
       },
       organizationId,
+      search: searchMock,
       scopedDb: unusedScopedDb,
     });
 
