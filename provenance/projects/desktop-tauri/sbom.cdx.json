@@ -21089,6 +21089,54 @@
       "version": "2.3.1"
     },
     {
+      "bom-ref": "pkg:cargo/tauri-plugin-single-instance@2.4.2",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "5c8f29386f5e9fdc699182388a33ee80a56de436d91b67459e86afef426282af"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        },
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "tauri-plugin-single-instance",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/tauri-plugin-single-instance@2.4.2",
+      "type": "library",
+      "version": "2.4.2"
+    },
+    {
       "bom-ref": "pkg:cargo/tauri-plugin-updater@2.10.1",
       "evidence": {
         "identity": [
@@ -33070,6 +33118,7 @@
         "pkg:cargo/tauri-plugin-notification@2.3.3",
         "pkg:cargo/tauri-plugin-opener@2.5.4",
         "pkg:cargo/tauri-plugin-process@2.3.1",
+        "pkg:cargo/tauri-plugin-single-instance@2.4.2",
         "pkg:cargo/tauri-plugin-updater@2.10.1",
         "pkg:cargo/tauri@2.11.1",
         "pkg:cargo/tokio@1.52.2",
@@ -33424,6 +33473,19 @@
         "pkg:cargo/tauri@2.11.1"
       ],
       "ref": "pkg:cargo/tauri-plugin-process@2.3.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/serde@1.0.228",
+        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/tauri-plugin-deep-link@2.4.9",
+        "pkg:cargo/tauri@2.11.1",
+        "pkg:cargo/thiserror@2.0.18",
+        "pkg:cargo/tracing@0.1.44",
+        "pkg:cargo/windows-sys@0.60.2",
+        "pkg:cargo/zbus@5.15.0"
+      ],
+      "ref": "pkg:cargo/tauri-plugin-single-instance@2.4.2"
     },
     {
       "dependsOn": [
