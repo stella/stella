@@ -15,6 +15,17 @@ export const anonymizationAllowlistKeys = {
     workspaceId,
     entityId ?? "no-entity",
   ],
+  /**
+   * Broader prefix matching every doc's allowlist query in this
+   * workspace. Use this as the SSE invalidation key when a
+   * workspace- or org-scoped entry changes, so allowlists for
+   * other open documents refresh too — entity-keyed queries
+   * would otherwise keep stale exclusions.
+   */
+  workspace: (workspaceId: string): string[] => [
+    "anonymization-allowlist",
+    workspaceId,
+  ],
 };
 
 export const anonymizationAllowlistOptions = ({

@@ -586,7 +586,6 @@ export const AnonymizationFacet = ({
                                 for (const entry of matches) {
                                   deleteAllowlistMutation.mutate({
                                     workspaceId,
-                                    entityId,
                                     entryId: entry.id,
                                   });
                                 }

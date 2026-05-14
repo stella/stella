@@ -39,7 +39,15 @@ export const useCreateAnonymizationAllowlistEntry = () => {
           ...(scope === "document" && entityId
             ? { entityId: toSafeId<"entity">(entityId) }
             : {}),
-          queryKey: anonymizationAllowlistKeys.all({ workspaceId, entityId }),
+          // Workspace-scoped writes affect every doc in the
+          // workspace, so invalidate by the workspace-only key
+          // prefix; that wakes up every open document's
+          // entity-keyed allowlist query. Doc-scoped writes only
+          // need to refresh their own query.
+          queryKey:
+            scope === "workspace"
+              ? anonymizationAllowlistKeys.workspace(workspaceId)
+              : anonymizationAllowlistKeys.all({ workspaceId, entityId }),
         });
       if (response.error) {
         throw toAPIError(response.error);
@@ -54,25 +62,24 @@ export const useCreateAnonymizationAllowlistEntry = () => {
 
 type DeleteAllowlistEntryVars = {
   workspaceId: string;
-  entityId: string | null;
   entryId: string;
 };
 
 export const useDeleteAnonymizationAllowlistEntry = () => {
   const analytics = useAnalytics();
   return useMutation({
-    mutationFn: async ({
-      workspaceId,
-      entityId,
-      entryId,
-    }: DeleteAllowlistEntryVars) => {
+    mutationFn: async ({ workspaceId, entryId }: DeleteAllowlistEntryVars) => {
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
         ["anonymization-allowlist"]({
           entryId: toSafeId<"anonymizationAllowlistEntry">(entryId),
         })
         .delete({
-          queryKey: anonymizationAllowlistKeys.all({ workspaceId, entityId }),
+          // The caller doesn't know whether the deleted row was
+          // doc- or workspace-scoped, so broadcast on the
+          // workspace-prefix key. That refreshes every open
+          // document's allowlist query in this workspace.
+          queryKey: anonymizationAllowlistKeys.workspace(workspaceId),
         });
       if (response.error) {
         throw toAPIError(response.error);
