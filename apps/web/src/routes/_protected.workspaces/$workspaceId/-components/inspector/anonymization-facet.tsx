@@ -13,7 +13,7 @@
  * actions, and "download anonymized" land in follow-up commits.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -47,6 +47,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { useAnonymizationActiveStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-active-store";
 import { AnonymizationContextMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-context-menu";
 import { useAnonymizationMatches } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-matches-store";
+import { useAnonymizationSelectionStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-selection-store";
 import {
   useCreateAnonymizationAllowlistEntry,
   useDeleteAnonymizationAllowlistEntry,
@@ -368,8 +369,51 @@ export const AnonymizationFacet = ({
       return next;
     });
 
+  // Click in the document → highlight matching row here.
+  // Subscribe to the bridge store and, on every doc-sourced
+  // selection bump, find the row by data attribute, scroll it
+  // into view, and run a brief outline flash. Sidebar-sourced
+  // selections (our own emits) are ignored to avoid loops.
+  const containerRef = useRef<HTMLDivElement>(null);
+  const docSelection = useAnonymizationSelectionStore((s) =>
+    s.source === "doc" ? { canonical: s.canonical, seq: s.seq } : null,
+  );
+  useEffect(() => {
+    if (!docSelection?.canonical) {
+      return;
+    }
+    const root = containerRef.current;
+    if (!root) {
+      return;
+    }
+    // `seq` is part of the dep array so repeated clicks of the
+    // same canonical re-fire the scroll + flash.
+    const selector = `[data-anonymization-canonical="${CSS.escape(docSelection.canonical)}"]`;
+    const row = root.querySelector<HTMLElement>(selector);
+    if (!row) {
+      return;
+    }
+    row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    row.animate(
+      [
+        { boxShadow: "inset 0 0 0 2px var(--color-primary)" },
+        { boxShadow: "inset 0 0 0 2px transparent" },
+      ],
+      { duration: 600, easing: "ease-out" },
+    );
+  }, [docSelection?.canonical, docSelection?.seq]);
+
+  const selectFromSidebar = (canonical: string, label: string) => {
+    useAnonymizationSelectionStore
+      .getState()
+      .select(canonical, label, "sidebar");
+  };
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
+    <div
+      ref={containerRef}
+      className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4"
+    >
       <h3 className="text-foreground text-sm font-medium">
         {t("inspector.anonymization.title")}
       </h3>
@@ -480,8 +524,18 @@ export const AnonymizationFacet = ({
           const hitCount = matchSnapshot.countByCanonical.get(entry.canonical);
           return (
             <div
-              className="hover:bg-muted/50 flex items-center justify-between gap-2 rounded-md border px-3 py-2"
+              className="hover:bg-muted/50 flex cursor-pointer items-center justify-between gap-2 rounded-md border px-3 py-2"
+              data-anonymization-canonical={entry.canonical}
               key={entry.id}
+              onClick={() => selectFromSidebar(entry.canonical, entry.label)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  selectFromSidebar(entry.canonical, entry.label);
+                }
+              }}
             >
               <div className="flex min-w-0 flex-col">
                 <span className="truncate text-sm font-medium">
@@ -509,9 +563,10 @@ export const AnonymizationFacet = ({
                 )}
                 <Button
                   disabled={deleteMutation.isPending}
-                  onClick={() =>
-                    deleteMutation.mutate({ workspaceId, entryId: entry.id })
-                  }
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    deleteMutation.mutate({ workspaceId, entryId: entry.id });
+                  }}
                   size="icon"
                   variant="ghost"
                 >
@@ -565,15 +620,32 @@ export const AnonymizationFacet = ({
                       <li
                         className={
                           row.isExcluded
-                            ? "text-muted-foreground hover:bg-muted/30 flex items-center justify-between gap-2 px-3 py-1.5 line-through"
-                            : "hover:bg-muted/50 flex items-center justify-between gap-2 px-3 py-1.5"
+                            ? "text-muted-foreground hover:bg-muted/30 flex cursor-pointer items-center justify-between gap-2 px-3 py-1.5 line-through"
+                            : "hover:bg-muted/50 flex cursor-pointer items-center justify-between gap-2 px-3 py-1.5"
                         }
+                        data-anonymization-canonical={row.canonical}
                         key={row.canonical}
+                        onClick={() => selectFromSidebar(row.canonical, label)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            selectFromSidebar(row.canonical, label);
+                          }
+                        }}
                       >
                         <span className="truncate text-xs">
                           {row.canonical}
                         </span>
-                        <span className="flex items-center gap-1">
+                        {/* Wrapper stops the row click so inner action
+                            buttons (ignore / restore / scope menu) don't
+                            also trigger the term-select bridge. */}
+                        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+                        <span
+                          className="flex items-center gap-1"
+                          onClick={(event) => event.stopPropagation()}
+                        >
                           {!row.isExcluded && row.count > 0 && (
                             <span
                               aria-label={t(

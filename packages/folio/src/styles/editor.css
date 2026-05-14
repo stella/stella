@@ -716,6 +716,24 @@
 .folio-anonymization-term {
   background-color: transparent;
   box-shadow: inset 0 -2px 0 0 rgb(37 99 235 / 0.8); /* blue-600 */
+  border-radius: 2px;
+  transition:
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.folio-anonymization-term:hover {
+  background-color: rgb(37 99 235 / 0.12);
+}
+
+/* Selected via the inspector facet (sidebar → doc direction).
+   Adds a soft fill + outline so the user can spot which term
+   they just selected in the sidebar after the scroll. */
+.folio-anonymization-term[data-folio-anonymization-selected="true"] {
+  background-color: rgb(37 99 235 / 0.2);
+  box-shadow:
+    inset 0 -2px 0 0 rgb(37 99 235 / 0.9),
+    0 0 0 2px rgb(37 99 235 / 0.35);
 }
 
 /* AI prompt-bar caret suppression lives in apps/web (the bar is no

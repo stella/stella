@@ -383,6 +383,24 @@ export type DocxEditorProps = {
   onAnonymizationMatchesChange?: (
     matches: readonly import("../core/prosemirror/plugins/anonymizationDecorations").AnonymizationMatch[],
   ) => void;
+  /**
+   * Fires when the user clicks an anonymization highlight in
+   * the rendered document. Hosts use this to push the
+   * selection into a sidebar bridge so the inspector facet can
+   * scroll/flash the matching row.
+   */
+  onAnonymizationTermClick?:
+    | ((canonical: string, label: string) => void)
+    | undefined;
+  /**
+   * Canonical to mark as selected in the rendered document.
+   * The first matching rect scrolls into view whenever
+   * `anonymizationSelectionSeq` increments (so repeated
+   * sidebar clicks of the same term re-trigger the scroll).
+   */
+  selectedAnonymizationCanonical?: string | null | undefined;
+  /** Monotonic counter from the bridge store; drives the re-scroll. */
+  anonymizationSelectionSeq?: number | undefined;
 };
 
 /**
@@ -687,6 +705,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       onCompatibilityChange,
       onEditorViewReady,
       onAnonymizationMatchesChange,
+      onAnonymizationTermClick,
+      selectedAnonymizationCanonical = null,
+      anonymizationSelectionSeq,
     },
     ref,
   ) {
@@ -3701,6 +3722,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                         onContextMenu={handleContextMenu}
                         commentsSidebarOpen={showCommentsSidebar}
                         anchorPositionMode="comments"
+                        onAnonymizationTermClick={onAnonymizationTermClick}
+                        selectedAnonymizationCanonical={
+                          selectedAnonymizationCanonical
+                        }
+                        anonymizationSelectionSeq={anonymizationSelectionSeq}
                         onAnchorPositionsChange={setAnchorPositions}
                         onTotalPagesChange={(totalPages) => {
                           setScrollPageInfo((previous) =>

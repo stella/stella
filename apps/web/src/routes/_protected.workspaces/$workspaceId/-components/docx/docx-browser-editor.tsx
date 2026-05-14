@@ -63,6 +63,7 @@ import { useDocxBlockScroll } from "@/routes/_protected.workspaces/$workspaceId/
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { useIsAnonymizationActive } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-active-store";
 import { useAnonymizationMatchesStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-matches-store";
+import { useAnonymizationSelectionStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-selection-store";
 import { anonymizationAllowlistOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-terms";
 import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.css";
@@ -417,6 +418,25 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       clear(fieldId);
     };
   }, [fieldId, isAnonymizationActive]);
+
+  // Two-way bridge with the inspector anonymization facet.
+  // - Click in document → push to store as source="doc".
+  // - Selection from sidebar (source="sidebar") → forward
+  //   canonical + seq to Folio so the overlay scrolls/marks
+  //   the term. Doc-sourced selections aren't echoed back to
+  //   the editor — that would re-scroll on its own click.
+  const handleAnonymizationTermClick = useCallback(
+    (canonical: string, label: string) => {
+      useAnonymizationSelectionStore.getState().select(canonical, label, "doc");
+    },
+    [],
+  );
+  const sidebarSelectedCanonical = useAnonymizationSelectionStore((s) =>
+    s.source === "sidebar" ? s.canonical : null,
+  );
+  const sidebarSelectionSeq = useAnonymizationSelectionStore((s) =>
+    s.source === "sidebar" ? s.seq : 0,
+  );
   const didOpenRef = useRef(false);
   const errorToastShownRef = useRef(false);
   const lastStyleLabelRef = useRef("Normal");
@@ -1208,6 +1228,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
                 onCompatibilityChange?.(nextCompatibility);
               }}
               onAnonymizationMatchesChange={handleAnonymizationMatchesChange}
+              onAnonymizationTermClick={handleAnonymizationTermClick}
+              selectedAnonymizationCanonical={sidebarSelectedCanonical}
+              anonymizationSelectionSeq={sidebarSelectionSeq}
               onEditorViewReady={setEditorViewForAnonymization}
               showToolbar={showActionBar ? true : isUnlocked}
               toolbarExtra={toolbarExtra}
