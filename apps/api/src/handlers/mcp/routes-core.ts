@@ -1,0 +1,119 @@
+import Elysia from "elysia";
+
+import {
+  MCP_ANONYMIZED_DISCOVERY_PATH,
+  MCP_ANONYMIZED_HTTP_PATH,
+  MCP_DISCOVERY_PATH,
+  MCP_HTTP_PATH,
+  ROOT_MCP_DISCOVERY_PATH,
+} from "@/api/mcp/constants";
+import type { McpMode } from "@/api/mcp/constants";
+import {
+  createMcpMetadataHeaders,
+  getMcpProtectedResourceMetadata,
+} from "@/api/mcp/metadata";
+
+type HandleMcpHttpRequest = (
+  request: Request,
+  options?: { mode?: McpMode },
+) => Promise<Response>;
+
+const applyHeaders = ({
+  headers,
+  set,
+}: {
+  headers: Headers;
+  set: { headers: Record<string, string | number | boolean | undefined> };
+}) => {
+  for (const [key, value] of headers) {
+    set.headers[key] = value;
+  }
+};
+
+export const createMcpRoute = ({
+  handleMcpHttpRequest,
+}: {
+  handleMcpHttpRequest: HandleMcpHttpRequest;
+}) =>
+  new Elysia()
+    .options(ROOT_MCP_DISCOVERY_PATH, ({ set }) => {
+      applyHeaders({
+        headers: createMcpMetadataHeaders(),
+        set,
+      });
+      set.status = 204;
+      return "";
+    })
+    .get(ROOT_MCP_DISCOVERY_PATH, ({ set }) => {
+      applyHeaders({
+        headers: createMcpMetadataHeaders(),
+        set,
+      });
+      return getMcpProtectedResourceMetadata();
+    })
+    .options(MCP_ANONYMIZED_DISCOVERY_PATH, ({ set }) => {
+      applyHeaders({
+        headers: createMcpMetadataHeaders(),
+        set,
+      });
+      set.status = 204;
+      return "";
+    })
+    .get(MCP_ANONYMIZED_DISCOVERY_PATH, ({ set }) => {
+      applyHeaders({
+        headers: createMcpMetadataHeaders(),
+        set,
+      });
+      return getMcpProtectedResourceMetadata("anonymized");
+    })
+    .options(MCP_DISCOVERY_PATH, ({ set }) => {
+      applyHeaders({
+        headers: createMcpMetadataHeaders(),
+        set,
+      });
+      set.status = 204;
+      return "";
+    })
+    .get(MCP_DISCOVERY_PATH, ({ set }) => {
+      applyHeaders({
+        headers: createMcpMetadataHeaders(),
+        set,
+      });
+      return getMcpProtectedResourceMetadata();
+    })
+    .options(
+      MCP_HTTP_PATH,
+      async ({ request }) => await handleMcpHttpRequest(request),
+    )
+    .get(
+      MCP_HTTP_PATH,
+      async ({ request }) => await handleMcpHttpRequest(request),
+    )
+    .post(
+      MCP_HTTP_PATH,
+      async ({ request }) => await handleMcpHttpRequest(request),
+    )
+    .delete(
+      MCP_HTTP_PATH,
+      async ({ request }) => await handleMcpHttpRequest(request),
+    )
+    .options(
+      MCP_ANONYMIZED_HTTP_PATH,
+      async ({ request }) =>
+        await handleMcpHttpRequest(request, { mode: "anonymized" }),
+    )
+    .get(
+      MCP_ANONYMIZED_HTTP_PATH,
+      async ({ request }) =>
+        await handleMcpHttpRequest(request, { mode: "anonymized" }),
+    )
+    .post(
+      MCP_ANONYMIZED_HTTP_PATH,
+      async ({ request }) =>
+        await handleMcpHttpRequest(request, { mode: "anonymized" }),
+    )
+    .delete(
+      MCP_ANONYMIZED_HTTP_PATH,
+      async ({ request }) =>
+        await handleMcpHttpRequest(request, { mode: "anonymized" }),
+    );

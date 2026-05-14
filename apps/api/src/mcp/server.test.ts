@@ -1,47 +1,38 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import {
   McpAuthenticationError,
   McpOrganizationAccessError,
 } from "@/api/mcp/errors";
+import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
 
 const authenticateMcpRequestMock = mock();
 const captureErrorMock = mock();
-const analyticsCaptureMock = mock();
-const analyticsFlushMock = mock(async function flushAnalyticsMock() {
-  return;
-});
-const getAnalyticsMock = mock(() => ({
-  capture: analyticsCaptureMock,
-  flush: analyticsFlushMock,
-}));
 const resolveMcpSessionContextMock = mock();
+const getMcpToolDefinitionMock = mock();
+const handleMcpToolCallMock = mock();
+const listMcpToolsMock = mock(() => []);
 
-void mock.module("@/api/lib/analytics", () => ({
-  captureError: captureErrorMock,
-  captureRequestError: captureErrorMock,
-  getAnalytics: getAnalyticsMock,
-}));
-
-void mock.module("@/api/mcp/auth", () => ({
+const handleMcpHttpRequest = createMcpHttpRequestHandler({
   authenticateMcpRequest: authenticateMcpRequestMock,
-}));
-
-void mock.module("@/api/mcp/context", () => ({
+  captureError: (error, context) => {
+    captureErrorMock(error, context);
+  },
+  getMcpToolDefinition: getMcpToolDefinitionMock,
+  handleMcpToolCall: handleMcpToolCallMock,
+  listMcpTools: listMcpToolsMock,
   resolveMcpSessionContext: resolveMcpSessionContextMock,
-}));
-
-const { handleMcpHttpRequest } = await import("@/api/mcp/server");
+});
 
 describe("handleMcpHttpRequest", () => {
   beforeEach(() => {
     authenticateMcpRequestMock.mockReset();
     captureErrorMock.mockReset();
+    getMcpToolDefinitionMock.mockReset();
+    handleMcpToolCallMock.mockReset();
+    listMcpToolsMock.mockReset();
+    listMcpToolsMock.mockImplementation(() => []);
     resolveMcpSessionContextMock.mockReset();
-  });
-
-  afterAll(() => {
-    mock.restore();
   });
 
   test("returns a generic 401 for token validation failures", async () => {

@@ -1,12 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
-import { mcpRoute } from "@/api/handlers/mcp/routes";
+import { createMcpRoute } from "@/api/handlers/mcp/routes-core";
 import {
   MCP_ANONYMIZED_DISCOVERY_PATH,
   MCP_DISCOVERY_PATH,
   ROOT_MCP_DISCOVERY_PATH,
 } from "@/api/mcp/constants";
 import { getMcpProtectedResourceMetadata } from "@/api/mcp/metadata";
+
+const mcpRoute = createMcpRoute({
+  handleMcpHttpRequest: async () => new Response("Unexpected MCP transport"),
+});
 
 describe("MCP protected resource discovery routes", () => {
   const assertMetadataResponse = async (path: string) => {
