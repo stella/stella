@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull, or } from "drizzle-orm";
 
 import type { GazetteerEntry } from "@stll/anonymize-wasm";
 
@@ -79,11 +79,27 @@ export const normalizeAnonymizationBlacklistEntries = (
 
 export const loadAnonymizationGazetteerEntries = async ({
   organizationId,
+  workspaceId,
   scopedDb,
 }: {
   organizationId: SafeId<"organization">;
+  /**
+   * When provided, the load returns the union of:
+   *   - org-wide entries (workspace_id IS NULL) — the firm
+   *     default catalog.
+   *   - entries scoped to this workspace (workspace_id = $).
+   * When absent, only org-wide entries are returned.
+   */
+  workspaceId?: SafeId<"workspace"> | undefined;
   scopedDb: ScopedDb;
 }) => {
+  const workspaceMatch = workspaceId
+    ? or(
+        isNull(anonymizationBlacklistEntries.workspaceId),
+        eq(anonymizationBlacklistEntries.workspaceId, workspaceId),
+      )
+    : isNull(anonymizationBlacklistEntries.workspaceId);
+
   const rows = await scopedDb((tx) =>
     tx
       .select({
@@ -92,12 +108,14 @@ export const loadAnonymizationGazetteerEntries = async ({
         label: anonymizationBlacklistEntries.label,
         variants: anonymizationBlacklistEntries.variants,
         createdAt: anonymizationBlacklistEntries.createdAt,
+        workspaceId: anonymizationBlacklistEntries.workspaceId,
       })
       .from(anonymizationBlacklistEntries)
       .where(
         and(
           eq(anonymizationBlacklistEntries.organizationId, organizationId),
           eq(anonymizationBlacklistEntries.enabled, true),
+          workspaceMatch,
         ),
       )
       .orderBy(asc(anonymizationBlacklistEntries.canonical)),
@@ -109,7 +127,7 @@ export const loadAnonymizationGazetteerEntries = async ({
       canonical: row.canonical,
       label: row.label,
       variants: row.variants,
-      workspaceId: organizationId,
+      workspaceId: row.workspaceId ?? organizationId,
       createdAt: row.createdAt.getTime(),
       source: "manual",
     }),

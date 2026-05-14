@@ -1778,6 +1778,74 @@ export const organizationSettings = p.pgTable(
   () => [...orgPolicies()],
 );
 
+/**
+ * Anonymization allowlist — entries that the detection pipeline
+ * should NOT mask. The user marks a detected entity as a false
+ * positive (e.g. their own client name signing a contract) and
+ * the row lands here; the pipeline removes matches whose
+ * canonical surface form is in this list at any of the three
+ * applicable scopes (doc, workspace, org).
+ *
+ * Scope columns mirror the blacklist's NULL-pattern:
+ *   - workspaceId NULL AND entityId NULL → org-wide
+ *   - workspaceId set, entityId NULL    → workspace-wide
+ *   - workspaceId set, entityId set     → single document
+ *
+ * Doc scope keys on `entityId` (the file's entity) so the
+ * allowlist follows the file across version cuts; using
+ * `fieldId` would lose the override every time the user saves a
+ * new revision.
+ */
+export const anonymizationAllowlistEntries = p.pgTable(
+  "anonymization_allowlist_entries",
+  {
+    id: pUuid<"anonymizationAllowlistEntry">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id").references(
+      () => workspaces.id,
+      { onDelete: "cascade" },
+    ),
+    entityId: safeUuid<"entity">("entity_id").references(
+      () => entities.id,
+      { onDelete: "cascade" },
+    ),
+    label: p.varchar({ length: 64 }).notNull(),
+    canonical: p.varchar({ length: 512 }).notNull(),
+    createdBy: p
+      .text("created_by")
+      .references(() => user.id, { onDelete: "set null" }),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .index("anonymization_allowlist_entries_org_idx")
+      .on(table.organizationId),
+    p
+      .index("anonymization_allowlist_entries_workspace_idx")
+      .on(table.workspaceId)
+      .where(sql`${table.workspaceId} is not null`),
+    p
+      .index("anonymization_allowlist_entries_entity_idx")
+      .on(table.entityId)
+      .where(sql`${table.entityId} is not null`),
+    p
+      .uniqueIndex("anonymization_allowlist_entries_org_canonical_uidx")
+      .on(table.organizationId, sql`lower(${table.canonical})`)
+      .where(sql`${table.workspaceId} is null and ${table.entityId} is null`),
+    p
+      .uniqueIndex("anonymization_allowlist_entries_ws_canonical_uidx")
+      .on(table.workspaceId, sql`lower(${table.canonical})`)
+      .where(sql`${table.workspaceId} is not null and ${table.entityId} is null`),
+    p
+      .uniqueIndex("anonymization_allowlist_entries_entity_canonical_uidx")
+      .on(table.entityId, sql`lower(${table.canonical})`)
+      .where(sql`${table.entityId} is not null`),
+    ...orgPolicies(),
+  ],
+);
+
 export const anonymizationBlacklistEntries = p.pgTable(
   "anonymization_blacklist_entries",
   {
@@ -1785,6 +1853,16 @@ export const anonymizationBlacklistEntries = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    /**
+     * When set, the entry is scoped to a single workspace
+     * and is only consulted by detection runs for that
+     * workspace. NULL means org-wide — the firm-level
+     * default catalog the existing settings UI maintains.
+     */
+    workspaceId: safeWorkspaceId("workspace_id").references(
+      () => workspaces.id,
+      { onDelete: "cascade" },
+    ),
     label: p.varchar({ length: 64 }).notNull(),
     canonical: p.varchar({ length: 512 }).notNull(),
     variants: jsonb().$type<string[]>().notNull().default([]),
@@ -1807,8 +1885,16 @@ export const anonymizationBlacklistEntries = p.pgTable(
       .index("anonymization_blacklist_entries_org_enabled_idx")
       .on(table.organizationId, table.enabled),
     p
+      .index("anonymization_blacklist_entries_workspace_idx")
+      .on(table.workspaceId, table.enabled),
+    p
       .uniqueIndex("anonymization_blacklist_entries_org_canonical_uidx")
-      .on(table.organizationId, sql`lower(${table.canonical})`),
+      .on(table.organizationId, sql`lower(${table.canonical})`)
+      .where(sql`${table.workspaceId} is null`),
+    p
+      .uniqueIndex("anonymization_blacklist_entries_ws_canonical_uidx")
+      .on(table.workspaceId, sql`lower(${table.canonical})`)
+      .where(sql`${table.workspaceId} is not null`),
     ...orgPolicies(),
   ],
 );
@@ -2787,6 +2873,7 @@ export const relations = defineRelations(
     matterCounters,
     documentCounters,
     organizationSettings,
+    anonymizationAllowlistEntries,
     anonymizationBlacklistEntries,
     clauseCategories,
     clauses,
@@ -3243,6 +3330,7 @@ export const relations = defineRelations(
     matterCounters: {},
     documentCounters: {},
     organizationSettings: {},
+    anonymizationAllowlistEntries: {},
     anonymizationBlacklistEntries: {},
     clauseCategories: {
       parent: r.one.clauseCategories({

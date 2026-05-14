@@ -100,6 +100,7 @@ import { DocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-
 import type { DocxBrowserEditorActions } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import { getDocxEditBlockReason } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
+import { AnonymizationFacet } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet";
 import { clearAnonymization } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymize-pdf";
 import {
   ChatTabPanel,
@@ -1090,6 +1091,14 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                 {tab.facet === "suggestions" && (
                   <SuggestionsFacet entityId={tab.entityId} />
                 )}
+                {tab.facet === "anonymization" && (
+                  <AnonymizationFacet
+                    activeFieldId={tab.id}
+                    entityId={tab.entityId}
+                    isVisible={isActive}
+                    workspaceId={tab.workspaceId}
+                  />
+                )}
                 {/* No preview branch in fullscreen: the main view
                  *  IS the preview. FullViewPreviewGuard above swaps
                  *  a stale "preview" facet to "metadata" on entry
@@ -1521,6 +1530,24 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                     : {})}
                 />
               )}
+              {sidepeekFacet === "anonymization" && (
+                // Sidepeek shows the file as a thumbnail-sized preview
+                // without an interactive Folio editor underneath, so
+                // there's no per-document match data to display. Pass
+                // `activeFieldId={null}` so the facet renders the
+                // "open full view first" hint instead of a zero count
+                // that the user can't act on from here.
+                <AnonymizationFacet
+                  activeFieldId={null}
+                  entityId={tab.entityId}
+                  onOpenFullView={() => {
+                    handleOpenFullView().catch(() => {
+                      /* fire-and-forget */
+                    });
+                  }}
+                  workspaceId={tab.workspaceId}
+                />
+              )}
             </div>
           );
 
@@ -1835,11 +1862,13 @@ const FACETS: readonly Facet[] = [
   "metadata",
   "versions",
   "suggestions",
+  "anonymization",
 ];
 const FULLVIEW_FACETS: readonly Facet[] = [
   "metadata",
   "versions",
   "suggestions",
+  "anonymization",
 ];
 
 /**
@@ -1901,6 +1930,7 @@ const FacetBar = ({
     metadata: t("common.metadata"),
     versions: t("fileDetail.versionHistory"),
     suggestions: t("docxReview.title"),
+    anonymization: t("inspector.facet.anonymization"),
   };
 
   return (

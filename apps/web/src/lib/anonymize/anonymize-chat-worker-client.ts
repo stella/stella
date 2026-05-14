@@ -13,6 +13,7 @@ type WorkerRequest = {
   id: number;
   text: string;
   workspaceId: string;
+  excludedCanonicals?: readonly string[];
 };
 
 type WorkerResponse =
@@ -72,16 +73,26 @@ const ensureWorker = (): Worker => {
 export const anonymizeChatTextInWorker = ({
   text,
   workspaceId,
+  excludedCanonicals,
 }: {
   text: string;
   workspaceId: string;
+  /**
+   * Surface forms the caller has marked as never-anonymize for
+   * this run. Forwarded verbatim to `runChatAnonPipeline`, which
+   * applies its own NFKC + case-insensitive comparison.
+   */
+  excludedCanonicals?: readonly string[];
 }): Promise<ChatAnonResult> => {
   const w = ensureWorker();
   nextRequestId += 1;
   const id = nextRequestId;
   return new Promise((resolve, reject) => {
     pending.set(id, { resolve, reject });
-    const request: WorkerRequest = { id, text, workspaceId };
+    const request: WorkerRequest =
+      excludedCanonicals === undefined
+        ? { id, text, workspaceId }
+        : { id, text, workspaceId, excludedCanonicals };
     // Worker postMessage doesn't take a targetOrigin.
     // eslint-disable-next-line unicorn/require-post-message-target-origin
     w.postMessage(request);

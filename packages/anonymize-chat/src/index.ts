@@ -42,6 +42,14 @@ export const DEFAULT_CHAT_ANON_ENTITY_LABELS = [
 export type ChatAnonPair = {
   placeholder: string;
   original: string;
+  /**
+   * Entity label as emitted by the pipeline (e.g. "person",
+   * "organization", "phone number"). Same vocabulary as
+   * {@link DEFAULT_CHAT_ANON_ENTITY_LABELS}. Consumers that need
+   * to colour or group by entity type read this directly instead
+   * of parsing the placeholder string.
+   */
+  label: string;
 };
 
 export type ChatAnonResult = {
@@ -158,9 +166,20 @@ export const buildChatAnonPipelineConfig = ({
   workspaceId,
 });
 
+/**
+ * Fold a surface form to its comparison key for the
+ * excluded-canonicals filter. Mirrors Folio's
+ * decoration matcher: NFKC + lowercase, with runs of
+ * whitespace collapsed so "Acme  Corp" and "Acme Corp"
+ * collide.
+ */
+const normalizeForExclusion = (value: string): string =>
+  value.normalize("NFKC").toLowerCase().replaceAll(/\s+/g, " ").trim();
+
 export const runChatAnonPipeline = async ({
   context: providedContext,
   dictionaries,
+  excludedCanonicals,
   gazetteerEntries = [],
   runtime,
   text,
@@ -172,6 +191,15 @@ export const runChatAnonPipeline = async ({
   workspaceId: string;
   gazetteerEntries?: GazetteerEntry[] | undefined;
   context?: PipelineContext | undefined;
+  /**
+   * Surface forms the caller has marked as never-anonymize.
+   * After the pipeline runs, any entity whose normalized text
+   * matches one of these (NFKC + lowercase, collapsed whitespace)
+   * is dropped before the redaction step, so the placeholder
+   * counter stays continuous and the original text passes
+   * through unchanged.
+   */
+  excludedCanonicals?: readonly string[] | undefined;
 }): Promise<ChatAnonResult> => {
   if (text.trim().length === 0) {
     return {
@@ -183,7 +211,7 @@ export const runChatAnonPipeline = async ({
   }
 
   const context = providedContext ?? runtime.createPipelineContext();
-  const entities: Entity[] = await runtime.runPipeline({
+  const rawEntities: Entity[] = await runtime.runPipeline({
     fullText: text,
     config: {
       ...buildChatAnonPipelineConfig({
@@ -195,14 +223,39 @@ export const runChatAnonPipeline = async ({
     gazetteerEntries,
     context,
   });
+  const excludedSet =
+    excludedCanonicals && excludedCanonicals.length > 0
+      ? new Set(excludedCanonicals.map(normalizeForExclusion))
+      : null;
+  const entities: Entity[] =
+    excludedSet === null
+      ? rawEntities
+      : rawEntities.filter(
+          (entity) => !excludedSet.has(normalizeForExclusion(entity.text)),
+        );
   const result: RedactionResult = runtime.redactText(
     text,
     entities,
     runtime.defaultOperatorConfig,
     context,
   );
+  // Index entities by their surface text so each placeholder
+  // can carry the originating entity's label out to consumers.
+  // Same text + same label maps to the same placeholder by the
+  // wasm operator config, so a Map keyed on the entity text is
+  // enough to recover the label per pair.
+  const labelByOriginal = new Map<string, string>();
+  for (const entity of entities) {
+    if (!labelByOriginal.has(entity.text)) {
+      labelByOriginal.set(entity.text, entity.label);
+    }
+  }
   const pairs: ChatAnonPair[] = [...result.redactionMap.entries()].map(
-    ([placeholder, original]) => ({ placeholder, original }),
+    ([placeholder, original]) => ({
+      placeholder,
+      original,
+      label: labelByOriginal.get(original) ?? "misc",
+    }),
   );
 
   return {

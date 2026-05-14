@@ -64,6 +64,7 @@ describe("anonymizeTextFields", () => {
       createPipelineContext,
       defaultOperatorConfig: DEFAULT_OPERATOR_CONFIG,
       loadAnonymizationGazetteerEntries: async () => [],
+      loadAnonymizationAllowlistCanonicals: async () => [],
       loadNameDictionaries: loadNameDictionariesMock,
       redactText: (fullText: string) => ({
         entityCount: 0,

@@ -6,6 +6,7 @@ import {
   runPipeline,
 } from "@stll/anonymize-wasm";
 
+import { loadAnonymizationAllowlistCanonicals } from "@/api/lib/anonymization-allowlist";
 import { loadAnonymizationGazetteerEntries } from "@/api/lib/anonymization-blacklist";
 import type { AnonymizeTextFieldsInput } from "@/api/mcp/anonymization-core";
 import { anonymizeTextFieldsWithDependencies } from "@/api/mcp/anonymization-core";
@@ -14,6 +15,7 @@ const anonymizeTextFieldsDependencies = {
   createPipelineContext,
   defaultOperatorConfig: DEFAULT_OPERATOR_CONFIG,
   loadAnonymizationGazetteerEntries,
+  loadAnonymizationAllowlistCanonicals,
   loadNameDictionaries,
   redactText,
   runPipeline,
