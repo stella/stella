@@ -652,21 +652,6 @@ export const AnonymizationFacet = ({
                                         "inspector.anonymization.ignoreScopeWorkspace",
                                       )}
                                     </MenuItem>
-                                    <MenuItem
-                                      onClick={() => {
-                                        createAllowlistMutation.mutate({
-                                          workspaceId,
-                                          entityId,
-                                          canonical: row.canonical,
-                                          label,
-                                          scope: "organization",
-                                        });
-                                      }}
-                                    >
-                                      {t(
-                                        "inspector.anonymization.ignoreScopeOrganization",
-                                      )}
-                                    </MenuItem>
                                   </MenuPopup>
                                 </MenuPortal>
                               </Menu>

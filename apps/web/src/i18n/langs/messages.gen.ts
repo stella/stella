@@ -1079,7 +1079,6 @@ type Messages = {
       "emptyState": "No workspace-specific terms yet. Add one above.";
       "ignoreAction": "Ignore in this document";
       "ignoreScopeMenuAriaLabel": "Ignore scope";
-      "ignoreScopeOrganization": "Ignore across the firm";
       "ignoreScopeWorkspace": "Ignore in this workspace";
       "labelPickerAriaLabel": "Entity label";
       "labelPickerEmpty": "No matching label.";

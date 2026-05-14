@@ -213,6 +213,11 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   const [detectedAnonymizationTerms, setDetectedAnonymizationTerms] = useState<
     AnonymizationTerm[]
   >([]);
+  // Exposed by the detection heartbeat effect below so the
+  // exclusions-watching effect can kick a fresh run the moment
+  // the allowlist changes, instead of waiting for the next 2s
+  // heartbeat tick.
+  const runDetectionRef = useRef<(() => void) | null>(null);
   useEffect(() => {
     const view = editorViewForAnonymization;
     if (!view || !isAnonymizationActive) {
@@ -223,12 +228,18 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       return undefined;
     }
     let cancelled = false;
-    // Track the text we received *results* for (not just
-    // dispatched). The worker can occasionally drop a request
-    // across dev HMR (the singleton's pending map loses entries
-    // when the client module re-evaluates); the next tick simply
-    // re-dispatches until results actually land.
-    let lastDeliveredText: string | null = null;
+    // Track the text+exclusions we received *results* for (not
+    // just dispatched). The worker can occasionally drop a
+    // request across dev HMR (the singleton's pending map loses
+    // entries when the client module re-evaluates); the next tick
+    // simply re-dispatches until results actually land.
+    //
+    // Exclusions are part of the cache key: when the user marks
+    // a detected entity as a false positive, the doc text is
+    // unchanged but the worker needs to rerun with the new
+    // allowlist so the now-excluded canonical disappears from
+    // detected terms without waiting for the user to edit.
+    let lastDeliveredKey: string | null = null;
     // Suppress overlapping calls for a short window so we don't
     // queue up dozens of requests for a stable doc; if the call
     // never delivers, the window expires and a retry fires.
@@ -242,21 +253,23 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         return;
       }
       const text = view.state.doc.textContent;
-      if (text.length === 0 || text === lastDeliveredText) {
+      const excluded = excludedCanonicalsRef.current;
+      const cacheKey = `${[...excluded].sort().join("|")}~${text}`;
+      if (text.length === 0 || cacheKey === lastDeliveredKey) {
         return;
       }
       inFlightUntil = Date.now() + IN_FLIGHT_TIMEOUT_MS;
       anonymizeChatTextInWorker({
         text,
         workspaceId,
-        excludedCanonicals: excludedCanonicalsRef.current,
+        excludedCanonicals: excluded,
       })
         .then((result) => {
           inFlightUntil = 0;
           if (cancelled) {
             return;
           }
-          lastDeliveredText = text;
+          lastDeliveredKey = cacheKey;
           const byCanonical = new Map<string, AnonymizationTerm>();
           for (const pair of result.pairs) {
             const key = `${pair.label} ${pair.original.toLowerCase()}`;
@@ -280,8 +293,14 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     // guard above no-ops re-runs once the doc is steady.
     const initialTimer = setTimeout(run, 300);
     const heartbeat = setInterval(run, 2000);
+    // Expose `run` so an outside effect can kick a fresh
+    // detection right after the user toggles an exclusion,
+    // without waiting up to a heartbeat tick for the new
+    // allowlist to take effect.
+    runDetectionRef.current = run;
     return () => {
       cancelled = true;
+      runDetectionRef.current = null;
       clearTimeout(initialTimer);
       clearInterval(heartbeat);
     };
@@ -308,6 +327,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   const excludedCanonicalsRef = useRef<readonly string[]>([]);
   useEffect(() => {
     excludedCanonicalsRef.current = [...excludedCanonicalsSet];
+    // Kick the detection right away so worker-found terms that
+    // the user just added to the allowlist disappear without
+    // having to wait up to 2s for the next heartbeat tick.
+    runDetectionRef.current?.();
   }, [excludedCanonicalsSet]);
   const mergedAnonymizationTerms = useMemo<AnonymizationTerm[]>(() => {
     if (!isAnonymizationActive) {

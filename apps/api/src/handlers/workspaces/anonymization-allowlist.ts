@@ -82,7 +82,13 @@ export const readWorkspaceAnonymizationAllowlist = createSafeHandler(
   },
 );
 
-const SCOPE_VALUES = ["document", "workspace", "organization"] as const;
+// Org-wide entries are deliberately NOT writable from this
+// workspace endpoint. Creating or removing rows that apply to
+// every workspace in the firm requires firm-admin context;
+// otherwise any workspace editor could mask data org-wide. A
+// dedicated org-settings endpoint with `organizationSettings`
+// permissions will land alongside the org-wide management UI.
+const SCOPE_VALUES = ["document", "workspace"] as const;
 
 const createConfig = {
   permissions: { workspace: ["update"] },
@@ -111,7 +117,7 @@ export const createWorkspaceAnonymizationAllowlistEntry = createSafeHandler(
         const values = {
           id,
           organizationId: session.activeOrganizationId,
-          workspaceId: scope === "organization" ? null : workspaceId,
+          workspaceId,
           entityId: scope === "document" ? (body.entityId ?? null) : null,
           label: body.label,
           canonical,
@@ -142,15 +148,18 @@ export const deleteWorkspaceAnonymizationAllowlistEntry = createSafeHandler(
   async function* ({ params: { entryId }, safeDb, workspaceId }) {
     yield* Result.await(
       safeDb((tx) =>
+        // Scope the delete to rows that live inside the current
+        // workspace. Org-wide rows (workspace_id IS NULL) are
+        // intentionally NOT deletable from here — the org admin
+        // endpoint owns those — so a workspace editor cannot
+        // accidentally (or maliciously) remove a firm-wide entry
+        // that the rest of the org relies on.
         tx
           .delete(anonymizationAllowlistEntries)
           .where(
             and(
               eq(anonymizationAllowlistEntries.id, entryId),
-              or(
-                eq(anonymizationAllowlistEntries.workspaceId, workspaceId),
-                isNull(anonymizationAllowlistEntries.workspaceId),
-              ),
+              eq(anonymizationAllowlistEntries.workspaceId, workspaceId),
             ),
           ),
       ),

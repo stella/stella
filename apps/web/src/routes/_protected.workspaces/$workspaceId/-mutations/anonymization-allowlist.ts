@@ -6,7 +6,11 @@ import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { anonymizationAllowlistKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-allowlist";
 
-export type AllowlistScope = "document" | "workspace" | "organization";
+// Org-wide ignore lands behind a dedicated org-settings handler
+// with `organizationSettings` permissions; until that ships, the
+// workspace endpoint accepts doc and workspace scopes only so a
+// workspace editor cannot mask data firm-wide.
+export type AllowlistScope = "document" | "workspace";
 
 type CreateAllowlistEntryVars = {
   workspaceId: string;
