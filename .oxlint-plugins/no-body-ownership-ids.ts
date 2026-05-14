@@ -1,4 +1,5 @@
 // Disallow ownership IDs sourced from the request body or query.
+// oxlint-disable typescript/no-unsafe-assignment, typescript/no-unsafe-member-access, typescript/no-unsafe-return, typescript/no-unsafe-argument, typescript/no-unsafe-call, typescript/strict-boolean-expressions
 //
 // IDs that control data ownership or scoping (workspaceId,
 // organizationId) must come from a server-validated source
@@ -9,10 +10,9 @@
 // Catches both direct access (body.workspaceId) and
 // destructured access (const { workspaceId } = body).
 
-const OWNERSHIP_FIELDS = new Set([
-  "workspaceId",
-  "organizationId",
-]);
+import { getPropertyName, isIdentifier } from "./utils.ts";
+
+const OWNERSHIP_FIELDS = new Set(["workspaceId", "organizationId"]);
 
 const SOURCE_OBJECTS = new Set(["body", "query"]);
 
@@ -40,28 +40,23 @@ export default {
         return {
           // body.workspaceId, query.organizationId
           MemberExpression(node) {
-            if (node.computed) {return;}
-
-            const object = node.object;
-            const property = node.property;
-
-            if (
-              object.type !== "Identifier" ||
-              property.type !== "Identifier"
-            ) {
+            if (node.computed) {
+              return;
+            }
+            if (!isIdentifier(node.object) || !isIdentifier(node.property)) {
               return;
             }
 
             if (
-              SOURCE_OBJECTS.has(object.name) &&
-              OWNERSHIP_FIELDS.has(property.name)
+              SOURCE_OBJECTS.has(node.object.name) &&
+              OWNERSHIP_FIELDS.has(node.property.name)
             ) {
               context.report({
                 node,
                 messageId: "bodyOwnershipId",
                 data: {
-                  object: object.name,
-                  property: property.name,
+                  object: node.object.name,
+                  property: node.property.name,
                 },
               });
             }
@@ -72,22 +67,18 @@ export default {
           VariableDeclarator(node) {
             if (
               node.id.type !== "ObjectPattern" ||
-              node.init?.type !== "Identifier" ||
+              !isIdentifier(node.init) ||
               !SOURCE_OBJECTS.has(node.init.name)
             ) {
               return;
             }
 
             for (const prop of node.id.properties) {
-              if (prop.type !== "Property") {continue;}
+              if (prop.type !== "Property") {
+                continue;
+              }
               // Handle both { workspaceId } and { ['workspaceId']: ws }
-              const key =
-                prop.key.type === "Identifier"
-                  ? prop.key.name
-                  : prop.key.type === "Literal" &&
-                      typeof prop.key.value === "string"
-                    ? prop.key.value
-                    : null;
+              const key = getPropertyName(prop.key);
               if (key !== null && OWNERSHIP_FIELDS.has(key)) {
                 context.report({
                   node: prop,
