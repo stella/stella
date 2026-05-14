@@ -34,6 +34,7 @@ import {
 } from "@stll/ui/components/menu";
 import { Separator } from "@stll/ui/components/separator";
 import { TOAST_RIGHT_OFFSET_VAR } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { ApiVersionMismatchBanner } from "@/components/api-version-mismatch-banner";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -414,7 +415,10 @@ function ProtectedContent({
       <ApiVersionMismatchBanner />
       <SelfhostUpdateBanner />
       <header
-        className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4"
+        className={cn(
+          "flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4",
+          !matterColor && "bg-sidebar",
+        )}
         style={
           matterColor
             ? {
