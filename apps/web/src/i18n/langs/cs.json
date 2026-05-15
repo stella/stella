@@ -541,6 +541,7 @@
     "anonymizationLabels": {
       "address": "Adresa",
       "bankAccountNumber": "Číslo bankovního účtu",
+      "birthNumber": "Rodné číslo",
       "creditCardNumber": "Číslo platební karty",
       "date": "Datum",
       "dateOfBirth": "Datum narození",
@@ -550,11 +551,13 @@
       "landParcel": "Parcela",
       "miscellaneous": "Ostatní",
       "monetaryAmount": "Peněžní částka",
+      "nationalIdentificationNumber": "Národní identifikační číslo",
       "organization": "Organizace",
       "passportNumber": "Číslo pasu",
       "person": "Osoba",
       "phoneNumber": "Telefonní číslo",
       "registrationNumber": "IČO",
+      "socialSecurityNumber": "Číslo sociálního pojištění",
       "taxIdentificationNumber": "DIČ"
     },
     "cancel": "Zrušit",

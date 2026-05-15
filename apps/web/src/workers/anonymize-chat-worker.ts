@@ -3,13 +3,10 @@
 import { runChatAnonPipeline } from "@stll/anonymize-chat";
 import type { ChatAnonResult } from "@stll/anonymize-chat";
 import { loadNameDictionaries } from "@stll/anonymize-data";
-import {
-  createPipelineContext,
-  DEFAULT_OPERATOR_CONFIG,
-  redactText,
-  runPipeline,
-} from "@stll/anonymize-wasm";
+import * as anonymizeRuntime from "@stll/anonymize-wasm";
 import type { GazetteerEntry, PipelineConfig } from "@stll/anonymize-wasm";
+
+import { createPipelineContextRunner } from "@/lib/anonymize/pipeline-context";
 
 /**
  * Off-main-thread runner for the chat-input anonymization
@@ -25,6 +22,7 @@ import type { GazetteerEntry, PipelineConfig } from "@stll/anonymize-wasm";
 
 type AnonRequest = {
   id: number;
+  locale?: string | undefined;
   text: string;
   workspaceId: string;
   gazetteerEntries?: GazetteerEntry[];
@@ -39,6 +37,9 @@ let dictionariesPromise: Promise<
   NonNullable<PipelineConfig["dictionaries"]>
 > | null = null;
 
+const pipelineContext = anonymizeRuntime.createPipelineContext();
+const runWithPipelineContext = createPipelineContextRunner();
+
 // eslint-disable-next-line @typescript-eslint/promise-function-async -- lazy init returns the cached promise without awaiting
 const getDictionaries = (): Promise<
   NonNullable<PipelineConfig["dictionaries"]>
@@ -47,6 +48,8 @@ const getDictionaries = (): Promise<
   return dictionariesPromise;
 };
 
+const defaultLocale = globalThis.navigator.language;
+
 const handle = async (request: AnonRequest): Promise<AnonResponse> => {
   const {
     id,
@@ -54,24 +57,31 @@ const handle = async (request: AnonRequest): Promise<AnonResponse> => {
     workspaceId,
     gazetteerEntries = [],
     excludedCanonicals,
+    locale = defaultLocale,
   } = request;
   try {
-    const dictionaries = await getDictionaries();
-    const { redactedText, pairs, redactionMap, entityCount } =
-      await runChatAnonPipeline({
-        runtime: {
-          createPipelineContext,
-          defaultOperatorConfig: DEFAULT_OPERATOR_CONFIG,
-          redactText,
-          runPipeline,
-        },
+    const result = await runWithPipelineContext(async () => {
+      const dictionaries = await getDictionaries();
+      pipelineContext.corefSourceMap.clear();
+      const runtime = {
+        createPipelineContext: anonymizeRuntime.createPipelineContext,
+        defaultOperatorConfig: anonymizeRuntime.DEFAULT_OPERATOR_CONFIG,
+        preparePipelineSearch: anonymizeRuntime.preparePipelineSearch,
+        redactText: anonymizeRuntime.redactText,
+        runPipeline: anonymizeRuntime.runPipeline,
+      };
+      return await runChatAnonPipeline({
+        runtime,
         dictionaries,
         text,
+        locale,
         workspaceId,
         gazetteerEntries,
         excludedCanonicals,
+        context: pipelineContext,
       });
-    return { id, ok: true, redactedText, pairs, redactionMap, entityCount };
+    });
+    return { id, ok: true, ...result };
   } catch (error) {
     return {
       id,

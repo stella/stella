@@ -32,11 +32,15 @@ export const DEFAULT_CHAT_ANON_ENTITY_LABELS = [
   "iban",
   "tax identification number",
   "identity card number",
+  "birth number",
+  "national identification number",
+  "social security number",
   "registration number",
   "credit card number",
   "passport number",
   "monetary amount",
   "land parcel",
+  "misc",
 ] as const;
 
 export type ChatAnonPair = {
@@ -141,30 +145,56 @@ export const isThirdPartyBoundaryRefusalError = (error: Error): boolean =>
 export type ChatAnonRuntime = {
   createPipelineContext: typeof createPipelineContext;
   defaultOperatorConfig: typeof DEFAULT_OPERATOR_CONFIG;
+  preparePipelineSearch?: (input: {
+    config: PipelineConfig;
+    context: PipelineContext;
+    gazetteerEntries: GazetteerEntry[];
+  }) => Promise<unknown>;
   redactText: typeof redactText;
   runPipeline: typeof runPipeline;
 };
 
+type ScopedPipelineConfig = PipelineConfig & {
+  nameCorpusLanguages?: string[];
+};
+
+export const normalizeChatAnonLocaleLanguage = (
+  locale: string | undefined,
+): string | null => {
+  const [languagePart] = locale?.split(/[-_]/u) ?? [];
+  const language = languagePart?.trim().toLowerCase();
+  return language && /^[a-z]{2}$/u.test(language) ? language : null;
+};
+
 export const buildChatAnonPipelineConfig = ({
   hasGazetteer,
+  locale,
   workspaceId,
 }: {
   hasGazetteer: boolean;
+  locale?: string | undefined;
   workspaceId: string;
-}): PipelineConfig => ({
-  threshold: 0.4,
-  enableTriggerPhrases: true,
-  enableRegex: true,
-  enableNameCorpus: true,
-  enableDenyList: false,
-  enableGazetteer: hasGazetteer,
-  enableNer: false,
-  enableConfidenceBoost: false,
-  enableCoreference: true,
-  enableLegalForms: true,
-  labels: [...DEFAULT_CHAT_ANON_ENTITY_LABELS],
-  workspaceId,
-});
+}): ScopedPipelineConfig => {
+  const nameCorpusLanguage = normalizeChatAnonLocaleLanguage(locale);
+  const config: ScopedPipelineConfig = {
+    threshold: 0.4,
+    enableTriggerPhrases: true,
+    enableRegex: true,
+    enableNameCorpus: true,
+    enableDenyList: false,
+    enableGazetteer: hasGazetteer,
+    enableNer: false,
+    enableConfidenceBoost: false,
+    enableCoreference: true,
+    enableLegalForms: true,
+    labels: [...DEFAULT_CHAT_ANON_ENTITY_LABELS],
+    workspaceId,
+  };
+  if (nameCorpusLanguage !== null) {
+    config.nameCorpusLanguages = [nameCorpusLanguage];
+  }
+  return config;
+};
 
 /**
  * Fold a surface form to its comparison key for the
@@ -183,11 +213,13 @@ export const runChatAnonPipeline = async ({
   gazetteerEntries = [],
   runtime,
   text,
+  locale,
   workspaceId,
 }: {
   runtime: ChatAnonRuntime;
   dictionaries: NonNullable<PipelineConfig["dictionaries"]>;
   text: string;
+  locale?: string | undefined;
   workspaceId: string;
   gazetteerEntries?: GazetteerEntry[] | undefined;
   context?: PipelineContext | undefined;
@@ -211,15 +243,22 @@ export const runChatAnonPipeline = async ({
   }
 
   const context = providedContext ?? runtime.createPipelineContext();
+  const config = {
+    ...buildChatAnonPipelineConfig({
+      hasGazetteer: gazetteerEntries.length > 0,
+      locale,
+      workspaceId,
+    }),
+    dictionaries,
+  };
+  await runtime.preparePipelineSearch?.({
+    config,
+    context,
+    gazetteerEntries,
+  });
   const rawEntities: Entity[] = await runtime.runPipeline({
     fullText: text,
-    config: {
-      ...buildChatAnonPipelineConfig({
-        hasGazetteer: gazetteerEntries.length > 0,
-        workspaceId,
-      }),
-      dictionaries,
-    },
+    config,
     gazetteerEntries,
     context,
   });

@@ -1,6 +1,12 @@
 import { runChatAnonPipeline } from "@stll/anonymize-chat";
 import type { ChatAnonResult } from "@stll/anonymize-chat";
-import type { GazetteerEntry, PipelineConfig } from "@stll/anonymize-wasm";
+import type {
+  GazetteerEntry,
+  PipelineConfig,
+  PipelineContext,
+} from "@stll/anonymize-wasm";
+
+import { createPipelineContextRunner } from "@/lib/anonymize/pipeline-context";
 
 export type { ChatAnonPair, ChatAnonResult } from "@stll/anonymize-chat";
 
@@ -10,6 +16,8 @@ export type { ChatAnonPair, ChatAnonResult } from "@stll/anonymize-chat";
 let dictionariesPromise: Promise<
   NonNullable<PipelineConfig["dictionaries"]>
 > | null = null;
+let pipelineContextPromise: Promise<PipelineContext> | null = null;
+const runWithPipelineContext = createPipelineContextRunner();
 
 // eslint-disable-next-line @typescript-eslint/promise-function-async -- lazy init returns the cached promise without awaiting
 const getDictionaries = (): Promise<
@@ -22,35 +30,53 @@ const getDictionaries = (): Promise<
   return dictionariesPromise;
 };
 
+const getPipelineContext = async () => {
+  pipelineContextPromise ??= (async () => {
+    const wasm = await import("@stll/anonymize-wasm");
+    return wasm.createPipelineContext();
+  })();
+  return await pipelineContextPromise;
+};
+
 /**
  * Run the same wasm pipeline the server uses against a single
- * chat-sized text from the main thread. Each call gets a fresh
- * `PipelineContext`, matching the chat-anonymize-worker's
- * per-request semantics.
+ * chat-sized text from the main thread. Calls share the
+ * `PipelineContext` search caches, but run serially so
+ * per-document coreference state can be cleared between inputs.
  */
 export const anonymizeChatText = async ({
   gazetteerEntries = [],
+  locale = navigator.language,
   text,
   workspaceId,
 }: {
+  locale?: string | undefined;
   text: string;
   workspaceId: string;
   gazetteerEntries?: GazetteerEntry[];
 }): Promise<ChatAnonResult> => {
-  const [wasm, dictionaries] = await Promise.all([
+  const [wasm, dictionaries, context] = await Promise.all([
     import("@stll/anonymize-wasm"),
     getDictionaries(),
+    getPipelineContext(),
   ]);
-  return await runChatAnonPipeline({
-    runtime: {
+  return await runWithPipelineContext(async () => {
+    context.corefSourceMap.clear();
+    const runtime = {
       createPipelineContext: wasm.createPipelineContext,
       defaultOperatorConfig: wasm.DEFAULT_OPERATOR_CONFIG,
+      preparePipelineSearch: wasm.preparePipelineSearch,
       redactText: wasm.redactText,
       runPipeline: wasm.runPipeline,
-    },
-    dictionaries,
-    text,
-    workspaceId,
-    gazetteerEntries,
+    };
+    return await runChatAnonPipeline({
+      runtime,
+      dictionaries,
+      text,
+      locale,
+      workspaceId,
+      gazetteerEntries,
+      context,
+    });
   });
 };

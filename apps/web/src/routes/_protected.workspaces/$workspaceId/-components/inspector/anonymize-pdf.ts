@@ -1,8 +1,9 @@
-import type { PipelineConfig } from "@stll/anonymize-wasm";
+import type { PipelineConfig, PipelineContext } from "@stll/anonymize-wasm";
 
 import { PDF_MIME_TYPE } from "@/consts";
 import { DEFAULT_ENTITY_LABELS } from "@/lib/anonymize/constants";
 import { extractPDFText } from "@/lib/anonymize/pdf-coords";
+import { createPipelineContextRunner } from "@/lib/anonymize/pipeline-context";
 import { api } from "@/lib/api";
 import { ClientOperationError } from "@/lib/errors";
 import {
@@ -19,22 +20,30 @@ import type {
 const buildPipelineConfig = (
   workspaceId: string,
   labels: readonly string[],
-): PipelineConfig => ({
-  threshold: 0.4,
-  enableTriggerPhrases: true,
-  enableRegex: true,
-  enableNameCorpus: true,
-  enableDenyList: false,
-  enableGazetteer: false,
-  enableNer: false,
-  enableConfidenceBoost: false,
-  enableCoreference: true,
-  enableLegalForms: true,
-  labels: [...labels],
-  workspaceId,
-});
+): PipelineConfig => {
+  const config: PipelineConfig = {
+    threshold: 0.4,
+    enableTriggerPhrases: true,
+    enableRegex: true,
+    enableNameCorpus: true,
+    enableDenyList: false,
+    enableGazetteer: false,
+    enableNer: false,
+    enableConfidenceBoost: false,
+    enableCoreference: true,
+    enableLegalForms: true,
+    labels: [...labels],
+    workspaceId,
+  };
+  return config;
+};
 
 const cancelledFieldIds = new Set<string>();
+let dictionariesPromise: Promise<
+  NonNullable<PipelineConfig["dictionaries"]>
+> | null = null;
+let pipelineContext: PipelineContext | null = null;
+const runWithPipelineContext = createPipelineContextRunner();
 
 export const anonymizePdf = async ({
   workspaceId,
@@ -78,19 +87,30 @@ export const anonymizePdf = async ({
   const pdf = await PDF.load(pdfBytes);
   const { text, spans: charSpans } = extractPDFText(pdf);
 
-  const [{ loadNameDictionaries }, { runPipeline }] = await Promise.all([
+  const [{ loadNameDictionaries }, wasm] = await Promise.all([
     import("@stll/anonymize-data"),
     import("@stll/anonymize-wasm"),
   ]);
-  const dictionaries = await loadNameDictionaries();
-
-  const entities = await runPipeline({
-    fullText: text,
-    config: {
+  dictionariesPromise ??= loadNameDictionaries();
+  const dictionaries = await dictionariesPromise;
+  const entities = await runWithPipelineContext(async () => {
+    pipelineContext ??= wasm.createPipelineContext();
+    pipelineContext.corefSourceMap.clear();
+    const config = {
       ...buildPipelineConfig(workspaceId, DEFAULT_ENTITY_LABELS),
       dictionaries,
-    },
-    gazetteerEntries: [],
+    };
+    await wasm.preparePipelineSearch({
+      config,
+      context: pipelineContext,
+      gazetteerEntries: [],
+    });
+    return await wasm.runPipeline({
+      fullText: text,
+      config,
+      gazetteerEntries: [],
+      context: pipelineContext,
+    });
   });
 
   const overlayEntities: EntityOverlay[] = [];

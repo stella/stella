@@ -60,11 +60,16 @@ const LABEL_TRANSLATION_KEY = {
   "tax identification number":
     "common.anonymizationLabels.taxIdentificationNumber",
   "identity card number": "common.anonymizationLabels.identityCardNumber",
+  "birth number": "common.anonymizationLabels.birthNumber",
+  "national identification number":
+    "common.anonymizationLabels.nationalIdentificationNumber",
+  "social security number": "common.anonymizationLabels.socialSecurityNumber",
   "registration number": "common.anonymizationLabels.registrationNumber",
   "credit card number": "common.anonymizationLabels.creditCardNumber",
   "passport number": "common.anonymizationLabels.passportNumber",
   "monetary amount": "common.anonymizationLabels.monetaryAmount",
   "land parcel": "common.anonymizationLabels.landParcel",
+  misc: "common.anonymizationLabels.miscellaneous",
 } as const satisfies Record<LabelOption, TranslationKey>;
 
 const isKnownLabel = (label: string): label is LabelOption =>

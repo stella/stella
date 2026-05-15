@@ -541,6 +541,7 @@
     "anonymizationLabels": {
       "address": "Aadress",
       "bankAccountNumber": "Pangakonto number",
+      "birthNumber": "Sünninumber",
       "creditCardNumber": "Krediitkaardi number",
       "date": "Kuupäev",
       "dateOfBirth": "Sünnikuupäev",
@@ -550,11 +551,13 @@
       "landParcel": "Maatükk",
       "miscellaneous": "Muu",
       "monetaryAmount": "Rahasumma",
+      "nationalIdentificationNumber": "Riiklik isikukood",
       "organization": "Organisatsioon",
       "passportNumber": "Passi number",
       "person": "Isik",
       "phoneNumber": "Telefoninumber",
       "registrationNumber": "Registrikood",
+      "socialSecurityNumber": "Sotsiaalkindlustuse number",
       "taxIdentificationNumber": "Maksukohustuslase number"
     },
     "cancel": "Tühista",

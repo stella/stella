@@ -541,6 +541,7 @@
     "anonymizationLabels": {
       "address": "Adresas",
       "bankAccountNumber": "Banko sąskaitos numeris",
+      "birthNumber": "Gimimo numeris",
       "creditCardNumber": "Kredito kortelės numeris",
       "date": "Data",
       "dateOfBirth": "Gimimo data",
@@ -550,11 +551,13 @@
       "landParcel": "Sklypas",
       "miscellaneous": "Kita",
       "monetaryAmount": "Pinigų suma",
+      "nationalIdentificationNumber": "Nacionalinis identifikavimo numeris",
       "organization": "Organizacija",
       "passportNumber": "Paso numeris",
       "person": "Asmuo",
       "phoneNumber": "Telefono numeris",
       "registrationNumber": "Įmonės kodas",
+      "socialSecurityNumber": "Socialinio draudimo numeris",
       "taxIdentificationNumber": "Mokesčių mokėtojo kodas"
     },
     "cancel": "Atšaukti",
