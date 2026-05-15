@@ -2,6 +2,7 @@ import type { Context, Generator, Options } from "elysia-rate-limit";
 
 type RateLimitEntry = {
   count: number;
+  start: number;
   expiresAt: number;
 };
 
@@ -42,11 +43,14 @@ export class InMemoryRateLimitContext implements Context {
   }
 
   init(options: Omit<Options, "context">) {
-    this.durationMs = options.duration;
+    if (typeof options.duration === "number") {
+      this.durationMs = options.duration;
+    }
   }
 
-  increment(key: string) {
-    const now = Date.now();
+  increment(key: string, duration?: number, requestTime?: number) {
+    const effectiveDuration = duration ?? this.durationMs;
+    const now = requestTime ?? Date.now();
     const entry = this.store.get(key);
 
     if (entry && entry.expiresAt > now) {
@@ -54,14 +58,16 @@ export class InMemoryRateLimitContext implements Context {
       return {
         count: entry.count,
         nextReset: new Date(entry.expiresAt),
+        start: entry.start,
       };
     }
 
-    const expiresAt = now + this.durationMs;
-    this.store.set(key, { count: 1, expiresAt });
+    const expiresAt = now + effectiveDuration;
+    this.store.set(key, { count: 1, start: now, expiresAt });
     return {
       count: 1,
       nextReset: new Date(expiresAt),
+      start: now,
     };
   }
 
