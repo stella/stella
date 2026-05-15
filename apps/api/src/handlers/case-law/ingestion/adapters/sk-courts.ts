@@ -238,9 +238,13 @@ const parseItemWithDetail = async (
   // and date immediately; fulltext follows via backfill.
 
   const caseNumber = item.spisovaZnacka;
+  const courtInfo = Reflect.get(item, "sud");
+  if (!caseNumber || !isSkSud(courtInfo) || !courtInfo.nazov) {
+    return null;
+  }
   const decisionDate = parseSkDate(item.datumVydania);
   const decisionType = toOptionalValue(item.formaRozhodnutia);
-  const court = item.sud.nazov;
+  const court = courtInfo.nazov;
   const ecli = toOptionalValue(detail?.ecli);
 
   return {
@@ -265,7 +269,7 @@ const parseItemWithDetail = async (
       identifikacneCislo: toOptionalValue(item.identifikacneCislo),
       judge: toOptionalValue(item.sudca?.meno),
       judgeRegistreGuid: toOptionalValue(item.sudca?.registreGuid),
-      courtRegistreGuid: toOptionalValue(item.sud.registreGuid),
+      courtRegistreGuid: toOptionalValue(courtInfo.registreGuid),
       decisionNature: item.povaha,
       subArea: detail?.podOblast,
       referencedLegislation: detail?.odkazovanePredpisy,

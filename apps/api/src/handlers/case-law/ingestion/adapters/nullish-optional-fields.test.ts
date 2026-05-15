@@ -669,6 +669,29 @@ describe("case-law adapter nullish optionals", () => {
     expect(decision?.ecli).toBe("ECLI:SK:TEST");
   });
 
+  test("SK Courts skips items missing required court data", async () => {
+    mockFetchWithBodies([
+      {
+        pattern: "/pilot/api/ress-isu-service/v1/rozhodnutie?",
+        body: JSON.stringify({
+          rozhodnutieList: [
+            {
+              spisovaZnacka: "1Cdo/2/2024",
+              sud: null,
+              datumVydania: "01.02.2024",
+            },
+          ],
+          numFound: 1,
+        }),
+      },
+    ]);
+
+    const result = await skCourtsAdapter.fetchPage(null, {});
+
+    expect(result.isOk()).toBe(true);
+    expect(result.unwrap().decisions).toEqual([]);
+  });
+
   test("PL Courts uses the extended page timeout budget for sequential detail fetches", () => {
     expect(plCourtsAdapter.pageTimeoutMs).toBe(280_000);
   });
