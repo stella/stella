@@ -18,8 +18,6 @@ import {
   useMemo,
   forwardRef,
   useImperativeHandle,
-  lazy,
-  Suspense,
 } from "react";
 import type { CSSProperties } from "react";
 
@@ -177,6 +175,7 @@ import { CommentsSidebar } from "./CommentsSidebar";
 import type { TrackedChangeEntry } from "./CommentsSidebar";
 // Dialog hooks and utilities (static imports — lightweight, no UI)
 import type { FindMatch } from "./dialogs/findReplaceUtils";
+import type { ImagePropertiesData } from "./dialogs/ImagePropertiesDialog";
 import { useFindReplace as useFindReplaceState } from "./dialogs/useFindReplace";
 import type {
   DisplayMode,
@@ -185,6 +184,7 @@ import type {
   EditorMode,
   EditorState,
 } from "./DocxEditor.props";
+import { DocxEditorDialogs } from "./DocxEditorDialogs";
 import {
   DefaultLoadingIndicator,
   DefaultPlaceholder,
@@ -256,37 +256,7 @@ const toast = (msg: string) => {
   }, 3000);
 };
 
-// Dialog components (lazy-loaded — only fetched when first opened)
-const FindReplaceDialog = lazy(() =>
-  import("./dialogs/FindReplaceDialog").then((m) => ({
-    default: m.FindReplaceDialog,
-  })),
-);
-const TablePropertiesDialog = lazy(() =>
-  import("./dialogs/TablePropertiesDialog").then((m) => ({
-    default: m.TablePropertiesDialog,
-  })),
-);
-const ImagePositionDialog = lazy(() =>
-  import("./dialogs/ImagePositionDialog").then((m) => ({
-    default: m.ImagePositionDialog,
-  })),
-);
-const ImagePropertiesDialog = lazy(() =>
-  import("./dialogs/ImagePropertiesDialog").then((m) => ({
-    default: m.ImagePropertiesDialog,
-  })),
-);
-const FootnotePropertiesDialog = lazy(() =>
-  import("./dialogs/FootnotePropertiesDialog").then((m) => ({
-    default: m.FootnotePropertiesDialog,
-  })),
-);
-const PageSetupDialog = lazy(() =>
-  import("./dialogs/PageSetupDialog").then((m) => ({
-    default: m.PageSetupDialog,
-  })),
-);
+// Dialog tree (lazy-loaded internally) lives in ./DocxEditorDialogs.
 
 // ============================================================================
 // TYPES — see ./DocxEditor.props for the type definitions. Public types are
@@ -310,6 +280,28 @@ const EMPTY_ANCHOR_POSITIONS = new Map<string, number>();
 function getCommentAuthorKey(author?: string): string {
   const trimmed = author?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : "Unknown";
+}
+
+function buildImagePropertiesData(
+  ctx: EditorState["pmImageContext"],
+): ImagePropertiesData | undefined {
+  if (!ctx) {
+    return undefined;
+  }
+  const data: ImagePropertiesData = {};
+  if (ctx.alt != null) {
+    data.alt = ctx.alt;
+  }
+  if (ctx.borderWidth != null) {
+    data.borderWidth = ctx.borderWidth;
+  }
+  if (ctx.borderColor != null) {
+    data.borderColor = ctx.borderColor;
+  }
+  if (ctx.borderStyle != null) {
+    data.borderStyle = ctx.borderStyle;
+  }
+  return data;
 }
 
 /**
@@ -3351,6 +3343,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       </>
     );
 
+    const imagePropertiesCurrentData = buildImagePropertiesData(
+      state.pmImageContext,
+    );
+
     return (
       <ErrorProvider>
         <ErrorBoundary onError={handleEditorError}>
@@ -3887,113 +3883,60 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             {/* Toast notifications */}
             {/* Toast notifications provided by host app */}
 
-            {/* Lazy-loaded dialogs — only fetched when first opened */}
-            <Suspense fallback={null}>
-              {findReplace.state.dialog.status === "open" && (
-                <FindReplaceDialog
-                  isOpen={true}
-                  onClose={findReplace.close}
-                  onFind={handleFind}
-                  onFindNext={handleFindNext}
-                  onFindPrevious={handleFindPrevious}
-                  onReplace={handleReplace}
-                  onReplaceAll={handleReplaceAll}
-                  initialSearchText={findReplace.state.searchText}
-                  currentResult={findResultRef.current}
-                />
-              )}
-              {tablePropsOpen && (
-                <TablePropertiesDialog
-                  isOpen={tablePropsOpen}
-                  onClose={() => setTablePropsOpen(false)}
-                  onApply={(props) => {
-                    const view = getActiveEditorView();
-                    if (view) {
-                      setTableProperties(props)(view.state, view.dispatch);
-                    }
-                  }}
-                  {...(state.pmTableContext?.table?.attrs
-                    ? {
-                        currentProps: state.pmTableContext.table
-                          .attrs as Record<string, unknown>,
-                      }
-                    : {})}
-                />
-              )}
-              {imagePositionOpen && (
-                <ImagePositionDialog
-                  isOpen={imagePositionOpen}
-                  onClose={() => setImagePositionOpen(false)}
-                  onApply={handleApplyImagePosition}
-                />
-              )}
-              {imagePropsOpen && (
-                <ImagePropertiesDialog
-                  isOpen={imagePropsOpen}
-                  onClose={() => setImagePropsOpen(false)}
-                  onApply={handleApplyImageProperties}
-                  {...(state.pmImageContext
-                    ? {
-                        currentData: (() => {
-                          const data: Record<string, string | number> = {};
-                          if (state.pmImageContext.alt != null) {
-                            data["alt"] = state.pmImageContext.alt;
-                          }
-                          if (state.pmImageContext.borderWidth != null) {
-                            data["borderWidth"] =
-                              state.pmImageContext.borderWidth;
-                          }
-                          if (state.pmImageContext.borderColor != null) {
-                            data["borderColor"] =
-                              state.pmImageContext.borderColor;
-                          }
-                          if (state.pmImageContext.borderStyle != null) {
-                            data["borderStyle"] =
-                              state.pmImageContext.borderStyle;
-                          }
-                          return data as import("./dialogs/ImagePropertiesDialog").ImagePropertiesData;
-                        })(),
-                      }
-                    : {})}
-                />
-              )}
-              {showPageSetup && (
-                <PageSetupDialog
-                  isOpen={showPageSetup}
-                  onClose={() => setShowPageSetup(false)}
-                  onApply={handlePageSetupApply}
-                  {...(history.state.package.document.finalSectionProperties
-                    ? {
-                        currentProps:
-                          history.state.package.document.finalSectionProperties,
-                      }
-                    : {})}
-                />
-              )}
-              {footnotePropsOpen && (
-                <FootnotePropertiesDialog
-                  isOpen={footnotePropsOpen}
-                  onClose={() => setFootnotePropsOpen(false)}
-                  onApply={handleApplyFootnoteProperties}
-                  {...(history.state.package.document.finalSectionProperties
-                    ?.footnotePr
-                    ? {
-                        footnotePr:
-                          history.state.package.document.finalSectionProperties
-                            .footnotePr,
-                      }
-                    : {})}
-                  {...(history.state.package.document.finalSectionProperties
-                    ?.endnotePr
-                    ? {
-                        endnotePr:
-                          history.state.package.document.finalSectionProperties
-                            .endnotePr,
-                      }
-                    : {})}
-                />
-              )}
-            </Suspense>
+            <DocxEditorDialogs
+              findReplace={{
+                state: findReplace.state,
+                onClose: findReplace.close,
+                onFind: handleFind,
+                onFindNext: handleFindNext,
+                onFindPrevious: handleFindPrevious,
+                onReplace: handleReplace,
+                onReplaceAll: handleReplaceAll,
+                currentResult: findResultRef.current,
+              }}
+              tableProperties={{
+                isOpen: tablePropsOpen,
+                onClose: () => setTablePropsOpen(false),
+                onApply: (props) => {
+                  const view = getActiveEditorView();
+                  if (view) {
+                    setTableProperties(props)(view.state, view.dispatch);
+                  }
+                },
+                currentProps: state.pmTableContext?.table?.attrs as
+                  | Record<string, unknown>
+                  | undefined,
+              }}
+              imagePosition={{
+                isOpen: imagePositionOpen,
+                onClose: () => setImagePositionOpen(false),
+                onApply: handleApplyImagePosition,
+              }}
+              imageProperties={{
+                isOpen: imagePropsOpen,
+                onClose: () => setImagePropsOpen(false),
+                onApply: handleApplyImageProperties,
+                currentData: imagePropertiesCurrentData,
+              }}
+              pageSetup={{
+                isOpen: showPageSetup,
+                onClose: () => setShowPageSetup(false),
+                onApply: handlePageSetupApply,
+                currentProps:
+                  history.state.package.document.finalSectionProperties,
+              }}
+              footnoteProperties={{
+                isOpen: footnotePropsOpen,
+                onClose: () => setFootnotePropsOpen(false),
+                onApply: handleApplyFootnoteProperties,
+                footnotePr:
+                  history.state.package.document.finalSectionProperties
+                    ?.footnotePr,
+                endnotePr:
+                  history.state.package.document.finalSectionProperties
+                    ?.endnotePr,
+              }}
+            />
             {/* InlineHeaderFooterEditor is rendered inside the editor content area (position:relative div) */}
             {/* Hidden file input for image insertion */}
             <input
