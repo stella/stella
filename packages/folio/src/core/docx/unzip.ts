@@ -107,7 +107,14 @@ export type RawDocxContent = {
 
   // Comments
   commentsXml: string | null;
+  // commentsExtensible.xml (w16cex, Word 2016+) carries UTC timestamps via
+  // `w16cex:dateUtc`. Different file with a different schema from
+  // commentsExtended.xml, even though the names look similar.
   commentsExtensibleXml: string | null;
+  // commentsExtended.xml (w15, Word 2013+) carries reply-thread parent
+  // links via `w15:paraIdParent` and the resolved/done state via
+  // `w15:done`. Needed to reconstruct comment reply threads on import.
+  commentsExtendedXml: string | null;
 
   // Relationships
   documentRels: string | null;
@@ -173,6 +180,7 @@ export async function unzipDocx(
     endnotesXml: null,
     commentsXml: null,
     commentsExtensibleXml: null,
+    commentsExtendedXml: null,
     documentRels: null,
     packageRels: null,
     contentTypesXml: null,
@@ -238,14 +246,10 @@ export async function unzipDocx(
         content.endnotesXml = xmlContent;
       } else if (lowerPath === "word/comments.xml") {
         content.commentsXml = xmlContent;
-      } else if (
-        lowerPath === "word/commentsextensible.xml" ||
-        lowerPath === "word/commentsextended.xml"
-      ) {
-        // Prefer commentsExtensible (Word 2016+), fall back to commentsExtended
-        if (!content.commentsExtensibleXml) {
-          content.commentsExtensibleXml = xmlContent;
-        }
+      } else if (lowerPath === "word/commentsextensible.xml") {
+        content.commentsExtensibleXml = xmlContent;
+      } else if (lowerPath === "word/commentsextended.xml") {
+        content.commentsExtendedXml = xmlContent;
       } else if (lowerPath === "word/_rels/document.xml.rels") {
         content.documentRels = xmlContent;
       } else if (lowerPath === "_rels/.rels") {

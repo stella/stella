@@ -194,6 +194,128 @@ describe("commentParser", () => {
       expect(comments[0].date).toBe("2024-02-10T15:30:00");
     });
 
+    test("commentsExtended.xml populates parentId on replies", () => {
+      const extendedXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w15:commentsEx xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml">
+  <w15:commentEx w15:paraId="1A2B3C4D" w15:done="0"/>
+  <w15:commentEx w15:paraId="5E6F7A8B" w15:paraIdParent="1A2B3C4D" w15:done="0"/>
+</w15:commentsEx>`;
+
+      const comments = parseComments(
+        COMMENTS_XML,
+        emptyStyles,
+        emptyTheme,
+        emptyRels,
+        emptyMedia,
+        null,
+        extendedXml,
+      );
+
+      expect(comments).toHaveLength(2);
+      // Top-level comment has no parent
+      expect(comments[0].parentId).toBeUndefined();
+      // Reply points at the top-level w:id
+      expect(comments[1].parentId).toBe(1);
+    });
+
+    test("commentsExtended.xml carries the done/resolved state", () => {
+      const extendedXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w15:commentsEx xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml">
+  <w15:commentEx w15:paraId="1A2B3C4D" w15:done="1"/>
+  <w15:commentEx w15:paraId="5E6F7A8B" w15:done="0"/>
+</w15:commentsEx>`;
+
+      const comments = parseComments(
+        COMMENTS_XML,
+        emptyStyles,
+        emptyTheme,
+        emptyRels,
+        emptyMedia,
+        null,
+        extendedXml,
+      );
+
+      expect(comments[0].done).toBe(true);
+      expect(comments[1].done).toBe(false);
+    });
+
+    test("paraIdParent that doesn't match any comment is ignored", () => {
+      const extendedXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w15:commentsEx xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml">
+  <w15:commentEx w15:paraId="5E6F7A8B" w15:paraIdParent="DEADBEEF"/>
+</w15:commentsEx>`;
+
+      const comments = parseComments(
+        COMMENTS_XML,
+        emptyStyles,
+        emptyTheme,
+        emptyRels,
+        emptyMedia,
+        null,
+        extendedXml,
+      );
+
+      // Reply with unresolvable parent falls back to top-level.
+      expect(comments[1].parentId).toBeUndefined();
+    });
+
+    test("falls back to first-paragraph paraId when w:comment has none", () => {
+      // Some Word exporters put the join key on the first `w:p` child,
+      // not on `w:comment` itself. The reply-thread metadata still has
+      // to be applied.
+      const commentsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml">
+  <w:comment w:id="1" w:author="Alice" w:date="2024-02-10T15:30:00">
+    <w:p w14:paraId="1A2B3C4D">
+      <w:r><w:t>First</w:t></w:r>
+    </w:p>
+  </w:comment>
+  <w:comment w:id="2" w:author="Bob" w:date="2024-03-05T09:15:00">
+    <w:p w14:paraId="5E6F7A8B">
+      <w:r><w:t>Reply</w:t></w:r>
+    </w:p>
+  </w:comment>
+</w:comments>`;
+      const extendedXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w15:commentsEx xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml">
+  <w15:commentEx w15:paraId="1A2B3C4D" w15:done="1"/>
+  <w15:commentEx w15:paraId="5E6F7A8B" w15:paraIdParent="1A2B3C4D"/>
+</w15:commentsEx>`;
+
+      const comments = parseComments(
+        commentsXml,
+        emptyStyles,
+        emptyTheme,
+        emptyRels,
+        emptyMedia,
+        null,
+        extendedXml,
+      );
+
+      expect(comments[0].done).toBe(true);
+      expect(comments[1].parentId).toBe(1);
+    });
+
+    test("parentId resolution is case-insensitive on paraId", () => {
+      const extendedXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w15:commentsEx xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml">
+  <w15:commentEx w15:paraId="5e6f7a8b" w15:paraIdParent="1a2b3c4d"/>
+</w15:commentsEx>`;
+
+      const comments = parseComments(
+        COMMENTS_XML,
+        emptyStyles,
+        emptyTheme,
+        emptyRels,
+        emptyMedia,
+        null,
+        extendedXml,
+      );
+
+      expect(comments[1].parentId).toBe(1);
+    });
+
     test("paraId matching is case-insensitive", () => {
       // commentsExtensible uses lowercase paraId
       const lowerCaseExtensible = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>

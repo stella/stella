@@ -214,16 +214,17 @@ export function collectCommentIdsFromSources(
  *  - replies whose explicit `parentId` does not reach a kept top-level
  *    comment (a true broken-thread orphan).
  *
- * Why we don't prune unanchored top-level comments: the OOXML parser
- * does not yet read `commentsExtended.xml`, so Word comment replies
- * arrive with `parentId === undefined` and look indistinguishable from
- * a true top-level comment whose anchor has been edited away. Until the
- * parser populates the parent link, dropping unanchored top-level
- * entries would silently lose every imported Word reply on the first
- * save — a strictly worse failure mode than re-emitting a comment whose
- * anchor was actually deleted. The complementary "overwrite stale
- * `comments.xml`" fix in the save paths already prevents the
- * phantom-thread regression when the array does end up empty.
+ * Why we don't prune unanchored top-level comments: pre-Word-2013
+ * documents (and any document missing `commentsExtended.xml`) carry no
+ * reply-thread metadata, so Word replies in those files arrive with
+ * `parentId === undefined` and look indistinguishable from a true
+ * top-level comment whose anchor has been edited away. Dropping
+ * unanchored top-level entries would silently lose every reply in
+ * those older files on the first save — a strictly worse failure mode
+ * than re-emitting a comment whose anchor was actually deleted. The
+ * complementary "overwrite stale `comments.xml`" fix in the save paths
+ * already prevents the phantom-thread regression when the array does
+ * end up empty.
  */
 export function pruneOrphanedComments(
   comments: Comment[],

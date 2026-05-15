@@ -253,6 +253,7 @@ export async function parseDocx(
         rels,
         media,
         raw.commentsExtensibleXml,
+        raw.commentsExtendedXml,
       ),
     );
     if (comments.length > 0) {
