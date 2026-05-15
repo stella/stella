@@ -64,6 +64,7 @@ import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-compon
 import { useIsAnonymizationActive } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-active-store";
 import { useAnonymizationMatchesStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-matches-store";
 import { useAnonymizationSelectionStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-selection-store";
+import { useDocumentTextSelectionStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/document-text-selection-store";
 import { anonymizationAllowlistOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-terms";
 import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.css";
@@ -282,6 +283,14 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
             }
           }
           setDetectedAnonymizationTerms([...byCanonical.values()]);
+          // Tell the inspector facet that the pipeline has
+          // delivered a real result for this field. Folio's
+          // plugin already published an empty snapshot on
+          // mount; without this signal the facet would flip
+          // from "Detecting…" to "0 entities" the moment the
+          // editor mounts, then to the real count seconds
+          // later when the worker finally returns.
+          useAnonymizationMatchesStore.getState().markPipelineRan(fieldId);
         })
         .catch(() => {
           inFlightUntil = 0;
@@ -418,6 +427,50 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       clear(fieldId);
     };
   }, [fieldId, isAnonymizationActive]);
+
+  // Bridge document selections → inspector "Term to anonymize"
+  // input. The folio paged editor sets PM selections
+  // programmatically on its off-screen hidden PM and renders
+  // the visible selection via a custom overlay, so a global
+  // `selectionchange` listener never sees what the user
+  // highlighted on a painted page. Wrap the PM view's dispatch
+  // so every selection-bearing transaction publishes the
+  // selected text to the document-selection store, which the
+  // inspector facet subscribes to.
+  useEffect(() => {
+    const view = editorViewForAnonymization;
+    if (!view) {
+      return undefined;
+    }
+    const originalDispatch = view.dispatch.bind(view);
+    const { publish } = useDocumentTextSelectionStore.getState();
+    view.dispatch = (tr) => {
+      originalDispatch(tr);
+      if (!tr.selectionSet) {
+        return;
+      }
+      const { from, to } = view.state.selection;
+      if (from === to) {
+        return;
+      }
+      // textBetween with " " for both leaf-block and block
+      // separators collapses table cells, paragraphs, and
+      // inline atoms into a single-line phrase fit for the
+      // term-to-anonymize input.
+      const raw = view.state.doc.textBetween(from, to, " ", " ");
+      const single = raw.replace(/\s+/g, " ").trim();
+      if (single.length < 2 || single.length > 200) {
+        return;
+      }
+      publish(fieldId, single);
+    };
+    return () => {
+      // Restore the original dispatch so subsequent unmounted
+      // wrappers don't pile up if the view is reused.
+      view.dispatch = originalDispatch;
+      useDocumentTextSelectionStore.getState().clear(fieldId);
+    };
+  }, [editorViewForAnonymization, fieldId]);
 
   // Two-way bridge with the inspector anonymization facet.
   // - Click in document → push to store as source="doc" with

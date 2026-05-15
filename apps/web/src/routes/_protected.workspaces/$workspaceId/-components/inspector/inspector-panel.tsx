@@ -1954,7 +1954,13 @@ const FacetBar = ({
   return (
     <div
       className={cn(
-        "bg-background/85 supports-[backdrop-filter]:bg-background/65 sticky top-0 z-10 flex shrink-0 items-center gap-1 border-b px-2 backdrop-blur",
+        // `whitespace-nowrap` on each chip stops multi-word
+        // labels like "Historie verzí" from breaking mid-row
+        // in narrow inspector panes. The row stays single
+        // line; the active version chip moved to the chip's
+        // tooltip / sibling chrome (no longer inline) so the
+        // strip fits without horizontal scroll.
+        "bg-background/85 supports-[backdrop-filter]:bg-background/65 sticky top-0 z-10 flex shrink-0 items-center gap-0.5 border-b px-1.5 backdrop-blur",
         TOOLBAR_ROW_HEIGHT,
       )}
     >
@@ -1964,9 +1970,13 @@ const FacetBar = ({
         return (
           <button
             className={cn(
-              "rounded-md px-2 py-1 text-xs font-medium transition-colors",
+              // Active chip never shrinks — its full label
+              // always reads. Inactive chips can shrink and
+              // ellipsis if the row gets tight (full label
+              // is still in the `title` tooltip).
+              "min-w-0 truncate rounded-md px-1.5 py-1 text-xs font-medium whitespace-nowrap transition-colors",
               active
-                ? "bg-foreground text-background"
+                ? "bg-foreground text-background shrink-0"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground",
               active &&
                 pulsing &&
@@ -1976,14 +1986,14 @@ const FacetBar = ({
             disabled={disabled}
             key={value}
             onClick={() => onChange(value)}
+            title={
+              active && activeBadge !== undefined
+                ? `${labels[value]} · ${activeBadge}`
+                : labels[value]
+            }
             type="button"
           >
             {labels[value]}
-            {active && activeBadge !== undefined && (
-              <span className="text-background/70 ms-1 font-normal">
-                ({activeBadge})
-              </span>
-            )}
           </button>
         );
       })}

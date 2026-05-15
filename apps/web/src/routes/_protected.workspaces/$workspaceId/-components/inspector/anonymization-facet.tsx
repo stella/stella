@@ -47,8 +47,12 @@ import { stellaToast } from "@stll/ui/components/toast";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnonymizationActiveStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-active-store";
 import { AnonymizationContextMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-context-menu";
-import { useAnonymizationMatches } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-matches-store";
+import {
+  useAnonymizationMatches,
+  useAnonymizationMatchesReady,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-matches-store";
 import { useAnonymizationSelectionStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-selection-store";
+import { useDocumentTextSelection } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/document-text-selection-store";
 import {
   useCreateAnonymizationAllowlistEntry,
   useDeleteAnonymizationAllowlistEntry,
@@ -62,11 +66,11 @@ import { anonymizationTermsOptions } from "@/routes/_protected.workspaces/$works
 
 /**
  * Labels users can pick from when tagging a new term. Mirrors
- * the chat anonymizer's default entity labels — without MISC
- * for v1 because adding it requires a coordinated change in
- * the upstream @stll/anonymize-wasm package.
+ * the chat anonymizer's default entity labels (`misc` is now
+ * supported end-to-end in `@stll/anonymize-wasm`).
  */
 const LABEL_OPTIONS = [
+  "misc",
   "organization",
   "person",
   "address",
@@ -87,7 +91,11 @@ const LABEL_OPTIONS = [
 
 type LabelOption = (typeof LABEL_OPTIONS)[number];
 
-const DEFAULT_LABEL: LabelOption = "organization";
+// Misc is the safest default — most user-added terms don't
+// fit the structured categories cleanly, and it forces the
+// person to consciously upgrade the label when one of the
+// PII-specific buckets really does apply.
+const DEFAULT_LABEL: LabelOption = "misc";
 
 // Map the anonymizer's English label strings (the pipeline
 // emits canonicals like "organization", "phone number") onto
@@ -113,6 +121,12 @@ const LABEL_TRANSLATION_KEYS = {
   "passport number": "common.anonymizationLabels.passportNumber",
   "monetary amount": "common.anonymizationLabels.monetaryAmount",
   "land parcel": "common.anonymizationLabels.landParcel",
+  misc: "common.anonymizationLabels.miscellaneous",
+  // Back-compat alias: legacy server entries still labelled
+  // "other" before the wasm runtime adopted the canonical
+  // "misc" key. Kept so old workspace catalogs render with a
+  // proper translated label instead of falling back to the
+  // raw string.
   other: "common.anonymizationLabels.miscellaneous",
 } as const satisfies Record<string, TranslationKey>;
 
@@ -215,16 +229,15 @@ export const AnonymizationFacet = ({
   // like they live inside an input/textarea so typing into the
   // term field itself doesn't keep overwriting the value.
   useEffect(() => {
-    // CSS selector for the file-preview surfaces we want to
-    // accept selections from. `.layout-page` is the painted
-    // Folio page; the PDF viewer uses `.textLayer`. Folio's
-    // paged editor routes window.getSelection() to a hidden
-    // ProseMirror at -9999px (`.paged-editor__hidden-pm`) when
-    // the user drags on a painted page, so accept that surface
-    // too — without it, real user selections never reach the
-    // "Term to anonymize" prefill.
-    const PREVIEW_SURFACES =
-      ".layout-page, .textLayer, .paged-editor__hidden-pm";
+    // PDF viewer renders a real DOM `.textLayer` whose
+    // selections show up in `window.getSelection()`. The folio
+    // paged editor doesn't — it sets PM selections
+    // programmatically on an off-screen hidden PM and renders
+    // visible selection via a custom overlay. Folio
+    // selections come in via the document-text-selection
+    // store (subscribed below); the listener here only
+    // handles the PDF case.
+    const PREVIEW_SURFACES = ".textLayer";
     const isInsidePreview = (node: Node | null): boolean => {
       const element =
         node instanceof Element ? node : (node?.parentElement ?? null);
@@ -235,9 +248,6 @@ export const AnonymizationFacet = ({
       if (!selection || selection.rangeCount === 0) {
         return;
       }
-      // Both endpoints must sit inside the preview, otherwise we
-      // pick up incidental selections in the inspector, sidebar,
-      // tooltips, etc.
       if (
         !isInsidePreview(selection.anchorNode) ||
         !isInsidePreview(selection.focusNode)
@@ -257,6 +267,22 @@ export const AnonymizationFacet = ({
     document.addEventListener("selectionchange", handler);
     return () => document.removeEventListener("selectionchange", handler);
   }, []);
+
+  // Folio selection bridge — picks up PM selections that
+  // live in the off-screen hidden PM and aren't visible to
+  // `window.getSelection()`. The docx editor wrapper
+  // wraps `view.dispatch` and publishes the latest
+  // selected text here on every selection-bearing
+  // transaction.
+  const folioSelection = useDocumentTextSelection(activeFieldId);
+  useEffect(() => {
+    if (folioSelection === null) {
+      return;
+    }
+    setPendingValue(folioSelection.text);
+    // `seq` is part of the dep array so re-selecting the
+    // same string still re-fires the prefill.
+  }, [folioSelection?.text, folioSelection?.seq]);
 
   const addTerm = (canonical: string, label: LabelOption) => {
     const trimmed = canonical.trim();
@@ -292,6 +318,7 @@ export const AnonymizationFacet = ({
 
   const allEntries = termsQuery.data?.entries ?? [];
   const matchSnapshot = useAnonymizationMatches(activeFieldId);
+  const matchesReady = useAnonymizationMatchesReady(activeFieldId);
   const allowlistQuery = useQuery({
     ...anonymizationAllowlistOptions({ workspaceId, entityId }),
     enabled: activeFieldId !== null,
@@ -303,12 +330,16 @@ export const AnonymizationFacet = ({
   // canonical form is actually present in the open document. When
   // no document is open (peek mode, file list) `activeFieldId` is
   // null and the snapshot is empty — we fall back to the full
-  // catalog so the user can still curate terms.
-  const entries = activeFieldId
-    ? allEntries.filter((entry) =>
-        matchSnapshot.countByCanonical.has(entry.canonical),
-      )
-    : allEntries;
+  // catalog so the user can still curate terms. Same fallback
+  // while `!matchesReady`: detection hasn't published yet, so
+  // filtering would collapse the list to "0 matches" and look
+  // identical to "actually nothing matches".
+  const entries =
+    activeFieldId && matchesReady
+      ? allEntries.filter((entry) =>
+          matchSnapshot.countByCanonical.has(entry.canonical),
+        )
+      : allEntries;
   const noOpenDocument = activeFieldId === null;
 
   // Auto-detected entities to surface in the "Detected" section.
@@ -513,7 +544,7 @@ export const AnonymizationFacet = ({
             autoHighlight
             disabled={createMutation.isPending}
             items={[...LABEL_OPTIONS]}
-            itemToStringLabel={(option) => option}
+            itemToStringLabel={formatLabel}
             onValueChange={(next) => {
               if (next) {
                 setPendingLabel(next);
@@ -573,6 +604,13 @@ export const AnonymizationFacet = ({
             );
           })();
         }
+        if (!matchesReady) {
+          return (
+            <div className="text-muted-foreground bg-muted/40 rounded-md px-3 py-2 text-xs">
+              {t("inspector.anonymization.detectingMatches")}
+            </div>
+          );
+        }
         return (
           <div className="bg-muted/40 text-foreground rounded-md px-3 py-2 text-xs">
             {t("inspector.anonymization.matchCount", {
@@ -584,7 +622,7 @@ export const AnonymizationFacet = ({
 
       <div className="flex flex-col gap-1">
         <div className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-          {noOpenDocument
+          {noOpenDocument || !matchesReady
             ? t("inspector.anonymization.workspaceTermsHeading", {
                 count: String(entries.length),
               })
@@ -670,7 +708,7 @@ export const AnonymizationFacet = ({
           );
         })}
       </div>
-      {!noOpenDocument && detectedGroups.length > 0 && (
+      {!noOpenDocument && matchesReady && detectedGroups.length > 0 && (
         <div className="flex flex-col gap-1">
           <div className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
             {t("inspector.anonymization.detectedHeading", {
