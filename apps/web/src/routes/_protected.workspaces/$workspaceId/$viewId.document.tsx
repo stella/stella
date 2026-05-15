@@ -443,77 +443,104 @@ function RouteComponentInner({
             </div>
           )}
           <div className="relative min-h-0 flex-1">
-            {shouldRenderDocxBrowserShell && filePropertyId ? (
-              <VersionDropZone
-                disabled={false}
-                entityId={entityId}
-                workspaceId={workspaceId}
-              >
-                <DocxBrowserEditor
-                  actionBarControls={
-                    <PdfViewerControls
-                      currentPage={pageNumber}
-                      fieldId={fieldId}
-                      showFileActions={false}
-                      variant="inline"
-                      workspaceId={workspaceId}
-                    />
-                  }
-                  canUnlock={useDocxBrowserEditor}
-                  entityId={entityId}
-                  fieldId={fieldId}
-                  isEditing={initialEditing}
-                  onBlockedUnlock={() => {
-                    setDocxLatestVersionDialogOpen(true);
-                  }}
-                  onClose={() => {
-                    setDocxUnlocked(false);
-                    void navigate({
-                      search: (prev) => ({ ...prev, editing: undefined }),
-                    });
-                  }}
-                  onSaved={(savedFieldId) => {
-                    setDocxUnlocked(false);
-                    setActiveFieldId(savedFieldId);
-                    void navigate({
-                      replace: true,
-                      search: (prev) => ({
-                        ...prev,
-                        editing: undefined,
-                        field: savedFieldId,
-                        pdfPage: undefined,
-                      }),
-                    });
-                  }}
-                  onUnlockedChange={setDocxUnlocked}
-                  propertyId={filePropertyId}
-                  scaleOffset={scaleOffset}
-                  workspaceId={workspaceId}
-                />
-              </VersionDropZone>
-            ) : (
-              <VersionDropZone
-                disabled={!!compareState}
-                entityId={entityId}
-                workspaceId={workspaceId}
-              >
-                {compareState ? (
-                  <RedlineOverlay
-                    compareState={compareState}
-                    scaleOffset={scaleOffset}
-                    onClose={() => setCompareState(null)}
-                  />
-                ) : usesNativeDocxDisplay ? (
-                  <Suspense
-                    fallback={<DocxLoadingShell scaleOffset={scaleOffset} />}
+            {(() => {
+              if (shouldRenderDocxBrowserShell && filePropertyId) {
+                return (
+                  <VersionDropZone
+                    disabled={false}
+                    entityId={entityId}
+                    workspaceId={workspaceId}
                   >
-                    <FullscreenDocxViewer
+                    <DocxBrowserEditor
+                      actionBarControls={
+                        <PdfViewerControls
+                          currentPage={pageNumber}
+                          fieldId={fieldId}
+                          showFileActions={false}
+                          variant="inline"
+                          workspaceId={workspaceId}
+                        />
+                      }
+                      canUnlock={useDocxBrowserEditor}
+                      entityId={entityId}
                       fieldId={fieldId}
+                      isEditing={initialEditing}
+                      onBlockedUnlock={() => {
+                        setDocxLatestVersionDialogOpen(true);
+                      }}
+                      onClose={() => {
+                        setDocxUnlocked(false);
+                        void navigate({
+                          search: (prev) => ({
+                            ...prev,
+                            editing: undefined,
+                          }),
+                        });
+                      }}
+                      onSaved={(savedFieldId) => {
+                        setDocxUnlocked(false);
+                        setActiveFieldId(savedFieldId);
+                        void navigate({
+                          replace: true,
+                          search: (prev) => ({
+                            ...prev,
+                            editing: undefined,
+                            field: savedFieldId,
+                            pdfPage: undefined,
+                          }),
+                        });
+                      }}
+                      onUnlockedChange={setDocxUnlocked}
+                      propertyId={filePropertyId}
                       scaleOffset={scaleOffset}
                       workspaceId={workspaceId}
                     />
-                  </Suspense>
-                ) : (
+                  </VersionDropZone>
+                );
+              }
+
+              if (compareState) {
+                return (
+                  <VersionDropZone
+                    disabled
+                    entityId={entityId}
+                    workspaceId={workspaceId}
+                  >
+                    <RedlineOverlay
+                      compareState={compareState}
+                      scaleOffset={scaleOffset}
+                      onClose={() => setCompareState(null)}
+                    />
+                  </VersionDropZone>
+                );
+              }
+
+              if (usesNativeDocxDisplay) {
+                return (
+                  <VersionDropZone
+                    disabled={false}
+                    entityId={entityId}
+                    workspaceId={workspaceId}
+                  >
+                    <Suspense
+                      fallback={<DocxLoadingShell scaleOffset={scaleOffset} />}
+                    >
+                      <FullscreenDocxViewer
+                        fieldId={fieldId}
+                        scaleOffset={scaleOffset}
+                        workspaceId={workspaceId}
+                      />
+                    </Suspense>
+                  </VersionDropZone>
+                );
+              }
+
+              return (
+                <VersionDropZone
+                  disabled={false}
+                  entityId={entityId}
+                  workspaceId={workspaceId}
+                >
                   <PDFProvider
                     key={fieldId}
                     fieldId={fieldId}
@@ -525,9 +552,9 @@ function RouteComponentInner({
                     <JustificationScrollSync />
                     <PdfViewer />
                   </PDFProvider>
-                )}
-              </VersionDropZone>
-            )}
+                </VersionDropZone>
+              );
+            })()}
           </div>
         </section>
       </div>

@@ -730,22 +730,26 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           )}
         >
           <Tooltip
-            content={
-              tabs.length === 0
-                ? t("inspector.openChat")
-                : minimized
-                  ? t("inspector.showPane")
-                  : t("inspector.hidePane")
-            }
+            content={(() => {
+              if (tabs.length === 0) {
+                return t("inspector.openChat");
+              }
+              if (minimized) {
+                return t("inspector.showPane");
+              }
+              return t("inspector.hidePane");
+            })()}
             render={
               <button
-                aria-label={
-                  tabs.length === 0
-                    ? t("inspector.openChat")
-                    : minimized
-                      ? t("inspector.showPane")
-                      : t("inspector.hidePane")
-                }
+                aria-label={(() => {
+                  if (tabs.length === 0) {
+                    return t("inspector.openChat");
+                  }
+                  if (minimized) {
+                    return t("inspector.showPane");
+                  }
+                  return t("inspector.hidePane");
+                })()}
                 className={cn(
                   "text-muted-foreground hover:bg-accent hover:text-foreground flex items-center justify-center rounded-md transition-colors",
                   SIDE_RAIL_ICON_BUTTON_SIZE,
@@ -1141,34 +1145,42 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         // preview facet, we hide the toggle entirely (Full view
         // alone) rather than show a button that would no-op.
         const isPreviewFacet = (tab.facet ?? "preview") === "preview";
-        const editToggle = isEditingNativeDocx ? (
-          <Button
-            className="transition-all"
-            onClick={() => {
-              docxActionsRef.current.get(tab.id)?.finalize();
-            }}
-            size="xs"
-          >
-            <CheckIcon className="size-3.5" />
-            {t("common.save")}
-          </Button>
-        ) : canUnlockNativeDocx ? (
-          <Button
-            className={cn(
-              "transition-all",
-              isPromptingDocxUnlock &&
-                "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
-            )}
-            onClick={() => {
-              void handleStartDocxEdit(tab.id);
-            }}
-            size="xs"
-            variant="ghost"
-          >
-            <LockOpenIcon className="size-3.5" />
-            {t("folio.editFile")}
-          </Button>
-        ) : null;
+        const editToggle = (() => {
+          if (isEditingNativeDocx) {
+            return (
+              <Button
+                className="transition-all"
+                onClick={() => {
+                  docxActionsRef.current.get(tab.id)?.finalize();
+                }}
+                size="xs"
+              >
+                <CheckIcon className="size-3.5" />
+                {t("common.save")}
+              </Button>
+            );
+          }
+          if (canUnlockNativeDocx) {
+            return (
+              <Button
+                className={cn(
+                  "transition-all",
+                  isPromptingDocxUnlock &&
+                    "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
+                )}
+                onClick={() => {
+                  void handleStartDocxEdit(tab.id);
+                }}
+                size="xs"
+                variant="ghost"
+              >
+                <LockOpenIcon className="size-3.5" />
+                {t("folio.editFile")}
+              </Button>
+            );
+          }
+          return null;
+        })();
 
         const fullViewButton = (
           <Button
@@ -1289,64 +1301,67 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           });
         };
 
-        const fileViewer =
-          isNativeDocxDisplay && tab.propertyId !== undefined ? (
-            <DocxBrowserEditor
-              actionsKey={tab.id}
-              actionsMapRef={docxActionsRef}
-              entityId={tab.entityId}
-              errorFallback={viewerErrorFallback}
-              fieldId={tab.id}
-              initialScrollTop={docxScrollTopByTab.get(tab.id)}
-              isEditing={isEditingNativeDocx}
-              onClose={() => {
-                docxActionsRef.current.delete(tab.id);
-                setEditingDocxTabId(null);
-              }}
-              onCompatibilityChange={(compatibility) => {
-                setDocxCompatibilityByTab((prev) => {
-                  if (prev.get(tab.id) === compatibility) {
-                    return prev;
+        const fileViewer = (() => {
+          if (isNativeDocxDisplay && tab.propertyId !== undefined) {
+            return (
+              <DocxBrowserEditor
+                actionsKey={tab.id}
+                actionsMapRef={docxActionsRef}
+                entityId={tab.entityId}
+                errorFallback={viewerErrorFallback}
+                fieldId={tab.id}
+                initialScrollTop={docxScrollTopByTab.get(tab.id)}
+                isEditing={isEditingNativeDocx}
+                onClose={() => {
+                  docxActionsRef.current.delete(tab.id);
+                  setEditingDocxTabId(null);
+                }}
+                onCompatibilityChange={(compatibility) => {
+                  setDocxCompatibilityByTab((prev) => {
+                    if (prev.get(tab.id) === compatibility) {
+                      return prev;
+                    }
+                    const next = new Map(prev);
+                    next.set(tab.id, compatibility);
+                    return next;
+                  });
+                }}
+                onError={handleViewerError}
+                onReadonlyEditAttempt={promptDocxUnlock}
+                onSaved={(fieldId) => {
+                  if (fieldId !== tab.id) {
+                    setDocxScrollTopByTab((prev) => {
+                      const scrollTop = prev.get(tab.id);
+                      if (scrollTop === undefined) {
+                        return prev;
+                      }
+                      const next = new Map(prev);
+                      next.set(fieldId, scrollTop);
+                      return next;
+                    });
+                    setScaleOffsets((prev) => {
+                      const scaleOffset = prev.get(tab.id);
+                      if (scaleOffset === undefined) {
+                        return prev;
+                      }
+                      const next = new Map(prev);
+                      next.set(fieldId, scaleOffset);
+                      return next;
+                    });
+                    useInspectorStore
+                      .getState()
+                      .replaceFileFieldId(tab.id, fieldId);
                   }
-                  const next = new Map(prev);
-                  next.set(tab.id, compatibility);
-                  return next;
-                });
-              }}
-              onError={handleViewerError}
-              onReadonlyEditAttempt={promptDocxUnlock}
-              onSaved={(fieldId) => {
-                if (fieldId !== tab.id) {
-                  setDocxScrollTopByTab((prev) => {
-                    const scrollTop = prev.get(tab.id);
-                    if (scrollTop === undefined) {
-                      return prev;
-                    }
-                    const next = new Map(prev);
-                    next.set(fieldId, scrollTop);
-                    return next;
-                  });
-                  setScaleOffsets((prev) => {
-                    const scaleOffset = prev.get(tab.id);
-                    if (scaleOffset === undefined) {
-                      return prev;
-                    }
-                    const next = new Map(prev);
-                    next.set(fieldId, scaleOffset);
-                    return next;
-                  });
-                  useInspectorStore
-                    .getState()
-                    .replaceFileFieldId(tab.id, fieldId);
-                }
-              }}
-              onScrollTopChange={handleDocxScrollTopChange}
-              propertyId={tab.propertyId}
-              scaleOffset={scaleOffsets.get(tab.id) ?? 0}
-              showActionBar={false}
-              workspaceId={tab.workspaceId}
-            />
-          ) : (
+                }}
+                onScrollTopChange={handleDocxScrollTopChange}
+                propertyId={tab.propertyId}
+                scaleOffset={scaleOffsets.get(tab.id) ?? 0}
+                showActionBar={false}
+                workspaceId={tab.workspaceId}
+              />
+            );
+          }
+          return (
             <PeekPdfViewer
               activePropertyId={tab.propertyId ?? ""}
               entityId={tab.entityId}
@@ -1362,6 +1377,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
               workspaceId={tab.workspaceId}
             />
           );
+        })();
 
         const viewerPane = (
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -1426,10 +1442,11 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         // facets render the same content as the fullscreen branch
         // so the inspector tab is one consistent workbench
         // regardless of mode.
-        const sidepeekBody =
-          sidepeekFacet === "preview" ? (
-            viewerContent
-          ) : (
+        const sidepeekBody = (() => {
+          if (sidepeekFacet === "preview") {
+            return viewerContent;
+          }
+          return (
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
               {sidepeekFacet === "metadata" && (
                 <Suspense fallback={<MetadataPanelSkeleton />}>
@@ -1550,6 +1567,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
               )}
             </div>
           );
+        })();
 
         return (
           <div
@@ -3277,14 +3295,20 @@ const ExternalReferencePanel = ({
                 value={findQuery}
               />
               <span className="text-muted-foreground min-w-14 text-end text-xs tabular-nums">
-                {findQuery
-                  ? matchCount > 0
-                    ? t("folio.findReplace.matchCounter", {
-                        current: String(activeMatchNumber),
-                        total: String(matchCount),
-                      })
-                    : t("folio.findReplace.noResults")
-                  : ""}
+                {(() => {
+                  if (findQuery) {
+                    return (() => {
+                      if (matchCount > 0) {
+                        return t("folio.findReplace.matchCounter", {
+                          current: String(activeMatchNumber),
+                          total: String(matchCount),
+                        });
+                      }
+                      return t("folio.findReplace.noResults");
+                    })();
+                  }
+                  return "";
+                })()}
               </span>
               <Button
                 aria-label={t("folio.findReplace.previous")}
@@ -3319,51 +3343,64 @@ const ExternalReferencePanel = ({
               </Button>
             </div>
           )}
-          {previewLoading ? (
-            <div className="space-y-3 p-4">
-              <Skeleton className="h-4 w-2/3" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-5/6" />
-              <Skeleton className="h-4 w-4/5" />
-            </div>
-          ) : shouldLoadExternalPdf && externalFilePreviewUrl !== undefined ? (
-            <ExternalPdfPreview
-              buffer={externalPdfPreview.buffer}
-              onOpenOriginal={requestSafeExternalOpen}
-              status={externalPdfPreview.status}
-              token={externalPdfPreview.token}
-              url={externalFilePreviewUrl}
-            />
-          ) : previewText || tab.snippet ? (
-            <ScrollArea className="min-h-0 flex-1">
-              <article className="max-w-none px-4 py-3" ref={contentRef}>
-                {previewSnippet && (
-                  <p className="text-muted-foreground border-b pb-3 text-sm">
-                    {previewSnippet}
-                  </p>
-                )}
-                {previewText && (
-                  <div className="text-foreground text-sm leading-6">
-                    {previewTitle && previewTitle !== tab.label ? (
-                      <h2 className="mb-3 font-medium">{previewTitle}</h2>
-                    ) : null}
-                    {fetchedPreview?.format === "markdown" ? (
-                      <MessageResponse className="text-sm">
-                        {previewText}
-                      </MessageResponse>
-                    ) : (
-                      <div className="whitespace-pre-wrap">{previewText}</div>
+          {(() => {
+            if (previewLoading) {
+              return (
+                <div className="space-y-3 p-4">
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-5/6" />
+                  <Skeleton className="h-4 w-4/5" />
+                </div>
+              );
+            }
+            if (shouldLoadExternalPdf && externalFilePreviewUrl !== undefined) {
+              return (
+                <ExternalPdfPreview
+                  buffer={externalPdfPreview.buffer}
+                  onOpenOriginal={requestSafeExternalOpen}
+                  status={externalPdfPreview.status}
+                  token={externalPdfPreview.token}
+                  url={externalFilePreviewUrl}
+                />
+              );
+            }
+            if (previewText || tab.snippet) {
+              return (
+                <ScrollArea className="min-h-0 flex-1">
+                  <article className="max-w-none px-4 py-3" ref={contentRef}>
+                    {previewSnippet && (
+                      <p className="text-muted-foreground border-b pb-3 text-sm">
+                        {previewSnippet}
+                      </p>
                     )}
-                  </div>
-                )}
-              </article>
-            </ScrollArea>
-          ) : (
-            <ExternalPreviewUnavailable
-              canOpenOriginal={canPreview}
-              onOpenOriginal={requestSafeExternalOpen}
-            />
-          )}
+                    {previewText && (
+                      <div className="text-foreground text-sm leading-6">
+                        {previewTitle && previewTitle !== tab.label ? (
+                          <h2 className="mb-3 font-medium">{previewTitle}</h2>
+                        ) : null}
+                        {fetchedPreview?.format === "markdown" ? (
+                          <MessageResponse className="text-sm">
+                            {previewText}
+                          </MessageResponse>
+                        ) : (
+                          <div className="whitespace-pre-wrap">
+                            {previewText}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </article>
+                </ScrollArea>
+              );
+            }
+            return (
+              <ExternalPreviewUnavailable
+                canOpenOriginal={canPreview}
+                onOpenOriginal={requestSafeExternalOpen}
+              />
+            );
+          })()}
         </div>
       </FileViewerWithAI>
       <Dialog

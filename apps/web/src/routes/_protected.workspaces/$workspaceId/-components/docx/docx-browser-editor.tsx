@@ -1079,40 +1079,44 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     ? t("folio.finishEditing")
     : t("folio.editFile");
 
-  const toolbarExtra =
-    showActionBar || actionBarControls !== undefined ? (
-      <>
-        {actionBarControls}
-        {showActionBar && (
-          <>
-            <Tooltip
-              content={lockActionLabel}
-              render={
-                <Button
-                  aria-label={lockActionLabel}
-                  className={cn(
-                    "transition-all",
-                    showLockLabel ? "px-2" : "",
-                    isPromptingUnlock &&
-                      "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
-                  )}
-                  disabled={
-                    state.status === "opening" || state.status === "saving"
-                  }
-                  onClick={handleToggleLock}
-                  size={showLockLabel ? "sm" : "icon-sm"}
-                  variant="ghost"
-                >
-                  {isUnlocked ? <LockOpenIcon /> : <LockIcon />}
-                  {showLockLabel && <span>{lockActionLabel}</span>}
-                </Button>
-              }
-            />
-            {isUnlocked && <AutosaveIndicator status={autosaveStatus} />}
-          </>
-        )}
-      </>
-    ) : undefined;
+  const toolbarExtra = (() => {
+    if (showActionBar || actionBarControls !== undefined) {
+      return (
+        <>
+          {actionBarControls}
+          {showActionBar && (
+            <>
+              <Tooltip
+                content={lockActionLabel}
+                render={
+                  <Button
+                    aria-label={lockActionLabel}
+                    className={cn(
+                      "transition-all",
+                      showLockLabel ? "px-2" : "",
+                      isPromptingUnlock &&
+                        "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
+                    )}
+                    disabled={
+                      state.status === "opening" || state.status === "saving"
+                    }
+                    onClick={handleToggleLock}
+                    size={showLockLabel ? "sm" : "icon-sm"}
+                    variant="ghost"
+                  >
+                    {isUnlocked ? <LockOpenIcon /> : <LockIcon />}
+                    {showLockLabel && <span>{lockActionLabel}</span>}
+                  </Button>
+                }
+              />
+              {isUnlocked && <AutosaveIndicator status={autosaveStatus} />}
+            </>
+          )}
+        </>
+      );
+    }
+    return undefined;
+  })();
 
   useEffect(() => {
     if (!isUnlocked) {
@@ -1278,13 +1282,15 @@ const AutosaveIndicator = ({ status }: { status: AutosaveStatus }) => {
       role="status"
       title={isSynced ? t("folio.synced") : t("folio.syncing")}
     >
-      {isSynced ? (
-        <CheckCircle2Icon className="size-3.5" />
-      ) : isSyncing ? (
-        <RefreshCwIcon className="size-3.5 animate-spin" />
-      ) : (
-        <RefreshCwIcon className="size-3.5 opacity-45" />
-      )}
+      {(() => {
+        if (isSynced) {
+          return <CheckCircle2Icon className="size-3.5" />;
+        }
+        if (isSyncing) {
+          return <RefreshCwIcon className="size-3.5 animate-spin" />;
+        }
+        return <RefreshCwIcon className="size-3.5 opacity-45" />;
+      })()}
     </span>
   );
 };

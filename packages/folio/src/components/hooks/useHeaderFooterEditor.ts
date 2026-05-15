@@ -345,13 +345,20 @@ export const useHeaderFooterEditor = ({
   const handleHeaderFooterDoubleClick = useCallback(
     (position: "header" | "footer", pageNumber?: number) => {
       const isFirstPage = hasTitlePg && (pageNumber ?? 1) === 1;
-      const hf = isFirstPage
-        ? position === "header"
-          ? firstPageHeaderContent
-          : firstPageFooterContent
-        : position === "header"
-          ? headerContent
-          : footerContent;
+      const hf = (() => {
+        if (isFirstPage) {
+          return (() => {
+            if (position === "header") {
+              return firstPageHeaderContent;
+            }
+            return firstPageFooterContent;
+          })();
+        }
+        if (position === "header") {
+          return headerContent;
+        }
+        return footerContent;
+      })();
       setHfEditIsFirstPage(isFirstPage);
       if (hf) {
         setHfEditPosition(position);
@@ -434,13 +441,20 @@ export const useHeaderFooterEditor = ({
       // title-page section has the body H/F; signature sections
       // override default with stripped-down rIds). Codex PR #258
       // review.
-      const activeRId = hfEditIsFirstPage
-        ? hfEditPosition === "header"
-          ? activeFirstHeaderRId
-          : activeFirstFooterRId
-        : hfEditPosition === "header"
-          ? activeHeaderRId
-          : activeFooterRId;
+      const activeRId = (() => {
+        if (hfEditIsFirstPage) {
+          return (() => {
+            if (hfEditPosition === "header") {
+              return activeFirstHeaderRId;
+            }
+            return activeFirstFooterRId;
+          })();
+        }
+        if (hfEditPosition === "header") {
+          return activeHeaderRId;
+        }
+        return activeFooterRId;
+      })();
       const refType = hfEditIsFirstPage ? "first" : "default";
       const mapKey = hfEditPosition === "header" ? "headers" : "footers";
       const map = pkg[mapKey];
@@ -509,13 +523,20 @@ export const useHeaderFooterEditor = ({
     // rendered, not whatever lives in `finalSectionProperties` (Codex
     // PR #258 review). Drop the ref from every section that points at
     // this rId so we don't leave a dangling reference behind.
-    const activeRId = hfEditIsFirstPage
-      ? hfEditPosition === "header"
-        ? activeFirstHeaderRId
-        : activeFirstFooterRId
-      : hfEditPosition === "header"
-        ? activeHeaderRId
-        : activeFooterRId;
+    const activeRId = (() => {
+      if (hfEditIsFirstPage) {
+        return (() => {
+          if (hfEditPosition === "header") {
+            return activeFirstHeaderRId;
+          }
+          return activeFirstFooterRId;
+        })();
+      }
+      if (hfEditPosition === "header") {
+        return activeHeaderRId;
+      }
+      return activeFooterRId;
+    })();
 
     if (activeRId) {
       const newMap = new Map(pkg[mapKey]);
@@ -546,15 +567,24 @@ export const useHeaderFooterEditor = ({
         package: {
           ...pkg,
           [mapKey]: newMap,
-          document: oldDoc
-            ? {
+          document: (() => {
+            if (oldDoc) {
+              return {
                 ...oldDoc,
-                ...(newSections !== undefined ? { sections: newSections } : {}),
-                ...(newFinalProps !== undefined
-                  ? { finalSectionProperties: newFinalProps }
+                ...(newSections !== undefined
+                  ? {
+                      sections: newSections,
+                    }
                   : {}),
-              }
-            : oldDoc,
+                ...(newFinalProps !== undefined
+                  ? {
+                      finalSectionProperties: newFinalProps,
+                    }
+                  : {}),
+              };
+            }
+            return oldDoc;
+          })(),
         },
       };
       pushDocument(newDoc);

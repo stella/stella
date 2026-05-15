@@ -120,9 +120,14 @@ function RouteComponent() {
   const groups = groupBy === "client" ? groupByClient(sorted) : null;
 
   const collapsedSet = new Set(collapsedGroups);
-  const displayed = groups
-    ? groups.flatMap((g) => (collapsedSet.has(g.groupId) ? [] : g.workspaces))
-    : sorted;
+  const displayed = (() => {
+    if (groups) {
+      return groups.flatMap((g) =>
+        collapsedSet.has(g.groupId) ? [] : g.workspaces,
+      );
+    }
+    return sorted;
+  })();
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -164,42 +169,53 @@ function RouteComponent() {
 
         <div className="relative flex-1">
           <div className="absolute inset-0 overflow-y-auto" ref={scrollRef}>
-            {sorted.length === 0 ? (
-              workspaces.length === 0 && isFetching ? (
-                <div className="grid auto-rows-min gap-4 border-t p-4 md:grid-cols-3">
-                  <Skeleton className="h-22 w-full rounded-xl" />
-                  <Skeleton className="h-22 w-full rounded-xl" />
-                  <Skeleton className="h-22 w-full rounded-xl" />
-                </div>
-              ) : workspaces.length === 0 ? (
-                <EmptyScreen
-                  className="min-h-full"
-                  description={t("workspaces.emptyMatters.description")}
-                  primaryAction={{
-                    label: t("workspaces.createNewWorkspace"),
-                    icon: PlusIcon,
-                    onClick: () => openCreateMatter(),
-                  }}
-                  mediaPlacement="bottom"
-                  title={t("workspaces.emptyMatters.title")}
-                  video={{
-                    ...EMPTY_SCREEN_MATTERS_VIDEO,
-                    title: t("workspaces.emptyMatters.videoLabel"),
-                  }}
+            {(() => {
+              if (sorted.length === 0) {
+                return (() => {
+                  if (workspaces.length === 0 && isFetching) {
+                    return (
+                      <div className="grid auto-rows-min gap-4 border-t p-4 md:grid-cols-3">
+                        <Skeleton className="h-22 w-full rounded-xl" />
+                        <Skeleton className="h-22 w-full rounded-xl" />
+                        <Skeleton className="h-22 w-full rounded-xl" />
+                      </div>
+                    );
+                  }
+                  if (workspaces.length === 0) {
+                    return (
+                      <EmptyScreen
+                        className="min-h-full"
+                        description={t("workspaces.emptyMatters.description")}
+                        primaryAction={{
+                          label: t("workspaces.createNewWorkspace"),
+                          icon: PlusIcon,
+                          onClick: () => openCreateMatter(),
+                        }}
+                        mediaPlacement="bottom"
+                        title={t("workspaces.emptyMatters.title")}
+                        video={{
+                          ...EMPTY_SCREEN_MATTERS_VIDEO,
+                          title: t("workspaces.emptyMatters.videoLabel"),
+                        }}
+                      />
+                    );
+                  }
+                  return (
+                    <div className="text-muted-foreground flex flex-1 items-center justify-center p-8 text-sm">
+                      {t("common.empty")}
+                    </div>
+                  );
+                })();
+              }
+              return (
+                <MattersContentView
+                  canCreateMatter={canOpenCreateMatter}
+                  displayed={displayed}
+                  focusIndex={focusIndex}
+                  groups={groups}
                 />
-              ) : (
-                <div className="text-muted-foreground flex flex-1 items-center justify-center p-8 text-sm">
-                  {t("common.empty")}
-                </div>
-              )
-            ) : (
-              <MattersContentView
-                canCreateMatter={canOpenCreateMatter}
-                displayed={displayed}
-                focusIndex={focusIndex}
-                groups={groups}
-              />
-            )}
+              );
+            })()}
           </div>
           {groups && groups.length > 0 && (
             <AlphabetIndex
@@ -297,54 +313,68 @@ const MattersContentView = ({
   const toggleGroupCollapsed = useConfigStore((s) => s.toggleGroupCollapsed);
   return (
     <div className="p-2">
-      {viewMode === "table" ? (
-        <MattersTable
-          collapsedGroups={collapsedGroups}
-          focusIndex={focusIndex}
-          groups={groups}
-          onToggleGroup={toggleGroupCollapsed}
-          workspaces={displayed}
-        />
-      ) : groups && groups.length > 0 ? (
-        <div className="grid auto-rows-min gap-3 md:grid-cols-3" ref={gridRef}>
-          {groups.map((group) => {
-            const collapsed = collapsedGroups.includes(group.groupId);
-            const firstWs = group.workspaces.at(0);
-            const baseIndex = firstWs ? displayed.indexOf(firstWs) : 0;
-            return (
-              <Fragment key={group.groupId}>
-                <ClientGroupHeader
-                  collapsed={collapsed}
-                  group={group}
-                  onToggle={() => toggleGroupCollapsed(group.groupId)}
-                  personalLabel={t("workspaces.parties.personalLabel")}
-                />
-                {!collapsed &&
-                  group.workspaces.map((workspace, i) => (
-                    <MatterCard
-                      canCreateMatter={canCreateMatter}
-                      focused={focusIndex === baseIndex + i}
-                      hideClientName
-                      key={workspace.id}
-                      workspace={workspace}
-                    />
-                  ))}
-              </Fragment>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="grid auto-rows-min gap-3 md:grid-cols-3" ref={gridRef}>
-          {displayed.map((workspace, i) => (
-            <MatterCard
-              canCreateMatter={canCreateMatter}
-              focused={focusIndex === i}
-              key={workspace.id}
-              workspace={workspace}
+      {(() => {
+        if (viewMode === "table") {
+          return (
+            <MattersTable
+              collapsedGroups={collapsedGroups}
+              focusIndex={focusIndex}
+              groups={groups}
+              onToggleGroup={toggleGroupCollapsed}
+              workspaces={displayed}
             />
-          ))}
-        </div>
-      )}
+          );
+        }
+        if (groups && groups.length > 0) {
+          return (
+            <div
+              className="grid auto-rows-min gap-3 md:grid-cols-3"
+              ref={gridRef}
+            >
+              {groups.map((group) => {
+                const collapsed = collapsedGroups.includes(group.groupId);
+                const firstWs = group.workspaces.at(0);
+                const baseIndex = firstWs ? displayed.indexOf(firstWs) : 0;
+                return (
+                  <Fragment key={group.groupId}>
+                    <ClientGroupHeader
+                      collapsed={collapsed}
+                      group={group}
+                      onToggle={() => toggleGroupCollapsed(group.groupId)}
+                      personalLabel={t("workspaces.parties.personalLabel")}
+                    />
+                    {!collapsed &&
+                      group.workspaces.map((workspace, i) => (
+                        <MatterCard
+                          canCreateMatter={canCreateMatter}
+                          focused={focusIndex === baseIndex + i}
+                          hideClientName
+                          key={workspace.id}
+                          workspace={workspace}
+                        />
+                      ))}
+                  </Fragment>
+                );
+              })}
+            </div>
+          );
+        }
+        return (
+          <div
+            className="grid auto-rows-min gap-3 md:grid-cols-3"
+            ref={gridRef}
+          >
+            {displayed.map((workspace, i) => (
+              <MatterCard
+                canCreateMatter={canCreateMatter}
+                focused={focusIndex === i}
+                key={workspace.id}
+                workspace={workspace}
+              />
+            ))}
+          </div>
+        );
+      })()}
     </div>
   );
 };

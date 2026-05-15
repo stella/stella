@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import {
   useCallback,
   useEffect,
@@ -825,6 +825,18 @@ const DraggableHeaderCell = ({
     return combine(...cleanups);
   }, [canReorderColumn, header.column, pinning]);
 
+  let headerContent: ReactNode = null;
+  if (header.column.id === selectColId) {
+    headerContent = (
+      <SelectAllHeader onToggle={onToggleSelectAll} state={selectAllState} />
+    );
+  } else if (!header.isPlaceholder) {
+    headerContent = flexRender(
+      header.column.columnDef.header,
+      header.getContext(),
+    );
+  }
+
   return (
     <WorkspaceGridHead
       aria-colindex={index + 1}
@@ -869,11 +881,7 @@ const DraggableHeaderCell = ({
           <GripVerticalIcon className="size-3.5" />
         </div>
       )}
-      {header.column.id === selectColId ? (
-        <SelectAllHeader onToggle={onToggleSelectAll} state={selectAllState} />
-      ) : header.isPlaceholder ? null : (
-        flexRender(header.column.columnDef.header, header.getContext())
-      )}
+      {headerContent}
       {header.column.getCanResize() && (
         <button
           className="user-select-none absolute top-0 -right-2 z-30 hidden h-full w-4 cursor-col-resize touch-none py-1 group-hover/table-head:flex"
@@ -965,11 +973,15 @@ const SelectAllHeader = ({ state, onToggle }: SelectAllHeaderProps) => {
         role="checkbox"
         type="button"
       >
-        {state.indeterminate ? (
-          <MinusIcon className="size-3" strokeWidth={3} />
-        ) : state.checked ? (
-          <CheckIcon className="size-3" strokeWidth={3} />
-        ) : null}
+        {(() => {
+          if (state.indeterminate) {
+            return <MinusIcon className="size-3" strokeWidth={3} />;
+          }
+          if (state.checked) {
+            return <CheckIcon className="size-3" strokeWidth={3} />;
+          }
+          return null;
+        })()}
       </button>
     </div>
   );

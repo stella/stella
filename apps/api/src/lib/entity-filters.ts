@@ -230,11 +230,15 @@ const buildBuiltinFilterCondition = (
       }
       return or(ne(col, String(filter.value)), isNull(col)) ?? null;
     case "in": {
-      const vals = Array.isArray(filter.value)
-        ? filter.value
-        : filter.value
-          ? [filter.value]
-          : [];
+      const vals = (() => {
+        if (Array.isArray(filter.value)) {
+          return filter.value;
+        }
+        if (filter.value) {
+          return [filter.value];
+        }
+        return [];
+      })();
       if (vals.length === 0) {
         return null;
       }

@@ -332,12 +332,15 @@ export const parseBlockTree = (
       d.kind === "elseif" ||
       d.kind === "else"
     ) {
-      const tag =
-        d.kind === "endif"
-          ? "{{/if}}"
-          : d.kind === "endeach"
-            ? "{{/each}}"
-            : `{{#${d.kind}}}`;
+      const tag = (() => {
+        if (d.kind === "endif") {
+          return "{{/if}}";
+        }
+        if (d.kind === "endeach") {
+          return "{{/each}}";
+        }
+        return `{{#${d.kind}}}`;
+      })();
       errors.push({
         message: `Orphaned ${tag} without matching opening directive`,
         paragraphIndex: d.paragraphIndex,

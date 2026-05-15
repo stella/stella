@@ -379,12 +379,15 @@ function DatePickerPopover({
   };
 
   // Header label per view
-  const headerLabel =
-    view === "days"
-      ? formatMonthYear(locale, viewYear, viewMonth)
-      : view === "months"
-        ? String(viewYear)
-        : `${decadeBase}\u2013${decadeBase + 9}`;
+  const headerLabel = (() => {
+    if (view === "days") {
+      return formatMonthYear(locale, viewYear, viewMonth);
+    }
+    if (view === "months") {
+      return String(viewYear);
+    }
+    return `${decadeBase}\u2013${decadeBase + 9}`;
+  })();
 
   const handleHeaderClick = () => {
     if (view === "days") {
@@ -433,11 +436,15 @@ function DatePickerPopover({
               "flex h-auto min-h-7 w-full min-w-0 items-center gap-1.5",
               "rounded-md px-1.5 text-sm",
               "hover:bg-muted transition-colors",
-              isOverdue
-                ? "text-red-500"
-                : value
-                  ? "text-foreground"
-                  : "text-muted-foreground",
+              (() => {
+                if (isOverdue) {
+                  return "text-red-500";
+                }
+                if (value) {
+                  return "text-foreground";
+                }
+                return "text-muted-foreground";
+              })(),
             )}
             type="button"
           />
@@ -460,13 +467,15 @@ function DatePickerPopover({
           {/* Shared header: [<] label [>] */}
           <div className="flex items-center justify-between gap-1 pb-1">
             <Button
-              aria-label={
-                view === "days"
-                  ? "Previous month"
-                  : view === "months"
-                    ? "Previous year"
-                    : "Previous decade"
-              }
+              aria-label={(() => {
+                if (view === "days") {
+                  return "Previous month";
+                }
+                if (view === "months") {
+                  return "Previous year";
+                }
+                return "Previous decade";
+              })()}
               onClick={handlePrev}
               size="icon-xs"
               variant="ghost"
@@ -487,13 +496,15 @@ function DatePickerPopover({
               {headerLabel}
             </button>
             <Button
-              aria-label={
-                view === "days"
-                  ? "Next month"
-                  : view === "months"
-                    ? "Next year"
-                    : "Next decade"
-              }
+              aria-label={(() => {
+                if (view === "days") {
+                  return "Next month";
+                }
+                if (view === "months") {
+                  return "Next year";
+                }
+                return "Next decade";
+              })()}
               onClick={handleNext}
               size="icon-xs"
               variant="ghost"

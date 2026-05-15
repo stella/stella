@@ -321,11 +321,15 @@ const fetchDecisionContent = async (
           caseNumber: row.caseNumber,
           ecli: detail.ecli,
           court: "Nejvyšší správní soud",
-          decisionDate: detail.decisionDate
-            ? parseCeDate(detail.decisionDate)
-            : row.decisionDate
-              ? parseCeDate(row.decisionDate)
-              : undefined,
+          decisionDate: (() => {
+            if (detail.decisionDate) {
+              return parseCeDate(detail.decisionDate);
+            }
+            if (row.decisionDate) {
+              return parseCeDate(row.decisionDate);
+            }
+            return undefined;
+          })(),
           decisionType: (
             detail.decisionType ?? row.decisionType
           )?.toLowerCase(),
@@ -503,11 +507,15 @@ const rowToResult = (
     court: "Nejvyšší správní soud",
     country: "CZE",
     language: "cs",
-    decisionDate: detail.decisionDate
-      ? parseCeDate(detail.decisionDate)
-      : row.decisionDate
-        ? parseCeDate(row.decisionDate)
-        : undefined,
+    decisionDate: (() => {
+      if (detail.decisionDate) {
+        return parseCeDate(detail.decisionDate);
+      }
+      if (row.decisionDate) {
+        return parseCeDate(row.decisionDate);
+      }
+      return undefined;
+    })(),
     // Prefer structured decisionType from detail page over
     // the heuristic cell match from the search results table
     decisionType: (detail.decisionType ?? row.decisionType)?.toLowerCase(),

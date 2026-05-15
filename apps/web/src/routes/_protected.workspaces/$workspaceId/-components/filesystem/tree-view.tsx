@@ -735,50 +735,58 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                     <Fragment key={crumb.id}>
                       <BreadcrumbSeparator />
                       <BreadcrumbItem>
-                        {isEditingCrumb ? (
-                          <InlineEdit
-                            inputClassName="h-5 w-40 text-xs"
-                            onCancel={() => setEditingEntityId(null)}
-                            onChange={setBreadcrumbEditValue}
-                            onCommit={() => {
-                              const trimmed = breadcrumbEditValue.trim();
-                              setEditingEntityId(null);
-                              if (trimmed && trimmed !== crumb.name) {
-                                renameEntity.mutate({
-                                  workspaceId,
-                                  entityId: crumb.id,
-                                  name: trimmed,
-                                });
-                              }
-                            }}
-                            value={breadcrumbEditValue}
-                          />
-                        ) : isLast ? (
-                          <button
-                            className="text-xs font-medium"
-                            onClick={() => {
-                              void navigateToFolder();
-                            }}
-                            onDoubleClick={(e) => {
-                              e.stopPropagation();
-                              setBreadcrumbEditValue(crumb.name);
-                              setEditingEntityId(crumb.id);
-                            }}
-                            type="button"
-                          >
-                            {crumb.name}
-                          </button>
-                        ) : (
-                          <button
-                            className="text-muted-foreground hover:text-foreground text-xs"
-                            onClick={() => {
-                              void navigateToFolder(crumb.id);
-                            }}
-                            type="button"
-                          >
-                            {crumb.name}
-                          </button>
-                        )}
+                        {(() => {
+                          if (isEditingCrumb) {
+                            return (
+                              <InlineEdit
+                                inputClassName="h-5 w-40 text-xs"
+                                onCancel={() => setEditingEntityId(null)}
+                                onChange={setBreadcrumbEditValue}
+                                onCommit={() => {
+                                  const trimmed = breadcrumbEditValue.trim();
+                                  setEditingEntityId(null);
+                                  if (trimmed && trimmed !== crumb.name) {
+                                    renameEntity.mutate({
+                                      workspaceId,
+                                      entityId: crumb.id,
+                                      name: trimmed,
+                                    });
+                                  }
+                                }}
+                                value={breadcrumbEditValue}
+                              />
+                            );
+                          }
+                          if (isLast) {
+                            return (
+                              <button
+                                className="text-xs font-medium"
+                                onClick={() => {
+                                  void navigateToFolder();
+                                }}
+                                onDoubleClick={(e) => {
+                                  e.stopPropagation();
+                                  setBreadcrumbEditValue(crumb.name);
+                                  setEditingEntityId(crumb.id);
+                                }}
+                                type="button"
+                              >
+                                {crumb.name}
+                              </button>
+                            );
+                          }
+                          return (
+                            <button
+                              className="text-muted-foreground hover:text-foreground text-xs"
+                              onClick={() => {
+                                void navigateToFolder(crumb.id);
+                              }}
+                              type="button"
+                            >
+                              {crumb.name}
+                            </button>
+                          );
+                        })()}
                       </BreadcrumbItem>
                     </Fragment>
                   );
@@ -1355,44 +1363,56 @@ const FilesystemRow = ({
       ) : (
         <span className="w-3.5 shrink-0" />
       )}
-      {isFolder ? (
-        expanded ? (
-          <FolderOpenIcon className="text-muted-foreground size-4 shrink-0" />
-        ) : (
-          <FolderIcon className="text-muted-foreground size-4 shrink-0" />
-        )
-      ) : file?.mimeType ? (
-        <DocumentIcon className="size-4 shrink-0" mimeType={file.mimeType} />
-      ) : (
-        <FileIcon className="text-muted-foreground size-4 shrink-0" />
-      )}
-      {isEditing ? (
-        <InlineEdit
-          inputClassName="w-48"
-          onCancel={cancelEditing}
-          onChange={setEditValue}
-          onCommit={commitRename}
-          suffix={
-            ext ? (
-              <span className="text-muted-foreground text-sm">{ext}</span>
-            ) : undefined
-          }
-          value={editValue}
-        />
-      ) : (
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate" title={name}>
-            {name}
-          </span>
-          {node.activeEditBy && (
-            <ActiveEditBadge
-              className="shrink-0"
-              image={node.activeEditBy.image}
-              name={node.activeEditBy.name}
+      {(() => {
+        if (isFolder) {
+          return expanded ? (
+            <FolderOpenIcon className="text-muted-foreground size-4 shrink-0" />
+          ) : (
+            <FolderIcon className="text-muted-foreground size-4 shrink-0" />
+          );
+        }
+        if (file?.mimeType) {
+          return (
+            <DocumentIcon
+              className="size-4 shrink-0"
+              mimeType={file.mimeType}
             />
-          )}
-        </span>
-      )}
+          );
+        }
+        return <FileIcon className="text-muted-foreground size-4 shrink-0" />;
+      })()}
+      {(() => {
+        if (isEditing) {
+          return (
+            <InlineEdit
+              inputClassName="w-48"
+              onCancel={cancelEditing}
+              onChange={setEditValue}
+              onCommit={commitRename}
+              suffix={
+                ext ? (
+                  <span className="text-muted-foreground text-sm">{ext}</span>
+                ) : undefined
+              }
+              value={editValue}
+            />
+          );
+        }
+        return (
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate" title={name}>
+              {name}
+            </span>
+            {node.activeEditBy && (
+              <ActiveEditBadge
+                className="shrink-0"
+                image={node.activeEditBy.image}
+                name={node.activeEditBy.name}
+              />
+            )}
+          </span>
+        );
+      })()}
     </span>
   );
 
@@ -1488,11 +1508,15 @@ const FilesystemRow = ({
   } else if (!contextOpen) {
     bulkEntitiesRef.current = undefined;
   }
-  const bulkEntities = contextOpen
-    ? bulkEntitiesRef.current
-    : isBulkSelected
-      ? getSelectedEntities(selectedIds)
-      : undefined;
+  const bulkEntities = (() => {
+    if (contextOpen) {
+      return bulkEntitiesRef.current;
+    }
+    if (isBulkSelected) {
+      return getSelectedEntities(selectedIds);
+    }
+    return undefined;
+  })();
 
   const rowActionsNode = (
     <span className="flex justify-end">

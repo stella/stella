@@ -160,12 +160,15 @@ const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
     property?.content.type === "single-select" ||
     property?.content.type === "multi-select";
 
-  const displayNew =
-    newVal === null
-      ? null
-      : Array.isArray(newVal)
-        ? newVal.join(", ")
-        : JSON.stringify(newVal);
+  const displayNew = (() => {
+    if (newVal === null) {
+      return null;
+    }
+    if (Array.isArray(newVal)) {
+      return newVal.join(", ");
+    }
+    return JSON.stringify(newVal);
+  })();
 
   return (
     <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2">

@@ -69,7 +69,17 @@ export const getPinningStyles = <T = WorkspaceEntity>(
     left: isPinned ? `${column.getStart("left")}px` : undefined,
     position: isPinned ? "sticky" : undefined,
     width,
-    zIndex: isPinned ? (isSelectColumn ? 3 : 2) : undefined,
+    zIndex: (() => {
+      if (isPinned) {
+        return (() => {
+          if (isSelectColumn) {
+            return 3;
+          }
+          return 2;
+        })();
+      }
+      return undefined;
+    })(),
   };
 };
 
@@ -138,11 +148,15 @@ export const getEntityName = (entity: WorkspaceEntity): string => {
     return textField.content.value;
   }
 
-  return entity.kind === "folder"
-    ? "Untitled Folder"
-    : entity.kind === "task"
-      ? "Untitled Task"
-      : "Untitled";
+  return (() => {
+    if (entity.kind === "folder") {
+      return "Untitled Folder";
+    }
+    if (entity.kind === "task") {
+      return "Untitled Task";
+    }
+    return "Untitled";
+  })();
 };
 
 export const getFirstFile = (entity: WorkspaceEntity) => {

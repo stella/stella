@@ -287,57 +287,72 @@ const MatterPickerSection = ({
           />
         </div>
 
-        {isLoadingMatters ? (
-          <p className="text-muted-foreground py-2 text-center text-xs">
-            {t("common.loading")}
-          </p>
-        ) : matters.length === 0 ? (
-          <p className="text-muted-foreground py-2 text-center text-xs">
-            {t("inspector.matterPicker.empty")}
-          </p>
-        ) : filtered.length === 0 ? (
-          <p className="text-muted-foreground py-2 text-center text-xs">
-            {t("inspector.matterPicker.noResults", { query: search })}
-          </p>
-        ) : (
-          <div className="max-h-56 overflow-y-auto rounded-md border">
-            {filtered.map((m) => {
-              const isSelected = m.id === selectedMatterId;
-              const swatch = resolveMatterColor(m.id, m.color);
-              return (
-                <button
-                  className={cn(
-                    "flex w-full items-center gap-2 px-2 py-1.5 text-start text-xs transition-colors",
-                    isSelected
-                      ? "bg-foreground text-background"
-                      : "hover:bg-muted",
-                  )}
-                  disabled={isSubmitting}
-                  key={m.id}
-                  onClick={() => setSelectedMatterId(m.id)}
-                  type="button"
-                >
-                  <LayersIcon
-                    aria-hidden="true"
-                    className="size-3.5 shrink-0"
-                    style={{ color: isSelected ? undefined : swatch }}
-                  />
-                  <span className="min-w-0 flex-1 truncate">{m.name}</span>
-                  {m.client?.displayName && (
-                    <span
-                      className={cn(
-                        "shrink-0 text-[10px]",
-                        isSelected ? "opacity-80" : "text-muted-foreground",
-                      )}
-                    >
-                      {m.client.displayName}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
+        {(() => {
+          if (isLoadingMatters) {
+            return (
+              <p className="text-muted-foreground py-2 text-center text-xs">
+                {t("common.loading")}
+              </p>
+            );
+          }
+          if (matters.length === 0) {
+            return (
+              <p className="text-muted-foreground py-2 text-center text-xs">
+                {t("inspector.matterPicker.empty")}
+              </p>
+            );
+          }
+          if (filtered.length === 0) {
+            return (
+              <p className="text-muted-foreground py-2 text-center text-xs">
+                {t("inspector.matterPicker.noResults", {
+                  query: search,
+                })}
+              </p>
+            );
+          }
+          return (
+            <div className="max-h-56 overflow-y-auto rounded-md border">
+              {filtered.map((m) => {
+                const isSelected = m.id === selectedMatterId;
+                const swatch = resolveMatterColor(m.id, m.color);
+                return (
+                  <button
+                    className={cn(
+                      "flex w-full items-center gap-2 px-2 py-1.5 text-start text-xs transition-colors",
+                      isSelected
+                        ? "bg-foreground text-background"
+                        : "hover:bg-muted",
+                    )}
+                    disabled={isSubmitting}
+                    key={m.id}
+                    onClick={() => setSelectedMatterId(m.id)}
+                    type="button"
+                  >
+                    <LayersIcon
+                      aria-hidden="true"
+                      className="size-3.5 shrink-0"
+                      style={{
+                        color: isSelected ? undefined : swatch,
+                      }}
+                    />
+                    <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                    {m.client?.displayName && (
+                      <span
+                        className={cn(
+                          "shrink-0 text-[10px]",
+                          isSelected ? "opacity-80" : "text-muted-foreground",
+                        )}
+                      >
+                        {m.client.displayName}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
 
       <div className="border-border/50 flex items-center justify-end gap-2 border-t px-3 py-2">

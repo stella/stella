@@ -236,14 +236,19 @@ export const OnboardingWizard = () => {
               ...(providerDraft.apiKey.trim()
                 ? { apiKey: providerDraft.apiKey.trim() }
                 : {}),
-              ...(providerDraft.provider === "azure_foundry"
-                ? {
+              ...(() => {
+                if (providerDraft.provider === "azure_foundry") {
+                  return {
                     endpoint: providerDraft.endpoint.trim(),
                     ...(providerDraft.apiVersion
-                      ? { apiVersion: providerDraft.apiVersion }
+                      ? {
+                          apiVersion: providerDraft.apiVersion,
+                        }
                       : {}),
-                  }
-                : {}),
+                  };
+                }
+                return {};
+              })(),
               region: providerDraft.region,
             })),
             overrideModels: aiOverrideModels,
@@ -336,21 +341,30 @@ export const OnboardingWizard = () => {
   );
 
   const showPrices = step === "ai" && aiPhase === "models";
-  const preview =
-    step === "jurisdiction" ? (
-      <JurisdictionGlobePreview
-        onChange={(practiceJurisdictions) => {
-          setData((d) => ({ ...d, practiceJurisdictions }));
-          setJurisdictionSuggestionApplied(true);
-        }}
-        selected={data.practiceJurisdictions}
-      />
-    ) : showPrices ? (
-      <PricesPanel
-        providers={data.aiProviders.map((p) => p.provider)}
-        roleModels={data.aiRoleModels}
-      />
-    ) : (
+  const preview = (() => {
+    if (step === "jurisdiction") {
+      return (
+        <JurisdictionGlobePreview
+          onChange={(practiceJurisdictions) => {
+            setData((d) => ({
+              ...d,
+              practiceJurisdictions,
+            }));
+            setJurisdictionSuggestionApplied(true);
+          }}
+          selected={data.practiceJurisdictions}
+        />
+      );
+    }
+    if (showPrices) {
+      return (
+        <PricesPanel
+          providers={data.aiProviders.map((p) => p.provider)}
+          roleModels={data.aiRoleModels}
+        />
+      );
+    }
+    return (
       <SidebarPreview
         aiProviders={previewAiProviders}
         chatActive={step === "ai"}
@@ -359,6 +373,7 @@ export const OnboardingWizard = () => {
         organizationName={previewOrgName}
       />
     );
+  })();
 
   const renderStep = () => {
     if (step === "creating") {

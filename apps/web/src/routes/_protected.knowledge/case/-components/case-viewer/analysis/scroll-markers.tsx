@@ -147,11 +147,17 @@ export const ScrollMarkers = ({
               className={cn(
                 "truncate rounded-full px-2.5 py-1 text-[0.65rem] leading-none font-semibold shadow-sm transition-[max-width,opacity,font-size] duration-150",
                 isHovered ? "max-w-72 text-[0.7rem] opacity-100" : "max-w-52",
-                active
-                  ? isHovered
-                    ? ""
-                    : "opacity-70"
-                  : "pointer-events-none opacity-0 transition-opacity duration-300",
+                (() => {
+                  if (active) {
+                    return (() => {
+                      if (isHovered) {
+                        return "";
+                      }
+                      return "opacity-70";
+                    })();
+                  }
+                  return "pointer-events-none opacity-0 transition-opacity duration-300";
+                })(),
               )}
               style={{
                 backgroundColor: isHovered
@@ -167,9 +173,15 @@ export const ScrollMarkers = ({
               className="shrink-0 rounded-full transition-[width,height,opacity,background-color] duration-150"
               style={{
                 backgroundColor: `var(${m.cssVar})`,
-                width: isHovered ? "16px" : active ? "12px" : "8px",
-                height: isHovered ? "6px" : active ? "5px" : "4px",
-                opacity: isHovered ? 1 : active ? 0.9 : 0.8,
+                ...(() => {
+                  if (isHovered) {
+                    return { height: "6px", opacity: 1, width: "16px" };
+                  }
+                  if (active) {
+                    return { height: "5px", opacity: 0.9, width: "12px" };
+                  }
+                  return { height: "4px", opacity: 0.8, width: "8px" };
+                })(),
               }}
             />
           </button>

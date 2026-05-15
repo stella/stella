@@ -70,12 +70,15 @@ const mockFetchFromDataset = (
 
   const mockedFetch: typeof fetch = Object.assign(
     async (input: string | URL | Request): Promise<Response> => {
-      const url =
-        typeof input === "string"
-          ? input
-          : input instanceof URL
-            ? input.href
-            : input.url;
+      const url = (() => {
+        if (typeof input === "string") {
+          return input;
+        }
+        if (input instanceof URL) {
+          return input.href;
+        }
+        return input.url;
+      })();
       const parsedUrl = new URL(url);
       const page = Number.parseInt(
         parsedUrl.searchParams.get("page") ?? "",

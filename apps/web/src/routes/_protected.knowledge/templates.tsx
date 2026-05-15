@@ -451,11 +451,15 @@ const TemplateDetail = ({
       ? detailData
       : null;
 
-  const state: "loading" | "error" | "ready" = isLoading
-    ? "loading"
-    : isError || !detail
-      ? "error"
-      : "ready";
+  const state: "loading" | "error" | "ready" = (() => {
+    if (isLoading) {
+      return "loading";
+    }
+    if (isError || !detail) {
+      return "error";
+    }
+    return "ready";
+  })();
 
   const [rename, renameDispatch] = useReducer(renameReducer, {
     status: "idle",
@@ -734,125 +738,132 @@ const TemplateDetail = ({
             </TabsList>
 
             <TabsPanel value="fields">
-              {fieldEdit.status === "editing" ? (
-                <div className="mt-4">
-                  <div className="rounded-lg border">
-                    <div className="border-b px-4 py-3">
-                      <h3 className="text-muted-foreground text-sm font-medium">
-                        {t("templates.fieldCount", {
-                          count: fieldEdit.fields.length,
-                        })}
-                      </h3>
+              {(() => {
+                if (fieldEdit.status === "editing") {
+                  return (
+                    <div className="mt-4">
+                      <div className="rounded-lg border">
+                        <div className="border-b px-4 py-3">
+                          <h3 className="text-muted-foreground text-sm font-medium">
+                            {t("templates.fieldCount", {
+                              count: fieldEdit.fields.length,
+                            })}
+                          </h3>
+                        </div>
+                        <ul className="divide-y">
+                          {fieldEdit.fields.map((field) => {
+                            const isExpanded =
+                              fieldEdit.expandedPath === field.path;
+                            return (
+                              <li key={field.path}>
+                                <button
+                                  className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-3 text-start text-sm"
+                                  onClick={() =>
+                                    fieldEditDispatch({
+                                      type: "setExpanded",
+                                      path: isExpanded ? null : field.path,
+                                    })
+                                  }
+                                  type="button"
+                                >
+                                  {isExpanded ? (
+                                    <ChevronDownIcon className="text-muted-foreground size-4 shrink-0" />
+                                  ) : (
+                                    <ChevronRightIcon className="text-muted-foreground size-4 shrink-0" />
+                                  )}
+                                  <span className="min-w-0 flex-1 font-medium">
+                                    {field.label || field.path}
+                                  </span>
+                                  <span className="text-muted-foreground shrink-0 text-xs">
+                                    {t(
+                                      `templates.inputTypes.${field.inputType}`,
+                                    )}
+                                  </span>
+                                  {field.required && (
+                                    <span className="text-muted-foreground shrink-0 text-xs">
+                                      *
+                                    </span>
+                                  )}
+                                </button>
+                                {isExpanded && (
+                                  <FieldConfigEditor
+                                    field={field}
+                                    onUpdate={(patch) =>
+                                      updateField(field.path, patch)
+                                    }
+                                  />
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                      <div className="mt-4 flex justify-end gap-2">
+                        <Button
+                          disabled={fieldEdit.saving}
+                          onClick={cancelEditFields}
+                          size="sm"
+                          variant="outline"
+                        >
+                          {t("common.cancel")}
+                        </Button>
+                        <Button
+                          disabled={fieldEdit.saving}
+                          onClick={() => {
+                            void saveFields();
+                          }}
+                          size="sm"
+                        >
+                          {t("common.save")}
+                        </Button>
+                      </div>
                     </div>
-                    <ul className="divide-y">
-                      {fieldEdit.fields.map((field) => {
-                        const isExpanded =
-                          fieldEdit.expandedPath === field.path;
-                        return (
-                          <li key={field.path}>
-                            <button
-                              className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-3 text-start text-sm"
-                              onClick={() =>
-                                fieldEditDispatch({
-                                  type: "setExpanded",
-                                  path: isExpanded ? null : field.path,
-                                })
-                              }
-                              type="button"
-                            >
-                              {isExpanded ? (
-                                <ChevronDownIcon className="text-muted-foreground size-4 shrink-0" />
-                              ) : (
-                                <ChevronRightIcon className="text-muted-foreground size-4 shrink-0" />
-                              )}
-                              <span className="min-w-0 flex-1 font-medium">
-                                {field.label || field.path}
-                              </span>
+                  );
+                }
+                return (
+                  fields.length > 0 && (
+                    <div className="mt-4 rounded-lg border">
+                      <div className="flex items-center justify-between border-b px-4 py-3">
+                        <h3 className="text-muted-foreground text-sm font-medium">
+                          {t("templates.fieldCount", {
+                            count: fields.length,
+                          })}
+                        </h3>
+                        <Button
+                          onClick={startEditFields}
+                          size="sm"
+                          variant="ghost"
+                        >
+                          <PencilIcon className="size-3.5" />
+                          {t("templates.editFields")}
+                        </Button>
+                      </div>
+                      <ul className="divide-y">
+                        {fields.map((field) => (
+                          <li
+                            className="flex items-center gap-3 px-4 py-3 text-sm"
+                            key={field.path}
+                          >
+                            <span className="min-w-0 flex-1 font-medium">
+                              {field.label || field.path}
+                            </span>
+                            <span className="text-muted-foreground shrink-0 text-xs">
+                              {field.inputType
+                                ? t(`templates.inputTypes.${field.inputType}`)
+                                : t("templates.inputTypes.text")}
+                            </span>
+                            {field.required && (
                               <span className="text-muted-foreground shrink-0 text-xs">
-                                {t(`templates.inputTypes.${field.inputType}`)}
+                                *
                               </span>
-                              {field.required && (
-                                <span className="text-muted-foreground shrink-0 text-xs">
-                                  *
-                                </span>
-                              )}
-                            </button>
-                            {isExpanded && (
-                              <FieldConfigEditor
-                                field={field}
-                                onUpdate={(patch) =>
-                                  updateField(field.path, patch)
-                                }
-                              />
                             )}
                           </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                  <div className="mt-4 flex justify-end gap-2">
-                    <Button
-                      disabled={fieldEdit.saving}
-                      onClick={cancelEditFields}
-                      size="sm"
-                      variant="outline"
-                    >
-                      {t("common.cancel")}
-                    </Button>
-                    <Button
-                      disabled={fieldEdit.saving}
-                      onClick={() => {
-                        void saveFields();
-                      }}
-                      size="sm"
-                    >
-                      {t("common.save")}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                fields.length > 0 && (
-                  <div className="mt-4 rounded-lg border">
-                    <div className="flex items-center justify-between border-b px-4 py-3">
-                      <h3 className="text-muted-foreground text-sm font-medium">
-                        {t("templates.fieldCount", {
-                          count: fields.length,
-                        })}
-                      </h3>
-                      <Button
-                        onClick={startEditFields}
-                        size="sm"
-                        variant="ghost"
-                      >
-                        <PencilIcon className="size-3.5" />
-                        {t("templates.editFields")}
-                      </Button>
+                        ))}
+                      </ul>
                     </div>
-                    <ul className="divide-y">
-                      {fields.map((field) => (
-                        <li
-                          className="flex items-center gap-3 px-4 py-3 text-sm"
-                          key={field.path}
-                        >
-                          <span className="min-w-0 flex-1 font-medium">
-                            {field.label || field.path}
-                          </span>
-                          <span className="text-muted-foreground shrink-0 text-xs">
-                            {field.inputType
-                              ? t(`templates.inputTypes.${field.inputType}`)
-                              : t("templates.inputTypes.text")}
-                          </span>
-                          {field.required && (
-                            <span className="text-muted-foreground shrink-0 text-xs">
-                              *
-                            </span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )
-              )}
+                  )
+                );
+              })()}
             </TabsPanel>
 
             <TabsPanel value="preview">

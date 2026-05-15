@@ -75,8 +75,7 @@ export default defineConfig({
     "max-statements": "off",
     "prefer-destructuring": "off",
     "no-negated-condition": "off",
-    // Candidate strict rule, not enabled yet: current code has ~95 findings.
-    "no-nested-ternary": "off",
+    "no-nested-ternary": "error",
     "no-use-before-define": "off",
     "no-useless-return": "off",
     "no-warning-comments": "off",

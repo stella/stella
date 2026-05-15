@@ -151,12 +151,15 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   const monthWeeks = getMonthWeekRows(locale, monthWindowStart);
   const monthAnchors = getMonthAnchors(locale, monthWindowStart);
 
-  const days =
-    mode === "month"
-      ? monthWeeks.flatMap((week) => week.days)
-      : mode === "week"
-        ? getWeekDays(viewDate)
-        : [];
+  const days = (() => {
+    if (mode === "month") {
+      return monthWeeks.flatMap((week) => week.days);
+    }
+    if (mode === "week") {
+      return getWeekDays(viewDate);
+    }
+    return [];
+  })();
 
   // All date property IDs to show on the calendar
   const allDatePropertyIds = [datePropertyId];
@@ -168,12 +171,25 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     }
   }
 
-  const queryRange =
-    mode === "year"
-      ? getCalendarQueryRange({ type: "year", year })
-      : mode === "month"
-        ? getCalendarQueryRange({ type: "month", year, month })
-        : getCalendarQueryRange({ type: "week", viewDate });
+  const queryRange = (() => {
+    if (mode === "year") {
+      return getCalendarQueryRange({
+        type: "year",
+        year,
+      });
+    }
+    if (mode === "month") {
+      return getCalendarQueryRange({
+        type: "month",
+        year,
+        month,
+      });
+    }
+    return getCalendarQueryRange({
+      type: "week",
+      viewDate,
+    });
+  })();
 
   const { data: calendarTasks = [] } = useQuery({
     ...calendarTasksOptions({
@@ -466,12 +482,15 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
 
   const monthLabel = formatMonthYearLabel(locale, year, month);
 
-  const headerLabel =
-    mode === "year"
-      ? String(year)
-      : mode === "week"
-        ? `${days[0]?.date} – ${days[6]?.date}`
-        : monthLabel;
+  const headerLabel = (() => {
+    if (mode === "year") {
+      return String(year);
+    }
+    if (mode === "week") {
+      return `${days[0]?.date} – ${days[6]?.date}`;
+    }
+    return monthLabel;
+  })();
 
   return (
     <div className="flex h-full min-w-0 flex-col">
@@ -492,107 +511,116 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
         year={year}
       />
 
-      {mode === "year" ? (
-        <CalendarYearGrid
-          dots={yearDots}
-          onMonthClick={(m) => {
-            setViewDate(new Date(Date.UTC(year, m, 1)));
-            // Year grid doesn't set mode; the mode is controlled
-            // by the view layout. Clicking a month navigates but
-            // stays in year view.
-          }}
-          year={year}
-        />
-      ) : mode === "month" ? (
-        <>
-          <CalendarWeekHeader weekdayLabels={weekdayLabels} />
+      {(() => {
+        if (mode === "year") {
+          return (
+            <CalendarYearGrid
+              dots={yearDots}
+              onMonthClick={(m) => {
+                setViewDate(new Date(Date.UTC(year, m, 1)));
+                // Year grid doesn't set mode; the mode is controlled
+                // by the view layout. Clicking a month navigates but
+                // stays in year view.
+              }}
+              year={year}
+            />
+          );
+        }
+        if (mode === "month") {
+          return (
+            <>
+              <CalendarWeekHeader weekdayLabels={weekdayLabels} />
 
-          <div
-            className="relative flex-1 overflow-y-auto overscroll-contain"
-            onScroll={handleMonthScroll}
-            ref={monthScrollRef}
-          >
-            <div className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 border-b px-4 py-1.5 backdrop-blur">
-              <button
-                className="text-muted-foreground hover:text-foreground rounded text-xs font-medium transition-colors"
-                onClick={() => scrollToMonth(viewDate)}
-                type="button"
+              <div
+                className="relative flex-1 overflow-y-auto overscroll-contain"
+                onScroll={handleMonthScroll}
+                ref={monthScrollRef}
               >
-                {monthLabel}
-              </button>
-            </div>
-
-            {monthWeeks.map((week) => (
-              <div className="contents" key={week.key}>
-                {week.anchors.map((anchor) => (
-                  <div
-                    className="bg-background/70 grid h-6 scroll-mt-7 grid-cols-7 border-b"
-                    key={anchor.key}
-                    ref={(element) => {
-                      if (element) {
-                        monthAnchorRefs.current.set(anchor.key, element);
-                        return;
-                      }
-
-                      monthAnchorRefs.current.delete(anchor.key);
-                    }}
+                <div className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 border-b px-4 py-1.5 backdrop-blur">
+                  <button
+                    className="text-muted-foreground hover:text-foreground rounded text-xs font-medium transition-colors"
+                    onClick={() => scrollToMonth(viewDate)}
+                    type="button"
                   >
-                    <div
-                      className="border-s-foreground/35 text-muted-foreground after:bg-foreground/35 relative flex items-center border-s-2 px-2 text-xs font-medium after:absolute after:-start-0.5 after:-bottom-px after:h-px after:w-0.5"
-                      style={{ gridColumn: `${anchor.column + 1} / 8` }}
-                    >
-                      {anchor.label}
+                    {monthLabel}
+                  </button>
+                </div>
+
+                {monthWeeks.map((week) => (
+                  <div className="contents" key={week.key}>
+                    {week.anchors.map((anchor) => (
+                      <div
+                        className="bg-background/70 grid h-6 scroll-mt-7 grid-cols-7 border-b"
+                        key={anchor.key}
+                        ref={(element) => {
+                          if (element) {
+                            monthAnchorRefs.current.set(anchor.key, element);
+                            return;
+                          }
+                          monthAnchorRefs.current.delete(anchor.key);
+                        }}
+                      >
+                        <div
+                          className="border-s-foreground/35 text-muted-foreground after:bg-foreground/35 relative flex items-center border-s-2 px-2 text-xs font-medium after:absolute after:-start-0.5 after:-bottom-px after:h-px after:w-0.5"
+                          style={{
+                            gridColumn: `${anchor.column + 1} / 8`,
+                          }}
+                        >
+                          {anchor.label}
+                        </div>
+                      </div>
+                    ))}
+                    <div className="grid min-h-[calc((100%_-_1.75rem)/6)] grid-cols-7">
+                      {week.days.map((day) => (
+                        <CalendarDayCell
+                          day={day}
+                          entries={entitiesByDate.get(day.date) ?? []}
+                          isEditable={isEditable}
+                          key={day.date}
+                          mode="month"
+                          onCreate={(kind) => {
+                            handleCreate(day.date, kind).catch(() => {
+                              // Error handled inside handleCreate
+                            });
+                          }}
+                          onDrop={(entityId, kind) =>
+                            handleDrop(day.date, entityId, kind)
+                          }
+                        />
+                      ))}
                     </div>
                   </div>
                 ))}
-                <div className="grid min-h-[calc((100%_-_1.75rem)/6)] grid-cols-7">
-                  {week.days.map((day) => (
-                    <CalendarDayCell
-                      day={day}
-                      entries={entitiesByDate.get(day.date) ?? []}
-                      isEditable={isEditable}
-                      key={day.date}
-                      mode="month"
-                      onCreate={(kind) => {
-                        handleCreate(day.date, kind).catch(() => {
-                          // Error handled inside handleCreate
-                        });
-                      }}
-                      onDrop={(entityId, kind) =>
-                        handleDrop(day.date, entityId, kind)
-                      }
-                    />
-                  ))}
-                </div>
               </div>
-            ))}
-          </div>
-        </>
-      ) : (
-        <>
-          <CalendarWeekHeader weekdayLabels={weekdayLabels} />
+            </>
+          );
+        }
+        return (
+          <>
+            <CalendarWeekHeader weekdayLabels={weekdayLabels} />
 
-          <div className="grid flex-1 grid-cols-7 grid-rows-1">
-            {days.map((day) => (
-              <CalendarDayCell
-                day={day}
-                entries={entitiesByDate.get(day.date) ?? []}
-                isEditable={isEditable}
-                key={day.date}
-                mode={mode}
-                onCreate={(kind) => {
-                  handleCreate(day.date, kind).catch(() => {
-                    // Error handled inside handleCreate
-                  });
-                }}
-                onDrop={(entityId, kind) =>
-                  handleDrop(day.date, entityId, kind)
-                }
-              />
-            ))}
-          </div>
-        </>
-      )}
+            <div className="grid flex-1 grid-cols-7 grid-rows-1">
+              {days.map((day) => (
+                <CalendarDayCell
+                  day={day}
+                  entries={entitiesByDate.get(day.date) ?? []}
+                  isEditable={isEditable}
+                  key={day.date}
+                  mode={mode}
+                  onCreate={(kind) => {
+                    handleCreate(day.date, kind).catch(() => {
+                      // Error handled inside handleCreate
+                    });
+                  }}
+                  onDrop={(entityId, kind) =>
+                    handleDrop(day.date, entityId, kind)
+                  }
+                />
+              ))}
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 };

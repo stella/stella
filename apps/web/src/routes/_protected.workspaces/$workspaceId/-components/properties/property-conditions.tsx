@@ -211,12 +211,15 @@ const getOperatorOptions = (
   value: string | string[],
   operatorLabels: Record<ConditionOperator, string>,
 ) => {
-  const operatorKeys: ConditionOperator[] =
-    typeof value === "string"
-      ? STRING_OPERATORS
-      : Array.isArray(value)
-        ? STRING_ARRAY_OPERATORS
-        : [];
+  const operatorKeys: ConditionOperator[] = (() => {
+    if (typeof value === "string") {
+      return STRING_OPERATORS;
+    }
+    if (Array.isArray(value)) {
+      return STRING_ARRAY_OPERATORS;
+    }
+    return [];
+  })();
 
   return operatorKeys.map((operator) => ({
     value: operator,

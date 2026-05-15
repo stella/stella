@@ -84,7 +84,15 @@ const mergeAdjacentWordChanges = (diffs: readonly Diff[]): Diff[] => {
 const wordDiff = (oldText: string, newText: string): Diff[] => {
   const rawDiffs = diffArrays(tokenize(oldText), tokenize(newText)).map(
     (change): Diff => ({
-      kind: change.added ? "insert" : change.removed ? "delete" : "equal",
+      kind: (() => {
+        if (change.added) {
+          return "insert";
+        }
+        if (change.removed) {
+          return "delete";
+        }
+        return "equal";
+      })(),
       text: change.value.join(""),
     }),
   );

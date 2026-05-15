@@ -51,18 +51,22 @@ export const ThreadsSheet = ({
     shouldThrow: false,
   });
 
-  const activeThreadRef: ChatThreadRef | null = workspaceThreadMatch
-    ? {
+  const activeThreadRef: ChatThreadRef | null = (() => {
+    if (workspaceThreadMatch) {
+      return {
         scope: "workspace",
         workspaceId: workspaceThreadMatch.params.workspaceId,
         threadId: toChatThreadId(workspaceThreadMatch.params.threadId),
-      }
-    : globalThreadMatch
-      ? {
-          scope: "global",
-          threadId: toChatThreadId(globalThreadMatch.params.threadId),
-        }
-      : null;
+      };
+    }
+    if (globalThreadMatch) {
+      return {
+        scope: "global",
+        threadId: toChatThreadId(globalThreadMatch.params.threadId),
+      };
+    }
+    return null;
+  })();
 
   const { data } = useQuery(groupedChatThreadsOptions());
 

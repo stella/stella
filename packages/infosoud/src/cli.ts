@@ -179,11 +179,15 @@ const main = async (): Promise<void> => {
       });
 
       printStdout(
-        flags.json
-          ? JSON.stringify(result, null, 2)
-          : flags.csv
-            ? serializeHearingsCsv(result)
-            : formatHearingsSummary(result),
+        (() => {
+          if (flags.json) {
+            return JSON.stringify(result, null, 2);
+          }
+          if (flags.csv) {
+            return serializeHearingsCsv(result);
+          }
+          return formatHearingsSummary(result);
+        })(),
       );
       return;
     }

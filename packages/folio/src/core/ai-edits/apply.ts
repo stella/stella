@@ -418,12 +418,15 @@ const applyTextReplacement = ({
   commentMark,
 }: TextReplacementOptions): Transaction => {
   let nextTr = tr;
-  const replacement =
-    item.operation.type === "replaceInBlock"
-      ? item.operation.replace
-      : item.operation.type === "replaceBlock"
-        ? item.operation.text
-        : "";
+  const replacement = (() => {
+    if (item.operation.type === "replaceInBlock") {
+      return item.operation.replace;
+    }
+    if (item.operation.type === "replaceBlock") {
+      return item.operation.text;
+    }
+    return "";
+  })();
 
   if (mode === "direct") {
     nextTr = nextTr.insertText(replacement, item.from, item.to);

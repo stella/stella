@@ -101,12 +101,15 @@ export const mockFetchWithFixtures = async (
 
   const mockedFetch: typeof fetch = Object.assign(
     async (input: string | URL | Request): Promise<Response> => {
-      const url =
-        typeof input === "string"
-          ? input
-          : input instanceof URL
-            ? input.href
-            : input.url;
+      const url = (() => {
+        if (typeof input === "string") {
+          return input;
+        }
+        if (input instanceof URL) {
+          return input.href;
+        }
+        return input.url;
+      })();
 
       // Longest-match: prefer more specific patterns
       const match = loaded

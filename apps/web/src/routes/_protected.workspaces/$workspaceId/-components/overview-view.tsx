@@ -488,71 +488,79 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               {t("common.add")}
             </Button>
           </div>
-          {tasks.length > 0 ? (
-            <ScrollArea className="min-h-0 flex-1 rounded-lg border">
-              <div className="divide-y">
-                {tasks.map((task) => (
-                  <button
-                    className="hover:bg-accent/50 flex w-full items-center gap-3 px-3 py-2.5 text-start transition-colors"
-                    key={task.entityId}
-                    onClick={() =>
-                      useInspectorStore
-                        .getState()
-                        .openTask(task.entityId, task.name)
-                    }
-                    onContextMenu={handleTaskContextMenu({
-                      entityId: task.entityId,
-                      name: task.name,
-                      status: task.status,
-                    })}
-                    type="button"
-                  >
-                    <EntityKindIcon
-                      className="size-4 shrink-0"
-                      kind="task"
-                      status={task.status}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p
-                        className={cn(
-                          "truncate text-sm",
-                          (task.status === "done" ||
-                            task.status === "cancelled") &&
-                            "text-muted-foreground line-through",
-                        )}
+          {(() => {
+            if (tasks.length > 0) {
+              return (
+                <ScrollArea className="min-h-0 flex-1 rounded-lg border">
+                  <div className="divide-y">
+                    {tasks.map((task) => (
+                      <button
+                        className="hover:bg-accent/50 flex w-full items-center gap-3 px-3 py-2.5 text-start transition-colors"
+                        key={task.entityId}
+                        onClick={() =>
+                          useInspectorStore
+                            .getState()
+                            .openTask(task.entityId, task.name)
+                        }
+                        onContextMenu={handleTaskContextMenu({
+                          entityId: task.entityId,
+                          name: task.name,
+                          status: task.status,
+                        })}
+                        type="button"
                       >
-                        {task.name}
-                      </p>
-                      <span className="text-muted-foreground flex items-center gap-1 text-xs">
-                        {task.assignedTo !== null && (
-                          <PersonMentionLabel
-                            avatarClassName="size-4 text-[7px]"
-                            mention={{
-                              name: task.assignedTo,
-                              image: task.assignedToImage,
-                            }}
-                          />
-                        )}
-                        {task.dueDate && (
-                          <>
-                            {task.assignedTo ? " · " : ""}
-                            {new Date(task.dueDate).toLocaleDateString(lang, {
-                              month: "short",
-                              day: "numeric",
-                            })}
-                          </>
-                        )}
-                      </span>
-                    </div>
-                  </button>
-                ))}
+                        <EntityKindIcon
+                          className="size-4 shrink-0"
+                          kind="task"
+                          status={task.status}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p
+                            className={cn(
+                              "truncate text-sm",
+                              (task.status === "done" ||
+                                task.status === "cancelled") &&
+                                "text-muted-foreground line-through",
+                            )}
+                          >
+                            {task.name}
+                          </p>
+                          <span className="text-muted-foreground flex items-center gap-1 text-xs">
+                            {task.assignedTo !== null && (
+                              <PersonMentionLabel
+                                avatarClassName="size-4 text-[7px]"
+                                mention={{
+                                  name: task.assignedTo,
+                                  image: task.assignedToImage,
+                                }}
+                              />
+                            )}
+                            {task.dueDate && (
+                              <>
+                                {task.assignedTo ? " · " : ""}
+                                {new Date(task.dueDate).toLocaleDateString(
+                                  lang,
+                                  {
+                                    month: "short",
+                                    day: "numeric",
+                                  },
+                                )}
+                              </>
+                            )}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </ScrollArea>
+              );
+            }
+            return (
+              <div className="text-muted-foreground flex flex-1 items-center justify-center rounded-lg border px-3 py-6 text-center text-sm">
+                {t("common.noResults")}
               </div>
-            </ScrollArea>
-          ) : (
-            <div className="text-muted-foreground flex flex-1 items-center justify-center rounded-lg border px-3 py-6 text-center text-sm">
-              {t("common.noResults")}
-            </div>
-          )}
+            );
+          })()}
           <Menu
             onOpenChange={(open) => {
               setUpcomingMenu((previous) =>
@@ -1142,22 +1150,25 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
 
   const { fieldId } = entity;
 
-  const handleOpen =
-    entity.kind === "task"
-      ? () =>
-          useInspectorStore.getState().openTask(entity.entityId, entity.name)
-      : navigable && fieldId
-        ? () =>
-            useInspectorStore.getState().openFile({
-              id: fieldId,
-              entityId: entity.entityId,
-              label: entity.name,
-              mimeType: entity.mimeType ?? undefined,
-              pdfFileId: entity.pdfFileId,
-              propertyId: entity.propertyId ?? undefined,
-              workspaceId,
-            })
-        : undefined;
+  const handleOpen = (() => {
+    if (entity.kind === "task") {
+      return () =>
+        useInspectorStore.getState().openTask(entity.entityId, entity.name);
+    }
+    if (navigable && fieldId) {
+      return () =>
+        useInspectorStore.getState().openFile({
+          id: fieldId,
+          entityId: entity.entityId,
+          label: entity.name,
+          mimeType: entity.mimeType ?? undefined,
+          pdfFileId: entity.pdfFileId,
+          propertyId: entity.propertyId ?? undefined,
+          workspaceId,
+        });
+    }
+    return undefined;
+  })();
 
   const t = useTranslations();
   const relTime = formatRelativeTime(

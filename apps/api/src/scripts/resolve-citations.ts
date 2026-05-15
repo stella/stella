@@ -537,11 +537,15 @@ const printReport = async () => {
     const citationText = formatSqlValue(row["citation_text"]);
     const count = formatSqlValue(row["cnt"]);
     const norm = normalizeCitation(citationText);
-    const suffix = norm.caseNumber
-      ? ` → "${norm.caseNumber}"`
-      : norm.ecli
-        ? ` → ECLI`
-        : " → ???";
+    const suffix = (() => {
+      if (norm.caseNumber) {
+        return ` → "${norm.caseNumber}"`;
+      }
+      if (norm.ecli) {
+        return ` → ECLI`;
+      }
+      return " → ???";
+    })();
     console.log(`  [${count}x] ${citationText}${suffix}`);
   }
 
@@ -660,11 +664,15 @@ const printReport = async () => {
 // ── Main ────────────────────────────────────────────────
 
 console.log(
-  DRY_RUN
-    ? "=== DRY RUN (no DB writes) ==="
-    : REPORT_ONLY
-      ? "=== REPORT ONLY ==="
-      : "=== RESOLVING CITATIONS ===",
+  (() => {
+    if (DRY_RUN) {
+      return "=== DRY RUN (no DB writes) ===";
+    }
+    if (REPORT_ONLY) {
+      return "=== REPORT ONLY ===";
+    }
+    return "=== RESOLVING CITATIONS ===";
+  })(),
 );
 
 if (!REPORT_ONLY) {

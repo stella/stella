@@ -31,7 +31,15 @@ export const getSelectAllState = ({
   return {
     checked,
     indeterminate,
-    key: checked ? "all" : indeterminate ? "some" : "none",
+    key: (() => {
+      if (checked) {
+        return "all";
+      }
+      if (indeterminate) {
+        return "some";
+      }
+      return "none";
+    })(),
   };
 };
 

@@ -898,12 +898,17 @@ function convertTable(
     const isFirstRowStyled = rowIndex === 0 && !!look?.firstRow;
     const isLastRow = rowIndex === totalRows - 1 && !!look?.lastRow;
 
-    const rowBandStyle =
-      bandingEnabledH && !isFirstRowStyled && !isLastRow
-        ? dataRowIndex % 2 === 0
-          ? conditionalStyles.band1Horz
-          : conditionalStyles.band2Horz
-        : undefined;
+    const rowBandStyle = (() => {
+      if (bandingEnabledH && !isFirstRowStyled && !isLastRow) {
+        return (() => {
+          if (dataRowIndex % 2 === 0) {
+            return conditionalStyles.band1Horz;
+          }
+          return conditionalStyles.band2Horz;
+        })();
+      }
+      return undefined;
+    })();
     if (bandingEnabledH && !isFirstRowStyled && !isLastRow) {
       dataRowIndex++;
     }
@@ -1267,14 +1272,17 @@ function convertTableCell(
 
   // Convert borders — preserve full BorderSpec per side
   // Priority: cell borders > conditional style borders > table borders
-  const baseBorders = tableBorders
-    ? {
+  const baseBorders = (() => {
+    if (tableBorders) {
+      return {
         top: isFirstRow ? tableBorders.top : tableBorders.insideH,
         bottom: isLastRow ? tableBorders.bottom : tableBorders.insideH,
         left: isFirstCol ? tableBorders.left : tableBorders.insideV,
         right: isLastCol ? tableBorders.right : tableBorders.insideV,
-      }
-    : undefined;
+      };
+    }
+    return undefined;
+  })();
 
   const conditionalBorders = conditionalStyle?.tcPr?.borders;
   const cellBorders = formatting?.borders;
