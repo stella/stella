@@ -8,12 +8,14 @@
  * (via {@link selectionToRects}) and stack a coloured div per
  * line on this absolutely-positioned overlay.
  *
- * The container has `pointer-events: none` so text selection
- * still works through it. Individual term spans opt back in
- * (`pointer-events: auto`) so clicks on a highlight are
- * captured and forwarded via {@link onTermClick} — the
- * consumer wires that to the sidebar-bridge store so the
- * inspector facet can scroll to the matching row.
+ * Pointer events stay disabled on every node so text selection,
+ * caret placement, drag-selects, and the editor's own
+ * mousedown/click handlers continue to work through the
+ * overlay. The sidebar bridge instead listens on `document`
+ * for clicks and hit-tests the click coordinates against the
+ * overlay spans via `elementsFromPoint`. That way the editor
+ * still receives the click and the bridge fires alongside it,
+ * with no contention over `mousedown`.
  *
  * When `selectedCanonical` is set, every rect for that
  * canonical gets `data-folio-anonymization-selected="true"`
@@ -41,7 +43,9 @@ export type AnonymizationRectsOverlayProps = {
   /**
    * Called when the user clicks a highlight. Receives the
    * canonical surface form and label slug so the host can
-   * forward to a sidebar-bridge store.
+   * forward to a sidebar-bridge store. The overlay uses a
+   * `document`-level click + hit-test to detect this, leaving
+   * the editor's own mousedown/click handlers untouched.
    */
   onTermClick?: ((canonical: string, label: string) => void) | undefined;
   /**
@@ -93,11 +97,43 @@ export const AnonymizationRectsOverlay = ({
     }
   }, [selectedCanonical, selectionSeq]);
 
+  // Document-level hit-test. The overlay spans keep
+  // `pointer-events: none`, so the editor receives clicks
+  // normally (caret placement, drag-selects, the existing
+  // mousedown handler on `.paged-editor__pages`). After the
+  // click bubbles, we run `elementsFromPoint` to see whether
+  // an overlay span was visually under the cursor and forward
+  // the bridge call if so.
+  useEffect(() => {
+    if (!onTermClick) {
+      return;
+    }
+    const handleClick = (event: MouseEvent) => {
+      // Ignore non-primary clicks; right-click should reach the
+      // editor's context menu unchanged.
+      if (event.button !== 0) {
+        return;
+      }
+      const hits = document.elementsFromPoint(event.clientX, event.clientY);
+      for (const el of hits) {
+        if (!(el instanceof HTMLElement)) {
+          continue;
+        }
+        const canonical = el.dataset["folioAnonymizationCanonical"];
+        const label = el.dataset["folioAnonymizationLabel"];
+        if (canonical && label) {
+          onTermClick(canonical, label);
+          return;
+        }
+      }
+    };
+    document.addEventListener("click", handleClick);
+    return () => document.removeEventListener("click", handleClick);
+  }, [onTermClick]);
+
   if (groups.length === 0) {
     return null;
   }
-
-  const clickable = onTermClick !== undefined;
 
   return (
     <div style={overlayStyles} data-folio-anonymization-overlay="">
@@ -128,24 +164,12 @@ export const AnonymizationRectsOverlay = ({
                 isSelected ? "true" : undefined
               }
               title={`Anonymized: ${group.canonical}`}
-              role={clickable ? "button" : undefined}
-              tabIndex={clickable ? -1 : undefined}
-              onClick={
-                clickable
-                  ? (event) => {
-                      event.stopPropagation();
-                      onTermClick(group.canonical, group.label);
-                    }
-                  : undefined
-              }
               style={{
                 position: "absolute",
                 left: rect.x,
                 top: rect.y,
                 width: rect.width,
                 height: rect.height,
-                pointerEvents: clickable ? "auto" : "none",
-                cursor: clickable ? "pointer" : undefined,
               }}
             />
           );
