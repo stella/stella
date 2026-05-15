@@ -290,10 +290,13 @@ export function findChangeAtPosition(
     return { from, to };
   }
 
-  // Find the text node at this position and its mark
+  // Find the text node at this position and its mark instance. We capture
+  // the specific instance (not just the type) so the adjacency expansion
+  // below stays inside a single revision — two back-to-back insertions
+  // belonging to different `revisionId`s must not be treated as one range.
   let markStart = from;
   let markEnd = from;
-  let foundMark: typeof insertionType | undefined;
+  let foundMark: import("prosemirror-model").Mark | undefined;
 
   // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
   node.forEach((child, offset) => {
@@ -302,7 +305,7 @@ export function findChangeAtPosition(
     if (from >= childStart && from <= childEnd && child.isText) {
       for (const mark of child.marks) {
         if (mark.type === insertionType || mark.type === deletionType) {
-          foundMark = mark.type;
+          foundMark = mark;
           markStart = childStart;
           markEnd = childEnd;
         }
@@ -314,20 +317,47 @@ export function findChangeAtPosition(
     return { from, to };
   }
 
-  // Expand to adjacent nodes with the same mark type
+  // Expand to adjacent nodes carrying the *same* mark instance (matching
+  // attrs, including revisionId). Two passes — one left-to-right and one
+  // right-to-left — so the expansion can cross more than one neighbouring
+  // text node on either side (forEach doesn't revisit earlier siblings,
+  // which a single-pass walk would need to do to extend leftward by more
+  // than one step).
+  const sameMark = foundMark;
+  const children: {
+    childStart: number;
+    childEnd: number;
+    marks: readonly import("prosemirror-model").Mark[];
+  }[] = [];
   // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
   node.forEach((child, offset) => {
+    if (!child.isText) {
+      return;
+    }
     const childStart = $pos.start() + offset;
-    const childEnd = childStart + child.nodeSize;
-    if (child.isText && child.marks.some((m) => m.type === foundMark)) {
-      if (childEnd === markStart) {
-        markStart = childStart;
+    children.push({
+      childStart,
+      childEnd: childStart + child.nodeSize,
+      marks: child.marks,
+    });
+  });
+  let extended = true;
+  while (extended) {
+    extended = false;
+    for (const child of children) {
+      if (!child.marks.some((m) => m.eq(sameMark))) {
+        continue;
       }
-      if (childStart === markEnd) {
-        markEnd = childEnd;
+      if (child.childEnd === markStart) {
+        markStart = child.childStart;
+        extended = true;
+      }
+      if (child.childStart === markEnd) {
+        markEnd = child.childEnd;
+        extended = true;
       }
     }
-  });
+  }
 
   return { from: markStart, to: markEnd };
 }
