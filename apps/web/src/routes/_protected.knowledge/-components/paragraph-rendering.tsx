@@ -23,7 +23,7 @@ export const HighlightedText = ({ text }: { text: string }) => {
   let lastIndex = 0;
 
   for (const match of text.matchAll(PLACEHOLDER_RE)) {
-    const start = match.index ?? 0;
+    const start = match.index;
     if (start > lastIndex) {
       parts.push(text.slice(lastIndex, start));
     }

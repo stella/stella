@@ -63,14 +63,7 @@ type StringCondition = Extract<PropertyCondition, { type: "string" }>;
 const evaluateStringCondition = (
   condition: StringCondition,
   fieldValue: string,
-) => {
-  switch (condition.operator) {
-    case "eq":
-      return fieldValue === condition.value;
-    default:
-      return false;
-  }
-};
+) => fieldValue === condition.value;
 
 type StringArrayCondition = Extract<
   PropertyCondition,
@@ -80,11 +73,4 @@ type StringArrayCondition = Extract<
 const evaluateStringArrayCondition = (
   condition: StringArrayCondition,
   fieldValue: string[],
-) => {
-  switch (condition.operator) {
-    case "contains-every":
-      return condition.value.every((v) => fieldValue.includes(v));
-    default:
-      return false;
-  }
-};
+) => condition.value.every((v) => fieldValue.includes(v));

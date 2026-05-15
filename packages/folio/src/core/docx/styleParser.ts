@@ -1216,7 +1216,7 @@ function parseTableCellProperties(
 function parseStyle(styleEl: XmlElement, theme: Theme | null): Style {
   const style: Style = {
     styleId: getAttribute(styleEl, "w", "styleId") ?? "",
-    type: (getAttribute(styleEl, "w", "type") as StyleType) ?? "paragraph",
+    type: getAttribute(styleEl, "w", "type") as StyleType,
   };
 
   // Default flag
@@ -1456,7 +1456,7 @@ function mergeParagraphFormatting(
     return target;
   }
   if (!target) {
-    return source ? { ...source } : undefined;
+    return { ...source };
   }
 
   const result = { ...target };

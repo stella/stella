@@ -81,7 +81,7 @@ export function ImagePositionDialog({
     if (h?.align) {
       setHMode("align");
       setHAlign(h.align);
-    } else if (h?.posOffset !== null && h?.posOffset !== undefined) {
+    } else if (h?.posOffset !== undefined) {
       setHMode("offset");
       setHOffset(h.posOffset);
     }
@@ -92,7 +92,7 @@ export function ImagePositionDialog({
     if (v?.align) {
       setVMode("align");
       setVAlign(v.align);
-    } else if (v?.posOffset !== null && v?.posOffset !== undefined) {
+    } else if (v?.posOffset !== undefined) {
       setVMode("offset");
       setVOffset(v.posOffset);
     }

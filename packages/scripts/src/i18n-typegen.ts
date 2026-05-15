@@ -63,7 +63,7 @@ const toLiteral = (value: JsonValue, depth: number): string => {
     return JSON.stringify(value);
   }
 
-  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+  if (typeof value === "object" && !Array.isArray(value)) {
     const entries = Object.entries(value);
     if (entries.length === 0) {
       return "Record<string, never>";

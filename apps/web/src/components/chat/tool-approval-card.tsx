@@ -147,11 +147,7 @@ const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
     const cached = qc.getQueryData<WorkspaceProperty[]>(
       propertiesKeys.all(workspaceId),
     );
-    if (
-      cached !== undefined &&
-      input.propertyId !== undefined &&
-      input.propertyId !== null
-    ) {
+    if (cached !== undefined) {
       property = cached.find((p) => p.id === input.propertyId);
     }
   }
@@ -160,15 +156,12 @@ const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
     property?.content.type === "single-select" ||
     property?.content.type === "multi-select";
 
-  const displayNew = (() => {
-    if (newVal === null) {
-      return null;
-    }
-    if (Array.isArray(newVal)) {
-      return newVal.join(", ");
-    }
-    return JSON.stringify(newVal);
-  })();
+  let displayNew: string | null = null;
+  if (Array.isArray(newVal)) {
+    displayNew = newVal.join(", ");
+  } else if (newVal !== null) {
+    displayNew = JSON.stringify(newVal);
+  }
 
   return (
     <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2">

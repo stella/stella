@@ -293,7 +293,7 @@ function convertTrackedChange(
           styleResolver,
         ),
       );
-    } else if (item.type === "hyperlink") {
+    } else {
       nodes.push(
         ...convertHyperlink(item, getInheritedRunFormatting, styleResolver),
       );
@@ -639,9 +639,7 @@ function hasDirectRunFormatting(
     return false;
   }
 
-  return Object.entries(formatting).some(
-    ([key, value]) => key !== "styleId" && value !== undefined,
-  );
+  return Object.keys(formatting).some((key) => key !== "styleId");
 }
 
 function resolveTextFormatting(
@@ -1370,7 +1368,7 @@ function convertTableCell(
           conditionalStyle?.rPr,
         ),
       );
-    } else if (content.type === "table") {
+    } else {
       // Nested tables - recursively convert
       contentNodes.push(convertTable(content, styleResolver, theme));
     }
@@ -1400,18 +1398,16 @@ function convertField(
   let displayText = "";
   let fieldFormatting: TextFormatting | undefined;
   const runs = field.type === "simpleField" ? field.content : field.fieldResult;
-  if (runs) {
-    for (const r of runs) {
-      if (r.type === "run") {
-        for (const c of r.content) {
-          if (c.type === "text") {
-            displayText += c.text;
-          }
+  for (const r of runs) {
+    if (r.type === "run") {
+      for (const c of r.content) {
+        if (c.type === "text") {
+          displayText += c.text;
         }
-        // Use formatting from the first run that has it
-        if (!fieldFormatting && r.formatting) {
-          fieldFormatting = r.formatting;
-        }
+      }
+      // Use formatting from the first run that has it
+      if (!fieldFormatting && r.formatting) {
+        fieldFormatting = r.formatting;
       }
     }
   }
@@ -1469,7 +1465,7 @@ function convertInlineSdt(
         styleResolver,
       );
       inlineNodes.push(...runNodes);
-    } else if (content.type === "hyperlink") {
+    } else {
       const linkNodes = convertHyperlink(
         content,
         getInheritedRunFormatting,
@@ -1559,10 +1555,7 @@ function convertRunContent(
       return [schema.node("tab")];
 
     case "drawing":
-      if (content.image) {
-        return [convertImage(content.image)];
-      }
-      return [];
+      return [convertImage(content.image)];
 
     case "shape": {
       // Shapes with text body are handled as text boxes at block level
@@ -1617,15 +1610,15 @@ function convertRunContent(
  */
 function convertImage(image: Image): PMNode {
   // Convert EMU to pixels for proper sizing
-  const widthPx = image.size?.width ? emuToPixels(image.size.width) : undefined;
-  const heightPx = image.size?.height
+  const widthPx = image.size.width ? emuToPixels(image.size.width) : undefined;
+  const heightPx = image.size.height
     ? emuToPixels(image.size.height)
     : undefined;
 
   // Determine wrap type and float direction
   const wrapType = image.wrap.type;
   const wrapText = image.wrap.wrapText;
-  const hAlign = image.position?.horizontal?.alignment;
+  const hAlign = image.position?.horizontal.alignment;
 
   // Determine CSS float based on wrap settings
   // In DOCX: wrapText='left' means "text flows on the left" → image is on right → float: right
@@ -1678,7 +1671,7 @@ function convertImage(image: Image): PMNode {
     displayMode = "block";
   } else if (wrapType === "behind" || wrapType === "inFront") {
     displayMode = "float";
-  } else if (cssFloat && cssFloat !== "none") {
+  } else if (cssFloat !== "none") {
     displayMode = "float";
   } else {
     displayMode = "block";
@@ -1725,30 +1718,27 @@ function convertImage(image: Image): PMNode {
     | undefined;
   if (image.position) {
     position = {};
-    if (image.position.horizontal) {
-      const h: { relativeTo?: string; posOffset?: number; align?: string } = {
-        relativeTo: image.position.horizontal.relativeTo,
-      };
-      if (image.position.horizontal.posOffset !== undefined) {
-        h.posOffset = image.position.horizontal.posOffset;
-      }
-      if (image.position.horizontal.alignment) {
-        h.align = image.position.horizontal.alignment;
-      }
-      position.horizontal = h;
+    const h: { relativeTo?: string; posOffset?: number; align?: string } = {
+      relativeTo: image.position.horizontal.relativeTo,
+    };
+    if (image.position.horizontal.posOffset !== undefined) {
+      h.posOffset = image.position.horizontal.posOffset;
     }
-    if (image.position.vertical) {
-      const v: { relativeTo?: string; posOffset?: number; align?: string } = {
-        relativeTo: image.position.vertical.relativeTo,
-      };
-      if (image.position.vertical.posOffset !== undefined) {
-        v.posOffset = image.position.vertical.posOffset;
-      }
-      if (image.position.vertical.alignment) {
-        v.align = image.position.vertical.alignment;
-      }
-      position.vertical = v;
+    if (image.position.horizontal.alignment) {
+      h.align = image.position.horizontal.alignment;
     }
+    position.horizontal = h;
+
+    const v: { relativeTo?: string; posOffset?: number; align?: string } = {
+      relativeTo: image.position.vertical.relativeTo,
+    };
+    if (image.position.vertical.posOffset !== undefined) {
+      v.posOffset = image.position.vertical.posOffset;
+    }
+    if (image.position.vertical.alignment) {
+      v.align = image.position.vertical.alignment;
+    }
+    position.vertical = v;
   }
 
   // Convert outline to border attrs
@@ -1963,10 +1953,10 @@ function textFormattingToMarks(
 
   // Character spacing (spacing, position, scale, kerning)
   if (
-    formatting.spacing !== null ||
-    formatting.position !== null ||
-    formatting.scale !== null ||
-    formatting.kerning !== null
+    formatting.spacing !== undefined ||
+    formatting.position !== undefined ||
+    formatting.scale !== undefined ||
+    formatting.kerning !== undefined
   ) {
     marks.push(
       schema.mark("characterSpacing", {
@@ -2014,8 +2004,8 @@ function textFormattingToMarks(
  * Convert a Shape to a ProseMirror shape node (inline SVG)
  */
 function convertShape(shape: Shape): PMNode {
-  const widthPx = shape.size?.width ? emuToPixels(shape.size.width) : 100;
-  const heightPx = shape.size?.height ? emuToPixels(shape.size.height) : 80;
+  const widthPx = shape.size.width ? emuToPixels(shape.size.width) : 100;
+  const heightPx = shape.size.height ? emuToPixels(shape.size.height) : 80;
 
   let fillColor: string | undefined;
   let fillType: string = "solid";
@@ -2074,7 +2064,7 @@ function convertShape(shape: Shape): PMNode {
   }
 
   return schema.node("shape", {
-    shapeType: shape.shapeType || "rect",
+    shapeType: shape.shapeType,
     shapeId: shape.id,
     width: widthPx,
     height: heightPx,
@@ -2169,8 +2159,8 @@ function convertTextBox(
   textBox: TextBox,
   styleResolver: StyleResolver | null,
 ): PMNode {
-  const widthPx = textBox.size?.width ? emuToPixels(textBox.size.width) : 200;
-  const heightPx = textBox.size?.height
+  const widthPx = textBox.size.width ? emuToPixels(textBox.size.width) : 200;
+  const heightPx = textBox.size.height
     ? emuToPixels(textBox.size.height)
     : undefined;
 
@@ -2258,7 +2248,7 @@ export function headerFooterToProseDoc(
   for (const block of content) {
     if (block.type === "paragraph") {
       nodes.push(...convertParagraphWithTextBoxes(block, styleResolver));
-    } else if (block.type === "table") {
+    } else {
       nodes.push(convertTable(block, styleResolver, theme));
     }
   }

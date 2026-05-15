@@ -43,9 +43,6 @@ function parseCommentsExtensible(xml: string): Map<string, string> {
   const dateUtcByParaId = new Map<string, string>();
 
   const root = parseXml(xml);
-  if (!root) {
-    return dateUtcByParaId;
-  }
 
   // Find the root element (may be w16cex:commentsExtensible or similar)
   const container = findChild(root, "w16cex", "commentsExtensible") ?? root;
@@ -95,9 +92,6 @@ export function parseComments(
   }
 
   const root = parseXml(commentsXml);
-  if (!root) {
-    return [];
-  }
 
   // Build UTC date lookup from extended comments (if available)
   const dateUtcByParaId = commentsExtensibleXml

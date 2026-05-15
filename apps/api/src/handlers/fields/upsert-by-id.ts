@@ -115,7 +115,6 @@ const upsertField = createSafeHandler(
 
     const isEmpty =
       body.content.value === null ||
-      body.content.value === undefined ||
       body.content.value === "" ||
       (Array.isArray(body.content.value) && body.content.value.length === 0);
 

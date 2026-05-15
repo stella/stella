@@ -31,10 +31,6 @@ export const invalidateQuery = new Elysia({ name: "invalidateQueryMacro" })
     validateAuth: true,
     body: invalidateQueryBodySchema,
     afterHandle: (ctx) => {
-      if (ctx.session === null || ctx.session === undefined) {
-        return;
-      }
-
       const event = createInvalidateQueryEvent(ctx.body.queryKey);
       const workspaceId =
         "workspaceId" in ctx ? String(ctx.workspaceId) : undefined;
@@ -50,10 +46,6 @@ export const invalidateQuery = new Elysia({ name: "invalidateQueryMacro" })
     validateAuth: true,
     body: invalidateQueryBodySchema,
     afterHandle: (ctx) => {
-      if (ctx.session === null || ctx.session === undefined) {
-        return;
-      }
-
       broadcastQueryInvalidationToOrganization(
         ctx.session.activeOrganizationId,
         ctx.body.queryKey,

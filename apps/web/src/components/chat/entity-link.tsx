@@ -1,10 +1,5 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import {
-  FileTextIcon,
-  FolderIcon,
-  LandmarkIcon,
-  LayersIcon,
-} from "lucide-react";
+import { FileTextIcon, LandmarkIcon, LayersIcon } from "lucide-react";
 
 import { cn } from "@stll/ui/lib/utils";
 
@@ -13,33 +8,14 @@ import type { MentionCategory } from "@/components/chat/chat-mention-href";
 import { parseStellaMentionHref } from "@/components/chat/chat-mention-href";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
-import type { WorkspaceEntity } from "@/lib/types";
-import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
-import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const DECISION_HASH_PREFIX = "#stella-decision=";
 
 /** Resolve the icon for an entity by its ID. */
 // TODO: fix me
-export const EntityMentionIcon = ({ entityId: _ }: { entityId: string }) => {
-  // TODO: fix me
-  const entity: WorkspaceEntity | undefined = undefined;
-  const file = entity !== undefined ? getFirstFile(entity) : null;
-  const kind: string = "document";
-
-  if (kind === "folder") {
-    return <FolderIcon className="inline size-3 shrink-0" />;
-  }
-  if (file?.mimeType) {
-    return (
-      <DocumentIcon
-        className="inline size-3 shrink-0"
-        mimeType={file.mimeType}
-      />
-    );
-  }
-  return <FileTextIcon className="inline size-3 shrink-0" />;
-};
+export const EntityMentionIcon = ({ entityId: _ }: { entityId: string }) => (
+  <FileTextIcon className="inline size-3 shrink-0" />
+);
 
 const CATEGORY_ICON: Record<
   Exclude<MentionCategory, "entity">,
@@ -139,14 +115,11 @@ export const EntityLink = ({
       })();
       return;
     }
-    if (category === "workspace") {
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
-      navigate({
-        to: "/workspaces/$workspaceId",
-        params: { workspaceId: id },
-      });
-      return;
-    }
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    navigate({
+      to: "/workspaces/$workspaceId",
+      params: { workspaceId: id },
+    });
   };
 
   const icon =

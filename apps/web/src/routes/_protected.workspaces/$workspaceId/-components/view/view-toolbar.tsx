@@ -90,7 +90,7 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
 
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-1 px-2 py-1">
-      {view.layout.type === "filesystem" && folderState?.hasFolders && (
+      {view.layout.type === "filesystem" && folderState.hasFolders && (
         <>
           <Button
             onClick={toggleAllFolders}

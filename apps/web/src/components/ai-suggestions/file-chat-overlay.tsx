@@ -212,14 +212,10 @@ const prepareOperations = (
 const inputOperationSeverity = (
   operation: ToolInputOperation,
 ): FolioAIEditSeverity | "unspecified" =>
-  "severity" in operation && operation.severity !== undefined
-    ? operation.severity
-    : "unspecified";
+  "severity" in operation ? operation.severity : "unspecified";
 
 const inputOperationArea = (operation: ToolInputOperation): string =>
-  "area" in operation && operation.area !== undefined
-    ? operation.area
-    : REVIEW_UNSPECIFIED_AREA;
+  "area" in operation ? operation.area : REVIEW_UNSPECIFIED_AREA;
 
 type SnapshotBlock = {
   id: string;
@@ -746,41 +742,28 @@ const FileChatOverlayInner = ({
     openIfAIUnavailable();
   }, [openIfAIUnavailable]);
 
-  const filePlaceholder = (() => {
-    if (activeFile === undefined) {
-      return (() => {
-        if (activeExternal) {
-          return t("chat.externalSourcePlaceholder", {
-            title: activeExternal.title,
-          });
-        }
-        return undefined;
-      })();
+  let filePlaceholder: string | undefined;
+  let filePlaceholderAction: string | undefined;
+  if (activeFile === undefined) {
+    if (activeExternal) {
+      filePlaceholder = t("chat.externalSourcePlaceholder", {
+        title: activeExternal.title,
+      });
+      filePlaceholderAction = t("chat.externalSourcePlaceholderAction");
     }
-    return t(
+  } else {
+    filePlaceholder = t(
       activeFile.editable
         ? "chat.editableFilePlaceholder"
         : "chat.filePlaceholder",
-      {
-        fileName: activeFile.fileName,
-      },
+      { fileName: activeFile.fileName },
     );
-  })();
-  const filePlaceholderAction = (() => {
-    if (activeFile === undefined) {
-      return (() => {
-        if (activeExternal) {
-          return t("chat.externalSourcePlaceholderAction");
-        }
-        return undefined;
-      })();
-    }
-    return t(
+    filePlaceholderAction = t(
       activeFile.editable
         ? "chat.editableFilePlaceholderAction"
         : "chat.filePlaceholderAction",
     );
-  })();
+  }
 
   const editorController = useChatEditor({
     placeholder: filePlaceholder,

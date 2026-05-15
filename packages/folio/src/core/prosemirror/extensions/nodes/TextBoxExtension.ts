@@ -140,16 +140,16 @@ export const TextBoxExtension = createNodeExtension({
       if (attrs.outlineStyle) {
         domAttrs["data-outline-style"] = attrs.outlineStyle;
       }
-      if (attrs.marginTop !== null) {
+      if (attrs.marginTop !== undefined) {
         domAttrs["data-margin-top"] = String(attrs.marginTop);
       }
-      if (attrs.marginBottom !== null) {
+      if (attrs.marginBottom !== undefined) {
         domAttrs["data-margin-bottom"] = String(attrs.marginBottom);
       }
-      if (attrs.marginLeft !== null) {
+      if (attrs.marginLeft !== undefined) {
         domAttrs["data-margin-left"] = String(attrs.marginLeft);
       }
-      if (attrs.marginRight !== null) {
+      if (attrs.marginRight !== undefined) {
         domAttrs["data-margin-right"] = String(attrs.marginRight);
       }
       if (attrs.verticalAlign) {

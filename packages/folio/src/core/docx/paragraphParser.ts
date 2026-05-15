@@ -1172,7 +1172,7 @@ function parseParagraphContents(
               }
             } else if (content.charType === "separate") {
               hasFieldSeparate = true;
-            } else if (content.charType === "end") {
+            } else {
               hasFieldEnd = true;
             }
           } else if (content.type === "instrText") {
@@ -1582,9 +1582,6 @@ export function parseParagraph(
     if (style?.pPr?.numPr) {
       effectiveNumPr = style.pPr.numPr;
       // Store it on the paragraph formatting so downstream code sees it
-      if (!paragraph.formatting) {
-        paragraph.formatting = {};
-      }
       paragraph.formatting.numPr = effectiveNumPr;
     }
   }
@@ -1624,9 +1621,7 @@ export function parseParagraph(
         if (level.isLgl) {
           listRendering.isLegal = true;
         }
-        if (level.numFmt) {
-          listRendering.numFmt = level.isLgl ? "decimal" : level.numFmt;
-        }
+        listRendering.numFmt = level.isLgl ? "decimal" : level.numFmt;
         if (level.rPr?.hidden) {
           listRendering.markerHidden = true;
         }

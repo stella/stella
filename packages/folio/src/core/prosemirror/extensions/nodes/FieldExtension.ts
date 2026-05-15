@@ -37,7 +37,7 @@ export const FieldExtension = createNodeExtension({
           return {
             fieldType: dom.dataset["fieldType"] ?? "UNKNOWN",
             instruction: dom.dataset["instruction"] ?? "",
-            displayText: dom.textContent ?? "",
+            displayText: dom.textContent,
             fieldKind: dom.dataset["fieldKind"] ?? "simple",
             fldLock: dom.dataset["fldLock"] === "true",
             dirty: dom.dataset["dirty"] === "true",

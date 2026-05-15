@@ -34,7 +34,6 @@ import {
 } from "@stll/ui/components/menu";
 import { Separator } from "@stll/ui/components/separator";
 import { TOAST_RIGHT_OFFSET_VAR } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
 
 import { ApiVersionMismatchBanner } from "@/components/api-version-mismatch-banner";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -52,11 +51,6 @@ import {
   useSidebar,
 } from "@/components/sidebar";
 import { getAnalytics } from "@/lib/analytics/provider";
-import {
-  SIDE_RAIL_ICON_BUTTON_SIZE,
-  SIDE_RAIL_WIDTH,
-  TOOLBAR_ROW_HEIGHT,
-} from "@/lib/consts";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
@@ -78,41 +72,6 @@ const LazyInspectorPanel = lazy(
     await import("@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel").then(
       (m) => ({ default: m.InspectorPanel }),
     ),
-);
-
-// Visual shell for the inspector rail while the panel chunk is
-// loading. Mirrors the real rail's chrome (top toggle, bottom
-// "new chat") so the rail doesn't render as an empty strip during
-// the lazy chunk fetch. Buttons are inert; they activate once the
-// real panel mounts.
-const InspectorRailFallback = () => (
-  <div className="bg-background flex h-full border-s shadow-lg">
-    <div
-      className={`bg-muted/50 flex shrink-0 flex-col border-e ${SIDE_RAIL_WIDTH}`}
-    >
-      <div
-        aria-hidden="true"
-        className={`text-muted-foreground flex w-full shrink-0 items-center justify-center border-b ${TOOLBAR_ROW_HEIGHT}`}
-      >
-        <span
-          className={`flex items-center justify-center ${SIDE_RAIL_ICON_BUTTON_SIZE}`}
-        >
-          <PanelRightIcon className="size-4" />
-        </span>
-      </div>
-      <div className="flex-1" />
-      <div
-        aria-hidden="true"
-        className={`text-muted-foreground flex w-full shrink-0 items-center justify-center border-t ${TOOLBAR_ROW_HEIGHT}`}
-      >
-        <span
-          className={`flex items-center justify-center ${SIDE_RAIL_ICON_BUTTON_SIZE}`}
-        >
-          <MessageSquarePlusIcon className="size-4" />
-        </span>
-      </div>
-    </div>
-  </div>
 );
 
 export const Route = createFileRoute("/_protected")({
@@ -307,15 +266,12 @@ function ProtectedContent({
   // content is minimized, and its top button is the restore/hide
   // affordance.
   const canShowInspectorButton = inspectorTabsCount === 0;
-  const inspectorButtonTitle = (() => {
-    if (inspectorTabsCount === 0) {
-      return t("inspector.openChat");
-    }
-    if (inspectorMinimized) {
-      return t("inspector.showPane");
-    }
-    return t("inspector.hidePane");
-  })();
+  let inspectorButtonTitle = t("inspector.hidePane");
+  if (inspectorTabsCount === 0) {
+    inspectorButtonTitle = t("inspector.openChat");
+  } else if (inspectorMinimized) {
+    inspectorButtonTitle = t("inspector.showPane");
+  }
 
   // Right-clicking the chrome's icon row (including the empty
   // space after the last icon) offers a quick "Open new chat"
@@ -397,9 +353,6 @@ function ProtectedContent({
         <div className="contents md:hidden">
           <Separator className="mx-1 h-4" orientation="vertical" />
           <Button
-            aria-pressed={
-              inspectorTabsCount > 0 ? !inspectorMinimized : undefined
-            }
             className="size-7"
             onClick={handleInspectorButtonClick}
             size="icon"
@@ -418,10 +371,7 @@ function ProtectedContent({
       <ApiVersionMismatchBanner />
       <SelfhostUpdateBanner />
       <header
-        className={cn(
-          "flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4",
-          !matterColor && "bg-sidebar",
-        )}
+        className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4"
         style={
           matterColor
             ? {
@@ -467,11 +417,7 @@ function ProtectedContent({
 const INSPECTOR_PANE_DEFAULT_WIDTH = 512;
 const INSPECTOR_PANE_MIN_WIDTH = 320;
 const INSPECTOR_PANE_MAX_WIDTH = 800;
-// Matches SIDE_RAIL_WIDTH (`w-12` = 48px) so the wrapper width
-// equals the rail's actual rendered width. Earlier this was 40,
-// leaving the rail 8px wider than its wrapper and pushing the
-// toast / find-replace right-offset CSS vars under the visible rail.
-const INSPECTOR_RAIL_WIDTH = 48;
+const INSPECTOR_RAIL_WIDTH = 40;
 
 /**
  * Workspace inspector pane — file viewers + chat tabs. Mounted at
@@ -512,18 +458,12 @@ function WorkspaceInspectorSidePanel() {
   //      with only blank chats active but PDFs from earlier
   //      matters still open in the rail.
   const activeTab = tabs.find((tab) => tab.id === activeId);
-  const tabOriginWorkspaceId = (() => {
-    if (activeTab?.type === "pdf") {
-      return activeTab.workspaceId;
-    }
-    if (activeTab?.type === "matter") {
-      return activeTab.workspaceId;
-    }
-    if (activeTab?.type === "chat") {
-      return activeTab.contextMatterIds.at(0) ?? null;
-    }
-    return null;
-  })();
+  let tabOriginWorkspaceId: string | null = null;
+  if (activeTab?.type === "pdf" || activeTab?.type === "matter") {
+    tabOriginWorkspaceId = activeTab.workspaceId;
+  } else if (activeTab?.type === "chat") {
+    tabOriginWorkspaceId = activeTab.contextMatterIds.at(0) ?? null;
+  }
   // Last-resort: pick *any* tab's stored workspace so the inspector
   // mounts even when the active tab can't dictate one (a task tab,
   // or a chat that hasn't been pinned to a matter yet) and the
@@ -580,19 +520,9 @@ function WorkspaceInspectorSidePanel() {
 
   useEffect(() => {
     document.documentElement.style.setProperty(TOAST_RIGHT_OFFSET_VAR, widthPx);
-    // Keep Folio's find/replace dialog out from under the right inspector
-    // pane. Folio reads --folio-find-replace-right on the overlay so the
-    // dialog lands over the document, not behind the sidebar.
-    document.documentElement.style.setProperty(
-      "--folio-find-replace-right",
-      widthPx,
-    );
 
     return () => {
       document.documentElement.style.removeProperty(TOAST_RIGHT_OFFSET_VAR);
-      document.documentElement.style.removeProperty(
-        "--folio-find-replace-right",
-      );
     };
   }, [widthPx]);
 
@@ -616,7 +546,7 @@ function WorkspaceInspectorSidePanel() {
           />
         )}
         <div className="bg-sidebar flex h-full w-full flex-col">
-          <Suspense fallback={<InspectorRailFallback />}>
+          <Suspense>
             <LazyInspectorPanel workspaceId={activeWorkspaceId ?? undefined} />
           </Suspense>
         </div>

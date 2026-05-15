@@ -126,7 +126,7 @@ describe("chat third-party anonymization boundary", () => {
       throw prepared.error;
     }
 
-    expect(prepared.value?.at(0)?.parts.at(0)).toEqual({
+    expect(prepared.value.at(0)?.parts.at(0)).toEqual({
       type: "text",
       text: "Does [PERSON_1] appear in [CUSTOM_1] contract?",
     });
@@ -193,7 +193,7 @@ describe("chat third-party anonymization boundary", () => {
       throw prepared.error;
     }
 
-    const part = prepared.value?.at(0)?.parts.at(0);
+    const part = prepared.value.at(0)?.parts.at(0);
 
     expect(part).toMatchObject({
       type: "file",

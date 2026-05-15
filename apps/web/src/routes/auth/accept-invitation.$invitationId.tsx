@@ -36,15 +36,11 @@ export const Route = createFileRoute("/auth/accept-invitation/$invitationId")({
     }
   },
   loader: async ({ params }) => {
-    const { data, error } = await authClient.organization.getInvitation({
+    const { data } = await authClient.organization.getInvitation({
       query: { id: params.invitationId },
     });
 
-    if (
-      (error !== undefined && error !== null) ||
-      data === undefined ||
-      data === null
-    ) {
+    if (data === null) {
       throw notFound();
     }
 

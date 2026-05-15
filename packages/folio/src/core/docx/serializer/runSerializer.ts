@@ -60,7 +60,7 @@ export function resetAutoIdCounter(): void {
 
 /** Get a unique positive integer ID, using the provided value or generating one */
 function getUniqueId(id: string | number | undefined): string {
-  if (id !== undefined && id !== null && id !== "" && id !== 0) {
+  if (id !== undefined && id !== "" && id !== 0) {
     return String(id);
   }
   return String(nextAutoId++);
@@ -655,7 +655,7 @@ function serializeOutline(outline: ShapeOutline | undefined): string {
     return "";
   }
   const attrs: string[] = [];
-  if (outline.width !== null) {
+  if (outline.width !== undefined) {
     attrs.push(`w="${outline.width}"`);
   }
   if (outline.cap) {

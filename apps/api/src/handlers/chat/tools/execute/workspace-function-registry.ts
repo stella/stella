@@ -245,7 +245,7 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
               panic("Entity has no currentVersion");
             }
 
-            const name = entity.name ?? "Untitled";
+            const name = entity.name;
 
             return {
               entityRef: refRegistry.toEntityRef({
@@ -334,7 +334,7 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
 
           const currentVersion = entity.currentVersion;
 
-          const name = entity.name ?? "Untitled";
+          const name = entity.name;
 
           return {
             createdAt: entity.createdAt.toISOString(),

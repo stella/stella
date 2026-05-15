@@ -265,7 +265,7 @@ const parseItemWithDetail = async (
       identifikacneCislo: toOptionalValue(item.identifikacneCislo),
       judge: toOptionalValue(item.sudca?.meno),
       judgeRegistreGuid: toOptionalValue(item.sudca?.registreGuid),
-      courtRegistreGuid: toOptionalValue(item.sud?.registreGuid),
+      courtRegistreGuid: toOptionalValue(item.sud.registreGuid),
       decisionNature: item.povaha,
       subArea: detail?.podOblast,
       referencedLegislation: detail?.odkazovanePredpisy,

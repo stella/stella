@@ -441,7 +441,7 @@ export const sanitizeForAIAnalytics = (value: unknown): unknown => {
   }
 
   const serialized = JSON.stringify(value);
-  return serialized ?? Object.prototype.toString.call(value);
+  return serialized;
 };
 
 const normalizeProvider = (provider: string): string => {

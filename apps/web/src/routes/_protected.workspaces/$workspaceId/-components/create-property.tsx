@@ -396,7 +396,7 @@ const PropertyComposerBody = ({
     editingProperty &&
     (editingProperty.content.type === "single-select" ||
       editingProperty.content.type === "multi-select")
-      ? (editingProperty.content.options ?? [])
+      ? editingProperty.content.options
       : [];
   const initialFallback: string | null =
     editingProperty &&
@@ -751,57 +751,48 @@ const PropertyComposerBody = ({
           />
         </div>
 
-        {(() => {
-          if (showAiSections) {
-            return (
-              <ComposerCard
-                autoPromptDisabled={
-                  trimmedName.length === 0 || suggestPrompt.isPending
+        {showAiSections ? (
+          <ComposerCard
+            autoPromptDisabled={
+              trimmedName.length === 0 || suggestPrompt.isPending
+            }
+            autoPromptPending={suggestPrompt.isPending}
+            contentType={contentType}
+            editorReady={setEditor}
+            fileChips={selectedFileIds.map(
+              (id) =>
+                fileProperties.find((p) => p.id === id) ?? {
+                  id,
+                  name: id,
+                },
+            )}
+            onAutoPrompt={handleAutoPrompt}
+            onContentTypeChange={setContentType}
+            onMentionsChange={setTextareaMentions}
+            onRemoveFile={(id) =>
+              setSelectedFileIds((prev) => prev.filter((p) => p !== id))
+            }
+            onSubmit={handleSubmit}
+            promptField={promptField}
+            propertyName={trimmedName}
+            typeChanged={typeChanged}
+            {...(availableFileToAdd.length > 0
+              ? {
+                  addFile: (id: string) =>
+                    setSelectedFileIds((prev) => [...prev, id]),
+                  availableFiles: availableFileToAdd,
                 }
-                autoPromptPending={suggestPrompt.isPending}
-                contentType={contentType}
-                editorReady={setEditor}
-                fileChips={selectedFileIds.map(
-                  (id) =>
-                    fileProperties.find((p) => p.id === id) ?? {
-                      id,
-                      name: id,
-                    },
-                )}
-                onAutoPrompt={handleAutoPrompt}
-                onContentTypeChange={setContentType}
-                onMentionsChange={setTextareaMentions}
-                onRemoveFile={(id) =>
-                  setSelectedFileIds((prev) => prev.filter((p) => p !== id))
-                }
-                onSubmit={handleSubmit}
-                promptField={promptField}
-                propertyName={trimmedName}
-                typeChanged={typeChanged}
-                {...(availableFileToAdd.length > 0
-                  ? {
-                      addFile: (id: string) =>
-                        setSelectedFileIds((prev) => [...prev, id]),
-                      availableFiles: availableFileToAdd,
-                    }
-                  : {})}
-                {...(propertyId !== undefined
-                  ? {
-                      propertyId,
-                    }
-                  : {})}
-                workspaceId={workspaceId}
-              />
-            );
-          }
-          return (
-            <ManualTypeRow
-              contentType={contentType}
-              onContentTypeChange={setContentType}
-              typeChanged={typeChanged}
-            />
-          );
-        })()}
+              : {})}
+            {...(propertyId !== undefined ? { propertyId } : {})}
+            workspaceId={workspaceId}
+          />
+        ) : (
+          <ManualTypeRow
+            contentType={contentType}
+            onContentTypeChange={setContentType}
+            typeChanged={typeChanged}
+          />
+        )}
 
         {needsOptions && (
           <InlineOptionEditor

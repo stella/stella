@@ -161,7 +161,7 @@ export const PropertyPromptInput = ({
   });
 
   useEffect(() => {
-    if (editor !== null && onEditorReady !== undefined) {
+    if (onEditorReady !== undefined) {
       onEditorReady(editor);
     }
   }, [editor, onEditorReady]);
@@ -172,10 +172,7 @@ export const PropertyPromptInput = ({
     if (
       !autoPopulateOnEmpty ||
       didAutoPopulate.current ||
-      editor === undefined ||
-      editor === null ||
       fileProperty === undefined ||
-      fileProperty === null ||
       field.state.value.length > 0
     ) {
       return;

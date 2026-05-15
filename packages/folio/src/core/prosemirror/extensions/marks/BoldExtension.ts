@@ -17,7 +17,7 @@ export const BoldExtension = createMarkExtension({
         tag: "b",
         getAttrs(dom) {
           // Reject <b> with explicit non-bold font-weight (e.g. Google Docs structural wrapper)
-          const fw = dom.style?.fontWeight;
+          const fw = dom.style.fontWeight;
           if (fw === "normal" || fw === "400") {
             return false;
           }

@@ -107,7 +107,7 @@ const checkField = (
 
   for (const d of decisions) {
     const val = d[field];
-    if (val !== undefined && val !== null && val !== "") {
+    if (val !== undefined && val !== "") {
       present++;
       if (examples.length < 3) {
         const str =
@@ -167,15 +167,12 @@ export const checkAdapterHealth = async (
       return check && check.missing === 0;
     });
 
-    const status = (() => {
-      if (page.decisions.length === 0) {
-        return "down";
-      }
-      if (requiredOk) {
-        return "healthy";
-      }
-      return "degraded";
-    })();
+    let status: HealthResult["status"] = "degraded";
+    if (page.decisions.length === 0) {
+      status = "down";
+    } else if (requiredOk) {
+      status = "healthy";
+    }
 
     return {
       key: adapter.key,
@@ -236,15 +233,12 @@ export const formatHealthReport = (
   const lines: string[] = ["=== Adapter Health Report ===", ""];
 
   for (const r of results) {
-    const icon = (() => {
-      if (r.status === "healthy") {
-        return "OK";
-      }
-      if (r.status === "degraded") {
-        return "WARN";
-      }
-      return "FAIL";
-    })();
+    let icon = "FAIL";
+    if (r.status === "healthy") {
+      icon = "OK";
+    } else if (r.status === "degraded") {
+      icon = "WARN";
+    }
 
     lines.push(`[${icon}] ${r.key} (${r.name})`);
     lines.push(

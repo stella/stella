@@ -127,11 +127,7 @@ const renderTupleType = ({
     renderSchemaDefinition(definition, depth),
   );
 
-  if (
-    typeof additionalItems === "object" &&
-    additionalItems !== null &&
-    !Array.isArray(additionalItems)
-  ) {
+  if (typeof additionalItems === "object" && !Array.isArray(additionalItems)) {
     const restType = renderSchemaDefinition(additionalItems, depth);
     return `[${[...itemTypes, `...${restType}[]`].join(", ")}]`;
   }

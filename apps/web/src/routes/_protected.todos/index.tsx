@@ -142,10 +142,7 @@ function MyTodosPage() {
       throw toAPIError(response.error);
     }
 
-    const entityId = response.data?.entityId;
-    if (entityId === undefined) {
-      return;
-    }
+    const entityId = response.data.entityId;
 
     await navigate({
       to: "/workspaces/$workspaceId",
@@ -288,7 +285,7 @@ const TaskRow = ({ task }: { task: ValidTask }) => {
     <Link
       className="group hover:bg-muted/50 flex items-center gap-3 rounded-md px-2 py-1.5 text-sm transition-colors"
       onClick={() => {
-        useInspectorStore.getState().openTask(task.id, task.name ?? "");
+        useInspectorStore.getState().openTask(task.id, task.name);
       }}
       params={{ workspaceId: task.workspaceId }}
       to="/workspaces/$workspaceId"

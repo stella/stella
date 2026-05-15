@@ -115,7 +115,7 @@ export const useHyperlinkHandlers = ({
         // Build ranges of consecutive hyperlink-marked nodes
         type Range = { start: number; end: number };
         const ranges: Range[] = [];
-        let currentRange: Range | null = null;
+        const currentRange = { value: null as Range | null };
 
         // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node API
         parent.forEach((node, offset) => {
@@ -130,18 +130,18 @@ export const useHyperlinkHandlers = ({
             : null;
 
           if (hlMark) {
-            if (currentRange) {
-              currentRange.end = nodeEnd;
+            if (currentRange.value !== null) {
+              currentRange.value.end = nodeEnd;
             } else {
-              currentRange = { start: nodeStart, end: nodeEnd };
+              currentRange.value = { start: nodeStart, end: nodeEnd };
             }
-          } else if (currentRange) {
-            ranges.push(currentRange);
-            currentRange = null;
+          } else if (currentRange.value !== null) {
+            ranges.push(currentRange.value);
+            currentRange.value = null;
           }
         });
-        if (currentRange) {
-          ranges.push(currentRange);
+        if (currentRange.value !== null) {
+          ranges.push(currentRange.value);
         }
 
         // Find the range that contains the cursor
@@ -223,7 +223,7 @@ export const useHyperlinkHandlers = ({
     const parentStart = $from.start();
     type Range = { start: number; end: number };
     const ranges: Range[] = [];
-    let currentRange: Range | null = null;
+    const currentRange = { value: null as Range | null };
 
     // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node API
     parent.forEach((node, offset) => {
@@ -237,18 +237,18 @@ export const useHyperlinkHandlers = ({
         : null;
 
       if (hlMark) {
-        if (currentRange) {
-          currentRange.end = nodeEnd;
+        if (currentRange.value !== null) {
+          currentRange.value.end = nodeEnd;
         } else {
-          currentRange = { start: nodeStart, end: nodeEnd };
+          currentRange.value = { start: nodeStart, end: nodeEnd };
         }
-      } else if (currentRange) {
-        ranges.push(currentRange);
-        currentRange = null;
+      } else if (currentRange.value !== null) {
+        ranges.push(currentRange.value);
+        currentRange.value = null;
       }
     });
-    if (currentRange) {
-      ranges.push(currentRange);
+    if (currentRange.value !== null) {
+      ranges.push(currentRange.value);
     }
 
     const cursorPos = $from.pos;

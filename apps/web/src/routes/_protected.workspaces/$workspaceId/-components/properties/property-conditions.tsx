@@ -111,7 +111,7 @@ export const PropertyConditions = ({
   const t = useTranslations();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
 
-  const data = (dependencies ?? [])
+  const data = dependencies
     .map((dependency) => {
       const property = properties.find(
         (p) => p.id === dependency.dependsOnPropertyId,
@@ -129,7 +129,7 @@ export const PropertyConditions = ({
         condition !== null,
     );
 
-  const conditionCount = (dependencies ?? []).filter(
+  const conditionCount = dependencies.filter(
     (dependency) => dependency.condition !== null,
   ).length;
 
@@ -211,15 +211,12 @@ const getOperatorOptions = (
   value: string | string[],
   operatorLabels: Record<ConditionOperator, string>,
 ) => {
-  const operatorKeys: ConditionOperator[] = (() => {
-    if (typeof value === "string") {
-      return STRING_OPERATORS;
-    }
-    if (Array.isArray(value)) {
-      return STRING_ARRAY_OPERATORS;
-    }
-    return [];
-  })();
+  let operatorKeys: ConditionOperator[] = [];
+  if (typeof value === "string") {
+    operatorKeys = STRING_OPERATORS;
+  } else if (Array.isArray(value)) {
+    operatorKeys = STRING_ARRAY_OPERATORS;
+  }
 
   return operatorKeys.map((operator) => ({
     value: operator,

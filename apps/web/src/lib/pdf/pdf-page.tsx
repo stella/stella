@@ -61,8 +61,8 @@ export const PDFPage = ({ pageId, renderOverlay, fallback }: PDFPageProps) => {
         {
           "--total-scale-factor": "var(--scale-factor)",
           backgroundColor: "var(--document-preview-page, var(--background))",
-          width: `round(down, var(--total-scale-factor) * ${page?.originalWidth ?? 0}px, var(--scale-round-x))`,
-          height: `round(down, var(--total-scale-factor) * ${page?.originalHeight ?? 0}px, var(--scale-round-y))`,
+          width: `round(down, var(--total-scale-factor) * ${page.originalWidth}px, var(--scale-round-x))`,
+          height: `round(down, var(--total-scale-factor) * ${page.originalHeight}px, var(--scale-round-y))`,
         } as CSSProperties
       }
     >

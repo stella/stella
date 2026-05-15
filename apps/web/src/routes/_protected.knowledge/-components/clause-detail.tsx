@@ -178,20 +178,12 @@ export const ClauseDetailView = ({
   }, [clauseId, t]);
 
   useEffect(() => {
-    let cancelled = false;
-
     const doLoad = async () => {
       await load();
     };
 
-    if (!cancelled) {
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
-      doLoad();
-    }
-
-    return () => {
-      cancelled = true;
-    };
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    doLoad();
   }, [load]);
 
   const handleDelete = useCallback(async () => {

@@ -285,7 +285,7 @@ function paragraphAttrsToFormatting(
     attrs.borders ||
     attrs.shading ||
     attrs.tabs ||
-    attrs.outlineLevel !== null ||
+    attrs.outlineLevel !== undefined ||
     attrs.contextualSpacing ||
     attrs.spacingExplicit ||
     attrs.bidi;
@@ -340,7 +340,7 @@ function paragraphAttrsToFormatting(
   if (attrs.tabs) {
     f.tabs = attrs.tabs;
   }
-  if (attrs.outlineLevel !== undefined && attrs.outlineLevel !== null) {
+  if (attrs.outlineLevel !== undefined) {
     f.outlineLevel = attrs.outlineLevel;
   }
   if (attrs.contextualSpacing) {
@@ -655,7 +655,7 @@ function getMarksKey(marks: readonly Mark[]): string {
 function createHyperlink(linkMark: Mark): Hyperlink {
   const href = linkMark.attrs["href"] as string;
   // Internal bookmark links use the anchor property in OOXML
-  if (href?.startsWith("#")) {
+  if (href.startsWith("#")) {
     return {
       type: "hyperlink",
       anchor: href.slice(1),
@@ -826,7 +826,7 @@ function createMathFromNode(node: PMNode): MathEquation {
 
   const math: MathEquation = {
     type: "mathEquation",
-    display: (attrs.display as "inline" | "block") || "inline",
+    display: (attrs.display as "inline" | "block" | undefined) ?? "inline",
     ommlXml: attrs.ommlXml,
   };
   if (attrs.plainText) {
@@ -842,7 +842,8 @@ function createInlineSdtFromNode(node: PMNode): InlineSdt {
   const attrs = node.attrs as Record<string, unknown>;
 
   const properties: SdtProperties = {
-    sdtType: (attrs["sdtType"] as SdtProperties["sdtType"]) ?? "richText",
+    sdtType:
+      (attrs["sdtType"] as SdtProperties["sdtType"] | undefined) ?? "richText",
   };
   if (attrs["alias"]) {
     properties.alias = attrs["alias"] as string;
@@ -952,7 +953,7 @@ function createImageRun(node: PMNode): Run {
 
   // Round-trip floating image position (ImagePositionAttrs uses loose strings;
   // cast to the strict OOXML union types for the Document model)
-  if (attrs.position?.horizontal && attrs.position?.vertical) {
+  if (attrs.position?.horizontal && attrs.position.vertical) {
     const pos = attrs.position;
     type HRelativeTo = ImagePosition["horizontal"]["relativeTo"];
     type HAlignment = ImagePosition["horizontal"]["alignment"];
@@ -1428,10 +1429,10 @@ function tableAttrsToFormatting(
     const origWidthVal = orig.width?.value;
     const origWidthType = orig.width?.type;
     if (attrs.width !== origWidthVal || attrs.widthType !== origWidthType) {
-      if (attrs.width !== null || attrs.widthType) {
+      if (attrs.widthType) {
         result.width = {
           value: attrs.width ?? 0,
-          type: (attrs.widthType as "auto" | "dxa" | "pct" | "nil") || "dxa",
+          type: attrs.widthType as "auto" | "dxa" | "pct" | "nil",
         };
       } else {
         delete result.width;
@@ -1449,7 +1450,7 @@ function tableAttrsToFormatting(
   // newly created tables that don't have _originalFormatting)
   const hasFormatting =
     attrs.styleId ||
-    attrs.width !== null ||
+    attrs.width !== undefined ||
     attrs.widthType ||
     attrs.justification ||
     attrs.floating ||
@@ -1467,10 +1468,10 @@ function tableAttrsToFormatting(
 
   // Restore width — handle width=0 with type="auto" (common OOXML pattern)
   let width: TableFormatting["width"];
-  if (attrs.width !== null || attrs.widthType) {
+  if (attrs.widthType) {
     width = {
       value: attrs.width ?? 0,
-      type: (attrs.widthType as "auto" | "dxa" | "pct" | "nil") || "dxa",
+      type: attrs.widthType as "auto" | "dxa" | "pct" | "nil",
     };
   }
 
@@ -1630,10 +1631,10 @@ function tableCellAttrsToFormatting(
       result.gridSpan = attrs.colspan;
     }
     // Width: use !== null to handle width=0 correctly (ProseMirror can set null)
-    if (attrs.width !== null) {
+    if (attrs.width !== undefined) {
       result.width = {
         value: attrs.width ?? 0,
-        type: (attrs.widthType as "auto" | "dxa" | "pct" | "nil") || "dxa",
+        type: attrs.widthType as "auto" | "dxa" | "pct" | "nil",
       };
     }
     if (attrs.verticalAlign !== (orig.verticalAlign ?? undefined)) {
@@ -1674,7 +1675,7 @@ function tableCellAttrsToFormatting(
   const hasFormatting =
     attrs.colspan > 1 ||
     attrs.rowspan > 1 ||
-    attrs.width !== null ||
+    attrs.width !== undefined ||
     attrs.verticalAlign ||
     attrs.backgroundColor ||
     attrs.borders ||
@@ -1689,10 +1690,10 @@ function tableCellAttrsToFormatting(
   if (attrs.colspan > 1) {
     f.gridSpan = attrs.colspan;
   }
-  if (attrs.width !== null) {
+  if (attrs.width !== undefined) {
     f.width = {
       value: attrs.width ?? 0,
-      type: (attrs.widthType as "auto" | "dxa" | "pct" | "nil") || "dxa",
+      type: attrs.widthType as "auto" | "dxa" | "pct" | "nil",
     };
   }
   if (attrs.verticalAlign) {
@@ -1756,16 +1757,16 @@ function convertPMTextBox(node: PMNode): Paragraph {
           left?: number;
           right?: number;
         } = {};
-        if (attrs.marginTop !== null && attrs.marginTop !== undefined) {
+        if (attrs.marginTop !== undefined) {
           m.top = pixelsToEmu(attrs.marginTop);
         }
-        if (attrs.marginBottom !== null && attrs.marginBottom !== undefined) {
+        if (attrs.marginBottom !== undefined) {
           m.bottom = pixelsToEmu(attrs.marginBottom);
         }
-        if (attrs.marginLeft !== null && attrs.marginLeft !== undefined) {
+        if (attrs.marginLeft !== undefined) {
           m.left = pixelsToEmu(attrs.marginLeft);
         }
-        if (attrs.marginRight !== null && attrs.marginRight !== undefined) {
+        if (attrs.marginRight !== undefined) {
           m.right = pixelsToEmu(attrs.marginRight);
         }
         return m;

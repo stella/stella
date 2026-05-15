@@ -70,12 +70,10 @@ const uploadSingleFile = async (
 
     // Attach the raw Response so the queue can extract
     // the Retry-After header on 429 responses.
-    if (response.response !== undefined) {
-      Object.defineProperty(error, "response", {
-        value: response.response,
-        enumerable: false,
-      });
-    }
+    Object.defineProperty(error, "response", {
+      value: response.response,
+      enumerable: false,
+    });
 
     throw error;
   }

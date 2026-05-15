@@ -60,7 +60,7 @@ export const getCategoryVar = (category: string): string => {
   }
   const idx = hashString(category) % OPTION_VARS.length;
   // idx is in [0, length); indexing is safe.
-  return OPTION_VARS[idx] ?? OPTION_VARS[0] ?? "";
+  return OPTION_VARS[idx] ?? "";
 };
 
 /** Inline style for using a category color. */

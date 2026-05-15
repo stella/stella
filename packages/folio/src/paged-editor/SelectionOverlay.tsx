@@ -218,7 +218,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         ))}
 
       {/* Render caret for collapsed selection */}
-      {hasCollapsedSelection && caretPosition && (
+      {hasCollapsedSelection && (
         <Caret
           position={caretPosition}
           color={caretColor}

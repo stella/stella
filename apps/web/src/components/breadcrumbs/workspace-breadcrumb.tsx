@@ -65,7 +65,7 @@ export const WorkspaceBreadcrumb = ({
     );
   }
 
-  const displayName = workspace.name ?? workspaceId;
+  const displayName = workspace.name;
 
   const startEditingName = () => {
     escapedNameRef.current = false;
@@ -235,7 +235,7 @@ export const WorkspaceBreadcrumb = ({
         <button
           className="text-foreground-muted hover:text-muted-foreground cursor-text text-sm"
           onClick={() => {
-            setRefValue(workspace.reference ?? "");
+            setRefValue(workspace.reference);
             setRefError("");
             setIsEditingRef(true);
           }}
@@ -348,7 +348,7 @@ export const WorkspaceBreadcrumb = ({
                     onContextMenu={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      setRefValue(workspace.reference ?? "");
+                      setRefValue(workspace.reference);
                       setRefError("");
                       setIsEditingRef(true);
                     }}

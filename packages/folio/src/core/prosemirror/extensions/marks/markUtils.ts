@@ -319,7 +319,7 @@ export function textFormattingToMarks(
   if (formatting.underline && schema.marks["underline"]) {
     marks.push(
       schema.marks["underline"].create({
-        style: formatting.underline.style || "single",
+        style: formatting.underline.style,
         color: formatting.underline.color,
       }),
     );

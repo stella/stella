@@ -19,10 +19,7 @@ import type {
   TextRun,
   FootnoteContent,
 } from "../layout-engine/types";
-import {
-  DEFAULT_TEXTBOX_MARGINS as TEXTBOX_MARGINS,
-  DEFAULT_TEXTBOX_WIDTH as TEXTBOX_WIDTH,
-} from "../layout-engine/types";
+import { DEFAULT_TEXTBOX_MARGINS as TEXTBOX_MARGINS } from "../layout-engine/types";
 import { footnoteToProseDoc } from "../prosemirror/conversion/toProseDoc";
 import type { Footnote, StyleDefinitions, Theme } from "../types/document";
 import { measureParagraph } from "./measuring";
@@ -206,7 +203,7 @@ function measureFootnoteBlock(block: FlowBlock, contentWidth: number): Measure {
 
     case "textBox": {
       const margins = block.margins ?? TEXTBOX_MARGINS;
-      const width = block.width ?? TEXTBOX_WIDTH;
+      const width = block.width;
       const innerWidth = Math.max(1, width - margins.left - margins.right);
       const innerMeasures = block.content.map((paragraph) =>
         measureParagraph(paragraph, innerWidth),
@@ -500,7 +497,7 @@ export function buildFootnoteContentMap(
   const footnoteById = new Map<number, Footnote>();
 
   for (const fn of footnotes) {
-    if (fn.noteType === "normal" || fn.noteType === null) {
+    if (fn.noteType === "normal") {
       footnoteById.set(fn.id, fn);
     }
   }

@@ -151,8 +151,8 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
 
   const hasExtra =
     sourceFields.length > 0 ||
-    (astMeta?.keywords?.length ?? 0) > 0 ||
-    (astMeta?.statutes?.length ?? 0) > 0;
+    (astMeta?.keywords.length ?? 0) > 0 ||
+    (astMeta?.statutes.length ?? 0) > 0;
 
   const sourceHref = decision.sourceUrl
     ? sanitizeHref(humanizeSourceUrl(decision.sourceUrl))

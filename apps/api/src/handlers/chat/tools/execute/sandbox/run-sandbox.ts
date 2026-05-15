@@ -189,7 +189,7 @@ const serializeJsonValue = (
   message: string,
 ): SerializeJsonValueResult =>
   Result.try({
-    try: () => JSON.stringify(value),
+    try: (): string | undefined => JSON.stringify(value),
     catch: (cause) =>
       new SandboxError({
         reason: "non-serialisable-return",

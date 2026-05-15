@@ -155,9 +155,7 @@ const ClientCell = ({ workspace }: CellProps) => {
 };
 
 const ReferenceCell = ({ workspace }: CellProps) => (
-  <span className="text-muted-foreground font-mono">
-    {workspace.reference ?? "—"}
-  </span>
+  <span className="text-muted-foreground font-mono">{workspace.reference}</span>
 );
 
 const EntityCountCell = ({ workspace }: CellProps) => (

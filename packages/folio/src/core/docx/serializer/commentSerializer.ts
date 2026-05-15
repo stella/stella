@@ -73,7 +73,7 @@ function serializeComment(comment: Comment): string {
   }
 
   let xml = `<w:comment ${attrs.join(" ")}>`;
-  if (comment.content && comment.content.length > 0) {
+  if (comment.content.length > 0) {
     // First paragraph must contain an annotationRef run for Word to link the comment
     // SAFETY: length > 0 verified by condition above
     xml += serializeParagraphWithAnnotationRef(comment.content[0]!);
@@ -94,7 +94,7 @@ function serializeComment(comment: Comment): string {
  * Serialize comments array to comments.xml content
  */
 export function serializeComments(comments: Comment[]): string {
-  if (!comments || comments.length === 0) {
+  if (comments.length === 0) {
     return "";
   }
 
@@ -102,7 +102,7 @@ export function serializeComments(comments: Comment[]): string {
   const topLevel: Comment[] = [];
   const replies: Comment[] = [];
   for (const c of comments) {
-    (c.parentId === null ? topLevel : replies).push(c);
+    (c.parentId === undefined ? topLevel : replies).push(c);
   }
 
   let xml =

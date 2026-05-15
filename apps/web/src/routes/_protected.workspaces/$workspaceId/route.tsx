@@ -77,7 +77,7 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
       // eslint-disable-next-line no-console
       console.trace(
         "[stella] notFoundComponent triggered — redirecting to /workspaces. Current URL:",
-        globalThis.location?.href,
+        globalThis.location.href,
       );
     }
     return <Navigate replace to="/workspaces" />;

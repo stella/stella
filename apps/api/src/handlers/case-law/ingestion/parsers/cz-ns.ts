@@ -768,13 +768,11 @@ const mergeBlocks = (
     // other section headings — already detected by the
     // classifier via SECTION_HEADING_RE which handles
     // both "Odůvodnění" and "O d ů v o d n ě n í").
-    if (inHolding) {
-      if (block.type === "heading") {
-        break;
-      }
-      if (block.type === "paragraph" && !block.role) {
-        block.role = "holding";
-      }
+    if (block.type === "heading") {
+      break;
+    }
+    if (block.type === "paragraph" && !block.role) {
+      block.role = "holding";
     }
   }
 

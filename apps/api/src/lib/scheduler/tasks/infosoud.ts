@@ -34,10 +34,6 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
     total += trackedCases.length;
 
     for (const trackedCase of trackedCases) {
-      if (signal.aborted) {
-        break;
-      }
-
       try {
         const lookupResult = await client.searchCaseWithHearings({
           courtCode: trackedCase.courtCode,
@@ -48,10 +44,6 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
           lookupResult.case,
           lookupResult.hearings.udalosti,
         );
-
-        if (signal.aborted) {
-          break;
-        }
 
         if (agendaItems.length > LIMITS.infoSoudAgendaImportItemsMax) {
           await markTrackedCaseFailed({
@@ -93,10 +85,6 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
 
         synced += 1;
       } catch (error: unknown) {
-        if (signal.aborted) {
-          break;
-        }
-
         await markTrackedCaseFailed({
           error: errorTag(error),
           trackedCaseId: trackedCase.id,

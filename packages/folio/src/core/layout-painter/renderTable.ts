@@ -89,7 +89,7 @@ function extractCellFloatingImages(
       // Use actual measured height for Y tracking
       const blockMeasure = cellMeasure.blocks[blockIndex];
       if (blockMeasure && blockMeasure.kind === "table") {
-        paragraphY += (blockMeasure as TableMeasure).totalHeight ?? 0;
+        paragraphY += (blockMeasure as TableMeasure).totalHeight;
       }
       continue;
     }
@@ -349,7 +349,7 @@ function renderCellContent(
       );
       nestedTableEl.style.position = "relative";
       contentEl.append(nestedTableEl);
-      cumulativeY += (measure as TableMeasure).totalHeight ?? 0;
+      cumulativeY += (measure as TableMeasure).totalHeight;
     }
   }
 
@@ -397,7 +397,7 @@ function renderNestedTable(
   let yPos = 0;
   for (const i_item of measure.rows) {
     rowYPositions.push(yPos);
-    yPos += i_item?.height ?? 0;
+    yPos += i_item.height;
   }
   rowYPositions.push(yPos);
 
@@ -554,16 +554,16 @@ function renderTableCell(
 
   // Store PM positions for selection
   if (cell.blocks.length > 0) {
-    const firstBlock = cell.blocks[0];
+    const firstBlock = cell.blocks.at(0);
     const lastBlock = cell.blocks.at(-1);
-    if (
-      firstBlock &&
-      "pmStart" in firstBlock &&
-      firstBlock.pmStart !== undefined
-    ) {
-      cellEl.dataset["pmStart"] = String(firstBlock.pmStart);
+    const pmStart =
+      firstBlock !== undefined && "pmStart" in firstBlock
+        ? firstBlock.pmStart
+        : undefined;
+    if (pmStart !== undefined) {
+      cellEl.dataset["pmStart"] = String(pmStart);
     }
-    if (lastBlock && "pmEnd" in lastBlock && lastBlock.pmEnd !== undefined) {
+    if (lastBlock && "pmEnd" in lastBlock) {
       cellEl.dataset["pmEnd"] = String(lastBlock.pmEnd);
     }
   }
@@ -793,7 +793,7 @@ export function renderTableFragment(
   let yPos = 0;
   for (const i_item of measure.rows) {
     rowYPositions.push(yPos);
-    yPos += i_item?.height ?? 0;
+    yPos += i_item.height;
   }
   rowYPositions.push(yPos); // Add final position for height calculation
 

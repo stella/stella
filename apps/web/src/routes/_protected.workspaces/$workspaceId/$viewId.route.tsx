@@ -62,7 +62,7 @@ export const Route = createFileRoute(
         // eslint-disable-next-line no-console
         console.trace(
           `[stella] beforeLoad rejected viewId="${params.viewId}" — redirecting. URL:`,
-          globalThis.location?.href,
+          globalThis.location.href,
         );
       }
       throw redirect({
@@ -311,8 +311,8 @@ function VisibleFieldEntityViewContent({
 
   useSyncTable({
     workspaceId,
-    filters: activeView.layout.filters ?? [],
-    sorts: activeView.layout.sorts ?? [],
+    filters: activeView.layout.filters,
+    sorts: activeView.layout.sorts,
     page,
     fieldMode: "visible",
     fieldIds,
@@ -347,8 +347,8 @@ function FullEntityViewContent({
 }: EntityViewContentProps) {
   useSyncTable({
     workspaceId,
-    filters: activeView.layout.filters ?? [],
-    sorts: activeView.layout.sorts ?? [],
+    filters: activeView.layout.filters,
+    sorts: activeView.layout.sorts,
     page,
   });
 

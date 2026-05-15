@@ -71,7 +71,7 @@ export const MatterMetadataPanel = ({
   useEffect(() => {
     escapedNameRef.current = false;
     setNameValue(workspace.name);
-    setReferenceValue(workspace.reference ?? "");
+    setReferenceValue(workspace.reference);
     setReferenceError("");
   }, [workspace.name, workspace.reference]);
 

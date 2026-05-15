@@ -346,7 +346,7 @@ const tableRowSpec: NodeSpec = {
     const attrs = node.attrs as TableRowAttrs;
     const domAttrs: Record<string, string> = {};
 
-    if (attrs.height !== undefined && attrs.height !== null) {
+    if (attrs.height !== undefined) {
       const heightPx = Math.round((attrs.height / 20) * 1.333);
       domAttrs["style"] = `height: ${heightPx}px`;
     }
@@ -1294,12 +1294,11 @@ export const TablePluginExtension = createExtension({
 
             if (
               context.columnIndex !== undefined &&
-              context.columnIndex !== null &&
               colIdx <= context.columnIndex
             ) {
               const paragraph = nodeTypeParagraph.create();
               const cellAttrs = buildCellAttrsFromTemplate(
-                row.child(row.childCount - 1) ?? null,
+                row.child(row.childCount - 1),
                 { colspan: 1, rowspan: 1 },
               );
               cellAttrs["width"] = newColWidthPercent;
@@ -1333,7 +1332,7 @@ export const TablePluginExtension = createExtension({
           }
 
           // Update table columnWidths so full-width tables resize correctly.
-          const colCount = firstRow?.childCount ?? newColumnCount;
+          const colCount = firstRow.childCount;
           const tableWidthTwips =
             (updatedTable.attrs["width"] as number) || 9360;
           const colWidthTwips = Math.floor(
@@ -1376,7 +1375,7 @@ export const TablePluginExtension = createExtension({
           if (row.type.name === "tableRow") {
             let cellPos = rowPos + 1;
             let colIdx = 0;
-            let inserted = false;
+            let insertedCount = 0;
 
             // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
             row.forEach((cell) => {
@@ -1384,9 +1383,8 @@ export const TablePluginExtension = createExtension({
               colIdx += Number(cell.attrs["colspan"]) || 1;
 
               if (
-                !inserted &&
+                insertedCount === 0 &&
                 context.columnIndex !== undefined &&
-                context.columnIndex !== null &&
                 colIdx > context.columnIndex
               ) {
                 const paragraph = nodeTypeParagraph.create();
@@ -1398,14 +1396,14 @@ export const TablePluginExtension = createExtension({
                 cellAttrs["widthType"] = "pct";
                 const newCell = nodeTypeTableCell.create(cellAttrs, paragraph);
                 tr = tr.insert(cellPos, newCell);
-                inserted = true;
+                insertedCount += 1;
               }
             });
 
-            if (!inserted) {
+            if (insertedCount === 0) {
               const paragraph = nodeTypeParagraph.create();
               const cellAttrs = buildCellAttrsFromTemplate(
-                row.child(row.childCount - 1) ?? null,
+                row.child(row.childCount - 1),
                 { colspan: 1, rowspan: 1 },
               );
               cellAttrs["width"] = newColWidthPercent;
@@ -1439,7 +1437,7 @@ export const TablePluginExtension = createExtension({
           }
 
           // Update table columnWidths so full-width tables resize correctly.
-          const colCount = firstRow?.childCount ?? newColumnCount;
+          const colCount = firstRow.childCount;
           const tableWidthTwips =
             (updatedTable.attrs["width"] as number) || 9360;
           const colWidthTwips = Math.floor(
@@ -1493,7 +1491,6 @@ export const TablePluginExtension = createExtension({
 
               if (
                 context.columnIndex !== undefined &&
-                context.columnIndex !== null &&
                 colIdx <= context.columnIndex &&
                 context.columnIndex < colIdx + cellColspan
               ) {
@@ -1533,7 +1530,7 @@ export const TablePluginExtension = createExtension({
           }
 
           // Update table columnWidths to match new column count.
-          const colCount = firstRow?.childCount ?? newColumnCount;
+          const colCount = firstRow.childCount;
           const tableWidthTwips =
             (updatedTable.attrs["width"] as number) || 9360;
           const colWidthTwips = Math.floor(
@@ -1867,8 +1864,7 @@ export const TablePluginExtension = createExtension({
 
             // Update target cell
             const attrs = getAttrs(pos, info.node);
-            const existingBorders =
-              (attrs["borders"] as Record<string, unknown>) ?? {};
+            const existingBorders = attrs["borders"] as Record<string, unknown>;
             setAttrs(pos, {
               ...attrs,
               borders: { ...existingBorders, ...cellBorders },
@@ -1884,8 +1880,10 @@ export const TablePluginExtension = createExtension({
                   continue;
                 }
                 const adjAttrs = getAttrs(adjPos, adj.node);
-                const adjBorders =
-                  (adjAttrs["borders"] as Record<string, unknown>) ?? {};
+                const adjBorders = adjAttrs["borders"] as Record<
+                  string,
+                  unknown
+                >;
                 setAttrs(adjPos, {
                   ...adjAttrs,
                   borders: { ...adjBorders, bottom: cellBorders["top"] },
@@ -1901,8 +1899,10 @@ export const TablePluginExtension = createExtension({
                   continue;
                 }
                 const adjAttrs = getAttrs(adjPos, adj.node);
-                const adjBorders =
-                  (adjAttrs["borders"] as Record<string, unknown>) ?? {};
+                const adjBorders = adjAttrs["borders"] as Record<
+                  string,
+                  unknown
+                >;
                 setAttrs(adjPos, {
                   ...adjAttrs,
                   borders: { ...adjBorders, top: cellBorders["bottom"] },
@@ -1918,8 +1918,10 @@ export const TablePluginExtension = createExtension({
                   continue;
                 }
                 const adjAttrs = getAttrs(adjPos, adj.node);
-                const adjBorders =
-                  (adjAttrs["borders"] as Record<string, unknown>) ?? {};
+                const adjBorders = adjAttrs["borders"] as Record<
+                  string,
+                  unknown
+                >;
                 setAttrs(adjPos, {
                   ...adjAttrs,
                   borders: { ...adjBorders, right: cellBorders["left"] },
@@ -1937,8 +1939,10 @@ export const TablePluginExtension = createExtension({
                   continue;
                 }
                 const adjAttrs = getAttrs(adjPos, adj.node);
-                const adjBorders =
-                  (adjAttrs["borders"] as Record<string, unknown>) ?? {};
+                const adjBorders = adjAttrs["borders"] as Record<
+                  string,
+                  unknown
+                >;
                 setAttrs(adjPos, {
                   ...adjAttrs,
                   borders: { ...adjBorders, left: cellBorders["right"] },
@@ -2033,8 +2037,7 @@ export const TablePluginExtension = createExtension({
           for (const { pos, node } of cells) {
             const info = cellByPos.get(pos);
             const attrs = getAttrs(pos, node);
-            const currentBorders =
-              (attrs["borders"] as Record<string, unknown>) ?? {};
+            const currentBorders = attrs["borders"] as Record<string, unknown>;
 
             const sides = side === "all" ? allSides : [side];
             // When clearOthers is true, start with all sides cleared (preset behavior)
@@ -2072,8 +2075,10 @@ export const TablePluginExtension = createExtension({
                     continue;
                   }
                   const adjAttrs = getAttrs(adjPos, adjInfo.node);
-                  const adjBorders =
-                    (adjAttrs["borders"] as Record<string, unknown>) ?? {};
+                  const adjBorders = adjAttrs["borders"] as Record<
+                    string,
+                    unknown
+                  >;
                   setAttrs(adjPos, {
                     ...adjAttrs,
                     borders: { ...adjBorders, [adj.adjSide]: syncValue },
@@ -2675,9 +2680,10 @@ export const TablePluginExtension = createExtension({
           for (const { pos, node } of cells) {
             const info = cellByPos.get(pos);
             const attrs = getAttrs(pos, node);
-            const currentBorders =
-              (attrs["borders"] as Record<string, Record<string, unknown>>) ??
-              {};
+            const currentBorders = attrs["borders"] as Record<
+              string,
+              Record<string, unknown>
+            >;
             const newBorders: Record<string, unknown> = {};
 
             for (const side of ["top", "bottom", "left", "right"] as const) {
@@ -2707,8 +2713,10 @@ export const TablePluginExtension = createExtension({
                     continue;
                   }
                   const adjAttrs = getAttrs(adjPos, adjInfo.node);
-                  const adjBorders =
-                    (adjAttrs["borders"] as Record<string, unknown>) ?? {};
+                  const adjBorders = adjAttrs["borders"] as Record<
+                    string,
+                    unknown
+                  >;
                   setAttrs(adjPos, {
                     ...adjAttrs,
                     borders: { ...adjBorders, [adj.adjSide]: borderVal },
@@ -2771,9 +2779,10 @@ export const TablePluginExtension = createExtension({
           for (const { pos, node } of cells) {
             const info = cellByPos.get(pos);
             const attrs = getAttrs(pos, node);
-            const currentBorders =
-              (attrs["borders"] as Record<string, Record<string, unknown>>) ??
-              {};
+            const currentBorders = attrs["borders"] as Record<
+              string,
+              Record<string, unknown>
+            >;
             const newBorders: Record<string, unknown> = {};
 
             for (const side of ["top", "bottom", "left", "right"] as const) {
@@ -2803,8 +2812,10 @@ export const TablePluginExtension = createExtension({
                     continue;
                   }
                   const adjAttrs = getAttrs(adjPos, adjInfo.node);
-                  const adjBorders =
-                    (adjAttrs["borders"] as Record<string, unknown>) ?? {};
+                  const adjBorders = adjAttrs["borders"] as Record<
+                    string,
+                    unknown
+                  >;
                   setAttrs(adjPos, {
                     ...adjAttrs,
                     borders: { ...adjBorders, [adj.adjSide]: borderVal },

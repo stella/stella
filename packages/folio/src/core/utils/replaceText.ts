@@ -108,17 +108,12 @@ function getParagraphByIndex(
   paragraphIndex: number,
 ): Paragraph | null {
   let currentIndex = 0;
-  let found: Paragraph | null = null;
 
-  const walkBlocks = (blocks: readonly BlockContent[]): void => {
-    if (found) {
-      return;
-    }
+  const walkBlocks = (blocks: readonly BlockContent[]): Paragraph | null => {
     for (const block of blocks) {
       if (block.type === "paragraph") {
         if (currentIndex === paragraphIndex) {
-          found = block;
-          return;
+          return block;
         }
         currentIndex++;
         continue;
@@ -127,23 +122,24 @@ function getParagraphByIndex(
       if (block.type === "table") {
         for (const row of block.rows) {
           for (const cell of row.cells) {
-            walkBlocks(cell.content);
-            if (found) {
-              return;
+            const found = walkBlocks(cell.content);
+            if (found !== null) {
+              return found;
             }
           }
         }
         continue;
       }
 
-      if (block.type === "blockSdt") {
-        walkBlocks(block.content);
+      const found = walkBlocks(block.content);
+      if (found !== null) {
+        return found;
       }
     }
+    return null;
   };
 
-  walkBlocks(body.content);
-  return found;
+  return walkBlocks(body.content);
 }
 
 function getParagraphText(paragraph: Paragraph): string {

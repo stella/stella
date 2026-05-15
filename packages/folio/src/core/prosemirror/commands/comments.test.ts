@@ -35,9 +35,6 @@ const makeStateWithMarks = () => {
   // mark untouched; the previous resolveChange ignored the
   // revision id and processed every insertion mark in the range.
   const insertion = schema.marks["insertion"];
-  if (!insertion) {
-    throw new Error("insertion mark missing");
-  }
   return EditorState.create({
     schema,
     doc: schema.node("doc", null, [

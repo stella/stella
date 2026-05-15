@@ -105,8 +105,7 @@ function resolveTextRangeInParagraph({
   endOffset,
 }: ResolveTextRangeInParagraphOptions): FindMatchRange | null {
   let textOffset = 0;
-  let from: number | null = null;
-  let to: number | null = null;
+  const range = { from: null as number | null, to: null as number | null };
 
   paragraph.descendants((node, pos) => {
     const tokenLength = getSearchTextTokenLength(node);
@@ -118,22 +117,26 @@ function resolveTextRangeInParagraph({
     const textEnd = textStart + tokenLength;
     const nodeStart = paragraphPos + 1 + pos;
 
-    if (from === null && startOffset >= textStart && startOffset <= textEnd) {
-      from = nodeStart + Math.min(startOffset - textStart, node.nodeSize);
+    if (
+      range.from === null &&
+      startOffset >= textStart &&
+      startOffset <= textEnd
+    ) {
+      range.from = nodeStart + Math.min(startOffset - textStart, node.nodeSize);
     }
-    if (to === null && endOffset >= textStart && endOffset <= textEnd) {
-      to = nodeStart + Math.min(endOffset - textStart, node.nodeSize);
+    if (range.to === null && endOffset >= textStart && endOffset <= textEnd) {
+      range.to = nodeStart + Math.min(endOffset - textStart, node.nodeSize);
     }
 
     textOffset = textEnd;
-    return to === null;
+    return range.to === null;
   });
 
-  if (from === null || to === null || from >= to) {
+  if (range.from === null || range.to === null || range.from >= range.to) {
     return null;
   }
 
-  return { from, to };
+  return { from: range.from, to: range.to };
 }
 
 function getSearchTextTokenLength(node: ProseMirrorNode): number {

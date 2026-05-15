@@ -972,9 +972,9 @@ describe("Selective save with headers/footers", () => {
       throw new Error("Expected headers or footers map");
     }
     for (const [, hf] of map.entries()) {
-      if (hf.content && hf.content.length > 0) {
+      if (hf.content.length > 0) {
         const para = hf.content.find((b) => b.type === "paragraph");
-        if (para && para.type === "paragraph") {
+        if (para) {
           para.content.push({
             type: "run",
             formatting: {},
@@ -1251,10 +1251,7 @@ describe("Selective save edge cases", () => {
 
       // Verify an unedited paragraph is unchanged
       const uneditedPara = paragraphs.find(
-        (p) =>
-          p.paraId !== undefined &&
-          p.paraId !== null &&
-          !editIds.includes(p.paraId),
+        (p) => p.paraId !== undefined && !editIds.includes(p.paraId),
       );
       if (uneditedPara?.paraId) {
         const originalXml = await getDocumentXml(buffer);

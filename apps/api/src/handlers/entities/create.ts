@@ -91,7 +91,7 @@ const createEntitiesHandler = async function* ({
 }: CreateEntitiesHandlerProps) {
   const parentId = body.parentId ?? null;
   const kind = body.kind;
-  const name = body.name?.trim() ?? "";
+  const name = body.name.trim();
 
   // `entities.name` is the canonical display label and is non-null
   // for every kind. Reject empty names here so the row never

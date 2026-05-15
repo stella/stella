@@ -107,7 +107,7 @@ function htmlToPromptText(html: string): string {
       mention instanceof HTMLElement ? (mention.dataset["label"] ?? "") : "";
     mention.replaceWith(document.createTextNode(`@${label}`));
   }
-  return (container.textContent ?? "").trim();
+  return container.textContent.trim();
 }
 
 function writeStoredApplyMode(mode: AISuggestionApplyMode): void {
@@ -299,15 +299,12 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
     (m) => m.role === "assistant" && m.status === "loading",
   );
 
-  const status: FileAIChatStatus = (() => {
-    if (generating) {
-      return "generating";
-    }
-    if (pendingCount > 0) {
-      return "review-ready";
-    }
-    return "idle";
-  })();
+  let status: FileAIChatStatus = "idle";
+  if (generating) {
+    status = "generating";
+  } else if (pendingCount > 0) {
+    status = "review-ready";
+  }
 
   // ---- decoration push (DOCX only) ----------------------------------------
 
@@ -358,12 +355,12 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
     }
     const doc = editorView.state.doc;
     setMessages((prev) => {
-      let changed = false;
+      const messagesState = { changed: false };
       const next = prev.map<ThreadMessage>((m) => {
         if (m.role !== "assistant" || m.suggestions.length === 0) {
           return m;
         }
-        let suggestionsChanged = false;
+        const suggestionsState = { changed: false };
         const updated = m.suggestions.map((s): AISuggestion => {
           if (s.status !== "pending" && s.status !== "stale") {
             return s;
@@ -374,16 +371,16 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
           if (nextStatus === s.status) {
             return s;
           }
-          suggestionsChanged = true;
+          suggestionsState.changed = true;
           return { ...s, status: nextStatus };
         });
-        if (!suggestionsChanged) {
+        if (!suggestionsState.changed) {
           return m;
         }
-        changed = true;
+        messagesState.changed = true;
         return { ...m, suggestions: updated };
       });
-      return changed ? next : prev;
+      return messagesState.changed ? next : prev;
     });
   }, [editorView, allSuggestions, editorView?.state.doc]);
 
@@ -465,17 +462,13 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
 
       const token = ++generationToken.current;
 
-      const fullPrompt = (() => {
-        if (input.pastedText) {
-          return (() => {
-            if (promptText.length === 0) {
-              return input.pastedText;
-            }
-            return `${promptText}\n\n${input.pastedText}`;
-          })();
-        }
-        return promptText;
-      })();
+      let fullPrompt = promptText;
+      if (input.pastedText) {
+        fullPrompt =
+          promptText.length === 0
+            ? input.pastedText
+            : `${promptText}\n\n${input.pastedText}`;
+      }
 
       const docText = editorView
         ? editorView.state.doc.textBetween(
@@ -609,19 +602,19 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
           if (m.role !== "assistant" || m.suggestions.length === 0) {
             return m;
           }
-          let changed = false;
+          const suggestionState = { changed: false };
           const next = m.suggestions.map((s): AISuggestion => {
             if (result.applied.includes(s.id)) {
-              changed = true;
+              suggestionState.changed = true;
               return { ...s, status: "accepted" };
             }
             if (result.stale.includes(s.id)) {
-              changed = true;
+              suggestionState.changed = true;
               return { ...s, status: "stale" };
             }
             return s;
           });
-          return changed ? { ...m, suggestions: next } : m;
+          return suggestionState.changed ? { ...m, suggestions: next } : m;
         }),
       );
     },
@@ -1309,7 +1302,7 @@ export function PromptBar(props: PromptBarProps) {
               disabled={showStop ? false : submitDisabled || !canSubmit}
               onClick={() => {
                 if (showStop) {
-                  onStop?.();
+                  onStop();
                   return;
                 }
                 void submitDraft();
@@ -1560,25 +1553,22 @@ function ThreadPanel(props: ThreadPanelProps) {
         )}
         style={{ scrollbarGutter: "stable" }}
       >
-        {(() => {
-          if (messages.length === 0 && !isFloating) {
-            return (
-              // Standalone empty state. Floating mode never reaches this
-              // branch because the thread doesn't render until the first
-              // message arrives; standalone always renders, so we need a
-              // gentle landing surface instead of a blank canvas.
-              <div className="text-foreground-strong-muted m-auto flex max-w-[28ch] flex-col items-center gap-1 text-center text-[12px] text-balance">
-                <span className="text-foreground-strong-muted text-[13px] font-medium">
-                  Start a chat
-                </span>
-                <span>
-                  Ask about your matter, draft a snippet, or request a quick
-                  research note.
-                </span>
-              </div>
-            );
-          }
-          return messages.map((m) =>
+        {messages.length === 0 && !isFloating ? (
+          // Standalone empty state. Floating mode never reaches this
+          // branch because the thread doesn't render until the first
+          // message arrives; standalone always renders, so we need a
+          // gentle landing surface instead of a blank canvas.
+          <div className="text-foreground-strong-muted m-auto flex max-w-[28ch] flex-col items-center gap-1 text-center text-[12px] text-balance">
+            <span className="text-foreground-strong-muted text-[13px] font-medium">
+              Start a chat
+            </span>
+            <span>
+              Ask about your matter, draft a snippet, or request a quick
+              research note.
+            </span>
+          </div>
+        ) : (
+          messages.map((m) =>
             m.role === "user" ? (
               <UserBubble key={m.id} message={m} />
             ) : (
@@ -1596,8 +1586,8 @@ function ThreadPanel(props: ThreadPanelProps) {
                 onActivateCitation={onActivateCitation}
               />
             ),
-          );
-        })()}
+          )
+        )}
       </div>
     </div>
   );

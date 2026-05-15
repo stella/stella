@@ -300,7 +300,7 @@ export const KanbanCard = ({
     );
   }
 
-  if (navigable && file !== undefined) {
+  if (navigable) {
     return (
       <div className="group/card" ref={dragRef}>
         <div
@@ -532,15 +532,11 @@ const KanbanCardFieldValue = ({
     ));
   }
 
-  if (content.type === "clip") {
-    return (
-      <span className="text-muted-foreground bg-muted/60 truncate rounded px-1.5 py-0.5 text-xs leading-none">
-        {content.citation ?? content.url}
-      </span>
-    );
-  }
-
-  return null;
+  return (
+    <span className="text-muted-foreground bg-muted/60 truncate rounded px-1.5 py-0.5 text-xs leading-none">
+      {content.citation ?? content.url}
+    </span>
+  );
 };
 
 const KanbanSelectChip = ({

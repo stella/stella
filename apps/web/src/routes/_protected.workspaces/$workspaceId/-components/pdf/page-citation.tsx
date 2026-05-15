@@ -54,7 +54,7 @@ export const PageCitation = ({
   const highlightPadding = originalWidth * HIGHLIGHT_PADDING_RATIO * scale;
 
   const topBoundingBox = boundingBoxes
-    ?.toSorted((a, b) => a.yMin - b.yMin)
+    .toSorted((a, b) => a.yMin - b.yMin)
     .at(0);
   const topBoundingBoxKey = topBoundingBox
     ? getBoundingBoxKey(topBoundingBox)
@@ -83,7 +83,7 @@ export const PageCitation = ({
           </feComponentTransfer>
         </filter>
       </svg>
-      {boundingBoxes?.map((bBox) => {
+      {boundingBoxes.map((bBox) => {
         const { xMin, yMin, xMax, yMax } = bBox;
         const width = (xMax - xMin) * scale;
         const height = (yMax - yMin) * scale;

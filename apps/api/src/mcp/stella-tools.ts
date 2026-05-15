@@ -232,7 +232,7 @@ const handleListMattersTool: McpToolHandler = async ({ args, context }) => {
       name: matter.name,
       reference: matter.reference,
       status: matter.status,
-      lastActivityAt: matter.lastActivityAt?.toISOString() ?? null,
+      lastActivityAt: matter.lastActivityAt.toISOString(),
       createdAt: matter.createdAt.toISOString(),
     })),
     totalCountLimit: LIMITS.workspacesCount,
@@ -272,11 +272,7 @@ const handleGetMatterOverviewTool: McpToolHandler = async ({
     }),
   ]);
 
-  if (
-    typeof workspace !== "object" ||
-    workspace === null ||
-    !("name" in workspace)
-  ) {
+  if (typeof workspace !== "object" || !("name" in workspace)) {
     return errorResult("Matter not found or not accessible");
   }
 
@@ -436,10 +432,7 @@ type SearchCaseLawSuccess = Extract<
 const isSearchCaseLawSuccess = (
   value: Awaited<ReturnType<typeof searchDecisionsHandler>>,
 ): value is SearchCaseLawSuccess =>
-  typeof value === "object" &&
-  value !== null &&
-  "hits" in value &&
-  Array.isArray(value.hits);
+  typeof value === "object" && "hits" in value && Array.isArray(value.hits);
 
 type ReadCaseLawDecisionSuccess = Extract<
   Awaited<ReturnType<typeof readDecisionHandler>>,
@@ -450,7 +443,6 @@ const isReadCaseLawDecisionSuccess = (
   value: Awaited<ReturnType<typeof readDecisionHandler>>,
 ): value is ReadCaseLawDecisionSuccess =>
   typeof value === "object" &&
-  value !== null &&
   "caseNumber" in value &&
   typeof value.caseNumber === "string" &&
   "citationsFrom" in value &&
@@ -532,7 +524,7 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
     charCount: row.charCount,
     entityId,
     kind: row.entity.kind,
-    name: row.entity.name ?? null,
+    name: row.entity.name,
     text: truncated ? plaintext.slice(0, MCP_CONTENT_MAX_CHARS) : plaintext,
     truncated,
     workspaceId: row.entity.workspaceId,

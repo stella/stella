@@ -60,21 +60,17 @@ class FakeBroadcastChannel {
   }
 
   addEventListener(
-    type: "message",
+    _type: "message",
     listener: (event: MessageEvent<unknown>) => void,
   ) {
-    if (type === "message") {
-      this.listeners.add(listener);
-    }
+    this.listeners.add(listener);
   }
 
   removeEventListener(
-    type: "message",
+    _type: "message",
     listener: (event: MessageEvent<unknown>) => void,
   ) {
-    if (type === "message") {
-      this.listeners.delete(listener);
-    }
+    this.listeners.delete(listener);
   }
 
   private dispatchToPeers(message: unknown) {

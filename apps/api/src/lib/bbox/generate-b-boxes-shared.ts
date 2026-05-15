@@ -207,12 +207,7 @@ export const prepareJustificationData = async (
     const tool = data?.field?.property?.tool;
     const content = data?.content;
 
-    if (
-      !fieldContent ||
-      !content ||
-      tool?.type !== "ai-model" ||
-      !data?.field
-    ) {
+    if (!fieldContent || !content || tool?.type !== "ai-model" || !data.field) {
       return Result.err(
         new JustificationDataError({
           justificationId,

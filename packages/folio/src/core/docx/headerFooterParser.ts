@@ -195,9 +195,6 @@ export function parseHeader(
   }
 
   const doc = parseXml(headerXml);
-  if (!doc) {
-    return result;
-  }
 
   // Find the root header element (w:hdr)
   const rootElement = doc.elements?.find(
@@ -255,9 +252,6 @@ export function parseFooter(
   }
 
   const doc = parseXml(footerXml);
-  if (!doc) {
-    return result;
-  }
 
   // Find the root footer element (w:ftr)
   const rootElement = doc.elements?.find(
@@ -423,7 +417,7 @@ export function getHeaderFooterText(hf: HeaderFooter): string {
         }
       }
       texts.push(paraTexts.join(""));
-    } else if (item.type === "table") {
+    } else {
       // Extract text from table cells
       for (const row of item.rows) {
         for (const cell of row.cells) {
@@ -463,7 +457,7 @@ export function isEmptyHeaderFooter(hf: HeaderFooter): boolean {
     if (item.type === "table") {
       return false;
     }
-    if (item.type === "paragraph" && item.content.length > 0) {
+    if (item.content.length > 0) {
       // Check if paragraph has any actual content
       for (const content of item.content) {
         if (content.type !== "run") {

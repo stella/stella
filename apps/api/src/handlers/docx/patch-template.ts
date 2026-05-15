@@ -212,7 +212,6 @@ const isPatchableValue = (value: TemplateDataValue | undefined): boolean => {
   }
   if (
     typeof value === "object" &&
-    value !== null &&
     !Array.isArray(value) &&
     "paragraphs" in value
   ) {

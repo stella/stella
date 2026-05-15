@@ -3877,9 +3877,7 @@ export async function seed(organizationId?: string, userId?: string) {
         bankAccounts: "bankAccounts" in c ? c.bankAccounts : undefined,
         billingAddress: "billingAddress" in c ? c.billingAddress : undefined,
         defaultHourlyRate:
-          "defaultHourlyRate" in c && c.defaultHourlyRate !== undefined
-            ? cents(c.defaultHourlyRate)
-            : undefined,
+          "defaultHourlyRate" in c ? cents(c.defaultHourlyRate) : undefined,
         currency: "currency" in c ? c.currency : undefined,
         paymentTermDays: "paymentTermDays" in c ? c.paymentTermDays : undefined,
         originatingAttorneyId: USER_ID,
@@ -3901,10 +3899,7 @@ export async function seed(organizationId?: string, userId?: string) {
         registrationNumber: c.registrationNumber,
         taxId: c.taxId,
         billingAddress: c.billingAddress,
-        defaultHourlyRate:
-          c.defaultHourlyRate === null || c.defaultHourlyRate === undefined
-            ? c.defaultHourlyRate
-            : cents(c.defaultHourlyRate),
+        defaultHourlyRate: cents(c.defaultHourlyRate),
         currency: c.currency,
         paymentTermDays: c.paymentTermDays,
         emails: c.emails,

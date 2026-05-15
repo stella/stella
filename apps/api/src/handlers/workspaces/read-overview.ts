@@ -110,7 +110,7 @@ export const readOverviewHandler = async ({
     // icon and click-to-open works.
     const primaryField =
       cv.fields.find((f) => f.content.type === "file") ?? cv.fields.at(0);
-    let name = e.name ?? "Untitled";
+    let name = e.name;
     let mimeType: string | null = null;
     let fieldId: string | null = null;
     let propertyId: string | null = null;

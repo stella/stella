@@ -552,7 +552,7 @@ function SidebarMenuButton({
     />
   );
 
-  if (tooltip === undefined || tooltip === null) {
+  if (tooltip === undefined) {
     return button;
   }
 

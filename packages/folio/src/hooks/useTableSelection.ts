@@ -215,9 +215,7 @@ export function useTableSelection({
         newDoc = updateTableInDocument(doc, state.tableIndex, newTable);
         onChange?.(newDoc);
 
-        if (newDoc) {
-          handleCellClick(state.tableIndex, newRowIndex, newColumnIndex);
-        }
+        handleCellClick(state.tableIndex, newRowIndex, newColumnIndex);
       }
     },
     [doc, state, onChange, clearSelection, handleCellClick],

@@ -103,7 +103,7 @@ const PropertyCell = ({
   }
 
   // AI-model property: click opens peek PDF with justification
-  if (property.tool.type === "ai-model" && field !== undefined) {
+  if (field !== undefined) {
     const firstFile = getFirstFile(entity);
     const justFieldId = justification?.fileFieldIds.at(0);
     const fileFieldId = justFieldId ?? firstFile?.fieldId;

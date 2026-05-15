@@ -11,7 +11,7 @@ type AuthWithOAuthServerConfig = ReturnType<typeof getAuth> & {
 const hasOAuthServerConfig = (
   auth: ReturnType<typeof getAuth>,
 ): auth is AuthWithOAuthServerConfig => {
-  if (typeof auth !== "object" || auth === null) {
+  if (typeof auth !== "object") {
     return false;
   }
 
@@ -20,7 +20,7 @@ const hasOAuthServerConfig = (
   }
 
   const { api } = auth;
-  if (typeof api !== "object" || api === null) {
+  if (typeof api !== "object") {
     return false;
   }
 

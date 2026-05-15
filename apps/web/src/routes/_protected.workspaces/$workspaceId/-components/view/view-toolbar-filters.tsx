@@ -341,9 +341,7 @@ const BuiltinFilterChip = ({
           value={String(filter.value ?? "")}
         >
           <FilterSelectTrigger>
-            {filter.value !== "" && filter.value !== null
-              ? resolveLabel(String(filter.value))
-              : "…"}
+            {filter.value !== "" ? resolveLabel(String(filter.value)) : "…"}
           </FilterSelectTrigger>
           <SelectPopup alignItemWithTrigger={false}>
             {values.map((val) => (
@@ -435,9 +433,7 @@ const PropertyFilterChip = ({
             value={String(filter.value ?? "")}
           >
             <FilterSelectTrigger>
-              {filter.value !== "" && filter.value !== null
-                ? String(filter.value)
-                : "…"}
+              {filter.value !== "" ? String(filter.value) : "…"}
             </FilterSelectTrigger>
             <SelectPopup alignItemWithTrigger={false}>
               {selectOptions.map((opt) => (

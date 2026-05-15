@@ -172,7 +172,7 @@ export function RequireAIKey({ children }: PropsWithChildren) {
     return null;
   }
 
-  if (!isError && data?.available) {
+  if (!isError && data.available) {
     return <>{children}</>;
   }
 

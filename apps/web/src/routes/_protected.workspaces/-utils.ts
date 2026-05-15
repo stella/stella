@@ -77,7 +77,7 @@ export const compareWorkspacesByKey = (
     case "name":
       return a.name.localeCompare(b.name);
     case "reference":
-      return (a.reference ?? "").localeCompare(b.reference ?? "");
+      return a.reference.localeCompare(b.reference);
     case "entityCount":
       return a.entityCount - b.entityCount;
     case "lastActivityAt":

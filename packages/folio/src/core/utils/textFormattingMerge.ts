@@ -23,7 +23,7 @@ export function mergeTextFormatting(
       continue;
     }
 
-    if (key === "fontFamily" && typeof value === "object" && value !== null) {
+    if (key === "fontFamily" && typeof value === "object") {
       result["fontFamily"] = mergeFontFamily(
         target.fontFamily,
         value as NonNullable<TextFormatting["fontFamily"]>,
@@ -31,12 +31,12 @@ export function mergeTextFormatting(
       continue;
     }
 
-    if (key === "color" && typeof value === "object" && value !== null) {
+    if (key === "color" && typeof value === "object") {
       result["color"] = value as ColorValue;
       continue;
     }
 
-    if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    if (typeof value === "object" && !Array.isArray(value)) {
       result[key] = {
         ...(target[key] as Record<string, unknown> | undefined),
         ...(value as Record<string, unknown>),

@@ -199,13 +199,10 @@ function calculateTypographyMetrics(
     // At least: use specified height or natural height, whichever is larger
     const defaultHeight = singleLineBase * DEFAULT_LINE_HEIGHT_MULTIPLIER;
     lineHeight = Math.max(spacing.line, defaultHeight);
-  } else if (
-    spacing?.line !== undefined &&
-    spacing?.lineUnit === "multiplier"
-  ) {
+  } else if (spacing?.line !== undefined && spacing.lineUnit === "multiplier") {
     // Multiplier applied to font's single-line height
     lineHeight = singleLineBase * spacing.line;
-  } else if (spacing?.line !== undefined && spacing?.lineUnit === "px") {
+  } else if (spacing?.line !== undefined && spacing.lineUnit === "px") {
     // Pixel value
     lineHeight = spacing.line;
   } else {
@@ -668,7 +665,7 @@ export function measureParagraph(
 
       // Compute tab width: advance to the next tab stop position.
       const tabStops = attrs?.tabs;
-      const currentPos = currentLine.width + (currentLine.leftOffset ?? 0);
+      const currentPos = currentLine.width + currentLine.leftOffset;
       const tabWidth = computeTabWidth(currentPos, tabStops);
 
       if (

@@ -76,7 +76,7 @@ export const OnboardingWizard = () => {
   const invalidateSession = useInvalidateSession();
   const queryClient = useQueryClient();
   const { data: sessionData } = useQuery(sessionOptions);
-  const userEmail = sessionData?.user?.email ?? "";
+  const userEmail = sessionData?.user.email ?? "";
   const [step, setStep] = useState<Step>("organization");
   const [data, setData] = useState<WizardData>(() => ({
     orgName: "",
@@ -236,19 +236,14 @@ export const OnboardingWizard = () => {
               ...(providerDraft.apiKey.trim()
                 ? { apiKey: providerDraft.apiKey.trim() }
                 : {}),
-              ...(() => {
-                if (providerDraft.provider === "azure_foundry") {
-                  return {
+              ...(providerDraft.provider === "azure_foundry"
+                ? {
                     endpoint: providerDraft.endpoint.trim(),
                     ...(providerDraft.apiVersion
-                      ? {
-                          apiVersion: providerDraft.apiVersion,
-                        }
+                      ? { apiVersion: providerDraft.apiVersion }
                       : {}),
-                  };
-                }
-                return {};
-              })(),
+                  }
+                : {}),
               region: providerDraft.region,
             })),
             overrideModels: aiOverrideModels,
@@ -300,7 +295,7 @@ export const OnboardingWizard = () => {
           );
 
           const failedCount = inviteResults.filter(
-            (r) => r.error !== null && r.error !== undefined,
+            (r) => r.error !== null,
           ).length;
 
           if (failedCount > 0) {
@@ -341,39 +336,33 @@ export const OnboardingWizard = () => {
   );
 
   const showPrices = step === "ai" && aiPhase === "models";
-  const preview = (() => {
-    if (step === "jurisdiction") {
-      return (
-        <JurisdictionGlobePreview
-          onChange={(practiceJurisdictions) => {
-            setData((d) => ({
-              ...d,
-              practiceJurisdictions,
-            }));
-            setJurisdictionSuggestionApplied(true);
-          }}
-          selected={data.practiceJurisdictions}
-        />
-      );
-    }
-    if (showPrices) {
-      return (
-        <PricesPanel
-          providers={data.aiProviders.map((p) => p.provider)}
-          roleModels={data.aiRoleModels}
-        />
-      );
-    }
-    return (
-      <SidebarPreview
-        aiProviders={previewAiProviders}
-        chatActive={step === "ai"}
-        emailCount={previewEmailCount}
-        matterName=""
-        organizationName={previewOrgName}
+  let preview = (
+    <SidebarPreview
+      aiProviders={previewAiProviders}
+      chatActive={step === "ai"}
+      emailCount={previewEmailCount}
+      matterName=""
+      organizationName={previewOrgName}
+    />
+  );
+  if (step === "jurisdiction") {
+    preview = (
+      <JurisdictionGlobePreview
+        onChange={(practiceJurisdictions) => {
+          setData((d) => ({ ...d, practiceJurisdictions }));
+          setJurisdictionSuggestionApplied(true);
+        }}
+        selected={data.practiceJurisdictions}
       />
     );
-  })();
+  } else if (showPrices) {
+    preview = (
+      <PricesPanel
+        providers={data.aiProviders.map((p) => p.provider)}
+        roleModels={data.aiRoleModels}
+      />
+    );
+  }
 
   const renderStep = () => {
     if (step === "creating") {

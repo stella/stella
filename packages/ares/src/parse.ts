@@ -29,21 +29,13 @@ const CURRENCIES: Record<string, string> = {
 
 export const parseAddress = (raw: AresRawAddress): AresAddress => ({
   street: raw.nazevUlice ?? null,
-  houseNumber:
-    raw.cisloDomovni !== null && raw.cisloDomovni !== undefined
-      ? String(raw.cisloDomovni)
-      : null,
+  houseNumber: raw.cisloDomovni !== undefined ? String(raw.cisloDomovni) : null,
   orientationNumber:
-    raw.cisloOrientacni !== null && raw.cisloOrientacni !== undefined
-      ? String(raw.cisloOrientacni)
-      : null,
+    raw.cisloOrientacni !== undefined ? String(raw.cisloOrientacni) : null,
   orientationLetter: raw.cisloOrientacniPismeno ?? null,
   municipalityPart: raw.nazevCastiObce ?? null,
   municipality: raw.nazevMestskehoObvodu || raw.nazevObce || null,
-  postalCode:
-    raw.psc !== null && raw.psc !== undefined
-      ? String(raw.psc)
-      : (raw.pscTxt ?? null),
+  postalCode: raw.psc !== undefined ? String(raw.psc) : (raw.pscTxt ?? null),
   district: raw.nazevOkresu ?? null,
   country: raw.nazevStatu ?? null,
   textAddress: raw.textovaAdresa ?? null,

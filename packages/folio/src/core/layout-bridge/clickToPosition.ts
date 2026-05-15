@@ -93,7 +93,7 @@ function sliceRunsForLine(block: ParagraphBlock, line: MeasuredLine): Run[] {
 
     // Handle text runs - may need to slice
     if (run.kind === "text") {
-      const text = run.text ?? "";
+      const text = run.text;
       const isFirstRun = runIndex === line.fromRun;
       const isLastRun = runIndex === line.toRun;
 
@@ -147,7 +147,7 @@ function computeLinePmRange(
     if (runIndex < line.fromRun) {
       // Before the line - count all characters
       if (run.kind === "text") {
-        charOffset += (run.text ?? "").length;
+        charOffset += run.text.length;
       } else if (run.kind === "tab" || run.kind === "lineBreak") {
         charOffset += 1;
       } else if (run.kind === "image") {
@@ -179,7 +179,7 @@ function computeLinePmRange(
       }
 
       if (run.kind === "text") {
-        const text = run.text ?? "";
+        const text = run.text;
         const start = runIndex === line.fromRun ? line.fromChar : 0;
         const end = runIndex === line.toRun ? line.toChar : text.length;
         lineLength += end - start;
@@ -355,7 +355,7 @@ function findCharacterInLine(
 
     // Handle text runs
     if (run.kind === "text") {
-      const text = run.text ?? "";
+      const text = run.text;
       if (text.length === 0) {
         continue;
       }
@@ -611,7 +611,7 @@ export function positionToX(
           }
           charsProcessed += 1;
         } else if (run.kind === "text") {
-          const text = run.text ?? "";
+          const text = run.text;
           if (offsetInLine <= charsProcessed + text.length) {
             const charInRun = offsetInLine - charsProcessed;
             const style = runToFontStyle(run);

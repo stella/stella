@@ -101,9 +101,6 @@ describe("ParagraphChangeTrackerExtension", () => {
         { text: "BBBB", paraId: "P2" },
       ]);
       const bold = schema.marks.bold;
-      if (!bold) {
-        throw new Error("Expected bold mark in test schema");
-      }
       const boldMark = bold.create();
 
       state = state.apply(state.tr.step(new AddMarkStep(7, 11, boldMark)));

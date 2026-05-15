@@ -859,7 +859,7 @@ function serializeCellContent(content: (Paragraph | Table)[]): string {
   for (const item of content) {
     if (item.type === "paragraph") {
       parts.push(serializeParagraph(item));
-    } else if (item.type === "table") {
+    } else {
       parts.push(serializeTable(item));
     }
   }

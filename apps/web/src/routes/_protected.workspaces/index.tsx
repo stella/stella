@@ -73,7 +73,7 @@ function RouteComponent() {
       sortKey: s.matters.sortKey,
       sortDesc: s.matters.sortDesc,
       groupBy: s.matters.groupBy,
-      collapsedGroups: s.matters.collapsedGroups ?? [],
+      collapsedGroups: s.matters.collapsedGroups,
     })),
   );
 
@@ -120,14 +120,9 @@ function RouteComponent() {
   const groups = groupBy === "client" ? groupByClient(sorted) : null;
 
   const collapsedSet = new Set(collapsedGroups);
-  const displayed = (() => {
-    if (groups) {
-      return groups.flatMap((g) =>
-        collapsedSet.has(g.groupId) ? [] : g.workspaces,
-      );
-    }
-    return sorted;
-  })();
+  const displayed = groups
+    ? groups.flatMap((g) => (collapsedSet.has(g.groupId) ? [] : g.workspaces))
+    : sorted;
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -170,50 +165,48 @@ function RouteComponent() {
         <div className="relative flex-1">
           <div className="absolute inset-0 overflow-y-auto" ref={scrollRef}>
             {(() => {
-              if (sorted.length === 0) {
-                return (() => {
-                  if (workspaces.length === 0 && isFetching) {
-                    return (
-                      <div className="grid auto-rows-min gap-4 border-t p-4 md:grid-cols-3">
-                        <Skeleton className="h-22 w-full rounded-xl" />
-                        <Skeleton className="h-22 w-full rounded-xl" />
-                        <Skeleton className="h-22 w-full rounded-xl" />
-                      </div>
-                    );
-                  }
-                  if (workspaces.length === 0) {
-                    return (
-                      <EmptyScreen
-                        className="min-h-full"
-                        description={t("workspaces.emptyMatters.description")}
-                        primaryAction={{
-                          label: t("workspaces.createNewWorkspace"),
-                          icon: PlusIcon,
-                          onClick: () => openCreateMatter(),
-                        }}
-                        mediaPlacement="bottom"
-                        title={t("workspaces.emptyMatters.title")}
-                        video={{
-                          ...EMPTY_SCREEN_MATTERS_VIDEO,
-                          title: t("workspaces.emptyMatters.videoLabel"),
-                        }}
-                      />
-                    );
-                  }
-                  return (
-                    <div className="text-muted-foreground flex flex-1 items-center justify-center p-8 text-sm">
-                      {t("common.empty")}
-                    </div>
-                  );
-                })();
+              if (sorted.length > 0) {
+                return (
+                  <MattersContentView
+                    canCreateMatter={canOpenCreateMatter}
+                    displayed={displayed}
+                    focusIndex={focusIndex}
+                    groups={groups}
+                  />
+                );
+              }
+              if (workspaces.length === 0 && isFetching) {
+                return (
+                  <div className="grid auto-rows-min gap-4 border-t p-4 md:grid-cols-3">
+                    <Skeleton className="h-22 w-full rounded-xl" />
+                    <Skeleton className="h-22 w-full rounded-xl" />
+                    <Skeleton className="h-22 w-full rounded-xl" />
+                  </div>
+                );
+              }
+              if (workspaces.length === 0) {
+                return (
+                  <EmptyScreen
+                    className="min-h-full"
+                    description={t("workspaces.emptyMatters.description")}
+                    primaryAction={{
+                      label: t("workspaces.createNewWorkspace"),
+                      icon: PlusIcon,
+                      onClick: () => openCreateMatter(),
+                    }}
+                    mediaPlacement="bottom"
+                    title={t("workspaces.emptyMatters.title")}
+                    video={{
+                      ...EMPTY_SCREEN_MATTERS_VIDEO,
+                      title: t("workspaces.emptyMatters.videoLabel"),
+                    }}
+                  />
+                );
               }
               return (
-                <MattersContentView
-                  canCreateMatter={canOpenCreateMatter}
-                  displayed={displayed}
-                  focusIndex={focusIndex}
-                  groups={groups}
-                />
+                <div className="text-muted-foreground flex flex-1 items-center justify-center p-8 text-sm">
+                  {t("common.empty")}
+                </div>
               );
             })()}
           </div>
@@ -308,7 +301,7 @@ const MattersContentView = ({
   const gridRef = useRef<HTMLDivElement>(null);
   const viewMode = useConfigStore((s) => s.matters.viewMode);
   const collapsedGroups = useConfigStore(
-    useShallow((s) => s.matters.collapsedGroups ?? []),
+    useShallow((s) => s.matters.collapsedGroups),
   );
   const toggleGroupCollapsed = useConfigStore((s) => s.toggleGroupCollapsed);
   return (

@@ -171,7 +171,7 @@ export const getDefaultViews = (
   lang: SupportedLang,
   options: GetDefaultViewsOptions = {},
 ): DefaultView[] => {
-  const names = VIEW_NAMES[lang] ?? VIEW_NAMES.en;
+  const names = VIEW_NAMES[lang];
   return DEFAULT_VIEW_TEMPLATES.map((tmpl) => ({
     name: names[tmpl.nameKey],
     layout: cloneDefaultLayout(tmpl.layout, options),

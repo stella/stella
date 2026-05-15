@@ -289,7 +289,7 @@ export const AssigneePicker = ({
                   >
                     {user.image ? (
                       <img
-                        alt={user.name ?? ""}
+                        alt={user.name}
                         className="size-5 rounded-full"
                         height={20}
                         src={user.image}
@@ -297,7 +297,7 @@ export const AssigneePicker = ({
                       />
                     ) : (
                       <span className="bg-primary/10 flex size-5 items-center justify-center rounded-full text-xs font-medium">
-                        {user.name?.[0]?.toUpperCase() ?? "?"}
+                        {user.name[0]?.toUpperCase() ?? "?"}
                       </span>
                     )}
                     <span className="truncate">{user.name}</span>

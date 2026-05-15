@@ -103,9 +103,7 @@ export const AddEntityMenu = ({
             title: t("success.folderCreated"),
             type: "success",
           });
-          if (data?.entityId !== undefined) {
-            onFolderCreated?.(data.entityId);
-          }
+          onFolderCreated?.(data.entityId);
         },
         onError: () => {
           stellaToast.add({

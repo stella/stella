@@ -2,7 +2,6 @@ import { useState } from "react";
 
 import { revalidateLogic, useForm } from "@tanstack/react-form";
 import type { AnyFieldApi } from "@tanstack/react-form";
-import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -103,15 +102,11 @@ const getDefaultValues = (
     };
   }
 
-  if (fieldContent.type === "int") {
-    return {
-      type: "int",
-      value: fieldContent.value,
-      currency: fieldContent.currency,
-    };
-  }
-
-  return panic("Invalid field content type");
+  return {
+    type: "int",
+    value: fieldContent.value,
+    currency: fieldContent.currency,
+  };
 };
 
 type EditFieldDialogProps = {

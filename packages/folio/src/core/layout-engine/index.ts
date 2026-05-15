@@ -33,17 +33,6 @@ import type {
   SectionBreakBlock,
 } from "./types";
 
-// Default page size (US Letter in pixels at 96 DPI)
-const DEFAULT_PAGE_SIZE = { w: 816, h: 1056 };
-
-// Default margins (1 inch = 96 pixels)
-const DEFAULT_MARGINS: PageMargins = {
-  top: 96,
-  right: 96,
-  bottom: 96,
-  left: 96,
-};
-
 export type SectionLayoutConfig = {
   pageSize: { w: number; h: number };
   margins: PageMargins;
@@ -190,19 +179,19 @@ export function layoutDocument(
   }
 
   // Set up options with defaults
-  const pageSize = options.pageSize ?? DEFAULT_PAGE_SIZE;
-  const baseMargins = {
-    top: options.margins?.top ?? DEFAULT_MARGINS.top,
-    right: options.margins?.right ?? DEFAULT_MARGINS.right,
-    bottom: options.margins?.bottom ?? DEFAULT_MARGINS.bottom,
-    left: options.margins?.left ?? DEFAULT_MARGINS.left,
-    header:
-      options.margins?.header ?? options.margins?.top ?? DEFAULT_MARGINS.top,
-    footer:
-      options.margins?.footer ??
-      options.margins?.bottom ??
-      DEFAULT_MARGINS.bottom,
+  const pageSize = options.pageSize;
+  const baseMargins: PageMargins = {
+    top: options.margins.top,
+    right: options.margins.right,
+    bottom: options.margins.bottom,
+    left: options.margins.left,
   };
+  if (options.margins.header !== undefined) {
+    baseMargins.header = options.margins.header;
+  }
+  if (options.margins.footer !== undefined) {
+    baseMargins.footer = options.margins.footer;
+  }
 
   // Use document margins directly for WYSIWYG fidelity
   // Word uses fixed margins from the document - body content always starts at marginTop
@@ -431,10 +420,6 @@ function layoutParagraph(
   contentWidth: number,
   footnoteHeightById?: Map<number, number>,
 ): void {
-  if (measure.kind !== "paragraph") {
-    throw new Error(`layoutParagraph: expected paragraph measure`);
-  }
-
   const lines = measure.lines;
   if (lines.length === 0) {
     // Empty paragraph - still takes up space based on spacing
@@ -637,10 +622,6 @@ function layoutTable(
   measure: TableMeasure,
   paginator: ReturnType<typeof createPaginator>,
 ): void {
-  if (measure.kind !== "table") {
-    throw new Error(`layoutTable: expected table measure`);
-  }
-
   const rows = measure.rows;
   if (rows.length === 0) {
     return;
@@ -742,10 +723,6 @@ function layoutFloatingTable(
   paginator: ReturnType<typeof createPaginator>,
   contentWidth: number,
 ): void {
-  if (measure.kind !== "table") {
-    throw new Error(`layoutFloatingTable: expected table measure`);
-  }
-
   const state = paginator.getCurrentState();
   const floating = block.floating;
   const page = state.page;
@@ -777,7 +754,7 @@ function layoutFloatingTable(
       x = baseX;
     } else if (spec === "right" || spec === "outside") {
       x = baseX + contentWidth - tableWidth;
-    } else if (spec === "center") {
+    } else {
       x = baseX + (contentWidth - tableWidth) / 2;
     }
   } else if (block.justification === "center") {
@@ -843,10 +820,6 @@ function layoutImage(
   measure: ImageMeasure,
   paginator: ReturnType<typeof createPaginator>,
 ): void {
-  if (measure.kind !== "image") {
-    throw new Error(`layoutImage: expected image measure`);
-  }
-
   // Handle anchored images differently
   if (block.anchor?.isAnchored) {
     layoutAnchoredImage(block, measure, paginator);
@@ -914,10 +887,6 @@ function layoutTextBox(
   measure: TextBoxMeasure,
   paginator: ReturnType<typeof createPaginator>,
 ): void {
-  if (measure.kind !== "textBox") {
-    throw new Error(`layoutTextBox: expected textBox measure`);
-  }
-
   const state = paginator.ensureFits(measure.height);
 
   const fragment: TextBoxFragment = {

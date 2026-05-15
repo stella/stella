@@ -885,7 +885,7 @@ const runBenchTask = async ({
     surface,
     taskId: task.id,
     tools: trace.tools,
-    usage: result.totalUsage ?? result.usage ?? null,
+    usage: result.totalUsage,
   };
 };
 

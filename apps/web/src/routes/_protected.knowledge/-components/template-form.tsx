@@ -296,7 +296,7 @@ const FieldRenderer = ({
               value={
                 // SAFETY: inputType discriminates; value is string for textarea
                 // eslint-disable-next-line typescript/no-unsafe-type-assertion
-                (value as string) ?? ""
+                value as string
               }
             />
           }
@@ -323,7 +323,7 @@ const FieldRenderer = ({
               value={
                 // SAFETY: inputType discriminates; value is string for number input
                 // eslint-disable-next-line typescript/no-unsafe-type-assertion
-                (value as string) ?? ""
+                value as string
               }
             />
           }
@@ -349,7 +349,7 @@ const FieldRenderer = ({
             value={
               // SAFETY: inputType discriminates; value is string for text/date
               // eslint-disable-next-line typescript/no-unsafe-type-assertion
-              (value as string) ?? ""
+              value as string
             }
           />
         }

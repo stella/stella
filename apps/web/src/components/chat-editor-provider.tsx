@@ -831,10 +831,6 @@ export const useChatEditor = ({
   );
 
   useEffect(() => {
-    if (editor === null) {
-      return undefined;
-    }
-
     syncEditorPlugins(editor);
 
     return () => {
@@ -848,10 +844,6 @@ export const useChatEditor = ({
   }, [editor, extensionVersion, syncEditorPlugins]);
 
   useEffect(() => {
-    if (editor === null) {
-      return;
-    }
-
     if (areDocsEqual(editor.getJSON(), draftDoc)) {
       setIsEmpty(editor.isEmpty);
       return;
@@ -864,19 +856,11 @@ export const useChatEditor = ({
   }, [draftDoc, editor]);
 
   const focus = useCallback(() => {
-    if (editor === null) {
-      return;
-    }
-
     editor.commands.focus("end");
   }, [editor]);
 
   const insertMention = useCallback(
     (mention: ChatMentionOption) => {
-      if (editor === null) {
-        return;
-      }
-
       markDraftStarted();
       editor
         .chain()
@@ -898,21 +882,19 @@ export const useChatEditor = ({
     [editor, markDraftStarted],
   );
 
-  useEffect(() => {
-    if (editor === null) {
-      return undefined;
-    }
-
-    return registerActiveEditor({
-      focus,
-      insertMention,
-      threadKey,
-    });
-  }, [editor, focus, insertMention, registerActiveEditor, threadKey]);
+  useEffect(
+    () =>
+      registerActiveEditor({
+        focus,
+        insertMention,
+        threadKey,
+      }),
+    [focus, insertMention, registerActiveEditor, threadKey],
+  );
 
   const updateAttachments = useCallback(
     (nextAttachments: ChatDraftAttachment[]) => {
-      const doc = editor?.getJSON() ?? draftDoc;
+      const doc = editor.getJSON();
 
       setDraft(
         threadKey,
@@ -926,7 +908,7 @@ export const useChatEditor = ({
         markDraftStarted();
       }
     },
-    [draftDoc, editor, markDraftStarted, setDraft, threadKey],
+    [editor, markDraftStarted, setDraft, threadKey],
   );
 
   const addFiles = useCallback(
@@ -1030,10 +1012,6 @@ export const useChatEditor = ({
 
   const submit = useCallback(
     async (send: (draft: ChatInputDraft) => Promise<void> | void) => {
-      if (editor === null) {
-        return;
-      }
-
       const html = editor.isEmpty ? "" : editor.getHTML().trim();
       const doc = editor.getJSON();
       const files = attachmentsRef.current;

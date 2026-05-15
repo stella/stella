@@ -519,7 +519,7 @@ const queryEntitiesGenerator = async function* ({
   for (const s of activeSessions) {
     if (!activeEditMap.has(s.entityId)) {
       activeEditMap.set(s.entityId, {
-        name: s.editorName ?? "",
+        name: s.editorName,
         image: s.editorImage,
         isMe: s.createdBy === currentUserId,
       });

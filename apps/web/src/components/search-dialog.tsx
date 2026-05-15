@@ -1055,7 +1055,7 @@ const SummaryBody = ({
   let cursor = 0;
 
   for (const match of text.matchAll(CITATION_RE)) {
-    const start = match.index ?? 0;
+    const start = match.index;
     const numberText = match[1];
     const number = numberText ? Number(numberText) : Number.NaN;
     const citation = citationByNumber.get(number);
@@ -1573,7 +1573,7 @@ const SearchHitIcon = ({ hit }: { hit: GlobalSearchHit }) => {
     );
   }
 
-  const Icon = KIND_ICONS[hit.type] ?? FileTextIcon;
+  const Icon = KIND_ICONS[hit.type];
 
   if (hit.type === "matter") {
     const color = resolveMatterColor(hit.workspaceId, hit.color);

@@ -151,7 +151,7 @@ function computeListMarker(
   }
 
   const { numId, level } = listRendering;
-  if (numId === undefined || numId === 0) {
+  if (numId === 0) {
     return;
   }
 
@@ -363,7 +363,7 @@ function extractTableVariables(table: Table): string[] {
               variables.push(v);
             }
           }
-        } else if (cellContent.type === "table") {
+        } else {
           // Nested table
           const nestedVars = extractTableVariables(cellContent);
           for (const v of nestedVars) {
@@ -657,9 +657,6 @@ export function parseDocumentBody(
 
   // Parse XML
   const doc = parseXml(xml);
-  if (!doc) {
-    return result;
-  }
 
   // Find root document element (w:document)
   const documentEl = (doc.elements ?? []).find(
@@ -735,7 +732,7 @@ function getTableParagraphs(table: Table): Paragraph[] {
       for (const content of cell.content) {
         if (content.type === "paragraph") {
           paragraphs.push(content);
-        } else if (content.type === "table") {
+        } else {
           paragraphs.push(...getTableParagraphs(content));
         }
       }
@@ -812,7 +809,7 @@ function getTableText(table: Table): string {
       for (const content of cell.content) {
         if (content.type === "paragraph") {
           cellTexts.push(getParagraphText(content));
-        } else if (content.type === "table") {
+        } else {
           cellTexts.push(getTableText(content));
         }
       }
