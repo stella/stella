@@ -71,7 +71,9 @@ const withFieldAdded = (
   set: ReadonlySet<string>,
   fieldId: string,
 ): ReadonlySet<string> => {
-  if (set.has(fieldId)) {return set;}
+  if (set.has(fieldId)) {
+    return set;
+  }
   const next = new Set(set);
   next.add(fieldId);
   return next;
@@ -81,7 +83,9 @@ const withFieldRemoved = (
   set: ReadonlySet<string>,
   fieldId: string,
 ): ReadonlySet<string> => {
-  if (!set.has(fieldId)) {return set;}
+  if (!set.has(fieldId)) {
+    return set;
+  }
   const next = new Set(set);
   next.delete(fieldId);
   return next;
@@ -162,7 +166,11 @@ export const useAnonymizationMatches = (
  */
 export const useAnonymizationMatchesReady = (fieldId: string | null): boolean =>
   useAnonymizationMatchesStore((s) => {
-    if (fieldId === null) {return false;}
-    if (s.pipelineRanFieldIds.has(fieldId)) {return true;}
+    if (fieldId === null) {
+      return false;
+    }
+    if (s.pipelineRanFieldIds.has(fieldId)) {
+      return true;
+    }
     return !s.pipelineStartedFieldIds.has(fieldId);
   });
