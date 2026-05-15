@@ -163,18 +163,26 @@ describe("collectCommentIdsFromSources", () => {
 });
 
 describe("pruneOrphanedComments", () => {
-  test("keeps top-level comments that are still anchored", () => {
+  test("keeps top-level comments regardless of anchor status", () => {
     const comments = [makeComment(1), makeComment(2)];
     expect(pruneOrphanedComments(comments, new Set([1, 2]))).toEqual(comments);
   });
 
-  test("drops a top-level comment whose anchor is gone", () => {
+  test("keeps a top-level comment whose anchor was deleted (cannot distinguish from a parser-missed reply)", () => {
+    // We don't drop unanchored top-level comments: the parser does
+    // not yet read `commentsExtended.xml` to restore `parentId` on
+    // Word replies, so an unanchored top-level entry might be an
+    // imported reply masquerading as a root. Erring on the side of
+    // preserving data — losing a Word reply on first save is strictly
+    // worse than re-emitting a comment whose anchor was deleted.
     const kept = makeComment(1);
-    const orphan = makeComment(2);
-    expect(pruneOrphanedComments([kept, orphan], new Set([1]))).toEqual([kept]);
+    const unanchoredTopLevel = makeComment(2);
+    expect(
+      pruneOrphanedComments([kept, unanchoredTopLevel], new Set([1])),
+    ).toEqual([kept, unanchoredTopLevel]);
   });
 
-  test("keeps a reply when its parent is still anchored", () => {
+  test("keeps a reply when its parent is still present", () => {
     const parent = makeComment(1);
     const reply = makeComment(2, 1);
     expect(pruneOrphanedComments([parent, reply], new Set([1]))).toEqual([
@@ -183,28 +191,28 @@ describe("pruneOrphanedComments", () => {
     ]);
   });
 
-  test("drops a reply when the parent has been orphaned", () => {
-    const orphanedParent = makeComment(1);
+  test("keeps replies whose explicit parent exists, even when the parent's anchor was deleted", () => {
+    // Top-level entries are kept whether or not they are anchored, so
+    // replies pointing to them are kept too.
+    const parent = makeComment(1);
     const reply = makeComment(2, 1);
-    expect(pruneOrphanedComments([orphanedParent, reply], new Set())).toEqual(
-      [],
-    );
+    expect(pruneOrphanedComments([parent, reply], new Set())).toEqual([
+      parent,
+      reply,
+    ]);
   });
 
-  test("drops a reply with no matching parent", () => {
+  test("drops a reply whose explicit parent doesn't exist", () => {
+    // A reply with an explicit `parentId` that points at no comment
+    // we know about is a genuine broken-thread orphan — the only
+    // kind we can identify confidently.
     const replyOnly = makeComment(2, 999);
     expect(pruneOrphanedComments([replyOnly], new Set([2]))).toEqual([]);
   });
 
-  test("returns an empty array when no top-level comments are anchored", () => {
-    const a = makeComment(1);
-    const b = makeComment(2, 1);
-    expect(pruneOrphanedComments([a, b], new Set([7]))).toEqual([]);
-  });
-
-  test("keeps a reply-to-a-reply when the root top-level comment is anchored", () => {
+  test("keeps a reply-to-a-reply when the root top-level comment exists", () => {
     // Threads can nest more than one level — a reply to a reply must
-    // ride along when the root is anchored, not get pruned because its
+    // ride along when the root is present, not get pruned because its
     // immediate parent isn't a top-level comment.
     const root = makeComment(1);
     const reply = makeComment(2, 1);
@@ -216,10 +224,27 @@ describe("pruneOrphanedComments", () => {
 
   test("drops the whole branch when an intermediate reply has no surviving root", () => {
     // Reply 4 points to reply 3, which points to a parent 2 that was
-    // never created. The chain doesn't reach an anchored top-level,
-    // so the whole branch goes.
+    // never created. The chain doesn't reach a top-level comment in
+    // the array, so the whole branch goes.
     const reply3 = makeComment(3, 2);
     const reply4 = makeComment(4, 3);
     expect(pruneOrphanedComments([reply3, reply4], new Set([2]))).toEqual([]);
+  });
+
+  test("preserves imported Word replies that arrive with parentId undefined", () => {
+    // The OOXML parser does not yet populate `parentId` from
+    // `commentsExtended.xml`, so Word replies look identical to
+    // top-level comments without anchors. Dropping them on save —
+    // the previous behaviour — silently loses every Word reply on
+    // the first save. Keep them.
+    const anchoredParent = makeComment(1);
+    const unparsedReplyA = makeComment(2);
+    const unparsedReplyB = makeComment(3);
+    expect(
+      pruneOrphanedComments(
+        [anchoredParent, unparsedReplyA, unparsedReplyB],
+        new Set([1]),
+      ),
+    ).toEqual([anchoredParent, unparsedReplyA, unparsedReplyB]);
   });
 });

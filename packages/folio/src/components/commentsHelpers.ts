@@ -202,39 +202,46 @@ export function collectCommentIdsFromSources(
 }
 
 /**
- * Filter `comments` to those still anchored. A comment is kept when:
- *  - it is top-level and its id appears in `referencedIds`, or
- *  - it has a parent which (transitively) reaches a kept top-level
- *    comment. A reply-to-a-reply that ultimately roots at an anchored
- *    comment stays; a reply whose parent chain doesn't reach a
- *    referenced top-level is dropped.
+ * Filter `comments` to drop entries whose reply chain has lost its root.
  *
- * Phantom comment threads are a real failure mode: when a user deletes
- * text covered by a comment mark, PM drops the mark with the text but
- * the comment entry stays in the in-memory `comments` array and gets
- * serialized back into `comments.xml` on the next save. The thread is
- * present in the saved file but with no in-body anchor, which Word
- * either silently drops or surfaces as an orphan that can't be
- * resolved.
+ * Kept:
+ *  - every top-level comment (`parentId` is null/undefined), regardless of
+ *    whether its id appears in `referencedIds`,
+ *  - replies whose parent chain transitively reaches a kept top-level
+ *    comment.
+ *
+ * Dropped:
+ *  - replies whose explicit `parentId` does not reach a kept top-level
+ *    comment (a true broken-thread orphan).
+ *
+ * Why we don't prune unanchored top-level comments: the OOXML parser
+ * does not yet read `commentsExtended.xml`, so Word comment replies
+ * arrive with `parentId === undefined` and look indistinguishable from
+ * a true top-level comment whose anchor has been edited away. Until the
+ * parser populates the parent link, dropping unanchored top-level
+ * entries would silently lose every imported Word reply on the first
+ * save — a strictly worse failure mode than re-emitting a comment whose
+ * anchor was actually deleted. The complementary "overwrite stale
+ * `comments.xml`" fix in the save paths already prevents the
+ * phantom-thread regression when the array does end up empty.
  */
 export function pruneOrphanedComments(
   comments: Comment[],
-  referencedIds: Set<number>,
+  _referencedIds: Set<number>,
 ): Comment[] {
+  void _referencedIds;
   const keptIds = new Set<number>();
-  // Step 1: top-level comments whose anchor is still in the doc.
+  // Step 1: keep every top-level comment.
   for (const comment of comments) {
     const parentId = getCommentParentId(comment);
-    if (
-      (parentId === null || parentId === undefined) &&
-      referencedIds.has(comment.id)
-    ) {
+    if (parentId === null || parentId === undefined) {
       keptIds.add(comment.id);
     }
   }
-  // Step 2: iteratively pull in replies whose parent has already been
-  // kept. Repeats until no new comment is added, so a thread of depth
-  // N (replies-to-replies-to-…) is fully promoted in N − 1 passes.
+  // Step 2: iteratively pull in replies whose parent chain reaches a kept
+  // top-level comment. Repeats until no new comment is added, so a
+  // thread of depth N (replies-to-replies-to-…) is fully promoted in
+  // N − 1 passes.
   let addedThisPass = true;
   while (addedThisPass) {
     addedThisPass = false;
