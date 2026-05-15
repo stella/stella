@@ -64,9 +64,15 @@ export const anonymizePdf = async ({
   try {
     await runPipelineAndCommit({ workspaceId, fieldId, isPdf });
   } finally {
-    if (!cancelledFieldIds.has(fieldId)) {
-      useAnonymizationMatchesStore.getState().markPipelineRan(fieldId);
-    }
+    // Release the in-flight lock unconditionally — even
+    // when cancelled or when an awaited step rejected
+    // before the explicit cancellation check inside
+    // `runPipelineAndCommit`. Without this, a cancel +
+    // error race would leave `pipelineStartedFieldIds`
+    // permanently holding this field, and reopening the
+    // same document would keep the inspector facet stuck
+    // on the "Detecting…" placeholder.
+    useAnonymizationMatchesStore.getState().markPipelineRan(fieldId);
   }
 };
 
@@ -197,4 +203,9 @@ const runPipelineAndCommit = async ({
 export const clearAnonymization = (fieldId: string): void => {
   cancelledFieldIds.add(fieldId);
   clearAnonymizationForField(fieldId);
+  // Also drop the matches-store entry for this field so
+  // the inspector facet stops showing a stale count when
+  // the user navigates away mid-detection. Idempotent for
+  // fields that were never published.
+  useAnonymizationMatchesStore.getState().clear(fieldId);
 };
