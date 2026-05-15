@@ -163,7 +163,9 @@ function findPositionInSpan(
     range.setStart(text, i);
     range.setEnd(text, i + 1);
     const rect = range.getBoundingClientRect();
-    if (rect.width === 0 && rect.height === 0) {continue;}
+    if (rect.width === 0 && rect.height === 0) {
+      continue;
+    }
     const midpoint = rect.left + rect.width / 2;
     const distance = Math.abs(clientX - midpoint);
     if (distance < bestDistance) {
