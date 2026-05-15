@@ -435,56 +435,30 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   }, [fieldId, isAnonymizationActive]);
 
   // Bridge document selections → inspector "Term to anonymize"
-  // input. The folio paged editor sets PM selections
-  // programmatically on its off-screen hidden PM and renders
-  // the visible selection via a custom overlay, so a global
-  // `selectionchange` listener never sees what the user
-  // highlighted on a painted page. Wrap the PM view's dispatch
-  // so every selection-bearing transaction publishes the
-  // selected text to the document-selection store, which the
-  // inspector facet subscribes to. Wrapping `view.dispatch`
-  // post-creation is fragile in principle (a second wrapper
-  // installed after this one would un-stack out of order on
-  // cleanup), but in practice nothing else outside folio
-  // touches this view's dispatch — folio itself goes through
-  // its own internal calls bound at view construction. A
-  // cleaner long-term fix would be a folio-side
-  // `onSelectionTextChange` callback that already gives us
-  // both the range and the text; tracked but out of scope here.
-  useEffect(() => {
-    const view = editorViewForAnonymization;
-    if (!view) {
-      return undefined;
-    }
-    const originalDispatch = view.dispatch.bind(view);
-    const { publish } = useDocumentTextSelectionStore.getState();
-    view.dispatch = (tr) => {
-      originalDispatch(tr);
-      if (!tr.selectionSet) {
+  // input. Folio fires `onSelectionTextChange` with the range
+  // and the resolved text on every selection-bearing
+  // transaction, so we just have to length-gate and publish.
+  // The cleanup clears the store so a second tab opening this
+  // facet doesn't see a stale prefill from the previous file.
+  const handleSelectionTextChange = useCallback(
+    (selection: { from: number; to: number; text: string }) => {
+      if (selection.from === selection.to) {
         return;
       }
-      const { from, to } = view.state.selection;
-      if (from === to) {
-        return;
-      }
-      // textBetween with " " for both leaf-block and block
-      // separators collapses table cells, paragraphs, and
-      // inline atoms into a single-line phrase fit for the
-      // term-to-anonymize input.
-      const raw = view.state.doc.textBetween(from, to, " ", " ");
-      const single = raw.replace(/\s+/g, " ").trim();
+      const single = selection.text.replace(/\s+/g, " ").trim();
       if (single.length < 2 || single.length > 200) {
         return;
       }
-      publish(fieldId, single);
-    };
-    return () => {
-      // Restore the original dispatch so subsequent unmounted
-      // wrappers don't pile up if the view is reused.
-      view.dispatch = originalDispatch;
+      useDocumentTextSelectionStore.getState().publish(fieldId, single);
+    },
+    [fieldId],
+  );
+  useEffect(
+    () => () => {
       useDocumentTextSelectionStore.getState().clear(fieldId);
-    };
-  }, [editorViewForAnonymization, fieldId]);
+    },
+    [fieldId],
+  );
 
   // Two-way bridge with the inspector anonymization facet.
   // - Click in document → push to store as source="doc" with
@@ -1309,6 +1283,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
                 onCompatibilityChange?.(nextCompatibility);
               }}
               onAnonymizationMatchesChange={handleAnonymizationMatchesChange}
+              onSelectionTextChange={handleSelectionTextChange}
               onAnonymizationTermClick={handleAnonymizationTermClick}
               selectedAnonymizationCanonical={sidebarSelectedCanonical}
               anonymizationSelectionSeq={sidebarSelectionSeq}

@@ -306,6 +306,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       author = "User",
       onChange,
       onSelectionChange,
+      onSelectionTextChange,
       onError,
       onFontsLoaded: onFontsLoadedCallback,
       theme,
@@ -3065,6 +3066,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                             handleSelectionChange(null);
                           }
                         }}
+                        {...(onSelectionTextChange !== undefined
+                          ? { onSelectionTextChange }
+                          : {})}
                         externalPlugins={editorPlugins}
                         onHyperlinkClick={handleHyperlinkClick}
                         onContextMenu={handleContextMenu}

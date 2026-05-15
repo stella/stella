@@ -180,6 +180,21 @@ export type PagedEditorProps = {
   onReadOnlyEditAttempt?: () => void;
   /** Callback when selection changes. */
   onSelectionChange?: (from: number, to: number) => void;
+  /**
+   * Callback when the active text selection changes. Fires
+   * with the resolved PM positions and the selected plain
+   * text (atom inline nodes — tab, hard_break — are
+   * collapsed to a single space). Useful for consumers that
+   * want the selected phrase without having to hold a
+   * reference to the editor view themselves; fires on every
+   * selection-bearing transaction (caret moves, drag,
+   * word-select, programmatic `setSelection`).
+   */
+  onSelectionTextChange?: (selection: {
+    from: number;
+    to: number;
+    text: string;
+  }) => void;
   /** External ProseMirror plugins. */
   externalPlugins?: Plugin[];
   /** Extension manager for plugins/schema/commands (optional — falls back to default) */
@@ -1341,6 +1356,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       onDocumentChange,
       onReadOnlyEditAttempt,
       onSelectionChange,
+      onSelectionTextChange,
       externalPlugins = EMPTY_PLUGINS,
       extensionManager,
       onHeaderFooterDoubleClick,
@@ -1390,12 +1406,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     // Store callbacks in refs to avoid infinite re-render loops
     // when parent passes unstable callback references
     const onSelectionChangeRef = useRef(onSelectionChange);
+    const onSelectionTextChangeRef = useRef(onSelectionTextChange);
     const onDocumentChangeRef = useRef(onDocumentChange);
     const onTotalPagesChangeRef = useRef(onTotalPagesChange);
     const lastTotalPagesRef = useRef<number | null>(null);
 
     // Keep refs in sync with latest props
     onSelectionChangeRef.current = onSelectionChange;
+    onSelectionTextChangeRef.current = onSelectionTextChange;
     onDocumentChangeRef.current = onDocumentChange;
     onTotalPagesChangeRef.current = onTotalPagesChange;
 
@@ -2198,6 +2216,18 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         // Always notify selection change (for toolbar sync) even if layout not ready
         // Use ref to avoid infinite loops when callback is unstable
         onSelectionChangeRef.current?.(from, to);
+        // `onSelectionTextChange` carries the resolved text
+        // alongside the range so consumers (anonymisation
+        // term prefill, etc.) don't need to hold a reference
+        // to the editor view themselves. `textBetween` with
+        // a single space for both leaf-block and block
+        // separators collapses table cells, paragraphs, and
+        // inline atoms into a single-line phrase.
+        if (onSelectionTextChangeRef.current) {
+          const text =
+            from === to ? "" : state.doc.textBetween(from, to, " ", " ");
+          onSelectionTextChangeRef.current({ from, to, text });
+        }
 
         if (suppressSelectionOverlayRef.current) {
           setCaretPosition(null);
