@@ -1089,6 +1089,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
           },
           {
@@ -1179,10 +1182,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#14"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell.tsx#1"
@@ -1207,6 +1210,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-context-menu.tsx#13"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#18"
@@ -1516,6 +1525,9 @@
           },
           {
             "location": "packages/folio/src/components/ui/Tooltip.tsx#8"
+          },
+          {
+            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#15"
           },
           {
             "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
@@ -2418,6 +2430,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
           },
           {
@@ -2508,10 +2523,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#14"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell.tsx#1"
@@ -2536,6 +2551,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-context-menu.tsx#13"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#18"
@@ -2845,6 +2866,9 @@
           },
           {
             "location": "packages/folio/src/components/ui/Tooltip.tsx#8"
+          },
+          {
+            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#15"
           },
           {
             "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
@@ -4551,6 +4575,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
           },
           {
@@ -4641,10 +4668,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#14"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell.tsx#1"
@@ -4669,6 +4696,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-context-menu.tsx#13"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#18"
@@ -4978,6 +5011,9 @@
           },
           {
             "location": "packages/folio/src/components/ui/Tooltip.tsx#8"
+          },
+          {
+            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#15"
           },
           {
             "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
@@ -5335,6 +5371,9 @@
             "location": "apps/web/src/main.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-context-menu.tsx#14"
+          },
+          {
             "location": "packages/folio/src/components/TextContextMenu.tsx#9"
           }
         ]
@@ -5536,13 +5575,16 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/mcp/server.ts#1"
+            "location": "apps/api/src/mcp/server-core.ts#1"
           },
           {
-            "location": "apps/api/src/mcp/server.ts#2"
+            "location": "apps/api/src/mcp/server-core.ts#2"
           },
           {
-            "location": "apps/api/src/mcp/server.ts#6"
+            "location": "apps/api/src/mcp/server-core.ts#6"
+          },
+          {
+            "location": "apps/api/src/mcp/server-core.ts#10"
           },
           {
             "location": "apps/api/src/mcp/tool-types.ts#4"
@@ -6341,6 +6383,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
           },
           {
@@ -6431,10 +6476,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#14"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell.tsx#1"
@@ -6459,6 +6504,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-context-menu.tsx#13"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#18"
@@ -6768,6 +6819,9 @@
           },
           {
             "location": "packages/folio/src/components/ui/Tooltip.tsx#8"
+          },
+          {
+            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#15"
           },
           {
             "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
@@ -7405,6 +7459,9 @@
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#8"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#7"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#31"
           },
           {
@@ -8028,10 +8085,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#30"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#28"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#30"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#29"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#36"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#42"
@@ -8046,7 +8103,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#41"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#40"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#47"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#25"
@@ -8627,6 +8684,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#10"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#19"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#7"
           },
           {
@@ -8684,7 +8744,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#35"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#38"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#45"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#23"
@@ -8697,6 +8757,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#44"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#45"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#56"
@@ -8966,6 +9029,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#8"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#8"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/matter-numbering-card.tsx#7"
           },
           {
@@ -9035,7 +9101,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#20"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#30"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#37"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#9"
@@ -9045,6 +9111,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inline-edit.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#28"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#33"
@@ -9273,6 +9342,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#17"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#6"
@@ -9593,10 +9665,13 @@
             "location": "apps/web/src/routes/_protected.settings/organization.members.tsx#37"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/route.tsx#13"
+            "location": "apps/web/src/routes/_protected.settings/route.tsx#14"
           },
           {
             "location": "apps/web/src/routes/_protected.todos/index.tsx#28"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.tsx#37"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#42"
@@ -9641,7 +9716,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#36"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#39"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#46"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon.tsx#3"
@@ -9995,6 +10070,9 @@
             "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#25"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#18"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/matter-numbering-card.tsx#10"
           },
           {
@@ -10032,6 +10110,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#32"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#37"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#53"
@@ -10139,7 +10220,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-form.tsx#17"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#37"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#44"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/field-value-select.tsx#9"
@@ -10190,7 +10271,13 @@
             "location": "apps/web/src/components/contact-picker.tsx#16"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#16"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox.tsx#10"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#36"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/-components/create-matter-dialog.tsx#24"
@@ -10338,6 +10425,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#43"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#44"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-anchored-menu.tsx#4"
@@ -11465,6 +11555,12 @@
             "location": "apps/web/src/routes/_protected.organization/-settings-queries.ts#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-mutations/anonymization-blacklist.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-queries/anonymization-blacklist.ts#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.todos/-queries.ts#1"
           },
           {
@@ -11495,6 +11591,12 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications.ts#3"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-mutations/anonymization-allowlist.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-mutations/anonymization-terms.ts#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-mutations/billing-codes.ts#1"
           },
           {
@@ -11520,6 +11622,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-mutations/workspace-members.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/anonymization-allowlist.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/anonymization-terms.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/billing-codes.ts#1"
@@ -11717,6 +11825,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#3"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#3"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#3"
           },
           {
@@ -11786,7 +11897,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#17"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#18"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/editable-field.tsx#15"
@@ -11796,6 +11907,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#18"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#18"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#25"
@@ -12249,6 +12363,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.ai.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.anonymization.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.index.tsx#1"
@@ -13996,6 +14113,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
           },
           {
@@ -14086,10 +14206,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#14"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell.tsx#1"
@@ -14114,6 +14234,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-context-menu.tsx#13"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#18"
@@ -14423,6 +14549,9 @@
           },
           {
             "location": "packages/folio/src/components/ui/Tooltip.tsx#8"
+          },
+          {
+            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#15"
           },
           {
             "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
@@ -15737,6 +15866,12 @@
           },
           {
             "location": "apps/api/src/handlers/views/update.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/anonymization-allowlist.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/anonymization-terms.ts#1"
           },
           {
             "location": "apps/api/src/handlers/workspaces/archive.ts#1"
@@ -17193,6 +17328,12 @@
             "location": "apps/api/src/handlers/views/update.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/workspaces/anonymization-allowlist.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/anonymization-terms.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/workspaces/archive.ts#2"
           },
           {
@@ -17236,6 +17377,9 @@
           },
           {
             "location": "apps/api/src/handlers/workspaces/workspace-members-remove.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/anonymization-allowlist.ts#1"
           },
           {
             "location": "apps/api/src/lib/anonymization-blacklist.ts#2"
@@ -17287,6 +17431,12 @@
           },
           {
             "location": "apps/api/src/lib/scheduler/tasks/infosoud.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/search/contact-workspace-access-sql.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/search/contact-workspace-access-sql.ts#2"
           },
           {
             "location": "apps/api/src/lib/search/index-entity.ts#2"
@@ -17850,7 +18000,7 @@
             "location": "apps/api/src/handlers/invoices/update.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/mcp/routes.ts#1"
+            "location": "apps/api/src/handlers/mcp/routes-core.ts#1"
           },
           {
             "location": "apps/api/src/handlers/mcp-connectors/connect.ts#3"
@@ -18145,6 +18295,12 @@
           },
           {
             "location": "apps/api/src/handlers/views/table-export.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/anonymization-allowlist.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/anonymization-terms.ts#3"
           },
           {
             "location": "apps/api/src/handlers/workspaces/create.ts#3"
@@ -19078,16 +19234,19 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#5"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#4"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.members.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/route.tsx#9"
+            "location": "apps/web/src/routes/_protected.settings/route.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/route.tsx#10"
+            "location": "apps/web/src/routes/_protected.settings/route.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.todos/index.tsx#18"
@@ -19162,7 +19321,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/document-icon.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#25"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#26"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/drop-zone.tsx#9"
@@ -19181,6 +19340,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#29"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#25"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#27"
@@ -20272,6 +20434,9 @@
             "location": "packages/folio/src/core/prosemirror/plugins/aiSuggestionDecorations.ts#14"
           },
           {
+            "location": "packages/folio/src/core/prosemirror/plugins/anonymizationDecorations.ts#20"
+          },
+          {
             "location": "packages/folio/src/core/prosemirror/plugins/suggestionMode.ts#14"
           },
           {
@@ -20402,6 +20567,9 @@
           },
           {
             "location": "packages/folio/src/core/prosemirror/plugins/aiSuggestionDecorations.ts#15"
+          },
+          {
+            "location": "packages/folio/src/core/prosemirror/plugins/anonymizationDecorations.ts#21"
           },
           {
             "location": "packages/folio/src/core/prosemirror/plugins/selectionTracker.ts#11"
@@ -20639,6 +20807,9 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#28"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#27"
+          },
+          {
             "location": "packages/folio/src/components/DocxEditor.tsx#38"
           },
           {
@@ -20852,6 +21023,9 @@
           },
           {
             "location": "apps/web/src/main.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-context-menu.tsx#14"
           },
           {
             "location": "packages/folio/src/components/TextContextMenu.tsx#9"
@@ -21452,6 +21626,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
           },
           {
@@ -21542,10 +21719,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#14"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell.tsx#1"
@@ -21570,6 +21747,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-context-menu.tsx#13"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#18"
@@ -21879,6 +22062,9 @@
           },
           {
             "location": "packages/folio/src/components/ui/Tooltip.tsx#8"
+          },
+          {
+            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#15"
           },
           {
             "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
@@ -22662,6 +22848,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#6"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#5"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#4"
           },
           {
@@ -22683,13 +22872,16 @@
             "location": "apps/web/src/routes/_protected.settings/organization.ai.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/organization.anonymization.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/organization.matter-numbering.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.members.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/route.tsx#11"
+            "location": "apps/web/src/routes/_protected.settings/route.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.todos/index.tsx#19"
@@ -22776,7 +22968,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#18"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#26"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#28"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/drop-zone.tsx#10"
@@ -22801,6 +22993,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inline-edit.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-context-menu.tsx#16"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#26"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#28"
@@ -23520,6 +23718,12 @@
           },
           {
             "location": "apps/web/src/lib/pinned-store.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-active-store.ts#14"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-matches-store.ts#17"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store.ts#2"
