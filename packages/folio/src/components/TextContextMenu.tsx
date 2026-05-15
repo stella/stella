@@ -942,7 +942,7 @@ export function useTextContextMenu(
           // Trigger paste event with shift key simulation
           // Note: This may not work in all browsers due to security restrictions
           navigator.clipboard
-            .readText?.()
+            .readText()
             .then((text) => {
               document.execCommand("insertText", false, text);
             })

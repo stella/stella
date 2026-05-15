@@ -278,7 +278,7 @@ const CreateOrganizationForm = ({
         return;
       }
 
-      if (!slugCheckData?.status) {
+      if (!slugCheckData.status) {
         formApi.setErrorMap({
           onSubmit: { fields: { slug: t("errors.slugAlreadyTaken") } },
         });

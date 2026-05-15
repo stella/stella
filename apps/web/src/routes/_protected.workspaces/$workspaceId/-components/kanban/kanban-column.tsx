@@ -274,7 +274,7 @@ export const KanbanColumn = ({
 
     // Column draggable: entire column is the element,
     // grip icon is the drag handle (Trello-style).
-    if (isDraggable && handle && columnValue !== null) {
+    if (isDraggable && handle) {
       cleanups.push(
         draggable({
           element: el,
@@ -369,9 +369,7 @@ export const KanbanColumn = ({
                 <button className="shrink-0 cursor-pointer" type="button">
                   <span
                     className="block size-2.5 rounded-full"
-                    style={{
-                      backgroundColor: color,
-                    }}
+                    style={{ backgroundColor: color }}
                   />
                 </button>
               </ColorPicker>
@@ -381,9 +379,7 @@ export const KanbanColumn = ({
             return (
               <span
                 className="size-2.5 rounded-full"
-                style={{
-                  backgroundColor: color,
-                }}
+                style={{ backgroundColor: color }}
               />
             );
           }

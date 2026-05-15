@@ -103,6 +103,13 @@ export const finalizeDesktopEditSessionHandler = async ({
       });
   };
 
+  const deleteCheckpointKeyIfPresent = async (checkpointKey: string | null) => {
+    if (checkpointKey === null) {
+      return;
+    }
+    await deleteCheckpointKey(checkpointKey);
+  };
+
   const deleteUploadedKey = async (uploadedKey: string) => {
     await getS3()
       .delete(uploadedKey)
@@ -432,9 +439,7 @@ export const finalizeDesktopEditSessionHandler = async ({
     if ("error" in result) {
       await Promise.all(uploadedKeys.map(deleteUploadedKey));
 
-      if (checkpointKeyToDelete !== null) {
-        await deleteCheckpointKey(checkpointKeyToDelete);
-      }
+      await deleteCheckpointKeyIfPresent(checkpointKeyToDelete);
 
       return status(result.error.statusCode, {
         ...("code" in result.error && { code: result.error.code }),
@@ -444,9 +449,7 @@ export const finalizeDesktopEditSessionHandler = async ({
 
     shouldRollbackUploadedKeys = false;
 
-    if (checkpointKeyToDelete !== null) {
-      await deleteCheckpointKey(checkpointKeyToDelete);
-    }
+    await deleteCheckpointKeyIfPresent(checkpointKeyToDelete);
 
     broadcast(authorizedSession.value.workspaceId, {
       type: "invalidate-query",

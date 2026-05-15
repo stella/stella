@@ -79,10 +79,6 @@ export function getTableFromDocument(
   doc: Document,
   tableIndex: number,
 ): Table | null {
-  if (!doc.package?.document?.content) {
-    return null;
-  }
-
   let currentTableIndex = 0;
   for (const block of doc.package.document.content) {
     if (block.type === "table") {
@@ -101,10 +97,6 @@ export function updateTableInDocument(
   tableIndex: number,
   newTable: Table,
 ): Document {
-  if (!doc.package?.document?.content) {
-    return doc;
-  }
-
   let currentTableIndex = 0;
   const newContent = doc.package.document.content.map((block) => {
     if (block.type === "table") {
@@ -134,10 +126,6 @@ export function deleteTableFromDocument(
   doc: Document,
   tableIndex: number,
 ): Document {
-  if (!doc.package?.document?.content) {
-    return doc;
-  }
-
   let currentTableIndex = 0;
   const newContent = doc.package.document.content.filter((block) => {
     if (block.type === "table") {

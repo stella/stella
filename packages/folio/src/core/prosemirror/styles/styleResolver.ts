@@ -306,7 +306,7 @@ export class StyleResolver {
       return target;
     }
     if (!target) {
-      return source ? { ...source } : undefined;
+      return { ...source };
     }
 
     const result = { ...target };

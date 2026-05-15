@@ -125,7 +125,7 @@ export const ShortcutFormDialog = ({
 
     setSaving(true);
 
-    if (isEdit && initial?.id) {
+    if (isEdit && initial.id) {
       const response = await api.shortcuts({ shortcutId: initial.id }).post({
         name: form.name.trim(),
         description: form.description.trim() || null,

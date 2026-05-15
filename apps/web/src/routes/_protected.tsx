@@ -397,9 +397,6 @@ function ProtectedContent({
         <div className="contents md:hidden">
           <Separator className="mx-1 h-4" orientation="vertical" />
           <Button
-            aria-pressed={
-              inspectorTabsCount > 0 ? !inspectorMinimized : undefined
-            }
             className="size-7"
             onClick={handleInspectorButtonClick}
             size="icon"

@@ -64,9 +64,6 @@ export const TimesheetWeekView = ({
   type DayData = { minutes: number; amount: number };
   const grid = useMemo(() => {
     const map = new Map<string, Map<string, DayData>>();
-    if (entries === undefined) {
-      return map;
-    }
     for (const entry of entries) {
       let dayMap = map.get(entry.matterId);
       if (!dayMap) {
@@ -91,7 +88,7 @@ export const TimesheetWeekView = ({
 
   // Find dominant currency
   const dominantCurrency = useMemo(() => {
-    if (entries === undefined || entries.length === 0) {
+    if (entries.length === 0) {
       return DEFAULT_CURRENCY;
     }
     return entries.at(0)?.currency ?? DEFAULT_CURRENCY;

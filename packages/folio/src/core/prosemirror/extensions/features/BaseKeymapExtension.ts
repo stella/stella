@@ -119,10 +119,10 @@ const splitBlockClearBorders: Command = (state, dispatch, view) => {
   // Intercept splitBlock's transaction so we can modify it before dispatch.
   // This ensures attrs + stored marks are set in a single transaction,
   // avoiding a flash where the empty paragraph has no formatting.
-  let splitTr: Transaction | null = null;
+  const splitResult = { tr: null as Transaction | null };
   const capturingDispatch = dispatch
     ? (tr: Transaction) => {
-        splitTr = tr;
+        splitResult.tr = tr;
       }
     : undefined;
 
@@ -130,10 +130,10 @@ const splitBlockClearBorders: Command = (state, dispatch, view) => {
     return false;
   }
 
-  if (dispatch && splitTr !== null) {
+  if (dispatch && splitResult.tr !== null) {
     // After split, cursor is in the new (second) paragraph.
     // Apply attr inheritance, border clearing, and stored marks to the SAME transaction.
-    const tr = splitTr as Transaction;
+    const tr = splitResult.tr;
     const { $from } = tr.selection;
     const newPara = $from.parent;
 

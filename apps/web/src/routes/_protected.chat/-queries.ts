@@ -442,7 +442,7 @@ const getAutoSendFingerprint = (
 
   const segments = [message.id];
   for (const part of message.parts) {
-    if (typeof part !== "object" || part === null || !("type" in part)) {
+    if (typeof part !== "object" || !("type" in part)) {
       continue;
     }
 
@@ -456,7 +456,6 @@ const getAutoSendFingerprint = (
     const approved =
       "approval" in part &&
       typeof part.approval === "object" &&
-      part.approval !== null &&
       "approved" in part.approval &&
       typeof part.approval.approved === "boolean"
         ? String(part.approval.approved)
@@ -485,12 +484,12 @@ export const chatThreadOptions = ({ key, context }: ChatThreadOptionsInput) =>
     gcTime: STALE_TIME.FIVETEEN.MINUTES,
     queryKey: chatKeys.thread({
       ...key,
-      allowMissingThread: context?.allowMissingThread,
+      allowMissingThread: context.allowMissingThread,
       contextKind: getChatRuntimeContextKind(context),
     }),
     queryFn: async ({ client: queryClient }): Promise<ChatThreadFetched> => {
       const { messages, contextMatterIds } = await fetchThreadMessages(key, {
-        allowMissingThread: context?.allowMissingThread,
+        allowMissingThread: context.allowMissingThread,
       });
 
       const chat = new Chat<PersistedChatMessage>({

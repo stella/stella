@@ -188,9 +188,9 @@ function normalizeFlowBlockArray(blocks: FlowBlock[]): FlowBlock[] {
 }
 
 function normalizeTableBlock(block: TableBlock): TableBlock {
-  let changed = false;
+  const blockState = { changed: false };
   const rows = block.rows.map((row) => {
-    let rowChanged = false;
+    const rowState = { changed: false };
     const cells = row.cells.map((cell) => {
       const normalizedBlocks = normalizeFlowBlockArray(cell.blocks);
       const cellChanged = normalizedBlocks.some(
@@ -199,17 +199,17 @@ function normalizeTableBlock(block: TableBlock): TableBlock {
       if (!cellChanged) {
         return cell;
       }
-      rowChanged = true;
+      rowState.changed = true;
       return { ...cell, blocks: normalizedBlocks };
     });
-    if (!rowChanged) {
+    if (!rowState.changed) {
       return row;
     }
-    changed = true;
+    blockState.changed = true;
     return { ...row, cells };
   });
 
-  return changed ? { ...block, rows } : block;
+  return blockState.changed ? { ...block, rows } : block;
 }
 
 // =============================================================================
@@ -330,7 +330,7 @@ function resolveHeaderFooterFloatingTableVisualTop(
 /**
  * Image is rendered "behind" body content (full-page letterhead, watermark).
  * The renderer lifts these out of the HF container to the page root, so they
- * must not push body margins down — they paint underneath the body by design.
+ * must not push body margins down because they paint underneath the body.
  */
 function isBehindDocImageRun(run: Run): boolean {
   return run.kind === "image" && run.wrapType === "behind";
@@ -564,11 +564,7 @@ export function convertHeaderFooterToContent(
   metrics: HeaderFooterMetrics,
   options: ConvertHeaderFooterOptions,
 ): HeaderFooterContent | undefined {
-  if (
-    !headerFooter ||
-    !headerFooter.content ||
-    headerFooter.content.length === 0
-  ) {
+  if (!headerFooter || headerFooter.content.length === 0) {
     return undefined;
   }
 

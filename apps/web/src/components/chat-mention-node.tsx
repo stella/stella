@@ -84,10 +84,10 @@ export const ChatMentionNode = (props: NodeViewProps) => {
         }
       >
         <CategoryIcon
-          attrId={attrs.id ?? ""}
-          attrKind={attrs.kind ?? "document"}
+          attrId={attrs.id}
+          attrKind={attrs.kind}
           attrMimeType={attrs.mimeType}
-          category={attrs.category ?? "entity"}
+          category={attrs.category}
         />
         <span className={cn("truncate", CHAT_MENTION_LABEL_MAX_WIDTH_CLASS)}>
           {attrs.label}

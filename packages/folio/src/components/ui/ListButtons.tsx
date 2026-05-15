@@ -67,7 +67,7 @@ export function ListButtons({
   const isBullet = listState?.type === "bullet";
   const isNumbered = listState?.type === "numbered";
   const isInList = listState?.isInList || isBullet || isNumbered;
-  const canOutdent = (isInList && (listState?.level ?? 0) > 0) || hasIndent;
+  const canOutdent = (isInList && listState.level > 0) || hasIndent;
 
   return (
     <div

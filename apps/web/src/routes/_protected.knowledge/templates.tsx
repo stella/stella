@@ -719,7 +719,7 @@ const TemplateDetail = ({
               </p>
             </div>
             <Button
-              disabled={state !== "ready"}
+              disabled={false}
               onClick={handleTestFill}
               size="sm"
               variant="outline"

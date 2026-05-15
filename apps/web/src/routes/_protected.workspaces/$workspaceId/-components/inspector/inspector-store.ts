@@ -687,9 +687,7 @@ export const useInspectorStore = create<State & Actions>()(
             if (tab.mimeType !== undefined) {
               existing.mimeType = tab.mimeType;
             }
-            if (tab.pdfFileId !== undefined) {
-              existing.pdfFileId = tab.pdfFileId;
-            }
+            existing.pdfFileId = tab.pdfFileId;
             // Bump the render id only when the underlying field
             // changed (version switch); a no-op re-open of the same
             // field shouldn't remount the viewer subtree.
@@ -748,9 +746,7 @@ export const useInspectorStore = create<State & Actions>()(
             if (tab.mimeType !== undefined) {
               existing.mimeType = tab.mimeType;
             }
-            if (tab.pdfFileId !== undefined) {
-              existing.pdfFileId = tab.pdfFileId;
-            }
+            existing.pdfFileId = tab.pdfFileId;
             existing.renderId = uuidv7();
             state.tabs = state.tabs.filter(
               (t, i) =>

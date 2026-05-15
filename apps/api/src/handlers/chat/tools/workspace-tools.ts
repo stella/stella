@@ -48,9 +48,6 @@ const formatFieldValue = (content: FieldContent): string => {
       });
     }
     case "int":
-      if (content.value === null || content.value === undefined) {
-        return "";
-      }
       return content.currency
         ? `${content.value} ${content.currency}`
         : String(content.value);

@@ -71,7 +71,7 @@ export const CellResult = ({
   if (type === "file") {
     return (
       <FileCell
-        encrypted={field.content.encrypted ?? false}
+        encrypted={field.content.encrypted}
         entityId={field.entityId}
         fieldId={field.id}
         fileName={field.content.fileName}

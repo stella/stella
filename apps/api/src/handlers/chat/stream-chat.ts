@@ -187,6 +187,7 @@ const runChatStream = async ({
   );
   writer.merge(finalised);
   await flushed;
+  // eslint-disable-next-line typescript/no-unnecessary-condition -- onFinish can set this while the provider stream drains.
   return emptyCompletion !== null;
 };
 
@@ -357,7 +358,7 @@ export const streamChat = async ({
         onAiError,
       });
 
-      if (primaryEmpty && fallbackEligible && fallbackInfo !== null) {
+      if (primaryEmpty && fallbackEligible) {
         // Same conversation, different model. If the fallback also
         // returns empty we surface the error chunk; one automatic
         // retry on a different model is bounded and recoverable,

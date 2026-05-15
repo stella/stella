@@ -143,16 +143,9 @@ export const parseBlockTree = (
         if (eachBlock) {
           result.push(eachBlock);
         }
-      } else if (
-        d.kind === "endif" ||
-        d.kind === "endeach" ||
-        d.kind === "elseif" ||
-        d.kind === "else"
-      ) {
+      } else {
         // These are handled by their parent parsers
         break;
-      } else {
-        i++;
       }
     }
 
@@ -225,17 +218,13 @@ export const parseBlockTree = (
         return { kind: "if", branches, directiveParagraphs };
       }
 
-      if (d.kind === "endeach") {
-        errors.push({
-          message: "Unexpected {{/each}} inside {{#if}} block",
-          paragraphIndex: d.paragraphIndex,
-          directive: "{{/each}}",
-        });
-        i++;
-        break;
-      }
-
+      errors.push({
+        message: "Unexpected {{/each}} inside {{#if}} block",
+        paragraphIndex: d.paragraphIndex,
+        directive: "{{/each}}",
+      });
       i++;
+      break;
     }
 
     // Unclosed #if
@@ -295,17 +284,13 @@ export const parseBlockTree = (
         break;
       }
 
-      if (d.kind === "elseif" || d.kind === "else") {
-        errors.push({
-          message: `Unexpected {{#${d.kind}}} inside {{#each}} block`,
-          paragraphIndex: d.paragraphIndex,
-          directive: `{{#${d.kind}}}`,
-        });
-        i++;
-        continue;
-      }
-
+      errors.push({
+        message: `Unexpected {{#${d.kind}}} inside {{#each}} block`,
+        paragraphIndex: d.paragraphIndex,
+        directive: `{{#${d.kind}}}`,
+      });
       i++;
+      continue;
     }
 
     // Unclosed #each
@@ -332,15 +317,12 @@ export const parseBlockTree = (
       d.kind === "elseif" ||
       d.kind === "else"
     ) {
-      const tag = (() => {
-        if (d.kind === "endif") {
-          return "{{/if}}";
-        }
-        if (d.kind === "endeach") {
-          return "{{/each}}";
-        }
-        return `{{#${d.kind}}}`;
-      })();
+      let tag = `{{#${d.kind}}}`;
+      if (d.kind === "endif") {
+        tag = "{{/if}}";
+      } else if (d.kind === "endeach") {
+        tag = "{{/each}}";
+      }
       errors.push({
         message: `Orphaned ${tag} without matching opening directive`,
         paragraphIndex: d.paragraphIndex,
@@ -378,7 +360,7 @@ export const flattenTemplateData = (
       result[fullKey] = String(value);
     } else if (Array.isArray(value)) {
       // Arrays are not flattened — handled by #each
-    } else if (typeof value === "object" && value !== null) {
+    } else if (typeof value === "object") {
       Object.assign(result, flattenTemplateData(value, fullKey));
     }
   }

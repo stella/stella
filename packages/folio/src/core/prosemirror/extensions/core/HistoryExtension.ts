@@ -14,10 +14,8 @@ export const HistoryExtension = createExtension({
     return {
       plugins: [
         history({
-          ...(options.depth !== undefined ? { depth: options.depth } : {}),
-          ...(options.newGroupDelay !== undefined
-            ? { newGroupDelay: options.newGroupDelay }
-            : {}),
+          depth: options.depth,
+          newGroupDelay: options.newGroupDelay,
         }),
       ],
       commands: {

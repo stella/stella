@@ -3,7 +3,12 @@ import { Schema } from "prosemirror-model";
 import { EditorState } from "prosemirror-state";
 import type { Transaction } from "prosemirror-state";
 
-import { acceptAIEditRevision, rejectAIEditRevision } from "./comments";
+import {
+  acceptAIEditRevision,
+  findNextChange,
+  findPreviousChange,
+  rejectAIEditRevision,
+} from "./comments";
 
 const schema = new Schema({
   nodes: {
@@ -35,9 +40,6 @@ const makeStateWithMarks = () => {
   // mark untouched; the previous resolveChange ignored the
   // revision id and processed every insertion mark in the range.
   const insertion = schema.marks["insertion"];
-  if (!insertion) {
-    throw new Error("insertion mark missing");
-  }
   return EditorState.create({
     schema,
     doc: schema.node("doc", null, [
@@ -106,5 +108,55 @@ describe("AI revision accept/reject scoping", () => {
     // remaining insertion mark belongs to revision B alone.
     expect(view.state.doc.textContent).toBe(" middle beta");
     expect(insertionRevisionsAt(view.state)).toEqual([2]);
+  });
+});
+
+describe("tracked change navigation", () => {
+  test("findNextChange returns the nearest later change before wrapping", () => {
+    const state = makeStateWithMarks();
+
+    const result = findNextChange(state, 6);
+
+    expect(result).toMatchObject({
+      from: 14,
+      to: 18,
+      type: "insertion",
+    });
+  });
+
+  test("findNextChange wraps only when there is no later change", () => {
+    const state = makeStateWithMarks();
+
+    const result = findNextChange(state, state.doc.content.size);
+
+    expect(result).toMatchObject({
+      from: 1,
+      to: 6,
+      type: "insertion",
+    });
+  });
+
+  test("findPreviousChange returns the nearest earlier change before wrapping", () => {
+    const state = makeStateWithMarks();
+
+    const result = findPreviousChange(state, 12);
+
+    expect(result).toMatchObject({
+      from: 1,
+      to: 6,
+      type: "insertion",
+    });
+  });
+
+  test("findPreviousChange wraps only when there is no earlier change", () => {
+    const state = makeStateWithMarks();
+
+    const result = findPreviousChange(state, 0);
+
+    expect(result).toMatchObject({
+      from: 14,
+      to: 18,
+      type: "insertion",
+    });
   });
 });

@@ -99,7 +99,7 @@ const buildSearchDocument = async (
     entity.currentVersion ?? panic("Entity has no currentVersion");
 
   const fieldTexts: string[] = [];
-  let title = entity.name ?? "";
+  let title = entity.name;
 
   // Sort by propertyId for deterministic title extraction
   const sortedFields = [...version.fields].toSorted((a, b) =>

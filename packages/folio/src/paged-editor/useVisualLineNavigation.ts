@@ -102,9 +102,6 @@ export function useVisualLineNavigation({
           const textNode = spanEl.firstChild as Text;
           const charIndex = Math.min(pmPos - pmStart, textNode.length);
           const ownerDoc = spanEl.ownerDocument;
-          if (!ownerDoc) {
-            continue;
-          }
           const range = ownerDoc.createRange();
           range.setStart(textNode, charIndex);
           range.setEnd(textNode, charIndex);
@@ -119,7 +116,9 @@ export function useVisualLineNavigation({
       // Check empty paragraphs
       const emptyRuns = findBodyEmptyRuns(pagesContainerRef.current);
       for (const emptyRun of emptyRuns) {
-        const paragraph = emptyRun.closest(".layout-paragraph") as HTMLElement;
+        const paragraph = emptyRun.closest(
+          ".layout-paragraph",
+        ) as HTMLElement | null;
         if (!paragraph) {
           continue;
         }
@@ -168,7 +167,9 @@ export function useVisualLineNavigation({
       // and empty paragraphs where no spans have pm data)
       for (const line of Array.from(allLines)) {
         const lineEl = line as HTMLElement;
-        const paragraph = lineEl.closest(".layout-paragraph") as HTMLElement;
+        const paragraph = lineEl.closest(
+          ".layout-paragraph",
+        ) as HTMLElement | null;
         if (!paragraph) {
           continue;
         }
@@ -197,7 +198,7 @@ export function useVisualLineNavigation({
       const emptyRun = lineEl.querySelector(".layout-empty-run");
       if (emptyRun) {
         const paragraph = lineEl.closest(".layout-paragraph") as HTMLElement;
-        if (paragraph?.dataset["pmStart"]) {
+        if (paragraph.dataset["pmStart"]) {
           return Number(paragraph.dataset["pmStart"]) + 1;
         }
         const emptyRunEl = emptyRun as HTMLElement;
@@ -210,7 +211,7 @@ export function useVisualLineNavigation({
       if (spans.length === 0) {
         // Empty line - return paragraph content start
         const paragraph = lineEl.closest(".layout-paragraph") as HTMLElement;
-        if (paragraph?.dataset["pmStart"]) {
+        if (paragraph.dataset["pmStart"]) {
           return Number(paragraph.dataset["pmStart"]) + 1;
         }
         return null;
@@ -239,9 +240,6 @@ export function useVisualLineNavigation({
 
           const text = textNode as Text;
           const ownerDoc = spanEl.ownerDocument;
-          if (!ownerDoc) {
-            return pmStart;
-          }
 
           // Binary search for the character at clientX
           let lo = 0;

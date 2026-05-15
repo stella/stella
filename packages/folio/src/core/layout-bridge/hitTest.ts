@@ -118,7 +118,7 @@ export function hitTestPage(layout: Layout, point: Point): PageHit | null {
   for (let pageIndex = 0; pageIndex < layout.pages.length; pageIndex++) {
     // SAFETY: pageIndex is bounded by layout.pages.length
     const page = layout.pages[pageIndex]!;
-    const pageHeight = page.size?.h ?? layout.pageSize.h;
+    const pageHeight = page.size.h;
     const pageTop = cursorY;
     const pageBottom = pageTop + pageHeight;
 
@@ -147,10 +147,7 @@ export function hitTestPage(layout: Layout, point: Point): PageHit | null {
     return {
       pageIndex: nearestPageIndex,
       page,
-      pageY: Math.max(
-        0,
-        Math.min(point.y - pageTop, page.size?.h ?? layout.pageSize.h),
-      ),
+      pageY: Math.max(0, Math.min(point.y - pageTop, page.size.h)),
     };
   }
 
@@ -167,7 +164,7 @@ export function getPageTop(layout: Layout, pageIndex: number): number {
   for (let i = 0; i < pageIndex && i < layout.pages.length; i++) {
     // SAFETY: i is bounded by layout.pages.length
     const page = layout.pages[i]!;
-    const pageHeight = page.size?.h ?? layout.pageSize.h;
+    const pageHeight = page.size.h;
     y += pageHeight + pageGap;
   }
 
@@ -521,7 +518,7 @@ export function hitTestTableCell(
     let cellBlock: ParagraphBlock | undefined;
     let cellBlockMeasure: ParagraphMeasure | undefined;
 
-    if (cell.blocks && cell.blocks.length > 0) {
+    if (cell.blocks.length > 0) {
       // SAFETY: length > 0 guarantees index 0 exists
       const firstBlock = cell.blocks[0]!;
       const firstMeasure = cellMeasure.blocks[0];
@@ -646,7 +643,7 @@ export function getTotalDocumentHeight(layout: Layout): number {
   for (let i = 0; i < layout.pages.length; i++) {
     // SAFETY: i is bounded by layout.pages.length
     const page = layout.pages[i]!;
-    height += page.size?.h ?? layout.pageSize.h;
+    height += page.size.h;
     if (i < layout.pages.length - 1) {
       height += pageGap;
     }
@@ -676,7 +673,7 @@ export function getPageBounds(
   const top = getPageTop(layout, pageIndex);
   // SAFETY: bounds check above ensures pageIndex is valid
   const page = layout.pages[pageIndex]!;
-  const height = page.size?.h ?? layout.pageSize.h;
+  const height = page.size.h;
 
   return {
     top,

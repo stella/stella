@@ -172,9 +172,7 @@ export function StylePicker({
           color: s.rPr?.color?.rgb ?? def?.color,
         };
       });
-    return docStyles.toSorted(
-      (a, b) => (a.priority ?? 99) - (b.priority ?? 99),
-    );
+    return docStyles.toSorted((a, b) => a.priority - b.priority);
   }, [styles]);
 
   return (

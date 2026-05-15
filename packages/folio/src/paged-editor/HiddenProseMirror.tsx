@@ -158,19 +158,13 @@ function createInitialState(
   externalPlugins: Plugin[] = [],
 ): EditorState {
   const activeSchema = manager?.getSchema() ?? schema;
-  const doc = (() => {
-    if (document) {
-      return (() => {
-        if (styles === undefined || styles === null) {
-          return toProseDoc(document);
-        }
-        return toProseDoc(document, {
-          styles,
-        });
-      })();
-    }
-    return createEmptyDoc();
-  })();
+  let doc = createEmptyDoc();
+  if (document) {
+    doc =
+      styles === undefined || styles === null
+        ? toProseDoc(document)
+        : toProseDoc(document, { styles });
+  }
 
   // External plugins go first so they can intercept before extension keymaps
   // (e.g. suggestion mode must handle Backspace/Delete before deleteSelection)
@@ -399,7 +393,7 @@ const HiddenProseMirrorComponent = forwardRef<
       // Use the document's package id or a hash of its structure
       // For simplicity, we compare based on whether it's a different document object
       // and whether it has different metadata
-      const meta = doc.package?.properties;
+      const meta = doc.package.properties;
       return `${meta?.created || ""}-${meta?.modified || ""}-${meta?.title || ""}`;
     };
 

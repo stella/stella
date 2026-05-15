@@ -24,7 +24,6 @@ const extractCheckValues = (
   let inList: string | undefined;
   for (const chunk of chunks) {
     if (
-      chunk !== null &&
       typeof chunk === "object" &&
       "value" in chunk &&
       Array.isArray(chunk.value)

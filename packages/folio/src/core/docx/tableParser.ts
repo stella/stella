@@ -342,12 +342,12 @@ export function parseShading(
     shading.fill = { themeColor: themeFill as ThemeColorSlot };
 
     const themeFillTint = getAttribute(shdElement, "w", "themeFillTint");
-    if (themeFillTint && shading.fill) {
+    if (themeFillTint) {
       shading.fill.themeTint = themeFillTint;
     }
 
     const themeFillShade = getAttribute(shdElement, "w", "themeFillShade");
-    if (themeFillShade && shading.fill) {
+    if (themeFillShade) {
       shading.fill.themeShade = themeFillShade;
     }
   }

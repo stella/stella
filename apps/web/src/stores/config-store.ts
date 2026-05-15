@@ -54,7 +54,7 @@ export const useConfigStore = create<ConfigState>()(
 
       toggleGroupCollapsed: (groupId) => {
         void set((s) => {
-          const current = s.matters.collapsedGroups ?? [];
+          const current = s.matters.collapsedGroups;
           const next = current.includes(groupId)
             ? current.filter((id) => id !== groupId)
             : [...current, groupId];

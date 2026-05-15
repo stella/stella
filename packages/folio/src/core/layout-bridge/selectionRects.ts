@@ -123,7 +123,7 @@ function computeLinePmRange(
 
     if (runIndex < line.fromRun) {
       if (run.kind === "text") {
-        charOffset += (run.text ?? "").length;
+        charOffset += run.text.length;
       } else {
         charOffset += 1;
       }
@@ -151,7 +151,7 @@ function computeLinePmRange(
     }
 
     if (run.kind === "text") {
-      const text = run.text ?? "";
+      const text = run.text;
       const start = runIndex === line.fromRun ? line.fromChar : 0;
       const end = runIndex === line.toRun ? line.toChar : text.length;
       lineLength += end - start;
@@ -267,7 +267,7 @@ function charOffsetToX(
     }
 
     if (run.kind === "text") {
-      const text = run.text ?? "";
+      const text = run.text;
 
       // Get portion of text for this line
       const isFirstRun = runIndex === line.fromRun;

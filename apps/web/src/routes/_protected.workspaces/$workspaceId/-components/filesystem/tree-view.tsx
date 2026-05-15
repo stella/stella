@@ -1365,9 +1365,12 @@ const FilesystemRow = ({
       )}
       {(() => {
         if (isFolder) {
-          return expanded ? (
-            <FolderOpenIcon className="text-muted-foreground size-4 shrink-0" />
-          ) : (
+          if (expanded) {
+            return (
+              <FolderOpenIcon className="text-muted-foreground size-4 shrink-0" />
+            );
+          }
+          return (
             <FolderIcon className="text-muted-foreground size-4 shrink-0" />
           );
         }
@@ -1381,38 +1384,33 @@ const FilesystemRow = ({
         }
         return <FileIcon className="text-muted-foreground size-4 shrink-0" />;
       })()}
-      {(() => {
-        if (isEditing) {
-          return (
-            <InlineEdit
-              inputClassName="w-48"
-              onCancel={cancelEditing}
-              onChange={setEditValue}
-              onCommit={commitRename}
-              suffix={
-                ext ? (
-                  <span className="text-muted-foreground text-sm">{ext}</span>
-                ) : undefined
-              }
-              value={editValue}
-            />
-          );
-        }
-        return (
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate" title={name}>
-              {name}
-            </span>
-            {node.activeEditBy && (
-              <ActiveEditBadge
-                className="shrink-0"
-                image={node.activeEditBy.image}
-                name={node.activeEditBy.name}
-              />
-            )}
+      {isEditing ? (
+        <InlineEdit
+          inputClassName="w-48"
+          onCancel={cancelEditing}
+          onChange={setEditValue}
+          onCommit={commitRename}
+          suffix={
+            ext ? (
+              <span className="text-muted-foreground text-sm">{ext}</span>
+            ) : undefined
+          }
+          value={editValue}
+        />
+      ) : (
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate" title={name}>
+            {name}
           </span>
-        );
-      })()}
+          {node.activeEditBy && (
+            <ActiveEditBadge
+              className="shrink-0"
+              image={node.activeEditBy.image}
+              name={node.activeEditBy.name}
+            />
+          )}
+        </span>
+      )}
     </span>
   );
 
@@ -1483,7 +1481,7 @@ const FilesystemRow = ({
     if (node.kind === "task") {
       return () => useInspectorStore.getState().openTask(node.entityId, name);
     }
-    if (navigable && file !== undefined) {
+    if (navigable) {
       return () =>
         useInspectorStore.getState().openFile({
           id: file.fieldId,
@@ -1508,15 +1506,12 @@ const FilesystemRow = ({
   } else if (!contextOpen) {
     bulkEntitiesRef.current = undefined;
   }
-  const bulkEntities = (() => {
-    if (contextOpen) {
-      return bulkEntitiesRef.current;
-    }
-    if (isBulkSelected) {
-      return getSelectedEntities(selectedIds);
-    }
-    return undefined;
-  })();
+  let bulkEntities: WorkspaceEntity[] | undefined;
+  if (contextOpen) {
+    bulkEntities = bulkEntitiesRef.current;
+  } else if (isBulkSelected) {
+    bulkEntities = getSelectedEntities(selectedIds);
+  }
 
   const rowActionsNode = (
     <span className="flex justify-end">

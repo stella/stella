@@ -390,12 +390,7 @@ const CategoryIcon = ({
 }) => {
   const Icon = CATEGORY_ICON[category];
   return (
-    <Icon
-      className="size-3 shrink-0"
-      {...(category === "workspace"
-        ? { style: { color: getMatterColor(id) } }
-        : {})}
-    />
+    <Icon className="size-3 shrink-0" style={{ color: getMatterColor(id) }} />
   );
 };
 

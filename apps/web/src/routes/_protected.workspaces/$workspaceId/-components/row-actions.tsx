@@ -47,11 +47,7 @@ import { env } from "@/env";
 import { api } from "@/lib/api";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { DOCX_MIME } from "@/lib/consts";
-import {
-  DesktopBridgeIncompatibleError,
-  openDocxInDesktop,
-} from "@/lib/desktop-bridge";
-import { showDesktopEditOpenResultToast } from "@/lib/desktop-edit-status-toast";
+import { openDocxInDesktop } from "@/lib/desktop-bridge";
 import { ClientOperationError, isUnauthorizedError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceCellMetadata, WorkspaceEntity } from "@/lib/types";
@@ -224,10 +220,12 @@ export const RowActions = ({
         ...(isLockedByMe ? { force: true as const } : {}),
       };
 
-      const openResult = await openDocxInDesktop(desktopInput);
-      await showDesktopEditOpenResultToast({
-        result: openResult,
-        t,
+      await openDocxInDesktop(desktopInput);
+
+      stellaToast.add({
+        description: t("workspaces.files.desktopEdit.openedDescription"),
+        title: t("workspaces.files.desktopEdit.openedTitle"),
+        type: "success",
       });
     } catch (error) {
       if (error instanceof Error && isUnauthorizedError(error)) {
@@ -236,17 +234,6 @@ export const RowActions = ({
             "workspaces.files.desktopEdit.authRequiredDescription",
           ),
           title: t("workspaces.files.desktopEdit.authRequiredTitle"),
-          type: "error",
-        });
-        return;
-      }
-
-      if (error instanceof DesktopBridgeIncompatibleError) {
-        stellaToast.add({
-          description: t(
-            "workspaces.files.desktopEdit.updateRequiredDescription",
-          ),
-          title: t("workspaces.files.desktopEdit.updateRequiredTitle"),
           type: "error",
         });
         return;
@@ -267,7 +254,7 @@ export const RowActions = ({
 
     const linkedAccount = await getFreshLinkedAccount();
 
-    const openResult = await openDocxInDesktop({
+    await openDocxInDesktop({
       apiBaseUrl: env.VITE_API_URL,
       entityId: file.entityId,
       force: true,
@@ -276,9 +263,10 @@ export const RowActions = ({
       workspaceId,
     });
 
-    await showDesktopEditOpenResultToast({
-      result: openResult,
-      t,
+    stellaToast.add({
+      description: t("workspaces.files.desktopEdit.openedDescription"),
+      title: t("workspaces.files.desktopEdit.openedTitle"),
+      type: "success",
     });
   };
 
@@ -333,17 +321,6 @@ export const RowActions = ({
               "workspaces.files.desktopEdit.authRequiredDescription",
             ),
             title: t("workspaces.files.desktopEdit.authRequiredTitle"),
-            type: "error",
-          });
-          return;
-        }
-
-        if (forceError instanceof DesktopBridgeIncompatibleError) {
-          stellaToast.add({
-            description: t(
-              "workspaces.files.desktopEdit.updateRequiredDescription",
-            ),
-            title: t("workspaces.files.desktopEdit.updateRequiredTitle"),
             type: "error",
           });
           return;
@@ -692,9 +669,7 @@ const CreateSubfolderMenuItem = ({
             title: t("success.folderCreated"),
             type: "success",
           });
-          if (data?.entityId !== undefined) {
-            onSubfolderCreated(data.entityId, entity.entityId);
-          }
+          onSubfolderCreated(data.entityId, entity.entityId);
         },
         onError: () => {
           stellaToast.add({

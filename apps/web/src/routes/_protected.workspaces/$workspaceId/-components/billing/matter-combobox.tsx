@@ -41,7 +41,7 @@ export const MatterCombobox = ({
         <ComboboxList>
           {matters.map((matter) => (
             <ComboboxItem key={matter.id} value={matter.id}>
-              {matter.name ?? t("workspaces.defaultName")}
+              {matter.name}
             </ComboboxItem>
           ))}
         </ComboboxList>

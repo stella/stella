@@ -32,7 +32,7 @@ export const cleanStalePropertyIds = (
     (f) =>
       f.field === "kind" ||
       f.field === "builtin" ||
-      (f.field === "property" && propertyIds.includes(f.propertyId)),
+      propertyIds.includes(f.propertyId),
   );
   if (cleanedFilters.length !== layout.filters.length) {
     layout.filters = cleanedFilters;

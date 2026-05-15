@@ -226,9 +226,6 @@ export function parseFootnotes(
   }
 
   const doc = parseXml(footnotesXml);
-  if (!doc) {
-    return createFootnoteMap(byId, footnotes);
-  }
 
   // Find the root footnotes element
   const rootElement = doc.elements?.find(
@@ -349,9 +346,6 @@ export function parseEndnotes(
   }
 
   const doc = parseXml(endnotesXml);
-  if (!doc) {
-    return createEndnoteMap(byId, endnotes);
-  }
 
   // Find the root endnotes element
   const rootElement = doc.elements?.find(

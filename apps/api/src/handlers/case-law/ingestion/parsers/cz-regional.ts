@@ -289,7 +289,7 @@ const toInlines = (
       ? { type: "text", text: span.text, anonymized: true }
       : { type: "text", text: span.text };
 
-    if (style?.bold && style?.italic) {
+    if (style?.bold && style.italic) {
       inlines.push({
         type: "bold",
         children: [{ type: "italic", children: [node] }],

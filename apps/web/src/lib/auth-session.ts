@@ -19,7 +19,7 @@ export const getFreshLinkedAccount = async () => {
 
   return {
     email: user.email,
-    name: user.name ?? null,
+    name: user.name,
     verifiedAt: new Date().toISOString(),
   };
 };

@@ -278,37 +278,30 @@ const InlineEditor = ({
     );
   }
 
-  if (type === "single-select" || type === "multi-select") {
-    const options =
-      property.content.type === "single-select" ||
-      property.content.type === "multi-select"
-        ? property.content.options
-        : [];
-
-    if (type === "single-select") {
-      return (
-        <FieldValueSelect
-          onChange={(value) =>
-            save({ type: "single-select", version: 1, value })
-          }
-          options={options}
-          type="single-select"
-          value={content?.type === "single-select" ? content.value : null}
-        />
-      );
-    }
-
+  const options =
+    property.content.type === "single-select" ||
+    property.content.type === "multi-select"
+      ? property.content.options
+      : [];
+  if (type === "single-select") {
     return (
       <FieldValueSelect
-        onChange={(value) => save({ type: "multi-select", version: 1, value })}
+        onChange={(value) => save({ type: "single-select", version: 1, value })}
         options={options}
-        type="multi-select"
-        value={content?.type === "multi-select" ? content.value : []}
+        type="single-select"
+        value={content?.type === "single-select" ? content.value : null}
       />
     );
   }
 
-  return <span className="text-muted-foreground text-sm">—</span>;
+  return (
+    <FieldValueSelect
+      onChange={(value) => save({ type: "multi-select", version: 1, value })}
+      options={options}
+      type="multi-select"
+      value={content?.type === "multi-select" ? content.value : []}
+    />
+  );
 };
 
 // -- Text inline editor --

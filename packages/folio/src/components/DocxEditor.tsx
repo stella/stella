@@ -615,6 +615,11 @@ function createComment(
   };
 }
 
+function getCommentParentId(comment: Comment): number | null | undefined {
+  const runtimeComment: { parentId?: number | null } = comment;
+  return runtimeComment.parentId;
+}
+
 function applyCommentMarkRange(
   view: EditorView,
   range: CommentMarkRange,
@@ -912,7 +917,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       if (!doc) {
         return;
       }
-      const bodyComments = doc.package?.document?.comments;
+      const bodyComments = doc.package.document.comments;
       if (bodyComments && bodyComments.length > 0) {
         setComments(bodyComments);
         setVisibleCommentAuthors(null);
@@ -955,17 +960,19 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     const visibleComments = useMemo(() => {
       const visibleRootIds = new Set<number>();
       for (const comment of comments) {
+        const parentId = getCommentParentId(comment);
         if (
-          comment.parentId === null ||
-          comment.parentId === undefined ||
+          parentId === null ||
+          parentId === undefined ||
           !visibleCommentIds.has(comment.id)
         ) {
           continue;
         }
-        visibleRootIds.add(comment.parentId);
+        visibleRootIds.add(parentId);
       }
       return comments.filter((comment) => {
-        if (comment.parentId !== null && comment.parentId !== undefined) {
+        const parentId = getCommentParentId(comment);
+        if (parentId !== null && parentId !== undefined) {
           return visibleCommentIds.has(comment.id);
         }
         return (
@@ -1564,7 +1571,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
 
       const doc = structuredClone(history.state);
       const pmDoc = pagedEditorRef.current?.getDocument();
-      if (pmDoc?.package?.document) {
+      if (pmDoc) {
         doc.package.document.content = pmDoc.package.document.content;
       }
       doc.package.document.comments = commentsRef.current;
@@ -1674,20 +1681,26 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             }
           ).node;
           if (selectedNode?.type.name === "image") {
+            const attrs = selectedNode.attrs;
+            const readRequiredStringAttr = (key: string, fallback: string) => {
+              const value = attrs[key];
+              return typeof value === "string" ? value : fallback;
+            };
+            const readNullableStringAttr = (key: string) => {
+              const value = attrs[key];
+              return typeof value === "string" ? value : null;
+            };
+            const borderWidth = attrs["borderWidth"];
             pmImageCtx = {
               pos: sel.from,
-              wrapType: (selectedNode.attrs["wrapType"] as string) ?? "inline",
-              displayMode:
-                (selectedNode.attrs["displayMode"] as string) ?? "inline",
-              cssFloat: (selectedNode.attrs["cssFloat"] as string) ?? null,
-              transform: (selectedNode.attrs["transform"] as string) ?? null,
-              alt: (selectedNode.attrs["alt"] as string) ?? null,
-              borderWidth:
-                (selectedNode.attrs["borderWidth"] as number) ?? null,
-              borderColor:
-                (selectedNode.attrs["borderColor"] as string) ?? null,
-              borderStyle:
-                (selectedNode.attrs["borderStyle"] as string) ?? null,
+              wrapType: readRequiredStringAttr("wrapType", "inline"),
+              displayMode: readRequiredStringAttr("displayMode", "inline"),
+              cssFloat: readNullableStringAttr("cssFloat"),
+              transform: readNullableStringAttr("transform"),
+              alt: readNullableStringAttr("alt"),
+              borderWidth: typeof borderWidth === "number" ? borderWidth : null,
+              borderColor: readNullableStringAttr("borderColor"),
+              borderStyle: readNullableStringAttr("borderStyle"),
             };
           }
         }
@@ -1851,7 +1864,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           const parentEl = editorContentRef.current;
           const { from: selFrom } = view.state.selection;
           const top = findSelectionYPosition(container, parentEl, selFrom);
-          if (top !== null && top !== undefined && container && parentEl) {
+          if (top !== null && container && parentEl) {
             const pagesEl = container.querySelector(".paged-editor__pages");
             const pageEl = pagesEl?.querySelector(
               ".layout-page",
@@ -1969,12 +1982,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
 </html>`);
       printDocument.close();
 
-      let isCleanedUp = false;
+      const cleanupState = { isCleanedUp: false };
       const cleanup = () => {
-        if (isCleanedUp) {
+        if (cleanupState.isCleanedUp) {
           return;
         }
-        isCleanedUp = true;
+        cleanupState.isCleanedUp = true;
         iframe.remove();
       };
       printWindow.addEventListener("afterprint", cleanup, { once: true });
@@ -2002,7 +2015,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       void (async () => {
         await waitForFrameLoad();
         await waitForFonts();
-        if (isCleanedUp) {
+        if (cleanupState.isCleanedUp) {
           return;
         }
         printWindow.focus();
@@ -2265,7 +2278,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                 setTablePropsOpen(true);
               } else if (action.type === "tableProperties") {
                 setTableProperties(action.props)(view.state, view.dispatch);
-              } else if (action.type === "applyTableStyle") {
+              } else {
                 // Resolve style data from built-in presets or document styles
                 let preset: TableStylePreset | undefined = getBuiltinTableStyle(
                   action.styleId,
@@ -3621,7 +3634,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                           : bodyHistoryAvailability.canRedo
                       }
                       disabled={readOnly}
-                      theme={history.state?.package.theme || theme || null}
+                      theme={history.state.package.theme || theme || null}
                       showZoomControl={showZoomControl}
                       zoom={state.zoom}
                       onZoomChange={handleZoomChange}
@@ -3633,7 +3646,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                       onTableAction={handleTableAction}
                       priorityExtra={toolbarPriorityExtra}
                       inlineExtra={toolbarInlineExtra}
-                      {...(history.state?.package.styles?.styles
+                      {...(history.state.package.styles?.styles
                         ? {
                             documentStyles: history.state.package.styles.styles,
                           }
@@ -3687,13 +3700,13 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                       <PagedEditor
                         ref={pagedEditorRef}
                         document={history.state}
-                        theme={history.state?.package.theme || theme || null}
+                        theme={history.state.package.theme || theme || null}
                         sectionProperties={effectiveSectionProperties ?? null}
                         headerContent={headerContent}
                         footerContent={footerContent}
                         firstPageHeaderContent={firstPageHeaderContent}
                         firstPageFooterContent={firstPageFooterContent}
-                        {...(history.state?.package.styles
+                        {...(history.state.package.styles
                           ? { styles: history.state.package.styles }
                           : {})}
                         onHeaderFooterDoubleClick={
@@ -3704,9 +3717,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                         zoom={state.zoom}
                         readOnly={readOnly}
                         onDocumentChange={handleDocumentChange}
-                        {...(extensionManager !== undefined
-                          ? { extensionManager }
-                          : {})}
+                        extensionManager={extensionManager}
                         {...(onReadonlyEditAttempt !== undefined
                           ? { onReadOnlyEditAttempt: onReadonlyEditAttempt }
                           : {})}
@@ -3748,8 +3759,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                                 anchorPositions={anchorPositions}
                                 pageWidth={(() => {
                                   const sp =
-                                    history.state?.package?.document
-                                      ?.finalSectionProperties;
+                                    history.state.package.document
+                                      .finalSectionProperties;
                                   return sp?.pageWidth
                                     ? Math.round(sp.pageWidth / 15)
                                     : 816;
@@ -3887,7 +3898,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
 
                       {/* Floating "add comment" button — appears on right edge of page at selection */}
                       {floatingCommentBtn !== null &&
-                        floatingCommentBtn !== undefined &&
                         !isAddingComment &&
                         !readOnly && (
                           <Tooltip
@@ -3942,11 +3952,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                                   safeRange.from,
                                 );
                                 setAddCommentYPosition(
-                                  yPos ??
-                                    floatingCommentBtn.top ??
-                                    getFallbackCommentYPosition(
-                                      scrollContainerRef.current,
-                                    ),
+                                  yPos ?? floatingCommentBtn.top,
                                 );
                                 setShowCommentsSidebar(true);
                                 setIsAddingComment(true);
@@ -4046,7 +4052,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                               onClose={() => setHfEditPosition(null)}
                               onSelectionChange={handleSelectionChange}
                               onRemove={handleRemoveHeaderFooter}
-                              {...(history.state?.package.styles
+                              {...(history.state.package.styles
                                 ? { styles: history.state.package.styles }
                                 : {})}
                             />
@@ -4194,7 +4200,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                   isOpen={showPageSetup}
                   onClose={() => setShowPageSetup(false)}
                   onApply={handlePageSetupApply}
-                  {...(history.state?.package.document?.finalSectionProperties
+                  {...(history.state.package.document.finalSectionProperties
                     ? {
                         currentProps:
                           history.state.package.document.finalSectionProperties,
@@ -4207,7 +4213,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                   isOpen={footnotePropsOpen}
                   onClose={() => setFootnotePropsOpen(false)}
                   onApply={handleApplyFootnoteProperties}
-                  {...(history.state?.package.document?.finalSectionProperties
+                  {...(history.state.package.document.finalSectionProperties
                     ?.footnotePr
                     ? {
                         footnotePr:
@@ -4215,7 +4221,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                             .footnotePr,
                       }
                     : {})}
-                  {...(history.state?.package.document?.finalSectionProperties
+                  {...(history.state.package.document.finalSectionProperties
                     ?.endnotePr
                     ? {
                         endnotePr:

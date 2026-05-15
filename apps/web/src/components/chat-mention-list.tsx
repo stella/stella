@@ -436,7 +436,7 @@ export const ChatMentionList = forwardRef<
 
           {drillDown &&
             !entitiesLoading &&
-            drillDownItems?.map((item, i) => (
+            drillDownItems.map((item, i) => (
               <Button
                 className={cn(
                   "min-w-0 justify-start gap-2 overflow-hidden font-normal",

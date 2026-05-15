@@ -280,7 +280,7 @@ export const AIConfigProvidersEditor = ({
                   <Button
                     disabled={disabled || rowStatus === "checking"}
                     loading={rowStatus === "checking"}
-                    onClick={() => onSaveRow?.(index)}
+                    onClick={() => onSaveRow(index)}
                     size="sm"
                     type="button"
                     variant={rowStatus === "invalid" ? "outline" : "default"}
@@ -307,11 +307,7 @@ export const AIConfigProvidersEditor = ({
 
           return (
             <div
-              className={
-                compact
-                  ? "grid gap-2 border-t p-2 first:border-t-0"
-                  : "grid gap-3 border-t p-3 first:border-t-0"
-              }
+              className="grid gap-3 border-t p-3 first:border-t-0"
               key={`${providerDraft.provider}-${index}`}
             >
               <div className="grid gap-2 sm:grid-cols-[minmax(8rem,0.85fr)_minmax(0,1fr)] sm:items-start">
@@ -366,7 +362,6 @@ export const AIConfigProvidersEditor = ({
                         size="sm"
                         type="button"
                         variant="outline"
-                        className={compact ? "px-2" : undefined}
                       >
                         {t("aiConfig.replaceKey")}
                       </Button>
@@ -386,7 +381,6 @@ export const AIConfigProvidersEditor = ({
                       size="sm"
                       type="button"
                       variant="ghost"
-                      className={compact ? "px-2" : undefined}
                     >
                       {t("aiConfig.keepSavedKey")}
                     </Button>
@@ -398,21 +392,14 @@ export const AIConfigProvidersEditor = ({
                     size="sm"
                     type="button"
                     variant="ghost"
-                    className={compact ? "px-2" : undefined}
                   >
                     <Trash2Icon className="size-4" />
-                    {compact ? null : t("aiConfig.removeProvider")}
+                    {t("aiConfig.removeProvider")}
                   </Button>
                 </div>
               </div>
 
-              <div
-                className={
-                  compact
-                    ? "grid gap-2 sm:grid-cols-2"
-                    : "grid gap-3 sm:grid-cols-2"
-                }
-              >
+              <div className="grid gap-3 sm:grid-cols-2">
                 {needsEndpoint && (
                   <Field>
                     <FieldLabel>{t("aiConfig.endpoint")}</FieldLabel>
@@ -429,11 +416,11 @@ export const AIConfigProvidersEditor = ({
                       type="url"
                       value={providerDraft.endpoint}
                     />
-                    {!compact && (
+                    {
                       <p className="text-muted-foreground text-xs">
                         {t("aiConfig.endpointDescription")}
                       </p>
-                    )}
+                    }
                   </Field>
                 )}
 
@@ -458,7 +445,7 @@ export const AIConfigProvidersEditor = ({
                       type="password"
                       value={providerDraft.apiKey}
                     />
-                    {hasSavedKey && !compact && (
+                    {hasSavedKey && (
                       <p className="text-muted-foreground text-xs">
                         {t("aiConfig.newApiKeyDescription")}
                       </p>
@@ -492,11 +479,11 @@ export const AIConfigProvidersEditor = ({
                         ))}
                       </SelectPopup>
                     </Select>
-                    {!compact && (
+                    {
                       <p className="text-muted-foreground text-xs">
                         {t("aiConfig.dataRegionDescription")}
                       </p>
-                    )}
+                    }
                   </Field>
                 )}
               </div>

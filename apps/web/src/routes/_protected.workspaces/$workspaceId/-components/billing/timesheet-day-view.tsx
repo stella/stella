@@ -65,15 +65,12 @@ export const TimesheetDayView = ({
   const deleteEntry = useDeleteTimeEntry();
 
   const totalMinutes = useMemo(
-    () => (entries ?? []).reduce((sum, e) => sum + e.durationMinutes, 0),
+    () => entries.reduce((sum, e) => sum + e.durationMinutes, 0),
     [entries],
   );
 
   // Compute total billed amount
   const totalBilledAmount = useMemo(() => {
-    if (entries === undefined) {
-      return 0;
-    }
     let total = 0;
     for (const e of entries) {
       if (e.billable) {
@@ -88,14 +85,14 @@ export const TimesheetDayView = ({
 
   // Find dominant currency for display
   const dominantCurrency = useMemo(() => {
-    if (entries === undefined || entries.length === 0) {
+    if (entries.length === 0) {
       return DEFAULT_CURRENCY;
     }
     return entries.at(0)?.currency ?? DEFAULT_CURRENCY;
   }, [entries]);
 
   const editingEntry = editingId
-    ? entries?.find((e) => e.id === editingId)
+    ? entries.find((e) => e.id === editingId)
     : null;
 
   const handleCreate = (values: TimeEntryFormValues) => {
@@ -197,9 +194,6 @@ export const TimesheetDayView = ({
   }, []);
 
   const handleSelectAll = () => {
-    if (entries === undefined) {
-      return;
-    }
     if (selectedIds.size === entries.length) {
       setSelectedIds(new Set());
     } else {
@@ -215,7 +209,7 @@ export const TimesheetDayView = ({
       {/* Summary bar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          {entries !== undefined && entries.length > 0 && (
+          {entries.length > 0 && (
             <Checkbox
               checked={
                 selectedIds.size === entries.length && entries.length > 0
@@ -251,7 +245,7 @@ export const TimesheetDayView = ({
       />
 
       {/* Entries list */}
-      {entries !== undefined && entries !== null && entries.length > 0 ? (
+      {entries.length > 0 ? (
         <div className="flex flex-col gap-1.5">
           {entries.map((entry) => (
             <TimeEntryRow

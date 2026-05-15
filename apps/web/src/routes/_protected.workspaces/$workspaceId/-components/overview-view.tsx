@@ -355,7 +355,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
         return {
           userId: member.userId,
-          name: member.user.name ?? member.user.email ?? "—",
+          name: member.user.name,
           image: member.user.image,
           daily,
           dailyEntries,

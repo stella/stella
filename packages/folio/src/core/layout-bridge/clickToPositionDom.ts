@@ -126,9 +126,6 @@ function findPositionInSpan(
   }
 
   const ownerDoc = spanEl.ownerDocument;
-  if (!ownerDoc) {
-    return pmStart;
-  }
 
   // Binary search for the character boundary
   let left = 0;
@@ -429,9 +426,6 @@ export function getSelectionRectsFromDom(
 
     const text = textNode as Text;
     const ownerDoc = spanEl.ownerDocument;
-    if (!ownerDoc) {
-      continue;
-    }
 
     // Calculate character range within this span
     const startChar = Math.max(0, from - pmStart);
@@ -552,9 +546,6 @@ export function getCaretPositionFromDom(
       const charIndex = Math.min(pmPos - pmStart, text.length);
 
       const ownerDoc = spanEl.ownerDocument;
-      if (!ownerDoc) {
-        continue;
-      }
 
       const range = ownerDoc.createRange();
       range.setStart(text, charIndex);

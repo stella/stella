@@ -1214,9 +1214,10 @@ function parseTableCellProperties(
  * Parse a single style element (w:style)
  */
 function parseStyle(styleEl: XmlElement, theme: Theme | null): Style {
+  const rawType = getAttribute(styleEl, "w", "type");
   const style: Style = {
     styleId: getAttribute(styleEl, "w", "styleId") ?? "",
-    type: (getAttribute(styleEl, "w", "type") as StyleType) ?? "paragraph",
+    type: rawType === null ? "paragraph" : (rawType as StyleType),
   };
 
   // Default flag
@@ -1456,7 +1457,7 @@ function mergeParagraphFormatting(
     return target;
   }
   if (!target) {
-    return source ? { ...source } : undefined;
+    return { ...source };
   }
 
   const result = { ...target };

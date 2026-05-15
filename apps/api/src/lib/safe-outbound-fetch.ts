@@ -88,7 +88,7 @@ export const fetchWithResolvedAddress = async ({
             headers: headersToObject(requestHeaders),
             hostname: url.hostname,
             lookup: (_hostname, options, callback) => {
-              if (typeof options === "object" && options?.all === true) {
+              if (typeof options === "object" && options.all === true) {
                 callback(null, [address]);
                 return;
               }
@@ -222,7 +222,7 @@ export const fetchStreamWithResolvedAddress = async ({
             headers: headersToObject(requestHeaders),
             hostname: url.hostname,
             lookup: (_hostname, options, callback) => {
-              if (typeof options === "object" && options?.all === true) {
+              if (typeof options === "object" && options.all === true) {
                 callback(null, [address]);
                 return;
               }

@@ -255,32 +255,28 @@ const renderInline = ({
     );
   }
 
-  if (node.type === "link") {
-    const safeHref = sanitizeHref(node.href);
-    const children = renderInlineChildren({
-      children: node.children,
-      context,
-      offset,
-    });
+  const safeHref = sanitizeHref(node.href);
+  const children = renderInlineChildren({
+    children: node.children,
+    context,
+    offset,
+  });
 
-    if (!safeHref) {
-      return <Fragment key={key}>{children}</Fragment>;
-    }
-
-    return (
-      <a
-        className="decoration-border underline underline-offset-2 hover:decoration-current"
-        href={safeHref}
-        key={key}
-        rel="noopener noreferrer"
-        target="_blank"
-      >
-        {children}
-      </a>
-    );
+  if (!safeHref) {
+    return <Fragment key={key}>{children}</Fragment>;
   }
 
-  return null;
+  return (
+    <a
+      className="decoration-border underline underline-offset-2 hover:decoration-current"
+      href={safeHref}
+      key={key}
+      rel="noopener noreferrer"
+      target="_blank"
+    >
+      {children}
+    </a>
+  );
 };
 
 const renderInlineChildren = ({

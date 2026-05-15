@@ -70,7 +70,7 @@ export function extractSelectionState(
   const paragraph = $from.parent;
   const isEmptyParagraph =
     paragraph.type.name === "paragraph" && paragraph.textContent.length === 0;
-  const paragraphDefaultFormatting = paragraph.attrs?.[
+  const paragraphDefaultFormatting = paragraph.attrs[
     "defaultTextFormatting"
   ] as TextFormatting | undefined;
 

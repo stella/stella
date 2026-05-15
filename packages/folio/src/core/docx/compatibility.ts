@@ -74,9 +74,7 @@ function inspectBlocks(
       continue;
     }
 
-    if (block.type === "blockSdt") {
-      inspectBlocks(block.content, record);
-    }
+    inspectBlocks(block.content, record);
   }
 }
 

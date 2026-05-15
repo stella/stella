@@ -31,7 +31,7 @@ export const MathExtension = createNodeExtension({
           return {
             display: dom.dataset["display"] ?? "inline",
             ommlXml: dom.dataset["ommlXml"] ?? "",
-            plainText: dom.textContent ?? "",
+            plainText: dom.textContent,
           };
         },
       },

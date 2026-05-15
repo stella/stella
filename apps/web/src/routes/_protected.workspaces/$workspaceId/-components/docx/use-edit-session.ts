@@ -128,6 +128,7 @@ export const useEditSession = ({
   const checkpointQueueRef = useRef(Promise.resolve());
   const releaseContextRef = useRef({ workspaceId, entityId, propertyId });
   const isMountedRef = useRef(true);
+  const isMounted = () => isMountedRef.current;
 
   useEffect(() => {
     releaseContextRef.current = { workspaceId, entityId, propertyId };
@@ -158,7 +159,7 @@ export const useEditSession = ({
       });
 
     if (response.error) {
-      if (!isMountedRef.current) {
+      if (!isMounted()) {
         return false;
       }
       setState({
@@ -172,7 +173,7 @@ export const useEditSession = ({
 
     const { sessionId, sessionToken, downloadUrl, fileName } = response.data;
     sessionRef.current = { fileName, sessionId, sessionToken };
-    if (!isMountedRef.current) {
+    if (!isMounted()) {
       sessionRef.current = null;
       await releaseEditSession(releaseContext);
       return false;
@@ -182,11 +183,9 @@ export const useEditSession = ({
       signal: AbortSignal.timeout(30_000),
     }).catch(() => null);
     if (!fileResponse?.ok) {
-      if (sessionRef.current !== null) {
-        sessionRef.current = null;
-        await releaseEditSession(releaseContext);
-      }
-      if (!isMountedRef.current) {
+      sessionRef.current = null;
+      await releaseEditSession(releaseContext);
+      if (!isMounted()) {
         return false;
       }
       setState({
@@ -198,11 +197,9 @@ export const useEditSession = ({
     }
 
     const downloadedBuffer = await fileResponse.arrayBuffer();
-    if (!isMountedRef.current) {
-      if (sessionRef.current !== null) {
-        sessionRef.current = null;
-        await releaseEditSession(releaseContext);
-      }
+    if (!isMounted()) {
+      sessionRef.current = null;
+      await releaseEditSession(releaseContext);
       return false;
     }
 

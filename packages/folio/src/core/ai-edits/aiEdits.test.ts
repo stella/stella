@@ -141,9 +141,6 @@ const makeTrackedDoc = (
 ): { state: EditorState; doc: ReturnType<typeof schema.node> } => {
   const insertionType = schema.marks["insertion"];
   const deletionType = schema.marks["deletion"];
-  if (!insertionType || !deletionType) {
-    throw new Error("schema missing tracked-change marks");
-  }
   const date = "2026-01-01T00:00:00.000Z";
   const textNodes = runs.flatMap((run) => {
     if (typeof run === "string") {
@@ -207,16 +204,6 @@ describe("Folio AI edit operations", () => {
     const fontSizeType = schema.marks["fontSize"];
     const fontFamilyType = schema.marks["fontFamily"];
     const underlineType = schema.marks["underline"];
-    if (
-      !boldType ||
-      !italicType ||
-      !fontSizeType ||
-      !fontFamilyType ||
-      !underlineType
-    ) {
-      throw new Error("schema missing formatting marks");
-    }
-
     const state = EditorState.create({
       schema,
       doc: schema.node("doc", null, [
@@ -585,19 +572,16 @@ describe("Folio AI edit operations", () => {
     //
     // Build a doc whose textContent is "The buyer shallmust pay."
     // (`shall` is a pending deletion, `must` is a pending insertion).
-    const insertionMark = schema.marks["insertion"]?.create({
+    const insertionMark = schema.marks["insertion"].create({
       revisionId: 1,
       author: "AI",
       date: "2026-01-01T00:00:00.000Z",
     });
-    const deletionMark = schema.marks["deletion"]?.create({
+    const deletionMark = schema.marks["deletion"].create({
       revisionId: 1,
       author: "AI",
       date: "2026-01-01T00:00:00.000Z",
     });
-    if (!insertionMark || !deletionMark) {
-      throw new Error("schema missing tracked-change marks");
-    }
     const trackedDoc = schema.node("doc", null, [
       schema.node("paragraph", {}, [
         schema.text("The buyer "),
@@ -758,7 +742,7 @@ describe("Folio AI edit operations", () => {
     expect(shallNodeMarks).not.toBeNull();
     // Pre-existing "shall" deletion is left intact (one deletion
     // mark, no insertion mark added on top by the new revision).
-    const shallMarks: string[] = shallNodeMarks ?? [];
+    const shallMarks: string[] = shallNodeMarks;
     expect(shallMarks.includes("deletion")).toBe(true);
     expect(shallMarks.includes("insertion")).toBe(false);
   });

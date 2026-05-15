@@ -272,6 +272,7 @@ function paragraphAttrsToFormatting(
 
   // Fallback: reconstruct formatting from individual attrs (e.g. for
   // newly created paragraphs that don't have _originalFormatting)
+  const outlineLevel = Reflect.get(attrs, "outlineLevel");
   const hasFormatting =
     attrs.alignment ||
     attrs.spaceBefore ||
@@ -285,7 +286,7 @@ function paragraphAttrsToFormatting(
     attrs.borders ||
     attrs.shading ||
     attrs.tabs ||
-    attrs.outlineLevel !== null ||
+    typeof outlineLevel === "number" ||
     attrs.contextualSpacing ||
     attrs.spacingExplicit ||
     attrs.bidi;
@@ -340,8 +341,8 @@ function paragraphAttrsToFormatting(
   if (attrs.tabs) {
     f.tabs = attrs.tabs;
   }
-  if (attrs.outlineLevel !== undefined && attrs.outlineLevel !== null) {
-    f.outlineLevel = attrs.outlineLevel;
+  if (typeof outlineLevel === "number") {
+    f.outlineLevel = outlineLevel;
   }
   if (attrs.contextualSpacing) {
     f.contextualSpacing = attrs.contextualSpacing;
@@ -655,7 +656,7 @@ function getMarksKey(marks: readonly Mark[]): string {
 function createHyperlink(linkMark: Mark): Hyperlink {
   const href = linkMark.attrs["href"] as string;
   // Internal bookmark links use the anchor property in OOXML
-  if (href?.startsWith("#")) {
+  if (href.startsWith("#")) {
     return {
       type: "hyperlink",
       anchor: href.slice(1),
@@ -826,7 +827,7 @@ function createMathFromNode(node: PMNode): MathEquation {
 
   const math: MathEquation = {
     type: "mathEquation",
-    display: (attrs.display as "inline" | "block") || "inline",
+    display: (attrs.display as "inline" | "block" | undefined) ?? "inline",
     ommlXml: attrs.ommlXml,
   };
   if (attrs.plainText) {
@@ -842,7 +843,8 @@ function createInlineSdtFromNode(node: PMNode): InlineSdt {
   const attrs = node.attrs as Record<string, unknown>;
 
   const properties: SdtProperties = {
-    sdtType: (attrs["sdtType"] as SdtProperties["sdtType"]) ?? "richText",
+    sdtType:
+      (attrs["sdtType"] as SdtProperties["sdtType"] | undefined) ?? "richText",
   };
   if (attrs["alias"]) {
     properties.alias = attrs["alias"] as string;
@@ -952,7 +954,7 @@ function createImageRun(node: PMNode): Run {
 
   // Round-trip floating image position (ImagePositionAttrs uses loose strings;
   // cast to the strict OOXML union types for the Document model)
-  if (attrs.position?.horizontal && attrs.position?.vertical) {
+  if (attrs.position?.horizontal && attrs.position.vertical) {
     const pos = attrs.position;
     type HRelativeTo = ImagePosition["horizontal"]["relativeTo"];
     type HAlignment = ImagePosition["horizontal"]["alignment"];
@@ -1425,13 +1427,21 @@ function tableAttrsToFormatting(
       }
     }
     // Width: check if changed
+    const tableWidth = Reflect.get(attrs, "width");
+    const tableWidthType = Reflect.get(attrs, "widthType");
     const origWidthVal = orig.width?.value;
     const origWidthType = orig.width?.type;
-    if (attrs.width !== origWidthVal || attrs.widthType !== origWidthType) {
-      if (attrs.width !== null || attrs.widthType) {
+    if (tableWidth !== origWidthVal || tableWidthType !== origWidthType) {
+      if (
+        typeof tableWidth === "number" ||
+        typeof tableWidthType === "string"
+      ) {
         result.width = {
-          value: attrs.width ?? 0,
-          type: (attrs.widthType as "auto" | "dxa" | "pct" | "nil") || "dxa",
+          value: typeof tableWidth === "number" ? tableWidth : 0,
+          type:
+            typeof tableWidthType === "string"
+              ? (tableWidthType as "auto" | "dxa" | "pct" | "nil")
+              : "dxa",
         };
       } else {
         delete result.width;
@@ -1447,10 +1457,12 @@ function tableAttrsToFormatting(
 
   // Fallback: reconstruct formatting from individual attrs (e.g. for
   // newly created tables that don't have _originalFormatting)
+  const tableWidth = Reflect.get(attrs, "width");
+  const tableWidthType = Reflect.get(attrs, "widthType");
   const hasFormatting =
     attrs.styleId ||
-    attrs.width !== null ||
-    attrs.widthType ||
+    typeof tableWidth === "number" ||
+    typeof tableWidthType === "string" ||
     attrs.justification ||
     attrs.floating ||
     attrs.cellMargins ||
@@ -1467,10 +1479,13 @@ function tableAttrsToFormatting(
 
   // Restore width — handle width=0 with type="auto" (common OOXML pattern)
   let width: TableFormatting["width"];
-  if (attrs.width !== null || attrs.widthType) {
+  if (typeof tableWidth === "number" || typeof tableWidthType === "string") {
     width = {
-      value: attrs.width ?? 0,
-      type: (attrs.widthType as "auto" | "dxa" | "pct" | "nil") || "dxa",
+      value: typeof tableWidth === "number" ? tableWidth : 0,
+      type:
+        typeof tableWidthType === "string"
+          ? (tableWidthType as "auto" | "dxa" | "pct" | "nil")
+          : "dxa",
     };
   }
 
@@ -1629,11 +1644,16 @@ function tableCellAttrsToFormatting(
     if (attrs.colspan > 1) {
       result.gridSpan = attrs.colspan;
     }
-    // Width: use !== null to handle width=0 correctly (ProseMirror can set null)
-    if (attrs.width !== null) {
+    const cellWidth = Reflect.get(attrs, "width");
+    // Width: keep null absent while preserving explicit width=0 values.
+    if (typeof cellWidth === "number") {
+      const cellWidthType = Reflect.get(attrs, "widthType");
       result.width = {
-        value: attrs.width ?? 0,
-        type: (attrs.widthType as "auto" | "dxa" | "pct" | "nil") || "dxa",
+        value: cellWidth,
+        type:
+          typeof cellWidthType === "string"
+            ? (cellWidthType as "auto" | "dxa" | "pct" | "nil")
+            : "dxa",
       };
     }
     if (attrs.verticalAlign !== (orig.verticalAlign ?? undefined)) {
@@ -1671,10 +1691,11 @@ function tableCellAttrsToFormatting(
   }
 
   // Fallback: reconstruct formatting from individual attrs
+  const cellWidth = Reflect.get(attrs, "width");
   const hasFormatting =
     attrs.colspan > 1 ||
     attrs.rowspan > 1 ||
-    attrs.width !== null ||
+    typeof cellWidth === "number" ||
     attrs.verticalAlign ||
     attrs.backgroundColor ||
     attrs.borders ||
@@ -1689,10 +1710,14 @@ function tableCellAttrsToFormatting(
   if (attrs.colspan > 1) {
     f.gridSpan = attrs.colspan;
   }
-  if (attrs.width !== null) {
+  if (typeof cellWidth === "number") {
+    const cellWidthType = Reflect.get(attrs, "widthType");
     f.width = {
-      value: attrs.width ?? 0,
-      type: (attrs.widthType as "auto" | "dxa" | "pct" | "nil") || "dxa",
+      value: cellWidth,
+      type:
+        typeof cellWidthType === "string"
+          ? (cellWidthType as "auto" | "dxa" | "pct" | "nil")
+          : "dxa",
     };
   }
   if (attrs.verticalAlign) {
@@ -1756,16 +1781,16 @@ function convertPMTextBox(node: PMNode): Paragraph {
           left?: number;
           right?: number;
         } = {};
-        if (attrs.marginTop !== null && attrs.marginTop !== undefined) {
+        if (typeof attrs.marginTop === "number") {
           m.top = pixelsToEmu(attrs.marginTop);
         }
-        if (attrs.marginBottom !== null && attrs.marginBottom !== undefined) {
+        if (typeof attrs.marginBottom === "number") {
           m.bottom = pixelsToEmu(attrs.marginBottom);
         }
-        if (attrs.marginLeft !== null && attrs.marginLeft !== undefined) {
+        if (typeof attrs.marginLeft === "number") {
           m.left = pixelsToEmu(attrs.marginLeft);
         }
-        if (attrs.marginRight !== null && attrs.marginRight !== undefined) {
+        if (typeof attrs.marginRight === "number") {
           m.right = pixelsToEmu(attrs.marginRight);
         }
         return m;

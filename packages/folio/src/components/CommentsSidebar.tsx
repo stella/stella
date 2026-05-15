@@ -64,6 +64,11 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
+function getCommentParentId(comment: Comment): number | null | undefined {
+  const runtimeComment: { parentId?: number | null } = comment;
+  return runtimeComment.parentId;
+}
+
 // Kibana-style avatar colors — deterministic per author name
 const AVATAR_COLORS = [
   "#6DCCB1", // teal
@@ -257,7 +262,8 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   const visibleComments = useMemo(
     () =>
       comments.filter((c) => {
-        if (c.parentId !== null && c.parentId !== undefined) {
+        const parentId = getCommentParentId(c);
+        if (parentId !== null && parentId !== undefined) {
           return false;
         }
         if (c.done && !showResolved) {
@@ -272,12 +278,13 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   const repliesByParent = useMemo(() => {
     const map = new Map<number, Comment[]>();
     for (const c of comments) {
-      if (c.parentId !== null && c.parentId !== undefined) {
-        const arr = map.get(c.parentId);
+      const parentId = getCommentParentId(c);
+      if (parentId !== null && parentId !== undefined) {
+        const arr = map.get(parentId);
         if (arr) {
           arr.push(c);
         } else {
-          map.set(c.parentId, [c]);
+          map.set(parentId, [c]);
         }
       }
     }
@@ -327,7 +334,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
       }
 
       const layoutY = anchorPositions?.get(cardId);
-      if (layoutY !== null && layoutY !== undefined) {
+      if (layoutY !== undefined) {
         pushPosition(
           cardId,
           layoutY,
@@ -360,11 +367,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     }
 
     // Include the "add comment" input box in the layout if it has a Y position
-    if (
-      isAddingComment &&
-      addCommentYPosition !== null &&
-      addCommentYPosition !== undefined
-    ) {
+    if (isAddingComment && addCommentYPosition !== null) {
       positions.push({
         id: "new-comment-input",
         targetY: addCommentYPosition,
@@ -555,7 +558,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   };
 
   useEffect(() => {
-    if (activeCommentId === null || activeCommentId === undefined) {
+    if (activeCommentId === null) {
       return;
     }
     setExpandedCard(`comment-${activeCommentId}`);
@@ -629,33 +632,36 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     // Cards without position yet: hidden completely (no transition)
     const isNewCard = !isKnown && yPos !== undefined;
     const noPosition = hasPositions && yPos === undefined;
-    return {
-      ...(() => {
-        if (hasPositions) {
-          return (() => {
-            if (yPos !== undefined) {
-              return {
-                position: "absolute",
-                top: yPos,
-                left: 0,
-                right: 0,
-                opacity: 1,
-              };
-            }
-            return {
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              opacity: 0,
-              visibility: "hidden" as const,
-            };
-          })();
-        }
+    const positionStyle = (() => {
+      if (!hasPositions) {
+        return { marginBottom: 6 };
+      }
+      if (yPos !== undefined) {
         return {
-          marginBottom: 6,
+          position: "absolute" as const,
+          top: yPos,
+          left: 0,
+          right: 0,
+          opacity: 1,
         };
-      })(),
+      }
+      return {
+        position: "absolute" as const,
+        top: 0,
+        left: 0,
+        right: 0,
+        opacity: 0,
+        visibility: "hidden" as const,
+      };
+    })();
+    let transition = "none";
+    if (!noPosition && isNewCard) {
+      transition = "opacity 0.2s ease, box-shadow 0.2s ease";
+    } else if (!noPosition && initialPositionsDone) {
+      transition = "opacity 0.2s ease, box-shadow 0.2s ease, top 0.15s ease";
+    }
+    return {
+      ...positionStyle,
       padding: isExpanded ? "8px 10px" : "7px 9px",
       borderRadius: 6,
       backgroundColor: "var(--doc-page)",
@@ -663,18 +669,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
       boxShadow: isExpanded
         ? "0 1px 2px rgba(60,64,67,0.22), 0 3px 8px rgba(60,64,67,0.12)"
         : "0 1px 2px rgba(60,64,67,0.16), 0 2px 5px rgba(60,64,67,0.08)",
-      transition: (() => {
-        if (noPosition) {
-          return "none";
-        }
-        if (isNewCard) {
-          return "opacity 0.2s ease, box-shadow 0.2s ease";
-        }
-        if (initialPositionsDone) {
-          return "opacity 0.2s ease, box-shadow 0.2s ease, top 0.15s ease";
-        }
-        return "none";
-      })(),
+      transition,
     };
   };
 
@@ -1069,23 +1064,20 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
             }}
             style={{
               ...(() => {
-                if (hasPositions) {
-                  return (() => {
-                    if (cardPositions.get("new-comment-input") !== undefined) {
-                      return {
-                        position: "absolute",
-                        top: cardPositions.get("new-comment-input"),
-                        left: 0,
-                        right: 0,
-                      };
-                    }
-                    return {
-                      position: "relative",
-                      marginBottom: 8,
-                    };
-                  })();
+                const yPos = cardPositions.get("new-comment-input");
+                if (!hasPositions) {
+                  return { marginBottom: 8 };
+                }
+                if (yPos !== undefined) {
+                  return {
+                    position: "absolute" as const,
+                    top: yPos,
+                    left: 0,
+                    right: 0,
+                  };
                 }
                 return {
+                  position: "relative" as const,
                   marginBottom: 8,
                 };
               })(),

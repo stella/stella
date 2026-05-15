@@ -243,7 +243,6 @@ export const isApprovalRespondedPart = (
   part.state === "approval-responded" &&
   "approval" in part &&
   typeof part.approval === "object" &&
-  part.approval !== null &&
   "id" in part.approval &&
   typeof part.approval.id === "string" &&
   "approved" in part.approval &&

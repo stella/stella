@@ -87,10 +87,7 @@ import type {
   TextBoxBlock,
   FootnoteContent,
 } from "../core/layout-engine/types";
-import {
-  DEFAULT_TEXTBOX_MARGINS,
-  DEFAULT_TEXTBOX_WIDTH,
-} from "../core/layout-engine/types";
+import { DEFAULT_TEXTBOX_MARGINS } from "../core/layout-engine/types";
 // Layout painter
 import { LayoutPainter } from "../core/layout-painter";
 import type { BlockLookup } from "../core/layout-painter";
@@ -1025,7 +1022,7 @@ function extractFloatingZones(
         floating.tblpXSpec === "outside"
       ) {
         x = contentWidth - tableWidth;
-      } else if (floating.tblpXSpec === "center") {
+      } else {
         x = (contentWidth - tableWidth) / 2;
       }
     } else if (tableBlock.justification === "center") {
@@ -1103,16 +1100,15 @@ function measureBlock(
       const imageBlock = block as ImageBlock;
       return {
         kind: "image",
-        width: imageBlock.width ?? 100,
-        height: imageBlock.height ?? 100,
+        width: imageBlock.width,
+        height: imageBlock.height,
       };
     }
 
     case "textBox": {
       const tb = block as TextBoxBlock;
       const margins = tb.margins ?? DEFAULT_TEXTBOX_MARGINS;
-      const innerWidth =
-        (tb.width ?? DEFAULT_TEXTBOX_WIDTH) - margins.left - margins.right;
+      const innerWidth = tb.width - margins.left - margins.right;
       const innerMeasures = tb.content.map((p) =>
         measureParagraph(p, innerWidth),
       );
@@ -1124,7 +1120,7 @@ function measureBlock(
         tb.height ?? contentHeight + margins.top + margins.bottom;
       return {
         kind: "textBox" as const,
-        width: tb.width ?? DEFAULT_TEXTBOX_WIDTH,
+        width: tb.width,
         height: totalHeight,
         innerMeasures,
       };
@@ -1272,7 +1268,7 @@ function buildFootnoteRenderItems(
   doc: Document | null,
 ): Map<number, FootnoteRenderItem[]> {
   const result = new Map<number, FootnoteRenderItem[]>();
-  if (!doc?.package?.footnotes) {
+  if (!doc || !doc.package.footnotes) {
     return result;
   }
 
@@ -1624,7 +1620,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           // Step 2.5: Collect footnote references from blocks
           const footnoteRefs = collectFootnoteRefs(newBlocks);
           const hasFootnotes =
-            footnoteRefs.length > 0 && document?.package?.footnotes;
+            footnoteRefs.length > 0 && document?.package.footnotes;
 
           // Step 2.75: Prepare header/footer content for rendering (needed before layout
           // to compute effective margins when header content exceeds available space)
@@ -2103,9 +2099,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
             // Create a range at the exact character position
             const ownerDoc = spanEl.ownerDocument;
-            if (!ownerDoc) {
-              continue;
-            }
             const range = ownerDoc.createRange();
             range.setStart(textNode, charIndex);
             range.setEnd(textNode, charIndex);
@@ -2167,10 +2160,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           const paragraph = emptyRun.closest(
             ".layout-paragraph",
           ) as HTMLElement;
-          if (!paragraph) {
-            continue;
-          }
-
           const pmStart = Number(paragraph.dataset["pmStart"]);
           const pmEnd = Number(paragraph.dataset["pmEnd"]);
 
@@ -2348,9 +2337,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                   continue;
                 }
                 const ownerDoc = spanEl.ownerDocument;
-                if (!ownerDoc) {
-                  continue;
-                }
 
                 // Calculate the character range within this span
                 const startChar = Math.max(0, from - pmStart);
@@ -2495,9 +2481,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             continue;
           }
           const ownerDoc = spanEl.ownerDocument;
-          if (!ownerDoc) {
-            continue;
-          }
           const startChar = Math.max(0, from - pmStart);
           const endChar = Math.min(textNode.length, to - pmStart);
           if (!(startChar < endChar)) {
@@ -3016,7 +2999,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         return false;
       }
 
-      if (!navigator.clipboard) {
+      // eslint-disable-next-line typescript/no-unnecessary-condition -- Clipboard API may be unavailable in older browsers or insecure contexts.
+      if (navigator.clipboard === undefined) {
         return false;
       }
 
@@ -3083,11 +3067,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           if (isInHfArea) {
             e.preventDefault();
             // Place cursor at start of body content
-            if (hiddenPMRef.current) {
-              hiddenPMRef.current.setSelection(0);
-              hiddenPMRef.current.focus();
-              setIsFocused(true);
-            }
+            hiddenPMRef.current.setSelection(0);
+            hiddenPMRef.current.focus();
+            setIsFocused(true);
             return;
           }
         }
@@ -3175,19 +3157,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             for (let d = $pos.depth; d >= 0; d--) {
               const node = $pos.node(d);
               if (node.type.name === "table") {
-                let rowNode: typeof node | null = null;
-                let idx = 0;
-                // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node API
-                node.forEach((child) => {
-                  if (idx === rowIndex) {
-                    rowNode = child;
-                  }
-                  idx++;
-                });
-                if (rowNode) {
-                  const height = (rowNode as typeof node).attrs["height"] as
-                    | number
-                    | null;
+                if (rowIndex < node.childCount) {
+                  const rowNode = node.child(rowIndex);
+                  const height = rowNode.attrs["height"] as number | null;
                   if (height) {
                     resizeRowOrigHeightRef.current = height;
                   } else {
@@ -3868,9 +3840,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             if (bookmarkName && hiddenPMRef.current) {
               const view = hiddenPMRef.current.getView();
               if (view) {
-                let targetPos: number | null = null;
+                const targetPos = { value: null as number | null };
                 view.state.doc.descendants((node, pos) => {
-                  if (targetPos !== null) {
+                  if (targetPos.value !== null) {
                     return false;
                   }
                   if (node.type.name === "paragraph") {
@@ -3878,14 +3850,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                       | { id: number; name: string }[]
                       | undefined;
                     if (bookmarks?.some((b) => b.name === bookmarkName)) {
-                      targetPos = pos;
+                      targetPos.value = pos;
                       return false;
                     }
                   }
                   return undefined;
                 });
-                if (targetPos !== null) {
-                  const tp: number = targetPos;
+                if (targetPos.value !== null) {
+                  const tp = targetPos.value;
                   scrollToPositionImpl(tp);
                   hiddenPMRef.current.setSelection(tp + 1);
                 }
@@ -4181,7 +4153,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               // Fallback to last page if below all pages
               contentEl = Array.from(pages)
                 .at(-1)
-                ?.querySelector(".layout-page-content") as HTMLElement;
+                ?.querySelector(".layout-page-content") as HTMLElement | null;
             }
             if (!contentEl) {
               return;
@@ -4261,9 +4233,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           (e.metaKey || e.ctrlKey) &&
           e.key.toLowerCase() === "c"
         ) {
-          if (copySelectionText()) {
-            e.preventDefault();
-          }
+          copySelectionText();
           return;
         }
 
@@ -4629,7 +4599,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           onEditorViewReady={handleEditorViewReady}
           onKeyDown={handlePMKeyDown}
           {...(styles !== undefined ? { styles } : {})}
-          {...(externalPlugins !== undefined ? { externalPlugins } : {})}
+          externalPlugins={externalPlugins}
           {...(extensionManager !== undefined ? { extensionManager } : {})}
           {...(onReadOnlyEditAttempt !== undefined
             ? { onReadOnlyEditAttempt }

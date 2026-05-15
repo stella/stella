@@ -66,7 +66,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
-import { createChatThreadId } from "@/lib/chat-thread-ref";
+import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
 import type { Citation } from "@/lib/citations";
 import { iterateJustificationCitations } from "@/lib/citations";
 import {
@@ -2217,7 +2217,7 @@ const DocumentAiSourceBar = ({
       return undefined;
     }
 
-    let cancelled = false;
+    const requestState = { cancelled: false };
     setIsGeneratingBoxes(true);
 
     void (async () => {
@@ -2229,7 +2229,7 @@ const DocumentAiSourceBar = ({
             queryKey: workspaceKeys.justifications(workspaceId),
           });
 
-        if (cancelled) {
+        if (requestState.cancelled) {
           return;
         }
 
@@ -2239,18 +2239,18 @@ const DocumentAiSourceBar = ({
           });
         }
       } catch (error) {
-        if (!cancelled) {
+        if (!requestState.cancelled) {
           analytics.captureError(error);
         }
       } finally {
-        if (!cancelled) {
+        if (!requestState.cancelled) {
           setIsGeneratingBoxes(false);
         }
       }
     })();
 
     return () => {
-      cancelled = true;
+      requestState.cancelled = true;
     };
   }, [
     justificationId,
@@ -2358,7 +2358,7 @@ const DocumentAiSourceBar = ({
       if (Array.isArray(v)) {
         return v.join(", ");
       }
-      return v !== null && v !== undefined ? String(v) : null;
+      return v !== null ? String(v) : null;
     }
     return null;
   })();
@@ -2550,7 +2550,9 @@ const useInspectorFind = ({
     setFindQuery("");
     setMatchCount(0);
     setActiveIndex(0);
+    // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
     CSS.highlights?.delete(allHighlightName);
+    // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
     CSS.highlights?.delete(activeHighlightName);
   }, [activeHighlightName, allHighlightName]);
 
@@ -2602,7 +2604,9 @@ const useInspectorFind = ({
   }, [enabled, findOpen]);
 
   useLayoutEffect(() => {
+    // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
     CSS.highlights?.delete(allHighlightName);
+    // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
     CSS.highlights?.delete(activeHighlightName);
 
     const root = contentRef.current;
@@ -2627,15 +2631,19 @@ const useInspectorFind = ({
       return undefined;
     }
 
+    // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
     CSS.highlights?.set(allHighlightName, new Highlight(...ranges));
     const activeRange = ranges.at(safeActiveIndex);
     if (activeRange) {
+      // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
       CSS.highlights?.set(activeHighlightName, new Highlight(activeRange));
       scrollRangeIntoView(activeRange);
     }
 
     return () => {
+      // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
       CSS.highlights?.delete(allHighlightName);
+      // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
       CSS.highlights?.delete(activeHighlightName);
     };
   }, [
@@ -2831,6 +2839,7 @@ const useExternalPdfBuffer = ({
 
     setState({ status: "loading" });
     const controller = new AbortController();
+    const isAborted = () => controller.signal.aborted;
 
     void (async () => {
       const response = await fetch(url, {
@@ -2838,15 +2847,15 @@ const useExternalPdfBuffer = ({
         signal: controller.signal,
       });
 
-      if (!response.ok || controller.signal.aborted) {
-        if (!controller.signal.aborted) {
+      if (!response.ok || isAborted()) {
+        if (!isAborted()) {
           setState({ status: "error" });
         }
         return;
       }
 
       const next = await response.arrayBuffer();
-      if (controller.signal.aborted) {
+      if (isAborted()) {
         return;
       }
 
@@ -2857,7 +2866,7 @@ const useExternalPdfBuffer = ({
       // `fileId` so each new buffer parses from scratch.
       setState({ status: "ready", buffer: next, token: crypto.randomUUID() });
     })().catch(() => {
-      if (!controller.signal.aborted) {
+      if (!isAborted()) {
         setState({ status: "error" });
       }
     });
@@ -3064,8 +3073,11 @@ const ExternalReferencePanel = ({
     enabled: shouldLoadExternalPdf,
     url: externalFilePreviewUrl,
   });
+  const persistedExternalTab: { chatThreadId?: string | undefined } = tab;
   const externalChatThreadId =
-    tab.chatThreadId ?? fallbackChatThreadIdRef.current;
+    persistedExternalTab.chatThreadId === undefined
+      ? fallbackChatThreadIdRef.current
+      : toChatThreadId(persistedExternalTab.chatThreadId);
   const hasMetadata =
     provider !== undefined ||
     connectorSlug !== undefined ||
@@ -3354,7 +3366,7 @@ const ExternalReferencePanel = ({
                 </div>
               );
             }
-            if (shouldLoadExternalPdf && externalFilePreviewUrl !== undefined) {
+            if (shouldLoadExternalPdf) {
               return (
                 <ExternalPdfPreview
                   buffer={externalPdfPreview.buffer}

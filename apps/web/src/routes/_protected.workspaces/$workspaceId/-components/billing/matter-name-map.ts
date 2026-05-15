@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { useTranslations } from "use-intl";
 
 import { entitySummariesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
@@ -11,7 +10,6 @@ import { entitySummariesOptions } from "@/routes/_protected.workspaces/$workspac
  * matter names without duplicating the extraction logic.
  */
 export const useMatterNameMap = (workspaceId: string) => {
-  const t = useTranslations();
   const { data: summaries } = useSuspenseQuery(
     entitySummariesOptions(workspaceId),
   );
@@ -19,8 +17,8 @@ export const useMatterNameMap = (workspaceId: string) => {
   return useMemo(() => {
     const map = new Map<string, string>();
     for (const summary of summaries) {
-      map.set(summary.id, summary.name ?? t("workspaces.defaultName"));
+      map.set(summary.id, summary.name);
     }
     return map;
-  }, [summaries, t]);
+  }, [summaries]);
 };

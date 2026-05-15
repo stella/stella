@@ -23,7 +23,6 @@ const PROBE_CACHE_TTL_MS = 5000;
 const unrefTimer = (timerId: ReturnType<typeof setTimeout>) => {
   if (
     typeof timerId === "object" &&
-    timerId !== null &&
     "unref" in timerId &&
     typeof timerId.unref === "function"
   ) {

@@ -82,7 +82,7 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
         header: t("common.date"),
         cell: (info) => {
           const value = info.getValue();
-          if (value === null || value === undefined) {
+          if (value === null) {
             return "\u2014";
           }
           const date = value instanceof Date ? value : new Date(value);

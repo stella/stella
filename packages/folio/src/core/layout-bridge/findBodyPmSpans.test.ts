@@ -38,7 +38,7 @@ describe("body-scoped PM DOM lookups", () => {
   test("finds only body run spans", () => {
     const spans = findBodyPmSpans(createContainer());
 
-    expect(spans.map((span) => span.textContent?.trim())).toEqual(["body"]);
+    expect(spans.map((span) => span.textContent.trim())).toEqual(["body"]);
   });
 
   test("finds body anchors without matching overlapping header/footer positions", () => {
@@ -50,7 +50,7 @@ describe("body-scoped PM DOM lookups", () => {
       "7",
       "9",
     ]);
-    expect(findBodyPmAnchor(createContainer(), 2)?.textContent?.trim()).toBe(
+    expect(findBodyPmAnchor(createContainer(), 2).textContent.trim()).toBe(
       "body",
     );
   });

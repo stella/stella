@@ -34,8 +34,8 @@ function hasNewImagesOrHyperlinks(blocks: BlockContent[]): boolean {
           for (const c of item.content) {
             if (
               c.type === "drawing" &&
-              c.image?.src?.startsWith("data:") &&
-              !c.image?.rId
+              c.image.src?.startsWith("data:") &&
+              !c.image.rId
             ) {
               return true;
             }
@@ -93,10 +93,6 @@ export async function attemptSelectiveSave(
   if (hasUntrackedChanges) {
     return null;
   }
-  if (!originalBuffer) {
-    return null;
-  }
-
   // Check for new images/hyperlinks that need relationship management
   const content = doc.package.document.content;
   if (hasNewImagesOrHyperlinks(content)) {

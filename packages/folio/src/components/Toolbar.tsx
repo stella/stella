@@ -86,7 +86,7 @@ export function Toolbar({
       const isSelectActive =
         target.tagName === "SELECT" ||
         target.tagName === "OPTION" ||
-        activeEl?.tagName === "SELECT";
+        activeEl.tagName === "SELECT";
 
       if (isSelectActive) {
         return;

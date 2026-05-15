@@ -44,10 +44,8 @@ function buildNamespaceDeclarations(): string {
 function serializeBlock(block: Paragraph | Table): string {
   if (block.type === "paragraph") {
     return serializeParagraph(block);
-  } else if (block.type === "table") {
-    return serializeTable(block);
   }
-  return "";
+  return serializeTable(block);
 }
 
 /**

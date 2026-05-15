@@ -1284,7 +1284,7 @@ const SuggestionRow = ({
           )}
         </div>
       </div>
-      {!isResolved && !isApplying && (
+      {!isApplying && (
         <div className="relative mt-2 flex items-center gap-1.5">
           <Button
             className="h-7 px-2.5 text-xs"

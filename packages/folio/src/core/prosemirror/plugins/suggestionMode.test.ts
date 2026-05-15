@@ -91,15 +91,15 @@ describe("SuggestionMode Plugin", () => {
       expect(getPluginState(state)?.active).toBe(false);
 
       // Activate
-      let dispatched: EditorState | null = null;
+      const dispatched = { state: null as EditorState | null };
       setSuggestionMode(true, state, (tr) => {
-        dispatched = state.apply(tr);
+        dispatched.state = state.apply(tr);
       });
-      expect(dispatched).not.toBeNull();
-      if (!dispatched) {
+      expect(dispatched.state).not.toBeNull();
+      if (dispatched.state === null) {
         throw new Error("Expected dispatched state");
       }
-      expect(getPluginState(dispatched)?.active).toBe(true);
+      expect(getPluginState(dispatched.state)?.active).toBe(true);
     });
   });
 

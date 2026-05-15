@@ -132,7 +132,7 @@ export const openEntityInInspector = async (
       throw toAPIError(response.error);
     }
 
-    const responseLabel = response.data.name ?? label;
+    const responseLabel = response.data.name;
     const openedByKind = openEntityByKind({
       entityId,
       kind: response.data.kind,

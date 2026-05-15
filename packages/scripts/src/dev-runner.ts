@@ -1161,7 +1161,7 @@ const runStep = (step: Step) => {
 
   if (!result.success) {
     throw new Error(
-      `${step.label} failed with exit code ${String(result.exitCode ?? 1)}.`,
+      `${step.label} failed with exit code ${String(result.exitCode)}.`,
     );
   }
 };

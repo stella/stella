@@ -71,7 +71,7 @@ export const buildBoldRanges = (
       continue;
     }
 
-    const bold = isBoldFont(span.fontName ?? "");
+    const bold = isBoldFont(span.fontName);
 
     // Find this span's text in the remaining line text
     const idx = lineText.indexOf(text.trim(), offset);

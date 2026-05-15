@@ -284,7 +284,7 @@ const CategoryFormDialog = ({
 
     setSaving(true);
 
-    if (isEdit && initial?.id) {
+    if (isEdit && initial.id) {
       const response = await api["template-categories"]({
         categoryId: initial.id,
       }).post({ name: name.trim() });

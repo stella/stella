@@ -83,10 +83,7 @@ const envApi = createEnv({
         if (provider === "ses") {
           return !!process.env["SES_REGION"];
         }
-        if (provider === "smtp") {
-          return !!(process.env["SMTP_HOST"] && process.env["SMTP_PORT"]);
-        }
-        return true;
+        return !!(process.env["SMTP_HOST"] && process.env["SMTP_PORT"]);
       }, "Missing required env vars for the selected EMAIL_PROVIDER"),
     ),
     SES_REGION: v.optional(v.string()),

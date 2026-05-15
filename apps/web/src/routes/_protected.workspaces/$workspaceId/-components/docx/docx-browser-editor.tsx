@@ -1128,25 +1128,29 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     const styleLabelElement = containerRef.current?.querySelector<HTMLElement>(
       '[data-folio-style-picker] [data-slot="select-value"]',
     );
-    const stylePreviewElement =
-      styleLabelElement?.querySelector<HTMLElement>("[style]") ??
-      styleLabelElement;
-    const styleLabel = styleLabelElement?.textContent?.trim();
+    if (!styleLabelElement) {
+      return;
+    }
 
-    if (styleLabel !== undefined && styleLabel.length > 0) {
+    const stylePreviewElement =
+      styleLabelElement.querySelector<HTMLElement>("[style]") ??
+      styleLabelElement;
+    const styleLabelText = Reflect.get(styleLabelElement, "textContent");
+    const styleLabel =
+      typeof styleLabelText === "string" ? styleLabelText.trim() : "";
+
+    if (styleLabel.length > 0) {
       lastStyleLabelRef.current = styleLabel;
     }
 
-    if (stylePreviewElement !== undefined && stylePreviewElement !== null) {
-      const computedStyle = window.getComputedStyle(stylePreviewElement);
-      lastStyleLabelStyleRef.current = {
-        color: computedStyle.color,
-        fontSize: computedStyle.fontSize,
-        fontStyle: computedStyle.fontStyle,
-        fontWeight: computedStyle.fontWeight,
-        lineHeight: computedStyle.lineHeight,
-      };
-    }
+    const computedStyle = window.getComputedStyle(stylePreviewElement);
+    lastStyleLabelStyleRef.current = {
+      color: computedStyle.color,
+      fontSize: computedStyle.fontSize,
+      fontStyle: computedStyle.fontStyle,
+      fontWeight: computedStyle.fontWeight,
+      lineHeight: computedStyle.lineHeight,
+    };
   });
 
   if (

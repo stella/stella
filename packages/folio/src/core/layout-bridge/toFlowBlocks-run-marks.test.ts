@@ -65,7 +65,7 @@ function buildSingleRunDoc(
 
 function firstRun(blocks: unknown[]): TextRun {
   const paragraph = blocks.find(
-    (block) => (block as ParagraphBlock).kind === "paragraph",
+    (block) => (block as { kind?: string }).kind === "paragraph",
   ) as ParagraphBlock;
   return paragraph.runs[0] as TextRun;
 }

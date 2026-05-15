@@ -641,12 +641,11 @@ function serializeHyperlink(hyperlink: Hyperlink): string {
     .map((child) => {
       if (child.type === "run") {
         return serializeRun(child);
-      } else if (child.type === "bookmarkStart") {
-        return serializeBookmarkStart(child);
-      } else if (child.type === "bookmarkEnd") {
-        return serializeBookmarkEnd(child);
       }
-      return "";
+      if (child.type === "bookmarkStart") {
+        return serializeBookmarkStart(child);
+      }
+      return serializeBookmarkEnd(child);
     })
     .join("");
 
@@ -739,7 +738,7 @@ function serializeComplexField(field: ComplexField): string {
   // Extract formatting from the first result run to apply to structural runs
   // (begin/separate/end). OOXML consumers expect consistent formatting across
   // all runs in a complex field.
-  const resultFormatting = field.fieldResult?.[0]?.formatting;
+  const resultFormatting = field.fieldResult[0]?.formatting;
   const rPrXml = resultFormatting
     ? serializeTextFormatting(resultFormatting)
     : "";
@@ -848,10 +847,7 @@ function serializeInlineSdt(sdt: InlineSdt): string {
       if (item.type === "run") {
         return serializeRun(item);
       }
-      if (item.type === "hyperlink") {
-        return serializeHyperlink(item);
-      }
-      return "";
+      return serializeHyperlink(item);
     })
     .join("");
 
@@ -901,10 +897,7 @@ function serializeTrackedChange(
         }
         return serializeRun(item);
       }
-      if (item.type === "hyperlink") {
-        return serializeHyperlink(item);
-      }
-      return "";
+      return serializeHyperlink(item);
     })
     .join("");
 

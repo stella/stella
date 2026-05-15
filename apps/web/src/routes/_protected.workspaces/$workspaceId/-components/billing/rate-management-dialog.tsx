@@ -157,7 +157,7 @@ const RateTablesView = ({
         />
       )}
 
-      {tables !== undefined && tables.length > 0 ? (
+      {tables.length > 0 ? (
         <div className="flex flex-col gap-1.5">
           {tables.map((table) => (
             <div
@@ -335,12 +335,12 @@ const RateEntriesView = ({
   );
   const { data: org } = useSuspenseQuery(organizationOptions);
 
-  const table = tables?.find((tbl) => tbl.id === rateTableId);
+  const table = tables.find((tbl) => tbl.id === rateTableId);
 
   const createEntry = useCreateRateEntry();
   const deleteEntry = useDeleteRateEntry();
 
-  const members = org?.members ?? [];
+  const members = org.members;
 
   const handleDelete = (id: string) => {
     deleteEntry.mutate(

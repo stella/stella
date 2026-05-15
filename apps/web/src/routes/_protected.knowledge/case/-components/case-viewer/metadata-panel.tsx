@@ -149,10 +149,10 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
     }
   }
 
+  const astKeywords = astMeta?.keywords ?? [];
+  const astStatutes = astMeta?.statutes ?? [];
   const hasExtra =
-    sourceFields.length > 0 ||
-    (astMeta?.keywords?.length ?? 0) > 0 ||
-    (astMeta?.statutes?.length ?? 0) > 0;
+    sourceFields.length > 0 || astKeywords.length > 0 || astStatutes.length > 0;
 
   const sourceHref = decision.sourceUrl
     ? sanitizeHref(humanizeSourceUrl(decision.sourceUrl))
@@ -207,16 +207,16 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
 
       {expanded && (
         <dl className="space-y-3 border-t pt-3">
-          {astMeta?.keywords && (
+          {astKeywords.length > 0 && (
             <TagList
               label={t("caseLaw.viewer.keywords")}
-              values={astMeta.keywords}
+              values={astKeywords}
             />
           )}
-          {astMeta?.statutes && (
+          {astStatutes.length > 0 && (
             <TagList
               label={t("caseLaw.viewer.statutes")}
-              values={astMeta.statutes}
+              values={astStatutes}
             />
           )}
           {sourceFields.map((f) => (

@@ -45,7 +45,7 @@ const normalizeSearchText = (text: string): NormalizedText => {
   // letter's startMap/endMap still points at its original char.
   const dropSpaceAt = new Set<number>();
   for (const match of text.matchAll(SPACED_LETTER_RUN_RE)) {
-    const matchStart = match.index ?? 0;
+    const matchStart = match.index;
     const matched = match[0];
     for (let i = 0; i < matched.length; i++) {
       if (matched[i] === " ") {

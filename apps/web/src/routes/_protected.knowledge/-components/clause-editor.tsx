@@ -153,16 +153,16 @@ export const ClauseEditor = ({
   }, [contentKey]);
 
   const toggleBold = useCallback(() => {
-    editor?.chain().focus().toggleBold().run();
+    editor.chain().focus().toggleBold().run();
   }, [editor]);
 
   const toggleItalic = useCallback(() => {
-    editor?.chain().focus().toggleItalic().run();
+    editor.chain().focus().toggleItalic().run();
   }, [editor]);
 
   const toggleHeading = useCallback(
     (level: 1 | 2 | 3) => {
-      editor?.chain().focus().toggleHeading({ level }).run();
+      editor.chain().focus().toggleHeading({ level }).run();
     },
     [editor],
   );

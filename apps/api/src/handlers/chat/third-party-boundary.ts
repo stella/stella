@@ -37,8 +37,9 @@ export type ChatThirdPartyBoundary =
        * Canonicals the user marked as "ignore" in the inspector
        * allowlist (workspace and org scopes). Pre-loaded once on
        * boundary creation so we don't hit the DB per anonymize
-       * call. Doc-scope ignores are skipped here — chat threads
-       * aren't tied to a specific entity in the current shape.
+       * call. Doc-scope ignores are skipped here because chat
+       * threads aren't tied to a specific entity in the current
+       * shape.
        */
       excludedCanonicals: Promise<string[]>;
       organizationId: SafeId<"organization">;
@@ -774,16 +775,18 @@ const anonymizeToolPart = ({
       });
     }
 
-    const approval =
-      "approval" in part &&
-      part.approval !== undefined &&
-      "reason" in part.approval &&
-      part.approval.reason
-        ? part.approval
-        : undefined;
-    if (approval?.reason) {
+    const approval: unknown = Reflect.get(part, "approval");
+    if (
+      typeof approval === "object" &&
+      approval !== null &&
+      "reason" in approval &&
+      typeof approval.reason === "string" &&
+      approval.reason
+    ) {
       queueTextReplacement(replacements, approval.reason, (value) => {
-        prepared.approval = { ...approval, reason: value };
+        Object.assign(prepared, {
+          approval: { ...approval, reason: value },
+        });
       });
     }
 
@@ -842,7 +845,7 @@ export const prepareToolsForThirdParty = <TTools extends ToolSet>({
           return rawOutput;
         }
 
-        if (deanonymizeInputBeforeExecute && args.length > 0) {
+        if (deanonymizeInputBeforeExecute) {
           // SAFETY: the AI SDK types tool execute's input arg as `any`
           // because each tool defines its own input schema. We
           // recursively walk strings only and preserve every other

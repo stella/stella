@@ -1628,7 +1628,7 @@ export function renderPage(
       if (
         fragment.kind === "paragraph" &&
         blockData?.block.kind === "paragraph" &&
-        blockData?.measure.kind === "paragraph"
+        blockData.measure.kind === "paragraph"
       ) {
         const paragraphBlock = blockData.block as ParagraphBlock;
         const nextBorders =
@@ -1671,7 +1671,7 @@ export function renderPage(
       } else if (
         fragment.kind === "table" &&
         blockData?.block.kind === "table" &&
-        blockData?.measure.kind === "table"
+        blockData.measure.kind === "table"
       ) {
         fragmentEl = renderTableFragment(
           fragment as TableFragment,
@@ -1684,7 +1684,7 @@ export function renderPage(
       } else if (
         fragment.kind === "image" &&
         blockData?.block.kind === "image" &&
-        blockData?.measure.kind === "image"
+        blockData.measure.kind === "image"
       ) {
         fragmentEl = renderImageFragment(
           fragment as ImageFragment,
@@ -1697,7 +1697,7 @@ export function renderPage(
       } else if (
         fragment.kind === "textBox" &&
         blockData?.block.kind === "textBox" &&
-        blockData?.measure.kind === "textBox"
+        blockData.measure.kind === "textBox"
       ) {
         fragmentEl = renderTextBoxFragment(
           fragment as TextBoxFragment,
@@ -2059,7 +2059,7 @@ export function computePageFingerprint(
     } else if (frag.kind === "table") {
       fp += `,fr:${frag.fromRow},tr:${frag.toRow}`;
     }
-    if (blockLookup && frag.blockId !== undefined) {
+    if (blockLookup) {
       const block = blockLookup.get(String(frag.blockId))?.block;
       const annotationFingerprint = block
         ? computeAnnotationFingerprint(block)

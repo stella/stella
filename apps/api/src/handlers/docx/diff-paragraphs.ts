@@ -83,18 +83,18 @@ const mergeAdjacentWordChanges = (diffs: readonly Diff[]): Diff[] => {
  */
 const wordDiff = (oldText: string, newText: string): Diff[] => {
   const rawDiffs = diffArrays(tokenize(oldText), tokenize(newText)).map(
-    (change): Diff => ({
-      kind: (() => {
-        if (change.added) {
-          return "insert";
-        }
-        if (change.removed) {
-          return "delete";
-        }
-        return "equal";
-      })(),
-      text: change.value.join(""),
-    }),
+    (change): Diff => {
+      let kind: Diff["kind"] = "equal";
+      if (change.added) {
+        kind = "insert";
+      } else if (change.removed) {
+        kind = "delete";
+      }
+      return {
+        kind,
+        text: change.value.join(""),
+      };
+    },
   );
 
   return mergeAdjacentWordChanges(rawDiffs);
@@ -149,15 +149,13 @@ const diffSingleParagraph = (
     }
 
     // INSERT (standalone, not preceded by DELETE)
-    if (kind === "insert") {
-      edits.push({
-        kind: "insert",
-        paragraphIndex,
-        charOffset,
-        text,
-      });
-      // INSERT doesn't advance offset in the original text
-    }
+    edits.push({
+      kind: "insert",
+      paragraphIndex,
+      charOffset,
+      text,
+    });
+    // INSERT doesn't advance offset in the original text
   }
 
   return edits;

@@ -10,10 +10,10 @@ export type AresRawAddress = {
   nazevMestskehoObvodu?: string;
   nazevCastiObce?: string;
   nazevUlice?: string;
-  cisloDomovni?: number;
-  cisloOrientacni?: number;
+  cisloDomovni?: number | null;
+  cisloOrientacni?: number | null;
   cisloOrientacniPismeno?: string;
-  psc?: number;
+  psc?: number | null;
   pscTxt?: string;
   textovaAdresa?: string;
   nazevOkresu?: string;

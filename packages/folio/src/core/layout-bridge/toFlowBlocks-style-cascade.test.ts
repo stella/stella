@@ -25,7 +25,7 @@ function makeDoc(paragraph: Paragraph, styles?: StyleDefinitions): Document {
 
 function firstParagraph(blocks: unknown[]): ParagraphBlock {
   return blocks.find(
-    (block) => (block as ParagraphBlock).kind === "paragraph",
+    (block) => (block as { kind?: string }).kind === "paragraph",
   ) as ParagraphBlock;
 }
 
@@ -35,7 +35,7 @@ function firstRun(blocks: unknown[]): TextRun {
 
 function firstTableRun(blocks: unknown[]): TextRun {
   const table = blocks.find(
-    (block) => (block as LayoutTableBlock).kind === "table",
+    (block) => (block as { kind?: string }).kind === "table",
   ) as LayoutTableBlock;
   const paragraph = table.rows[0]?.cells[0]?.blocks[0] as ParagraphBlock;
   return paragraph.runs[0] as TextRun;

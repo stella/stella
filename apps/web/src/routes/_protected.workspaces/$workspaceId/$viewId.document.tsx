@@ -334,8 +334,7 @@ function RouteComponentInner({
     filePropertyId !== undefined &&
     !isComparing &&
     compareState === null;
-  const usesEmbeddedDocxToolbar =
-    shouldRenderDocxBrowserShell && filePropertyId !== undefined;
+  const usesEmbeddedDocxToolbar = shouldRenderDocxBrowserShell;
   const latestFileFieldForProperty =
     filePropertyId !== undefined
       ? entity.fields.findLast(

@@ -428,7 +428,7 @@ export const ShapeExtension = createNodeExtension({
       if (attrs.gradientType) {
         domAttrs["data-gradient-type"] = attrs.gradientType;
       }
-      if (attrs.gradientAngle !== null) {
+      if (typeof attrs.gradientAngle === "number") {
         domAttrs["data-gradient-angle"] = String(attrs.gradientAngle);
       }
       if (attrs.gradientStops) {
@@ -458,19 +458,19 @@ export const ShapeExtension = createNodeExtension({
       if (attrs.shadowColor) {
         domAttrs["data-shadow-color"] = attrs.shadowColor;
       }
-      if (attrs.shadowBlur !== null) {
+      if (typeof attrs.shadowBlur === "number") {
         domAttrs["data-shadow-blur"] = String(attrs.shadowBlur);
       }
-      if (attrs.shadowOffsetX !== null) {
+      if (typeof attrs.shadowOffsetX === "number") {
         domAttrs["data-shadow-offset-x"] = String(attrs.shadowOffsetX);
       }
-      if (attrs.shadowOffsetY !== null) {
+      if (typeof attrs.shadowOffsetY === "number") {
         domAttrs["data-shadow-offset-y"] = String(attrs.shadowOffsetY);
       }
       if (attrs.glowColor) {
         domAttrs["data-glow-color"] = attrs.glowColor;
       }
-      if (attrs.glowRadius !== null) {
+      if (typeof attrs.glowRadius === "number") {
         domAttrs["data-glow-radius"] = String(attrs.glowRadius);
       }
 

@@ -141,7 +141,7 @@ export const validateAst = (
       // Skip <div> wrappers that contain child content
       // elements — those children are matched separately.
       if (
-        el.tagName?.toLowerCase() === "div" &&
+        el.tagName.toLowerCase() === "div" &&
         $el.find("p, li, td, th, div").length > 0
       ) {
         return;
@@ -229,9 +229,7 @@ export const validateAst = (
   const typeCounts: Record<string, number> = {};
   for (const b of blocks) {
     const key =
-      b.type === "paragraph" && "role" in b && b.role
-        ? `paragraph-${b.role}`
-        : b.type;
+      b.type === "paragraph" && "role" in b ? `paragraph-${b.role}` : b.type;
     typeCounts[key] = (typeCounts[key] ?? 0) + 1;
   }
 

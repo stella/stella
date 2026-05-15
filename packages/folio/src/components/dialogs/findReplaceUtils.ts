@@ -507,7 +507,5 @@ export function scrollToMatch(
       .querySelectorAll(".layout-paragraph")
       .item(match.paragraphIndex);
 
-  if (paragraphElement) {
-    paragraphElement.scrollIntoView({ behavior: "smooth", block: "center" });
-  }
+  paragraphElement.scrollIntoView({ behavior: "smooth", block: "center" });
 }

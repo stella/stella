@@ -265,7 +265,7 @@ const textRunsWithPlaceholders = (
   const runs: Run[] = [];
   let cursor = 0;
   for (const match of text.matchAll(PLACEHOLDER_PATTERN)) {
-    const start = match.index ?? 0;
+    const start = match.index;
     if (start > cursor) {
       runs.push(textRun(text.slice(cursor, start), options));
     }

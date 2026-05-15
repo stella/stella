@@ -255,7 +255,7 @@ export function FindReplaceDialog({
     }
 
     const match = onFindNext();
-    if (match && result) {
+    if (match) {
       const newIndex = (result.currentIndex + 1) % result.totalCount;
       setResult({
         ...result,
@@ -276,7 +276,7 @@ export function FindReplaceDialog({
     }
 
     const match = onFindPrevious();
-    if (match && result) {
+    if (match) {
       const newIndex =
         result.currentIndex === 0
           ? result.totalCount - 1

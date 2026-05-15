@@ -187,8 +187,7 @@ export function findAIEditRevisionRange(
     typeof revisionIds === "number" ? [revisionIds] : revisionIds,
   );
 
-  let rangeFrom: number | null = null;
-  let rangeTo: number | null = null;
+  const range = { from: null as number | null, to: null as number | null };
 
   state.doc.descendants((node, pos) => {
     if (!node.isText) {
@@ -202,11 +201,11 @@ export function findAIEditRevisionRange(
       ) {
         const start = pos;
         const end = pos + node.nodeSize;
-        if (rangeFrom === null || start < rangeFrom) {
-          rangeFrom = start;
+        if (range.from === null || start < range.from) {
+          range.from = start;
         }
-        if (rangeTo === null || end > rangeTo) {
-          rangeTo = end;
+        if (range.to === null || end > range.to) {
+          range.to = end;
         }
         break;
       }
@@ -214,10 +213,10 @@ export function findAIEditRevisionRange(
     return undefined;
   });
 
-  if (rangeFrom === null || rangeTo === null) {
+  if (range.from === null || range.to === null) {
     return null;
   }
-  return { from: rangeFrom, to: rangeTo };
+  return { from: range.from, to: range.to };
 }
 
 /**
@@ -294,7 +293,7 @@ export function findChangeAtPosition(
   // Find the text node at this position and its mark
   let markStart = from;
   let markEnd = from;
-  let foundMark: typeof insertionType | null = null;
+  let foundMark: typeof insertionType | undefined;
 
   // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
   node.forEach((child, offset) => {
@@ -311,7 +310,7 @@ export function findChangeAtPosition(
     }
   });
 
-  if (!foundMark) {
+  if (foundMark === undefined) {
     return { from, to };
   }
 
@@ -346,10 +345,10 @@ export function findNextChange(
     return null;
   }
 
-  let result: ChangeRange | null = null;
+  const result = { value: null as ChangeRange | null };
 
   state.doc.descendants((node, pos) => {
-    if (result) {
+    if (result.value) {
       return false;
     }
     if (!node.isText) {
@@ -361,7 +360,7 @@ export function findNextChange(
 
     for (const mark of node.marks) {
       if (mark.type === insertionType || mark.type === deletionType) {
-        result = {
+        result.value = {
           from: Math.max(pos, startPos),
           to: pos + node.nodeSize,
           type: mark.type === insertionType ? "insertion" : "deletion",
@@ -373,11 +372,11 @@ export function findNextChange(
   });
 
   // Wrap around (only once)
-  if (!result && startPos > 0) {
+  if (result.value === null && startPos > 0) {
     return findNextChange(state, 0);
   }
 
-  return result;
+  return result.value;
 }
 
 /**
@@ -393,7 +392,7 @@ export function findPreviousChange(
     return null;
   }
 
-  let result: ChangeRange | null = null;
+  const result = { value: null as ChangeRange | null };
 
   state.doc.descendants((node, pos) => {
     if (!node.isText) {
@@ -405,7 +404,7 @@ export function findPreviousChange(
 
     for (const mark of node.marks) {
       if (mark.type === insertionType || mark.type === deletionType) {
-        result = {
+        result.value = {
           from: pos,
           to: pos + node.nodeSize,
           type: mark.type === insertionType ? "insertion" : "deletion",
@@ -416,9 +415,9 @@ export function findPreviousChange(
   });
 
   // Wrap around (only once — guard prevents infinite recursion)
-  if (!result && startPos < state.doc.content.size) {
+  if (result.value === null && startPos < state.doc.content.size) {
     return findPreviousChange(state, state.doc.content.size);
   }
 
-  return result;
+  return result.value;
 }

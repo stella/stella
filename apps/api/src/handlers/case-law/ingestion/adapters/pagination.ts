@@ -266,12 +266,10 @@ export const createPagePaginatedFetch = <TResponse>(
             } catch (retryParseError) {
               const retryContentType =
                 retryResponse.headers.get("content-type") ?? "unknown";
-              const detail = (() => {
-                if (retryParseError instanceof SyntaxError) {
-                  return `unparseable (content-type: ${retryContentType})`;
-                }
-                return `validation failed: ${retryParseError instanceof Error ? retryParseError.message : String(retryParseError)}`;
-              })();
+              const detail =
+                retryParseError instanceof SyntaxError
+                  ? `unparseable (content-type: ${retryContentType})`
+                  : `validation failed: ${retryParseError instanceof Error ? retryParseError.message : String(retryParseError)}`;
               throw new AdapterFetchError({
                 message: `${opts.adapterKey}: page ${page} retry ${detail}`,
                 adapterKey: opts.adapterKey,
@@ -341,15 +339,13 @@ export const createPagePaginatedFetch = <TResponse>(
           skipped: itemsSkipped,
           totalMs,
           fetchMs,
-          ...(total !== undefined && total !== null
-            ? { sourceTotal: total }
-            : {}),
+          ...(total !== undefined ? { sourceTotal: total } : {}),
         });
 
         const fetched = pageStartOffset + fetchedItems.length;
         const hasMore =
           fetchedItems.length >= opts.pageSize &&
-          (total === undefined || total === null || fetched < total);
+          (total === undefined || fetched < total);
 
         // On abort, rewind to the start of the in-flight chunk so the
         // next cycle re-processes it.
@@ -358,20 +354,16 @@ export const createPagePaginatedFetch = <TResponse>(
         // re-processing the already consumed page tail.
         // When exhausted with zero results (overshot past end),
         // step back so the cursor recovers into the valid range.
-        const nextCursor = (() => {
-          if (signal?.aborted) {
-            return encodeOffsetCursor(offset + processedThroughIndex);
-          }
-          if (hasMore) {
-            return encodeOffsetCursor(fetched);
-          }
-          if (fetchedItems.length > 0) {
-            return encodeOffsetCursor(offset + items.length);
-          }
-          return encodeOffsetCursor(
-            Math.max(0, pageStartOffset - opts.pageSize),
-          );
-        })();
+        let nextCursor = encodeOffsetCursor(
+          Math.max(0, pageStartOffset - opts.pageSize),
+        );
+        if (signal?.aborted) {
+          nextCursor = encodeOffsetCursor(offset + processedThroughIndex);
+        } else if (hasMore) {
+          nextCursor = encodeOffsetCursor(fetched);
+        } else if (fetchedItems.length > 0) {
+          nextCursor = encodeOffsetCursor(offset + items.length);
+        }
 
         return { decisions, nextCursor };
       },

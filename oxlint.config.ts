@@ -93,6 +93,10 @@ export default defineConfig({
     "typescript/dot-notation": "error",
     "typescript/prefer-readonly": "off",
     "typescript/no-unnecessary-type-conversion": "error",
+    "typescript/no-unnecessary-condition": [
+      "error",
+      { allowConstantLoopConditions: "only-allowed-literals" },
+    ],
     "typescript/no-unnecessary-type-arguments": "error",
 
     "unicorn/switch-case-braces": "off",

@@ -187,7 +187,7 @@ const extractLines = async (pdfBytes: Uint8Array): Promise<PdfLine[]> => {
       }
 
       const primarySpan = line.spans[0];
-      const bold = primarySpan ? isBoldFont(primarySpan.fontName ?? "") : false;
+      const bold = primarySpan ? isBoldFont(primarySpan.fontName) : false;
       const fontSize = primarySpan?.fontSize ?? 10;
 
       lines.push({
