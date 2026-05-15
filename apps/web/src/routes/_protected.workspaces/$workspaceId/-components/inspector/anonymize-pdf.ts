@@ -62,7 +62,7 @@ export const anonymizePdf = async ({
   // runs. Mirrored on every terminal exit below.
   useAnonymizationMatchesStore.getState().markPipelineStarted(fieldId);
   try {
-     await runPipelineAndCommit({ workspaceId, fieldId, isPdf });; return;
+    await runPipelineAndCommit({ workspaceId, fieldId, isPdf });
   } finally {
     if (!cancelledFieldIds.has(fieldId)) {
       useAnonymizationMatchesStore.getState().markPipelineRan(fieldId);
