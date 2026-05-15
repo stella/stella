@@ -212,6 +212,33 @@ describe("tracked change navigation", () => {
     });
   });
 
+  test("findPreviousChange surfaces an overlapping change inside a previously expanded range", () => {
+    // A previously inserted span that a second reviewer later deleted
+    // ("inserted-then-deleted") carries BOTH an insertion mark
+    // (revision A) and a deletion mark (revision B) on the same text
+    // node. The forward walk must process both ranges — skipping
+    // strictly by position would return the outer insertion when the
+    // user expects the nearer overlapping deletion.
+    const insertion = schema.marks["insertion"]!.create(REV_A_ATTRS);
+    const deletion = schema.marks["deletion"]!.create(REV_B_ATTRS);
+    const state = EditorState.create({
+      schema,
+      doc: schema.node("doc", null, [
+        schema.node("paragraph", null, [
+          // "first " — insertion A only, positions 1..7.
+          schema.text("first ", [insertion]),
+          // "second" — insertion A + deletion B, positions 7..13.
+          schema.text("second", [insertion, deletion]),
+        ]),
+      ]),
+    });
+    expect(findPreviousChange(state, 14)).toMatchObject({
+      from: 7,
+      to: 13,
+      type: "deletion",
+    });
+  });
+
   test("findNextChange returns the full range when startPos sits inside a multi-node change", () => {
     // The toolbar calls `findNextChange(state, selectionEnd)` and then
     // accepts/rejects the returned range. If `startPos` lands inside

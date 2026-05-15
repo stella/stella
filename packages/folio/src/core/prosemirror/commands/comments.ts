@@ -446,6 +446,13 @@ export function findPreviousChange(
   }
 
   const result = { value: null as ChangeRange | null };
+  // Remember the specific mark instance that produced the kept result, so
+  // the walk can skip later text nodes covered by the same expansion
+  // without skipping a sibling that carries a *different* tracked-change
+  // mark (e.g., an `insertion + deletion` overlay where the same text
+  // node belongs to two distinct revisions). Skipping by position alone
+  // would miss the nearer overlapping change.
+  let resultMark: import("prosemirror-model").Mark | null = null;
 
   state.doc.descendants((node, pos) => {
     if (!node.isText) {
@@ -454,11 +461,18 @@ export function findPreviousChange(
     if (pos >= startPos) {
       return false;
     }
-    // The forward walk would otherwise re-expand the same span once per
-    // text node inside it. Skip nodes already covered by the most
-    // recent kept result — the previous expansion already included
-    // them, and expansion is idempotent.
-    if (result.value && pos < result.value.to) {
+    if (
+      result.value &&
+      resultMark &&
+      pos < result.value.to &&
+      node.marks.every(
+        (m) =>
+          (m.type !== insertionType && m.type !== deletionType) ||
+          m.eq(resultMark!),
+      )
+    ) {
+      // Already covered by the previous expansion AND no additional
+      // tracked-change mark sits on this node — safe to skip.
       return;
     }
 
@@ -475,6 +489,7 @@ export function findPreviousChange(
           to: expanded.to,
           type: mark.type === insertionType ? "insertion" : "deletion",
         };
+        resultMark = mark;
       }
     }
     return undefined;
