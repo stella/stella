@@ -345,10 +345,10 @@ export function findNextChange(
     return null;
   }
 
-  let result: ChangeRange | null = null;
+  const result = { value: null as ChangeRange | null };
 
   state.doc.descendants((node, pos) => {
-    if (result) {
+    if (result.value) {
       return false;
     }
     if (!node.isText) {
@@ -360,7 +360,7 @@ export function findNextChange(
 
     for (const mark of node.marks) {
       if (mark.type === insertionType || mark.type === deletionType) {
-        result = {
+        result.value = {
           from: Math.max(pos, startPos),
           to: pos + node.nodeSize,
           type: mark.type === insertionType ? "insertion" : "deletion",
@@ -372,11 +372,11 @@ export function findNextChange(
   });
 
   // Wrap around (only once)
-  if (startPos > 0) {
+  if (result.value === null && startPos > 0) {
     return findNextChange(state, 0);
   }
 
-  return result;
+  return result.value;
 }
 
 /**
@@ -392,7 +392,7 @@ export function findPreviousChange(
     return null;
   }
 
-  let result: ChangeRange | null = null;
+  const result = { value: null as ChangeRange | null };
 
   state.doc.descendants((node, pos) => {
     if (!node.isText) {
@@ -404,7 +404,7 @@ export function findPreviousChange(
 
     for (const mark of node.marks) {
       if (mark.type === insertionType || mark.type === deletionType) {
-        result = {
+        result.value = {
           from: pos,
           to: pos + node.nodeSize,
           type: mark.type === insertionType ? "insertion" : "deletion",
@@ -415,9 +415,9 @@ export function findPreviousChange(
   });
 
   // Wrap around (only once — guard prevents infinite recursion)
-  if (startPos < state.doc.content.size) {
+  if (result.value === null && startPos < state.doc.content.size) {
     return findPreviousChange(state, state.doc.content.size);
   }
 
-  return result;
+  return result.value;
 }
