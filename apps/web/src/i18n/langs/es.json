@@ -541,6 +541,7 @@
     "anonymizationLabels": {
       "address": "Dirección",
       "bankAccountNumber": "Número de cuenta bancaria",
+      "birthNumber": "Birth number",
       "creditCardNumber": "Número de tarjeta de crédito",
       "date": "Fecha",
       "dateOfBirth": "Fecha de nacimiento",
@@ -550,11 +551,13 @@
       "landParcel": "Parcela",
       "miscellaneous": "Otros",
       "monetaryAmount": "Importe",
+      "nationalIdentificationNumber": "National identification number",
       "organization": "Organización",
       "passportNumber": "Número de pasaporte",
       "person": "Persona",
       "phoneNumber": "Número de teléfono",
       "registrationNumber": "Número de registro",
+      "socialSecurityNumber": "Social security number",
       "taxIdentificationNumber": "NIF / CIF"
     },
     "cancel": "Cancelar",

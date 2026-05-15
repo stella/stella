@@ -544,6 +544,7 @@ type Messages = {
     "anonymizationLabels": {
       "address": "Address";
       "bankAccountNumber": "Bank account number";
+      "birthNumber": "Birth number";
       "creditCardNumber": "Credit card number";
       "date": "Date";
       "dateOfBirth": "Date of birth";
@@ -553,11 +554,13 @@ type Messages = {
       "landParcel": "Land parcel";
       "miscellaneous": "Miscellaneous";
       "monetaryAmount": "Monetary amount";
+      "nationalIdentificationNumber": "National identification number";
       "organization": "Organization";
       "passportNumber": "Passport number";
       "person": "Person";
       "phoneNumber": "Phone number";
       "registrationNumber": "Registration number";
+      "socialSecurityNumber": "Social security number";
       "taxIdentificationNumber": "Tax identification number";
     };
     "cancel": "Cancel";

@@ -1,4 +1,4 @@
-import type { PipelineConfig } from "@stll/anonymize-wasm";
+import type { PipelineConfig, PipelineContext } from "@stll/anonymize-wasm";
 
 import { PDF_MIME_TYPE } from "@/consts";
 import { DEFAULT_ENTITY_LABELS } from "@/lib/anonymize/constants";
@@ -19,22 +19,50 @@ import type {
 const buildPipelineConfig = (
   workspaceId: string,
   labels: readonly string[],
-): PipelineConfig => ({
-  threshold: 0.4,
-  enableTriggerPhrases: true,
-  enableRegex: true,
-  enableNameCorpus: true,
-  enableDenyList: false,
-  enableGazetteer: false,
-  enableNer: false,
-  enableConfidenceBoost: false,
-  enableCoreference: true,
-  enableLegalForms: true,
-  labels: [...labels],
-  workspaceId,
-});
+): PipelineConfig => {
+  const nameCorpusLanguage = navigator.language
+    .split(/[-_]/u)
+    .at(0)
+    ?.trim()
+    .toLowerCase();
+
+  const config: PipelineConfig = {
+    threshold: 0.4,
+    enableTriggerPhrases: true,
+    enableRegex: true,
+    enableNameCorpus: true,
+    enableDenyList: false,
+    enableGazetteer: false,
+    enableNer: false,
+    enableConfidenceBoost: false,
+    enableCoreference: true,
+    enableLegalForms: true,
+    labels: [...labels],
+    workspaceId,
+  };
+  if (nameCorpusLanguage && /^[a-z]{2}$/u.test(nameCorpusLanguage)) {
+    config.nameCorpusLanguages = [nameCorpusLanguage];
+  }
+  return config;
+};
 
 const cancelledFieldIds = new Set<string>();
+let dictionariesPromise: Promise<
+  NonNullable<PipelineConfig["dictionaries"]>
+> | null = null;
+let pipelineContext: PipelineContext | null = null;
+let pipelineQueue: Promise<void> = Promise.resolve();
+
+const runWithPipelineContext = async <T>(
+  task: () => Promise<T>,
+): Promise<T> => {
+  const run = pipelineQueue.then(task, task);
+  pipelineQueue = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return await run;
+};
 
 export const anonymizePdf = async ({
   workspaceId,
@@ -78,19 +106,30 @@ export const anonymizePdf = async ({
   const pdf = await PDF.load(pdfBytes);
   const { text, spans: charSpans } = extractPDFText(pdf);
 
-  const [{ loadNameDictionaries }, { runPipeline }] = await Promise.all([
+  const [{ loadNameDictionaries }, wasm] = await Promise.all([
     import("@stll/anonymize-data"),
     import("@stll/anonymize-wasm"),
   ]);
-  const dictionaries = await loadNameDictionaries();
-
-  const entities = await runPipeline({
-    fullText: text,
-    config: {
+  dictionariesPromise ??= loadNameDictionaries();
+  const dictionaries = await dictionariesPromise;
+  const entities = await runWithPipelineContext(async () => {
+    pipelineContext ??= wasm.createPipelineContext();
+    pipelineContext.corefSourceMap.clear();
+    const config = {
       ...buildPipelineConfig(workspaceId, DEFAULT_ENTITY_LABELS),
       dictionaries,
-    },
-    gazetteerEntries: [],
+    };
+    await wasm.preparePipelineSearch({
+      config,
+      context: pipelineContext,
+      gazetteerEntries: [],
+    });
+    return await wasm.runPipeline({
+      fullText: text,
+      config,
+      gazetteerEntries: [],
+      context: pipelineContext,
+    });
   });
 
   const overlayEntities: EntityOverlay[] = [];

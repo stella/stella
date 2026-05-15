@@ -541,6 +541,7 @@
     "anonymizationLabels": {
       "address": "Cím",
       "bankAccountNumber": "Bankszámlaszám",
+      "birthNumber": "Birth number",
       "creditCardNumber": "Bankkártyaszám",
       "date": "Dátum",
       "dateOfBirth": "Születési dátum",
@@ -550,11 +551,13 @@
       "landParcel": "Földrészlet",
       "miscellaneous": "Egyéb",
       "monetaryAmount": "Pénzösszeg",
+      "nationalIdentificationNumber": "National identification number",
       "organization": "Szervezet",
       "passportNumber": "Útlevélszám",
       "person": "Személy",
       "phoneNumber": "Telefonszám",
       "registrationNumber": "Cégjegyzékszám",
+      "socialSecurityNumber": "Social security number",
       "taxIdentificationNumber": "Adóazonosító"
     },
     "cancel": "Mégse",
