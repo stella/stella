@@ -33,7 +33,7 @@
     "@stll/docx-core": "workspace:*",
     "@stll/docx-utils": "workspace:*",
     "@stll/ui": "workspace:*",
-    "fast-xml-parser": "^5.7.2",
+    "fast-xml-parser": "^5.7.3",
     "jszip": "catalog:",
     "lucide-react": "catalog:",
     "prosemirror-commands": "^1.7.1",

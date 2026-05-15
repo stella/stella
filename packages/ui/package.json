@@ -24,7 +24,7 @@
     "input-otp": "^1.4.2",
     "lucide-react": "catalog:",
     "react": "catalog:react19",
-    "tailwind-merge": "^3.4.1"
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
