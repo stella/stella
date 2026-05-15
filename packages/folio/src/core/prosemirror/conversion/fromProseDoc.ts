@@ -1630,10 +1630,11 @@ function tableCellAttrsToFormatting(
     if (attrs.colspan > 1) {
       result.gridSpan = attrs.colspan;
     }
-    // Width: use !== null to handle width=0 correctly (ProseMirror can set null)
-    if (attrs.width !== undefined) {
+    const cellWidth = Reflect.get(attrs, "width");
+    // Width: keep null absent while preserving explicit width=0 values.
+    if (typeof cellWidth === "number") {
       result.width = {
-        value: attrs.width ?? 0,
+        value: cellWidth,
         type: attrs.widthType as "auto" | "dxa" | "pct" | "nil",
       };
     }

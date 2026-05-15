@@ -1135,7 +1135,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     const stylePreviewElement =
       styleLabelElement.querySelector<HTMLElement>("[style]") ??
       styleLabelElement;
-    const styleLabel = styleLabelElement.textContent.trim();
+    const styleLabelText = Reflect.get(styleLabelElement, "textContent");
+    const styleLabel =
+      typeof styleLabelText === "string" ? styleLabelText.trim() : "";
 
     if (styleLabel.length > 0) {
       lastStyleLabelRef.current = styleLabel;

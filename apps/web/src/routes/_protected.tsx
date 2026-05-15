@@ -417,7 +417,7 @@ function ProtectedContent({
 const INSPECTOR_PANE_DEFAULT_WIDTH = 512;
 const INSPECTOR_PANE_MIN_WIDTH = 320;
 const INSPECTOR_PANE_MAX_WIDTH = 800;
-const INSPECTOR_RAIL_WIDTH = 40;
+const INSPECTOR_RAIL_WIDTH = 48;
 
 /**
  * Workspace inspector pane — file viewers + chat tabs. Mounted at

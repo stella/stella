@@ -34,6 +34,11 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
     total += trackedCases.length;
 
     for (const trackedCase of trackedCases) {
+      // eslint-disable-next-line typescript/no-unnecessary-condition -- AbortSignal can flip between scheduler awaits.
+      if (signal.aborted) {
+        break;
+      }
+
       try {
         const lookupResult = await client.searchCaseWithHearings({
           courtCode: trackedCase.courtCode,
@@ -44,6 +49,11 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
           lookupResult.case,
           lookupResult.hearings.udalosti,
         );
+
+        // eslint-disable-next-line typescript/no-unnecessary-condition -- AbortSignal can flip while the external lookup is in flight.
+        if (signal.aborted) {
+          break;
+        }
 
         if (agendaItems.length > LIMITS.infoSoudAgendaImportItemsMax) {
           await markTrackedCaseFailed({
@@ -85,6 +95,11 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
 
         synced += 1;
       } catch (error: unknown) {
+        // eslint-disable-next-line typescript/no-unnecessary-condition -- Avoid marking an intentionally aborted task as a failed tracked case.
+        if (signal.aborted) {
+          break;
+        }
+
         await markTrackedCaseFailed({
           error: errorTag(error),
           trackedCaseId: trackedCase.id,
