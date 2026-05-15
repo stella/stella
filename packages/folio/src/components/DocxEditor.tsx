@@ -31,7 +31,6 @@ import {
   StickyNoteIcon,
   XIcon,
 } from "lucide-react";
-import { Selection } from "prosemirror-state";
 // Paginated editor
 import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
@@ -61,7 +60,6 @@ import {
 } from "../core/ai-edits";
 import { repackDocx } from "../core/docx/rezip";
 import { attemptSelectiveSave } from "../core/docx/selectiveSave";
-import { findBodyPmAnchors } from "../core/layout-bridge/findBodyPmSpans";
 // ProseMirror editor
 import {
   TextSelection,
@@ -165,11 +163,18 @@ import { useDocumentHistory } from "../hooks/useHistory";
 import { useTableSelection } from "../hooks/useTableSelection";
 import { PagedEditor } from "../paged-editor/PagedEditor";
 import type { PagedEditorRef } from "../paged-editor/PagedEditor";
+import { resolveCommentCreationRange } from "./commentAnchors";
 import {
-  clampCommentMarkRange,
-  resolveCommentCreationRange,
-} from "./commentAnchors";
-import type { CommentMarkRange } from "./commentAnchors";
+  EMPTY_ANCHOR_POSITIONS,
+  PENDING_COMMENT_ID,
+  applyCommentMarkRange,
+  createComment,
+  findSelectionYPosition,
+  getCommentAuthorKey,
+  getCommentParentId,
+  getFallbackCommentYPosition,
+  removePendingCommentMarkRange,
+} from "./commentsHelpers";
 import { CommentsSidebar } from "./CommentsSidebar";
 import type { TrackedChangeEntry } from "./CommentsSidebar";
 // Dialog hooks and utilities (static imports — lightweight, no UI)
@@ -269,14 +274,7 @@ export type {
 // MAIN COMPONENT
 // ============================================================================
 
-let nextCommentId = Date.now();
-const PENDING_COMMENT_ID = -1;
-const EMPTY_ANCHOR_POSITIONS = new Map<string, number>();
-
-function getCommentAuthorKey(author?: string): string {
-  const trimmed = author?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : "Unknown";
-}
+// Comment helpers and the in-process id allocator live in ./commentsHelpers.
 
 function buildImagePropertiesData(
   ctx: EditorState["pmImageContext"],
@@ -298,125 +296,6 @@ function buildImagePropertiesData(
     data.borderStyle = ctx.borderStyle;
   }
   return data;
-}
-
-/**
- * Find the Y position (relative to parentEl) of the element containing the given PM position.
- * Used by both the floating comment button and the context menu comment action.
- * Queries all elements with data-pm-start (spans, divs, imgs) — not just spans,
- * since table cell content may use div fragments.
- */
-function findSelectionYPosition(
-  scrollContainer: HTMLElement | null,
-  parentEl: HTMLElement | null,
-  pmPos: number,
-): number | null {
-  if (!scrollContainer || !parentEl) {
-    return null;
-  }
-  const pagesEl = scrollContainer.querySelector(".paged-editor__pages");
-  if (!pagesEl) {
-    return null;
-  }
-  for (const el of findBodyPmAnchors(pagesEl)) {
-    const pmStart = Number(el.dataset["pmStart"]);
-    const pmEnd = Number(el.dataset["pmEnd"]);
-    if (pmPos >= pmStart && pmPos <= pmEnd) {
-      return (
-        el.getBoundingClientRect().top -
-        scrollContainer.getBoundingClientRect().top +
-        scrollContainer.scrollTop
-      );
-    }
-  }
-  return null;
-}
-
-function getFallbackCommentYPosition(
-  scrollContainer: HTMLElement | null,
-): number {
-  if (!scrollContainer) {
-    return 80;
-  }
-  return (
-    scrollContainer.scrollTop + Math.max(80, scrollContainer.clientHeight / 3)
-  );
-}
-
-function createComment(
-  text: string,
-  authorName: string,
-  parentId?: number,
-): Comment {
-  return {
-    id: nextCommentId++,
-    author: authorName,
-    date: new Date().toISOString(),
-    content: [
-      {
-        type: "paragraph",
-        formatting: {},
-        content: [
-          { type: "run", formatting: {}, content: [{ type: "text", text }] },
-        ],
-      },
-    ],
-    ...(parentId !== undefined && { parentId }),
-  };
-}
-
-function getCommentParentId(comment: Comment): number | null | undefined {
-  const runtimeComment: { parentId?: number | null } = comment;
-  return runtimeComment.parentId;
-}
-
-function applyCommentMarkRange(
-  view: EditorView,
-  range: CommentMarkRange,
-  commentId: number,
-  options?: { replacePending?: boolean; selectEnd?: boolean },
-): boolean {
-  const commentMark = view.state.schema.marks["comment"];
-  const safeRange = clampCommentMarkRange(view.state.doc.content.size, range);
-  if (!commentMark || !safeRange) {
-    return false;
-  }
-
-  let tr = view.state.tr;
-  if (options?.replacePending) {
-    tr = tr.removeMark(safeRange.from, safeRange.to, commentMark);
-  }
-  tr = tr.addMark(
-    safeRange.from,
-    safeRange.to,
-    commentMark.create({ commentId }),
-  );
-
-  if (options?.selectEnd) {
-    tr = tr.setSelection(Selection.near(tr.doc.resolve(safeRange.to), -1));
-  }
-
-  view.dispatch(tr);
-  return true;
-}
-
-function removePendingCommentMarkRange(
-  view: EditorView,
-  range: CommentMarkRange,
-): void {
-  const commentMark = view.state.schema.marks["comment"];
-  const safeRange = clampCommentMarkRange(view.state.doc.content.size, range);
-  if (!commentMark || !safeRange) {
-    return;
-  }
-
-  view.dispatch(
-    view.state.tr.removeMark(
-      safeRange.from,
-      safeRange.to,
-      commentMark.create({ commentId: PENDING_COMMENT_ID }),
-    ),
-  );
 }
 
 /**
