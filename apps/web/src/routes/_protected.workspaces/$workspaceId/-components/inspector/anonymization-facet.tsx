@@ -44,6 +44,7 @@ import {
 } from "@stll/ui/components/menu";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import type { TranslationKey } from "@/i18n/types";
 import { useAnonymizationActiveStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-active-store";
 import { AnonymizationContextMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-context-menu";
 import { useAnonymizationMatches } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-matches-store";
@@ -87,6 +88,38 @@ const LABEL_OPTIONS = [
 type LabelOption = (typeof LABEL_OPTIONS)[number];
 
 const DEFAULT_LABEL: LabelOption = "organization";
+
+// Map the anonymizer's English label strings (the pipeline
+// emits canonicals like "organization", "phone number") onto
+// the existing `common.anonymizationLabels.*` translation keys.
+// Detector output not in this map falls back to the raw label
+// string so unfamiliar categories still render something
+// readable.
+const LABEL_TRANSLATION_KEYS = {
+  organization: "common.anonymizationLabels.organization",
+  person: "common.anonymizationLabels.person",
+  address: "common.anonymizationLabels.address",
+  "phone number": "common.anonymizationLabels.phoneNumber",
+  "email address": "common.anonymizationLabels.emailAddress",
+  date: "common.anonymizationLabels.date",
+  "date of birth": "common.anonymizationLabels.dateOfBirth",
+  "bank account number": "common.anonymizationLabels.bankAccountNumber",
+  iban: "common.anonymizationLabels.iban",
+  "tax identification number":
+    "common.anonymizationLabels.taxIdentificationNumber",
+  "identity card number": "common.anonymizationLabels.identityCardNumber",
+  "registration number": "common.anonymizationLabels.registrationNumber",
+  "credit card number": "common.anonymizationLabels.creditCardNumber",
+  "passport number": "common.anonymizationLabels.passportNumber",
+  "monetary amount": "common.anonymizationLabels.monetaryAmount",
+  "land parcel": "common.anonymizationLabels.landParcel",
+  other: "common.anonymizationLabels.miscellaneous",
+} as const satisfies Record<string, TranslationKey>;
+
+type LabelTranslationKey = keyof typeof LABEL_TRANSLATION_KEYS;
+
+const isLabelTranslationKey = (label: string): label is LabelTranslationKey =>
+  label in LABEL_TRANSLATION_KEYS;
 
 type AnonymizationFacetProps = {
   workspaceId: string;
@@ -136,6 +169,8 @@ export const AnonymizationFacet = ({
   onOpenFullView,
 }: AnonymizationFacetProps) => {
   const t = useTranslations();
+  const formatLabel = (label: string): string =>
+    isLabelTranslationKey(label) ? t(LABEL_TRANSLATION_KEYS[label]) : label;
   const termsQuery = useQuery(anonymizationTermsOptions(workspaceId));
   const createMutation = useCreateAnonymizationTerms();
   const deleteMutation = useDeleteAnonymizationTerm();
@@ -377,13 +412,23 @@ export const AnonymizationFacet = ({
   // ignored to avoid loops; selections from other docs (cached
   // tab panes) are ignored too.
   const containerRef = useRef<HTMLDivElement>(null);
-  const docSelection = useAnonymizationSelectionStore((s) =>
-    s.source === "doc" && s.fieldId === activeFieldId
-      ? { canonical: s.canonical, label: s.label, seq: s.seq }
-      : null,
+  // Select primitives separately rather than returning a fresh
+  // `{ canonical, label, seq }` object from the selector. Zustand
+  // v5 uses referential equality on selector results, so an
+  // object literal would re-render on every store change and risk
+  // an infinite getSnapshot loop. Each primitive selector is
+  // stable across unrelated updates.
+  const docSelectionCanonical = useAnonymizationSelectionStore((s) =>
+    s.source === "doc" && s.fieldId === activeFieldId ? s.canonical : null,
+  );
+  const docSelectionLabel = useAnonymizationSelectionStore((s) =>
+    s.source === "doc" && s.fieldId === activeFieldId ? s.label : null,
+  );
+  const docSelectionSeq = useAnonymizationSelectionStore((s) =>
+    s.source === "doc" && s.fieldId === activeFieldId ? s.seq : 0,
   );
   useEffect(() => {
-    if (!docSelection?.canonical) {
+    if (!docSelectionCanonical) {
       return;
     }
     // Detected groups start collapsed; if the doc click lands on
@@ -391,17 +436,15 @@ export const AnonymizationFacet = ({
     // first. The effect re-runs after expandedGroups updates and
     // proceeds to the scroll/flash branch below.
     if (
-      docSelection.label &&
-      !expandedGroups.has(docSelection.label) &&
+      docSelectionLabel &&
+      !expandedGroups.has(docSelectionLabel) &&
       // Only the detected section is collapsible — workspace
       // term rows live above it and are always visible.
-      detectedGroups.some(([label]) => label === docSelection.label)
+      detectedGroups.some(([label]) => label === docSelectionLabel)
     ) {
       setExpandedGroups((prev) => {
         const next = new Set(prev);
-        if (docSelection.label) {
-          next.add(docSelection.label);
-        }
+        next.add(docSelectionLabel);
         return next;
       });
       return;
@@ -412,7 +455,7 @@ export const AnonymizationFacet = ({
     }
     // `seq` is part of the dep array so repeated clicks of the
     // same canonical re-fire the scroll + flash.
-    const selector = `[data-anonymization-canonical="${CSS.escape(docSelection.canonical)}"]`;
+    const selector = `[data-anonymization-canonical="${CSS.escape(docSelectionCanonical)}"]`;
     const row = root.querySelector<HTMLElement>(selector);
     if (!row) {
       return;
@@ -420,15 +463,15 @@ export const AnonymizationFacet = ({
     row.scrollIntoView({ block: "nearest", behavior: "smooth" });
     row.animate(
       [
-        { boxShadow: "inset 0 0 0 2px var(--color-primary)" },
+        { boxShadow: "inset 0 0 0 2px var(--primary)" },
         { boxShadow: "inset 0 0 0 2px transparent" },
       ],
       { duration: 600, easing: "ease-out" },
     );
   }, [
-    docSelection?.canonical,
-    docSelection?.label,
-    docSelection?.seq,
+    docSelectionCanonical,
+    docSelectionLabel,
+    docSelectionSeq,
     expandedGroups,
     detectedGroups,
   ]);
@@ -487,7 +530,7 @@ export const AnonymizationFacet = ({
               <ComboboxList>
                 {(option: LabelOption) => (
                   <ComboboxItem key={option} value={option}>
-                    {option}
+                    {formatLabel(option)}
                   </ComboboxItem>
                 )}
               </ComboboxList>
@@ -581,7 +624,7 @@ export const AnonymizationFacet = ({
                   {entry.canonical}
                 </span>
                 <span className="text-muted-foreground text-xs">
-                  {entry.label}
+                  {formatLabel(entry.label)}
                 </span>
               </div>
               <div className="flex items-center gap-1">
@@ -646,7 +689,7 @@ export const AnonymizationFacet = ({
                       <ChevronRight className="text-muted-foreground size-4 shrink-0" />
                     )}
                     <span className="truncate text-sm font-medium">
-                      {label}
+                      {formatLabel(label)}
                     </span>
                   </span>
                   <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs tabular-nums">
