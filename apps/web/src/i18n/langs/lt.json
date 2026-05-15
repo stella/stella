@@ -1094,6 +1094,8 @@
       "detectedHeading": "Aptikta šiame dokumente ({count})",
       "emptyState": "No workspace-specific terms yet. Add one above.",
       "ignoreAction": "Ignoruoti šiame dokumente",
+      "ignoreScopeAlways": "Always ignore",
+      "ignoreScopeDocument": "Ignore in this matter",
       "ignoreScopeMenuAriaLabel": "Ignoravimo apimtis",
       "ignoreScopeWorkspace": "Ignoruoti šioje darbo erdvėje",
       "labelPickerAriaLabel": "Entity label",

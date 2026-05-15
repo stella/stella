@@ -1094,6 +1094,8 @@
       "detectedHeading": "Nalezeno v dokumentu ({count})",
       "emptyState": "No workspace-specific terms yet. Add one above.",
       "ignoreAction": "Ignorovat v tomto dokumentu",
+      "ignoreScopeAlways": "Vždy ignorovat",
+      "ignoreScopeDocument": "Ignorovat v rámci tohoto spisu",
       "ignoreScopeMenuAriaLabel": "Rozsah ignorování",
       "ignoreScopeWorkspace": "Ignorovat v tomto spise",
       "labelPickerAriaLabel": "Entity label",

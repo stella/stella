@@ -80,18 +80,35 @@ export const AnonymizationRectsOverlay = ({
   selectedCanonical = null,
   selectionSeq,
 }: AnonymizationRectsOverlayProps) => {
-  // Track the first span that matches the selected canonical so
-  // we can scroll it into view on each seq bump. Using a ref
-  // map keyed by canonical lets us look up the right element
-  // without re-querying the DOM.
-  const firstSpanByCanonical = useRef(new Map<string, HTMLSpanElement>());
-  firstSpanByCanonical.current = new Map();
+  // All spans grouped by canonical. Repeated sidebar selections
+  // of the same canonical advance through `spansByCanonical`,
+  // wrapping at the end, so the user isn't stuck on the first
+  // occurrence and can step through every hit.
+  const spansByCanonical = useRef(new Map<string, HTMLSpanElement[]>());
+  spansByCanonical.current = new Map();
+
+  // Last canonical scrolled to + index inside its span list.
+  // Used to advance on repeat selections of the same canonical
+  // and reset to 0 when the canonical changes.
+  const cycleRef = useRef<{ canonical: string; index: number } | null>(null);
 
   useEffect(() => {
     if (!selectedCanonical) {
+      cycleRef.current = null;
       return;
     }
-    const el = firstSpanByCanonical.current.get(selectedCanonical);
+    const spans = spansByCanonical.current.get(selectedCanonical) ?? [];
+    if (spans.length === 0) {
+      return;
+    }
+    let nextIndex: number;
+    if (cycleRef.current?.canonical === selectedCanonical) {
+      nextIndex = (cycleRef.current.index + 1) % spans.length;
+    } else {
+      nextIndex = 0;
+    }
+    cycleRef.current = { canonical: selectedCanonical, index: nextIndex };
+    const el = spans[nextIndex];
     if (el) {
       el.scrollIntoView({ block: "center", behavior: "smooth" });
     }
@@ -165,41 +182,31 @@ export const AnonymizationRectsOverlay = ({
     >
       {groups.flatMap((group) => {
         const isSelected = selectedCanonical === group.canonical;
-        return group.rects.map((rect, idx) => {
-          const isFirstForCanonical = idx === 0;
-          return (
-            <span
-              key={`${group.label}:${group.canonical}:${idx}:${rect.pageIndex}:${rect.x}:${rect.y}`}
-              ref={(node) => {
-                if (
-                  node &&
-                  isFirstForCanonical &&
-                  !firstSpanByCanonical.current.has(group.canonical)
-                ) {
-                  // The same canonical can appear in multiple groups
-                  // (e.g. classified under more than one label across
-                  // occurrences); keep the *first* group's first rect
-                  // so sidebar selections scroll to the earliest hit.
-                  firstSpanByCanonical.current.set(group.canonical, node);
-                }
-              }}
-              className={`folio-anonymization-term folio-anonymization-term--${slugAnonymizationLabel(group.label)}`}
-              data-folio-anonymization-label={group.label}
-              data-folio-anonymization-canonical={group.canonical}
-              data-folio-anonymization-selected={
-                isSelected ? "true" : undefined
+        return group.rects.map((rect, idx) => (
+          <span
+            key={`${group.label}:${group.canonical}:${idx}:${rect.pageIndex}:${rect.x}:${rect.y}`}
+            ref={(node) => {
+              if (node) {
+                const list =
+                  spansByCanonical.current.get(group.canonical) ?? [];
+                list.push(node);
+                spansByCanonical.current.set(group.canonical, list);
               }
-              title={`Anonymized: ${group.canonical}`}
-              style={{
-                position: "absolute",
-                left: rect.x,
-                top: rect.y,
-                width: rect.width,
-                height: rect.height,
-              }}
-            />
-          );
-        });
+            }}
+            className={`folio-anonymization-term folio-anonymization-term--${slugAnonymizationLabel(group.label)}`}
+            data-folio-anonymization-label={group.label}
+            data-folio-anonymization-canonical={group.canonical}
+            data-folio-anonymization-selected={isSelected ? "true" : undefined}
+            title={`Anonymized: ${group.canonical}`}
+            style={{
+              position: "absolute",
+              left: rect.x,
+              top: rect.y,
+              width: rect.width,
+              height: rect.height,
+            }}
+          />
+        ));
       })}
     </div>
   );
