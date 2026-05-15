@@ -88,10 +88,7 @@ function DestructiveConfirmDialog({
           <Button
             disabled={!typedConfirmation.confirmed}
             loading={loading}
-            onClick={() => {
-              // eslint-disable-next-line typescript/no-floating-promises
-              handleConfirm();
-            }}
+            onClick={() => void handleConfirm()}
             variant="destructive"
           >
             {confirmLabel}
