@@ -1,10 +1,9 @@
 import { useCallback, useState } from "react";
 import type { RefObject } from "react";
 
-import type { EditorView } from "prosemirror-view";
-
 import { isInTable } from "../../core/prosemirror";
 import type { PagedEditorRef } from "../../paged-editor/PagedEditor";
+import { detectActiveTrackedChange } from "../selectionDetection";
 
 export type ContextMenuAnchor = { x: number; y: number };
 
@@ -25,37 +24,6 @@ const CLOSED_STATE: ContextMenuState = {
   cursorInTable: false,
   cursorInTrackedChange: false,
 };
-
-/**
- * True when the cursor sits on a text node carrying an `insertion` or
- * `deletion` mark — i.e., inside a tracked-change region. Used to decide
- * whether to surface accept/reject items in the context menu.
- */
-function isCursorOnTrackedChange(view: EditorView): boolean {
-  const { from } = view.state.selection;
-  const $pos = view.state.doc.resolve(from);
-  const node = $pos.parent;
-  if (!node.isTextblock) {
-    return false;
-  }
-  let onTrackedChange = false;
-  // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
-  node.forEach((child, offset) => {
-    const start = $pos.start() + offset;
-    const end = start + child.nodeSize;
-    if (
-      from >= start &&
-      from <= end &&
-      child.isText &&
-      child.marks.some(
-        (m) => m.type.name === "insertion" || m.type.name === "deletion",
-      )
-    ) {
-      onTrackedChange = true;
-    }
-  });
-  return onTrackedChange;
-}
 
 export type UseContextMenuArgs = {
   pagedEditorRef: RefObject<PagedEditorRef | null>;
@@ -90,7 +58,7 @@ export function useContextMenu({
         hasSelectionOverride ?? selection.from !== selection.to;
       const cursorInTable = view ? isInTable(view.state) : false;
       const cursorInTrackedChange = view
-        ? isCursorOnTrackedChange(view)
+        ? detectActiveTrackedChange(view.state) !== null
         : false;
 
       setContextMenu({

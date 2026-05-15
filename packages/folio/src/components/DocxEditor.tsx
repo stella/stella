@@ -210,6 +210,10 @@ import { useZoomAndPageInfo } from "./hooks/useZoomAndPageInfo";
 import { InlineHeaderFooterEditor } from "./InlineHeaderFooterEditor";
 import type { InlineHeaderFooterEditorRef } from "./InlineHeaderFooterEditor";
 import { updateScrollPageTotal } from "./scrollPageInfo";
+import {
+  detectActiveTrackedChange,
+  detectImageContext,
+} from "./selectionDetection";
 import { TextContextMenu } from "./TextContextMenu";
 import type { TextContextAction, TextContextMenuItem } from "./TextContextMenu";
 import { ToolbarButton, ToolbarSeparator } from "./Toolbar";
@@ -1180,73 +1184,13 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           };
         }
 
-        // Check if cursor is on an image (NodeSelection)
-        let pmImageCtx: typeof state.pmImageContext = null;
-        if (view) {
-          const sel = view.state.selection;
-          // NodeSelection has a `node` property
-          const selectedNode = (
-            sel as {
-              node?: { type: { name: string }; attrs: Record<string, unknown> };
-            }
-          ).node;
-          if (selectedNode?.type.name === "image") {
-            const attrs = selectedNode.attrs;
-            const readRequiredStringAttr = (key: string, fallback: string) => {
-              const value = attrs[key];
-              return typeof value === "string" ? value : fallback;
-            };
-            const readNullableStringAttr = (key: string) => {
-              const value = attrs[key];
-              return typeof value === "string" ? value : null;
-            };
-            const borderWidth = attrs["borderWidth"];
-            pmImageCtx = {
-              pos: sel.from,
-              wrapType: readRequiredStringAttr("wrapType", "inline"),
-              displayMode: readRequiredStringAttr("displayMode", "inline"),
-              cssFloat: readNullableStringAttr("cssFloat"),
-              transform: readNullableStringAttr("transform"),
-              alt: readNullableStringAttr("alt"),
-              borderWidth: typeof borderWidth === "number" ? borderWidth : null,
-              borderColor: readNullableStringAttr("borderColor"),
-              borderStyle: readNullableStringAttr("borderStyle"),
-            };
-          }
-        }
-
-        // Detect tracked change at cursor position
-        let trackedChange: EditorState["activeTrackedChange"] = null;
-        if (view) {
-          const { from } = view.state.selection;
-          const $pos = view.state.doc.resolve(from);
-          const node = $pos.parent;
-          if (node.isTextblock) {
-            // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
-            node.forEach((child, offset) => {
-              const childStart = $pos.start() + offset;
-              const childEnd = childStart + child.nodeSize;
-              if (from >= childStart && from <= childEnd && child.isText) {
-                for (const mark of child.marks) {
-                  if (
-                    mark.type.name === "insertion" ||
-                    mark.type.name === "deletion"
-                  ) {
-                    // Expand to full change range
-                    const range = findChangeAtPosition(view.state, from, from);
-                    trackedChange = {
-                      type: mark.type.name as "insertion" | "deletion",
-                      author: (mark.attrs["author"] as string) || "Unknown",
-                      date: (mark.attrs["date"] as string) || null,
-                      from: range.from,
-                      to: range.to,
-                    };
-                  }
-                }
-              }
-            });
-          }
-        }
+        // Image context (when the selection is a NodeSelection of an image)
+        // and active tracked-change at the cursor live in pure helpers so the
+        // logic is unit-tested without spinning up a real component.
+        const pmImageCtx = view ? detectImageContext(view.state) : null;
+        const trackedChange = view
+          ? detectActiveTrackedChange(view.state)
+          : null;
 
         if (!selectionState) {
           setFloatingCommentBtn(null);
