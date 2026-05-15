@@ -168,11 +168,13 @@ import {
   EMPTY_ANCHOR_POSITIONS,
   PENDING_COMMENT_ID,
   applyCommentMarkRange,
+  collectCommentIdsFromContent,
   createComment,
   findSelectionYPosition,
   getCommentAuthorKey,
   getCommentParentId,
   getFallbackCommentYPosition,
+  pruneOrphanedComments,
   removePendingCommentMarkRange,
 } from "./commentsHelpers";
 import { CommentsSidebar } from "./CommentsSidebar";
@@ -1082,7 +1084,19 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       if (pmDoc) {
         doc.package.document.content = pmDoc.package.document.content;
       }
-      doc.package.document.comments = commentsRef.current;
+      // Drop comment threads whose anchor text has been edited away. The
+      // in-memory `comments` array can outlive its in-body anchors (PM
+      // removes the mark when its text is deleted, but the array entry
+      // stays put), and serializing the unfiltered array writes
+      // unanchored threads into `comments.xml` that no reader can
+      // resolve.
+      const referencedCommentIds = collectCommentIdsFromContent(
+        doc.package.document.content,
+      );
+      doc.package.document.comments = pruneOrphanedComments(
+        commentsRef.current,
+        referencedCommentIds,
+      );
       return doc;
     }, [history.state]);
 

@@ -138,6 +138,82 @@ export function applyCommentMarkRange(
   return true;
 }
 
+/**
+ * Walk an arbitrary Folio content tree and collect every comment id that
+ * is *referenced* by an inline anchor (`commentRangeStart`,
+ * `commentRangeEnd`, or `commentReference`). Used at save time to detect
+ * which comment threads still have something to anchor to, so that
+ * comments whose underlying text has been edited away can be pruned
+ * before serialization instead of being written out as phantom threads
+ * that no Word reader can scroll to.
+ */
+export function collectCommentIdsFromContent(content: unknown): Set<number> {
+  const ids = new Set<number>();
+  const visit = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        visit(item);
+      }
+      return;
+    }
+    if (!node || typeof node !== "object") {
+      return;
+    }
+    const obj = node as Record<string, unknown>;
+    const type = obj["type"];
+    if (
+      (type === "commentRangeStart" ||
+        type === "commentRangeEnd" ||
+        type === "commentReference") &&
+      typeof obj["id"] === "number"
+    ) {
+      ids.add(obj["id"]);
+    }
+    for (const value of Object.values(obj)) {
+      visit(value);
+    }
+  };
+  visit(content);
+  return ids;
+}
+
+/**
+ * Filter `comments` to those still anchored by the document. A top-level
+ * comment is kept when its id appears in `referencedIds`; a reply is
+ * kept when its parent is itself kept (a reply has no anchor of its own
+ * — losing the parent's anchor logically loses the whole thread).
+ *
+ * Phantom comment threads are a real failure mode: when a user deletes
+ * text covered by a comment mark, PM drops the mark with the text but
+ * the comment entry stays in the in-memory `comments` array and gets
+ * serialized back into `comments.xml` on the next save. The thread is
+ * present in the saved file but with no in-body anchor, which Word
+ * either silently drops or surfaces as an orphan that can't be
+ * resolved.
+ */
+export function pruneOrphanedComments(
+  comments: Comment[],
+  referencedIds: Set<number>,
+): Comment[] {
+  const keptTopIds = new Set<number>();
+  for (const comment of comments) {
+    const parentId = getCommentParentId(comment);
+    if (
+      (parentId === null || parentId === undefined) &&
+      referencedIds.has(comment.id)
+    ) {
+      keptTopIds.add(comment.id);
+    }
+  }
+  return comments.filter((comment) => {
+    const parentId = getCommentParentId(comment);
+    if (parentId === null || parentId === undefined) {
+      return keptTopIds.has(comment.id);
+    }
+    return keptTopIds.has(parentId);
+  });
+}
+
 export function removePendingCommentMarkRange(
   view: EditorView,
   range: CommentMarkRange,
