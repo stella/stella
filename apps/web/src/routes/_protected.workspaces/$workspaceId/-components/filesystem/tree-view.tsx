@@ -1365,16 +1365,11 @@ const FilesystemRow = ({
       )}
       {(() => {
         if (isFolder) {
-          return (() => {
-            if (expanded) {
-              return (
-                <FolderOpenIcon className="text-muted-foreground size-4 shrink-0" />
-              );
-            }
-            return (
-              <FolderIcon className="text-muted-foreground size-4 shrink-0" />
-            );
-          })();
+          return expanded ? (
+            <FolderOpenIcon className="text-muted-foreground size-4 shrink-0" />
+          ) : (
+            <FolderIcon className="text-muted-foreground size-4 shrink-0" />
+          );
         }
         if (file?.mimeType) {
           return (

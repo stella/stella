@@ -173,32 +173,14 @@ export const ScrollMarkers = ({
               className="shrink-0 rounded-full transition-[width,height,opacity,background-color] duration-150"
               style={{
                 backgroundColor: `var(${m.cssVar})`,
-                width: (() => {
+                ...(() => {
                   if (isHovered) {
-                    return "16px";
+                    return { height: "6px", opacity: 1, width: "16px" };
                   }
                   if (active) {
-                    return "12px";
+                    return { height: "5px", opacity: 0.9, width: "12px" };
                   }
-                  return "8px";
-                })(),
-                height: (() => {
-                  if (isHovered) {
-                    return "6px";
-                  }
-                  if (active) {
-                    return "5px";
-                  }
-                  return "4px";
-                })(),
-                opacity: (() => {
-                  if (isHovered) {
-                    return 1;
-                  }
-                  if (active) {
-                    return 0.9;
-                  }
-                  return 0.8;
+                  return { height: "4px", opacity: 0.8, width: "8px" };
                 })(),
               }}
             />
