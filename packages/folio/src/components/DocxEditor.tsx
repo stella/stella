@@ -163,6 +163,7 @@ import { useDocumentHistory } from "../hooks/useHistory";
 import { useTableSelection } from "../hooks/useTableSelection";
 import { PagedEditor } from "../paged-editor/PagedEditor";
 import type { PagedEditorRef } from "../paged-editor/PagedEditor";
+import { clampRangeToDocSize } from "./aiEditRange";
 import { resolveCommentCreationRange } from "./commentAnchors";
 import {
   EMPTY_ANCHOR_POSITIONS,
@@ -2490,18 +2491,24 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           if (!range) {
             return false;
           }
-          // `TextSelection.between` clamps to the nearest valid
-          // inline position; `create` throws "endpoint not pointing
-          // into a node with inline content" when from/to land on a
-          // block boundary, which is exactly what happens for marks
-          // that wrap an entire paragraph.
-          const $from = view.state.doc.resolve(range.from);
-          const $to = view.state.doc.resolve(range.to);
+          // `TextSelection.between` clamps to the nearest valid inline
+          // position; `create` throws "endpoint not pointing into a node
+          // with inline content" when from/to land on a block boundary,
+          // which is exactly what happens for marks that wrap an entire
+          // paragraph. `clampRangeToDocSize` is a defensive guard against
+          // a revision range whose endpoints fell past the doc end after
+          // concurrent edits.
+          const { from, to } = clampRangeToDocSize(
+            view.state.doc.content.size,
+            range,
+          );
+          const $from = view.state.doc.resolve(from);
+          const $to = view.state.doc.resolve(to);
           view.dispatch(
             view.state.tr.setSelection(TextSelection.between($from, $to)),
           );
           requestAnimationFrame(() => {
-            pagedEditorRef.current?.scrollToPosition(range.from);
+            pagedEditorRef.current?.scrollToPosition(from);
           });
           return true;
         },
@@ -2510,12 +2517,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           if (!view) {
             return false;
           }
-          // Prefer the caller's snapshot (the one the AI saw when
-          // it generated the suggestion); only fall back to a
-          // fresh recompute when the caller didn't pass one. A
-          // recomputed snapshot re-numbers blocks after any
-          // structural accept, so `b-0007` would point to a
-          // different paragraph than the panel's pending
+          // Prefer the caller's snapshot (the one the AI saw when it
+          // generated the suggestion); only fall back to a fresh recompute
+          // when the caller didn't pass one. A recomputed snapshot
+          // re-numbers blocks after any structural accept, so `b-0007`
+          // would point to a different paragraph than the panel's pending
           // suggestion is referencing.
           const resolvedSnapshot =
             snapshot ?? createFolioAIEditSnapshot(view.state.doc);
@@ -2523,15 +2529,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           if (!anchor) {
             return false;
           }
-          const docSize = view.state.doc.content.size;
-          // Clamp because a block range generated from the snapshot
-          // can include a position one past the doc end (e.g.
-          // trailing paragraph) that PM rejects when used directly
-          // for a TextSelection. Use `between` over `create` so a
-          // block-boundary `from` doesn't trip "endpoint not
-          // pointing into a node with inline content".
-          const from = Math.min(anchor.from, docSize);
-          const to = Math.min(anchor.to, docSize);
+          const { from, to } = clampRangeToDocSize(
+            view.state.doc.content.size,
+            anchor,
+          );
           const $from = view.state.doc.resolve(from);
           const $to = view.state.doc.resolve(to);
           view.dispatch(
