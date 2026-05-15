@@ -42,22 +42,17 @@ type State = {
    * flight. Producers (the docx chat-anon worker, the
    * PDF wasm runner) call `markPipelineStarted` when
    * they begin and `markPipelineRan` on terminal
-   * outcome. The inspector facet uses this together
-   * with `pipelineRanFieldIds` to know whether to show
-   * the "Detecting…" placeholder — fields with no
-   * producer at all (unsupported file types) never
-   * enter this set so the facet falls through to the
-   * direct count instead of stalling forever.
+   * outcome. The inspector facet's "Detecting…"
+   * placeholder is shown iff a field id is in this set,
+   * so:
+   *   - Surfaces with no producer (PDF where the wasm
+   *     path hasn't been wired, unsupported file types)
+   *     fall straight through to the direct count.
+   *   - Reruns after edits / allowlist toggles flip the
+   *     field back into the set, so the facet drops the
+   *     stale count and shows the placeholder again.
    */
   pipelineStartedFieldIds: ReadonlySet<string>;
-  /**
-   * Field ids whose detection pipeline has produced at
-   * least one terminal outcome (success or error).
-   * Distinct from `byFieldId` because Folio publishes an
-   * empty snapshot on plugin init, before the worker
-   * has actually run.
-   */
-  pipelineRanFieldIds: ReadonlySet<string>;
 };
 
 type Actions = {
@@ -94,7 +89,6 @@ const withFieldRemoved = (
 export const useAnonymizationMatchesStore = create<State & Actions>((set) => ({
   byFieldId: {},
   pipelineStartedFieldIds: new Set(),
-  pipelineRanFieldIds: new Set(),
   publish: (fieldId, snapshot) =>
     set((state) => ({
       byFieldId: { ...state.byFieldId, [fieldId]: snapshot },
@@ -112,7 +106,6 @@ export const useAnonymizationMatchesStore = create<State & Actions>((set) => ({
         state.pipelineStartedFieldIds,
         fieldId,
       ),
-      pipelineRanFieldIds: withFieldAdded(state.pipelineRanFieldIds, fieldId),
     })),
   clear: (fieldId) =>
     set((state) => {
@@ -121,12 +114,7 @@ export const useAnonymizationMatchesStore = create<State & Actions>((set) => ({
         state.pipelineStartedFieldIds,
         fieldId,
       );
-      const nextRan = withFieldRemoved(state.pipelineRanFieldIds, fieldId);
-      if (
-        !hadMatches &&
-        nextStarted === state.pipelineStartedFieldIds &&
-        nextRan === state.pipelineRanFieldIds
-      ) {
+      if (!hadMatches && nextStarted === state.pipelineStartedFieldIds) {
         return state;
       }
       return {
@@ -136,7 +124,6 @@ export const useAnonymizationMatchesStore = create<State & Actions>((set) => ({
             )
           : state.byFieldId,
         pipelineStartedFieldIds: nextStarted,
-        pipelineRanFieldIds: nextRan,
       };
     }),
 }));
@@ -156,21 +143,16 @@ export const useAnonymizationMatches = (
 
 /**
  * True when the inspector facet should treat the current
- * match snapshot as authoritative — either the detection
- * pipeline has finished at least once for this field, or
- * no producer ever started one (so there's nothing to wait
- * for and the facet should render the direct count, even
- * if it's zero). Returns `false` only while a producer is
- * actively in flight, which is the only state where the
- * "Detecting entities…" placeholder is correct.
+ * match snapshot as authoritative. Returns `false` iff a
+ * producer is currently in flight for `fieldId` — the only
+ * state where the "Detecting entities…" placeholder is
+ * correct. Surfaces with no producer (PDFs where the wasm
+ * path isn't wired yet, unsupported file types) fall
+ * through to the direct count, and reruns triggered by
+ * edits / allowlist changes flip the field back into the
+ * loading state until the new run lands.
  */
 export const useAnonymizationMatchesReady = (fieldId: string | null): boolean =>
-  useAnonymizationMatchesStore((s) => {
-    if (fieldId === null) {
-      return false;
-    }
-    if (s.pipelineRanFieldIds.has(fieldId)) {
-      return true;
-    }
-    return !s.pipelineStartedFieldIds.has(fieldId);
-  });
+  useAnonymizationMatchesStore((s) =>
+    fieldId === null ? false : !s.pipelineStartedFieldIds.has(fieldId),
+  );
