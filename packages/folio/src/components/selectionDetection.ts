@@ -1,3 +1,4 @@
+import { NodeSelection } from "prosemirror-state";
 import type { EditorState } from "prosemirror-state";
 
 import { findChangeAtPosition } from "../core/prosemirror/commands/comments";
@@ -15,14 +16,13 @@ export function detectImageContext(
   state: EditorState,
 ): ImageContextInfo | null {
   const sel = state.selection;
-  const selectedNode = (
-    sel as {
-      node?: { type: { name: string }; attrs: Record<string, unknown> };
-    }
-  ).node;
-  if (selectedNode?.type.name !== "image") {
+  // `instanceof NodeSelection` is the idiomatic ProseMirror narrowing —
+  // it gives us a typed `.node` without an unsafe `as` cast and rejects
+  // custom selection subclasses that happen to expose a `node` field.
+  if (!(sel instanceof NodeSelection) || sel.node.type.name !== "image") {
     return null;
   }
+  const selectedNode = sel.node;
 
   const attrs = selectedNode.attrs;
   const readRequiredStringAttr = (key: string, fallback: string) => {
