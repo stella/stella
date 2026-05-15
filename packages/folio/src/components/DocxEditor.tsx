@@ -199,6 +199,7 @@ import { useFindReplace } from "./hooks/useFindReplace";
 import { useHeaderFooterEditor } from "./hooks/useHeaderFooterEditor";
 import { useHyperlinkHandlers } from "./hooks/useHyperlinkHandlers";
 import { useImageHandlers } from "./hooks/useImageHandlers";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useZoomAndPageInfo } from "./hooks/useZoomAndPageInfo";
 import { InlineHeaderFooterEditor } from "./InlineHeaderFooterEditor";
 import type { InlineHeaderFooterEditorRef } from "./InlineHeaderFooterEditor";
@@ -1677,86 +1678,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       })();
     }, [onPrint, t]);
 
-    // Keyboard shortcuts for Find/Replace (Ctrl+F, Ctrl+H), print, and delete table selection
-    useEffect(() => {
-      const openFindFromSelection = () => {
-        const selection = window.getSelection();
-        const selectedText =
-          selection && !selection.isCollapsed ? selection.toString() : "";
-        findReplace.openFind(selectedText);
-      };
-
-      const handleKeyDown = (e: KeyboardEvent) => {
-        // Check for Ctrl+F (Find) or Ctrl+H (Replace)
-        const isMac = navigator.platform.toUpperCase().includes("MAC");
-        const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
-
-        // Delete selected table from layout selection (non-ProseMirror selection)
-        if (
-          !cmdOrCtrl &&
-          !e.shiftKey &&
-          !e.altKey &&
-          (e.key === "Delete" || e.key === "Backspace")
-        ) {
-          // If full table is selected via ProseMirror CellSelection, delete it.
-          const view = pagedEditorRef.current?.getView();
-          if (view) {
-            const sel = view.state.selection as {
-              $anchorCell?: unknown;
-              forEachCell?: unknown;
-            };
-            const isCellSel =
-              "$anchorCell" in sel && typeof sel.forEachCell === "function";
-            if (isCellSel) {
-              const context = getTableContext(view.state);
-              if (context.isInTable && context.table) {
-                let totalCells = 0;
-                context.table.descendants((node) => {
-                  if (
-                    node.type.name === "tableCell" ||
-                    node.type.name === "tableHeader"
-                  ) {
-                    totalCells += 1;
-                  }
-                });
-                let selectedCells = 0;
-                (sel as { forEachCell: (fn: () => void) => void }).forEachCell(
-                  () => {
-                    selectedCells += 1;
-                  },
-                );
-                if (totalCells > 0 && selectedCells >= totalCells) {
-                  e.preventDefault();
-                  pmDeleteTable(view.state, view.dispatch);
-                  return;
-                }
-              }
-            }
-          }
-
-          if (tableSelection.state.tableIndex !== null) {
-            e.preventDefault();
-            tableSelection.handleAction("deleteTable");
-            return;
-          }
-        }
-
-        if (cmdOrCtrl && !e.shiftKey && !e.altKey) {
-          if (e.key.toLowerCase() === "f" || e.key.toLowerCase() === "h") {
-            e.preventDefault();
-            openFindFromSelection();
-          } else if (e.key.toLowerCase() === "p" && !e.repeat) {
-            e.preventDefault();
-            handleDirectPrint();
-          }
-        }
-      };
-
-      document.addEventListener("keydown", handleKeyDown);
-      return () => {
-        document.removeEventListener("keydown", handleKeyDown);
-      };
-    }, [findReplace, handleDirectPrint, tableSelection]);
+    useKeyboardShortcuts({
+      pagedEditorRef,
+      findReplace,
+      tableSelection,
+      onDirectPrint: handleDirectPrint,
+    });
 
     // Handle footnote/endnote properties update
     const handleApplyFootnoteProperties = useCallback(
