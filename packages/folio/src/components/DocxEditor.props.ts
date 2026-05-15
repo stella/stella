@@ -15,17 +15,10 @@ import type { Document, Theme, TabStop } from "../core/types/document";
 import type { DocxInput } from "../core/utils/docxInput";
 import type { PagedEditorRef } from "../paged-editor/PagedEditor";
 import type { DocumentLoadState } from "./hooks/useDocumentLoader";
+// `EditorMode` is owned by `./hooks/useEditorMode`. Re-imported here for use
+// in `DocxEditorProps`; the canonical export is from the hook module.
+import type { EditorMode } from "./hooks/useEditorMode";
 import type { SelectionFormatting } from "./Toolbar";
-
-/** Editor mode. Public; mirrors Google Docs editing/suggesting/viewing semantics. */
-export type EditorMode = "editing" | "suggesting" | "viewing";
-
-/** How tracked changes render. Internal — drives the display mode dropdown. */
-export type DisplayMode =
-  | "all-markup"
-  | "simple-markup"
-  | "no-markup"
-  | "original";
 
 /** Image context surfaced to the toolbar when the cursor is on an image node. */
 export type ImageContextInfo = {

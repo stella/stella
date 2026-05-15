@@ -182,10 +182,8 @@ import type { FindMatch } from "./dialogs/findReplaceUtils";
 import type { ImagePropertiesData } from "./dialogs/ImagePropertiesDialog";
 import { useFindReplace as useFindReplaceState } from "./dialogs/useFindReplace";
 import type {
-  DisplayMode,
   DocxEditorProps,
   DocxEditorRef,
-  EditorMode,
   EditorState,
 } from "./DocxEditor.props";
 import { DocxEditorDialogs } from "./DocxEditorDialogs";
@@ -200,6 +198,8 @@ import { resolveFindMatchRange } from "./hooks/findReplaceSelection";
 import { useContextMenu } from "./hooks/useContextMenu";
 import type { DocumentLoadState } from "./hooks/useDocumentLoader";
 import { useDocumentLoader } from "./hooks/useDocumentLoader";
+import type { DisplayMode } from "./hooks/useEditorMode";
+import { useEditorMode } from "./hooks/useEditorMode";
 import { useFindReplace } from "./hooks/useFindReplace";
 import { useHeaderFooterEditor } from "./hooks/useHeaderFooterEditor";
 import { useHyperlinkHandlers } from "./hooks/useHyperlinkHandlers";
@@ -260,15 +260,11 @@ const toast = (msg: string) => {
 // Dialog tree (lazy-loaded internally) lives in ./DocxEditorDialogs.
 
 // ============================================================================
-// TYPES — see ./DocxEditor.props for the type definitions. Public types are
-// re-exported here so callers can keep importing from this module path.
+// TYPES — `DocxEditorProps` / `DocxEditorRef` live in `./DocxEditor.props`,
+// `EditorMode` / `DisplayMode` in `./hooks/useEditorMode`. The package barrel
+// (`src/index.ts`) imports them from those canonical homes directly; no
+// re-export shim here.
 // ============================================================================
-
-export type {
-  DocxEditorProps,
-  DocxEditorRef,
-  EditorMode,
-} from "./DocxEditor.props";
 
 // ============================================================================
 // MAIN COMPONENT
@@ -395,29 +391,18 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     const [addCommentYPosition, setAddCommentYPosition] = useState<
       number | null
     >(null);
-    const [editingModeInternal, setEditingModeInternal] = useState<EditorMode>(
-      modeProp ?? "editing",
-    );
-    const editingMode = modeProp ?? editingModeInternal;
-    const setEditingMode = useCallback(
-      (mode: EditorMode) => {
-        if (!modeProp) {
-          setEditingModeInternal(mode);
-        }
-        onModeChange?.(mode);
-      },
-      [modeProp, onModeChange],
-    );
-    // 'viewing' mode acts as read-only
-    const readOnly = readOnlyProp || editingMode === "viewing";
-
-    // Track Changes display mode
-    const [displayMode, setDisplayMode] = useState<DisplayMode>("all-markup");
-    const trackChangesOn = editingMode === "suggesting";
-
-    const toggleTrackChanges = useCallback(() => {
-      setEditingMode(trackChangesOn ? "editing" : "suggesting");
-    }, [setEditingMode, trackChangesOn]);
+    const {
+      editingMode,
+      readOnly,
+      trackChangesOn,
+      toggleTrackChanges,
+      displayMode,
+      setDisplayMode,
+    } = useEditorMode({
+      modeProp,
+      onModeChange,
+      readOnlyProp,
+    });
 
     // Floating "add comment" button position (relative to scroll container, null = hidden)
     const [floatingCommentBtn, setFloatingCommentBtn] = useState<{

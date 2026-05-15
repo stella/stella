@@ -1,9 +1,9 @@
-export {
-  DocxEditor,
-  type DocxEditorProps,
-  type DocxEditorRef,
-  type EditorMode,
-} from "./components/DocxEditor";
+export { DocxEditor } from "./components/DocxEditor";
+export type {
+  DocxEditorProps,
+  DocxEditorRef,
+} from "./components/DocxEditor.props";
+export type { EditorMode } from "./components/hooks/useEditorMode";
 export {
   FormattingBar,
   type FormattingBarProps,
