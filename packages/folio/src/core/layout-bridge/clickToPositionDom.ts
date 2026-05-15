@@ -93,12 +93,19 @@ export function clickToPositionDom(
 }
 
 /**
- * Find exact position within a text span using binary search on character boundaries.
+ * Find exact position within a text span. Defers to the
+ * browser's own hit-tester (`caretPositionFromPoint` /
+ * `caretRangeFromPoint`) — that's what every native text
+ * editor uses, and it correctly handles bidi runs, kerning,
+ * variable fonts, sub-pixel rendering, and line wrap. Falls
+ * back to a per-glyph rect scan when the browser API is
+ * unavailable or returns a point outside this span (e.g. the
+ * caret API resolved to a sibling text node at the same y).
  */
 function findPositionInSpan(
   spanEl: HTMLElement,
   clientX: number,
-  _clientY: number,
+  clientY: number,
 ): number | null {
   const pmStart = Number(spanEl.dataset["pmStart"]);
   const pmEnd = Number(spanEl.dataset["pmEnd"]);
@@ -126,51 +133,79 @@ function findPositionInSpan(
   }
 
   const ownerDoc = spanEl.ownerDocument;
+  const native = caretOffsetFromPoint(ownerDoc, text, clientX, clientY);
+  if (native !== null) {
+    return pmStart + Math.min(native, pmEnd - pmStart);
+  }
 
-  // Binary search for the character boundary
-  let left = 0;
-  let right = textLength;
-
-  while (left < right) {
-    const mid = Math.floor((left + right) / 2);
+  // Fallback: per-glyph rect scan. Earlier we used a
+  // binary search that compared `clientX` against the
+  // `getBoundingClientRect().left` of a collapsed range
+  // at offset `mid`, but a collapsed-range rect's left
+  // edge is the *caret* X (boundary between glyphs N-1
+  // and N), not the visual centre of any glyph. The
+  // tie-break logic then preferred the caret to the
+  // right of the click on every exact midpoint, which
+  // shifted drag selections one position left. Doing a
+  // forward walk that compares against each glyph's
+  // visual midpoint matches what every native text
+  // editor does for a "which character is under the
+  // cursor" hit-test.
+  let bestOffset = textLength;
+  for (let i = 0; i < textLength; i++) {
     const range = ownerDoc.createRange();
-    range.setStart(text, mid);
-    range.setEnd(text, mid);
-
+    range.setStart(text, i);
+    range.setEnd(text, i + 1);
     const rect = range.getBoundingClientRect();
-    const charX = rect.left;
-
-    if (clientX < charX) {
-      right = mid;
-    } else {
-      left = mid + 1;
+    if (rect.width === 0 && rect.height === 0) {
+      continue;
+    }
+    const midpoint = rect.left + rect.width / 2;
+    if (clientX < midpoint) {
+      bestOffset = i;
+      break;
     }
   }
+  return pmStart + Math.min(bestOffset, pmEnd - pmStart);
+}
 
-  // Refine: check if we're closer to left-1 or left
-  if (left > 0 && left <= textLength) {
-    const range = ownerDoc.createRange();
-
-    // Get position of character at left-1
-    range.setStart(text, left - 1);
-    range.setEnd(text, left - 1);
-    const leftRect = range.getBoundingClientRect();
-
-    // Get position of character at left
-    range.setStart(text, Math.min(left, textLength));
-    range.setEnd(text, Math.min(left, textLength));
-    const rightRect = range.getBoundingClientRect();
-
-    // Use the closer boundary
-    const distLeft = Math.abs(clientX - leftRect.left);
-    const distRight = Math.abs(clientX - rightRect.left);
-
-    if (distLeft < distRight) {
-      return pmStart + (left - 1);
+/**
+ * Resolve `(clientX, clientY)` to a character offset
+ * inside `text` using the browser's caret hit-tester.
+ * Returns `null` if the API is unavailable or resolved to
+ * a different node — callers fall back to a glyph-by-glyph
+ * scan in that case.
+ */
+function caretOffsetFromPoint(
+  ownerDoc: Document,
+  text: Text,
+  clientX: number,
+  clientY: number,
+): number | null {
+  // `caretPositionFromPoint` is the spec'd successor;
+  // `caretRangeFromPoint` is the older WebKit-rooted API
+  // still shipped by Chromium and Safari. Try both.
+  type LegacyDocument = Document & {
+    caretPositionFromPoint?: (
+      x: number,
+      y: number,
+    ) => { offsetNode: Node; offset: number } | null;
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+  };
+  const doc: LegacyDocument = ownerDoc;
+  if (typeof doc.caretPositionFromPoint === "function") {
+    const pos = doc.caretPositionFromPoint(clientX, clientY);
+    if (pos && pos.offsetNode === text) {
+      return pos.offset;
     }
   }
-
-  return pmStart + Math.min(left, pmEnd - pmStart);
+  if (typeof doc.caretRangeFromPoint === "function") {
+    const range = doc.caretRangeFromPoint(clientX, clientY);
+    if (range && range.startContainer === text) {
+      return range.startOffset;
+    }
+  }
+  return null;
 }
 
 /**

@@ -3929,22 +3929,48 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               const $pos = doc.resolve(pmPos);
               const parent = $pos.parent;
 
-              // Find word boundaries
+              // Find word boundaries.
               if (parent.isTextblock) {
-                const text = parent.textContent;
+                // Build a string aligned 1-to-1 with PM
+                // offsets inside the parent. Atom inline
+                // nodes (tab, hard_break, image) take 1 PM
+                // position but don't appear in
+                // `textContent`, so a tab at offset 0 +
+                // text "(a)" + tab at offset 4 + text
+                // "Equity Financing" has parentSize 21
+                // but textContent length 19. Walking
+                // word boundaries on `textContent` and
+                // then writing back via `$pos.start() +
+                // offset` shifts the resulting selection
+                // by one PM position per atom skipped —
+                // double-clicking "Financing" in such a
+                // paragraph selected "y Financin"
+                // instead. Padding atom nodes with a
+                // non-word character keeps every offset
+                // in PM-position space.
+                let pmAlignedText = "";
+                for (let i = 0; i < parent.content.childCount; i++) {
+                  const node = parent.content.child(i);
+                  pmAlignedText += node.isText
+                    ? (node.text ?? "")
+                    : " ".repeat(node.nodeSize);
+                }
                 const offset = $pos.parentOffset;
 
                 // Find word start (go back until whitespace/punctuation)
                 let start = offset;
-                while (start > 0 && /\w/.test(text[start - 1]!)) {
+                while (start > 0 && /\w/.test(pmAlignedText[start - 1]!)) {
                   // SAFETY: start > 0
                   start--;
                 }
 
                 // Find word end (go forward until whitespace/punctuation)
                 let end = offset;
-                while (end < text.length && /\w/.test(text[end]!)) {
-                  // SAFETY: end < text.length
+                while (
+                  end < pmAlignedText.length &&
+                  /\w/.test(pmAlignedText[end]!)
+                ) {
+                  // SAFETY: end < pmAlignedText.length
                   end++;
                 }
 
