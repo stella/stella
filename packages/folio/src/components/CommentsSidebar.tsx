@@ -64,6 +64,11 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
+function getCommentParentId(comment: Comment): number | null | undefined {
+  const runtimeComment: { parentId?: number | null } = comment;
+  return runtimeComment.parentId;
+}
+
 // Kibana-style avatar colors — deterministic per author name
 const AVATAR_COLORS = [
   "#6DCCB1", // teal
@@ -257,7 +262,8 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   const visibleComments = useMemo(
     () =>
       comments.filter((c) => {
-        if (c.parentId !== undefined) {
+        const parentId = getCommentParentId(c);
+        if (parentId !== null && parentId !== undefined) {
           return false;
         }
         if (c.done && !showResolved) {
@@ -272,12 +278,13 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   const repliesByParent = useMemo(() => {
     const map = new Map<number, Comment[]>();
     for (const c of comments) {
-      if (c.parentId !== undefined) {
-        const arr = map.get(c.parentId);
+      const parentId = getCommentParentId(c);
+      if (parentId !== null && parentId !== undefined) {
+        const arr = map.get(parentId);
         if (arr) {
           arr.push(c);
         } else {
-          map.set(c.parentId, [c]);
+          map.set(parentId, [c]);
         }
       }
     }

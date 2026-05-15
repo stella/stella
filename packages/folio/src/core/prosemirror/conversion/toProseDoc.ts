@@ -1612,12 +1612,15 @@ function convertRunContent(
  *    - None/Behind/InFront: positioned image, no text wrap
  */
 type PartialImagePosition = Partial<NonNullable<Image["position"]>>;
+type PartialImageSize = Partial<Image["size"]>;
 
 function convertImage(image: Image): PMNode {
   // Convert EMU to pixels for proper sizing
-  const widthPx = image.size.width ? emuToPixels(image.size.width) : undefined;
-  const heightPx = image.size.height
-    ? emuToPixels(image.size.height)
+  const imageData: { size?: PartialImageSize } = image;
+  const imageSize = imageData.size;
+  const widthPx = imageSize?.width ? emuToPixels(imageSize.width) : undefined;
+  const heightPx = imageSize?.height
+    ? emuToPixels(imageSize.height)
     : undefined;
 
   // Determine wrap type and float direction
@@ -1962,18 +1965,25 @@ function textFormattingToMarks(
   }
 
   // Character spacing (spacing, position, scale, kerning)
+  const spacing =
+    typeof formatting.spacing === "number" ? formatting.spacing : null;
+  const position =
+    typeof formatting.position === "number" ? formatting.position : null;
+  const scale = typeof formatting.scale === "number" ? formatting.scale : null;
+  const kerning =
+    typeof formatting.kerning === "number" ? formatting.kerning : null;
   if (
-    formatting.spacing !== undefined ||
-    formatting.position !== undefined ||
-    formatting.scale !== undefined ||
-    formatting.kerning !== undefined
+    spacing !== null ||
+    position !== null ||
+    scale !== null ||
+    kerning !== null
   ) {
     marks.push(
       schema.mark("characterSpacing", {
-        spacing: formatting.spacing ?? null,
-        position: formatting.position ?? null,
-        scale: formatting.scale ?? null,
-        kerning: formatting.kerning ?? null,
+        spacing,
+        position,
+        scale,
+        kerning,
       }),
     );
   }
@@ -2014,8 +2024,10 @@ function textFormattingToMarks(
  * Convert a Shape to a ProseMirror shape node (inline SVG)
  */
 function convertShape(shape: Shape): PMNode {
-  const widthPx = shape.size.width ? emuToPixels(shape.size.width) : 100;
-  const heightPx = shape.size.height ? emuToPixels(shape.size.height) : 80;
+  const shapeData: { size?: Partial<Shape["size"]> } = shape;
+  const shapeSize = shapeData.size;
+  const widthPx = shapeSize?.width ? emuToPixels(shapeSize.width) : 100;
+  const heightPx = shapeSize?.height ? emuToPixels(shapeSize.height) : 80;
   const shapeAttrs: { shapeType?: Shape["shapeType"] } = shape;
 
   let fillColor: string | undefined;
@@ -2170,9 +2182,11 @@ function convertTextBox(
   textBox: TextBox,
   styleResolver: StyleResolver | null,
 ): PMNode {
-  const widthPx = textBox.size.width ? emuToPixels(textBox.size.width) : 200;
-  const heightPx = textBox.size.height
-    ? emuToPixels(textBox.size.height)
+  const textBoxData: { size?: Partial<TextBox["size"]> } = textBox;
+  const textBoxSize = textBoxData.size;
+  const widthPx = textBoxSize?.width ? emuToPixels(textBoxSize.width) : 200;
+  const heightPx = textBoxSize?.height
+    ? emuToPixels(textBoxSize.height)
     : undefined;
 
   // Convert fill color

@@ -346,7 +346,7 @@ const tableRowSpec: NodeSpec = {
     const attrs = node.attrs as TableRowAttrs;
     const domAttrs: Record<string, string> = {};
 
-    if (attrs.height !== undefined) {
+    if (typeof attrs.height === "number") {
       const heightPx = Math.round((attrs.height / 20) * 1.333);
       domAttrs["style"] = `height: ${heightPx}px`;
     }

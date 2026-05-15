@@ -1781,16 +1781,16 @@ function convertPMTextBox(node: PMNode): Paragraph {
           left?: number;
           right?: number;
         } = {};
-        if (attrs.marginTop !== undefined) {
+        if (typeof attrs.marginTop === "number") {
           m.top = pixelsToEmu(attrs.marginTop);
         }
-        if (attrs.marginBottom !== undefined) {
+        if (typeof attrs.marginBottom === "number") {
           m.bottom = pixelsToEmu(attrs.marginBottom);
         }
-        if (attrs.marginLeft !== undefined) {
+        if (typeof attrs.marginLeft === "number") {
           m.left = pixelsToEmu(attrs.marginLeft);
         }
-        if (attrs.marginRight !== undefined) {
+        if (typeof attrs.marginRight === "number") {
           m.right = pixelsToEmu(attrs.marginRight);
         }
         return m;

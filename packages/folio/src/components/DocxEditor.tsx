@@ -615,6 +615,11 @@ function createComment(
   };
 }
 
+function getCommentParentId(comment: Comment): number | null | undefined {
+  const runtimeComment: { parentId?: number | null } = comment;
+  return runtimeComment.parentId;
+}
+
 function applyCommentMarkRange(
   view: EditorView,
   range: CommentMarkRange,
@@ -955,16 +960,19 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     const visibleComments = useMemo(() => {
       const visibleRootIds = new Set<number>();
       for (const comment of comments) {
+        const parentId = getCommentParentId(comment);
         if (
-          comment.parentId === undefined ||
+          parentId === null ||
+          parentId === undefined ||
           !visibleCommentIds.has(comment.id)
         ) {
           continue;
         }
-        visibleRootIds.add(comment.parentId);
+        visibleRootIds.add(parentId);
       }
       return comments.filter((comment) => {
-        if (comment.parentId !== undefined) {
+        const parentId = getCommentParentId(comment);
+        if (parentId !== null && parentId !== undefined) {
           return visibleCommentIds.has(comment.id);
         }
         return (
