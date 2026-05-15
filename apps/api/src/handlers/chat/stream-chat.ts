@@ -187,7 +187,8 @@ const runChatStream = async ({
   );
   writer.merge(finalised);
   await flushed;
-  return true;
+  // eslint-disable-next-line typescript/no-unnecessary-condition -- onFinish can set this while the provider stream drains.
+  return emptyCompletion !== null;
 };
 
 type StoredUserFile = {
