@@ -97,13 +97,18 @@ export const AnonymizationRectsOverlay = ({
     }
   }, [selectedCanonical, selectionSeq]);
 
+  // Track the overlay's root so we only hit-test our own
+  // spans and ignore clicks elsewhere in the page.
+  const overlayRef = useRef<HTMLDivElement>(null);
+
   // Document-level hit-test. The overlay spans keep
   // `pointer-events: none`, so the editor receives clicks
   // normally (caret placement, drag-selects, the existing
   // mousedown handler on `.paged-editor__pages`). After the
-  // click bubbles, we run `elementsFromPoint` to see whether
-  // an overlay span was visually under the cursor and forward
-  // the bridge call if so.
+  // click bubbles, we iterate the overlay spans and
+  // bounding-rect-test against the click position.
+  // (`elementsFromPoint` skips `pointer-events: none`
+  // elements, so it can't be used here.)
   useEffect(() => {
     if (!onTermClick) {
       return;
@@ -114,15 +119,32 @@ export const AnonymizationRectsOverlay = ({
       if (event.button !== 0) {
         return;
       }
-      const hits = document.elementsFromPoint(event.clientX, event.clientY);
-      for (const el of hits) {
-        if (!(el instanceof HTMLElement)) {
+      const root = overlayRef.current;
+      if (!root) {
+        return;
+      }
+      const spans = root.querySelectorAll<HTMLElement>(
+        "[data-folio-anonymization-canonical]",
+      );
+      // Iterate in reverse paint order so the topmost rect wins
+      // when several overlap at the same point.
+      for (let i = spans.length - 1; i >= 0; i--) {
+        const el = spans[i];
+        if (!el) {
           continue;
         }
-        const canonical = el.dataset["folioAnonymizationCanonical"];
-        const label = el.dataset["folioAnonymizationLabel"];
-        if (canonical && label) {
-          onTermClick(canonical, label);
+        const rect = el.getBoundingClientRect();
+        if (
+          event.clientX >= rect.left &&
+          event.clientX < rect.right &&
+          event.clientY >= rect.top &&
+          event.clientY < rect.bottom
+        ) {
+          const canonical = el.dataset["folioAnonymizationCanonical"];
+          const label = el.dataset["folioAnonymizationLabel"];
+          if (canonical && label) {
+            onTermClick(canonical, label);
+          }
           return;
         }
       }
@@ -136,7 +158,11 @@ export const AnonymizationRectsOverlay = ({
   }
 
   return (
-    <div style={overlayStyles} data-folio-anonymization-overlay="">
+    <div
+      ref={overlayRef}
+      style={overlayStyles}
+      data-folio-anonymization-overlay=""
+    >
       {groups.flatMap((group) => {
         const isSelected = selectedCanonical === group.canonical;
         return group.rects.map((rect, idx) => {
