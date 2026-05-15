@@ -20,6 +20,13 @@ type State = {
   canonical: string | null;
   label: string | null;
   source: AnonymizationSelectionSource | null;
+  /**
+   * Field id of the document the selection belongs to. Multiple
+   * editor panes can be mounted at once (active tab + cached
+   * background tabs); each one only honours selections that
+   * carry its own field id.
+   */
+  fieldId: string | null;
   seq: number;
 };
 
@@ -28,6 +35,7 @@ type Actions = {
     canonical: string,
     label: string,
     source: AnonymizationSelectionSource,
+    fieldId: string,
   ) => void;
   clear: () => void;
 };
@@ -36,17 +44,19 @@ const INITIAL_STATE: State = {
   canonical: null,
   label: null,
   source: null,
+  fieldId: null,
   seq: 0,
 };
 
 export const useAnonymizationSelectionStore = create<State & Actions>(
   (set) => ({
     ...INITIAL_STATE,
-    select: (canonical, label, source) =>
+    select: (canonical, label, source, fieldId) =>
       set((state) => ({
         canonical,
         label,
         source,
+        fieldId,
         seq: state.seq + 1,
       })),
     clear: () => set({ ...INITIAL_STATE }),

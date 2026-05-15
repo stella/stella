@@ -420,22 +420,28 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   }, [fieldId, isAnonymizationActive]);
 
   // Two-way bridge with the inspector anonymization facet.
-  // - Click in document → push to store as source="doc".
+  // - Click in document → push to store as source="doc" with
+  //   this editor's fieldId so only this document's facet
+  //   reacts.
   // - Selection from sidebar (source="sidebar") → forward
-  //   canonical + seq to Folio so the overlay scrolls/marks
-  //   the term. Doc-sourced selections aren't echoed back to
-  //   the editor — that would re-scroll on its own click.
+  //   canonical + seq to Folio only when the bridged fieldId
+  //   matches. Background editor panes (cached inactive tabs)
+  //   stay quiet.
+  // - Doc-sourced selections aren't echoed back to the editor —
+  //   that would re-scroll on its own click.
   const handleAnonymizationTermClick = useCallback(
     (canonical: string, label: string) => {
-      useAnonymizationSelectionStore.getState().select(canonical, label, "doc");
+      useAnonymizationSelectionStore
+        .getState()
+        .select(canonical, label, "doc", fieldId);
     },
-    [],
+    [fieldId],
   );
   const sidebarSelectedCanonical = useAnonymizationSelectionStore((s) =>
-    s.source === "sidebar" ? s.canonical : null,
+    s.source === "sidebar" && s.fieldId === fieldId ? s.canonical : null,
   );
   const sidebarSelectionSeq = useAnonymizationSelectionStore((s) =>
-    s.source === "sidebar" ? s.seq : 0,
+    s.source === "sidebar" && s.fieldId === fieldId ? s.seq : 0,
   );
   const didOpenRef = useRef(false);
   const errorToastShownRef = useRef(false);

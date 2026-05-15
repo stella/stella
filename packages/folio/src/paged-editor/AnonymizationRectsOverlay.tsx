@@ -109,7 +109,15 @@ export const AnonymizationRectsOverlay = ({
             <span
               key={`${group.label}:${group.canonical}:${idx}:${rect.pageIndex}:${rect.x}:${rect.y}`}
               ref={(node) => {
-                if (node && isFirstForCanonical) {
+                if (
+                  node &&
+                  isFirstForCanonical &&
+                  !firstSpanByCanonical.current.has(group.canonical)
+                ) {
+                  // The same canonical can appear in multiple groups
+                  // (e.g. classified under more than one label across
+                  // occurrences); keep the *first* group's first rect
+                  // so sidebar selections scroll to the earliest hit.
                   firstSpanByCanonical.current.set(group.canonical, node);
                 }
               }}

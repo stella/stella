@@ -371,15 +371,39 @@ export const AnonymizationFacet = ({
 
   // Click in the document → highlight matching row here.
   // Subscribe to the bridge store and, on every doc-sourced
-  // selection bump, find the row by data attribute, scroll it
-  // into view, and run a brief outline flash. Sidebar-sourced
-  // selections (our own emits) are ignored to avoid loops.
+  // selection bump *for this document*, find the row by data
+  // attribute, scroll it into view, and run a brief outline
+  // flash. Sidebar-sourced selections (our own emits) are
+  // ignored to avoid loops; selections from other docs (cached
+  // tab panes) are ignored too.
   const containerRef = useRef<HTMLDivElement>(null);
   const docSelection = useAnonymizationSelectionStore((s) =>
-    s.source === "doc" ? { canonical: s.canonical, seq: s.seq } : null,
+    s.source === "doc" && s.fieldId === activeFieldId
+      ? { canonical: s.canonical, label: s.label, seq: s.seq }
+      : null,
   );
   useEffect(() => {
     if (!docSelection?.canonical) {
+      return;
+    }
+    // Detected groups start collapsed; if the doc click lands on
+    // a detected canonical whose group isn't open yet, expand it
+    // first. The effect re-runs after expandedGroups updates and
+    // proceeds to the scroll/flash branch below.
+    if (
+      docSelection.label &&
+      !expandedGroups.has(docSelection.label) &&
+      // Only the detected section is collapsible — workspace
+      // term rows live above it and are always visible.
+      detectedGroups.some(([label]) => label === docSelection.label)
+    ) {
+      setExpandedGroups((prev) => {
+        const next = new Set(prev);
+        if (docSelection.label) {
+          next.add(docSelection.label);
+        }
+        return next;
+      });
       return;
     }
     const root = containerRef.current;
@@ -401,12 +425,21 @@ export const AnonymizationFacet = ({
       ],
       { duration: 600, easing: "ease-out" },
     );
-  }, [docSelection?.canonical, docSelection?.seq]);
+  }, [
+    docSelection?.canonical,
+    docSelection?.label,
+    docSelection?.seq,
+    expandedGroups,
+    detectedGroups,
+  ]);
 
   const selectFromSidebar = (canonical: string, label: string) => {
+    if (activeFieldId === null) {
+      return;
+    }
     useAnonymizationSelectionStore
       .getState()
-      .select(canonical, label, "sidebar");
+      .select(canonical, label, "sidebar", activeFieldId);
   };
 
   return (
