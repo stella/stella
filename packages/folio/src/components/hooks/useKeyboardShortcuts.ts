@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { RefObject } from "react";
 
 import {
@@ -20,7 +20,31 @@ export type UseKeyboardShortcutsArgs = {
 };
 
 function isMacPlatform(): boolean {
-  return navigator.platform.toUpperCase().includes("MAC");
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  return /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+}
+
+/**
+ * `target` is an input-like element that the user is typing into. We must
+ * not intercept Delete/Backspace there — only when focus is in the editor
+ * surface (or nowhere at all).
+ */
+function isFocusInInputLike(
+  target: EventTarget | null,
+  editorDom: HTMLElement | null | undefined,
+): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") {
+    return true;
+  }
+  if (target.isContentEditable && target !== editorDom) {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -30,7 +54,9 @@ function isMacPlatform(): boolean {
  *  - Cmd/Ctrl+P → trigger the custom print path (intercepts the OS dialog)
  *  - Delete/Backspace → delete the currently selected table when nothing else
  *    is selected (works with both ProseMirror `CellSelection` whole-table
- *    selections and the layout-overlay table selection).
+ *    selections and the layout-overlay table selection). Suppressed when
+ *    focus is in a non-editor input/textarea/contenteditable to avoid
+ *    deleting tables while the user is typing in a sidebar or dialog.
  */
 export function useKeyboardShortcuts({
   pagedEditorRef,
@@ -38,12 +64,17 @@ export function useKeyboardShortcuts({
   tableSelection,
   onDirectPrint,
 }: UseKeyboardShortcutsArgs): void {
+  // Keep callbacks fresh without re-attaching the global listener on every
+  // change to `findReplace.state` (which updates on every search keystroke).
+  const callbacksRef = useRef({ findReplace, tableSelection, onDirectPrint });
+  callbacksRef.current = { findReplace, tableSelection, onDirectPrint };
+
   useEffect(() => {
     const openFindFromSelection = () => {
       const selection = window.getSelection();
       const selectedText =
         selection && !selection.isCollapsed ? selection.toString() : "";
-      findReplace.openFind(selectedText);
+      callbacksRef.current.findReplace.openFind(selectedText);
     };
 
     const tryDeleteSelectedTable = (e: KeyboardEvent): boolean => {
@@ -81,9 +112,9 @@ export function useKeyboardShortcuts({
           }
         }
       }
-      if (tableSelection.state.tableIndex !== null) {
+      if (callbacksRef.current.tableSelection.state.tableIndex !== null) {
         e.preventDefault();
-        tableSelection.handleAction("deleteTable");
+        callbacksRef.current.tableSelection.handleAction("deleteTable");
         return true;
       }
       return false;
@@ -91,12 +122,14 @@ export function useKeyboardShortcuts({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const cmdOrCtrl = isMacPlatform() ? e.metaKey : e.ctrlKey;
+      const editorDom = pagedEditorRef.current?.getView()?.dom;
 
       if (
         !cmdOrCtrl &&
         !e.shiftKey &&
         !e.altKey &&
         (e.key === "Delete" || e.key === "Backspace") &&
+        !isFocusInInputLike(e.target, editorDom) &&
         tryDeleteSelectedTable(e)
       ) {
         return;
@@ -108,7 +141,7 @@ export function useKeyboardShortcuts({
           openFindFromSelection();
         } else if (e.key.toLowerCase() === "p" && !e.repeat) {
           e.preventDefault();
-          onDirectPrint();
+          callbacksRef.current.onDirectPrint();
         }
       }
     };
@@ -117,5 +150,5 @@ export function useKeyboardShortcuts({
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [findReplace, tableSelection, pagedEditorRef, onDirectPrint]);
+  }, [pagedEditorRef]);
 }
