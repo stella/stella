@@ -19,7 +19,7 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@ai-sdk/react": "3.0.176",
+    "@ai-sdk/react": "3.0.179",
     "@atlaskit/pragmatic-drag-and-drop": "^1.8.1",
     "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^2.1.5",
     "@atlaskit/pragmatic-drag-and-drop-hitbox": "^1.1.0",
@@ -104,7 +104,7 @@
     "@vitejs/plugin-react": "catalog:",
     "babel-plugin-react-compiler": "^1.0.0",
     "elysia": "catalog:",
-    "react-grab": "0.1.32",
+    "react-grab": "0.1.33",
     "rollup-plugin-visualizer": "^7.0.1",
     "typescript": "catalog:"
   }
