@@ -186,12 +186,34 @@ export function parseComments(
     const rawDate = getAttribute(child, "w", "date");
     const localDate = rawDate !== null ? String(rawDate) : undefined;
 
-    // The paraId on `w:comment` is the join key used by both
-    // commentsExtensible (UTC dates) and commentsExtended (reply links).
-    const rawParaId =
+    // The paraId join key used by commentsExtensible (UTC dates) and
+    // commentsExtended (reply links) may live on `w:comment` itself,
+    // or on the first `w:p` child — both layouts occur in the wild
+    // and exporters disagree. Check the wrapper first, then fall back
+    // to the first paragraph.
+    let rawParaId =
       getAttribute(child, "w14", "paraId") ??
       child.attributes?.["w14:paraId"] ??
+      getAttribute(child, "w15", "paraId") ??
+      child.attributes?.["w15:paraId"] ??
       getAttribute(child, "w", "paraId");
+    if (!rawParaId) {
+      for (const sub of getChildElements(child)) {
+        const subLocal = sub.name?.replace(/^.*:/, "") ?? "";
+        if (subLocal !== "p") {
+          continue;
+        }
+        rawParaId =
+          getAttribute(sub, "w14", "paraId") ??
+          sub.attributes?.["w14:paraId"] ??
+          getAttribute(sub, "w15", "paraId") ??
+          sub.attributes?.["w15:paraId"] ??
+          getAttribute(sub, "w", "paraId");
+        if (rawParaId) {
+          break;
+        }
+      }
+    }
     const paraId = rawParaId ? String(rawParaId).toUpperCase() : null;
 
     const dateUtc = paraId ? dateUtcByParaId.get(paraId) : undefined;
