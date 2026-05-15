@@ -138,6 +138,131 @@ export function applyCommentMarkRange(
   return true;
 }
 
+/**
+ * Walk arbitrary Folio content subtrees and collect every comment id that
+ * is *referenced* by an inline anchor (`commentRangeStart`,
+ * `commentRangeEnd`, or `commentReference`). Used at save time to detect
+ * which comment threads still have something to anchor to, so that
+ * comments whose underlying text has been edited away can be pruned
+ * before serialization instead of being written out as phantom threads
+ * that no Word reader can scroll to.
+ *
+ * Pass every part of the document that can carry anchors — comments can
+ * live in headers, footers, footnotes, and endnotes as well as the
+ * main body, and a save path that only checks the body would prune
+ * legitimate header/footer/note comments.
+ *
+ * Uses `for (const key in obj)` instead of `Object.values(obj)` so the
+ * recursive walk doesn't allocate a values array at every node; also
+ * handles `Map` containers (e.g., `package.headers`) which `Object.values`
+ * would silently skip.
+ */
+export function collectCommentIdsFromSources(
+  ...sources: readonly unknown[]
+): Set<number> {
+  const ids = new Set<number>();
+  const visit = (node: unknown): void => {
+    if (node === null || node === undefined) {
+      return;
+    }
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        visit(item);
+      }
+      return;
+    }
+    if (node instanceof Map) {
+      for (const value of node.values()) {
+        visit(value);
+      }
+      return;
+    }
+    if (typeof node !== "object") {
+      return;
+    }
+    const obj = node as Record<string, unknown>;
+    const type = obj["type"];
+    if (
+      (type === "commentRangeStart" ||
+        type === "commentRangeEnd" ||
+        type === "commentReference") &&
+      typeof obj["id"] === "number"
+    ) {
+      ids.add(obj["id"]);
+    }
+    // oxlint-disable-next-line guard-for-in -- plain object literals from parser; allocating a values array here is hot-path work we want to avoid
+    for (const key in obj) {
+      visit(obj[key]);
+    }
+  };
+  for (const source of sources) {
+    visit(source);
+  }
+  return ids;
+}
+
+/**
+ * Filter `comments` to drop entries whose reply chain has lost its root.
+ *
+ * Kept:
+ *  - every top-level comment (`parentId` is null/undefined), regardless of
+ *    whether its id appears in `referencedIds`,
+ *  - replies whose parent chain transitively reaches a kept top-level
+ *    comment.
+ *
+ * Dropped:
+ *  - replies whose explicit `parentId` does not reach a kept top-level
+ *    comment (a true broken-thread orphan).
+ *
+ * Why we don't prune unanchored top-level comments: the OOXML parser
+ * does not yet read `commentsExtended.xml`, so Word comment replies
+ * arrive with `parentId === undefined` and look indistinguishable from
+ * a true top-level comment whose anchor has been edited away. Until the
+ * parser populates the parent link, dropping unanchored top-level
+ * entries would silently lose every imported Word reply on the first
+ * save — a strictly worse failure mode than re-emitting a comment whose
+ * anchor was actually deleted. The complementary "overwrite stale
+ * `comments.xml`" fix in the save paths already prevents the
+ * phantom-thread regression when the array does end up empty.
+ */
+export function pruneOrphanedComments(
+  comments: Comment[],
+  _referencedIds: Set<number>,
+): Comment[] {
+  void _referencedIds;
+  const keptIds = new Set<number>();
+  // Step 1: keep every top-level comment.
+  for (const comment of comments) {
+    const parentId = getCommentParentId(comment);
+    if (parentId === null || parentId === undefined) {
+      keptIds.add(comment.id);
+    }
+  }
+  // Step 2: iteratively pull in replies whose parent chain reaches a kept
+  // top-level comment. Repeats until no new comment is added, so a
+  // thread of depth N (replies-to-replies-to-…) is fully promoted in
+  // N − 1 passes.
+  let addedThisPass = true;
+  while (addedThisPass) {
+    addedThisPass = false;
+    for (const comment of comments) {
+      if (keptIds.has(comment.id)) {
+        continue;
+      }
+      const parentId = getCommentParentId(comment);
+      if (
+        parentId !== null &&
+        parentId !== undefined &&
+        keptIds.has(parentId)
+      ) {
+        keptIds.add(comment.id);
+        addedThisPass = true;
+      }
+    }
+  }
+  return comments.filter((comment) => keptIds.has(comment.id));
+}
+
 export function removePendingCommentMarkRange(
   view: EditorView,
   range: CommentMarkRange,

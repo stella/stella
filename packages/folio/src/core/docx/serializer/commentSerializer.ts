@@ -90,14 +90,32 @@ function serializeComment(comment: Comment): string {
   return xml;
 }
 
+const COMMENTS_HEADER =
+  '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+  '<w:comments xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" ' +
+  'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" ' +
+  'xmlns:o="urn:schemas-microsoft-com:office:office" ' +
+  'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
+  'xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" ' +
+  'xmlns:v="urn:schemas-microsoft-com:vml" ' +
+  'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ' +
+  'xmlns:w10="urn:schemas-microsoft-com:office:word" ' +
+  'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' +
+  'xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" ' +
+  'xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" ' +
+  'xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" ' +
+  'xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" ' +
+  'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" ' +
+  'mc:Ignorable="w14 wp14">';
+
 /**
- * Serialize comments array to comments.xml content
+ * Serialize comments array to comments.xml content. Returns a valid empty
+ * `<w:comments/>` document for an empty array so callers can overwrite an
+ * existing `word/comments.xml` part when the editor has removed the last
+ * comment — leaving the previous file in place would otherwise re-emit
+ * the orphaned comment threads on every save.
  */
 export function serializeComments(comments: Comment[]): string {
-  if (comments.length === 0) {
-    return "";
-  }
-
   // Separate top-level comments and replies in a single pass
   const topLevel: Comment[] = [];
   const replies: Comment[] = [];
@@ -107,23 +125,7 @@ export function serializeComments(comments: Comment[]): string {
     (parentId === null || parentId === undefined ? topLevel : replies).push(c);
   }
 
-  let xml =
-    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
-    '<w:comments xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" ' +
-    'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" ' +
-    'xmlns:o="urn:schemas-microsoft-com:office:office" ' +
-    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
-    'xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" ' +
-    'xmlns:v="urn:schemas-microsoft-com:vml" ' +
-    'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ' +
-    'xmlns:w10="urn:schemas-microsoft-com:office:word" ' +
-    'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' +
-    'xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" ' +
-    'xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" ' +
-    'xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" ' +
-    'xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" ' +
-    'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" ' +
-    'mc:Ignorable="w14 wp14">';
+  let xml = COMMENTS_HEADER;
 
   // Serialize top-level comments first, then replies
   for (const comment of topLevel) {

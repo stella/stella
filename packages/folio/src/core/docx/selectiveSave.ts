@@ -99,8 +99,8 @@ export async function attemptSelectiveSave(
     return null;
   }
 
-  const comments = doc.package.document.comments;
-  const hasComments = comments && comments.length > 0;
+  const comments = doc.package.document.comments ?? [];
+  const hasComments = comments.length > 0;
   const headerFooterUpdates = collectHeaderFooterUpdates(doc);
 
   try {
@@ -128,10 +128,15 @@ export async function attemptSelectiveSave(
       updates.set("word/document.xml", patchedDocXml);
     }
 
-    // Always serialize comments.xml when the document has comments
-    if (hasComments) {
+    // Overwrite `word/comments.xml` whenever the source already had one,
+    // even if the editor now has zero comments — otherwise the stale
+    // entries linger in the saved file (the rezip baseline copies the
+    // previous part as-is) and round-trip back as phantom threads.
+    const hadCommentsFile = zip.file("word/comments.xml") !== null;
+    if (hasComments || hadCommentsFile) {
       updates.set("word/comments.xml", serializeComments(comments));
-
+    }
+    if (hasComments) {
       // Ensure [Content_Types].xml has an Override for comments.xml
       const ctFile = zip.file("[Content_Types].xml");
       if (ctFile) {
