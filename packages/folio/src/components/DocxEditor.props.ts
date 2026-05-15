@@ -230,7 +230,6 @@ export type DocxEditorRef = {
 /** Aggregated internal state held by DocxEditor's top-level reducer slot. */
 export type EditorState = {
   documentLoad: DocumentLoadState;
-  zoom: number;
   /** Current selection formatting for toolbar */
   selectionFormatting: SelectionFormatting;
   /** Paragraph indent data for ruler */

@@ -199,10 +199,10 @@ import { useFindReplace } from "./hooks/useFindReplace";
 import { useHeaderFooterEditor } from "./hooks/useHeaderFooterEditor";
 import { useHyperlinkHandlers } from "./hooks/useHyperlinkHandlers";
 import { useImageHandlers } from "./hooks/useImageHandlers";
+import { useZoomAndPageInfo } from "./hooks/useZoomAndPageInfo";
 import { InlineHeaderFooterEditor } from "./InlineHeaderFooterEditor";
 import type { InlineHeaderFooterEditorRef } from "./InlineHeaderFooterEditor";
 import { updateScrollPageTotal } from "./scrollPageInfo";
-import type { ScrollPageInfo } from "./scrollPageInfo";
 import { TextContextMenu } from "./TextContextMenu";
 import type { TextContextAction, TextContextMenuItem } from "./TextContextMenu";
 import { ToolbarButton, ToolbarSeparator } from "./Toolbar";
@@ -213,11 +213,6 @@ import { getBuiltinTableStyle } from "./ui/table-styles";
 import type { TableStylePreset } from "./ui/table-styles";
 import type { TableAction } from "./ui/table-types";
 import { Tooltip } from "./ui/Tooltip";
-import {
-  getViewportCenterZoomAnchorForZoomChange,
-  getScrollTopForZoomAnchor,
-} from "./zoomScrollAnchor";
-import type { ViewportCenterZoomAnchor } from "./zoomScrollAnchor";
 
 // Toast stub — host app provides the real toast system.
 // Uses a temporary DOM banner so the user sees feedback even without
@@ -268,6 +263,7 @@ export type {
   DocxEditorRef,
   EditorMode,
 } from "./DocxEditor.props";
+
 
 // ============================================================================
 // MAIN COMPONENT
@@ -477,7 +473,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       documentLoad: documentBuffer
         ? { status: "loading" }
         : { status: "ready" },
-      zoom: initialZoom,
       selectionFormatting: {},
       paragraphIndentLeft: 0,
       paragraphIndentRight: 0,
@@ -845,8 +840,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     const imageInputRef = useRef<HTMLInputElement>(null);
     const editorContentRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
-    const zoomRef = useRef(state.zoom);
-    const pendingZoomAnchorRef = useRef<ViewportCenterZoomAnchor | null>(null);
     const toolbarWrapperRef = useRef<HTMLDivElement>(null);
     const toolbarRoRef = useRef<ResizeObserver | null>(null);
     const [_toolbarHeight, setToolbarHeight] = useState(0);
@@ -934,113 +927,21 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       [],
     );
 
-    const setZoomWithViewportAnchor = useCallback((zoom: number) => {
-      const currentZoom = zoomRef.current;
-      const scrollContainer = scrollContainerRef.current;
-      const previousAnchor = pendingZoomAnchorRef.current;
-
-      pendingZoomAnchorRef.current = scrollContainer
-        ? getViewportCenterZoomAnchorForZoomChange({
-            clientHeight: scrollContainer.clientHeight,
-            currentZoom,
-            nextZoom: zoom,
-            pendingAnchor: previousAnchor,
-            scrollTop: scrollContainer.scrollTop,
-          })
-        : null;
-
-      if (currentZoom === zoom) {
-        return;
-      }
-
-      zoomRef.current = zoom;
-      setState((prev) => (prev.zoom === zoom ? prev : { ...prev, zoom }));
-    }, []);
-
-    // Scroll-based page indicator (Google Docs style)
-    const [scrollPageInfo, setScrollPageInfo] = useState<ScrollPageInfo>({
-      currentPage: 1,
-      totalPages: 1,
-      visible: false,
+    const {
+      zoom,
+      zoomRef,
+      setZoomWithViewportAnchor,
+      scrollPageInfo,
+      setScrollPageInfo,
+    } = useZoomAndPageInfo({
+      scrollContainerRef,
+      pagedEditorRef,
+      initialZoom,
     });
     const [bodyHistoryAvailability, setBodyHistoryAvailability] = useState({
       canRedo: false,
       canUndo: false,
     });
-    const scrollFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-      null,
-    );
-    const scheduleScrollPageInfoFade = useCallback(() => {
-      if (scrollFadeTimerRef.current) {
-        clearTimeout(scrollFadeTimerRef.current);
-      }
-
-      scrollFadeTimerRef.current = setTimeout(() => {
-        setScrollPageInfo((prev) => ({ ...prev, visible: false }));
-      }, 600);
-    }, []);
-    const updateScrollPageInfo = useCallback(
-      (scrollContainer: HTMLDivElement) => {
-        const layout = pagedEditorRef.current?.getLayout();
-        if (!layout || layout.pages.length === 0) {
-          return;
-        }
-
-        const scrollTop = scrollContainer.scrollTop;
-        const totalPages = layout.pages.length;
-        const pageGap = 24; // DEFAULT_PAGE_GAP from PagedEditor
-        const paddingTop = 24; // top padding in paged-editor__pages
-        const scaledViewportCenter =
-          scrollTop + scrollContainer.clientHeight / 2;
-        const viewportCenter =
-          scaledViewportCenter / Math.max(zoomRef.current, Number.EPSILON);
-        let accumulatedY = paddingTop;
-        let currentPage = 1;
-
-        for (let i = 0; i < layout.pages.length; i++) {
-          // SAFETY: i is bounded by layout.pages.length
-          const pageHeight = layout.pages[i]!.size.h;
-          const pageEnd = accumulatedY + pageHeight;
-          if (viewportCenter < pageEnd) {
-            currentPage = i + 1;
-            break;
-          }
-          accumulatedY = pageEnd + pageGap;
-          currentPage = i + 2; // next page
-        }
-        currentPage = Math.min(currentPage, totalPages);
-
-        setScrollPageInfo({ currentPage, totalPages, visible: true });
-      },
-      [],
-    );
-
-    useLayoutEffect(() => {
-      zoomRef.current = state.zoom;
-    }, [state.zoom]);
-
-    useLayoutEffect(() => {
-      const anchor = pendingZoomAnchorRef.current;
-      if (!anchor) {
-        return;
-      }
-
-      pendingZoomAnchorRef.current = null;
-      if (anchor.zoom === state.zoom) {
-        return;
-      }
-
-      const scrollContainer = scrollContainerRef.current;
-      if (!scrollContainer) {
-        return;
-      }
-
-      const nextScrollTop = getScrollTopForZoomAnchor(anchor, state.zoom);
-
-      scrollContainer.scrollTop = nextScrollTop;
-      updateScrollPageInfo(scrollContainer);
-      scheduleScrollPageInfoFade();
-    }, [state.zoom, scheduleScrollPageInfoFade, updateScrollPageInfo]);
 
     // Measure toolbar height for positioning the outline panel below it
     const toolbarRefCallback = useCallback((el: HTMLDivElement | null) => {
@@ -2382,14 +2283,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       [getActiveEditorView],
     );
 
-    // Handle zoom change
-    const handleZoomChange = useCallback(
-      (zoom: number) => {
-        setZoomWithViewportAnchor(zoom);
-      },
-      [setZoomWithViewportAnchor],
-    );
-
     // Right-click context menu handlers
     const handleContextMenu = useCallback(
       (data: { x: number; y: number; hasSelection: boolean }) => {
@@ -2727,30 +2620,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       [history.state, readOnly, handleDocumentChange],
     );
 
-    // Scroll-based page tracking: calculate current page from scroll position.
-    // Re-attaches when the scroll container mounts (after loading completes).
-    const scrollContainerEl = scrollContainerRef.current;
-    useEffect(() => {
-      if (!scrollContainerEl) {
-        return;
-      }
-
-      const handleScroll = () => {
-        updateScrollPageInfo(scrollContainerEl);
-        scheduleScrollPageInfoFade();
-      };
-
-      scrollContainerEl.addEventListener("scroll", handleScroll, {
-        passive: true,
-      });
-      return () => {
-        scrollContainerEl.removeEventListener("scroll", handleScroll);
-        if (scrollFadeTimerRef.current) {
-          clearTimeout(scrollFadeTimerRef.current);
-        }
-      };
-    }, [scrollContainerEl, scheduleScrollPageInfoFade, updateScrollPageInfo]);
-
     // Handle save
     const handleSave = useCallback(
       async (options?: {
@@ -2975,6 +2844,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
         scrollPageInfo,
         handleSave,
         setZoomWithViewportAnchor,
+        zoomRef,
         handleDirectPrint,
         loadParsedDocument,
         loadBuffer,
@@ -3394,8 +3264,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                       disabled={readOnly}
                       theme={history.state.package.theme || theme || null}
                       showZoomControl={showZoomControl}
-                      zoom={state.zoom}
-                      onZoomChange={handleZoomChange}
+                      zoom={zoom}
+                      onZoomChange={setZoomWithViewportAnchor}
                       editorRef={editorContentRef}
                       onRefocusEditor={focusActiveEditor}
                       onImageWrapType={handleImageWrapType}
@@ -3472,7 +3342,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                         }
                         hfEditMode={hfEditPosition}
                         onBodyClick={handleBodyClick}
-                        zoom={state.zoom}
+                        zoom={zoom}
                         readOnly={readOnly}
                         onDocumentChange={handleDocumentChange}
                         extensionManager={extensionManager}
