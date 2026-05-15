@@ -5,6 +5,7 @@ import type { Transaction } from "prosemirror-state";
 
 import {
   acceptAIEditRevision,
+  findChangeAtPosition,
   findNextChange,
   findPreviousChange,
   rejectAIEditRevision,
@@ -108,6 +109,70 @@ describe("AI revision accept/reject scoping", () => {
     // remaining insertion mark belongs to revision B alone.
     expect(view.state.doc.textContent).toBe(" middle beta");
     expect(insertionRevisionsAt(view.state)).toEqual([2]);
+  });
+});
+
+describe("findChangeAtPosition", () => {
+  test("returns the input range unchanged for a non-cursor selection", () => {
+    const state = makeStateWithMarks();
+    expect(findChangeAtPosition(state, 3, 12)).toEqual({ from: 3, to: 12 });
+  });
+
+  test("returns the cursor as-is when no tracked-change marks exist nearby", () => {
+    // Position 10 sits in the plain " middle " run between the two
+    // insertion spans of `makeStateWithMarks`.
+    const state = makeStateWithMarks();
+    expect(findChangeAtPosition(state, 10, 10)).toEqual({
+      from: 10,
+      to: 10,
+    });
+  });
+
+  test("expands a cursor inside a single tracked-change span to that span's full range", () => {
+    // Cursor inside "alpha" (revision A) — expansion should cover the
+    // whole inserted word. Paragraph offsets: 1..6 = "alpha".
+    const state = makeStateWithMarks();
+    expect(findChangeAtPosition(state, 3, 3)).toEqual({ from: 1, to: 6 });
+  });
+
+  test("expands across multiple adjacent text nodes that share the same mark instance", () => {
+    // Three adjacent text nodes that all share the *same* insertion
+    // mark — this comes up when the inserted span is formatted
+    // unevenly (e.g., a bold word inside a tracked-change). The
+    // expansion must reach both edges, not just one neighbouring
+    // node on either side.
+    const insertion = schema.marks["insertion"]!.create(REV_A_ATTRS);
+    const state = EditorState.create({
+      schema,
+      doc: schema.node("doc", null, [
+        schema.node("paragraph", null, [
+          schema.text("one", [insertion]),
+          schema.text("two", [insertion]),
+          schema.text("three", [insertion]),
+        ]),
+      ]),
+    });
+    // "one" 1..4, "two" 4..7, "three" 7..12. Cursor in "two".
+    expect(findChangeAtPosition(state, 5, 5)).toEqual({ from: 1, to: 12 });
+  });
+
+  test("does not bleed into an adjacent insertion that belongs to a different revisionId", () => {
+    // Two insertions back-to-back, no plain text between them. Cursor
+    // is in the FIRST insertion. The expansion must stop at the
+    // boundary — accepting/rejecting one revision must not implicate
+    // the other.
+    const insertion = schema.marks["insertion"];
+    const state = EditorState.create({
+      schema,
+      doc: schema.node("doc", null, [
+        schema.node("paragraph", null, [
+          schema.text("alpha", [insertion.create(REV_A_ATTRS)]),
+          schema.text("beta", [insertion.create(REV_B_ATTRS)]),
+        ]),
+      ]),
+    });
+    // "alpha" occupies positions 1..6, "beta" positions 6..10.
+    expect(findChangeAtPosition(state, 3, 3)).toEqual({ from: 1, to: 6 });
   });
 });
 
