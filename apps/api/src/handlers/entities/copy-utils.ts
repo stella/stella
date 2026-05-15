@@ -167,12 +167,6 @@ export type CopyEntitiesResult =
   | CopyEntitiesErrorResult
   | CopyEntitiesSuccessResult;
 
-export type FieldTransformer = (
-  field: EntityFieldSnapshot,
-  newEntityId: SafeId<"entity">,
-  newVersionId: SafeId<"entityVersion">,
-) => EntityFieldSnapshot;
-
 type CopyEntitiesProps = {
   tx: Transaction;
   targetWorkspaceId: SafeId<"workspace">;
@@ -181,12 +175,8 @@ type CopyEntitiesProps = {
   auditContext: AuditContext;
   sourceEntityId: SafeId<"entity">;
   sourceEntities: EntitySnapshot[];
-  /** Optional field transformer for remapping file IDs etc. */
-  transformField?: FieldTransformer;
   /** Source workspace ID for audit log (cross-workspace only). */
   sourceWorkspaceId?: SafeId<"workspace">;
-  /** Property ID map for cross-workspace copy: source ID → target ID. */
-  propertyIdMap?: Map<SafeId<"property">, SafeId<"property">>;
 };
 
 /**
@@ -201,9 +191,7 @@ export const copyEntities = async ({
   auditContext,
   sourceEntityId,
   sourceEntities,
-  transformField,
   sourceWorkspaceId,
-  propertyIdMap,
 }: CopyEntitiesProps): Promise<CopyEntitiesResult> => {
   const entityCount = await tx.$count(
     entities,
@@ -320,34 +308,14 @@ export const copyEntities = async ({
 
     const sourceFields = source.currentVersion.fields;
     if (sourceFields.length > 0) {
-      const transformedFields = transformField
-        ? sourceFields.map((f) => transformField(f, newEntityId, newVersionId))
-        : sourceFields;
-
-      // For cross-workspace copy, remap property IDs and skip unmapped fields
-      const fieldsToInsert = transformedFields.flatMap((field) => {
-        const targetPropertyId = propertyIdMap
-          ? propertyIdMap.get(field.propertyId)
-          : field.propertyId;
-
-        if (!targetPropertyId) {
-          // Property not available in target workspace; skip this field
-          return [];
-        }
-
-        return [
-          {
-            workspaceId: targetWorkspaceId,
-            propertyId: targetPropertyId,
-            entityVersionId: newVersionId,
-            content: field.content,
-          },
-        ];
-      });
-
-      if (fieldsToInsert.length > 0) {
-        await tx.insert(fields).values(fieldsToInsert);
-      }
+      await tx.insert(fields).values(
+        sourceFields.map((field) => ({
+          workspaceId: targetWorkspaceId,
+          propertyId: field.propertyId,
+          entityVersionId: newVersionId,
+          content: field.content,
+        })),
+      );
     }
 
     idMap.set(source.id, newEntityId);

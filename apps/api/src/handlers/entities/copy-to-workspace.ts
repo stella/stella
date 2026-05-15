@@ -9,10 +9,7 @@ import {
   copyEntities,
   getFolderSubtree,
 } from "@/api/handlers/entities/copy-utils";
-import type {
-  EntityFieldSnapshot,
-  EntitySnapshot,
-} from "@/api/handlers/entities/copy-utils";
+import type { EntitySnapshot } from "@/api/handlers/entities/copy-utils";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -123,39 +120,89 @@ const collectFileMappings = (
 };
 
 /**
- * Create a field transformer that remaps file IDs to the new
- * workspace copies. PDF derivative state is reset since each
- * workspace needs its own derivatives.
+ * Remap file IDs in entity snapshots for cross-workspace copy.
+ * S3 keys include workspaceId, so files copied to another workspace
+ * get new IDs. This updates field content to reference those new IDs
+ * and resets PDF derivative state (each workspace needs its own).
  */
-const createFieldTransformer = (fileMappings: FileMapping[]) => {
+const remapFileIds = (
+  sourceEntities: EntitySnapshot[],
+  fileMappings: FileMapping[],
+): EntitySnapshot[] => {
   const idMap = new Map(fileMappings.map((m) => [m.sourceFileId, m.newFileId]));
 
-  return (field: EntityFieldSnapshot): EntityFieldSnapshot => {
-    if (field.content.type !== "file" || !field.content.id) {
-      return field;
+  return sourceEntities.map((entity) => {
+    if (!entity.currentVersion) {
+      return entity;
     }
 
-    const newFileId = idMap.get(field.content.id);
-    if (!newFileId) {
-      return field;
-    }
+    const remappedFields = entity.currentVersion.fields.map((field) => {
+      if (field.content.type !== "file" || !field.content.id) {
+        return field;
+      }
 
-    const { pdfDerivative: _, ...restContent } = field.content;
+      const newFileId = idMap.get(field.content.id);
+      if (!newFileId) {
+        return field;
+      }
+
+      const { pdfDerivative: _, ...restContent } = field.content;
+
+      return {
+        ...field,
+        content: {
+          ...restContent,
+          id: newFileId,
+          pdfFileId: null,
+          ...(field.content.pdfDerivative
+            ? { pdfDerivative: { status: "pending" as const } }
+            : {}),
+        },
+      };
+    });
 
     return {
-      ...field,
-      content: {
-        ...restContent,
-        id: newFileId,
-        pdfFileId: null,
-        // Reset PDF derivative state; new workspace needs its own
-        ...(field.content.pdfDerivative
-          ? { pdfDerivative: { status: "pending" as const } }
-          : {}),
+      ...entity,
+      currentVersion: {
+        ...entity.currentVersion,
+        fields: remappedFields,
       },
     };
-  };
+  });
 };
+
+/**
+ * Remap property IDs in entity snapshots for cross-workspace copy.
+ * Properties are workspace-scoped, so we match by name+type and remap
+ * to the target workspace's property IDs. Fields with no matching
+ * property in the target workspace are dropped.
+ */
+const remapPropertyIds = (
+  sourceEntities: EntitySnapshot[],
+  propertyIdMap: Map<SafeId<"property">, SafeId<"property">>,
+): EntitySnapshot[] =>
+  sourceEntities.map((entity) => {
+    if (!entity.currentVersion) {
+      return entity;
+    }
+
+    const remappedFields = entity.currentVersion.fields.flatMap((field) => {
+      const targetPropertyId = propertyIdMap.get(field.propertyId);
+      if (!targetPropertyId) {
+        // Property not available in target workspace; drop this field
+        return [];
+      }
+      return [{ ...field, propertyId: targetPropertyId }];
+    });
+
+    return {
+      ...entity,
+      currentVersion: {
+        ...entity.currentVersion,
+        fields: remappedFields,
+      },
+    };
+  });
 
 const copyToWorkspaceHandler = async function* ({
   safeDb,
@@ -306,8 +353,10 @@ const copyToWorkspaceHandler = async function* ({
   // Collect property IDs needed for copy
   const requiredPropertyIds = collectPropertyIds(sourceEntities);
 
+  // Remap file IDs in source entities to reference the new S3 copies
+  const remappedEntities = remapFileIds(sourceEntities, fileMappings);
+
   // DB transaction phase
-  const fieldTransformer = createFieldTransformer(fileMappings);
   const txResult = yield* Result.await(
     safeDb(async (tx) => {
       // Build property map: source ID → target ID for properties present in both workspaces
@@ -345,6 +394,12 @@ const copyToWorkspaceHandler = async function* ({
         }
       }
 
+      // Remap property IDs to target workspace equivalents
+      const propertyRemappedEntities = remapPropertyIds(
+        remappedEntities,
+        propertyIdMap,
+      );
+
       return await copyEntities({
         tx,
         targetWorkspaceId,
@@ -352,10 +407,8 @@ const copyToWorkspaceHandler = async function* ({
         userId,
         auditContext: targetAuditContext,
         sourceEntityId,
-        sourceEntities,
-        transformField: fieldTransformer,
+        sourceEntities: propertyRemappedEntities,
         sourceWorkspaceId,
-        propertyIdMap,
       });
     }),
   );
