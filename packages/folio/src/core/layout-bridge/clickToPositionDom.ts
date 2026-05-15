@@ -138,32 +138,40 @@ function findPositionInSpan(
     return pmStart + Math.min(native, pmEnd - pmStart);
   }
 
-  // Fallback: per-glyph rect scan. Earlier we used a
-  // binary search that compared `clientX` against the
-  // `getBoundingClientRect().left` of a collapsed range
-  // at offset `mid`, but a collapsed-range rect's left
-  // edge is the *caret* X (boundary between glyphs N-1
-  // and N), not the visual centre of any glyph. The
-  // tie-break logic then preferred the caret to the
+  // Fallback: per-glyph rect scan. Pick the glyph whose
+  // visual midpoint is closest to `clientX` rather than
+  // walking forward and breaking on the first midpoint
+  // past the cursor — that shortcut assumes monotonic
+  // increasing X, which is only true for LTR runs and
+  // would resolve to the wrong glyph in a bidi/RTL
+  // section. Distance-minimisation is direction-agnostic.
+  // The earlier binary search compared `clientX` against
+  // the `getBoundingClientRect().left` of a collapsed
+  // range at offset `mid`, but that's the *caret* X
+  // (boundary between glyphs N-1 and N), not any glyph's
+  // centre, and the tie-break preferred the caret to the
   // right of the click on every exact midpoint, which
-  // shifted drag selections one position left. Doing a
-  // forward walk that compares against each glyph's
-  // visual midpoint matches what every native text
-  // editor does for a "which character is under the
-  // cursor" hit-test.
-  let bestOffset = textLength;
+  // shifted drag selections one PM position left.
+  // Reuse a single `Range` across the whole loop —
+  // `createRange()` per iteration leaks DOM allocations
+  // on long spans, and each `getBoundingClientRect()`
+  // already forces a layout reflow we can't avoid.
+  const range = ownerDoc.createRange();
+  let bestOffset = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
   for (let i = 0; i < textLength; i++) {
-    const range = ownerDoc.createRange();
     range.setStart(text, i);
     range.setEnd(text, i + 1);
     const rect = range.getBoundingClientRect();
-    if (rect.width === 0 && rect.height === 0) {
-      continue;
-    }
+    if (rect.width === 0 && rect.height === 0) {continue;}
     const midpoint = rect.left + rect.width / 2;
-    if (clientX < midpoint) {
-      bestOffset = i;
-      break;
+    const distance = Math.abs(clientX - midpoint);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      // Click lands in the right half of glyph `i` →
+      // caret should sit AFTER the glyph (offset i+1);
+      // left half → caret BEFORE (offset i).
+      bestOffset = clientX < midpoint ? i : i + 1;
     }
   }
   return pmStart + Math.min(bestOffset, pmEnd - pmStart);

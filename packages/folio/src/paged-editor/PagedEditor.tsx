@@ -3948,13 +3948,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                 // instead. Padding atom nodes with a
                 // non-word character keeps every offset
                 // in PM-position space.
-                let pmAlignedText = "";
+                const pmAlignedParts: string[] = [];
                 for (let i = 0; i < parent.content.childCount; i++) {
                   const node = parent.content.child(i);
-                  pmAlignedText += node.isText
-                    ? (node.text ?? "")
-                    : " ".repeat(node.nodeSize);
+                  pmAlignedParts.push(
+                    node.isText ? (node.text ?? "") : " ".repeat(node.nodeSize),
+                  );
                 }
+                const pmAlignedText = pmAlignedParts.join("");
                 const offset = $pos.parentOffset;
 
                 // Find word start (go back until whitespace/punctuation)
