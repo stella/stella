@@ -90,7 +90,6 @@ import {
   createStyleResolver,
   setRtl,
   setLtr,
-  isInTable,
   getTableContext,
   addRowAbove,
   addRowBelow,
@@ -193,6 +192,7 @@ import {
 import { ErrorBoundary, ErrorProvider } from "./ErrorBoundary";
 import { FormattingBar } from "./FormattingBar";
 import { resolveFindMatchRange } from "./hooks/findReplaceSelection";
+import { useContextMenu } from "./hooks/useContextMenu";
 import type { DocumentLoadState } from "./hooks/useDocumentLoader";
 import { useDocumentLoader } from "./hooks/useDocumentLoader";
 import { useFindReplace } from "./hooks/useFindReplace";
@@ -548,23 +548,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       to: number;
     } | null>(null);
 
-    // Right-click context menu state
-    const [contextMenu, setContextMenu] = useState<{
-      isOpen: boolean;
-      position: { x: number; y: number };
-      hasSelection: boolean;
-      selectionRange: { from: number; to: number };
-      cursorInTable: boolean;
-      cursorInTrackedChange: boolean;
-    }>({
-      isOpen: false,
-      position: { x: 0, y: 0 },
-      hasSelection: false,
-      selectionRange: { from: 0, to: 0 },
-      cursorInTable: false,
-      cursorInTrackedChange: false,
-    });
-
     // Debounce timer for extractTrackedChanges (avoid full doc walk on every keystroke)
     const extractTrackedChangesTimerRef = useRef<ReturnType<
       typeof setTimeout
@@ -840,6 +823,12 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     const imageInputRef = useRef<HTMLInputElement>(null);
     const editorContentRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+    const {
+      contextMenu,
+      openMenu: openContextMenu,
+      closeMenu: closeContextMenu,
+    } = useContextMenu({ pagedEditorRef });
     const toolbarWrapperRef = useRef<HTMLDivElement>(null);
     const toolbarRoRef = useRef<ResizeObserver | null>(null);
     const [_toolbarHeight, setToolbarHeight] = useState(0);
@@ -1984,46 +1973,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
     );
 
     // Context menu handler
-    const handleEditorContextMenu = useCallback((e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const view = pagedEditorRef.current?.getView();
-      const inTable = view ? isInTable(view.state) : false;
-      const { from, to } = view?.state.selection ?? { from: 0, to: 0 };
-      const hasSel = from !== to;
-      // Check if cursor is on a tracked change mark
-      let inTrackedChange = false;
-      if (view) {
-        const $pos = view.state.doc.resolve(from);
-        const node = $pos.parent;
-        if (node.isTextblock) {
-          // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
-          node.forEach((child, offset) => {
-            const childStart = $pos.start() + offset;
-            const childEnd = childStart + child.nodeSize;
-            if (
-              from >= childStart &&
-              from <= childEnd &&
-              child.isText &&
-              child.marks.some(
-                (m) =>
-                  m.type.name === "insertion" || m.type.name === "deletion",
-              )
-            ) {
-              inTrackedChange = true;
-            }
-          });
-        }
-      }
-      setContextMenu({
-        isOpen: true,
-        position: { x: e.clientX, y: e.clientY },
-        hasSelection: hasSel,
-        selectionRange: { from, to },
-        cursorInTable: inTable,
-        cursorInTrackedChange: inTrackedChange,
-      });
-    }, []);
+    const handleEditorContextMenu = useCallback(
+      (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openContextMenu({ x: e.clientX, y: e.clientY });
+      },
+      [openContextMenu],
+    );
 
     // Handle formatting action from toolbar
     const handleFormat = useCallback(
@@ -2209,57 +2166,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       [getActiveEditorView],
     );
 
-    // Right-click context menu handlers
     const handleContextMenu = useCallback(
       (data: { x: number; y: number; hasSelection: boolean }) => {
-        const view = pagedEditorRef.current?.getView();
-        const inTable = view ? isInTable(view.state) : false;
-        let inChange = false;
-        if (view) {
-          const { from } = view.state.selection;
-          const $pos = view.state.doc.resolve(from);
-          const node = $pos.parent;
-          if (node.isTextblock) {
-            // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
-            node.forEach((child, offset) => {
-              const s = $pos.start() + offset;
-              if (
-                from >= s &&
-                from <= s + child.nodeSize &&
-                child.isText &&
-                child.marks.some(
-                  (m) =>
-                    m.type.name === "insertion" || m.type.name === "deletion",
-                )
-              ) {
-                inChange = true;
-              }
-            });
-          }
-        }
-        const sel = view?.state.selection ?? { from: 0, to: 0 };
-        setContextMenu({
-          isOpen: true,
-          position: data,
-          hasSelection: data.hasSelection,
-          selectionRange: { from: sel.from, to: sel.to },
-          cursorInTable: inTable,
-          cursorInTrackedChange: inChange,
-        });
+        openContextMenu({ x: data.x, y: data.y }, data.hasSelection);
       },
-      [],
+      [openContextMenu],
     );
 
-    const handleContextMenuClose = useCallback(() => {
-      setContextMenu({
-        isOpen: false,
-        position: { x: 0, y: 0 },
-        hasSelection: false,
-        selectionRange: { from: 0, to: 0 },
-        cursorInTable: false,
-        cursorInTrackedChange: false,
-      });
-    }, []);
+    const handleContextMenuClose = closeContextMenu;
 
     const contextMenuItems = useMemo((): TextContextMenuItem[] => {
       const isMac =
