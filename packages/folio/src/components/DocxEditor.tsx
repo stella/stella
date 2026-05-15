@@ -216,10 +216,14 @@ import {
   detectActiveTrackedChange,
   detectImageContext,
 } from "./selectionDetection";
+import {
+  buildSelectionFormatting,
+  extractListState,
+} from "./selectionFormattingBuilder";
 import { TextContextMenu } from "./TextContextMenu";
 import type { TextContextAction, TextContextMenuItem } from "./TextContextMenu";
 import { ToolbarButton, ToolbarSeparator } from "./Toolbar";
-import type { SelectionFormatting, FormattingAction } from "./Toolbar";
+import type { FormattingAction } from "./Toolbar";
 import { mapHexToHighlightName } from "./toolbarUtils";
 import { HyperlinkPopup } from "./ui/HyperlinkPopup";
 import { getBuiltinTableStyle } from "./ui/table-styles";
@@ -1257,65 +1261,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           ? `#${textFormatting.color.rgb}`
           : undefined;
 
-        // Build list state from numPr
-        const numPr = paragraphFormatting.numPr;
-        let listState: SelectionFormatting["listState"];
-        if (numPr) {
-          const ls: NonNullable<SelectionFormatting["listState"]> = {
-            type: (numPr.numId === 1 ? "bullet" : "numbered") as
-              | "bullet"
-              | "numbered",
-            level: numPr.ilvl ?? 0,
-            isInList: true,
-          };
-          if (numPr.numId !== undefined) {
-            ls.numId = numPr.numId;
-          }
-          listState = ls;
-        }
-
-        const formatting: SelectionFormatting = {
-          underline: !!textFormatting.underline,
-          superscript: textFormatting.vertAlign === "superscript",
-          subscript: textFormatting.vertAlign === "subscript",
-          bidi: !!paragraphFormatting.bidi,
-        };
-        if (textFormatting.bold !== undefined) {
-          formatting.bold = textFormatting.bold;
-        }
-        if (textFormatting.italic !== undefined) {
-          formatting.italic = textFormatting.italic;
-        }
-        if (textFormatting.strike !== undefined) {
-          formatting.strike = textFormatting.strike;
-        }
-        if (fontFamily !== undefined) {
-          formatting.fontFamily = fontFamily;
-        }
-        if (fontSize !== undefined) {
-          formatting.fontSize = fontSize;
-        }
-        if (textColor !== undefined) {
-          formatting.color = textColor;
-        }
-        if (textFormatting.highlight !== undefined) {
-          formatting.highlight = textFormatting.highlight;
-        }
-        if (paragraphFormatting.alignment !== undefined) {
-          formatting.alignment = paragraphFormatting.alignment;
-        }
-        if (paragraphFormatting.lineSpacing !== undefined) {
-          formatting.lineSpacing = paragraphFormatting.lineSpacing;
-        }
-        if (listState !== undefined) {
-          formatting.listState = listState;
-        }
-        if (selectionState.styleId) {
-          formatting.styleId = selectionState.styleId;
-        }
-        if (paragraphFormatting.indentLeft !== undefined) {
-          formatting.indentLeft = paragraphFormatting.indentLeft;
-        }
+        const listState = extractListState(paragraphFormatting.numPr);
+        const formatting = buildSelectionFormatting({
+          selectionState,
+          fontFamily,
+          fontSize,
+          textColor,
+          listState,
+        });
         setState((prev) => ({
           ...prev,
           selectionFormatting: formatting,
