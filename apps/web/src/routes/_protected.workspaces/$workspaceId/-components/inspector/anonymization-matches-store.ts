@@ -38,51 +38,92 @@ export type AnonymizationMatchSnapshot = {
 type State = {
   byFieldId: Record<string, AnonymizationMatchSnapshot>;
   /**
-   * Field ids for which the detection pipeline (the
-   * chat-anon worker) has delivered at least one
-   * result. Distinct from `byFieldId` because Folio
-   * publishes an empty snapshot on plugin init, before
-   * the worker has had a chance to run; reading
-   * `byFieldId` alone would tell the inspector facet
-   * "ready, 0 matches" the moment the editor mounts.
+   * Field ids whose detection pipeline is currently in
+   * flight. Producers (the docx chat-anon worker, the
+   * PDF wasm runner) call `markPipelineStarted` when
+   * they begin and `markPipelineRan` on terminal
+   * outcome. The inspector facet uses this together
+   * with `pipelineRanFieldIds` to know whether to show
+   * the "Detecting…" placeholder — fields with no
+   * producer at all (unsupported file types) never
+   * enter this set so the facet falls through to the
+   * direct count instead of stalling forever.
+   */
+  pipelineStartedFieldIds: ReadonlySet<string>;
+  /**
+   * Field ids whose detection pipeline has produced at
+   * least one terminal outcome (success or error).
+   * Distinct from `byFieldId` because Folio publishes an
+   * empty snapshot on plugin init, before the worker
+   * has actually run.
    */
   pipelineRanFieldIds: ReadonlySet<string>;
 };
 
 type Actions = {
   publish: (fieldId: string, snapshot: AnonymizationMatchSnapshot) => void;
+  markPipelineStarted: (fieldId: string) => void;
   markPipelineRan: (fieldId: string) => void;
   clear: (fieldId: string) => void;
 };
 
+const withFieldAdded = (
+  set: ReadonlySet<string>,
+  fieldId: string,
+): ReadonlySet<string> => {
+  if (set.has(fieldId)) {return set;}
+  const next = new Set(set);
+  next.add(fieldId);
+  return next;
+};
+
+const withFieldRemoved = (
+  set: ReadonlySet<string>,
+  fieldId: string,
+): ReadonlySet<string> => {
+  if (!set.has(fieldId)) {return set;}
+  const next = new Set(set);
+  next.delete(fieldId);
+  return next;
+};
+
 export const useAnonymizationMatchesStore = create<State & Actions>((set) => ({
   byFieldId: {},
+  pipelineStartedFieldIds: new Set(),
   pipelineRanFieldIds: new Set(),
   publish: (fieldId, snapshot) =>
     set((state) => ({
       byFieldId: { ...state.byFieldId, [fieldId]: snapshot },
     })),
+  markPipelineStarted: (fieldId) =>
+    set((state) => ({
+      pipelineStartedFieldIds: withFieldAdded(
+        state.pipelineStartedFieldIds,
+        fieldId,
+      ),
+    })),
   markPipelineRan: (fieldId) =>
-    set((state) => {
-      if (state.pipelineRanFieldIds.has(fieldId)) {
-        return state;
-      }
-      const next = new Set(state.pipelineRanFieldIds);
-      next.add(fieldId);
-      return { pipelineRanFieldIds: next };
-    }),
+    set((state) => ({
+      pipelineStartedFieldIds: withFieldRemoved(
+        state.pipelineStartedFieldIds,
+        fieldId,
+      ),
+      pipelineRanFieldIds: withFieldAdded(state.pipelineRanFieldIds, fieldId),
+    })),
   clear: (fieldId) =>
     set((state) => {
       const hadMatches = fieldId in state.byFieldId;
-      const hadRan = state.pipelineRanFieldIds.has(fieldId);
-      if (!hadMatches && !hadRan) {
+      const nextStarted = withFieldRemoved(
+        state.pipelineStartedFieldIds,
+        fieldId,
+      );
+      const nextRan = withFieldRemoved(state.pipelineRanFieldIds, fieldId);
+      if (
+        !hadMatches &&
+        nextStarted === state.pipelineStartedFieldIds &&
+        nextRan === state.pipelineRanFieldIds
+      ) {
         return state;
-      }
-      let nextRan: ReadonlySet<string> = state.pipelineRanFieldIds;
-      if (hadRan) {
-        const mutable = new Set(state.pipelineRanFieldIds);
-        mutable.delete(fieldId);
-        nextRan = mutable;
       }
       return {
         byFieldId: hadMatches
@@ -90,6 +131,7 @@ export const useAnonymizationMatchesStore = create<State & Actions>((set) => ({
               Object.entries(state.byFieldId).filter(([id]) => id !== fieldId),
             )
           : state.byFieldId,
+        pipelineStartedFieldIds: nextStarted,
         pipelineRanFieldIds: nextRan,
       };
     }),
@@ -109,15 +151,18 @@ export const useAnonymizationMatches = (
   );
 
 /**
- * True once the detection pipeline has delivered at least one
- * result for `fieldId`. Lets the inspector facet distinguish
- * "detection still warming up" from "detection ran and found
- * nothing", so an empty result doesn't masquerade as a buggy
- * zero. Note: Folio publishes an empty snapshot on plugin init,
- * so we explicitly track pipeline completion via
- * `markPipelineRan` rather than reading `byFieldId`.
+ * True when the inspector facet should treat the current
+ * match snapshot as authoritative — either the detection
+ * pipeline has finished at least once for this field, or
+ * no producer ever started one (so there's nothing to wait
+ * for and the facet should render the direct count, even
+ * if it's zero). Returns `false` only while a producer is
+ * actively in flight, which is the only state where the
+ * "Detecting entities…" placeholder is correct.
  */
 export const useAnonymizationMatchesReady = (fieldId: string | null): boolean =>
-  useAnonymizationMatchesStore((s) =>
-    fieldId === null ? false : s.pipelineRanFieldIds.has(fieldId),
-  );
+  useAnonymizationMatchesStore((s) => {
+    if (fieldId === null) {return false;}
+    if (s.pipelineRanFieldIds.has(fieldId)) {return true;}
+    return !s.pipelineStartedFieldIds.has(fieldId);
+  });

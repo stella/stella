@@ -16,6 +16,7 @@ import type {
   EntityOverlay,
   FileAnonymization,
 } from "@/lib/pdf/anonymization-types";
+import { useAnonymizationMatchesStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-matches-store";
 
 const buildPipelineConfig = (
   workspaceId: string,
@@ -56,7 +57,28 @@ export const anonymizePdf = async ({
 }): Promise<void> => {
   cancelledFieldIds.delete(fieldId);
   const isPdf = mimeType === PDF_MIME_TYPE;
+  // Tell the inspector facet a producer is in flight so
+  // it shows "Detecting entities…" while the wasm pipeline
+  // runs. Mirrored on every terminal exit below.
+  useAnonymizationMatchesStore.getState().markPipelineStarted(fieldId);
+  try {
+     await runPipelineAndCommit({ workspaceId, fieldId, isPdf });; return;
+  } finally {
+    if (!cancelledFieldIds.has(fieldId)) {
+      useAnonymizationMatchesStore.getState().markPipelineRan(fieldId);
+    }
+  }
+};
 
+const runPipelineAndCommit = async ({
+  workspaceId,
+  fieldId,
+  isPdf,
+}: {
+  workspaceId: string;
+  fieldId: string;
+  isPdf: boolean;
+}): Promise<void> => {
   const response = await api
     .files({ workspaceId })
     .url({ fieldId })
@@ -147,6 +169,29 @@ export const anonymizePdf = async ({
   };
 
   commitAnonymizationForField(fieldId, data);
+  // Mirror the detection result into the inspector
+  // matches store. The DOCX path publishes via Folio's
+  // plugin on every transaction; the PDF path runs
+  // once-per-document, so we publish here for the
+  // count badge. The "started/ran" lifecycle bookkeeping
+  // lives in the wrapping `anonymizePdf` so the facet
+  // exits the "Detecting…" state on errors too.
+  const countByCanonical = new Map<string, number>();
+  const labelByCanonical = new Map<string, string>();
+  let totalMatches = 0;
+  for (const overlay of overlayEntities) {
+    const canonical = overlay.text;
+    countByCanonical.set(canonical, (countByCanonical.get(canonical) ?? 0) + 1);
+    if (!labelByCanonical.has(canonical)) {
+      labelByCanonical.set(canonical, overlay.label);
+    }
+    totalMatches += 1;
+  }
+  useAnonymizationMatchesStore.getState().publish(fieldId, {
+    totalMatches,
+    countByCanonical,
+    labelByCanonical,
+  });
 };
 
 export const clearAnonymization = (fieldId: string): void => {

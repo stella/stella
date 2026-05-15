@@ -261,6 +261,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         return;
       }
       inFlightUntil = Date.now() + IN_FLIGHT_TIMEOUT_MS;
+      // Tell the inspector facet a producer is in flight
+      // so it shows the "Detecting…" placeholder instead
+      // of a stale (or zero) count from an earlier run.
+      useAnonymizationMatchesStore.getState().markPipelineStarted(fieldId);
       anonymizeChatTextInWorker({
         text,
         workspaceId,
