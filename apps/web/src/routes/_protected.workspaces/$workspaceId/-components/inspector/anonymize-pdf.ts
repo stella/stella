@@ -1,4 +1,3 @@
-import { normalizeChatAnonLocaleLanguage } from "@stll/anonymize-chat";
 import type { PipelineConfig, PipelineContext } from "@stll/anonymize-wasm";
 
 import { PDF_MIME_TYPE } from "@/consts";
@@ -22,10 +21,6 @@ const buildPipelineConfig = (
   workspaceId: string,
   labels: readonly string[],
 ): PipelineConfig => {
-  const nameCorpusLanguage = normalizeChatAnonLocaleLanguage(
-    navigator.language,
-  );
-
   const config: PipelineConfig = {
     threshold: 0.4,
     enableTriggerPhrases: true,
@@ -40,9 +35,6 @@ const buildPipelineConfig = (
     labels: [...labels],
     workspaceId,
   };
-  if (nameCorpusLanguage !== null) {
-    config.nameCorpusLanguages = [nameCorpusLanguage];
-  }
   return config;
 };
 
