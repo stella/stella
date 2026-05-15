@@ -267,6 +267,46 @@ describe("chat third-party anonymization boundary", () => {
     ]);
   });
 
+  test("handles tool parts with an explicitly undefined approval", async () => {
+    const boundary = createBoundary();
+    const messages: ChatMessage[] = [
+      {
+        id: "msg_1",
+        role: "assistant",
+        parts: [
+          // SAFETY: this fixture models a persisted AI SDK tool UI part with
+          // an optional approval property present but undefined.
+          // eslint-disable-next-line typescript/no-unsafe-type-assertion
+          {
+            type: "dynamic-tool",
+            toolName: "read_secret",
+            toolCallId: "call_1",
+            state: "output-available",
+            input: { query: "Jan Novák" },
+            output: { text: "Secret notes" },
+            approval: undefined,
+          } as unknown as ChatMessage["parts"][number],
+        ],
+      },
+    ];
+
+    const prepared = await prepareMessagesForThirdParty({
+      boundary,
+      messages,
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+
+    expect(prepared.value.at(0)?.parts.at(0)).toMatchObject({
+      approval: undefined,
+      input: { query: "[PERSON_1]" },
+      output: { text: "[CUSTOM_1] notes" },
+    });
+  });
+
   test("returns anonymized live tool output values", async () => {
     const boundary = createBoundary();
     const tools = {

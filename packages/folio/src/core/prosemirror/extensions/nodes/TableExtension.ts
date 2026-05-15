@@ -1864,7 +1864,11 @@ export const TablePluginExtension = createExtension({
 
             // Update target cell
             const attrs = getAttrs(pos, info.node);
-            const existingBorders = attrs["borders"] as Record<string, unknown>;
+            const existingBorders =
+              (attrs["borders"] as
+                | Record<string, unknown>
+                | null
+                | undefined) ?? {};
             setAttrs(pos, {
               ...attrs,
               borders: { ...existingBorders, ...cellBorders },
@@ -1880,10 +1884,11 @@ export const TablePluginExtension = createExtension({
                   continue;
                 }
                 const adjAttrs = getAttrs(adjPos, adj.node);
-                const adjBorders = adjAttrs["borders"] as Record<
-                  string,
-                  unknown
-                >;
+                const adjBorders =
+                  (adjAttrs["borders"] as
+                    | Record<string, unknown>
+                    | null
+                    | undefined) ?? {};
                 setAttrs(adjPos, {
                   ...adjAttrs,
                   borders: { ...adjBorders, bottom: cellBorders["top"] },
@@ -1899,10 +1904,11 @@ export const TablePluginExtension = createExtension({
                   continue;
                 }
                 const adjAttrs = getAttrs(adjPos, adj.node);
-                const adjBorders = adjAttrs["borders"] as Record<
-                  string,
-                  unknown
-                >;
+                const adjBorders =
+                  (adjAttrs["borders"] as
+                    | Record<string, unknown>
+                    | null
+                    | undefined) ?? {};
                 setAttrs(adjPos, {
                   ...adjAttrs,
                   borders: { ...adjBorders, top: cellBorders["bottom"] },
@@ -1918,10 +1924,11 @@ export const TablePluginExtension = createExtension({
                   continue;
                 }
                 const adjAttrs = getAttrs(adjPos, adj.node);
-                const adjBorders = adjAttrs["borders"] as Record<
-                  string,
-                  unknown
-                >;
+                const adjBorders =
+                  (adjAttrs["borders"] as
+                    | Record<string, unknown>
+                    | null
+                    | undefined) ?? {};
                 setAttrs(adjPos, {
                   ...adjAttrs,
                   borders: { ...adjBorders, right: cellBorders["left"] },
@@ -1939,10 +1946,11 @@ export const TablePluginExtension = createExtension({
                   continue;
                 }
                 const adjAttrs = getAttrs(adjPos, adj.node);
-                const adjBorders = adjAttrs["borders"] as Record<
-                  string,
-                  unknown
-                >;
+                const adjBorders =
+                  (adjAttrs["borders"] as
+                    | Record<string, unknown>
+                    | null
+                    | undefined) ?? {};
                 setAttrs(adjPos, {
                   ...adjAttrs,
                   borders: { ...adjBorders, left: cellBorders["right"] },
@@ -2037,7 +2045,11 @@ export const TablePluginExtension = createExtension({
           for (const { pos, node } of cells) {
             const info = cellByPos.get(pos);
             const attrs = getAttrs(pos, node);
-            const currentBorders = attrs["borders"] as Record<string, unknown>;
+            const currentBorders =
+              (attrs["borders"] as
+                | Record<string, unknown>
+                | null
+                | undefined) ?? {};
 
             const sides = side === "all" ? allSides : [side];
             // When clearOthers is true, start with all sides cleared (preset behavior)
@@ -2075,10 +2087,11 @@ export const TablePluginExtension = createExtension({
                     continue;
                   }
                   const adjAttrs = getAttrs(adjPos, adjInfo.node);
-                  const adjBorders = adjAttrs["borders"] as Record<
-                    string,
-                    unknown
-                  >;
+                  const adjBorders =
+                    (adjAttrs["borders"] as
+                      | Record<string, unknown>
+                      | null
+                      | undefined) ?? {};
                   setAttrs(adjPos, {
                     ...adjAttrs,
                     borders: { ...adjBorders, [adj.adjSide]: syncValue },
@@ -2680,10 +2693,11 @@ export const TablePluginExtension = createExtension({
           for (const { pos, node } of cells) {
             const info = cellByPos.get(pos);
             const attrs = getAttrs(pos, node);
-            const currentBorders = attrs["borders"] as Record<
-              string,
-              Record<string, unknown>
-            >;
+            const currentBorders =
+              (attrs["borders"] as
+                | Record<string, Record<string, unknown>>
+                | null
+                | undefined) ?? {};
             const newBorders: Record<string, unknown> = {};
 
             for (const side of ["top", "bottom", "left", "right"] as const) {
@@ -2713,10 +2727,11 @@ export const TablePluginExtension = createExtension({
                     continue;
                   }
                   const adjAttrs = getAttrs(adjPos, adjInfo.node);
-                  const adjBorders = adjAttrs["borders"] as Record<
-                    string,
-                    unknown
-                  >;
+                  const adjBorders =
+                    (adjAttrs["borders"] as
+                      | Record<string, unknown>
+                      | null
+                      | undefined) ?? {};
                   setAttrs(adjPos, {
                     ...adjAttrs,
                     borders: { ...adjBorders, [adj.adjSide]: borderVal },
@@ -2779,10 +2794,11 @@ export const TablePluginExtension = createExtension({
           for (const { pos, node } of cells) {
             const info = cellByPos.get(pos);
             const attrs = getAttrs(pos, node);
-            const currentBorders = attrs["borders"] as Record<
-              string,
-              Record<string, unknown>
-            >;
+            const currentBorders =
+              (attrs["borders"] as
+                | Record<string, Record<string, unknown>>
+                | null
+                | undefined) ?? {};
             const newBorders: Record<string, unknown> = {};
 
             for (const side of ["top", "bottom", "left", "right"] as const) {
@@ -2812,10 +2828,11 @@ export const TablePluginExtension = createExtension({
                     continue;
                   }
                   const adjAttrs = getAttrs(adjPos, adjInfo.node);
-                  const adjBorders = adjAttrs["borders"] as Record<
-                    string,
-                    unknown
-                  >;
+                  const adjBorders =
+                    (adjAttrs["borders"] as
+                      | Record<string, unknown>
+                      | null
+                      | undefined) ?? {};
                   setAttrs(adjPos, {
                     ...adjAttrs,
                     borders: { ...adjBorders, [adj.adjSide]: borderVal },

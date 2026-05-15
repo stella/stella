@@ -775,13 +775,18 @@ const anonymizeToolPart = ({
       });
     }
 
-    const approval =
-      "approval" in part && "reason" in part.approval && part.approval.reason
-        ? part.approval
-        : undefined;
-    if (approval?.reason) {
+    const approval: unknown = Reflect.get(part, "approval");
+    if (
+      typeof approval === "object" &&
+      approval !== null &&
+      "reason" in approval &&
+      typeof approval.reason === "string" &&
+      approval.reason
+    ) {
       queueTextReplacement(replacements, approval.reason, (value) => {
-        prepared.approval = { ...approval, reason: value };
+        Object.assign(prepared, {
+          approval: { ...approval, reason: value },
+        });
       });
     }
 
