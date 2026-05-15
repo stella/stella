@@ -564,6 +564,12 @@ export const AnonymizationFacet = ({
               role="button"
               tabIndex={0}
               onKeyDown={(event) => {
+                // Don't hijack Enter/Space from nested action
+                // buttons (trash, ignore, restore, scope menu);
+                // only handle keys originating on the row itself.
+                if (event.target !== event.currentTarget) {
+                  return;
+                }
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
                   selectFromSidebar(entry.canonical, entry.label);
@@ -662,6 +668,13 @@ export const AnonymizationFacet = ({
                         role="button"
                         tabIndex={0}
                         onKeyDown={(event) => {
+                          // Don't hijack Enter/Space from nested
+                          // action buttons (ignore, restore, scope
+                          // menu); only handle keys originating on
+                          // the row itself.
+                          if (event.target !== event.currentTarget) {
+                            return;
+                          }
                           if (event.key === "Enter" || event.key === " ") {
                             event.preventDefault();
                             selectFromSidebar(row.canonical, label);
