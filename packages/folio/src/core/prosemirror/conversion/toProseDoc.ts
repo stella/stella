@@ -378,6 +378,15 @@ function paragraphFormattingToAttrs(
   if (formatting) {
     attrs._originalFormatting = formatting;
   }
+  // Carry `w:pPrChange` (paragraph-property-change tracking) opaquely
+  // through ProseMirror. Without this, every edit strips the entries
+  // off the paragraph because nothing in PM's schema represents them.
+  // Shallow-clone the array so the editor state owns its own
+  // reference — mutating the Folio document later must not poke
+  // through into PM attrs.
+  if (paragraph.propertyChanges && paragraph.propertyChanges.length > 0) {
+    attrs._propertyChanges = [...paragraph.propertyChanges];
+  }
 
   // Helper: assign a value only when defined
   const set = <K extends keyof ParagraphAttrs>(

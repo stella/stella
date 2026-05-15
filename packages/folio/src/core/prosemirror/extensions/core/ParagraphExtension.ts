@@ -355,6 +355,7 @@ const paragraphNodeSpec: NodeSpec = {
     bookmarks: { default: null },
     _originalFormatting: { default: null },
     _sectionProperties: { default: null },
+    _propertyChanges: { default: null },
   },
   parseDOM: [
     {

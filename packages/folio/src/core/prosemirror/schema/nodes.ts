@@ -10,6 +10,7 @@ import type { FloatingTableProperties, TableLook } from "../../types";
 import type {
   ParagraphAlignment,
   ParagraphFormatting,
+  ParagraphPropertyChange,
   LineSpacingRule,
   BorderSpec,
   ShadingProperties,
@@ -131,6 +132,13 @@ export type ParagraphAttrs = {
   /** Full section properties for paragraphs that end a section.
    *  Used by layout engine for per-section column/page config and round-trip. */
   _sectionProperties?: SectionProperties;
+
+  /** Paragraph-property-change tracking entries (`w:pPrChange`).
+   *  Preserved opaquely through ProseMirror — the editor does not surface
+   *  them in UI today, but stripping them on every edit would corrupt the
+   *  `w:pPrChange` history Word relies on for "show previous formatting"
+   *  and for reverting an accepted property change. */
+  _propertyChanges?: ParagraphPropertyChange[];
 };
 
 /**
