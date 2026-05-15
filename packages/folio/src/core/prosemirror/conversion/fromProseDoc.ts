@@ -361,11 +361,13 @@ function paragraphAttrsToFormatting(
  */
 function extractParagraphContent(
   paragraph: PMNode,
-  documentCounts?: TrackedChangeCounts,
+  // Parameter retained for signature compatibility with the call sites
+  // threaded through tables/cells. The body no longer needs the counts
+  // — `moveFrom`/`moveTo` round-trip is now driven by the explicit
+  // `moveKind` mark attribute set by `toProseDoc`.
+  _documentCounts?: TrackedChangeCounts,
 ): ParagraphContent[] {
   const content: ParagraphContent[] = [];
-  const trackedChangeCounts =
-    documentCounts ?? buildDocumentTrackedChangeCounts(paragraph);
 
   // Track current run being built
   let currentRun: Run | null = null;
@@ -478,20 +480,22 @@ function extractParagraphContent(
       if (dateStr) {
         info.date = dateStr;
       }
-      const revisionId = info.id;
-      const hasInsertionForId =
-        (trackedChangeCounts.insertionById.get(revisionId) ?? 0) > 0;
-      const hasDeletionForId =
-        (trackedChangeCounts.deletionById.get(revisionId) ?? 0) > 0;
-      const isMovePair = hasInsertionForId && hasDeletionForId;
-
+      // The mark itself records whether it originated as a
+      // `w:moveTo` / `w:moveFrom`. The previous "is there both an
+      // insertion AND a deletion with the same revisionId somewhere
+      // in the document?" heuristic was unsound: OOXML doesn't
+      // require `w:moveFrom`/`w:moveTo` to share `w:id` (they
+      // typically don't), and unrelated `w:ins w:id="5"` /
+      // `w:del w:id="5"` from different reviewers would coincidentally
+      // fuse into a phantom move pair.
+      const moveKind = changeMark.attrs["moveKind"];
       if (insertionMark) {
-        if (isMovePair) {
+        if (moveKind === "moveTo") {
           content.push({ type: "moveTo", info, content: [run] });
         } else {
           content.push({ type: "insertion", info, content: [run] });
         }
-      } else if (isMovePair) {
+      } else if (moveKind === "moveFrom") {
         content.push({ type: "moveFrom", info, content: [run] });
       } else {
         content.push({ type: "deletion", info, content: [run] });

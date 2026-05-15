@@ -173,6 +173,7 @@ function convertParagraph(
   const emitTrackedChange = (
     change: Insertion | Deletion | MoveFrom | MoveTo,
     markType: "insertion" | "deletion",
+    moveKind: "moveFrom" | "moveTo" | null,
   ): void => {
     emitInlineNodes(
       convertTrackedChange(
@@ -180,6 +181,7 @@ function convertParagraph(
         markType,
         getInheritedRunFormatting,
         styleResolver,
+        moveKind,
       ),
     );
   };
@@ -213,9 +215,17 @@ function convertParagraph(
         convertInlineSdt(content, getInheritedRunFormatting, styleResolver),
       );
     } else if (content.type === "insertion" || content.type === "moveTo") {
-      emitTrackedChange(content, "insertion");
+      emitTrackedChange(
+        content,
+        "insertion",
+        content.type === "moveTo" ? "moveTo" : null,
+      );
     } else if (content.type === "deletion" || content.type === "moveFrom") {
-      emitTrackedChange(content, "deletion");
+      emitTrackedChange(
+        content,
+        "deletion",
+        content.type === "moveFrom" ? "moveFrom" : null,
+      );
     } else if (content.type === "mathEquation") {
       emitInlineNode(convertMathEquation(content));
     }
@@ -282,6 +292,7 @@ function convertTrackedChange(
   markType: "insertion" | "deletion",
   getInheritedRunFormatting: RunFormattingResolver,
   styleResolver?: StyleResolver | null,
+  moveKind: "moveFrom" | "moveTo" | null = null,
 ): PMNode[] {
   const nodes: PMNode[] = [];
   for (const item of change.content) {
@@ -305,6 +316,7 @@ function convertTrackedChange(
     revisionId: change.info.id,
     author: change.info.author,
     date: change.info.date ?? null,
+    moveKind,
   });
 
   return nodes.map((node) => {
