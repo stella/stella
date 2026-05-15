@@ -202,7 +202,10 @@ export type DocxEditorRef = {
    * deletion and insertion sides. Returns whether a matching range was found.
    */
   acceptAIEditOperation: (revisionIds: number | readonly number[]) => boolean;
-  /** Reject the tracked-change marks belonging to a previously applied AI edit. */
+  /**
+   * Reject the tracked-change marks belonging to a previously applied AI edit.
+   * Same id semantics as `acceptAIEditOperation`.
+   */
   rejectAIEditOperation: (revisionIds: number | readonly number[]) => boolean;
   /**
    * Scroll the editor viewport so the tracked-change marks belonging to the
@@ -211,7 +214,10 @@ export type DocxEditorRef = {
    */
   scrollToAIEditOperation: (revisionIds: number | readonly number[]) => boolean;
   /**
-   * Scroll the editor viewport so the block referenced by `blockId` is in view.
+   * Scroll the editor viewport so the block referenced by `blockId` is in view,
+   * and place the selection inside it. Returns `false` when the block can't be
+   * resolved on the live document (e.g. it was edited away).
+   *
    * When `snapshot` is supplied, ids resolve against it — required for review
    * panel pending-suggestion navigation, because block ids are sequential and
    * a freshly recomputed snapshot would re-number blocks after a structural
