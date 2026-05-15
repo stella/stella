@@ -18,6 +18,12 @@ const schema = new Schema({
     text: { marks: "_" },
   },
   marks: {
+    // `bold` is here so a single tracked-change span can be split into
+    // two adjacent text nodes that share the *same* insertion mark
+    // instance but differ in inline formatting — ProseMirror does not
+    // merge text nodes whose mark sets differ, so this is the only
+    // way to construct a genuinely multi-node tracked change.
+    bold: { toDOM: () => ["strong", 0] },
     insertion: {
       attrs: { revisionId: {}, author: {}, date: {} },
       excludes: "",
@@ -221,6 +227,94 @@ describe("tracked change navigation", () => {
     expect(result).toMatchObject({
       from: 14,
       to: 18,
+      type: "insertion",
+    });
+  });
+
+  // A tracked-change span split into two text nodes that share the *same*
+  // insertion mark instance but differ in inline formatting — exactly
+  // what happens when a user partially bolds inside an AI suggestion.
+  // The navigation buttons must select the WHOLE inserted span, not
+  // just the first text node — otherwise pressing "next change" leaves
+  // the second half outside the selection and follow-up accept/reject
+  // actions miss it.
+  const makeMultiNodeSameRevisionState = () => {
+    const insertion = schema.marks["insertion"]!.create(REV_A_ATTRS);
+    const bold = schema.marks["bold"]!.create();
+    return EditorState.create({
+      schema,
+      doc: schema.node("doc", null, [
+        schema.node("paragraph", null, [
+          schema.text("plain"),
+          schema.text("bold", [insertion, bold]),
+          schema.text("plain", [insertion]),
+          schema.text(" tail"),
+        ]),
+      ]),
+    });
+  };
+
+  test("findNextChange spans the full multi-node tracked change", () => {
+    // Paragraph offsets: "plain" 1..6, "bold" 6..10 (ins+bold),
+    // "plain" 10..15 (ins), " tail" 15..20. Starting before the
+    // change, "next" must select the whole inserted region 6..15.
+    const state = makeMultiNodeSameRevisionState();
+    expect(findNextChange(state, 0)).toMatchObject({
+      from: 6,
+      to: 15,
+      type: "insertion",
+    });
+  });
+
+  test("findPreviousChange spans the full multi-node tracked change", () => {
+    // Starting from beyond the change, "previous" must also select
+    // the whole inserted region 6..15.
+    const state = makeMultiNodeSameRevisionState();
+    expect(findPreviousChange(state, 20)).toMatchObject({
+      from: 6,
+      to: 15,
+      type: "insertion",
+    });
+  });
+
+  test("findPreviousChange surfaces an overlapping change inside a previously expanded range", () => {
+    // A previously inserted span that a second reviewer later deleted
+    // ("inserted-then-deleted") carries BOTH an insertion mark
+    // (revision A) and a deletion mark (revision B) on the same text
+    // node. The forward walk must process both ranges — skipping
+    // strictly by position would return the outer insertion when the
+    // user expects the nearer overlapping deletion.
+    const insertion = schema.marks["insertion"]!.create(REV_A_ATTRS);
+    const deletion = schema.marks["deletion"]!.create(REV_B_ATTRS);
+    const state = EditorState.create({
+      schema,
+      doc: schema.node("doc", null, [
+        schema.node("paragraph", null, [
+          // "first " — insertion A only, positions 1..7.
+          schema.text("first ", [insertion]),
+          // "second" — insertion A + deletion B, positions 7..13.
+          schema.text("second", [insertion, deletion]),
+        ]),
+      ]),
+    });
+    expect(findPreviousChange(state, 14)).toMatchObject({
+      from: 7,
+      to: 13,
+      type: "deletion",
+    });
+  });
+
+  test("findNextChange returns the full range when startPos sits inside a multi-node change", () => {
+    // The toolbar calls `findNextChange(state, selectionEnd)` and then
+    // accepts/rejects the returned range. If `startPos` lands inside
+    // an existing tracked change, returning a range clamped to
+    // `startPos` truncates the earlier portion of the same revision
+    // and leaves orphan marks after accept. Return the full expanded
+    // range — including positions BEFORE `startPos`.
+    const state = makeMultiNodeSameRevisionState();
+    expect(findNextChange(state, 8)).toMatchObject({
+      from: 6,
+      to: 15,
       type: "insertion",
     });
   });

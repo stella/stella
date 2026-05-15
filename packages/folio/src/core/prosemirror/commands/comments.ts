@@ -363,7 +363,46 @@ export function findChangeAtPosition(
 }
 
 /**
- * Find the next tracked change after the given position.
+ * Walk outward from `[fromHint, toHint]` and return the full extent of the
+ * tracked-change span carrying `mark` (matched via `Mark.eq`, so attrs like
+ * `revisionId` distinguish adjacent changes). Used to keep the
+ * navigation/scroll helpers honest when a tracked-change span is split
+ * across multiple text nodes due to inline formatting (e.g., a bold word
+ * inside an insertion).
+ */
+function expandTrackedChangeRange(
+  state: EditorState,
+  mark: import("prosemirror-model").Mark,
+  fromHint: number,
+  toHint: number,
+): { from: number; to: number } {
+  // Resolve the boundary positions and hop outward through `nodeBefore`
+  // / `nodeAfter` while the neighbouring text node still carries the
+  // same mark instance. O(K) in the number of text nodes that make up
+  // the span — `nodesBetween`-based fixed-point expansion is O(K²) and
+  // re-walks the same subtree on every iteration.
+  let from = fromHint;
+  let to = toHint;
+  let $from = state.doc.resolve(from);
+  while (
+    $from.nodeBefore?.isText &&
+    $from.nodeBefore.marks.some((m) => m.eq(mark))
+  ) {
+    from -= $from.nodeBefore.nodeSize;
+    $from = state.doc.resolve(from);
+  }
+  let $to = state.doc.resolve(to);
+  while ($to.nodeAfter?.isText && $to.nodeAfter.marks.some((m) => m.eq(mark))) {
+    to += $to.nodeAfter.nodeSize;
+    $to = state.doc.resolve(to);
+  }
+  return { from, to };
+}
+
+/**
+ * Find the next tracked change after the given position. Returns the full
+ * range of the change (including adjacent text nodes that share the same
+ * insertion/deletion mark instance), not just the first text node.
  */
 export function findNextChange(
   state: EditorState,
@@ -390,9 +429,21 @@ export function findNextChange(
 
     for (const mark of node.marks) {
       if (mark.type === insertionType || mark.type === deletionType) {
+        // Return the FULL expanded range, even when `startPos` lands
+        // inside the matched span. A toolbar that does
+        // `findNextChange(state, selectionEnd)` and then accepts the
+        // returned range must see the whole revision — clamping `from`
+        // up to `startPos` truncates the earlier portion of the same
+        // change and leaves orphaned marks behind after accept.
+        const expanded = expandTrackedChangeRange(
+          state,
+          mark,
+          pos,
+          pos + node.nodeSize,
+        );
         result.value = {
-          from: Math.max(pos, startPos),
-          to: pos + node.nodeSize,
+          from: expanded.from,
+          to: expanded.to,
           type: mark.type === insertionType ? "insertion" : "deletion",
         };
         return false;
@@ -410,7 +461,9 @@ export function findNextChange(
 }
 
 /**
- * Find the previous tracked change before the given position.
+ * Find the previous tracked change before the given position. Returns the
+ * full range of the change (including adjacent text nodes that share the
+ * same insertion/deletion mark instance), not just the last text node.
  */
 export function findPreviousChange(
   state: EditorState,
@@ -423,6 +476,13 @@ export function findPreviousChange(
   }
 
   const result = { value: null as ChangeRange | null };
+  // Remember the specific mark instance that produced the kept result, so
+  // the walk can skip later text nodes covered by the same expansion
+  // without skipping a sibling that carries a *different* tracked-change
+  // mark (e.g., an `insertion + deletion` overlay where the same text
+  // node belongs to two distinct revisions). Skipping by position alone
+  // would miss the nearer overlapping change.
+  let resultMark: import("prosemirror-model").Mark | null = null;
 
   state.doc.descendants((node, pos) => {
     if (!node.isText) {
@@ -431,14 +491,35 @@ export function findPreviousChange(
     if (pos >= startPos) {
       return false;
     }
+    if (
+      result.value &&
+      resultMark &&
+      pos < result.value.to &&
+      node.marks.every(
+        (m) =>
+          (m.type !== insertionType && m.type !== deletionType) ||
+          m.eq(resultMark!),
+      )
+    ) {
+      // Already covered by the previous expansion AND no additional
+      // tracked-change mark sits on this node — safe to skip.
+      return;
+    }
 
     for (const mark of node.marks) {
       if (mark.type === insertionType || mark.type === deletionType) {
+        const expanded = expandTrackedChangeRange(
+          state,
+          mark,
+          pos,
+          pos + node.nodeSize,
+        );
         result.value = {
-          from: pos,
-          to: pos + node.nodeSize,
+          from: expanded.from,
+          to: expanded.to,
           type: mark.type === insertionType ? "insertion" : "deletion",
         };
+        resultMark = mark;
       }
     }
     return undefined;
