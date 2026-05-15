@@ -64,6 +64,7 @@ import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-compon
 import { useIsAnonymizationActive } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-active-store";
 import { useAnonymizationMatchesStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-matches-store";
 import { useAnonymizationSelectionStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-selection-store";
+import { useDocumentTextSelectionStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/document-text-selection-store";
 import { anonymizationAllowlistOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-terms";
 import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.css";
@@ -229,6 +230,15 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       return undefined;
     }
     let cancelled = false;
+    // Mark the pipeline as in-flight from mount so the
+    // inspector facet shows "Detecting entities…" right
+    // away instead of flashing "0 entities" during the
+    // 300ms gap before the first `run()` fires (and
+    // before that run can call `markPipelineStarted`
+    // itself). The first `run()` also calls it again
+    // (idempotent set-add); subsequent runs flip it on
+    // around each worker call.
+    useAnonymizationMatchesStore.getState().markPipelineStarted(fieldId);
     // Track the text+exclusions we received *results* for (not
     // just dispatched). The worker can occasionally drop a
     // request across dev HMR (the singleton's pending map loses
@@ -246,6 +256,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     // never delivers, the window expires and a retry fires.
     let inFlightUntil = 0;
     const IN_FLIGHT_TIMEOUT_MS = 10_000;
+    const markRan = () =>
+      useAnonymizationMatchesStore.getState().markPipelineRan(fieldId);
     const run = () => {
       if (cancelled) {
         return;
@@ -256,10 +268,25 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       const text = view.state.doc.textContent;
       const excluded = excludedCanonicalsRef.current;
       const cacheKey = `${[...excluded].sort().join("|")}~${text}`;
-      if (text.length === 0 || cacheKey === lastDeliveredKey) {
+      if (text.length === 0) {
+        // Empty doc: nothing to detect. Release the
+        // "in flight" lock so the facet exits the
+        // "Detecting…" placeholder instead of stalling
+        // on the mount-time mark.
+        markRan();
+        return;
+      }
+      if (cacheKey === lastDeliveredKey) {
+        // Already delivered for this exact text +
+        // exclusions; no-op without flipping the
+        // started state (we're not running anything).
         return;
       }
       inFlightUntil = Date.now() + IN_FLIGHT_TIMEOUT_MS;
+      // (Re-)mark started: handles reruns triggered by
+      // edits or allowlist changes after the first run
+      // already called `markPipelineRan`.
+      useAnonymizationMatchesStore.getState().markPipelineStarted(fieldId);
       anonymizeChatTextInWorker({
         text,
         workspaceId,
@@ -282,9 +309,14 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
             }
           }
           setDetectedAnonymizationTerms([...byCanonical.values()]);
+          markRan();
         })
         .catch(() => {
           inFlightUntil = 0;
+          // Mark on failure too — without this, a worker
+          // error would leave the facet stuck on
+          // "Detecting…" forever.
+          markRan();
         });
     };
     // The doc text isn't always populated when the view first
@@ -304,8 +336,12 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       runDetectionRef.current = null;
       clearTimeout(initialTimer);
       clearInterval(heartbeat);
+      // Release the in-flight lock on unmount/dep change
+      // so a stale "Detecting…" doesn't survive a tab
+      // switch or an anonymization toggle-off.
+      markRan();
     };
-  }, [editorViewForAnonymization, isAnonymizationActive, workspaceId]);
+  }, [editorViewForAnonymization, isAnonymizationActive, workspaceId, fieldId]);
   // Per-doc allowlist: canonicals the user has flagged as false
   // positives. The chat-anon worker filters these out of its
   // detected entities itself; we still need to strip them from
@@ -418,6 +454,32 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       clear(fieldId);
     };
   }, [fieldId, isAnonymizationActive]);
+
+  // Bridge document selections → inspector "Term to anonymize"
+  // input. Folio fires `onSelectionTextChange` with the range
+  // and the resolved text on every selection-bearing
+  // transaction, so we just have to length-gate and publish.
+  // The cleanup clears the store so a second tab opening this
+  // facet doesn't see a stale prefill from the previous file.
+  const handleSelectionTextChange = useCallback(
+    (selection: { from: number; to: number; text: string }) => {
+      if (selection.from === selection.to) {
+        return;
+      }
+      const single = selection.text.replace(/\s+/g, " ").trim();
+      if (single.length < 2 || single.length > 200) {
+        return;
+      }
+      useDocumentTextSelectionStore.getState().publish(fieldId, single);
+    },
+    [fieldId],
+  );
+  useEffect(
+    () => () => {
+      useDocumentTextSelectionStore.getState().clear(fieldId);
+    },
+    [fieldId],
+  );
 
   // Two-way bridge with the inspector anonymization facet.
   // - Click in document → push to store as source="doc" with
@@ -1242,6 +1304,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
                 onCompatibilityChange?.(nextCompatibility);
               }}
               onAnonymizationMatchesChange={handleAnonymizationMatchesChange}
+              onSelectionTextChange={handleSelectionTextChange}
               onAnonymizationTermClick={handleAnonymizationTermClick}
               selectedAnonymizationCanonical={sidebarSelectedCanonical}
               anonymizationSelectionSeq={sidebarSelectionSeq}

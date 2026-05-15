@@ -1098,6 +1098,7 @@ type Messages = {
       "contextMenuAddAction": "Anonymize selection";
       "deleteAction": "Delete term";
       "detectedHeading": "Detected in this document ({count})";
+      "detectingMatches": "Detecting entities in this document…";
       "emptyState": "No workspace-specific terms yet. Add one above.";
       "ignoreAction": "Ignore in this document";
       "ignoreScopeAlways": "Always ignore";

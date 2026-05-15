@@ -1095,6 +1095,7 @@
       "contextMenuAddAction": "Anonymize selection",
       "deleteAction": "Delete term",
       "detectedHeading": "Wykryto w tym dokumencie ({count})",
+      "detectingMatches": "Detecting entities in this document…",
       "emptyState": "No workspace-specific terms yet. Add one above.",
       "ignoreAction": "Ignoruj w tym dokumencie",
       "ignoreScopeAlways": "Zawsze ignoruj",

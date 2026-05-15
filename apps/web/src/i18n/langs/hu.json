@@ -1095,6 +1095,7 @@
       "contextMenuAddAction": "Anonymize selection",
       "deleteAction": "Delete term",
       "detectedHeading": "Talált a dokumentumban ({count})",
+      "detectingMatches": "Detecting entities in this document…",
       "emptyState": "No workspace-specific terms yet. Add one above.",
       "ignoreAction": "Mellőzés ebben a dokumentumban",
       "ignoreScopeAlways": "Mindig mellőzni",

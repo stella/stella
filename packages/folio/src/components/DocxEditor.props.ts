@@ -55,6 +55,21 @@ export type DocxEditorProps = {
   onChange?: (document: Document) => void;
   /** Callback when selection changes */
   onSelectionChange?: (state: SelectionState | null) => void;
+  /**
+   * Callback fired with the resolved PM positions and the
+   * selected plain text on every selection-bearing
+   * transaction. Useful for consumers (e.g. the inspector
+   * "Term to anonymize" prefill) that want the selected
+   * phrase without holding a reference to the editor view.
+   * Atom inline nodes (tab, hard_break) collapse to a
+   * single space in the returned text. Empty string when
+   * the selection is collapsed.
+   */
+  onSelectionTextChange?: (selection: {
+    from: number;
+    to: number;
+    text: string;
+  }) => void;
   /** Callback on error */
   onError?: (error: Error) => void;
   /** Callback when fonts are loaded */
