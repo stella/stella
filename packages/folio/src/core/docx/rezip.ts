@@ -131,8 +131,14 @@ async function serializeCommentsToZip(
   zip: JSZip,
   compressionLevel: number,
 ): Promise<void> {
-  const comments = doc.package.document.comments;
-  if (!comments || comments.length === 0) {
+  const comments = doc.package.document.comments ?? [];
+  // Whether the source DOCX already had a `word/comments.xml`. If it did
+  // and we now have zero comments (e.g., the user deleted the only
+  // anchored thread), we MUST overwrite with an empty <w:comments/>
+  // — otherwise the previous file is copied through the rezip baseline
+  // and the saved DOCX still surfaces the now-phantom threads.
+  const hadCommentsFile = zip.file("word/comments.xml") !== null;
+  if (comments.length === 0 && !hadCommentsFile) {
     return;
   }
 
