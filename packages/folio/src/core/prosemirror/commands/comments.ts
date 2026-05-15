@@ -346,38 +346,27 @@ function expandTrackedChangeRange(
   fromHint: number,
   toHint: number,
 ): { from: number; to: number } {
-  // Walk left from `from` and right from `to`, hopping across adjacent
-  // text nodes whose mark set contains the same insertion/deletion
-  // instance. PM's `nodesBetween` visits siblings in tree order; we use
-  // it in a fixed-point loop so the range stabilises across multi-node
-  // expansions. Box-mutate `range` so the visitor (declared once,
-  // outside the loop) can update it in place.
-  const range = { from: fromHint, to: toHint, extended: true };
-  const visitor = (
-    child: import("prosemirror-model").Node,
-    pos: number,
-  ): void => {
-    if (!child.isText) {
-      return;
-    }
-    const childEnd = pos + child.nodeSize;
-    if (!child.marks.some((m) => m.eq(mark))) {
-      return;
-    }
-    if (childEnd === range.from) {
-      range.from = pos;
-      range.extended = true;
-    }
-    if (pos === range.to) {
-      range.to = childEnd;
-      range.extended = true;
-    }
-  };
-  while (range.extended) {
-    range.extended = false;
-    state.doc.nodesBetween(Math.max(0, range.from - 1), range.to + 1, visitor);
+  // Resolve the boundary positions and hop outward through `nodeBefore`
+  // / `nodeAfter` while the neighbouring text node still carries the
+  // same mark instance. O(K) in the number of text nodes that make up
+  // the span — `nodesBetween`-based fixed-point expansion is O(K²) and
+  // re-walks the same subtree on every iteration.
+  let from = fromHint;
+  let to = toHint;
+  let $from = state.doc.resolve(from);
+  while (
+    $from.nodeBefore?.isText &&
+    $from.nodeBefore.marks.some((m) => m.eq(mark))
+  ) {
+    from -= $from.nodeBefore.nodeSize;
+    $from = state.doc.resolve(from);
   }
-  return { from: range.from, to: range.to };
+  let $to = state.doc.resolve(to);
+  while ($to.nodeAfter?.isText && $to.nodeAfter.marks.some((m) => m.eq(mark))) {
+    to += $to.nodeAfter.nodeSize;
+    $to = state.doc.resolve(to);
+  }
+  return { from, to };
 }
 
 /**
@@ -410,6 +399,12 @@ export function findNextChange(
 
     for (const mark of node.marks) {
       if (mark.type === insertionType || mark.type === deletionType) {
+        // Return the FULL expanded range, even when `startPos` lands
+        // inside the matched span. A toolbar that does
+        // `findNextChange(state, selectionEnd)` and then accepts the
+        // returned range must see the whole revision — clamping `from`
+        // up to `startPos` truncates the earlier portion of the same
+        // change and leaves orphaned marks behind after accept.
         const expanded = expandTrackedChangeRange(
           state,
           mark,
@@ -417,7 +412,7 @@ export function findNextChange(
           pos + node.nodeSize,
         );
         result.value = {
-          from: Math.max(expanded.from, startPos),
+          from: expanded.from,
           to: expanded.to,
           type: mark.type === insertionType ? "insertion" : "deletion",
         };
@@ -458,6 +453,13 @@ export function findPreviousChange(
     }
     if (pos >= startPos) {
       return false;
+    }
+    // The forward walk would otherwise re-expand the same span once per
+    // text node inside it. Skip nodes already covered by the most
+    // recent kept result — the previous expansion already included
+    // them, and expansion is idempotent.
+    if (result.value && pos < result.value.to) {
+      return;
     }
 
     for (const mark of node.marks) {

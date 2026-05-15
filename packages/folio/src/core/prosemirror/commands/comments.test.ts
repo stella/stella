@@ -211,4 +211,19 @@ describe("tracked change navigation", () => {
       type: "insertion",
     });
   });
+
+  test("findNextChange returns the full range when startPos sits inside a multi-node change", () => {
+    // The toolbar calls `findNextChange(state, selectionEnd)` and then
+    // accepts/rejects the returned range. If `startPos` lands inside
+    // an existing tracked change, returning a range clamped to
+    // `startPos` truncates the earlier portion of the same revision
+    // and leaves orphan marks after accept. Return the full expanded
+    // range — including positions BEFORE `startPos`.
+    const state = makeMultiNodeSameRevisionState();
+    expect(findNextChange(state, 8)).toMatchObject({
+      from: 6,
+      to: 15,
+      type: "insertion",
+    });
+  });
 });
