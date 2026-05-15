@@ -102,7 +102,9 @@ export function serializeComments(comments: Comment[]): string {
   const topLevel: Comment[] = [];
   const replies: Comment[] = [];
   for (const c of comments) {
-    (c.parentId === undefined ? topLevel : replies).push(c);
+    const comment: { parentId?: number | null } = c;
+    const { parentId } = comment;
+    (parentId === null || parentId === undefined ? topLevel : replies).push(c);
   }
 
   let xml =

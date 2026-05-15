@@ -272,6 +272,7 @@ function paragraphAttrsToFormatting(
 
   // Fallback: reconstruct formatting from individual attrs (e.g. for
   // newly created paragraphs that don't have _originalFormatting)
+  const outlineLevel = Reflect.get(attrs, "outlineLevel");
   const hasFormatting =
     attrs.alignment ||
     attrs.spaceBefore ||
@@ -285,7 +286,7 @@ function paragraphAttrsToFormatting(
     attrs.borders ||
     attrs.shading ||
     attrs.tabs ||
-    attrs.outlineLevel !== undefined ||
+    typeof outlineLevel === "number" ||
     attrs.contextualSpacing ||
     attrs.spacingExplicit ||
     attrs.bidi;
@@ -340,8 +341,8 @@ function paragraphAttrsToFormatting(
   if (attrs.tabs) {
     f.tabs = attrs.tabs;
   }
-  if (attrs.outlineLevel !== undefined) {
-    f.outlineLevel = attrs.outlineLevel;
+  if (typeof outlineLevel === "number") {
+    f.outlineLevel = outlineLevel;
   }
   if (attrs.contextualSpacing) {
     f.contextualSpacing = attrs.contextualSpacing;
@@ -1426,13 +1427,21 @@ function tableAttrsToFormatting(
       }
     }
     // Width: check if changed
+    const tableWidth = Reflect.get(attrs, "width");
+    const tableWidthType = Reflect.get(attrs, "widthType");
     const origWidthVal = orig.width?.value;
     const origWidthType = orig.width?.type;
-    if (attrs.width !== origWidthVal || attrs.widthType !== origWidthType) {
-      if (attrs.widthType) {
+    if (tableWidth !== origWidthVal || tableWidthType !== origWidthType) {
+      if (
+        typeof tableWidth === "number" ||
+        typeof tableWidthType === "string"
+      ) {
         result.width = {
-          value: attrs.width ?? 0,
-          type: attrs.widthType as "auto" | "dxa" | "pct" | "nil",
+          value: typeof tableWidth === "number" ? tableWidth : 0,
+          type:
+            typeof tableWidthType === "string"
+              ? (tableWidthType as "auto" | "dxa" | "pct" | "nil")
+              : "dxa",
         };
       } else {
         delete result.width;
@@ -1448,10 +1457,12 @@ function tableAttrsToFormatting(
 
   // Fallback: reconstruct formatting from individual attrs (e.g. for
   // newly created tables that don't have _originalFormatting)
+  const tableWidth = Reflect.get(attrs, "width");
+  const tableWidthType = Reflect.get(attrs, "widthType");
   const hasFormatting =
     attrs.styleId ||
-    attrs.width !== undefined ||
-    attrs.widthType ||
+    typeof tableWidth === "number" ||
+    typeof tableWidthType === "string" ||
     attrs.justification ||
     attrs.floating ||
     attrs.cellMargins ||
@@ -1468,10 +1479,13 @@ function tableAttrsToFormatting(
 
   // Restore width — handle width=0 with type="auto" (common OOXML pattern)
   let width: TableFormatting["width"];
-  if (attrs.widthType) {
+  if (typeof tableWidth === "number" || typeof tableWidthType === "string") {
     width = {
-      value: attrs.width ?? 0,
-      type: attrs.widthType as "auto" | "dxa" | "pct" | "nil",
+      value: typeof tableWidth === "number" ? tableWidth : 0,
+      type:
+        typeof tableWidthType === "string"
+          ? (tableWidthType as "auto" | "dxa" | "pct" | "nil")
+          : "dxa",
     };
   }
 
@@ -1633,9 +1647,13 @@ function tableCellAttrsToFormatting(
     const cellWidth = Reflect.get(attrs, "width");
     // Width: keep null absent while preserving explicit width=0 values.
     if (typeof cellWidth === "number") {
+      const cellWidthType = Reflect.get(attrs, "widthType");
       result.width = {
         value: cellWidth,
-        type: attrs.widthType as "auto" | "dxa" | "pct" | "nil",
+        type:
+          typeof cellWidthType === "string"
+            ? (cellWidthType as "auto" | "dxa" | "pct" | "nil")
+            : "dxa",
       };
     }
     if (attrs.verticalAlign !== (orig.verticalAlign ?? undefined)) {
@@ -1673,10 +1691,11 @@ function tableCellAttrsToFormatting(
   }
 
   // Fallback: reconstruct formatting from individual attrs
+  const cellWidth = Reflect.get(attrs, "width");
   const hasFormatting =
     attrs.colspan > 1 ||
     attrs.rowspan > 1 ||
-    attrs.width !== undefined ||
+    typeof cellWidth === "number" ||
     attrs.verticalAlign ||
     attrs.backgroundColor ||
     attrs.borders ||
@@ -1691,10 +1710,14 @@ function tableCellAttrsToFormatting(
   if (attrs.colspan > 1) {
     f.gridSpan = attrs.colspan;
   }
-  if (attrs.width !== undefined) {
+  if (typeof cellWidth === "number") {
+    const cellWidthType = Reflect.get(attrs, "widthType");
     f.width = {
-      value: attrs.width ?? 0,
-      type: attrs.widthType as "auto" | "dxa" | "pct" | "nil",
+      value: cellWidth,
+      type:
+        typeof cellWidthType === "string"
+          ? (cellWidthType as "auto" | "dxa" | "pct" | "nil")
+          : "dxa",
     };
   }
   if (attrs.verticalAlign) {

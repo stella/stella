@@ -1214,9 +1214,10 @@ function parseTableCellProperties(
  * Parse a single style element (w:style)
  */
 function parseStyle(styleEl: XmlElement, theme: Theme | null): Style {
+  const rawType = getAttribute(styleEl, "w", "type");
   const style: Style = {
     styleId: getAttribute(styleEl, "w", "styleId") ?? "",
-    type: getAttribute(styleEl, "w", "type") as StyleType,
+    type: rawType === null ? "paragraph" : (rawType as StyleType),
   };
 
   // Default flag

@@ -639,7 +639,10 @@ function hasDirectRunFormatting(
     return false;
   }
 
-  return Object.keys(formatting).some((key) => key !== "styleId");
+  const entries: [string, unknown][] = Object.entries(formatting);
+  return entries.some(
+    ([key, value]) => key !== "styleId" && value !== undefined,
+  );
 }
 
 function resolveTextFormatting(
@@ -1608,6 +1611,8 @@ function convertRunContent(
  *    - TopAndBottom: image on its own line, text above/below only
  *    - None/Behind/InFront: positioned image, no text wrap
  */
+type PartialImagePosition = Partial<NonNullable<Image["position"]>>;
+
 function convertImage(image: Image): PMNode {
   // Convert EMU to pixels for proper sizing
   const widthPx = image.size.width ? emuToPixels(image.size.width) : undefined;
@@ -1618,7 +1623,8 @@ function convertImage(image: Image): PMNode {
   // Determine wrap type and float direction
   const wrapType = image.wrap.type;
   const wrapText = image.wrap.wrapText;
-  const hAlign = image.position?.horizontal.alignment;
+  const imagePosition: PartialImagePosition | undefined = image.position;
+  const hAlign = imagePosition?.horizontal?.alignment;
 
   // Determine CSS float based on wrap settings
   // In DOCX: wrapText='left' means "text flows on the left" → image is on right → float: right
@@ -1716,29 +1722,33 @@ function convertImage(image: Image): PMNode {
         vertical?: { relativeTo?: string; posOffset?: number; align?: string };
       }
     | undefined;
-  if (image.position) {
+  if (imagePosition) {
     position = {};
-    const h: { relativeTo?: string; posOffset?: number; align?: string } = {
-      relativeTo: image.position.horizontal.relativeTo,
-    };
-    if (image.position.horizontal.posOffset !== undefined) {
-      h.posOffset = image.position.horizontal.posOffset;
+    if (imagePosition.horizontal) {
+      const h: { relativeTo?: string; posOffset?: number; align?: string } = {
+        relativeTo: imagePosition.horizontal.relativeTo,
+      };
+      if (imagePosition.horizontal.posOffset !== undefined) {
+        h.posOffset = imagePosition.horizontal.posOffset;
+      }
+      if (imagePosition.horizontal.alignment) {
+        h.align = imagePosition.horizontal.alignment;
+      }
+      position.horizontal = h;
     }
-    if (image.position.horizontal.alignment) {
-      h.align = image.position.horizontal.alignment;
-    }
-    position.horizontal = h;
 
-    const v: { relativeTo?: string; posOffset?: number; align?: string } = {
-      relativeTo: image.position.vertical.relativeTo,
-    };
-    if (image.position.vertical.posOffset !== undefined) {
-      v.posOffset = image.position.vertical.posOffset;
+    if (imagePosition.vertical) {
+      const v: { relativeTo?: string; posOffset?: number; align?: string } = {
+        relativeTo: imagePosition.vertical.relativeTo,
+      };
+      if (imagePosition.vertical.posOffset !== undefined) {
+        v.posOffset = imagePosition.vertical.posOffset;
+      }
+      if (imagePosition.vertical.alignment) {
+        v.align = imagePosition.vertical.alignment;
+      }
+      position.vertical = v;
     }
-    if (image.position.vertical.alignment) {
-      v.align = image.position.vertical.alignment;
-    }
-    position.vertical = v;
   }
 
   // Convert outline to border attrs
@@ -2006,6 +2016,7 @@ function textFormattingToMarks(
 function convertShape(shape: Shape): PMNode {
   const widthPx = shape.size.width ? emuToPixels(shape.size.width) : 100;
   const heightPx = shape.size.height ? emuToPixels(shape.size.height) : 80;
+  const shapeAttrs: { shapeType?: Shape["shapeType"] } = shape;
 
   let fillColor: string | undefined;
   let fillType: string = "solid";
@@ -2064,7 +2075,7 @@ function convertShape(shape: Shape): PMNode {
   }
 
   return schema.node("shape", {
-    shapeType: shape.shapeType,
+    shapeType: shapeAttrs.shapeType ?? "rect",
     shapeId: shape.id,
     width: widthPx,
     height: heightPx,
