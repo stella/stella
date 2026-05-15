@@ -7,6 +7,10 @@ import {
 } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 
+import {
+  DEFAULT_PAGE_GAP,
+  VIEWPORT_PADDING_TOP,
+} from "../../paged-editor/PagedEditor";
 import type { PagedEditorRef } from "../../paged-editor/PagedEditor";
 import type { ScrollPageInfo } from "../scrollPageInfo";
 import type { ViewportCenterZoomAnchor } from "../zoomScrollAnchor";
@@ -16,8 +20,6 @@ import {
 } from "../zoomScrollAnchor";
 
 const PAGE_INFO_FADE_MS = 600;
-const PAGE_GAP = 24;
-const PAGES_PADDING_TOP = 24;
 
 export type UseZoomAndPageInfoArgs = {
   scrollContainerRef: RefObject<HTMLDivElement | null>;
@@ -82,7 +84,7 @@ export function useZoomAndPageInfo({
       const viewportCenter =
         scaledViewportCenter / Math.max(zoomRef.current, Number.EPSILON);
 
-      let accumulatedY = PAGES_PADDING_TOP;
+      let accumulatedY = VIEWPORT_PADDING_TOP;
       let currentPage = 1;
       for (let i = 0; i < layout.pages.length; i++) {
         // SAFETY: i is bounded by layout.pages.length
@@ -92,7 +94,7 @@ export function useZoomAndPageInfo({
           currentPage = i + 1;
           break;
         }
-        accumulatedY = pageEnd + PAGE_GAP;
+        accumulatedY = pageEnd + DEFAULT_PAGE_GAP;
         currentPage = i + 2;
       }
       currentPage = Math.min(currentPage, totalPages);
@@ -155,8 +157,12 @@ export function useZoomAndPageInfo({
     scrollContainerRef,
   ]);
 
-  // Scroll-driven page indicator: re-attaches when the scroll container
-  // mounts (after loading completes).
+  // Scroll-driven page indicator. The scroll container is mounted by the
+  // child PagedEditor once the document has loaded, so the ref starts as null
+  // and becomes non-null on a later render. We read `ref.current` into a
+  // render-scoped const so it lands in the effect's dep array — that makes
+  // the effect re-fire (and attach the listener) when the container finally
+  // mounts. The container element is not expected to swap after that.
   const scrollContainerEl = scrollContainerRef.current;
   useEffect(() => {
     if (!scrollContainerEl) {

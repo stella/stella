@@ -292,7 +292,7 @@ const DEFAULT_MARGINS: PageMargins = {
   left: 96,
 };
 
-const DEFAULT_PAGE_GAP = 24;
+export const DEFAULT_PAGE_GAP = 24;
 const COMMENTS_SIDEBAR_SCROLL_GUTTER = 304;
 
 /** Distance in px from a row/column boundary that triggers the insert button */
@@ -321,7 +321,7 @@ const containerStyles: CSSProperties = {
 };
 
 /** Padding above page content in the viewport div. */
-const VIEWPORT_PADDING_TOP = 24;
+export const VIEWPORT_PADDING_TOP = 24;
 
 const viewportStyles: CSSProperties = {
   position: "relative",
