@@ -158,7 +158,9 @@ type ScopedPipelineConfig = PipelineConfig & {
   nameCorpusLanguages?: string[];
 };
 
-const normalizeLocaleLanguage = (locale: string | undefined): string | null => {
+export const normalizeChatAnonLocaleLanguage = (
+  locale: string | undefined,
+): string | null => {
   const [languagePart] = locale?.split(/[-_]/u) ?? [];
   const language = languagePart?.trim().toLowerCase();
   return language && /^[a-z]{2}$/u.test(language) ? language : null;
@@ -173,7 +175,7 @@ export const buildChatAnonPipelineConfig = ({
   locale?: string | undefined;
   workspaceId: string;
 }): ScopedPipelineConfig => {
-  const nameCorpusLanguage = normalizeLocaleLanguage(locale);
+  const nameCorpusLanguage = normalizeChatAnonLocaleLanguage(locale);
   const config: ScopedPipelineConfig = {
     threshold: 0.4,
     enableTriggerPhrases: true,

@@ -1,8 +1,10 @@
+import { normalizeChatAnonLocaleLanguage } from "@stll/anonymize-chat";
 import type { PipelineConfig, PipelineContext } from "@stll/anonymize-wasm";
 
 import { PDF_MIME_TYPE } from "@/consts";
 import { DEFAULT_ENTITY_LABELS } from "@/lib/anonymize/constants";
 import { extractPDFText } from "@/lib/anonymize/pdf-coords";
+import { createPipelineContextRunner } from "@/lib/anonymize/pipeline-context";
 import { api } from "@/lib/api";
 import { ClientOperationError } from "@/lib/errors";
 import {
@@ -20,11 +22,9 @@ const buildPipelineConfig = (
   workspaceId: string,
   labels: readonly string[],
 ): PipelineConfig => {
-  const nameCorpusLanguage = navigator.language
-    .split(/[-_]/u)
-    .at(0)
-    ?.trim()
-    .toLowerCase();
+  const nameCorpusLanguage = normalizeChatAnonLocaleLanguage(
+    navigator.language,
+  );
 
   const config: PipelineConfig = {
     threshold: 0.4,
@@ -40,7 +40,7 @@ const buildPipelineConfig = (
     labels: [...labels],
     workspaceId,
   };
-  if (nameCorpusLanguage && /^[a-z]{2}$/u.test(nameCorpusLanguage)) {
+  if (nameCorpusLanguage !== null) {
     config.nameCorpusLanguages = [nameCorpusLanguage];
   }
   return config;
@@ -51,18 +51,7 @@ let dictionariesPromise: Promise<
   NonNullable<PipelineConfig["dictionaries"]>
 > | null = null;
 let pipelineContext: PipelineContext | null = null;
-let pipelineQueue: Promise<void> = Promise.resolve();
-
-const runWithPipelineContext = async <T>(
-  task: () => Promise<T>,
-): Promise<T> => {
-  const run = pipelineQueue.then(task, task);
-  pipelineQueue = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  return await run;
-};
+const runWithPipelineContext = createPipelineContextRunner();
 
 export const anonymizePdf = async ({
   workspaceId,

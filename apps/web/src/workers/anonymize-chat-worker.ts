@@ -6,6 +6,8 @@ import { loadNameDictionaries } from "@stll/anonymize-data";
 import * as anonymizeRuntime from "@stll/anonymize-wasm";
 import type { GazetteerEntry, PipelineConfig } from "@stll/anonymize-wasm";
 
+import { createPipelineContextRunner } from "@/lib/anonymize/pipeline-context";
+
 /**
  * Off-main-thread runner for the chat-input anonymization
  * pipeline. Loading the wasm module + name dictionaries is heavy
@@ -36,7 +38,7 @@ let dictionariesPromise: Promise<
 > | null = null;
 
 const pipelineContext = anonymizeRuntime.createPipelineContext();
-let pipelineQueue: Promise<void> = Promise.resolve();
+const runWithPipelineContext = createPipelineContextRunner();
 
 // eslint-disable-next-line @typescript-eslint/promise-function-async -- lazy init returns the cached promise without awaiting
 const getDictionaries = (): Promise<
@@ -47,17 +49,6 @@ const getDictionaries = (): Promise<
 };
 
 const defaultLocale = globalThis.navigator.language;
-
-const runWithPipelineContext = async <T>(
-  task: () => Promise<T>,
-): Promise<T> => {
-  const run = pipelineQueue.then(task, task);
-  pipelineQueue = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  return await run;
-};
 
 const handle = async (request: AnonRequest): Promise<AnonResponse> => {
   const {

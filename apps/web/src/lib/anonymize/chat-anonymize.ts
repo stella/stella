@@ -6,6 +6,8 @@ import type {
   PipelineContext,
 } from "@stll/anonymize-wasm";
 
+import { createPipelineContextRunner } from "@/lib/anonymize/pipeline-context";
+
 export type { ChatAnonPair, ChatAnonResult } from "@stll/anonymize-chat";
 
 // Dictionaries are large but idempotent and HTTP-cached. Hold a
@@ -15,7 +17,7 @@ let dictionariesPromise: Promise<
   NonNullable<PipelineConfig["dictionaries"]>
 > | null = null;
 let pipelineContextPromise: Promise<PipelineContext> | null = null;
-let pipelineQueue: Promise<void> = Promise.resolve();
+const runWithPipelineContext = createPipelineContextRunner();
 
 // eslint-disable-next-line @typescript-eslint/promise-function-async -- lazy init returns the cached promise without awaiting
 const getDictionaries = (): Promise<
@@ -34,17 +36,6 @@ const getPipelineContext = async () => {
     return wasm.createPipelineContext();
   })();
   return await pipelineContextPromise;
-};
-
-const runWithPipelineContext = async <T>(
-  task: () => Promise<T>,
-): Promise<T> => {
-  const run = pipelineQueue.then(task, task);
-  pipelineQueue = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  return await run;
 };
 
 /**
