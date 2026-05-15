@@ -132,7 +132,7 @@ describe("buildSelectionFormatting", () => {
     });
   });
 
-  test("copies the paragraph styleId only when it is a non-empty string", () => {
+  test("copies the paragraph styleId for any non-null source value", () => {
     expect(
       buildSelectionFormatting({
         selectionState: makeSelection({}, {}, "Heading1"),
@@ -142,6 +142,18 @@ describe("buildSelectionFormatting", () => {
         listState: undefined,
       }).styleId,
     ).toBe("Heading1");
+    // Empty string is technically permitted by `SelectionState.styleId`
+    // (`string | null`) and must be passed through — only `null` means
+    // "no paragraph style".
+    expect(
+      buildSelectionFormatting({
+        selectionState: makeSelection({}, {}, ""),
+        fontFamily: undefined,
+        fontSize: undefined,
+        textColor: undefined,
+        listState: undefined,
+      }).styleId,
+    ).toBe("");
     // `null` styleId must not appear on the result.
     expect(
       "styleId" in

@@ -89,7 +89,11 @@ export function buildSelectionFormatting({
   if (listState !== undefined) {
     formatting.listState = listState;
   }
-  if (selectionState.styleId) {
+  // `styleId` is `string | null`. `if (selectionState.styleId)` would also
+  // skip an empty-string id, which OOXML does not produce but the type
+  // technically permits — narrow to "not null" so the only excluded value
+  // is the genuine "no paragraph style" sentinel.
+  if (selectionState.styleId !== null) {
     formatting.styleId = selectionState.styleId;
   }
   if (paragraphFormatting.indentLeft !== undefined) {
