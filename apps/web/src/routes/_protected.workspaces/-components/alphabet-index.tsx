@@ -173,11 +173,17 @@ export const AlphabetIndex = ({
               className={cn(
                 "truncate rounded-full px-2.5 py-1 text-[0.65rem] leading-none font-semibold shadow-sm transition-[max-width,opacity,font-size] duration-150",
                 isHovered ? "max-w-72 text-[0.7rem] opacity-100" : "max-w-52",
-                active
-                  ? isHovered
-                    ? ""
-                    : "opacity-70"
-                  : "pointer-events-none opacity-0 transition-opacity duration-300",
+                (() => {
+                  if (active) {
+                    return (() => {
+                      if (isHovered) {
+                        return "";
+                      }
+                      return "opacity-70";
+                    })();
+                  }
+                  return "pointer-events-none opacity-0 transition-opacity duration-300";
+                })(),
               )}
               style={{
                 backgroundColor: isHovered
@@ -196,9 +202,33 @@ export const AlphabetIndex = ({
                 backgroundColor: isHovered
                   ? "var(--color-primary)"
                   : "var(--color-muted-foreground)",
-                width: isHovered ? "16px" : active ? "12px" : "8px",
-                height: isHovered ? "6px" : active ? "5px" : "4px",
-                opacity: isHovered ? 1 : active ? 0.9 : 0.5,
+                width: (() => {
+                  if (isHovered) {
+                    return "16px";
+                  }
+                  if (active) {
+                    return "12px";
+                  }
+                  return "8px";
+                })(),
+                height: (() => {
+                  if (isHovered) {
+                    return "6px";
+                  }
+                  if (active) {
+                    return "5px";
+                  }
+                  return "4px";
+                })(),
+                opacity: (() => {
+                  if (isHovered) {
+                    return 1;
+                  }
+                  if (active) {
+                    return 0.9;
+                  }
+                  return 0.5;
+                })(),
               }}
             />
           </button>

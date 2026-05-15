@@ -975,17 +975,23 @@ export function AppSidebar(props: AppSidebarProps) {
                     <span>{t("common.matters")}</span>
                   </Link>
                 </SidebarMenuButton>
-                {showNavBadges ? (
-                  <NavBadge digit={3} />
-                ) : canCreateMatter ? (
-                  <SidebarMenuAction
-                    onClick={handleCreateWorkspace}
-                    showOnHover
-                    title={t("navigation.newMatter")}
-                  >
-                    <PlusIcon />
-                  </SidebarMenuAction>
-                ) : null}
+                {(() => {
+                  if (showNavBadges) {
+                    return <NavBadge digit={3} />;
+                  }
+                  if (canCreateMatter) {
+                    return (
+                      <SidebarMenuAction
+                        onClick={handleCreateWorkspace}
+                        showOnHover
+                        title={t("navigation.newMatter")}
+                      >
+                        <PlusIcon />
+                      </SidebarMenuAction>
+                    );
+                  }
+                  return null;
+                })()}
               </SidebarMenuItem>
             </NavContextMenu>
             <NavContextMenu config={fixedNavTargets[3].contextMenu}>

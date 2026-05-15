@@ -324,12 +324,15 @@ export const TemplatePreview = ({ templateId }: { templateId: string }) => {
         const showDivider =
           hasMultipleSections && source !== undefined && source !== prevSource;
 
-        const sectionLabel =
-          source === "header"
-            ? t("previewSectionHeader")
-            : source === "footer"
-              ? t("previewSectionFooter")
-              : t("previewSectionBody");
+        const sectionLabel = (() => {
+          if (source === "header") {
+            return t("previewSectionHeader");
+          }
+          if (source === "footer") {
+            return t("previewSectionFooter");
+          }
+          return t("previewSectionBody");
+        })();
 
         return (
           <div key={p.index}>

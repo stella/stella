@@ -40,7 +40,15 @@ type HexColorPickerProps = {
 // ---------------------------------------------------------------------------
 
 const clamp = (n: number, min = 0, max = 1): number =>
-  n > max ? max : n < min ? min : n;
+  (() => {
+    if (n > max) {
+      return max;
+    }
+    if (n < min) {
+      return min;
+    }
+    return n;
+  })();
 
 const round = (n: number, digits = 0): number => {
   const base = 10 ** digits;
@@ -75,13 +83,20 @@ const hexToRgba = (hex: string): RgbaColor => {
 const rgbaToHsva = ({ r, g, b, a }: RgbaColor): HsvaColor => {
   const max = Math.max(r, g, b);
   const delta = max - Math.min(r, g, b);
-  const hh = delta
-    ? max === r
-      ? (g - b) / delta
-      : max === g
-        ? 2 + (b - r) / delta
-        : 4 + (r - g) / delta
-    : 0;
+  const hh = (() => {
+    if (delta) {
+      return (() => {
+        if (max === r) {
+          return (g - b) / delta;
+        }
+        if (max === g) {
+          return 2 + (b - r) / delta;
+        }
+        return 4 + (r - g) / delta;
+      })();
+    }
+    return 0;
+  })();
 
   return {
     h: round(60 * (hh < 0 ? hh + 6 : hh)),
@@ -130,9 +145,12 @@ const hsvaToHsla = ({ h, s, v, a }: HsvaColor) => {
   return {
     h: round(h),
     s: round(
-      hh > 0 && hh < 200
-        ? ((s * v) / 100 / (hh <= 100 ? hh : 200 - hh)) * 100
-        : 0,
+      (() => {
+        if (hh > 0 && hh < 200) {
+          return ((s * v) / 100 / (hh <= 100 ? hh : 200 - hh)) * 100;
+        }
+        return 0;
+      })(),
     ),
     l: round(hh / 2),
     a: round(a, 2),
@@ -346,8 +364,24 @@ const InteractiveArea = ({
     }
     e.preventDefault();
     onKeyRef({
-      left: key === "ArrowRight" ? 0.05 : key === "ArrowLeft" ? -0.05 : 0,
-      top: key === "ArrowDown" ? 0.05 : key === "ArrowUp" ? -0.05 : 0,
+      left: (() => {
+        if (key === "ArrowRight") {
+          return 0.05;
+        }
+        if (key === "ArrowLeft") {
+          return -0.05;
+        }
+        return 0;
+      })(),
+      top: (() => {
+        if (key === "ArrowDown") {
+          return 0.05;
+        }
+        if (key === "ArrowUp") {
+          return -0.05;
+        }
+        return 0;
+      })(),
     });
   };
 

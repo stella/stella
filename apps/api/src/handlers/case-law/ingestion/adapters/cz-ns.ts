@@ -93,11 +93,15 @@ const isDominoViewResponse = (value: unknown): value is DominoViewResponse =>
 const normalizeViewEntries = (
   viewentry: DominoViewResponse["viewentry"],
 ): DominoViewEntry[] =>
-  viewentry === undefined || viewentry === null
-    ? []
-    : Array.isArray(viewentry)
-      ? viewentry
-      : [viewentry];
+  (() => {
+    if (viewentry === undefined || viewentry === null) {
+      return [];
+    }
+    if (Array.isArray(viewentry)) {
+      return viewentry;
+    }
+    return [viewentry];
+  })();
 
 /** Extract a named field from Domino entrydata. */
 const entryField = (

@@ -266,10 +266,12 @@ export const createPagePaginatedFetch = <TResponse>(
             } catch (retryParseError) {
               const retryContentType =
                 retryResponse.headers.get("content-type") ?? "unknown";
-              const detail =
-                retryParseError instanceof SyntaxError
-                  ? `unparseable (content-type: ${retryContentType})`
-                  : `validation failed: ${retryParseError instanceof Error ? retryParseError.message : String(retryParseError)}`;
+              const detail = (() => {
+                if (retryParseError instanceof SyntaxError) {
+                  return `unparseable (content-type: ${retryContentType})`;
+                }
+                return `validation failed: ${retryParseError instanceof Error ? retryParseError.message : String(retryParseError)}`;
+              })();
               throw new AdapterFetchError({
                 message: `${opts.adapterKey}: page ${page} retry ${detail}`,
                 adapterKey: opts.adapterKey,
@@ -356,15 +358,20 @@ export const createPagePaginatedFetch = <TResponse>(
         // re-processing the already consumed page tail.
         // When exhausted with zero results (overshot past end),
         // step back so the cursor recovers into the valid range.
-        const nextCursor = signal?.aborted
-          ? encodeOffsetCursor(offset + processedThroughIndex)
-          : hasMore
-            ? encodeOffsetCursor(fetched)
-            : fetchedItems.length > 0
-              ? encodeOffsetCursor(offset + items.length)
-              : encodeOffsetCursor(
-                  Math.max(0, pageStartOffset - opts.pageSize),
-                );
+        const nextCursor = (() => {
+          if (signal?.aborted) {
+            return encodeOffsetCursor(offset + processedThroughIndex);
+          }
+          if (hasMore) {
+            return encodeOffsetCursor(fetched);
+          }
+          if (fetchedItems.length > 0) {
+            return encodeOffsetCursor(offset + items.length);
+          }
+          return encodeOffsetCursor(
+            Math.max(0, pageStartOffset - opts.pageSize),
+          );
+        })();
 
         return { decisions, nextCursor };
       },

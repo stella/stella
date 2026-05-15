@@ -237,12 +237,15 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
     ).webkitTextFillColor = "transparent";
   }
   if (run.emphasisMark) {
-    const variant =
-      run.emphasisMark === "comma"
-        ? "filled sesame"
-        : run.emphasisMark === "circle"
-          ? "filled circle"
-          : "filled dot";
+    const variant = (() => {
+      if (run.emphasisMark === "comma") {
+        return "filled sesame";
+      }
+      if (run.emphasisMark === "circle") {
+        return "filled circle";
+      }
+      return "filled dot";
+    })();
     const position =
       run.emphasisMark === "underDot" ? "under right" : "over right";
     element.style.textEmphasis = variant;
@@ -1551,11 +1554,15 @@ export function renderParagraphFragment(
         indent?.hanging !== undefined && indent.hanging > 0;
       const markerHasFirstLine =
         indent?.firstLine !== undefined && indent.firstLine > 0;
-      const markerPos = markerHasHanging
-        ? Math.max(0, indentLeft - (indent?.hanging ?? 0))
-        : markerHasFirstLine
-          ? indentLeft + (indent?.firstLine ?? 0)
-          : indentLeft;
+      const markerPos = (() => {
+        if (markerHasHanging) {
+          return Math.max(0, indentLeft - (indent?.hanging ?? 0));
+        }
+        if (markerHasFirstLine) {
+          return indentLeft + (indent?.firstLine ?? 0);
+        }
+        return indentLeft;
+      })();
       lineEl.style.paddingLeft = `${markerPos}px`;
       lineEl.style.textIndent = "0"; // Don't use textIndent for lists
 

@@ -67,7 +67,15 @@ export const diffClauseBodies = (
       tokenize(newP.text),
     ).map((change) => ({
       text: change.value.join(""),
-      type: change.added ? "added" : change.removed ? "removed" : "equal",
+      type: (() => {
+        if (change.added) {
+          return "added";
+        }
+        if (change.removed) {
+          return "removed";
+        }
+        return "equal";
+      })(),
     }));
 
     result.push({ status: "modified", segments });

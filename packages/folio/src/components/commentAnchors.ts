@@ -26,14 +26,18 @@ export function resolveCommentCreationRange({
   currentRange: CommentMarkRange;
   savedRange: CommentMarkRange | null;
 }): CommentMarkRange | null {
-  const range =
-    capturedRange.from !== capturedRange.to
-      ? capturedRange
-      : currentRange.from !== currentRange.to
-        ? currentRange
-        : savedRange && savedRange.from !== savedRange.to
-          ? savedRange
-          : null;
+  const range = (() => {
+    if (capturedRange.from !== capturedRange.to) {
+      return capturedRange;
+    }
+    if (currentRange.from !== currentRange.to) {
+      return currentRange;
+    }
+    if (savedRange && savedRange.from !== savedRange.to) {
+      return savedRange;
+    }
+    return null;
+  })();
 
   return range ? clampCommentMarkRange(docSize, range) : null;
 }

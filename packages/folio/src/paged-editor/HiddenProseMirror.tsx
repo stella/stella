@@ -158,11 +158,19 @@ function createInitialState(
   externalPlugins: Plugin[] = [],
 ): EditorState {
   const activeSchema = manager?.getSchema() ?? schema;
-  const doc = document
-    ? styles === undefined || styles === null
-      ? toProseDoc(document)
-      : toProseDoc(document, { styles })
-    : createEmptyDoc();
+  const doc = (() => {
+    if (document) {
+      return (() => {
+        if (styles === undefined || styles === null) {
+          return toProseDoc(document);
+        }
+        return toProseDoc(document, {
+          styles,
+        });
+      })();
+    }
+    return createEmptyDoc();
+  })();
 
   // External plugins go first so they can intercept before extension keymaps
   // (e.g. suggestion mode must handle Backspace/Delete before deleteSelection)

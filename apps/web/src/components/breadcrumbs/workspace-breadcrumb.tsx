@@ -200,45 +200,53 @@ export const WorkspaceBreadcrumb = ({
     </>
   );
 
-  const referenceSegment = isEditingRef ? (
-    <Input
-      className={`${breadcrumbInputClassName} w-28 text-sm`}
-      onBlur={handleSaveReference}
-      onChange={(e) => {
-        setRefValue(e.target.value);
-        setRefError("");
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          handleSaveReference();
-        }
-        if (e.key === "Escape") {
-          setIsEditingRef(false);
-          setRefError("");
-        }
-      }}
-      placeholder={t("workspaces.referencePlaceholder")}
-      ref={(el) => {
-        setRefInputEl(el);
-        el?.focus();
-      }}
-      size="sm"
-      unstyled
-      value={refValue}
-    />
-  ) : workspace.reference ? (
-    <button
-      className="text-foreground-muted hover:text-muted-foreground cursor-text text-sm"
-      onClick={() => {
-        setRefValue(workspace.reference ?? "");
-        setRefError("");
-        setIsEditingRef(true);
-      }}
-      type="button"
-    >
-      {workspace.reference}
-    </button>
-  ) : null;
+  const referenceSegment = (() => {
+    if (isEditingRef) {
+      return (
+        <Input
+          className={`${breadcrumbInputClassName} w-28 text-sm`}
+          onBlur={handleSaveReference}
+          onChange={(e) => {
+            setRefValue(e.target.value);
+            setRefError("");
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              handleSaveReference();
+            }
+            if (e.key === "Escape") {
+              setIsEditingRef(false);
+              setRefError("");
+            }
+          }}
+          placeholder={t("workspaces.referencePlaceholder")}
+          ref={(el) => {
+            setRefInputEl(el);
+            el?.focus();
+          }}
+          size="sm"
+          unstyled
+          value={refValue}
+        />
+      );
+    }
+    if (workspace.reference) {
+      return (
+        <button
+          className="text-foreground-muted hover:text-muted-foreground cursor-text text-sm"
+          onClick={() => {
+            setRefValue(workspace.reference ?? "");
+            setRefError("");
+            setIsEditingRef(true);
+          }}
+          type="button"
+        >
+          {workspace.reference}
+        </button>
+      );
+    }
+    return null;
+  })();
 
   const referenceHint = (
     <MatterNumberHint
@@ -255,86 +263,102 @@ export const WorkspaceBreadcrumb = ({
       <>
         {clientSegment}
         <BreadcrumbItem className="shrink-0">
-          {isEditing ? (
-            <>
-              <span
-                className="flex shrink-0"
+          {(() => {
+            if (isEditing) {
+              return (
+                <>
+                  <span
+                    className="flex shrink-0"
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setColorPickerOpen(true);
+                    }}
+                    ref={setIconAnchor}
+                  >
+                    <LayersIcon
+                      className="size-3.5"
+                      style={{
+                        color: activeColor,
+                      }}
+                    />
+                  </span>
+                  <Input
+                    className={`${matterNameInputClassName} w-fit`}
+                    disabled={updateWorkspace.isPending}
+                    onBlur={() => handleSaveProjectName()}
+                    onChange={(e) => setValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.currentTarget.blur();
+                      }
+                      if (e.key === "Escape") {
+                        escapedNameRef.current = true;
+                        e.currentTarget.blur();
+                      }
+                    }}
+                    autoFocus
+                    size="sm"
+                    unstyled
+                    value={value}
+                  />
+                </>
+              );
+            }
+            return (
+              <Link
+                activeOptions={{
+                  exact: true,
+                  includeSearch: false,
+                }}
+                activeProps={{
+                  className: "text-foreground font-semibold",
+                }}
+                className="hover:text-foreground inline-flex max-w-80 items-center gap-1.5 font-semibold transition-colors"
                 onContextMenu={(e) => {
                   e.preventDefault();
-                  e.stopPropagation();
-                  setColorPickerOpen(true);
+                  startEditingName();
                 }}
-                ref={setIconAnchor}
+                params={{
+                  workspaceId,
+                }}
+                title={displayName}
+                to="/workspaces/$workspaceId"
               >
-                <LayersIcon
-                  className="size-3.5"
-                  style={{ color: activeColor }}
-                />
-              </span>
-              <Input
-                className={`${matterNameInputClassName} w-fit`}
-                disabled={updateWorkspace.isPending}
-                onBlur={() => handleSaveProjectName()}
-                onChange={(e) => setValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.currentTarget.blur();
-                  }
-                  if (e.key === "Escape") {
-                    escapedNameRef.current = true;
-                    e.currentTarget.blur();
-                  }
-                }}
-                autoFocus
-                size="sm"
-                unstyled
-                value={value}
-              />
-            </>
-          ) : (
-            <Link
-              activeOptions={{ exact: true, includeSearch: false }}
-              activeProps={{ className: "text-foreground font-semibold" }}
-              className="hover:text-foreground inline-flex max-w-80 items-center gap-1.5 font-semibold transition-colors"
-              onContextMenu={(e) => {
-                e.preventDefault();
-                startEditingName();
-              }}
-              params={{ workspaceId }}
-              title={displayName}
-              to="/workspaces/$workspaceId"
-            >
-              <span
-                className="flex shrink-0"
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setColorPickerOpen(true);
-                }}
-                ref={setIconAnchor}
-              >
-                <LayersIcon
-                  className="size-3.5"
-                  style={{ color: activeColor }}
-                />
-              </span>
-              <span className="truncate">{displayName}</span>
-              {workspace.reference && !isEditingRef ? (
                 <span
-                  className="text-foreground-muted shrink-0 text-sm"
+                  className="flex shrink-0"
                   onContextMenu={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    setRefValue(workspace.reference ?? "");
-                    setRefError("");
-                    setIsEditingRef(true);
+                    setColorPickerOpen(true);
                   }}
+                  ref={setIconAnchor}
                 >
-                  {workspace.reference}
+                  <LayersIcon
+                    className="size-3.5"
+                    style={{
+                      color: activeColor,
+                    }}
+                  />
                 </span>
-              ) : null}
-            </Link>
-          )}
+                <span className="truncate">{displayName}</span>
+                {workspace.reference && !isEditingRef ? (
+                  <span
+                    className="text-foreground-muted shrink-0 text-sm"
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setRefValue(workspace.reference ?? "");
+                      setRefError("");
+                      setIsEditingRef(true);
+                    }}
+                  >
+                    {workspace.reference}
+                  </span>
+                ) : null}
+              </Link>
+            );
+          })()}
           {isEditingRef ? referenceSegment : null}
           {referenceHint}
         </BreadcrumbItem>

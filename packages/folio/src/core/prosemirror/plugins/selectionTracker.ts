@@ -122,8 +122,15 @@ export function extractSelectionContext(state: EditorState): SelectionContext {
   // List detection
   const numPr = paragraph.attrs?.["numPr"];
   const inList = !!numPr?.numId;
-  const listType =
-    numPr?.numId === 1 ? "bullet" : numPr?.numId ? "numbered" : undefined;
+  const listType = (() => {
+    if (numPr?.numId === 1) {
+      return "bullet";
+    }
+    if (numPr?.numId) {
+      return "numbered";
+    }
+    return undefined;
+  })();
   const listLevel = numPr?.ilvl;
 
   // Comment and tracked change detection

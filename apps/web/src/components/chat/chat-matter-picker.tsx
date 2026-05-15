@@ -161,12 +161,15 @@ export const ChatMatterPicker = ({
 
   const allSelected = matters.length > 0 && selected.length === matters.length;
   const selectedIdSet = useMemo(() => new Set(matterIds), [matterIds]);
-  const triggerLabel =
-    selected.length === 0
-      ? t("inspector.matterPicker.noMatter")
-      : allSelected
-        ? t("inspector.matterPicker.allMatters")
-        : (selected[0]?.name ?? t("inspector.matterPicker.noMatter"));
+  const triggerLabel = (() => {
+    if (selected.length === 0) {
+      return t("inspector.matterPicker.noMatter");
+    }
+    if (allSelected) {
+      return t("inspector.matterPicker.allMatters");
+    }
+    return selected[0]?.name ?? t("inspector.matterPicker.noMatter");
+  })();
   const extraCount =
     !allSelected && selected.length > 1 ? selected.length - 1 : 0;
   const triggerSwatch = selected[0]
@@ -226,15 +229,26 @@ export const ChatMatterPicker = ({
             : triggerLabel
         }
       >
-        {allSelected ? (
-          <MatterStackIcon aria-hidden="true" className="size-3 shrink-0" />
-        ) : (
-          <LayersIcon
-            aria-hidden="true"
-            className="size-3 shrink-0"
-            style={triggerSwatch ? { color: triggerSwatch } : undefined}
-          />
-        )}
+        {(() => {
+          if (allSelected) {
+            return (
+              <MatterStackIcon aria-hidden="true" className="size-3 shrink-0" />
+            );
+          }
+          return (
+            <LayersIcon
+              aria-hidden="true"
+              className="size-3 shrink-0"
+              style={
+                triggerSwatch
+                  ? {
+                      color: triggerSwatch,
+                    }
+                  : undefined
+              }
+            />
+          );
+        })()}
         <span className="truncate">{triggerLabel}</span>
         {extraCount > 0 && (
           <span
@@ -314,18 +328,26 @@ export const ChatMatterPicker = ({
               </span>
             </MenuCheckboxItem>
           )}
-          {workspaces === undefined ? (
-            <div className="text-muted-foreground p-3 text-center text-xs">
-              {t("common.loading")}
-            </div>
-          ) : groups.length === 0 ? (
-            <div className="text-muted-foreground p-3 text-center text-xs">
-              {search.length > 0
-                ? t("inspector.matterPicker.noResults", { query: search })
-                : t("inspector.matterPicker.empty")}
-            </div>
-          ) : (
-            groups.map((group) => (
+          {(() => {
+            if (workspaces === undefined) {
+              return (
+                <div className="text-muted-foreground p-3 text-center text-xs">
+                  {t("common.loading")}
+                </div>
+              );
+            }
+            if (groups.length === 0) {
+              return (
+                <div className="text-muted-foreground p-3 text-center text-xs">
+                  {search.length > 0
+                    ? t("inspector.matterPicker.noResults", {
+                        query: search,
+                      })
+                    : t("inspector.matterPicker.empty")}
+                </div>
+              );
+            }
+            return groups.map((group) => (
               <MenuGroup key={group.key}>
                 <ClientMatterToggle
                   group={group}
@@ -346,7 +368,9 @@ export const ChatMatterPicker = ({
                         <LayersIcon
                           aria-hidden="true"
                           className="size-3.5 shrink-0"
-                          style={{ color: swatch }}
+                          style={{
+                            color: swatch,
+                          }}
                         />
                         <span className="truncate text-xs">{m.name}</span>
                       </span>
@@ -354,8 +378,8 @@ export const ChatMatterPicker = ({
                   );
                 })}
               </MenuGroup>
-            ))
-          )}
+            ));
+          })()}
         </div>
       </MenuPopup>
     </Menu>

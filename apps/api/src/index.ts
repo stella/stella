@@ -190,14 +190,18 @@ const api = new Elysia()
 
     const path = getRequestPath(request);
     const reqCtx = getRequestContext(request);
-    const statusCode =
-      code === "VALIDATION"
-        ? 422
-        : code === "NOT_FOUND"
-          ? 404
-          : code === "PARSE"
-            ? 400
-            : 500;
+    const statusCode = (() => {
+      if (code === "VALIDATION") {
+        return 422;
+      }
+      if (code === "NOT_FOUND") {
+        return 404;
+      }
+      if (code === "PARSE") {
+        return 400;
+      }
+      return 500;
+    })();
 
     if (shouldLogRequest(path)) {
       const attributes = buildRequestLogAttributes({

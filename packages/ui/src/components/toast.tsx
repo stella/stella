@@ -240,13 +240,15 @@ function Toasts({ position }: { position: ToastPosition }) {
               )}
               data-position={position}
               key={toastItem.id}
-              swipeDirection={
-                position.includes("center")
-                  ? [isTop ? "up" : "down"]
-                  : position.includes("left")
-                    ? ["left", isTop ? "up" : "down"]
-                    : ["right", isTop ? "up" : "down"]
-              }
+              swipeDirection={(() => {
+                if (position.includes("center")) {
+                  return [isTop ? "up" : "down"];
+                }
+                if (position.includes("left")) {
+                  return ["left", isTop ? "up" : "down"];
+                }
+                return ["right", isTop ? "up" : "down"];
+              })()}
               toast={toastItem}
             >
               <Toast.Content className="pointer-events-auto flex items-center gap-3 overflow-hidden px-3.5 py-3 text-sm transition-opacity duration-250 select-text data-behind:opacity-0 data-behind:not-data-expanded:pointer-events-none data-expanded:opacity-100">

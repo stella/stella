@@ -853,16 +853,21 @@ function paragraphToRuns(
       // "Exhibit A" / "Section 1.3" in NVCA-style templates) render with no
       // underline. Reuse the same extractor text runs use.
       const ft = child.attrs["fieldType"] as string;
-      const mappedType: FieldRun["fieldType"] =
-        ft === "PAGE"
-          ? "PAGE"
-          : ft === "NUMPAGES"
-            ? "NUMPAGES"
-            : ft === "DATE"
-              ? "DATE"
-              : ft === "TIME"
-                ? "TIME"
-                : "OTHER";
+      const mappedType: FieldRun["fieldType"] = (() => {
+        if (ft === "PAGE") {
+          return "PAGE";
+        }
+        if (ft === "NUMPAGES") {
+          return "NUMPAGES";
+        }
+        if (ft === "DATE") {
+          return "DATE";
+        }
+        if (ft === "TIME") {
+          return "TIME";
+        }
+        return "OTHER";
+      })();
       const fieldFormatting = markDefaultBlackTextColorSource(
         extractRunFormatting(child.marks, theme),
         paraDefaults,

@@ -879,7 +879,15 @@ const buildPracticeJurisdictionLine = (
   }
   const names = new Intl.DisplayNames(["en"], { type: "region" });
   const ordered = [...practiceJurisdictions].sort((a, b) =>
-    a.isPrimary === b.isPrimary ? 0 : a.isPrimary ? -1 : 1,
+    (() => {
+      if (a.isPrimary === b.isPrimary) {
+        return 0;
+      }
+      if (a.isPrimary) {
+        return -1;
+      }
+      return 1;
+    })(),
   );
   const annotatePrimary = ordered.length > 1;
   const formatted = ordered.map((jurisdiction) => {

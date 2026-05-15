@@ -55,11 +55,17 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
   const { organizationId, limit } = query;
 
   const orgFilter = sql`sd.organization_id = ${organizationId}`;
-  const workspaceAccessFilter = query.workspaceIds
-    ? query.workspaceIds.length > 0
-      ? sql`AND sd.workspace_id = ANY(${typedPgArray(query.workspaceIds, "uuid")})`
-      : sql`AND false`
-    : sql`AND sd.workspace_id = ${query.workspaceId}`;
+  const workspaceAccessFilter = (() => {
+    if (query.workspaceIds) {
+      return (() => {
+        if (query.workspaceIds.length > 0) {
+          return sql`AND sd.workspace_id = ANY(${typedPgArray(query.workspaceIds, "uuid")})`;
+        }
+        return sql`AND false`;
+      })();
+    }
+    return sql`AND sd.workspace_id = ${query.workspaceId}`;
+  })();
   const workspaceSelectionFilter =
     query.workspaceIds && query.workspaceId
       ? sql`AND sd.workspace_id = ${query.workspaceId}`

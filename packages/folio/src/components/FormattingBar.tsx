@@ -382,11 +382,17 @@ export function FormattingBar(props: FormattingBarProps) {
                 <span
                   className="mt-[-2px] h-1 w-4 rounded-sm"
                   style={{
-                    backgroundColor: currentFormatting.color
-                      ? currentFormatting.color.startsWith("#")
-                        ? currentFormatting.color
-                        : `#${currentFormatting.color}`
-                      : "#000000",
+                    backgroundColor: (() => {
+                      if (currentFormatting.color) {
+                        return (() => {
+                          if (currentFormatting.color.startsWith("#")) {
+                            return currentFormatting.color;
+                          }
+                          return `#${currentFormatting.color}`;
+                        })();
+                      }
+                      return "#000000";
+                    })(),
                   }}
                 />
               </div>

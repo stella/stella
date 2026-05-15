@@ -194,11 +194,15 @@ const HotkeyHint = ({ hint, setIsVisible }: HotkeyHintProps) => {
         "flex h-auto w-full items-center",
         "justify-between px-2 py-1.5",
         "transition-colors duration-150",
-        isActivated
-          ? "bg-accent text-accent-foreground"
-          : isActive
-            ? "text-foreground"
-            : "text-foreground-disabled",
+        (() => {
+          if (isActivated) {
+            return "bg-accent text-accent-foreground";
+          }
+          if (isActive) {
+            return "text-foreground";
+          }
+          return "text-foreground-disabled";
+        })(),
       )}
       key={hint.hotkey}
       onClick={() => handleActivateHotkey(hint.hotkey)}
@@ -210,11 +214,15 @@ const HotkeyHint = ({ hint, setIsVisible }: HotkeyHintProps) => {
         className={cn(
           "rounded border px-1.5 py-0.5",
           "text-[0.625rem]",
-          isActivated
-            ? "border-border bg-background text-foreground"
-            : isActive
-              ? "border-border bg-muted text-muted-foreground"
-              : "bg-muted/40 text-foreground-disabled border-transparent",
+          (() => {
+            if (isActivated) {
+              return "border-border bg-background text-foreground";
+            }
+            if (isActive) {
+              return "border-border bg-muted text-muted-foreground";
+            }
+            return "bg-muted/40 text-foreground-disabled border-transparent";
+          })(),
         )}
       >
         {formatHintKey(hint.hotkey)}

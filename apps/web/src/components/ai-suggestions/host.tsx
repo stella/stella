@@ -299,11 +299,15 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
     (m) => m.role === "assistant" && m.status === "loading",
   );
 
-  const status: FileAIChatStatus = generating
-    ? "generating"
-    : pendingCount > 0
-      ? "review-ready"
-      : "idle";
+  const status: FileAIChatStatus = (() => {
+    if (generating) {
+      return "generating";
+    }
+    if (pendingCount > 0) {
+      return "review-ready";
+    }
+    return "idle";
+  })();
 
   // ---- decoration push (DOCX only) ----------------------------------------
 
@@ -461,11 +465,17 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
 
       const token = ++generationToken.current;
 
-      const fullPrompt = input.pastedText
-        ? promptText.length === 0
-          ? input.pastedText
-          : `${promptText}\n\n${input.pastedText}`
-        : promptText;
+      const fullPrompt = (() => {
+        if (input.pastedText) {
+          return (() => {
+            if (promptText.length === 0) {
+              return input.pastedText;
+            }
+            return `${promptText}\n\n${input.pastedText}`;
+          })();
+        }
+        return promptText;
+      })();
 
       const docText = editorView
         ? editorView.state.doc.textBetween(
@@ -1316,7 +1326,15 @@ export function PromptBar(props: PromptBarProps) {
           }
         />
         <TooltipPopup side="top">
-          {showStop ? "Stop" : canSubmit ? "Send prompt" : "Ask anything"}
+          {(() => {
+            if (showStop) {
+              return "Stop";
+            }
+            if (canSubmit) {
+              return "Send prompt";
+            }
+            return "Ask anything";
+          })()}
         </TooltipPopup>
       </Tooltip>
 
@@ -1542,22 +1560,25 @@ function ThreadPanel(props: ThreadPanelProps) {
         )}
         style={{ scrollbarGutter: "stable" }}
       >
-        {messages.length === 0 && !isFloating ? (
-          // Standalone empty state. Floating mode never reaches this
-          // branch because the thread doesn't render until the first
-          // message arrives; standalone always renders, so we need a
-          // gentle landing surface instead of a blank canvas.
-          <div className="text-foreground-strong-muted m-auto flex max-w-[28ch] flex-col items-center gap-1 text-center text-[12px] text-balance">
-            <span className="text-foreground-strong-muted text-[13px] font-medium">
-              Start a chat
-            </span>
-            <span>
-              Ask about your matter, draft a snippet, or request a quick
-              research note.
-            </span>
-          </div>
-        ) : (
-          messages.map((m) =>
+        {(() => {
+          if (messages.length === 0 && !isFloating) {
+            return (
+              // Standalone empty state. Floating mode never reaches this
+              // branch because the thread doesn't render until the first
+              // message arrives; standalone always renders, so we need a
+              // gentle landing surface instead of a blank canvas.
+              <div className="text-foreground-strong-muted m-auto flex max-w-[28ch] flex-col items-center gap-1 text-center text-[12px] text-balance">
+                <span className="text-foreground-strong-muted text-[13px] font-medium">
+                  Start a chat
+                </span>
+                <span>
+                  Ask about your matter, draft a snippet, or request a quick
+                  research note.
+                </span>
+              </div>
+            );
+          }
+          return messages.map((m) =>
             m.role === "user" ? (
               <UserBubble key={m.id} message={m} />
             ) : (
@@ -1575,8 +1596,8 @@ function ThreadPanel(props: ThreadPanelProps) {
                 onActivateCitation={onActivateCitation}
               />
             ),
-          )
-        )}
+          );
+        })()}
       </div>
     </div>
   );

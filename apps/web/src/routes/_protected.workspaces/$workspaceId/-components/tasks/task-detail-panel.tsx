@@ -202,11 +202,17 @@ export const TaskDetailPanel = ({
 
   // Sync task status to the inspector tab icon so the vertical
   // tab bar reflects the current status color.
-  const resolvedStatus = task
-    ? isTaskStatus(task.status)
-      ? task.status
-      : "open"
-    : null;
+  const resolvedStatus = (() => {
+    if (task) {
+      return (() => {
+        if (isTaskStatus(task.status)) {
+          return task.status;
+        }
+        return "open";
+      })();
+    }
+    return null;
+  })();
   useEffect(() => {
     if (resolvedStatus !== null) {
       useInspectorStore.getState().updateTaskStatus(taskId, resolvedStatus);

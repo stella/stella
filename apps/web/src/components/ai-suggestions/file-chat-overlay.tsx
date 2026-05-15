@@ -746,29 +746,41 @@ const FileChatOverlayInner = ({
     openIfAIUnavailable();
   }, [openIfAIUnavailable]);
 
-  const filePlaceholder =
-    activeFile === undefined
-      ? activeExternal
-        ? t("chat.externalSourcePlaceholder", {
+  const filePlaceholder = (() => {
+    if (activeFile === undefined) {
+      return (() => {
+        if (activeExternal) {
+          return t("chat.externalSourcePlaceholder", {
             title: activeExternal.title,
-          })
-        : undefined
-      : t(
-          activeFile.editable
-            ? "chat.editableFilePlaceholder"
-            : "chat.filePlaceholder",
-          { fileName: activeFile.fileName },
-        );
-  const filePlaceholderAction =
-    activeFile === undefined
-      ? activeExternal
-        ? t("chat.externalSourcePlaceholderAction")
-        : undefined
-      : t(
-          activeFile.editable
-            ? "chat.editableFilePlaceholderAction"
-            : "chat.filePlaceholderAction",
-        );
+          });
+        }
+        return undefined;
+      })();
+    }
+    return t(
+      activeFile.editable
+        ? "chat.editableFilePlaceholder"
+        : "chat.filePlaceholder",
+      {
+        fileName: activeFile.fileName,
+      },
+    );
+  })();
+  const filePlaceholderAction = (() => {
+    if (activeFile === undefined) {
+      return (() => {
+        if (activeExternal) {
+          return t("chat.externalSourcePlaceholderAction");
+        }
+        return undefined;
+      })();
+    }
+    return t(
+      activeFile.editable
+        ? "chat.editableFilePlaceholderAction"
+        : "chat.filePlaceholderAction",
+    );
+  })();
 
   const editorController = useChatEditor({
     placeholder: filePlaceholder,

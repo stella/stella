@@ -48,12 +48,15 @@ export const SdtExtension = createNodeExtension({
             showingPlaceholder: el.dataset["showingPlaceholder"] === "true",
             dateFormat: el.dataset["dateFormat"] || null,
             listItems: el.dataset["listItems"] || null,
-            checked:
-              el.dataset["checked"] === "true"
-                ? true
-                : el.dataset["checked"] === "false"
-                  ? false
-                  : null,
+            checked: (() => {
+              if (el.dataset["checked"] === "true") {
+                return true;
+              }
+              if (el.dataset["checked"] === "false") {
+                return false;
+              }
+              return null;
+            })(),
           };
         },
       },

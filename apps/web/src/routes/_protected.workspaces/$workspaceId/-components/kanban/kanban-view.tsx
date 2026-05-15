@@ -265,16 +265,21 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     link: t("search.kinds.link"),
   };
 
-  const options: GroupOption[] = isStatusGrouping
-    ? getStatusGroupOptions(statusLabels)
-    : isBuiltInGrouping
-      ? getBuiltInGroupOptions({
-          labels: entityKindLabels,
-          mode: groupByPropertyId,
-        })
-      : groupByProperty && isGroupableProperty(groupByProperty)
-        ? getGroupOptions(groupByProperty)
-        : [];
+  const options: GroupOption[] = (() => {
+    if (isStatusGrouping) {
+      return getStatusGroupOptions(statusLabels);
+    }
+    if (isBuiltInGrouping) {
+      return getBuiltInGroupOptions({
+        labels: entityKindLabels,
+        mode: groupByPropertyId,
+      });
+    }
+    if (groupByProperty && isGroupableProperty(groupByProperty)) {
+      return getGroupOptions(groupByProperty);
+    }
+    return [];
+  })();
 
   const groups = getEntityGroups(options, t("common.uncategorized"));
 
@@ -357,8 +362,9 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     }
   };
 
-  const handleChangeColor = groupByProperty
-    ? (optionValue: string, newColor: OptionColor) => {
+  const handleChangeColor = (() => {
+    if (groupByProperty) {
+      return (optionValue: string, newColor: OptionColor) => {
         if (
           groupByProperty.content.type !== "single-select" &&
           groupByProperty.content.type !== "multi-select"
@@ -366,20 +372,31 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           return;
         }
         const updatedOptions = groupByProperty.content.options.map((opt) =>
-          opt.value === optionValue ? { ...opt, color: newColor } : opt,
+          opt.value === optionValue
+            ? {
+                ...opt,
+                color: newColor,
+              }
+            : opt,
         );
         updateProperty.mutate({
           workspaceId,
           propertyId: groupByPropertyId,
           name: groupByProperty.name,
-          content: { ...groupByProperty.content, options: updatedOptions },
+          content: {
+            ...groupByProperty.content,
+            options: updatedOptions,
+          },
           tool: groupByProperty.tool,
         });
-      }
-    : null;
+      };
+    }
+    return null;
+  })();
 
-  const handleRenameColumn = groupByProperty
-    ? (oldValue: string, newValue: string) => {
+  const handleRenameColumn = (() => {
+    if (groupByProperty) {
+      return (oldValue: string, newValue: string) => {
         if (
           groupByProperty.content.type !== "single-select" &&
           groupByProperty.content.type !== "multi-select"
@@ -387,17 +404,27 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           return;
         }
         const updatedOptions = groupByProperty.content.options.map((opt) =>
-          opt.value === oldValue ? { ...opt, value: newValue } : opt,
+          opt.value === oldValue
+            ? {
+                ...opt,
+                value: newValue,
+              }
+            : opt,
         );
         updateProperty.mutate({
           workspaceId,
           propertyId: groupByPropertyId,
           name: groupByProperty.name,
-          content: { ...groupByProperty.content, options: updatedOptions },
+          content: {
+            ...groupByProperty.content,
+            options: updatedOptions,
+          },
           tool: groupByProperty.tool,
         });
-      }
-    : null;
+      };
+    }
+    return null;
+  })();
 
   const handleHideColumn = (value: string) => {
     setHiddenGroups((prev) => {

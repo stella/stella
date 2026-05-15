@@ -358,25 +358,37 @@ export const KanbanColumn = ({
         </div>
       )}
       <div className="flex items-center gap-2 px-3 py-2">
-        {color && onChangeColor ? (
-          <ColorPicker
-            value={optionColor}
-            onSelect={handleColorSelect}
-            side="bottom"
-          >
-            <button className="shrink-0 cursor-pointer" type="button">
+        {(() => {
+          if (color && onChangeColor) {
+            return (
+              <ColorPicker
+                value={optionColor}
+                onSelect={handleColorSelect}
+                side="bottom"
+              >
+                <button className="shrink-0 cursor-pointer" type="button">
+                  <span
+                    className="block size-2.5 rounded-full"
+                    style={{
+                      backgroundColor: color,
+                    }}
+                  />
+                </button>
+              </ColorPicker>
+            );
+          }
+          if (color) {
+            return (
               <span
-                className="block size-2.5 rounded-full"
-                style={{ backgroundColor: color }}
+                className="size-2.5 rounded-full"
+                style={{
+                  backgroundColor: color,
+                }}
               />
-            </button>
-          </ColorPicker>
-        ) : color ? (
-          <span
-            className="size-2.5 rounded-full"
-            style={{ backgroundColor: color }}
-          />
-        ) : null}
+            );
+          }
+          return null;
+        })()}
         {editing ? (
           <InlineEdit
             className="flex-1"

@@ -557,7 +557,17 @@ const formatTable = (report: HealthReport): string => {
   ];
 
   for (const a of report.adapters) {
-    const status = a.issues.length === 0 ? (a.enabled ? "OK" : "OFF") : "!!";
+    const status = (() => {
+      if (a.issues.length === 0) {
+        return (() => {
+          if (a.enabled) {
+            return "OK";
+          }
+          return "OFF";
+        })();
+      }
+      return "!!";
+    })();
 
     lines.push(`[${status}] ${a.adapterKey} (${a.name})`);
     const remoteSuffix =

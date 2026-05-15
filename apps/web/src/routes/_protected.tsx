@@ -307,12 +307,15 @@ function ProtectedContent({
   // content is minimized, and its top button is the restore/hide
   // affordance.
   const canShowInspectorButton = inspectorTabsCount === 0;
-  const inspectorButtonTitle =
-    inspectorTabsCount === 0
-      ? t("inspector.openChat")
-      : inspectorMinimized
-        ? t("inspector.showPane")
-        : t("inspector.hidePane");
+  const inspectorButtonTitle = (() => {
+    if (inspectorTabsCount === 0) {
+      return t("inspector.openChat");
+    }
+    if (inspectorMinimized) {
+      return t("inspector.showPane");
+    }
+    return t("inspector.hidePane");
+  })();
 
   // Right-clicking the chrome's icon row (including the empty
   // space after the last icon) offers a quick "Open new chat"
@@ -509,14 +512,18 @@ function WorkspaceInspectorSidePanel() {
   //      with only blank chats active but PDFs from earlier
   //      matters still open in the rail.
   const activeTab = tabs.find((tab) => tab.id === activeId);
-  const tabOriginWorkspaceId =
-    activeTab?.type === "pdf"
-      ? activeTab.workspaceId
-      : activeTab?.type === "matter"
-        ? activeTab.workspaceId
-        : activeTab?.type === "chat"
-          ? (activeTab.contextMatterIds.at(0) ?? null)
-          : null;
+  const tabOriginWorkspaceId = (() => {
+    if (activeTab?.type === "pdf") {
+      return activeTab.workspaceId;
+    }
+    if (activeTab?.type === "matter") {
+      return activeTab.workspaceId;
+    }
+    if (activeTab?.type === "chat") {
+      return activeTab.contextMatterIds.at(0) ?? null;
+    }
+    return null;
+  })();
   // Last-resort: pick *any* tab's stored workspace so the inspector
   // mounts even when the active tab can't dictate one (a task tab,
   // or a chat that hasn't been pinned to a matter yet) and the

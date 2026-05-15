@@ -372,12 +372,15 @@ export const getNextHearingCaseEvent = (
   events: readonly EventWithMaybeDetail[],
   options: { readonly now?: Date | number | undefined } = {},
 ): EventWithMaybeDetail | null => {
-  const nowUnixMs =
-    typeof options.now === "number"
-      ? options.now
-      : options.now instanceof Date
-        ? options.now.getTime()
-        : Date.now();
+  const nowUnixMs = (() => {
+    if (typeof options.now === "number") {
+      return options.now;
+    }
+    if (options.now instanceof Date) {
+      return options.now.getTime();
+    }
+    return Date.now();
+  })();
 
   const futureHearings = events
     .filter((event) => HEARING_EVENT_TYPES.has(event.udalost))

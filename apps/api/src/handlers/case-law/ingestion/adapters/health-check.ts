@@ -167,12 +167,15 @@ export const checkAdapterHealth = async (
       return check && check.missing === 0;
     });
 
-    const status =
-      page.decisions.length === 0
-        ? "down"
-        : requiredOk
-          ? "healthy"
-          : "degraded";
+    const status = (() => {
+      if (page.decisions.length === 0) {
+        return "down";
+      }
+      if (requiredOk) {
+        return "healthy";
+      }
+      return "degraded";
+    })();
 
     return {
       key: adapter.key,
@@ -233,8 +236,15 @@ export const formatHealthReport = (
   const lines: string[] = ["=== Adapter Health Report ===", ""];
 
   for (const r of results) {
-    const icon =
-      r.status === "healthy" ? "OK" : r.status === "degraded" ? "WARN" : "FAIL";
+    const icon = (() => {
+      if (r.status === "healthy") {
+        return "OK";
+      }
+      if (r.status === "degraded") {
+        return "WARN";
+      }
+      return "FAIL";
+    })();
 
     lines.push(`[${icon}] ${r.key} (${r.name})`);
     lines.push(

@@ -445,12 +445,15 @@ export const atCourtsAdapter: SourceAdapter = {
       // XML-to-JSON may return a single object instead
       // of an array when there's only one result.
       const ref = results?.OgdDocumentReference;
-      const items =
-        ref === null || ref === undefined
-          ? []
-          : Array.isArray(ref)
-            ? ref
-            : [ref];
+      const items = (() => {
+        if (ref === null || ref === undefined) {
+          return [];
+        }
+        if (Array.isArray(ref)) {
+          return ref;
+        }
+        return [ref];
+      })();
       return { items, total };
     },
 

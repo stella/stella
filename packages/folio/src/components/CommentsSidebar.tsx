@@ -630,18 +630,32 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     const isNewCard = !isKnown && yPos !== undefined;
     const noPosition = hasPositions && yPos === undefined;
     return {
-      ...(hasPositions
-        ? yPos !== undefined
-          ? { position: "absolute", top: yPos, left: 0, right: 0, opacity: 1 }
-          : {
+      ...(() => {
+        if (hasPositions) {
+          return (() => {
+            if (yPos !== undefined) {
+              return {
+                position: "absolute",
+                top: yPos,
+                left: 0,
+                right: 0,
+                opacity: 1,
+              };
+            }
+            return {
               position: "absolute",
               top: 0,
               left: 0,
               right: 0,
               opacity: 0,
               visibility: "hidden" as const,
-            }
-        : { marginBottom: 6 }),
+            };
+          })();
+        }
+        return {
+          marginBottom: 6,
+        };
+      })(),
       padding: isExpanded ? "8px 10px" : "7px 9px",
       borderRadius: 6,
       backgroundColor: "var(--doc-page)",
@@ -649,13 +663,18 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
       boxShadow: isExpanded
         ? "0 1px 2px rgba(60,64,67,0.22), 0 3px 8px rgba(60,64,67,0.12)"
         : "0 1px 2px rgba(60,64,67,0.16), 0 2px 5px rgba(60,64,67,0.08)",
-      transition: noPosition
-        ? "none"
-        : isNewCard
-          ? "opacity 0.2s ease, box-shadow 0.2s ease"
-          : initialPositionsDone
-            ? "opacity 0.2s ease, box-shadow 0.2s ease, top 0.15s ease"
-            : "none",
+      transition: (() => {
+        if (noPosition) {
+          return "none";
+        }
+        if (isNewCard) {
+          return "opacity 0.2s ease, box-shadow 0.2s ease";
+        }
+        if (initialPositionsDone) {
+          return "opacity 0.2s ease, box-shadow 0.2s ease, top 0.15s ease";
+        }
+        return "none";
+      })(),
     };
   };
 
@@ -1049,19 +1068,27 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
               }
             }}
             style={{
-              ...(hasPositions
-                ? cardPositions.get("new-comment-input") !== undefined
-                  ? {
-                      position: "absolute",
-                      top: cardPositions.get("new-comment-input"),
-                      left: 0,
-                      right: 0,
+              ...(() => {
+                if (hasPositions) {
+                  return (() => {
+                    if (cardPositions.get("new-comment-input") !== undefined) {
+                      return {
+                        position: "absolute",
+                        top: cardPositions.get("new-comment-input"),
+                        left: 0,
+                        right: 0,
+                      };
                     }
-                  : {
+                    return {
                       position: "relative",
                       marginBottom: 8,
-                    }
-                : { marginBottom: 8 }),
+                    };
+                  })();
+                }
+                return {
+                  marginBottom: 8,
+                };
+              })(),
               padding: 10,
               borderRadius: 6,
               border: "1px solid var(--border, var(--doc-border))",

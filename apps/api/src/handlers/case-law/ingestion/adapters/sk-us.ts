@@ -328,11 +328,15 @@ const parseDocument = async (
       dissentingOpinion: dedupe(doc.mkDifferentView),
       wordRegister: dedupe(doc.mkWordRegister),
       materialRegister: dedupe(doc.mkMaterialRegister),
-      challengedLegislation: Array.isArray(doc.mkComplainedLegalRegulation)
-        ? doc.mkComplainedLegalRegulation
-        : doc.mkComplainedLegalRegulation
-          ? [doc.mkComplainedLegalRegulation]
-          : undefined,
+      challengedLegislation: (() => {
+        if (Array.isArray(doc.mkComplainedLegalRegulation)) {
+          return doc.mkComplainedLegalRegulation;
+        }
+        if (doc.mkComplainedLegalRegulation) {
+          return [doc.mkComplainedLegalRegulation];
+        }
+        return undefined;
+      })(),
       legalForceDate: parseApiDate(doc.mkDateOfLegalForce),
       publicationDate: parseApiDate(doc.mkPublicationDate),
       references: doc.mkReferences,

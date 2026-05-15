@@ -431,28 +431,36 @@ export const AnonymizationFacet = ({
         </div>
       </form>
 
-      {noOpenDocument ? (
-        onOpenFullView ? (
-          <Button
-            className="border-muted-foreground/30 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground h-auto w-full justify-start rounded-md border border-dashed px-3 py-2 text-start text-xs whitespace-normal"
-            onClick={onOpenFullView}
-            type="button"
-            variant="ghost"
-          >
-            {t("inspector.anonymization.openFullViewHint")}
-          </Button>
-        ) : (
-          <div className="border-muted-foreground/30 bg-muted/40 text-muted-foreground rounded-md border border-dashed px-3 py-2 text-xs">
-            {t("inspector.anonymization.openFullViewHint")}
+      {(() => {
+        if (noOpenDocument) {
+          return (() => {
+            if (onOpenFullView) {
+              return (
+                <Button
+                  className="border-muted-foreground/30 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground h-auto w-full justify-start rounded-md border border-dashed px-3 py-2 text-start text-xs whitespace-normal"
+                  onClick={onOpenFullView}
+                  type="button"
+                  variant="ghost"
+                >
+                  {t("inspector.anonymization.openFullViewHint")}
+                </Button>
+              );
+            }
+            return (
+              <div className="border-muted-foreground/30 bg-muted/40 text-muted-foreground rounded-md border border-dashed px-3 py-2 text-xs">
+                {t("inspector.anonymization.openFullViewHint")}
+              </div>
+            );
+          })();
+        }
+        return (
+          <div className="bg-muted/40 text-foreground rounded-md px-3 py-2 text-xs">
+            {t("inspector.anonymization.matchCount", {
+              count: String(matchSnapshot.totalMatches),
+            })}
           </div>
-        )
-      ) : (
-        <div className="bg-muted/40 text-foreground rounded-md px-3 py-2 text-xs">
-          {t("inspector.anonymization.matchCount", {
-            count: String(matchSnapshot.totalMatches),
-          })}
-        </div>
-      )}
+        );
+      })()}
 
       <div className="flex flex-col gap-1">
         <div className="text-muted-foreground text-xs font-medium tracking-wide uppercase">

@@ -21,21 +21,30 @@ const normalizeOperation = (value: unknown): JsonObject | null => {
     return null;
   }
 
-  const type =
-    typeof operation["type"] === "string"
-      ? operation["type"]
-      : typeof operation["kind"] === "string"
-        ? operation["kind"]
-        : typeof operation["find"] === "string" &&
-            typeof operation["replace"] === "string"
-          ? "replaceInBlock"
-          : null;
-  const blockId =
-    typeof operation["blockId"] === "string"
-      ? operation["blockId"]
-      : typeof operation["id"] === "string"
-        ? operation["id"]
-        : null;
+  const type = (() => {
+    if (typeof operation["type"] === "string") {
+      return operation["type"];
+    }
+    if (typeof operation["kind"] === "string") {
+      return operation["kind"];
+    }
+    if (
+      typeof operation["find"] === "string" &&
+      typeof operation["replace"] === "string"
+    ) {
+      return "replaceInBlock";
+    }
+    return null;
+  })();
+  const blockId = (() => {
+    if (typeof operation["blockId"] === "string") {
+      return operation["blockId"];
+    }
+    if (typeof operation["id"] === "string") {
+      return operation["id"];
+    }
+    return null;
+  })();
 
   if (type === null || blockId === null) {
     return null;
