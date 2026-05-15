@@ -294,6 +294,12 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         })
         .catch(() => {
           inFlightUntil = 0;
+          // Mark on failure too — the inspector facet hides
+          // the "Detecting…" placeholder once the pipeline
+          // has produced *any* terminal outcome. Without
+          // this, a worker error would leave the facet
+          // stuck on "Detecting…" forever.
+          useAnonymizationMatchesStore.getState().markPipelineRan(fieldId);
         });
     };
     // The doc text isn't always populated when the view first
@@ -436,7 +442,15 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   // highlighted on a painted page. Wrap the PM view's dispatch
   // so every selection-bearing transaction publishes the
   // selected text to the document-selection store, which the
-  // inspector facet subscribes to.
+  // inspector facet subscribes to. Wrapping `view.dispatch`
+  // post-creation is fragile in principle (a second wrapper
+  // installed after this one would un-stack out of order on
+  // cleanup), but in practice nothing else outside folio
+  // touches this view's dispatch — folio itself goes through
+  // its own internal calls bound at view construction. A
+  // cleaner long-term fix would be a folio-side
+  // `onSelectionTextChange` callback that already gives us
+  // both the range and the text; tracked but out of scope here.
   useEffect(() => {
     const view = editorViewForAnonymization;
     if (!view) {
