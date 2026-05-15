@@ -31,8 +31,13 @@ import type { ExtensionContext, ExtensionRuntime } from "../types";
 // ============================================================================
 
 function paragraphAttrsToDOMStyle(attrs: ParagraphAttrs): string {
-  let indentLeft = attrs.indentLeft;
-  if (attrs.numPr?.numId) {
+  const rawIndentLeft: unknown = Reflect.get(attrs, "indentLeft");
+  let indentLeft =
+    typeof rawIndentLeft === "number" ? rawIndentLeft : undefined;
+  if (
+    attrs.numPr?.numId &&
+    (rawIndentLeft === null || rawIndentLeft === undefined)
+  ) {
     const level = attrs.numPr.ilvl ?? 0;
     indentLeft = (level + 1) * 720;
   }
