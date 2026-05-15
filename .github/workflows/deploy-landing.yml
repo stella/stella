@@ -11,6 +11,7 @@ on:
     paths:
       - "apps/landing/**"
       - "packages/**"
+      - "docs/changelog/**"
       - "bun.lock"
       - ".github/workflows/deploy-landing.yml"
   workflow_dispatch:
