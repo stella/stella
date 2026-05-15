@@ -21,7 +21,7 @@ import {
   lazy,
   Suspense,
 } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties } from "react";
 
 import {
   CheckIcon,
@@ -61,13 +61,6 @@ import {
   applyFolioAIEditOperations,
   createFolioAIEditSnapshot,
 } from "../core/ai-edits";
-import type {
-  FolioAIEditApplyMode,
-  FolioAIEditApplyResult,
-  FolioAIEditOperation,
-  FolioAIEditSnapshot,
-} from "../core/ai-edits";
-import type { DocxCompatibility } from "../core/docx/compatibility";
 import { repackDocx } from "../core/docx/rezip";
 import { attemptSelectiveSave } from "../core/docx/selectiveSave";
 import { findBodyPmAnchors } from "../core/layout-bridge/findBodyPmSpans";
@@ -162,14 +155,11 @@ import {
 import type { Comment } from "../core/types/content";
 import type {
   Document,
-  Theme,
   SectionProperties,
-  TabStop,
   FootnoteProperties,
   EndnoteProperties,
 } from "../core/types/document";
 import { resolveColor } from "../core/utils/colorResolver";
-import type { DocxInput } from "../core/utils/docxInput";
 import { onFontsLoaded } from "../core/utils/fontLoader";
 import type { HeadingInfo } from "../core/utils/headingCollector";
 import { collectHeadings } from "../core/utils/headingCollector";
@@ -188,6 +178,13 @@ import type { TrackedChangeEntry } from "./CommentsSidebar";
 // Dialog hooks and utilities (static imports — lightweight, no UI)
 import type { FindMatch } from "./dialogs/findReplaceUtils";
 import { useFindReplace as useFindReplaceState } from "./dialogs/useFindReplace";
+import type {
+  DisplayMode,
+  DocxEditorProps,
+  DocxEditorRef,
+  EditorMode,
+  EditorState,
+} from "./DocxEditor.props";
 import {
   DefaultLoadingIndicator,
   DefaultPlaceholder,
@@ -292,250 +289,15 @@ const PageSetupDialog = lazy(() =>
 );
 
 // ============================================================================
-// TYPES
+// TYPES — see ./DocxEditor.props for the type definitions. Public types are
+// re-exported here so callers can keep importing from this module path.
 // ============================================================================
 
-/**
- * DocxEditor props
- */
-export type DocxEditorProps = {
-  /** Document data — ArrayBuffer, Uint8Array, Blob, or File */
-  documentBuffer?: DocxInput | null;
-  /** Pre-parsed document (alternative to documentBuffer) */
-  document?: Document | null;
-  /** Callback when document is saved */
-  onSave?: (buffer: ArrayBuffer) => void;
-  /** Author name used for comments and track changes */
-  author?: string;
-  /** Callback when document changes */
-  onChange?: (document: Document) => void;
-  /** Callback when selection changes */
-  onSelectionChange?: (state: SelectionState | null) => void;
-  /** Callback on error */
-  onError?: (error: Error) => void;
-  /** Callback when fonts are loaded */
-  onFontsLoaded?: () => void;
-  /** Theme for styling */
-  theme?: Theme | null;
-  /** Whether to show toolbar (default: true) */
-  showToolbar?: boolean;
-  /** Whether to show zoom control (default: true) */
-  showZoomControl?: boolean;
-  /** Whether to show page margin guides/boundaries (default: false) */
-  showMarginGuides?: boolean;
-  /** Color for margin guides (default: '#c0c0c0') */
-  marginGuideColor?: string;
-  /** Initial zoom level (default: 1.0) */
-  initialZoom?: number;
-  /** Whether the editor is read-only. When true, hides toolbar and rulers */
-  readOnly?: boolean;
-  /** Whether comments/tracked changes should auto-open the review sidebar (default: true) */
-  autoOpenReviewSidebar?: boolean;
-  /** Custom toolbar actions */
-  toolbarExtra?: ReactNode;
-  /** Additional CSS class name */
-  className?: string;
-  /** Additional inline styles */
-  style?: CSSProperties;
-  /** Placeholder when no document */
-  placeholder?: ReactNode;
-  /** Loading indicator */
-  loadingIndicator?: ReactNode;
-  /** Keep the current parsed document visible while a new buffer is loading. */
-  preserveDocumentWhileLoading?: boolean;
-  /** Initial scroll offset for the editor's document scroll container. */
-  initialScrollTop?: number;
-  /** Callback when the editor's document scroll container scrolls. */
-  onScrollTopChange?: (scrollTop: number) => void;
-  /** Whether to show the document outline sidebar (default: false) */
-  showOutline?: boolean;
-  /** Whether to show print button in toolbar (default: true) */
-  showPrintButton?: boolean;
-  /** Callback when print is triggered */
-  onPrint?: () => void;
-  /** Callback when content is copied */
-  onCopy?: () => void;
-  /** Callback when content is cut */
-  onCut?: () => void;
-  /** Callback when content is pasted */
-  onPaste?: () => void;
-  /** Editor mode: 'editing' (direct edits), 'suggesting' (track changes), or 'viewing' (read-only). Default: 'editing' */
-  mode?: EditorMode;
-  /** Callback when the editing mode changes */
-  onModeChange?: (mode: EditorMode) => void;
-  /** Callback when a readonly user action would mutate the document. */
-  onReadonlyEditAttempt?: () => void;
-  /** Callback with the parsed document's editing compatibility report. */
-  onCompatibilityChange?: (compatibility: DocxCompatibility) => void;
-  /**
-   * Fires when the live ProseMirror view is captured (or torn down).
-   * The host wires this so it can drive the AI suggestion overlay
-   * (decoration meta, apply, scroll-to) from outside the editor.
-   */
-  onEditorViewReady?: (view: EditorView | null) => void;
-  /**
-   * Fires with the current anonymization match list every time
-   * the decoration plugin recomputes it (initial mount, term
-   * push, doc edit, async DOCX load). The host uses this to
-   * mirror per-document counts and "matching workspace terms"
-   * to the inspector facet without polling the plugin state.
-   */
-  onAnonymizationMatchesChange?: (
-    matches: readonly import("../core/prosemirror/plugins/anonymizationDecorations").AnonymizationMatch[],
-  ) => void;
-  /**
-   * Fires when the user clicks an anonymization highlight in
-   * the rendered document. Hosts use this to push the
-   * selection into a sidebar bridge so the inspector facet can
-   * scroll/flash the matching row.
-   */
-  onAnonymizationTermClick?:
-    | ((canonical: string, label: string) => void)
-    | undefined;
-  /**
-   * Canonical to mark as selected in the rendered document.
-   * The first matching rect scrolls into view whenever
-   * `anonymizationSelectionSeq` increments (so repeated
-   * sidebar clicks of the same term re-trigger the scroll).
-   */
-  selectedAnonymizationCanonical?: string | null | undefined;
-  /** Monotonic counter from the bridge store; drives the re-scroll. */
-  anonymizationSelectionSeq?: number | undefined;
-};
-
-/**
- * DocxEditor ref interface
- */
-export type DocxEditorRef = {
-  /** Get the current document */
-  getDocument: () => Document | null;
-  /** Whether the live ProseMirror state has edits that have not been serialized. */
-  hasPendingChanges: () => boolean;
-  /** Get the editor ref */
-  getEditorRef: () => PagedEditorRef | null;
-  /** Save the document to buffer. Pass { selective: false } to force full repack. */
-  save: (options?: { selective?: boolean }) => Promise<ArrayBuffer | null>;
-  /** Set zoom level */
-  setZoom: (zoom: number) => void;
-  /** Get current zoom level */
-  getZoom: () => number;
-  /** Focus the editor */
-  focus: () => void;
-  /** Get current page number */
-  getCurrentPage: () => number;
-  /** Get total page count */
-  getTotalPages: () => number;
-  /** Scroll to a specific page */
-  scrollToPage: (pageNumber: number) => void;
-  /** Open print preview */
-  openPrintPreview: () => void;
-  /** Print the document directly */
-  print: () => void;
-  /** Load a pre-parsed document programmatically */
-  loadDocument: (doc: Document) => void;
-  /** Load a DOCX buffer programmatically (ArrayBuffer, Uint8Array, Blob, or File) */
-  loadDocumentBuffer: (buffer: DocxInput) => Promise<void>;
-  /** Create the block snapshot that an external AI editor should reference. */
-  createAIEditSnapshot: () => FolioAIEditSnapshot | null;
-  /** Apply AI-authored operations against a previously created block snapshot. */
-  applyAIEditOperations: (options: {
-    snapshot: FolioAIEditSnapshot;
-    operations: FolioAIEditOperation[];
-    mode?: FolioAIEditApplyMode;
-    author?: string;
-  }) => FolioAIEditApplyResult;
-  /**
-   * Accept the tracked-change marks belonging to a previously
-   * applied AI edit. Pass a single id for inserts/standalone
-   * deletions, or the full id list (`applied.revisionIds`) for a
-   * replace, which has separate ids for its deletion and insertion
-   * sides. No-op when none of the ids match anything in the doc.
-   * Returns whether a matching range was found.
-   */
-  acceptAIEditOperation: (revisionIds: number | readonly number[]) => boolean;
-  /**
-   * Reject the tracked-change marks belonging to a previously
-   * applied AI edit. Same id semantics as `acceptAIEditOperation`.
-   */
-  rejectAIEditOperation: (revisionIds: number | readonly number[]) => boolean;
-  /**
-   * Scroll the editor viewport so the tracked-change marks
-   * belonging to the given `revisionIds` come into view, and select
-   * them. No-op when none of the revisions are present.
-   */
-  scrollToAIEditOperation: (revisionIds: number | readonly number[]) => boolean;
-  /**
-   * Scroll the editor viewport so the AI edit block (by snapshot
-   * `blockId`) comes into view, and place the selection inside it.
-   * Used by the review panel to navigate to a still-pending
-   * suggestion (no `revisionId` yet because the user hasn't
-   * accepted). Returns false when the block can't be resolved on
-   * the live document (e.g. it was edited away).
-   */
-  /**
-   * Scroll the editor viewport so the block referenced by
-   * `blockId` is in view. If `snapshot` is supplied, ids are
-   * resolved against it — this is how the review panel's
-   * pending-suggestion navigation works, because block ids are
-   * sequential and a freshly recomputed snapshot would re-number
-   * blocks after any structural accept (insertAfterBlock /
-   * deleteBlock), making `b-0007` point to a different block than
-   * the AI intended. Without the argument, falls back to a
-   * fresh-from-live-doc snapshot (used by debug surfaces and
-   * tests).
-   */
-  scrollToBlock: (blockId: string, snapshot?: FolioAIEditSnapshot) => boolean;
-};
-
-/**
- * Editor internal state
- */
-type EditorState = {
-  documentLoad: DocumentLoadState;
-  zoom: number;
-  /** Current selection formatting for toolbar */
-  selectionFormatting: SelectionFormatting;
-  /** Paragraph indent data for ruler */
-  paragraphIndentLeft: number;
-  paragraphIndentRight: number;
-  paragraphFirstLineIndent: number;
-  paragraphHangingIndent: boolean;
-  paragraphTabs: TabStop[] | null;
-  /** ProseMirror table context (for showing table toolbar) */
-  pmTableContext: TableContextInfo | null;
-  /** Image context when cursor is on an image node */
-  pmImageContext: {
-    pos: number;
-    wrapType: string;
-    displayMode: string;
-    cssFloat: string | null;
-    transform: string | null;
-    alt: string | null;
-    borderWidth: number | null;
-    borderColor: string | null;
-    borderStyle: string | null;
-  } | null;
-  /** Active tracked change at cursor (for contextual toolbar) */
-  activeTrackedChange: {
-    type: "insertion" | "deletion";
-    author: string;
-    date: string | null;
-    from: number;
-    to: number;
-  } | null;
-};
-
-// ============================================================================
-// EDITING MODE DROPDOWN (Google Docs-style)
-// ============================================================================
-
-export type EditorMode = "editing" | "suggesting" | "viewing";
-
-// ============================================================================
-// DISPLAY MODE DROPDOWN (uses Stella Select)
-// ============================================================================
-
-type DisplayMode = "all-markup" | "simple-markup" | "no-markup" | "original";
+export type {
+  DocxEditorProps,
+  DocxEditorRef,
+  EditorMode,
+} from "./DocxEditor.props";
 
 // ============================================================================
 // MAIN COMPONENT
