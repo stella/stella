@@ -1094,6 +1094,8 @@
       "detectedHeading": "Atrasts šajā dokumentā ({count})",
       "emptyState": "No workspace-specific terms yet. Add one above.",
       "ignoreAction": "Ignorēt šajā dokumentā",
+      "ignoreScopeAlways": "Vienmēr ignorēt",
+      "ignoreScopeDocument": "Ignorēt šajā lietā",
       "ignoreScopeMenuAriaLabel": "Ignorēšanas tvērums",
       "ignoreScopeWorkspace": "Ignorēt šajā darbvietā",
       "labelPickerAriaLabel": "Entity label",

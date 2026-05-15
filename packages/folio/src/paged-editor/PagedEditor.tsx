@@ -225,6 +225,23 @@ export type PagedEditorProps = {
   onTotalPagesChange?: (totalPages: number) => void;
   /** Which mark anchors should be mapped for sidebars/margin markers. */
   anchorPositionMode?: "comments" | "comments-and-revisions";
+  /**
+   * Called when the user clicks an anonymization highlight in
+   * the rendered document. Receives the canonical surface form
+   * and label slug; the host wires this to the sidebar bridge.
+   */
+  onAnonymizationTermClick?:
+    | ((canonical: string, label: string) => void)
+    | undefined;
+  /**
+   * Canonical to highlight as "selected" in the overlay. The
+   * first matching rect scrolls into view whenever
+   * `anonymizationSelectionSeq` changes (so repeated sidebar
+   * clicks of the same term re-trigger the scroll).
+   */
+  selectedAnonymizationCanonical?: string | null | undefined;
+  /** Monotonic counter from the bridge store; drives the re-scroll. */
+  anonymizationSelectionSeq?: number | undefined;
 };
 
 export type PagedEditorRef = {
@@ -1343,6 +1360,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       onAnchorPositionsChange,
       onTotalPagesChange,
       anchorPositionMode = "comments-and-revisions",
+      onAnonymizationTermClick,
+      selectedAnonymizationCanonical = null,
+      anonymizationSelectionSeq,
     } = props;
 
     // Resolve the scroll container: prefer parent-provided ref, fallback to own container
@@ -4638,7 +4658,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                 rendered pages so PII spans the wasm pipeline would
                 redact are visible inline. Always mounted, renders
                 nothing when no terms are pushed. */}
-            <AnonymizationRectsOverlay groups={anonymizationRectGroups} />
+            <AnonymizationRectsOverlay
+              groups={anonymizationRectGroups}
+              onTermClick={onAnonymizationTermClick}
+              selectedCanonical={selectedAnonymizationCanonical}
+              selectionSeq={anonymizationSelectionSeq}
+            />
 
             {/* Selection overlay */}
             <SelectionOverlay

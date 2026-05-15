@@ -1097,6 +1097,8 @@ type Messages = {
       "detectedHeading": "Detected in this document ({count})";
       "emptyState": "No workspace-specific terms yet. Add one above.";
       "ignoreAction": "Ignore in this document";
+      "ignoreScopeAlways": "Always ignore";
+      "ignoreScopeDocument": "Ignore in this matter";
       "ignoreScopeMenuAriaLabel": "Ignore scope";
       "ignoreScopeWorkspace": "Ignore in this workspace";
       "labelPickerAriaLabel": "Entity label";

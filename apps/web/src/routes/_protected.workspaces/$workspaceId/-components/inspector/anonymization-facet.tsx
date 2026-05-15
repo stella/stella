@@ -13,7 +13,7 @@
  * actions, and "download anonymized" land in follow-up commits.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -44,9 +44,11 @@ import {
 } from "@stll/ui/components/menu";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import type { TranslationKey } from "@/i18n/types";
 import { useAnonymizationActiveStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-active-store";
 import { AnonymizationContextMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-context-menu";
 import { useAnonymizationMatches } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-matches-store";
+import { useAnonymizationSelectionStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-selection-store";
 import {
   useCreateAnonymizationAllowlistEntry,
   useDeleteAnonymizationAllowlistEntry,
@@ -86,6 +88,38 @@ const LABEL_OPTIONS = [
 type LabelOption = (typeof LABEL_OPTIONS)[number];
 
 const DEFAULT_LABEL: LabelOption = "organization";
+
+// Map the anonymizer's English label strings (the pipeline
+// emits canonicals like "organization", "phone number") onto
+// the existing `common.anonymizationLabels.*` translation keys.
+// Detector output not in this map falls back to the raw label
+// string so unfamiliar categories still render something
+// readable.
+const LABEL_TRANSLATION_KEYS = {
+  organization: "common.anonymizationLabels.organization",
+  person: "common.anonymizationLabels.person",
+  address: "common.anonymizationLabels.address",
+  "phone number": "common.anonymizationLabels.phoneNumber",
+  "email address": "common.anonymizationLabels.emailAddress",
+  date: "common.anonymizationLabels.date",
+  "date of birth": "common.anonymizationLabels.dateOfBirth",
+  "bank account number": "common.anonymizationLabels.bankAccountNumber",
+  iban: "common.anonymizationLabels.iban",
+  "tax identification number":
+    "common.anonymizationLabels.taxIdentificationNumber",
+  "identity card number": "common.anonymizationLabels.identityCardNumber",
+  "registration number": "common.anonymizationLabels.registrationNumber",
+  "credit card number": "common.anonymizationLabels.creditCardNumber",
+  "passport number": "common.anonymizationLabels.passportNumber",
+  "monetary amount": "common.anonymizationLabels.monetaryAmount",
+  "land parcel": "common.anonymizationLabels.landParcel",
+  other: "common.anonymizationLabels.miscellaneous",
+} as const satisfies Record<string, TranslationKey>;
+
+type LabelTranslationKey = keyof typeof LABEL_TRANSLATION_KEYS;
+
+const isLabelTranslationKey = (label: string): label is LabelTranslationKey =>
+  label in LABEL_TRANSLATION_KEYS;
 
 type AnonymizationFacetProps = {
   workspaceId: string;
@@ -135,6 +169,8 @@ export const AnonymizationFacet = ({
   onOpenFullView,
 }: AnonymizationFacetProps) => {
   const t = useTranslations();
+  const formatLabel = (label: string): string =>
+    isLabelTranslationKey(label) ? t(LABEL_TRANSLATION_KEYS[label]) : label;
   const termsQuery = useQuery(anonymizationTermsOptions(workspaceId));
   const createMutation = useCreateAnonymizationTerms();
   const deleteMutation = useDeleteAnonymizationTerm();
@@ -368,8 +404,92 @@ export const AnonymizationFacet = ({
       return next;
     });
 
+  // Click in the document → highlight matching row here.
+  // Subscribe to the bridge store and, on every doc-sourced
+  // selection bump *for this document*, find the row by data
+  // attribute, scroll it into view, and run a brief outline
+  // flash. Sidebar-sourced selections (our own emits) are
+  // ignored to avoid loops; selections from other docs (cached
+  // tab panes) are ignored too.
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Select primitives separately rather than returning a fresh
+  // `{ canonical, label, seq }` object from the selector. Zustand
+  // v5 uses referential equality on selector results, so an
+  // object literal would re-render on every store change and risk
+  // an infinite getSnapshot loop. Each primitive selector is
+  // stable across unrelated updates.
+  const docSelectionCanonical = useAnonymizationSelectionStore((s) =>
+    s.source === "doc" && s.fieldId === activeFieldId ? s.canonical : null,
+  );
+  const docSelectionLabel = useAnonymizationSelectionStore((s) =>
+    s.source === "doc" && s.fieldId === activeFieldId ? s.label : null,
+  );
+  const docSelectionSeq = useAnonymizationSelectionStore((s) =>
+    s.source === "doc" && s.fieldId === activeFieldId ? s.seq : 0,
+  );
+  useEffect(() => {
+    if (!docSelectionCanonical) {
+      return;
+    }
+    // Detected groups start collapsed; if the doc click lands on
+    // a detected canonical whose group isn't open yet, expand it
+    // first. The effect re-runs after expandedGroups updates and
+    // proceeds to the scroll/flash branch below.
+    if (
+      docSelectionLabel &&
+      !expandedGroups.has(docSelectionLabel) &&
+      // Only the detected section is collapsible — workspace
+      // term rows live above it and are always visible.
+      detectedGroups.some(([label]) => label === docSelectionLabel)
+    ) {
+      setExpandedGroups((prev) => {
+        const next = new Set(prev);
+        next.add(docSelectionLabel);
+        return next;
+      });
+      return;
+    }
+    const root = containerRef.current;
+    if (!root) {
+      return;
+    }
+    // `seq` is part of the dep array so repeated clicks of the
+    // same canonical re-fire the scroll + flash.
+    const selector = `[data-anonymization-canonical="${CSS.escape(docSelectionCanonical)}"]`;
+    const row = root.querySelector<HTMLElement>(selector);
+    if (!row) {
+      return;
+    }
+    row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    row.animate(
+      [
+        { boxShadow: "inset 0 0 0 2px var(--primary)" },
+        { boxShadow: "inset 0 0 0 2px transparent" },
+      ],
+      { duration: 600, easing: "ease-out" },
+    );
+  }, [
+    docSelectionCanonical,
+    docSelectionLabel,
+    docSelectionSeq,
+    expandedGroups,
+    detectedGroups,
+  ]);
+
+  const selectFromSidebar = (canonical: string, label: string) => {
+    if (activeFieldId === null) {
+      return;
+    }
+    useAnonymizationSelectionStore
+      .getState()
+      .select(canonical, label, "sidebar", activeFieldId);
+  };
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
+    <div
+      ref={containerRef}
+      className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4"
+    >
       <h3 className="text-foreground text-sm font-medium">
         {t("inspector.anonymization.title")}
       </h3>
@@ -410,7 +530,7 @@ export const AnonymizationFacet = ({
               <ComboboxList>
                 {(option: LabelOption) => (
                   <ComboboxItem key={option} value={option}>
-                    {option}
+                    {formatLabel(option)}
                   </ComboboxItem>
                 )}
               </ComboboxList>
@@ -480,15 +600,31 @@ export const AnonymizationFacet = ({
           const hitCount = matchSnapshot.countByCanonical.get(entry.canonical);
           return (
             <div
-              className="hover:bg-muted/50 flex items-center justify-between gap-2 rounded-md border px-3 py-2"
+              className="hover:bg-muted/50 flex cursor-pointer items-center justify-between gap-2 rounded-md border px-3 py-2"
+              data-anonymization-canonical={entry.canonical}
               key={entry.id}
+              onClick={() => selectFromSidebar(entry.canonical, entry.label)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(event) => {
+                // Don't hijack Enter/Space from nested action
+                // buttons (trash, ignore, restore, scope menu);
+                // only handle keys originating on the row itself.
+                if (event.target !== event.currentTarget) {
+                  return;
+                }
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  selectFromSidebar(entry.canonical, entry.label);
+                }
+              }}
             >
               <div className="flex min-w-0 flex-col">
                 <span className="truncate text-sm font-medium">
                   {entry.canonical}
                 </span>
                 <span className="text-muted-foreground text-xs">
-                  {entry.label}
+                  {formatLabel(entry.label)}
                 </span>
               </div>
               <div className="flex items-center gap-1">
@@ -509,9 +645,10 @@ export const AnonymizationFacet = ({
                 )}
                 <Button
                   disabled={deleteMutation.isPending}
-                  onClick={() =>
-                    deleteMutation.mutate({ workspaceId, entryId: entry.id })
-                  }
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    deleteMutation.mutate({ workspaceId, entryId: entry.id });
+                  }}
                   size="icon"
                   variant="ghost"
                 >
@@ -552,7 +689,7 @@ export const AnonymizationFacet = ({
                       <ChevronRight className="text-muted-foreground size-4 shrink-0" />
                     )}
                     <span className="truncate text-sm font-medium">
-                      {label}
+                      {formatLabel(label)}
                     </span>
                   </span>
                   <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs tabular-nums">
@@ -565,15 +702,39 @@ export const AnonymizationFacet = ({
                       <li
                         className={
                           row.isExcluded
-                            ? "text-muted-foreground hover:bg-muted/30 flex items-center justify-between gap-2 px-3 py-1.5 line-through"
-                            : "hover:bg-muted/50 flex items-center justify-between gap-2 px-3 py-1.5"
+                            ? "text-muted-foreground hover:bg-muted/30 flex cursor-pointer items-center justify-between gap-2 px-3 py-1.5 line-through"
+                            : "hover:bg-muted/50 flex cursor-pointer items-center justify-between gap-2 px-3 py-1.5"
                         }
+                        data-anonymization-canonical={row.canonical}
                         key={row.canonical}
+                        onClick={() => selectFromSidebar(row.canonical, label)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(event) => {
+                          // Don't hijack Enter/Space from nested
+                          // action buttons (ignore, restore, scope
+                          // menu); only handle keys originating on
+                          // the row itself.
+                          if (event.target !== event.currentTarget) {
+                            return;
+                          }
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            selectFromSidebar(row.canonical, label);
+                          }
+                        }}
                       >
                         <span className="truncate text-xs">
                           {row.canonical}
                         </span>
-                        <span className="flex items-center gap-1">
+                        {/* Wrapper stops the row click so inner action
+                            buttons (ignore / restore / scope menu) don't
+                            also trigger the term-select bridge. */}
+                        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+                        <span
+                          className="flex items-center gap-1"
+                          onClick={(event) => event.stopPropagation()}
+                        >
                           {!row.isExcluded && row.count > 0 && (
                             <span
                               aria-label={t(
@@ -662,12 +823,27 @@ export const AnonymizationFacet = ({
                                           entityId,
                                           canonical: row.canonical,
                                           label,
+                                          scope: "document",
+                                        });
+                                      }}
+                                    >
+                                      {t(
+                                        "inspector.anonymization.ignoreScopeDocument",
+                                      )}
+                                    </MenuItem>
+                                    <MenuItem
+                                      onClick={() => {
+                                        createAllowlistMutation.mutate({
+                                          workspaceId,
+                                          entityId,
+                                          canonical: row.canonical,
+                                          label,
                                           scope: "workspace",
                                         });
                                       }}
                                     >
                                       {t(
-                                        "inspector.anonymization.ignoreScopeWorkspace",
+                                        "inspector.anonymization.ignoreScopeAlways",
                                       )}
                                     </MenuItem>
                                   </MenuPopup>

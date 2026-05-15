@@ -1094,6 +1094,8 @@
       "detectedHeading": "Wykryto w tym dokumencie ({count})",
       "emptyState": "No workspace-specific terms yet. Add one above.",
       "ignoreAction": "Ignoruj w tym dokumencie",
+      "ignoreScopeAlways": "Zawsze ignoruj",
+      "ignoreScopeDocument": "Ignoruj w tej sprawie",
       "ignoreScopeMenuAriaLabel": "Zakres ignorowania",
       "ignoreScopeWorkspace": "Ignoruj w tym obszarze roboczym",
       "labelPickerAriaLabel": "Entity label",
