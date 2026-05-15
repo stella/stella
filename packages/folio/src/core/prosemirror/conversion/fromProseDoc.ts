@@ -202,12 +202,14 @@ function convertPMParagraph(
 
   // Restore `w:pPrChange` entries that PM carried opaquely. The editor
   // doesn't surface them in UI, but they must survive an edit so the
-  // saved DOCX still contains the property-change history Word relies on.
+  // saved DOCX still contains the property-change history Word relies
+  // on. Shallow-clone the array so the rebuilt Folio document doesn't
+  // share a mutable reference with PM's attrs.
   if (
     Array.isArray(attrs._propertyChanges) &&
     attrs._propertyChanges.length > 0
   ) {
-    paragraph.propertyChanges = attrs._propertyChanges;
+    paragraph.propertyChanges = [...attrs._propertyChanges];
   }
 
   return paragraph;
