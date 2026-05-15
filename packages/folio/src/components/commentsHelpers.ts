@@ -115,7 +115,14 @@ export function applyCommentMarkRange(
 
   let tr = view.state.tr;
   if (options?.replacePending) {
-    tr = tr.removeMark(safeRange.from, safeRange.to, commentMark);
+    // Target only the pending placeholder mark. Passing the MarkType would
+    // remove every comment mark in the range, including any pre-existing
+    // (non-pending) comments the new selection happens to overlap.
+    tr = tr.removeMark(
+      safeRange.from,
+      safeRange.to,
+      commentMark.create({ commentId: PENDING_COMMENT_ID }),
+    );
   }
   tr = tr.addMark(
     safeRange.from,
