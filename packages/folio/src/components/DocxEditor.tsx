@@ -168,7 +168,7 @@ import {
   EMPTY_ANCHOR_POSITIONS,
   PENDING_COMMENT_ID,
   applyCommentMarkRange,
-  collectCommentIdsFromContent,
+  collectCommentIdsFromSources,
   createComment,
   findSelectionYPosition,
   getCommentAuthorKey,
@@ -1090,8 +1090,16 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       // stays put), and serializing the unfiltered array writes
       // unanchored threads into `comments.xml` that no reader can
       // resolve.
-      const referencedCommentIds = collectCommentIdsFromContent(
+      // Collect anchors from every part of the doc that can carry a
+      // comment marker — body, headers, footers, footnotes, endnotes.
+      // A body-only walk would prune legitimate header/footer/note
+      // comments because their anchors live outside `document.content`.
+      const referencedCommentIds = collectCommentIdsFromSources(
         doc.package.document.content,
+        doc.package.headers,
+        doc.package.footers,
+        doc.package.footnotes,
+        doc.package.endnotes,
       );
       doc.package.document.comments = pruneOrphanedComments(
         commentsRef.current,

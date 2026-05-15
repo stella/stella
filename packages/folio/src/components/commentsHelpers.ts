@@ -139,24 +139,45 @@ export function applyCommentMarkRange(
 }
 
 /**
- * Walk an arbitrary Folio content tree and collect every comment id that
+ * Walk arbitrary Folio content subtrees and collect every comment id that
  * is *referenced* by an inline anchor (`commentRangeStart`,
  * `commentRangeEnd`, or `commentReference`). Used at save time to detect
  * which comment threads still have something to anchor to, so that
  * comments whose underlying text has been edited away can be pruned
  * before serialization instead of being written out as phantom threads
  * that no Word reader can scroll to.
+ *
+ * Pass every part of the document that can carry anchors — comments can
+ * live in headers, footers, footnotes, and endnotes as well as the
+ * main body, and a save path that only checks the body would prune
+ * legitimate header/footer/note comments.
+ *
+ * Uses `for (const key in obj)` instead of `Object.values(obj)` so the
+ * recursive walk doesn't allocate a values array at every node; also
+ * handles `Map` containers (e.g., `package.headers`) which `Object.values`
+ * would silently skip.
  */
-export function collectCommentIdsFromContent(content: unknown): Set<number> {
+export function collectCommentIdsFromSources(
+  ...sources: readonly unknown[]
+): Set<number> {
   const ids = new Set<number>();
   const visit = (node: unknown): void => {
+    if (node === null || node === undefined) {
+      return;
+    }
     if (Array.isArray(node)) {
       for (const item of node) {
         visit(item);
       }
       return;
     }
-    if (!node || typeof node !== "object") {
+    if (node instanceof Map) {
+      for (const value of node.values()) {
+        visit(value);
+      }
+      return;
+    }
+    if (typeof node !== "object") {
       return;
     }
     const obj = node as Record<string, unknown>;
@@ -169,19 +190,24 @@ export function collectCommentIdsFromContent(content: unknown): Set<number> {
     ) {
       ids.add(obj["id"]);
     }
-    for (const value of Object.values(obj)) {
-      visit(value);
+    // oxlint-disable-next-line guard-for-in -- plain object literals from parser; allocating a values array here is hot-path work we want to avoid
+    for (const key in obj) {
+      visit(obj[key]);
     }
   };
-  visit(content);
+  for (const source of sources) {
+    visit(source);
+  }
   return ids;
 }
 
 /**
- * Filter `comments` to those still anchored by the document. A top-level
- * comment is kept when its id appears in `referencedIds`; a reply is
- * kept when its parent is itself kept (a reply has no anchor of its own
- * — losing the parent's anchor logically loses the whole thread).
+ * Filter `comments` to those still anchored. A comment is kept when:
+ *  - it is top-level and its id appears in `referencedIds`, or
+ *  - it has a parent which (transitively) reaches a kept top-level
+ *    comment. A reply-to-a-reply that ultimately roots at an anchored
+ *    comment stays; a reply whose parent chain doesn't reach a
+ *    referenced top-level is dropped.
  *
  * Phantom comment threads are a real failure mode: when a user deletes
  * text covered by a comment mark, PM drops the mark with the text but
@@ -195,23 +221,39 @@ export function pruneOrphanedComments(
   comments: Comment[],
   referencedIds: Set<number>,
 ): Comment[] {
-  const keptTopIds = new Set<number>();
+  const keptIds = new Set<number>();
+  // Step 1: top-level comments whose anchor is still in the doc.
   for (const comment of comments) {
     const parentId = getCommentParentId(comment);
     if (
       (parentId === null || parentId === undefined) &&
       referencedIds.has(comment.id)
     ) {
-      keptTopIds.add(comment.id);
+      keptIds.add(comment.id);
     }
   }
-  return comments.filter((comment) => {
-    const parentId = getCommentParentId(comment);
-    if (parentId === null || parentId === undefined) {
-      return keptTopIds.has(comment.id);
+  // Step 2: iteratively pull in replies whose parent has already been
+  // kept. Repeats until no new comment is added, so a thread of depth
+  // N (replies-to-replies-to-…) is fully promoted in N − 1 passes.
+  let addedThisPass = true;
+  while (addedThisPass) {
+    addedThisPass = false;
+    for (const comment of comments) {
+      if (keptIds.has(comment.id)) {
+        continue;
+      }
+      const parentId = getCommentParentId(comment);
+      if (
+        parentId !== null &&
+        parentId !== undefined &&
+        keptIds.has(parentId)
+      ) {
+        keptIds.add(comment.id);
+        addedThisPass = true;
+      }
     }
-    return keptTopIds.has(parentId);
-  });
+  }
+  return comments.filter((comment) => keptIds.has(comment.id));
 }
 
 export function removePendingCommentMarkRange(
