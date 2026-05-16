@@ -22,6 +22,7 @@ import { CheckIcon, MoreVerticalIcon } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
 
 import type { Comment, Paragraph } from "../core/types/content";
+import { closestHtmlElement, queryHtmlElement } from "../core/utils/domGuards";
 
 /** Extract plain text from a Comment's paragraph content */
 function getCommentText(paragraphs?: Paragraph[]): string {
@@ -218,10 +219,10 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   const updateSidebarLeft = useCallback(() => {
     const scrollEl = editorContainerRef?.current;
     const sidebarEl = sidebarRef.current;
-    const pageEl = scrollEl?.querySelector(
-      ".layout-page",
-    ) as HTMLElement | null;
-    const offsetParent = sidebarEl?.offsetParent as HTMLElement | null;
+    const pageEl = scrollEl ? queryHtmlElement(scrollEl, ".layout-page") : null;
+    const offsetParentRaw = sidebarEl?.offsetParent;
+    const offsetParent =
+      offsetParentRaw instanceof HTMLElement ? offsetParentRaw : null;
 
     if (!scrollEl || !pageEl || !offsetParent) {
       setMeasuredLeft(null);
@@ -424,7 +425,10 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     }
 
     const handleDocClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
+      const target = e.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
 
       // Clicks inside the sidebar itself are handled by card onClick — ignore here
       if (sidebarRef.current?.contains(target)) {
@@ -433,9 +437,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
 
       // Clicks inside the pages area — check for comment highlights
       if (pagesEl.contains(target)) {
-        const commentEl = target.closest(
-          "[data-comment-id]",
-        ) as HTMLElement | null;
+        const commentEl = closestHtmlElement(target, "[data-comment-id]");
         if (commentEl?.dataset["commentId"]) {
           setExpandedCard(`comment-${commentEl.dataset["commentId"]}`);
           onCommentClick?.(Number(commentEl.dataset["commentId"]));
@@ -980,20 +982,18 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                       fontFamily: "inherit",
                     }}
                     onMouseOver={(e) => {
-                      (e.target as HTMLElement).style.backgroundColor =
+                      e.currentTarget.style.backgroundColor =
                         "var(--doc-primary-light)";
                     }}
                     onFocus={(e) => {
-                      (e.target as HTMLElement).style.backgroundColor =
+                      e.currentTarget.style.backgroundColor =
                         "var(--doc-primary-light)";
                     }}
                     onMouseOut={(e) => {
-                      (e.target as HTMLElement).style.backgroundColor =
-                        "transparent";
+                      e.currentTarget.style.backgroundColor = "transparent";
                     }}
                     onBlur={(e) => {
-                      (e.target as HTMLElement).style.backgroundColor =
-                        "transparent";
+                      e.currentTarget.style.backgroundColor = "transparent";
                     }}
                   >
                     Delete
