@@ -507,7 +507,7 @@ const validateProviderKey = async (
     return { valid: false, error: result.error };
   }
   if (!result.value.valid) {
-    return { valid: false, error: result.value.error ?? "Unknown error" };
+    return { valid: false, error: result.value.error };
   }
   return { valid: true };
 };
