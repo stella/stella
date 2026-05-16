@@ -50,7 +50,7 @@ export type UserThreadMessage = {
   createdAt: number;
 };
 
-export type AssistantThreadMessage = {
+type AssistantThreadMessageCommon = {
   id: ThreadMessageId;
   role: "assistant";
   /** Markdown-flavoured response. May be empty when the message is suggestions-only. */
@@ -61,11 +61,16 @@ export type AssistantThreadMessage = {
   citations: AICitation[];
   /** Mode that produced the response (mirrors the user message). */
   mode: AIChatMode;
-  status: "loading" | "complete" | "error";
-  /** Populated when status === "error". */
-  error?: string;
   createdAt: number;
 };
+
+type AssistantThreadMessageState =
+  | { status: "loading" }
+  | { status: "complete" }
+  | { status: "error"; error: string };
+
+export type AssistantThreadMessage = AssistantThreadMessageCommon &
+  AssistantThreadMessageState;
 
 export type ThreadMessage = UserThreadMessage | AssistantThreadMessage;
 
