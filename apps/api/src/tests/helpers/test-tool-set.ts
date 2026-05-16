@@ -69,3 +69,57 @@ export const asChatPart = (part: object): ChatMessage["parts"][number] =>
   // the canonical persisted-part union.
   // eslint-disable-next-line typescript/no-unsafe-type-assertion
   part as unknown as ChatMessage["parts"][number];
+
+/**
+ * Cast a test fetch mock to the global `fetch` signature.
+ *
+ * `typeof fetch` has an overloaded signature (string | URL |
+ * Request, RequestInit) that's awkward to satisfy in tests that
+ * only care about the URL string. This helper centralises the
+ * widening so the per-test mock can use whatever convenient input
+ * shape (`(url: string) => Response`, no args, etc.).
+ */
+export const asFetchMock = (
+  fn: (...args: never[]) => Promise<Response>,
+): typeof fetch =>
+  // SAFETY: production code calls the mock with the URL it would
+  // pass to real `fetch`; the test asserts on that exact input.
+  // Absent fetch overloads are not exercised at runtime.
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  fn as unknown as typeof fetch;
+
+/**
+ * Narrow an `unknown` raw value to a caller-declared test shape.
+ *
+ * Used by ingestion-adapter tests that simulate the production
+ * `parseItem(raw: unknown)` callback. The test fixture knows the
+ * exact shape, but the abstraction's type is intentionally
+ * `unknown` to force production callers to validate explicitly.
+ */
+// SAFETY: tests construct the raw object directly, so its shape
+// matches by construction. This helper centralises the assertion
+// in one place per test file. The single-use type parameter is
+// the helper's whole API surface.
+// eslint-disable-next-line typescript/no-unnecessary-type-parameters
+export const asTestRaw = <T>(raw: unknown): T =>
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  raw as T;
+
+/**
+ * Cast a literal-object fixture to a complex SDK event shape.
+ *
+ * Used in analytics callback tests where the production type
+ * (e.g. `OnStepStartEvent`, `OnToolCallFinishEvent`) has many
+ * fields and tests only need the subset relevant to the
+ * assertion. The cast widens the literal back to the canonical
+ * event shape.
+ */
+// SAFETY: each call site spells out the discriminator fields the
+// handler reads; the cast widens the test fixture to the full
+// event type. Missing fields aren't accessed by the production
+// code path under test. The single-use type parameter is the
+// helper's whole API surface.
+// eslint-disable-next-line typescript/no-unnecessary-type-parameters
+export const asSdkEvent = <T>(event: object): T =>
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  event as unknown as T;

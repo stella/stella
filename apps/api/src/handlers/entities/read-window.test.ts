@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import readEntities from "./read";
 import readKanbanGroup from "./read-kanban-group";
@@ -97,9 +98,7 @@ const createSafeDb = ({
 
   return async <T>() => {
     const result = results.shift() ?? [];
-
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- the queued fixture order mirrors queryEntities' safeDb calls for this handler-level test
-    return Result.ok(result as T);
+    return Result.ok(asTestRaw<T>(result));
   };
 };
 

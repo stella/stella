@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import calendarTasks from "./calendar";
 
@@ -81,9 +82,7 @@ describe("calendar task handler", () => {
     ];
     const safeDb: Parameters<
       typeof calendarTasks.handler
-    >[0]["safeDb"] = async <T>() =>
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- queued fixture order mirrors handler safeDb calls
-      Result.ok(results.shift() as T);
+    >[0]["safeDb"] = async <T>() => Result.ok(asTestRaw<T>(results.shift()));
 
     const result = await calendarTasks.handler(
       createContext({
