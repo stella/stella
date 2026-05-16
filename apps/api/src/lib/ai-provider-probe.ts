@@ -5,13 +5,18 @@
  * committing the config.
  */
 
+import { Result } from "better-result";
+
 import { env } from "@/api/env";
 import {
   AZURE_FOUNDRY_DEFAULT_API_VERSION,
   normalizeAzureFoundryBaseURL,
 } from "@/api/lib/azure-foundry";
+import type { SafeOutboundFetchResponse } from "@/api/lib/safe-outbound-fetch";
+import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
 const DEFAULT_VALIDATION_TIMEOUT_MS = 5000;
+const PROBE_MAX_BYTES = 1_000_000;
 
 export const PROVIDER_PROBE_VALUES = [
   "google",
@@ -29,8 +34,8 @@ export type ProviderProbeResult =
   | { valid: false; error: string };
 
 type ProbeTarget = {
-  url: string;
-  init?: RequestInit;
+  url: URL;
+  headers?: Record<string, string>;
 };
 
 const PROBE_TARGETS: Record<
@@ -38,28 +43,28 @@ const PROBE_TARGETS: Record<
   (apiKey: string) => ProbeTarget
 > = {
   google: (apiKey) => ({
-    url: `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`,
+    url: new URL(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`,
+    ),
   }),
   anthropic: (apiKey) => ({
-    url: "https://api.anthropic.com/v1/models",
-    init: {
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
+    url: new URL("https://api.anthropic.com/v1/models"),
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
     },
   }),
   openai: (apiKey) => ({
-    url: "https://api.openai.com/v1/models",
-    init: { headers: { Authorization: `Bearer ${apiKey}` } },
+    url: new URL("https://api.openai.com/v1/models"),
+    headers: { Authorization: `Bearer ${apiKey}` },
   }),
   openrouter: (apiKey) => ({
-    url: "https://openrouter.ai/api/v1/auth/key",
-    init: { headers: { Authorization: `Bearer ${apiKey}` } },
+    url: new URL("https://openrouter.ai/api/v1/auth/key"),
+    headers: { Authorization: `Bearer ${apiKey}` },
   }),
   mistral: (apiKey) => ({
-    url: "https://api.mistral.ai/v1/models",
-    init: { headers: { Authorization: `Bearer ${apiKey}` } },
+    url: new URL("https://api.mistral.ai/v1/models"),
+    headers: { Authorization: `Bearer ${apiKey}` },
   }),
 };
 
@@ -72,34 +77,39 @@ const PROVIDER_LABELS: Record<ProviderProbeValue, string> = {
   mistral: "Mistral",
 };
 
-const extractDetail = async (response: Response): Promise<string | undefined> =>
-  await response
-    .clone()
-    .json()
-    .then((body: unknown) => {
-      if (typeof body !== "object" || body === null) {
-        return undefined;
-      }
-      if ("error" in body) {
-        const { error } = body;
-        if (typeof error === "string") {
-          return error;
-        }
-        if (
-          typeof error === "object" &&
-          error !== null &&
-          "message" in error &&
-          typeof error.message === "string"
-        ) {
-          return error.message;
-        }
-      }
-      if ("message" in body && typeof body.message === "string") {
-        return body.message;
-      }
-      return undefined;
-    })
-    .catch(() => undefined);
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const parseJsonBody = (
+  response: SafeOutboundFetchResponse,
+): Record<string, unknown> | undefined => {
+  try {
+    const parsed: unknown = JSON.parse(new TextDecoder().decode(response.body));
+    return isRecord(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const extractDetail = (
+  response: SafeOutboundFetchResponse,
+): string | undefined => {
+  const body = parseJsonBody(response);
+  if (!body) {
+    return undefined;
+  }
+  const errorField = body["error"];
+  if (typeof errorField === "string") {
+    return errorField;
+  }
+  if (isRecord(errorField) && typeof errorField["message"] === "string") {
+    return errorField["message"];
+  }
+  if (typeof body["message"] === "string") {
+    return body["message"];
+  }
+  return undefined;
+};
 
 export const probeProvider = async (
   provider: ProviderProbeValue,
@@ -119,21 +129,30 @@ export const probeProvider = async (
     );
   }
 
-  const signal = AbortSignal.timeout(timeoutMs);
   const target = PROBE_TARGETS[provider](apiKey);
-  const response = await fetch(target.url, { ...target.init, signal });
+  const response = await safeOutboundFetchBytes({
+    url: target.url,
+    headers: target.headers,
+    maxBytes: PROBE_MAX_BYTES,
+    method: "GET",
+    timeoutMs,
+  });
 
-  if (response.ok) {
+  if (Result.isError(response)) {
+    throw response.error;
+  }
+
+  if (response.value.ok) {
     return { valid: true };
   }
 
-  const detail = await extractDetail(response);
+  const detail = extractDetail(response.value);
   const label = PROVIDER_LABELS[provider];
   return {
     valid: false,
     error: detail
-      ? `${label} rejected the key (HTTP ${response.status}): ${detail}`
-      : `${label} rejected the key (HTTP ${response.status})`,
+      ? `${label} rejected the key (HTTP ${response.value.status}): ${detail}`
+      : `${label} rejected the key (HTTP ${response.value.status})`,
   };
 };
 
@@ -156,21 +175,27 @@ const probeAzureFoundry = async (
     return { valid: false, error: normalized.error };
   }
 
-  const signal = AbortSignal.timeout(timeoutMs);
   const url = new URL(`${normalized.baseURL}/v1/models`);
   url.searchParams.set("api-version", resolveAzureApiVersion(apiVersion));
-  const response = await fetch(url, {
+  const response = await safeOutboundFetchBytes({
+    url,
     headers: { "api-key": apiKey },
-    signal,
+    maxBytes: PROBE_MAX_BYTES,
+    method: "GET",
+    timeoutMs,
   });
 
-  if (!response.ok) {
-    const detail = await extractDetail(response);
+  if (Result.isError(response)) {
+    throw response.error;
+  }
+
+  if (!response.value.ok) {
+    const detail = extractDetail(response.value);
     return {
       valid: false,
       error: detail
-        ? `Azure Foundry rejected the key or endpoint (HTTP ${response.status}): ${detail}`
-        : `Azure Foundry rejected the key or endpoint (HTTP ${response.status})`,
+        ? `Azure Foundry rejected the key or endpoint (HTTP ${response.value.status}): ${detail}`
+        : `Azure Foundry rejected the key or endpoint (HTTP ${response.value.status})`,
     };
   }
 
@@ -178,7 +203,7 @@ const probeAzureFoundry = async (
     return { valid: true };
   }
 
-  const deployments = await extractAzureDeployments(response);
+  const deployments = extractAzureDeployments(response.value);
   const missing = expectedDeployments.filter(
     (deployment) => !deployments.has(deployment),
   );
@@ -191,32 +216,18 @@ const probeAzureFoundry = async (
   return { valid: true };
 };
 
-const extractAzureDeployments = async (
-  response: Response,
-): Promise<ReadonlySet<string>> =>
-  await response
-    .clone()
-    .json()
-    .then((body: unknown) => {
-      if (
-        typeof body !== "object" ||
-        body === null ||
-        !("data" in body) ||
-        !Array.isArray(body.data)
-      ) {
-        return new Set<string>();
-      }
-      const ids = body.data.flatMap((entry: unknown) =>
-        typeof entry === "object" &&
-        entry !== null &&
-        "id" in entry &&
-        typeof entry.id === "string"
-          ? [entry.id]
-          : [],
-      );
-      return new Set<string>(ids);
-    })
-    .catch(() => new Set<string>());
+const extractAzureDeployments = (
+  response: SafeOutboundFetchResponse,
+): ReadonlySet<string> => {
+  const body = parseJsonBody(response);
+  if (!body || !Array.isArray(body["data"])) {
+    return new Set<string>();
+  }
+  const ids = body["data"].flatMap((entry: unknown) =>
+    isRecord(entry) && typeof entry["id"] === "string" ? [entry["id"]] : [],
+  );
+  return new Set<string>(ids);
+};
 
 const resolveAzureApiVersion = (apiVersion: string | undefined): string =>
   apiVersion?.trim() ||

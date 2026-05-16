@@ -8,10 +8,12 @@ import { redactMcpOAuthRegistrationResponse } from "@/api/handlers/mcp-connector
 import {
   authorizationServerMetadataUrls,
   mcpWellKnownProtectedResourceUrls,
-  safeMcpFetchBytes,
-  validateSafeMcpFetchUrl,
 } from "@/api/handlers/mcp-connectors/url-safety";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  safeOutboundFetchBytes,
+  validateOutboundFetchTarget,
+} from "@/api/lib/safe-outbound-fetch";
 import type {
   SafeOutboundFetchBody,
   SafeOutboundHeaders,
@@ -105,7 +107,7 @@ const fetchJson = async <T>({
         headers.set("Accept", "application/json");
       }
 
-      const response = await safeMcpFetchBytes({
+      const response = await safeOutboundFetchBytes({
         body: init?.body,
         headers,
         maxBytes: OAUTH_FETCH_MAX_BYTES,
@@ -149,17 +151,17 @@ export const discoverOAuthMetadata = async (
     HandlerError<400 | 502>
   >
 > => {
-  const parsedResult = await validateSafeMcpFetchUrl(rawMcpUrl);
-  if (Result.isError(parsedResult)) {
+  const target = await validateOutboundFetchTarget(rawMcpUrl);
+  if (Result.isError(target)) {
     return Result.err(
       new HandlerError({
         status: 400,
-        message: parsedResult.error.message,
-        cause: parsedResult.error,
+        message: target.error.message,
+        cause: target.error,
       }),
     );
   }
-  const parsedUrl = parsedResult.value;
+  const parsedUrl = target.value.url;
 
   let protectedResource: ProtectedResourceMetadata | null = null;
   for (const metadataUrl of mcpWellKnownProtectedResourceUrls(parsedUrl)) {
@@ -485,7 +487,7 @@ const validateAuthorizationServerMetadata = async (
   ].filter((url) => url !== undefined);
 
   for (const url of urls) {
-    const safe = await validateSafeMcpFetchUrl(url);
+    const safe = await validateOutboundFetchTarget(url);
     if (Result.isError(safe)) {
       return Result.err(
         new HandlerError({

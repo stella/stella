@@ -19,12 +19,12 @@ import {
   refreshOAuthToken,
   tokenExpiresAt,
 } from "@/api/handlers/mcp-connectors/oauth";
-import {
-  safeMcpFetchStream,
-  validateSafeMcpFetchUrl,
-} from "@/api/handlers/mcp-connectors/url-safety";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  safeOutboundFetchStream,
+  validateOutboundFetchTarget,
+} from "@/api/lib/safe-outbound-fetch";
 import type { SafeOutboundFetchBody } from "@/api/lib/safe-outbound-fetch";
 
 const MCP_TOOL_PREFIX = "mcp";
@@ -244,9 +244,9 @@ const loadConnectorTools = async ({
     if (token.type === "skip") {
       return;
     }
-    const safeUrl = await validateSafeMcpFetchUrl(row.url);
-    if (Result.isError(safeUrl)) {
-      captureError(safeUrl.error, {
+    const target = await validateOutboundFetchTarget(row.url);
+    if (Result.isError(target)) {
+      captureError(target.error, {
         source: "external-mcp-tools",
         connectorSlug: row.slug,
       });
@@ -255,7 +255,7 @@ const loadConnectorTools = async ({
 
     const transport = {
       type: "http" as const,
-      url: safeUrl.value.toString(),
+      url: target.value.url.toString(),
       redirect: "error" as const,
       fetch: createSafeMcpFetch(MCP_HTTP_REQUEST_TIMEOUT_MS),
       ...(token.value === null
@@ -310,7 +310,7 @@ const createSafeMcpFetch = (timeoutMs: number): FetchFunction => {
       }
 
       const url = mcpFetchUrl(input);
-      const response = await safeMcpFetchStream({
+      const response = await safeOutboundFetchStream({
         body: await mcpFetchBody(input, init),
         headers: mcpFetchHeaders(input, init),
         maxBytes: MCP_HTTP_RESPONSE_MAX_BYTES,
