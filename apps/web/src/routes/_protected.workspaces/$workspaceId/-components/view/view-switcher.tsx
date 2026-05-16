@@ -405,7 +405,7 @@ const ViewTab = ({
       {isActive && (canUpdateView || canCreateView || canDeleteView) && (
         <ViewTabMenu
           canDelete={canDelete}
-          className="inset-e-0 absolute top-1/2 -translate-y-1/2"
+          className="absolute inset-e-0 top-1/2 -translate-y-1/2"
           onRename={() => {
             setIsRenaming(true);
             setRenameValue(name);
