@@ -5,9 +5,9 @@
  * triggers generation and polls until complete.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { DecisionAnalysis } from "@stll/case-law/analysis";
 import {
@@ -64,150 +64,118 @@ const parseAnalysisResponse = (value: unknown): AnalysisResponse | null => {
   return null;
 };
 
+type AnalysisQueryResult =
+  | { kind: "done"; analysis: DecisionAnalysis }
+  | { kind: "generating"; tree: DecisionAnalysis["tree"] }
+  | { kind: "error"; message: string };
+
+const isTerminal = (result: AnalysisQueryResult): boolean =>
+  result.kind === "done" || result.kind === "error";
+
 export const useDecisionAnalysis = (
   decisionId: string,
   existingAnalysis: unknown,
 ) => {
-  const [state, setState] = useState<AnalysisState>(() => {
-    if (
-      isDecisionAnalysis(existingAnalysis) &&
-      !isAnalysisInProgress(existingAnalysis)
-    ) {
-      return { status: "done", analysis: existingAnalysis };
-    }
-    return { status: "idle" };
+  const queryClient = useQueryClient();
+  const hasFreshAnalysis =
+    isDecisionAnalysis(existingAnalysis) &&
+    !isAnalysisInProgress(existingAnalysis);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  // Reset the kick-off flag when the route changes.
+  useEffect(() => {
+    setIsGenerating(false);
+  }, [decisionId]);
+
+  const enabled = isGenerating && !hasFreshAnalysis;
+
+  const query = useQuery<AnalysisQueryResult>({
+    queryKey: ["decision-analysis", decisionId],
+    queryFn: async ({ signal }): Promise<AnalysisQueryResult> => {
+      const response = await fetch(
+        `${env.VITE_API_URL}/v1/case/decisions/${decisionId}/analysis`,
+        {
+          credentials: "include",
+          signal,
+        },
+      );
+
+      const data: unknown = await response.json();
+      const parsed = parseAnalysisResponse(data);
+
+      if (!parsed) {
+        return {
+          kind: "error",
+          message: response.ok
+            ? "Unexpected response"
+            : `HTTP ${String(response.status)}`,
+        };
+      }
+
+      if (parsed.status === "done") {
+        return { kind: "done", analysis: parsed.analysis };
+      }
+      if (parsed.status === "generating") {
+        return { kind: "generating", tree: parsed.tree };
+      }
+      return { kind: "error", message: parsed.error };
+    },
+    enabled,
+    refetchInterval: (q) =>
+      q.state.data && isTerminal(q.state.data) ? false : POLL_INTERVAL_MS,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    staleTime: 0,
+    gcTime: 0,
   });
 
-  const abortRef = useRef<AbortController | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const queryClient = useQueryClient();
-
-  const stopPolling = useCallback(() => {
-    if (!pollRef.current) {
-      return;
-    }
-    clearInterval(pollRef.current);
-    pollRef.current = null;
-  }, []);
-
-  // Reset to idle when decisionId changes (route navigation)
-  const prevDecisionId = useRef(decisionId);
+  // Mirror a `done` result into the decision query cache so route
+  // re-renders pick up the persisted analysis without another fetch.
   useEffect(() => {
-    if (prevDecisionId.current !== decisionId) {
-      prevDecisionId.current = decisionId;
-      abortRef.current?.abort();
-      stopPolling();
-
-      if (
-        isDecisionAnalysis(existingAnalysis) &&
-        !isAnalysisInProgress(existingAnalysis)
-      ) {
-        setState({ status: "done", analysis: existingAnalysis });
-      } else {
-        setState({ status: "idle" });
-      }
+    if (query.data?.kind !== "done") {
       return;
     }
-
-    if (
-      isDecisionAnalysis(existingAnalysis) &&
-      !isAnalysisInProgress(existingAnalysis) &&
-      state.status !== "done"
-    ) {
-      setState({ status: "done", analysis: existingAnalysis });
-    }
-  }, [existingAnalysis, state.status, decisionId, stopPolling]);
-
-  // Cleanup on unmount
-  useEffect(
-    () => () => {
-      abortRef.current?.abort();
-      stopPolling();
-    },
-    [stopPolling],
-  );
-
-  /** Returns true if analysis resolved (done or error), false if still generating. */
-  const fetchAnalysis = useCallback(async (): Promise<boolean> => {
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    const response = await fetch(
-      `${env.VITE_API_URL}/v1/case/decisions/${decisionId}/analysis`,
-      {
-        credentials: "include",
-        signal: controller.signal,
-      },
+    const analysis = query.data.analysis;
+    queryClient.setQueryData(
+      ["case-law-decisions", decisionId],
+      (old: Record<string, unknown> | undefined) =>
+        old ? { ...old, analysis } : old,
     );
+  }, [query.data, decisionId, queryClient]);
 
-    const data: unknown = await response.json();
-
-    const analysisResponse = parseAnalysisResponse(data);
-    if (analysisResponse) {
-      switch (analysisResponse.status) {
-        case "done":
-          stopPolling();
-          setState({ status: "done", analysis: analysisResponse.analysis });
-          queryClient.setQueryData(
-            ["case-law-decisions", decisionId],
-            (old: Record<string, unknown> | undefined) =>
-              old ? { ...old, analysis: analysisResponse.analysis } : old,
-          );
-          return true;
-
-        case "generating":
-          setState({ status: "generating", tree: analysisResponse.tree });
-          return false;
-
-        case "error":
-          stopPolling();
-          setState({ status: "error", message: analysisResponse.error });
-          return true;
-      }
-
-      const unhandledResponse: never = analysisResponse;
-      return unhandledResponse;
-    }
-
-    // Unexpected response shape (auth failure, server error, etc.)
-    // Treat as error to stop polling
-    stopPolling();
-    setState({
-      status: "error",
-      message: response.ok ? "Unexpected response" : `HTTP ${response.status}`,
-    });
-    return true;
-  }, [decisionId, queryClient, stopPolling]);
-
-  const generate = useCallback(async () => {
-    if (state.status === "generating") {
+  const generate = useCallback(() => {
+    if (hasFreshAnalysis || isGenerating) {
       return;
     }
+    setIsGenerating(true);
+  }, [hasFreshAnalysis, isGenerating]);
 
-    setState({ status: "generating", tree: [] });
-
-    try {
-      const resolved = await fetchAnalysis();
-
-      // Only poll if the first fetch didn't already resolve
-      if (!resolved) {
-        stopPolling();
-        pollRef.current = setInterval(() => {
-          void fetchAnalysis().catch(() => {
-            // Ignore poll errors; will retry on next interval
-          });
-        }, POLL_INTERVAL_MS);
-      }
-    } catch (error) {
-      if (abortRef.current?.signal.aborted) {
-        return;
-      }
-      setState({
-        status: "error",
-        message: error instanceof Error ? error.message : "Unknown error",
-      });
+  const state: AnalysisState = (() => {
+    if (hasFreshAnalysis && isDecisionAnalysis(existingAnalysis)) {
+      return { status: "done", analysis: existingAnalysis };
     }
-  }, [state.status, fetchAnalysis, stopPolling]);
+    if (!isGenerating) {
+      return { status: "idle" };
+    }
+    if (query.data) {
+      switch (query.data.kind) {
+        case "done":
+          return { status: "done", analysis: query.data.analysis };
+        case "generating":
+          return { status: "generating", tree: query.data.tree };
+        case "error":
+          return { status: "error", message: query.data.message };
+      }
+    }
+    if (query.isError) {
+      return {
+        status: "error",
+        message:
+          query.error instanceof Error ? query.error.message : "Unknown error",
+      };
+    }
+    return { status: "generating", tree: [] };
+  })();
 
   return { state, generate };
 };

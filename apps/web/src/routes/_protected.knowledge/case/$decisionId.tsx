@@ -105,7 +105,7 @@ function DecisionViewer() {
     if (!(await ensureAIAvailable())) {
       return;
     }
-    await generateDecisionAnalysis();
+    generateDecisionAnalysis();
   }, [ensureAIAvailable, generateDecisionAnalysis]);
 
   const hasAnalysis =
