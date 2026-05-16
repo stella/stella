@@ -31,6 +31,7 @@ export const LIMITS = {
   agentSkillBodyMaxChars: 80_000,
   agentSkillArchiveFilesMax: 100,
   agentSkillArchiveUncompressedMaxBytes: 6 * 1024 * 1024,
+  agentSkillGithubDirectoriesMax: 100,
   agentSkillResourcesPerSkill: 50,
   agentSkillResourceMaxChars: 100_000,
   clauseVariantsPerClause: 10,

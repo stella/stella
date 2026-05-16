@@ -377,6 +377,7 @@ const agentSkillResourceVisibleCheck = sql`(
     SELECT 1
     FROM agent_skills s
     WHERE s.id = skill_id
+      AND s.organization_id = agent_skill_resources.organization_id
       AND (s.scope = 'team' OR s.user_id = (SELECT current_setting(
         '${sql.raw(SETTING_USER_ID)}', true
       )))

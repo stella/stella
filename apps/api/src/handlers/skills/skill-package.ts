@@ -17,6 +17,7 @@ const SKILL_FILE_NAME = "SKILL.md";
 const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const GITHUB_API_TIMEOUT_MS = 10_000;
 const GITHUB_REF_CANDIDATE_LIMIT = 16;
+const GITHUB_SKILL_FILE_MAX_BYTES = LIMITS.agentSkillResourceMaxChars * 4;
 const UTF8_DECODER = new TextDecoder("utf-8", { fatal: true });
 const GITHUB_SKILL_HOSTNAMES = new Set([
   "github.com",
@@ -72,6 +73,7 @@ type GithubRefExists = (options: {
 
 type GithubContentItem = {
   path: string;
+  size: number | null;
   type: string;
 };
 
@@ -412,6 +414,8 @@ const fetchGithubSkillFiles = async (
   const files: SkillFile[] = [];
   const pendingDirectories = [target.rootPath];
   const queuedDirectories = new Set(pendingDirectories);
+  let totalFileBytes = 0;
+  let resourceCount = 0;
 
   while (pendingDirectories.length > 0) {
     const directory = pendingDirectories.shift();
@@ -434,6 +438,7 @@ const fetchGithubSkillFiles = async (
           shouldTraverseGithubSkillDirectory(relativePath) &&
           !queuedDirectories.has(item.path)
         ) {
+          assertGithubDirectoryLimit(queuedDirectories.size + 1);
           queuedDirectories.add(item.path);
           pendingDirectories.push(item.path);
         }
@@ -453,6 +458,19 @@ const fetchGithubSkillFiles = async (
         continue;
       }
 
+      if (normalizedPath !== SKILL_FILE_NAME) {
+        resourceCount += 1;
+        assertGithubResourceCount(resourceCount);
+      }
+
+      assertGithubDeclaredFileSize({
+        path: normalizedPath,
+        size: item.size,
+      });
+      if (item.size !== null) {
+        assertGithubTotalFileBytes(totalFileBytes + item.size);
+      }
+
       const raw = await fetchSafeBytes(
         githubRawUrl({
           owner: target.owner,
@@ -460,13 +478,16 @@ const fetchGithubSkillFiles = async (
           ref: target.ref,
           repo: target.repo,
         }),
+        GITHUB_SKILL_FILE_MAX_BYTES,
       );
+      totalFileBytes += raw.body.byteLength;
+      assertGithubTotalFileBytes(totalFileBytes);
+
       files.push({
         content: decodeUtf8(raw.body),
         path: normalizedPath,
         sizeBytes: raw.body.byteLength,
       });
-      assertGithubResourceLimit(files);
     }
   }
 
@@ -520,10 +541,18 @@ const shouldTraverseGithubSkillDirectory = (relativePath: string): boolean => {
   return root !== undefined && SKILL_RESOURCE_ROOTS.has(root);
 };
 
-const assertGithubResourceLimit = (files: readonly SkillFile[]) => {
-  const resourceCount = files.filter(
-    (file) => file.path !== SKILL_FILE_NAME,
-  ).length;
+const assertGithubDirectoryLimit = (directoryCount: number) => {
+  if (directoryCount <= LIMITS.agentSkillGithubDirectoriesMax) {
+    return;
+  }
+
+  throw new HandlerError({
+    status: 400,
+    message: "Skill has too many GitHub directories",
+  });
+};
+
+const assertGithubResourceCount = (resourceCount: number) => {
   if (resourceCount <= LIMITS.agentSkillResourcesPerSkill) {
     return;
   }
@@ -531,6 +560,34 @@ const assertGithubResourceLimit = (files: readonly SkillFile[]) => {
   throw new HandlerError({
     status: 400,
     message: "Skill has too many resources",
+  });
+};
+
+const assertGithubDeclaredFileSize = ({
+  path,
+  size,
+}: {
+  path: string;
+  size: number | null;
+}) => {
+  if (size === null || size <= GITHUB_SKILL_FILE_MAX_BYTES) {
+    return;
+  }
+
+  throw new HandlerError({
+    status: 400,
+    message: `Skill file is too large: ${path}`,
+  });
+};
+
+const assertGithubTotalFileBytes = (totalBytes: number) => {
+  if (totalBytes <= LIMITS.agentSkillArchiveUncompressedMaxBytes) {
+    return;
+  }
+
+  throw new HandlerError({
+    status: 400,
+    message: "Skill GitHub content is too large",
   });
 };
 
@@ -630,9 +687,14 @@ const parseGithubContentItems = (
       continue;
     }
     const path = item["path"];
+    const size = item["size"];
     const type = item["type"];
     if (typeof path === "string" && typeof type === "string") {
-      parsed.push({ path, type });
+      parsed.push({
+        path,
+        size: typeof size === "number" && Number.isFinite(size) ? size : null,
+        type,
+      });
     }
   }
   return parsed;
@@ -656,10 +718,13 @@ const hashSkillPackage = ({
   return hasher.digest("hex");
 };
 
-const fetchSafeBytes = async (url: URL) => {
+const fetchSafeBytes = async (
+  url: URL,
+  maxBytes = FILE_SIZE_LIMIT_BYTES.skillPack,
+) => {
   const response = await safeMcpFetchBytes({
     headers: GITHUB_FETCH_HEADERS,
-    maxBytes: FILE_SIZE_LIMIT_BYTES.skillPack,
+    maxBytes,
     timeoutMs: GITHUB_API_TIMEOUT_MS,
     url,
   });
