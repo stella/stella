@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import { stella } from "@/api/db/rls";
+import { stella, stellaIngestion } from "@/api/db/rls";
 import {
   anonymizationBlacklistEntries,
   billingCodes,
@@ -1058,6 +1058,15 @@ type TablePrivilegeRow = {
  */
 export const fetchStellaPolicies = async (
   db: TestDatabase,
+): Promise<PolicyRow[]> => await fetchPoliciesForRole(db, stella.name);
+
+export const fetchStellaIngestionPolicies = async (
+  db: TestDatabase,
+): Promise<PolicyRow[]> => await fetchPoliciesForRole(db, stellaIngestion.name);
+
+const fetchPoliciesForRole = async (
+  db: TestDatabase,
+  roleName: string,
 ): Promise<PolicyRow[]> => {
   const rows = await db.execute<PolicyRow>(sql`
     SELECT c.relname AS table_name,
@@ -1071,7 +1080,7 @@ export const fetchStellaPolicies = async (
     JOIN pg_class c ON c.oid = p.polrelid
     WHERE p.polroles @> ARRAY[
       (SELECT oid FROM pg_roles
-       WHERE rolname = ${stella.name})
+       WHERE rolname = ${roleName})
     ]::oid[]
     ORDER BY c.relname, p.polname
   `);
@@ -1080,6 +1089,17 @@ export const fetchStellaPolicies = async (
 
 export const fetchStellaTablePrivileges = async (
   db: TestDatabase,
+): Promise<TablePrivilegeRow[]> =>
+  await fetchTablePrivilegesForRole(db, stella.name);
+
+export const fetchStellaIngestionTablePrivileges = async (
+  db: TestDatabase,
+): Promise<TablePrivilegeRow[]> =>
+  await fetchTablePrivilegesForRole(db, stellaIngestion.name);
+
+const fetchTablePrivilegesForRole = async (
+  db: TestDatabase,
+  roleName: string,
 ): Promise<TablePrivilegeRow[]> => {
   const rows = await db.execute<TablePrivilegeRow>(sql`
     SELECT c.relname AS table_name,
@@ -1094,8 +1114,39 @@ export const fetchStellaTablePrivileges = async (
     ) AS privilege(value)
     WHERE n.nspname = 'public'
       AND c.relkind IN ('r', 'p')
-      AND has_table_privilege(${stella.name}, c.oid, privilege.value)
+      AND has_table_privilege(${roleName}, c.oid, privilege.value)
     ORDER BY c.relname, privilege.value
+  `);
+  return rows.rows;
+};
+
+type ColumnPrivilegeRow = {
+  column_name: string;
+  privilege: "UPDATE";
+  table_name: string;
+};
+
+export const fetchStellaIngestionColumnPrivileges = async (
+  db: TestDatabase,
+): Promise<ColumnPrivilegeRow[]> => {
+  const rows = await db.execute<ColumnPrivilegeRow>(sql`
+    SELECT c.relname AS table_name,
+           a.attname AS column_name,
+           'UPDATE' AS privilege
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN pg_attribute a ON a.attrelid = c.oid
+    WHERE n.nspname = 'public'
+      AND c.relkind IN ('r', 'p')
+      AND a.attnum > 0
+      AND NOT a.attisdropped
+      AND has_column_privilege(
+        ${stellaIngestion.name},
+        c.oid,
+        a.attname,
+        'UPDATE'
+      )
+    ORDER BY c.relname, a.attname
   `);
   return rows.rows;
 };

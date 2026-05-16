@@ -11,6 +11,9 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import {
   fetchScopedTables,
+  fetchStellaIngestionColumnPrivileges,
+  fetchStellaIngestionPolicies,
+  fetchStellaIngestionTablePrivileges,
   fetchStellaTablePrivileges,
   fetchStellaPolicies,
 } from "@/api/tests/security/rls-helpers";
@@ -60,6 +63,9 @@ describe("policy coverage", () => {
     "case_law_search_documents",
     "case_law_sources",
   ];
+  const INGESTION_MUTABLE_CASE_LAW_TABLES = GLOBAL_CASE_LAW_TABLES.filter(
+    (table) => table !== "case_law_sources",
+  );
 
   test("every table with workspace_id has workspace policies", async () => {
     const scoped = await fetchScopedTables(testDb);
@@ -219,5 +225,44 @@ describe("policy coverage", () => {
       expect(globalPolicy?.check_expr).toBeNull();
       expect(privilegesFor(table)).toEqual(["SELECT"]);
     }
+  });
+
+  test("case-law ingestion role has explicit narrow write boundaries", async () => {
+    const policies = await fetchStellaIngestionPolicies(testDb);
+    const tablePrivileges = await fetchStellaIngestionTablePrivileges(testDb);
+    const columnPrivileges = await fetchStellaIngestionColumnPrivileges(testDb);
+    const privilegesFor = (table: string) =>
+      tablePrivileges
+        .filter((p) => p.table_name === table)
+        .map((p) => p.privilege)
+        .sort();
+
+    for (const table of GLOBAL_CASE_LAW_TABLES) {
+      const ingestionPolicy = policies.find(
+        (p) =>
+          p.table_name === table &&
+          p.policy_name === "case_law_ingestion_access",
+      );
+      expect(ingestionPolicy?.command).toBe("*");
+      expect(ingestionPolicy?.using_expr).toBe("true");
+      expect(ingestionPolicy?.check_expr).toBe("true");
+    }
+
+    for (const table of INGESTION_MUTABLE_CASE_LAW_TABLES) {
+      expect(privilegesFor(table)).toEqual([
+        "DELETE",
+        "INSERT",
+        "SELECT",
+        "UPDATE",
+      ]);
+    }
+
+    expect(privilegesFor("case_law_sources")).toEqual(["SELECT"]);
+    expect(
+      columnPrivileges
+        .filter((p) => p.table_name === "case_law_sources")
+        .map((p) => p.column_name)
+        .sort(),
+    ).toEqual(["last_sync_at", "sync_cursor", "updated_at"]);
   });
 });

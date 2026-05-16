@@ -34,6 +34,7 @@ const createTestDb = async (): Promise<TestDatabase> => {
   const pushSchemaDb = drizzle({ client });
 
   await testDb.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
+  await testDb.execute(sql.raw("CREATE ROLE stella_ingestion NOLOGIN"));
 
   const { sqlStatements } = await pushSchema(allSchema, pushSchemaDb);
   for (const statement of sqlStatements) {
@@ -59,6 +60,42 @@ const createTestDb = async (): Promise<TestDatabase> => {
         "case_law_ingestion_events",
         "case_law_ingestion_failures"
       FROM stella
+    `),
+  );
+  await testDb.execute(
+    sql.raw(`
+      GRANT SELECT ON TABLE
+        "case_law_sources",
+        "case_law_decisions",
+        "case_law_citations",
+        "case_law_polarity_rules",
+        "case_law_court_weights",
+        "case_law_fts_configs",
+        "case_law_search_documents",
+        "case_law_ingestion_events",
+        "case_law_ingestion_failures"
+      TO stella_ingestion
+    `),
+  );
+  await testDb.execute(
+    sql.raw(`
+      GRANT INSERT, UPDATE, DELETE ON TABLE
+        "case_law_decisions",
+        "case_law_citations",
+        "case_law_polarity_rules",
+        "case_law_court_weights",
+        "case_law_fts_configs",
+        "case_law_search_documents",
+        "case_law_ingestion_events",
+        "case_law_ingestion_failures"
+      TO stella_ingestion
+    `),
+  );
+  await testDb.execute(
+    sql.raw(`
+      GRANT UPDATE (sync_cursor, last_sync_at, updated_at)
+        ON TABLE "case_law_sources"
+        TO stella_ingestion
     `),
   );
 
