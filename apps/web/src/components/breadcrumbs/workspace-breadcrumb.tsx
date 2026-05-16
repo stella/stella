@@ -36,6 +36,15 @@ const breadcrumbInputClassName =
 
 const matterNameInputClassName = `${breadcrumbInputClassName} font-semibold`;
 
+type NameState = { mode: "view" } | { mode: "edit"; draft: string };
+
+type RefState =
+  | { mode: "view" }
+  | { mode: "edit"; draft: string; error?: string };
+
+const NAME_VIEW: NameState = { mode: "view" };
+const REF_VIEW: RefState = { mode: "view" };
+
 export const WorkspaceBreadcrumb = ({
   workspaceId,
 }: ResolveParams<"/workspaces/$workspaceId">) => {
@@ -44,12 +53,9 @@ export const WorkspaceBreadcrumb = ({
     from: "/_protected/workspaces/$workspaceId/",
     shouldThrow: false,
   });
-  const [value, setValue] = useState("");
-  const [isEditing, setIsEditing] = useState(false);
+  const [nameState, setNameState] = useState<NameState>(NAME_VIEW);
   const escapedNameRef = useRef(false);
-  const [refValue, setRefValue] = useState("");
-  const [isEditingRef, setIsEditingRef] = useState(false);
-  const [refError, setRefError] = useState("");
+  const [refState, setRefState] = useState<RefState>(REF_VIEW);
   const [refInputEl, setRefInputEl] = useState<HTMLInputElement | null>(null);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const [iconAnchor, setIconAnchor] = useState<HTMLSpanElement | null>(null);
@@ -69,21 +75,20 @@ export const WorkspaceBreadcrumb = ({
 
   const startEditingName = () => {
     escapedNameRef.current = false;
-    setValue(displayName);
-    setIsEditing(true);
+    setNameState({ mode: "edit", draft: displayName });
   };
 
   const handleSaveProjectName = () => {
     if (escapedNameRef.current) {
       escapedNameRef.current = false;
-      setValue(displayName);
-      setIsEditing(false);
+      setNameState(NAME_VIEW);
       return;
     }
 
-    setIsEditing(false);
+    const draft = nameState.mode === "edit" ? nameState.draft : "";
+    setNameState(NAME_VIEW);
 
-    const workspaceName = value.trim();
+    const workspaceName = draft.trim();
 
     if (!workspaceName || workspaceName === workspace.name) {
       return;
@@ -96,15 +101,21 @@ export const WorkspaceBreadcrumb = ({
   };
 
   const handleSaveReference = () => {
-    const trimmed = refValue.trim();
+    if (refState.mode !== "edit") {
+      return;
+    }
+    const trimmed = refState.draft.trim();
 
     if (!trimmed || trimmed === workspace.reference) {
-      setIsEditingRef(false);
-      setRefError("");
+      setRefState(REF_VIEW);
       return;
     }
 
-    setRefError("");
+    setRefState((prev) =>
+      prev.mode === "edit" && prev.error !== undefined
+        ? { mode: "edit", draft: prev.draft }
+        : prev,
+    );
     updateWorkspace.mutate(
       {
         workspaceId,
@@ -112,11 +123,15 @@ export const WorkspaceBreadcrumb = ({
       },
       {
         onSuccess: () => {
-          setIsEditingRef(false);
+          setRefState(REF_VIEW);
         },
         onError: (error) => {
           if (APIError.is(error) && error.status === 409) {
-            setRefError(t("workspaces.referenceTaken"));
+            setRefState((prev) =>
+              prev.mode === "edit"
+                ? { ...prev, error: t("workspaces.referenceTaken") }
+                : prev,
+            );
             refInputEl?.focus();
             return;
           }
@@ -126,7 +141,7 @@ export const WorkspaceBreadcrumb = ({
               ? error.message
               : t("errors.actionFailed");
           stellaToast.add({ title: message, type: "error" });
-          setIsEditingRef(false);
+          setRefState(REF_VIEW);
         },
       },
     );
@@ -201,22 +216,21 @@ export const WorkspaceBreadcrumb = ({
   );
 
   const referenceSegment = (() => {
-    if (isEditingRef) {
+    if (refState.mode === "edit") {
       return (
         <Input
           className={`${breadcrumbInputClassName} w-28 text-sm`}
           onBlur={handleSaveReference}
           onChange={(e) => {
-            setRefValue(e.target.value);
-            setRefError("");
+            const draft = e.target.value;
+            setRefState({ mode: "edit", draft });
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               handleSaveReference();
             }
             if (e.key === "Escape") {
-              setIsEditingRef(false);
-              setRefError("");
+              setRefState(REF_VIEW);
             }
           }}
           placeholder={t("workspaces.referencePlaceholder")}
@@ -226,7 +240,7 @@ export const WorkspaceBreadcrumb = ({
           }}
           size="sm"
           unstyled
-          value={refValue}
+          value={refState.draft}
         />
       );
     }
@@ -235,9 +249,7 @@ export const WorkspaceBreadcrumb = ({
         <button
           className="text-foreground-muted hover:text-muted-foreground cursor-text text-sm"
           onClick={() => {
-            setRefValue(workspace.reference);
-            setRefError("");
-            setIsEditingRef(true);
+            setRefState({ mode: "edit", draft: workspace.reference });
           }}
           type="button"
         >
@@ -251,9 +263,9 @@ export const WorkspaceBreadcrumb = ({
   const referenceHint = (
     <MatterNumberHint
       anchor={refInputEl}
-      error={refError}
-      open={isEditingRef}
-      value={refValue}
+      error={refState.mode === "edit" ? (refState.error ?? "") : ""}
+      open={refState.mode === "edit"}
+      value={refState.mode === "edit" ? refState.draft : ""}
       variant="popover"
     />
   );
@@ -264,7 +276,7 @@ export const WorkspaceBreadcrumb = ({
         {clientSegment}
         <BreadcrumbItem className="shrink-0">
           {(() => {
-            if (isEditing) {
+            if (nameState.mode === "edit") {
               return (
                 <>
                   <span
@@ -287,7 +299,9 @@ export const WorkspaceBreadcrumb = ({
                     className={`${matterNameInputClassName} w-fit`}
                     disabled={updateWorkspace.isPending}
                     onBlur={() => handleSaveProjectName()}
-                    onChange={(e) => setValue(e.target.value)}
+                    onChange={(e) =>
+                      setNameState({ mode: "edit", draft: e.target.value })
+                    }
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.currentTarget.blur();
@@ -300,7 +314,7 @@ export const WorkspaceBreadcrumb = ({
                     autoFocus
                     size="sm"
                     unstyled
-                    value={value}
+                    value={nameState.draft}
                   />
                 </>
               );
@@ -342,15 +356,16 @@ export const WorkspaceBreadcrumb = ({
                   />
                 </span>
                 <span className="truncate">{displayName}</span>
-                {workspace.reference && !isEditingRef ? (
+                {workspace.reference && refState.mode === "view" ? (
                   <span
                     className="text-foreground-muted shrink-0 text-sm"
                     onContextMenu={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      setRefValue(workspace.reference);
-                      setRefError("");
-                      setIsEditingRef(true);
+                      setRefState({
+                        mode: "edit",
+                        draft: workspace.reference,
+                      });
                     }}
                   >
                     {workspace.reference}
@@ -359,7 +374,7 @@ export const WorkspaceBreadcrumb = ({
               </Link>
             );
           })()}
-          {isEditingRef ? referenceSegment : null}
+          {refState.mode === "edit" ? referenceSegment : null}
           {referenceHint}
         </BreadcrumbItem>
         <Popover onOpenChange={setColorPickerOpen} open={colorPickerOpen}>
@@ -382,7 +397,7 @@ export const WorkspaceBreadcrumb = ({
     );
   }
 
-  if (isEditing) {
+  if (nameState.mode === "edit") {
     return (
       <>
         {clientSegment}
@@ -392,7 +407,9 @@ export const WorkspaceBreadcrumb = ({
             className={`${matterNameInputClassName} w-fit`}
             disabled={updateWorkspace.isPending}
             onBlur={() => handleSaveProjectName()}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) =>
+              setNameState({ mode: "edit", draft: e.target.value })
+            }
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.currentTarget.blur();
@@ -405,7 +422,7 @@ export const WorkspaceBreadcrumb = ({
             autoFocus
             size="sm"
             unstyled
-            value={value}
+            value={nameState.draft}
           />
           {referenceSegment}
           {referenceHint}
