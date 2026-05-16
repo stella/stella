@@ -79,6 +79,22 @@ export const userErrorMessage = (
   return toAPIError(error).message;
 };
 
+/** User-safe error description for thrown errors (e.g. from
+ *  `useMutation` onError). Accepts any thrown value; falls back to
+ *  the supplied text for non-API failures and 5xx responses. */
+export const userErrorFromThrown = (
+  error: unknown,
+  fallback: string,
+): string => {
+  if (APIError.is(error)) {
+    if (error.status >= SERVER_ERROR_THRESHOLD) {
+      return fallback;
+    }
+    return error.message;
+  }
+  return fallback;
+};
+
 const AUTH_ERROR_CODES = {
   YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION: true,
 } as const;

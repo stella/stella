@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import {
   CircleHelpIcon,
@@ -29,7 +29,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { McpIcon } from "@/components/mcp-icon";
 import { api } from "@/lib/api";
-import { userErrorMessage } from "@/lib/errors";
+import { toAPIError, userErrorFromThrown } from "@/lib/errors";
 import { subscribeToMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { toSafeId } from "@/lib/safe-id";
 import { sanitizeHref } from "@/lib/sanitize-href";
@@ -270,158 +270,159 @@ function ConnectorCard({
   userCanManageCustomConnectors: boolean;
 }) {
   const t = useTranslations();
-  const [busy, setBusy] = useState(false);
   const [token, setToken] = useState("");
   const [showTokenInput, setShowTokenInput] = useState(
     connector.authType === "bearer" && connection?.status === "needs_reauth",
   );
 
-  const connect = async () => {
-    setBusy(true);
-    const response = await api.mcp
-      .connectors({ slug: connector.slug })
-      .connect.post({ queryKey: ["mcp"] });
-    setBusy(false);
-
-    if (response.error) {
-      showApiError({
-        error: response.error,
-        fallback: t("knowledge.mcp.errorDescription"),
-        title: t("knowledge.mcp.errorTitle"),
-      });
-      return;
-    }
-
-    if (response.data.type === "bearer") {
-      setShowTokenInput(true);
-      return;
-    }
-
-    if (response.data.type === "oauth2") {
-      const popup = window.open(
-        response.data.authorizeUrl,
-        "_blank",
-        "width=560,height=720",
-      );
-
-      if (!popup) {
-        window.location.assign(response.data.authorizeUrl);
-      }
-      return;
-    }
-
-    stellaToast.add({
-      title: t("knowledge.mcp.connectedToast"),
-      type: "success",
+  const handleApiError = (error: unknown) => {
+    showApiError({
+      error,
+      fallback: t("knowledge.mcp.errorDescription"),
+      title: t("knowledge.mcp.errorTitle"),
     });
-    onChanged();
   };
 
-  const saveToken = async () => {
+  const connectMutation = useMutation({
+    mutationFn: async () => {
+      const response = await api.mcp
+        .connectors({ slug: connector.slug })
+        .connect.post({ queryKey: ["mcp"] });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: (data) => {
+      if (data.type === "bearer") {
+        setShowTokenInput(true);
+        return;
+      }
+      if (data.type === "oauth2") {
+        const popup = window.open(
+          data.authorizeUrl,
+          "_blank",
+          "width=560,height=720",
+        );
+        if (!popup) {
+          window.location.assign(data.authorizeUrl);
+        }
+        return;
+      }
+      stellaToast.add({
+        title: t("knowledge.mcp.connectedToast"),
+        type: "success",
+      });
+      onChanged();
+    },
+    onError: handleApiError,
+  });
+
+  const saveTokenMutation = useMutation({
+    mutationFn: async (trimmedToken: string) => {
+      const response = await api.mcp.connections.post({
+        connectorSlug: connector.slug,
+        token: trimmedToken,
+        queryKey: ["mcp"],
+      });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      setToken("");
+      setShowTokenInput(false);
+      stellaToast.add({
+        title: t("knowledge.mcp.connectedToast"),
+        type: "success",
+      });
+      onChanged();
+    },
+    onError: handleApiError,
+  });
+
+  const disconnectMutation = useMutation({
+    mutationFn: async (connectionId: string) => {
+      const response = await api.mcp
+        .connections({
+          connectionId: toSafeId<"mcpUserConnection">(connectionId),
+        })
+        .delete({ queryKey: ["mcp"] });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => onChanged(),
+    onError: handleApiError,
+  });
+
+  const setEnabledMutation = useMutation({
+    mutationFn: async (payload: { connectionId: string; enabled: boolean }) => {
+      const response = await api.mcp
+        .connections({
+          connectionId: toSafeId<"mcpUserConnection">(payload.connectionId),
+        })
+        .patch({
+          enabled: payload.enabled,
+          queryKey: ["mcp"],
+        });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => onChanged(),
+    onError: handleApiError,
+  });
+
+  const deleteConnectorMutation = useMutation({
+    mutationFn: async () => {
+      const response = await api.mcp
+        .connectors({ slug: connector.slug })
+        .delete({ queryKey: ["mcp"] });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => onChanged(),
+    onError: handleApiError,
+  });
+
+  const busy =
+    connectMutation.isPending ||
+    saveTokenMutation.isPending ||
+    disconnectMutation.isPending ||
+    setEnabledMutation.isPending ||
+    deleteConnectorMutation.isPending;
+
+  const connect = () => connectMutation.mutate();
+  const saveToken = () => {
     const trimmedToken = token.trim();
     if (!trimmedToken) {
       return;
     }
-
-    setBusy(true);
-    const response = await api.mcp.connections.post({
-      connectorSlug: connector.slug,
-      token: trimmedToken,
-      queryKey: ["mcp"],
-    });
-    setBusy(false);
-
-    if (response.error) {
-      showApiError({
-        error: response.error,
-        fallback: t("knowledge.mcp.errorDescription"),
-        title: t("knowledge.mcp.errorTitle"),
-      });
-      return;
-    }
-
-    setToken("");
-    setShowTokenInput(false);
-    stellaToast.add({
-      title: t("knowledge.mcp.connectedToast"),
-      type: "success",
-    });
-    onChanged();
+    saveTokenMutation.mutate(trimmedToken);
   };
-
-  const disconnect = async () => {
+  const disconnect = () => {
     if (!connection || busy) {
       return;
     }
-
-    setBusy(true);
-    const response = await api.mcp
-      .connections({
-        connectionId: toSafeId<"mcpUserConnection">(connection.id),
-      })
-      .delete({ queryKey: ["mcp"] });
-    setBusy(false);
-
-    if (response.error) {
-      showApiError({
-        error: response.error,
-        fallback: t("knowledge.mcp.errorDescription"),
-        title: t("knowledge.mcp.errorTitle"),
-      });
-      return;
-    }
-
-    onChanged();
+    disconnectMutation.mutate(connection.id);
   };
-
-  const setEnabled = async (enabled: boolean) => {
+  const setEnabled = (enabled: boolean) => {
     if (!connection || busy) {
       return;
     }
-
-    setBusy(true);
-    const response = await api.mcp
-      .connections({
-        connectionId: toSafeId<"mcpUserConnection">(connection.id),
-      })
-      .patch({
-        enabled,
-        queryKey: ["mcp"],
-      });
-    setBusy(false);
-
-    if (response.error) {
-      showApiError({
-        error: response.error,
-        fallback: t("knowledge.mcp.errorDescription"),
-        title: t("knowledge.mcp.errorTitle"),
-      });
-      return;
-    }
-
-    onChanged();
+    setEnabledMutation.mutate({ connectionId: connection.id, enabled });
   };
-
-  const deleteConnector = async () => {
+  const deleteConnector = () => {
     if (busy) {
       return;
     }
-    setBusy(true);
-    const response = await api.mcp
-      .connectors({ slug: connector.slug })
-      .delete({ queryKey: ["mcp"] });
-    setBusy(false);
-
-    if (response.error) {
-      showApiError({
-        error: response.error,
-        fallback: t("knowledge.mcp.errorDescription"),
-        title: t("knowledge.mcp.errorTitle"),
-      });
-      return;
-    }
-
-    onChanged();
+    deleteConnectorMutation.mutate();
   };
 
   const connected = connection?.status === "connected";
@@ -466,10 +467,10 @@ function ConnectorCard({
             <ChatUseSwitchButton
               busy={busy}
               enabled={enabled}
-              onToggle={() => void setEnabled(!enabled)}
+              onToggle={() => setEnabled(!enabled)}
             />
           ) : (
-            <Button disabled={busy} onClick={() => void connect()} size="sm">
+            <Button disabled={busy} onClick={connect} size="sm">
               {needsReauth ? (
                 <RefreshCcwIcon className="me-1.5 size-4" />
               ) : (
@@ -484,7 +485,7 @@ function ConnectorCard({
             <Button
               aria-busy={busy}
               aria-label={t("knowledge.mcp.disconnect")}
-              onClick={() => void disconnect()}
+              onClick={disconnect}
               size="sm"
               variant="ghost"
             >
@@ -495,7 +496,7 @@ function ConnectorCard({
             <Button
               aria-busy={busy}
               aria-label={t("common.delete")}
-              onClick={() => void deleteConnector()}
+              onClick={deleteConnector}
               size="sm"
               variant="ghost"
             >
@@ -523,10 +524,7 @@ function ConnectorCard({
               type="password"
               value={token}
             />
-            <Button
-              disabled={busy || !token.trim()}
-              onClick={() => void saveToken()}
-            >
+            <Button disabled={busy || !token.trim()} onClick={saveToken}>
               <KeyRoundIcon className="me-1.5 size-4" />
               {t("knowledge.mcp.saveToken")}
             </Button>
@@ -558,32 +556,38 @@ function NativeToolCard({
   onChanged: () => void;
 }) {
   const t = useTranslations();
-  const [busy, setBusy] = useState(false);
   const iconHref = tool.iconUrl ?? fallbackIconUrl(tool.url);
   const safeIconHref =
     iconHref === undefined ? undefined : sanitizeHref(iconHref);
 
-  const setEnabled = async (enabled: boolean) => {
-    if (busy) {
-      return;
-    }
-    setBusy(true);
-    const response = await api.mcp["native-tools"]({ slug: tool.slug }).patch({
-      enabled,
-      queryKey: ["mcp"],
-    });
-    setBusy(false);
-
-    if (response.error) {
+  const setEnabledMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const response = await api.mcp["native-tools"]({ slug: tool.slug }).patch(
+        {
+          enabled,
+          queryKey: ["mcp"],
+        },
+      );
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => onChanged(),
+    onError: (error) => {
       showApiError({
-        error: response.error,
+        error,
         fallback: t("knowledge.mcp.errorDescription"),
         title: t("knowledge.mcp.errorTitle"),
       });
+    },
+  });
+  const busy = setEnabledMutation.isPending;
+  const setEnabled = (enabled: boolean) => {
+    if (busy) {
       return;
     }
-
-    onChanged();
+    setEnabledMutation.mutate(enabled);
   };
 
   return (
@@ -611,7 +615,7 @@ function NativeToolCard({
         <ChatUseSwitchButton
           busy={busy}
           enabled={tool.enabled}
-          onToggle={() => void setEnabled(!tool.enabled)}
+          onToggle={() => setEnabled(!tool.enabled)}
         />
       ) : (
         <span
@@ -681,12 +685,11 @@ const fallbackIconUrl = (rawUrl: string): string | undefined => {
 
 type WizardState =
   | { step: "idle" }
-  | { step: "url"; url: string; busy: boolean }
+  | { step: "url"; url: string }
   | {
       step: "token";
       createdConnector: CreatedConnector;
       token: string;
-      busy: boolean;
     };
 
 const WIZARD_IDLE: WizardState = { step: "idle" };
@@ -695,132 +698,135 @@ function AddServerCard({ onChanged }: { onChanged: () => void }) {
   const t = useTranslations();
   const [wizard, setWizard] = useState<WizardState>(WIZARD_IDLE);
 
+  const handleApiError = (error: unknown) => {
+    showApiError({
+      error,
+      fallback: t("knowledge.mcp.errorDescription"),
+      title: t("knowledge.mcp.errorTitle"),
+    });
+  };
+
   const reset = () => {
     setWizard(WIZARD_IDLE);
   };
 
-  const connectConnector = async (connector: CreatedConnector) => {
-    const response = await api.mcp
-      .connectors({ slug: connector.slug })
-      .connect.post({ queryKey: ["mcp"] });
-
-    if (response.error) {
-      showApiError({
-        error: response.error,
-        fallback: t("knowledge.mcp.errorDescription"),
-        title: t("knowledge.mcp.errorTitle"),
-      });
-      return;
-    }
-
-    if (response.data.type === "bearer") {
-      setWizard({
-        step: "token",
-        createdConnector: connector,
-        token: "",
-        busy: false,
-      });
-      return;
-    }
-
-    if (response.data.type === "oauth2") {
-      const popup = window.open(
-        response.data.authorizeUrl,
-        "_blank",
-        "width=560,height=720",
-      );
-
-      if (!popup) {
-        window.location.assign(response.data.authorizeUrl);
+  const connectMutation = useMutation({
+    mutationFn: async (connector: CreatedConnector) => {
+      const response = await api.mcp
+        .connectors({ slug: connector.slug })
+        .connect.post({ queryKey: ["mcp"] });
+      if (response.error) {
+        throw toAPIError(response.error);
       }
+      return { connector, data: response.data };
+    },
+    onSuccess: ({ connector, data }) => {
+      if (data.type === "bearer") {
+        setWizard({
+          step: "token",
+          createdConnector: connector,
+          token: "",
+        });
+        return;
+      }
+      if (data.type === "oauth2") {
+        const popup = window.open(
+          data.authorizeUrl,
+          "_blank",
+          "width=560,height=720",
+        );
+        if (!popup) {
+          window.location.assign(data.authorizeUrl);
+        }
+        reset();
+        return;
+      }
+      stellaToast.add({
+        title: t("knowledge.mcp.connectedToast"),
+        type: "success",
+      });
+      onChanged();
       reset();
-      return;
-    }
+    },
+    onError: handleApiError,
+  });
 
-    stellaToast.add({
-      title: t("knowledge.mcp.connectedToast"),
-      type: "success",
-    });
-    onChanged();
-    reset();
-  };
+  const addServerMutation = useMutation({
+    mutationFn: async (trimmedUrl: string) => {
+      const response = await api.mcp.connectors.post({
+        url: trimmedUrl,
+        queryKey: ["mcp"],
+      });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: (data) => {
+      onChanged();
+      connectMutation.mutate(data.connector);
+    },
+    onError: handleApiError,
+  });
 
-  const addServer = async () => {
+  const saveTokenMutation = useMutation({
+    mutationFn: async (payload: { connectorSlug: string; token: string }) => {
+      const response = await api.mcp.connections.post({
+        connectorSlug: payload.connectorSlug,
+        token: payload.token,
+        queryKey: ["mcp"],
+      });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      stellaToast.add({
+        title: t("knowledge.mcp.connectedToast"),
+        type: "success",
+      });
+      onChanged();
+      reset();
+    },
+    onError: handleApiError,
+  });
+
+  const busy =
+    connectMutation.isPending ||
+    addServerMutation.isPending ||
+    saveTokenMutation.isPending;
+
+  const addServer = () => {
     if (wizard.step !== "url") {
       return;
     }
     const trimmedUrl = wizard.url.trim();
-    if (!trimmedUrl || wizard.busy) {
+    if (!trimmedUrl || busy) {
       return;
     }
-
-    setWizard({ ...wizard, busy: true });
-    const response = await api.mcp.connectors.post({
-      url: trimmedUrl,
-      queryKey: ["mcp"],
-    });
-
-    if (response.error) {
-      setWizard((prev) =>
-        prev.step === "url" ? { ...prev, busy: false } : prev,
-      );
-      showApiError({
-        error: response.error,
-        fallback: t("knowledge.mcp.errorDescription"),
-        title: t("knowledge.mcp.errorTitle"),
-      });
-      return;
-    }
-
-    setWizard((prev) =>
-      prev.step === "url" ? { ...prev, busy: false } : prev,
-    );
-    onChanged();
-    await connectConnector(response.data.connector);
+    addServerMutation.mutate(trimmedUrl);
   };
 
-  const saveToken = async () => {
+  const saveToken = () => {
     if (wizard.step !== "token") {
       return;
     }
     const trimmedToken = wizard.token.trim();
-    if (!trimmedToken || wizard.busy) {
+    if (!trimmedToken || busy) {
       return;
     }
-
-    const { createdConnector } = wizard;
-    setWizard({ ...wizard, busy: true });
-    const response = await api.mcp.connections.post({
-      connectorSlug: createdConnector.slug,
+    saveTokenMutation.mutate({
+      connectorSlug: wizard.createdConnector.slug,
       token: trimmedToken,
-      queryKey: ["mcp"],
     });
-
-    if (response.error) {
-      setWizard((prev) =>
-        prev.step === "token" ? { ...prev, busy: false } : prev,
-      );
-      showApiError({
-        error: response.error,
-        fallback: t("knowledge.mcp.errorDescription"),
-        title: t("knowledge.mcp.errorTitle"),
-      });
-      return;
-    }
-
-    stellaToast.add({
-      title: t("knowledge.mcp.connectedToast"),
-      type: "success",
-    });
-    onChanged();
-    reset();
   };
 
   if (wizard.step === "idle") {
     return (
       <button
         className="bg-card hover:bg-muted/30 focus-visible:ring-ring flex items-center gap-3 rounded-lg border border-dashed p-3 text-start transition-colors focus-visible:ring-2 focus-visible:outline-none"
-        onClick={() => setWizard({ step: "url", url: "", busy: false })}
+        onClick={() => setWizard({ step: "url", url: "" })}
         type="button"
       >
         <PlusIcon className="text-muted-foreground size-5 shrink-0" />
@@ -837,7 +843,7 @@ function AddServerCard({ onChanged }: { onChanged: () => void }) {
         className="bg-card flex items-center gap-2 rounded-lg border p-2 ps-3"
         onSubmit={(event) => {
           event.preventDefault();
-          void addServer();
+          addServer();
         }}
       >
         <PlusIcon className="text-muted-foreground size-5 shrink-0" />
@@ -860,14 +866,8 @@ function AddServerCard({ onChanged }: { onChanged: () => void }) {
           type="url"
           value={wizard.url}
         />
-        <Button
-          disabled={wizard.busy || !wizard.url.trim()}
-          size="sm"
-          type="submit"
-        >
-          {wizard.busy ? (
-            <LoaderIcon className="me-1.5 size-4 animate-spin" />
-          ) : null}
+        <Button disabled={busy || !wizard.url.trim()} size="sm" type="submit">
+          {busy ? <LoaderIcon className="me-1.5 size-4 animate-spin" /> : null}
           {t("knowledge.mcp.addAndConnect")}
         </Button>
         <Button
@@ -889,7 +889,7 @@ function AddServerCard({ onChanged }: { onChanged: () => void }) {
         className="flex items-center gap-2"
         onSubmit={(event) => {
           event.preventDefault();
-          void saveToken();
+          saveToken();
         }}
       >
         <KeyRoundIcon className="text-muted-foreground size-5 shrink-0" />
@@ -914,14 +914,8 @@ function AddServerCard({ onChanged }: { onChanged: () => void }) {
           type="password"
           value={wizard.token}
         />
-        <Button
-          disabled={wizard.busy || !wizard.token.trim()}
-          size="sm"
-          type="submit"
-        >
-          {wizard.busy ? (
-            <LoaderIcon className="me-1.5 size-4 animate-spin" />
-          ) : null}
+        <Button disabled={busy || !wizard.token.trim()} size="sm" type="submit">
+          {busy ? <LoaderIcon className="me-1.5 size-4 animate-spin" /> : null}
           {t("knowledge.mcp.saveToken")}
         </Button>
         <Button
@@ -946,13 +940,13 @@ function showApiError({
   fallback,
   title,
 }: {
-  error: Parameters<typeof userErrorMessage>[0];
+  error: unknown;
   fallback: string;
   title: string;
 }) {
   stellaToast.add({
     title,
-    description: userErrorMessage(error, fallback),
+    description: userErrorFromThrown(error, fallback),
     type: "error",
   });
 }

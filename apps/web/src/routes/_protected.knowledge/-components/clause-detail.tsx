@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
   Loader2Icon,
@@ -43,7 +43,11 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
-import { userErrorMessage } from "@/lib/errors";
+import {
+  toAPIError,
+  userErrorFromThrown,
+  userErrorMessage,
+} from "@/lib/errors";
 import { ClauseBody } from "@/routes/_protected.knowledge/-components/clause-body";
 import { diffClauseBodies } from "@/routes/_protected.knowledge/-components/clause-diff";
 import type { ParagraphDiff } from "@/routes/_protected.knowledge/-components/clause-diff";
@@ -150,7 +154,6 @@ export const ClauseDetailView = ({
   const detailQuery = useQuery(clauseDetailOptions(organizationId, clauseId));
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   // SAFETY: The API returns body as ClauseParagraph[]
   // but Eden types it as unknown due to JSONB.
@@ -163,31 +166,30 @@ export const ClauseDetailView = ({
     });
   }, [clauseId, organizationId, queryClient]);
 
-  const handleDelete = useCallback(async () => {
-    setDeleting(true);
-    const response = await api.clauses({ clauseId }).delete();
-
-    setDeleting(false);
-
-    if (response.error) {
+  const deleteClause = useMutation({
+    mutationFn: async () => {
+      const response = await api.clauses({ clauseId }).delete();
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      stellaToast.add({
+        type: "success",
+        title: t("clauses.clauseDeleted"),
+      });
+      setDeleteOpen(false);
+      onDeleted();
+    },
+    onError: (error) => {
       stellaToast.add({
         type: "error",
         title: t("clauses.deleteFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
+        description: userErrorFromThrown(error, t("common.unexpectedError")),
       });
-      return;
-    }
-
-    stellaToast.add({
-      type: "success",
-      title: t("clauses.clauseDeleted"),
-    });
-    setDeleteOpen(false);
-    onDeleted();
-  }, [clauseId, t, onDeleted]);
+    },
+  });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -231,9 +233,9 @@ export const ClauseDetailView = ({
                       {t("common.cancel")}
                     </AlertDialogClose>
                     <Button
-                      disabled={deleting}
+                      disabled={deleteClause.isPending}
                       onClick={() => {
-                        void handleDelete();
+                        deleteClause.mutate();
                       }}
                       variant="destructive"
                     >
