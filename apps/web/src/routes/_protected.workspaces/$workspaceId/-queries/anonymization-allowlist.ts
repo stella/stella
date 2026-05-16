@@ -10,8 +10,9 @@ export type AnonymizationAllowlistKey = {
 };
 
 export const anonymizationAllowlistKeys = {
+  root: ["anonymization-allowlist"] as string[],
   all: ({ workspaceId, entityId }: AnonymizationAllowlistKey): string[] => [
-    "anonymization-allowlist",
+    ...anonymizationAllowlistKeys.root,
     workspaceId,
     entityId ?? "no-entity",
   ],
@@ -23,7 +24,7 @@ export const anonymizationAllowlistKeys = {
    * would otherwise keep stale exclusions.
    */
   workspace: (workspaceId: string): string[] => [
-    "anonymization-allowlist",
+    ...anonymizationAllowlistKeys.root,
     workspaceId,
   ],
 };

@@ -21,14 +21,15 @@ type FileData = {
 type FileMetadata = Omit<FileData, "buffer">;
 
 export const filesKeys = {
+  all: () => ["files"],
   byFieldId: (key: FileByFieldIdKey) => [
-    "files",
+    ...filesKeys.all(),
     key.workspaceId,
     key.fieldId,
     key.purpose ?? "display",
   ],
   metadataByFieldId: (key: FileByFieldIdKey) => [
-    "files",
+    ...filesKeys.all(),
     "metadata",
     key.workspaceId,
     key.fieldId,
