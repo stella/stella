@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { getRouteApi } from "@tanstack/react-router";
 import { SearchIcon } from "lucide-react";
@@ -21,13 +21,12 @@ export const OrganizationListToolbar = () => {
   // Search lives on the parent route so it survives sub-tab swaps;
   // navigate must target the leaf so we don't pull the user up to
   // the parent (which has no index and would render blank).
-  const q = settingsOrgParentRoute.useSearch({ select: (s) => s.q });
+  const q = settingsOrgParentRoute.useSearch({ select: (s) => s.q ?? "" });
   const navigate = membersRoute.useNavigate();
-  const [localQuery, setLocalQuery] = useState(() => q ?? "");
-
-  useEffect(() => {
-    setLocalQuery(q ?? "");
-  }, [q]);
+  // Local controlled-input value keeps IME composition snappy and
+  // prevents flicker between keystrokes; the URL is the source of
+  // truth and gets the trimmed value via the debounced writer.
+  const [localQuery, setLocalQuery] = useState(q);
 
   const updateSearch = useDebouncedCallback((value: string) => {
     // eslint-disable-next-line typescript/no-floating-promises
