@@ -145,13 +145,21 @@ const openFolioCollabSessionHandler = async function* ({
 
       const existingSession = existingSessions.at(0);
       if (existingSession) {
-        const seedClaimStale =
-          existingSession.seededAt === null &&
-          (existingSession.seedClaimedAt === null ||
+        if (existingSession.seededAt === null) {
+          const seedClaimStale =
+            existingSession.seedClaimedAt === null ||
             existingSession.seedClaimedAt.getTime() <
-              Date.now() - SEED_CLAIM_STALE_MS);
+              Date.now() - SEED_CLAIM_STALE_MS;
 
-        if (seedClaimStale) {
+          if (!seedClaimStale) {
+            return {
+              error: {
+                message: "Collaborative edit session is still preparing.",
+                status: 409,
+              },
+            } as const;
+          }
+
           const baseContent = await readVersionDocxTarget({
             entityVersionId: existingSession.baseVersionId,
             propertyId,

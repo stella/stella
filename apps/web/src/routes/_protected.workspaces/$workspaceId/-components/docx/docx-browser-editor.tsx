@@ -1026,7 +1026,23 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       })
     ) {
       if (isCollaborativeEditing) {
-        await finalizeActiveSession();
+        if (collaborationSession === null) {
+          return;
+        }
+
+        const finalized = await collaborationSession.finalize();
+        if (finalized === null) {
+          setAutosaveStatus("pending");
+          stellaToast.add({
+            description: t("folio.saveCheckpointFailedDescription"),
+            title: t("folio.editSaveFailedTitle"),
+            type: "error",
+          });
+          return;
+        }
+        if (finalized.outcome === "finalized") {
+          onSaved?.(finalized.fieldId);
+        }
         onClose();
         return;
       }
@@ -1073,16 +1089,34 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     }
     finalizedBufferRef.current = buffer;
     hasSessionChangesRef.current = false;
-    const finalized = await finalizeActiveSession();
     if (isCollaborativeEditing) {
-      if (finalized?.outcome === "finalized") {
-        onSaved?.(finalized.fieldId);
+      if (collaborationSession === null) {
+        return;
+      }
+
+      const collaborativeFinalized = await collaborationSession.finalize();
+      if (collaborativeFinalized === null) {
+        hasSessionChangesRef.current = true;
+        setAutosaveStatus("pending");
+        stellaToast.add({
+          description: t("folio.saveCheckpointFailedDescription"),
+          title: t("folio.editSaveFailedTitle"),
+          type: "error",
+        });
+        return;
+      }
+      if (collaborativeFinalized.outcome === "finalized") {
+        onSaved?.(collaborativeFinalized.fieldId);
       }
       onClose();
+      return;
     }
+
+    await finalizeActiveSession();
   }, [
     cancelActiveSession,
     clearQueuedChangeCheckpoint,
+    collaborationSession,
     fieldId,
     finalizeActiveSession,
     isCollaborativeEditing,
@@ -1179,7 +1213,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     const actions: DocxBrowserEditorActions = {
       cancel: handleCancel,
       finalize: () => {
-        if (state.status === "editing") {
+        if (isCollaborativeEditing || state.status === "editing") {
           void handleFinalize();
         }
       },
@@ -1214,6 +1248,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     flushPendingChanges,
     handleCancel,
     handleFinalize,
+    isCollaborativeEditing,
     requestEditMode,
     state.status,
   ]);
