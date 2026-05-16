@@ -18,17 +18,21 @@ const isRenderingCancelledError = (
 const createCanvasElement = (viewport: PageViewport): HTMLCanvasElement => {
   const canvas = document.createElement("canvas");
 
-  canvas.style.position = "absolute";
-  canvas.style.insetInlineStart = "0";
-  canvas.style.top = "0";
-  canvas.style.transformOrigin = "top left";
-  canvas.style.contain = "content";
+  Object.assign(canvas.style, {
+    contain: "content",
+    insetInlineStart: "0",
+    position: "absolute",
+    top: "0",
+    transformOrigin: "top left",
+  });
 
   const canvasSize = getCanvasSize(viewport);
   canvas.width = canvasSize.width;
   canvas.height = canvasSize.height;
-  canvas.style.width = "100%";
-  canvas.style.height = "100%";
+  Object.assign(canvas.style, {
+    height: "100%",
+    width: "100%",
+  });
 
   return canvas;
 };
@@ -36,11 +40,13 @@ const createCanvasElement = (viewport: PageViewport): HTMLCanvasElement => {
 const createTextLayerElement = (viewport: PageViewport): HTMLDivElement => {
   const textLayerDiv = document.createElement("div");
 
-  textLayerDiv.style.position = "absolute";
-  textLayerDiv.style.inset = "0";
-  textLayerDiv.style.width = `${viewport.width}px`;
-  textLayerDiv.style.height = `${viewport.height}px`;
-  textLayerDiv.style.lineHeight = "1";
+  Object.assign(textLayerDiv.style, {
+    height: `${viewport.height}px`,
+    inset: "0",
+    lineHeight: "1",
+    position: "absolute",
+    width: `${viewport.width}px`,
+  });
 
   const eoc = createEndOfContent();
   textLayerDiv.append(eoc);
@@ -52,15 +58,16 @@ const createEndOfContent = () => {
   const eoc = document.createElement("div");
 
   eoc.className = EOC_CLASS_NAME;
-  eoc.style.display = "none";
-  eoc.style.position = "absolute";
-  eoc.style.top = "0";
-  eoc.style.zIndex = "0";
-  eoc.style.userSelect = "none";
-  eoc.style.width = "100%";
-  eoc.style.height = "100%";
-  // additional style to not lose text cursor when selecting text
-  eoc.style.cursor = "text";
+  Object.assign(eoc.style, {
+    cursor: "text",
+    display: "none",
+    height: "100%",
+    position: "absolute",
+    top: "0",
+    userSelect: "none",
+    width: "100%",
+    zIndex: "0",
+  });
 
   return eoc;
 };

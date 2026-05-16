@@ -181,13 +181,14 @@ export const visibleEntityFieldIds = ({
   requiredPropertyIds?: readonly string[];
 }): string[] => {
   const propertyIds = new Set<string>();
+  const hiddenPropertyIds = new Set(hiddenProperties);
   for (const property of properties) {
     if (property.content.type === "file") {
       propertyIds.add(property.id);
       continue;
     }
 
-    if (!hiddenProperties.includes(property.id)) {
+    if (!hiddenPropertyIds.has(property.id)) {
       propertyIds.add(property.id);
     }
   }

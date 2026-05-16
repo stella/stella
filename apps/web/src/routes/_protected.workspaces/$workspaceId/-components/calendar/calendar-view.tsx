@@ -162,14 +162,13 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   })();
 
   // All date property IDs to show on the calendar
-  const allDatePropertyIds = [datePropertyId];
+  const allDatePropertyIds = new Set([datePropertyId]);
   if (additionalDatePropertyIds) {
     for (const id of additionalDatePropertyIds) {
-      if (!allDatePropertyIds.includes(id)) {
-        allDatePropertyIds.push(id);
-      }
+      allDatePropertyIds.add(id);
     }
   }
+  const visibleDatePropertyIds = [...allDatePropertyIds];
 
   const queryRange = (() => {
     if (mode === "year") {
@@ -198,7 +197,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       sorts,
       dateFrom: queryRange.dateFrom,
       dateTo: queryRange.dateTo,
-      datePropertyIds: allDatePropertyIds,
+      datePropertyIds: visibleDatePropertyIds,
       endDatePropertyId,
     }),
     throwOnError: true,
@@ -207,7 +206,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   // Group tasks by date across all configured date properties
   const entitiesByDate = groupCalendarTasksByDate({
     tasks: calendarTasks,
-    datePropertyIds: allDatePropertyIds,
+    datePropertyIds: visibleDatePropertyIds,
     datePropertyId,
     endDatePropertyId,
   });

@@ -25,27 +25,32 @@ export const getChangelogReleases = (): ChangelogRelease[] => {
     return [];
   }
 
-  return readdirSync(CHANGELOG_DIR)
-    .filter((fileName) => STABLE_CHANGELOG_FILE_PATTERN.test(fileName))
-    .map((fileName) => {
-      const tagName = fileName.replace(/\.md$/, "");
-      const markdown = readFileSync(join(CHANGELOG_DIR, fileName), "utf-8");
-      const heading = findHeading(markdown, 1);
-      const description =
-        findHeading(markdown, 2) ??
-        `Release notes for ${formatReleaseName(tagName)}.`;
+  const releases: ChangelogRelease[] = [];
 
-      return {
-        description,
-        displayName: formatReleaseName(tagName),
-        heading,
-        slug: releaseAnchorId(tagName),
-        tagName,
-      };
-    })
-    .sort((left, right) =>
-      right.tagName.localeCompare(left.tagName, "en", { numeric: true }),
-    );
+  for (const fileName of readdirSync(CHANGELOG_DIR)) {
+    if (!STABLE_CHANGELOG_FILE_PATTERN.test(fileName)) {
+      continue;
+    }
+
+    const tagName = fileName.replace(/\.md$/, "");
+    const markdown = readFileSync(join(CHANGELOG_DIR, fileName), "utf-8");
+    const heading = findHeading(markdown, 1);
+    const description =
+      findHeading(markdown, 2) ??
+      `Release notes for ${formatReleaseName(tagName)}.`;
+
+    releases.push({
+      description,
+      displayName: formatReleaseName(tagName),
+      heading,
+      slug: releaseAnchorId(tagName),
+      tagName,
+    });
+  }
+
+  return releases.sort((left, right) =>
+    right.tagName.localeCompare(left.tagName, "en", { numeric: true }),
+  );
 };
 
 const findHeading = (markdown: string, level: 1 | 2) => {

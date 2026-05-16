@@ -36,6 +36,43 @@ const isValidEmail = (value: string) => {
   return dotIndex > 0 && dotIndex < domain.length - 1;
 };
 
+type ParsedInviteEmails = {
+  valid: string[];
+  invalid: string[];
+};
+
+const parseInviteEmails = (
+  raw: string,
+  existingEmails: readonly string[],
+): ParsedInviteEmails => {
+  const tokens = raw.split(DELIMITERS).flatMap((s) => {
+    const trimmed = s.trim();
+    return trimmed ? [trimmed] : [];
+  });
+
+  const valid: string[] = [];
+  const invalid: string[] = [];
+  const existingEmailSet = new Set(existingEmails);
+  const validEmailSet = new Set<string>();
+
+  for (const token of tokens) {
+    const lower = token.toLowerCase();
+    if (!isValidEmail(lower)) {
+      invalid.push(token);
+      continue;
+    }
+
+    if (existingEmailSet.has(lower) || validEmailSet.has(lower)) {
+      continue;
+    }
+
+    valid.push(lower);
+    validEmailSet.add(lower);
+  }
+
+  return { valid, invalid };
+};
+
 type InviteStepProps = {
   userEmail: string;
   onNext: (data: { emails: string[] }) => void;
@@ -56,24 +93,7 @@ export const InviteStep = ({
 
   const processInput = useCallback(
     (raw: string) => {
-      const tokens = raw
-        .split(DELIMITERS)
-        .map((s) => s.trim())
-        .filter(Boolean);
-
-      const valid: string[] = [];
-      const invalid: string[] = [];
-
-      for (const token of tokens) {
-        const lower = token.toLowerCase();
-        if (isValidEmail(lower)) {
-          if (!emails.includes(lower) && !valid.includes(lower)) {
-            valid.push(lower);
-          }
-        } else {
-          invalid.push(token);
-        }
-      }
+      const { valid, invalid } = parseInviteEmails(raw, emails);
 
       if (valid.length > 0) {
         setEmails((prev) => {
@@ -220,22 +240,14 @@ export const InviteStep = ({
           onClick={() => {
             let finalEmails = emails;
             if (input.trim()) {
-              const tokens = input
-                .split(/[,;\n\t]/)
-                .map((s) => s.trim())
-                .filter(Boolean);
-              const valid = tokens
-                .map((s) => s.toLowerCase())
-                .filter(isValidEmail);
-              const hasInvalid = valid.length < tokens.length;
+              const { valid, invalid } = parseInviteEmails(input, emails);
               processInput(input);
-              if (hasInvalid) {
+              if (invalid.length > 0) {
                 return;
               }
               // Compute final list synchronously since
               // setEmails is async and won't update yet
-              const deduped = valid.filter((s) => !emails.includes(s));
-              finalEmails = [...emails, ...deduped];
+              finalEmails = [...emails, ...valid];
             }
             onNext({ emails: finalEmails });
           }}

@@ -230,13 +230,15 @@ export const roleModelsFromOverrideModels = ({
     return models;
   }
 
+  const providerSet = new Set(providers);
+
   for (const role of ROLE_KEYS) {
     const selection = overrideModels[role];
     if (
       selection?.provider &&
       selection.modelId &&
       isProviderValue(selection.provider) &&
-      providers.includes(selection.provider)
+      providerSet.has(selection.provider)
     ) {
       models[role] = {
         provider: selection.provider,
@@ -385,11 +387,12 @@ export const getAvailableProviderKeys = ({
   currentProvider?: ProviderValue | undefined;
   providers: readonly ProviderCredentialDraft[];
 }): ProviderValue[] => {
-  const usedProviders = new Set(
-    providers
-      .map((providerDraft) => providerDraft.provider)
-      .filter((provider) => provider !== currentProvider),
-  );
+  const usedProviders = new Set<ProviderValue>();
+  for (const providerDraft of providers) {
+    if (providerDraft.provider !== currentProvider) {
+      usedProviders.add(providerDraft.provider);
+    }
+  }
 
   return PROVIDER_KEYS.filter((provider) => !usedProviders.has(provider));
 };

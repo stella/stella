@@ -71,7 +71,7 @@ export const useWorkspaceSSE = (
       WORKSPACE_SSE_EVENT_SOURCE_INIT,
     );
 
-    source.addEventListener("message", (event: MessageEvent) => {
+    const handleMessage = (event: MessageEvent) => {
       try {
         const parsed = parseWorkspaceSSEEvent(String(event.data));
         if (!parsed) {
@@ -90,9 +90,9 @@ export const useWorkspaceSSE = (
       } catch {
         // Malformed SSE data; ignore.
       }
-    });
+    };
 
-    source.addEventListener("error", () => {
+    const handleError = () => {
       // EventSource auto-reconnects; capture for observability
       // only if the connection is fully closed.
       if (source.readyState === EventSource.CLOSED) {
@@ -100,9 +100,14 @@ export const useWorkspaceSSE = (
           new Error(`SSE connection closed for workspace ${workspaceId}`),
         );
       }
-    });
+    };
+
+    source.addEventListener("message", handleMessage);
+    source.addEventListener("error", handleError);
 
     return () => {
+      source.removeEventListener("message", handleMessage);
+      source.removeEventListener("error", handleError);
       source.close();
     };
   }, [workspaceId]);
