@@ -239,7 +239,7 @@ export default defineConfig({
         "typescript/no-unsafe-return": "off",
         "typescript/no-unsafe-argument": "off",
         "typescript/strict-boolean-expressions": "off",
-        
+        "typescript/no-redundant-type-constituents": "off",
         // Existing scripts are operational glue with argument parsing,
         // process orchestration, and one-off reporting branches. Keep a
         // looser legacy budget while new app/library code starts at 30.
