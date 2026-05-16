@@ -1,11 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -50,10 +45,10 @@ export const DocumentAiSourceBar = ({
   const t = useTranslations();
   const openFile = useInspectorStore((s) => s.openFile);
 
-  const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
-  const { data: entity } = useSuspenseQuery(
-    entityOptions(workspaceId, activeTab.entityId),
-  );
+  const propertiesQuery = useQuery(propertiesOptions(workspaceId));
+  const properties = propertiesQuery.data;
+  const entityQuery = useQuery(entityOptions(workspaceId, activeTab.entityId));
+  const entity = entityQuery.data;
   useSyncJustifications({
     workspaceId,
     entityIds: [activeTab.entityId],
@@ -64,7 +59,7 @@ export const DocumentAiSourceBar = ({
   );
 
   const slots = useMemo(() => {
-    if (!justification) {
+    if (!justification || !entity || !properties) {
       return [];
     }
     return Object.values(entity.fields)
@@ -251,7 +246,7 @@ export const DocumentAiSourceBar = ({
     setActiveJustification,
   ]);
 
-  if (!justification) {
+  if (!justification || !entity || !properties) {
     return null;
   }
 

@@ -1,4 +1,4 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { ResolveParams } from "@tanstack/react-router";
 import { BookOpenTextIcon } from "lucide-react";
 
@@ -39,9 +39,13 @@ const extractId = (param: string): SafeId<"caseLawDecision"> => {
 export const CaseLawBreadcrumb = ({
   decisionId: rawParam,
 }: ResolveParams<"/knowledge/case/$decisionId">) => {
-  const { data: decision } = useSuspenseQuery(
+  const { data: decision, isError } = useQuery(
     decisionOptions(extractId(rawParam)),
   );
+
+  if (isError || !decision) {
+    return null;
+  }
 
   const color = getCourtColor(decision.court);
   const displayRef = extractFullRef(decision.documentAst, decision.caseNumber);

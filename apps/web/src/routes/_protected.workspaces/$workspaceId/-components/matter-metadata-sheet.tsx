@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { CopyIcon, CopyPlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -61,7 +61,8 @@ export const MatterMetadataPanel = ({
   const [referenceValue, setReferenceValue] = useState("");
   const [referenceError, setReferenceError] = useState("");
 
-  const { data: workspace } = useSuspenseQuery(workspaceOptions(workspaceId));
+  const workspaceQuery = useQuery(workspaceOptions(workspaceId));
+  const workspace = workspaceQuery.data;
   const deleteWorkspace = useDeleteWorkspace();
   const duplicateWorkspace = useDuplicateWorkspace();
   const canCreateWorkspace = usePermissions({ workspace: ["create"] });
@@ -69,13 +70,19 @@ export const MatterMetadataPanel = ({
   const updateWorkspace = useUpdateWorkspace();
 
   useEffect(() => {
+    if (!workspace) {
+      return;
+    }
     escapedNameRef.current = false;
     setNameValue(workspace.name);
     setReferenceValue(workspace.reference);
     setReferenceError("");
-  }, [workspace.name, workspace.reference]);
+  }, [workspace]);
 
   const handleSaveName = () => {
+    if (!workspace) {
+      return;
+    }
     if (escapedNameRef.current) {
       escapedNameRef.current = false;
       setNameValue(workspace.name);
@@ -88,6 +95,7 @@ export const MatterMetadataPanel = ({
       return;
     }
 
+    const fallbackName = workspace.name;
     updateWorkspace.mutate(
       {
         workspaceId,
@@ -100,13 +108,16 @@ export const MatterMetadataPanel = ({
               ? error.message
               : t("errors.actionFailed");
           stellaToast.add({ title: message, type: "error" });
-          setNameValue(workspace.name);
+          setNameValue(fallbackName);
         },
       },
     );
   };
 
   const handleSaveReference = () => {
+    if (!workspace) {
+      return;
+    }
     const trimmed = referenceValue.trim();
     if (!trimmed || trimmed === workspace.reference) {
       return;
@@ -217,6 +228,10 @@ export const MatterMetadataPanel = ({
       },
     );
   };
+
+  if (workspaceQuery.isError || !workspace) {
+    return null;
+  }
 
   return (
     <>

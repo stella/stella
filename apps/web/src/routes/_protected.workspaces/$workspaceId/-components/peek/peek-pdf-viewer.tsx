@@ -9,7 +9,7 @@ import {
 } from "react";
 import type { ReactNode, RefObject } from "react";
 
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangleIcon,
   FoldHorizontalIcon,
@@ -108,9 +108,10 @@ const PeekPdfViewerContent = ({
 }: PeekPdfViewerProps) => {
   const isImageOrigin = mimeType?.startsWith("image/") ?? false;
 
-  const { data: file } = useSuspenseQuery(
+  const fileQuery = useQuery(
     fileOptions({ workspaceId, fieldId, purpose: filePurpose }),
   );
+  const file = fileQuery.data;
 
   const renderPageOverlay = useCallback(
     (pageId: string) => (
@@ -126,6 +127,10 @@ const PeekPdfViewerContent = ({
     ),
     [activePropertyId, entityId, fieldId, onPeekNavigate, viewId, workspaceId],
   );
+
+  if (fileQuery.isError || !file) {
+    return null;
+  }
 
   if (file.mimeType === DOCX_MIME) {
     return (
