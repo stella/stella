@@ -30,6 +30,7 @@ export type FolioCollaborationSession = {
   collaboration: DocxEditorCollaboration;
   finalize: () => Promise<FinalizeFolioCollaborationSessionResult | null>;
   saveCheckpoint: (docxBuffer: ArrayBuffer) => Promise<boolean>;
+  seedDocumentBuffer: ArrayBuffer | null;
   sessionId: string;
 };
 
@@ -58,6 +59,29 @@ type UseFolioCollaborationSessionOptions = {
 };
 
 const FOLIO_COLLAB_TOKEN_REFRESH_LEEWAY_MS = 5 * 60 * 1000;
+const SEED_DOCUMENT_DOWNLOAD_TIMEOUT_MS = 10_000;
+
+const fetchSeedDocumentBuffer = async (seedDownloadUrl: string) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    SEED_DOCUMENT_DOWNLOAD_TIMEOUT_MS,
+  );
+
+  try {
+    const response = await fetch(seedDownloadUrl, {
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to download collaborative editing seed file.");
+    }
+
+    return await response.arrayBuffer();
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
 
 export const useFolioCollaborationSession = ({
   enabled,
@@ -114,6 +138,22 @@ export const useFolioCollaborationSession = ({
       const sessionId = response.data.collabSessionId;
       let token = response.data.token;
       let tokenExpiresAtMs = Date.parse(response.data.tokenExpiresAt);
+      const seedDocumentBuffer = await (async () => {
+        if (!response.data.shouldSeed) {
+          return null;
+        }
+
+        if (response.data.seedDownloadUrl === null) {
+          throw new Error("Collaborative editing seed file is unavailable.");
+        }
+
+        return await fetchSeedDocumentBuffer(response.data.seedDownloadUrl);
+      })();
+
+      if (isDisposed()) {
+        return;
+      }
+
       const refreshTokenIfNeeded = async () => {
         if (
           Number.isFinite(tokenExpiresAtMs) &&
@@ -283,6 +323,7 @@ export const useFolioCollaborationSession = ({
           collaboration,
           finalize,
           saveCheckpoint,
+          seedDocumentBuffer,
           sessionId,
         },
       });

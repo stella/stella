@@ -74,15 +74,12 @@ import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.c
 
 import {
   getDocxEditBlockReason,
-  selectEditorBuffer,
+  selectDocxBrowserEditorBuffer,
   selectPreviewFile,
   shouldFinalizeEditSession,
 } from "./docx-browser-editor.logic";
 import type { OptimisticPreviewFile } from "./docx-browser-editor.logic";
-import type {
-  EditSessionErrorReason,
-  EditSessionState,
-} from "./use-edit-session";
+import type { EditSessionErrorReason } from "./use-edit-session";
 import { useEditSession } from "./use-edit-session";
 
 const DocxEditor = lazy(async () => {
@@ -544,16 +541,34 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   );
   const changeCheckpointIdleCallbackRef = useRef<number | null>(null);
   const [editorMode, setEditorMode] = useState<EditorMode>("editing");
-  const [compatibility, setCompatibility] = useState<DocxCompatibility | null>(
-    null,
-  );
+  const editTargetKey = `${workspaceId}:${entityId}:${propertyId}:${fieldId}`;
+  const [compatibilityState, setCompatibilityState] = useState<{
+    targetKey: string;
+    value: DocxCompatibility | null;
+  }>({ targetKey: editTargetKey, value: null });
+  const compatibility =
+    compatibilityState.targetKey === editTargetKey
+      ? compatibilityState.value
+      : null;
   const [isPromptingUnlock, setIsPromptingUnlock] = useState(false);
   const [autosaveStatus, setAutosaveStatus] =
     useState<AutosaveStatus>("synced");
   const targetZoom = useDocxFitZoom(containerRef, scaleOffset, 0.85);
   const t = useTranslations();
+  const previewPlaceholder =
+    optimisticPreviewRef.current?.fieldId === fieldId
+      ? optimisticPreviewRef.current.file
+      : undefined;
+  const previewFileQuery = useQuery({
+    ...fileOptions({ workspaceId, fieldId, purpose: "native-display" }),
+    ...(previewPlaceholder !== undefined
+      ? { placeholderData: previewPlaceholder }
+      : { placeholderData: keepPreviousData }),
+  });
   const canAutoRequestCollaboration =
-    isEditing && compatibility?.canSafelyEdit === true;
+    isEditing &&
+    !previewFileQuery.isPlaceholderData &&
+    compatibility?.canSafelyEdit === true;
   const collaborationRuntime = useDocxBrowserCollaboration({
     canUnlock,
     externalCollaboration: collaboration,
@@ -572,16 +587,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     isCollaborativeEditing,
     requestCollaboration,
   } = collaborationRuntime;
-  const previewPlaceholder =
-    optimisticPreviewRef.current?.fieldId === fieldId
-      ? optimisticPreviewRef.current.file
-      : undefined;
-  const previewFileQuery = useQuery({
-    ...fileOptions({ workspaceId, fieldId, purpose: "native-display" }),
-    ...(previewPlaceholder !== undefined
-      ? { placeholderData: previewPlaceholder }
-      : { placeholderData: keepPreviousData }),
-  });
 
   if (previewFileQuery.error) {
     throw previewFileQuery.error;
@@ -681,8 +686,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       clearTimeout(lockedEditPromptTimerRef.current);
       lockedEditPromptTimerRef.current = null;
     }
-    setCompatibility(null);
-  }, [fieldId]);
+    setCompatibilityState({ targetKey: editTargetKey, value: null });
+  }, [editTargetKey, fieldId]);
 
   const reportUnsupportedEditAttempt = useCallback(() => {
     stellaToast.warning(t("folio.unsupportedDocxEditTitle"), {
@@ -1222,7 +1227,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     preservedLoadedBufferRef.current?.fieldId === fieldId
       ? preservedLoadedBufferRef.current.buffer
       : null;
+  const collaborationSeedBuffer =
+    collaborationSession?.seedDocumentBuffer ?? null;
   const editorBuffer = selectDocxBrowserEditorBuffer({
+    collaborationSeedBuffer,
     isCollaborativeEditing,
     lastEditingBuffer: lastEditingBufferRef.current,
     preservedLoadedBuffer,
@@ -1420,7 +1428,14 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
                 }
               }}
               onCompatibilityChange={(nextCompatibility) => {
-                setCompatibility(nextCompatibility);
+                if (previewFileQuery.isPlaceholderData) {
+                  return;
+                }
+
+                setCompatibilityState({
+                  targetKey: editTargetKey,
+                  value: nextCompatibility,
+                });
                 onCompatibilityChange?.(nextCompatibility);
               }}
               onAnonymizationMatchesChange={handleAnonymizationMatchesChange}
@@ -1470,6 +1485,11 @@ type UseDocxBrowserCollaborationOptions = {
   workspaceId: string;
 };
 
+type CollaborationRequestState = {
+  requested: boolean;
+  targetKey: string;
+};
+
 const useDocxBrowserCollaboration = ({
   canUnlock,
   entityId,
@@ -1479,7 +1499,15 @@ const useDocxBrowserCollaboration = ({
   propertyId,
   workspaceId,
 }: UseDocxBrowserCollaborationOptions) => {
-  const [requested, setRequested] = useState(initiallyRequested);
+  const targetKey = `${workspaceId}:${entityId}:${propertyId}:${fieldId}`;
+  const [requestState, setRequestState] = useState<CollaborationRequestState>({
+    requested: initiallyRequested,
+    targetKey,
+  });
+  const requested =
+    requestState.targetKey === targetKey
+      ? requestState.requested
+      : initiallyRequested;
   const currentUser = useRouteContext({
     from: "/_protected",
     select: (ctx) => ({
@@ -1502,18 +1530,16 @@ const useDocxBrowserCollaboration = ({
     workspaceId,
   });
   useEffect(() => {
-    if (initiallyRequested) {
-      setRequested(true);
-    }
-  }, [initiallyRequested]);
+    setRequestState({ requested: initiallyRequested, targetKey });
+  }, [initiallyRequested, targetKey]);
   const collaborationSession =
     collaborationState.status === "ready" ? collaborationState.session : null;
   const cancelCollaboration = useCallback(() => {
-    setRequested(false);
-  }, []);
+    setRequestState({ requested: false, targetKey });
+  }, [targetKey]);
   const requestCollaboration = useCallback(() => {
-    setRequested(true);
-  }, []);
+    setRequestState({ requested: true, targetKey });
+  }, [targetKey]);
 
   return {
     activeCollaboration:
@@ -1525,43 +1551,6 @@ const useDocxBrowserCollaboration = ({
     isCollaborativeEditing: collaborationSession !== null,
     requestCollaboration,
   };
-};
-
-type SelectDocxBrowserEditorBufferOptions = {
-  isCollaborativeEditing: boolean;
-  lastEditingBuffer: ArrayBuffer | null;
-  preservedLoadedBuffer: ArrayBuffer | null;
-  previewBuffer?: ArrayBuffer | undefined;
-  state: EditSessionState;
-};
-
-const selectDocxBrowserEditorBuffer = ({
-  isCollaborativeEditing,
-  lastEditingBuffer,
-  preservedLoadedBuffer,
-  previewBuffer,
-  state,
-}: SelectDocxBrowserEditorBufferOptions) => {
-  if (isCollaborativeEditing) {
-    return previewBuffer;
-  }
-
-  if (state.status === "editing") {
-    return selectEditorBuffer({
-      status: state.status,
-      editingBuffer: state.buffer,
-      lastEditingBuffer,
-      preservedLoadedBuffer,
-      previewBuffer,
-    });
-  }
-
-  return selectEditorBuffer({
-    status: state.status,
-    lastEditingBuffer,
-    preservedLoadedBuffer,
-    previewBuffer,
-  });
 };
 
 const AutosaveIndicator = ({ status }: { status: AutosaveStatus }) => {

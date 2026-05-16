@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   getDocxEditBlockReason,
+  selectDocxBrowserEditorBuffer,
   selectEditorBuffer,
   selectPreviewFile,
   shouldBlockDocxEdit,
@@ -122,6 +123,37 @@ describe("DOCX browser editor buffer selection", () => {
         lastEditingBuffer: null,
         preservedLoadedBuffer: null,
         previewBuffer,
+      }),
+    ).toBe(previewBuffer);
+  });
+
+  test("uses the collaboration seed buffer before seeding a shared session", () => {
+    const seedBuffer = bufferFrom([7]);
+    const previewBuffer = bufferFrom([4]);
+
+    expect(
+      selectDocxBrowserEditorBuffer({
+        collaborationSeedBuffer: seedBuffer,
+        isCollaborativeEditing: true,
+        lastEditingBuffer: null,
+        preservedLoadedBuffer: null,
+        previewBuffer,
+        state: { status: "idle" },
+      }),
+    ).toBe(seedBuffer);
+  });
+
+  test("falls back to the preview buffer for already-seeded shared sessions", () => {
+    const previewBuffer = bufferFrom([4]);
+
+    expect(
+      selectDocxBrowserEditorBuffer({
+        collaborationSeedBuffer: null,
+        isCollaborativeEditing: true,
+        lastEditingBuffer: null,
+        preservedLoadedBuffer: null,
+        previewBuffer,
+        state: { status: "idle" },
       }),
     ).toBe(previewBuffer);
   });
