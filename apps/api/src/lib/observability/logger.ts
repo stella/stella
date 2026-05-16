@@ -1,8 +1,39 @@
 import "@/api/lib/observability/otel";
 import { logs, SeverityNumber } from "@opentelemetry/api-logs";
-import type { LogAttributes } from "@opentelemetry/api-logs";
 
 const otelLogger = logs.getLogger("stella.api");
+const SENSITIVE_ATTRIBUTE_KEY_PATTERN =
+  /(?:body|content|email|fileName|message|name|title)/i;
+
+type LoggerAttributeValue = boolean | number | string;
+
+export type LoggerAttributes = Record<string, LoggerAttributeValue>;
+
+export const sanitizeLogAttributes = (
+  attributes: LoggerAttributes | undefined,
+): LoggerAttributes | undefined => {
+  if (!attributes) {
+    return undefined;
+  }
+
+  let dropped = 0;
+  const safeAttributes: LoggerAttributes = {};
+
+  for (const [key, value] of Object.entries(attributes)) {
+    if (SENSITIVE_ATTRIBUTE_KEY_PATTERN.test(key)) {
+      dropped += 1;
+      continue;
+    }
+
+    safeAttributes[key] = value;
+  }
+
+  if (dropped > 0) {
+    safeAttributes["log.attributes_dropped"] = dropped;
+  }
+
+  return safeAttributes;
+};
 
 const emit = ({
   attributes,
@@ -10,21 +41,22 @@ const emit = ({
   severityNumber,
   severityText,
 }: {
-  attributes: LogAttributes | undefined;
+  attributes: LoggerAttributes | undefined;
   message: string;
   severityNumber: SeverityNumber;
   severityText: string;
 }): void => {
+  const safeAttributes = sanitizeLogAttributes(attributes);
   const record = {
     severityNumber,
     severityText,
     body: message,
   };
 
-  if (attributes) {
+  if (safeAttributes) {
     otelLogger.emit({
       ...record,
-      attributes,
+      attributes: safeAttributes,
     });
   } else {
     otelLogger.emit(record);
@@ -41,35 +73,35 @@ const emit = ({
       `${JSON.stringify({
         severity: severityText,
         message,
-        ...attributes,
+        ...safeAttributes,
       })}\n`,
     );
   }
 };
 
 export const logger = {
-  debug: (message: string, attributes?: LogAttributes) =>
+  debug: (message: string, attributes?: LoggerAttributes) =>
     emit({
       message,
       attributes,
       severityNumber: SeverityNumber.DEBUG,
       severityText: "DEBUG",
     }),
-  info: (message: string, attributes?: LogAttributes) =>
+  info: (message: string, attributes?: LoggerAttributes) =>
     emit({
       message,
       attributes,
       severityNumber: SeverityNumber.INFO,
       severityText: "INFO",
     }),
-  warn: (message: string, attributes?: LogAttributes) =>
+  warn: (message: string, attributes?: LoggerAttributes) =>
     emit({
       message,
       attributes,
       severityNumber: SeverityNumber.WARN,
       severityText: "WARN",
     }),
-  error: (message: string, attributes?: LogAttributes) =>
+  error: (message: string, attributes?: LoggerAttributes) =>
     emit({
       message,
       attributes,
