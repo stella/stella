@@ -123,16 +123,20 @@ export const parseSkillFile = (
   body: string;
   metadata: SkillMetadata;
 } => {
-  if (!source.startsWith("---\n")) {
+  const normalizedSource = source
+    .replaceAll("\r\n", "\n")
+    .replaceAll("\r", "\n");
+
+  if (!normalizedSource.startsWith("---\n")) {
     throw new Error("Skill file missing frontmatter");
   }
 
-  const end = source.indexOf("\n---", 4);
+  const end = normalizedSource.indexOf("\n---", 4);
   if (end === -1) {
     throw new Error("Skill file missing frontmatter terminator");
   }
 
-  const frontmatter = parseSimpleFrontmatter(source.slice(4, end));
+  const frontmatter = parseSimpleFrontmatter(normalizedSource.slice(4, end));
   if (!frontmatter.name || !frontmatter.description) {
     throw new Error("Skill file frontmatter must include name and description");
   }
@@ -146,7 +150,7 @@ export const parseSkillFile = (
       name: frontmatter.name,
       version: frontmatter.version ?? frontmatter.metadata?.["version"] ?? null,
     },
-    body: source.slice(end + "\n---".length).trim(),
+    body: normalizedSource.slice(end + "\n---".length).trim(),
   };
 };
 
