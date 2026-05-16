@@ -26,6 +26,7 @@ import {
   DEFAULT_ENTITY_WINDOW_SIZE,
   entitiesOptions,
   entitiesWindowOptions,
+  filesystemEntitiesOptions,
   useEntitiesOptions,
   visibleEntityFieldIds,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -172,6 +173,20 @@ export const Route = createFileRoute(
       return;
     }
 
+    if (activeView.layout.type === "filesystem") {
+      await ensureCriticalQueryData(
+        queryClient,
+        filesystemEntitiesOptions({
+          workspaceId,
+          filters: activeView.layout.filters,
+          sorts: activeView.layout.sorts,
+          fieldMode,
+          fieldIds,
+        }),
+      );
+      return;
+    }
+
     if (activeView.layout.type === "calendar") {
       return;
     }
@@ -189,17 +204,10 @@ export const Route = createFileRoute(
         page: deps.page,
         fieldMode,
         fieldIds,
-        ...(activeView.layout.type === "filesystem" && {
-          excludedKinds: ["task"],
-        }),
       }),
     );
 
     if (entities.entities.length === 0) {
-      return;
-    }
-
-    if (activeView.layout.type === "filesystem") {
       return;
     }
 
@@ -275,7 +283,6 @@ function EntityViewContent({
     return (
       <VisibleFieldEntityViewContent
         activeView={activeView}
-        page={page}
         workspaceId={workspaceId}
       />
     );
@@ -308,46 +315,9 @@ const hasVisibleFieldsLayout = (
 
 function VisibleFieldEntityViewContent({
   activeView,
-  page,
   workspaceId,
-}: EntityViewContentProps & { activeView: VisibleFieldsView }) {
-  const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
-  const fieldIds = visibleEntityFieldIds({
-    hiddenProperties: activeView.layout.hiddenProperties,
-    properties,
-  });
-
-  useSyncTable({
-    workspaceId,
-    filters: activeView.layout.filters,
-    sorts: activeView.layout.sorts,
-    page,
-    fieldMode: "visible",
-    fieldIds,
-    excludedKinds: ["task"],
-  });
-
-  const { data } = useSuspenseQuery(
-    useEntitiesOptions({
-      workspaceId,
-      filters: activeView.layout.filters,
-      sorts: activeView.layout.sorts,
-      page,
-      fieldMode: "visible",
-      fieldIds,
-      excludedKinds: ["task"],
-    }),
-  );
-  const totalPages = Math.ceil(data.totalCount / data.pageSize);
-
-  return (
-    <ViewShell
-      activeView={activeView}
-      page={page}
-      totalPages={totalPages}
-      workspaceId={workspaceId}
-    />
-  );
+}: ViewContentProps & { activeView: VisibleFieldsView }) {
+  return <ViewShell activeView={activeView} workspaceId={workspaceId} />;
 }
 
 function FullEntityViewContent({

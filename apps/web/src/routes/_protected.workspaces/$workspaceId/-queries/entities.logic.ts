@@ -28,6 +28,11 @@ export type EntitiesWindowKey = Omit<EntitiesPageKey, "page" | "pageSize"> & {
   limit?: number;
 };
 
+export type FilesystemEntitiesKey = Omit<
+  EntitiesPageKey,
+  "page" | "pageSize" | "excludedKinds" | "previewableForAi"
+>;
+
 export type KanbanGroupKey = Omit<EntitiesWindowKey, "excludedKinds"> & {
   groupByPropertyId: string;
   groupValue: string | null;
@@ -101,6 +106,30 @@ export const entitiesKeys = {
             : [],
         excludedKinds: excludedKinds?.toSorted() ?? [],
         previewableForAi: previewableForAi ?? false,
+      },
+    ];
+  },
+  filesystemTree: ({
+    workspaceId,
+    filters,
+    sorts,
+    search,
+    fieldMode,
+    fieldIds,
+  }: FilesystemEntitiesKey) => {
+    const normalizedFieldMode = fieldMode ?? "full";
+    return [
+      ...entitiesKeys.all(workspaceId),
+      "filesystem-tree",
+      {
+        filters,
+        sorts,
+        ...(search?.trim() && { search: search.trim() }),
+        fieldMode: normalizedFieldMode,
+        fieldIds:
+          normalizedFieldMode === "visible"
+            ? normalizeVisibleFieldIds(fieldIds)
+            : [],
       },
     ];
   },

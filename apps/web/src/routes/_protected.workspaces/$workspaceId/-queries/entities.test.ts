@@ -190,6 +190,27 @@ describe("entity query field selection", () => {
     ]);
   });
 
+  test("keeps filesystem tree cache identity independent from page state", () => {
+    expect(
+      entitiesKeys
+        .filesystemTree({
+          workspaceId: "workspace-1",
+          filters: [],
+          sorts: [],
+          search: " closing binder ",
+          fieldMode: "visible",
+          fieldIds: ["status", "due", "status"],
+        })
+        .at(-1),
+    ).toEqual({
+      filters: [],
+      sorts: [],
+      search: "closing binder",
+      fieldMode: "visible",
+      fieldIds: ["due", "status"],
+    });
+  });
+
   test("keeps search and AI-previewable state in the window cache identity", () => {
     const previewKey = entitiesKeys.window({
       workspaceId: "workspace-1",

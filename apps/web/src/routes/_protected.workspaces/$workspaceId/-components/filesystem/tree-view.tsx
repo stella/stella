@@ -79,7 +79,7 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 import {
-  useEntitiesOptions,
+  useFilesystemEntitiesOptions,
   visibleEntityFieldIds,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
@@ -338,10 +338,6 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
 
   const { filters, sorts, hiddenProperties } = view.layout;
   const primarySort = sorts.at(0) ?? null;
-  const page = useSearch({
-    from: "/_protected/workspaces/$workspaceId/$viewId",
-    select: (s) => s.page ?? 1,
-  });
   const fieldIds = useMemo(
     () => visibleEntityFieldIds({ hiddenProperties, properties }),
     [hiddenProperties, properties],
@@ -368,20 +364,15 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   );
 
   const { data: entityData } = useSuspenseQuery(
-    useEntitiesOptions({
+    useFilesystemEntitiesOptions({
       workspaceId,
       filters,
       sorts,
-      page,
       fieldMode: "visible",
       fieldIds,
-      excludedKinds: ["task"],
     }),
   );
-  const data = useMemo(
-    () => entityData.entities.filter((e) => e.kind !== "task"),
-    [entityData.entities],
-  );
+  const data = entityData.entities;
 
   // Build a lookup for drag preview data from selected entities.
   const entityMap = useMemo(() => {

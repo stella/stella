@@ -17,6 +17,7 @@ import {
 import type {
   EntitiesPageKey,
   EntitiesWindowKey,
+  FilesystemEntitiesKey,
   KanbanGroupKey,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities.logic";
 
@@ -24,6 +25,7 @@ export { DEFAULT_ENTITY_WINDOW_SIZE, entitiesKeys, visibleEntityFieldIds };
 
 type EntitiesOptionsInput = QueryOptionsInput<EntitiesPageKey>;
 type EntitiesWindowOptionsInput = QueryOptionsInput<EntitiesWindowKey>;
+type FilesystemEntitiesOptionsInput = QueryOptionsInput<FilesystemEntitiesKey>;
 type KanbanGroupOptionsInput = QueryOptionsInput<KanbanGroupKey>;
 
 type RawWorkspaceEntity = Omit<
@@ -177,6 +179,42 @@ export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
   });
 
+export const filesystemEntitiesOptions = (
+  key: FilesystemEntitiesOptionsInput,
+) =>
+  queryOptions({
+    queryKey: entitiesKeys.filesystemTree(key),
+    queryFn: async ({ signal }) => {
+      const fieldMode = key.fieldMode ?? "full";
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
+        ["filesystem-tree"].post(
+          {
+            filters: key.filters,
+            sorts: key.sorts,
+            ...(key.search?.trim() && { search: key.search.trim() }),
+            fieldMode,
+            fieldIds:
+              fieldMode === "visible"
+                ? normalizeVisibleFieldIds(key.fieldIds).map((fieldId) =>
+                    toSafeId<"property">(fieldId),
+                  )
+                : [],
+          },
+          { fetch: { signal } },
+        );
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      const entities: WorkspaceEntity[] =
+        response.data.entities.map(toWorkspaceEntity);
+
+      return { entities };
+    },
+  });
+
 export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
   infiniteQueryOptions({
     queryKey: entitiesKeys.kanbanGroup(key),
@@ -225,6 +263,10 @@ export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
 // sorts change.
 export const useEntitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
   entitiesWindowOptions(useDeferredValue(key));
+
+export const useFilesystemEntitiesOptions = (
+  key: FilesystemEntitiesOptionsInput,
+) => filesystemEntitiesOptions(useDeferredValue(key));
 
 export const useKanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
   kanbanGroupOptions(useDeferredValue(key));
