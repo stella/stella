@@ -69,8 +69,11 @@ export const TextBoxExtension = createNodeExtension({
     parseDOM: [
       {
         tag: "div.docx-textbox",
-        getAttrs(dom): TextBoxAttrs {
-          const el = dom as HTMLElement;
+        getAttrs(dom): TextBoxAttrs | false {
+          if (!(dom instanceof HTMLElement)) {
+            return false;
+          }
+          const el = dom;
           const d = el.dataset;
           return {
             ...(d["width"] ? { width: Number(d["width"]) } : {}),

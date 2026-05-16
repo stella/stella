@@ -548,11 +548,11 @@ function processNode(
     return;
   }
 
-  if (node.nodeType !== Node.ELEMENT_NODE) {
+  if (!(node instanceof HTMLElement)) {
     return;
   }
 
-  const element = node as HTMLElement;
+  const element = node;
   const tagName = element.tagName.toLowerCase();
 
   // Merge formatting from this element

@@ -2433,7 +2433,10 @@ export function renderPages(
       } = renderState;
 
       for (const entry of entries) {
-        const shell = entry.target as HTMLElement;
+        if (!(entry.target instanceof HTMLElement)) {
+          continue;
+        }
+        const shell = entry.target;
         const data = liveDataMap.get(shell);
         if (!data) {
           continue;

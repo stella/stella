@@ -155,6 +155,7 @@ import type {
   EndnoteProperties,
 } from "../core/types/document";
 import { resolveColor } from "../core/utils/colorResolver";
+import { queryHtmlElement } from "../core/utils/domGuards";
 import { onFontsLoaded } from "../core/utils/fontLoader";
 import type { HeadingInfo } from "../core/utils/headingCollector";
 import { collectHeadings } from "../core/utils/headingCollector";
@@ -1295,9 +1296,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           const top = findSelectionYPosition(container, parentEl, selFrom);
           if (top !== null && container && parentEl) {
             const pagesEl = container.querySelector(".paged-editor__pages");
-            const pageEl = pagesEl?.querySelector(
-              ".layout-page",
-            ) as HTMLElement | null;
+            const pageEl =
+              pagesEl instanceof Element
+                ? queryHtmlElement(pagesEl, ".layout-page")
+                : null;
             const parentRect = parentEl.getBoundingClientRect();
             const rawLeft = pageEl
               ? pageEl.getBoundingClientRect().right - parentRect.left + 12
@@ -1364,7 +1366,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
       ]
         .map((node) => node.outerHTML)
         .join("\n");
-      const pagesClone = pages.cloneNode(true) as HTMLElement;
+      const pagesCloneRaw = pages.cloneNode(true);
+      if (!(pagesCloneRaw instanceof HTMLElement)) {
+        return;
+      }
+      const pagesClone = pagesCloneRaw;
       const overlays = pagesClone.querySelectorAll(
         ".selection-overlay, .layout-selection-overlay, .image-selection-overlay",
       );

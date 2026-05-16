@@ -38,7 +38,10 @@ export const SdtExtension = createNodeExtension({
       {
         tag: "span.docx-sdt",
         getAttrs(dom) {
-          const el = dom as HTMLElement;
+          if (!(dom instanceof HTMLElement)) {
+            return false;
+          }
+          const el = dom;
           return {
             sdtType: el.dataset["sdtType"] || "richText",
             alias: el.dataset["alias"] || null,

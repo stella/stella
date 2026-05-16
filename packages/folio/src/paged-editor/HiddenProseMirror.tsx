@@ -463,8 +463,9 @@ const HiddenProseMirrorComponent = forwardRef<
       },
 
       blur() {
-        if (viewRef.current?.hasFocus()) {
-          (viewRef.current.dom as HTMLElement).blur();
+        const dom = viewRef.current?.dom;
+        if (viewRef.current?.hasFocus() && dom instanceof HTMLElement) {
+          dom.blur();
         }
       },
 

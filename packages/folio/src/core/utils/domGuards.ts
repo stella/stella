@@ -58,3 +58,15 @@ export const closestHtmlElement = (
   const found = node.closest(selector);
   return found instanceof HTMLElement ? found : null;
 };
+
+/**
+ * Return `el.children[index]` only if it is an HTMLElement;
+ * `undefined` otherwise.
+ */
+export const childHtmlElement = (
+  el: Element,
+  index: number,
+): HTMLElement | undefined => {
+  const child = el.children[index];
+  return child instanceof HTMLElement ? child : undefined;
+};

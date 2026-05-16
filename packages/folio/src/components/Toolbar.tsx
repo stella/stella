@@ -67,7 +67,10 @@ export function Toolbar({
   const toolbarRef = useRef<HTMLDivElement>(null);
 
   const handleToolbarMouseDown = useCallback((e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
+    if (!(e.target instanceof HTMLElement)) {
+      return;
+    }
+    const target = e.target;
     const isInteractive =
       target.tagName === "INPUT" ||
       target.tagName === "TEXTAREA" ||
@@ -81,12 +84,17 @@ export function Toolbar({
 
   const handleToolbarMouseUp = useCallback(
     (e: React.MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const activeEl = document.activeElement as HTMLElement;
+      if (!(e.target instanceof HTMLElement)) {
+        return;
+      }
+      const target = e.target;
+      const activeEl = document.activeElement;
+      const activeTagName =
+        activeEl instanceof HTMLElement ? activeEl.tagName : null;
       const isSelectActive =
         target.tagName === "SELECT" ||
         target.tagName === "OPTION" ||
-        activeEl.tagName === "SELECT";
+        activeTagName === "SELECT";
 
       if (isSelectActive) {
         return;

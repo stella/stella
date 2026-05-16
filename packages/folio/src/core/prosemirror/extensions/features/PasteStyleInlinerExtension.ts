@@ -148,7 +148,9 @@ function inlineStylesFromStyleBlocks(doc: Document): void {
     try {
       const matchingElements = doc.body.querySelectorAll(selector);
       for (const el of matchingElements) {
-        mergeStylesOntoElement(el as HTMLElement, declarations);
+        if (el instanceof HTMLElement) {
+          mergeStylesOntoElement(el, declarations);
+        }
       }
     } catch {
       // Invalid selector — skip silently

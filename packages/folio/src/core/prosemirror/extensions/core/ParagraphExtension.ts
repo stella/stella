@@ -360,8 +360,11 @@ const paragraphNodeSpec: NodeSpec = {
   parseDOM: [
     {
       tag: "p",
-      getAttrs(dom): ParagraphAttrs {
-        const element = dom as HTMLElement;
+      getAttrs(dom): ParagraphAttrs | false {
+        if (!(dom instanceof HTMLElement)) {
+          return false;
+        }
+        const element = dom;
 
         // Start with data-attribute values (from our own editor's copy/paste)
         const paraId = element.dataset["paraId"];
