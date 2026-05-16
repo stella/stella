@@ -1,10 +1,5 @@
-import {
-  forwardRef,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useImperativeHandle, useRef, useState } from 'react';
+import type { Ref } from 'react';
 
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import { useTranslations } from "use-intl";
@@ -50,10 +45,20 @@ const groupByScope = (
   return result;
 };
 
-export const PromptSlashList = forwardRef<
-  ReturnType<NonNullable<SuggestionOptions["render"]>>,
-  SuggestionProps<ChatPrompt>
->(({ items, command, decorationNode }, ref) => {
+type PromptSlashListHandle = ReturnType<
+  NonNullable<SuggestionOptions["render"]>
+>;
+
+type PromptSlashListProps = SuggestionProps<ChatPrompt> & {
+  ref?: Ref<PromptSlashListHandle>;
+};
+
+export const PromptSlashList = ({
+  items,
+  command,
+  decorationNode,
+  ref,
+}: PromptSlashListProps) => {
   const t = useTranslations();
   const scopeLabel = useScopeLabel();
   const [isOpen, setIsOpen] = useState(true);
@@ -188,6 +193,4 @@ export const PromptSlashList = forwardRef<
       </PopoverPopup>
     </Popover>
   );
-});
-
-PromptSlashList.displayName = "PromptSlashList";
+};

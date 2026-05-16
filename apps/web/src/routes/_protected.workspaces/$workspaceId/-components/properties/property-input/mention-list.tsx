@@ -1,4 +1,5 @@
-import { forwardRef, useImperativeHandle, useState } from "react";
+import { useImperativeHandle, useState } from 'react';
+import type { Ref } from 'react';
 
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import { useTranslations } from "use-intl";
@@ -9,10 +10,18 @@ import { cn } from "@stll/ui/lib/utils";
 
 import type { MentionOption } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/custom-mention";
 
-export const MentionList = forwardRef<
-  ReturnType<NonNullable<SuggestionOptions["render"]>>,
-  SuggestionProps<MentionOption>
->(({ items, command, decorationNode }, ref) => {
+type MentionListHandle = ReturnType<NonNullable<SuggestionOptions["render"]>>;
+
+type MentionListProps = SuggestionProps<MentionOption> & {
+  ref?: Ref<MentionListHandle>;
+};
+
+export const MentionList = ({
+  items,
+  command,
+  decorationNode,
+  ref,
+}: MentionListProps) => {
   const t = useTranslations();
   const [isOpen, setIsOpen] = useState(true);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -84,6 +93,4 @@ export const MentionList = forwardRef<
       </PopoverPopup>
     </Popover>
   );
-});
-
-MentionList.displayName = "MentionList";
+};
