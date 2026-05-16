@@ -70,3 +70,44 @@ export const childHtmlElement = (
   const child = el.children[index];
   return child instanceof HTMLElement ? child : undefined;
 };
+
+/**
+ * `querySelectorAll` that returns only HTMLElements.
+ *
+ * Use at trusted DOM sources (layout containers rendered by
+ * `LayoutPainter`, our own `Toolbar`/`Sidebar` markup) where the
+ * matched nodes are guaranteed by construction to be HTMLElements.
+ * The instanceof filter runs once at the source so downstream
+ * iteration is statically-typed and pays zero per-element cost.
+ */
+export const htmlQueryAll = (
+  root: ParentNode,
+  selector: string,
+): HTMLElement[] => {
+  const out: HTMLElement[] = [];
+  for (const el of root.querySelectorAll(selector)) {
+    if (el instanceof HTMLElement) {
+      out.push(el);
+    }
+  }
+  return out;
+};
+
+/**
+ * Assert that `node` is an HTMLElement, throwing if not.
+ *
+ * Use at a single trusted boundary where the surrounding code
+ * relies on the node being an HTMLElement (e.g., immediately
+ * after `pagesContainerRef.current` is null-checked). Downstream
+ * code reads from the asserted variable with zero runtime cost.
+ */
+export const assertHtmlElement = (
+  node: Node | null | undefined,
+  description?: string,
+): HTMLElement => {
+  if (!(node instanceof HTMLElement)) {
+    const where = description ? ` (${description})` : "";
+    throw new TypeError(`Expected HTMLElement${where}`);
+  }
+  return node;
+};

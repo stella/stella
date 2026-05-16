@@ -20,7 +20,7 @@ import {
   findBodyEmptyRuns,
   findBodyPmSpans,
 } from "../core/layout-bridge/findBodyPmSpans";
-import { closestHtmlElement } from "../core/utils/domGuards";
+import { closestHtmlElement, htmlQueryAll } from "../core/utils/domGuards";
 
 /** Only match lines inside page body content, skipping header/footer lines. */
 const CONTENT_LINE_SELECTOR = ".layout-page-content .layout-line";
@@ -142,23 +142,15 @@ export function useVisualLineNavigation({
         return null;
       }
 
-      const allLines = pagesContainerRef.current.querySelectorAll(
+      const allLines = htmlQueryAll(
+        pagesContainerRef.current,
         CONTENT_LINE_SELECTOR,
       );
 
       // First pass: check span ranges (most precise)
-      for (const line of Array.from(allLines)) {
-        if (!(line instanceof HTMLElement)) {
-          continue;
-        }
-        const lineEl = line;
-        const spans = lineEl.querySelectorAll(
-          "span[data-pm-start][data-pm-end]",
-        );
-        for (const span of Array.from(spans)) {
-          if (!(span instanceof HTMLElement)) {
-            continue;
-          }
+      for (const lineEl of allLines) {
+        const spans = htmlQueryAll(lineEl, "span[data-pm-start][data-pm-end]");
+        for (const span of spans) {
           const start = Number(span.dataset["pmStart"]);
           const end = Number(span.dataset["pmEnd"]);
           if (pmPos >= start && pmPos <= end) {
@@ -169,11 +161,7 @@ export function useVisualLineNavigation({
 
       // Second pass: check paragraph ranges (handles boundary positions
       // and empty paragraphs where no spans have pm data)
-      for (const line of Array.from(allLines)) {
-        if (!(line instanceof HTMLElement)) {
-          continue;
-        }
-        const lineEl = line;
+      for (const lineEl of allLines) {
         const paragraph = closestHtmlElement(lineEl, ".layout-paragraph");
         if (!paragraph) {
           continue;
@@ -198,7 +186,7 @@ export function useVisualLineNavigation({
    */
   const findPositionOnLineAtClientX = useCallback(
     (lineEl: HTMLElement, clientX: number): number | null => {
-      const spans = lineEl.querySelectorAll("span[data-pm-start][data-pm-end]");
+      const spans = htmlQueryAll(lineEl, "span[data-pm-start][data-pm-end]");
 
       const emptyRun = lineEl.querySelector(".layout-empty-run");
       if (emptyRun) {
@@ -222,11 +210,7 @@ export function useVisualLineNavigation({
       }
 
       // Check each span for the target X
-      for (const span of Array.from(spans)) {
-        if (!(span instanceof HTMLElement)) {
-          continue;
-        }
-        const spanEl = span;
+      for (const spanEl of spans) {
         const rect = spanEl.getBoundingClientRect();
         const pmStart = Number(spanEl.dataset["pmStart"]);
         const pmEnd = Number(spanEl.dataset["pmEnd"]);
@@ -283,10 +267,7 @@ export function useVisualLineNavigation({
       // clientX not within any span - find closest span
       let closestSpan: HTMLElement | null = null;
       let closestDist = Infinity;
-      for (const span of Array.from(spans)) {
-        if (!(span instanceof HTMLElement)) {
-          continue;
-        }
+      for (const span of spans) {
         const rect = span.getBoundingClientRect();
         const dist =
           clientX < rect.left ? rect.left - clientX : clientX - rect.right;
@@ -336,8 +317,9 @@ export function useVisualLineNavigation({
         return false;
       }
 
-      const allLines = Array.from(
-        pagesContainerRef.current.querySelectorAll(CONTENT_LINE_SELECTOR),
+      const allLines = htmlQueryAll(
+        pagesContainerRef.current,
+        CONTENT_LINE_SELECTOR,
       );
       if (allLines.length === 0) {
         return false;
@@ -381,7 +363,7 @@ export function useVisualLineNavigation({
       }
 
       const targetLine = allLines[targetIndex];
-      if (!(targetLine instanceof HTMLElement)) {
+      if (!targetLine) {
         return false;
       }
 

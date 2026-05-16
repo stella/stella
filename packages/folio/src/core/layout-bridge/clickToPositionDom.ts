@@ -12,6 +12,7 @@
 import {
   closestHtmlElement,
   findHtmlElement,
+  htmlQueryAll,
   queryHtmlElement,
 } from "../utils/domGuards";
 
@@ -244,14 +245,11 @@ function findNearestSpanInElement(
   }
 
   // Find the closest line within this element
-  const lines = element.querySelectorAll(".layout-line");
+  const lines = htmlQueryAll(element, ".layout-line");
   let closestLine: HTMLElement | null = null;
   let closestLineDistance = Infinity;
 
-  for (const line of Array.from(lines)) {
-    if (!(line instanceof HTMLElement)) {
-      continue;
-    }
+  for (const line of lines) {
     const rect = line.getBoundingClientRect();
     const centerY = (rect.top + rect.bottom) / 2;
     const distance = Math.abs(clientY - centerY);
@@ -279,7 +277,8 @@ function findNearestSpanInElement(
   }
 
   // Find closest span in that line
-  const lineSpans = closestLine.querySelectorAll(
+  const lineSpans = htmlQueryAll(
+    closestLine,
     "span[data-pm-start][data-pm-end]",
   );
   if (lineSpans.length === 0) {
@@ -293,11 +292,7 @@ function findNearestSpanInElement(
   let closestSpan: HTMLElement | null = null;
   let closestSpanDistance = Infinity;
 
-  for (const span of Array.from(lineSpans)) {
-    if (!(span instanceof HTMLElement)) {
-      continue;
-    }
-    const spanEl = span;
+  for (const spanEl of lineSpans) {
     const rect = spanEl.getBoundingClientRect();
 
     if (clientX >= rect.left && clientX <= rect.right) {
@@ -339,29 +334,27 @@ function findNearestSpan(
   // includes header/footer subtrees whose `data-pm-start` collides with body
   // PM positions (HF content is a separate ProseMirror doc). Without scoping,
   // a click outside any body span could resolve to an HF position.
-  const spans = pageEl.querySelectorAll(
+  const spans = htmlQueryAll(
+    pageEl,
     ".layout-page-content span[data-pm-start][data-pm-end]",
   );
   if (spans.length === 0) {
-    const paragraphs = pageEl.querySelectorAll(
+    const firstP = htmlQueryAll(
+      pageEl,
       ".layout-page-content .layout-paragraph",
-    );
-    const firstP = paragraphs[0];
-    if (firstP instanceof HTMLElement) {
+    ).at(0);
+    if (firstP) {
       return Number(firstP.dataset["pmStart"]) || 0;
     }
     return null;
   }
 
   // Find the closest line to the click Y
-  const lines = pageEl.querySelectorAll(".layout-page-content .layout-line");
+  const lines = htmlQueryAll(pageEl, ".layout-page-content .layout-line");
   let closestLine: HTMLElement | null = null;
   let closestLineDistance = Infinity;
 
-  for (const line of Array.from(lines)) {
-    if (!(line instanceof HTMLElement)) {
-      continue;
-    }
+  for (const line of lines) {
     const rect = line.getBoundingClientRect();
     const centerY = (rect.top + rect.bottom) / 2;
     const distance = Math.abs(clientY - centerY);
@@ -377,7 +370,8 @@ function findNearestSpan(
   }
 
   // Get spans in this line
-  const lineSpans = closestLine.querySelectorAll(
+  const lineSpans = htmlQueryAll(
+    closestLine,
     "span[data-pm-start][data-pm-end]",
   );
   if (lineSpans.length === 0) {
@@ -393,11 +387,7 @@ function findNearestSpan(
   let closestSpan: HTMLElement | null = null;
   let closestSpanDistance = Infinity;
 
-  for (const span of Array.from(lineSpans)) {
-    if (!(span instanceof HTMLElement)) {
-      continue;
-    }
-    const spanEl = span;
+  for (const spanEl of lineSpans) {
     const rect = spanEl.getBoundingClientRect();
 
     // Check if click is within span bounds
@@ -459,15 +449,12 @@ export function getSelectionRectsFromDom(
   // HF span can carry the same `data-pm-start` as a body run — without the
   // scope, body selections paint phantom rects on HF text and clicks in
   // body coords could resolve to HF positions.
-  const spans = container.querySelectorAll(
+  const spans = htmlQueryAll(
+    container,
     ".layout-page-content span[data-pm-start][data-pm-end]",
   );
 
-  for (const span of Array.from(spans)) {
-    if (!(span instanceof HTMLElement)) {
-      continue;
-    }
-    const spanEl = span;
+  for (const spanEl of spans) {
     const pmStart = Number(spanEl.dataset["pmStart"]);
     const pmEnd = Number(spanEl.dataset["pmEnd"]);
 
@@ -546,15 +533,12 @@ export function getCaretPositionFromDom(
   // HF span can carry the same `data-pm-start` as a body run — without the
   // scope, body selections paint phantom rects on HF text and clicks in
   // body coords could resolve to HF positions.
-  const spans = container.querySelectorAll(
+  const spans = htmlQueryAll(
+    container,
     ".layout-page-content span[data-pm-start][data-pm-end]",
   );
 
-  for (const span of Array.from(spans)) {
-    if (!(span instanceof HTMLElement)) {
-      continue;
-    }
-    const spanEl = span;
+  for (const spanEl of spans) {
     const pmStart = Number(spanEl.dataset["pmStart"]);
     const pmEnd = Number(spanEl.dataset["pmEnd"]);
 
@@ -629,12 +613,8 @@ export function getCaretPositionFromDom(
   }
 
   // Check empty paragraphs
-  const paragraphs = container.querySelectorAll(".layout-paragraph");
-  for (const p of Array.from(paragraphs)) {
-    if (!(p instanceof HTMLElement)) {
-      continue;
-    }
-    const pEl = p;
+  const paragraphs = htmlQueryAll(container, ".layout-paragraph");
+  for (const pEl of paragraphs) {
     const pStart = Number(pEl.dataset["pmStart"]);
     const pEnd = Number(pEl.dataset["pmEnd"]);
 

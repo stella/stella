@@ -113,7 +113,11 @@ import type {
   SectionProperties,
   HeaderFooter,
 } from "../core/types/document";
-import { closestHtmlElement, queryHtmlElement } from "../core/utils/domGuards";
+import {
+  closestHtmlElement,
+  htmlQueryAll,
+  queryHtmlElement,
+} from "../core/utils/domGuards";
 // Internal components
 import { AnonymizationRectsOverlay } from "./AnonymizationRectsOverlay";
 import type { AnonymizationRectGroup } from "./AnonymizationRectsOverlay";
@@ -2240,12 +2244,11 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             });
 
             // Find visible layout cells whose pmStart falls inside a selected cell range
-            const allCells =
-              pagesContainerRef.current.querySelectorAll(".layout-table-cell");
-            for (const cellEl of Array.from(allCells)) {
-              if (!(cellEl instanceof HTMLElement)) {
-                continue;
-              }
+            const allCells = htmlQueryAll(
+              pagesContainerRef.current,
+              ".layout-table-cell",
+            );
+            for (const cellEl of allCells) {
               const pmStartAttr = cellEl.dataset["pmStart"];
               if (pmStartAttr !== undefined) {
                 const pmPos = Number(pmStartAttr);
@@ -3672,11 +3675,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           : null;
         if (!tableEl) {
           // Mouse may be in the margin area near a table — check all tables
-          const tables = pagesEl.querySelectorAll(".layout-table");
-          for (const t of Array.from(tables)) {
-            if (!(t instanceof HTMLElement)) {
-              continue;
-            }
+          const tables = htmlQueryAll(pagesEl, ".layout-table");
+          for (const t of tables) {
             const r = t.getBoundingClientRect();
             const nearLeft =
               mouseX >= r.left - TABLE_INSERT_EDGE_PROXIMITY && mouseX < r.left;
@@ -3755,11 +3755,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
         // Show button centered on the hovered column (top edge hover)
         if (nearTopEdge && rows[0]) {
-          const cells = rows[0].querySelectorAll(":scope > .layout-table-cell");
+          const cells = htmlQueryAll(rows[0], ":scope > .layout-table-cell");
           for (const cellEl of cells) {
-            if (!(cellEl instanceof HTMLElement)) {
-              continue;
-            }
             const cellRect = cellEl.getBoundingClientRect();
             if (mouseX >= cellRect.left && mouseX <= cellRect.right) {
               const pmPos = getCellPmPos(cellEl);
