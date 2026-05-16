@@ -14,13 +14,16 @@
  */
 
 import type { ReactNode, RefObject } from "react";
+import { useState } from "react";
 
 import type { DocxEditorRef } from "@stll/folio";
 import { cn } from "@stll/ui/lib/utils";
 
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
+import { createChatThreadId } from "@/lib/chat-thread-ref";
 
 import { FileChatOverlay } from "./file-chat-overlay";
+import { useReviewStore } from "./review-store";
 import "./file-viewer-with-ai.css";
 
 type ActiveFile = {
@@ -86,19 +89,63 @@ export function FileViewerWithAI({
 }: FileViewerWithAIProps) {
   return (
     <div
-      data-file-viewer-ai="true"
       className={cn("relative h-full w-full", className)}
+      data-file-viewer-ai="true"
     >
       {children}
-      <FileChatOverlay
-        activeFile={activeFile}
+      <FileChatOverlayHost
         activeExternal={activeExternal}
+        activeFile={activeFile}
         chatThreadId={chatThreadId}
         docxEditable={docxEditable}
         docxEditorRef={docxEditorRef}
+        key={chatThreadId}
         requestDocxEditMode={requestDocxEditMode}
         workspaceId={workspaceId}
       />
     </div>
   );
 }
+
+type FileChatOverlayHostProps = Omit<
+  FileViewerWithAIProps,
+  "children" | "className"
+>;
+
+const FileChatOverlayHost = ({
+  workspaceId,
+  chatThreadId: initialChatThreadId,
+  activeFile,
+  activeExternal,
+  docxEditable,
+  docxEditorRef,
+  requestDocxEditMode,
+}: FileChatOverlayHostProps) => {
+  const [currentChatThreadId, setCurrentChatThreadId] =
+    useState(initialChatThreadId);
+
+  const handleNewThread = () => {
+    // The previous thread's queued/accepted/rejected suggestions
+    // belong to that thread's history. Carrying them into a fresh
+    // thread invites the user to act on proposals they no longer
+    // have context for; reset the session whenever they explicitly
+    // start a new chat.
+    if (activeFile) {
+      useReviewStore.getState().resetSession(activeFile.entityId);
+    }
+    setCurrentChatThreadId(createChatThreadId());
+  };
+
+  return (
+    <FileChatOverlay
+      activeExternal={activeExternal}
+      activeFile={activeFile}
+      chatThreadId={currentChatThreadId}
+      docxEditable={docxEditable}
+      docxEditorRef={docxEditorRef}
+      onNewThread={handleNewThread}
+      requestDocxEditMode={requestDocxEditMode}
+      workspaceId={workspaceId}
+    />
+  );
+};

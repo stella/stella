@@ -37,34 +37,43 @@ const PATTERN_PRESETS = [
 const PADDING_OPTIONS = [2, 3, 4, 5, 6] as const;
 
 export const MatterNumberingCard = () => {
+  const { data: settings } = useQuery(organizationSettingsOptions);
+
+  if (!settings) {
+    return null;
+  }
+
+  return (
+    <MatterNumberingCardBody
+      key={`${settings.matterNumberPattern}|${settings.matterNumberPadding}`}
+      settings={settings}
+    />
+  );
+};
+
+type MatterNumberingSettings = {
+  matterNumberPattern: string;
+  matterNumberPadding: number;
+};
+
+const MatterNumberingCardBody = ({
+  settings,
+}: {
+  settings: MatterNumberingSettings;
+}) => {
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const { data: settings } = useQuery(organizationSettingsOptions);
 
-  const [pattern, setPattern] = useState(
-    settings?.matterNumberPattern ?? "{SEQ}",
-  );
-  const [padding, setPadding] = useState(settings?.matterNumberPadding ?? 3);
-  const [isCustom, setIsCustom] = useState(() => {
-    const p = settings?.matterNumberPattern ?? "{SEQ}";
-    return !PATTERN_PRESETS.some((preset) => preset.value === p);
-  });
-  const [preview, setPreview] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!settings) {
-      return;
-    }
-
-    setPattern(settings.matterNumberPattern);
-    setPadding(settings.matterNumberPadding);
-    setIsCustom(
+  const [pattern, setPattern] = useState(settings.matterNumberPattern);
+  const [padding, setPadding] = useState(settings.matterNumberPadding);
+  const [isCustom, setIsCustom] = useState(
+    () =>
       !PATTERN_PRESETS.some(
         (preset) => preset.value === settings.matterNumberPattern,
       ),
-    );
-  }, [settings]);
+  );
+  const [preview, setPreview] = useState<string | null>(null);
 
   const fetchPreview = useDebouncedCallback(async (p: string, pad: number) => {
     const response = await api["organization-settings"].preview.post({

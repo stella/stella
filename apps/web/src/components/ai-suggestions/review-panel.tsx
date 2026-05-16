@@ -5,7 +5,7 @@
  * underlying tracked changes are resolved on the editor.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { CSSProperties, RefObject } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -700,6 +700,25 @@ const IdentityPopover = ({
   initialsLabel,
   hideAccepted,
   onHideAcceptedChange,
+}: IdentityPopoverProps) => (
+  <IdentityPopoverBody
+    authorName={authorName}
+    hideAccepted={hideAccepted}
+    initialPreferredName={initialPreferredName}
+    initialWordEditShortcut={initialWordEditShortcut}
+    initialsLabel={initialsLabel}
+    key={`${initialPreferredName}|${initialWordEditShortcut}`}
+    onHideAcceptedChange={onHideAcceptedChange}
+  />
+);
+
+const IdentityPopoverBody = ({
+  authorName,
+  initialPreferredName,
+  initialWordEditShortcut,
+  initialsLabel,
+  hideAccepted,
+  onHideAcceptedChange,
 }: IdentityPopoverProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -707,15 +726,6 @@ const IdentityPopover = ({
   const [wordEditShortcut, setWordEditShortcut] = useState(
     initialWordEditShortcut,
   );
-  // Resync local form state when the underlying user record changes
-  // (e.g., another tab edited the same field) so the popover stops
-  // reflecting stale values once it reopens.
-  useEffect(() => {
-    setPreferredName(initialPreferredName);
-  }, [initialPreferredName]);
-  useEffect(() => {
-    setWordEditShortcut(initialWordEditShortcut);
-  }, [initialWordEditShortcut]);
 
   const updateIdentity = useMutation({
     mutationFn: async () => {

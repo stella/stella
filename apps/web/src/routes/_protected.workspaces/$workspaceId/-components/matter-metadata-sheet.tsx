@@ -95,7 +95,6 @@ export const MatterMetadataPanel = ({
       setReferenceError("");
     }
   }, [nameDirty, referenceDirty, workspace, workspaceId]);
-
   const handleSaveName = () => {
     if (!workspace) {
       return;
