@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 /**
  * Test script: fills the SPA template with mock values
  * to verify the template filling flow.

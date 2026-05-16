@@ -248,6 +248,17 @@ export default defineConfig({
       },
     },
     {
+      // One-off DOCX fixture scripts and load-test CLIs intentionally
+      // print progress/errors to the terminal; keep product API code on
+      // structured logging.
+      files: [
+        "apps/api/src/handlers/docx/generate-spa-filled.ts",
+        "apps/api/src/handlers/docx/prepare-spa-template.ts",
+        "apps/api/src/tests/load/**/*.ts",
+      ],
+      rules: { "no-console": "off" },
+    },
+    {
       // Legacy DOCX/editor code has parser and layout state machines that need
       // dedicated extraction passes. Keep the rule visible without blocking
       // this guardrail rollout on a broad folio rewrite.

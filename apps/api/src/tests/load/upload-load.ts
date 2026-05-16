@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 /**

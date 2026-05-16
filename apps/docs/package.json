@@ -9,8 +9,8 @@
     "build": "bun --bun astro build",
     "preview": "bun --bun astro preview",
     "typecheck": "bun --bun astro check",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/docs/astro.config.mjs apps/docs/src/content.config.ts",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/docs/astro.config.mjs apps/docs/src/content.config.ts",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/docs",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/docs",
     "format": "oxfmt ."
   },
   "dependencies": {
