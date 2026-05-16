@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useFormStatus } from "react-dom";
 
 import {
   useMutation,
@@ -153,11 +154,13 @@ function ProfilePage() {
             </Select>
           </div>
           <form
-            className="border-border flex flex-col gap-4 border-t p-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              updateWordEditIdentity.mutate();
+            action={async () => {
+              await updateWordEditIdentity.mutateAsync().catch(() => {
+                // The error toast is surfaced via the mutation's
+                // `onError`; swallow here so the action settles.
+              });
             }}
+            className="border-border flex flex-col gap-4 border-t p-4"
           >
             <div className="flex max-w-lg flex-col gap-2">
               <Label htmlFor="preferred-name-input">
@@ -189,13 +192,7 @@ function ProfilePage() {
                 onChange={(event) => setWordEditShortcut(event.target.value)}
               />
             </div>
-            <Button
-              className="w-fit"
-              disabled={updateWordEditIdentity.isPending}
-              type="submit"
-            >
-              {t("common.save")}
-            </Button>
+            <ProfileSubmitButton label={t("common.save")} />
           </form>
         </FramePanel>
       </Frame>
@@ -219,3 +216,12 @@ function ProfilePage() {
     </>
   );
 }
+
+const ProfileSubmitButton = ({ label }: { label: string }) => {
+  const { pending } = useFormStatus();
+  return (
+    <Button className="w-fit" disabled={pending} type="submit">
+      {label}
+    </Button>
+  );
+};

@@ -1,3 +1,5 @@
+import { useFormStatus } from "react-dom";
+
 import { PlusIcon } from "lucide-react";
 
 import { Button } from "@stll/ui/components/button";
@@ -25,12 +27,11 @@ export const AddContactMethodForm = ({
   value: string;
 }) => (
   <form
-    className="flex gap-2"
-    noValidate
-    onSubmit={(event) => {
-      event.preventDefault();
+    action={() => {
       onSubmit();
     }}
+    className="flex gap-2"
+    noValidate
   >
     <Input
       className="h-8 min-w-0 flex-1 text-sm"
@@ -42,13 +43,25 @@ export const AddContactMethodForm = ({
       type={type}
       value={value}
     />
-    <Button
+    <AddContactMethodSubmitButton
+      buttonLabel={buttonLabel}
       disabled={disabled || value.trim().length === 0}
-      size="sm"
-      type="submit"
-    >
+    />
+  </form>
+);
+
+const AddContactMethodSubmitButton = ({
+  buttonLabel,
+  disabled,
+}: {
+  buttonLabel: string;
+  disabled: boolean;
+}) => {
+  const { pending } = useFormStatus();
+  return (
+    <Button disabled={disabled || pending} size="sm" type="submit">
       <PlusIcon className="size-4" />
       {buttonLabel}
     </Button>
-  </form>
-);
+  );
+};

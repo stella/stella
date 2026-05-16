@@ -241,9 +241,7 @@ export function VersionsSidebar({
               onRestore={(vid) => {
                 void handleRestore(vid);
               }}
-              onSetLabel={(vid, label) => {
-                void handleSetLabel(vid, label);
-              }}
+              onSetLabel={handleSetLabel}
               onSwitchVersion={onSwitchVersion}
             />
           ))}
@@ -288,7 +286,7 @@ type VersionItemProps = {
   canDelete: boolean;
   onSwitchVersion: (fieldId: string, versionId: string) => Promise<void> | void;
   onDelete: (versionId: string) => Promise<void>;
-  onSetLabel: (versionId: string, label: string | null) => void;
+  onSetLabel: (versionId: string, label: string | null) => Promise<void>;
   onRestore: (versionId: string) => void;
   onDownload: (fieldId: string) => void;
 };
@@ -438,7 +436,9 @@ function VersionItem({
             return (
               <MenuItem
                 key={preset.key}
-                onClick={() => onSetLabel(version.id, isActive ? null : label)}
+                onClick={() => {
+                  void onSetLabel(version.id, isActive ? null : label);
+                }}
               >
                 <span
                   className={cn("size-2.5 shrink-0 rounded-full", preset.color)}
@@ -449,19 +449,20 @@ function VersionItem({
             );
           })}
 
-          {/* Custom label input */}
+          {/* Custom label input — the form action resets the
+              uncontrolled input automatically once the mutation
+              settles; we just close the menu after the action
+              finishes. */}
           <div className="px-2 py-1.5">
             <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const form = new FormData(e.currentTarget);
-                const raw = form.get("customLabel");
+              action={async (formData) => {
+                const raw = formData.get("customLabel");
                 const value = typeof raw === "string" ? raw.trim() : "";
-                if (value) {
-                  onSetLabel(version.id, value);
-                  e.currentTarget.reset();
-                  setContextAnchor(null);
+                if (!value) {
+                  return;
                 }
+                await onSetLabel(version.id, value);
+                setContextAnchor(null);
               }}
             >
               <input

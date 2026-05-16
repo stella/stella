@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
 
 import { PlusIcon, Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -117,11 +118,10 @@ export const ContactCustomFieldsEditor = ({
           </p>
         )}
         <form
-          className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]"
-          onSubmit={(event) => {
-            event.preventDefault();
+          action={() => {
             addCustomField();
           }}
+          className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]"
         >
           <Input
             disabled={isPending}
@@ -137,16 +137,29 @@ export const ContactCustomFieldsEditor = ({
             placeholder={t("contacts.customFields.valuePlaceholder")}
             value={valueDraft}
           />
-          <Button
+          <AddCustomFieldSubmitButton
             disabled={isPending || labelDraft.trim().length === 0}
-            type="submit"
-          >
-            <PlusIcon className="size-4" />
-            {t("contacts.customFields.addField")}
-          </Button>
+            label={t("contacts.customFields.addField")}
+          />
         </form>
       </div>
     </section>
+  );
+};
+
+const AddCustomFieldSubmitButton = ({
+  disabled,
+  label,
+}: {
+  disabled: boolean;
+  label: string;
+}) => {
+  const { pending } = useFormStatus();
+  return (
+    <Button disabled={disabled || pending} type="submit">
+      <PlusIcon className="size-4" />
+      {label}
+    </Button>
   );
 };
 
