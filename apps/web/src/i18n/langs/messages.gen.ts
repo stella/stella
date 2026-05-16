@@ -254,6 +254,7 @@ type Messages = {
         "reasoning": "Reasoning";
       };
     };
+    "analyzing": "Analyzing...";
     "columns": {
       "caseNumber": "Case number";
       "country": "Country";
@@ -295,15 +296,22 @@ type Messages = {
       "popularName": "Popular name";
       "sections": "Sections";
       "source": "Source";
+      "sourceFields": {
+        "decisionCategory": "Decision category";
+        "publishedOnWeb": "Published on web";
+      };
       "statutes": "Applicable statutes";
       "viewOriginal": "View source";
     };
   };
   "chat": {
+    "acceptAllCount": "Accept all ({count})";
     "actionExpand": {
       "toastDescription": "Full-page chat lands with persisted threads.";
       "toastTitle": "Full view not yet available";
     };
+    "aiPrompt": "AI message composer";
+    "aiThread": "AI conversation";
     "anonymizedMode": "Anonymized AI mode";
     "anonymizedModeDisabled": "Anonymized AI mode is off";
     "anonymizedModeEnabled": "Anonymized AI mode is on";
@@ -327,6 +335,7 @@ type Messages = {
       "externalMcpDescription": "Only the information needed for this tool call will be sent.";
       "externalMcpQuestion": "Can Stella send this request to {provider}?";
     };
+    "askAnything": "Ask anything";
     "askUser": {
       "custom": "Write your own";
       "default": "Default";
@@ -360,15 +369,20 @@ type Messages = {
     "editableFilePlaceholder": "Chat about or edit {fileName}";
     "editableFilePlaceholderAction": "Chat about or edit";
     "editorLoading": "Loading editor…";
+    "emptyThreadDescription": "Ask about this matter, draft text, or request a short research note.";
+    "emptyThreadTitle": "Start a conversation";
     "externalSourcePlaceholder": "Chat about {title}";
     "externalSourcePlaceholderAction": "Chat about";
     "extractingContent": "Extracting content...";
     "filePlaceholder": "Chat about {fileName}";
     "filePlaceholderAction": "Chat about";
     "fileTooLarge": "File exceeds {maxSize} limit";
+    "focusSuggestion": "Focus suggestion: {topic}";
     "folioCitationFallback": "p. {n}";
     "greeting": "What would you like to work on?";
     "greetingSubtitle": "Start with a matter, document, or plain question.";
+    "hideThread": "Hide conversation";
+    "inDocument": "In document";
     "landing": {
       "lastAccessedMatters": "Last accessed matters";
       "noMatters": "No matters yet";
@@ -393,7 +407,12 @@ type Messages = {
     "moveToMain": "Move to main view";
     "moveToSide": "Move to side panel";
     "newChat": "New chat";
+    "noPromptPresetOnly": "No message, preset only";
     "noThreads": "No conversations yet";
+    "openCitation": "Open citation {label}";
+    "openThread": "Open conversation";
+    "pageNumber": "Page {page}";
+    "pastedChars": "Pasted · {count} chars";
     "pastedText": {
       "expand": "Show full text";
       "fromClipboard": "Pasted {count, plural, one {# character} other {# characters}}";
@@ -410,14 +429,29 @@ type Messages = {
       };
       "tryOne": "Try one of these to start";
     };
+    "removeSuggestion": "(remove)";
     "resend": "Resend";
+    "resizeThread": "Resize conversation";
     "send": "Send message";
     "sendError": "There was an issue sending your message. Contact support if the error persists.";
     "sendErrorAnonymizationBlocked": "Stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.";
     "sendErrorInsufficientCredits": "The AI provider needs more credits. Contact your workspace admin to top up the account.";
     "sendErrorProviderUnavailable": "The AI provider is temporarily unavailable. Please try again in a moment.";
     "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin to upgrade the plan.";
+    "sendPrompt": "Send message";
     "sendWithoutAnonymization": "Send without anonymization";
+    "sources": "Sources:";
+    "stopResponse": "Stop";
+    "suggestionSeverity": {
+      "style": "Style";
+      "substantive": "Substantive";
+      "typo": "Typo";
+    };
+    "suggestionStatus": {
+      "accepted": "Applied";
+      "rejected": "Rejected";
+      "stale": "Stale";
+    };
     "thinking": "Working with context";
     "threads": "History";
     "tool": {
@@ -610,6 +644,7 @@ type Messages = {
     "error": "Error";
     "expenses": "Expenses";
     "filter": "Filter";
+    "goBack": "Go back";
     "history": "History";
     "invite": "Invite";
     "invoices": "Invoices";
@@ -639,6 +674,7 @@ type Messages = {
     "properties": "Properties";
     "reconnecting": "Reconnecting…";
     "reference": "Reference";
+    "remove": "Remove";
     "rename": "Rename";
     "required": "Required";
     "retry": "Retry";
@@ -1657,6 +1693,7 @@ type Messages = {
     "noLinks": "No linked entities";
     "noSubtasks": "No subtasks";
     "noTasksAssigned": "No tasks assigned to you";
+    "notFound": "Task not found";
     "overdue": "Overdue";
     "priority": "Priority";
     "priorityValues": {
@@ -1791,6 +1828,7 @@ type Messages = {
     "deleteSelection": "Delete selection";
     "deleteWorkspace": "Delete matter";
     "deleteWorkspaceConfirmDescription": "Are you sure you want to delete this matter? This action cannot be undone.";
+    "deletedItem": "Deleted: {name}";
     "deletingWorkspace": "Deleting matter";
     "documentsCount": "{count, plural, one {# document} other {# documents}}";
     "dropToUploadFiles": "Drop to upload files";

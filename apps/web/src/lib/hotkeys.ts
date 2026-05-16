@@ -52,7 +52,7 @@ export const SHORTCUT_HINT_GROUPS = [
     ],
   },
 ] as const satisfies readonly {
-  categoryKey: string;
+  categoryKey: TranslationKey;
   hints: readonly {
     hotkey: Hotkey;
     labelKey: TranslationKey;

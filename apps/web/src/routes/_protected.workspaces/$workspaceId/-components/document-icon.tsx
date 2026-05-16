@@ -8,12 +8,12 @@ type DocxIconProps = {
 
 const DocxIcon = ({ className }: DocxIconProps) => (
   <svg
+    aria-hidden="true"
     className={className}
     fill="none"
     viewBox="0 0 48 48"
     xmlns="http://www.w3.org/2000/svg"
   >
-    <title>DOCX document icon</title>
     <path
       d="M13.5 44h29c.275 0 .5-.225.5-.5V14h-8.5c-.827 0-1.5-.673-1.5-1.5V4H13.5c-.275 0-.5.225-.5.5v39c0 .275.225.5.5.5z"
       fill="#fff"
@@ -47,13 +47,13 @@ type PdfIconProps = {
 
 const PdfIcon = ({ className }: PdfIconProps) => (
   <svg
+    aria-hidden="true"
     className={className}
     height="92.604164mm"
     viewBox="0 0 75.320129 92.604164"
     width="75.320129mm"
     xmlns="http://www.w3.org/2000/svg"
   >
-    <title>PDF document icon</title>
     <g transform="translate(53.548057 -183.975276) scale(1.4843)">
       <path
         color="#000"

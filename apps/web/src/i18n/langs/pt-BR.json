@@ -251,6 +251,7 @@
         "reasoning": "Fundamentação"
       }
     },
+    "analyzing": "Analisando...",
     "columns": {
       "caseNumber": "Número do processo",
       "country": "País",
@@ -292,15 +293,22 @@
       "popularName": "Nome popular",
       "sections": "Seções",
       "source": "Fonte",
+      "sourceFields": {
+        "decisionCategory": "Categoria da decisão",
+        "publishedOnWeb": "Publicado na web"
+      },
       "statutes": "Normas aplicáveis",
       "viewOriginal": "Ver fonte"
     }
   },
   "chat": {
+    "acceptAllCount": "Aceitar tudo ({count})",
     "actionExpand": {
       "toastDescription": "O chat em página inteira virá com conversas persistidas.",
       "toastTitle": "Visualização completa ainda não disponível"
     },
+    "aiPrompt": "Campo de mensagem de IA",
+    "aiThread": "Conversa de IA",
     "anonymizedMode": "Modo IA anonimizado",
     "anonymizedModeDisabled": "O modo IA anonimizado está desativado",
     "anonymizedModeEnabled": "O modo de IA anonimizada está ativado",
@@ -324,6 +332,7 @@
       "externalMcpDescription": "Só serão enviadas as informações necessárias para esta chamada de ferramenta.",
       "externalMcpQuestion": "A Stella pode enviar esta solicitação para {provider}?"
     },
+    "askAnything": "Pergunte qualquer coisa",
     "askUser": {
       "custom": "Escreva o seu próprio",
       "default": "Padrão",
@@ -357,15 +366,20 @@
     "editableFilePlaceholder": "Converse ou edite {fileName}",
     "editableFilePlaceholderAction": "Converse ou edite",
     "editorLoading": "Carregando editor…",
+    "emptyThreadDescription": "Pergunte sobre este caso, redija um texto ou peça uma nota breve de pesquisa.",
+    "emptyThreadTitle": "Iniciar conversa",
     "externalSourcePlaceholder": "Converse sobre {title}",
     "externalSourcePlaceholderAction": "Conversar sobre",
     "extractingContent": "Extraindo conteúdo...",
     "filePlaceholder": "Conversar sobre {fileName}",
     "filePlaceholderAction": "Conversar sobre",
     "fileTooLarge": "O arquivo excede o limite {maxSize}",
+    "focusSuggestion": "Focar sugestão: {topic}",
     "folioCitationFallback": "pág. {n}",
     "greeting": "No que você gostaria de trabalhar?",
     "greetingSubtitle": "Comece com um caso, documento ou pergunta simples.",
+    "hideThread": "Ocultar conversa",
+    "inDocument": "No documento",
     "landing": {
       "lastAccessedMatters": "Últimos casos acessados",
       "noMatters": "Ainda não há casos",
@@ -390,7 +404,12 @@
     "moveToMain": "Mover para a visualização principal",
     "moveToSide": "Mover para o painel lateral",
     "newChat": "Novo bate-papo",
+    "noPromptPresetOnly": "Sem mensagem, apenas predefinição",
     "noThreads": "Ainda não há conversas",
+    "openCitation": "Abrir citação {label}",
+    "openThread": "Abrir conversa",
+    "pageNumber": "Página {page}",
+    "pastedChars": "Colado · {count} caracteres",
     "pastedText": {
       "expand": "Mostrar texto completo",
       "fromClipboard": "{count, plural, one {# caractere colado} other {# caracteres colados}}",
@@ -407,14 +426,29 @@
       },
       "tryOne": "Experimente um destes para começar"
     },
+    "removeSuggestion": "(remover)",
     "resend": "Reenviar",
+    "resizeThread": "Redimensionar conversa",
     "send": "Enviar mensagem",
     "sendError": "Ocorreu um problema ao enviar sua mensagem. Entre em contato com o suporte se o erro persistir.",
     "sendErrorAnonymizationBlocked": "A Stella não conseguiu anonimizar um anexo, então nada foi enviado. Remova o arquivo ou envie esta mensagem sem anonimização.",
     "sendErrorInsufficientCredits": "O provedor de IA precisa de mais créditos. Peça ao administrador do espaço de trabalho para recarregar a conta.",
     "sendErrorProviderUnavailable": "O provedor de IA está temporariamente indisponível. Tente novamente em instantes.",
     "sendErrorQuotaExhausted": "A cota do provedor de IA foi esgotada. Tente novamente em um minuto ou peça ao administrador do espaço de trabalho para atualizar o plano.",
+    "sendPrompt": "Enviar mensagem",
     "sendWithoutAnonymization": "Enviar sem anonimização",
+    "sources": "Fontes:",
+    "stopResponse": "Parar",
+    "suggestionSeverity": {
+      "style": "Estilo",
+      "substantive": "Substancial",
+      "typo": "Erro de digitação"
+    },
+    "suggestionStatus": {
+      "accepted": "Aplicado",
+      "rejected": "Rejeitado",
+      "stale": "Desatualizado"
+    },
     "thinking": "Trabalhando com contexto",
     "threads": "Histórico",
     "tool": {
@@ -607,6 +641,7 @@
     "error": "Erro",
     "expenses": "Despesas",
     "filter": "Filtro",
+    "goBack": "Voltar",
     "history": "História",
     "invite": "Convidar",
     "invoices": "Faturas",
@@ -636,6 +671,7 @@
     "properties": "Propriedades",
     "reconnecting": "Reconectando…",
     "reference": "Referência",
+    "remove": "Remover",
     "rename": "Renomear",
     "required": "Obrigatório",
     "retry": "Tentar novamente",
@@ -1654,6 +1690,7 @@
     "noLinks": "Nenhuma entidade vinculada",
     "noSubtasks": "Sem subtarefas",
     "noTasksAssigned": "Nenhuma tarefa atribuída a você",
+    "notFound": "Tarefa não encontrada",
     "overdue": "Atrasado",
     "priority": "Prioridade",
     "priorityValues": {
@@ -1788,6 +1825,7 @@
     "deleteSelection": "Excluir seleção",
     "deleteWorkspace": "Excluir caso",
     "deleteWorkspaceConfirmDescription": "Tem certeza de que deseja excluir este caso? Esta ação não pode ser desfeita.",
+    "deletedItem": "Excluído: {name}",
     "deletingWorkspace": "Excluindo caso",
     "documentsCount": "{count, plural, one {# documento} many {# documentos} other {# documentos}}",
     "dropToUploadFiles": "Solte para fazer upload de arquivos",

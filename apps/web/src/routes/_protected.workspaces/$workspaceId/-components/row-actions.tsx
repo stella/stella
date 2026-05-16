@@ -411,13 +411,13 @@ export const RowActions = ({
           stellaToast.add({
             title: isBulk
               ? t("common.deletedCount", { count: ids.length })
-              : `"${name}" deleted`,
+              : t("workspaces.deletedItem", { name }),
             type: "success",
           });
         },
         onError: () => {
           stellaToast.add({
-            title: "Failed to delete",
+            title: t("errors.failedToDeleteEntities"),
             type: "error",
           });
         },
@@ -436,7 +436,7 @@ export const RowActions = ({
   return (
     <Menu onOpenChange={onOpenChange} open={open}>
       <Tooltip
-        content="Actions"
+        content={t("common.actions")}
         render={
           <MenuTrigger
             className={

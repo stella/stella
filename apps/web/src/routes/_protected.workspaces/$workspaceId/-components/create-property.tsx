@@ -1075,19 +1075,23 @@ type ReadingChipProps = {
   onRemove?: () => void;
 };
 
-const ReadingChip = ({ label, onRemove }: ReadingChipProps) => (
-  <span className="bg-muted/64 group inline-flex h-6 items-center gap-1 rounded-md px-2 text-[11.5px]">
-    <FileTextIcon className="size-3" />
-    {label}
-    {onRemove && (
-      <button
-        aria-label="Remove"
-        className="text-foreground-placeholder hover:text-foreground ms-0.5 -me-1 inline-flex size-3.5 items-center justify-center opacity-0 group-hover:opacity-100"
-        onClick={onRemove}
-        type="button"
-      >
-        <XIcon className="size-2.5" />
-      </button>
-    )}
-  </span>
-);
+const ReadingChip = ({ label, onRemove }: ReadingChipProps) => {
+  const t = useTranslations();
+
+  return (
+    <span className="bg-muted/64 group inline-flex h-6 items-center gap-1 rounded-md px-2 text-[11.5px]">
+      <FileTextIcon className="size-3" />
+      {label}
+      {onRemove && (
+        <button
+          aria-label={t("common.remove")}
+          className="text-foreground-placeholder hover:text-foreground ms-0.5 -me-1 inline-flex size-3.5 items-center justify-center opacity-0 group-hover:opacity-100"
+          onClick={onRemove}
+          type="button"
+        >
+          <XIcon className="size-2.5" />
+        </button>
+      )}
+    </span>
+  );
+};

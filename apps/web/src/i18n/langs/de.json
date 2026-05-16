@@ -251,6 +251,7 @@
         "reasoning": "Argumentation"
       }
     },
+    "analyzing": "Analyse läuft...",
     "columns": {
       "caseNumber": "Aktenzeichen",
       "country": "Land",
@@ -291,16 +292,23 @@
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Populärer Name",
       "sections": "Abschnitte",
-      "source": "Nur Schätzungen · Preise aus",
+      "source": "Quelle",
+      "sourceFields": {
+        "decisionCategory": "Entscheidungskategorie",
+        "publishedOnWeb": "Im Web veröffentlicht"
+      },
       "statutes": "Applicable statutes",
       "viewOriginal": "Quelle anzeigen"
     }
   },
   "chat": {
+    "acceptAllCount": "Alle übernehmen ({count})",
     "actionExpand": {
       "toastDescription": "Full-page chat lands with persisted threads.",
       "toastTitle": "Full view not yet available"
     },
+    "aiPrompt": "KI-Nachrichtenfeld",
+    "aiThread": "KI-Konversation",
     "anonymizedMode": "Anonymisierter KI-Modus",
     "anonymizedModeDisabled": "Anonymisierter KI-Modus ist aus",
     "anonymizedModeEnabled": "Anonymisierter KI-Modus ist an",
@@ -324,6 +332,7 @@
       "externalMcpDescription": "Only the information needed for this tool call will be sent.",
       "externalMcpQuestion": "Can Stella send this request to {provider}?"
     },
+    "askAnything": "Beliebige Frage stellen",
     "askUser": {
       "custom": "Eigene Antwort",
       "default": "Standard",
@@ -357,15 +366,20 @@
     "editableFilePlaceholder": "Chat über {fileName} oder bearbeiten",
     "editableFilePlaceholderAction": "Chatten oder bearbeiten",
     "editorLoading": "Loading editor…",
+    "emptyThreadDescription": "Fragen Sie zu dieser Sache, entwerfen Sie Text oder bitten Sie um eine kurze Recherche.",
+    "emptyThreadTitle": "Konversation starten",
     "externalSourcePlaceholder": "Chat über {title}",
     "externalSourcePlaceholderAction": "Chat über",
     "extractingContent": "Inhalt wird extrahiert...",
     "filePlaceholder": "Chat über {fileName}",
     "filePlaceholderAction": "Chat über",
     "fileTooLarge": "Datei überschreitet das Limit von {maxSize}",
+    "focusSuggestion": "Vorschlag fokussieren: {topic}",
     "folioCitationFallback": "S. {n}",
     "greeting": "Woran möchten Sie arbeiten?",
     "greetingSubtitle": "Beginnen Sie mit einer Sache, einem Dokument oder einer einfachen Frage.",
+    "hideThread": "Konversation ausblenden",
+    "inDocument": "Im Dokument",
     "landing": {
       "lastAccessedMatters": "Zuletzt geöffnete Sachen",
       "noMatters": "Noch keine Sachen",
@@ -390,7 +404,12 @@
     "moveToMain": "In Hauptansicht verschieben",
     "moveToSide": "In Seitenleiste verschieben",
     "newChat": "Neuer Chat",
+    "noPromptPresetOnly": "Keine Nachricht, nur Vorlage",
     "noThreads": "Noch keine Konversationen",
+    "openCitation": "Fundstelle {label} öffnen",
+    "openThread": "Konversation öffnen",
+    "pageNumber": "Seite {page}",
+    "pastedChars": "Eingefügt · {count} Zeichen",
     "pastedText": {
       "expand": "Vollständigen Text anzeigen",
       "fromClipboard": "{count, plural, one {# Zeichen eingefügt} other {# Zeichen eingefügt}}",
@@ -407,14 +426,29 @@
       },
       "tryOne": "Probiere einen davon zum Start"
     },
+    "removeSuggestion": "(entfernen)",
     "resend": "Erneut senden",
+    "resizeThread": "Konversation vergrößern oder verkleinern",
     "send": "Nachricht senden",
     "sendError": "Beim Senden deiner Nachricht ist ein Problem aufgetreten. Wende dich an den Support, wenn der Fehler weiterhin auftritt.",
     "sendErrorAnonymizationBlocked": "Stella konnte einen Anhang nicht anonymisieren, daher wurde nichts gesendet. Entferne die Datei oder sende diese Nachricht ohne Anonymisierung.",
     "sendErrorInsufficientCredits": "Der KI-Provider benötigt mehr Guthaben. Bitte deinen Workspace-Admin, das Konto aufzuladen.",
     "sendErrorProviderUnavailable": "Der KI-Provider ist vorübergehend nicht verfügbar. Bitte versuche es gleich noch einmal.",
     "sendErrorQuotaExhausted": "Das Kontingent des KI-Providers ist aufgebraucht. Versuche es gleich noch einmal oder bitte deinen Workspace-Admin, das Paket zu erweitern.",
+    "sendPrompt": "Nachricht senden",
     "sendWithoutAnonymization": "Ohne Anonymisierung senden",
+    "sources": "Quellen:",
+    "stopResponse": "Stoppen",
+    "suggestionSeverity": {
+      "style": "Stil",
+      "substantive": "Inhaltlich",
+      "typo": "Tippfehler"
+    },
+    "suggestionStatus": {
+      "accepted": "Angewendet",
+      "rejected": "Abgelehnt",
+      "stale": "Veraltet"
+    },
     "thinking": "Arbeite mit Kontext",
     "threads": "Verlauf",
     "tool": {
@@ -607,6 +641,7 @@
     "error": "Fehler",
     "expenses": "Ausgaben",
     "filter": "Filtern",
+    "goBack": "Zurück",
     "history": "Verlauf",
     "invite": "Einladen",
     "invoices": "Rechnungen",
@@ -636,6 +671,7 @@
     "properties": "Eigenschaften",
     "reconnecting": "Verbindung wird wiederhergestellt…",
     "reference": "Referenz",
+    "remove": "Entfernen",
     "rename": "Umbenennen",
     "required": "Erforderlich",
     "retry": "Erneut versuchen",
@@ -1654,6 +1690,7 @@
     "noLinks": "Keine verknüpften Einträge",
     "noSubtasks": "Keine Unteraufgaben",
     "noTasksAssigned": "Keine Aufgaben zugewiesen",
+    "notFound": "Aufgabe nicht gefunden",
     "overdue": "Überfällig",
     "priority": "Priorität",
     "priorityValues": {
@@ -1788,6 +1825,7 @@
     "deleteSelection": "Auswahl löschen",
     "deleteWorkspace": "Akte löschen",
     "deleteWorkspaceConfirmDescription": "Möchten Sie diese Akte wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+    "deletedItem": "Gelöscht: {name}",
     "deletingWorkspace": "Akte wird gelöscht",
     "documentsCount": "{count, plural, one {# Dokument} other {# Dokumente}}",
     "dropToUploadFiles": "Dateien zum Hochladen ablegen",

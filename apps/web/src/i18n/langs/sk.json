@@ -251,6 +251,7 @@
         "reasoning": "Uvažovanie"
       }
     },
+    "analyzing": "Analyzujem...",
     "columns": {
       "caseNumber": "Spisová značka",
       "country": "Krajina",
@@ -291,16 +292,23 @@
       "nalusDisclaimer": "Zdroj: NALUS, Ústavný súd Českej republiky. Bezplatne. Táto elektronická verzia nie je autentická; autentické sú iba originály so štátnym znakom a podpisom oprávnenej osoby.",
       "popularName": "Populárny názov",
       "sections": "Časti",
-      "source": "Iba odhady · ceny z",
+      "source": "Zdroj",
+      "sourceFields": {
+        "decisionCategory": "Kategória rozhodnutia",
+        "publishedOnWeb": "Zverejnené na webe"
+      },
       "statutes": "Aplikované predpisy",
       "viewOriginal": "Zobraziť zdroj"
     }
   },
   "chat": {
+    "acceptAllCount": "Prijať všetko ({count})",
     "actionExpand": {
       "toastDescription": "Zobrazenie chatu na celú stránku s uloženými vláknami už čoskoro.",
       "toastTitle": "Plné zobrazenie zatiaľ nie je dostupné"
     },
+    "aiPrompt": "Pole správy pre AI",
+    "aiThread": "Konverzácia s AI",
     "anonymizedMode": "Anonymizovaný režim AI",
     "anonymizedModeDisabled": "Anonymizovaný režim AI je vypnutý",
     "anonymizedModeEnabled": "Anonymizovaný režim AI je zapnutý",
@@ -324,6 +332,7 @@
       "externalMcpDescription": "Odošlú sa iba informácie potrebné pre tento dotaz.",
       "externalMcpQuestion": "Môže Stella odoslať tento dotaz do {provider}?"
     },
+    "askAnything": "Opýtajte sa na čokoľvek",
     "askUser": {
       "custom": "Napísať vlastnú",
       "default": "Predvolená",
@@ -357,15 +366,20 @@
     "editableFilePlaceholder": "Chatovať alebo upraviť {fileName}",
     "editableFilePlaceholderAction": "Chatovať alebo upraviť",
     "editorLoading": "Načítava sa editor…",
+    "emptyThreadDescription": "Opýtajte sa na túto vec, pripravte text alebo požiadajte o krátku rešeršnú poznámku.",
+    "emptyThreadTitle": "Začať konverzáciu",
     "externalSourcePlaceholder": "Chatovať o {title}",
     "externalSourcePlaceholderAction": "Chatovať o",
     "extractingContent": "Extrahovanie obsahu...",
     "filePlaceholder": "Chatovať o {fileName}",
     "filePlaceholderAction": "Chatovať o",
     "fileTooLarge": "Súbor prekračuje limit {maxSize}",
+    "focusSuggestion": "Zamerať návrh: {topic}",
     "folioCitationFallback": "str. {n}",
     "greeting": "Na čom chcete pracovať?",
     "greetingSubtitle": "Začnite spisom, dokumentom alebo obyčajnou otázkou.",
+    "hideThread": "Skryť konverzáciu",
+    "inDocument": "V dokumente",
     "landing": {
       "lastAccessedMatters": "Naposledy otvorené spisy",
       "noMatters": "Zatiaľ žiadne spisy",
@@ -390,7 +404,12 @@
     "moveToMain": "Presunúť do hlavného zobrazenia",
     "moveToSide": "Presunúť do bočného panela",
     "newChat": "Nový chat",
+    "noPromptPresetOnly": "Bez správy, iba predvoľba",
     "noThreads": "Zatiaľ žiadne konverzácie",
+    "openCitation": "Otvoriť citáciu {label}",
+    "openThread": "Otvoriť konverzáciu",
+    "pageNumber": "Strana {page}",
+    "pastedChars": "Vložené · {count} znakov",
     "pastedText": {
       "expand": "Zobraziť celý text",
       "fromClipboard": "Vložené {count, plural, one {# znak} few {# znaky} other {# znakov}}",
@@ -407,14 +426,29 @@
       },
       "tryOne": "Začni s jedným z týchto"
     },
+    "removeSuggestion": "(odstrániť)",
     "resend": "Odoslať znova",
+    "resizeThread": "Zmeniť veľkosť konverzácie",
     "send": "Odoslať správu",
     "sendError": "Pri odosielaní správy nastal problém. Ak chyba pretrváva, kontaktujte podporu.",
     "sendErrorAnonymizationBlocked": "Stella nedokázala anonymizovať jednu prílohu, takže sa nič neodoslalo. Odstráňte súbor alebo odošlite správu bez anonymizácie.",
     "sendErrorInsufficientCredits": "AI poskytovateľ potrebuje doplniť kredity. Požiadajte správcu pracovného priestoru o navýšenie zostatku.",
     "sendErrorProviderUnavailable": "AI poskytovateľ je dočasne nedostupný. Skúste to prosím o chvíľu znova.",
     "sendErrorQuotaExhausted": "Kvóta AI poskytovateľa je vyčerpaná. Skúste to o chvíľu znova alebo požiadajte správcu pracovného priestoru o navýšenie plánu.",
+    "sendPrompt": "Odoslať správu",
     "sendWithoutAnonymization": "Odoslať bez anonymizácie",
+    "sources": "Zdroje:",
+    "stopResponse": "Zastaviť",
+    "suggestionSeverity": {
+      "style": "Štýl",
+      "substantive": "Vecné",
+      "typo": "Preklep"
+    },
+    "suggestionStatus": {
+      "accepted": "Použité",
+      "rejected": "Odmietnuté",
+      "stale": "Zastarané"
+    },
     "thinking": "Pracujem s kontextom",
     "threads": "História",
     "tool": {
@@ -607,6 +641,7 @@
     "error": "Chyba",
     "expenses": "Výdavky",
     "filter": "Filtrovať",
+    "goBack": "Späť",
     "history": "História",
     "invite": "Pozvať",
     "invoices": "Faktúry",
@@ -636,6 +671,7 @@
     "properties": "Vlastnosti",
     "reconnecting": "Obnovenie spojenia…",
     "reference": "Referencia",
+    "remove": "Odstrániť",
     "rename": "Premenovať",
     "required": "Povinné",
     "retry": "Skúsiť znova",
@@ -1654,6 +1690,7 @@
     "noLinks": "Žiadne prepojené položky",
     "noSubtasks": "Žiadne podúlohy",
     "noTasksAssigned": "Nemáte priradené žiadne úlohy",
+    "notFound": "Úloha sa nenašla",
     "overdue": "Po termíne",
     "priority": "Priorita",
     "priorityValues": {
@@ -1788,6 +1825,7 @@
     "deleteSelection": "Vymazať výber",
     "deleteWorkspace": "Vymazať spis",
     "deleteWorkspaceConfirmDescription": "Naozaj chcete vymazať tento spis? Túto akciu nemožno vrátiť.",
+    "deletedItem": "Odstránené: {name}",
     "deletingWorkspace": "Mazanie spisu",
     "documentsCount": "{count, plural, one {# dokument} few {# dokumenty} other {# dokumentov}}",
     "dropToUploadFiles": "Presuňte súbory pre nahranie",
