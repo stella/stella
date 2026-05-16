@@ -9,7 +9,7 @@ import Paragraph from "@tiptap/extension-paragraph";
 import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
 import { EditorContent, useEditor } from "@tiptap/react";
-import type { JSONContent } from "@tiptap/react";
+import type { Editor, JSONContent } from "@tiptap/react";
 import {
   BoldIcon,
   Heading1Icon,
@@ -22,6 +22,9 @@ import { Button } from "@stll/ui/components/button";
 
 import "./clause-editor.css";
 import type { ClauseParagraph, ClauseRun } from "./clause-editor-types";
+
+const isUsableEditor = (editor: Editor | null | undefined): editor is Editor =>
+  editor !== null && editor !== undefined && !editor.isDestroyed;
 
 // ── Conversion: ClauseBody → TipTap JSON ────────────
 
@@ -143,25 +146,42 @@ export const ClauseEditor = ({
 
   // Sync content when the dialog resets
   const contentKey = content.map((p) => p.text).join("\n");
+  const editorReady = isUsableEditor(editor);
 
   useEffect(() => {
+    if (!isUsableEditor(editor)) {
+      return undefined;
+    }
     const currentText = editor.getText();
     if (currentText !== contentKey) {
       editor.commands.setContent(clauseBodyToTipTap(content));
     }
+    return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- editor and content are stable refs; only re-sync when contentKey changes
   }, [contentKey]);
 
   const toggleBold = useCallback(() => {
+    if (!isUsableEditor(editor)) {
+      return;
+    }
+
     editor.chain().focus().toggleBold().run();
   }, [editor]);
 
   const toggleItalic = useCallback(() => {
+    if (!isUsableEditor(editor)) {
+      return;
+    }
+
     editor.chain().focus().toggleItalic().run();
   }, [editor]);
 
   const toggleHeading = useCallback(
     (level: 1 | 2 | 3) => {
+      if (!isUsableEditor(editor)) {
+        return;
+      }
+
       editor.chain().focus().toggleHeading({ level }).run();
     },
     [editor],
@@ -182,7 +202,10 @@ export const ClauseEditor = ({
       {/* Toolbar */}
       <div className="flex items-center gap-0.5 border-b px-1 py-0.5">
         <Button
-          className={editor.isActive("bold") ? "bg-muted" : undefined}
+          className={
+            editorReady && editor.isActive("bold") ? "bg-muted" : undefined
+          }
+          disabled={!editorReady}
           onClick={toggleBold}
           size="icon-xs"
           type="button"
@@ -191,7 +214,10 @@ export const ClauseEditor = ({
           <BoldIcon className="size-3.5" />
         </Button>
         <Button
-          className={editor.isActive("italic") ? "bg-muted" : undefined}
+          className={
+            editorReady && editor.isActive("italic") ? "bg-muted" : undefined
+          }
+          disabled={!editorReady}
           onClick={toggleItalic}
           size="icon-xs"
           type="button"
@@ -202,8 +228,11 @@ export const ClauseEditor = ({
         <div className="bg-border mx-1 h-4 w-px" />
         <Button
           className={
-            editor.isActive("heading", { level: 1 }) ? "bg-muted" : undefined
+            editorReady && editor.isActive("heading", { level: 1 })
+              ? "bg-muted"
+              : undefined
           }
+          disabled={!editorReady}
           onClick={() => toggleHeading(1)}
           size="icon-xs"
           type="button"
@@ -213,8 +242,11 @@ export const ClauseEditor = ({
         </Button>
         <Button
           className={
-            editor.isActive("heading", { level: 2 }) ? "bg-muted" : undefined
+            editorReady && editor.isActive("heading", { level: 2 })
+              ? "bg-muted"
+              : undefined
           }
+          disabled={!editorReady}
           onClick={() => toggleHeading(2)}
           size="icon-xs"
           type="button"
@@ -224,8 +256,11 @@ export const ClauseEditor = ({
         </Button>
         <Button
           className={
-            editor.isActive("heading", { level: 3 }) ? "bg-muted" : undefined
+            editorReady && editor.isActive("heading", { level: 3 })
+              ? "bg-muted"
+              : undefined
           }
+          disabled={!editorReady}
           onClick={() => toggleHeading(3)}
           size="icon-xs"
           type="button"

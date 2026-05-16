@@ -84,7 +84,7 @@ const syncNativeSelection = (editor: Editor, from: number, to: number) => {
 };
 
 export const selectPromptEditorContents = (editor: Editor | null): boolean => {
-  if (editor === null) {
+  if (editor === null || editor.isDestroyed) {
     return false;
   }
 

@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useChatComposerWiring } from "@/components/chat-editor-provider";
 import type {
   ChatEditorController,
   ChatInputDraft,
@@ -67,32 +68,20 @@ export const ChatInputSurface = ({
     isEmpty,
     openFilePicker,
     removeFile,
-    setSubmitHandler,
-    submit,
   } = controller;
   const inputDisabled = disabled;
+  // While the assistant is streaming we render Stop in place of Send,
+  // but Enter still calls submit unless we gate it here. Without this
+  // guard, a user pressing Enter during a turn fires an overlapping
+  // `sendMessage` and the two responses interleave.
   const submitDisabled = disabled || isGenerating;
 
-  const submitDraft = useCallback(async () => {
-    // While the assistant is streaming we render Stop in place of
-    // Send, but Enter still calls submit unless we gate it here.
-    // Without this guard, a user pressing Enter during a turn fires
-    // an overlapping `sendMessage` and the two responses interleave.
-    if (submitDisabled) {
-      return;
-    }
-
-    await submit(async (draft) => {
-      await onSubmit(draft);
-    });
-  }, [onSubmit, submit, submitDisabled]);
-
-  useEffect(() => {
-    setSubmitHandler(submitDraft);
-    return () => {
-      setSubmitHandler(null);
-    };
-  }, [setSubmitHandler, submitDraft]);
+  const { submitDraft } = useChatComposerWiring({
+    controller,
+    inputDisabled,
+    onSubmit,
+    submitDisabled,
+  });
 
   useEffect(() => {
     if (!autoFocus) {
@@ -101,13 +90,6 @@ export const ChatInputSurface = ({
 
     focus();
   }, [autoFocus, focus]);
-
-  useEffect(() => {
-    editor?.setEditable(!inputDisabled);
-    if (inputDisabled) {
-      editor?.commands.blur();
-    }
-  }, [editor, inputDisabled]);
 
   const handleFocus = useCallback(() => {
     onFocusChange?.(true);

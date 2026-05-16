@@ -131,7 +131,15 @@ type ActiveChatEditorHandle = {
 
 export type ChatEditorController = {
   attachments: ChatDraftAttachment[];
+  blur: () => void;
   canSubmit: boolean;
+  /**
+   * Read-only TipTap handle. TipTap nulls `commandManager` on destroy, so
+   * any `editor.commands.*` access after teardown throws. Always narrow
+   * with `editor.isDestroyed`, or prefer the controller's mutation
+   * helpers (`blur`, `setEditable`, `setContent`, ...) which already
+   * guard against the destroyed state.
+   */
   editor: Editor | null;
   fileInputAccept: string;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
@@ -143,6 +151,10 @@ export type ChatEditorController = {
   isEmpty: boolean;
   openFilePicker: () => void;
   removeFile: (id: string) => void;
+  setContent: (
+    content: Parameters<Editor["commands"]["setContent"]>[0],
+  ) => void;
+  setEditable: (editable: boolean) => void;
   setSubmitHandler: (handler: (() => Promise<void>) | null) => void;
   submit: (
     send: (draft: ChatInputDraft) => Promise<void> | void,
@@ -189,6 +201,9 @@ const areDocsEqual = (left: JSONContent, right: JSONContent) =>
 
 const getEditorHtml = (editor: Editor) =>
   editor.isEmpty ? "" : editor.getHTML().trim();
+
+const isUsableEditor = (editor: Editor | null | undefined): editor is Editor =>
+  editor !== null && editor !== undefined && !editor.isDestroyed;
 
 const isSelectionAtStart = ({ selection }: EditorState) =>
   selection.empty && selection.from <= 1;
@@ -375,6 +390,67 @@ export const useChatEditorManager = () => {
   }
 
   return context;
+};
+
+type UseChatComposerWiringOptions = {
+  controller: ChatEditorController;
+  inputDisabled: boolean;
+  onSubmit: (draft: ChatInputDraft) => Promise<void> | void;
+  /**
+   * Pre-submit gate. Return `false` to abort the submit (e.g. when a
+   * file-aware caller wants to block until a DOCX snapshot is ready).
+   * Returning `true` or `undefined` lets the submit proceed.
+   */
+  onSubmitGuard?: (() => boolean | undefined) | undefined;
+  submitDisabled: boolean;
+};
+
+/**
+ * Wires the three effects every chat-composer surface needs:
+ *   1. an Enter→submit handler registered with the controller,
+ *   2. `setEditable`/`blur` synced to `inputDisabled`,
+ *   3. a `submitDraft` callback that respects the disabled gate.
+ *
+ * New composer surfaces should consume this hook rather than
+ * re-implementing the effects: the wiring lives next to the editor
+ * itself, so the use-after-destroy hazard is centrally guarded.
+ */
+export const useChatComposerWiring = ({
+  controller,
+  inputDisabled,
+  onSubmit,
+  onSubmitGuard,
+  submitDisabled,
+}: UseChatComposerWiringOptions) => {
+  const { blur, setEditable, setSubmitHandler, submit } = controller;
+
+  const submitDraft = useCallback(async () => {
+    if (submitDisabled) {
+      return;
+    }
+    if (onSubmitGuard && onSubmitGuard() === false) {
+      return;
+    }
+    await submit(async (draft) => {
+      await onSubmit(draft);
+    });
+  }, [onSubmit, onSubmitGuard, submit, submitDisabled]);
+
+  useEffect(() => {
+    setSubmitHandler(submitDraft);
+    return () => {
+      setSubmitHandler(null);
+    };
+  }, [setSubmitHandler, submitDraft]);
+
+  useEffect(() => {
+    setEditable(!inputDisabled);
+    if (inputDisabled) {
+      blur();
+    }
+  }, [blur, inputDisabled, setEditable]);
+
+  return { submitDraft };
 };
 
 export const useChatEditor = ({
@@ -831,10 +907,14 @@ export const useChatEditor = ({
   );
 
   useEffect(() => {
+    if (!isUsableEditor(editor)) {
+      return undefined;
+    }
+
     syncEditorPlugins(editor);
 
     return () => {
-      if (activePluginKeysRef.current.length === 0) {
+      if (editor.isDestroyed || activePluginKeysRef.current.length === 0) {
         return;
       }
 
@@ -844,23 +924,61 @@ export const useChatEditor = ({
   }, [editor, extensionVersion, syncEditorPlugins]);
 
   useEffect(() => {
+    if (!isUsableEditor(editor)) {
+      return undefined;
+    }
     if (areDocsEqual(editor.getJSON(), draftDoc)) {
       setIsEmpty(editor.isEmpty);
-      return;
+      return undefined;
     }
 
     isApplyingStoredDraftRef.current = true;
     editor.commands.setContent(draftDoc);
     isApplyingStoredDraftRef.current = false;
     setIsEmpty(editor.isEmpty);
+    return undefined;
   }, [draftDoc, editor]);
 
   const focus = useCallback(() => {
+    if (!isUsableEditor(editor)) {
+      return;
+    }
     editor.commands.focus("end");
   }, [editor]);
 
+  const blur = useCallback(() => {
+    if (!isUsableEditor(editor)) {
+      return;
+    }
+    editor.commands.blur();
+  }, [editor]);
+
+  const setEditable = useCallback(
+    (editable: boolean) => {
+      if (!isUsableEditor(editor)) {
+        return;
+      }
+      editor.setEditable(editable);
+    },
+    [editor],
+  );
+
+  const setContent = useCallback(
+    (content: Parameters<Editor["commands"]["setContent"]>[0]) => {
+      if (!isUsableEditor(editor)) {
+        return;
+      }
+      editor.commands.setContent(content);
+    },
+    [editor],
+  );
+
   const insertMention = useCallback(
     (mention: ChatMentionOption) => {
+      if (!isUsableEditor(editor)) {
+        return;
+      }
+
       markDraftStarted();
       editor
         .chain()
@@ -894,6 +1012,10 @@ export const useChatEditor = ({
 
   const updateAttachments = useCallback(
     (nextAttachments: ChatDraftAttachment[]) => {
+      if (!isUsableEditor(editor)) {
+        return;
+      }
+
       const doc = editor.getJSON();
 
       setDraft(
@@ -1012,6 +1134,9 @@ export const useChatEditor = ({
 
   const submit = useCallback(
     async (send: (draft: ChatInputDraft) => Promise<void> | void) => {
+      if (!isUsableEditor(editor)) {
+        return;
+      }
       const html = editor.isEmpty ? "" : editor.getHTML().trim();
       const doc = editor.getJSON();
       const files = attachmentsRef.current;
@@ -1035,12 +1160,15 @@ export const useChatEditor = ({
             doc,
           }),
         );
-        isApplyingStoredDraftRef.current = true;
-        editor.commands.setContent(doc);
-        isApplyingStoredDraftRef.current = false;
-        setIsEmpty(editor.isEmpty);
-        if (!editor.isEmpty || files.length > 0) {
-          draftStartedThreadKeyRef.current = threadKey;
+        // The editor may have been destroyed during `await send(...)`;
+        if (!editor.isDestroyed) {
+          isApplyingStoredDraftRef.current = true;
+          editor.commands.setContent(doc);
+          isApplyingStoredDraftRef.current = false;
+          setIsEmpty(editor.isEmpty);
+          if (!editor.isEmpty || files.length > 0) {
+            draftStartedThreadKeyRef.current = threadKey;
+          }
         }
         throw error;
       }
@@ -1059,6 +1187,7 @@ export const useChatEditor = ({
 
   return {
     attachments,
+    blur,
     canSubmit,
     editor,
     fileInputAccept: CHAT_FILE_INPUT_ACCEPT,
@@ -1071,6 +1200,8 @@ export const useChatEditor = ({
     isEmpty,
     openFilePicker,
     removeFile,
+    setContent,
+    setEditable,
     setSubmitHandler,
     submit,
   };

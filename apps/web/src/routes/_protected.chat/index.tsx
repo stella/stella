@@ -165,12 +165,8 @@ function ChatIndex() {
   }, [groupedThreads]);
 
   const selectPrompt = (prompt: ChatPrompt) => {
-    const editor = controller.editor;
-    if (!editor) {
-      return;
-    }
-    editor.commands.setContent(prompt.body);
-    editor.commands.focus("end");
+    controller.setContent(prompt.body);
+    controller.focus();
   };
 
   const moveToSide = () => {
