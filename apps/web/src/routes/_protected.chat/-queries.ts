@@ -24,7 +24,7 @@ import { env } from "@/env";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
-import { getChatThreadKey } from "@/lib/chat-thread-ref";
+import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
 import { useDevStore } from "@/lib/dev-store";
 import { APIError, toAPIError } from "@/lib/errors";
@@ -65,6 +65,12 @@ type ActiveExternalContext = {
 };
 
 type ChatThreadKey = ChatThreadRef;
+
+type FileChatThreadKey = {
+  entityId: string;
+  fieldId: string;
+  workspaceId: string;
+};
 
 type GroupedChatThreadsPage = Awaited<
   ReturnType<typeof fetchGroupedChatThreads>
@@ -137,6 +143,14 @@ const getChatRuntimeContextKind = (
 
 export const chatKeys = {
   all: ["chat"],
+  fileThread: (activeOrganizationId: string, key: FileChatThreadKey) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    "file-thread",
+    key.workspaceId,
+    key.entityId,
+    key.fieldId,
+  ],
   groupedThreads: (activeOrganizationId: string) => [
     ...chatKeys.all,
     activeOrganizationId,
@@ -230,6 +244,25 @@ const fetchGroupedChatThreads = async ({
   }
 
   return response.data;
+};
+
+const fetchFileChatThread = async ({
+  entityId,
+  fieldId,
+  workspaceId,
+}: FileChatThreadKey): Promise<ChatThreadId> => {
+  const response = await api.chat
+    .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+    ["file-thread"].post({
+      entityId: toSafeId<"entity">(entityId),
+      fieldId: toSafeId<"field">(fieldId),
+    });
+
+  if (response.error) {
+    throw toAPIError(response.error);
+  }
+
+  return toChatThreadId(response.data.threadId);
 };
 
 export const mergeGroupedChatThreadPages = (
@@ -550,6 +583,22 @@ export type ChatThreadFetched = {
    */
   contextMatterIds: string[];
 };
+
+type FileChatThreadOptionsArgs = {
+  activeOrganizationId: string;
+  key: FileChatThreadKey;
+};
+
+export const fileChatThreadOptions = ({
+  activeOrganizationId,
+  key,
+}: FileChatThreadOptionsArgs) =>
+  queryOptions({
+    staleTime: STALE_TIME.FIVETEEN.MINUTES,
+    gcTime: STALE_TIME.FIVETEEN.MINUTES,
+    queryKey: chatKeys.fileThread(activeOrganizationId, key),
+    queryFn: async () => await fetchFileChatThread(key),
+  });
 
 export type ChatThreadOptionsArgs = ChatThreadOptionsInput & {
   activeOrganizationId: string;

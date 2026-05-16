@@ -27,6 +27,3 @@ export const toChatThreadId = (value: string): ChatThreadId =>
   toSafeId<"chatThread">(value);
 
 export const createChatThreadId = (): ChatThreadId => toChatThreadId(uuidv7());
-
-export const chatThreadIdFromFileFieldId = (fieldId: string): ChatThreadId =>
-  toChatThreadId(fieldId);

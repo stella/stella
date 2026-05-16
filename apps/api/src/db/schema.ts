@@ -13,6 +13,7 @@ import {
   agentSkillResourcePolicies,
   chatMessagePolicies,
   chatThreadPolicies,
+  fileChatThreadPolicies,
   globalCaseLawPolicies,
   mcpConnectorPolicies,
   mcpOAuthStatePolicies,
@@ -2546,6 +2547,68 @@ export const chatMessages = p.pgTable(
   ],
 );
 
+export const fileChatThreads = p.pgTable(
+  "file_chat_threads",
+  {
+    id: pUuid<"fileChatThread">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    entityId: safeUuid<"entity">("entity_id").notNull(),
+    fieldId: safeUuid<"field">("field_id").notNull(),
+    chatThreadId: safeUuid<"chatThread">("chat_thread_id")
+      .notNull()
+      .references(() => chatThreads.id, { onDelete: "cascade" }),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p
+      .timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    p
+      .uniqueIndex("file_chat_threads_scope_uidx")
+      .on(
+        table.organizationId,
+        table.workspaceId,
+        table.userId,
+        table.entityId,
+        table.fieldId,
+      ),
+    p
+      .uniqueIndex("file_chat_threads_chat_thread_id_uidx")
+      .on(table.chatThreadId),
+    p
+      .index("file_chat_threads_workspace_entity_field_idx")
+      .on(table.workspaceId, table.entityId, table.fieldId),
+    p
+      .foreignKey({
+        columns: [table.workspaceId],
+        foreignColumns: [workspaces.id],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.entityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.fieldId, table.workspaceId],
+        foreignColumns: [fields.id, fields.workspaceId],
+      })
+      .onDelete("cascade"),
+    ...fileChatThreadPolicies(),
+  ],
+);
+
 // -- MCP Connectors --
 
 export const MCP_CONNECTOR_AUTH_TYPES = ["none", "bearer", "oauth2"] as const;
@@ -3002,6 +3065,7 @@ export const relations = defineRelations(
     caseLawIngestionFailures,
     chatThreads,
     chatMessages,
+    fileChatThreads,
     mcpConnectors,
     mcpOAuthClients,
     mcpUserConnections,
@@ -3621,6 +3685,10 @@ export const relations = defineRelations(
         from: r.chatThreads.id,
         to: r.chatMessages.threadId,
       }),
+      fileChatThread: r.one.fileChatThreads({
+        from: r.chatThreads.id,
+        to: r.fileChatThreads.chatThreadId,
+      }),
       userFiles: r.many.userFiles({
         from: r.chatThreads.id,
         to: r.userFiles.threadId,
@@ -3634,6 +3702,24 @@ export const relations = defineRelations(
       workspace: r.one.workspaces({
         from: r.chatMessages.workspaceId,
         to: r.workspaces.id,
+      }),
+    },
+    fileChatThreads: {
+      thread: r.one.chatThreads({
+        from: r.fileChatThreads.chatThreadId,
+        to: r.chatThreads.id,
+      }),
+      workspace: r.one.workspaces({
+        from: r.fileChatThreads.workspaceId,
+        to: r.workspaces.id,
+      }),
+      entity: r.one.entities({
+        from: r.fileChatThreads.entityId,
+        to: r.entities.id,
+      }),
+      field: r.one.fields({
+        from: r.fileChatThreads.fieldId,
+        to: r.fields.id,
       }),
     },
     mcpConnectors: {

@@ -22,6 +22,7 @@ import {
   entityVersions,
   expenses,
   fields,
+  fileChatThreads,
   invoices,
   justifications,
   matterCounters,
@@ -122,6 +123,7 @@ export const createTestIds = () => ({
   chatMessageWorkspaceA1: id<"chatMessage">(),
   chatMessageWorkspaceA2: id<"chatMessage">(),
   chatMessageWorkspaceB1: id<"chatMessage">(),
+  fileChatThreadA1: id<"fileChatThread">(),
   // Additional properties for dependencies
   propertyA1dep: id<"property">(),
   propertyB1dep: id<"property">(),
@@ -875,6 +877,16 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       workspaceId: ids.wsA1,
     },
   ]);
+
+  await db.insert(fileChatThreads).values({
+    id: ids.fileChatThreadA1,
+    organizationId: ids.orgA,
+    workspaceId: ids.wsA1,
+    userId: ids.userA1,
+    entityId: ids.entityA1,
+    fieldId: ids.fieldA1,
+    chatThreadId: ids.chatThreadWorkspaceA1,
+  });
 
   const chatContent = (text: string) => ({
     version: 1 as const,

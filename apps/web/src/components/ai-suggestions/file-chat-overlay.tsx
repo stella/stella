@@ -66,7 +66,10 @@ import type {
   ApplyActiveDocxEditsInput,
   ApplyActiveDocxEditsOutput,
 } from "@/routes/_protected.chat/-queries";
-import { chatThreadOptions } from "@/routes/_protected.chat/-queries";
+import {
+  chatThreadOptions,
+  fileChatThreadOptions,
+} from "@/routes/_protected.chat/-queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
 type ActiveFile = {
@@ -77,6 +80,7 @@ type ActiveFile = {
     | undefined;
   entityId: string;
   editable?: boolean | undefined;
+  fileFieldId?: string | undefined;
   fileName: string;
   supportsDocxEdits?: boolean | undefined;
 };
@@ -490,13 +494,8 @@ const ACTIVE_FILE_BLOCKED_APPROVAL_TOOLS = new Set<ApprovalToolName>();
 type FileChatOverlayProps = {
   /** Workspace this viewer belongs to. Scopes the thread + mention sources. */
   workspaceId?: string | undefined;
-  /**
-   * Stable identifier for this file's chat thread. Use the file's
-   * entity id (or any per-file unique string) so drafts + history
-   * persist across mounts and stay isolated from other files'
-   * chats.
-   */
-  chatThreadId: ChatThreadId;
+  /** Explicit thread id for non-file previews and newly-created chat sessions. */
+  chatThreadId?: ChatThreadId | undefined;
   /**
    * Surfaced to the model via the chat transport so prompts can
    * reference "the file you're looking at" and tools can resolve
@@ -518,25 +517,114 @@ type FileChatOverlayProps = {
 
 const protectedRouteApi = getRouteApi("/_protected");
 
-export const FileChatOverlay = (props: FileChatOverlayProps) => (
-  // Suspense boundary keeps the chat-thread fetch local to the
-  // overlay — without it, a cold cache propagates the suspension
-  // up to the file route and shows the route's pending screen.
-  <Suspense
-    fallback={
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center"
-      >
-        <LoaderCircleIcon className="text-muted-foreground size-4 animate-spin" />
-      </div>
-    }
-  >
-    <FileChatOverlayInner {...props} />
-  </Suspense>
-);
+export const FileChatOverlay = ({
+  workspaceId,
+  chatThreadId,
+  activeFile,
+  activeExternal,
+  docxEditable,
+  docxEditorRef,
+  onNewThread,
+  requestDocxEditMode,
+}: FileChatOverlayProps) => {
+  const fallback = (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center"
+    >
+      <LoaderCircleIcon className="text-muted-foreground size-4 animate-spin" />
+    </div>
+  );
 
-type FileChatOverlayInnerProps = FileChatOverlayProps;
+  if (chatThreadId === undefined) {
+    const fileFieldId = activeFile?.fileFieldId;
+    if (
+      workspaceId === undefined ||
+      activeFile === undefined ||
+      fileFieldId === undefined
+    ) {
+      return null;
+    }
+
+    return (
+      <Suspense fallback={fallback}>
+        <ResolvedFileChatOverlay
+          activeFile={{ ...activeFile, fileFieldId }}
+          docxEditable={docxEditable}
+          docxEditorRef={docxEditorRef}
+          onNewThread={onNewThread}
+          requestDocxEditMode={requestDocxEditMode}
+          workspaceId={workspaceId}
+        />
+      </Suspense>
+    );
+  }
+
+  return (
+    <Suspense fallback={fallback}>
+      <FileChatOverlayInner
+        activeExternal={activeExternal}
+        activeFile={activeFile}
+        chatThreadId={chatThreadId}
+        docxEditable={docxEditable}
+        docxEditorRef={docxEditorRef}
+        onNewThread={onNewThread}
+        requestDocxEditMode={requestDocxEditMode}
+        workspaceId={workspaceId}
+      />
+    </Suspense>
+  );
+};
+
+type ResolvedFileChatOverlayProps = Omit<
+  FileChatOverlayProps,
+  "activeExternal" | "activeFile" | "chatThreadId" | "workspaceId"
+> & {
+  activeFile: ActiveFile & { fileFieldId: string };
+  workspaceId: string;
+};
+
+const ResolvedFileChatOverlay = ({
+  activeFile,
+  docxEditable,
+  docxEditorRef,
+  onNewThread,
+  requestDocxEditMode,
+  workspaceId,
+}: ResolvedFileChatOverlayProps) => {
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data: chatThreadId } = useSuspenseQuery(
+    fileChatThreadOptions({
+      activeOrganizationId,
+      key: {
+        entityId: activeFile.entityId,
+        fieldId: activeFile.fileFieldId,
+        workspaceId,
+      },
+    }),
+  );
+
+  return (
+    <FileChatOverlayInner
+      activeFile={activeFile}
+      chatThreadId={chatThreadId}
+      docxEditable={docxEditable}
+      docxEditorRef={docxEditorRef}
+      onNewThread={onNewThread}
+      requestDocxEditMode={requestDocxEditMode}
+      workspaceId={workspaceId}
+    />
+  );
+};
+
+type FileChatOverlayInnerProps = Omit<
+  FileChatOverlayProps,
+  "chatThreadId"
+> & {
+  chatThreadId: ChatThreadId;
+};
 
 const FileChatOverlayInner = ({
   workspaceId,
