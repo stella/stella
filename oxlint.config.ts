@@ -545,12 +545,12 @@ export default defineConfig({
         "typescript/no-non-null-assertion": "off",
         "typescript/no-unnecessary-type-assertion": "off",
         "typescript/no-unsafe-return": "off",
-        "typescript/restrict-template-expressions": "off",
+        
         "typescript/switch-exhaustiveness-check": "off",
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
         "typescript/consistent-return": "off",
-        "unicorn/no-useless-collection-argument": "off",
+        
       },
     },
     {
@@ -578,7 +578,7 @@ export default defineConfig({
         "eslint/eqeqeq": "off",
         "typescript/consistent-return": "off",
         
-        "typescript/restrict-template-expressions": "off",
+        
         "typescript/no-unsafe-return": "off",
         "typescript/no-unsafe-call": "off",
         "typescript/no-unsafe-argument": "off",
@@ -634,7 +634,7 @@ export default defineConfig({
         "eslint/eqeqeq": "off",
         "typescript/consistent-return": "off",
         
-        "typescript/restrict-template-expressions": "off",
+        
         "typescript/no-unsafe-return": "off",
         "typescript/no-unsafe-call": "off",
         "typescript/no-unsafe-argument": "off",
@@ -677,7 +677,7 @@ export default defineConfig({
         "typescript/no-unsafe-return": "off",
         "typescript/no-unsafe-call": "off",
         "typescript/no-unsafe-argument": "off",
-        "typescript/restrict-template-expressions": "off",
+        
         
         "unicorn/prefer-string-starts-ends-with": "off",
         "typescript/prefer-string-starts-ends-with": "off",

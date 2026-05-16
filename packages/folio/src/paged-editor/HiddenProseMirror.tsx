@@ -394,7 +394,10 @@ const HiddenProseMirrorComponent = forwardRef<
       // For simplicity, we compare based on whether it's a different document object
       // and whether it has different metadata
       const meta = doc.package.properties;
-      return `${meta?.created || ""}-${meta?.modified || ""}-${meta?.title || ""}`;
+      const created = meta?.created ? String(meta.created) : "";
+      const modified = meta?.modified ? String(meta.modified) : "";
+      const title = meta?.title ?? "";
+      return `${created}-${modified}-${title}`;
     };
 
     const currentDocId = getDocumentId(document);
