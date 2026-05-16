@@ -17,6 +17,23 @@ export const LIMITS = {
   templateCategoriesCount: 100,
   clausesPerOrganization: 500,
   shortcutsPerUser: 100,
+  agentSkillsPerUser: 100,
+  agentSkillsPageSizeDefault: 100,
+  agentSkillsPageSizeMax: 250,
+  agentSkillsChatMetadataMax: 200,
+  agentSkillDescriptionMaxChars: 1000,
+  agentSkillCompatibilityMaxChars: 1000,
+  agentSkillLicenseMaxChars: 256,
+  agentSkillMetadataEntriesMax: 32,
+  agentSkillMetadataKeyMaxChars: 64,
+  agentSkillMetadataValueMaxChars: 512,
+  agentSkillVersionMaxChars: 64,
+  agentSkillBodyMaxChars: 80_000,
+  agentSkillArchiveFilesMax: 100,
+  agentSkillArchiveUncompressedMaxBytes: 6 * 1024 * 1024,
+  agentSkillGithubDirectoriesMax: 100,
+  agentSkillResourcesPerSkill: 50,
+  agentSkillResourceMaxChars: 100_000,
   clauseVariantsPerClause: 10,
   clauseVersionsPerClause: 50,
   templateClausesPerTemplate: 50,
@@ -97,6 +114,8 @@ export const FILE_SIZE_LIMITS = {
   document: "50m",
   /** Structured data imports (clause JSON). */
   dataImport: "10m",
+  /** Agent skill packs (`SKILL.md` or a ZIP folder). */
+  skillPack: "2m",
   /** Chat context file attachments. */
   chatContextFile: `${CHAT_CONTEXT_FILE_MAX_MEGABYTES}m`,
 } as const;
@@ -106,6 +125,8 @@ export const FILE_SIZE_LIMITS = {
  * validate before a framework-level t.File() parser runs.
  */
 export const FILE_SIZE_LIMIT_BYTES = {
+  /** Agent skill packs (`SKILL.md` or a ZIP folder). */
+  skillPack: 2 * 1024 * 1024,
   /** Chat context file attachments. */
   chatContextFile: CHAT_CONTEXT_FILE_MAX_MEGABYTES * 1024 * 1024,
 } as const;

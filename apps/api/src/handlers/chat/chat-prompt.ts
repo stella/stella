@@ -22,7 +22,10 @@ import type {
   IncomingActiveFile,
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
-import { getChatSkillMetadata } from "@/api/handlers/chat/skills";
+import {
+  getChatSkillMetadata,
+  listAvailableChatSkillMetadata,
+} from "@/api/handlers/chat/skills";
 import { readonlyOrgFunctionContracts } from "@/api/handlers/chat/tools/execute/org-manifest";
 import { buildReadonlyFunctionManifest } from "@/api/handlers/chat/tools/execute/readonly-manifest";
 import type { ReadonlyFunctionManifest } from "@/api/handlers/chat/tools/execute/readonly-manifest";
@@ -71,12 +74,16 @@ const CORE_RULE_SECTIONS = [
 
 export type UserContext = IncomingUserContext;
 
+type PromptSkillMetadata = SkillMetadata & {
+  source?: "built-in" | "installed" | undefined;
+};
+
 export type ChatPromptParts = {
   cacheStablePrefix: string;
   /**
-   * Server-built scaffold: product copy, skill catalog, jurisdic-
-   * tions, workspace metadata. Carries no third-party PII and is
-   * sent to the model verbatim — *no anonymization*.
+   * Server-built scaffold: product copy, built-in skill catalog,
+   * jurisdictions, workspace metadata. Carries no third-party PII
+   * and is sent to the model verbatim — *no anonymization*.
    */
   safePrompt: string;
   /**
@@ -94,6 +101,7 @@ export type ChatPromptParts = {
    * logging).
    */
   fullPrompt: string;
+  skillMetadata: readonly PromptSkillMetadata[];
 };
 
 export const buildChatPromptCacheKey = (cacheStablePrefix: string) => {
@@ -122,6 +130,8 @@ type BuildChatSystemPromptProps = {
   safeDb: SafeDb;
   userContext: IncomingUserContext | undefined;
   workspaceId: SafeId<"workspace"> | null;
+  organizationId?: SafeId<"organization"> | undefined;
+  userId?: SafeId<"user"> | undefined;
 };
 
 export const buildChatSystemPrompt = async (
@@ -134,13 +144,26 @@ export const buildChatSystemPromptParts = async ({
   activeExternal,
   activeFile,
   contextMatterIds,
+  organizationId,
   practiceJurisdictions,
   refRegistry,
   safeDb,
   userContext,
+  userId,
   workspaceId,
 }: BuildChatSystemPromptProps): Promise<Result<ChatPromptParts, SafeDbError>> =>
   await Result.gen(async function* () {
+    const skillMetadata =
+      organizationId && userId
+        ? yield* Result.await(
+            listAvailableChatSkillMetadata({
+              organizationId,
+              safeDb,
+              userId,
+            }),
+          )
+        : getChatSkillMetadata();
+
     // The "safe" half is built by the workspace / global builders:
     // brand voice, skill catalog, jurisdiction labels, workspace
     // metadata. Anything that pulls user-supplied free text (active
@@ -152,7 +175,7 @@ export const buildChatSystemPromptParts = async ({
       workspaceId === null
         ? buildGlobalPromptParts({
             practiceJurisdictions,
-            skillMetadata: getChatSkillMetadata(),
+            skillMetadata,
             userContext: userContext ?? null,
           })
         : yield* Result.await(
@@ -160,6 +183,7 @@ export const buildChatSystemPromptParts = async ({
               practiceJurisdictions,
               refRegistry,
               safeDb,
+              skillMetadata,
               userContext: userContext ?? null,
               workspaceId,
             }),
@@ -224,6 +248,7 @@ export const buildChatSystemPromptParts = async ({
       safePrompt: safeParts.safePrompt,
       untrustedSuffix,
       fullPrompt: `${safeParts.safePrompt}${untrustedSuffix}`,
+      skillMetadata,
     });
   });
 
@@ -306,7 +331,7 @@ export const extractTitle = (parts: ChatMessage["parts"]) => {
 
 type BuildGlobalPromptProps = {
   practiceJurisdictions?: readonly PracticeJurisdiction[];
-  skillMetadata?: readonly SkillMetadata[] | undefined;
+  skillMetadata?: readonly PromptSkillMetadata[] | undefined;
   userContext: UserContext | null;
 };
 
@@ -337,6 +362,7 @@ type BuildWorkspacePromptProps = {
   practiceJurisdictions?: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
+  skillMetadata?: readonly PromptSkillMetadata[] | undefined;
   userContext: UserContext | null;
   workspaceId: SafeId<"workspace">;
 };
@@ -345,6 +371,7 @@ const buildWorkspacePromptPartsFromDb = async ({
   practiceJurisdictions = [],
   refRegistry,
   safeDb,
+  skillMetadata = getChatSkillMetadata(),
   userContext,
   workspaceId,
 }: BuildWorkspacePromptProps): Promise<Result<ChatPromptParts, SafeDbError>> =>
@@ -361,7 +388,7 @@ const buildWorkspacePromptPartsFromDb = async ({
         entityCount: workspacePromptData.entityCount,
         practiceJurisdictions,
         refRegistry,
-        skillMetadata: getChatSkillMetadata(),
+        skillMetadata,
         userContext,
         workspaceId,
         workspaceName: workspacePromptData.workspaceName,
@@ -434,7 +461,7 @@ type BuildWorkspacePromptTextProps = {
   entityCount: number;
   practiceJurisdictions?: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
-  skillMetadata?: readonly SkillMetadata[] | undefined;
+  skillMetadata?: readonly PromptSkillMetadata[] | undefined;
   userContext: UserContext | null;
   workspaceId: SafeId<"workspace">;
   workspaceName: string;
@@ -821,7 +848,7 @@ export const appendActiveFilePromptIfEntityExists = ({
 type BuildPromptProps = {
   practiceJurisdictions: readonly PracticeJurisdiction[];
   requestContextSections: string[];
-  skillMetadata: readonly SkillMetadata[];
+  skillMetadata: readonly PromptSkillMetadata[];
   userContext: UserContext | null;
 };
 
@@ -831,9 +858,11 @@ const buildPromptParts = ({
   skillMetadata,
   userContext,
 }: BuildPromptProps): ChatPromptParts => {
+  const { safeSkillMetadata, untrustedSkillMetadata } =
+    splitSkillMetadataForPrompt(skillMetadata);
   const cacheStablePrefix = joinPromptSections([
     ...CORE_RULE_SECTIONS,
-    buildSkillCatalogSection(skillMetadata),
+    buildSkillCatalogSection(safeSkillMetadata),
     READONLY_API_HINT,
   ]);
   // Safe half: scaffold + jurisdiction labels. Both are
@@ -848,12 +877,16 @@ const buildPromptParts = ({
   const safePrompt = joinPromptSections(safeSections);
 
   // Untrusted half: anything that interpolates user-controlled
-  // text into the prompt. `requestContextSections` is the
+  // text into the prompt. Installed skill names/descriptions are
+  // user-configured text; `requestContextSections` includes the
   // `Connected to matter "..."` line (matter names commonly carry
   // client / opposing-party names); `userContextBlock` echoes the
-  // user's own profile (name, email). Both must cross the
+  // user's own profile (name, email). All must cross the
   // anonymizer in anonymized mode.
-  const untrustedSections: string[] = [...requestContextSections];
+  const untrustedSections: string[] = [
+    buildSkillCatalogSection(untrustedSkillMetadata),
+    ...requestContextSections,
+  ];
   const userContextBlock = buildUserContextBlock(userContext);
   if (userContextBlock) {
     untrustedSections.push(userContextBlock);
@@ -868,7 +901,26 @@ const buildPromptParts = ({
     safePrompt,
     untrustedSuffix,
     fullPrompt: `${safePrompt}${untrustedSuffix}`,
+    skillMetadata,
   };
+};
+
+const splitSkillMetadataForPrompt = (
+  skillMetadata: readonly PromptSkillMetadata[],
+) => {
+  const safeSkillMetadata: PromptSkillMetadata[] = [];
+  const untrustedSkillMetadata: PromptSkillMetadata[] = [];
+
+  for (const skill of skillMetadata) {
+    if (skill.source === "installed") {
+      untrustedSkillMetadata.push(skill);
+      continue;
+    }
+
+    safeSkillMetadata.push(skill);
+  }
+
+  return { safeSkillMetadata, untrustedSkillMetadata };
 };
 
 const buildPracticeJurisdictionLine = (

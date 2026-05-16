@@ -1,17 +1,26 @@
 import { GENERATED_SKILLS } from "./skills.gen";
 
-// TODO: This is a temporary toy implementation for Stella-provided skills.
-// Replace it with importable, persisted skill packs before user-managed
-// skills become a runtime feature.
 export type SkillMetadata = {
+  compatibility?: string | null;
   description: string;
+  license?: string | null;
+  metadata?: Record<string, string>;
   name: string;
   version: string | null;
 };
 
+export type SkillResourceKind =
+  | "asset"
+  | "knowledge"
+  | "other"
+  | "prompt"
+  | "reference"
+  | "script"
+  | "template";
+
 export type SkillResource = {
   path: string;
-  kind: "knowledge" | "prompt";
+  kind: SkillResourceKind;
 };
 
 export type StellaSkill = SkillMetadata & {
@@ -19,13 +28,29 @@ export type StellaSkill = SkillMetadata & {
   resources: SkillResource[];
 };
 
-const RESOURCE_EXTENSIONS = [".md", ".prompt.md"] as const;
+const RESOURCE_EXTENSIONS = [
+  ".csv",
+  ".json",
+  ".md",
+  ".mjs",
+  ".prompt.md",
+  ".py",
+  ".sh",
+  ".ts",
+  ".tsv",
+  ".txt",
+  ".yaml",
+  ".yml",
+] as const;
 const skillsById: ReadonlyMap<string, GeneratedSkill> = new Map(
   GENERATED_SKILLS.map((skill) => [skill.id, skill]),
 );
 
 type Frontmatter = {
+  compatibility?: string | undefined;
   description?: string | undefined;
+  license?: string | undefined;
+  metadata?: Record<string, string> | undefined;
   name?: string | undefined;
   version?: string | undefined;
 };
@@ -92,66 +117,143 @@ const getSkill = (skillId: string) => {
   return skill;
 };
 
-const parseSkillFile = (
+export const parseSkillFile = (
   source: string,
 ): {
   body: string;
   metadata: SkillMetadata;
 } => {
-  if (!source.startsWith("---\n")) {
+  const normalizedSource = source
+    .replaceAll("\r\n", "\n")
+    .replaceAll("\r", "\n");
+
+  if (!normalizedSource.startsWith("---\n")) {
     throw new Error("Skill file missing frontmatter");
   }
 
-  const end = source.indexOf("\n---", 4);
+  const end = normalizedSource.indexOf("\n---", 4);
   if (end === -1) {
     throw new Error("Skill file missing frontmatter terminator");
   }
 
-  const frontmatter = parseSimpleFrontmatter(source.slice(4, end));
+  const frontmatter = parseSimpleFrontmatter(normalizedSource.slice(4, end));
   if (!frontmatter.name || !frontmatter.description) {
     throw new Error("Skill file frontmatter must include name and description");
   }
 
   return {
     metadata: {
+      compatibility: frontmatter.compatibility ?? null,
       description: frontmatter.description,
+      license: frontmatter.license ?? null,
+      metadata: frontmatter.metadata ?? {},
       name: frontmatter.name,
-      version: frontmatter.version ?? null,
+      version: frontmatter.version ?? frontmatter.metadata?.["version"] ?? null,
     },
-    body: source.slice(end + "\n---".length).trim(),
+    body: normalizedSource.slice(end + "\n---".length).trim(),
   };
 };
 
 const parseSimpleFrontmatter = (source: string): Frontmatter => {
   const frontmatter: Frontmatter = {};
+  let parsingMetadata = false;
 
   for (const line of source.split("\n")) {
-    const separatorIndex = line.indexOf(":");
-    if (separatorIndex === -1) {
+    if (line.trim().length === 0) {
       continue;
     }
 
-    const key = line.slice(0, separatorIndex);
-    if (!isFrontmatterKey(key)) {
+    if (parsingMetadata && /^\s+/.test(line)) {
+      const metadataEntry = parseFrontmatterEntry(line.trim());
+      if (metadataEntry) {
+        frontmatter.metadata ??= {};
+        frontmatter.metadata[metadataEntry.key] = metadataEntry.value;
+      }
       continue;
     }
 
-    const value = stripYamlString(line.slice(separatorIndex + 1));
-    frontmatter[key] = value;
+    parsingMetadata = false;
+    const entry = parseFrontmatterEntry(line);
+    if (!entry) {
+      continue;
+    }
+    if (entry.key === "metadata") {
+      frontmatter.metadata ??= {};
+      parsingMetadata = true;
+      continue;
+    }
+    if (!isFrontmatterKey(entry.key)) {
+      continue;
+    }
+
+    setFrontmatterValue({
+      frontmatter,
+      key: entry.key,
+      value: entry.value,
+    });
   }
 
   return frontmatter;
 };
 
+const parseFrontmatterEntry = (
+  line: string,
+): { key: string; value: string } | null => {
+  const separatorIndex = line.indexOf(":");
+  if (separatorIndex === -1) {
+    return null;
+  }
+
+  const key = line.slice(0, separatorIndex).trim();
+  const value = stripYamlString(line.slice(separatorIndex + 1));
+  return { key, value };
+};
+
 const isFrontmatterKey = (key: string): key is keyof Frontmatter =>
-  key === "name" || key === "description" || key === "version";
+  key === "compatibility" ||
+  key === "description" ||
+  key === "license" ||
+  key === "name" ||
+  key === "version";
+
+const setFrontmatterValue = ({
+  frontmatter,
+  key,
+  value,
+}: {
+  frontmatter: Frontmatter;
+  key: keyof Frontmatter;
+  value: string;
+}) => {
+  switch (key) {
+    case "compatibility":
+      frontmatter.compatibility = value;
+      return;
+    case "description":
+      frontmatter.description = value;
+      return;
+    case "license":
+      frontmatter.license = value;
+      return;
+    case "name":
+      frontmatter.name = value;
+      return;
+    case "version":
+      frontmatter.version = value;
+      return;
+    case "metadata":
+      return;
+    default:
+      return;
+  }
+};
 
 const stripYamlString = (value: string): string => {
   const trimmed = value.trim();
   return trimmed.replace(/^["']|["']$/g, "");
 };
 
-const normalizeResourcePath = (resourcePath: string): string => {
+export const normalizeResourcePath = (resourcePath: string): string => {
   if (resourcePath.startsWith("/")) {
     throw new Error("Skill resource path must be relative");
   }
@@ -169,12 +271,35 @@ const normalizeResourcePath = (resourcePath: string): string => {
   return normalized;
 };
 
-const isAllowedResourcePath = (resourcePath: string): boolean => {
+export const isAllowedResourcePath = (resourcePath: string): boolean =>
+  getSkillResourceKind(resourcePath) !== null &&
+  hasAllowedResourceExtension(resourcePath);
+
+export const getSkillResourceKind = (
+  resourcePath: string,
+): SkillResourceKind | null => {
   const root = resourcePath.split("/").at(0);
-  return (
-    (root === "knowledge" || root === "prompts") &&
-    hasAllowedResourceExtension(resourcePath)
-  );
+  if (!root) {
+    return null;
+  }
+
+  switch (root) {
+    case "assets":
+      return "asset";
+    case "knowledge":
+      return "knowledge";
+    case "prompts":
+      return "prompt";
+    case "reference":
+    case "references":
+      return "reference";
+    case "scripts":
+      return "script";
+    case "templates":
+      return "template";
+    default:
+      return null;
+  }
 };
 
 const hasAllowedResourceExtension = (resourcePath: string): boolean =>

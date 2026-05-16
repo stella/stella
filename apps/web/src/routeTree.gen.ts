@@ -31,6 +31,7 @@ import { Route as ProtectedChatIndexRouteImport } from './routes/_protected.chat
 import { Route as AuthAcceptInvitationInvitationIdRouteImport } from './routes/auth/accept-invitation.$invitationId'
 import { Route as ProtectedKnowledgeTemplatesRouteImport } from './routes/_protected.knowledge/templates'
 import { Route as ProtectedKnowledgeSkillsRouteImport } from './routes/_protected.knowledge/skills'
+import { Route as ProtectedKnowledgePromptsRouteImport } from './routes/_protected.knowledge/prompts'
 import { Route as ProtectedKnowledgeMcpRouteImport } from './routes/_protected.knowledge/mcp'
 import { Route as ProtectedKnowledgeClausesRouteImport } from './routes/_protected.knowledge/clauses'
 import { Route as ProtectedContactsContactIdRouteImport } from './routes/_protected.contacts/$contactId'
@@ -171,6 +172,12 @@ const ProtectedKnowledgeSkillsRoute =
   ProtectedKnowledgeSkillsRouteImport.update({
     id: '/skills',
     path: '/skills',
+    getParentRoute: () => ProtectedKnowledgeRouteRoute,
+  } as any)
+const ProtectedKnowledgePromptsRoute =
+  ProtectedKnowledgePromptsRouteImport.update({
+    id: '/prompts',
+    path: '/prompts',
     getParentRoute: () => ProtectedKnowledgeRouteRoute,
   } as any)
 const ProtectedKnowledgeMcpRoute = ProtectedKnowledgeMcpRouteImport.update({
@@ -360,6 +367,7 @@ export interface FileRoutesByFullPath {
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
   '/knowledge/mcp': typeof ProtectedKnowledgeMcpRoute
+  '/knowledge/prompts': typeof ProtectedKnowledgePromptsRoute
   '/knowledge/skills': typeof ProtectedKnowledgeSkillsRoute
   '/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
@@ -404,6 +412,7 @@ export interface FileRoutesByTo {
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
   '/knowledge/mcp': typeof ProtectedKnowledgeMcpRoute
+  '/knowledge/prompts': typeof ProtectedKnowledgePromptsRoute
   '/knowledge/skills': typeof ProtectedKnowledgeSkillsRoute
   '/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
@@ -456,6 +465,7 @@ export interface FileRoutesById {
   '/_protected/contacts/$contactId': typeof ProtectedContactsContactIdRoute
   '/_protected/knowledge/clauses': typeof ProtectedKnowledgeClausesRoute
   '/_protected/knowledge/mcp': typeof ProtectedKnowledgeMcpRoute
+  '/_protected/knowledge/prompts': typeof ProtectedKnowledgePromptsRoute
   '/_protected/knowledge/skills': typeof ProtectedKnowledgeSkillsRoute
   '/_protected/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
@@ -509,6 +519,7 @@ export interface FileRouteTypes {
     | '/contacts/$contactId'
     | '/knowledge/clauses'
     | '/knowledge/mcp'
+    | '/knowledge/prompts'
     | '/knowledge/skills'
     | '/knowledge/templates'
     | '/auth/accept-invitation/$invitationId'
@@ -553,6 +564,7 @@ export interface FileRouteTypes {
     | '/contacts/$contactId'
     | '/knowledge/clauses'
     | '/knowledge/mcp'
+    | '/knowledge/prompts'
     | '/knowledge/skills'
     | '/knowledge/templates'
     | '/auth/accept-invitation/$invitationId'
@@ -604,6 +616,7 @@ export interface FileRouteTypes {
     | '/_protected/contacts/$contactId'
     | '/_protected/knowledge/clauses'
     | '/_protected/knowledge/mcp'
+    | '/_protected/knowledge/prompts'
     | '/_protected/knowledge/skills'
     | '/_protected/knowledge/templates'
     | '/auth/accept-invitation/$invitationId'
@@ -799,6 +812,13 @@ declare module '@tanstack/react-router' {
       path: '/skills'
       fullPath: '/knowledge/skills'
       preLoaderRoute: typeof ProtectedKnowledgeSkillsRouteImport
+      parentRoute: typeof ProtectedKnowledgeRouteRoute
+    }
+    '/_protected/knowledge/prompts': {
+      id: '/_protected/knowledge/prompts'
+      path: '/prompts'
+      fullPath: '/knowledge/prompts'
+      preLoaderRoute: typeof ProtectedKnowledgePromptsRouteImport
       parentRoute: typeof ProtectedKnowledgeRouteRoute
     }
     '/_protected/knowledge/mcp': {
@@ -1060,6 +1080,7 @@ interface ProtectedKnowledgeRouteRouteChildren {
   ProtectedKnowledgeCaseRouteRoute: typeof ProtectedKnowledgeCaseRouteRouteWithChildren
   ProtectedKnowledgeClausesRoute: typeof ProtectedKnowledgeClausesRoute
   ProtectedKnowledgeMcpRoute: typeof ProtectedKnowledgeMcpRoute
+  ProtectedKnowledgePromptsRoute: typeof ProtectedKnowledgePromptsRoute
   ProtectedKnowledgeSkillsRoute: typeof ProtectedKnowledgeSkillsRoute
   ProtectedKnowledgeTemplatesRoute: typeof ProtectedKnowledgeTemplatesRoute
   ProtectedKnowledgeIndexRoute: typeof ProtectedKnowledgeIndexRoute
@@ -1071,6 +1092,7 @@ const ProtectedKnowledgeRouteRouteChildren: ProtectedKnowledgeRouteRouteChildren
       ProtectedKnowledgeCaseRouteRouteWithChildren,
     ProtectedKnowledgeClausesRoute: ProtectedKnowledgeClausesRoute,
     ProtectedKnowledgeMcpRoute: ProtectedKnowledgeMcpRoute,
+    ProtectedKnowledgePromptsRoute: ProtectedKnowledgePromptsRoute,
     ProtectedKnowledgeSkillsRoute: ProtectedKnowledgeSkillsRoute,
     ProtectedKnowledgeTemplatesRoute: ProtectedKnowledgeTemplatesRoute,
     ProtectedKnowledgeIndexRoute: ProtectedKnowledgeIndexRoute,

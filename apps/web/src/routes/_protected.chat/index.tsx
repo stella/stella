@@ -290,7 +290,7 @@ function ChatIndex() {
             heading={
               <Link
                 className="text-muted-foreground hover:text-foreground focus-visible:ring-ring flex items-center gap-2 rounded-md px-1 text-xs font-semibold tracking-widest uppercase transition-colors outline-none focus-visible:ring-2"
-                to="/knowledge/skills"
+                to="/knowledge/prompts"
               >
                 <SlashPromptIcon />
                 {t("chat.landing.prompts")}

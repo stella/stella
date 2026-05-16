@@ -1,19 +1,33 @@
 import { valibotSchema } from "@ai-sdk/valibot";
 import { tool } from "ai";
+import { Result } from "better-result";
 import * as v from "valibot";
 
 import type { SkillMetadata } from "@stll/skills";
-import { listSkillResources, loadSkill, readSkillResource } from "@stll/skills";
 
+import type { SafeDb } from "@/api/db";
+import {
+  listAvailableChatSkillResources,
+  loadAvailableChatSkill,
+  readAvailableChatSkillResource,
+} from "@/api/handlers/chat/skills";
+import type { SafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 
 type CreateSkillToolsProps = {
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
   skills: readonly SkillMetadata[];
+  userId: SafeId<"user">;
 };
 
-export const createSkillTools = ({ skills }: CreateSkillToolsProps) => {
+export const createSkillTools = ({
+  organizationId,
+  safeDb,
+  skills,
+  userId,
+}: CreateSkillToolsProps) => {
   const availableSkillIds = new Set(skills.map((skill) => skill.name));
-  const allowedSkillDescription = `Available skill names: ${[...availableSkillIds].join(", ")}`;
 
   return {
     "load-skill": tool({
@@ -24,17 +38,33 @@ export const createSkillTools = ({ skills }: CreateSkillToolsProps) => {
         "methodology or resource list.",
       inputSchema: valibotSchema(
         v.strictObject({
-          skillName: v.pipe(v.string(), v.description(allowedSkillDescription)),
+          skillName: v.pipe(
+            v.string(),
+            v.description(
+              "Skill name exactly as listed in the chat skill catalog.",
+            ),
+          ),
         }),
       ),
-      // eslint-disable-next-line require-await
       execute: async ({ skillName }) => {
         assertAvailableSkill({
           availableSkillIds,
           skillName,
         });
 
-        const skill = loadSkill(skillName);
+        const skillResult = await loadAvailableChatSkill({
+          organizationId,
+          safeDb,
+          skillName,
+          userId,
+        });
+        if (Result.isError(skillResult)) {
+          throw new ChatToolError({
+            message: "Skill could not be loaded.",
+            cause: skillResult.error,
+          });
+        }
+        const skill = skillResult.value;
         return {
           name: skill.name,
           version: skill.version,
@@ -53,7 +83,12 @@ export const createSkillTools = ({ skills }: CreateSkillToolsProps) => {
         "matter data.",
       inputSchema: valibotSchema(
         v.strictObject({
-          skillName: v.pipe(v.string(), v.description(allowedSkillDescription)),
+          skillName: v.pipe(
+            v.string(),
+            v.description(
+              "Skill name exactly as listed in the chat skill catalog.",
+            ),
+          ),
           path: v.pipe(
             v.string(),
             v.description(
@@ -62,14 +97,26 @@ export const createSkillTools = ({ skills }: CreateSkillToolsProps) => {
           ),
         }),
       ),
-      // eslint-disable-next-line require-await
       execute: async ({ path, skillName }) => {
         assertAvailableSkill({
           availableSkillIds,
           skillName,
         });
 
-        const resources = listSkillResources(skillName);
+        const resourcesResult = await listAvailableChatSkillResources({
+          organizationId,
+          safeDb,
+          skillName,
+          userId,
+        });
+        if (Result.isError(resourcesResult)) {
+          throw new ChatToolError({
+            message: "Skill resources could not be listed.",
+            cause: resourcesResult.error,
+          });
+        }
+
+        const resources = resourcesResult.value;
         if (!resources.some((resource) => resource.path === path)) {
           throw new ChatToolError({
             message: "Unknown or unavailable skill resource path.",
@@ -79,14 +126,46 @@ export const createSkillTools = ({ skills }: CreateSkillToolsProps) => {
         return {
           skillName,
           path,
-          content: readSkillResource({
-            resourcePath: path,
-            skillId: skillName,
+          content: await readSkillResourceContent({
+            organizationId,
+            path,
+            safeDb,
+            skillName,
+            userId,
           }),
         };
       },
     }),
   };
+};
+
+const readSkillResourceContent = async ({
+  organizationId,
+  path,
+  safeDb,
+  skillName,
+  userId,
+}: {
+  organizationId: SafeId<"organization">;
+  path: string;
+  safeDb: SafeDb;
+  skillName: string;
+  userId: SafeId<"user">;
+}) => {
+  const resourceResult = await readAvailableChatSkillResource({
+    organizationId,
+    path,
+    safeDb,
+    skillName,
+    userId,
+  });
+  if (Result.isError(resourceResult)) {
+    throw new ChatToolError({
+      message: "Skill resource could not be read.",
+      cause: resourceResult.error,
+    });
+  }
+  return resourceResult.value;
 };
 
 const assertAvailableSkill = ({

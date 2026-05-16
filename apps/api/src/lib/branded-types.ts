@@ -1,9 +1,11 @@
 declare const __brand: unique symbol;
 
 export type SafeIdType =
-  | "auditLog"
+  | "agentSkill"
+  | "agentSkillResource"
   | "anonymizationAllowlistEntry"
   | "anonymizationBlacklistEntry"
+  | "auditLog"
   | "billingCode"
   | "caseLawCitation"
   | "caseLawCourtWeight"

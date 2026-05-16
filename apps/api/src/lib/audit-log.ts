@@ -16,6 +16,7 @@ export const AUDIT_ACTION = {
 export type AuditAction = (typeof AUDIT_ACTION)[keyof typeof AUDIT_ACTION];
 
 export const AUDIT_RESOURCE_TYPE = {
+  AGENT_SKILL: "agent_skill",
   ENTITY: "entity",
   ORGANIZATION_SETTINGS: "organization_settings",
   WORKSPACE: "workspace",
