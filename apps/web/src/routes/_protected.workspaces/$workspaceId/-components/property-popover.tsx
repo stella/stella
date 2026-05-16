@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 
 import { EyeOffIcon, PencilLineIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -27,6 +27,11 @@ type PropertyPopoverProps = {
   header: TableHeader;
 };
 
+type ReplaceAction = {
+  index: number;
+  next: PropertyDependency;
+};
+
 export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
   const t = useTranslations();
   const { workspaceId, id, name } = property;
@@ -41,27 +46,20 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
   // a save from silently rewriting the file column as text/manual.
   const canEditViaComposer = property.content.type !== "file";
 
-  // Local optimistic copy of the dependencies. The conditions sub-modal
-  // can fire several edits in quick succession; rebuilding from
-  // `property.tool.dependencies` each time would clobber an in-flight
-  // change with the snapshot from the previous render. We keep the
-  // local copy authoritative while a mutation is pending and only
-  // re-sync from the prop when it settles.
-  const initialDeps =
+  // `useOptimistic` mirrors the server `dependencies` while a save is
+  // in flight so rapid successive edits compose against the latest
+  // user intent. Once the transition settles, React reverts to the
+  // passthrough server value — no manual resync effect needed.
+  const serverDependencies =
     property.tool.type === "ai-model" ? property.tool.dependencies : [];
-  const [localDeps, setLocalDeps] = useState<PropertyDependency[]>(initialDeps);
-  const isUpdatePending = updateProperty.isPending;
-
-  useEffect(() => {
-    if (isUpdatePending) {
-      return;
-    }
-    if (property.tool.type !== "ai-model") {
-      setLocalDeps([]);
-      return;
-    }
-    setLocalDeps(property.tool.dependencies);
-  }, [property, isUpdatePending]);
+  const [optimisticDeps, applyDependencyReplacement] = useOptimistic(
+    serverDependencies,
+    (current, action: ReplaceAction) =>
+      current.map((dependency, index) =>
+        index === action.index ? action.next : dependency,
+      ),
+  );
+  const [, startDepsTransition] = useTransition();
 
   // Conditions are editable from the popover without opening the full
   // composer: replaceValue swaps a dependency in place and we save by
@@ -70,28 +68,28 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
     if (property.tool.type !== "ai-model") {
       return;
     }
-    const nextDependencies = localDeps.map((d, i) => (i === index ? next : d));
-    setLocalDeps(nextDependencies);
-    updateProperty.mutate(
-      {
-        workspaceId,
-        propertyId: id,
-        name,
-        content: property.content,
-        tool: { ...property.tool, dependencies: nextDependencies },
-      },
-      {
-        onSuccess: () => {
-          void startWorkflow();
-        },
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
-        },
-      },
-    );
+    const tool = property.tool;
+    startDepsTransition(async () => {
+      applyDependencyReplacement({ index, next });
+      const nextDependencies = tool.dependencies.map((dependency, i) =>
+        i === index ? next : dependency,
+      );
+      try {
+        await updateProperty.mutateAsync({
+          workspaceId,
+          propertyId: id,
+          name,
+          content: property.content,
+          tool: { ...tool, dependencies: nextDependencies },
+        });
+        void startWorkflow();
+      } catch {
+        stellaToast.add({
+          title: t("errors.actionFailed"),
+          type: "error",
+        });
+      }
+    });
   };
 
   return (
@@ -133,7 +131,7 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
             <Separator />
             <div className="flex flex-col p-1">
               <PropertyConditions
-                dependencies={localDeps}
+                dependencies={optimisticDeps}
                 replaceValue={replaceDependency}
                 workspaceId={workspaceId}
               />
