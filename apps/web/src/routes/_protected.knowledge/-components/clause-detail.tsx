@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
   Loader2Icon,
@@ -49,6 +50,10 @@ import type { ParagraphDiff } from "@/routes/_protected.knowledge/-components/cl
 import { ClauseDiffView } from "@/routes/_protected.knowledge/-components/clause-diff-view";
 import { ClauseFormDialog } from "@/routes/_protected.knowledge/-components/clause-form-dialog";
 import type { BlockDirectiveKind } from "@/routes/_protected.knowledge/-components/paragraph-rendering";
+import {
+  clauseDetailOptions,
+  knowledgeKeys,
+} from "@/routes/_protected.knowledge/-queries";
 
 // ── Types ────────────────────────────────────────────
 
@@ -122,6 +127,7 @@ type CategoryOption = {
 };
 
 type ClauseDetailViewProps = {
+  organizationId: string;
   clauseId: string;
   categories: CategoryOption[];
   onBack: () => void;
@@ -131,60 +137,31 @@ type ClauseDetailViewProps = {
 // ── Main Component ───────────────────────────────────
 
 export const ClauseDetailView = ({
+  organizationId,
   clauseId,
   categories,
   onBack,
   onDeleted,
 }: ClauseDetailViewProps) => {
   const t = useTranslations();
+  const queryClient = useQueryClient();
   const canEditClause = usePermissions({ clause: ["update"] });
   const canDeleteClause = usePermissions({ clause: ["delete"] });
-  const [state, setState] = useState<
-    | { kind: "loading" }
-    | { kind: "ready"; detail: ClauseDetail }
-    | { kind: "error" }
-  >({ kind: "loading" });
+  const detailQuery = useQuery(clauseDetailOptions(organizationId, clauseId));
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const load = useCallback(async () => {
-    const response = await api.clauses({ clauseId }).get();
+  // SAFETY: The API returns body as ClauseParagraph[]
+  // but Eden types it as unknown due to JSONB.
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  const detail = detailQuery.data as unknown as ClauseDetail | undefined;
 
-    if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.loadFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
-      setState({ kind: "error" });
-      return;
-    }
-
-    const data = response.data;
-    if (data instanceof Response) {
-      setState({ kind: "error" });
-      return;
-    }
-
-    // SAFETY: The API returns body as ClauseParagraph[]
-    // but Eden types it as unknown due to JSONB.
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion
-    const detail = data as unknown as ClauseDetail;
-    setState({ kind: "ready", detail });
-  }, [clauseId, t]);
-
-  useEffect(() => {
-    const doLoad = async () => {
-      await load();
-    };
-
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    doLoad();
-  }, [load]);
+  const refreshDetail = useCallback(() => {
+    void queryClient.invalidateQueries({
+      queryKey: knowledgeKeys.clauses.detail(organizationId, clauseId),
+    });
+  }, [clauseId, organizationId, queryClient]);
 
   const handleDelete = useCallback(async () => {
     setDeleting(true);
@@ -220,7 +197,7 @@ export const ClauseDetailView = ({
           {t("clauses.backToList")}
         </Button>
 
-        {state.kind === "ready" && (
+        {detail && (
           <div className="flex gap-1">
             {canEditClause && (
               <Button
@@ -270,7 +247,7 @@ export const ClauseDetailView = ({
         )}
       </div>
 
-      {state.kind === "loading" && (
+      {detailQuery.isPending && (
         <div className="flex flex-1 items-center justify-center p-8">
           <p className="text-muted-foreground text-sm">
             {t("clauses.loading")}
@@ -278,7 +255,7 @@ export const ClauseDetailView = ({
         </div>
       )}
 
-      {state.kind === "error" && (
+      {detailQuery.isError && (
         <div className="flex flex-1 items-center justify-center p-8">
           <p className="text-muted-foreground text-sm">
             {t("clauses.loadFailed")}
@@ -286,28 +263,24 @@ export const ClauseDetailView = ({
         </div>
       )}
 
-      {state.kind === "ready" && (
+      {detail && (
         <DetailContent
           categories={categories}
           clauseId={clauseId}
-          detail={state.detail}
-          onRefresh={() => {
-            void load();
-          }}
+          detail={detail}
+          onRefresh={refreshDetail}
         />
       )}
 
-      {state.kind === "ready" && (
+      {detail && (
         <ClauseFormDialog
           categories={categories}
           initial={{
-            ...state.detail,
-            bodyParagraphs: state.detail.body,
+            ...detail,
+            bodyParagraphs: detail.body,
           }}
           onOpenChange={setEditOpen}
-          onSaved={() => {
-            void load();
-          }}
+          onSaved={refreshDetail}
           open={editOpen}
         />
       )}

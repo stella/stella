@@ -239,6 +239,7 @@ function RouteComponent() {
       <ClauseDetailView
         categories={categories}
         clauseId={view.clauseId}
+        organizationId={activeOrganizationId}
         onBack={handleBackToList}
         onDeleted={handleBackToList}
       />

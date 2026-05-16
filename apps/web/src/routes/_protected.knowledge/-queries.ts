@@ -77,6 +77,11 @@ export const knowledgeKeys = {
       "list",
       { categoryId: categoryId ?? null, search, limit },
     ],
+    detail: (organizationId: string, clauseId: string) => [
+      ...knowledgeKeys.clauses.all(organizationId),
+      clauseId,
+      "detail",
+    ],
   },
   clauseCategories: {
     all: (organizationId: string) => ["clause-categories", organizationId],
@@ -269,6 +274,23 @@ export const clausesOptions = (
 
       const response = await api.clauses.get({
         query,
+        fetch: { signal },
+      });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+export const clauseDetailOptions = (organizationId: string, clauseId: string) =>
+  queryOptions({
+    queryKey: knowledgeKeys.clauses.detail(organizationId, clauseId),
+    queryFn: async ({ signal }) => {
+      const response = await api.clauses({ clauseId }).get({
         fetch: { signal },
       });
 
