@@ -1,0 +1,433 @@
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  LoaderCircleIcon,
+} from "lucide-react";
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/components/button";
+import { cn } from "@stll/ui/lib/utils";
+
+import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
+import type { Citation } from "@/lib/citations";
+import { iterateJustificationCitations } from "@/lib/citations";
+import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import {
+  getPDFPageIdByNumber,
+  useOptionalPDFStore,
+} from "@/lib/pdf/pdf-context";
+import { renderJustificationContent } from "@/lib/render-justification-content";
+import { toSafeId } from "@/lib/safe-id";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import type { FileTab } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { useSyncJustifications } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
+import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
+import { workspaceKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
+import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
+
+export const DocumentAiSourceBar = ({
+  activeTab,
+  fieldId,
+  isActiveTab,
+  workspaceId,
+}: {
+  activeTab: FileTab;
+  fieldId: string;
+  isActiveTab: boolean;
+  workspaceId: string;
+}) => {
+  const t = useTranslations();
+  const openFile = useInspectorStore((s) => s.openFile);
+
+  const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
+  const { data: entity } = useSuspenseQuery(
+    entityOptions(workspaceId, activeTab.entityId),
+  );
+  useSyncJustifications({
+    workspaceId,
+    entityIds: [activeTab.entityId],
+  });
+
+  const justification = useWorkspaceStore((s) =>
+    s.justifications.find((j) => j.fieldId === fieldId),
+  );
+
+  const slots = useMemo(() => {
+    if (!justification) {
+      return [];
+    }
+    return Object.values(entity.fields)
+      .map((f) => {
+        const prop = properties.find((p) => p.id === f.propertyId);
+        if (!prop || prop.tool.type !== "ai-model") {
+          return null;
+        }
+        return { fieldId: f.id, property: prop };
+      })
+      .filter((s) => s !== null);
+  }, [entity, justification, properties]);
+
+  const currentIdx = slots.findIndex((s) => s.fieldId === fieldId);
+  const prevSlot = currentIdx > 0 ? slots[currentIdx - 1] : null;
+  const nextSlot =
+    currentIdx !== -1 && currentIdx < slots.length - 1
+      ? slots[currentIdx + 1]
+      : null;
+
+  const setActiveJustification = useWorkspaceStore(
+    (s) => s.setActiveJustification,
+  );
+  const requestBlockScroll = useInspectorStore((s) => s.requestBlockScroll);
+  const [isAnswerExpanded, setIsAnswerExpanded] = useState(false);
+
+  // Eagerly generate bboxes when the justification bar mounts.
+  const queryClient = useQueryClient();
+  const analytics = useAnalytics();
+  const [isGeneratingBoxes, setIsGeneratingBoxes] = useState(false);
+  const setScrollTo = useOptionalPDFStore((s) => s.setScrollTo);
+  const pages = useOptionalPDFStore((s) => s.pages);
+
+  const justificationId = justification?.id;
+  const boundingBoxes = justification?.boundingBoxes;
+  const activeDocumentJustificationContent = useMemo(
+    () =>
+      justification
+        ? {
+            ...justification.content,
+            blocks: justification.content.blocks.filter(
+              (block) => block.fileFieldId === activeTab.id,
+            ),
+          }
+        : null,
+    [activeTab.id, justification],
+  );
+  const citations = useMemo(
+    () =>
+      activeDocumentJustificationContent
+        ? [...iterateJustificationCitations(activeDocumentJustificationContent)]
+        : [],
+    [activeDocumentJustificationContent],
+  );
+  const hasBoundingBoxCitations = citations.some(
+    (citation) => citation.kind === "pdf-bates",
+  );
+
+  useEffect(() => {
+    if (
+      !justificationId ||
+      !isActiveTab ||
+      !hasBoundingBoxCitations ||
+      boundingBoxes
+    ) {
+      return undefined;
+    }
+
+    const requestState = { cancelled: false };
+    setIsGeneratingBoxes(true);
+
+    void (async () => {
+      try {
+        const response = await api
+          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          ["bounding-boxes"].post({
+            justificationId: toSafeId<"justification">(justificationId),
+            queryKey: workspaceKeys.justifications(workspaceId),
+          });
+
+        if (requestState.cancelled) {
+          return;
+        }
+
+        if (!response.error) {
+          await queryClient.invalidateQueries({
+            queryKey: workspaceKeys.justifications(workspaceId),
+          });
+        }
+      } catch (error) {
+        if (!requestState.cancelled) {
+          analytics.captureError(error);
+        }
+      } finally {
+        if (!requestState.cancelled) {
+          setIsGeneratingBoxes(false);
+        }
+      }
+    })();
+
+    return () => {
+      requestState.cancelled = true;
+    };
+  }, [
+    justificationId,
+    hasBoundingBoxCitations,
+    boundingBoxes,
+    isActiveTab,
+    workspaceId,
+    queryClient,
+    analytics,
+  ]);
+
+  useEffect(() => {
+    setIsAnswerExpanded(false);
+  }, [fieldId]);
+
+  useEffect(() => {
+    if (!isGeneratingBoxes) {
+      return undefined;
+    }
+
+    const interval = window.setInterval(() => {
+      void queryClient.invalidateQueries({
+        queryKey: workspaceKeys.justifications(workspaceId),
+      });
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [isGeneratingBoxes, queryClient, workspaceId]);
+
+  useEffect(() => {
+    if (!boundingBoxes || !isActiveTab || !pages || !setScrollTo) {
+      return;
+    }
+
+    const firstBox = boundingBoxes.boxes
+      .toSorted((a, b) => a.pageNumber - b.pageNumber)
+      .at(0);
+
+    if (!firstBox) {
+      return;
+    }
+
+    const pageId = getPDFPageIdByNumber({
+      fieldId: activeTab.id,
+      pages,
+      pageNumber: firstBox.pageNumber,
+    });
+    if (pageId && justificationId) {
+      setScrollTo({
+        pageId,
+        target: { kind: "justification", id: justificationId },
+      });
+    }
+  }, [
+    activeTab.id,
+    boundingBoxes,
+    justificationId,
+    isActiveTab,
+    pages,
+    setScrollTo,
+  ]);
+
+  // Sync activeJustification before paint so PageCitation can
+  // render bboxes without waiting for PeekJustification's effect.
+  // Only set for the ACTIVE tab — inactive tabs stay mounted but
+  // hidden, and their effects must not overwrite the active tab's
+  // justification.
+  useLayoutEffect(() => {
+    if (justificationId && isActiveTab && hasBoundingBoxCitations) {
+      setActiveJustification({ id: justificationId, pageNumber: 1 });
+    }
+    return () => {
+      if (isActiveTab) {
+        setActiveJustification(null);
+      }
+    };
+  }, [
+    justificationId,
+    hasBoundingBoxCitations,
+    isActiveTab,
+    setActiveJustification,
+  ]);
+
+  if (!justification) {
+    return null;
+  }
+
+  const currentSlot = currentIdx !== -1 ? slots[currentIdx] : undefined;
+  const propertyName = currentSlot?.property.name;
+
+  const shortAnswer = (() => {
+    if (!currentSlot) {
+      return null;
+    }
+    // entity.fields is Record<propertyId, WorkspaceField>
+    const field = Object.values(entity.fields).find(
+      (f) => f.id === currentSlot.fieldId,
+    );
+    if (!field) {
+      return null;
+    }
+    const c = field.content;
+    if ("value" in c) {
+      const v = c.value;
+      if (Array.isArray(v)) {
+        return v.join(", ");
+      }
+      return v !== null ? String(v) : null;
+    }
+    return null;
+  })();
+  const handleCitationClick = (citation: Citation) => {
+    if (citation.kind === "docx-folio") {
+      requestBlockScroll(activeTab.id, citation.blockId);
+      return;
+    }
+
+    setActiveJustification({
+      id: justification.id,
+      pageNumber: citation.pageNumber,
+    });
+    if (!pages || !setScrollTo) {
+      return;
+    }
+    const pageId = getPDFPageIdByNumber({
+      fieldId: activeTab.id,
+      pages,
+      pageNumber: citation.pageNumber,
+    });
+    if (!pageId) {
+      return;
+    }
+    setScrollTo({
+      pageId,
+      target: { kind: "justification", id: justification.id },
+    });
+  };
+  const justificationNodes = activeDocumentJustificationContent
+    ? renderJustificationContent({
+        content: activeDocumentJustificationContent,
+        renderCitation: ({ citation, key }) => (
+          <SourceCitationChip
+            citation={citation}
+            key={key}
+            onClick={() => handleCitationClick(citation)}
+          />
+        ),
+      }).nodes
+    : [];
+
+  return (
+    <div className="bg-muted/30 flex shrink-0 flex-col border-b px-3">
+      <div
+        className={cn(
+          "flex w-full min-w-0 items-center gap-2 text-xs",
+          TOOLBAR_ROW_HEIGHT,
+        )}
+      >
+        {isGeneratingBoxes && (
+          <LoaderCircleIcon className="text-muted-foreground size-3 shrink-0 animate-spin" />
+        )}
+        <button
+          aria-expanded={isAnswerExpanded}
+          className="min-w-0 flex-1 truncate text-start"
+          onClick={() => setIsAnswerExpanded((expanded) => !expanded)}
+          title={shortAnswer ?? undefined}
+          type="button"
+        >
+          {propertyName && (
+            <span className="text-muted-foreground">{propertyName}: </span>
+          )}
+          <span className="font-medium">
+            {shortAnswer ?? t("workspaces.pdf.evidence")}
+          </span>
+        </button>
+        <Button
+          disabled={!prevSlot}
+          onClick={() => {
+            if (!prevSlot) {
+              return;
+            }
+            openFile({
+              id: activeTab.id,
+              entityId: activeTab.entityId,
+              label: activeTab.label,
+              workspaceId: activeTab.workspaceId,
+              mimeType: activeTab.mimeType,
+              pdfFileId: activeTab.pdfFileId,
+              justificationFieldId: prevSlot.fieldId,
+              propertyId: prevSlot.property.id,
+            });
+          }}
+          size="icon-xs"
+          variant="ghost"
+        >
+          <ChevronLeftIcon className="size-3.5" />
+        </Button>
+        <span className="text-muted-foreground min-w-8 text-center text-[10px] tabular-nums">
+          {currentIdx + 1} / {slots.length}
+        </span>
+        <Button
+          disabled={!nextSlot}
+          onClick={() => {
+            if (!nextSlot) {
+              return;
+            }
+            openFile({
+              id: activeTab.id,
+              entityId: activeTab.entityId,
+              label: activeTab.label,
+              workspaceId: activeTab.workspaceId,
+              mimeType: activeTab.mimeType,
+              pdfFileId: activeTab.pdfFileId,
+              justificationFieldId: nextSlot.fieldId,
+              propertyId: nextSlot.property.id,
+            });
+          }}
+          size="icon-xs"
+          variant="ghost"
+        >
+          <ChevronRightIcon className="size-3.5" />
+        </Button>
+      </div>
+      {isAnswerExpanded && shortAnswer !== null && (
+        <div className="text-foreground-strong-muted max-h-32 min-w-0 overflow-y-auto pb-2 text-xs leading-relaxed break-words">
+          {justificationNodes}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const DOCX_SOURCE_PREVIEW_CHARS = 28;
+
+const SourceCitationChip = ({
+  citation,
+  onClick,
+}: {
+  citation: Citation;
+  onClick: () => void;
+}) => {
+  if (citation.kind === "pdf-bates") {
+    return (
+      <button
+        className="bg-primary/10 text-primary hover:bg-primary/20 inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium transition-colors"
+        onClick={onClick}
+        type="button"
+      >
+        p.&nbsp;{citation.pageNumber}
+      </button>
+    );
+  }
+
+  const trimmed = citation.text.trim();
+  const preview =
+    trimmed.length > DOCX_SOURCE_PREVIEW_CHARS
+      ? `${trimmed.slice(0, DOCX_SOURCE_PREVIEW_CHARS).trimEnd()}...`
+      : trimmed || "Text";
+
+  return (
+    <button
+      className="bg-primary/10 text-primary hover:bg-primary/20 inline-flex max-w-36 shrink-0 items-center truncate rounded-md px-1.5 py-0.5 text-[11px] font-medium transition-colors"
+      onClick={onClick}
+      title={trimmed || undefined}
+      type="button"
+    >
+      "{preview}"
+    </button>
+  );
+};
