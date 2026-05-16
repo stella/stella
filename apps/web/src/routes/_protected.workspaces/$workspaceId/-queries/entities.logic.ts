@@ -33,7 +33,7 @@ export type KanbanGroupKey = Omit<EntitiesWindowKey, "excludedKinds"> & {
   groupValue: string | null;
 };
 
-export const DEFAULT_ENTITY_VIEW_PAGE_SIZE = 10_000;
+export const DEFAULT_ENTITY_VIEW_PAGE_SIZE = 100;
 export const DEFAULT_ENTITY_WINDOW_SIZE = 200;
 
 export const normalizeVisibleFieldIds = (
@@ -76,10 +76,12 @@ export const entitiesKeys = {
     workspaceId,
     filters,
     sorts,
+    search,
     limit,
     fieldMode,
     fieldIds,
     excludedKinds,
+    previewableForAi,
   }: EntitiesWindowKey) => {
     const normalizedFieldMode = fieldMode ?? "full";
     return [
@@ -88,6 +90,7 @@ export const entitiesKeys = {
       {
         filters,
         sorts,
+        ...(search?.trim() && { search: search.trim() }),
         limit: limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
         fieldMode: normalizedFieldMode,
         fieldIds:
@@ -95,6 +98,7 @@ export const entitiesKeys = {
             ? normalizeVisibleFieldIds(fieldIds)
             : [],
         excludedKinds: excludedKinds?.toSorted() ?? [],
+        previewableForAi: previewableForAi ?? false,
       },
     ];
   },

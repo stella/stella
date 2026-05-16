@@ -2,11 +2,8 @@ export const LIMITS = {
   workspacesCount: 1000,
   propertiesCount: 20,
   entitiesCount: 10_000,
-  // TODO: switch matter views to virtualised rendering and cursor-based
-  // server pagination. Loading the whole workspace in one request
-  // doesn't scale once we lift entitiesCount past ~10k.
-  entitiesPageSizeDefault: 10_000,
-  entitiesPageSizeMax: 10_000,
+  entitiesPageSizeDefault: 100,
+  entitiesPageSizeMax: 500,
   entitiesWindowSizeDefault: 200,
   entitiesWindowSizeMax: 500,
   calendarTasksMax: 200,

@@ -169,8 +169,35 @@ describe("entity query field selection", () => {
         fieldMode: "visible",
         fieldIds: ["due", "status"],
         excludedKinds: ["folder", "task"],
+        previewableForAi: false,
       },
     ]);
+  });
+
+  test("keeps search and AI-previewable state in the window cache identity", () => {
+    const previewKey = entitiesKeys.window({
+      workspaceId: "workspace-1",
+      filters: [],
+      sorts: [],
+      search: " closing binder ",
+      previewableForAi: true,
+    });
+    const regularKey = entitiesKeys.window({
+      workspaceId: "workspace-1",
+      filters: [],
+      sorts: [],
+      search: " closing binder ",
+    });
+
+    expect(previewKey).not.toEqual(regularKey);
+    expect(previewKey.at(-1)).toMatchObject({
+      search: "closing binder",
+      previewableForAi: true,
+    });
+    expect(regularKey.at(-1)).toMatchObject({
+      search: "closing binder",
+      previewableForAi: false,
+    });
   });
 
   test("keeps kanban group value in the cache identity", () => {

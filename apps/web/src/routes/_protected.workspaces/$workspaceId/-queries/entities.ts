@@ -20,7 +20,7 @@ import type {
   KanbanGroupKey,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities.logic";
 
-export { entitiesKeys, visibleEntityFieldIds };
+export { DEFAULT_ENTITY_WINDOW_SIZE, entitiesKeys, visibleEntityFieldIds };
 
 type EntitiesOptionsInput = QueryOptionsInput<EntitiesPageKey>;
 type EntitiesWindowOptionsInput = QueryOptionsInput<EntitiesWindowKey>;
@@ -120,9 +120,6 @@ export const entitiesOptions = (key: EntitiesOptionsInput) =>
                   )
                 : [],
             previewableForAi: key.previewableForAi ?? false,
-            // TODO: replace this load-everything pageSize with
-            // virtualised rendering + cursor pagination. Tracked
-            // alongside the matching limits.ts TODO.
             pageSize: key.pageSize ?? DEFAULT_ENTITY_VIEW_PAGE_SIZE,
           },
           { fetch: { signal } },
@@ -150,6 +147,7 @@ export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
           {
             filters: key.filters,
             sorts: key.sorts,
+            ...(key.search !== undefined && { search: key.search }),
             limit: key.limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
             excludedKinds: key.excludedKinds ?? [],
             fieldMode,
@@ -159,6 +157,7 @@ export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
                     toSafeId<"property">(fieldId),
                   )
                 : [],
+            previewableForAi: key.previewableForAi ?? false,
             ...(pageParam !== undefined && { cursor: pageParam }),
           },
           { fetch: { signal } },

@@ -338,6 +338,10 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
 
   const { filters, sorts, hiddenProperties } = view.layout;
   const primarySort = sorts.at(0) ?? null;
+  const page = useSearch({
+    from: "/_protected/workspaces/$workspaceId/$viewId",
+    select: (s) => s.page ?? 1,
+  });
   const fieldIds = useMemo(
     () => visibleEntityFieldIds({ hiddenProperties, properties }),
     [hiddenProperties, properties],
@@ -368,7 +372,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       workspaceId,
       filters,
       sorts,
-      page: 1,
+      page,
       fieldMode: "visible",
       fieldIds,
     }),

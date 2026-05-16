@@ -23,6 +23,7 @@ import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-com
 import { useSyncJustificationChunks } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
 import {
+  DEFAULT_ENTITY_WINDOW_SIZE,
   useEntitiesWindowOptions,
   visibleEntityFieldIds,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -68,7 +69,7 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
         workspaceId,
         filters: view.layout.filters,
         sorts: view.layout.sorts,
-        limit: 200,
+        limit: DEFAULT_ENTITY_WINDOW_SIZE,
         excludedKinds: ["folder", "task"],
         fieldMode: "visible",
         fieldIds,

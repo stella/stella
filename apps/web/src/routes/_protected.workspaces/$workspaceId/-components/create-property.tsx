@@ -957,7 +957,7 @@ const TypeChipsRow = ({
     <div className="flex flex-col gap-1.5">
       <div
         className={cn(
-          "flex [scrollbar-width:none] items-center gap-1 overflow-x-auto",
+          "flex items-center gap-1 overflow-x-auto [scrollbar-width:none]",
           showSeparator && "border-t pt-2",
         )}
       >

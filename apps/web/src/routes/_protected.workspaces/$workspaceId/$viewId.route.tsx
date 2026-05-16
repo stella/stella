@@ -23,6 +23,7 @@ import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-compon
 import { chunkJustificationEntityIds } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
 import { useSyncTable } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-table";
 import {
+  DEFAULT_ENTITY_WINDOW_SIZE,
   entitiesOptions,
   entitiesWindowOptions,
   useEntitiesOptions,
@@ -162,7 +163,7 @@ export const Route = createFileRoute(
           workspaceId,
           filters: activeView.layout.filters,
           sorts: activeView.layout.sorts,
-          limit: 200,
+          limit: DEFAULT_ENTITY_WINDOW_SIZE,
           excludedKinds: ["folder", "task"],
           fieldMode,
           fieldIds,
