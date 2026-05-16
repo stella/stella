@@ -25,6 +25,13 @@ services:
       retries: 3
       start_period: 30s
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: ${STELLA_API_PIDS_LIMIT:-512}
+    mem_limit: ${STELLA_API_MEM_LIMIT:-2g}
+    cpus: ${STELLA_API_CPUS:-2.0}
 
   gotenberg:
     image: gotenberg/gotenberg:8
@@ -42,3 +49,8 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: ${STELLA_GOTENBERG_PIDS_LIMIT:-1024}
+    mem_limit: ${STELLA_GOTENBERG_MEM_LIMIT:-1g}
+    cpus: ${STELLA_GOTENBERG_CPUS:-1.0}
