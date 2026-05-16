@@ -2,7 +2,7 @@
   "bomFormat": "CycloneDX",
   "components": [
     {
-      "bom-ref": "pkg:npm/@ai-sdk/anthropic@3.0.74",
+      "bom-ref": "pkg:npm/@ai-sdk/anthropic@3.0.76",
       "evidence": {
         "identity": [
           {
@@ -50,16 +50,16 @@
           "value": "node_modules/@ai-sdk/anthropic/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/anthropic@3.0.74",
+      "purl": "pkg:npm/%40ai-sdk/anthropic@3.0.76",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.74"
+      "version": "3.0.76"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/azure@3.0.62",
+      "bom-ref": "pkg:npm/@ai-sdk/azure@3.0.64",
       "evidence": {
         "identity": [
           {
@@ -107,13 +107,13 @@
           "value": "node_modules/@ai-sdk/azure/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/azure@3.0.62",
+      "purl": "pkg:npm/%40ai-sdk/azure@3.0.64",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.62"
+      "version": "3.0.64"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/devtools@0.0.17",
@@ -173,7 +173,7 @@
       "version": "0.0.17"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/google-vertex@4.0.118",
+      "bom-ref": "pkg:npm/@ai-sdk/google-vertex@4.0.125",
       "evidence": {
         "identity": [
           {
@@ -221,16 +221,16 @@
           "value": "node_modules/@ai-sdk/google-vertex/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/google-vertex@4.0.118",
+      "purl": "pkg:npm/%40ai-sdk/google-vertex@4.0.125",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "4.0.118"
+      "version": "4.0.125"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/google@3.0.67",
+      "bom-ref": "pkg:npm/@ai-sdk/google@3.0.71",
       "evidence": {
         "identity": [
           {
@@ -290,16 +290,16 @@
           "value": "node_modules/@ai-sdk/google/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/google@3.0.67",
+      "purl": "pkg:npm/%40ai-sdk/google@3.0.71",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.67"
+      "version": "3.0.71"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/mcp@1.0.39",
+      "bom-ref": "pkg:npm/@ai-sdk/mcp@1.0.41",
       "evidence": {
         "identity": [
           {
@@ -350,16 +350,16 @@
           "value": "node_modules/@ai-sdk/mcp/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/mcp@1.0.39",
+      "purl": "pkg:npm/%40ai-sdk/mcp@1.0.41",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "1.0.39"
+      "version": "1.0.41"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/mistral@3.0.35",
+      "bom-ref": "pkg:npm/@ai-sdk/mistral@3.0.36",
       "evidence": {
         "identity": [
           {
@@ -407,16 +407,16 @@
           "value": "node_modules/@ai-sdk/mistral/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/mistral@3.0.35",
+      "purl": "pkg:npm/%40ai-sdk/mistral@3.0.36",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.35"
+      "version": "3.0.36"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/openai@3.0.61",
+      "bom-ref": "pkg:npm/@ai-sdk/openai@3.0.63",
       "evidence": {
         "identity": [
           {
@@ -464,17 +464,17 @@
           "value": "node_modules/@ai-sdk/openai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/openai@3.0.61",
+      "purl": "pkg:npm/%40ai-sdk/openai@3.0.63",
       "scope": "required",
       "tags": [
         "framework",
         "ml"
       ],
       "type": "framework",
-      "version": "3.0.61"
+      "version": "3.0.63"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/provider-utils@4.0.26",
+      "bom-ref": "pkg:npm/@ai-sdk/provider-utils@4.0.27",
       "evidence": {
         "identity": [
           {
@@ -522,16 +522,16 @@
           "value": "node_modules/@ai-sdk/provider-utils/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/provider-utils@4.0.26",
+      "purl": "pkg:npm/%40ai-sdk/provider-utils@4.0.27",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "4.0.26"
+      "version": "4.0.27"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/react@3.0.176",
+      "bom-ref": "pkg:npm/@ai-sdk/react@3.0.179",
       "evidence": {
         "identity": [
           {
@@ -669,13 +669,25 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-utils.ts#1"
           },
           {
+            "location": "packages/folio/src/components/DocxEditor.props.ts#1"
+          },
+          {
             "location": "packages/folio/src/components/dialogs/findReplaceDialogLayout.ts#1"
           },
           {
             "location": "packages/folio/src/components/dialogs/useFindReplace.ts#8"
           },
           {
+            "location": "packages/folio/src/components/hooks/useContextMenu.ts#1"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useContextMenu.ts#2"
+          },
+          {
             "location": "packages/folio/src/components/hooks/useDocumentLoader.ts#7"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useEditorMode.ts#1"
           },
           {
             "location": "packages/folio/src/components/hooks/useFindReplace.ts#10"
@@ -691,6 +703,18 @@
           },
           {
             "location": "packages/folio/src/components/hooks/useImageHandlers.ts#1"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#1"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#2"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#7"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#8"
           },
           {
             "location": "packages/folio/src/core/utils/formatToStyle.ts#15"
@@ -1458,10 +1482,13 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#23"
+            "location": "packages/folio/src/components/DocxEditor.tsx#21"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#24"
+            "location": "packages/folio/src/components/DocxEditor.tsx#22"
+          },
+          {
+            "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
           },
           {
             "location": "packages/folio/src/components/ErrorBoundary.tsx#16"
@@ -1527,7 +1554,7 @@
             "location": "packages/folio/src/components/ui/Tooltip.tsx#8"
           },
           {
-            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#15"
+            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
           },
           {
             "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
@@ -1644,16 +1671,16 @@
           "value": "node_modules/@ai-sdk/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/react@3.0.176",
+      "purl": "pkg:npm/%40ai-sdk/react@3.0.179",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.176"
+      "version": "3.0.179"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/valibot@2.0.27",
+      "bom-ref": "pkg:npm/@ai-sdk/valibot@2.0.28",
       "evidence": {
         "identity": [
           {
@@ -1803,7 +1830,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#7"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx#20"
@@ -1857,13 +1884,13 @@
           "value": "node_modules/@ai-sdk/valibot/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/valibot@2.0.27",
+      "purl": "pkg:npm/%40ai-sdk/valibot@2.0.28",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "2.0.27"
+      "version": "2.0.28"
     },
     {
       "authors": [
@@ -2010,13 +2037,25 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-utils.ts#1"
           },
           {
+            "location": "packages/folio/src/components/DocxEditor.props.ts#1"
+          },
+          {
             "location": "packages/folio/src/components/dialogs/findReplaceDialogLayout.ts#1"
           },
           {
             "location": "packages/folio/src/components/dialogs/useFindReplace.ts#8"
           },
           {
+            "location": "packages/folio/src/components/hooks/useContextMenu.ts#1"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useContextMenu.ts#2"
+          },
+          {
             "location": "packages/folio/src/components/hooks/useDocumentLoader.ts#7"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useEditorMode.ts#1"
           },
           {
             "location": "packages/folio/src/components/hooks/useFindReplace.ts#10"
@@ -2032,6 +2071,18 @@
           },
           {
             "location": "packages/folio/src/components/hooks/useImageHandlers.ts#1"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#1"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#2"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#7"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#8"
           },
           {
             "location": "packages/folio/src/core/utils/formatToStyle.ts#15"
@@ -2799,10 +2850,13 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#23"
+            "location": "packages/folio/src/components/DocxEditor.tsx#21"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#24"
+            "location": "packages/folio/src/components/DocxEditor.tsx#22"
+          },
+          {
+            "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
           },
           {
             "location": "packages/folio/src/components/ErrorBoundary.tsx#16"
@@ -2868,7 +2922,7 @@
             "location": "packages/folio/src/components/ui/Tooltip.tsx#8"
           },
           {
-            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#15"
+            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
           },
           {
             "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
@@ -4155,13 +4209,25 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-utils.ts#1"
           },
           {
+            "location": "packages/folio/src/components/DocxEditor.props.ts#1"
+          },
+          {
             "location": "packages/folio/src/components/dialogs/findReplaceDialogLayout.ts#1"
           },
           {
             "location": "packages/folio/src/components/dialogs/useFindReplace.ts#8"
           },
           {
+            "location": "packages/folio/src/components/hooks/useContextMenu.ts#1"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useContextMenu.ts#2"
+          },
+          {
             "location": "packages/folio/src/components/hooks/useDocumentLoader.ts#7"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useEditorMode.ts#1"
           },
           {
             "location": "packages/folio/src/components/hooks/useFindReplace.ts#10"
@@ -4177,6 +4243,18 @@
           },
           {
             "location": "packages/folio/src/components/hooks/useImageHandlers.ts#1"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#1"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#2"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#7"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#8"
           },
           {
             "location": "packages/folio/src/core/utils/formatToStyle.ts#15"
@@ -4944,10 +5022,13 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#23"
+            "location": "packages/folio/src/components/DocxEditor.tsx#21"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#24"
+            "location": "packages/folio/src/components/DocxEditor.tsx#22"
+          },
+          {
+            "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
           },
           {
             "location": "packages/folio/src/components/ErrorBoundary.tsx#16"
@@ -5013,7 +5094,7 @@
             "location": "packages/folio/src/components/ui/Tooltip.tsx#8"
           },
           {
-            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#15"
+            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
           },
           {
             "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
@@ -5136,7 +5217,7 @@
       "version": "1.4.1"
     },
     {
-      "bom-ref": "pkg:npm/@better-auth/oauth-provider@1.6.9",
+      "bom-ref": "pkg:npm/@better-auth/oauth-provider@1.6.10",
       "description": "An oauth provider plugin for Better Auth",
       "evidence": {
         "identity": [
@@ -5194,10 +5275,10 @@
           "value": "node_modules/@better-auth/oauth-provider/package.json"
         }
       ],
-      "purl": "pkg:npm/%40better-auth/oauth-provider@1.6.9",
+      "purl": "pkg:npm/%40better-auth/oauth-provider@1.6.10",
       "scope": "required",
       "type": "library",
-      "version": "1.6.9"
+      "version": "1.6.10"
     },
     {
       "authors": [
@@ -5491,7 +5572,7 @@
       "version": "0.3.4"
     },
     {
-      "bom-ref": "pkg:npm/@litko/yara-x@0.5.1",
+      "bom-ref": "pkg:npm/@litko/yara-x@0.5.2",
       "evidence": {
         "identity": [
           {
@@ -5542,10 +5623,10 @@
           "value": "node_modules/@litko/yara-x/package.json"
         }
       ],
-      "purl": "pkg:npm/%40litko/yara-x@0.5.1",
+      "purl": "pkg:npm/%40litko/yara-x@0.5.2",
       "scope": "required",
       "type": "library",
-      "version": "0.5.1"
+      "version": "0.5.2"
     },
     {
       "authors": [
@@ -5963,13 +6044,25 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-utils.ts#1"
           },
           {
+            "location": "packages/folio/src/components/DocxEditor.props.ts#1"
+          },
+          {
             "location": "packages/folio/src/components/dialogs/findReplaceDialogLayout.ts#1"
           },
           {
             "location": "packages/folio/src/components/dialogs/useFindReplace.ts#8"
           },
           {
+            "location": "packages/folio/src/components/hooks/useContextMenu.ts#1"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useContextMenu.ts#2"
+          },
+          {
             "location": "packages/folio/src/components/hooks/useDocumentLoader.ts#7"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useEditorMode.ts#1"
           },
           {
             "location": "packages/folio/src/components/hooks/useFindReplace.ts#10"
@@ -5985,6 +6078,18 @@
           },
           {
             "location": "packages/folio/src/components/hooks/useImageHandlers.ts#1"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#1"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#2"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#7"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#8"
           },
           {
             "location": "packages/folio/src/core/utils/formatToStyle.ts#15"
@@ -6752,10 +6857,13 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#23"
+            "location": "packages/folio/src/components/DocxEditor.tsx#21"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#24"
+            "location": "packages/folio/src/components/DocxEditor.tsx#22"
+          },
+          {
+            "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
           },
           {
             "location": "packages/folio/src/components/ErrorBoundary.tsx#16"
@@ -6821,7 +6929,7 @@
             "location": "packages/folio/src/components/ui/Tooltip.tsx#8"
           },
           {
-            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#15"
+            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
           },
           {
             "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
@@ -7423,7 +7531,7 @@
             "location": "apps/web/src/lib/anonymize/chat-anonymize.ts#2"
           },
           {
-            "location": "apps/web/src/lib/anonymize/chat-anonymize.ts#5"
+            "location": "apps/web/src/lib/anonymize/chat-anonymize.ts#11"
           },
           {
             "location": "apps/web/src/lib/anonymize/constants.ts#1"
@@ -7549,7 +7657,7 @@
       "version": "0.0.5"
     },
     {
-      "bom-ref": "pkg:npm/@stll/anonymize-wasm@1.2.0",
+      "bom-ref": "pkg:npm/@stll/anonymize-wasm@1.4.4",
       "description": "PII detection and anonymization for browsers via WebAssembly. Same API as @stll/anonymize.",
       "evidence": {
         "identity": [
@@ -7580,10 +7688,10 @@
             "location": "apps/api/src/mcp/anonymization-core.ts#9"
           },
           {
-            "location": "apps/api/src/mcp/anonymization.ts#7"
+            "location": "apps/api/src/mcp/anonymization.ts#8"
           },
           {
-            "location": "apps/web/src/lib/anonymize/chat-anonymize.ts#3"
+            "location": "apps/web/src/lib/anonymize/chat-anonymize.ts#7"
           },
           {
             "location": "apps/web/src/lib/anonymize/gazetteer.ts#5"
@@ -7598,10 +7706,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymize-pdf.ts#1"
           },
           {
-            "location": "apps/web/src/workers/anonymize-chat-worker.ts#11"
+            "location": "apps/web/src/workers/anonymize-chat-worker.ts#6"
           },
           {
-            "location": "apps/web/src/workers/anonymize-chat-worker.ts#12"
+            "location": "apps/web/src/workers/anonymize-chat-worker.ts#7"
           },
           {
             "location": "packages/anonymize-chat/src/index.ts#13"
@@ -7630,13 +7738,13 @@
           "value": "node_modules/@stll/anonymize-wasm/package.json"
         }
       ],
-      "purl": "pkg:npm/%40stll/anonymize-wasm@1.2.0",
+      "purl": "pkg:npm/%40stll/anonymize-wasm@1.4.4",
       "scope": "required",
       "tags": [
         "api"
       ],
       "type": "library",
-      "version": "1.2.0"
+      "version": "1.4.4"
     },
     {
       "bom-ref": "pkg:npm/@stll/api@0.0.0",
@@ -8747,7 +8855,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#45"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#23"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#22"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/editable-field.tsx#19"
@@ -9104,7 +9212,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#37"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#9"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#8"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#21"
@@ -9260,7 +9368,7 @@
             "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#7"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#41"
+            "location": "packages/folio/src/components/DocxEditor.tsx#38"
           },
           {
             "location": "packages/folio/src/components/ErrorBoundary.tsx#28"
@@ -9551,7 +9659,7 @@
             "location": "apps/web/src/components/chat/chat-thread-messages.tsx#13"
           },
           {
-            "location": "apps/web/src/components/chat/entity-link.tsx#9"
+            "location": "apps/web/src/components/chat/entity-link.tsx#4"
           },
           {
             "location": "apps/web/src/components/chat/needs-matter-card.tsx#16"
@@ -9968,7 +10076,7 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#20"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#19"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/form.tsx#5"
@@ -10103,7 +10211,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#27"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#22"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#21"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/editable-field.tsx#18"
@@ -10256,7 +10364,7 @@
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#156"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#58"
+            "location": "packages/folio/src/components/DocxEditor.tsx#55"
           },
           {
             "location": "packages/folio/src/components/ui/FontPicker.tsx#12"
@@ -10475,7 +10583,7 @@
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#127"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#51"
+            "location": "packages/folio/src/components/DocxEditor.tsx#48"
           },
           {
             "location": "packages/folio/src/components/FormattingBar.tsx#28"
@@ -10586,7 +10694,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#26"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#19"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#18"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#31"
@@ -10754,7 +10862,7 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#11"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#21"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#20"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx#36"
@@ -11191,7 +11299,7 @@
           "name": "tannerlinsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-form@1.29.1",
+      "bom-ref": "pkg:npm/@tanstack/react-form@1.31.0",
       "description": "Powerful, type-safe forms for React.",
       "evidence": {
         "identity": [
@@ -11282,10 +11390,10 @@
           "value": "node_modules/@tanstack/react-form/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-form@1.29.1",
+      "purl": "pkg:npm/%40tanstack/react-form@1.31.0",
       "scope": "required",
       "type": "library",
-      "version": "1.29.1"
+      "version": "1.31.0"
     },
     {
       "authors": [
@@ -12825,7 +12933,7 @@
       "version": "2.11.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/core@3.22.5",
+      "bom-ref": "pkg:npm/@tiptap/core@3.23.1",
       "description": "headless rich text editor",
       "evidence": {
         "identity": [
@@ -12883,13 +12991,13 @@
           "value": "node_modules/@tiptap/core/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/core@3.22.5",
+      "purl": "pkg:npm/%40tiptap/core@3.23.1",
       "scope": "required",
       "type": "library",
-      "version": "3.22.5"
+      "version": "3.23.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.22.5",
+      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.23.1",
       "description": "bold extension for tiptap",
       "evidence": {
         "identity": [
@@ -12938,13 +13046,13 @@
           "value": "node_modules/@tiptap/extension-bold/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-bold@3.22.5",
+      "purl": "pkg:npm/%40tiptap/extension-bold@3.23.1",
       "scope": "required",
       "type": "library",
-      "version": "3.22.5"
+      "version": "3.23.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-document@3.22.5",
+      "bom-ref": "pkg:npm/@tiptap/extension-document@3.23.1",
       "description": "document extension for tiptap",
       "evidence": {
         "identity": [
@@ -12996,13 +13104,13 @@
           "value": "node_modules/@tiptap/extension-document/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-document@3.22.5",
+      "purl": "pkg:npm/%40tiptap/extension-document@3.23.1",
       "scope": "required",
       "type": "library",
-      "version": "3.22.5"
+      "version": "3.23.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.22.5",
+      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.23.1",
       "description": "hard break extension for tiptap",
       "evidence": {
         "identity": [
@@ -13051,13 +13159,13 @@
           "value": "node_modules/@tiptap/extension-hard-break/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.22.5",
+      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.23.1",
       "scope": "required",
       "type": "library",
-      "version": "3.22.5"
+      "version": "3.23.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.22.5",
+      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.23.1",
       "description": "heading extension for tiptap",
       "evidence": {
         "identity": [
@@ -13106,13 +13214,13 @@
           "value": "node_modules/@tiptap/extension-heading/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-heading@3.22.5",
+      "purl": "pkg:npm/%40tiptap/extension-heading@3.23.1",
       "scope": "required",
       "type": "library",
-      "version": "3.22.5"
+      "version": "3.23.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-history@3.22.5",
+      "bom-ref": "pkg:npm/@tiptap/extension-history@3.23.1",
       "description": "history extension for tiptap",
       "evidence": {
         "identity": [
@@ -13167,13 +13275,13 @@
           "value": "node_modules/@tiptap/extension-history/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-history@3.22.5",
+      "purl": "pkg:npm/%40tiptap/extension-history@3.23.1",
       "scope": "required",
       "type": "library",
-      "version": "3.22.5"
+      "version": "3.23.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.22.5",
+      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.23.1",
       "description": "italic extension for tiptap",
       "evidence": {
         "identity": [
@@ -13222,13 +13330,13 @@
           "value": "node_modules/@tiptap/extension-italic/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-italic@3.22.5",
+      "purl": "pkg:npm/%40tiptap/extension-italic@3.23.1",
       "scope": "required",
       "type": "library",
-      "version": "3.22.5"
+      "version": "3.23.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.22.5",
+      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.23.1",
       "description": "mention extension for tiptap",
       "evidence": {
         "identity": [
@@ -13286,13 +13394,13 @@
           "value": "node_modules/@tiptap/extension-mention/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-mention@3.22.5",
+      "purl": "pkg:npm/%40tiptap/extension-mention@3.23.1",
       "scope": "required",
       "type": "library",
-      "version": "3.22.5"
+      "version": "3.23.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.22.5",
+      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.23.1",
       "description": "paragraph extension for tiptap",
       "evidence": {
         "identity": [
@@ -13347,13 +13455,13 @@
           "value": "node_modules/@tiptap/extension-paragraph/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.22.5",
+      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.23.1",
       "scope": "required",
       "type": "library",
-      "version": "3.22.5"
+      "version": "3.23.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-placeholder@3.22.5",
+      "bom-ref": "pkg:npm/@tiptap/extension-placeholder@3.23.1",
       "description": "placeholder extension for tiptap",
       "evidence": {
         "identity": [
@@ -13408,13 +13516,13 @@
           "value": "node_modules/@tiptap/extension-placeholder/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-placeholder@3.22.5",
+      "purl": "pkg:npm/%40tiptap/extension-placeholder@3.23.1",
       "scope": "required",
       "type": "library",
-      "version": "3.22.5"
+      "version": "3.23.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-text@3.22.5",
+      "bom-ref": "pkg:npm/@tiptap/extension-text@3.23.1",
       "description": "text extension for tiptap",
       "evidence": {
         "identity": [
@@ -13469,13 +13577,13 @@
           "value": "node_modules/@tiptap/extension-text/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-text@3.22.5",
+      "purl": "pkg:npm/%40tiptap/extension-text@3.23.1",
       "scope": "required",
       "type": "library",
-      "version": "3.22.5"
+      "version": "3.23.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/pm@3.22.5",
+      "bom-ref": "pkg:npm/@tiptap/pm@3.23.1",
       "description": "prosemirror wrapper package for tiptap",
       "evidence": {
         "identity": [
@@ -13548,13 +13656,13 @@
           "value": "node_modules/@tiptap/pm/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/pm@3.22.5",
+      "purl": "pkg:npm/%40tiptap/pm@3.23.1",
       "scope": "required",
       "type": "library",
-      "version": "3.22.5"
+      "version": "3.23.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/react@3.22.5",
+      "bom-ref": "pkg:npm/@tiptap/react@3.23.1",
       "description": "React components for tiptap",
       "evidence": {
         "identity": [
@@ -13693,13 +13801,25 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-utils.ts#1"
           },
           {
+            "location": "packages/folio/src/components/DocxEditor.props.ts#1"
+          },
+          {
             "location": "packages/folio/src/components/dialogs/findReplaceDialogLayout.ts#1"
           },
           {
             "location": "packages/folio/src/components/dialogs/useFindReplace.ts#8"
           },
           {
+            "location": "packages/folio/src/components/hooks/useContextMenu.ts#1"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useContextMenu.ts#2"
+          },
+          {
             "location": "packages/folio/src/components/hooks/useDocumentLoader.ts#7"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useEditorMode.ts#1"
           },
           {
             "location": "packages/folio/src/components/hooks/useFindReplace.ts#10"
@@ -13715,6 +13835,18 @@
           },
           {
             "location": "packages/folio/src/components/hooks/useImageHandlers.ts#1"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#1"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#2"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#7"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#8"
           },
           {
             "location": "packages/folio/src/core/utils/formatToStyle.ts#15"
@@ -14482,10 +14614,13 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#23"
+            "location": "packages/folio/src/components/DocxEditor.tsx#21"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#24"
+            "location": "packages/folio/src/components/DocxEditor.tsx#22"
+          },
+          {
+            "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
           },
           {
             "location": "packages/folio/src/components/ErrorBoundary.tsx#16"
@@ -14551,7 +14686,7 @@
             "location": "packages/folio/src/components/ui/Tooltip.tsx#8"
           },
           {
-            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#15"
+            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
           },
           {
             "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
@@ -14668,13 +14803,13 @@
           "value": "node_modules/@tiptap/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/react@3.22.5",
+      "purl": "pkg:npm/%40tiptap/react@3.23.1",
       "scope": "required",
       "type": "library",
-      "version": "3.22.5"
+      "version": "3.23.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/suggestion@3.22.5",
+      "bom-ref": "pkg:npm/@tiptap/suggestion@3.23.1",
       "description": "suggestion plugin for tiptap",
       "evidence": {
         "identity": [
@@ -14741,10 +14876,10 @@
           "value": "node_modules/@tiptap/suggestion/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/suggestion@3.22.5",
+      "purl": "pkg:npm/%40tiptap/suggestion@3.23.1",
       "scope": "required",
       "type": "library",
-      "version": "3.22.5"
+      "version": "3.23.1"
     },
     {
       "authors": [
@@ -14816,7 +14951,7 @@
       "version": "1.7.0"
     },
     {
-      "bom-ref": "pkg:npm/ai@6.0.174",
+      "bom-ref": "pkg:npm/ai@6.0.177",
       "description": "AI SDK by Vercel - build apps like ChatGPT, Claude, Gemini, and more with a single interface for any model using the Vercel AI Gateway or go direct to OpenAI, Anthropic, Google, or any other model provider.",
       "evidence": {
         "identity": [
@@ -15003,13 +15138,13 @@
           "value": "node_modules/ai/package.json"
         }
       ],
-      "purl": "pkg:npm/ai@6.0.174",
+      "purl": "pkg:npm/ai@6.0.177",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "6.0.174"
+      "version": "6.0.177"
     },
     {
       "authors": [
@@ -15081,7 +15216,7 @@
       "version": "6.3.1"
     },
     {
-      "bom-ref": "pkg:npm/better-auth@1.6.9",
+      "bom-ref": "pkg:npm/better-auth@1.6.10",
       "description": "The most comprehensive authentication framework for TypeScript.",
       "evidence": {
         "identity": [
@@ -15175,13 +15310,13 @@
           "value": "node_modules/better-auth/package.json"
         }
       ],
-      "purl": "pkg:npm/better-auth@1.6.9",
+      "purl": "pkg:npm/better-auth@1.6.10",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "1.6.9"
+      "version": "1.6.10"
     },
     {
       "authors": [
@@ -16081,9 +16216,6 @@
             "location": "apps/web/src/components/sidebar.tsx#10"
           },
           {
-            "location": "apps/web/src/components/theme-provider.tsx#11"
-          },
-          {
             "location": "apps/web/src/lib/pdf/pdf-context.tsx#11"
           },
           {
@@ -16100,9 +16232,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-result.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#2"
@@ -16152,7 +16281,7 @@
           "name": "Taskforce.sh Inc."
         }
       ],
-      "bom-ref": "pkg:npm/bullmq@5.76.5",
+      "bom-ref": "pkg:npm/bullmq@5.76.6",
       "description": "Queue for messages and jobs based on Redis",
       "evidence": {
         "identity": [
@@ -16207,10 +16336,10 @@
           "value": "node_modules/bullmq/package.json"
         }
       ],
-      "purl": "pkg:npm/bullmq@5.76.5",
+      "purl": "pkg:npm/bullmq@5.76.6",
       "scope": "required",
       "type": "library",
-      "version": "5.76.5"
+      "version": "5.76.6"
     },
     {
       "authors": [
@@ -17550,7 +17679,7 @@
           "name": "rayriffy <mail@rayriffy.com> (https://github.com/rayriffy)"
         }
       ],
-      "bom-ref": "pkg:npm/elysia-rate-limit@4.6.1",
+      "bom-ref": "pkg:npm/elysia-rate-limit@4.6.2",
       "description": "Rate-limiter for Elysia.js",
       "evidence": {
         "identity": [
@@ -17601,10 +17730,10 @@
           "value": "node_modules/elysia-rate-limit/package.json"
         }
       ],
-      "purl": "pkg:npm/elysia-rate-limit@4.6.1",
+      "purl": "pkg:npm/elysia-rate-limit@4.6.2",
       "scope": "required",
       "type": "library",
-      "version": "4.6.1"
+      "version": "4.6.2"
     },
     {
       "authors": [
@@ -18406,6 +18535,66 @@
       "evidence": {
         "identity": [
           {
+            "concludedValue": "node_modules/@aws-sdk/xml-builder/node_modules/fast-xml-parser/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@aws-sdk/xml-builder/node_modules/fast-xml-parser/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "packages/folio/src/core/docx/xmlParser.ts#22"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/NaturalIntelligence/fast-xml-parser.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "fast-xml-parser",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@aws-sdk/xml-builder/node_modules/fast-xml-parser/package.json"
+        }
+      ],
+      "purl": "pkg:npm/fast-xml-parser@5.7.2",
+      "scope": "required",
+      "tags": [
+        "parse",
+        "xml"
+      ],
+      "type": "library",
+      "version": "5.7.2"
+    },
+    {
+      "authors": [
+        {
+          "name": "Amit Gupta (https://solothought.com)"
+        }
+      ],
+      "bom-ref": "pkg:npm/fast-xml-parser@5.7.3",
+      "description": "Validate XML, Parse XML, Build XML without C/C++ based libraries",
+      "evidence": {
+        "identity": [
+          {
             "concludedValue": "node_modules/fast-xml-parser/package.json",
             "confidence": 0.7,
             "field": "purl",
@@ -18446,14 +18635,14 @@
           "value": "node_modules/fast-xml-parser/package.json"
         }
       ],
-      "purl": "pkg:npm/fast-xml-parser@5.7.2",
+      "purl": "pkg:npm/fast-xml-parser@5.7.3",
       "scope": "required",
       "tags": [
         "parse",
         "xml"
       ],
       "type": "library",
-      "version": "5.7.2"
+      "version": "5.7.3"
     },
     {
       "authors": [
@@ -18526,7 +18715,7 @@
           "name": "Michel Weststrate <info@michel.codes>"
         }
       ],
-      "bom-ref": "pkg:npm/immer@11.1.4",
+      "bom-ref": "pkg:npm/immer@11.1.8",
       "description": "Create your next immutable state by mutating the current one",
       "evidence": {
         "identity": [
@@ -18584,10 +18773,10 @@
           "value": "node_modules/immer/package.json"
         }
       ],
-      "purl": "pkg:npm/immer@11.1.4",
+      "purl": "pkg:npm/immer@11.1.8",
       "scope": "required",
       "type": "library",
-      "version": "11.1.4"
+      "version": "11.1.8"
     },
     {
       "authors": [
@@ -18778,69 +18967,6 @@
       ],
       "type": "library",
       "version": "6.2.1"
-    },
-    {
-      "authors": [
-        {
-          "name": "Filip Skokan <panva.ip@gmail.com>"
-        }
-      ],
-      "bom-ref": "pkg:npm/jose@6.2.2",
-      "description": "JWA, JWS, JWE, JWT, JWK, JWKS for Node.js, Browser, Cloudflare Workers, Deno, Bun, and other Web-interoperable runtimes",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@better-auth/oauth-provider/node_modules/jose/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@better-auth/oauth-provider/node_modules/jose/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/mcp/auth.ts#2"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/panva/jose"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "jose",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/better-auth/node_modules/jose/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@better-auth/oauth-provider/node_modules/jose/package.json"
-        }
-      ],
-      "purl": "pkg:npm/jose@6.2.2",
-      "scope": "required",
-      "tags": [
-        "security"
-      ],
-      "type": "library",
-      "version": "6.2.2"
     },
     {
       "authors": [
@@ -19075,7 +19201,7 @@
             "location": "apps/web/src/components/chat/chat-thread-messages.tsx#6"
           },
           {
-            "location": "apps/web/src/components/chat/entity-link.tsx#7"
+            "location": "apps/web/src/components/chat/entity-link.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/needs-matter-card.tsx#12"
@@ -19528,7 +19654,7 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#21"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#35"
+            "location": "packages/folio/src/components/DocxEditor.tsx#33"
           },
           {
             "location": "packages/folio/src/components/DocxEditorHelpers.tsx#5"
@@ -20010,7 +20136,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.372.6",
+      "bom-ref": "pkg:npm/posthog-js@1.372.10",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -20059,10 +20185,10 @@
           "value": "node_modules/posthog-js/lib/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.372.6",
+      "purl": "pkg:npm/posthog-js@1.372.10",
       "scope": "required",
       "type": "library",
-      "version": "1.372.6"
+      "version": "1.372.10"
     },
     {
       "authors": [
@@ -20070,7 +20196,7 @@
           "name": "PostHog <engineering@posthog.com> (https://posthog.com)"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-node@5.33.0",
+      "bom-ref": "pkg:npm/posthog-node@5.33.4",
       "description": "PostHog Node.js integration",
       "evidence": {
         "identity": [
@@ -20115,10 +20241,10 @@
           "value": "node_modules/posthog-node/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-node@5.33.0",
+      "purl": "pkg:npm/posthog-node@5.33.4",
       "scope": "required",
       "type": "library",
-      "version": "5.33.0"
+      "version": "5.33.4"
     },
     {
       "bom-ref": "pkg:npm/prosemirror-commands@1.7.1",
@@ -20491,6 +20617,15 @@
         ],
         "occurrences": [
           {
+            "location": "packages/folio/src/components/commentsHelpers.ts#1"
+          },
+          {
+            "location": "packages/folio/src/components/selectionDetection.ts#1"
+          },
+          {
+            "location": "packages/folio/src/components/selectionDetection.ts#2"
+          },
+          {
             "location": "packages/folio/src/core/ai-edits/apply.ts#2"
           },
           {
@@ -20591,9 +20726,6 @@
           },
           {
             "location": "packages/folio/src/paged-editor/useVisualLineNavigation.ts#16"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditor.tsx#36"
           },
           {
             "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#22"
@@ -20774,6 +20906,12 @@
         ],
         "occurrences": [
           {
+            "location": "packages/folio/src/components/DocxEditor.props.ts#3"
+          },
+          {
+            "location": "packages/folio/src/components/commentsHelpers.ts#2"
+          },
+          {
             "location": "packages/folio/src/components/hooks/useHyperlinkHandlers.ts#3"
           },
           {
@@ -20810,7 +20948,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#27"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#38"
+            "location": "packages/folio/src/components/DocxEditor.tsx#35"
           },
           {
             "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#23"
@@ -21206,13 +21344,25 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-utils.ts#1"
           },
           {
+            "location": "packages/folio/src/components/DocxEditor.props.ts#1"
+          },
+          {
             "location": "packages/folio/src/components/dialogs/findReplaceDialogLayout.ts#1"
           },
           {
             "location": "packages/folio/src/components/dialogs/useFindReplace.ts#8"
           },
           {
+            "location": "packages/folio/src/components/hooks/useContextMenu.ts#1"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useContextMenu.ts#2"
+          },
+          {
             "location": "packages/folio/src/components/hooks/useDocumentLoader.ts#7"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useEditorMode.ts#1"
           },
           {
             "location": "packages/folio/src/components/hooks/useFindReplace.ts#10"
@@ -21228,6 +21378,18 @@
           },
           {
             "location": "packages/folio/src/components/hooks/useImageHandlers.ts#1"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#1"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#2"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#7"
+          },
+          {
+            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#8"
           },
           {
             "location": "packages/folio/src/core/utils/formatToStyle.ts#15"
@@ -21995,10 +22157,13 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#23"
+            "location": "packages/folio/src/components/DocxEditor.tsx#21"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#24"
+            "location": "packages/folio/src/components/DocxEditor.tsx#22"
+          },
+          {
+            "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
           },
           {
             "location": "packages/folio/src/components/ErrorBoundary.tsx#16"
@@ -22064,7 +22229,7 @@
             "location": "packages/folio/src/components/ui/Tooltip.tsx#8"
           },
           {
-            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#15"
+            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
           },
           {
             "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
@@ -22367,6 +22532,66 @@
       "evidence": {
         "identity": [
           {
+            "concludedValue": "node_modules/streamdown/node_modules/tailwind-merge/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/streamdown/node_modules/tailwind-merge/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "packages/ui/src/lib/utils.ts#3"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/dcastil/tailwind-merge"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/dcastil/tailwind-merge.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "tailwind-merge",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/streamdown/node_modules/tailwind-merge/package.json"
+        }
+      ],
+      "purl": "pkg:npm/tailwind-merge@3.5.0",
+      "scope": "required",
+      "type": "library",
+      "version": "3.5.0"
+    },
+    {
+      "authors": [
+        {
+          "name": "Dany Castillo"
+        }
+      ],
+      "bom-ref": "pkg:npm/tailwind-merge@3.6.0",
+      "description": "Merge Tailwind CSS classes without style conflicts",
+      "evidence": {
+        "identity": [
+          {
             "concludedValue": "node_modules/tailwind-merge/package.json",
             "confidence": 0.7,
             "field": "purl",
@@ -22411,10 +22636,10 @@
           "value": "node_modules/tailwind-merge/package.json"
         }
       ],
-      "purl": "pkg:npm/tailwind-merge@3.5.0",
+      "purl": "pkg:npm/tailwind-merge@3.6.0",
       "scope": "required",
       "type": "library",
-      "version": "3.5.0"
+      "version": "3.6.0"
     },
     {
       "authors": [
@@ -22586,7 +22811,7 @@
           "name": "Jan Amann <jan@amann.work>"
         }
       ],
-      "bom-ref": "pkg:npm/use-intl@4.11.0",
+      "bom-ref": "pkg:npm/use-intl@4.11.1",
       "description": "Internationalization (i18n) for React",
       "evidence": {
         "identity": [
@@ -22612,9 +22837,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.organization/-mutations.ts#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map.ts#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts#8"
@@ -22974,7 +23196,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/drop-zone.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#6"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/editable-field.tsx#16"
@@ -23208,7 +23430,7 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#22"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#39"
+            "location": "packages/folio/src/components/DocxEditor.tsx#36"
           },
           {
             "location": "packages/folio/src/components/DocxEditorHelpers.tsx#6"
@@ -23256,10 +23478,10 @@
           "value": "node_modules/use-intl/package.json"
         }
       ],
-      "purl": "pkg:npm/use-intl@4.11.0",
+      "purl": "pkg:npm/use-intl@4.11.1",
       "scope": "required",
       "type": "library",
-      "version": "4.11.0"
+      "version": "4.11.1"
     },
     {
       "authors": [
@@ -23594,7 +23816,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#7"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx#20"
@@ -23724,6 +23946,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-matches-store.ts#17"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-selection-store.ts#15"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/document-text-selection-store.ts#16"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store.ts#2"
