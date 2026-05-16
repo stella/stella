@@ -113,6 +113,7 @@ import type {
   SectionProperties,
   HeaderFooter,
 } from "../core/types/document";
+import { closestHtmlElement, queryHtmlElement } from "../core/utils/domGuards";
 // Internal components
 import { AnonymizationRectsOverlay } from "./AnonymizationRectsOverlay";
 import type { AnonymizationRectGroup } from "./AnonymizationRectsOverlay";
@@ -322,6 +323,30 @@ const SELECTION_REVEAL_AFTER_INPUT_DELAY = 120;
 
 // Stable empty array to avoid re-creating on each render
 const EMPTY_PLUGINS: Plugin[] = [];
+
+/**
+ * Get the zero-based page index for a node by climbing to its
+ * `.layout-page` ancestor and reading `data-page-number`. Returns
+ * 0 if no ancestor is found.
+ */
+const getPageIndex = (el: Element): number => {
+  const pageEl = closestHtmlElement(el, ".layout-page");
+  if (!pageEl) {
+    return 0;
+  }
+  const raw = pageEl.dataset["pageNumber"];
+  return raw ? Number(raw) - 1 : 0;
+};
+
+/**
+ * Get the line height for a node by climbing to its `.layout-line`
+ * ancestor and reading `offsetHeight`. Returns `fallback` if no
+ * ancestor is found.
+ */
+const getLineHeight = (el: Element, fallback = 16): number => {
+  const lineEl = closestHtmlElement(el, ".layout-line");
+  return lineEl ? lineEl.offsetHeight : fallback;
+};
 
 // =============================================================================
 // STYLES
@@ -1449,10 +1474,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     /** Build ImageSelectionInfo from a DOM element with data-pm-start */
     const buildImageSelectionInfo = useCallback(
       (el: HTMLElement, pmPos: number): ImageSelectionInfo => {
-        const imgTag = el.tagName === "IMG" ? el : el.querySelector("img");
-        const rect = (imgTag ?? el).getBoundingClientRect();
+        const imgTagCandidate =
+          el.tagName === "IMG" ? el : el.querySelector("img");
+        const imgTag =
+          imgTagCandidate instanceof HTMLElement ? imgTagCandidate : null;
+        const element = imgTag ?? el;
+        const rect = element.getBoundingClientRect();
         return {
-          element: (imgTag ?? el) as HTMLElement,
+          element,
           pmPos,
           width: Math.round(rect.width / zoom),
           height: Math.round(rect.height / zoom),
@@ -2064,20 +2093,11 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           if (spanEl.classList.contains("layout-run-tab")) {
             if (pmPos >= pmStart && pmPos < pmEnd) {
               const spanRect = spanEl.getBoundingClientRect();
-              const pageEl = spanEl.closest(".layout-page");
-              const pageIndex = pageEl
-                ? Number((pageEl as HTMLElement).dataset["pageNumber"]) - 1
-                : 0;
-              const lineEl = spanEl.closest(".layout-line");
-              const lineHeight = lineEl
-                ? (lineEl as HTMLElement).offsetHeight
-                : 16;
-
               return {
                 x: (spanRect.left - overlayRect.left) / currentZoom,
                 y: (spanRect.top - overlayRect.top) / currentZoom,
-                height: lineHeight,
-                pageIndex,
+                height: getLineHeight(spanEl),
+                pageIndex: getPageIndex(spanEl),
               };
             }
             continue; // Skip to next span
@@ -2089,20 +2109,11 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             pmPos <= pmEnd
           ) {
             const spanRect = spanEl.getBoundingClientRect();
-            const pageEl = spanEl.closest(".layout-page");
-            const pageIndex = pageEl
-              ? Number((pageEl as HTMLElement).dataset["pageNumber"]) - 1
-              : 0;
-            const lineEl = spanEl.closest(".layout-line");
-            const lineHeight = lineEl
-              ? (lineEl as HTMLElement).offsetHeight
-              : Math.max(16, spanRect.height);
-
             return {
               x: (spanRect.left - overlayRect.left) / currentZoom,
               y: (spanRect.top - overlayRect.top) / currentZoom,
-              height: lineHeight,
-              pageIndex,
+              height: getLineHeight(spanEl, Math.max(16, spanRect.height)),
+              pageIndex: getPageIndex(spanEl),
             };
           }
 
@@ -2132,42 +2143,21 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                 ? rangeRect.top
                 : spanRect.top;
 
-            // Find which page this span is on
-            const pageEl = spanEl.closest(".layout-page");
-            const pageIndex = pageEl
-              ? Number((pageEl as HTMLElement).dataset["pageNumber"]) - 1
-              : 0;
-
-            // Get line height from the line element or use default
-            const lineEl = spanEl.closest(".layout-line");
-            const lineHeight = lineEl
-              ? (lineEl as HTMLElement).offsetHeight
-              : 16;
-
             return {
               x: (caretLeft - overlayRect.left) / currentZoom,
               y: (caretTop - overlayRect.top) / currentZoom,
-              height: lineHeight,
-              pageIndex,
+              height: getLineHeight(spanEl),
+              pageIndex: getPageIndex(spanEl),
             };
           }
 
           if (pmPos >= pmStart && pmPos <= pmEnd) {
             const spanRect = spanEl.getBoundingClientRect();
-            const pageEl = spanEl.closest(".layout-page");
-            const pageIndex = pageEl
-              ? Number((pageEl as HTMLElement).dataset["pageNumber"]) - 1
-              : 0;
-            const lineEl = spanEl.closest(".layout-line");
-            const lineHeight = lineEl
-              ? (lineEl as HTMLElement).offsetHeight
-              : Math.max(16, spanRect.height);
-
             return {
               x: (spanRect.left - overlayRect.left) / currentZoom,
               y: (spanRect.top - overlayRect.top) / currentZoom,
-              height: lineHeight,
-              pageIndex,
+              height: getLineHeight(spanEl, Math.max(16, spanRect.height)),
+              pageIndex: getPageIndex(spanEl),
             };
           }
         }
@@ -2175,28 +2165,20 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         // Fallback: try to find position in empty paragraphs (they have empty runs)
         const emptyRuns = findBodyEmptyRuns(pagesContainerRef.current);
         for (const emptyRun of emptyRuns) {
-          const paragraph = emptyRun.closest(
-            ".layout-paragraph",
-          ) as HTMLElement;
+          const paragraph = closestHtmlElement(emptyRun, ".layout-paragraph");
+          if (!paragraph) {
+            continue;
+          }
           const pmStart = Number(paragraph.dataset["pmStart"]);
           const pmEnd = Number(paragraph.dataset["pmEnd"]);
 
           if (pmPos >= pmStart && pmPos <= pmEnd) {
             const runRect = emptyRun.getBoundingClientRect();
-            const pageEl = paragraph.closest(".layout-page");
-            const pageIndex = pageEl
-              ? Number((pageEl as HTMLElement).dataset["pageNumber"]) - 1
-              : 0;
-            const lineEl = emptyRun.closest(".layout-line");
-            const lineHeight = lineEl
-              ? (lineEl as HTMLElement).offsetHeight
-              : 16;
-
             return {
               x: (runRect.left - overlayRect.left) / currentZoom,
               y: (runRect.top - overlayRect.top) / currentZoom,
-              height: lineHeight,
-              pageIndex,
+              height: getLineHeight(emptyRun),
+              pageIndex: getPageIndex(paragraph),
             };
           }
         }
@@ -2261,13 +2243,15 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             const allCells =
               pagesContainerRef.current.querySelectorAll(".layout-table-cell");
             for (const cellEl of Array.from(allCells)) {
-              const htmlEl = cellEl as HTMLElement;
-              const pmStartAttr = htmlEl.dataset["pmStart"];
+              if (!(cellEl instanceof HTMLElement)) {
+                continue;
+              }
+              const pmStartAttr = cellEl.dataset["pmStart"];
               if (pmStartAttr !== undefined) {
                 const pmPos = Number(pmStartAttr);
                 for (const [start, end] of selectedRanges) {
                   if (pmPos >= start && pmPos < end) {
-                    htmlEl.classList.add("layout-table-cell-selected");
+                    cellEl.classList.add("layout-table-cell-selected");
                     break;
                   }
                 }
@@ -2337,17 +2321,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                 // Special handling for tab spans - highlight the full visual width
                 if (spanEl.classList.contains("layout-run-tab")) {
                   const spanRect = spanEl.getBoundingClientRect();
-                  const pageEl = spanEl.closest(".layout-page");
-                  const pageIndex = pageEl
-                    ? Number((pageEl as HTMLElement).dataset["pageNumber"]) - 1
-                    : 0;
-
                   domRects.push({
                     x: (spanRect.left - overlayRect.left) / zoom,
                     y: (spanRect.top - overlayRect.top) / zoom,
                     width: spanRect.width / zoom,
                     height: spanRect.height / zoom,
-                    pageIndex,
+                    pageIndex: getPageIndex(spanEl),
                   });
                   continue;
                 }
@@ -2357,8 +2336,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                 if (spanEl.firstChild?.nodeType === Node.TEXT_NODE) {
                   textNode = spanEl.firstChild as Text;
                 } else if (
-                  spanEl.firstChild?.nodeType === Node.ELEMENT_NODE &&
-                  (spanEl.firstChild as HTMLElement).tagName === "A" &&
+                  spanEl.firstChild instanceof HTMLElement &&
+                  spanEl.firstChild.tagName === "A" &&
                   spanEl.firstChild.firstChild?.nodeType === Node.TEXT_NODE
                 ) {
                   textNode = spanEl.firstChild.firstChild as Text;
@@ -2379,13 +2358,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
                   // Get all client rects for this range (handles line wraps)
                   const clientRects = range.getClientRects();
+                  const pageIndex = getPageIndex(spanEl);
                   for (const rect of Array.from(clientRects)) {
-                    const pageEl = spanEl.closest(".layout-page");
-                    const pageIndex = pageEl
-                      ? Number((pageEl as HTMLElement).dataset["pageNumber"]) -
-                        1
-                      : 0;
-
                     domRects.push({
                       x: (rect.left - overlayRect.left) / zoom,
                       y: (rect.top - overlayRect.top) / zoom,
@@ -2484,16 +2458,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           }
           if (spanEl.classList.contains("layout-run-tab")) {
             const spanRect = spanEl.getBoundingClientRect();
-            const pageEl = spanEl.closest(".layout-page");
-            const pageIndex = pageEl
-              ? Number((pageEl as HTMLElement).dataset["pageNumber"]) - 1
-              : 0;
             domRects.push({
               x: (spanRect.left - overlayRect.left) / zoom,
               y: (spanRect.top - overlayRect.top) / zoom,
               width: spanRect.width / zoom,
               height: spanRect.height / zoom,
-              pageIndex,
+              pageIndex: getPageIndex(spanEl),
             });
             continue;
           }
@@ -2501,8 +2471,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           if (spanEl.firstChild?.nodeType === Node.TEXT_NODE) {
             textNode = spanEl.firstChild as Text;
           } else if (
-            spanEl.firstChild?.nodeType === Node.ELEMENT_NODE &&
-            (spanEl.firstChild as HTMLElement).tagName === "A" &&
+            spanEl.firstChild instanceof HTMLElement &&
+            spanEl.firstChild.tagName === "A" &&
             spanEl.firstChild.firstChild?.nodeType === Node.TEXT_NODE
           ) {
             textNode = spanEl.firstChild.firstChild as Text;
@@ -2519,11 +2489,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           const range = ownerDoc.createRange();
           range.setStart(textNode, startChar);
           range.setEnd(textNode, endChar);
+          const pageIndex = getPageIndex(spanEl);
           for (const rect of Array.from(range.getClientRects())) {
-            const pageEl = spanEl.closest(".layout-page");
-            const pageIndex = pageEl
-              ? Number((pageEl as HTMLElement).dataset["pageNumber"]) - 1
-              : 0;
             domRects.push({
               x: (rect.left - overlayRect.left) / zoom,
               y: (rect.top - overlayRect.top) / zoom,
@@ -3062,19 +3029,23 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         setTableInsertButton(null);
         clearTableInsertTimer();
 
+        const target = e.target instanceof HTMLElement ? e.target : null;
+        if (!target) {
+          return;
+        }
+
         // Prevent default browser navigation for hyperlink clicks,
         // but let the rest of the handler run for cursor placement and drag selection.
         // The popup is shown in handlePagesClick (on mouseup) instead.
-        const anchorEl = (e.target as HTMLElement).closest(
-          "a[href]",
-        ) as HTMLAnchorElement | null;
+        const anchorClosest = target.closest("a[href]");
+        const anchorEl =
+          anchorClosest instanceof HTMLAnchorElement ? anchorClosest : null;
         if (anchorEl) {
           e.preventDefault(); // Prevent navigation only
         }
 
         // When in HF edit mode, clicks outside header/footer area close the HF editor
         if (!readOnly && hfEditMode && onBodyClick) {
-          const target = e.target as HTMLElement;
           const isInHfArea =
             target.closest(".layout-page-header") ||
             target.closest(".layout-page-footer") ||
@@ -3090,7 +3061,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         // In normal mode, clicks in header/footer area should place cursor at
         // start of body content, not inside header/footer (matches Word/Google Docs)
         if (!readOnly && !hfEditMode) {
-          const target = e.target as HTMLElement;
           const isInHfArea =
             target.closest(".layout-page-header") ||
             target.closest(".layout-page-footer");
@@ -3105,7 +3075,6 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         }
 
         // Column resize: intercept clicks on resize handles
-        const target = e.target as HTMLElement;
         if (
           !readOnly &&
           target.classList.contains("layout-table-resize-handle")
@@ -3198,9 +3167,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                     const rowEl = tableEl?.querySelector(
                       `[data-row-index="${rowIndex}"]`,
                     );
-                    const renderedHeight = rowEl
-                      ? (rowEl as HTMLElement).getBoundingClientRect().height
-                      : 30;
+                    const renderedHeight =
+                      rowEl instanceof HTMLElement
+                        ? rowEl.getBoundingClientRect().height
+                        : 30;
                     resizeRowOrigHeightRef.current = Math.round(
                       renderedHeight * 15,
                     );
@@ -3696,13 +3666,17 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         const mouseY = e.clientY;
 
         // Find the table — either directly under the cursor or nearby (for edge hover)
-        let tableEl = (e.target as HTMLElement).closest(
-          ".layout-table",
-        ) as HTMLElement | null;
+        const eventTarget = e.target instanceof HTMLElement ? e.target : null;
+        let tableEl = eventTarget
+          ? closestHtmlElement(eventTarget, ".layout-table")
+          : null;
         if (!tableEl) {
           // Mouse may be in the margin area near a table — check all tables
           const tables = pagesEl.querySelectorAll(".layout-table");
           for (const t of Array.from(tables)) {
+            if (!(t instanceof HTMLElement)) {
+              continue;
+            }
             const r = t.getBoundingClientRect();
             const nearLeft =
               mouseX >= r.left - TABLE_INSERT_EDGE_PROXIMITY && mouseX < r.left;
@@ -3715,7 +3689,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
               mouseY >= r.top - TABLE_INSERT_EDGE_PROXIMITY &&
               mouseY <= r.bottom;
             if ((nearLeft && withinY) || (nearTop && withinX)) {
-              tableEl = t as HTMLElement;
+              tableEl = t;
               break;
             }
           }
@@ -3761,9 +3735,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           for (const row of rows) {
             const rowRect = row.getBoundingClientRect();
             if (mouseY >= rowRect.top && mouseY <= rowRect.bottom) {
-              const cell = row.querySelector(
-                ".layout-table-cell",
-              ) as HTMLElement | null;
+              const cell = queryHtmlElement(row, ".layout-table-cell");
               const pmPos = getCellPmPos(cell);
               if (!pmPos) {
                 break;
@@ -3785,9 +3757,12 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         if (nearTopEdge && rows[0]) {
           const cells = rows[0].querySelectorAll(":scope > .layout-table-cell");
           for (const cellEl of cells) {
+            if (!(cellEl instanceof HTMLElement)) {
+              continue;
+            }
             const cellRect = cellEl.getBoundingClientRect();
             if (mouseX >= cellRect.left && mouseX <= cellRect.right) {
-              const pmPos = getCellPmPos(cellEl as HTMLElement);
+              const pmPos = getCellPmPos(cellEl);
               if (!pmPos) {
                 break;
               }
@@ -3857,10 +3832,14 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
      */
     const handlePagesClick = useCallback(
       (e: React.MouseEvent) => {
+        const target = e.target instanceof HTMLElement ? e.target : null;
+        if (!target) {
+          return;
+        }
         // Handle hyperlink clicks (single-click only, not drag-to-select)
-        const anchorEl = (e.target as HTMLElement).closest(
-          "a[href]",
-        ) as HTMLAnchorElement | null;
+        const anchorClosest = target.closest("a[href]");
+        const anchorEl =
+          anchorClosest instanceof HTMLAnchorElement ? anchorClosest : null;
         if (anchorEl) {
           e.preventDefault();
           const href = anchorEl.getAttribute("href") || "";
@@ -3917,13 +3896,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
         // Double-click on header/footer area triggers editing mode
         if (!readOnly && e.detail === 2 && onHeaderFooterDoubleClick) {
-          const target = e.target as HTMLElement;
           const headerEl = target.closest(".layout-page-header");
           const footerEl = target.closest(".layout-page-footer");
           if (headerEl || footerEl) {
-            const pageEl = target.closest(
-              "[data-page-number]",
-            ) as HTMLElement | null;
+            const pageEl = closestHtmlElement(target, "[data-page-number]");
             const pageNum = pageEl ? Number(pageEl.dataset["pageNumber"]) : 1;
             if (headerEl) {
               e.preventDefault();
@@ -4087,8 +4063,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     const handleContainerFocus = useCallback(
       (e: React.FocusEvent) => {
         // Don't steal focus from sidebar inputs (textareas, inputs, buttons)
-        const target = e.target as HTMLElement;
-        if (target.closest(".docx-comments-sidebar")) {
+        if (
+          e.target instanceof HTMLElement &&
+          e.target.closest(".docx-comments-sidebar")
+        ) {
           return;
         }
         focusHiddenEditor();
@@ -4101,7 +4079,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
      */
     const handleContainerBlur = useCallback((e: React.FocusEvent) => {
       // Check if focus is moving to hidden PM or staying within container
-      const relatedTarget = e.relatedTarget as HTMLElement | null;
+      const relatedTarget =
+        e.relatedTarget instanceof HTMLElement ? e.relatedTarget : null;
       if (relatedTarget && containerRef.current?.contains(relatedTarget)) {
         return; // Focus staying within editor
       }
@@ -4200,17 +4179,16 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             for (const page of pages) {
               const rect = page.getBoundingClientRect();
               if (clientY >= rect.top && clientY <= rect.bottom) {
-                contentEl = page.querySelector(
-                  ".layout-page-content",
-                ) as HTMLElement;
+                contentEl = queryHtmlElement(page, ".layout-page-content");
                 break;
               }
             }
             if (!contentEl) {
               // Fallback to last page if below all pages
-              contentEl = Array.from(pages)
-                .at(-1)
-                ?.querySelector(".layout-page-content") as HTMLElement | null;
+              const lastPage = Array.from(pages).at(-1);
+              contentEl = lastPage
+                ? queryHtmlElement(lastPage, ".layout-page-content")
+                : null;
             }
             if (!contentEl) {
               return;
@@ -4381,7 +4359,10 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
     const handleContainerMouseDown = useCallback(
       (e: React.MouseEvent) => {
         // Don't steal focus from sidebar inputs
-        if ((e.target as HTMLElement).closest(".docx-comments-sidebar")) {
+        if (
+          e.target instanceof HTMLElement &&
+          e.target.closest(".docx-comments-sidebar")
+        ) {
           return;
         }
         // Focus hidden PM if clicking outside pages area
