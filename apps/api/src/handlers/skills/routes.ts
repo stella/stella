@@ -13,21 +13,28 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
   .use(permissionMacro)
   .use(invalidateQuery)
   .guard({ validateAuth: true })
-  .get("/", listSkills.handler, { query: listSkills.config.query })
+  .get("/", listSkills.handler, {
+    permissions: listSkills.config.permissions,
+    query: listSkills.config.query,
+  })
   .post("/upload", uploadSkill.handler, {
     body: uploadSkill.config.body,
     invalidateQuery: true,
+    permissions: uploadSkill.config.permissions,
   })
   .post("/import-url", importSkillFromUrl.handler, {
     body: importSkillFromUrl.config.body,
     invalidateQuery: true,
+    permissions: importSkillFromUrl.config.permissions,
   })
   .patch("/:skillId", updateSkill.handler, {
-    params: updateSkill.config.params,
     body: updateSkill.config.body,
     invalidateQuery: true,
+    params: updateSkill.config.params,
+    permissions: updateSkill.config.permissions,
   })
   .delete("/:skillId", deleteSkill.handler, {
-    params: deleteSkill.config.params,
     invalidateQuery: true,
+    params: deleteSkill.config.params,
+    permissions: deleteSkill.config.permissions,
   });

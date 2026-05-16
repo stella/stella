@@ -184,18 +184,23 @@ const globalCaseLawRoute = new Elysia({
   prefix: "/case",
 })
   .use(authMacro)
+  .use(permissionMacro)
   .guard({ validateAuth: true })
   .get("/decisions", listDecisions.handler, {
+    permissions: listDecisions.config.permissions,
     query: listDecisions.config.query,
   })
   .get("/decisions/:decisionId", readDecision.handler, {
     params: readDecision.config.params,
+    permissions: readDecision.config.permissions,
   })
   .post("/decisions/search", searchDecisions.handler, {
     body: searchDecisions.config.body,
+    permissions: searchDecisions.config.permissions,
   })
   .get("/decisions/:decisionId/analysis", generateDecisionAnalysis.handler, {
     params: generateDecisionAnalysis.config.params,
+    permissions: generateDecisionAnalysis.config.permissions,
   });
 
 /**
@@ -208,12 +213,16 @@ const caseLawMatterLinksRoute = new Elysia({
   .use(workspaceAccessMacro)
   .use(permissionMacro)
   .guard({ validateWorkspaceAccess: true })
-  .get("/", listMatterLinks.handler)
+  .get("/", listMatterLinks.handler, {
+    permissions: listMatterLinks.config.permissions,
+  })
   .post("/", createMatterLink.handler, {
     body: createMatterLink.config.body,
+    permissions: createMatterLink.config.permissions,
   })
   .delete("/:linkId", deleteMatterLink.handler, {
     params: deleteMatterLink.config.params,
+    permissions: deleteMatterLink.config.permissions,
   });
 
 /**
@@ -224,6 +233,7 @@ const caseLawAdminRoute = new Elysia({
   prefix: "/case/admin",
 })
   .use(authMacro)
+  .use(permissionMacro)
   .guard({ validateAuth: true })
   .onBeforeHandle(({ memberRole, set }) => {
     if (!ADMIN_BYPASS_ROLES.includes(memberRole.role)) {
@@ -232,7 +242,9 @@ const caseLawAdminRoute = new Elysia({
     }
     return undefined;
   })
-  .get("/ingestion/status", getCaseLawIngestionStatus.handler);
+  .get("/ingestion/status", getCaseLawIngestionStatus.handler, {
+    permissions: getCaseLawIngestionStatus.config.permissions,
+  });
 
 export const caseLawRoute = new Elysia()
   .use(globalCaseLawRoute)

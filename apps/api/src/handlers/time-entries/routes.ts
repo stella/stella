@@ -104,48 +104,61 @@ export const timeEntriesRoute = new Elysia({
     validateWorkspaceAccess: true,
   })
   .get("/", readTimeEntries.handler, {
+    permissions: readTimeEntries.config.permissions,
     query: readTimeEntries.config.query,
   })
   .get("/:id", readTimeEntryById.handler, {
     params: readTimeEntryById.config.params,
+    permissions: readTimeEntryById.config.permissions,
   })
   .put("/", createTimeEntry.handler, {
-    invalidateQuery: true,
     body: createTimeEntry.config.body,
+    invalidateQuery: true,
+    permissions: createTimeEntry.config.permissions,
   })
   .patch("/", updateTimeEntryById.handler, {
-    invalidateQuery: true,
     body: updateTimeEntryById.config.body,
+    invalidateQuery: true,
+    permissions: updateTimeEntryById.config.permissions,
   })
   .delete("/", deleteTimeEntryById.handler, {
-    invalidateQuery: true,
     body: deleteTimeEntryById.config.body,
+    invalidateQuery: true,
+    permissions: deleteTimeEntryById.config.permissions,
   })
   .post("/timer/start", timerStart.handler, {
-    invalidateQuery: true,
     body: timerStart.config.body,
+    invalidateQuery: true,
+    permissions: timerStart.config.permissions,
   })
   .post("/timer/stop", timerStop.handler, {
     invalidateQuery: true,
+    permissions: timerStop.config.permissions,
   })
   .post("/batch", batchUpdate.handler, {
-    invalidateQuery: true,
     body: batchUpdate.config.body,
+    invalidateQuery: true,
+    permissions: batchUpdate.config.permissions,
   })
   .delete("/batch", batchDelete.handler, {
-    invalidateQuery: true,
     body: batchDelete.config.body,
+    invalidateQuery: true,
+    permissions: batchDelete.config.permissions,
   })
   .post("/split", splitEntry.handler, {
-    invalidateQuery: true,
     body: splitEntry.config.body,
+    invalidateQuery: true,
+    permissions: splitEntry.config.permissions,
   })
   .get("/export/csv", exportCsv.handler, {
+    permissions: exportCsv.config.permissions,
     query: exportCsv.config.query,
   })
   .get("/export/ledes", exportLedes.handler, {
+    permissions: exportLedes.config.permissions,
     query: exportLedes.config.query,
   })
   .get("/export/pdf", exportPdf.handler, {
+    permissions: exportPdf.config.permissions,
     query: exportPdf.config.query,
   });

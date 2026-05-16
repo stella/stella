@@ -23,41 +23,50 @@ export const ratesRoute = new Elysia({
   })
   // Rate tables
   .get("/", readRateTables.handler, {
+    permissions: readRateTables.config.permissions,
     query: readRateTables.config.query,
   })
   .put("/", createRateTable.handler, {
-    invalidateQuery: true,
     body: createRateTable.config.body,
+    invalidateQuery: true,
+    permissions: createRateTable.config.permissions,
   })
   .patch("/", updateRateTable.handler, {
-    invalidateQuery: true,
     body: updateRateTable.config.body,
+    invalidateQuery: true,
+    permissions: updateRateTable.config.permissions,
   })
   .delete("/", deleteRateTable.handler, {
-    invalidateQuery: true,
     body: deleteRateTable.config.body,
+    invalidateQuery: true,
+    permissions: deleteRateTable.config.permissions,
   })
   // Rate resolution
   .get("/resolve", resolveRate.handler, {
+    permissions: resolveRate.config.permissions,
     query: resolveRate.config.query,
   })
   // Rate entries
   .get("/:rateTableId/entries", readRateEntries.handler, {
     params: readRateEntries.config.params,
+    permissions: readRateEntries.config.permissions,
     query: readRateEntries.config.query,
   })
   .put("/:rateTableId/entries", createRateEntry.handler, {
-    params: createRateEntry.config.params,
-    invalidateQuery: true,
     body: createRateEntry.config.body,
+    invalidateQuery: true,
+    params: createRateEntry.config.params,
+    permissions: createRateEntry.config.permissions,
   })
   .patch("/:rateTableId/entries", updateRateEntry.handler, {
-    params: updateRateEntry.config.params,
-    invalidateQuery: true,
     body: updateRateEntry.config.body,
+    invalidateQuery: true,
+    params: updateRateEntry.config.params,
+    permissions: updateRateEntry.config.permissions,
   })
   .delete("/:rateTableId/entries", deleteRateEntry.handler, {
-    params: deleteRateEntry.config.params,
-    invalidateQuery: true,
     body: deleteRateEntry.config.body,
+    invalidateQuery: true,
+    params: deleteRateEntry.config.params,
+    permissions: deleteRateEntry.config.permissions,
   });

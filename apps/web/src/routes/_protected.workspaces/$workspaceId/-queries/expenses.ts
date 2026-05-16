@@ -59,6 +59,6 @@ export const expensesOptions = (
         throw toAPIError(response.error);
       }
 
-      return response.data;
+      return response.data.items;
     },
   });

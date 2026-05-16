@@ -59,8 +59,30 @@ export const brandPersistedAuditLogId = (
   auditLogId: string,
 ): SafeId<"auditLog"> => toSafeId<"auditLog">(auditLogId);
 
+export const brandPersistedBillingCodeId = (
+  billingCodeId: string,
+): SafeId<"billingCode"> => toSafeId<"billingCode">(billingCodeId);
+
 export const brandPersistedClauseId = (clauseId: string): SafeId<"clause"> =>
   toSafeId<"clause">(clauseId);
+
+export const brandPersistedExpenseId = (expenseId: string): SafeId<"expense"> =>
+  toSafeId<"expense">(expenseId);
+
+export const brandPersistedInvoiceId = (invoiceId: string): SafeId<"invoice"> =>
+  toSafeId<"invoice">(invoiceId);
+
+export const brandPersistedRateEntryId = (
+  rateEntryId: string,
+): SafeId<"rateEntry"> => toSafeId<"rateEntry">(rateEntryId);
+
+export const brandPersistedRateTableId = (
+  rateTableId: string,
+): SafeId<"rateTable"> => toSafeId<"rateTable">(rateTableId);
+
+export const brandPersistedTimeEntryId = (
+  timeEntryId: string,
+): SafeId<"timeEntry"> => toSafeId<"timeEntry">(timeEntryId);
 
 export const brandPersistedUserId = (userId: string): SafeId<"user"> =>
   toSafeId<"user">(userId);

@@ -166,13 +166,20 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
   .guard({
     validateAuth: true,
   })
-  .get("/", readWorkspaces.handler)
-  .get("/navigation", readWorkspaceNavigation.handler)
+  .get("/", readWorkspaces.handler, {
+    permissions: readWorkspaces.config.permissions,
+  })
+  .get("/navigation", readWorkspaceNavigation.handler, {
+    permissions: readWorkspaceNavigation.config.permissions,
+  })
   .put("/", createWorkspaces.handler, {
     body: createWorkspaces.config.body,
     invalidateQuery: true,
+    permissions: createWorkspaces.config.permissions,
   })
-  .get("/active", readActiveWorkspace.handler)
+  .get("/active", readActiveWorkspace.handler, {
+    permissions: readActiveWorkspace.config.permissions,
+  })
   .group(
     "/:workspaceId",
     {
@@ -181,80 +188,107 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
     },
     (app) =>
       app
-        .get("/", readWorkspace.handler)
-        .get("/workflow", readWorkflow.handler)
+        .get("/", readWorkspace.handler, {
+          permissions: readWorkspace.config.permissions,
+        })
+        .get("/workflow", readWorkflow.handler, {
+          permissions: readWorkflow.config.permissions,
+        })
         .post("/workflow/start", workflowStart.handler, {
           body: workflowStart.config.body,
           permissions: workflowStart.config.permissions,
         })
         .post("/justifications/query", readJustifications.handler, {
           body: readJustifications.config.body,
+          permissions: readJustifications.config.permissions,
         })
         .post("/bounding-boxes", generateBoundingBoxes.handler, {
           body: generateBoundingBoxes.config.body,
           invalidateQuery: true,
+          permissions: generateBoundingBoxes.config.permissions,
         })
-        .get("/infosoud/courts", infosoudCourts.handler)
+        .get("/infosoud/courts", infosoudCourts.handler, {
+          permissions: infosoudCourts.config.permissions,
+        })
         .post("/infosoud/lookup", infosoudLookup.handler, {
           body: infosoudLookup.config.body,
+          permissions: infosoudLookup.config.permissions,
         })
         .post("/infosoud/import-agenda", infosoudImportAgenda.handler, {
           body: infosoudImportAgenda.config.body,
           invalidateQuery: true,
+          permissions: infosoudImportAgenda.config.permissions,
         })
-        .get("/overview", readOverview.handler)
+        .get("/overview", readOverview.handler, {
+          permissions: readOverview.config.permissions,
+        })
         .post("/", updateWorkspace.handler, {
           body: updateWorkspace.config.body,
           invalidateQuery: true,
+          permissions: updateWorkspace.config.permissions,
         })
         .post("/duplicate", duplicateWorkspace.handler, {
           body: duplicateWorkspace.config.body,
-          permissions: duplicateWorkspace.config.permissions,
           invalidateOrganizationQuery: true,
+          permissions: duplicateWorkspace.config.permissions,
         })
-        .post("/active", updateActiveWorkspace.handler)
+        .post("/active", updateActiveWorkspace.handler, {
+          permissions: updateActiveWorkspace.config.permissions,
+        })
         .delete("/", deleteWorkspace.handler, {
           invalidateQuery: true,
+          permissions: deleteWorkspace.config.permissions,
         })
         .post("/archive", archiveWorkspace.handler, {
-          permissions: archiveWorkspace.config.permissions,
           invalidateQuery: true,
+          permissions: archiveWorkspace.config.permissions,
         })
         // Unarchive is mounted below, outside the active-only group.
-        .get("/contacts", readWorkspaceContacts.handler)
+        .get("/contacts", readWorkspaceContacts.handler, {
+          permissions: readWorkspaceContacts.config.permissions,
+        })
         .put("/contacts", createWorkspaceContact.handler, {
           body: createWorkspaceContact.config.body,
           invalidateQuery: true,
+          permissions: createWorkspaceContact.config.permissions,
         })
         .delete(
           "/contacts/:workspaceContactId",
           deleteWorkspaceContact.handler,
           {
-            params: deleteWorkspaceContact.config.params,
             invalidateQuery: true,
+            params: deleteWorkspaceContact.config.params,
+            permissions: deleteWorkspaceContact.config.permissions,
           },
         )
-        .get("/anonymization-terms", readWorkspaceAnonymizationTerms.handler)
+        .get("/anonymization-terms", readWorkspaceAnonymizationTerms.handler, {
+          permissions: readWorkspaceAnonymizationTerms.config.permissions,
+        })
         .put(
           "/anonymization-terms",
           createWorkspaceAnonymizationTerms.handler,
           {
             body: createWorkspaceAnonymizationTerms.config.body,
             invalidateQuery: true,
+            permissions: createWorkspaceAnonymizationTerms.config.permissions,
           },
         )
         .delete(
           "/anonymization-terms/:entryId",
           deleteWorkspaceAnonymizationTerm.handler,
           {
-            params: deleteWorkspaceAnonymizationTerm.config.params,
             invalidateQuery: true,
+            params: deleteWorkspaceAnonymizationTerm.config.params,
+            permissions: deleteWorkspaceAnonymizationTerm.config.permissions,
           },
         )
         .get(
           "/anonymization-allowlist",
           readWorkspaceAnonymizationAllowlist.handler,
-          { query: readWorkspaceAnonymizationAllowlist.config.query },
+          {
+            permissions: readWorkspaceAnonymizationAllowlist.config.permissions,
+            query: readWorkspaceAnonymizationAllowlist.config.query,
+          },
         )
         .put(
           "/anonymization-allowlist",
@@ -262,28 +296,36 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
           {
             body: createWorkspaceAnonymizationAllowlistEntry.config.body,
             invalidateQuery: true,
+            permissions:
+              createWorkspaceAnonymizationAllowlistEntry.config.permissions,
           },
         )
         .delete(
           "/anonymization-allowlist/:entryId",
           deleteWorkspaceAnonymizationAllowlistEntry.handler,
           {
-            params: deleteWorkspaceAnonymizationAllowlistEntry.config.params,
             invalidateQuery: true,
+            params: deleteWorkspaceAnonymizationAllowlistEntry.config.params,
+            permissions:
+              deleteWorkspaceAnonymizationAllowlistEntry.config.permissions,
           },
         )
-        .get("/members", readWorkspaceMembers.handler)
+        .get("/members", readWorkspaceMembers.handler, {
+          permissions: readWorkspaceMembers.config.permissions,
+        })
         .put("/members", addWorkspaceMember.handler, {
           body: addWorkspaceMember.config.body,
           invalidateQuery: true,
+          permissions: addWorkspaceMember.config.permissions,
         })
         .delete("/members/:userId", removeWorkspaceMember.handler, {
-          params: removeWorkspaceMember.config.params,
           invalidateQuery: true,
+          params: removeWorkspaceMember.config.params,
+          permissions: removeWorkspaceMember.config.permissions,
         }),
   )
   .post("/:workspaceId/unarchive", unarchiveWorkspace.handler, {
-    validateWorkspaceAccessIncludingArchived: true,
-    permissions: unarchiveWorkspace.config.permissions,
     invalidateQuery: true,
+    permissions: unarchiveWorkspace.config.permissions,
+    validateWorkspaceAccessIncludingArchived: true,
   });

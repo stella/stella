@@ -26,16 +26,21 @@ export const clauseCategoriesRoute = new Elysia({
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .get("/", listClauseCategories.handler)
+  .get("/", listClauseCategories.handler, {
+    permissions: listClauseCategories.config.permissions,
+  })
   .put("/", createClauseCategory.handler, {
     body: createClauseCategory.config.body,
+    permissions: createClauseCategory.config.permissions,
   })
   .post("/:categoryId", updateClauseCategory.handler, {
-    params: updateClauseCategory.config.params,
     body: updateClauseCategory.config.body,
+    params: updateClauseCategory.config.params,
+    permissions: updateClauseCategory.config.permissions,
   })
   .delete("/:categoryId", deleteClauseCategory.handler, {
     params: deleteClauseCategory.config.params,
+    permissions: deleteClauseCategory.config.permissions,
   });
 
 // ── Clauses ─────────────────────────────────────────
@@ -47,43 +52,55 @@ export const clausesRoute = new Elysia({
   .use(permissionMacro)
   .guard({ validateAuth: true })
   .get("/", listClauses.handler, {
+    permissions: listClauses.config.permissions,
     query: listClauses.config.query,
   })
   .put("/", createClause.handler, {
     body: createClause.config.body,
+    permissions: createClause.config.permissions,
   })
   .get("/export", exportClauses.handler, {
+    permissions: exportClauses.config.permissions,
     query: exportClauses.config.query,
   })
   .put("/import", importClauses.handler, {
     body: importClauses.config.body,
+    permissions: importClauses.config.permissions,
   })
   .get("/:clauseId", getClause.handler, {
     params: getClause.config.params,
+    permissions: getClause.config.permissions,
   })
   .post("/:clauseId", updateClause.handler, {
-    params: updateClause.config.params,
     body: updateClause.config.body,
+    params: updateClause.config.params,
+    permissions: updateClause.config.permissions,
   })
   .delete("/:clauseId", deleteClause.handler, {
     params: deleteClause.config.params,
+    permissions: deleteClause.config.permissions,
   })
   // ── Versions ───────────────────────────────────
   .get("/:clauseId/versions/:versionId", getClauseVersion.handler, {
     params: getClauseVersion.config.params,
+    permissions: getClauseVersion.config.permissions,
   })
   // ── Variants ────────────────────────────────────
   .get("/:clauseId/variants", listVariants.handler, {
     params: listVariants.config.params,
+    permissions: listVariants.config.permissions,
   })
   .put("/:clauseId/variants", createVariant.handler, {
-    params: createVariant.config.params,
     body: createVariant.config.body,
+    params: createVariant.config.params,
+    permissions: createVariant.config.permissions,
   })
   .post("/:clauseId/variants/:variantId", updateVariant.handler, {
-    params: updateVariant.config.params,
     body: updateVariant.config.body,
+    params: updateVariant.config.params,
+    permissions: updateVariant.config.permissions,
   })
   .delete("/:clauseId/variants/:variantId", deleteVariant.handler, {
     params: deleteVariant.config.params,
+    permissions: deleteVariant.config.permissions,
   });

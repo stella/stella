@@ -22,35 +22,44 @@ export const tasksRoute = new Elysia({
     validateWorkspaceAccess: true,
   })
   .put("/", createTask.handler, {
-    invalidateQuery: true,
     body: createTask.config.body,
+    invalidateQuery: true,
+    permissions: createTask.config.permissions,
   })
   .patch("/", updateTask.handler, {
-    invalidateQuery: true,
     body: updateTask.config.body,
+    invalidateQuery: true,
+    permissions: updateTask.config.permissions,
   })
   .post("/calendar", calendarTasks.handler, {
     body: calendarTasks.config.body,
+    permissions: calendarTasks.config.permissions,
   })
   .get("/:taskId", readTaskById.handler, {
     params: readTaskById.config.params,
+    permissions: readTaskById.config.permissions,
   })
   .post("/assignees", addAssignee.handler, {
-    invalidateQuery: true,
     body: addAssignee.config.body,
+    invalidateQuery: true,
+    permissions: addAssignee.config.permissions,
   })
   .delete("/assignees", removeAssignee.handler, {
-    invalidateQuery: true,
     body: removeAssignee.config.body,
+    invalidateQuery: true,
+    permissions: removeAssignee.config.permissions,
   })
   .post("/links", createEntityLink.handler, {
-    invalidateQuery: true,
     body: createEntityLink.config.body,
+    invalidateQuery: true,
+    permissions: createEntityLink.config.permissions,
   })
   .delete("/links", deleteEntityLink.handler, {
-    invalidateQuery: true,
     body: deleteEntityLink.config.body,
+    invalidateQuery: true,
+    permissions: deleteEntityLink.config.permissions,
   })
   .get("/:taskId/links", listEntityLinks.handler, {
     params: listEntityLinks.config.params,
+    permissions: listEntityLinks.config.permissions,
   });

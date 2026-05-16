@@ -1,6 +1,6 @@
-import { Suspense, useState } from "react";
+import { Suspense } from "react";
 
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
   Link,
@@ -16,7 +16,7 @@ import { Button } from "@stll/ui/components/button";
 import { usePermissions } from "@/hooks/use-permissions";
 import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge";
-import { invoicesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/invoices";
+import { invoicesInfiniteOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/invoices";
 
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/invoices",
@@ -78,18 +78,17 @@ const PAGE_SIZE = 50;
 const InvoicesList = ({ workspaceId }: { workspaceId: string }) => {
   const t = useTranslations();
   const navigate = useNavigate();
-  const [limit, setLimit] = useState(PAGE_SIZE);
-  const { data } = useSuspenseQuery(invoicesOptions(workspaceId, { limit }));
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
+    useSuspenseInfiniteQuery(invoicesInfiniteOptions(workspaceId, PAGE_SIZE));
+  const invoices = data.pages.flatMap((page) => page.items);
 
-  if (data.rows.length === 0) {
+  if (invoices.length === 0) {
     return (
       <div className="text-muted-foreground py-16 text-center text-sm">
         {t("billing.invoices.noInvoices")}
       </div>
     );
   }
-
-  const hasMore = data.rows.length < data.total;
 
   return (
     <div className="flex flex-col gap-3">
@@ -114,7 +113,7 @@ const InvoicesList = ({ workspaceId }: { workspaceId: string }) => {
             </tr>
           </thead>
           <tbody>
-            {data.rows.map((invoice) => (
+            {invoices.map((invoice) => (
               <tr
                 className="hover:bg-muted/30 cursor-pointer border-b last:border-0"
                 key={invoice.id}
@@ -152,10 +151,13 @@ const InvoicesList = ({ workspaceId }: { workspaceId: string }) => {
           </tbody>
         </table>
       </div>
-      {hasMore && (
+      {hasNextPage && (
         <div className="flex justify-center">
           <Button
-            onClick={() => setLimit((l) => l + PAGE_SIZE)}
+            disabled={isFetchingNextPage}
+            onClick={() => {
+              void fetchNextPage();
+            }}
             size="sm"
             variant="ghost"
           >

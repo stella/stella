@@ -12,15 +12,19 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
   .guard({ validateAuth: true })
   .post("/", sendMessage.handler, {
     body: sendMessage.config.body,
+    permissions: sendMessage.config.permissions,
   })
   .get("/threads", getThreads.handler, {
+    permissions: getThreads.config.permissions,
     query: getThreads.config.query,
   })
   .delete("/threads/:threadId", deleteThread.handler, {
-    query: deleteThread.config.query,
     params: deleteThread.config.params,
+    permissions: deleteThread.config.permissions,
+    query: deleteThread.config.query,
   })
   .get("/threads/:threadId/messages", getMessages.handler, {
     params: getMessages.config.params,
+    permissions: getMessages.config.permissions,
     query: getMessages.config.query,
   });

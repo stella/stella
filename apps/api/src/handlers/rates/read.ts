@@ -1,14 +1,45 @@
 import { Result } from "better-result";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { rateEntries, rateTables } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  createCursorPage,
+  decodePaginationCursor,
+  encodePaginationCursor,
+  isUuidPaginationCursorPart,
+  parseDateTimePaginationCursorPart,
+} from "@/api/lib/pagination";
+import { brandPersistedRateTableId } from "@/api/lib/safe-id-boundaries";
 
 const readRateTablesQuerySchema = t.Object({
   limit: t.Optional(t.Integer({ minimum: 1, maximum: 200 })),
-  offset: t.Optional(t.Integer({ minimum: 0 })),
+  cursor: t.Optional(t.String({ maxLength: 512 })),
 });
+
+type RateTableCursor = {
+  createdAt: Date;
+  id: SafeId<"rateTable">;
+};
+
+const rateTableCreatedAtCursor = sql<Date>`date_trunc('milliseconds', ${rateTables.createdAt})`;
+
+const decodeRateTableCursor = (cursor: string): RateTableCursor | null => {
+  const parts = decodePaginationCursor(cursor);
+  const createdAt = parts?.at(0);
+  const id = parts?.at(1);
+
+  const createdAtDate = parseDateTimePaginationCursorPart(createdAt);
+
+  if (!createdAtDate || !isUuidPaginationCursorPart(id)) {
+    return null;
+  }
+
+  return { createdAt: createdAtDate, id: brandPersistedRateTableId(id) };
+};
 
 const readRateTables = createSafeHandler(
   {
@@ -17,7 +48,29 @@ const readRateTables = createSafeHandler(
   },
   async function* ({ safeDb, workspaceId, query }) {
     const limit = query.limit ?? 50;
-    const offset = query.offset ?? 0;
+    const conditions = [eq(rateTables.workspaceId, workspaceId)];
+
+    if (query.cursor) {
+      const cursor = decodeRateTableCursor(query.cursor);
+
+      if (!cursor) {
+        return Result.err(
+          new HandlerError({ status: 400, message: "Invalid cursor" }),
+        );
+      }
+
+      const cursorCondition = or(
+        gt(rateTableCreatedAtCursor, cursor.createdAt),
+        and(
+          eq(rateTableCreatedAtCursor, cursor.createdAt),
+          gt(rateTables.id, cursor.id),
+        ),
+      );
+
+      if (cursorCondition) {
+        conditions.push(cursorCondition);
+      }
+    }
 
     const tables = yield* Result.await(
       safeDb((tx) =>
@@ -28,18 +81,25 @@ const readRateTables = createSafeHandler(
             currency: rateTables.currency,
             isDefault: rateTables.isDefault,
             createdAt: rateTables.createdAt,
+            createdAtCursor: rateTableCreatedAtCursor.as("created_at_cursor"),
             updatedAt: rateTables.updatedAt,
           })
           .from(rateTables)
-          .where(eq(rateTables.workspaceId, workspaceId))
-          .orderBy(rateTables.createdAt)
-          .limit(limit)
-          .offset(offset),
+          .where(and(...conditions))
+          .orderBy(asc(rateTableCreatedAtCursor), asc(rateTables.id))
+          .limit(limit + 1),
       ),
     );
 
+    const page = createCursorPage({
+      rows: tables,
+      limit,
+      cursorForItem: (item) =>
+        encodePaginationCursor([item.createdAtCursor.toISOString(), item.id]),
+    });
+
     // Batch count entries per table
-    const tableIds = tables.map((table) => table.id);
+    const tableIds = page.items.map((table) => table.id);
     const entryCounts = new Map<string, number>();
 
     if (tableIds.length > 0) {
@@ -61,8 +121,9 @@ const readRateTables = createSafeHandler(
       }
     }
 
-    return Result.ok(
-      tables.map((table) => ({
+    return Result.ok({
+      ...page,
+      items: page.items.map((table) => ({
         id: table.id,
         name: table.name,
         currency: table.currency,
@@ -71,7 +132,7 @@ const readRateTables = createSafeHandler(
         createdAt: table.createdAt.toISOString(),
         updatedAt: table.updatedAt.toISOString(),
       })),
-    );
+    });
   },
 );
 
