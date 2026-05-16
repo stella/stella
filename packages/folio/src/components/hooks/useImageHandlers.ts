@@ -180,8 +180,8 @@ export const useImageHandlers = ({
       );
       // SAFETY: capture group [1] always present when regex matches
       let rotation = rotateMatch ? Number.parseFloat(rotateMatch[1]!) : 0;
-      let hasFlipH = /scaleX\(-1\)/.test(currentTransform);
-      let hasFlipV = /scaleY\(-1\)/.test(currentTransform);
+      let hasFlipH = currentTransform.includes("scaleX(-1)");
+      let hasFlipV = currentTransform.includes("scaleY(-1)");
 
       switch (action) {
         case "rotateCW":

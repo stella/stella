@@ -1968,7 +1968,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
 
     const contextMenuItems = useMemo((): TextContextMenuItem[] => {
       const isMac =
-        typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
+        typeof navigator !== "undefined" && navigator.platform.includes("Mac");
       const mod = isMac ? "⌘" : "Ctrl";
       if (readOnly) {
         return [

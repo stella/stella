@@ -151,7 +151,7 @@ export const useDocumentLoader = ({
       return;
     }
 
-    loadBuffer(documentBuffer);
+    void loadBuffer(documentBuffer);
   }, [documentBuffer, initialDocument]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep original buffer for save/export

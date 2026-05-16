@@ -220,7 +220,7 @@ export default defineConfig({
         "typescript/no-unsafe-return": "off",
         "typescript/no-unsafe-argument": "off",
         "typescript/strict-boolean-expressions": "off",
-        "typescript/no-redundant-type-constituents": "off",
+        
         // Existing scripts are operational glue with argument parsing,
         // process orchestration, and one-off reporting branches. Keep a
         // looser legacy budget while new app/library code starts at 30.
@@ -584,13 +584,11 @@ export default defineConfig({
         "typescript/no-unsafe-argument": "off",
         "typescript/consistent-type-imports": "off",
         "typescript/prefer-regexp-exec": "off",
-        "typescript/no-redundant-type-constituents": "off",
+        
         "typescript/no-deprecated": "off",
         "typescript/promise-function-async": "off",
-        "typescript/no-unnecessary-type-arguments": "off",
-        "typescript/prefer-includes": "off",
-        "typescript/no-floating-promises": "off",
-        "typescript/use-unknown-in-catch-callback-variable": "off",
+        
+        
       },
     },
     {
@@ -642,7 +640,7 @@ export default defineConfig({
         "typescript/no-unsafe-argument": "off",
         "typescript/consistent-type-imports": "off",
         "typescript/prefer-regexp-exec": "off",
-        "typescript/no-redundant-type-constituents": "off",
+        
         "typescript/no-deprecated": "off",
         "typescript/promise-function-async": "off",
       },
@@ -672,7 +670,7 @@ export default defineConfig({
         "unicorn/no-array-for-each": "off",
         "typescript/no-unnecessary-type-conversion": "off",
         "typescript/no-duplicate-type-constituents": "off",
-        "typescript/no-redundant-type-constituents": "off",
+        
         "eslint/no-control-regex": "off",
         "typescript/no-deprecated": "off",
         "typescript/consistent-return": "off",

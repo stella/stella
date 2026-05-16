@@ -29,7 +29,6 @@ import type {
   ComplexField,
   Field,
   Run,
-  Hyperlink,
   Theme,
 } from "../types/document";
 import { parseRun } from "./runParser";
@@ -754,9 +753,7 @@ export function formatDate(date: Date, format: string): string {
  * @param content - Array of paragraph content items
  * @returns Array of all fields found
  */
-export function collectFields(
-  content: (Run | Hyperlink | Field | unknown)[],
-): Field[] {
+export function collectFields(content: unknown[]): Field[] {
   const fields: Field[] = [];
 
   for (const item of content) {
