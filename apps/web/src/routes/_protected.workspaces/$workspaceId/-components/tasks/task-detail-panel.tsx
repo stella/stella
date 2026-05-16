@@ -245,7 +245,7 @@ export const TaskDetailPanel = ({
           )}
         >
           <span className="text-muted-foreground flex-1 text-xs">
-            Task not found
+            {t("notFound")}
           </span>
           <Button onClick={handleClose} size="icon-xs" variant="ghost">
             <XIcon className="size-3.5" />

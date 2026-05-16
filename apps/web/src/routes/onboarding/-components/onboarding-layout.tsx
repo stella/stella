@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { ArrowLeftIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { OnboardingProgress } from "@/routes/onboarding/-components/onboarding-progress";
 
@@ -23,29 +24,36 @@ export const OnboardingLayout = ({
   currentStep,
   totalSteps,
   onBack,
-}: OnboardingLayoutProps) => (
-  <div className="flex min-h-dvh">
-    {/* Left: form */}
-    <div className="flex w-full flex-col px-6 pt-[8vh] pb-10 md:w-1/2 md:px-12 md:pt-[10vh] lg:px-20">
-      <div className="mx-auto w-full max-w-[460px]">
-        {onBack && (
-          <button
-            aria-label="Go back"
-            className="text-muted-foreground hover:text-foreground mb-4 flex items-center gap-1 text-sm transition-colors"
-            onClick={onBack}
-            type="button"
-          >
-            <ArrowLeftIcon className="size-3.5" />
-          </button>
-        )}
-        <OnboardingProgress currentStep={currentStep} totalSteps={totalSteps} />
-        {children}
+}: OnboardingLayoutProps) => {
+  const t = useTranslations();
+
+  return (
+    <div className="flex min-h-dvh">
+      {/* Left: form */}
+      <div className="flex w-full flex-col px-6 pt-[8vh] pb-10 md:w-1/2 md:px-12 md:pt-[10vh] lg:px-20">
+        <div className="mx-auto w-full max-w-[460px]">
+          {onBack && (
+            <button
+              aria-label={t("common.goBack")}
+              className="text-muted-foreground hover:text-foreground mb-4 flex items-center gap-1 text-sm transition-colors"
+              onClick={onBack}
+              type="button"
+            >
+              <ArrowLeftIcon className="size-3.5" />
+            </button>
+          )}
+          <OnboardingProgress
+            currentStep={currentStep}
+            totalSteps={totalSteps}
+          />
+          {children}
+        </div>
+      </div>
+
+      {/* Right: preview */}
+      <div className="bg-muted hidden items-center justify-center px-6 py-8 md:flex md:w-1/2">
+        {preview}
       </div>
     </div>
-
-    {/* Right: preview */}
-    <div className="bg-muted hidden items-center justify-center px-6 py-8 md:flex md:w-1/2">
-      {preview}
-    </div>
-  </div>
-);
+  );
+};

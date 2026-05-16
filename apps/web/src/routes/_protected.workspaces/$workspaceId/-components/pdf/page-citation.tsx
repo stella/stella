@@ -76,7 +76,6 @@ export const PageCitation = ({
         className="pointer-events-none absolute h-0 w-0"
         focusable="false"
       >
-        <title>Page highlight filter</title>
         <filter colorInterpolationFilters="sRGB" id={PAGE_HIGHLIGHT_FILTER_ID}>
           <feComponentTransfer in="SourceGraphic">
             <feFuncA slope={PAGE_HIGHLIGHT_OPACITY} type="linear" />

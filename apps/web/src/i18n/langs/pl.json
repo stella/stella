@@ -251,6 +251,7 @@
         "reasoning": "Rozumowanie"
       }
     },
+    "analyzing": "Analizowanie...",
     "columns": {
       "caseNumber": "Sygnatura akt",
       "country": "Kraj",
@@ -291,16 +292,23 @@
       "nalusDisclaimer": "Źródło: NALUS, Trybunał Konstytucyjny Republiki Czeskiej. Bezpłatnie. Niniejsza wersja elektroniczna nie jest autentyczna; autentyczne są wyłącznie oryginały z godłem państwowym i podpisem upoważnionej osoby.",
       "popularName": "Nazwa potoczna",
       "sections": "Sekcje",
-      "source": "Tylko szacunki · ceny z",
+      "source": "Źródło",
+      "sourceFields": {
+        "decisionCategory": "Kategoria orzeczenia",
+        "publishedOnWeb": "Opublikowano w sieci"
+      },
       "statutes": "Powołane przepisy",
       "viewOriginal": "Zobacz źródło"
     }
   },
   "chat": {
+    "acceptAllCount": "Zaakceptuj wszystkie ({count})",
     "actionExpand": {
       "toastDescription": "Pełnoekranowy czat zostanie udostępniony wraz z zapisanymi wątkami.",
       "toastTitle": "Pełny widok niedostępny"
     },
+    "aiPrompt": "Pole wiadomości AI",
+    "aiThread": "Konwersacja AI",
     "anonymizedMode": "Zanonimizowany tryb AI",
     "anonymizedModeDisabled": "Zanonimizowany tryb AI jest wyłączony",
     "anonymizedModeEnabled": "Zanonimizowany tryb AI jest włączony",
@@ -324,6 +332,7 @@
       "externalMcpDescription": "Only the information needed for this tool call will be sent.",
       "externalMcpQuestion": "Can Stella send this request to {provider}?"
     },
+    "askAnything": "Zapytaj o cokolwiek",
     "askUser": {
       "custom": "Napisz własną",
       "default": "Domyślna",
@@ -357,15 +366,20 @@
     "editableFilePlaceholder": "Czat o {fileName} lub edycja",
     "editableFilePlaceholderAction": "Czat lub edycja",
     "editorLoading": "Loading editor…",
+    "emptyThreadDescription": "Zapytaj o tę sprawę, przygotuj tekst albo poproś o krótką notatkę z researchu.",
+    "emptyThreadTitle": "Rozpocznij rozmowę",
     "externalSourcePlaceholder": "Czat o {title}",
     "externalSourcePlaceholderAction": "Czat o",
     "extractingContent": "Wyodrębnianie treści...",
     "filePlaceholder": "Czat o {fileName}",
     "filePlaceholderAction": "Czat o",
     "fileTooLarge": "Plik przekracza limit {maxSize}",
+    "focusSuggestion": "Ustaw fokus na sugestii: {topic}",
     "folioCitationFallback": "s. {n}",
     "greeting": "Nad czym chcesz pracować?",
     "greetingSubtitle": "Zacznij od sprawy, dokumentu albo prostego pytania.",
+    "hideThread": "Ukryj konwersację",
+    "inDocument": "W dokumencie",
     "landing": {
       "lastAccessedMatters": "Ostatnio otwarte sprawy",
       "noMatters": "Nie ma jeszcze spraw",
@@ -390,7 +404,12 @@
     "moveToMain": "Przenieś do widoku głównego",
     "moveToSide": "Przenieś do panelu bocznego",
     "newChat": "Nowy czat",
+    "noPromptPresetOnly": "Brak wiadomości, tylko ustawienie wstępne",
     "noThreads": "Brak rozmów",
+    "openCitation": "Otwórz cytowanie {label}",
+    "openThread": "Otwórz konwersację",
+    "pageNumber": "Strona {page}",
+    "pastedChars": "Wklejono · {count} znaków",
     "pastedText": {
       "expand": "Pokaż pełny tekst",
       "fromClipboard": "Wklejono {count, plural, one {# znak} few {# znaki} other {# znaków}}",
@@ -407,14 +426,29 @@
       },
       "tryOne": "Zacznij od jednego z tych"
     },
+    "removeSuggestion": "(usuń)",
     "resend": "Wyślij ponownie",
+    "resizeThread": "Zmień rozmiar konwersacji",
     "send": "Wyślij wiadomość",
     "sendError": "Wystąpił problem podczas wysyłania wiadomości. Jeśli błąd będzie się powtarzał, skontaktuj się z pomocą techniczną.",
     "sendErrorAnonymizationBlocked": "Stella nie mogła zanonimizować jednego załącznika, więc nic nie wysłano. Usuń plik albo wyślij tę wiadomość bez anonimizacji.",
     "sendErrorInsufficientCredits": "Dostawca AI potrzebuje więcej środków. Poproś administratora obszaru roboczego o doładowanie konta.",
     "sendErrorProviderUnavailable": "Dostawca AI jest tymczasowo niedostępny. Spróbuj ponownie za chwilę.",
     "sendErrorQuotaExhausted": "Limit dostawcy AI został wyczerpany. Spróbuj za chwilę ponownie lub poproś administratora obszaru roboczego o ulepszenie planu.",
+    "sendPrompt": "Wyślij wiadomość",
     "sendWithoutAnonymization": "Wyślij bez anonimizacji",
+    "sources": "Źródła:",
+    "stopResponse": "Zatrzymaj",
+    "suggestionSeverity": {
+      "style": "Styl",
+      "substantive": "Merytoryczna",
+      "typo": "Literówka"
+    },
+    "suggestionStatus": {
+      "accepted": "Zastosowano",
+      "rejected": "Odrzucono",
+      "stale": "Nieaktualne"
+    },
     "thinking": "Pracuję z kontekstem",
     "threads": "Historia",
     "tool": {
@@ -607,6 +641,7 @@
     "error": "Błąd",
     "expenses": "Wydatki",
     "filter": "Filtr",
+    "goBack": "Wróć",
     "history": "Historia",
     "invite": "Zaproś",
     "invoices": "Faktury",
@@ -636,6 +671,7 @@
     "properties": "Właściwości",
     "reconnecting": "Ponowne łączenie…",
     "reference": "Numer referencyjny",
+    "remove": "Usuń",
     "rename": "Zmień nazwę",
     "required": "Wymagane",
     "retry": "Spróbuj ponownie",
@@ -1654,6 +1690,7 @@
     "noLinks": "Brak powiązanych elementów",
     "noSubtasks": "Brak podzadań",
     "noTasksAssigned": "Nie masz przypisanych zadań",
+    "notFound": "Nie znaleziono zadania",
     "overdue": "Po terminie",
     "priority": "Priorytet",
     "priorityValues": {
@@ -1788,6 +1825,7 @@
     "deleteSelection": "Usuń zaznaczenie",
     "deleteWorkspace": "Usuń sprawę",
     "deleteWorkspaceConfirmDescription": "Czy na pewno chcesz usunąć tę sprawę? Tej operacji nie można cofnąć.",
+    "deletedItem": "Usunięto: {name}",
     "deletingWorkspace": "Usuwanie sprawy",
     "documentsCount": "{count, plural, one {# dokument} few {# dokumenty} many {# dokumentów} other {# dokumentu}}",
     "dropToUploadFiles": "Upuść pliki, aby je przesłać",

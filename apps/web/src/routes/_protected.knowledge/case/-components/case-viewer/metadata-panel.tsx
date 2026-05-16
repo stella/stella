@@ -116,11 +116,11 @@ const TagList = ({
 };
 
 /** Source-specific fields (excludes duplicates of AST metadata). */
-const SOURCE_FIELD_LABELS: Record<string, string> = {
-  kategorieRozhodnuti: "Kategorie rozhodnutí",
-  zverejnenoNaWebu: "Zveřejněno na webu",
-  legalSentence: "Právní věta",
-};
+const SOURCE_FIELD_KEYS = {
+  decisionCategory: "kategorieRozhodnuti",
+  legalSentence: "legalSentence",
+  publishedOnWeb: "zverejnenoNaWebu",
+} as const;
 
 /** Extract the popular name from source metadata (ÚS decisions). */
 const getPopularName = (meta: Record<string, unknown>): string | null => {
@@ -138,7 +138,18 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
 
   const sourceFields: { label: string; value: string }[] = [];
   for (const [key, val] of Object.entries(sourceMeta)) {
-    const label = SOURCE_FIELD_LABELS[key];
+    let label: string | null = null;
+    switch (key) {
+      case SOURCE_FIELD_KEYS.decisionCategory:
+        label = t("caseLaw.viewer.sourceFields.decisionCategory");
+        break;
+      case SOURCE_FIELD_KEYS.legalSentence:
+        label = t("caseLaw.viewer.legalSentence");
+        break;
+      case SOURCE_FIELD_KEYS.publishedOnWeb:
+        label = t("caseLaw.viewer.sourceFields.publishedOnWeb");
+        break;
+    }
     if (!label || val === null || val === undefined) {
       continue;
     }

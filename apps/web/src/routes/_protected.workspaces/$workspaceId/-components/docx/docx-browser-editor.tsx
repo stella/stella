@@ -1501,10 +1501,18 @@ const DocxLoadingPriorityExtra = () => {
           <StSelectValue />
         </StSelectTrigger>
         <StSelectPopup>
-          <StSelectItem value="all-markup">All Markup</StSelectItem>
-          <StSelectItem value="simple-markup">Simple</StSelectItem>
-          <StSelectItem value="no-markup">No Markup</StSelectItem>
-          <StSelectItem value="original">Original</StSelectItem>
+          <StSelectItem value="all-markup">
+            {t("markupView.allMarkup")}
+          </StSelectItem>
+          <StSelectItem value="simple-markup">
+            {t("markupView.simple")}
+          </StSelectItem>
+          <StSelectItem value="no-markup">
+            {t("markupView.noMarkup")}
+          </StSelectItem>
+          <StSelectItem value="original">
+            {t("markupView.original")}
+          </StSelectItem>
         </StSelectPopup>
       </StSelect>
     </div>

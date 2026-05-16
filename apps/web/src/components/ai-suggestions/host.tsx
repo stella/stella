@@ -118,12 +118,6 @@ function writeStoredApplyMode(mode: AISuggestionApplyMode): void {
   }
 }
 
-const SEVERITY_LABEL: Record<AISuggestionSeverity, string> = {
-  substantive: "Substantive",
-  style: "Style",
-  typo: "Typo",
-};
-
 const SEVERITY_DOT_CLASS: Record<AISuggestionSeverity, string> = {
   substantive: "bg-destructive",
   style: "bg-foreground/55",
@@ -1223,7 +1217,7 @@ export function PromptBar(props: PromptBarProps) {
   return (
     <PromptBarShell
       aria-busy={busy}
-      aria-label="AI prompt"
+      aria-label={t("chat.aiPrompt")}
       className={cn(
         !inputDisabled && "focus-within:border-foreground/30",
         // Attention pulse — kicked by the inspector chip click to
@@ -1306,7 +1300,9 @@ export function PromptBar(props: PromptBarProps) {
         <TooltipTrigger
           render={
             <Button
-              aria-label={showStop ? "Stop response" : "Send prompt"}
+              aria-label={
+                showStop ? t("chat.stopResponse") : t("chat.sendPrompt")
+              }
               className="rounded-full"
               disabled={showStop ? false : submitDisabled || !canSubmit}
               onClick={() => {
@@ -1330,12 +1326,12 @@ export function PromptBar(props: PromptBarProps) {
         <TooltipPopup side="top">
           {(() => {
             if (showStop) {
-              return "Stop";
+              return t("chat.stopResponse");
             }
             if (canSubmit) {
-              return "Send prompt";
+              return t("chat.sendPrompt");
             }
-            return "Ask anything";
+            return t("chat.askAnything");
           })()}
         </TooltipPopup>
       </Tooltip>
@@ -1346,7 +1342,9 @@ export function PromptBar(props: PromptBarProps) {
             render={
               <Button
                 aria-expanded={panelOpen}
-                aria-label={panelOpen ? "Hide thread" : "Open thread"}
+                aria-label={
+                  panelOpen ? t("chat.hideThread") : t("chat.openThread")
+                }
                 className="rounded-full"
                 onClick={onTogglePanel}
                 size="icon-sm"
@@ -1370,7 +1368,7 @@ export function PromptBar(props: PromptBarProps) {
             }
           />
           <TooltipPopup side="top">
-            {panelOpen ? "Hide thread" : "Open thread"}
+            {panelOpen ? t("chat.hideThread") : t("chat.openThread")}
           </TooltipPopup>
         </Tooltip>
       )}
@@ -1464,7 +1462,7 @@ function ThreadPanel(props: ThreadPanelProps) {
       // `aria-relevant="additions"` so existing-bubble updates
       // (e.g., status flips) don't get re-announced.
       role={isFloating ? "dialog" : "log"}
-      aria-label="AI thread"
+      aria-label={t("chat.aiThread")}
       aria-live={isFloating ? undefined : "polite"}
       aria-relevant={isFloating ? undefined : "additions"}
       style={
@@ -1511,7 +1509,7 @@ function ThreadPanel(props: ThreadPanelProps) {
         <div
           role="separator"
           aria-orientation="horizontal"
-          aria-label="Resize thread"
+          aria-label={t("chat.resizeThread")}
           onPointerDown={handleResizeStart}
           onDoubleClick={() => onResize(null)}
           className="group absolute inset-x-0 -top-3 z-20 flex h-3 cursor-ns-resize touch-none items-center justify-center select-none"
@@ -1569,12 +1567,9 @@ function ThreadPanel(props: ThreadPanelProps) {
           // gentle landing surface instead of a blank canvas.
           <div className="text-foreground-strong-muted m-auto flex max-w-[28ch] flex-col items-center gap-1 text-center text-[12px] text-balance">
             <span className="text-foreground-strong-muted text-[13px] font-medium">
-              Start a chat
+              {t("chat.emptyThreadTitle")}
             </span>
-            <span>
-              Ask about your matter, draft a snippet, or request a quick
-              research note.
-            </span>
+            <span>{t("chat.emptyThreadDescription")}</span>
           </div>
         ) : (
           messages.map((m) =>
@@ -1603,8 +1598,9 @@ function ThreadPanel(props: ThreadPanelProps) {
 }
 
 function UserBubble({ message }: { message: UserThreadMessage }) {
+  const t = useTranslations();
   const text =
-    message.prompt.length > 0 ? message.prompt : "(no prompt — preset only)";
+    message.prompt.length > 0 ? message.prompt : t("chat.noPromptPresetOnly");
   return (
     <Message from="user">
       <MessageContent className="gap-1 px-3 py-1.5 text-[13px]">
@@ -1616,7 +1612,9 @@ function UserBubble({ message }: { message: UserThreadMessage }) {
         <span className="whitespace-pre-wrap">{text}</span>
         {message.pastedText && (
           <span className="text-info bg-info/10 inline-flex w-fit items-center gap-0.5 rounded px-1.5 text-[10.5px] font-medium tabular-nums">
-            Pasted · {message.pastedText.length.toLocaleString()} chars
+            {t("chat.pastedChars", {
+              count: message.pastedText.length.toLocaleString(),
+            })}
           </span>
         )}
       </MessageContent>
@@ -1638,6 +1636,7 @@ type AssistantBubbleProps = {
 };
 
 function AssistantBubble(props: AssistantBubbleProps) {
+  const t = useTranslations();
   const {
     message,
     focusedId,
@@ -1664,7 +1663,7 @@ function AssistantBubble(props: AssistantBubbleProps) {
               className="border-border border-t-foreground inline-block size-3 animate-spin rounded-full border-[1.5px]"
               aria-hidden="true"
             />
-            Thinking…
+            {t("chat.thinking")}
           </span>
         )}
         {message.status === "error" && (
@@ -1677,7 +1676,9 @@ function AssistantBubble(props: AssistantBubbleProps) {
         )}
         {message.citations.length > 0 && (
           <div className="flex flex-wrap items-center gap-1">
-            <span className="text-muted-foreground text-[11px]">Sources:</span>
+            <span className="text-muted-foreground text-[11px]">
+              {t("chat.sources")}
+            </span>
             {message.citations.map((c) => (
               <CitationChip
                 key={c.id}
@@ -1699,7 +1700,7 @@ function AssistantBubble(props: AssistantBubbleProps) {
                   className="rounded-md"
                   onClick={() => onAcceptGroup(message.id)}
                 >
-                  Accept all {pendingCount}
+                  {t("chat.acceptAllCount", { count: String(pendingCount) })}
                 </Button>
                 <Button
                   type="button"
@@ -1708,7 +1709,7 @@ function AssistantBubble(props: AssistantBubbleProps) {
                   className="rounded-md"
                   onClick={() => onRejectGroup(message.id)}
                 >
-                  Reject all
+                  {t("docxReview.rejectAll")}
                 </Button>
               </div>
             )}
@@ -1737,11 +1738,12 @@ type CitationChipProps = {
 };
 
 function CitationChip(props: CitationChipProps) {
+  const t = useTranslations();
   const { citation, active, onActivate } = props;
   const sourceLabel =
     citation.source.kind === "pdf-bbox"
-      ? `Page ${citation.source.pageNumber}`
-      : "In document";
+      ? t("chat.pageNumber", { page: String(citation.source.pageNumber) })
+      : t("chat.inDocument");
   return (
     <Tooltip>
       <TooltipTrigger
@@ -1753,7 +1755,7 @@ function CitationChip(props: CitationChipProps) {
               active && "bg-info/25 ring-info/40 ring-1",
             )}
             onClick={() => onActivate(citation)}
-            aria-label={`Open citation ${citation.label}`}
+            aria-label={t("chat.openCitation", { label: citation.label })}
           >
             [{citation.label}]
           </button>
@@ -1781,10 +1783,18 @@ type SuggestionCardProps = {
 };
 
 function SuggestionCard(props: SuggestionCardProps) {
+  const t = useTranslations();
   const { suggestion, focused, showAcceptUI, onAccept, onReject, onFocus } =
     props;
   const isResolvable =
     suggestion.status === "pending" || suggestion.status === "stale";
+  let severityLabel = t("chat.suggestionSeverity.typo");
+
+  if (suggestion.severity === "substantive") {
+    severityLabel = t("chat.suggestionSeverity.substantive");
+  } else if (suggestion.severity === "style") {
+    severityLabel = t("chat.suggestionSeverity.style");
+  }
 
   return (
     <div
@@ -1798,7 +1808,7 @@ function SuggestionCard(props: SuggestionCardProps) {
         type="button"
         className="text-muted-foreground flex w-full cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-start text-[11px]"
         onClick={() => onFocus(suggestion.id)}
-        aria-label={`Focus suggestion: ${suggestion.topic}`}
+        aria-label={t("chat.focusSuggestion", { topic: suggestion.topic })}
       >
         <span
           className={cn(
@@ -1809,20 +1819,20 @@ function SuggestionCard(props: SuggestionCardProps) {
         />
         <span className="text-foreground font-medium">{suggestion.topic}</span>
         <span aria-hidden="true">·</span>
-        <span>{SEVERITY_LABEL[suggestion.severity]}</span>
+        <span>{severityLabel}</span>
         {suggestion.status === "stale" && (
           <span className="bg-destructive/12 text-destructive ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium tracking-wider uppercase">
-            Stale
+            {t("chat.suggestionStatus.stale")}
           </span>
         )}
         {suggestion.status === "accepted" && (
           <span className="bg-success/15 text-success ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium tracking-wider uppercase">
-            Applied
+            {t("chat.suggestionStatus.accepted")}
           </span>
         )}
         {suggestion.status === "rejected" && (
           <span className="bg-muted text-muted-foreground ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium tracking-wider uppercase">
-            Rejected
+            {t("chat.suggestionStatus.rejected")}
           </span>
         )}
       </button>
@@ -1850,7 +1860,7 @@ function SuggestionCard(props: SuggestionCardProps) {
           </span>
           <span>
             {suggestion.suggestedText.length === 0
-              ? "(remove)"
+              ? t("chat.removeSuggestion")
               : suggestion.suggestedText}
           </span>
         </div>
@@ -1872,7 +1882,7 @@ function SuggestionCard(props: SuggestionCardProps) {
             disabled={suggestion.status === "stale"}
           >
             <CheckIcon aria-hidden="true" />
-            Accept
+            {t("docxReview.accept")}
           </Button>
           <Button
             type="button"
@@ -1881,7 +1891,7 @@ function SuggestionCard(props: SuggestionCardProps) {
             className="rounded-md"
             onClick={() => onReject(suggestion.id)}
           >
-            Reject
+            {t("docxReview.reject")}
           </Button>
         </div>
       )}

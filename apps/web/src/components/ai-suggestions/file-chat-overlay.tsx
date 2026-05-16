@@ -863,7 +863,7 @@ const FileChatOverlayInner = ({
     <>
       {panelOpen && hasThreadContent && (
         <div
-          aria-label="AI thread"
+          aria-label={t("chat.aiThread")}
           className={cn(
             // Sizing rules: grows with content but caps at ~45dvh
             // / 380px so the panel doesn't dominate the file
