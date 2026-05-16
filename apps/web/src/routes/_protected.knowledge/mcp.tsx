@@ -672,22 +672,24 @@ const fallbackIconUrl = (rawUrl: string): string | undefined => {
   }
 };
 
+type WizardState =
+  | { step: "idle" }
+  | { step: "url"; url: string; busy: boolean }
+  | {
+      step: "token";
+      createdConnector: CreatedConnector;
+      token: string;
+      busy: boolean;
+    };
+
+const WIZARD_IDLE: WizardState = { step: "idle" };
+
 function AddServerCard({ onChanged }: { onChanged: () => void }) {
   const t = useTranslations();
-  const [step, setStep] = useState<"idle" | "url" | "token">("idle");
-  const [url, setUrl] = useState("");
-  const [token, setToken] = useState("");
-  const [createdConnector, setCreatedConnector] = useState<
-    CreatedConnector | undefined
-  >();
-  const [busy, setBusy] = useState(false);
+  const [wizard, setWizard] = useState<WizardState>(WIZARD_IDLE);
 
   const reset = () => {
-    setStep("idle");
-    setUrl("");
-    setToken("");
-    setCreatedConnector(undefined);
-    setBusy(false);
+    setWizard(WIZARD_IDLE);
   };
 
   const connectConnector = async (connector: CreatedConnector) => {
@@ -705,8 +707,12 @@ function AddServerCard({ onChanged }: { onChanged: () => void }) {
     }
 
     if (response.data.type === "bearer") {
-      setCreatedConnector(connector);
-      setStep("token");
+      setWizard({
+        step: "token",
+        createdConnector: connector,
+        token: "",
+        busy: false,
+      });
       return;
     }
 
@@ -733,19 +739,24 @@ function AddServerCard({ onChanged }: { onChanged: () => void }) {
   };
 
   const addServer = async () => {
-    const trimmedUrl = url.trim();
-    if (!trimmedUrl || busy) {
+    if (wizard.step !== "url") {
+      return;
+    }
+    const trimmedUrl = wizard.url.trim();
+    if (!trimmedUrl || wizard.busy) {
       return;
     }
 
-    setBusy(true);
+    setWizard({ ...wizard, busy: true });
     const response = await api.mcp.connectors.post({
       url: trimmedUrl,
       queryKey: ["mcp"],
     });
-    setBusy(false);
 
     if (response.error) {
+      setWizard((prev) =>
+        prev.step === "url" ? { ...prev, busy: false } : prev,
+      );
       showApiError({
         error: response.error,
         fallback: t("knowledge.mcp.errorDescription"),
@@ -754,25 +765,34 @@ function AddServerCard({ onChanged }: { onChanged: () => void }) {
       return;
     }
 
+    setWizard((prev) =>
+      prev.step === "url" ? { ...prev, busy: false } : prev,
+    );
     onChanged();
     await connectConnector(response.data.connector);
   };
 
   const saveToken = async () => {
-    const trimmedToken = token.trim();
-    if (!createdConnector || !trimmedToken || busy) {
+    if (wizard.step !== "token") {
+      return;
+    }
+    const trimmedToken = wizard.token.trim();
+    if (!trimmedToken || wizard.busy) {
       return;
     }
 
-    setBusy(true);
+    const { createdConnector } = wizard;
+    setWizard({ ...wizard, busy: true });
     const response = await api.mcp.connections.post({
       connectorSlug: createdConnector.slug,
       token: trimmedToken,
       queryKey: ["mcp"],
     });
-    setBusy(false);
 
     if (response.error) {
+      setWizard((prev) =>
+        prev.step === "token" ? { ...prev, busy: false } : prev,
+      );
       showApiError({
         error: response.error,
         fallback: t("knowledge.mcp.errorDescription"),
@@ -789,11 +809,11 @@ function AddServerCard({ onChanged }: { onChanged: () => void }) {
     reset();
   };
 
-  if (step === "idle") {
+  if (wizard.step === "idle") {
     return (
       <button
         className="bg-card hover:bg-muted/30 focus-visible:ring-ring flex items-center gap-3 rounded-lg border border-dashed p-3 text-start transition-colors focus-visible:ring-2 focus-visible:outline-none"
-        onClick={() => setStep("url")}
+        onClick={() => setWizard({ step: "url", url: "", busy: false })}
         type="button"
       >
         <PlusIcon className="text-muted-foreground size-5 shrink-0" />
@@ -804,7 +824,7 @@ function AddServerCard({ onChanged }: { onChanged: () => void }) {
     );
   }
 
-  if (step === "url") {
+  if (wizard.step === "url") {
     return (
       <form
         className="bg-card flex items-center gap-2 rounded-lg border p-2 ps-3"
@@ -819,7 +839,11 @@ function AddServerCard({ onChanged }: { onChanged: () => void }) {
           autoComplete="url"
           autoFocus
           className="border-0 shadow-none focus-visible:ring-0"
-          onChange={(event) => setUrl(event.target.value)}
+          onChange={(event) =>
+            setWizard((prev) =>
+              prev.step === "url" ? { ...prev, url: event.target.value } : prev,
+            )
+          }
           onKeyDown={(event) => {
             if (event.key === "Escape") {
               reset();
@@ -827,10 +851,16 @@ function AddServerCard({ onChanged }: { onChanged: () => void }) {
           }}
           placeholder={t("knowledge.mcp.urlPlaceholder")}
           type="url"
-          value={url}
+          value={wizard.url}
         />
-        <Button disabled={busy || !url.trim()} size="sm" type="submit">
-          {busy ? <LoaderIcon className="me-1.5 size-4 animate-spin" /> : null}
+        <Button
+          disabled={wizard.busy || !wizard.url.trim()}
+          size="sm"
+          type="submit"
+        >
+          {wizard.busy ? (
+            <LoaderIcon className="me-1.5 size-4 animate-spin" />
+          ) : null}
           {t("knowledge.mcp.addAndConnect")}
         </Button>
         <Button
@@ -861,7 +891,13 @@ function AddServerCard({ onChanged }: { onChanged: () => void }) {
           autoComplete="off"
           autoFocus
           className="border-0 font-mono shadow-none focus-visible:ring-0"
-          onChange={(event) => setToken(event.target.value)}
+          onChange={(event) =>
+            setWizard((prev) =>
+              prev.step === "token"
+                ? { ...prev, token: event.target.value }
+                : prev,
+            )
+          }
           onKeyDown={(event) => {
             if (event.key === "Escape") {
               reset();
@@ -869,10 +905,16 @@ function AddServerCard({ onChanged }: { onChanged: () => void }) {
           }}
           placeholder={t("knowledge.mcp.tokenPlaceholder")}
           type="password"
-          value={token}
+          value={wizard.token}
         />
-        <Button disabled={busy || !token.trim()} size="sm" type="submit">
-          {busy ? <LoaderIcon className="me-1.5 size-4 animate-spin" /> : null}
+        <Button
+          disabled={wizard.busy || !wizard.token.trim()}
+          size="sm"
+          type="submit"
+        >
+          {wizard.busy ? (
+            <LoaderIcon className="me-1.5 size-4 animate-spin" />
+          ) : null}
           {t("knowledge.mcp.saveToken")}
         </Button>
         <Button
