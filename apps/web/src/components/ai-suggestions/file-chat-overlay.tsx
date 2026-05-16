@@ -117,6 +117,24 @@ type PreparedOperation = {
   id: string;
 };
 
+const getOperationComment = (
+  operation: ToolInputOperation,
+): { text: string } | undefined => {
+  switch (operation.type) {
+    case "replaceInBlock":
+    case "insertAfterBlock":
+    case "insertBeforeBlock":
+    case "replaceBlock":
+    case "deleteBlock":
+      return operation.comment ? { text: operation.comment.text } : undefined;
+    case "commentOnBlock":
+      return { text: operation.comment.text };
+    default:
+      operation satisfies never;
+      return undefined;
+  }
+};
+
 const prepareOperations = (
   operations: ApplyActiveDocxEditsInput["operations"],
 ): PreparedOperation[] => {
@@ -124,10 +142,7 @@ const prepareOperations = (
 
   for (const [index, operation] of operations.entries()) {
     const id = `ai-docx-${String(index + 1)}-${uuidv7()}`;
-    const comment =
-      "comment" in operation && operation.comment
-        ? { text: operation.comment.text }
-        : undefined;
+    const comment = getOperationComment(operation);
     let folio: FolioAIEditOperation;
     switch (operation.type) {
       case "replaceInBlock": {
