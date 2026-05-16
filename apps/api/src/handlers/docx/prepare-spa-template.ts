@@ -5,8 +5,6 @@
  *
  * Run: bun apps/api/src/handlers/docx/prepare-spa-template.ts
  */
-/* eslint-disable no-console */
-
 import JSZip from "jszip";
 
 const INPUT = new URL("fixtures/spa-template.docx", import.meta.url).pathname;

@@ -22135,7 +22135,7 @@
       "version": "0.1.1"
     },
     {
-      "bom-ref": "pkg:cargo/tokio@1.52.2",
+      "bom-ref": "pkg:cargo/tokio@1.52.3",
       "evidence": {
         "identity": [
           {
@@ -22156,7 +22156,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "110a78583f19d5cdb2c5ccf321d1290344e71313c6c37d43520d386027d18386"
+          "content": "8fc7f01b389ac15039e4dc9531aa973a135d7a4135281b12d7c1bc79fd57fffe"
         }
       ],
       "licenses": [
@@ -22173,9 +22173,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tokio@1.52.2",
+      "purl": "pkg:cargo/tokio@1.52.3",
       "type": "library",
-      "version": "1.52.2"
+      "version": "1.52.3"
     },
     {
       "bom-ref": "pkg:cargo/tokio-macros@2.7.0",
@@ -30322,7 +30322,7 @@
         "pkg:cargo/serde_path_to_error@0.1.20",
         "pkg:cargo/serde_urlencoded@0.7.1",
         "pkg:cargo/sync_wrapper@1.0.2",
-        "pkg:cargo/tokio@1.52.2",
+        "pkg:cargo/tokio@1.52.3",
         "pkg:cargo/tower-layer@0.3.3",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/tower@0.5.3",
@@ -31325,7 +31325,7 @@
         "pkg:cargo/indexmap@2.14.0",
         "pkg:cargo/slab@0.4.12",
         "pkg:cargo/tokio-util@0.7.18",
-        "pkg:cargo/tokio@1.52.2",
+        "pkg:cargo/tokio@1.52.3",
         "pkg:cargo/tracing@0.1.44"
       ],
       "ref": "pkg:cargo/h2@0.4.14"
@@ -31425,7 +31425,7 @@
         "pkg:cargo/itoa@1.0.18",
         "pkg:cargo/pin-project-lite@0.2.17",
         "pkg:cargo/smallvec@1.15.1",
-        "pkg:cargo/tokio@1.52.2",
+        "pkg:cargo/tokio@1.52.3",
         "pkg:cargo/want@0.3.1"
       ],
       "ref": "pkg:cargo/hyper@1.9.0"
@@ -31437,7 +31437,7 @@
         "pkg:cargo/hyper@1.9.0",
         "pkg:cargo/rustls@0.23.40",
         "pkg:cargo/tokio-rustls@0.26.4",
-        "pkg:cargo/tokio@1.52.2",
+        "pkg:cargo/tokio@1.52.3",
         "pkg:cargo/tower-service@0.3.3"
       ],
       "ref": "pkg:cargo/hyper-rustls@0.27.9"
@@ -31457,7 +31457,7 @@
         "pkg:cargo/pin-project-lite@0.2.17",
         "pkg:cargo/socket2@0.6.3",
         "pkg:cargo/system-configuration@0.7.0",
-        "pkg:cargo/tokio@1.52.2",
+        "pkg:cargo/tokio@1.52.3",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/windows-registry@0.6.1"
@@ -32512,7 +32512,7 @@
         "pkg:cargo/rustls@0.23.40",
         "pkg:cargo/socket2@0.6.3",
         "pkg:cargo/thiserror@2.0.18",
-        "pkg:cargo/tokio@1.52.2",
+        "pkg:cargo/tokio@1.52.3",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/web-time@1.1.0"
       ],
@@ -32660,7 +32660,7 @@
         "pkg:cargo/sync_wrapper@1.0.2",
         "pkg:cargo/tokio-rustls@0.26.4",
         "pkg:cargo/tokio-util@0.7.18",
-        "pkg:cargo/tokio@1.52.2",
+        "pkg:cargo/tokio@1.52.3",
         "pkg:cargo/tower-http@0.6.10",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/tower@0.5.3",
@@ -33121,7 +33121,7 @@
         "pkg:cargo/tauri-plugin-single-instance@2.4.2",
         "pkg:cargo/tauri-plugin-updater@2.10.1",
         "pkg:cargo/tauri@2.11.1",
-        "pkg:cargo/tokio@1.52.2",
+        "pkg:cargo/tokio@1.52.3",
         "pkg:cargo/tower-http@0.6.10",
         "pkg:cargo/tower@0.5.3",
         "pkg:cargo/tracing-subscriber@0.3.23",
@@ -33315,7 +33315,7 @@
         "pkg:cargo/tauri-runtime@2.11.1",
         "pkg:cargo/tauri-utils@2.9.1",
         "pkg:cargo/thiserror@2.0.18",
-        "pkg:cargo/tokio@1.52.2",
+        "pkg:cargo/tokio@1.52.3",
         "pkg:cargo/tray-icon@0.23.1",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/webkit2gtk@2.0.2",
@@ -33510,7 +33510,7 @@
         "pkg:cargo/tempfile@3.27.0",
         "pkg:cargo/thiserror@2.0.18",
         "pkg:cargo/time@0.3.47",
-        "pkg:cargo/tokio@1.52.2",
+        "pkg:cargo/tokio@1.52.3",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/windows-sys@0.60.2",
         "pkg:cargo/zip@4.6.1"
@@ -33720,7 +33720,7 @@
         "pkg:cargo/tokio-macros@2.7.0",
         "pkg:cargo/windows-sys@0.61.2"
       ],
-      "ref": "pkg:cargo/tokio@1.52.2"
+      "ref": "pkg:cargo/tokio@1.52.3"
     },
     {
       "dependsOn": [
@@ -33733,7 +33733,7 @@
     {
       "dependsOn": [
         "pkg:cargo/rustls@0.23.40",
-        "pkg:cargo/tokio@1.52.2"
+        "pkg:cargo/tokio@1.52.3"
       ],
       "ref": "pkg:cargo/tokio-rustls@0.26.4"
     },
@@ -33743,7 +33743,7 @@
         "pkg:cargo/futures-core@0.3.32",
         "pkg:cargo/futures-sink@0.3.32",
         "pkg:cargo/pin-project-lite@0.2.17",
-        "pkg:cargo/tokio@1.52.2"
+        "pkg:cargo/tokio@1.52.3"
       ],
       "ref": "pkg:cargo/tokio-util@0.7.18"
     },
@@ -33790,7 +33790,7 @@
         "pkg:cargo/futures-util@0.3.32",
         "pkg:cargo/pin-project-lite@0.2.17",
         "pkg:cargo/sync_wrapper@1.0.2",
-        "pkg:cargo/tokio@1.52.2",
+        "pkg:cargo/tokio@1.52.3",
         "pkg:cargo/tower-layer@0.3.3",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/tracing@0.1.44"

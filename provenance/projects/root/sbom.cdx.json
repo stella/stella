@@ -48,6 +48,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@ai-sdk/anthropic/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@ai-sdk/anthropic,anthropic,@ai-sdk/anthropic/anthropic,createAnthropic,@ai-sdk/anthropic/createAnthropic"
         }
       ],
       "purl": "pkg:npm/%40ai-sdk/anthropic@3.0.76",
@@ -105,6 +109,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@ai-sdk/azure/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@ai-sdk/azure,createAzure,@ai-sdk/azure/createAzure"
         }
       ],
       "purl": "pkg:npm/%40ai-sdk/azure@3.0.64",
@@ -162,6 +170,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@ai-sdk/devtools/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@ai-sdk/devtools,devToolsMiddleware,@ai-sdk/devtools/devToolsMiddleware"
         }
       ],
       "purl": "pkg:npm/%40ai-sdk/devtools@0.0.17",
@@ -219,6 +231,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@ai-sdk/google-vertex/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@ai-sdk/google-vertex,createVertex,@ai-sdk/google-vertex/createVertex"
         }
       ],
       "purl": "pkg:npm/%40ai-sdk/google-vertex@4.0.125",
@@ -288,6 +304,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@ai-sdk/google/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@ai-sdk/google,GoogleGenerativeAIProviderOptions,@ai-sdk/google/GoogleGenerativeAIProviderOptions,createGoogleGenerativeAI,@ai-sdk/google/createGoogleGenerativeAI,google,@ai-sdk/google/google"
         }
       ],
       "purl": "pkg:npm/%40ai-sdk/google@3.0.71",
@@ -348,6 +368,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@ai-sdk/mcp/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@ai-sdk/mcp,createMCPClient,@ai-sdk/mcp/createMCPClient,MCPClient,@ai-sdk/mcp/MCPClient"
         }
       ],
       "purl": "pkg:npm/%40ai-sdk/mcp@1.0.41",
@@ -405,6 +429,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@ai-sdk/mistral/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@ai-sdk/mistral,createMistral,@ai-sdk/mistral/createMistral,mistral,@ai-sdk/mistral/mistral"
         }
       ],
       "purl": "pkg:npm/%40ai-sdk/mistral@3.0.36",
@@ -462,6 +490,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@ai-sdk/openai/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@ai-sdk/openai,createOpenAI,@ai-sdk/openai/createOpenAI,openai,@ai-sdk/openai/openai"
         }
       ],
       "purl": "pkg:npm/%40ai-sdk/openai@3.0.63",
@@ -520,6 +552,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@ai-sdk/provider-utils/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@ai-sdk/provider-utils,FetchFunction,@ai-sdk/provider-utils/FetchFunction"
         }
       ],
       "purl": "pkg:npm/%40ai-sdk/provider-utils@4.0.27",
@@ -643,6 +679,15 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-edit-session.ts#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-docx-tab-edit-session.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-file-tab-rename.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-pdf-tab-zoom.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/custom-mention.ts#1"
@@ -1095,6 +1140,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/prompts.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#1"
           },
           {
@@ -1248,19 +1296,46 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#19"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/document-ai-source-bar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/docx-desktop-open-button.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#9"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#10"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-facets.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-tab-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-tab-panel.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-tab-header.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/measured-pdf-provider.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/measured-pdf-provider.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/suggestions-facet.tsx#23"
@@ -1669,6 +1744,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@ai-sdk/react/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "react,RefObject,react/RefObject,useCallback,react/useCallback,createContext,react/createContext,useContext,react/useContext,useEffect,react/useEffect,useRef,react/useRef,useState,react/useState,useMemo,react/useMemo,useEffectEvent,react/useEffectEvent,useLayoutEffect,react/useLayoutEffect,useSyncExternalStore,react/useSyncExternalStore,createElement,react/createElement,ComponentProps,react/ComponentProps,useDeferredValue,react/useDeferredValue,CSSProperties,react/CSSProperties,ReactNode,react/ReactNode,Dispatch,react/Dispatch,SetStateAction,react/SetStateAction,startTransition,react/startTransition,StrictMode,react/StrictMode,memo,react/memo,HTMLAttributes,react/HTMLAttributes,ComponentType,react/ComponentType,Suspense,react/Suspense,Fragment,react/Fragment,useId,react/useId,PropsWithChildren,react/PropsWithChildren,forwardRef,react/forwardRef,useImperativeHandle,react/useImperativeHandle,Children,react/Children,MouseEventHandler,react/MouseEventHandler,ReactElement,react/ReactElement,SVGProps,react/SVGProps,Component,react/Component,ErrorInfo,react/ErrorInfo,useTransition,react/useTransition,react/use,cloneElement,react/cloneElement,isValidElement,react/isValidElement,lazy,react/lazy,useReducer,react/useReducer,MouseEvent,react/MouseEvent,UIEvent,react/UIEvent,ChangeEvent,react/ChangeEvent,KeyboardEvent,react/KeyboardEvent"
         }
       ],
       "purl": "pkg:npm/%40ai-sdk/react@3.0.179",
@@ -1743,7 +1822,7 @@
             "location": "apps/api/src/handlers/chat/tools/org-tools.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#3"
+            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#4"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#5"
@@ -1882,6 +1961,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@ai-sdk/valibot/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "valibot"
         }
       ],
       "purl": "pkg:npm/%40ai-sdk/valibot@2.0.28",
@@ -2011,6 +2094,15 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-edit-session.ts#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-docx-tab-edit-session.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-file-tab-rename.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-pdf-tab-zoom.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/custom-mention.ts#1"
@@ -2463,6 +2555,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/prompts.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#1"
           },
           {
@@ -2616,19 +2711,46 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#19"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/document-ai-source-bar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/docx-desktop-open-button.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#9"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#10"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-facets.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-tab-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-tab-panel.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-tab-header.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/measured-pdf-provider.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/measured-pdf-provider.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/suggestions-facet.tsx#23"
@@ -3037,6 +3159,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@astrojs/react/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "react,RefObject,react/RefObject,useCallback,react/useCallback,createContext,react/createContext,useContext,react/useContext,useEffect,react/useEffect,useRef,react/useRef,useState,react/useState,useMemo,react/useMemo,useEffectEvent,react/useEffectEvent,useLayoutEffect,react/useLayoutEffect,useSyncExternalStore,react/useSyncExternalStore,createElement,react/createElement,ComponentProps,react/ComponentProps,useDeferredValue,react/useDeferredValue,CSSProperties,react/CSSProperties,ReactNode,react/ReactNode,Dispatch,react/Dispatch,SetStateAction,react/SetStateAction,startTransition,react/startTransition,StrictMode,react/StrictMode,memo,react/memo,HTMLAttributes,react/HTMLAttributes,ComponentType,react/ComponentType,Suspense,react/Suspense,Fragment,react/Fragment,useId,react/useId,PropsWithChildren,react/PropsWithChildren,forwardRef,react/forwardRef,useImperativeHandle,react/useImperativeHandle,Children,react/Children,MouseEventHandler,react/MouseEventHandler,ReactElement,react/ReactElement,SVGProps,react/SVGProps,Component,react/Component,ErrorInfo,react/ErrorInfo,useTransition,react/useTransition,react/use,cloneElement,react/cloneElement,isValidElement,react/isValidElement,lazy,react/lazy,useReducer,react/useReducer,MouseEvent,react/MouseEvent,UIEvent,react/UIEvent,ChangeEvent,react/ChangeEvent,KeyboardEvent,react/KeyboardEvent"
         }
       ],
       "purl": "pkg:npm/%40astrojs/react@5.0.4",
@@ -3097,6 +3223,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@astrojs/sitemap/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@astrojs/sitemap"
         }
       ],
       "purl": "pkg:npm/%40astrojs/sitemap@3.7.2",
@@ -3136,6 +3266,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/element/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element,autoScrollForElements,@atlaskit/pragmatic-drag-and-drop-auto-scroll/element/autoScrollForElements"
         }
       ],
       "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop-auto-scroll%2Felement",
@@ -3172,6 +3306,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/external/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@atlaskit/pragmatic-drag-and-drop-auto-scroll/external,autoScrollForExternal,@atlaskit/pragmatic-drag-and-drop-auto-scroll/external/autoScrollForExternal"
         }
       ],
       "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop-auto-scroll%2Fexternal",
@@ -3234,6 +3372,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element,autoScrollForElements,@atlaskit/pragmatic-drag-and-drop-auto-scroll/element/autoScrollForElements,@atlaskit/pragmatic-drag-and-drop-auto-scroll/external,autoScrollForExternal,@atlaskit/pragmatic-drag-and-drop-auto-scroll/external/autoScrollForExternal"
         }
       ],
       "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop-auto-scroll@2.1.5",
@@ -3285,6 +3427,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge,attachClosestEdge,@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/attachClosestEdge,extractClosestEdge,@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/extractClosestEdge,Edge,@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/Edge"
         }
       ],
       "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop-hitbox%2Fclosest-edge",
@@ -3356,6 +3502,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge,attachClosestEdge,@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/attachClosestEdge,extractClosestEdge,@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/extractClosestEdge,Edge,@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/Edge"
         }
       ],
       "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop-hitbox@1.1.0",
@@ -3410,6 +3560,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/node_modules/@atlaskit/pragmatic-drag-and-drop/combine/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@atlaskit/pragmatic-drag-and-drop/combine,combine,@atlaskit/pragmatic-drag-and-drop/combine/combine"
         },
         {
           "name": "SrcFile",
@@ -3486,6 +3640,10 @@
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/node_modules/@atlaskit/pragmatic-drag-and-drop/element/adapter/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@atlaskit/pragmatic-drag-and-drop/element/adapter,draggable,@atlaskit/pragmatic-drag-and-drop/element/adapter/draggable,dropTargetForElements,@atlaskit/pragmatic-drag-and-drop/element/adapter/dropTargetForElements,monitorForElements,@atlaskit/pragmatic-drag-and-drop/element/adapter/monitorForElements"
+        },
+        {
           "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/node_modules/@atlaskit/pragmatic-drag-and-drop/element/adapter/package.json"
         },
@@ -3531,6 +3689,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/node_modules/@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer,centerUnderPointer,@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer/centerUnderPointer"
         },
         {
           "name": "SrcFile",
@@ -3589,6 +3751,10 @@
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/node_modules/@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview,setCustomNativeDragPreview,@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview/setCustomNativeDragPreview"
+        },
+        {
           "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/node_modules/@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview/package.json"
         },
@@ -3642,6 +3808,10 @@
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/node_modules/@atlaskit/pragmatic-drag-and-drop/external/adapter/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@atlaskit/pragmatic-drag-and-drop/external/adapter,dropTargetForExternal,@atlaskit/pragmatic-drag-and-drop/external/adapter/dropTargetForExternal"
+        },
+        {
           "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/node_modules/@atlaskit/pragmatic-drag-and-drop/external/adapter/package.json"
         },
@@ -3690,6 +3860,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/node_modules/@atlaskit/pragmatic-drag-and-drop/external/file/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@atlaskit/pragmatic-drag-and-drop/external/file,containsFiles,@atlaskit/pragmatic-drag-and-drop/external/file/containsFiles,getFiles,@atlaskit/pragmatic-drag-and-drop/external/file/getFiles"
         },
         {
           "name": "SrcFile",
@@ -3846,6 +4020,10 @@
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox/node_modules/@atlaskit/pragmatic-drag-and-drop/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "@atlaskit/pragmatic-drag-and-drop/combine,combine,@atlaskit/pragmatic-drag-and-drop/combine/combine,@atlaskit/pragmatic-drag-and-drop/element/adapter,draggable,@atlaskit/pragmatic-drag-and-drop/element/adapter/draggable,dropTargetForElements,@atlaskit/pragmatic-drag-and-drop/element/adapter/dropTargetForElements,monitorForElements,@atlaskit/pragmatic-drag-and-drop/element/adapter/monitorForElements,@atlaskit/pragmatic-drag-and-drop/external/adapter,dropTargetForExternal,@atlaskit/pragmatic-drag-and-drop/external/adapter/dropTargetForExternal,@atlaskit/pragmatic-drag-and-drop/external/file,containsFiles,@atlaskit/pragmatic-drag-and-drop/external/file/containsFiles,getFiles,@atlaskit/pragmatic-drag-and-drop/external/file/getFiles,@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer,centerUnderPointer,@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer/centerUnderPointer,@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview,setCustomNativeDragPreview,@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview/setCustomNativeDragPreview"
+        },
+        {
           "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop-auto-scroll/node_modules/@atlaskit/pragmatic-drag-and-drop/package.json"
         }
@@ -3994,6 +4172,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@atlaskit/pragmatic-drag-and-drop/combine,combine,@atlaskit/pragmatic-drag-and-drop/combine/combine,@atlaskit/pragmatic-drag-and-drop/element/adapter,draggable,@atlaskit/pragmatic-drag-and-drop/element/adapter/draggable,dropTargetForElements,@atlaskit/pragmatic-drag-and-drop/element/adapter/dropTargetForElements,monitorForElements,@atlaskit/pragmatic-drag-and-drop/element/adapter/monitorForElements,@atlaskit/pragmatic-drag-and-drop/external/adapter,dropTargetForExternal,@atlaskit/pragmatic-drag-and-drop/external/adapter/dropTargetForExternal,@atlaskit/pragmatic-drag-and-drop/external/file,containsFiles,@atlaskit/pragmatic-drag-and-drop/external/file/containsFiles,getFiles,@atlaskit/pragmatic-drag-and-drop/external/file/getFiles,@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer,centerUnderPointer,@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer/centerUnderPointer,@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview,setCustomNativeDragPreview,@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview/setCustomNativeDragPreview"
         }
       ],
       "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop@1.8.1",
@@ -4054,6 +4236,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@aws-sdk/client-sesv2/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@aws-sdk/client-sesv2,SESv2Client,@aws-sdk/client-sesv2/SESv2Client,SendEmailCommand,@aws-sdk/client-sesv2/SendEmailCommand"
         }
       ],
       "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1045.0",
@@ -4183,6 +4369,15 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-edit-session.ts#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-docx-tab-edit-session.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-file-tab-rename.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-pdf-tab-zoom.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/custom-mention.ts#1"
@@ -4635,6 +4830,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/prompts.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#1"
           },
           {
@@ -4788,19 +4986,46 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#19"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/document-ai-source-bar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/docx-desktop-open-button.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#9"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#10"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-facets.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-tab-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-tab-panel.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-tab-header.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/measured-pdf-provider.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/measured-pdf-provider.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/suggestions-facet.tsx#23"
@@ -5209,6 +5434,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@base-ui/react/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "react,RefObject,react/RefObject,useCallback,react/useCallback,createContext,react/createContext,useContext,react/useContext,useEffect,react/useEffect,useRef,react/useRef,useState,react/useState,useMemo,react/useMemo,useEffectEvent,react/useEffectEvent,useLayoutEffect,react/useLayoutEffect,useSyncExternalStore,react/useSyncExternalStore,createElement,react/createElement,ComponentProps,react/ComponentProps,useDeferredValue,react/useDeferredValue,CSSProperties,react/CSSProperties,ReactNode,react/ReactNode,Dispatch,react/Dispatch,SetStateAction,react/SetStateAction,startTransition,react/startTransition,StrictMode,react/StrictMode,memo,react/memo,HTMLAttributes,react/HTMLAttributes,ComponentType,react/ComponentType,Suspense,react/Suspense,Fragment,react/Fragment,useId,react/useId,PropsWithChildren,react/PropsWithChildren,forwardRef,react/forwardRef,useImperativeHandle,react/useImperativeHandle,Children,react/Children,MouseEventHandler,react/MouseEventHandler,ReactElement,react/ReactElement,SVGProps,react/SVGProps,Component,react/Component,ErrorInfo,react/ErrorInfo,useTransition,react/useTransition,react/use,cloneElement,react/cloneElement,isValidElement,react/isValidElement,lazy,react/lazy,useReducer,react/useReducer,MouseEvent,react/MouseEvent,UIEvent,react/UIEvent,ChangeEvent,react/ChangeEvent,KeyboardEvent,react/KeyboardEvent"
         }
       ],
       "purl": "pkg:npm/%40base-ui/react@1.4.1",
@@ -5273,6 +5502,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@better-auth/oauth-provider/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@better-auth/oauth-provider,oauthProviderAuthServerMetadata,@better-auth/oauth-provider/oauthProviderAuthServerMetadata,oauthProvider,@better-auth/oauth-provider/oauthProvider,@better-auth/oauth-provider/resource-client,oauthProviderResourceClient,@better-auth/oauth-provider/resource-client/oauthProviderResourceClient,@better-auth/oauth-provider/client,oauthProviderClient,@better-auth/oauth-provider/client/oauthProviderClient"
         }
       ],
       "purl": "pkg:npm/%40better-auth/oauth-provider@1.6.10",
@@ -5333,6 +5566,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@elysiajs/cors/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@elysiajs/cors"
         }
       ],
       "purl": "pkg:npm/%40elysiajs/cors@1.4.2",
@@ -5393,6 +5630,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@elysiajs/eden/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@elysiajs/eden,treaty,@elysiajs/eden/treaty"
         }
       ],
       "purl": "pkg:npm/%40elysiajs/eden@1.4.9",
@@ -5483,6 +5724,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@floating-ui/react-dom/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "react-dom/client,createRoot,react-dom/client/createRoot,react-dom,flushSync,react-dom/flushSync,createPortal,react-dom/createPortal"
         }
       ],
       "purl": "pkg:npm/%40floating-ui/react-dom@2.1.8",
@@ -5564,6 +5809,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@libpdf/core/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@libpdf/core,@libpdf/core/PDF,@libpdf/core/rgb,Standard14Font,@libpdf/core/Standard14Font,StandardFonts,@libpdf/core/StandardFonts,PdfDict,@libpdf/core/PdfDict,PdfRef,@libpdf/core/PdfRef,PdfStream,@libpdf/core/PdfStream,PDFPage,@libpdf/core/PDFPage,white,@libpdf/core/white"
         }
       ],
       "purl": "pkg:npm/%40libpdf/core@0.3.4",
@@ -5621,6 +5870,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@litko/yara-x/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@litko/yara-x,compile,@litko/yara-x/compile,RuleMatch,@litko/yara-x/RuleMatch"
         }
       ],
       "purl": "pkg:npm/%40litko/yara-x@0.5.2",
@@ -5702,6 +5955,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@modelcontextprotocol/sdk/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@modelcontextprotocol/sdk/server/index.js,Server,@modelcontextprotocol/sdk/server/index.js/Server,@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js,WebStandardStreamableHTTPServerTransport,@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js/WebStandardStreamableHTTPServerTransport,@modelcontextprotocol/sdk/types.js,CallToolRequestSchema,@modelcontextprotocol/sdk/types.js/CallToolRequestSchema,ListToolsRequestSchema,@modelcontextprotocol/sdk/types.js/ListToolsRequestSchema,CallToolResult,@modelcontextprotocol/sdk/types.js/CallToolResult,Tool,@modelcontextprotocol/sdk/types.js/Tool"
         }
       ],
       "purl": "pkg:npm/%40modelcontextprotocol/sdk@1.29.0",
@@ -5756,6 +6013,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@openrouter/ai-sdk-provider/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@openrouter/ai-sdk-provider,createOpenRouter,@openrouter/ai-sdk-provider/createOpenRouter"
         }
       ],
       "purl": "pkg:npm/%40openrouter/ai-sdk-provider@2.9.0",
@@ -5815,6 +6076,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/posthog-js/node_modules/@opentelemetry/api-logs/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@opentelemetry/api-logs,logs,@opentelemetry/api-logs/logs,SeverityNumber,@opentelemetry/api-logs/SeverityNumber,LogAttributes,@opentelemetry/api-logs/LogAttributes"
         },
         {
           "name": "SrcFile",
@@ -5889,6 +6154,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@opentelemetry/api-logs/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@opentelemetry/api-logs,logs,@opentelemetry/api-logs/logs,SeverityNumber,@opentelemetry/api-logs/SeverityNumber,LogAttributes,@opentelemetry/api-logs/LogAttributes"
         }
       ],
       "purl": "pkg:npm/%40opentelemetry/api-logs@0.217.0",
@@ -6018,6 +6287,15 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-edit-session.ts#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-docx-tab-edit-session.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-file-tab-rename.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-pdf-tab-zoom.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/custom-mention.ts#1"
@@ -6470,6 +6748,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/prompts.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#1"
           },
           {
@@ -6623,19 +6904,46 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#19"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/document-ai-source-bar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/docx-desktop-open-button.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#9"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#10"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-facets.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-tab-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-tab-panel.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-tab-header.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/measured-pdf-provider.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/measured-pdf-provider.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/suggestions-facet.tsx#23"
@@ -7044,6 +7352,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@posthog/react/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "react,RefObject,react/RefObject,useCallback,react/useCallback,createContext,react/createContext,useContext,react/useContext,useEffect,react/useEffect,useRef,react/useRef,useState,react/useState,useMemo,react/useMemo,useEffectEvent,react/useEffectEvent,useLayoutEffect,react/useLayoutEffect,useSyncExternalStore,react/useSyncExternalStore,createElement,react/createElement,ComponentProps,react/ComponentProps,useDeferredValue,react/useDeferredValue,CSSProperties,react/CSSProperties,ReactNode,react/ReactNode,Dispatch,react/Dispatch,SetStateAction,react/SetStateAction,startTransition,react/startTransition,StrictMode,react/StrictMode,memo,react/memo,HTMLAttributes,react/HTMLAttributes,ComponentType,react/ComponentType,Suspense,react/Suspense,Fragment,react/Fragment,useId,react/useId,PropsWithChildren,react/PropsWithChildren,forwardRef,react/forwardRef,useImperativeHandle,react/useImperativeHandle,Children,react/Children,MouseEventHandler,react/MouseEventHandler,ReactElement,react/ReactElement,SVGProps,react/SVGProps,Component,react/Component,ErrorInfo,react/ErrorInfo,useTransition,react/useTransition,react/use,cloneElement,react/cloneElement,isValidElement,react/isValidElement,lazy,react/lazy,useReducer,react/useReducer,MouseEvent,react/MouseEvent,UIEvent,react/UIEvent,ChangeEvent,react/ChangeEvent,KeyboardEvent,react/KeyboardEvent"
         }
       ],
       "purl": "pkg:npm/%40posthog/react@1.9.0",
@@ -7107,6 +7419,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@pydantic/genai-prices/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@pydantic/genai-prices,calcPrice,@pydantic/genai-prices/calcPrice,ModelPrice,@pydantic/genai-prices/ModelPrice,TieredPrices,@pydantic/genai-prices/TieredPrices"
         }
       ],
       "purl": "pkg:npm/%40pydantic/genai-prices@0.0.56",
@@ -7164,6 +7480,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@react-email/components/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@react-email/components,Body,@react-email/components/Body,Container,@react-email/components/Container,Head,@react-email/components/Head,Heading,@react-email/components/Heading,@react-email/components/Hr,Html,@react-email/components/Html,@react-email/components/Img,Preview,@react-email/components/Preview,Section,@react-email/components/Section,Text,@react-email/components/Text,Button,@react-email/components/Button"
         }
       ],
       "purl": "pkg:npm/%40react-email/components@1.0.12",
@@ -7215,6 +7535,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@react-email/components/node_modules/@react-email/render/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@react-email/render,render,@react-email/render/render"
         }
       ],
       "purl": "pkg:npm/%40react-email/render@2.0.6",
@@ -7269,6 +7593,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@react-email/render/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@react-email/render,render,@react-email/render/render"
         }
       ],
       "purl": "pkg:npm/%40react-email/render@2.0.8",
@@ -7320,6 +7648,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@resvg/resvg-js/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@resvg/resvg-js,Resvg,@resvg/resvg-js/Resvg"
         }
       ],
       "purl": "pkg:npm/%40resvg/resvg-js@2.6.2",
@@ -7388,6 +7720,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@sinclair/typebox/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@sinclair/typebox/value,Value,@sinclair/typebox/value/Value,@sinclair/typebox,TProperties,@sinclair/typebox/TProperties,Type,@sinclair/typebox/Type"
         }
       ],
       "purl": "pkg:npm/%40sinclair/typebox@0.34.49",
@@ -7457,6 +7793,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@smithy/uuid/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "uuid,uuid/v7"
         }
       ],
       "purl": "pkg:npm/%40smithy/uuid@1.1.2",
@@ -7595,6 +7935,10 @@
         {
           "name": "ExportedModules",
           "value": "@stll/anonymize-chat,ChatAnonPair,@stll/anonymize-chat/ChatAnonPair,ChatAnonResult,@stll/anonymize-chat/ChatAnonResult"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@stll/anonymize-chat,CHAT_SEND_MODE,@stll/anonymize-chat/CHAT_SEND_MODE,ChatSendMode,@stll/anonymize-chat/ChatSendMode,CHAT_TRANSPORT_ERROR_CODE,@stll/anonymize-chat/CHAT_TRANSPORT_ERROR_CODE,createThirdPartyBoundaryRefusalPayload,@stll/anonymize-chat/createThirdPartyBoundaryRefusalPayload,ChatTransportErrorCode,@stll/anonymize-chat/ChatTransportErrorCode,runChatAnonPipeline,@stll/anonymize-chat/runChatAnonPipeline,ChatAnonRuntime,@stll/anonymize-chat/ChatAnonRuntime,ChatAnonPair,@stll/anonymize-chat/ChatAnonPair,ChatAnonResult,@stll/anonymize-chat/ChatAnonResult,getPreferredChatSendMode,@stll/anonymize-chat/getPreferredChatSendMode,isChatSendMode,@stll/anonymize-chat/isChatSendMode,isThirdPartyBoundaryRefusalError,@stll/anonymize-chat/isThirdPartyBoundaryRefusalError,DEFAULT_CHAT_ANON_ENTITY_LABELS,@stll/anonymize-chat/DEFAULT_CHAT_ANON_ENTITY_LABELS"
         }
       ],
       "purl": "pkg:npm/%40stll/anonymize-chat@0.0.0",
@@ -7649,6 +7993,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@stll/anonymize-data/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@stll/anonymize-data,loadNameDictionaries,@stll/anonymize-data/loadNameDictionaries"
         }
       ],
       "purl": "pkg:npm/%40stll/anonymize-data@0.0.5",
@@ -7736,6 +8084,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@stll/anonymize-wasm/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@stll/anonymize-wasm,createPipelineContext,@stll/anonymize-wasm/createPipelineContext,deanonymise,@stll/anonymize-wasm/deanonymise,PipelineContext,@stll/anonymize-wasm/PipelineContext,GazetteerEntry,@stll/anonymize-wasm/GazetteerEntry,PipelineConfig,@stll/anonymize-wasm/PipelineConfig,DEFAULT_OPERATOR_CONFIG,@stll/anonymize-wasm/DEFAULT_OPERATOR_CONFIG,preparePipelineSearch,@stll/anonymize-wasm/preparePipelineSearch,redactText,@stll/anonymize-wasm/redactText,runPipeline,@stll/anonymize-wasm/runPipeline,Entity,@stll/anonymize-wasm/Entity,OperatorConfig,@stll/anonymize-wasm/OperatorConfig,RedactionResult,@stll/anonymize-wasm/RedactionResult,OperatorType,@stll/anonymize-wasm/OperatorType"
         }
       ],
       "purl": "pkg:npm/%40stll/anonymize-wasm@1.4.4",
@@ -7856,6 +8208,10 @@
         {
           "name": "ExportedModules",
           "value": "@stll/api/types,ChatAnonRestoration,@stll/api/types/ChatAnonRestoration,ChatMessage,@stll/api/types/ChatMessage,ChatPart,@stll/api/types/ChatPart,ChatUITools,@stll/api/types/ChatUITools,SafeId,@stll/api/types/SafeId,SafeIdType,@stll/api/types/SafeIdType,EntityKind,@stll/api/types/EntityKind,ViewFilterCondition,@stll/api/types/ViewFilterCondition,AgendaItemKind,@stll/api/types/AgendaItemKind,AgendaItemSource,@stll/api/types/AgendaItemSource,ViewLayout,@stll/api/types/ViewLayout,ViewLayoutType,@stll/api/types/ViewLayoutType"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@stll/api/types,ChatMentionCategory,@stll/api/types/ChatMentionCategory,ChatMentionHrefPrefixMap,@stll/api/types/ChatMentionHrefPrefixMap,ChatMessage,@stll/api/types/ChatMessage,ChatPart,@stll/api/types/ChatPart,ChatUITools,@stll/api/types/ChatUITools,ChatSourceDocument,@stll/api/types/ChatSourceDocument,@stll/api/types/API,EntityKind,@stll/api/types/EntityKind,GlobalSearchResultType,@stll/api/types/GlobalSearchResultType,BoundingBox,@stll/api/types/BoundingBox,AgendaItemKind,@stll/api/types/AgendaItemKind,AgendaItemSource,@stll/api/types/AgendaItemSource,OptionColor,@stll/api/types/OptionColor,PropertyCondition,@stll/api/types/PropertyCondition,ViewLayout,@stll/api/types/ViewLayout,ViewLayoutType,@stll/api/types/ViewLayoutType,PropertyContentType,@stll/api/types/PropertyContentType,GlobalSearchHit,@stll/api/types/GlobalSearchHit,PropertyContent,@stll/api/types/PropertyContent"
         }
       ],
       "purl": "pkg:npm/%40stll/api@0.0.0",
@@ -7914,6 +8270,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@stll/ares/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@stll/ares,lookupByIco,@stll/ares/lookupByIco,searchByName,@stll/ares/searchByName,AresAPIError,@stll/ares/AresAPIError,AresRequestError,@stll/ares/AresRequestError,AresTooBroadError,@stll/ares/AresTooBroadError,AresValidationError,@stll/ares/AresValidationError"
         }
       ],
       "purl": "pkg:npm/%40stll/ares@0.1.0",
@@ -8019,6 +8379,10 @@
         {
           "name": "ExportedModules",
           "value": "@stll/case-law/document-ast,@stll/case-law/analysis,Block,@stll/case-law/document-ast/Block,DocumentAst,@stll/case-law/document-ast/DocumentAst,DocumentAstMetadata,@stll/case-law/document-ast/DocumentAstMetadata,DocumentAstSource,@stll/case-law/document-ast/DocumentAstSource,HeadingBlock,@stll/case-law/document-ast/HeadingBlock,Inline,@stll/case-law/document-ast/Inline,InlineBold,@stll/case-law/document-ast/InlineBold,InlineItalic,@stll/case-law/document-ast/InlineItalic,InlineLineBreak,@stll/case-law/document-ast/InlineLineBreak,InlineLink,@stll/case-law/document-ast/InlineLink,InlineText,@stll/case-law/document-ast/InlineText,ParagraphBlock,@stll/case-law/document-ast/ParagraphBlock,ParagraphRole,@stll/case-law/document-ast/ParagraphRole,TableBlock,@stll/case-law/document-ast/TableBlock,TableCell,@stll/case-law/document-ast/TableCell,getDocumentAstMetadata,@stll/case-law/document-ast/getDocumentAstMetadata,hasUsableAst,@stll/case-law/document-ast/hasUsableAst,isDocumentAst,@stll/case-law/document-ast/isDocumentAst,parseDocumentAst,@stll/case-law/document-ast/parseDocumentAst,AnalysisAnnotation,@stll/case-law/analysis/AnalysisAnnotation,AnalysisHeading,@stll/case-law/analysis/AnalysisHeading"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@stll/case-law/analysis,PersistedDecisionAnalysis,@stll/case-law/analysis/PersistedDecisionAnalysis,AnalysisHeading,@stll/case-law/analysis/AnalysisHeading,AnalysisInProgress,@stll/case-law/analysis/AnalysisInProgress,DecisionAnalysis,@stll/case-law/analysis/DecisionAnalysis,analysisHeadingSchema,@stll/case-law/analysis/analysisHeadingSchema,isAnalysisInProgress,@stll/case-law/analysis/isAnalysisInProgress,isAnalysisGenerating,@stll/case-law/analysis/isAnalysisGenerating,isDecisionAnalysis,@stll/case-law/analysis/isDecisionAnalysis,parsePersistedDecisionAnalysis,@stll/case-law/analysis/parsePersistedDecisionAnalysis,AnalysisAnnotation,@stll/case-law/analysis/AnalysisAnnotation,@stll/case-law/document-ast,DocumentAst,@stll/case-law/document-ast/DocumentAst,hasUsableAst,@stll/case-law/document-ast/hasUsableAst,parseDocumentAst,@stll/case-law/document-ast/parseDocumentAst,Block,@stll/case-law/document-ast/Block,Inline,@stll/case-law/document-ast/Inline,getDocumentAstMetadata,@stll/case-law/document-ast/getDocumentAstMetadata"
         }
       ],
       "purl": "pkg:npm/%40stll/case-law@0.0.0",
@@ -8063,6 +8427,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@stll/docx-core/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@stll/docx-core,compileLegalSourceToDocx,@stll/docx-core/compileLegalSourceToDocx"
         }
       ],
       "purl": "pkg:npm/%40stll/docx-core@0.1.0",
@@ -8110,6 +8478,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@stll/docx-utils/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@stll/docx-utils,OOXML_NS,@stll/docx-utils/OOXML_NS"
         }
       ],
       "purl": "pkg:npm/%40stll/docx-utils@0.1.0",
@@ -8166,6 +8538,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll.ts#4"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-docx-tab-edit-session.ts#5"
+          },
+          {
             "location": "apps/playground/src/App.tsx#3"
           },
           {
@@ -8199,7 +8574,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#36"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#42"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-tab-panel.tsx#14"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/suggestions-facet.tsx#27"
@@ -8232,6 +8607,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@stll/folio/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@stll/folio/server,FolioAIBlock,@stll/folio/server/FolioAIBlock,@stll/folio,DocxEditorRef,@stll/folio/DocxEditorRef,FolioAIBlockPreviewRun,@stll/folio/FolioAIBlockPreviewRun,FolioAIEditApplyMode,@stll/folio/FolioAIEditApplyMode,FolioAIEditOperation,@stll/folio/FolioAIEditOperation,FolioAIEditSeverity,@stll/folio/FolioAIEditSeverity,FolioAIEditSnapshot,@stll/folio/FolioAIEditSnapshot,AIBarStatus,@stll/folio/AIBarStatus,AIChatMode,@stll/folio/AIChatMode,AICitation,@stll/folio/AICitation,AIGenerateInput,@stll/folio/AIGenerateInput,AISuggestion,@stll/folio/AISuggestion,AISuggestionApplyMode,@stll/folio/AISuggestionApplyMode,AISuggestionPreset,@stll/folio/AISuggestionPreset,DocxCompatibility,@stll/folio/DocxCompatibility,DocxEditor,@stll/folio/DocxEditor,createEmptyDocument,@stll/folio/createEmptyDocument,Document,@stll/folio/Document,EditorMode,@stll/folio/EditorMode,applySuggestions,@stll/folio/applySuggestions,resolveSuggestionAnchor,@stll/folio/resolveSuggestionAnchor,setActiveCitationMeta,@stll/folio/setActiveCitationMeta,setAICitationsMeta,@stll/folio/setAICitationsMeta,setAISuggestionsMeta,@stll/folio/setAISuggestionsMeta,setFocusedSuggestionMeta,@stll/folio/setFocusedSuggestionMeta,AICitationRange,@stll/folio/AICitationRange,AISuggestionSeverity,@stll/folio/AISuggestionSeverity,diffWordSegments,@stll/folio/diffWordSegments,FormattingBar,@stll/folio/FormattingBar,setAnonymizationTermsMeta,@stll/folio/setAnonymizationTermsMeta,AnonymizationTerm,@stll/folio/AnonymizationTerm,@stll/folio/editor.css"
         }
       ],
       "purl": "pkg:npm/%40stll/folio@0.1.0",
@@ -8302,6 +8681,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@stll/infosoud/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@stll/infosoud,InfoSoudAPIError,@stll/infosoud/InfoSoudAPIError,InfoSoudClient,@stll/infosoud/InfoSoudClient,InfoSoudParseError,@stll/infosoud/InfoSoudParseError,InfoSoudRequestError,@stll/infosoud/InfoSoudRequestError,buildCourtMapFromEntries,@stll/infosoud/buildCourtMapFromEntries,getEventLabel,@stll/infosoud/getEventLabel,resolveCourtCodeAlias,@stll/infosoud/resolveCourtCodeAlias,CaseEvent,@stll/infosoud/CaseEvent,CaseSearchResult,@stll/infosoud/CaseSearchResult,CaseSearchResultWithHearings,@stll/infosoud/CaseSearchResultWithHearings,HearingEvent,@stll/infosoud/HearingEvent,RelatedCase,@stll/infosoud/RelatedCase,parseInfoSoudDate,@stll/infosoud/parseInfoSoudDate,parseInfoSoudDateTime,@stll/infosoud/parseInfoSoudDateTime"
         }
       ],
       "purl": "pkg:npm/%40stll/infosoud@0.1.0",
@@ -8376,6 +8759,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@stll/money/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@stll/money,applyMarkupCents,@stll/money/applyMarkupCents,prorateHourlyCents,@stll/money/prorateHourlyCents"
         }
       ],
       "purl": "pkg:npm/%40stll/money@0.0.0",
@@ -8441,6 +8828,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@stll/permissions/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@stll/permissions,PermissionInput,@stll/permissions/PermissionInput,roles,@stll/permissions/roles,@stll/permissions/ac"
         }
       ],
       "purl": "pkg:npm/%40stll/permissions@0.0.0",
@@ -8470,16 +8861,28 @@
             "location": "apps/api/src/handlers/chat/chat-prompt.ts#12"
           },
           {
-            "location": "apps/api/src/handlers/chat/skills.ts#1"
+            "location": "apps/api/src/handlers/chat/send-message.ts#7"
           },
           {
-            "location": "apps/api/src/handlers/chat/skills.ts#2"
+            "location": "apps/api/src/handlers/chat/skills.ts#9"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#5"
+            "location": "apps/api/src/handlers/chat/skills.ts#10"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/chat-tools.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#6"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/list.ts#5"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/skill-package.ts#9"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/skill-package.ts#10"
           }
         ]
       },
@@ -8497,6 +8900,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@stll/skills/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@stll/skills,SkillMetadata,@stll/skills/SkillMetadata,listSkillMetadata,@stll/skills/listSkillMetadata,listSkillResources,@stll/skills/listSkillResources,loadSkill,@stll/skills/loadSkill,readSkillResource,@stll/skills/readSkillResource,SkillResource,@stll/skills/SkillResource,StellaSkill,@stll/skills/StellaSkill,getSkillResourceKind,@stll/skills/getSkillResourceKind,isAllowedResourcePath,@stll/skills/isAllowedResourcePath,normalizeResourcePath,@stll/skills/normalizeResourcePath,parseSkillFile,@stll/skills/parseSkillFile,SkillResourceKind,@stll/skills/SkillResourceKind"
         }
       ],
       "purl": "pkg:npm/%40stll/skills@0.0.0",
@@ -8523,6 +8930,9 @@
           }
         ],
         "occurrences": [
+          {
+            "location": "packages/ares/dist/validation.js#1"
+          },
           {
             "location": "packages/ares/src/validation.ts#1"
           }
@@ -8552,6 +8962,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@stll/stdnum/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@stll/stdnum/cz/ico,compact,@stll/stdnum/cz/ico/compact,validate,@stll/stdnum/cz/ico/validate"
         }
       ],
       "purl": "pkg:npm/%40stll/stdnum@0.0.1",
@@ -8599,6 +9013,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@stll/template-conditions/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@stll/template-conditions,evaluateCondition,@stll/template-conditions/evaluateCondition,resolvePath,@stll/template-conditions/resolvePath"
         }
       ],
       "purl": "pkg:npm/%40stll/template-conditions@0.0.0",
@@ -8649,6 +9067,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@stll/transactional/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@stll/transactional/emails/better-auth-otp,@stll/transactional/emails/new-device-login,@stll/transactional/emails/organization-invitation"
         }
       ],
       "purl": "pkg:npm/%40stll/transactional@0.0.0",
@@ -8693,6 +9115,12 @@
             "location": "apps/web/src/routes/_protected.organization/-mutations.ts#4"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-docx-tab-edit-session.ts#6"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-file-tab-rename.ts#5"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts#10"
           },
           {
@@ -8720,7 +9148,7 @@
             "location": "apps/web/src/router.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#18"
+            "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#22"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/$contactId.tsx#38"
@@ -8777,7 +9205,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#27"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#18"
+            "location": "apps/web/src/routes/_protected.knowledge/prompts.tsx#18"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#33"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#19"
@@ -8870,7 +9301,16 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#45"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#56"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/docx-desktop-open-button.tsx#7"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#35"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-facets.tsx#7"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-tab-panel.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#20"
@@ -9053,10 +9493,10 @@
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#9"
+            "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#13"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/index.tsx#15"
+            "location": "apps/web/src/routes/_protected.chat/index.tsx#19"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/$contactId.tsx#26"
@@ -9122,7 +9562,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#20"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#8"
+            "location": "apps/web/src/routes/_protected.knowledge/prompts.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#16"
@@ -9227,7 +9670,19 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#33"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#43"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/document-ai-source-bar.tsx#11"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/docx-desktop-open-button.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#22"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-tab-panel.tsx#15"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-pdf-error-fallback.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-tab-header.tsx#5"
@@ -9527,7 +9982,10 @@
             "location": "apps/web/src/lib/pdf/pdf-viewport.tsx#19"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#54"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#33"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail.tsx#14"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-view.tsx#45"
@@ -9734,10 +10192,10 @@
             "location": "apps/web/src/routes/_protected.chat/-components/chat-anonymized-toggle.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#19"
+            "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#23"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/index.tsx#16"
+            "location": "apps/web/src/routes/_protected.chat/index.tsx#20"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx#41"
@@ -9764,7 +10222,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#28"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#19"
+            "location": "apps/web/src/routes/_protected.knowledge/prompts.tsx#19"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#34"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.desktop.tsx#6"
@@ -9839,10 +10300,28 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inline-edit.tsx#4"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/document-ai-source-bar.tsx#12"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/docx-desktop-open-button.tsx#8"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#12"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#57"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#36"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-facets.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-tab-panel.tsx#17"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-pdf-error-fallback.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-tab-header.tsx#6"
@@ -10172,6 +10651,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#21"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#25"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#17"
           },
           {
@@ -10223,7 +10705,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#37"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#53"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#32"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet.tsx#19"
@@ -10305,6 +10787,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/case/-components/decision-filters.tsx#13"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#32"
           },
           {
             "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#32"
@@ -10664,7 +11149,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx#17"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#17"
+            "location": "apps/web/src/routes/_protected.knowledge/prompts.tsx#17"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#24"
           },
           {
             "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#22"
@@ -10700,7 +11188,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#31"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#52"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#31"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet.tsx#18"
@@ -10766,7 +11254,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#33"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#55"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#34"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-facets.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel.tsx#11"
@@ -10784,7 +11275,7 @@
             "location": "apps/web/src/components/sidebar.tsx#25"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#17"
+            "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#21"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/decision-metadata-sheet.tsx#15"
@@ -10991,6 +11482,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@stll/ui/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@stll/ui/components/toast,stellaToast,@stll/ui/components/toast/stellaToast,ToastProvider,@stll/ui/components/toast/ToastProvider,TOAST_RIGHT_OFFSET_VAR,@stll/ui/components/toast/TOAST_RIGHT_OFFSET_VAR,@stll/ui/components/avatar,Avatar,@stll/ui/components/avatar/Avatar,AvatarFallback,@stll/ui/components/avatar/AvatarFallback,AvatarImage,@stll/ui/components/avatar/AvatarImage,@stll/ui/components/button,Button,@stll/ui/components/button/Button,buttonVariants,@stll/ui/components/button/buttonVariants,@stll/ui/components/checkbox,Checkbox,@stll/ui/components/checkbox/Checkbox,@stll/ui/components/frame,FramePanel,@stll/ui/components/frame/FramePanel,Frame,@stll/ui/components/frame/Frame,FrameDescription,@stll/ui/components/frame/FrameDescription,FrameHeader,@stll/ui/components/frame/FrameHeader,FrameTitle,@stll/ui/components/frame/FrameTitle,FrameFooter,@stll/ui/components/frame/FrameFooter,@stll/ui/components/label,Label,@stll/ui/components/label/Label,@stll/ui/components/scroll-area,ScrollArea,@stll/ui/components/scroll-area/ScrollArea,@stll/ui/components/separator,Separator,@stll/ui/components/separator/Separator,@stll/ui/components/tabs,Tabs,@stll/ui/components/tabs/Tabs,TabsList,@stll/ui/components/tabs/TabsList,TabsPanel,@stll/ui/components/tabs/TabsPanel,TabsTab,@stll/ui/components/tabs/TabsTab,@stll/ui/lib/utils,@stll/ui/lib/utils/cn,@stll/ui/components/field,Field,@stll/ui/components/field/Field,FieldDescription,@stll/ui/components/field/FieldDescription,FieldLabel,@stll/ui/components/field/FieldLabel,FieldError,@stll/ui/components/field/FieldError,FieldControl,@stll/ui/components/field/FieldControl,@stll/ui/components/input,Input,@stll/ui/components/input/Input,InputProps,@stll/ui/components/input/InputProps,@stll/ui/components/select,Select,@stll/ui/components/select/Select,SelectItem,@stll/ui/components/select/SelectItem,SelectPopup,@stll/ui/components/select/SelectPopup,SelectTrigger,@stll/ui/components/select/SelectTrigger,SelectValue,@stll/ui/components/select/SelectValue,@stll/ui/components/combobox,Combobox,@stll/ui/components/combobox/Combobox,ComboboxEmpty,@stll/ui/components/combobox/ComboboxEmpty,ComboboxInput,@stll/ui/components/combobox/ComboboxInput,ComboboxItem,@stll/ui/components/combobox/ComboboxItem,ComboboxList,@stll/ui/components/combobox/ComboboxList,ComboboxPopup,@stll/ui/components/combobox/ComboboxPopup,@stll/ui/components/tooltip,Tooltip,@stll/ui/components/tooltip/Tooltip,TooltipPopup,@stll/ui/components/tooltip/TooltipPopup,TooltipProvider,@stll/ui/components/tooltip/TooltipProvider,TooltipTrigger,@stll/ui/components/tooltip/TooltipTrigger,@stll/ui/components/popover,Popover,@stll/ui/components/popover/Popover,PopoverPopup,@stll/ui/components/popover/PopoverPopup,PopoverTrigger,@stll/ui/components/popover/PopoverTrigger,PopoverClose,@stll/ui/components/popover/PopoverClose,PopoverDescription,@stll/ui/components/popover/PopoverDescription,PopoverTitle,@stll/ui/components/popover/PopoverTitle,@stll/ui/components/menu,Menu,@stll/ui/components/menu/Menu,MenuGroup,@stll/ui/components/menu/MenuGroup,MenuGroupLabel,@stll/ui/components/menu/MenuGroupLabel,MenuItem,@stll/ui/components/menu/MenuItem,MenuPopup,@stll/ui/components/menu/MenuPopup,MenuRadioGroup,@stll/ui/components/menu/MenuRadioGroup,MenuRadioItem,@stll/ui/components/menu/MenuRadioItem,MenuSeparator,@stll/ui/components/menu/MenuSeparator,MenuSub,@stll/ui/components/menu/MenuSub,MenuSubPopup,@stll/ui/components/menu/MenuSubPopup,MenuSubTrigger,@stll/ui/components/menu/MenuSubTrigger,MenuTrigger,@stll/ui/components/menu/MenuTrigger,MenuCheckboxItem,@stll/ui/components/menu/MenuCheckboxItem,DropdownMenu,@stll/ui/components/menu/DropdownMenu,DropdownMenuContent,@stll/ui/components/menu/DropdownMenuContent,DropdownMenuItem,@stll/ui/components/menu/DropdownMenuItem,DropdownMenuTrigger,@stll/ui/components/menu/DropdownMenuTrigger,MenuPortal,@stll/ui/components/menu/MenuPortal,MenuShortcut,@stll/ui/components/menu/MenuShortcut,@stll/ui/components/breadcrumb,Breadcrumb,@stll/ui/components/breadcrumb/Breadcrumb,BreadcrumbItem,@stll/ui/components/breadcrumb/BreadcrumbItem,BreadcrumbList,@stll/ui/components/breadcrumb/BreadcrumbList,BreadcrumbSeparator,@stll/ui/components/breadcrumb/BreadcrumbSeparator,BreadcrumbEllipsis,@stll/ui/components/breadcrumb/BreadcrumbEllipsis,BreadcrumbLink,@stll/ui/components/breadcrumb/BreadcrumbLink,BreadcrumbPage,@stll/ui/components/breadcrumb/BreadcrumbPage,@stll/ui/components/color-picker,ColorPicker,@stll/ui/components/color-picker/ColorPicker,ColorPickerContent,@stll/ui/components/color-picker/ColorPickerContent,DEFAULT_PRESETS,@stll/ui/components/color-picker/DEFAULT_PRESETS,ColorPreset,@stll/ui/components/color-picker/ColorPreset,@stll/ui/components/date-picker-popover,DatePickerPopover,@stll/ui/components/date-picker-popover/DatePickerPopover,DatePickerPopoverProps,@stll/ui/components/date-picker-popover/DatePickerPopoverProps,@stll/ui/components/dialog,Dialog,@stll/ui/components/dialog/Dialog,DialogClose,@stll/ui/components/dialog/DialogClose,DialogDescription,@stll/ui/components/dialog/DialogDescription,DialogFooter,@stll/ui/components/dialog/DialogFooter,DialogHeader,@stll/ui/components/dialog/DialogHeader,DialogPopup,@stll/ui/components/dialog/DialogPopup,DialogTitle,@stll/ui/components/dialog/DialogTitle,DialogPanel,@stll/ui/components/dialog/DialogPanel,DialogTrigger,@stll/ui/components/dialog/DialogTrigger,DialogPortal,@stll/ui/components/dialog/DialogPortal,DialogBackdrop,@stll/ui/components/dialog/DialogBackdrop,@stll/ui/components/command,Command,@stll/ui/components/command/Command,CommandDialog,@stll/ui/components/command/CommandDialog,CommandDialogPopup,@stll/ui/components/command/CommandDialogPopup,CommandInput,@stll/ui/components/command/CommandInput,CommandItem,@stll/ui/components/command/CommandItem,CommandList,@stll/ui/components/command/CommandList,@stll/ui/components/skeleton,Skeleton,@stll/ui/components/skeleton/Skeleton,@stll/ui/components/sheet,Sheet,@stll/ui/components/sheet/Sheet,SheetDescription,@stll/ui/components/sheet/SheetDescription,SheetHeader,@stll/ui/components/sheet/SheetHeader,SheetPopup,@stll/ui/components/sheet/SheetPopup,SheetTitle,@stll/ui/components/sheet/SheetTitle,SheetPanel,@stll/ui/components/sheet/SheetPanel,SheetTrigger,@stll/ui/components/sheet/SheetTrigger,SheetClose,@stll/ui/components/sheet/SheetClose,SheetFooter,@stll/ui/components/sheet/SheetFooter,@stll/ui/hooks/use-mobile,useIsMobile,@stll/ui/hooks/use-mobile/useIsMobile,@stll/ui/globals.css,@stll/ui/components/destructive-confirm-dialog,DestructiveConfirmDialog,@stll/ui/components/destructive-confirm-dialog/DestructiveConfirmDialog,@stll/ui/components/textarea,Textarea,@stll/ui/components/textarea/Textarea,TextareaProps,@stll/ui/components/textarea/TextareaProps,@stll/ui/components/form,Form,@stll/ui/components/form/Form,@stll/ui/components/input-group,InputGroup,@stll/ui/components/input-group/InputGroup,InputGroupAddon,@stll/ui/components/input-group/InputGroupAddon,InputGroupInput,@stll/ui/components/input-group/InputGroupInput,InputGroupText,@stll/ui/components/input-group/InputGroupText,InputGroupTextarea,@stll/ui/components/input-group/InputGroupTextarea,@stll/ui/components/table,Table,@stll/ui/components/table/Table,TableBody,@stll/ui/components/table/TableBody,TableCell,@stll/ui/components/table/TableCell,TableHead,@stll/ui/components/table/TableHead,TableHeader,@stll/ui/components/table/TableHeader,TableRow,@stll/ui/components/table/TableRow,TableCaption,@stll/ui/components/table/TableCaption,TableFooter,@stll/ui/components/table/TableFooter,@stll/ui/components/alert-dialog,AlertDialog,@stll/ui/components/alert-dialog/AlertDialog,AlertDialogClose,@stll/ui/components/alert-dialog/AlertDialogClose,AlertDialogDescription,@stll/ui/components/alert-dialog/AlertDialogDescription,AlertDialogFooter,@stll/ui/components/alert-dialog/AlertDialogFooter,AlertDialogHeader,@stll/ui/components/alert-dialog/AlertDialogHeader,AlertDialogPopup,@stll/ui/components/alert-dialog/AlertDialogPopup,AlertDialogTitle,@stll/ui/components/alert-dialog/AlertDialogTitle,AlertDialogTrigger,@stll/ui/components/alert-dialog/AlertDialogTrigger,AlertDialogPanel,@stll/ui/components/alert-dialog/AlertDialogPanel,@stll/ui/components/pagination,Pagination,@stll/ui/components/pagination/Pagination,PaginationContent,@stll/ui/components/pagination/PaginationContent,PaginationEllipsis,@stll/ui/components/pagination/PaginationEllipsis,PaginationItem,@stll/ui/components/pagination/PaginationItem,PaginationLink,@stll/ui/components/pagination/PaginationLink,PaginationNext,@stll/ui/components/pagination/PaginationNext,PaginationPrevious,@stll/ui/components/pagination/PaginationPrevious,@stll/ui/components/preview-card,PreviewCard,@stll/ui/components/preview-card/PreviewCard,PreviewCardPopup,@stll/ui/components/preview-card/PreviewCardPopup,PreviewCardTrigger,@stll/ui/components/preview-card/PreviewCardTrigger,@stll/ui/components/input-otp,InputOTP,@stll/ui/components/input-otp/InputOTP,InputOTPGroup,@stll/ui/components/input-otp/InputOTPGroup,InputOTPSlot,@stll/ui/components/input-otp/InputOTPSlot,InputOTPSeparator,@stll/ui/components/input-otp/InputOTPSeparator,@stll/ui/components/accordion,Accordion,@stll/ui/components/accordion/Accordion,AccordionItem,@stll/ui/components/accordion/AccordionItem,AccordionPanel,@stll/ui/components/accordion/AccordionPanel,AccordionTrigger,@stll/ui/components/accordion/AccordionTrigger,@stll/ui/components/destructive-action-confirmation,DestructiveActionConfirmation,@stll/ui/components/destructive-action-confirmation/DestructiveActionConfirmation,useDestructiveActionConfirmation,@stll/ui/components/destructive-action-confirmation/useDestructiveActionConfirmation,@stll/ui/components/hex-color-picker,HexColorPicker,@stll/ui/components/hex-color-picker/HexColorPicker"
         }
       ],
       "purl": "pkg:npm/%40stll/ui@0.0.0",
@@ -11050,6 +11545,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@streamdown/cjk/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@streamdown/cjk,@streamdown/cjk/cjk"
         }
       ],
       "purl": "pkg:npm/%40streamdown/cjk@1.0.3",
@@ -11106,6 +11605,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@streamdown/math/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@streamdown/math,math,@streamdown/math/math"
         }
       ],
       "purl": "pkg:npm/%40streamdown/math@1.0.2",
@@ -11162,6 +11665,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@streamdown/mermaid/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@streamdown/mermaid,mermaid,@streamdown/mermaid/mermaid"
         }
       ],
       "purl": "pkg:npm/%40streamdown/mermaid@1.0.2",
@@ -11223,6 +11730,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@t3-oss/env-core/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@t3-oss/env-core,createEnv,@t3-oss/env-core/createEnv"
         }
       ],
       "purl": "pkg:npm/%40t3-oss/env-core@0.13.11",
@@ -11283,6 +11794,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tanstack/react-devtools/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tanstack/react-devtools,TanStackDevtools,@tanstack/react-devtools/TanStackDevtools"
         }
       ],
       "purl": "pkg:npm/%40tanstack/react-devtools@0.10.2",
@@ -11299,7 +11814,7 @@
           "name": "tannerlinsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-form@1.31.0",
+      "bom-ref": "pkg:npm/@tanstack/react-form@1.32.0",
       "description": "Powerful, type-safe forms for React.",
       "evidence": {
         "identity": [
@@ -11388,12 +11903,16 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tanstack/react-form/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tanstack/react-form,AnyFieldMeta,@tanstack/react-form/AnyFieldMeta,useForm,@tanstack/react-form/useForm,useStore,@tanstack/react-form/useStore,revalidateLogic,@tanstack/react-form/revalidateLogic,AnyFieldApi,@tanstack/react-form/AnyFieldApi"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-form@1.31.0",
+      "purl": "pkg:npm/%40tanstack/react-form@1.32.0",
       "scope": "required",
       "type": "library",
-      "version": "1.31.0"
+      "version": "1.32.0"
     },
     {
       "authors": [
@@ -11481,6 +12000,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tanstack/react-hotkeys/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tanstack/react-hotkeys,detectPlatform,@tanstack/react-hotkeys/detectPlatform,formatForDisplay,@tanstack/react-hotkeys/formatForDisplay,IndividualKey,@tanstack/react-hotkeys/IndividualKey,Hotkey,@tanstack/react-hotkeys/Hotkey,useHotkey,@tanstack/react-hotkeys/useHotkey,useKeyHold,@tanstack/react-hotkeys/useKeyHold,HotkeysProvider,@tanstack/react-hotkeys/HotkeysProvider"
         }
       ],
       "purl": "pkg:npm/%40tanstack/react-hotkeys@0.10.0",
@@ -11541,6 +12064,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tanstack/react-query-devtools/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tanstack/react-query-devtools,ReactQueryDevtoolsPanel,@tanstack/react-query-devtools/ReactQueryDevtoolsPanel"
         }
       ],
       "purl": "pkg:npm/%40tanstack/react-query-devtools@5.100.9",
@@ -11876,10 +12403,10 @@
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#4"
+            "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/index.tsx#4"
+            "location": "apps/web/src/routes/_protected.chat/index.tsx#8"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/$contactId.tsx#8"
@@ -11916,6 +12443,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/prompts.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#3"
@@ -12023,10 +12553,22 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#25"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/document-ai-source-bar.tsx#3"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#16"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#11"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-facets.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#10"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/versions-facet.tsx#11"
@@ -12150,6 +12692,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tanstack/react-query/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tanstack/react-query,useMutation,@tanstack/react-query/useMutation,useQueryClient,@tanstack/react-query/useQueryClient,useSuspenseQuery,@tanstack/react-query/useSuspenseQuery,CancelledError,@tanstack/react-query/CancelledError,keepPreviousData,@tanstack/react-query/keepPreviousData,useQuery,@tanstack/react-query/useQuery,QueryClient,@tanstack/react-query/QueryClient,EnsureQueryDataOptions,@tanstack/react-query/EnsureQueryDataOptions,FetchQueryOptions,@tanstack/react-query/FetchQueryOptions,QueryKey,@tanstack/react-query/QueryKey,infiniteQueryOptions,@tanstack/react-query/infiniteQueryOptions,queryOptions,@tanstack/react-query/queryOptions,useIsMutating,@tanstack/react-query/useIsMutating,useQueries,@tanstack/react-query/useQueries,skipToken,@tanstack/react-query/skipToken,QueryErrorResetBoundary,@tanstack/react-query/QueryErrorResetBoundary,UseMutationResult,@tanstack/react-query/UseMutationResult,useInfiniteQuery,@tanstack/react-query/useInfiniteQuery,useSuspenseQueries,@tanstack/react-query/useSuspenseQueries,useSuspenseInfiniteQuery,@tanstack/react-query/useSuspenseInfiniteQuery"
         }
       ],
       "purl": "pkg:npm/%40tanstack/react-query@5.100.9",
@@ -12210,6 +12756,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tanstack/react-router-devtools/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tanstack/react-router-devtools,TanStackRouterDevtoolsPanel,@tanstack/react-router-devtools/TanStackRouterDevtoolsPanel"
         }
       ],
       "purl": "pkg:npm/%40tanstack/react-router-devtools@1.166.13",
@@ -12270,6 +12820,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tanstack/react-router-ssr-query/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tanstack/react-router-ssr-query,setupRouterSsrQueryIntegration,@tanstack/react-router-ssr-query/setupRouterSsrQueryIntegration"
         }
       ],
       "purl": "pkg:npm/%40tanstack/react-router-ssr-query@1.166.12",
@@ -12401,10 +12955,10 @@
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#5"
+            "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/index.tsx#5"
+            "location": "apps/web/src/routes/_protected.chat/index.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/new.tsx#1"
@@ -12444,6 +12998,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/prompts.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/route.tsx#1"
@@ -12518,7 +13075,13 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#26"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#17"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-tab-panel.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#11"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/versions-facet.tsx#12"
@@ -12648,6 +13211,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tanstack/react-router/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tanstack/react-router,useNavigate,@tanstack/react-router/useNavigate,useRouter,@tanstack/react-router/useRouter,useLocation,@tanstack/react-router/useLocation,useRouteContext,@tanstack/react-router/useRouteContext,useMatch,@tanstack/react-router/useMatch,getRouteApi,@tanstack/react-router/getRouteApi,Link,@tanstack/react-router/Link,useMatches,@tanstack/react-router/useMatches,ResolveParams,@tanstack/react-router/ResolveParams,useRouterState,@tanstack/react-router/useRouterState,Navigate,@tanstack/react-router/Navigate,ErrorComponentProps,@tanstack/react-router/ErrorComponentProps,RouterProvider,@tanstack/react-router/RouterProvider,createRouter,@tanstack/react-router/createRouter,createRootRouteWithContext,@tanstack/react-router/createRootRouteWithContext,HeadContent,@tanstack/react-router/HeadContent,Outlet,@tanstack/react-router/Outlet,createFileRoute,@tanstack/react-router/createFileRoute,redirect,@tanstack/react-router/redirect,useSearch,@tanstack/react-router/useSearch,stripSearchParams,@tanstack/react-router/stripSearchParams,notFound,@tanstack/react-router/notFound"
         }
       ],
       "purl": "pkg:npm/%40tanstack/react-router@1.169.2",
@@ -12735,6 +13302,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tanstack/react-table/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tanstack/react-table,RowSelectionState,@tanstack/react-table/RowSelectionState,Column,@tanstack/react-table/Column,ColumnDef,@tanstack/react-table/ColumnDef,Header,@tanstack/react-table/Header,Table,@tanstack/react-table/Table,ColumnSizingState,@tanstack/react-table/ColumnSizingState,Updater,@tanstack/react-table/Updater,ColumnOrderState,@tanstack/react-table/ColumnOrderState,ColumnPinningState,@tanstack/react-table/ColumnPinningState,OnChangeFn,@tanstack/react-table/OnChangeFn,SortingState,@tanstack/react-table/SortingState,VisibilityState,@tanstack/react-table/VisibilityState,createColumnHelper,@tanstack/react-table/createColumnHelper,flexRender,@tanstack/react-table/flexRender,getCoreRowModel,@tanstack/react-table/getCoreRowModel,useReactTable,@tanstack/react-table/useReactTable,Cell,@tanstack/react-table/Cell,@tanstack/react-table/Row"
         }
       ],
       "purl": "pkg:npm/%40tanstack/react-table@8.21.3",
@@ -12804,6 +13375,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tanstack/react-virtual/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tanstack/react-virtual,useVirtualizer,@tanstack/react-virtual/useVirtualizer"
         }
       ],
       "purl": "pkg:npm/%40tanstack/react-virtual@3.13.24",
@@ -12867,6 +13442,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tanstack/table-core/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tanstack/table-core,RowData,@tanstack/table-core/RowData,Header,@tanstack/table-core/Header"
         }
       ],
       "purl": "pkg:npm/%40tanstack/table-core@8.21.3",
@@ -12922,6 +13501,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tauri-apps/api/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tauri-apps/api/core,invoke,@tauri-apps/api/core/invoke,@tauri-apps/api/event,listen,@tauri-apps/api/event/listen"
         }
       ],
       "purl": "pkg:npm/%40tauri-apps/api@2.11.0",
@@ -12989,6 +13572,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tiptap/core/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tiptap/core,Extension,@tiptap/core/Extension,Editor,@tiptap/core/Editor,mergeAttributes,@tiptap/core/mergeAttributes,Node,@tiptap/core/Node"
         }
       ],
       "purl": "pkg:npm/%40tiptap/core@3.23.1",
@@ -13044,6 +13631,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tiptap/extension-bold/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tiptap/extension-bold"
         }
       ],
       "purl": "pkg:npm/%40tiptap/extension-bold@3.23.1",
@@ -13102,6 +13693,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tiptap/extension-document/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tiptap/extension-document"
         }
       ],
       "purl": "pkg:npm/%40tiptap/extension-document@3.23.1",
@@ -13157,6 +13752,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tiptap/extension-hard-break/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tiptap/extension-hard-break"
         }
       ],
       "purl": "pkg:npm/%40tiptap/extension-hard-break@3.23.1",
@@ -13212,6 +13811,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tiptap/extension-heading/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tiptap/extension-heading"
         }
       ],
       "purl": "pkg:npm/%40tiptap/extension-heading@3.23.1",
@@ -13273,6 +13876,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tiptap/extension-history/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tiptap/extension-history"
         }
       ],
       "purl": "pkg:npm/%40tiptap/extension-history@3.23.1",
@@ -13328,6 +13935,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tiptap/extension-italic/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tiptap/extension-italic"
         }
       ],
       "purl": "pkg:npm/%40tiptap/extension-italic@3.23.1",
@@ -13392,6 +14003,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tiptap/extension-mention/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tiptap/extension-mention,MentionNodeAttrs,@tiptap/extension-mention/MentionNodeAttrs"
         }
       ],
       "purl": "pkg:npm/%40tiptap/extension-mention@3.23.1",
@@ -13453,6 +14068,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tiptap/extension-paragraph/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tiptap/extension-paragraph"
         }
       ],
       "purl": "pkg:npm/%40tiptap/extension-paragraph@3.23.1",
@@ -13514,6 +14133,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tiptap/extension-placeholder/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tiptap/extension-placeholder"
         }
       ],
       "purl": "pkg:npm/%40tiptap/extension-placeholder@3.23.1",
@@ -13575,6 +14198,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tiptap/extension-text/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tiptap/extension-text"
         }
       ],
       "purl": "pkg:npm/%40tiptap/extension-text@3.23.1",
@@ -13654,6 +14281,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tiptap/pm/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tiptap/pm/model,Node,@tiptap/pm/model/Node,@tiptap/pm/state,Plugin,@tiptap/pm/state/Plugin,PluginKey,@tiptap/pm/state/PluginKey,EditorState,@tiptap/pm/state/EditorState,@tiptap/pm/view,Decoration,@tiptap/pm/view/Decoration,DecorationSet,@tiptap/pm/view/DecorationSet,EditorView,@tiptap/pm/view/EditorView"
         }
       ],
       "purl": "pkg:npm/%40tiptap/pm@3.23.1",
@@ -13775,6 +14406,15 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-edit-session.ts#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-docx-tab-edit-session.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-file-tab-rename.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-pdf-tab-zoom.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/custom-mention.ts#1"
@@ -14227,6 +14867,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/prompts.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#1"
           },
           {
@@ -14380,19 +15023,46 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#19"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/document-ai-source-bar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/docx-desktop-open-button.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#9"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#10"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-facets.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-tab-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-tab-panel.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-tab-header.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/measured-pdf-provider.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/measured-pdf-provider.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/suggestions-facet.tsx#23"
@@ -14801,6 +15471,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tiptap/react/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "react,RefObject,react/RefObject,useCallback,react/useCallback,createContext,react/createContext,useContext,react/useContext,useEffect,react/useEffect,useRef,react/useRef,useState,react/useState,useMemo,react/useMemo,useEffectEvent,react/useEffectEvent,useLayoutEffect,react/useLayoutEffect,useSyncExternalStore,react/useSyncExternalStore,createElement,react/createElement,ComponentProps,react/ComponentProps,useDeferredValue,react/useDeferredValue,CSSProperties,react/CSSProperties,ReactNode,react/ReactNode,Dispatch,react/Dispatch,SetStateAction,react/SetStateAction,startTransition,react/startTransition,StrictMode,react/StrictMode,memo,react/memo,HTMLAttributes,react/HTMLAttributes,ComponentType,react/ComponentType,Suspense,react/Suspense,Fragment,react/Fragment,useId,react/useId,PropsWithChildren,react/PropsWithChildren,forwardRef,react/forwardRef,useImperativeHandle,react/useImperativeHandle,Children,react/Children,MouseEventHandler,react/MouseEventHandler,ReactElement,react/ReactElement,SVGProps,react/SVGProps,Component,react/Component,ErrorInfo,react/ErrorInfo,useTransition,react/useTransition,react/use,cloneElement,react/cloneElement,isValidElement,react/isValidElement,lazy,react/lazy,useReducer,react/useReducer,MouseEvent,react/MouseEvent,UIEvent,react/UIEvent,ChangeEvent,react/ChangeEvent,KeyboardEvent,react/KeyboardEvent"
         }
       ],
       "purl": "pkg:npm/%40tiptap/react@3.23.1",
@@ -14874,6 +15548,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@tiptap/suggestion/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@tiptap/suggestion,Suggestion,@tiptap/suggestion/Suggestion,SuggestionOptions,@tiptap/suggestion/SuggestionOptions,SuggestionProps,@tiptap/suggestion/SuggestionProps"
         }
       ],
       "purl": "pkg:npm/%40tiptap/suggestion@3.23.1",
@@ -14940,6 +15618,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@valibot/to-json-schema/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "@valibot/to-json-schema,toJsonSchema,@valibot/to-json-schema/toJsonSchema,JsonSchema,@valibot/to-json-schema/JsonSchema"
         }
       ],
       "purl": "pkg:npm/%40valibot/to-json-schema@1.7.0",
@@ -15136,6 +15818,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/ai/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "ai,generateText,ai/generateText,stepCountIs,ai/stepCountIs,tool,ai/tool,LanguageModel,ai/LanguageModel,LanguageModelUsage,ai/LanguageModelUsage,Output,ai/Output,streamText,ai/streamText,FileUIPart,ai/FileUIPart,isFileUIPart,ai/isFileUIPart,isTextUIPart,ai/isTextUIPart,safeValidateUIMessages,ai/safeValidateUIMessages,ToolSet,ai/ToolSet,convertToModelMessages,ai/convertToModelMessages,createUIMessageStream,ai/createUIMessageStream,createUIMessageStreamResponse,ai/createUIMessageStreamResponse,hasToolCall,ai/hasToolCall,InferUIMessageChunk,ai/InferUIMessageChunk,UIMessageStreamOnFinishCallback,ai/UIMessageStreamOnFinishCallback,isToolUIPart,ai/isToolUIPart,InferUITools,ai/InferUITools,UIMessage,ai/UIMessage,APICallError,ai/APICallError,RetryError,ai/RetryError,wrapLanguageModel,ai/wrapLanguageModel,OnStepFinishEvent,ai/OnStepFinishEvent,OnStepStartEvent,ai/OnStepStartEvent,OnToolCallFinishEvent,ai/OnToolCallFinishEvent,StreamTextOnErrorCallback,ai/StreamTextOnErrorCallback,FilePart,ai/FilePart,TextPart,ai/TextPart,ToolExecutionOptions,ai/ToolExecutionOptions,DefaultChatTransport,ai/DefaultChatTransport,lastAssistantMessageIsCompleteWithApprovalResponses,ai/lastAssistantMessageIsCompleteWithApprovalResponses,lastAssistantMessageIsCompleteWithToolCalls,ai/lastAssistantMessageIsCompleteWithToolCalls,ToolUIPart,ai/ToolUIPart,getToolName,ai/getToolName,isDataUIPart,ai/isDataUIPart,UIDataTypes,ai/UIDataTypes"
         }
       ],
       "purl": "pkg:npm/ai@6.0.177",
@@ -15205,6 +15891,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/astro/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "astro/config,defineConfig,astro/config/defineConfig,astro,APIRoute,astro/APIRoute"
         }
       ],
       "purl": "pkg:npm/astro@6.3.1",
@@ -15308,6 +15998,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/better-auth/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "better-auth,BetterAuthPlugin,better-auth/BetterAuthPlugin,betterAuth,better-auth/betterAuth,better-auth/adapters/drizzle,drizzleAdapter,better-auth/adapters/drizzle/drizzleAdapter,better-auth/api,APIError,better-auth/api/APIError,createAuthMiddleware,better-auth/api/createAuthMiddleware,better-auth/plugins,bearer,better-auth/plugins/bearer,emailOTP,better-auth/plugins/emailOTP,better-auth/plugins/jwt,lastLoginMethod,better-auth/plugins/lastLoginMethod,organization,better-auth/plugins/organization,better-auth/client,BetterAuthClientPlugin,better-auth/client/BetterAuthClientPlugin,better-auth/client/plugins,emailOTPClient,better-auth/client/plugins/emailOTPClient,inferAdditionalFields,better-auth/client/plugins/inferAdditionalFields,lastLoginMethodClient,better-auth/client/plugins/lastLoginMethodClient,organizationClient,better-auth/client/plugins/organizationClient,better-auth/react,createAuthClient,better-auth/react/createAuthClient,better-auth/plugins/access,createAccessControl,better-auth/plugins/access/createAccessControl"
         }
       ],
       "purl": "pkg:npm/better-auth@1.6.10",
@@ -15436,6 +16130,9 @@
             "location": "apps/api/src/handlers/chat/send-message.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/chat/skills.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/chat/stream-chat.ts#15"
           },
           {
@@ -15479,6 +16176,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#5"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#3"
@@ -15599,6 +16299,9 @@
           },
           {
             "location": "apps/api/src/handlers/entities/read-by-id.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/read-filesystem-tree.ts#1"
           },
           {
             "location": "apps/api/src/handlers/entities/read-kanban-group.ts#1"
@@ -15851,6 +16554,27 @@
           },
           {
             "location": "apps/api/src/handlers/shortcuts/update.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/delete.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/import-url.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/install.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/skill-package.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/update.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/upload.ts#1"
           },
           {
             "location": "apps/api/src/handlers/tasks/assignees-add.ts#1"
@@ -16268,6 +16992,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/better-result/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "better-result,Result,better-result/Result,UnhandledException,better-result/UnhandledException,panic,better-result/panic,TaggedError,better-result/TaggedError,better-result/Err,Panic,better-result/Panic,matchError,better-result/matchError,isTaggedError,better-result/isTaggedError"
         }
       ],
       "purl": "pkg:npm/better-result@2.9.2",
@@ -16281,7 +17009,7 @@
           "name": "Taskforce.sh Inc."
         }
       ],
-      "bom-ref": "pkg:npm/bullmq@5.76.6",
+      "bom-ref": "pkg:npm/bullmq@5.76.7",
       "description": "Queue for messages and jobs based on Redis",
       "evidence": {
         "identity": [
@@ -16334,12 +17062,16 @@
         {
           "name": "SrcFile",
           "value": "node_modules/bullmq/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "bullmq,Queue,bullmq/Queue,Worker,bullmq/Worker"
         }
       ],
-      "purl": "pkg:npm/bullmq@5.76.6",
+      "purl": "pkg:npm/bullmq@5.76.7",
       "scope": "required",
       "type": "library",
-      "version": "5.76.6"
+      "version": "5.76.7"
     },
     {
       "authors": [
@@ -16427,6 +17159,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/cheerio/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "cheerio"
         }
       ],
       "purl": "pkg:npm/cheerio@1.2.0",
@@ -16502,6 +17238,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/class-variance-authority/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "class-variance-authority,class-variance-authority/cva,VariantProps,class-variance-authority/VariantProps"
         }
       ],
       "purl": "pkg:npm/class-variance-authority@0.7.1",
@@ -16555,6 +17295,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/clsx/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "clsx,clsx/clsx,ClassValue,clsx/ClassValue"
         }
       ],
       "purl": "pkg:npm/clsx@2.1.1",
@@ -16599,6 +17343,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/cobe/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "cobe"
         }
       ],
       "purl": "pkg:npm/cobe@2.0.1",
@@ -16659,6 +17407,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/astro/node_modules/diff/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "diff,diffArrays,diff/diffArrays"
         },
         {
           "name": "SrcFile",
@@ -16723,6 +17475,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/diff/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "diff,diffArrays,diff/diffArrays"
         }
       ],
       "purl": "pkg:npm/diff@9.0.0",
@@ -16797,6 +17553,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/parse5-htmlparser2-tree-adapter/node_modules/domhandler/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "domhandler,AnyNode,domhandler/AnyNode,Element,domhandler/Element,isTag,domhandler/isTag,isText,domhandler/isText"
         },
         {
           "name": "SrcFile",
@@ -16903,6 +17663,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/domhandler/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "domhandler,AnyNode,domhandler/AnyNode,Element,domhandler/Element,isTag,domhandler/isTag,isText,domhandler/isText"
         }
       ],
       "purl": "pkg:npm/domhandler@6.0.1",
@@ -17058,7 +17822,16 @@
             "location": "apps/api/src/handlers/chat/delete-thread.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/chat/get-threads.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/get-threads.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/chat/send-message.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/skills.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/execute/org-function-registry.ts#2"
@@ -17364,6 +18137,18 @@
             "location": "apps/api/src/handlers/shortcuts/update.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/skills/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/install.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/update.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/tasks/assignees-remove.ts#2"
           },
           {
@@ -17662,6 +18447,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/drizzle-orm/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "drizzle-orm,drizzle-orm/sql,drizzle-orm/and,desc,drizzle-orm/desc,drizzle-orm/eq,isNull,drizzle-orm/isNull,count,drizzle-orm/count,drizzle-orm/gte,inArray,drizzle-orm/inArray,defineRelationsPart,drizzle-orm/defineRelationsPart,drizzle-orm/pg-core,boolean,drizzle-orm/pg-core/boolean,index,drizzle-orm/pg-core/index,pgTable,drizzle-orm/pg-core/pgTable,text,drizzle-orm/pg-core/text,timestamp,drizzle-orm/pg-core/timestamp,uniqueIndex,drizzle-orm/pg-core/uniqueIndex,customType,drizzle-orm/pg-core/customType,drizzle-orm/bun-sql,drizzle,drizzle-orm/bun-sql/drizzle,defineRelations,drizzle-orm/defineRelations,isNotNull,drizzle-orm/isNotNull,AnyPgColumn,drizzle-orm/pg-core/AnyPgColumn,DrizzleQueryError,drizzle-orm/DrizzleQueryError,SQLWrapper,drizzle-orm/SQLWrapper,drizzle-orm/SQL,drizzle-orm/lt,drizzle-orm/lte,drizzle-orm/or,drizzle-orm/asc,drizzle-orm/gt,notExists,drizzle-orm/notExists,ilike,drizzle-orm/ilike,countDistinct,drizzle-orm/countDistinct,drizzle-orm/ne,like,drizzle-orm/like,notInArray,drizzle-orm/notInArray,alias,drizzle-orm/pg-core/alias,drizzle-orm/max,drizzle-orm/min,InferSelectModel,drizzle-orm/InferSelectModel"
         }
       ],
       "purl": "pkg:npm/drizzle-orm@1.0.0-rc.1",
@@ -17728,6 +18517,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/elysia-rate-limit/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "elysia-rate-limit,rateLimit,elysia-rate-limit/rateLimit,Context,elysia-rate-limit/Context,Generator,elysia-rate-limit/Generator,Options,elysia-rate-limit/Options"
         }
       ],
       "purl": "pkg:npm/elysia-rate-limit@4.6.2",
@@ -17842,6 +18635,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/get-messages.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/get-threads.ts#4"
           },
           {
             "location": "apps/api/src/handlers/chat/routes.ts#1"
@@ -18019,6 +18815,9 @@
           },
           {
             "location": "apps/api/src/handlers/entities/organize-suggestions.ts#7"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/read-filesystem-tree.ts#2"
           },
           {
             "location": "apps/api/src/handlers/entities/read-kanban-group.ts#4"
@@ -18256,6 +19055,24 @@
           },
           {
             "location": "apps/api/src/handlers/shortcuts/update.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/delete.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/import-url.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/list.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/routes.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/update.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/upload.ts#2"
           },
           {
             "location": "apps/api/src/handlers/tasks/assignees-add.ts#2"
@@ -18514,6 +19331,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/elysia/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "elysia,elysia/t,Static,elysia/Static,status,elysia/status,Elysia,elysia/Elysia,Context,elysia/Context,ElysiaCustomStatusResponse,elysia/ElysiaCustomStatusResponse,InputSchema,elysia/InputSchema,UnwrapRoute,elysia/UnwrapRoute"
         }
       ],
       "purl": "pkg:npm/elysia@1.4.28",
@@ -18573,6 +19394,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@aws-sdk/xml-builder/node_modules/fast-xml-parser/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "fast-xml-parser,XMLBuilder,fast-xml-parser/XMLBuilder,XMLParser,fast-xml-parser/XMLParser"
         }
       ],
       "purl": "pkg:npm/fast-xml-parser@5.7.2",
@@ -18633,6 +19458,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/fast-xml-parser/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "fast-xml-parser,XMLBuilder,fast-xml-parser/XMLBuilder,XMLParser,fast-xml-parser/XMLParser"
         }
       ],
       "purl": "pkg:npm/fast-xml-parser@5.7.3",
@@ -18702,6 +19531,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/idb/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "idb,openDB,idb/openDB,DBSchema,idb/DBSchema,IDBPDatabase,idb/IDBPDatabase"
         }
       ],
       "purl": "pkg:npm/idb@8.0.3",
@@ -18771,6 +19604,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/immer/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "immer,enableMapSet,immer/enableMapSet,produce,immer/produce"
         }
       ],
       "purl": "pkg:npm/immer@11.1.8",
@@ -18831,6 +19668,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/input-otp/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "input-otp,OTPInput,input-otp/OTPInput,OTPInputContext,input-otp/OTPInputContext"
         }
       ],
       "purl": "pkg:npm/input-otp@1.4.2",
@@ -18899,6 +19740,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/ioredis/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "ioredis,RedisOptions,ioredis/RedisOptions"
         }
       ],
       "purl": "pkg:npm/ioredis@5.10.1",
@@ -18958,6 +19803,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@modelcontextprotocol/sdk/node_modules/jose/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "jose,JWTPayload,jose/JWTPayload"
         }
       ],
       "purl": "pkg:npm/jose@6.2.1",
@@ -19017,6 +19866,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/jose/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "jose,JWTPayload,jose/JWTPayload"
         }
       ],
       "purl": "pkg:npm/jose@6.2.3",
@@ -19079,6 +19932,9 @@
             "location": "apps/api/src/handlers/files/xlsx-preprocess.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/skills/skill-package.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/views/table-export.ts#3"
           },
           {
@@ -19121,6 +19977,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/jszip/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "jszip"
         }
       ],
       "purl": "pkg:npm/jszip@3.10.1",
@@ -19279,10 +20139,10 @@
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#6"
+            "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/index.tsx#12"
+            "location": "apps/web/src/routes/_protected.chat/index.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/$contactId.tsx#21"
@@ -19348,7 +20208,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#17"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#5"
+            "location": "apps/web/src/routes/_protected.knowledge/prompts.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#13"
@@ -19474,10 +20337,25 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#27"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/document-ai-source-bar.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/docx-desktop-open-button.tsx#3"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#38"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#19"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-tab-panel.tsx#11"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-pdf-error-fallback.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-tab-header.tsx#3"
@@ -19745,6 +20623,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/lucide-react/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "lucide-react,AlertCircleIcon,lucide-react/AlertCircleIcon,ArrowDownIcon,lucide-react/ArrowDownIcon,ArrowUpIcon,lucide-react/ArrowUpIcon,CheckCircle2Icon,lucide-react/CheckCircle2Icon,CircleDotIcon,lucide-react/CircleDotIcon,CircleIcon,lucide-react/CircleIcon,MinusIcon,lucide-react/MinusIcon,XCircleIcon,lucide-react/XCircleIcon,EyeIcon,lucide-react/EyeIcon,PenLineIcon,lucide-react/PenLineIcon,PlusIcon,lucide-react/PlusIcon,Trash2Icon,lucide-react/Trash2Icon,DownloadIcon,lucide-react/DownloadIcon,CloudIcon,lucide-react/CloudIcon,SparklesIcon,lucide-react/SparklesIcon,LoaderCircleIcon,lucide-react/LoaderCircleIcon,CheckIcon,lucide-react/CheckIcon,ChevronDownIcon,lucide-react/ChevronDownIcon,SquareIcon,lucide-react/SquareIcon,SquarePenIcon,lucide-react/SquarePenIcon,ArrowRightIcon,lucide-react/ArrowRightIcon,XIcon,lucide-react/XIcon,RefreshCwIcon,lucide-react/RefreshCwIcon,BookOpenIcon,lucide-react/BookOpenIcon,ChevronsUpDownIcon,lucide-react/ChevronsUpDownIcon,EllipsisVerticalIcon,lucide-react/EllipsisVerticalIcon,GlobeIcon,lucide-react/GlobeIcon,LayersIcon,lucide-react/LayersIcon,LogOutIcon,lucide-react/LogOutIcon,MessageSquareIcon,lucide-react/MessageSquareIcon,MonitorIcon,lucide-react/MonitorIcon,MoonIcon,lucide-react/MoonIcon,PanelLeftIcon,lucide-react/PanelLeftIcon,PinIcon,lucide-react/PinIcon,PinOffIcon,lucide-react/PinOffIcon,SearchIcon,lucide-react/SearchIcon,Settings2Icon,lucide-react/Settings2Icon,SunIcon,lucide-react/SunIcon,UsersIcon,lucide-react/UsersIcon,BookOpenTextIcon,lucide-react/BookOpenTextIcon,HelpCircleIcon,lucide-react/HelpCircleIcon,LoaderIcon,lucide-react/LoaderIcon,PencilIcon,lucide-react/PencilIcon,CopyIcon,lucide-react/CopyIcon,FileTextIcon,lucide-react/FileTextIcon,RotateCcwIcon,lucide-react/RotateCcwIcon,LandmarkIcon,lucide-react/LandmarkIcon,ExternalLinkIcon,lucide-react/ExternalLinkIcon,FilePlusIcon,lucide-react/FilePlusIcon,FolderIcon,lucide-react/FolderIcon,ListTodoIcon,lucide-react/ListTodoIcon,CodeIcon,lucide-react/CodeIcon,CircleHelpIcon,lucide-react/CircleHelpIcon,LibraryIcon,lucide-react/LibraryIcon,UserIcon,lucide-react/UserIcon,PaperclipIcon,lucide-react/PaperclipIcon,ArrowLeftIcon,lucide-react/ArrowLeftIcon,ChevronRightIcon,lucide-react/ChevronRightIcon,ClipboardPasteIcon,lucide-react/ClipboardPasteIcon,BuildingIcon,lucide-react/BuildingIcon,DatabaseIcon,lucide-react/DatabaseIcon,PlayIcon,lucide-react/PlayIcon,WrenchIcon,lucide-react/WrenchIcon,LucideIcon,lucide-react/LucideIcon,MegaphoneIcon,lucide-react/MegaphoneIcon,StarIcon,lucide-react/StarIcon,AlertTriangleIcon,lucide-react/AlertTriangleIcon,RefreshCcwIcon,lucide-react/RefreshCcwIcon,HistoryIcon,lucide-react/HistoryIcon,LinkIcon,lucide-react/LinkIcon,SquareCheckIcon,lucide-react/SquareCheckIcon,WandSparklesIcon,lucide-react/WandSparklesIcon,ShieldCheckIcon,lucide-react/ShieldCheckIcon,ShieldIcon,lucide-react/ShieldIcon,Maximize2Icon,lucide-react/Maximize2Icon,TrashIcon,lucide-react/TrashIcon,Minimize2Icon,lucide-react/Minimize2Icon,InboxIcon,lucide-react/InboxIcon,MailIcon,lucide-react/MailIcon,PhoneIcon,lucide-react/PhoneIcon,Loader2Icon,lucide-react/Loader2Icon,MoreHorizontalIcon,lucide-react/MoreHorizontalIcon,BoldIcon,lucide-react/BoldIcon,Heading1Icon,lucide-react/Heading1Icon,Heading2Icon,lucide-react/Heading2Icon,Heading3Icon,lucide-react/Heading3Icon,ItalicIcon,lucide-react/ItalicIcon,UploadIcon,lucide-react/UploadIcon,TextQuoteIcon,lucide-react/TextQuoteIcon,LayoutTemplateIcon,lucide-react/LayoutTemplateIcon,ChevronUpIcon,lucide-react/ChevronUpIcon,EllipsisIcon,lucide-react/EllipsisIcon,BotIcon,lucide-react/BotIcon,LightbulbIcon,lucide-react/LightbulbIcon,KeyRoundIcon,lucide-react/KeyRoundIcon,PlugZapIcon,lucide-react/PlugZapIcon,UnplugIcon,lucide-react/UnplugIcon,FileUpIcon,lucide-react/FileUpIcon,PowerIcon,lucide-react/PowerIcon,UserPlusIcon,lucide-react/UserPlusIcon,Trash2,lucide-react/Trash2,HashIcon,lucide-react/HashIcon,CalendarIcon,lucide-react/CalendarIcon,MessageSquarePlusIcon,lucide-react/MessageSquarePlusIcon,PanelRightIcon,lucide-react/PanelRightIcon,LockIcon,lucide-react/LockIcon,FolderPlusIcon,lucide-react/FolderPlusIcon,CheckCheckIcon,lucide-react/CheckCheckIcon,CircleOffIcon,lucide-react/CircleOffIcon,DollarSignIcon,lucide-react/DollarSignIcon,UndoIcon,lucide-react/UndoIcon,ScissorsIcon,lucide-react/ScissorsIcon,ChevronLeftIcon,lucide-react/ChevronLeftIcon,MessageSquareWarningIcon,lucide-react/MessageSquareWarningIcon,ShieldAlertIcon,lucide-react/ShieldAlertIcon,SquareMinusIcon,lucide-react/SquareMinusIcon,AlignLeftIcon,lucide-react/AlignLeftIcon,AtSignIcon,lucide-react/AtSignIcon,TagsIcon,lucide-react/TagsIcon,File,lucide-react/File,FileImage,lucide-react/FileImage,FileSpreadsheet,lucide-react/FileSpreadsheet,FileText,lucide-react/FileText,LockOpenIcon,lucide-react/LockOpenIcon,FileIcon,lucide-react/FileIcon,Rows3Icon,lucide-react/Rows3Icon,TriangleAlertIcon,lucide-react/TriangleAlertIcon,EyeOffIcon,lucide-react/EyeOffIcon,FolderOpenIcon,lucide-react/FolderOpenIcon,ChevronDown,lucide-react/ChevronDown,ChevronRight,lucide-react/ChevronRight,EyeOff,lucide-react/EyeOff,RotateCcw,lucide-react/RotateCcw,LaptopIcon,lucide-react/LaptopIcon,Sparkles,lucide-react/Sparkles,ListXIcon,lucide-react/ListXIcon,XSquareIcon,lucide-react/XSquareIcon,GripVerticalIcon,lucide-react/GripVerticalIcon,PaletteIcon,lucide-react/PaletteIcon,KanbanIcon,lucide-react/KanbanIcon,CopyPlusIcon,lucide-react/CopyPlusIcon,CalendarClockIcon,lucide-react/CalendarClockIcon,ClockIcon,lucide-react/ClockIcon,FolderTreeIcon,lucide-react/FolderTreeIcon,FoldHorizontalIcon,lucide-react/FoldHorizontalIcon,PrinterIcon,lucide-react/PrinterIcon,UnfoldHorizontalIcon,lucide-react/UnfoldHorizontalIcon,RouteIcon,lucide-react/RouteIcon,FileQuestionIcon,lucide-react/FileQuestionIcon,ListChecksIcon,lucide-react/ListChecksIcon,TextIcon,lucide-react/TextIcon,PencilLineIcon,lucide-react/PencilLineIcon,ArchiveIcon,lucide-react/ArchiveIcon,FileOutputIcon,lucide-react/FileOutputIcon,TableIcon,lucide-react/TableIcon,GanttChartIcon,lucide-react/GanttChartIcon,LayoutDashboardIcon,lucide-react/LayoutDashboardIcon,FilterIcon,lucide-react/FilterIcon,SignalIcon,lucide-react/SignalIcon,ArrowUpDownIcon,lucide-react/ArrowUpDownIcon,AlignJustifyIcon,lucide-react/AlignJustifyIcon,WrapTextIcon,lucide-react/WrapTextIcon,EditIcon,lucide-react/EditIcon,SendIcon,lucide-react/SendIcon,SettingsIcon,lucide-react/SettingsIcon,ArchiveRestoreIcon,lucide-react/ArchiveRestoreIcon,ClipboardCopyIcon,lucide-react/ClipboardCopyIcon,LayoutGridIcon,lucide-react/LayoutGridIcon,ListIcon,lucide-react/ListIcon,SlidersHorizontalIcon,lucide-react/SlidersHorizontalIcon,BellIcon,lucide-react/BellIcon,MoreVerticalIcon,lucide-react/MoreVerticalIcon,StickyNoteIcon,lucide-react/StickyNoteIcon,FileWarningIcon,lucide-react/FileWarningIcon,InfoIcon,lucide-react/InfoIcon,BaselineIcon,lucide-react/BaselineIcon,Redo2Icon,lucide-react/Redo2Icon,UnderlineIcon,lucide-react/UnderlineIcon,Undo2Icon,lucide-react/Undo2Icon,AlignCenterIcon,lucide-react/AlignCenterIcon,AlignRightIcon,lucide-react/AlignRightIcon,TypeIcon,lucide-react/TypeIcon,UnlinkIcon,lucide-react/UnlinkIcon,IndentDecreaseIcon,lucide-react/IndentDecreaseIcon,IndentIncreaseIcon,lucide-react/IndentIncreaseIcon,ListOrderedIcon,lucide-react/ListOrderedIcon,MoreHorizontal,lucide-react/MoreHorizontal,CircleAlertIcon,lucide-react/CircleAlertIcon,CircleCheckIcon,lucide-react/CircleCheckIcon"
         }
       ],
       "purl": "pkg:npm/lucide-react@1.14.0",
@@ -19810,6 +20692,10 @@
           "value": "node_modules/react-email/node_modules/marked/package.json"
         },
         {
+          "name": "ImportedModules",
+          "value": "marked,marked/marked"
+        },
+        {
           "name": "SrcFile",
           "value": "node_modules/@react-email/markdown/node_modules/marked/package.json"
         }
@@ -19872,6 +20758,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/mermaid/node_modules/marked/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "marked,marked/marked"
         }
       ],
       "purl": "pkg:npm/marked@16.4.2",
@@ -19932,6 +20822,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/streamdown/node_modules/marked/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "marked,marked/marked"
         }
       ],
       "purl": "pkg:npm/marked@17.0.5",
@@ -19992,6 +20886,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/marked/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "marked,marked/marked"
         }
       ],
       "purl": "pkg:npm/marked@18.0.3",
@@ -20052,6 +20950,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/nodemailer/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "nodemailer,createTransport,nodemailer/createTransport"
         }
       ],
       "purl": "pkg:npm/nodemailer@8.0.7",
@@ -20123,6 +21025,10 @@
         {
           "name": "ExportedModules",
           "value": "pdfjs-dist,PDFDocumentProxy,pdfjs-dist/PDFDocumentProxy,PDFPageProxy,pdfjs-dist/PDFPageProxy,PageViewport,pdfjs-dist/PageViewport"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "pdfjs-dist,pdfjs-dist/build/pdf.worker.min.mjs?url"
         }
       ],
       "purl": "pkg:npm/pdfjs-dist@5.7.284",
@@ -20179,6 +21085,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/posthog-js/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "posthog-js,posthog,posthog-js/posthog"
         },
         {
           "name": "SrcFile",
@@ -20239,6 +21149,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/posthog-node/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "posthog-node,PostHog,posthog-node/PostHog"
         }
       ],
       "purl": "pkg:npm/posthog-node@5.33.4",
@@ -20308,6 +21222,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/prosemirror-commands/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "prosemirror-commands,baseKeymap,prosemirror-commands/baseKeymap,splitBlock,prosemirror-commands/splitBlock,deleteSelection,prosemirror-commands/deleteSelection,joinBackward,prosemirror-commands/joinBackward,joinForward,prosemirror-commands/joinForward,selectAll,prosemirror-commands/selectAll,selectParentNode,prosemirror-commands/selectParentNode,toggleMark,prosemirror-commands/toggleMark"
         }
       ],
       "purl": "pkg:npm/prosemirror-commands@1.7.1",
@@ -20359,6 +21277,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/prosemirror-dropcursor/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "prosemirror-dropcursor,dropCursor,prosemirror-dropcursor/dropCursor"
         }
       ],
       "purl": "pkg:npm/prosemirror-dropcursor@1.8.2",
@@ -20416,6 +21338,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/prosemirror-history/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "prosemirror-history,history,prosemirror-history/history,undo,prosemirror-history/undo,redo,prosemirror-history/redo"
         }
       ],
       "purl": "pkg:npm/prosemirror-history@1.5.0",
@@ -20467,6 +21393,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/prosemirror-keymap/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "prosemirror-keymap,keymap,prosemirror-keymap/keymap"
         }
       ],
       "purl": "pkg:npm/prosemirror-keymap@1.2.3",
@@ -20513,6 +21443,9 @@
           },
           {
             "location": "packages/folio/src/core/layout-bridge/toFlowBlocks.ts#8"
+          },
+          {
+            "location": "packages/folio/src/core/prosemirror/commands/comments.ts#7"
           },
           {
             "location": "packages/folio/src/core/prosemirror/commands/formatting.ts#9"
@@ -20590,6 +21523,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/prosemirror-model/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "prosemirror-model,Node,prosemirror-model/Node,Mark,prosemirror-model/Mark,Fragment,prosemirror-model/Fragment,Schema,prosemirror-model/Schema,NodeSpec,prosemirror-model/NodeSpec,MarkSpec,prosemirror-model/MarkSpec,MarkType,prosemirror-model/MarkType"
         }
       ],
       "purl": "pkg:npm/prosemirror-model@1.25.4",
@@ -20629,7 +21566,7 @@
             "location": "packages/folio/src/core/ai-edits/apply.ts#2"
           },
           {
-            "location": "packages/folio/src/core/prosemirror/commands/comments.ts#7"
+            "location": "packages/folio/src/core/prosemirror/commands/comments.ts#8"
           },
           {
             "location": "packages/folio/src/core/prosemirror/commands/formatting.ts#10"
@@ -20707,6 +21644,9 @@
             "location": "packages/folio/src/core/prosemirror/plugins/anonymizationDecorations.ts#21"
           },
           {
+            "location": "packages/folio/src/core/prosemirror/plugins/anonymizationDecorations.ts#22"
+          },
+          {
             "location": "packages/folio/src/core/prosemirror/plugins/selectionTracker.ts#11"
           },
           {
@@ -20768,6 +21708,10 @@
         {
           "name": "ExportedModules",
           "value": "prosemirror-state"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "prosemirror-state,Selection,prosemirror-state/Selection,NodeSelection,prosemirror-state/NodeSelection,EditorState,prosemirror-state/EditorState,Transaction,prosemirror-state/Transaction,Command,prosemirror-state/Command,TextSelection,prosemirror-state/TextSelection,Plugin,prosemirror-state/Plugin,PluginKey,prosemirror-state/PluginKey,PluginSpec,prosemirror-state/PluginSpec"
         }
       ],
       "purl": "pkg:npm/prosemirror-state@1.4.4",
@@ -20825,6 +21769,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/prosemirror-tables/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "prosemirror-tables,columnResizing,prosemirror-tables/columnResizing,tableEditing,prosemirror-tables/tableEditing,mergeCells,prosemirror-tables/mergeCells,splitCell,prosemirror-tables/splitCell,CellSelection,prosemirror-tables/CellSelection"
         }
       ],
       "purl": "pkg:npm/prosemirror-tables@1.8.5",
@@ -20879,6 +21827,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/prosemirror-transform/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "prosemirror-transform,AddMarkStep,prosemirror-transform/AddMarkStep,AddNodeMarkStep,prosemirror-transform/AddNodeMarkStep,RemoveMarkStep,prosemirror-transform/RemoveMarkStep,RemoveNodeMarkStep,prosemirror-transform/RemoveNodeMarkStep,Mapping,prosemirror-transform/Mapping"
         }
       ],
       "purl": "pkg:npm/prosemirror-transform@1.12.0",
@@ -20996,6 +21948,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/prosemirror-view/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "prosemirror-view,EditorView,prosemirror-view/EditorView,Decoration,prosemirror-view/Decoration,DecorationSet,prosemirror-view/DecorationSet,prosemirror-view/style/prosemirror.css,DirectEditorProps,prosemirror-view/DirectEditorProps"
         }
       ],
       "purl": "pkg:npm/prosemirror-view@1.41.8",
@@ -21054,6 +22010,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/quickjs-emscripten-core/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "quickjs-emscripten-core,QuickJSAsyncContext,quickjs-emscripten-core/QuickJSAsyncContext,QuickJSDeferredPromise,quickjs-emscripten-core/QuickJSDeferredPromise,QuickJSHandle,quickjs-emscripten-core/QuickJSHandle,Scope,quickjs-emscripten-core/Scope"
         }
       ],
       "purl": "pkg:npm/quickjs-emscripten-core@0.32.0",
@@ -21109,6 +22069,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/quickjs-emscripten/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "quickjs-emscripten,newAsyncContext,quickjs-emscripten/newAsyncContext"
         }
       ],
       "purl": "pkg:npm/quickjs-emscripten@0.32.0",
@@ -21194,6 +22158,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/react-dom/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "react-dom/client,createRoot,react-dom/client/createRoot,react-dom,flushSync,react-dom/flushSync,createPortal,react-dom/createPortal"
         }
       ],
       "purl": "pkg:npm/react-dom@19.2.6",
@@ -21318,6 +22286,15 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-edit-session.ts#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-docx-tab-edit-session.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-file-tab-rename.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-pdf-tab-zoom.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/custom-mention.ts#1"
@@ -21770,6 +22747,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/prompts.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#1"
           },
           {
@@ -21923,19 +22903,46 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#19"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/document-ai-source-bar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/docx-desktop-open-button.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#9"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#10"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-facets.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-tab-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-tab-panel.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-tab-header.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/measured-pdf-provider.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/measured-pdf-provider.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/suggestions-facet.tsx#23"
@@ -22344,6 +23351,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/react/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "react,RefObject,react/RefObject,useCallback,react/useCallback,createContext,react/createContext,useContext,react/useContext,useEffect,react/useEffect,useRef,react/useRef,useState,react/useState,useMemo,react/useMemo,useEffectEvent,react/useEffectEvent,useLayoutEffect,react/useLayoutEffect,useSyncExternalStore,react/useSyncExternalStore,createElement,react/createElement,ComponentProps,react/ComponentProps,useDeferredValue,react/useDeferredValue,CSSProperties,react/CSSProperties,ReactNode,react/ReactNode,Dispatch,react/Dispatch,SetStateAction,react/SetStateAction,startTransition,react/startTransition,StrictMode,react/StrictMode,memo,react/memo,HTMLAttributes,react/HTMLAttributes,ComponentType,react/ComponentType,Suspense,react/Suspense,Fragment,react/Fragment,useId,react/useId,PropsWithChildren,react/PropsWithChildren,forwardRef,react/forwardRef,useImperativeHandle,react/useImperativeHandle,Children,react/Children,MouseEventHandler,react/MouseEventHandler,ReactElement,react/ReactElement,SVGProps,react/SVGProps,Component,react/Component,ErrorInfo,react/ErrorInfo,useTransition,react/useTransition,react/use,cloneElement,react/cloneElement,isValidElement,react/isValidElement,lazy,react/lazy,useReducer,react/useReducer,MouseEvent,react/MouseEvent,UIEvent,react/UIEvent,ChangeEvent,react/ChangeEvent,KeyboardEvent,react/KeyboardEvent"
         }
       ],
       "purl": "pkg:npm/react@19.2.6",
@@ -22448,6 +23459,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/slimdom/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "slimdom"
         }
       ],
       "purl": "pkg:npm/slimdom@4.3.5",
@@ -22514,6 +23529,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/streamdown/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "streamdown,Streamdown,streamdown/Streamdown"
         }
       ],
       "purl": "pkg:npm/streamdown@2.5.0",
@@ -22574,6 +23593,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/streamdown/node_modules/tailwind-merge/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "tailwind-merge,twMerge,tailwind-merge/twMerge"
         }
       ],
       "purl": "pkg:npm/tailwind-merge@3.5.0",
@@ -22634,6 +23657,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/tailwind-merge/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "tailwind-merge,twMerge,tailwind-merge/twMerge"
         }
       ],
       "purl": "pkg:npm/tailwind-merge@3.6.0",
@@ -22693,6 +23720,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/unified/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "unified,PluggableList,unified/PluggableList"
         }
       ],
       "purl": "pkg:npm/unified@11.0.5",
@@ -22798,6 +23829,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/use-debounce/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "use-debounce,useDebounce,use-debounce/useDebounce,useThrottledCallback,use-debounce/useThrottledCallback,useDebouncedCallback,use-debounce/useDebouncedCallback"
         }
       ],
       "purl": "pkg:npm/use-debounce@10.1.1",
@@ -22837,6 +23872,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.organization/-mutations.ts#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-docx-tab-edit-session.ts#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-file-tab-rename.ts#3"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts#8"
@@ -22971,10 +24012,10 @@
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#6"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#7"
+            "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#11"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/index.tsx#13"
+            "location": "apps/web/src/routes/_protected.chat/index.tsx#17"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/$contactId.tsx#23"
@@ -23055,7 +24096,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#18"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#6"
+            "location": "apps/web/src/routes/_protected.knowledge/prompts.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#13"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#14"
@@ -23226,10 +24270,31 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#28"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/document-ai-source-bar.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/docx-desktop-open-button.tsx#4"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#39"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#20"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-facets.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-tab-panel.tsx#12"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#12"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-pdf-error-fallback.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-rail-context-menu.tsx#2"
@@ -23397,6 +24462,9 @@
             "location": "apps/web/src/routes/mcp.oauth-callback.tsx#4"
           },
           {
+            "location": "apps/web/src/routes/onboarding/-components/onboarding-layout.tsx#4"
+          },
+          {
             "location": "apps/web/src/routes/onboarding/-components/onboarding-progress.tsx#1"
           },
           {
@@ -23476,6 +24544,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/use-intl/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "use-intl,useTranslations,use-intl/useTranslations,useLocale,use-intl/useLocale,IntlProvider,use-intl/IntlProvider,useFormatter,use-intl/useFormatter"
         }
       ],
       "purl": "pkg:npm/use-intl@4.11.1",
@@ -23532,6 +24604,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/utif2/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "utif2"
         }
       ],
       "purl": "pkg:npm/utif2@4.1.0",
@@ -23592,6 +24668,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/mermaid/node_modules/uuid/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "uuid,uuid/v7"
         }
       ],
       "purl": "pkg:npm/uuid@11.1.0",
@@ -23652,6 +24732,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/uuid/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "uuid,uuid/v7"
         }
       ],
       "purl": "pkg:npm/uuid@14.0.0",
@@ -23729,7 +24813,7 @@
             "location": "apps/api/src/handlers/chat/tools/org-tools.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#3"
+            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#4"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#5"
@@ -23868,6 +24952,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/valibot/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "valibot"
         }
       ],
       "purl": "pkg:npm/valibot@1.4.0",
@@ -24008,7 +25096,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#29"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#40"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#13"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/suggestions-facet.tsx#25"
@@ -24104,7 +25192,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state.ts#13"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#40"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-panel.tsx#13"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/-components/create-matter-dialog.tsx#14"
@@ -24144,6 +25232,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/zustand/package.json"
+        },
+        {
+          "name": "ImportedModules",
+          "value": "zustand,create,zustand/create,zustand/react/shallow,useShallow,zustand/react/shallow/useShallow,zustand/middleware,persist,zustand/middleware/persist,StoreApi,zustand/StoreApi,zustand/middleware/immer,immer,zustand/middleware/immer/immer,PersistStorage,zustand/middleware/PersistStorage,StorageValue,zustand/middleware/StorageValue,zustand/shallow,zustand/shallow/useShallow,createStore,zustand/createStore,useStore,zustand/useStore"
         }
       ],
       "purl": "pkg:npm/zustand@5.0.13",

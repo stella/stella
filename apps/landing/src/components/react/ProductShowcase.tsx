@@ -26,7 +26,7 @@ export default function ProductShowcase() {
                 )}
                 data-showcase-shell
               >
-                {Illustration !== undefined && <Illustration />}
+                <Illustration />
                 <div className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-black/4 transition-opacity duration-300 group-hover:opacity-70 dark:ring-white/6" />
                 <div className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 transition-opacity duration-300 group-hover:opacity-100">
                   <div className="absolute inset-x-6 top-0 h-24 rounded-full bg-[linear-gradient(180deg,rgba(255,255,255,0.36),rgba(255,255,255,0))] blur-2xl dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0))]" />

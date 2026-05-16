@@ -65,7 +65,7 @@ Project: root
 - @streamdown/mermaid 1.0.2 — Apache-2.0
 - @t3-oss/env-core 0.13.11 — MIT
 - @tanstack/react-devtools 0.10.2 — MIT
-- @tanstack/react-form 1.31.0 — MIT
+- @tanstack/react-form 1.32.0 — MIT
 - @tanstack/react-hotkeys 0.10.0 — MIT
 - @tanstack/react-query 5.100.9 — MIT
 - @tanstack/react-query-devtools 5.100.9 — MIT
@@ -95,7 +95,7 @@ Project: root
 - astro 6.3.1 — MIT
 - better-auth 1.6.10 — MIT
 - better-result 2.9.2 — MIT
-- bullmq 5.76.6 — MIT
+- bullmq 5.76.7 — MIT
 - cheerio 1.2.0 — MIT
 - class-variance-authority 0.7.1 — Apache-2.0
 - clsx 2.1.1 — MIT
@@ -627,7 +627,7 @@ Project: desktop-tauri
 - tinystr 0.8.3 — Unicode-3.0
 - tinyvec 1.11.0 — Apache-2.0 OR MIT OR Zlib
 - tinyvec_macros 0.1.1 — Apache-2.0 OR MIT OR Zlib
-- tokio 1.52.2 — MIT
+- tokio 1.52.3 — MIT
 - tokio-macros 2.7.0 — MIT
 - tokio-rustls 0.26.4 — Apache-2.0 OR MIT
 - tokio-util 0.7.18 — MIT

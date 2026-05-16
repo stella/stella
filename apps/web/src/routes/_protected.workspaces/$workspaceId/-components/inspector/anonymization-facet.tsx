@@ -282,7 +282,7 @@ export const AnonymizationFacet = ({
     setPendingValue(folioSelection.text);
     // `seq` is part of the dep array so re-selecting the
     // same string still re-fires the prefill.
-  }, [folioSelection?.text, folioSelection?.seq]);
+  }, [folioSelection]);
 
   const addTerm = (canonical: string, label: LabelOption) => {
     const trimmed = canonical.trim();
@@ -316,14 +316,14 @@ export const AnonymizationFacet = ({
   };
   const submitTerm = () => addTerm(pendingValue, pendingLabel);
 
-  const allEntries = termsQuery.data?.entries ?? [];
+  const allEntries = termsQuery.data?.entries;
   const matchSnapshot = useAnonymizationMatches(activeFieldId);
   const matchesReady = useAnonymizationMatchesReady(activeFieldId);
   const allowlistQuery = useQuery({
     ...anonymizationAllowlistOptions({ workspaceId, entityId }),
     enabled: activeFieldId !== null,
   });
-  const allowlistEntries = allowlistQuery.data?.entries ?? [];
+  const allowlistEntries = allowlistQuery.data?.entries;
   const createAllowlistMutation = useCreateAnonymizationAllowlistEntry();
   const deleteAllowlistMutation = useDeleteAnonymizationAllowlistEntry();
   // Restrict the visible workspace vocabulary to entries whose
@@ -334,12 +334,15 @@ export const AnonymizationFacet = ({
   // while `!matchesReady`: detection hasn't published yet, so
   // filtering would collapse the list to "0 matches" and look
   // identical to "actually nothing matches".
-  const entries =
-    activeFieldId && matchesReady
-      ? allEntries.filter((entry) =>
-          matchSnapshot.countByCanonical.has(entry.canonical),
-        )
-      : allEntries;
+  const entries = useMemo(() => {
+    const sourceEntries = allEntries ?? [];
+    if (activeFieldId && matchesReady) {
+      return sourceEntries.filter((entry) =>
+        matchSnapshot.countByCanonical.has(entry.canonical),
+      );
+    }
+    return sourceEntries;
+  }, [activeFieldId, allEntries, matchesReady, matchSnapshot.countByCanonical]);
   const noOpenDocument = activeFieldId === null;
 
   // Auto-detected entities to surface in the "Detected" section.
@@ -350,16 +353,16 @@ export const AnonymizationFacet = ({
   // before Folio sees them), so re-merge them from the
   // exclusions store with their remembered label.
   const workspaceCanonicals = useMemo(
-    () => new Set(allEntries.map((entry) => entry.canonical)),
+    () => new Set((allEntries ?? []).map((entry) => entry.canonical)),
     [allEntries],
   );
   // Index allowlist entries by canonical (case-insensitive) so the
   // UI knows which detected rows are currently overridden, plus
   // which scope they sit at (for the restore button targeting).
-  type AllowlistRow = (typeof allowlistEntries)[number];
+  type AllowlistRow = NonNullable<typeof allowlistEntries>[number];
   const allowlistByCanonical = useMemo(() => {
     const map = new Map<string, AllowlistRow[]>();
-    for (const entry of allowlistEntries) {
+    for (const entry of allowlistEntries ?? []) {
       const key = entry.canonical.toLocaleLowerCase();
       const list = map.get(key);
       if (list) {
@@ -407,7 +410,7 @@ export const AnonymizationFacet = ({
     // Allowlist entries that no longer show up in the live match
     // snapshot (pipeline already dropped them) still need a row so
     // the user can restore them.
-    for (const entry of allowlistEntries) {
+    for (const entry of allowlistEntries ?? []) {
       push(entry.label, entry.canonical, 0, true);
     }
     for (const list of groups.values()) {
@@ -637,7 +640,7 @@ export const AnonymizationFacet = ({
         )}
         {!termsQuery.isLoading && entries.length === 0 && (
           <div className="text-muted-foreground rounded-md border border-dashed py-6 text-center text-xs">
-            {noOpenDocument || allEntries.length === 0
+            {noOpenDocument || (allEntries?.length ?? 0) === 0
               ? t("inspector.anonymization.emptyState")
               : t("inspector.anonymization.noMatchesInDocument")}
           </div>
@@ -646,33 +649,22 @@ export const AnonymizationFacet = ({
           const hitCount = matchSnapshot.countByCanonical.get(entry.canonical);
           return (
             <div
-              className="hover:bg-muted/50 flex cursor-pointer items-center justify-between gap-2 rounded-md border px-3 py-2"
+              className="hover:bg-muted/50 flex items-center justify-between gap-2 rounded-md border px-3 py-2"
               data-anonymization-canonical={entry.canonical}
               key={entry.id}
-              onClick={() => selectFromSidebar(entry.canonical, entry.label)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(event) => {
-                // Don't hijack Enter/Space from nested action
-                // buttons (trash, ignore, restore, scope menu);
-                // only handle keys originating on the row itself.
-                if (event.target !== event.currentTarget) {
-                  return;
-                }
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  selectFromSidebar(entry.canonical, entry.label);
-                }
-              }}
             >
-              <div className="flex min-w-0 flex-col">
+              <button
+                className="flex min-w-0 flex-1 flex-col text-start"
+                onClick={() => selectFromSidebar(entry.canonical, entry.label)}
+                type="button"
+              >
                 <span className="truncate text-sm font-medium">
                   {entry.canonical}
                 </span>
                 <span className="text-muted-foreground text-xs">
                   {formatLabel(entry.label)}
                 </span>
-              </div>
+              </button>
               <div className="flex items-center gap-1">
                 {hitCount !== undefined && hitCount > 0 && (
                   <span
@@ -748,39 +740,22 @@ export const AnonymizationFacet = ({
                       <li
                         className={
                           row.isExcluded
-                            ? "text-muted-foreground hover:bg-muted/30 flex cursor-pointer items-center justify-between gap-2 px-3 py-1.5 line-through"
-                            : "hover:bg-muted/50 flex cursor-pointer items-center justify-between gap-2 px-3 py-1.5"
+                            ? "text-muted-foreground hover:bg-muted/30 flex items-center justify-between gap-2 px-3 py-1.5 line-through"
+                            : "hover:bg-muted/50 flex items-center justify-between gap-2 px-3 py-1.5"
                         }
                         data-anonymization-canonical={row.canonical}
                         key={row.canonical}
-                        onClick={() => selectFromSidebar(row.canonical, label)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(event) => {
-                          // Don't hijack Enter/Space from nested
-                          // action buttons (ignore, restore, scope
-                          // menu); only handle keys originating on
-                          // the row itself.
-                          if (event.target !== event.currentTarget) {
-                            return;
-                          }
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            selectFromSidebar(row.canonical, label);
-                          }
-                        }}
                       >
-                        <span className="truncate text-xs">
-                          {row.canonical}
-                        </span>
-                        {/* Wrapper stops the row click so inner action
-                            buttons (ignore / restore / scope menu) don't
-                            also trigger the term-select bridge. */}
-                        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
-                        <span
-                          className="flex items-center gap-1"
-                          onClick={(event) => event.stopPropagation()}
+                        <button
+                          className="min-w-0 flex-1 truncate text-start text-xs"
+                          onClick={() =>
+                            selectFromSidebar(row.canonical, label)
+                          }
+                          type="button"
                         >
+                          {row.canonical}
+                        </button>
+                        <div className="flex items-center gap-1">
                           {!row.isExcluded && row.count > 0 && (
                             <span
                               aria-label={t(
@@ -897,7 +872,7 @@ export const AnonymizationFacet = ({
                               </Menu>
                             </>
                           )}
-                        </span>
+                        </div>
                       </li>
                     ))}
                   </ul>

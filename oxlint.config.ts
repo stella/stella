@@ -11,7 +11,7 @@ export default defineConfig({
   extends: [core, react],
   rules: {
     // Override ultracite defaults for Stella
-    "no-console": "warn",
+    "no-console": "error",
     "no-shadow": "error",
     "require-await": "error",
     "no-useless-catch": "error",
@@ -64,7 +64,7 @@ export default defineConfig({
     "sonarjs/no-useless-increment": "error",
     "sonarjs/non-existent-operator": "error",
     "sonarjs/regex-complexity": ["error", { threshold: 30 }],
-    "sonarjs/slow-regex": "warn",
+    "sonarjs/slow-regex": "error",
     "sonarjs/stateful-regex": "error",
     "sonarjs/updated-loop-counter": "error",
 
@@ -246,6 +246,29 @@ export default defineConfig({
         // looser legacy budget while new app/library code starts at 30.
         "sonarjs/cognitive-complexity": ["error", 80],
       },
+    },
+    {
+      // Astro's content config wires virtual loader/schema helpers that
+      // oxlint's type-aware pass sees as error-typed outside Astro's checker.
+      files: [
+        "apps/docs/src/content.config.ts",
+        "apps/landing/src/content.config.ts",
+      ],
+      rules: {
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-call": "off",
+      },
+    },
+    {
+      // One-off DOCX fixture scripts and load-test CLIs intentionally
+      // print progress/errors to the terminal; keep product API code on
+      // structured logging.
+      files: [
+        "apps/api/src/handlers/docx/generate-spa-filled.ts",
+        "apps/api/src/handlers/docx/prepare-spa-template.ts",
+        "apps/api/src/tests/load/**/*.ts",
+      ],
+      rules: { "no-console": "off" },
     },
     {
       // Legacy DOCX/editor code has parser and layout state machines that need
@@ -768,7 +791,7 @@ export default defineConfig({
           },
         ],
         "no-untyped-updates/no-untyped-updates": "error",
-        "security-guards/no-unscoped-user-query": "warn",
+        "security-guards/no-unscoped-user-query": "error",
         "no-restricted-imports": [
           "error",
           {

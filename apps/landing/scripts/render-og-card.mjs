@@ -12,7 +12,7 @@ const WIDTH = 1200;
 const HEIGHT = 630;
 
 const cabinetFontPath = join(FONT_DIR, "CabinetGrotesk-Regular.otf");
-const logoSvg = readFileSync(join(IMAGE_DIR, "stella-logo.svg"), "utf8");
+const logoSvg = readFileSync(join(IMAGE_DIR, "stella-logo.svg"), "utf-8");
 const logoSvgBase64 = Buffer.from(logoSvg).toString("base64");
 const gradientPng = readFileSync(join(IMAGE_DIR, "gradient-hero.png")).toString(
   "base64",

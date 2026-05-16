@@ -17,7 +17,10 @@
   },
   "scripts": {
     "test": "bun test",
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsgo --noEmit",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/case-law",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/case-law",
+    "format": "oxfmt ."
   },
   "dependencies": {
     "valibot": "catalog:"

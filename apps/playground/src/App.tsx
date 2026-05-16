@@ -1,5 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 
+import { EyeIcon, MinusIcon, PenLineIcon, PlusIcon } from "lucide-react";
+
 import { DocxEditor, createEmptyDocument } from "@stll/folio";
 import type {
   Document as FolioDocument,
@@ -8,7 +10,6 @@ import type {
 } from "@stll/folio";
 import { Button } from "@stll/ui/components/button";
 import { Separator } from "@stll/ui/components/separator";
-import { EyeIcon, MinusIcon, PenLineIcon, PlusIcon } from "lucide-react";
 
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 2;
@@ -197,7 +198,7 @@ export function App() {
       getEditorRef: () => editorRef.current,
     };
     return () => {
-      delete globalThis.__folioPlayground;
+      globalThis.__folioPlayground = undefined;
     };
   }, []);
 
@@ -206,7 +207,7 @@ export function App() {
       <main className="flex flex-1 overflow-hidden">
         <DocxEditor
           ref={editorRef}
-          document={documentBuffer ? undefined : currentDocument}
+          document={documentBuffer ? null : currentDocument}
           documentBuffer={documentBuffer}
           author="Folio User"
           onError={handleError}
