@@ -1,5 +1,11 @@
 import type { PropsWithChildren } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useOptimistic,
+  useRef,
+  useTransition,
+} from "react";
 
 import {
   useQuery,
@@ -111,9 +117,19 @@ const EntityMetadataContent = ({
   const { data: versionsData } = useQuery(
     entityVersionsOptions({ workspaceId, entityId: entity.entityId }),
   );
-  const [optimisticProperties, setOptimisticProperties] = useState<
-    WorkspaceProperty[]
-  >([]);
+  // `useOptimistic` keeps any newly created property visible until the
+  // wrapping transition completes (i.e., until the entity/property
+  // queries invalidate and the server-side row shows up). React then
+  // resyncs to the passthrough `properties` value, so we no longer
+  // need to manually prune entries once the field arrives.
+  const [optimisticProperties, addOptimisticProperty] = useOptimistic(
+    properties,
+    (current, action: WorkspaceProperty) =>
+      current.some((property) => property.id === action.id)
+        ? current
+        : [...current, action],
+  );
+  const [, startOptimisticTransition] = useTransition();
   const activeJustification = useWorkspaceStore((s) =>
     activeJustificationFieldId
       ? (s.justifications.find(
@@ -122,13 +138,15 @@ const EntityMetadataContent = ({
       : null,
   );
 
-  const refreshEntityFields = useCallback(() => {
-    void queryClient.invalidateQueries({
-      queryKey: entitiesKeys.all(workspaceId),
-    });
-    void queryClient.invalidateQueries({
-      queryKey: propertiesOptions(workspaceId).queryKey,
-    });
+  const refreshEntityFields = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: entitiesKeys.all(workspaceId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: propertiesOptions(workspaceId).queryKey,
+      }),
+    ]);
   }, [queryClient, workspaceId]);
 
   useEffect(() => {
@@ -142,33 +160,19 @@ const EntityMetadataContent = ({
     }
 
     sawWorkflowRunning.current = false;
-    refreshEntityFields();
+    void refreshEntityFields();
   }, [isWorkflowRunning, refreshEntityFields]);
 
   const entityFieldPropertyIds = new Set(
     entity.fields.map((field) => field.propertyId),
   );
-  const entityFieldPropertyIdsKey = [...entityFieldPropertyIds]
-    .toSorted()
-    .join(",");
 
-  useEffect(() => {
-    const currentFieldPropertyIds = new Set(
-      entityFieldPropertyIdsKey.split(",").filter((id) => id.length > 0),
-    );
-    setOptimisticProperties((prev) =>
-      prev.every((property) => !currentFieldPropertyIds.has(property.id))
-        ? prev
-        : prev.filter((property) => !currentFieldPropertyIds.has(property.id)),
-    );
-  }, [entityFieldPropertyIdsKey]);
-
-  const propertyIds = new Set(properties.map((property) => property.id));
-  const visibleProperties = [
-    ...properties,
-    ...optimisticProperties.filter((property) => !propertyIds.has(property.id)),
-  ];
-  const optimisticFields = optimisticProperties.flatMap((property) => {
+  const serverPropertyIds = new Set(properties.map((property) => property.id));
+  const optimisticOnlyProperties = optimisticProperties.filter(
+    (property) => !serverPropertyIds.has(property.id),
+  );
+  const visibleProperties = [...properties, ...optimisticOnlyProperties];
+  const optimisticFields = optimisticOnlyProperties.flatMap((property) => {
     if (entityFieldPropertyIds.has(property.id)) {
       return [];
     }
@@ -202,19 +206,16 @@ const EntityMetadataContent = ({
   }: {
     property: WorkspaceProperty;
   }) => {
-    setOptimisticProperties((prev) => {
-      if (prev.some((item) => item.id === property.id)) {
-        return prev;
-      }
-
-      return [...prev, property];
+    // The dialog already triggered the workflow itself (entity-scoped
+    // when a file source is set, whole-matter otherwise). We dispatch
+    // the optimistic row inside a transition and await the
+    // invalidations inside the same transition body — React keeps the
+    // optimistic property visible until the server queries refresh,
+    // then drops it because the passthrough now contains the real row.
+    startOptimisticTransition(async () => {
+      addOptimisticProperty(property);
+      await refreshEntityFields();
     });
-
-    // The dialog now triggers the workflow itself (entity-scoped when a
-    // file source is set, whole-matter otherwise). Refresh the entity
-    // fields so the optimistic row swaps to a real pending field as soon
-    // as the workflow query reports `running`.
-    refreshEntityFields();
   };
 
   const extractionAction = (
