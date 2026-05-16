@@ -406,6 +406,8 @@ type ExternalPdfState =
     }
   | { status: "ready"; buffer: ArrayBuffer; token: string };
 
+type ExternalPdfPayload = { buffer: ArrayBuffer; token: string };
+
 const useExternalPdfBuffer = ({
   enabled,
   url,
@@ -413,54 +415,55 @@ const useExternalPdfBuffer = ({
   enabled: boolean;
   url?: string | undefined;
 }): ExternalPdfState => {
-  const [state, setState] = useState<ExternalPdfState>({ status: "idle" });
-
-  useEffect(() => {
-    if (!enabled || url === undefined) {
-      setState({ status: "idle" });
-      return undefined;
-    }
-
-    setState({ status: "loading" });
-    const controller = new AbortController();
-    const isAborted = () => controller.signal.aborted;
-
-    void (async () => {
-      const response = await fetch(url, {
+  const query = useQuery({
+    queryKey: ["external-pdf", url],
+    queryFn: async ({ signal }): Promise<ExternalPdfPayload> => {
+      // SAFETY: `enabled` below guarantees `url` is defined when the
+      // queryFn runs.
+      // eslint-disable-next-line typescript/no-non-null-assertion
+      const response = await fetch(url!, {
         credentials: "include",
-        signal: controller.signal,
+        signal,
       });
 
-      if (!response.ok || isAborted()) {
-        if (!isAborted()) {
-          setState({ status: "error" });
-        }
-        return;
+      if (!response.ok) {
+        throw new Error(
+          `External PDF fetch failed: ${String(response.status)}`,
+        );
       }
 
-      const next = await response.arrayBuffer();
-      if (isAborted()) {
-        return;
-      }
-
+      const buffer = await response.arrayBuffer();
       // The PDF document cache (`usePDFDocument`) keys only by
       // `fileId` and ignores the buffer, so a same-URL refetch with
       // new bytes would otherwise return the stale parsed document.
-      // The token rotates per buffer fetch and is folded into the
+      // The token rotates per fresh fetch and is folded into the
       // `fileId` so each new buffer parses from scratch.
-      setState({ status: "ready", buffer: next, token: crypto.randomUUID() });
-    })().catch(() => {
-      if (!isAborted()) {
-        setState({ status: "error" });
-      }
-    });
+      return { buffer, token: crypto.randomUUID() };
+    },
+    enabled: enabled && url !== undefined,
+    // Large binaries — keep them cached for the session so toggling
+    // tabs doesn't trigger a re-download.
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: Number.POSITIVE_INFINITY,
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
 
-    return () => {
-      controller.abort();
-    };
-  }, [enabled, url]);
-
-  return state;
+  if (!enabled || url === undefined) {
+    return { status: "idle" };
+  }
+  if (query.isError) {
+    return { status: "error" };
+  }
+  if (query.data === undefined) {
+    return { status: "loading" };
+  }
+  return {
+    status: "ready",
+    buffer: query.data.buffer,
+    token: query.data.token,
+  };
 };
 
 const externalPdfSuspenseFallback = (
