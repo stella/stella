@@ -100,44 +100,42 @@ export const desktopEditSessionEventsHandler = async ({
 }: DesktopEditSessionEventsHandlerProps) => {
   const sessionToken = getSessionToken({ authorization, legacySessionToken });
 
-  if (authorization || legacySessionToken) {
-    if (!sessionToken) {
-      return status(401, {
-        code: "desktop_edit_session_token_missing",
-        message: "Desktop edit session token missing or malformed.",
-      });
-    }
-
-    const authorized = await authorizeDesktopEditSession({
-      sessionId,
-      sessionToken,
+  if (!sessionToken) {
+    return status(401, {
+      code: "desktop_edit_session_token_missing",
+      message: "Desktop edit session token missing or malformed.",
     });
+  }
 
-    if (authorized.status === "missing") {
-      return status(404, {
-        message: "Desktop edit session not found.",
-      });
-    }
-    if (authorized.status === "token-mismatch") {
-      return status(409, {
-        code: DESKTOP_EDIT_SESSION_TAKEN_OVER_CODE,
-        message: DESKTOP_EDIT_SESSION_TAKEN_OVER_MESSAGE,
-      });
-    }
-    if (authorized.status === "token-expired") {
-      return status(401, {
-        code: "desktop_edit_session_token_expired",
-        message:
-          "Desktop edit session token has expired. Reopen the document from stella.",
-      });
-    }
-    if (authorized.status === "permission-revoked") {
-      return status(403, {
-        code: "desktop_edit_session_permission_revoked",
-        message:
-          "Desktop edit permission was revoked. Reopen the document from stella.",
-      });
-    }
+  const authorized = await authorizeDesktopEditSession({
+    sessionId,
+    sessionToken,
+  });
+
+  if (authorized.status === "missing") {
+    return status(404, {
+      message: "Desktop edit session not found.",
+    });
+  }
+  if (authorized.status === "token-mismatch") {
+    return status(409, {
+      code: DESKTOP_EDIT_SESSION_TAKEN_OVER_CODE,
+      message: DESKTOP_EDIT_SESSION_TAKEN_OVER_MESSAGE,
+    });
+  }
+  if (authorized.status === "token-expired") {
+    return status(401, {
+      code: "desktop_edit_session_token_expired",
+      message:
+        "Desktop edit session token has expired. Reopen the document from stella.",
+    });
+  }
+  if (authorized.status === "permission-revoked") {
+    return status(403, {
+      code: "desktop_edit_session_permission_revoked",
+      message:
+        "Desktop edit permission was revoked. Reopen the document from stella.",
+    });
   }
 
   const eventState = await readDesktopEditSessionEventState(sessionId);
