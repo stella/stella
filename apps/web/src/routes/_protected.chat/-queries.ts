@@ -106,21 +106,16 @@ type ChatThreadOptionsContext = {
     | undefined;
 };
 
-type ChatThreadQueryKey = ChatThreadRef & {
-  allowMissingThread?: boolean | undefined;
-  contextKind?: ChatRuntimeContextKind | undefined;
-};
-
-type ChatThreadOptionsInput = QueryOptionsInput<
-  ChatThreadKey,
-  ChatThreadOptionsContext
->;
-
 type ChatRuntimeContextKind =
   | "active-docx-edit"
   | "active-external"
   | "active-file"
   | "plain";
+
+type ChatThreadQueryKey = ChatThreadRef & {
+  allowMissingThread?: boolean | undefined;
+  contextKind?: ChatRuntimeContextKind | undefined;
+};
 
 const getChatRuntimeContextKind = (
   context: ChatThreadOptionsContext | undefined,
@@ -165,6 +160,11 @@ export const chatKeys = {
           CHAT_TRANSPORT_VERSION,
         ],
 };
+
+type ChatThreadOptionsInput = QueryOptionsInput<
+  ChatThreadKey,
+  ChatThreadOptionsContext
+>;
 
 type ThreadFetch = {
   messages: PersistedChatMessage[];
