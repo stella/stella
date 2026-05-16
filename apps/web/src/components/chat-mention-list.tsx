@@ -1,5 +1,11 @@
-import { useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import type { Ref } from 'react';
+import {
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type { Ref } from "react";
 
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import {

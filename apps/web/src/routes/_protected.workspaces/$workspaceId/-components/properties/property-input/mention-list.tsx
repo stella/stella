@@ -1,5 +1,5 @@
-import { useImperativeHandle, useState } from 'react';
-import type { Ref } from 'react';
+import { useImperativeHandle, useState } from "react";
+import type { Ref } from "react";
 
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import { useTranslations } from "use-intl";
