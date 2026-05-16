@@ -124,6 +124,10 @@ const prepareOperations = (
 
   for (const [index, operation] of operations.entries()) {
     const id = `ai-docx-${String(index + 1)}-${uuidv7()}`;
+    const comment =
+      "comment" in operation && operation.comment
+        ? { text: operation.comment.text }
+        : undefined;
     let folio: FolioAIEditOperation;
     switch (operation.type) {
       case "replaceInBlock": {
@@ -134,8 +138,8 @@ const prepareOperations = (
           replace: operation.replace,
           type: operation.type,
         };
-        if (operation.comment) {
-          next.comment = { text: operation.comment.text };
+        if (comment) {
+          next.comment = comment;
         }
         folio = next;
         break;
@@ -151,8 +155,8 @@ const prepareOperations = (
         if (operation.inheritFormatting !== undefined) {
           next.inheritFormatting = operation.inheritFormatting;
         }
-        if (operation.comment) {
-          next.comment = { text: operation.comment.text };
+        if (comment) {
+          next.comment = comment;
         }
         folio = next;
         break;
@@ -167,8 +171,8 @@ const prepareOperations = (
         if (operation.preserveFormatting !== undefined) {
           next.preserveFormatting = operation.preserveFormatting;
         }
-        if (operation.comment) {
-          next.comment = { text: operation.comment.text };
+        if (comment) {
+          next.comment = comment;
         }
         folio = next;
         break;
@@ -179,8 +183,8 @@ const prepareOperations = (
           id,
           type: operation.type,
         };
-        if (operation.comment) {
-          next.comment = { text: operation.comment.text };
+        if (comment) {
+          next.comment = comment;
         }
         folio = next;
         break;
