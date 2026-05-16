@@ -6,6 +6,7 @@ import { contacts, workspaces } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { escapeLike } from "@/api/lib/escape-like";
+import { createCursorPage } from "@/api/lib/pagination";
 import { brandPersistedContactId } from "@/api/lib/safe-id-boundaries";
 
 const DEFAULT_LIMIT = 50;
@@ -77,7 +78,7 @@ const readContacts = createSafeRootHandler(
       }
     }
 
-    const items = yield* Result.await(
+    const rows = yield* Result.await(
       safeDb((tx) =>
         tx
           .select({
@@ -109,15 +110,13 @@ const readContacts = createSafeRootHandler(
       ),
     );
 
-    const hasMore = items.length > limit;
-    const page = hasMore ? items.slice(0, limit) : items;
-    const lastItem = page.at(-1);
-    const nextCursor =
-      hasMore && lastItem
-        ? encodeCursor(lastItem.displayName, lastItem.id)
-        : null;
-
-    return Result.ok({ items: page, nextCursor });
+    return Result.ok(
+      createCursorPage({
+        rows,
+        limit,
+        cursorForItem: (item) => encodeCursor(item.displayName, item.id),
+      }),
+    );
   },
 );
 

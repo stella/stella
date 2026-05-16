@@ -68,8 +68,7 @@ export const LinkClauseDialog = ({
 
   const categories =
     catData && "categories" in catData ? catData.categories : [];
-  const clauses =
-    clauseData && "clauses" in clauseData ? clauseData.clauses : [];
+  const clauses = clauseData && "items" in clauseData ? clauseData.items : [];
 
   const filtered = clauses.filter((c) => {
     if (selectedCategory && c.categoryId !== selectedCategory) {

@@ -170,7 +170,7 @@ export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
         throw toAPIError(response.error);
       }
 
-      const { entities: rawEntities, ...rest } = response.data;
+      const { items: rawEntities, ...rest } = response.data;
       const entities: WorkspaceEntity[] = rawEntities.map(toWorkspaceEntity);
 
       return { ...rest, entities };
@@ -249,7 +249,7 @@ export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
         throw toAPIError(response.error);
       }
 
-      const { entities: rawEntities, ...rest } = response.data;
+      const { items: rawEntities, ...rest } = response.data;
       const entities: WorkspaceEntity[] = rawEntities.map(toWorkspaceEntity);
 
       return { ...rest, entities };

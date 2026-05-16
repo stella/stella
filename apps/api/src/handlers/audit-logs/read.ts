@@ -11,6 +11,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { createCursorPage } from "@/api/lib/pagination";
 import { brandPersistedAuditLogId } from "@/api/lib/safe-id-boundaries";
 
 const CURSOR_SEPARATOR = "|";
@@ -140,15 +141,13 @@ const readAuditLogs = createSafeRootHandler(
       ),
     );
 
-    const hasMore = rows.length > limit;
-    const data = hasMore ? rows.slice(0, limit) : rows;
-    const lastItem = data.at(-1);
-    const nextCursor =
-      hasMore && lastItem
-        ? encodeCursor(lastItem.createdAt, lastItem.id)
-        : null;
-
-    return Result.ok({ data, nextCursor });
+    return Result.ok(
+      createCursorPage({
+        rows,
+        limit,
+        cursorForItem: (item) => encodeCursor(item.createdAt, item.id),
+      }),
+    );
   },
 );
 

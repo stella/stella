@@ -14,6 +14,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { createCursorPage } from "@/api/lib/pagination";
 import {
   tViewFilterConditionSchema,
   tViewSortSchema,
@@ -194,14 +195,13 @@ const readKanbanGroup = createSafeHandler(
       }),
     );
 
-    const hasMore = result.entities.length > limit;
-    const pageEntities = result.entities.slice(0, limit);
-
-    return Result.ok({
-      entities: pageEntities,
-      limit,
-      nextCursor: hasMore ? encodeEntitiesWindowCursor(offset + limit) : null,
-    });
+    return Result.ok(
+      createCursorPage({
+        rows: result.entities,
+        limit,
+        cursorForItem: () => encodeEntitiesWindowCursor(offset + limit),
+      }),
+    );
   },
 );
 

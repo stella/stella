@@ -8,6 +8,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { createCursorPage } from "@/api/lib/pagination";
 
 // ── Cursor helpers ───────────────────────────────────
 
@@ -122,19 +123,17 @@ export const listClausesHandler = async function* ({
     ),
   );
 
-  const hasMore = rows.length > limit;
-  const items = hasMore ? rows.slice(0, limit) : rows;
-  const lastItem = items.at(-1);
   // Cursor pagination is incompatible with rank-based
   // ordering; disable it when searching.
-  const nextCursor =
-    hasMore && lastItem && !isSearching
-      ? encodeCursor(lastItem.createdAt, lastItem.id)
-      : null;
+  const page = createCursorPage({
+    rows,
+    limit,
+    cursorForItem: (item) => encodeCursor(item.createdAt, item.id),
+  });
 
   return Result.ok({
-    clauses: items,
-    nextCursor,
+    ...page,
+    nextCursor: isSearching ? null : page.nextCursor,
   });
 };
 
