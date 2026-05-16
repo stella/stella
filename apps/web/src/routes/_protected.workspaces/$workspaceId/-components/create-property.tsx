@@ -482,16 +482,48 @@ const PropertyComposerBody = ({
 
   const trimmedName = name.trim();
   const promptText = promptFromHtml(prompt);
-  const dependencyIds = useMemo(
-    () => [...new Set([...selectedFileIds, ...textareaMentions])],
-    [selectedFileIds, textareaMentions],
-  );
   const needsOptions =
     contentType === "single-select" || contentType === "multi-select";
   const hasValidOptions = !needsOptions || options.length > 0;
   const typeChanged = isEditMode && contentType !== initialContentType;
   const isMutationPending =
     createProperty.isPending || updateProperty.isPending;
+
+  // Drop the fallback selection from consumers if its target option
+  // was renamed/removed, or if the user switched away from a select
+  // content type. The backend rejects mismatched fallbacks; sanitising
+  // here keeps the UI honest without round-tripping through setState.
+  const effectiveFallback = useMemo(
+    () =>
+      fallback !== null &&
+      needsOptions &&
+      options.some((o) => o.value === fallback)
+        ? fallback
+        : null,
+    [fallback, needsOptions, options],
+  );
+
+  // Keep the auto-included file chips in sync if the underlying
+  // properties list changes (e.g., a file property is created from
+  // another tab while the dialog is open). Derived rather than mirrored
+  // so the source-of-truth state never drifts out of valid options.
+  const validFileIds = useMemo(
+    () => new Set(fileProperties.map((p) => p.id)),
+    [fileProperties],
+  );
+  const effectiveSelectedFileIds = useMemo(
+    () => selectedFileIds.filter((id) => validFileIds.has(id)),
+    [selectedFileIds, validFileIds],
+  );
+
+  const dependencyIds = useMemo(
+    () => [...new Set([...effectiveSelectedFileIds, ...textareaMentions])],
+    [effectiveSelectedFileIds, textareaMentions],
+  );
+
+  const availableFileToAdd = fileProperties.filter(
+    (p) => !effectiveSelectedFileIds.includes(p.id),
+  );
 
   // Manual properties skip the prompt + dependency requirements; the
   // user fills values by hand. Select-type rules still apply.
@@ -523,7 +555,7 @@ const PropertyComposerBody = ({
     }));
 
     if (isEditMode && editingProperty) {
-      const nextContent = buildContent(contentType, options, fallback);
+      const nextContent = buildContent(contentType, options, effectiveFallback);
       const nextTool: WorkspaceProperty["tool"] =
         editingTool?.type === "manual-input"
           ? { version: 1, type: "manual-input" }
@@ -568,7 +600,9 @@ const PropertyComposerBody = ({
         toolType: "ai-model",
         prompt,
         dependencies,
-        ...(isSelectType && options.length > 0 ? { options, fallback } : {}),
+        ...(isSelectType && options.length > 0
+          ? { options, fallback: effectiveFallback }
+          : {}),
       },
       {
         onSuccess: (data) => {
@@ -579,7 +613,7 @@ const PropertyComposerBody = ({
               name: trimmedName,
               createdAt: new Date(),
               status: "stale",
-              content: buildContent(contentType, options, fallback),
+              content: buildContent(contentType, options, effectiveFallback),
               tool: {
                 version: 1,
                 type: "ai-model",
@@ -618,8 +652,8 @@ const PropertyComposerBody = ({
     dependencyIds,
     editingProperty,
     editingTool,
+    effectiveFallback,
     extractionContext,
-    fallback,
     initialDependencyConditions,
     isEditMode,
     onClose,
@@ -685,33 +719,6 @@ const PropertyComposerBody = ({
     workspaceId,
   ]);
 
-  // Drop the fallback selection if its target option was renamed/removed,
-  // or if the user switched away from a select content type. The backend
-  // rejects mismatched fallbacks; clearing here keeps the UI honest.
-  useEffect(() => {
-    if (
-      fallback !== null &&
-      (!needsOptions || !options.some((o) => o.value === fallback))
-    ) {
-      setFallback(null);
-    }
-  }, [fallback, needsOptions, options]);
-
-  // Keep the auto-included file chips in sync if the underlying
-  // properties list changes (e.g., a file property is created from
-  // another tab while the dialog is open).
-  useEffect(() => {
-    setSelectedFileIds((prev) => {
-      const validIds = new Set(fileProperties.map((p) => p.id));
-      const filtered = prev.filter((id) => validIds.has(id));
-      return filtered.length === prev.length ? prev : filtered;
-    });
-  }, [fileProperties]);
-
-  const availableFileToAdd = fileProperties.filter(
-    (p) => !selectedFileIds.includes(p.id),
-  );
-
   const pushOption = (option: WorkspacePropertyOption) =>
     setOptions((prev) => [...prev, option]);
   const removeOptionAt = (index: number) =>
@@ -759,7 +766,7 @@ const PropertyComposerBody = ({
             autoPromptPending={suggestPrompt.isPending}
             contentType={contentType}
             editorReady={setEditor}
-            fileChips={selectedFileIds.map(
+            fileChips={effectiveSelectedFileIds.map(
               (id) =>
                 fileProperties.find((p) => p.id === id) ?? {
                   id,
@@ -796,7 +803,7 @@ const PropertyComposerBody = ({
 
         {needsOptions && (
           <InlineOptionEditor
-            fallback={fallback}
+            fallback={effectiveFallback}
             onFallbackChange={setFallback}
             options={options}
             pushOption={pushOption}
