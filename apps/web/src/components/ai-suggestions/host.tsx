@@ -545,7 +545,10 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
           );
         }
         updateAssistantMessage(assistantId, (m) => ({
-          ...m,
+          id: m.id,
+          role: "assistant",
+          mode: m.mode,
+          createdAt: m.createdAt,
           status: "complete",
           text: response.text ?? "",
           suggestions: anchored,
@@ -556,7 +559,13 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
           return;
         }
         updateAssistantMessage(assistantId, (m) => ({
-          ...m,
+          id: m.id,
+          role: "assistant",
+          mode: m.mode,
+          createdAt: m.createdAt,
+          text: m.text,
+          suggestions: m.suggestions,
+          citations: m.citations,
           status: "error",
           error: error instanceof Error ? error.message : "Generation failed",
         }));
@@ -1659,9 +1668,7 @@ function AssistantBubble(props: AssistantBubbleProps) {
           </span>
         )}
         {message.status === "error" && (
-          <span className="text-destructive text-[12px]">
-            {message.error ?? "Something went wrong."}
-          </span>
+          <span className="text-destructive text-[12px]">{message.error}</span>
         )}
         {message.text && message.text.length > 0 && (
           <MessageResponse className="text-[13px] leading-relaxed [&_p]:my-0">
