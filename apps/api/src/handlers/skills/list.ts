@@ -20,7 +20,7 @@ const listSkillsQuerySchema = t.Object({
 });
 
 const config = {
-  permissions: { workspace: ["read"] },
+  permissions: { chat: ["create"] },
   query: listSkillsQuerySchema,
 } satisfies HandlerConfig;
 
