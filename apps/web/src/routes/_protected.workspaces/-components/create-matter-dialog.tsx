@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
@@ -151,14 +151,6 @@ const toActionErrorTitle = ({
 }) => (error instanceof Error ? error.message : fallback);
 
 export const CreateMatterDialog = () => {
-  const t = useTranslations();
-  const navigate = useNavigate();
-  const currentUser = routeApi.useRouteContext({
-    select: (ctx) => ctx.user,
-  });
-  const queryClient = useQueryClient();
-  const createWorkspace = useCreateWorkspace();
-  const createContact = useCreateContact();
   const { closeDialog, dialog } = useCreateMatterStore(
     useShallow((s) => ({
       closeDialog: s.closeDialog,
@@ -167,10 +159,47 @@ export const CreateMatterDialog = () => {
   );
   const isOpen = dialog.status === "open";
   const draftClient = dialog.status === "open" ? dialog.draftClient : null;
+
+  return (
+    <Dialog
+      onOpenChange={(open) => {
+        if (!open) {
+          closeDialog();
+        }
+      }}
+      open={isOpen}
+    >
+      {isOpen ? (
+        <CreateMatterDialogBody
+          closeDialog={closeDialog}
+          draftClient={draftClient}
+        />
+      ) : null}
+    </Dialog>
+  );
+};
+
+type CreateMatterDialogBodyProps = {
+  closeDialog: () => void;
+  draftClient: MatterDraftClient | null;
+};
+
+const CreateMatterDialogBody = ({
+  closeDialog,
+  draftClient,
+}: CreateMatterDialogBodyProps) => {
+  const t = useTranslations();
+  const navigate = useNavigate();
+  const currentUser = routeApi.useRouteContext({
+    select: (ctx) => ctx.user,
+  });
+  const queryClient = useQueryClient();
+  const createWorkspace = useCreateWorkspace();
+  const createContact = useCreateContact();
   const [name, setName] = useState("");
   const [ownerType, setOwnerType] = useState<"client" | "personal">("client");
   const [selectedClient, setSelectedClient] =
-    useState<MatterDraftClient | null>(null);
+    useState<MatterDraftClient | null>(draftClient);
   const [memberQuery, setMemberQuery] = useState("");
   const [selectedMemberUserIds, setSelectedMemberUserIds] = useState<string[]>(
     [],
@@ -180,33 +209,12 @@ export const CreateMatterDialog = () => {
   const nameInputRef = useRef<HTMLInputElement>(null);
   const { data: organization } = useQuery({
     ...organizationOptions,
-    enabled: isOpen,
   });
   const { data: workspacesData } = useQuery({
     ...workspacesOptions(currentUser.activeOrganizationId),
-    enabled: isOpen,
   });
 
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    setName("");
-    setMemberQuery("");
-    setSelectedMemberUserIds([]);
-    setSubmitAttempted(false);
-    setSelectedClient(draftClient);
-    setOwnerType("client");
-  }, [draftClient, isOpen]);
-
   const handleClose = () => {
-    setName("");
-    setMemberQuery("");
-    setSelectedMemberUserIds([]);
-    setSubmitAttempted(false);
-    setSelectedClient(null);
-    setOwnerType("client");
     closeDialog();
   };
 
@@ -419,230 +427,191 @@ export const CreateMatterDialog = () => {
   }, [name, ownerType, selectedClient, workspacesData?.workspaces]);
 
   return (
-    <Dialog
-      onOpenChange={(open) => {
-        if (!open) {
-          handleClose();
-        }
-      }}
-      open={isOpen}
-    >
-      <DialogPopup className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>{t("workspaces.newMatter")}</DialogTitle>
-        </DialogHeader>
-        <DialogPanel className="flex flex-col gap-5">
-          <OwnerTypeToggle onChange={setOwnerType} value={ownerType} />
+    <DialogPopup className="max-w-md">
+      <DialogHeader>
+        <DialogTitle>{t("workspaces.newMatter")}</DialogTitle>
+      </DialogHeader>
+      <DialogPanel className="flex flex-col gap-5">
+        <OwnerTypeToggle onChange={setOwnerType} value={ownerType} />
 
-          {(() => {
-            if (ownerType === "client") {
-              return (
-                <section className="space-y-3">
-                  <Field className="gap-3" invalid={clientInvalid}>
-                    <FieldLabel
-                      className={
-                        clientInvalid
-                          ? "text-destructive-foreground"
-                          : undefined
-                      }
-                    >
-                      {t("workspaces.parties.client")}
-                    </FieldLabel>
-                    {selectedClient && (
-                      <SelectedClient client={selectedClient} />
-                    )}
-                    <ContactPicker
-                      autoFocus={!selectedClient}
-                      inputRef={clientInputRef}
-                      invalid={clientInvalid}
-                      onCreate={(...args) => {
-                        void handleCreateClient(...args);
-                      }}
-                      onSelect={(contact) => {
-                        setSelectedClient({
-                          id: contact.id,
-                          displayName: contact.displayName,
-                          type: contact.type,
-                        });
-                      }}
-                      placeholder={
-                        selectedClient
-                          ? t("workspaces.parties.changeClient")
-                          : t("workspaces.parties.searchContacts")
-                      }
-                    />
-                    {clientInvalid ? (
-                      <p className="text-destructive-foreground text-xs">
-                        {t("common.required")}
-                      </p>
-                    ) : null}
-                  </Field>
-                </section>
-              );
-            }
+        {(() => {
+          if (ownerType === "client") {
             return (
-              <p className="text-muted-foreground text-xs">
-                {t("workspaces.create.personalDescription")}
-              </p>
-            );
-          })()}
-
-          <section>
-            <Field invalid={nameInvalid}>
-              <FieldLabel
-                className={
-                  nameInvalid ? "text-destructive-foreground" : undefined
-                }
-              >
-                {t("common.name")}
-              </FieldLabel>
-              <Input
-                aria-invalid={nameInvalid}
-                autoFocus={!!selectedClient}
-                ref={nameInputRef}
-                onChange={(e) => setName(e.currentTarget.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    void handleSubmit();
-                  }
-                }}
-                value={name}
-              />
-              {nameInvalid ? (
-                <p className="text-destructive-foreground text-xs">
-                  {t("common.required")}
-                </p>
-              ) : null}
-            </Field>
-          </section>
-
-          {possibleDuplicates.length > 0 && (
-            <section className="bg-muted/30 space-y-2 rounded-lg border px-3 py-3">
-              <h3 className="text-sm font-medium">
-                {t("workspaces.possibleDuplicates")}
-              </h3>
-              <ul className="space-y-1">
-                {possibleDuplicates.map((workspace) => (
-                  <li
-                    className="flex items-center gap-2 text-sm"
-                    key={workspace.id}
+              <section className="space-y-3">
+                <Field className="gap-3" invalid={clientInvalid}>
+                  <FieldLabel
+                    className={
+                      clientInvalid ? "text-destructive-foreground" : undefined
+                    }
                   >
-                    <span className="truncate font-medium">
-                      {workspace.name}
-                    </span>
-                    <span className="text-muted-foreground text-xs">
-                      {workspace.reference}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {ownerType === "client" && (
-            <section className="space-y-3">
-              <h3 className="text-sm font-medium">
-                {t("workspaces.sections.members")}
-              </h3>
-
-              {(() => {
-                if (hasAdditionalOrganizationMembers) {
-                  return (
-                    <div className="space-y-2">
-                      <Combobox<(typeof filteredMembers)[number]>
-                        itemToStringLabel={(member) =>
-                          `${member.user.name} ${member.user.email}`
-                        }
-                        onInputValueChange={(inputValue) => {
-                          setMemberQuery(inputValue);
-                        }}
-                        onValueChange={(member) => {
-                          if (!member) {
-                            return;
-                          }
-
-                          setSelectedMemberUserIds((current) => [
-                            ...current,
-                            member.userId,
-                          ]);
-                          setMemberQuery("");
-                        }}
-                        value={null}
-                      >
-                        <ComboboxInput
-                          placeholder={t("common.search")}
-                          showTrigger={false}
-                          startAddon={<SearchIcon />}
-                          value={memberQuery}
-                        />
-                        <ComboboxPopup>
-                          <ComboboxList>
-                            {filteredMembers.map((member) => (
-                              <ComboboxItem key={member.userId} value={member}>
-                                <div className="flex items-center gap-2">
-                                  <UserIdentity
-                                    avatarClassName="size-8 shrink-0 text-[0.625rem]"
-                                    className="min-w-0 flex-1"
-                                    image={member.user.image}
-                                    name={member.user.name}
-                                    secondaryText={member.user.email}
-                                  />
-                                  <PlusIcon className="text-muted-foreground size-4" />
-                                </div>
-                              </ComboboxItem>
-                            ))}
-                          </ComboboxList>
-                          {filteredMembers.length === 0 ? (
-                            <ComboboxEmpty>
-                              {memberQuery.length > 0
-                                ? t("workspaces.members.noMembersFound")
-                                : t("common.search")}
-                            </ComboboxEmpty>
-                          ) : null}
-                        </ComboboxPopup>
-                      </Combobox>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div className="bg-muted/20 space-y-3 rounded-lg border border-dashed p-3">
-                    <p className="text-muted-foreground text-sm">
-                      {t("workspaces.members.noMembersFound")}
+                    {t("workspaces.parties.client")}
+                  </FieldLabel>
+                  {selectedClient && <SelectedClient client={selectedClient} />}
+                  <ContactPicker
+                    autoFocus={!selectedClient}
+                    inputRef={clientInputRef}
+                    invalid={clientInvalid}
+                    onCreate={(...args) => {
+                      void handleCreateClient(...args);
+                    }}
+                    onSelect={(contact) => {
+                      setSelectedClient({
+                        id: contact.id,
+                        displayName: contact.displayName,
+                        type: contact.type,
+                      });
+                    }}
+                    placeholder={
+                      selectedClient
+                        ? t("workspaces.parties.changeClient")
+                        : t("workspaces.parties.searchContacts")
+                    }
+                  />
+                  {clientInvalid ? (
+                    <p className="text-destructive-foreground text-xs">
+                      {t("common.required")}
                     </p>
+                  ) : null}
+                </Field>
+              </section>
+            );
+          }
+          return (
+            <p className="text-muted-foreground text-xs">
+              {t("workspaces.create.personalDescription")}
+            </p>
+          );
+        })()}
+
+        <section>
+          <Field invalid={nameInvalid}>
+            <FieldLabel
+              className={
+                nameInvalid ? "text-destructive-foreground" : undefined
+              }
+            >
+              {t("common.name")}
+            </FieldLabel>
+            <Input
+              aria-invalid={nameInvalid}
+              autoFocus={!!selectedClient}
+              ref={nameInputRef}
+              onChange={(e) => setName(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void handleSubmit();
+                }
+              }}
+              value={name}
+            />
+            {nameInvalid ? (
+              <p className="text-destructive-foreground text-xs">
+                {t("common.required")}
+              </p>
+            ) : null}
+          </Field>
+        </section>
+
+        {possibleDuplicates.length > 0 && (
+          <section className="bg-muted/30 space-y-2 rounded-lg border px-3 py-3">
+            <h3 className="text-sm font-medium">
+              {t("workspaces.possibleDuplicates")}
+            </h3>
+            <ul className="space-y-1">
+              {possibleDuplicates.map((workspace) => (
+                <li
+                  className="flex items-center gap-2 text-sm"
+                  key={workspace.id}
+                >
+                  <span className="truncate font-medium">{workspace.name}</span>
+                  <span className="text-muted-foreground text-xs">
+                    {workspace.reference}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {ownerType === "client" && (
+          <section className="space-y-3">
+            <h3 className="text-sm font-medium">
+              {t("workspaces.sections.members")}
+            </h3>
+
+            {(() => {
+              if (hasAdditionalOrganizationMembers) {
+                return (
+                  <div className="space-y-2">
+                    <Combobox<(typeof filteredMembers)[number]>
+                      itemToStringLabel={(member) =>
+                        `${member.user.name} ${member.user.email}`
+                      }
+                      onInputValueChange={(inputValue) => {
+                        setMemberQuery(inputValue);
+                      }}
+                      onValueChange={(member) => {
+                        if (!member) {
+                          return;
+                        }
+
+                        setSelectedMemberUserIds((current) => [
+                          ...current,
+                          member.userId,
+                        ]);
+                        setMemberQuery("");
+                      }}
+                      value={null}
+                    >
+                      <ComboboxInput
+                        placeholder={t("common.search")}
+                        showTrigger={false}
+                        startAddon={<SearchIcon />}
+                        value={memberQuery}
+                      />
+                      <ComboboxPopup>
+                        <ComboboxList>
+                          {filteredMembers.map((member) => (
+                            <ComboboxItem key={member.userId} value={member}>
+                              <div className="flex items-center gap-2">
+                                <UserIdentity
+                                  avatarClassName="size-8 shrink-0 text-[0.625rem]"
+                                  className="min-w-0 flex-1"
+                                  image={member.user.image}
+                                  name={member.user.name}
+                                  secondaryText={member.user.email}
+                                />
+                                <PlusIcon className="text-muted-foreground size-4" />
+                              </div>
+                            </ComboboxItem>
+                          ))}
+                        </ComboboxList>
+                        {filteredMembers.length === 0 ? (
+                          <ComboboxEmpty>
+                            {memberQuery.length > 0
+                              ? t("workspaces.members.noMembersFound")
+                              : t("common.search")}
+                          </ComboboxEmpty>
+                        ) : null}
+                      </ComboboxPopup>
+                    </Combobox>
                   </div>
                 );
-              })()}
+              }
 
-              <div className="bg-muted/20 rounded-lg border p-3">
-                {shouldCollapseSelectedMembers ? (
-                  <ScrollArea className="h-64 w-full" scrollbarGutter>
-                    <div className="space-y-2">
-                      <TeamMemberRow
-                        email={currentUser.email}
-                        image={currentUser.image}
-                        name={creatorName}
-                      />
-                      {selectedMembers.map((member) => (
-                        <TeamMemberRow
-                          email={member.user.email}
-                          image={member.user.image}
-                          key={member.userId}
-                          name={member.user.name}
-                          onRemove={() => {
-                            setSelectedMemberUserIds((current) =>
-                              current.filter(
-                                (userId) => userId !== member.userId,
-                              ),
-                            );
-                          }}
-                          removeLabel={t("workspaces.members.removeMember")}
-                        />
-                      ))}
-                    </div>
-                  </ScrollArea>
-                ) : (
+              return (
+                <div className="bg-muted/20 space-y-3 rounded-lg border border-dashed p-3">
+                  <p className="text-muted-foreground text-sm">
+                    {t("workspaces.members.noMembersFound")}
+                  </p>
+                </div>
+              );
+            })()}
+
+            <div className="bg-muted/20 rounded-lg border p-3">
+              {shouldCollapseSelectedMembers ? (
+                <ScrollArea className="h-64 w-full" scrollbarGutter>
                   <div className="space-y-2">
                     <TeamMemberRow
                       email={currentUser.email}
@@ -666,26 +635,48 @@ export const CreateMatterDialog = () => {
                       />
                     ))}
                   </div>
-                )}
-              </div>
-            </section>
-          )}
-        </DialogPanel>
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>
-            {t("common.cancel")}
-          </DialogClose>
-          <Button
-            disabled={!canSubmit}
-            loading={createWorkspace.isPending}
-            onClick={() => {
-              void handleSubmit();
-            }}
-          >
-            {t("workspaces.createNewWorkspace")}
-          </Button>
-        </DialogFooter>
-      </DialogPopup>
-    </Dialog>
+                </ScrollArea>
+              ) : (
+                <div className="space-y-2">
+                  <TeamMemberRow
+                    email={currentUser.email}
+                    image={currentUser.image}
+                    name={creatorName}
+                  />
+                  {selectedMembers.map((member) => (
+                    <TeamMemberRow
+                      email={member.user.email}
+                      image={member.user.image}
+                      key={member.userId}
+                      name={member.user.name}
+                      onRemove={() => {
+                        setSelectedMemberUserIds((current) =>
+                          current.filter((userId) => userId !== member.userId),
+                        );
+                      }}
+                      removeLabel={t("workspaces.members.removeMember")}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+      </DialogPanel>
+      <DialogFooter>
+        <DialogClose render={<Button variant="outline" />}>
+          {t("common.cancel")}
+        </DialogClose>
+        <Button
+          disabled={!canSubmit}
+          loading={createWorkspace.isPending}
+          onClick={() => {
+            void handleSubmit();
+          }}
+        >
+          {t("workspaces.createNewWorkspace")}
+        </Button>
+      </DialogFooter>
+    </DialogPopup>
   );
 };
