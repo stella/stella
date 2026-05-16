@@ -287,13 +287,19 @@ export const printPdfBuffer = (buffer: ArrayBuffer) => {
 export const fetchPrintPdf = async ({
   workspaceId,
   fieldId,
+  signal,
 }: {
   workspaceId: string;
   fieldId: string;
+  signal?: AbortSignal | undefined;
 }) => {
+  const timeoutSignal = AbortSignal.timeout(30_000);
+  const combinedSignal = signal
+    ? AbortSignal.any([signal, timeoutSignal])
+    : timeoutSignal;
   const response = await fetch(
     `${env.VITE_API_URL}/v1/files/${workspaceId}/print-pdf/${fieldId}`,
-    { credentials: "include", signal: AbortSignal.timeout(30_000) },
+    { credentials: "include", signal: combinedSignal },
   );
 
   if (!response.ok) {
@@ -311,14 +317,6 @@ export const PeekPrintButton = () => {
   const analytics = useAnalytics();
   const pdfDocument = usePDFStore((s) => s.document);
   const [isPrinting, setIsPrinting] = useState(false);
-  const isMounted = useRef(true);
-
-  useEffect(() => {
-    isMounted.current = true;
-    return () => {
-      isMounted.current = false;
-    };
-  }, []);
 
   const handlePrint = useCallback(async () => {
     if (!pdfDocument) {
@@ -328,18 +326,11 @@ export const PeekPrintButton = () => {
     setIsPrinting(true);
     try {
       const data = await pdfDocument.document.getData();
-
-      if (!isMounted.current) {
-        return;
-      }
-
       printPdfBuffer(data.slice().buffer);
     } catch (error: unknown) {
       analytics.captureError(error);
     } finally {
-      if (isMounted.current) {
-        setIsPrinting(false);
-      }
+      setIsPrinting(false);
     }
   }, [analytics, pdfDocument]);
 
@@ -374,29 +365,35 @@ export const PreparedPdfPrintButton = ({
   const t = useTranslations();
   const analytics = useAnalytics();
   const [isPrinting, setIsPrinting] = useState(false);
-  const isMounted = useRef(true);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    isMounted.current = true;
-    return () => {
-      isMounted.current = false;
-    };
-  }, []);
+  useEffect(
+    () => () => {
+      abortControllerRef.current?.abort();
+    },
+    [],
+  );
 
   const handlePrint = useCallback(async () => {
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setIsPrinting(true);
     try {
-      const data = await fetchPrintPdf({ workspaceId, fieldId });
-      if (!isMounted.current) {
-        return;
-      }
+      const data = await fetchPrintPdf({
+        workspaceId,
+        fieldId,
+        signal: controller.signal,
+      });
       printPdfBuffer(data);
     } catch (error: unknown) {
+      if (controller.signal.aborted) {
+        return;
+      }
       analytics.captureError(error);
     } finally {
-      if (isMounted.current) {
-        setIsPrinting(false);
-      }
+      setIsPrinting(false);
     }
   }, [analytics, fieldId, workspaceId]);
 
