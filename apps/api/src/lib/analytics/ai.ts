@@ -710,8 +710,8 @@ export const createAIAnalyticsCallbacks = ({
         ? { "ai.model": resolvedModelInfo.modelId }
         : {}),
       ...(cwMessage?.kind === "safe"
-        ? { "ai.error_message": cwMessage.message }
-        : { "ai.error_message_kind": "non_standard" }),
+        ? { "ai.error_code": cwMessage.message }
+        : { "ai.error_code_kind": "non_standard" }),
     });
 
     if (!debugEnabled) {

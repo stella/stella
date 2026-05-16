@@ -208,6 +208,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-user-id-schema.ts",
     "./.oxlint-plugins/no-offset-pagination.ts",
     "./.oxlint-plugins/mcp-security.ts",
+    "./.oxlint-plugins/auth-lifecycle.ts",
     "./.oxlint-plugins/stella-toast.ts",
   ],
 
@@ -494,6 +495,8 @@ export default defineConfig({
     {
       files: ["apps/api/src/**/*.{ts,tsx}"],
       rules: {
+        "auth-lifecycle/after-remove-member-revokes-artifacts": "error",
+        "auth-lifecycle/no-direct-auth-artifact-delete": "error",
         "mcp-security/no-direct-oauth-client-join": "error",
         "no-raw-error-logging/no-raw-error-logging": "error",
       },

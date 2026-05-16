@@ -205,7 +205,7 @@ const initRedis = async () => {
       } catch (error) {
         logger.warn("sse.invalid_redis_message", {
           "error.type": errorTag(error),
-          "message.bytes": message.length,
+          "payload.bytes": message.length,
         });
       }
     });
