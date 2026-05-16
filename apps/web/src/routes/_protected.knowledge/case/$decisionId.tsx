@@ -11,6 +11,7 @@ import { parseDocumentAst } from "@stll/case-law/document-ast";
 
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { useCaseSearchStore } from "@/lib/case-search-store";
+import { pageTitleLiteral } from "@/lib/page-title";
 import { ensureCriticalQueryData } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
@@ -51,6 +52,11 @@ export const Route = createFileRoute("/_protected/knowledge/case/$decisionId")({
       queryClient,
       decisionOptions(extractId(decisionId)),
     ),
+  head: ({ loaderData }) => ({
+    meta: loaderData?.caseNumber
+      ? [{ title: pageTitleLiteral(loaderData.caseNumber) }]
+      : [],
+  }),
   component: DecisionViewer,
 });
 
@@ -65,14 +71,6 @@ function DecisionViewer() {
     () => parseDocumentAst(decision.documentAst),
     [decision.documentAst],
   );
-
-  useEffect(() => {
-    const prev = document.title;
-    document.title = `${decision.caseNumber} | stella`;
-    return () => {
-      document.title = prev;
-    };
-  }, [decision.caseNumber]);
 
   const mainRef = useRef<HTMLDivElement>(null);
   const [panelWidth, setPanelWidth] = useState(220);
