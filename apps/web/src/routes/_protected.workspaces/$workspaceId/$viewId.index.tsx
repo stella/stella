@@ -32,7 +32,10 @@ function RouteComponent() {
     case "table":
       return (
         <TableLayout
-          // SAFETY: the switch narrows activeView.layout.type to "table".
+          // SAFETY: switch narrows activeView.layout.type to "table";
+          // TS cannot propagate the narrowing onto the parent because
+          // `WorkspaceView<T>` uses T only inside an `Extract`, so the
+          // generic is treated as invariant.
           // eslint-disable-next-line typescript/no-unsafe-type-assertion
           view={activeView as WorkspaceView<"table">}
           workspaceId={workspaceId}
@@ -43,7 +46,7 @@ function RouteComponent() {
     case "filesystem":
       return (
         <FilesystemView
-          // SAFETY: the switch narrows activeView.layout.type to "filesystem".
+          // SAFETY: same invariance limitation as the "table" branch above.
           // eslint-disable-next-line typescript/no-unsafe-type-assertion
           view={activeView as WorkspaceView<"filesystem">}
           workspaceId={workspaceId}
@@ -54,7 +57,7 @@ function RouteComponent() {
     case "calendar":
       return (
         <CalendarView
-          // SAFETY: the switch narrows activeView.layout.type to "calendar".
+          // SAFETY: same invariance limitation as the "table" branch above.
           // eslint-disable-next-line typescript/no-unsafe-type-assertion
           view={activeView as WorkspaceView<"calendar">}
           workspaceId={workspaceId}

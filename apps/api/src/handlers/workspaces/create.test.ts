@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import type { SafeId } from "@/api/lib/branded-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import createWorkspaces from "./create";
@@ -23,14 +22,9 @@ const createContext = ({
     memberRole: { role: "owner" },
     orgAIConfig: null,
     session: {
-      activeOrganizationId:
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded test value
-        "org_test123" as SafeId<"organization">,
+      activeOrganizationId: toSafeId<"organization">("org_test123"),
     },
-    user: {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded test value
-      id: "user_test123" as SafeId<"user">,
-    },
+    user: { id: toSafeId<"user">("user_test123") },
   }) as Parameters<typeof createWorkspaces.handler>[0];
 
 describe("createWorkspaces", () => {

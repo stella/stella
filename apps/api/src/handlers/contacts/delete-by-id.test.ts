@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { SafeId } from "@/api/lib/branded-types";
+import { toSafeId } from "@/api/lib/branded-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import deleteContactById from "./delete-by-id";
@@ -21,14 +21,9 @@ const createContext = ({
     scopedDb,
     memberRole: { role: "owner" },
     session: {
-      activeOrganizationId:
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded test value
-        "org_test123" as SafeId<"organization">,
+      activeOrganizationId: toSafeId<"organization">("org_test123"),
     },
-    user: {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded test value
-      id: "user_test123" as SafeId<"user">,
-    },
+    user: { id: toSafeId<"user">("user_test123") },
     orgAIConfig: null,
   }) as Parameters<typeof deleteContactById.handler>[0];
 

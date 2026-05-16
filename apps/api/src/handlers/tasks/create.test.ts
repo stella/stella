@@ -1,13 +1,12 @@
 import { describe, expect, mock, test } from "bun:test";
 
-import type { SafeId } from "@/api/lib/branded-types";
+import { toSafeId } from "@/api/lib/branded-types";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createTaskHandler } from "./create";
 
-// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded type in test
-const workspaceId = "ws_test123" as SafeId<"workspace">;
-const userId = "user_abc";
+const workspaceId = toSafeId<"workspace">("ws_test123");
+const userId = toSafeId<"user">("user_abc");
 
 /** Mock scopedDb that throws if called (validates early return). */
 const throwingScopedDb = () =>
@@ -36,13 +35,9 @@ const createHandlerContext = ({
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test fixture only exercises the handler-owned fields accessed before/inside scopedDb
   ({
     workspaceId,
-    user: {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded type in test
-      id: userId as SafeId<"user">,
-    },
+    user: { id: userId },
     session: {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded type in test
-      activeOrganizationId: "org_test123" as SafeId<"organization">,
+      activeOrganizationId: toSafeId<"organization">("org_test123"),
     },
     memberRole: { role: "owner" },
     body,

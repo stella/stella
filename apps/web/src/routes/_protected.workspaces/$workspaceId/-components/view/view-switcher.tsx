@@ -326,12 +326,11 @@ const ViewTab = ({
         onDragLeave: () => setIsDropTarget(false),
         onDrop: ({ source }) => {
           setIsDropTarget(false);
-          // SAFETY: viewId from our draggable getInitialData
-          onReorderRef.current(
-            // eslint-disable-next-line typescript/no-unsafe-type-assertion
-            source.data["viewId"] as string,
-            id,
-          );
+          const draggedViewId = source.data["viewId"];
+          if (typeof draggedViewId !== "string") {
+            return;
+          }
+          onReorderRef.current(draggedViewId, id);
         },
       }),
     );

@@ -287,10 +287,12 @@ export const ShortcutFormDialog = ({
               </label>
               <Select
                 value={form.scope}
-                onValueChange={(v) =>
-                  // eslint-disable-next-line typescript/no-unsafe-type-assertion
-                  setForm((f) => ({ ...f, scope: v as ShortcutScope }))
-                }
+                onValueChange={(v) => {
+                  if (v !== "team" && v !== "private") {
+                    return;
+                  }
+                  setForm((f) => ({ ...f, scope: v }));
+                }}
               >
                 <SelectTrigger id="shortcut-scope">
                   <SelectValue />

@@ -58,22 +58,15 @@ export const ClauseImportDialog = ({
         .then((text) => {
           const parsed: unknown = JSON.parse(text);
           if (
-            typeof parsed === "object" &&
-            parsed !== null &&
-            "clauses" in parsed &&
-            // SAFETY: `"clauses" in parsed` narrows; Record cast
-            // reads the key for Array.isArray and .length.
-            /* eslint-disable typescript/no-unsafe-type-assertion */
-            Array.isArray((parsed as Record<string, unknown>)["clauses"])
+            typeof parsed !== "object" ||
+            parsed === null ||
+            !("clauses" in parsed)
           ) {
-            setPreviewCount(
-              ((parsed as Record<string, unknown>)["clauses"] as unknown[])
-                .length,
-            );
-            /* eslint-enable typescript/no-unsafe-type-assertion */
-          } else {
             setPreviewCount(0);
+            return;
           }
+          const { clauses } = parsed;
+          setPreviewCount(Array.isArray(clauses) ? clauses.length : 0);
         })
         .catch(() => {
           setPreviewCount(null);

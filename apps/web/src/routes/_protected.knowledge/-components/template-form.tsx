@@ -141,6 +141,19 @@ type TemplateFormProps = TransientFillProps | ServerFillProps;
 
 type FormValues = Record<string, unknown>;
 
+/**
+ * Read an `__array_*` key from form state into a `number[]` index list.
+ * Returns `[]` when the key is missing or holds a non-number-array value;
+ * runtime validation absorbs the previous unchecked cast.
+ */
+const readArrayIndices = (values: FormValues, arrayKey: string): number[] => {
+  const raw = values[arrayKey];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.filter((item): item is number => typeof item === "number");
+};
+
 const groupFieldsByPrefix = (fields: readonly ResolvedField[]) => {
   const groups = new Map<string, ResolvedField[]>();
 
@@ -256,13 +269,7 @@ const FieldRenderer = ({
             onChange(field.path, val);
             onBlur?.(field.path);
           }}
-          value={
-            value === ""
-              ? undefined
-              : // SAFETY: inputType discriminates; value is string for select
-                // eslint-disable-next-line typescript/no-unsafe-type-assertion
-                (value as string)
-          }
+          value={value === "" || typeof value !== "string" ? undefined : value}
         >
           <SelectTrigger>
             <SelectValue placeholder={label} />
@@ -293,11 +300,7 @@ const FieldRenderer = ({
               name={field.path}
               onBlur={handleBlur}
               onChange={(e) => onChange(field.path, e.target.value)}
-              value={
-                // SAFETY: inputType discriminates; value is string for textarea
-                // eslint-disable-next-line typescript/no-unsafe-type-assertion
-                value as string
-              }
+              value={typeof value === "string" ? value : ""}
             />
           }
         />
@@ -320,11 +323,7 @@ const FieldRenderer = ({
               onBlur={handleBlur}
               onChange={(e) => onChange(field.path, e.target.value)}
               type="number"
-              value={
-                // SAFETY: inputType discriminates; value is string for number input
-                // eslint-disable-next-line typescript/no-unsafe-type-assertion
-                value as string
-              }
+              value={typeof value === "string" ? value : ""}
             />
           }
         />
@@ -346,11 +345,7 @@ const FieldRenderer = ({
             onBlur={handleBlur}
             onChange={(e) => onChange(field.path, e.target.value)}
             type={inputType === "date" ? "date" : "text"}
-            value={
-              // SAFETY: inputType discriminates; value is string for text/date
-              // eslint-disable-next-line typescript/no-unsafe-type-assertion
-              value as string
-            }
+            value={typeof value === "string" ? value : ""}
           />
         }
       />
@@ -379,10 +374,7 @@ const ArrayFieldRenderer = ({
   const t = useTranslations();
   const itemFields: ResolvedField[] = field.itemFields ?? [];
   const arrayKey = `__array_${field.path}`;
-  // SAFETY: __array_* keys hold number[] from form state
-  const items =
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion
-    (values[arrayKey] as number[] | undefined) ?? [];
+  const items = readArrayIndices(values, arrayKey);
 
   const addItem = () => {
     const nextIndex = items.length;
@@ -495,9 +487,7 @@ const buildSubmitValues = (
 
     if (field.kind === "array") {
       const arrayKey = `__array_${field.path}`;
-      // SAFETY: __array_* keys hold number[] from form state
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
-      const items = (values[arrayKey] as number[] | undefined) ?? [];
+      const items = readArrayIndices(values, arrayKey);
       const itemFields: ResolvedField[] = field.itemFields ?? [];
       const arrayValues: Record<string, unknown>[] = [];
 
@@ -550,12 +540,17 @@ const setNestedValue = (
   let current = obj;
 
   for (const part of parts.slice(0, -1)) {
-    if (!(part in current) || typeof current[part] !== "object") {
-      current[part] = {};
+    const next = current[part];
+    if (typeof next === "object" && next !== null && !Array.isArray(next)) {
+      // SAFETY: a plain object value is structurally compatible with
+      // Record<string, unknown>; we guarded against arrays/null above.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      current = next as Record<string, unknown>;
+      continue;
     }
-    // SAFETY: guarded by typeof current[part] === "object" above
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion
-    current = current[part] as Record<string, unknown>;
+    const child: Record<string, unknown> = {};
+    current[part] = child;
+    current = child;
   }
 
   current[last] = value;
@@ -579,9 +574,7 @@ const collectValidatableFields = (
 
     if (field.kind === "array") {
       const arrayKey = `__array_${field.path}`;
-      // SAFETY: __array_* keys hold number[] from form state
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
-      const items = (values[arrayKey] as number[] | undefined) ?? [];
+      const items = readArrayIndices(values, arrayKey);
       const itemFields: ResolvedField[] = field.itemFields ?? [];
 
       for (let i = 0; i < items.length; i++) {
@@ -833,20 +826,23 @@ export const TemplateForm = ({
       const submitValues = buildSubmitValues(values, fields, conditions);
       const valuesJson = JSON.stringify(submitValues);
 
-      const response = templateId
-        ? await api
+      const fillResponse = async () => {
+        if (templateId) {
+          return await api
             .templates({ templateId })
-            .fill.post({ values: valuesJson }, { query: { format } })
-        : await api.templates.fill.post(
-            {
-              // SAFETY: the discriminated union guarantees `file`
-              // is defined when `templateId` is absent.
-              // eslint-disable-next-line typescript/no-unsafe-type-assertion
-              file: file as File,
-              values: valuesJson,
-            },
-            { query: { format } },
+            .fill.post({ values: valuesJson }, { query: { format } });
+        }
+        if (!file) {
+          throw new Error(
+            "TemplateForm: transient fill requires a file when templateId is absent",
           );
+        }
+        return await api.templates.fill.post(
+          { file, values: valuesJson },
+          { query: { format } },
+        );
+      };
+      const response = await fillResponse();
 
       setLoading(false);
 
