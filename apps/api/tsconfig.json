@@ -9,6 +9,7 @@
       "@stll/docx-core": ["../../packages/docx-core/src/index.ts"],
       "@stll/infosoud": ["../../packages/infosoud/src/index.ts"],
       "@stll/money": ["../../packages/money/src/index.ts"],
+      "@stll/permissions": ["../../packages/permissions/src/index.ts"],
       "@stll/skills": ["../../packages/skills/src/index.ts"],
       "@/api/*": ["./src/*"]
     },
