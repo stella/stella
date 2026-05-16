@@ -11,6 +11,7 @@ import {
   createCursorPage,
   decodePaginationCursor,
   encodePaginationCursor,
+  isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import { brandPersistedBillingCodeId } from "@/api/lib/safe-id-boundaries";
 
@@ -41,7 +42,7 @@ const decodeBillingCodeCursor = (cursor: string): BillingCodeCursor | null => {
   if (
     typeof sortOrder !== "number" ||
     typeof code !== "string" ||
-    typeof id !== "string"
+    !isUuidPaginationCursorPart(id)
   ) {
     return null;
   }

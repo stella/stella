@@ -12,6 +12,8 @@ import {
   createCursorPage,
   decodePaginationCursor,
   encodePaginationCursor,
+  isDateOnlyPaginationCursorPart,
+  isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import { brandPersistedRateEntryId } from "@/api/lib/safe-id-boundaries";
 
@@ -29,17 +31,14 @@ type RateEntryCursor = {
   id: SafeId<"rateEntry">;
 };
 
-const dateCursorPattern = /^\d{4}-\d{2}-\d{2}$/u;
-
 const decodeRateEntryCursor = (cursor: string): RateEntryCursor | null => {
   const parts = decodePaginationCursor(cursor);
   const effectiveFrom = parts?.at(0);
   const id = parts?.at(1);
 
   if (
-    typeof effectiveFrom !== "string" ||
-    !dateCursorPattern.test(effectiveFrom) ||
-    typeof id !== "string"
+    !isDateOnlyPaginationCursorPart(effectiveFrom) ||
+    !isUuidPaginationCursorPart(id)
   ) {
     return null;
   }

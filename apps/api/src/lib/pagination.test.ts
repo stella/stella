@@ -4,6 +4,9 @@ import {
   createCursorPage,
   decodePaginationCursor,
   encodePaginationCursor,
+  isDateOnlyPaginationCursorPart,
+  isUuidPaginationCursorPart,
+  parseDateTimePaginationCursorPart,
 } from "@/api/lib/pagination";
 
 describe("cursor pagination", () => {
@@ -54,5 +57,30 @@ describe("cursor pagination", () => {
     expect(decodePaginationCursor(encodePaginationCursor(["valid"]))).toEqual([
       "valid",
     ]);
+  });
+
+  test("validates date-only cursor parts", () => {
+    expect(isDateOnlyPaginationCursorPart("2026-05-16")).toBe(true);
+    expect(isDateOnlyPaginationCursorPart("2026-02-30")).toBe(false);
+    expect(isDateOnlyPaginationCursorPart("2026-99-99")).toBe(false);
+    expect(isDateOnlyPaginationCursorPart("2026-5-16")).toBe(false);
+  });
+
+  test("validates UUID cursor parts", () => {
+    expect(
+      isUuidPaginationCursorPart("018f3d26-388b-7b90-9e39-86c58be5f97a"),
+    ).toBe(true);
+    expect(isUuidPaginationCursorPart("not-a-uuid")).toBe(false);
+    expect(isUuidPaginationCursorPart("invoice_123")).toBe(false);
+  });
+
+  test("parses canonical ISO datetime cursor parts", () => {
+    expect(
+      parseDateTimePaginationCursorPart("2026-05-16T10:30:00.000Z"),
+    ).toEqual(new Date("2026-05-16T10:30:00.000Z"));
+    expect(parseDateTimePaginationCursorPart("2026-99-99")).toBeNull();
+    expect(
+      parseDateTimePaginationCursorPart("2026-05-16T10:30:00Z"),
+    ).toBeNull();
   });
 });

@@ -26,6 +26,8 @@ import {
   createCursorPage,
   decodePaginationCursor,
   encodePaginationCursor,
+  isDateOnlyPaginationCursorPart,
+  isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import { brandPersistedTimeEntryId } from "@/api/lib/safe-id-boundaries";
 
@@ -47,17 +49,14 @@ type TimeEntryCursor = {
   id: SafeId<"timeEntry">;
 };
 
-const dateCursorPattern = /^\d{4}-\d{2}-\d{2}$/u;
-
 const decodeTimeEntryCursor = (cursor: string): TimeEntryCursor | null => {
   const parts = decodePaginationCursor(cursor);
   const dateWorked = parts?.at(0);
   const id = parts?.at(1);
 
   if (
-    typeof dateWorked !== "string" ||
-    !dateCursorPattern.test(dateWorked) ||
-    typeof id !== "string"
+    !isDateOnlyPaginationCursorPart(dateWorked) ||
+    !isUuidPaginationCursorPart(id)
   ) {
     return null;
   }

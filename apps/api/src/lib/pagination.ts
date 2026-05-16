@@ -12,6 +12,10 @@ type CursorPageOptions<T> = {
   cursorForItem: (item: T) => string;
 };
 
+const dateOnlyCursorPartPattern = /^\d{4}-\d{2}-\d{2}$/u;
+const uuidCursorPartPattern =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/u;
+
 export const createCursorPage = <T>({
   rows,
   limit,
@@ -44,4 +48,38 @@ export const decodePaginationCursor = (cursor: string): unknown[] | null => {
   } catch {
     return null;
   }
+};
+
+export const isDateOnlyPaginationCursorPart = (
+  value: unknown,
+): value is string => {
+  if (typeof value !== "string" || !dateOnlyCursorPartPattern.test(value)) {
+    return false;
+  }
+
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+
+  return (
+    !Number.isNaN(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === value
+  );
+};
+
+export const isUuidPaginationCursorPart = (value: unknown): value is string =>
+  typeof value === "string" && uuidCursorPartPattern.test(value);
+
+export const parseDateTimePaginationCursorPart = (
+  value: unknown,
+): Date | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString() !== value) {
+    return null;
+  }
+
+  return parsed;
 };

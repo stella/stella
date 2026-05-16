@@ -10,6 +10,8 @@ import {
   createCursorPage,
   decodePaginationCursor,
   encodePaginationCursor,
+  isUuidPaginationCursorPart,
+  parseDateTimePaginationCursorPart,
 } from "@/api/lib/pagination";
 import { brandPersistedInvoiceId } from "@/api/lib/safe-id-boundaries";
 
@@ -30,12 +32,9 @@ const decodeInvoiceCursor = (cursor: string): InvoiceCursor | null => {
   const createdAt = parts?.at(0);
   const id = parts?.at(1);
 
-  if (typeof createdAt !== "string" || typeof id !== "string") {
-    return null;
-  }
+  const createdAtDate = parseDateTimePaginationCursorPart(createdAt);
 
-  const createdAtDate = new Date(createdAt);
-  if (Number.isNaN(createdAtDate.getTime())) {
+  if (!createdAtDate || !isUuidPaginationCursorPart(id)) {
     return null;
   }
 
