@@ -32,8 +32,8 @@ GRANT SELECT ON TABLE
 TO stella_ingestion;
 
 -- INSERT/UPDATE/DELETE on the eight mutable tables. case_law_sources
--- is config-only (rows seeded by app code on first run, columns
--- otherwise rotated only by migrations) so it stays read-only.
+-- is config-only — rows seeded by ensureSource at startup, columns
+-- otherwise rotated only by migrations.
 GRANT INSERT, UPDATE, DELETE ON TABLE
   "case_law_decisions",
   "case_law_citations",
@@ -44,6 +44,16 @@ GRANT INSERT, UPDATE, DELETE ON TABLE
   "case_law_ingestion_events",
   "case_law_ingestion_failures"
 TO stella_ingestion;
+
+-- Narrow exception on case_law_sources: each adapter cycle bumps
+-- sync_cursor + last_sync_at after a successful pass, and Drizzle's
+-- $onUpdate also writes updated_at. Without these three column-level
+-- UPDATEs the cursor never advances and every cycle is recorded as
+-- failed. All other source columns (name, adapter_key, enabled,
+-- config) remain migration-managed.
+GRANT UPDATE (sync_cursor, last_sync_at, updated_at)
+  ON TABLE "case_law_sources"
+  TO stella_ingestion;
 
 -- Sequence usage for serial PKs on the case_law_* tables.
 DO $$
