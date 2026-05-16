@@ -114,6 +114,7 @@ CREATE POLICY "agent_skill_resource_select" ON "agent_skill_resources" AS PERMIS
     SELECT 1
     FROM agent_skills s
     WHERE s.id = skill_id
+      AND s.organization_id = agent_skill_resources.organization_id
       AND (s.scope = 'team' OR s.user_id = (SELECT current_setting(
         'app.user_id', true
       )))
@@ -128,6 +129,7 @@ CREATE POLICY "agent_skill_resource_insert" ON "agent_skill_resources" AS PERMIS
     SELECT 1
     FROM agent_skills s
     WHERE s.id = skill_id
+      AND s.organization_id = agent_skill_resources.organization_id
       AND (s.scope = 'team' OR s.user_id = (SELECT current_setting(
         'app.user_id', true
       )))
@@ -142,6 +144,7 @@ CREATE POLICY "agent_skill_resource_update" ON "agent_skill_resources" AS PERMIS
     SELECT 1
     FROM agent_skills s
     WHERE s.id = skill_id
+      AND s.organization_id = agent_skill_resources.organization_id
       AND (s.scope = 'team' OR s.user_id = (SELECT current_setting(
         'app.user_id', true
       )))
@@ -154,6 +157,7 @@ CREATE POLICY "agent_skill_resource_update" ON "agent_skill_resources" AS PERMIS
     SELECT 1
     FROM agent_skills s
     WHERE s.id = skill_id
+      AND s.organization_id = agent_skill_resources.organization_id
       AND (s.scope = 'team' OR s.user_id = (SELECT current_setting(
         'app.user_id', true
       )))
@@ -168,6 +172,7 @@ CREATE POLICY "agent_skill_resource_delete" ON "agent_skill_resources" AS PERMIS
     SELECT 1
     FROM agent_skills s
     WHERE s.id = skill_id
+      AND s.organization_id = agent_skill_resources.organization_id
       AND (s.scope = 'team' OR s.user_id = (SELECT current_setting(
         'app.user_id', true
       )))
