@@ -5,6 +5,9 @@ import { join } from "node:path";
 const readSecurityFixture = (relativePath: string) =>
   readFileSync(join(import.meta.dir, relativePath), "utf-8");
 
+const readRootFixture = (relativePath: string) =>
+  readFileSync(join(import.meta.dir, "../../../../..", relativePath), "utf-8");
+
 describe("organization member auth lifecycle", () => {
   test("member removal routes cleanup through the shared helper", () => {
     const authSource = readSecurityFixture("../../lib/auth.ts");
@@ -27,5 +30,15 @@ describe("organization member auth lifecycle", () => {
     expect(helperSource).toContain("delete(sessionTable)");
     expect(helperSource).toContain("referenceId");
     expect(helperSource).toContain("activeOrganizationId");
+  });
+
+  test("lint rule catches auth artifact deletes through schema member access", () => {
+    const pluginSource = readRootFixture(".oxlint-plugins/auth-lifecycle.ts");
+
+    expect(pluginSource).toContain(
+      'firstArgument?.type === "MemberExpression"',
+    );
+    expect(pluginSource).toContain("isIdentifier(firstArgument.property)");
+    expect(pluginSource).toContain("return firstArgument.property.name");
   });
 });

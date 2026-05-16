@@ -70,7 +70,19 @@ const getDeleteTarget = (node): string | null => {
   }
 
   const firstArgument = node.arguments.at(0);
-  return isIdentifier(firstArgument) ? firstArgument.name : null;
+  if (isIdentifier(firstArgument)) {
+    return firstArgument.name;
+  }
+
+  if (
+    firstArgument?.type === "MemberExpression" &&
+    firstArgument.computed === false &&
+    isIdentifier(firstArgument.property)
+  ) {
+    return firstArgument.property.name;
+  }
+
+  return null;
 };
 
 export default {
