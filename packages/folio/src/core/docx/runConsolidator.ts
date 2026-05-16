@@ -348,8 +348,14 @@ export function consolidateRuns(runs: Run[]): Run[] {
   let current: Run | null = null;
 
   for (const run of runs) {
-    // Skip empty runs
+    // Empty runs do not serialize to visible content, but they can mark where a
+    // skipped OOXML payload belongs. Treat them as merge boundaries so later
+    // enrichment can reinsert that payload in the original position.
     if (run.content.length === 0) {
+      if (current !== null) {
+        result.push(current);
+        current = null;
+      }
       continue;
     }
 

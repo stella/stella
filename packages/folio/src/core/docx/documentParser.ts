@@ -17,6 +17,7 @@ import type {
   Section,
   Paragraph,
   Table,
+  Run,
   SectionProperties,
   Shape,
   ShapeContent,
@@ -407,81 +408,139 @@ function enrichParagraphTextBoxes(
 
   const xmlChildren = getChildElements(paraXml);
 
-  // Track which run we're on (to match XML runs with parsed runs)
-  let runIndex = 0;
+  // Walk XML <w:r> children and parsed paragraph runs with two pointers. Empty
+  // runs are dropped by consolidateParagraphContent (e.g., when the only child
+  // is a text-box drawing that parseDrawingContent skipped), so a strict
+  // index-based mapping loses textboxes. The two-pointer walk advances through
+  // parsed Run entries, falling back to a fresh Run when the parsed counterpart
+  // was dropped so the textbox shape still survives the round-trip.
+  let parsedIndex = 0;
+  let lastConsumedRun: Run | undefined;
 
   for (const xmlChild of xmlChildren) {
     if (getLocalName(xmlChild.name ?? "") !== "r") {
+      if (
+        parsedIndex < paragraph.content.length &&
+        paragraph.content[parsedIndex]?.type !== "run"
+      ) {
+        parsedIndex++;
+      }
       continue;
     }
 
-    // Find w:drawing children in this run
-    const runElements = getChildElements(xmlChild);
-    for (const runEl of runElements) {
-      if (
-        getLocalName(runEl.name ?? "") === "drawing" &&
-        isTextBoxDrawing(runEl)
-      ) {
-        // Parse the text box structure
-        const textBox = parseTextBox(runEl);
-        if (textBox) {
-          // Navigate to wps:wsp to get the txbxContent element
-          const wsp = findDeep(runEl, "wps", "wsp");
-          if (wsp) {
-            const txbxContentEl = getTextBoxContentElement(wsp);
-            if (txbxContentEl) {
-              textBox.content = parseTextBoxContent(
-                txbxContentEl,
-                parseParagraph,
-                null, // table parser not needed for most text boxes
-                styles,
-                theme,
-                numbering,
-                rels ?? undefined,
-                media ?? undefined,
-              );
-            }
-          }
+    const { textBoxDrawings, hasNonTextBoxContent } =
+      scanRunForTextBoxDrawings(xmlChild);
 
-          // Convert to Shape with textBody and inject as ShapeContent
-          const shape: Shape = {
-            type: "shape",
-            shapeType: "rect",
-            size: textBox.size,
-            ...(textBox.position !== undefined
-              ? { position: textBox.position }
-              : {}),
-            ...(textBox.wrap !== undefined ? { wrap: textBox.wrap } : {}),
-            ...(textBox.fill !== undefined ? { fill: textBox.fill } : {}),
-            ...(textBox.outline !== undefined
-              ? { outline: textBox.outline }
-              : {}),
-            textBody: {
-              content: textBox.content,
-              ...(textBox.margins !== undefined
-                ? { margins: textBox.margins }
-                : {}),
-            },
-          };
-          if (textBox.id) {
-            shape.id = textBox.id;
-          }
+    const parsedContent = paragraph.content[parsedIndex];
+    const parsedRun: Run | undefined =
+      parsedContent?.type === "run" ? parsedContent : undefined;
 
-          const shapeContent: ShapeContent = { type: "shape", shape };
+    // If this XML run contained non-textbox content but the parsed pointer is
+    // already at a boundary, the run was consolidated into the previous parsed
+    // run. Keep the textbox with that merged content instead of crossing the
+    // boundary to the next run.
+    const targetRun =
+      parsedRun ?? (hasNonTextBoxContent ? lastConsumedRun : undefined);
 
-          // Find the matching parsed run and inject the ShapeContent
-          if (runIndex < paragraph.content.length) {
-            const parsedContent = paragraph.content[runIndex];
-            if (parsedContent?.type === "run") {
-              parsedContent.content.push(shapeContent);
-            }
-          }
+    for (const runEl of textBoxDrawings) {
+      const textBox = parseTextBox(runEl);
+      if (!textBox) {
+        continue;
+      }
+
+      // Navigate to wps:wsp to get the txbxContent element
+      const wsp = findDeep(runEl, "wps", "wsp");
+      if (wsp) {
+        const txbxContentEl = getTextBoxContentElement(wsp);
+        if (txbxContentEl) {
+          textBox.content = parseTextBoxContent(
+            txbxContentEl,
+            parseParagraph,
+            null, // table parser not needed for most text boxes
+            styles,
+            theme,
+            numbering,
+            rels ?? undefined,
+            media ?? undefined,
+          );
         }
+      }
+
+      // Convert to Shape with textBody and inject as ShapeContent. Use
+      // shapeType "textBox" so the serializer emits the wps:txbx content
+      // wrapper on round-trip; otherwise the inner paragraphs are dropped
+      // and the shape re-parses as a plain drawing.
+      const shape: Shape = {
+        type: "shape",
+        shapeType: "textBox",
+        size: textBox.size,
+        ...(textBox.position !== undefined
+          ? { position: textBox.position }
+          : {}),
+        ...(textBox.wrap !== undefined ? { wrap: textBox.wrap } : {}),
+        ...(textBox.fill !== undefined ? { fill: textBox.fill } : {}),
+        ...(textBox.outline !== undefined ? { outline: textBox.outline } : {}),
+        textBody: {
+          content: textBox.content,
+          ...(textBox.margins !== undefined
+            ? { margins: textBox.margins }
+            : {}),
+        },
+      };
+      if (textBox.id) {
+        shape.id = textBox.id;
+      }
+
+      const shapeContent: ShapeContent = { type: "shape", shape };
+
+      // If the parsed run for this XML <w:r> survived consolidation, append
+      // the shape to it so the textbox lands next to its sibling content.
+      // Otherwise the XML run was dropped (only contained the textbox
+      // drawing); insert a standalone Run carrying just the shape at the
+      // current position so the textbox is still serialized back out.
+      if (targetRun && hasNonTextBoxContent) {
+        targetRun.content.push(shapeContent);
+      } else {
+        const newRun: Run = { type: "run", content: [shapeContent] };
+        paragraph.content.splice(parsedIndex, 0, newRun);
+        lastConsumedRun = newRun;
+        parsedIndex++;
       }
     }
 
-    runIndex++;
+    if (hasNonTextBoxContent && parsedRun) {
+      lastConsumedRun = parsedRun;
+      parsedIndex++;
+    }
   }
+}
+
+type TextBoxRunScan = {
+  textBoxDrawings: XmlElement[];
+  hasNonTextBoxContent: boolean;
+};
+
+function scanRunForTextBoxDrawings(xmlRun: XmlElement): TextBoxRunScan {
+  const textBoxDrawings: XmlElement[] = [];
+  let hasNonTextBoxContent = false;
+
+  for (const el of getChildElements(xmlRun)) {
+    const name = getLocalName(el.name ?? "");
+    if (name === "rPr") {
+      continue;
+    }
+    if (name !== "drawing") {
+      hasNonTextBoxContent = true;
+      continue;
+    }
+    if (isTextBoxDrawing(el)) {
+      textBoxDrawings.push(el);
+      continue;
+    }
+    hasNonTextBoxContent = true;
+  }
+
+  return { textBoxDrawings, hasNonTextBoxContent };
 }
 
 // ============================================================================
