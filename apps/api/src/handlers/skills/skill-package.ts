@@ -125,11 +125,13 @@ export const fetchSkillPackageFromUrl = async (
       const url = new URL(rawUrl);
       const response = await fetchSafeBytes(url);
       const contentType = response.headers.get("content-type") ?? "";
-      const parsed =
-        contentType.includes("application/zip") ||
-        rawUrl.toLowerCase().endsWith(".zip")
-          ? await parseZipSkillPackage(response.body)
-          : parseMarkdownSkillPackage(decodeUtf8(response.body));
+      const parsed = isZipSkillSource({
+        buffer: response.body,
+        contentType,
+        path: url.pathname,
+      })
+        ? await parseZipSkillPackage(response.body)
+        : parseMarkdownSkillPackage(decodeUtf8(response.body));
       return { ...parsed, sourceUrl: redactSkillSourceUrlForStorage(rawUrl) };
     },
     catch: toHandlerError,
@@ -897,12 +899,35 @@ const assertSafeGithubSkillUrl = (url: URL) => {
   });
 };
 
-const isZipFile = ({ buffer, name }: { buffer: ArrayBuffer; name: string }) => {
+export const isZipSkillSource = ({
+  buffer,
+  contentType,
+  path,
+}: {
+  buffer: ArrayBuffer | Uint8Array;
+  contentType: string;
+  path: string;
+}) => {
+  const normalizedContentType = contentType.toLowerCase();
+  return (
+    normalizedContentType.includes("application/zip") ||
+    normalizedContentType.includes("application/x-zip-compressed") ||
+    isZipFile({ buffer, name: path })
+  );
+};
+
+const isZipFile = ({
+  buffer,
+  name,
+}: {
+  buffer: ArrayBuffer | Uint8Array;
+  name: string;
+}) => {
   if (name.toLowerCase().endsWith(".zip")) {
     return true;
   }
 
-  const bytes = new Uint8Array(buffer);
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
   return (
     bytes.length >= 4 &&
     bytes.at(0) === 0x50 &&

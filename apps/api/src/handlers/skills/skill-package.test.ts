@@ -6,6 +6,7 @@ import { LIMITS } from "@/api/lib/limits";
 
 import {
   fetchSkillPackageFromUrl,
+  isZipSkillSource,
   parseUploadedSkillPackage,
   redactSkillSourceUrlForStorage,
   resolveGithubRefAndPath,
@@ -195,6 +196,29 @@ Instructions.`,
         "https://example.com/skill.zip?token=secret&X-Amz-Signature=sig",
       ),
     ).toBe("https://example.com/skill.zip");
+  });
+
+  test("detects zip package URLs before query strings", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "skill/SKILL.md",
+      `---
+name: signed-zip
+description: Imported from a signed URL.
+---
+
+Instructions.`,
+    );
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+    const url = new URL("https://example.com/skill.zip?X-Amz-Signature=secret");
+
+    expect(
+      isZipSkillSource({
+        buffer,
+        contentType: "application/octet-stream",
+        path: url.pathname,
+      }),
+    ).toBe(true);
   });
 
   test("resolves GitHub skill paths with multi-segment refs", async () => {
