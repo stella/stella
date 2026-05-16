@@ -530,7 +530,12 @@ function getActionIcon(action: TextContextAction): React.ReactNode {
       return <DeleteColumnIcon />;
     case "addComment":
       return <CommentIcon />;
-    default:
+    case "acceptChange":
+    case "rejectChange":
+    case "separator":
+      // Tracked-change menu items use a different icon set rendered by
+      // the surrounding menu component; this dispatcher leaves them
+      // iconless.
       return null;
   }
 }
@@ -664,7 +669,20 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
         case "paste":
         case "pasteAsPlainText":
           return !isEditable || !hasClipboardContent;
-        default:
+        case "acceptChange":
+        case "rejectChange":
+        case "selectAll":
+        case "separator":
+        case "addComment":
+        case "addRowAbove":
+        case "addRowBelow":
+        case "deleteRow":
+        case "addColumnLeft":
+        case "addColumnRight":
+        case "deleteColumn":
+          // Caller controls these enable states via the explicit
+          // `disabled` field on TextContextMenuItem — fall through to
+          // enabled.
           return false;
       }
     })();
@@ -957,7 +975,18 @@ export function useTextContextMenu(
         case "selectAll":
           document.execCommand("selectAll");
           break;
-        default:
+        case "addRowAbove":
+        case "addRowBelow":
+        case "deleteRow":
+        case "addColumnLeft":
+        case "addColumnRight":
+        case "deleteColumn":
+        case "addComment":
+        case "acceptChange":
+        case "rejectChange":
+        case "separator":
+          // Non-clipboard actions are routed via the onAction callback
+          // below — no execCommand needed here.
           break;
       }
 
@@ -1087,7 +1116,15 @@ export function isTextActionAvailable(
       return true; // Visibility controlled by context menu builder
     case "selectAll":
       return true;
-    default:
+    case "addRowAbove":
+    case "addRowBelow":
+    case "deleteRow":
+    case "addColumnLeft":
+    case "addColumnRight":
+    case "deleteColumn":
+    case "separator":
+      // Availability of table-edit actions is determined by the menu
+      // builder based on whether the cursor is inside a table cell.
       return true;
   }
 }

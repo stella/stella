@@ -838,7 +838,13 @@ function serializeInlineSdt(sdt: InlineSdt): string {
     case "picture":
       prParts.push("<w:picture/>");
       break;
-    default:
+    case "richText":
+    case "buildingBlockGallery":
+    case "group":
+    case "unknown":
+      // These SDT variants carry no type-specific properties in OOXML;
+      // the surrounding sdtPr fields (alias/tag/lock/...) carry all
+      // round-trippable state for them.
       break;
   }
 

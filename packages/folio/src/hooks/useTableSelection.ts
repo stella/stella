@@ -207,7 +207,20 @@ export function useTableSelection({
           clearSelection();
           onChange?.(newDoc);
           return;
-        default:
+        case "borderAll":
+        case "borderBottom":
+        case "borderInside":
+        case "borderLeft":
+        case "borderNone":
+        case "borderOutside":
+        case "borderRight":
+        case "borderTop":
+        case "selectColumn":
+        case "selectRow":
+        case "selectTable":
+          // Border-style and selection actions are routed through the
+          // toolbar's border/selection handlers — they don't modify
+          // table structure so the dispatcher above has nothing to do.
           break;
       }
 

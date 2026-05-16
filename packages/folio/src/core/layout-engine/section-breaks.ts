@@ -198,6 +198,9 @@ export function scheduleSectionBreak(
       };
 
     default:
+      // Continuous sections (and any unrecognised type) render in the
+      // same page region; only force a mid-page boundary when columns
+      // change.
       if (columnsChanging) {
         // Mid-page column layout change
         next.pendingColumns = getColumnConfig();

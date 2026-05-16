@@ -199,6 +199,10 @@ function formatCounter(
   if (value <= 0) {
     return "";
   }
+  // NumberFormat is the OOXML w:numFmt enum (70+ values). This switch
+  // handles every format whose counter-rendering differs from a simple
+  // decimal; CJK/Hindi/Arabic counters fall through to the decimal
+  // default. Matches Word's display when those font glyphs are absent.
   switch (format) {
     case "upperRoman":
       return toRoman(value, true);

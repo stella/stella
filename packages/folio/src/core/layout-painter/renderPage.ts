@@ -267,7 +267,7 @@ function pageBorderShouldRender(
       return pageNumber === 1;
     case "notFirstPage":
       return pageNumber !== 1;
-    default:
+    case "allPages":
       return true;
   }
 }

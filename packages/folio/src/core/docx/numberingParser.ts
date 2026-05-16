@@ -719,6 +719,11 @@ function createNumberingMap(definitions: NumberingDefinitions): NumberingMap {
  * @returns Formatted string
  */
 export function formatNumber(num: number, format: NumberFormat): string {
+  // NumberFormat is the OOXML w:numFmt enum (70+ values). This switch
+  // handles every format whose rendering differs from a decimal
+  // fallback; CJK/Hindi/Hebrew/etc. counters all map to the decimal
+  // default below, matching Word's behaviour when the specialised font
+  // glyphs are absent.
   switch (format) {
     case "decimal":
     case "decimalZero":

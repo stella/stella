@@ -2213,7 +2213,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
             rejectChange(range.from, range.to)(view.state, view.dispatch);
             break;
           }
-          default:
+          case "separator":
+            // Separators are visual dividers in the menu, never
+            // emitted as an actual user action.
             break;
         }
         // TextContextMenu calls onClose after onAction, so no need to close here

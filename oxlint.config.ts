@@ -99,6 +99,25 @@ export default defineConfig({
     ],
     "typescript/no-unnecessary-type-arguments": "error",
 
+    // Redundant with switch-exhaustiveness-check: an exhaustive switch
+    // covers every union member by construction, so a `default:` clause
+    // would be unreachable. Use exhaustive cases for internal
+    // discriminated unions; per-line disable switch-exhaustiveness for
+    // genuinely wide enums (OOXML w:numFmt etc.) where default+fallthrough
+    // is the intended behaviour.
+    "default-case": "off",
+
+    // A `default:` clause is treated as exhaustive. Switches without a
+    // default still require every union member to be cased — that's the
+    // safety net for discriminated unions (PM content kinds, action
+    // types). Switches with an explicit default opt out of the check,
+    // which is the right behaviour for catch-all parsers over wide
+    // string enums like OOXML w:numFmt.
+    "typescript/switch-exhaustiveness-check": [
+      "error",
+      { considerDefaultExhaustiveForUnions: true },
+    ],
+
     "unicorn/switch-case-braces": "off",
     "unicorn/number-literal-case": "off",
     "unicorn/escape-case": "off",
@@ -546,7 +565,7 @@ export default defineConfig({
         "typescript/no-unnecessary-type-assertion": "off",
         "typescript/no-unsafe-return": "off",
         
-        "typescript/switch-exhaustiveness-check": "off",
+        
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
         "typescript/consistent-return": "off",
@@ -573,7 +592,7 @@ export default defineConfig({
         "typescript/no-non-null-assertion": "off",
         "typescript/no-unnecessary-type-assertion": "off",
         "typescript/prefer-nullish-coalescing": "off",
-        "typescript/switch-exhaustiveness-check": "off",
+        
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
         "typescript/consistent-return": "off",
@@ -629,7 +648,7 @@ export default defineConfig({
         "typescript/no-non-null-assertion": "off",
         "typescript/no-unnecessary-type-assertion": "off",
         "typescript/prefer-nullish-coalescing": "off",
-        "typescript/switch-exhaustiveness-check": "off",
+        
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
         "typescript/consistent-return": "off",
@@ -664,7 +683,7 @@ export default defineConfig({
         "typescript/prefer-nullish-coalescing": "off",
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
-        "typescript/switch-exhaustiveness-check": "off",
+        
         "typescript/promise-function-async": "off",
         
         "unicorn/no-array-for-each": "off",
