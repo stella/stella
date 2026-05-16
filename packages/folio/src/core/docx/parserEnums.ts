@@ -26,11 +26,16 @@ import type {
   BorderSpec,
   EmphasisMark,
   FieldType,
+  FloatingTableProperties,
+  ImagePosition,
+  ImageWrap,
+  LevelSuffix,
   LineSpacingRule,
   ParagraphAlignment,
   ParagraphFormatting,
   SdtProperties,
   ShadingProperties,
+  ShapeOutline,
   Style,
   StyleType,
   TableCellFormatting,
@@ -428,3 +433,109 @@ export const ShadingPatternSchema = v.picklist([
   "pct95",
   "nil",
 ] as const satisfies readonly NonNullable<ShadingProperties["pattern"]>[]);
+
+// ---------------------------------------------------------------------------
+// Floating table position enums
+// ---------------------------------------------------------------------------
+
+export const FloatingTableXSpecSchema = v.picklist([
+  "left",
+  "center",
+  "right",
+  "inside",
+  "outside",
+] as const satisfies readonly NonNullable<
+  FloatingTableProperties["tblpXSpec"]
+>[]);
+
+export const FloatingTableYSpecSchema = v.picklist([
+  "top",
+  "center",
+  "bottom",
+  "inside",
+  "outside",
+  "inline",
+] as const satisfies readonly NonNullable<
+  FloatingTableProperties["tblpYSpec"]
+>[]);
+
+// ---------------------------------------------------------------------------
+// Image positioning / wrap enums
+// ---------------------------------------------------------------------------
+
+export const ImageHorizontalRelativeToSchema = v.picklist([
+  "character",
+  "column",
+  "insideMargin",
+  "leftMargin",
+  "margin",
+  "outsideMargin",
+  "page",
+  "rightMargin",
+] as const satisfies readonly ImagePosition["horizontal"]["relativeTo"][]);
+
+export const ImageHorizontalAlignmentSchema = v.picklist([
+  "left",
+  "right",
+  "center",
+  "inside",
+  "outside",
+] as const satisfies readonly NonNullable<
+  ImagePosition["horizontal"]["alignment"]
+>[]);
+
+export const ImageVerticalRelativeToSchema = v.picklist([
+  "insideMargin",
+  "line",
+  "margin",
+  "outsideMargin",
+  "page",
+  "paragraph",
+  "topMargin",
+  "bottomMargin",
+] as const satisfies readonly ImagePosition["vertical"]["relativeTo"][]);
+
+export const ImageVerticalAlignmentSchema = v.picklist([
+  "top",
+  "bottom",
+  "center",
+  "inside",
+  "outside",
+] as const satisfies readonly NonNullable<
+  ImagePosition["vertical"]["alignment"]
+>[]);
+
+export const ImageWrapTextSchema = v.picklist([
+  "bothSides",
+  "left",
+  "right",
+  "largest",
+] as const satisfies readonly NonNullable<ImageWrap["wrapText"]>[]);
+
+// ---------------------------------------------------------------------------
+// Shape outline enums
+// ---------------------------------------------------------------------------
+
+export const ShapeOutlineStyleSchema = v.picklist([
+  "solid",
+  "dot",
+  "dash",
+  "lgDash",
+  "dashDot",
+  "lgDashDot",
+  "lgDashDotDot",
+  "sysDot",
+  "sysDash",
+  "sysDashDot",
+  "sysDashDotDot",
+] as const satisfies readonly NonNullable<ShapeOutline["style"]>[]);
+
+// ---------------------------------------------------------------------------
+// Numbering enums
+// ---------------------------------------------------------------------------
+
+export const LevelSuffixSchema = v.picklist([
+  "tab",
+  "space",
+  "nothing",
+] as const satisfies readonly LevelSuffix[]);

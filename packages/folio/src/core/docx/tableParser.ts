@@ -43,12 +43,20 @@ import type {
   BorderSpec,
   ShadingProperties,
   ColorValue,
-  ThemeColorSlot,
   RelationshipMap,
   MediaFile,
 } from "../types/document";
 import type { NumberingMap } from "./numberingParser";
 import { parseParagraph } from "./paragraphParser";
+import {
+  BorderStyleSchema,
+  FloatingTableXSpecSchema,
+  FloatingTableYSpecSchema,
+  ShadingPatternSchema,
+  TableCellTextDirectionSchema,
+  ThemeColorSlotSchema,
+  narrowEnum,
+} from "./parserEnums";
 import type { StyleMap } from "./styleParser";
 import {
   findChild,
@@ -145,8 +153,9 @@ export function parseBorderSpec(
     return undefined;
   }
 
-  const styleStr = getAttribute(element, "w", "val") ?? "none";
-  const style = styleStr as BorderSpec["style"];
+  // Unknown / missing border style → render no border (Word does the same).
+  const style =
+    narrowEnum(getAttribute(element, "w", "val"), BorderStyleSchema) ?? "none";
 
   const border: BorderSpec = { style };
 
@@ -172,8 +181,9 @@ export function parseBorderSpec(
     if (color !== null) {
       colorVal.rgb = color;
     }
-    if (themeColor !== null) {
-      colorVal.themeColor = themeColor as NonNullable<ColorValue["themeColor"]>;
+    const validatedThemeColor = narrowEnum(themeColor, ThemeColorSlotSchema);
+    if (validatedThemeColor) {
+      colorVal.themeColor = validatedThemeColor;
     }
     if (themeTint !== null) {
       colorVal.themeTint = themeTint;
@@ -336,10 +346,12 @@ export function parseShading(
   }
 
   // Theme fill
-  const themeFill = getAttribute(shdElement, "w", "themeFill");
+  const themeFill = narrowEnum(
+    getAttribute(shdElement, "w", "themeFill"),
+    ThemeColorSlotSchema,
+  );
   if (themeFill) {
-    // SAFETY: OOXML theme color string from XML attribute; cast to ThemeColorSlot union
-    shading.fill = { themeColor: themeFill as ThemeColorSlot };
+    shading.fill = { themeColor: themeFill };
 
     const themeFillTint = getAttribute(shdElement, "w", "themeFillTint");
     if (themeFillTint) {
@@ -359,9 +371,12 @@ export function parseShading(
   }
 
   // Pattern value
-  const pattern = getAttribute(shdElement, "w", "val");
+  const pattern = narrowEnum(
+    getAttribute(shdElement, "w", "val"),
+    ShadingPatternSchema,
+  );
   if (pattern) {
-    shading.pattern = pattern as NonNullable<ShadingProperties["pattern"]>;
+    shading.pattern = pattern;
   }
 
   if (Object.keys(shading).length === 0) {
@@ -505,11 +520,12 @@ export function parseFloatingTableProperties(
     floating.tblpX = tblpX;
   }
 
-  const tblpXSpec = getAttribute(tblpPrElement, "w", "tblpXSpec");
+  const tblpXSpec = narrowEnum(
+    getAttribute(tblpPrElement, "w", "tblpXSpec"),
+    FloatingTableXSpecSchema,
+  );
   if (tblpXSpec) {
-    floating.tblpXSpec = tblpXSpec as NonNullable<
-      FloatingTableProperties["tblpXSpec"]
-    >;
+    floating.tblpXSpec = tblpXSpec;
   }
 
   // Vertical position
@@ -518,11 +534,12 @@ export function parseFloatingTableProperties(
     floating.tblpY = tblpY;
   }
 
-  const tblpYSpec = getAttribute(tblpPrElement, "w", "tblpYSpec");
+  const tblpYSpec = narrowEnum(
+    getAttribute(tblpPrElement, "w", "tblpYSpec"),
+    FloatingTableYSpecSchema,
+  );
   if (tblpYSpec) {
-    floating.tblpYSpec = tblpYSpec as NonNullable<
-      FloatingTableProperties["tblpYSpec"]
-    >;
+    floating.tblpYSpec = tblpYSpec;
   }
 
   // Distance from text
@@ -1099,11 +1116,12 @@ export function parseTableCellProperties(
   // Text direction (w:textDirection)
   const textDirElement = findChild(tcPrElement, "w", "textDirection");
   if (textDirElement) {
-    const textDir = getAttribute(textDirElement, "w", "val");
+    const textDir = narrowEnum(
+      getAttribute(textDirElement, "w", "val"),
+      TableCellTextDirectionSchema,
+    );
     if (textDir) {
-      formatting.textDirection = textDir as NonNullable<
-        TableCellFormatting["textDirection"]
-      >;
+      formatting.textDirection = textDir;
     }
   }
 
