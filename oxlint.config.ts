@@ -559,17 +559,15 @@ export default defineConfig({
         "typescript/no-unsafe-assignment": "off",
         "typescript/no-unsafe-member-access": "off",
         "typescript/strict-boolean-expressions": "off",
-        
+
         "typescript/prefer-nullish-coalescing": "off",
         "typescript/no-non-null-assertion": "off",
         "typescript/no-unnecessary-type-assertion": "off",
         "typescript/no-unsafe-return": "off",
-        
-        
+
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
         "typescript/consistent-return": "off",
-        
       },
     },
     {
@@ -592,22 +590,17 @@ export default defineConfig({
         "typescript/no-non-null-assertion": "off",
         "typescript/no-unnecessary-type-assertion": "off",
         "typescript/prefer-nullish-coalescing": "off",
-        
+
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
         "typescript/consistent-return": "off",
-        
-        
+
         "typescript/no-unsafe-return": "off",
         "typescript/no-unsafe-call": "off",
         "typescript/no-unsafe-argument": "off",
-        
-        
-        
+
         "typescript/no-deprecated": "off",
         "typescript/promise-function-async": "off",
-        
-        
       },
     },
     {
@@ -648,18 +641,15 @@ export default defineConfig({
         "typescript/no-non-null-assertion": "off",
         "typescript/no-unnecessary-type-assertion": "off",
         "typescript/prefer-nullish-coalescing": "off",
-        
+
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
         "typescript/consistent-return": "off",
-        
-        
+
         "typescript/no-unsafe-return": "off",
         "typescript/no-unsafe-call": "off",
         "typescript/no-unsafe-argument": "off",
-        
-        
-        
+
         "typescript/no-deprecated": "off",
         "typescript/promise-function-async": "off",
       },
@@ -683,21 +673,20 @@ export default defineConfig({
         "typescript/prefer-nullish-coalescing": "off",
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
-        
+
         "typescript/promise-function-async": "off",
-        
+
         "unicorn/no-array-for-each": "off",
         "typescript/no-unnecessary-type-conversion": "off",
         "typescript/no-duplicate-type-constituents": "off",
-        
+
         "eslint/no-control-regex": "off",
         "typescript/no-deprecated": "off",
         "typescript/consistent-return": "off",
         "typescript/no-unsafe-return": "off",
         "typescript/no-unsafe-call": "off",
         "typescript/no-unsafe-argument": "off",
-        
-        
+
         "unicorn/prefer-string-starts-ends-with": "off",
         "typescript/prefer-string-starts-ends-with": "off",
       },
@@ -742,6 +731,22 @@ export default defineConfig({
       files: ["apps/api/src/handlers/**/*.ts"],
       rules: {
         "no-body-ownership-ids/no-body-ownership-ids": "error",
+        "no-offset-pagination/no-offset-pagination": [
+          "error",
+          {
+            // Legacy offset-paginated list endpoints. New list endpoints must
+            // use cursor pagination and return Page<T>.
+            allowedFiles: [
+              "apps/api/src/handlers/billing-codes/read.ts",
+              "apps/api/src/handlers/expenses/read.ts",
+              "apps/api/src/handlers/invoices/read.ts",
+              "apps/api/src/handlers/rates/entries-read.ts",
+              "apps/api/src/handlers/rates/read.ts",
+              "apps/api/src/handlers/skills/list.ts",
+              "apps/api/src/handlers/time-entries/read.ts",
+            ],
+          },
+        ],
         "no-raw-user-id-schema/no-raw-user-id-schema": "error",
         "no-offset-pagination/no-offset-pagination": [
           "error",

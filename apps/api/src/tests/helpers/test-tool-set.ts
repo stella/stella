@@ -70,18 +70,21 @@ export const asChatPart = (part: object): ChatMessage["parts"][number] =>
   // eslint-disable-next-line typescript/no-unsafe-type-assertion
   part as unknown as ChatMessage["parts"][number];
 
+type TestFetchMock =
+  | (() => Promise<Response>)
+  | ((input: string) => Promise<Response>)
+  | ((input: string | URL | Request) => Promise<Response>)
+  | ((input: string | URL | Request, init?: RequestInit) => Promise<Response>);
+
 /**
  * Cast a test fetch mock to the global `fetch` signature.
  *
  * `typeof fetch` has an overloaded signature (string | URL |
  * Request, RequestInit) that's awkward to satisfy in tests that
  * only care about the URL string. This helper centralises the
- * widening so the per-test mock can use whatever convenient input
- * shape (`(url: string) => Response`, no args, etc.).
+ * widening so the per-test mock can use the input shape it asserts.
  */
-export const asFetchMock = (
-  fn: (...args: never[]) => Promise<Response>,
-): typeof fetch =>
+export const asFetchMock = (fn: TestFetchMock): typeof fetch =>
   // SAFETY: production code calls the mock with the URL it would
   // pass to real `fetch`; the test asserts on that exact input.
   // Absent fetch overloads are not exercised at runtime.

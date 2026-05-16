@@ -67,7 +67,6 @@ const getConditionData = (
   let defaultOperator: NonNullable<Condition>["operator"] | undefined;
   let defaultValue: NonNullable<Condition>["value"] | undefined;
 
-  // oxlint-disable-next-line typescript/switch-exhaustiveness-check
   switch (property.content.type) {
     case "text":
     case "single-select":
