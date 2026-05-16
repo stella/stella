@@ -24,8 +24,19 @@ import * as v from "valibot";
 
 import type {
   BorderSpec,
+  EmphasisMark,
+  FieldType,
+  LineSpacingRule,
+  ParagraphAlignment,
+  ParagraphFormatting,
+  SdtProperties,
   ShadingProperties,
+  TabLeader,
+  TabStopAlignment,
+  TextEffect,
+  TextFormatting,
   ThemeColorSlot,
+  UnderlineStyle,
 } from "../types/document";
 
 /**
@@ -92,6 +103,225 @@ export const BorderStyleSchema = v.picklist([
   "inset",
   "nil",
 ] as const satisfies readonly BorderSpec["style"][]);
+
+// ---------------------------------------------------------------------------
+// Run formatting enums
+// ---------------------------------------------------------------------------
+
+export const UnderlineStyleSchema = v.picklist([
+  "none",
+  "single",
+  "words",
+  "double",
+  "thick",
+  "dotted",
+  "dottedHeavy",
+  "dash",
+  "dashedHeavy",
+  "dashLong",
+  "dashLongHeavy",
+  "dotDash",
+  "dashDotHeavy",
+  "dotDotDash",
+  "dashDotDotHeavy",
+  "wave",
+  "wavyHeavy",
+  "wavyDouble",
+] as const satisfies readonly UnderlineStyle[]);
+
+export const HighlightColorSchema = v.picklist([
+  "black",
+  "blue",
+  "cyan",
+  "darkBlue",
+  "darkCyan",
+  "darkGray",
+  "darkGreen",
+  "darkMagenta",
+  "darkRed",
+  "darkYellow",
+  "green",
+  "lightGray",
+  "magenta",
+  "none",
+  "red",
+  "white",
+  "yellow",
+] as const satisfies readonly NonNullable<TextFormatting["highlight"]>[]);
+
+export const TextEffectSchema = v.picklist([
+  "none",
+  "blinkBackground",
+  "lights",
+  "antsBlack",
+  "antsRed",
+  "shimmer",
+  "sparkle",
+] as const satisfies readonly TextEffect[]);
+
+export const EmphasisMarkSchema = v.picklist([
+  "none",
+  "dot",
+  "comma",
+  "circle",
+  "underDot",
+] as const satisfies readonly EmphasisMark[]);
+
+type FontTheme = NonNullable<
+  NonNullable<TextFormatting["fontFamily"]>["asciiTheme"]
+>;
+
+export const FontThemeSchema = v.picklist([
+  "majorAscii",
+  "majorHAnsi",
+  "majorEastAsia",
+  "majorBidi",
+  "minorAscii",
+  "minorHAnsi",
+  "minorEastAsia",
+  "minorBidi",
+] as const satisfies readonly FontTheme[]);
+
+// ---------------------------------------------------------------------------
+// Paragraph formatting enums
+// ---------------------------------------------------------------------------
+
+export const ParagraphAlignmentSchema = v.picklist([
+  "left",
+  "center",
+  "right",
+  "both",
+  "distribute",
+  "mediumKashida",
+  "highKashida",
+  "lowKashida",
+  "thaiDistribute",
+] as const satisfies readonly ParagraphAlignment[]);
+
+export const LineSpacingRuleSchema = v.picklist([
+  "auto",
+  "exact",
+  "atLeast",
+] as const satisfies readonly LineSpacingRule[]);
+
+export const TabStopAlignmentSchema = v.picklist([
+  "left",
+  "center",
+  "right",
+  "decimal",
+  "bar",
+  "clear",
+  "num",
+] as const satisfies readonly TabStopAlignment[]);
+
+export const TabLeaderSchema = v.picklist([
+  "none",
+  "dot",
+  "hyphen",
+  "underscore",
+  "heavy",
+  "middleDot",
+] as const satisfies readonly TabLeader[]);
+
+type Frame = NonNullable<ParagraphFormatting["frame"]>;
+
+export const FrameXAlignSchema = v.picklist([
+  "left",
+  "center",
+  "right",
+  "inside",
+  "outside",
+] as const satisfies readonly NonNullable<Frame["xAlign"]>[]);
+
+export const FrameYAlignSchema = v.picklist([
+  "top",
+  "center",
+  "bottom",
+  "inside",
+  "outside",
+  "inline",
+] as const satisfies readonly NonNullable<Frame["yAlign"]>[]);
+
+export const FrameWrapSchema = v.picklist([
+  "around",
+  "auto",
+  "none",
+  "notBeside",
+  "through",
+  "tight",
+] as const satisfies readonly NonNullable<Frame["wrap"]>[]);
+
+// ---------------------------------------------------------------------------
+// Structured document tag (SDT) enums
+// ---------------------------------------------------------------------------
+
+export const SdtLockSchema = v.picklist([
+  "sdtLocked",
+  "contentLocked",
+  "sdtContentLocked",
+  "unlocked",
+] as const satisfies readonly NonNullable<SdtProperties["lock"]>[]);
+
+// ---------------------------------------------------------------------------
+// Field types
+// ---------------------------------------------------------------------------
+
+export const FieldTypeSchema = v.picklist([
+  "PAGE",
+  "NUMPAGES",
+  "NUMWORDS",
+  "NUMCHARS",
+  "DATE",
+  "TIME",
+  "CREATEDATE",
+  "SAVEDATE",
+  "PRINTDATE",
+  "AUTHOR",
+  "TITLE",
+  "SUBJECT",
+  "KEYWORDS",
+  "COMMENTS",
+  "FILENAME",
+  "FILESIZE",
+  "TEMPLATE",
+  "DOCPROPERTY",
+  "DOCVARIABLE",
+  "REF",
+  "PAGEREF",
+  "NOTEREF",
+  "HYPERLINK",
+  "TOC",
+  "TOA",
+  "INDEX",
+  "SEQ",
+  "STYLEREF",
+  "AUTONUM",
+  "AUTONUMLGL",
+  "AUTONUMOUT",
+  "IF",
+  "MERGEFIELD",
+  "NEXT",
+  "NEXTIF",
+  "ASK",
+  "SET",
+  "QUOTE",
+  "INCLUDETEXT",
+  "INCLUDEPICTURE",
+  "SYMBOL",
+  "ADVANCE",
+  "EDITTIME",
+  "REVNUM",
+  "SECTION",
+  "SECTIONPAGES",
+  "USERADDRESS",
+  "USERNAME",
+  "USERINITIALS",
+  "UNKNOWN",
+] as const satisfies readonly FieldType[]);
+
+// ---------------------------------------------------------------------------
+// Shading enums
+// ---------------------------------------------------------------------------
 
 export const ShadingPatternSchema = v.picklist([
   "clear",

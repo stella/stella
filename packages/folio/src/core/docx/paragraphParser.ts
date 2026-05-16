@@ -26,10 +26,6 @@ import type {
   BorderSpec,
   ShadingProperties,
   TabStop,
-  TabStopAlignment,
-  TabLeader,
-  LineSpacingRule,
-  ParagraphAlignment,
   RelationshipMap,
   MediaFile,
   InlineSdt,
@@ -48,6 +44,21 @@ import {
 } from "./bookmarkParser";
 import { parseHyperlink as parseHyperlinkFromModule } from "./hyperlinkParser";
 import type { NumberingMap } from "./numberingParser";
+import {
+  BorderStyleSchema,
+  FieldTypeSchema,
+  FrameWrapSchema,
+  FrameXAlignSchema,
+  FrameYAlignSchema,
+  LineSpacingRuleSchema,
+  ParagraphAlignmentSchema,
+  SdtLockSchema,
+  ShadingPatternSchema,
+  TabLeaderSchema,
+  TabStopAlignmentSchema,
+  ThemeColorSlotSchema,
+  narrowEnum,
+} from "./parserEnums";
 import { consolidateParagraphContent } from "./runConsolidator";
 import { parseRun, parseRunProperties } from "./runParser";
 import { parseSectionProperties } from "./sectionParser";
@@ -99,9 +110,7 @@ function parseSdtProperties(sdtPr: XmlElement | null): SdtProperties {
       }
       case "lock": {
         const lockVal = getAttribute(el, "w", "val");
-        props.lock = (lockVal ?? "unlocked") as NonNullable<
-          SdtProperties["lock"]
-        >;
+        props.lock = narrowEnum(lockVal, SdtLockSchema) ?? "unlocked";
         break;
       }
       case "placeholder": {
@@ -231,8 +240,9 @@ function parseColorValue(
     color.auto = true;
   }
 
-  if (themeColor) {
-    color.themeColor = themeColor as NonNullable<ColorValue["themeColor"]>;
+  const validatedThemeColor = narrowEnum(themeColor, ThemeColorSlotSchema);
+  if (validatedThemeColor) {
+    color.themeColor = validatedThemeColor;
   }
 
   if (themeTint) {
@@ -269,9 +279,10 @@ function parseShadingProperties(
   }
 
   const themeFill = getAttribute(shd, "w", "themeFill");
-  if (themeFill) {
+  const validatedThemeFill = narrowEnum(themeFill, ThemeColorSlotSchema);
+  if (validatedThemeFill) {
     props.fill = props.fill || {};
-    props.fill.themeColor = themeFill as NonNullable<ColorValue["themeColor"]>;
+    props.fill.themeColor = validatedThemeFill;
   }
 
   const themeFillTint = getAttribute(shd, "w", "themeFillTint");
@@ -284,9 +295,12 @@ function parseShadingProperties(
     props.fill.themeShade = themeFillShade;
   }
 
-  const pattern = getAttribute(shd, "w", "val");
+  const pattern = narrowEnum(
+    getAttribute(shd, "w", "val"),
+    ShadingPatternSchema,
+  );
   if (pattern) {
-    props.pattern = pattern as NonNullable<ShadingProperties["pattern"]>;
+    props.pattern = pattern;
   }
 
   return Object.keys(props).length > 0 ? props : undefined;
@@ -300,14 +314,12 @@ function parseBorderSpec(border: XmlElement | null): BorderSpec | undefined {
     return undefined;
   }
 
-  const style = getAttribute(border, "w", "val");
+  const style = narrowEnum(getAttribute(border, "w", "val"), BorderStyleSchema);
   if (!style) {
     return undefined;
   }
 
-  const spec: BorderSpec = {
-    style: style as BorderSpec["style"],
-  };
+  const spec: BorderSpec = { style };
 
   const colorVal = getAttribute(border, "w", "color");
   const themeColor = getAttribute(border, "w", "themeColor");
@@ -360,17 +372,23 @@ function parseTabStops(tabs: XmlElement | null): TabStop[] | undefined {
 
   for (const tab of tabElements) {
     const pos = parseNumericAttribute(tab, "w", "pos");
-    const val = getAttribute(tab, "w", "val");
+    const alignment = narrowEnum(
+      getAttribute(tab, "w", "val"),
+      TabStopAlignmentSchema,
+    );
 
-    if (pos !== undefined && val) {
+    if (pos !== undefined && alignment) {
       const tabStop: TabStop = {
         position: pos,
-        alignment: val as TabStopAlignment,
+        alignment,
       };
 
-      const leader = getAttribute(tab, "w", "leader");
+      const leader = narrowEnum(
+        getAttribute(tab, "w", "leader"),
+        TabLeaderSchema,
+      );
       if (leader) {
-        tabStop.leader = leader as TabLeader;
+        tabStop.leader = leader;
       }
 
       result.push(tabStop);
@@ -422,25 +440,25 @@ function parseFrameProperties(
     frame.y = y;
   }
 
-  const xAlign = getAttribute(framePr, "w", "xAlign");
+  const xAlign = narrowEnum(
+    getAttribute(framePr, "w", "xAlign"),
+    FrameXAlignSchema,
+  );
   if (xAlign) {
-    frame.xAlign = xAlign as NonNullable<
-      NonNullable<ParagraphFormatting["frame"]>["xAlign"]
-    >;
+    frame.xAlign = xAlign;
   }
 
-  const yAlign = getAttribute(framePr, "w", "yAlign");
+  const yAlign = narrowEnum(
+    getAttribute(framePr, "w", "yAlign"),
+    FrameYAlignSchema,
+  );
   if (yAlign) {
-    frame.yAlign = yAlign as NonNullable<
-      NonNullable<ParagraphFormatting["frame"]>["yAlign"]
-    >;
+    frame.yAlign = yAlign;
   }
 
-  const wrap = getAttribute(framePr, "w", "wrap");
+  const wrap = narrowEnum(getAttribute(framePr, "w", "wrap"), FrameWrapSchema);
   if (wrap) {
-    frame.wrap = wrap as NonNullable<
-      NonNullable<ParagraphFormatting["frame"]>["wrap"]
-    >;
+    frame.wrap = wrap;
   }
 
   return Object.keys(frame).length > 0 ? frame : undefined;
@@ -482,9 +500,12 @@ export function parseParagraphProperties(
   // === Alignment ===
   const jc = findChild(pPr, "w", "jc");
   if (jc) {
-    const val = getAttribute(jc, "w", "val");
+    const val = narrowEnum(
+      getAttribute(jc, "w", "val"),
+      ParagraphAlignmentSchema,
+    );
     if (val) {
-      formatting.alignment = val as ParagraphAlignment;
+      formatting.alignment = val;
     }
   }
 
@@ -523,9 +544,12 @@ export function parseParagraphProperties(
       formatting.spacingExplicit = spacingExplicit;
     }
 
-    const lineRule = getAttribute(spacing, "w", "lineRule");
+    const lineRule = narrowEnum(
+      getAttribute(spacing, "w", "lineRule"),
+      LineSpacingRuleSchema,
+    );
     if (lineRule) {
-      formatting.lineSpacingRule = lineRule as LineSpacingRule;
+      formatting.lineSpacingRule = lineRule;
     }
 
     const beforeAuto = getAttribute(spacing, "w", "beforeAutospacing");
@@ -1011,64 +1035,7 @@ function parseFieldType(instruction: string): FieldType {
 
   // SAFETY: capture group [1] always present when regex matches
   const fieldName = match[1]!.toUpperCase();
-
-  const knownFields: FieldType[] = [
-    "PAGE",
-    "NUMPAGES",
-    "NUMWORDS",
-    "NUMCHARS",
-    "DATE",
-    "TIME",
-    "CREATEDATE",
-    "SAVEDATE",
-    "PRINTDATE",
-    "AUTHOR",
-    "TITLE",
-    "SUBJECT",
-    "KEYWORDS",
-    "COMMENTS",
-    "FILENAME",
-    "FILESIZE",
-    "TEMPLATE",
-    "DOCPROPERTY",
-    "DOCVARIABLE",
-    "REF",
-    "PAGEREF",
-    "NOTEREF",
-    "HYPERLINK",
-    "TOC",
-    "TOA",
-    "INDEX",
-    "SEQ",
-    "STYLEREF",
-    "AUTONUM",
-    "AUTONUMLGL",
-    "AUTONUMOUT",
-    "IF",
-    "MERGEFIELD",
-    "NEXT",
-    "NEXTIF",
-    "ASK",
-    "SET",
-    "QUOTE",
-    "INCLUDETEXT",
-    "INCLUDEPICTURE",
-    "SYMBOL",
-    "ADVANCE",
-    "EDITTIME",
-    "REVNUM",
-    "SECTION",
-    "SECTIONPAGES",
-    "USERADDRESS",
-    "USERNAME",
-    "USERINITIALS",
-  ];
-
-  if (knownFields.includes(fieldName as FieldType)) {
-    return fieldName as FieldType;
-  }
-
-  return "UNKNOWN";
+  return narrowEnum(fieldName, FieldTypeSchema) ?? "UNKNOWN";
 }
 
 /**

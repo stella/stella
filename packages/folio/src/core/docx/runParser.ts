@@ -35,13 +35,22 @@ import type {
   TextFormatting,
   ColorValue,
   ShadingProperties,
-  UnderlineStyle,
   Theme,
   Image,
   RelationshipMap,
   MediaFile,
 } from "../types/document";
 import { parseImage } from "./imageParser";
+import {
+  EmphasisMarkSchema,
+  FontThemeSchema,
+  HighlightColorSchema,
+  ShadingPatternSchema,
+  TextEffectSchema,
+  ThemeColorSlotSchema,
+  UnderlineStyleSchema,
+  narrowEnum,
+} from "./parserEnums";
 import type { StyleMap } from "./styleParser";
 import { resolveThemeFontRef } from "./themeParser";
 import {
@@ -73,8 +82,9 @@ function parseColorValue(
     color.auto = true;
   }
 
-  if (themeColor) {
-    color.themeColor = themeColor as NonNullable<ColorValue["themeColor"]>;
+  const validatedThemeColor = narrowEnum(themeColor, ThemeColorSlotSchema);
+  if (validatedThemeColor) {
+    color.themeColor = validatedThemeColor;
   }
 
   if (themeTint) {
@@ -111,11 +121,12 @@ function parseShadingProperties(
   }
 
   const themeFill = getAttribute(shd, "w", "themeFill");
-  if (themeFill) {
+  const validatedThemeFill = narrowEnum(themeFill, ThemeColorSlotSchema);
+  if (validatedThemeFill) {
     if (!props.fill) {
       props.fill = {};
     }
-    props.fill.themeColor = themeFill as NonNullable<ColorValue["themeColor"]>;
+    props.fill.themeColor = validatedThemeFill;
   }
 
   const themeFillTint = getAttribute(shd, "w", "themeFillTint");
@@ -128,9 +139,12 @@ function parseShadingProperties(
     props.fill.themeShade = themeFillShade;
   }
 
-  const pattern = getAttribute(shd, "w", "val");
+  const pattern = narrowEnum(
+    getAttribute(shd, "w", "val"),
+    ShadingPatternSchema,
+  );
   if (pattern) {
-    props.pattern = pattern as NonNullable<ShadingProperties["pattern"]>;
+    props.pattern = pattern;
   }
 
   return Object.keys(props).length > 0 ? props : undefined;
@@ -189,7 +203,7 @@ export function parseRunProperties(
   // Underline (w:u)
   const u = findChild(rPr, "w", "u");
   if (u) {
-    const style = getAttribute(u, "w", "val") as UnderlineStyle | null;
+    const style = narrowEnum(getAttribute(u, "w", "val"), UnderlineStyleSchema);
     if (style) {
       formatting.underline = { style };
       const colorVal = getAttribute(u, "w", "color");
@@ -258,9 +272,12 @@ export function parseRunProperties(
   // Highlight color (w:highlight)
   const highlight = findChild(rPr, "w", "highlight");
   if (highlight) {
-    const val = getAttribute(highlight, "w", "val");
+    const val = narrowEnum(
+      getAttribute(highlight, "w", "val"),
+      HighlightColorSchema,
+    );
     if (val) {
-      formatting.highlight = val as NonNullable<TextFormatting["highlight"]>;
+      formatting.highlight = val;
     }
   }
 
@@ -313,14 +330,10 @@ export function parseRunProperties(
     }
 
     // Theme font references
-    const asciiTheme = getAttribute(rFonts, "w", "asciiTheme");
+    const asciiThemeRaw = getAttribute(rFonts, "w", "asciiTheme");
+    const asciiTheme = narrowEnum(asciiThemeRaw, FontThemeSchema);
     if (asciiTheme) {
-      fontFamily.asciiTheme =
-        asciiTheme as TextFormatting["fontFamily"] extends {
-          asciiTheme?: infer T;
-        }
-          ? T
-          : never;
+      fontFamily.asciiTheme = asciiTheme;
       // Also resolve the actual font name for convenience
       if (theme && !fontFamily.ascii) {
         const resolved = resolveThemeFontRef(theme, asciiTheme);
@@ -405,20 +418,18 @@ export function parseRunProperties(
   // Text effect animation (w:effect)
   const effect = findChild(rPr, "w", "effect");
   if (effect) {
-    const val = getAttribute(effect, "w", "val");
+    const val = narrowEnum(getAttribute(effect, "w", "val"), TextEffectSchema);
     if (val) {
-      formatting.effect = val as NonNullable<TextFormatting["effect"]>;
+      formatting.effect = val;
     }
   }
 
   // Emphasis mark (w:em)
   const em = findChild(rPr, "w", "em");
   if (em) {
-    const val = getAttribute(em, "w", "val");
+    const val = narrowEnum(getAttribute(em, "w", "val"), EmphasisMarkSchema);
     if (val) {
-      formatting.emphasisMark = val as NonNullable<
-        TextFormatting["emphasisMark"]
-      >;
+      formatting.emphasisMark = val;
     }
   }
 
