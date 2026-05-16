@@ -2,9 +2,10 @@ import { and, eq } from "drizzle-orm";
 
 import { roles } from "@stll/permissions";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb, Transaction } from "@/api/db";
 import { member } from "@/api/db/auth-schema";
 import { db } from "@/api/db/root";
+import type { FolioCollabTokenPermissions } from "@/api/db/schema";
 import {
   folioCollabSessions,
   folioCollabSessionTokens,
@@ -12,6 +13,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createFileKey } from "@/api/handlers/files/utils";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
@@ -47,9 +49,40 @@ export type AuthorizedFolioCollabSession = {
   organizationId: SafeId<"organization">;
   scopedDb: ScopedDb;
   sessionId: SafeId<"folioCollabSession">;
+  tokenExpiresAt: Date;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
   yjsSnapshotFileId: SafeId<"userFile">;
+};
+
+type IssueFolioCollabTokenOptions = {
+  permissions: FolioCollabTokenPermissions;
+  sessionId: SafeId<"folioCollabSession">;
+  tx: Transaction;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace">;
+};
+
+export const issueFolioCollabToken = async ({
+  permissions,
+  sessionId,
+  tx,
+  userId,
+  workspaceId,
+}: IssueFolioCollabTokenOptions) => {
+  const token = createFolioCollabToken();
+  const tokenExpiresAt = computeFolioCollabTokenExpiresAt();
+  await tx.insert(folioCollabSessionTokens).values({
+    expiresAt: tokenExpiresAt,
+    id: createSafeId<"folioCollabSessionToken">(),
+    permissions,
+    sessionId,
+    tokenHash: hashFolioCollabToken(token),
+    userId,
+    workspaceId,
+  });
+
+  return { token, tokenExpiresAt };
 };
 
 export type FolioCollabSessionAuthorizationResult =
@@ -143,6 +176,7 @@ export const authorizeFolioCollabSession = async ({
         workspaceIds: [row.workspaceId],
       }),
       sessionId,
+      tokenExpiresAt: row.expiresAt,
       userId: brandPersistedUserId(row.userId),
       workspaceId: row.workspaceId,
       yjsSnapshotFileId: row.yjsSnapshotFileId,

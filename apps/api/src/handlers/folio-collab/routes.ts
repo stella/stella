@@ -21,6 +21,7 @@ import {
   authorizeFolioCollabSession,
   FOLIO_COLLAB_SNAPSHOT_MAX_BASE64_LENGTH,
   FOLIO_COLLAB_SNAPSHOT_MAX_BYTES,
+  issueFolioCollabToken,
   loadFolioCollabSnapshot,
   storeFolioCollabSnapshot,
 } from "@/api/lib/folio-collab-sessions";
@@ -89,8 +90,36 @@ export const folioCollabRoute = new Elysia({
         canEdit: value.canEdit,
         roomName: value.sessionId,
         sessionId: value.sessionId,
+        tokenExpiresAt: value.tokenExpiresAt.toISOString(),
         userId: value.userId,
         workspaceId: value.workspaceId,
+      };
+    },
+    { body: authBodySchema },
+  )
+  .post(
+    "/refresh-token",
+    async ({ body }) => {
+      const authorized = await authorizeOrRespond(body);
+      if (!authorized.ok) {
+        return authorized.response;
+      }
+      const { value } = authorized;
+
+      const { token, tokenExpiresAt } = await value.scopedDb(
+        async (tx) =>
+          await issueFolioCollabToken({
+            permissions: { canEdit: value.canEdit },
+            sessionId: value.sessionId,
+            tx,
+            userId: value.userId,
+            workspaceId: value.workspaceId,
+          }),
+      );
+
+      return {
+        token,
+        tokenExpiresAt: tokenExpiresAt.toISOString(),
       };
     },
     { body: authBodySchema },

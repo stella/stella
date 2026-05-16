@@ -7,14 +7,18 @@ import { createCollabServer } from "./server";
 type FakeStellaApiOptions = {
   canEdit?: boolean;
   initialSnapshotBase64?: string | null;
+  refreshedToken?: string;
   roomName?: string;
   token?: string;
+  tokenExpiresAt?: string;
 };
 
 type FakeStellaApi = {
   authorizeRequests: () => number;
   destroy: () => Promise<void>;
   latestSnapshotBase64: () => string | null;
+  refreshRequests: () => number;
+  storeRequestTokens: () => string[];
   storeRequests: () => number;
   url: string;
 };
@@ -67,15 +71,23 @@ const hasAwarenessUserName = (
 
 const getTextContent = (doc: Doc, name: string) => doc.getText(name).toJSON();
 
+const farFutureTokenExpiresAt = () =>
+  new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
 const createFakeStellaApi = ({
   canEdit = true,
   initialSnapshotBase64 = null,
+  refreshedToken = "collab_token_refreshed",
   roomName = "folio_collab_session_test",
   token = "collab_token_test",
+  tokenExpiresAt = farFutureTokenExpiresAt(),
 }: FakeStellaApiOptions = {}): FakeStellaApi => {
   let authorizeRequests = 0;
   let latestSnapshotBase64 = initialSnapshotBase64;
+  let refreshRequests = 0;
+  const storeRequestTokens: string[] = [];
   let storeRequests = 0;
+  let currentToken = token;
 
   const server = Bun.serve({
     fetch: async (request) => {
@@ -93,13 +105,28 @@ const createFakeStellaApi = ({
           canEdit,
           roomName,
           sessionId: roomName,
+          tokenExpiresAt,
           userId: "user_test",
           workspaceId: "workspace_test",
         });
       }
 
+      if (url.pathname === "/v1/folio-collab-sessions/refresh-token") {
+        refreshRequests += 1;
+
+        if (body["sessionId"] !== roomName || body["token"] !== currentToken) {
+          return Response.json({ message: "Unauthorized" }, { status: 401 });
+        }
+
+        currentToken = refreshedToken;
+        return Response.json({
+          token: refreshedToken,
+          tokenExpiresAt: farFutureTokenExpiresAt(),
+        });
+      }
+
       if (url.pathname === "/v1/folio-collab-sessions/snapshot/load") {
-        if (body["sessionId"] !== roomName || body["token"] !== token) {
+        if (body["sessionId"] !== roomName || body["token"] !== currentToken) {
           return Response.json({ message: "Unauthorized" }, { status: 401 });
         }
 
@@ -107,11 +134,12 @@ const createFakeStellaApi = ({
       }
 
       if (url.pathname === "/v1/folio-collab-sessions/snapshot/store") {
-        if (body["sessionId"] !== roomName || body["token"] !== token) {
+        if (body["sessionId"] !== roomName || body["token"] !== currentToken) {
           return Response.json({ message: "Unauthorized" }, { status: 401 });
         }
 
         storeRequests += 1;
+        storeRequestTokens.push(body["token"] ?? "");
         latestSnapshotBase64 = body["snapshotBase64"] ?? null;
 
         return Response.json({ storedAt: new Date().toISOString() });
@@ -133,6 +161,8 @@ const createFakeStellaApi = ({
       await server.stop(true);
     },
     latestSnapshotBase64: () => latestSnapshotBase64,
+    refreshRequests: () => refreshRequests,
+    storeRequestTokens: () => storeRequestTokens,
     storeRequests: () => storeRequests,
     url: `http://127.0.0.1:${port}`,
   };
@@ -259,6 +289,55 @@ describe("collaboration server", () => {
       secondProvider.destroy();
       firstDoc.destroy();
       secondDoc.destroy();
+      await collabServer.destroy();
+      await fakeApi.destroy();
+    }
+  });
+
+  test("refreshes the Stella API token before storing snapshots", async () => {
+    const initialToken = "collab_token_initial";
+    const refreshedToken = "collab_token_refreshed";
+    const fakeApi = createFakeStellaApi({
+      refreshedToken,
+      token: initialToken,
+      tokenExpiresAt: new Date(Date.now() + 50).toISOString(),
+    });
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 20,
+      maxDebounceMs: 100,
+      port: 0,
+    });
+
+    const ydoc = new Doc();
+    const provider = createProvider({
+      name: "folio_collab_session_test",
+      token: initialToken,
+      url: collabServer.websocketUrl,
+      ydoc,
+    });
+
+    try {
+      await waitFor(
+        () => provider.isAuthenticated,
+        "Provider did not authenticate.",
+      );
+      await waitFor(
+        () => fakeApi.refreshRequests() > 0,
+        "Server did not refresh the token before expiry.",
+      );
+
+      ydoc.getText("body").insert(0, "stored with refreshed token");
+
+      await waitFor(
+        () => fakeApi.storeRequests() > 0,
+        "Server did not persist a snapshot after refreshing.",
+      );
+
+      expect(fakeApi.storeRequestTokens()).toEqual([refreshedToken]);
+    } finally {
+      provider.destroy();
+      ydoc.destroy();
       await collabServer.destroy();
       await fakeApi.destroy();
     }

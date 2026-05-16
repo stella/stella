@@ -8,9 +8,17 @@ import { applyUpdate, encodeStateAsUpdate } from "yjs";
 type CollabAuthContext = {
   canEdit: boolean;
   sessionId: string;
-  token: string;
+  tokenState: CollabSessionTokenState;
   userId: string;
   workspaceId: string;
+};
+
+type CollabSessionTokenState = {
+  refreshInFlight: Promise<string> | null;
+  refreshTimer: ReturnType<typeof setTimeout> | null;
+  sessionId: string;
+  token: string;
+  tokenExpiresAtMs: number;
 };
 
 type ManagedWebSocketLike = WebSocketLike & {
@@ -29,8 +37,14 @@ const authorizeResponseSchema = v.strictObject({
   canEdit: v.boolean(),
   roomName: v.string(),
   sessionId: v.string(),
+  tokenExpiresAt: v.string(),
   userId: v.string(),
   workspaceId: v.string(),
+});
+
+const refreshTokenResponseSchema = v.strictObject({
+  token: v.string(),
+  tokenExpiresAt: v.string(),
 });
 
 const loadSnapshotResponseSchema = v.strictObject({
@@ -40,6 +54,32 @@ const loadSnapshotResponseSchema = v.strictObject({
 const storeSnapshotResponseSchema = v.strictObject({
   storedAt: v.string(),
 });
+
+const TOKEN_REFRESH_LEEWAY_MS = 5 * 60 * 1000;
+const TOKEN_REFRESH_RETRY_MS = 1000;
+
+const parseTokenExpiresAt = (value: string) => {
+  const expiresAtMs = Date.parse(value);
+  if (Number.isNaN(expiresAtMs)) {
+    throw new TypeError("Stella API returned an invalid token expiry.");
+  }
+
+  return expiresAtMs;
+};
+
+const tokenRefreshDelayMs = (tokenExpiresAtMs: number) => {
+  const msUntilExpiry = tokenExpiresAtMs - Date.now();
+  if (msUntilExpiry <= 0) {
+    return 0;
+  }
+
+  const leewayMs = Math.min(
+    TOKEN_REFRESH_LEEWAY_MS,
+    Math.floor(msUntilExpiry / 2),
+  );
+
+  return Math.max(0, msUntilExpiry - leewayMs);
+};
 
 const postJson = async <TSchema extends v.GenericSchema>({
   apiUrl,
@@ -101,8 +141,132 @@ export const createCollabServer = async ({
   maxDebounceMs = 10_000,
   port,
 }: CreateCollabServerOptions) => {
+  const sessionTokens = new Map<string, CollabSessionTokenState>();
+
+  const clearSessionTokenRefresh = (state: CollabSessionTokenState) => {
+    if (!state.refreshTimer) {
+      return;
+    }
+
+    clearTimeout(state.refreshTimer);
+    state.refreshTimer = null;
+  };
+
+  const clearSessionToken = (sessionId: string) => {
+    const state = sessionTokens.get(sessionId);
+    if (!state) {
+      return;
+    }
+
+    clearSessionTokenRefresh(state);
+    sessionTokens.delete(sessionId);
+  };
+
+  const scheduleTokenRefresh = (
+    state: CollabSessionTokenState,
+    delayMs = tokenRefreshDelayMs(state.tokenExpiresAtMs),
+  ) => {
+    clearSessionTokenRefresh(state);
+    state.refreshTimer = setTimeout(() => {
+      state.refreshTimer = null;
+      void refreshSessionToken(state).catch(() => {
+        const retryDelayMs = Math.min(
+          TOKEN_REFRESH_RETRY_MS,
+          Math.max(0, state.tokenExpiresAtMs - Date.now()),
+        );
+
+        if (retryDelayMs > 0 && sessionTokens.get(state.sessionId) === state) {
+          scheduleTokenRefresh(state, retryDelayMs);
+        }
+      });
+    }, delayMs);
+  };
+
+  const upsertSessionToken = ({
+    sessionId,
+    token,
+    tokenExpiresAt,
+  }: {
+    sessionId: string;
+    token: string;
+    tokenExpiresAt: string;
+  }) => {
+    const tokenExpiresAtMs = parseTokenExpiresAt(tokenExpiresAt);
+    const existing = sessionTokens.get(sessionId);
+
+    if (existing && existing.tokenExpiresAtMs >= tokenExpiresAtMs) {
+      return existing;
+    }
+
+    if (existing) {
+      existing.token = token;
+      existing.tokenExpiresAtMs = tokenExpiresAtMs;
+      scheduleTokenRefresh(existing);
+      return existing;
+    }
+
+    const state: CollabSessionTokenState = {
+      refreshInFlight: null,
+      refreshTimer: null,
+      sessionId,
+      token,
+      tokenExpiresAtMs,
+    };
+    sessionTokens.set(sessionId, state);
+    scheduleTokenRefresh(state);
+
+    return state;
+  };
+
+  const refreshSessionToken = async (state: CollabSessionTokenState) => {
+    if (state.refreshInFlight) {
+      return await state.refreshInFlight;
+    }
+
+    const refresh = (async () => {
+      const refreshed = await postJson({
+        apiUrl,
+        body: {
+          sessionId: state.sessionId,
+          token: state.token,
+        },
+        path: "/folio-collab-sessions/refresh-token",
+        schema: refreshTokenResponseSchema,
+      });
+
+      state.token = refreshed.token;
+      state.tokenExpiresAtMs = parseTokenExpiresAt(refreshed.tokenExpiresAt);
+      if (sessionTokens.get(state.sessionId) === state) {
+        scheduleTokenRefresh(state);
+      }
+
+      return state.token;
+    })();
+
+    state.refreshInFlight = refresh;
+    try {
+      return await refresh;
+    } finally {
+      if (state.refreshInFlight === refresh) {
+        state.refreshInFlight = null;
+      }
+    }
+  };
+
+  const getFreshSessionToken = async (state: CollabSessionTokenState) => {
+    if (state.tokenExpiresAtMs - Date.now() > TOKEN_REFRESH_LEEWAY_MS) {
+      return state.token;
+    }
+
+    return await refreshSessionToken(state);
+  };
+
   const hocuspocus = new Hocuspocus<CollabAuthContext>({
     debounce: debounceMs,
+    async afterUnloadDocument({ documentName }) {
+      clearSessionToken(documentName);
+      await Promise.resolve();
+    },
     maxDebounce: maxDebounceMs,
     async onAuthenticate({ documentName, token }) {
       const authorized = await postJson({
@@ -119,20 +283,27 @@ export const createCollabServer = async ({
         throw new Error("Collaboration token does not match the room.");
       }
 
+      const tokenState = upsertSessionToken({
+        sessionId: authorized.sessionId,
+        token,
+        tokenExpiresAt: authorized.tokenExpiresAt,
+      });
+
       return {
         canEdit: authorized.canEdit,
         sessionId: authorized.sessionId,
-        token,
+        tokenState,
         userId: authorized.userId,
         workspaceId: authorized.workspaceId,
       };
     },
     async onLoadDocument({ context, document }) {
+      const token = await getFreshSessionToken(context.tokenState);
       const result = await postJson({
         apiUrl,
         body: {
           sessionId: context.sessionId,
-          token: context.token,
+          token,
         },
         path: "/folio-collab-sessions/snapshot/load",
         schema: loadSnapshotResponseSchema,
@@ -149,6 +320,7 @@ export const createCollabServer = async ({
         return;
       }
 
+      const token = await getFreshSessionToken(context.tokenState);
       await postJson({
         apiUrl,
         body: {
@@ -156,7 +328,7 @@ export const createCollabServer = async ({
           snapshotBase64: Buffer.from(encodeStateAsUpdate(document)).toString(
             "base64",
           ),
-          token: context.token,
+          token,
         },
         path: "/folio-collab-sessions/snapshot/store",
         schema: storeSnapshotResponseSchema,
@@ -228,6 +400,11 @@ export const createCollabServer = async ({
   });
 
   const destroy = async () => {
+    for (const state of sessionTokens.values()) {
+      clearSessionTokenRefresh(state);
+    }
+    sessionTokens.clear();
+
     await server.stop(true);
 
     await new Promise<void>((resolve) => {

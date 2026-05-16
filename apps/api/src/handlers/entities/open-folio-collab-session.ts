@@ -4,11 +4,7 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db";
-import {
-  desktopEditSessions,
-  folioCollabSessions,
-  folioCollabSessionTokens,
-} from "@/api/db/schema";
+import { desktopEditSessions, folioCollabSessions } from "@/api/db/schema";
 import {
   lockDocxEditTarget,
   presignDocxFieldDownload,
@@ -21,11 +17,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import {
-  computeFolioCollabTokenExpiresAt,
-  createFolioCollabToken,
-  hashFolioCollabToken,
-} from "@/api/lib/folio-collab-sessions";
+import { issueFolioCollabToken } from "@/api/lib/folio-collab-sessions";
 
 const openFolioCollabSessionBodySchema = t.Object({
   entityId: tSafeId("entity"),
@@ -56,34 +48,6 @@ type OpenFolioCollabSessionProps = {
 };
 
 const SEED_CLAIM_STALE_MS = 30_000;
-
-const issueToken = async ({
-  collabSessionId,
-  safeDb,
-  userId,
-  workspaceId,
-}: {
-  collabSessionId: SafeId<"folioCollabSession">;
-  safeDb: OpenFolioCollabSessionProps["safeDb"];
-  userId: SafeId<"user">;
-  workspaceId: SafeId<"workspace">;
-}) => {
-  const token = createFolioCollabToken();
-  const tokenExpiresAt = computeFolioCollabTokenExpiresAt();
-  await safeDb(async (tx) => {
-    await tx.insert(folioCollabSessionTokens).values({
-      expiresAt: tokenExpiresAt,
-      id: createSafeId<"folioCollabSessionToken">(),
-      permissions: { canEdit: true },
-      sessionId: collabSessionId,
-      tokenHash: hashFolioCollabToken(token),
-      userId,
-      workspaceId,
-    });
-  });
-
-  return { token, tokenExpiresAt };
-};
 
 const openFolioCollabSessionHandler = async function* ({
   body: { entityId, propertyId },
@@ -262,11 +226,12 @@ const openFolioCollabSessionHandler = async function* ({
   }
 
   const { token, tokenExpiresAt } = yield* Result.await(
-    Result.tryPromise(
-      async () =>
-        await issueToken({
-          collabSessionId: openSession.collabSessionId,
-          safeDb,
+    safeDb(
+      async (tx) =>
+        await issueFolioCollabToken({
+          permissions: { canEdit: true },
+          sessionId: openSession.collabSessionId,
+          tx,
           userId,
           workspaceId,
         }),
