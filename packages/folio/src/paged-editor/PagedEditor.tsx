@@ -69,6 +69,7 @@ import type {
 } from "../core/layout-bridge/selectionRects";
 // Layout bridge
 import { toFlowBlocks } from "../core/layout-bridge/toFlowBlocks";
+import type { ToFlowBlocksOptions } from "../core/layout-bridge/toFlowBlocks";
 // Layout engine
 import { layoutDocument } from "../core/layout-engine";
 import type { ColumnLayout, SectionLayoutConfig } from "../core/layout-engine";
@@ -80,6 +81,7 @@ import type {
   TableBlock,
   TableCell,
   TableMeasure,
+  TableCellMeasure,
   ImageBlock,
   ImageRun,
   PageMargins,
@@ -840,12 +842,11 @@ export function measureTableBlock(
         const padLeft = cell.padding?.left ?? DEFAULT_CELL_PADDING_X;
         const padRight = cell.padding?.right ?? DEFAULT_CELL_PADDING_X;
         const cellContentWidth = Math.max(1, cellWidth - padLeft - padRight);
-        const cellMeasure: import("../core/layout-engine/types").TableCellMeasure =
-          {
-            blocks: cell.blocks.map((b) => measureBlock(b, cellContentWidth)),
-            width: cellWidth,
-            height: 0, // Calculated below
-          };
+        const cellMeasure: TableCellMeasure = {
+          blocks: cell.blocks.map((b) => measureBlock(b, cellContentWidth)),
+          width: cellWidth,
+          height: 0, // Calculated below
+        };
         if (cell.colSpan !== undefined) {
           cellMeasure.colSpan = cell.colSpan;
         }
@@ -1621,10 +1622,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         try {
           // Step 1: Convert PM doc to flow blocks
           const pageContentHeight = pageSize.h - margins.top - margins.bottom;
-          const flowOpts: import("../core/layout-bridge/toFlowBlocks").ToFlowBlocksOptions =
-            {
-              pageContentHeight,
-            };
+          const flowOpts: ToFlowBlocksOptions = {
+            pageContentHeight,
+          };
           if (_theme !== undefined) {
             flowOpts.theme = _theme;
           }

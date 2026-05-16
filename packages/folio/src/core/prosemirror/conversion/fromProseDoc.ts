@@ -16,6 +16,7 @@ import type {
   ImageWrap,
   ImagePosition,
   ImageTransform,
+  ShapeFill,
   ShapeOutline,
   SectionProperties,
   SectionStart,
@@ -1067,9 +1068,7 @@ function createShapeRun(node: PMNode): Run {
         position: number;
         color: string;
       }[];
-      const gradient: NonNullable<
-        import("../../types/content").ShapeFill["gradient"]
-      > = {
+      const gradient: NonNullable<ShapeFill["gradient"]> = {
         type: (attrs.gradientType || "linear") as
           | "linear"
           | "radial"

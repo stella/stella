@@ -19,6 +19,7 @@
 
 import type { Node as PMNode } from "prosemirror-model";
 import { Plugin, PluginKey } from "prosemirror-state";
+import type { EditorState, PluginSpec } from "prosemirror-state";
 
 export type AnonymizationTerm = {
   /** Canonical surface form, displayed in tooltips. */
@@ -235,37 +236,36 @@ export type AnonymizationPluginOptions = {
 export const createAnonymizationDecorationsPlugin = ({
   onMatchesChange,
 }: AnonymizationPluginOptions = {}): Plugin<AnonymizationDecorationState> => {
-  const spec: import("prosemirror-state").PluginSpec<AnonymizationDecorationState> =
-    {
-      key: anonymizationDecorationsKey,
-      state: {
-        init(): AnonymizationDecorationState {
-          return { terms: [], matches: [] };
-        },
-        apply(tr, prev, _oldState, newState): AnonymizationDecorationState {
-          const setMeta = tr.getMeta(anonymizationDecorationsKey) as
-            | { type: typeof SET_META; terms: readonly AnonymizationTerm[] }
-            | undefined;
-
-          if (setMeta?.type === SET_META) {
-            return {
-              terms: setMeta.terms,
-              matches: buildMatches(newState.doc, setMeta.terms),
-            };
-          }
-
-          if (tr.docChanged) {
-            // Doc edits move text around; rebuild ranges from scratch
-            // rather than try to map regex matches through a mapping.
-            return {
-              terms: prev.terms,
-              matches: buildMatches(newState.doc, prev.terms),
-            };
-          }
-          return prev;
-        },
+  const spec: PluginSpec<AnonymizationDecorationState> = {
+    key: anonymizationDecorationsKey,
+    state: {
+      init(): AnonymizationDecorationState {
+        return { terms: [], matches: [] };
       },
-    };
+      apply(tr, prev, _oldState, newState): AnonymizationDecorationState {
+        const setMeta = tr.getMeta(anonymizationDecorationsKey) as
+          | { type: typeof SET_META; terms: readonly AnonymizationTerm[] }
+          | undefined;
+
+        if (setMeta?.type === SET_META) {
+          return {
+            terms: setMeta.terms,
+            matches: buildMatches(newState.doc, setMeta.terms),
+          };
+        }
+
+        if (tr.docChanged) {
+          // Doc edits move text around; rebuild ranges from scratch
+          // rather than try to map regex matches through a mapping.
+          return {
+            terms: prev.terms,
+            matches: buildMatches(newState.doc, prev.terms),
+          };
+        }
+        return prev;
+      },
+    },
+  };
   if (onMatchesChange) {
     spec.view = (view) => {
       // Emit the initial match list (init() ran above with the
@@ -313,6 +313,6 @@ export const setAnonymizationTermsMeta = (
  * PluginKey and break key-based lookups.
  */
 export const getAnonymizationMatches = (
-  state: import("prosemirror-state").EditorState,
+  state: EditorState,
 ): readonly AnonymizationMatch[] =>
   anonymizationDecorationsKey.getState(state)?.matches ?? [];

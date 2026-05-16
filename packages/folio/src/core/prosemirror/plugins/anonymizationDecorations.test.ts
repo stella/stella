@@ -7,8 +7,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { Mark, Schema } from "prosemirror-model";
-import type { Node as PMNode } from "prosemirror-model";
+import { Schema } from "prosemirror-model";
+import type { Node as PMNode, Mark } from "prosemirror-model";
 import { EditorState } from "prosemirror-state";
 
 import {

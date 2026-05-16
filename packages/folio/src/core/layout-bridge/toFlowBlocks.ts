@@ -29,6 +29,7 @@ import type {
   RunFormatting,
   ParagraphAttrs,
   TabStop,
+  FloatingTablePosition,
 } from "../layout-engine/types";
 import {
   DEFAULT_TEXTBOX_MARGINS,
@@ -1595,11 +1596,9 @@ function convertTable(
       }
     | undefined;
 
-  let floatingPx:
-    | import("../layout-engine/types").FloatingTablePosition
-    | undefined;
+  let floatingPx: FloatingTablePosition | undefined;
   if (floating) {
-    const fp: import("../layout-engine/types").FloatingTablePosition = {};
+    const fp: FloatingTablePosition = {};
     if (floating.horzAnchor) {
       fp.horzAnchor = floating.horzAnchor;
     }

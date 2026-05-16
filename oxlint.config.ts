@@ -582,7 +582,7 @@ export default defineConfig({
         "typescript/no-unsafe-return": "off",
         "typescript/no-unsafe-call": "off",
         "typescript/no-unsafe-argument": "off",
-        "typescript/consistent-type-imports": "off",
+        
         "typescript/prefer-regexp-exec": "off",
         
         "typescript/no-deprecated": "off",
@@ -638,7 +638,7 @@ export default defineConfig({
         "typescript/no-unsafe-return": "off",
         "typescript/no-unsafe-call": "off",
         "typescript/no-unsafe-argument": "off",
-        "typescript/consistent-type-imports": "off",
+        
         "typescript/prefer-regexp-exec": "off",
         
         "typescript/no-deprecated": "off",
