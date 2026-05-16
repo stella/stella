@@ -202,6 +202,9 @@ const areDocsEqual = (left: JSONContent, right: JSONContent) =>
 const getEditorHtml = (editor: Editor) =>
   editor.isEmpty ? "" : editor.getHTML().trim();
 
+const isUsableEditor = (editor: Editor | null | undefined): editor is Editor =>
+  editor !== null && editor !== undefined && !editor.isDestroyed;
+
 const isSelectionAtStart = ({ selection }: EditorState) =>
   selection.empty && selection.from <= 1;
 
@@ -904,10 +907,14 @@ export const useChatEditor = ({
   );
 
   useEffect(() => {
+    if (!isUsableEditor(editor)) {
+      return undefined;
+    }
+
     syncEditorPlugins(editor);
 
     return () => {
-      if (activePluginKeysRef.current.length === 0) {
+      if (editor.isDestroyed || activePluginKeysRef.current.length === 0) {
         return;
       }
 
@@ -917,29 +924,30 @@ export const useChatEditor = ({
   }, [editor, extensionVersion, syncEditorPlugins]);
 
   useEffect(() => {
-    if (editor.isDestroyed) {
-      return;
+    if (!isUsableEditor(editor)) {
+      return undefined;
     }
     if (areDocsEqual(editor.getJSON(), draftDoc)) {
       setIsEmpty(editor.isEmpty);
-      return;
+      return undefined;
     }
 
     isApplyingStoredDraftRef.current = true;
     editor.commands.setContent(draftDoc);
     isApplyingStoredDraftRef.current = false;
     setIsEmpty(editor.isEmpty);
+    return undefined;
   }, [draftDoc, editor]);
 
   const focus = useCallback(() => {
-    if (editor.isDestroyed) {
+    if (!isUsableEditor(editor)) {
       return;
     }
     editor.commands.focus("end");
   }, [editor]);
 
   const blur = useCallback(() => {
-    if (editor.isDestroyed) {
+    if (!isUsableEditor(editor)) {
       return;
     }
     editor.commands.blur();
@@ -947,7 +955,7 @@ export const useChatEditor = ({
 
   const setEditable = useCallback(
     (editable: boolean) => {
-      if (editor.isDestroyed) {
+      if (!isUsableEditor(editor)) {
         return;
       }
       editor.setEditable(editable);
@@ -957,7 +965,7 @@ export const useChatEditor = ({
 
   const setContent = useCallback(
     (content: Parameters<Editor["commands"]["setContent"]>[0]) => {
-      if (editor.isDestroyed) {
+      if (!isUsableEditor(editor)) {
         return;
       }
       editor.commands.setContent(content);
@@ -967,6 +975,10 @@ export const useChatEditor = ({
 
   const insertMention = useCallback(
     (mention: ChatMentionOption) => {
+      if (!isUsableEditor(editor)) {
+        return;
+      }
+
       markDraftStarted();
       editor
         .chain()
@@ -1000,6 +1012,10 @@ export const useChatEditor = ({
 
   const updateAttachments = useCallback(
     (nextAttachments: ChatDraftAttachment[]) => {
+      if (!isUsableEditor(editor)) {
+        return;
+      }
+
       const doc = editor.getJSON();
 
       setDraft(
@@ -1118,7 +1134,7 @@ export const useChatEditor = ({
 
   const submit = useCallback(
     async (send: (draft: ChatInputDraft) => Promise<void> | void) => {
-      if (editor.isDestroyed) {
+      if (!isUsableEditor(editor)) {
         return;
       }
       const html = editor.isEmpty ? "" : editor.getHTML().trim();
@@ -1145,8 +1161,6 @@ export const useChatEditor = ({
           }),
         );
         // The editor may have been destroyed during `await send(...)`;
-        // TS narrowing from the earlier guard does not survive the await.
-        // eslint-disable-next-line typescript-eslint/no-unnecessary-condition
         if (!editor.isDestroyed) {
           isApplyingStoredDraftRef.current = true;
           editor.commands.setContent(doc);
