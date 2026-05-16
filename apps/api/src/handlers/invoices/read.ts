@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq, gt, or } from "drizzle-orm";
+import { and, asc, eq, gt, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { invoices } from "@/api/db/schema";
@@ -22,6 +22,8 @@ type InvoiceCursor = {
   createdAt: Date;
   id: SafeId<"invoice">;
 };
+
+const invoiceCreatedAtCursor = sql<Date>`date_trunc('milliseconds', ${invoices.createdAt})`;
 
 const decodeInvoiceCursor = (cursor: string): InvoiceCursor | null => {
   const parts = decodePaginationCursor(cursor);
@@ -59,9 +61,9 @@ const readInvoices = createSafeHandler(
       }
 
       const cursorCondition = or(
-        gt(invoices.createdAt, cursor.createdAt),
+        gt(invoiceCreatedAtCursor, cursor.createdAt),
         and(
-          eq(invoices.createdAt, cursor.createdAt),
+          eq(invoiceCreatedAtCursor, cursor.createdAt),
           gt(invoices.id, cursor.id),
         ),
       );
@@ -84,11 +86,12 @@ const readInvoices = createSafeHandler(
             currency: invoices.currency,
             totalAmount: invoices.totalAmount,
             createdAt: invoices.createdAt,
+            createdAtCursor: invoiceCreatedAtCursor.as("created_at_cursor"),
             updatedAt: invoices.updatedAt,
           })
           .from(invoices)
           .where(and(...conditions))
-          .orderBy(asc(invoices.createdAt), asc(invoices.id))
+          .orderBy(asc(invoiceCreatedAtCursor), asc(invoices.id))
           .limit(limit + 1),
       ),
     );
@@ -97,7 +100,7 @@ const readInvoices = createSafeHandler(
       rows,
       limit,
       cursorForItem: (item) =>
-        encodePaginationCursor([item.createdAt.toISOString(), item.id]),
+        encodePaginationCursor([item.createdAtCursor.toISOString(), item.id]),
     });
 
     return Result.ok({

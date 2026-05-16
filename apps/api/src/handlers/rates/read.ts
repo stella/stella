@@ -23,6 +23,8 @@ type RateTableCursor = {
   id: SafeId<"rateTable">;
 };
 
+const rateTableCreatedAtCursor = sql<Date>`date_trunc('milliseconds', ${rateTables.createdAt})`;
+
 const decodeRateTableCursor = (cursor: string): RateTableCursor | null => {
   const parts = decodePaginationCursor(cursor);
   const createdAt = parts?.at(0);
@@ -59,9 +61,9 @@ const readRateTables = createSafeHandler(
       }
 
       const cursorCondition = or(
-        gt(rateTables.createdAt, cursor.createdAt),
+        gt(rateTableCreatedAtCursor, cursor.createdAt),
         and(
-          eq(rateTables.createdAt, cursor.createdAt),
+          eq(rateTableCreatedAtCursor, cursor.createdAt),
           gt(rateTables.id, cursor.id),
         ),
       );
@@ -80,11 +82,12 @@ const readRateTables = createSafeHandler(
             currency: rateTables.currency,
             isDefault: rateTables.isDefault,
             createdAt: rateTables.createdAt,
+            createdAtCursor: rateTableCreatedAtCursor.as("created_at_cursor"),
             updatedAt: rateTables.updatedAt,
           })
           .from(rateTables)
           .where(and(...conditions))
-          .orderBy(asc(rateTables.createdAt), asc(rateTables.id))
+          .orderBy(asc(rateTableCreatedAtCursor), asc(rateTables.id))
           .limit(limit + 1),
       ),
     );
@@ -93,7 +96,7 @@ const readRateTables = createSafeHandler(
       rows: tables,
       limit,
       cursorForItem: (item) =>
-        encodePaginationCursor([item.createdAt.toISOString(), item.id]),
+        encodePaginationCursor([item.createdAtCursor.toISOString(), item.id]),
     });
 
     // Batch count entries per table
