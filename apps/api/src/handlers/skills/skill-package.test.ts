@@ -7,6 +7,7 @@ import { LIMITS } from "@/api/lib/limits";
 import {
   fetchSkillPackageFromUrl,
   parseUploadedSkillPackage,
+  redactSkillSourceUrlForStorage,
   resolveGithubRefAndPath,
 } from "./skill-package";
 
@@ -188,6 +189,14 @@ Instructions.`,
     }
   });
 
+  test("strips query strings from persisted skill source URLs", () => {
+    expect(
+      redactSkillSourceUrlForStorage(
+        "https://example.com/skill.zip?token=secret&X-Amz-Signature=sig",
+      ),
+    ).toBe("https://example.com/skill.zip");
+  });
+
   test("resolves GitHub skill paths with multi-segment refs", async () => {
     const result = await resolveGithubRefAndPath({
       minPathParts: 0,
@@ -198,6 +207,22 @@ Instructions.`,
     });
 
     expect(result).toEqual({ ref: "feature/foo", rootPath: "skill" });
+  });
+
+  test("resolves GitHub skill paths pinned to commit SHAs", async () => {
+    const commitSha = "0123456789abcdef0123456789abcdef01234567";
+    const result = await resolveGithubRefAndPath({
+      minPathParts: 1,
+      owner: "org",
+      parts: [commitSha, "skills", "review", "SKILL.md"],
+      refExists: async () => false,
+      repo: "repo",
+    });
+
+    expect(result).toEqual({
+      ref: commitSha,
+      rootPath: "skills/review",
+    });
   });
 
   test("prefers the longest matching GitHub ref before deriving the skill path", async () => {

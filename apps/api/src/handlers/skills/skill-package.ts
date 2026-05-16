@@ -18,6 +18,7 @@ const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const GITHUB_API_TIMEOUT_MS = 10_000;
 const GITHUB_REF_CANDIDATE_LIMIT = 16;
 const GITHUB_SKILL_FILE_MAX_BYTES = LIMITS.agentSkillResourceMaxChars * 4;
+const GITHUB_COMMIT_SHA_PATTERN = /^[a-f0-9]{40}$/i;
 const UTF8_DECODER = new TextDecoder("utf-8", { fatal: true });
 const GITHUB_SKILL_HOSTNAMES = new Set([
   "github.com",
@@ -115,7 +116,10 @@ export const fetchSkillPackageFromUrl = async (
     try: async () => {
       const githubPath = await parseGithubSkillPath(rawUrl);
       if (githubPath) {
-        return await fetchGithubSkillPackage(githubPath, rawUrl);
+        return await fetchGithubSkillPackage(
+          githubPath,
+          redactSkillSourceUrlForStorage(rawUrl),
+        );
       }
 
       const url = new URL(rawUrl);
@@ -126,7 +130,7 @@ export const fetchSkillPackageFromUrl = async (
         rawUrl.toLowerCase().endsWith(".zip")
           ? await parseZipSkillPackage(response.body)
           : parseMarkdownSkillPackage(decodeUtf8(response.body));
-      return { ...parsed, sourceUrl: rawUrl };
+      return { ...parsed, sourceUrl: redactSkillSourceUrlForStorage(rawUrl) };
     },
     catch: toHandlerError,
   });
@@ -807,7 +811,10 @@ export const resolveGithubRefAndPath = async ({
     refPartCount--
   ) {
     const ref = parts.slice(0, refPartCount).join("/");
-    if (!(await refExists({ owner, ref, repo }))) {
+    if (
+      !GITHUB_COMMIT_SHA_PATTERN.test(ref) &&
+      !(await refExists({ owner, ref, repo }))
+    ) {
       continue;
     }
 
@@ -820,6 +827,12 @@ export const resolveGithubRefAndPath = async ({
   }
 
   return null;
+};
+
+export const redactSkillSourceUrlForStorage = (rawUrl: string): string => {
+  const url = new URL(rawUrl);
+  url.search = "";
+  return url.toString();
 };
 
 const parseGithubSkillPath = async (
