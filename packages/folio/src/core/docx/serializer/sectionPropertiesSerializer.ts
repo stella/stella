@@ -6,6 +6,7 @@ import type {
   HeaderReference,
   SectionProperties,
 } from "../../types/document";
+import { getUnserializedSectionPropertyChildNames } from "../sectionParser";
 import { intAttr } from "./xmlUtils";
 
 function serializeBorder(
@@ -219,6 +220,29 @@ function serializeLineNumbers(props: SectionProperties): string {
   return attrs.length > 0 ? `<w:lnNumType ${attrs.join(" ")}/>` : "";
 }
 
+function serializePageNumbering(props: SectionProperties): string {
+  if (!props.pageNumbering) {
+    return "";
+  }
+
+  const attrs: string[] = [];
+  const pageNumbering = props.pageNumbering;
+  if (pageNumbering.format) {
+    attrs.push(`w:fmt="${pageNumbering.format}"`);
+  }
+  if (pageNumbering.start !== undefined) {
+    attrs.push(`w:start="${intAttr(pageNumbering.start)}"`);
+  }
+  if (pageNumbering.chapterStyle !== undefined) {
+    attrs.push(`w:chapStyle="${intAttr(pageNumbering.chapterStyle)}"`);
+  }
+  if (pageNumbering.chapterSeparator) {
+    attrs.push(`w:chapSep="${pageNumbering.chapterSeparator}"`);
+  }
+
+  return attrs.length > 0 ? `<w:pgNumType ${attrs.join(" ")}/>` : "";
+}
+
 function serializePageBorders(props: SectionProperties): string {
   if (!props.pageBorders) {
     return "";
@@ -257,6 +281,37 @@ function serializePageBorders(props: SectionProperties): string {
   return `<w:pgBorders${attrsStr}>${borderElements.join("")}</w:pgBorders>`;
 }
 
+function serializeBackground(props: SectionProperties): string {
+  if (!props.background) {
+    return "";
+  }
+
+  const attrs: string[] = [];
+  const { background } = props;
+  if (background.color?.auto) {
+    attrs.push('w:color="auto"');
+  } else if (background.color?.rgb) {
+    attrs.push(`w:color="${background.color.rgb}"`);
+  }
+  if (background.themeColor ?? background.color?.themeColor) {
+    attrs.push(
+      `w:themeColor="${background.themeColor ?? background.color?.themeColor}"`,
+    );
+  }
+  if (background.themeTint ?? background.color?.themeTint) {
+    attrs.push(
+      `w:themeTint="${background.themeTint ?? background.color?.themeTint}"`,
+    );
+  }
+  if (background.themeShade ?? background.color?.themeShade) {
+    attrs.push(
+      `w:themeShade="${background.themeShade ?? background.color?.themeShade}"`,
+    );
+  }
+
+  return attrs.length > 0 ? `<w:background ${attrs.join(" ")}/>` : "";
+}
+
 function serializeDocGrid(props: SectionProperties): string {
   if (!props.docGrid) {
     return "";
@@ -274,6 +329,16 @@ function serializeDocGrid(props: SectionProperties): string {
     attrs.push(`w:charSpace="${intAttr(dg.charSpace)}"`);
   }
   return attrs.length > 0 ? `<w:docGrid ${attrs.join(" ")}/>` : "";
+}
+
+function serializeOnOffElement(
+  value: boolean | undefined,
+  name: string,
+): string {
+  if (value === undefined) {
+    return "";
+  }
+  return value ? `<w:${name}/>` : `<w:${name} w:val="0"/>`;
 }
 
 export function serializeSectionProperties(
@@ -310,7 +375,9 @@ export function serializeSectionProperties(
     serializePageMargins(props),
     serializePaperSource(props),
     serializePageBorders(props),
+    serializeBackground(props),
     serializeLineNumbers(props),
+    serializePageNumbering(props),
     serializeColumns(props),
     serializeDocGrid(props),
   ]) {
@@ -322,12 +389,48 @@ export function serializeSectionProperties(
   if (props.verticalAlign) {
     parts.push(`<w:vAlign w:val="${props.verticalAlign}"/>`);
   }
+  if (props.textDirection) {
+    parts.push(`<w:textDirection w:val="${props.textDirection}"/>`);
+  }
   if (props.titlePg) {
     parts.push("<w:titlePg/>");
   }
   if (props.bidi) {
     parts.push("<w:bidi/>");
   }
+  for (const xml of [
+    serializeOnOffElement(props.formProtection, "formProt"),
+    serializeOnOffElement(props.noEndnote, "noEndnote"),
+    serializeOnOffElement(props.rtlGutter, "rtlGutter"),
+  ]) {
+    if (xml) {
+      parts.push(xml);
+    }
+  }
+  if (props.printerSettingsRelationshipId) {
+    parts.push(
+      `<w:printerSettings r:id="${props.printerSettingsRelationshipId}"/>`,
+    );
+  }
 
-  return parts.length > 0 ? `<w:sectPr>${parts.join("")}</w:sectPr>` : "";
+  const unserializedChildNames =
+    getUnserializedSectionPropertyChildNames(props);
+  if (unserializedChildNames && unserializedChildNames.length > 0) {
+    return "";
+  }
+
+  if (parts.length > 0) {
+    return `<w:sectPr>${parts.join("")}</w:sectPr>`;
+  }
+
+  if (Object.keys(props).length > 0) {
+    return "";
+  }
+
+  // Empty `<w:sectPr/>` is meaningful in OOXML: as a paragraph-level child it
+  // marks a mid-body section break that inherits all settings from the following
+  // section. Only use that fallback for truly empty section properties; if the
+  // parser saw unparsed children, keep returning "" so the package fidelity
+  // guard fails closed instead of silently dropping those settings.
+  return "<w:sectPr/>";
 }

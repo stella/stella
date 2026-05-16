@@ -44,10 +44,51 @@ import {
   findChild,
   findChildren,
   getAttribute,
+  getChildElements,
+  getLocalName,
   parseNumericAttribute,
   parseBooleanElement,
 } from "./xmlParser";
 import type { XmlElement } from "./xmlParser";
+
+const serializedSectionPropertyChildNames = new Set([
+  "headerReference",
+  "footerReference",
+  "footnotePr",
+  "endnotePr",
+  "type",
+  "pgSz",
+  "pgMar",
+  "paperSrc",
+  "pgBorders",
+  "background",
+  "lnNumType",
+  "pgNumType",
+  "cols",
+  "formProt",
+  "vAlign",
+  "noEndnote",
+  "titlePg",
+  "textDirection",
+  "bidi",
+  "rtlGutter",
+  "docGrid",
+  "printerSettings",
+]);
+
+const unserializedSectionPropertyChildNames = Symbol(
+  "unserializedSectionPropertyChildNames",
+);
+
+export function getUnserializedSectionPropertyChildNames(
+  props: SectionProperties,
+): readonly string[] | undefined {
+  const descriptor = Object.getOwnPropertyDescriptor(
+    props,
+    unserializedSectionPropertyChildNames,
+  );
+  return Array.isArray(descriptor?.value) ? descriptor.value : undefined;
+}
 
 // ============================================================================
 // HELPER PARSERS
@@ -189,6 +230,28 @@ function parseVerticalAlign(align: string | null): VerticalAlign | undefined {
   }
 }
 
+function parseTextDirection(
+  val: string | null,
+): SectionProperties["textDirection"] | undefined {
+  switch (val) {
+    case "lrTb":
+    case "tbRl":
+    case "btLr":
+    case "lrTbV":
+    case "tbRlV":
+    case "tbLrV":
+    case "tb":
+    case "rl":
+    case "lr":
+    case "tbV":
+    case "rlV":
+    case "lrV":
+      return val;
+    default:
+      return undefined;
+  }
+}
+
 /**
  * Parse line number restart type
  */
@@ -227,6 +290,16 @@ export function parseSectionProperties(
   if (!sectPr) {
     return props;
   }
+
+  const unhandledChildNames = getChildElements(sectPr)
+    .map((child) => getLocalName(child.name ?? ""))
+    .filter((name) => !serializedSectionPropertyChildNames.has(name));
+
+  const addUnhandledChildName = (name: string) => {
+    if (!unhandledChildNames.includes(name)) {
+      unhandledChildNames.push(name);
+    }
+  };
 
   // ============================================================================
   // PAGE SIZE (w:pgSz)
@@ -384,6 +457,20 @@ export function parseSectionProperties(
   }
 
   // ============================================================================
+  // TEXT DIRECTION (w:textDirection)
+  // ============================================================================
+  const textDirection = findChild(sectPr, "w", "textDirection");
+  if (textDirection) {
+    const val = getAttribute(textDirection, "w", "val");
+    const textDirectionValue = parseTextDirection(val);
+    if (textDirectionValue) {
+      props.textDirection = textDirectionValue;
+    } else {
+      addUnhandledChildName("textDirection");
+    }
+  }
+
+  // ============================================================================
   // BIDIRECTIONAL (w:bidi)
   // ============================================================================
   const bidi = findChild(sectPr, "w", "bidi");
@@ -450,6 +537,38 @@ export function parseSectionProperties(
     const restartValue = parseLineNumberRestart(restart);
     if (restartValue) {
       props.lineNumbers.restart = restartValue;
+    }
+  }
+
+  // ============================================================================
+  // PAGE NUMBERING (w:pgNumType)
+  // ============================================================================
+  const pgNumType = findChild(sectPr, "w", "pgNumType");
+  if (pgNumType) {
+    const pageNumbering: NonNullable<SectionProperties["pageNumbering"]> = {};
+
+    const format = getAttribute(pgNumType, "w", "fmt");
+    if (format) {
+      pageNumbering.format = format;
+    }
+
+    const start = parseNumericAttribute(pgNumType, "w", "start");
+    if (start !== undefined) {
+      pageNumbering.start = start;
+    }
+
+    const chapterStyle = parseNumericAttribute(pgNumType, "w", "chapStyle");
+    if (chapterStyle !== undefined) {
+      pageNumbering.chapterStyle = chapterStyle;
+    }
+
+    const chapterSeparator = getAttribute(pgNumType, "w", "chapSep");
+    if (chapterSeparator) {
+      pageNumbering.chapterSeparator = chapterSeparator;
+    }
+
+    if (Object.keys(pageNumbering).length > 0) {
+      props.pageNumbering = pageNumbering;
     }
   }
 
@@ -559,6 +678,24 @@ export function parseSectionProperties(
   }
 
   // ============================================================================
+  // SECTION-LEVEL ON/OFF PROPERTIES
+  // ============================================================================
+  const formProt = findChild(sectPr, "w", "formProt");
+  if (formProt) {
+    props.formProtection = parseBooleanElement(formProt);
+  }
+
+  const noEndnote = findChild(sectPr, "w", "noEndnote");
+  if (noEndnote) {
+    props.noEndnote = parseBooleanElement(noEndnote);
+  }
+
+  const rtlGutter = findChild(sectPr, "w", "rtlGutter");
+  if (rtlGutter) {
+    props.rtlGutter = parseBooleanElement(rtlGutter);
+  }
+
+  // ============================================================================
   // DOCUMENT GRID (w:docGrid)
   // ============================================================================
   const docGrid = findChild(sectPr, "w", "docGrid");
@@ -601,6 +738,22 @@ export function parseSectionProperties(
       props.paperSrcOther = other;
     }
   }
+
+  // ============================================================================
+  // PRINTER SETTINGS (w:printerSettings)
+  // ============================================================================
+  const printerSettings = findChild(sectPr, "w", "printerSettings");
+  if (printerSettings) {
+    const relationshipId = getAttribute(printerSettings, "r", "id");
+    if (relationshipId) {
+      props.printerSettingsRelationshipId = relationshipId;
+    }
+  }
+
+  Object.defineProperty(props, unserializedSectionPropertyChildNames, {
+    enumerable: true,
+    value: unhandledChildNames,
+  });
 
   return props;
 }
@@ -835,6 +988,9 @@ export function mergeSectionProperties(
   if (override.verticalAlign !== undefined) {
     result.verticalAlign = override.verticalAlign;
   }
+  if (override.textDirection !== undefined) {
+    result.textDirection = override.textDirection;
+  }
   if (override.bidi !== undefined) {
     result.bidi = override.bidi;
   }
@@ -852,6 +1008,9 @@ export function mergeSectionProperties(
   }
   if (override.lineNumbers !== undefined) {
     result.lineNumbers = override.lineNumbers;
+  }
+  if (override.pageNumbering !== undefined) {
+    result.pageNumbering = override.pageNumbering;
   }
   if (override.pageBorders !== undefined) {
     result.pageBorders = override.pageBorders;
@@ -873,6 +1032,19 @@ export function mergeSectionProperties(
   }
   if (override.paperSrcOther !== undefined) {
     result.paperSrcOther = override.paperSrcOther;
+  }
+  if (override.formProtection !== undefined) {
+    result.formProtection = override.formProtection;
+  }
+  if (override.noEndnote !== undefined) {
+    result.noEndnote = override.noEndnote;
+  }
+  if (override.rtlGutter !== undefined) {
+    result.rtlGutter = override.rtlGutter;
+  }
+  if (override.printerSettingsRelationshipId !== undefined) {
+    result.printerSettingsRelationshipId =
+      override.printerSettingsRelationshipId;
   }
 
   return result;
