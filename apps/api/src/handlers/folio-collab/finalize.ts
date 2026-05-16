@@ -79,6 +79,15 @@ export const finalizeFolioCollabSessionHandler = async ({
         captureError(error, { checkpointKey, sessionId });
       });
   };
+  const deletePendingCheckpointKey = async () => {
+    const checkpointKey = checkpointKeyToDelete;
+    if (checkpointKey === null) {
+      return;
+    }
+
+    checkpointKeyToDelete = null;
+    await deleteCheckpointKey(checkpointKey);
+  };
 
   const deleteUploadedKey = async (uploadedKey: string) => {
     await getS3()
@@ -362,19 +371,13 @@ export const finalizeFolioCollabSessionHandler = async ({
 
     if ("error" in result) {
       await Promise.all(uploadedKeys.map(deleteUploadedKey));
-
-      if (checkpointKeyToDelete !== null) {
-        await deleteCheckpointKey(checkpointKeyToDelete);
-      }
+      await deletePendingCheckpointKey();
 
       return status(result.error.statusCode, { message: result.error.message });
     }
 
     shouldRollbackUploadedKeys = false;
-
-    if (checkpointKeyToDelete !== null) {
-      await deleteCheckpointKey(checkpointKeyToDelete);
-    }
+    await deletePendingCheckpointKey();
 
     broadcast(authorizedSession.value.workspaceId, {
       type: "invalidate-query",

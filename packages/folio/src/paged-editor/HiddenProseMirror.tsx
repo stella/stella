@@ -311,11 +311,13 @@ function createInitialState(
   collaboration?: HiddenProseMirrorCollaboration,
 ): EditorState {
   const activeSchema = manager?.getSchema() ?? schema;
-  const localDoc = document
-    ? styles === undefined || styles === null
-      ? toProseDoc(document)
-      : toProseDoc(document, { styles })
-    : createEmptyDoc();
+  let localDoc = createEmptyDoc();
+  if (document) {
+    localDoc =
+      styles === undefined || styles === null
+        ? toProseDoc(document)
+        : toProseDoc(document, { styles });
+  }
 
   if (collaboration) {
     if (collaboration.shouldSeed && collaboration.yXmlFragment.length === 0) {
@@ -591,10 +593,6 @@ const HiddenProseMirrorComponent = forwardRef<
       return;
     }
 
-    if (collaboration) {
-      return;
-    }
-
     // Generate a simple document identity based on its structure
     // This helps detect truly different documents vs the same doc passed back after editing
     const getDocumentId = (doc: Document | null): string => {
@@ -615,6 +613,10 @@ const HiddenProseMirrorComponent = forwardRef<
     const currentCollaborationFragment = collaboration?.yXmlFragment ?? null;
     const collaborationSourceChanged =
       currentCollaborationFragment !== lastCollaborationFragmentRef.current;
+
+    if (collaboration && !collaborationSourceChanged) {
+      return;
+    }
 
     // Skip if this is the same document (likely passed back after internal edit)
     // Only reset state if:

@@ -77,12 +77,13 @@ export const useFolioCollaborationSession = ({
   const canConnect = enabled && collabUrl !== undefined;
 
   useEffect(() => {
-    if (!canConnect || collabUrl === undefined) {
+    if (!canConnect) {
       setState({ status: "idle", collaboration: null });
       return undefined;
     }
 
     let disposed = false;
+    const isDisposed = () => disposed;
     let provider: HocuspocusProvider | null = null;
     setState({ status: "opening", collaboration: null });
 
@@ -94,7 +95,7 @@ export const useFolioCollaborationSession = ({
           propertyId: toSafeId<"property">(propertyId),
         });
 
-      if (disposed) {
+      if (isDisposed()) {
         return;
       }
 
@@ -286,7 +287,7 @@ export const useFolioCollaborationSession = ({
         },
       });
     })().catch((error: unknown) => {
-      if (disposed) {
+      if (isDisposed()) {
         return;
       }
 
