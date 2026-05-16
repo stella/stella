@@ -155,6 +155,10 @@ export const ExistingFileOrganizerDialog = ({
     () => new Map(existingFolders.map((folder) => [folder.entityId, folder])),
     [existingFolders],
   );
+  const fileByEntityId = useMemo(
+    () => new Map(files.map((file) => [file.entityId, file])),
+    [files],
+  );
   const initialRows = useMemo(
     () =>
       buildFileNameSuggestions(
@@ -163,7 +167,7 @@ export const ExistingFileOrganizerDialog = ({
           originalName: file.originalName,
         })),
       ).map((suggestion) => {
-        const file = files.find((item) => item.entityId === suggestion.id);
+        const file = fileByEntityId.get(suggestion.id);
         const parentFolder = file?.parentId
           ? folderByEntityId.get(file.parentId)
           : undefined;
@@ -179,7 +183,7 @@ export const ExistingFileOrganizerDialog = ({
           suggestedName: suggestion.originalName,
         };
       }),
-    [files, folderByEntityId],
+    [files, fileByEntityId, folderByEntityId],
   );
   const requestKey = useMemo(
     () =>
@@ -413,7 +417,7 @@ export const ExistingFileOrganizerDialog = ({
     let renamed = 0;
     let unchanged = 0;
     for (const row of rows) {
-      const file = files.find((item) => item.entityId === row.entityId);
+      const file = fileByEntityId.get(row.entityId);
       const currentParentPath = file?.parentId
         ? (folderByEntityId.get(file.parentId)?.path ?? "")
         : "";
@@ -437,7 +441,7 @@ export const ExistingFileOrganizerDialog = ({
       renamedCount: renamed,
       unchangedCount: unchanged,
     };
-  }, [files, folderByEntityId, rows]);
+  }, [fileByEntityId, folderByEntityId, rows]);
 
   const handleApply = () => {
     const rowsSnapshot = rows;
@@ -499,21 +503,24 @@ export const ExistingFileOrganizerDialog = ({
         }
       }
 
-      const usedFolderPaths = new Set(
-        rowsSnapshot
-          .map((row) => normalizeFolderPath(row.folderPath))
-          .filter(Boolean),
-      );
-      const deletableFolderIds = deleteSnapshot
-        .filter(
-          (folder) =>
-            ![...usedFolderPaths].some(
-              (path) =>
-                path === folder.folderPath ||
-                path.startsWith(`${folder.folderPath}/`),
-            ),
-        )
-        .map((folder) => folder.entityId);
+      const usedFolderPaths = [
+        ...new Set(
+          rowsSnapshot.flatMap((row) => {
+            const folderPath = normalizeFolderPath(row.folderPath);
+            return folderPath ? [folderPath] : [];
+          }),
+        ),
+      ];
+      const deletableFolderIds: string[] = [];
+      for (const folder of deleteSnapshot) {
+        const folderPath = normalizeFolderPath(folder.folderPath);
+        const isStillUsed = usedFolderPaths.some(
+          (path) => path === folderPath || path.startsWith(`${folderPath}/`),
+        );
+        if (!isStillUsed) {
+          deletableFolderIds.push(folder.entityId);
+        }
+      }
 
       if (deletableFolderIds.length > 0) {
         const deleteResponse = await api

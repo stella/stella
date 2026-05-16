@@ -65,6 +65,7 @@ import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-compone
 import { flattenFilesystemRows } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-virtualization";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import type { FileTab } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import {
   AuthorCell,
   LastUpdatedCell,
@@ -166,6 +167,9 @@ const resolveExtraColumns = (
   properties: WorkspaceProperty[],
   metadataLabels: Record<string, string>,
 ): ExtraColumn[] => {
+  const propertyById = new Map(
+    properties.map((property) => [property.id, property]),
+  );
   const ids = [
     ...FILESYSTEM_METADATA_IDS,
     ...properties.map((p) => p.id),
@@ -181,7 +185,7 @@ const resolveExtraColumns = (
         label: metadataLabels[id] ?? id,
       });
     } else {
-      const prop = properties.find((p) => p.id === id);
+      const prop = propertyById.get(id);
       // Skip file-type properties — the Name column already
       // shows the filename, so a "Documents" column is redundant.
       if (prop && prop.content.type !== "file") {
@@ -1447,23 +1451,23 @@ const FilesystemRow = ({
   const openInInspector = (() => {
     if (isBulkSelected) {
       const entities = getSelectedEntities(selectedIds);
-      const navigables = entities
-        .map((e) => {
-          const f = getFirstFile(e);
-          if (!f || !isFileDisplayable(f)) {
-            return null;
-          }
-          return {
-            id: f.fieldId,
-            entityId: e.entityId,
-            label: getEntityName(e),
-            mimeType: f.mimeType,
-            pdfFileId: f.pdfFileId,
-            propertyId: f.propertyId,
-            workspaceId,
-          };
-        })
-        .filter((x) => x !== null);
+      const navigables: Omit<FileTab, "type">[] = [];
+      for (const entity of entities) {
+        const candidateFile = getFirstFile(entity);
+        if (!candidateFile || !isFileDisplayable(candidateFile)) {
+          continue;
+        }
+
+        navigables.push({
+          id: candidateFile.fieldId,
+          entityId: entity.entityId,
+          label: getEntityName(entity),
+          mimeType: candidateFile.mimeType,
+          pdfFileId: candidateFile.pdfFileId,
+          propertyId: candidateFile.propertyId,
+          workspaceId,
+        });
+      }
       if (navigables.length === 0) {
         return undefined;
       }

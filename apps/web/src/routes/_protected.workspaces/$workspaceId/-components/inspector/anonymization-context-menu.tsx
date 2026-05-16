@@ -63,20 +63,22 @@ export const AnonymizationContextMenu = ({
       setMenu({ x: event.clientX, y: event.clientY, selection: raw });
     };
     const dismiss = () => setMenu(null);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        dismiss();
+      }
+    };
     document.addEventListener("contextmenu", handleContextMenu);
     document.addEventListener("click", dismiss);
     window.addEventListener("blur", dismiss);
     window.addEventListener("scroll", dismiss, true);
-    document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        dismiss();
-      }
-    });
+    document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("contextmenu", handleContextMenu);
       document.removeEventListener("click", dismiss);
       window.removeEventListener("blur", dismiss);
       window.removeEventListener("scroll", dismiss, true);
+      document.removeEventListener("keydown", handleKeyDown);
     };
   }, []);
 
@@ -88,15 +90,13 @@ export const AnonymizationContextMenu = ({
     <div
       className="bg-popover text-popover-foreground fixed z-[100] min-w-44 rounded-md border p-1 text-sm shadow-md"
       style={{ left: menu.x, top: menu.y }}
-      // Stop the outer click-to-dismiss from firing before our
-      // own onClick handler can run.
-      onClick={(event) => event.stopPropagation()}
       onContextMenu={(event) => event.preventDefault()}
       role="menu"
     >
       <button
         className="hover:bg-accent hover:text-accent-foreground flex w-full items-center rounded px-2 py-1.5 text-start"
-        onClick={() => {
+        onClick={(event) => {
+          event.stopPropagation();
           onAnonymize(menu.selection);
           setMenu(null);
         }}

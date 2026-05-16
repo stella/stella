@@ -196,6 +196,12 @@ export const useEditSession = ({
       return false;
     }
 
+    if (!isMounted()) {
+      sessionRef.current = null;
+      await releaseEditSession(releaseContext);
+      return false;
+    }
+
     const downloadedBuffer = await fileResponse.arrayBuffer();
     if (!isMounted()) {
       sessionRef.current = null;
