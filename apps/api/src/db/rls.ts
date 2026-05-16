@@ -3,6 +3,10 @@ import * as p from "drizzle-orm/pg-core";
 
 export const stella = p.pgRole("stella").existing();
 
+// Narrow write role used only by the case-law ingestion daemon.
+// Bootstrapped in 20260516000000_case_law_ingestion_role.
+export const stellaIngestion = p.pgRole("stella_ingestion").existing();
+
 /** Session setting keys set via `set_config` per transaction. */
 export const SETTING_WORKSPACE_IDS = "app.workspace_ids";
 export const SETTING_ORGANIZATION_ID = "app.organization_id";
@@ -205,6 +209,12 @@ export const globalCaseLawPolicies = () => [
     for: "select",
     to: stella,
     using: allowAllRows,
+  }),
+  p.pgPolicy("case_law_ingestion_access", {
+    for: "all",
+    to: stellaIngestion,
+    using: allowAllRows,
+    withCheck: allowAllRows,
   }),
 ];
 
