@@ -10,6 +10,7 @@ import {
   chatKeys,
   createSendAutomaticallyPredicate,
   matchesChatThreadAcrossScopes,
+  mergeGroupedChatThreadPages,
 } from "@/routes/_protected.chat/-queries";
 
 const createMessage = (id = "message-A"): PersistedChatMessage => ({
@@ -17,6 +18,7 @@ const createMessage = (id = "message-A"): PersistedChatMessage => ({
   role: "user",
   parts: [{ type: "text", text: "Hello" }],
 });
+const date = (value: string): Date => new Date(value);
 
 describe("chatKeys", () => {
   test("separates plain chat transports from active DOCX edit transports", () => {
@@ -93,6 +95,102 @@ describe("matchesChatThreadAcrossScopes", () => {
         threadId,
       ),
     ).toBe(false);
+  });
+});
+
+describe("mergeGroupedChatThreadPages", () => {
+  test("deduplicates threads while appending workspace groups across pages", () => {
+    const result = mergeGroupedChatThreadPages([
+      {
+        global: [
+          {
+            createdAt: date("2026-05-16T08:00:00.000Z"),
+            id: "global-A",
+            title: "Global A",
+            updatedAt: date("2026-05-16T08:00:00.000Z"),
+          },
+        ],
+        nextCursor: "page-2",
+        workspaces: [
+          {
+            workspaceId: "workspace-A",
+            workspaceName: "Matter A",
+            threads: [
+              {
+                createdAt: date("2026-05-16T07:00:00.000Z"),
+                id: "workspace-thread-A",
+                title: "Workspace A",
+                updatedAt: date("2026-05-16T07:00:00.000Z"),
+              },
+            ],
+          },
+        ],
+      },
+      {
+        global: [
+          {
+            createdAt: date("2026-05-16T08:00:00.000Z"),
+            id: "global-A",
+            title: "Global A duplicate",
+            updatedAt: date("2026-05-16T08:00:00.000Z"),
+          },
+          {
+            createdAt: date("2026-05-16T06:00:00.000Z"),
+            id: "global-B",
+            title: "Global B",
+            updatedAt: date("2026-05-16T06:00:00.000Z"),
+          },
+        ],
+        nextCursor: null,
+        workspaces: [
+          {
+            workspaceId: "workspace-A",
+            workspaceName: "Matter A",
+            threads: [
+              {
+                createdAt: date("2026-05-16T07:00:00.000Z"),
+                id: "workspace-thread-A",
+                title: "Workspace A duplicate",
+                updatedAt: date("2026-05-16T07:00:00.000Z"),
+              },
+              {
+                createdAt: date("2026-05-16T05:00:00.000Z"),
+                id: "workspace-thread-B",
+                title: "Workspace B",
+                updatedAt: date("2026-05-16T05:00:00.000Z"),
+              },
+            ],
+          },
+          {
+            workspaceId: "workspace-B",
+            workspaceName: "Matter B",
+            threads: [
+              {
+                createdAt: date("2026-05-16T04:00:00.000Z"),
+                id: "workspace-thread-C",
+                title: "Workspace C",
+                updatedAt: date("2026-05-16T04:00:00.000Z"),
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    expect(result.global.map((thread) => thread.id)).toEqual([
+      "global-A",
+      "global-B",
+    ]);
+    expect(result.workspaces).toMatchObject([
+      {
+        workspaceId: "workspace-A",
+        threads: [{ id: "workspace-thread-A" }, { id: "workspace-thread-B" }],
+      },
+      {
+        workspaceId: "workspace-B",
+        threads: [{ id: "workspace-thread-C" }],
+      },
+    ]);
   });
 });
 
