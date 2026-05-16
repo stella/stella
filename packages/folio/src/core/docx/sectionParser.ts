@@ -29,7 +29,6 @@ import type {
   Column,
   BorderSpec,
   ColorValue,
-  ThemeColorSlot,
   RelationshipMap,
 } from "../types/document";
 import {
@@ -40,6 +39,11 @@ import {
   parseFootnoteProperties,
   parseEndnoteProperties,
 } from "./notePropertiesParser";
+import {
+  BorderStyleSchema,
+  ThemeColorSlotSchema,
+  narrowEnum,
+} from "./parserEnums";
 import {
   findChild,
   findChildren,
@@ -115,8 +119,9 @@ function parseColorValue(
     color.auto = true;
   }
 
-  if (themeColor) {
-    color.themeColor = themeColor as ThemeColorSlot;
+  const validatedThemeColor = narrowEnum(themeColor, ThemeColorSlotSchema);
+  if (validatedThemeColor) {
+    color.themeColor = validatedThemeColor;
   }
   if (themeTint) {
     color.themeTint = themeTint;
@@ -136,8 +141,9 @@ function parseBorderSpec(element: XmlElement | null): BorderSpec | undefined {
     return undefined;
   }
 
-  const styleStr = getAttribute(element, "w", "val") ?? "none";
-  const style = styleStr as BorderSpec["style"];
+  const styleStr = getAttribute(element, "w", "val");
+  // Unknown / missing border style → render no border (Word does the same).
+  const style = narrowEnum(styleStr, BorderStyleSchema) ?? "none";
 
   const border: BorderSpec = { style };
 
@@ -639,9 +645,12 @@ export function parseSectionProperties(
       props.background.color = { rgb: colorVal };
     }
 
-    const themeColor = getAttribute(background, "w", "themeColor");
-    if (themeColor) {
-      props.background.themeColor = themeColor as ThemeColorSlot;
+    const backgroundThemeColor = narrowEnum(
+      getAttribute(background, "w", "themeColor"),
+      ThemeColorSlotSchema,
+    );
+    if (backgroundThemeColor) {
+      props.background.themeColor = backgroundThemeColor;
     }
 
     const themeTint = getAttribute(background, "w", "themeTint");
