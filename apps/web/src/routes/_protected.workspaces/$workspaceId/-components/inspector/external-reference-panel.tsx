@@ -67,22 +67,36 @@ type InspectorFindOptions = {
   highlightKey: string;
 };
 
+type FindState =
+  | { open: false }
+  | {
+      open: true;
+      query: string;
+      matchCount: number;
+      activeIndex: number;
+    };
+
+const FIND_CLOSED: FindState = { open: false };
+const FIND_OPENED: FindState = {
+  open: true,
+  query: "",
+  matchCount: 0,
+  activeIndex: 0,
+};
+
 const useInspectorFind = ({
   contentRef,
   enabled,
   highlightKey,
 }: InspectorFindOptions) => {
-  const [findOpen, setFindOpen] = useState(false);
-  const [findQuery, setFindQuery] = useState("");
-  const [matchCount, setMatchCount] = useState(0);
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [findState, setFindState] = useState<FindState>(FIND_CLOSED);
   const allHighlightName = `stella-inspector-find-${highlightKey}`;
   const activeHighlightName = `stella-inspector-find-active-${highlightKey}`;
 
   const clearFind = useCallback(() => {
-    setFindQuery("");
-    setMatchCount(0);
-    setActiveIndex(0);
+    setFindState((prev) =>
+      prev.open ? { ...prev, query: "", matchCount: 0, activeIndex: 0 } : prev,
+    );
     // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
     CSS.highlights?.delete(allHighlightName);
     // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
@@ -90,27 +104,48 @@ const useInspectorFind = ({
   }, [activeHighlightName, allHighlightName]);
 
   const closeFind = useCallback(() => {
-    setFindOpen(false);
+    setFindState(FIND_CLOSED);
   }, []);
 
   const openFind = useCallback(() => {
     if (!enabled) {
       return;
     }
-    setFindOpen(true);
+    setFindState((prev) => (prev.open ? prev : FIND_OPENED));
   }, [enabled]);
 
+  const setFindQuery = useCallback((query: string) => {
+    setFindState((prev) => (prev.open ? { ...prev, query } : prev));
+  }, []);
+
   const nextMatch = useCallback(() => {
-    setActiveIndex((current) =>
-      matchCount === 0 ? 0 : (current + 1) % matchCount,
-    );
-  }, [matchCount]);
+    setFindState((prev) => {
+      if (!prev.open || prev.matchCount === 0) {
+        return prev;
+      }
+      return {
+        ...prev,
+        activeIndex: (prev.activeIndex + 1) % prev.matchCount,
+      };
+    });
+  }, []);
 
   const previousMatch = useCallback(() => {
-    setActiveIndex((current) =>
-      matchCount === 0 ? 0 : (current - 1 + matchCount) % matchCount,
-    );
-  }, [matchCount]);
+    setFindState((prev) => {
+      if (!prev.open || prev.matchCount === 0) {
+        return prev;
+      }
+      return {
+        ...prev,
+        activeIndex: (prev.activeIndex - 1 + prev.matchCount) % prev.matchCount,
+      };
+    });
+  }, []);
+
+  const findOpen = findState.open;
+  const findQuery = findState.open ? findState.query : "";
+  const matchCount = findState.open ? findState.matchCount : 0;
+  const activeIndex = findState.open ? findState.activeIndex : 0;
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -120,13 +155,13 @@ const useInspectorFind = ({
 
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
         event.preventDefault();
-        setFindOpen(true);
+        setFindState((prev) => (prev.open ? prev : FIND_OPENED));
         return;
       }
 
       if (event.key === "Escape" && findOpen) {
         event.preventDefault();
-        setFindOpen(false);
+        setFindState(FIND_CLOSED);
       }
     };
 
@@ -145,22 +180,35 @@ const useInspectorFind = ({
     const root = contentRef.current;
     const query = findQuery.trim();
     if (!enabled || !root || query.length === 0) {
-      setMatchCount(0);
-      setActiveIndex(0);
+      setFindState((prev) =>
+        prev.open && (prev.matchCount !== 0 || prev.activeIndex !== 0)
+          ? { ...prev, matchCount: 0, activeIndex: 0 }
+          : prev,
+      );
       return undefined;
     }
 
     const ranges = collectTextRanges(root, query);
-    setMatchCount(ranges.length);
+    setFindState((prev) =>
+      prev.open && prev.matchCount !== ranges.length
+        ? { ...prev, matchCount: ranges.length }
+        : prev,
+    );
 
     if (ranges.length === 0) {
-      setActiveIndex(0);
+      setFindState((prev) =>
+        prev.open && prev.activeIndex !== 0
+          ? { ...prev, activeIndex: 0 }
+          : prev,
+      );
       return undefined;
     }
 
     const safeActiveIndex = activeIndex >= ranges.length ? 0 : activeIndex;
     if (safeActiveIndex !== activeIndex) {
-      setActiveIndex(safeActiveIndex);
+      setFindState((prev) =>
+        prev.open ? { ...prev, activeIndex: safeActiveIndex } : prev,
+      );
       return undefined;
     }
 
