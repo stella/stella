@@ -48,6 +48,8 @@ import type {
   ReviewSuggestionPreview,
 } from "@/components/ai-suggestions/review-store";
 import { useChatEditor } from "@/components/chat-editor-provider";
+import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
+import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import type {
   ActiveDocxEditApprovalPart,
@@ -867,114 +869,122 @@ const FileChatOverlayInner = ({
   }, [isGenerating, lastMessageId]);
 
   return (
-    <>
-      {panelOpen && hasThreadContent && (
-        <div
-          aria-label={t("chat.aiThread")}
-          className={cn(
-            // Sizing rules: grows with content but caps at ~45dvh
-            // / 380px so the panel doesn't dominate the file
-            // viewer. No min-height — short threads stay short.
-            "absolute start-1/2 bottom-[88px] z-40 flex max-h-[min(45dvh,380px)] min-h-0 w-[min(560px,calc(100%-2rem))] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border",
-            "bg-popover/90 border-border text-popover-foreground",
-            "[backdrop-filter:blur(18px)_saturate(160%)] [-webkit-backdrop-filter:blur(18px)_saturate(160%)]",
-            "before:bg-foreground/[0.06] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px",
-            "hover:bg-popover focus-within:bg-popover",
-            "transition-[background-color,border-color] duration-200 ease-out",
-            "shadow-[0_1px_2px_rgb(0_0_0/0.06),0_20px_64px_rgb(0_0_0/0.18)]",
-            "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-1",
-          )}
-          role="dialog"
-        >
-          {/* Plain scroll container — bypasses the legacy
-              Conversation's `size-full` chain, which only resolves
-              correctly when the parent has an explicit height
-              (this overlay uses `max-h` only, so flex-1 children
-              don't get a definite size to base `size-full` on). */}
+    <ChatMattersContext
+      value={{
+        createDocumentMatters,
+        isLoadingCreateDocumentMatters,
+      }}
+    >
+      <ChatApprovalContext
+        value={{
+          activeOrganizationId,
+          alwaysApprovedTools,
+          conversationApprovedTools,
+          handleAllowInConversation,
+          handleAlwaysAllow,
+          handleApprove: handleApproveWithDocxUnlock,
+          handleDeny,
+          blockedApprovalTools,
+        }}
+      >
+        {panelOpen && hasThreadContent && (
           <div
-            ref={threadScrollRef}
-            className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3"
-            style={{ scrollbarGutter: "stable" }}
+            aria-label={t("chat.aiThread")}
+            className={cn(
+              // Sizing rules: grows with content but caps at ~45dvh
+              // / 380px so the panel doesn't dominate the file
+              // viewer. No min-height — short threads stay short.
+              "absolute start-1/2 bottom-[88px] z-40 flex max-h-[min(45dvh,380px)] min-h-0 w-[min(560px,calc(100%-2rem))] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border",
+              "bg-popover/90 border-border text-popover-foreground",
+              "[backdrop-filter:blur(18px)_saturate(160%)] [-webkit-backdrop-filter:blur(18px)_saturate(160%)]",
+              "before:bg-foreground/[0.06] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px",
+              "hover:bg-popover focus-within:bg-popover",
+              "transition-[background-color,border-color] duration-200 ease-out",
+              "shadow-[0_1px_2px_rgb(0_0_0/0.06),0_20px_64px_rgb(0_0_0/0.18)]",
+              "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-1",
+            )}
+            role="dialog"
           >
-            <ChatThreadMessages
-              activeOrganizationId={activeOrganizationId}
-              alwaysApprovedTools={alwaysApprovedTools}
-              approvalPendingMessageId={approvalPendingMessageId}
-              blockedApprovalTools={blockedApprovalTools}
-              conversationApprovedTools={conversationApprovedTools}
-              error={error}
-              handleAllowInConversation={handleAllowInConversation}
-              handleAlwaysAllow={handleAlwaysAllow}
-              handleApprove={handleApproveWithDocxUnlock}
-              handleDeny={handleDeny}
-              isGenerating={isGenerating}
-              messages={messages}
-              onAskUserSubmit={handleAskUserSubmit}
-              onCreateDocumentResolve={handleCreateDocumentResolve}
-              onOpenCreatedDocument={handleOpenCreatedDocument}
-              createDocumentMatters={createDocumentMatters}
-              isLoadingCreateDocumentMatters={isLoadingCreateDocumentMatters}
-              onResend={resendLatestMessage}
-              showThinkingIndicator
-              showToolCallDetails={showToolCallDetails}
-              streamdownComponents={streamdownComponents}
-              workspaceId={workspaceId}
-            />
+            {/* Plain scroll container — bypasses the legacy
+                Conversation's `size-full` chain, which only resolves
+                correctly when the parent has an explicit height
+                (this overlay uses `max-h` only, so flex-1 children
+                don't get a definite size to base `size-full` on). */}
+            <div
+              ref={threadScrollRef}
+              className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3"
+              style={{ scrollbarGutter: "stable" }}
+            >
+              <ChatThreadMessages
+                approvalPendingMessageId={approvalPendingMessageId}
+                error={error}
+                isGenerating={isGenerating}
+                messages={messages}
+                onAskUserSubmit={handleAskUserSubmit}
+                onCreateDocumentResolve={handleCreateDocumentResolve}
+                onOpenCreatedDocument={handleOpenCreatedDocument}
+                onResend={resendLatestMessage}
+                showThinkingIndicator
+                showToolCallDetails={showToolCallDetails}
+                streamdownComponents={streamdownComponents}
+                workspaceId={workspaceId}
+              />
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <ChatAnonymizationLayer
-        editor={editorController.editor}
-        enabled={false}
-        workspaceId={workspaceId ?? threadRef.threadId}
-      />
-      <PromptBar
-        attentionPulseSeq={attentionPulseSeq}
-        canSubmitNow={canSubmitWithCurrentDocxSnapshot}
-        editorController={editorController}
-        emptyPlaceholder={
-          (activeFile || activeExternal) && filePlaceholderAction ? (
-            <span className="text-foreground-ghost flex min-w-0 items-center gap-1.5 text-[13px] leading-5">
-              <span className="shrink-0">{filePlaceholderAction}</span>
-              <span className="text-foreground-label max-w-64 truncate">
-                {activeFile?.fileName ?? activeExternal?.title}
+        <ChatAnonymizationLayer
+          editor={editorController.editor}
+          enabled={false}
+          workspaceId={workspaceId ?? threadRef.threadId}
+        />
+        <PromptBar
+          attentionPulseSeq={attentionPulseSeq}
+          canSubmitNow={canSubmitWithCurrentDocxSnapshot}
+          editorController={editorController}
+          emptyPlaceholder={
+            (activeFile || activeExternal) && filePlaceholderAction ? (
+              <span className="text-foreground-ghost flex min-w-0 items-center gap-1.5 text-[13px] leading-5">
+                <span className="shrink-0">{filePlaceholderAction}</span>
+                <span className="text-foreground-label max-w-64 truncate">
+                  {activeFile?.fileName ?? activeExternal?.title}
+                </span>
               </span>
-            </span>
-          ) : undefined
-        }
-        layout="floating"
-        newThreadLabel={t("chat.newChat")}
-        onNewThread={() => {
-          setPanelOpen(false);
-          onNewThread();
-        }}
-        onStop={() => {
-          void stop();
-        }}
-        onSubmit={({ prompt }) => {
-          void ensureAIAvailable().then((available) => {
-            if (!available) {
-              return;
-            }
-            // Always pop the thread open on send, even if the user
-            // minimised it earlier — they're sending a new prompt
-            // and want to see the response stream in.
-            setPanelOpen(true);
-            void sendMessage({ text: prompt });
-          });
-        }}
-        onTogglePanel={() => setPanelOpen((v) => !v)}
-        panelOpen={panelOpen}
-        pendingCount={0}
-        sendDisabledReason={
-          activeFile && docxEditorRef && !editorReady
-            ? "editor-loading"
-            : undefined
-        }
-        showThreadToggle={hasThreadContent}
-        status={isGenerating ? "generating" : "idle"}
-      />
-    </>
+            ) : undefined
+          }
+          layout="floating"
+          newThreadLabel={t("chat.newChat")}
+          onNewThread={() => {
+            setPanelOpen(false);
+            onNewThread();
+          }}
+          onStop={() => {
+            void stop();
+          }}
+          onSubmit={({ prompt }) => {
+            void ensureAIAvailable().then((available) => {
+              if (!available) {
+                return;
+              }
+              // Always pop the thread open on send, even if the user
+              // minimised it earlier — they're sending a new prompt
+              // and want to see the response stream in.
+              setPanelOpen(true);
+              void sendMessage({ text: prompt });
+            });
+          }}
+          onTogglePanel={() => setPanelOpen((v) => !v)}
+          panelOpen={panelOpen}
+          pendingCount={0}
+          sendDisabledReason={
+            activeFile && docxEditorRef && !editorReady
+              ? "editor-loading"
+              : undefined
+          }
+          showThreadToggle={hasThreadContent}
+          status={isGenerating ? "generating" : "idle"}
+        />
+      </ChatApprovalContext>
+    </ChatMattersContext>
   );
 };

@@ -20,17 +20,14 @@ import {
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import { AskUserCard } from "@/components/chat/ask-user-card";
 import type {
-  ApprovalToolName,
   AskUserOutput,
   ChatAnonRestoration,
   ChatPart,
   ChatUITools,
   PersistedChatMessage,
-  ToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
 import { isApprovalPart } from "@/components/chat/chat-ui-tools";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
-import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { SourceChips } from "@/components/chat/source-chips";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
@@ -433,24 +430,7 @@ const getRetryableAssistantMessageId = (
 };
 
 type ChatThreadMessagesProps = {
-  activeOrganizationId: string;
-  alwaysApprovedTools: ReadonlySet<ToolApprovalGrant>;
   approvalPendingMessageId: string | null;
-  blockedApprovalTools?: ReadonlySet<ApprovalToolName> | undefined;
-  conversationApprovedTools: ReadonlySet<ToolApprovalGrant>;
-  handleAllowInConversation: (
-    id: string,
-    toolName: ApprovalToolName,
-  ) => void | PromiseLike<void>;
-  handleAlwaysAllow: (
-    id: string,
-    toolName: ApprovalToolName,
-  ) => void | PromiseLike<void>;
-  handleApprove: (
-    id: string,
-    toolName: ApprovalToolName,
-  ) => void | PromiseLike<void>;
-  handleDeny: (id: string) => void | PromiseLike<void>;
   error?: Error | undefined;
   isGenerating?: boolean | undefined;
   messages: PersistedChatMessage[];
@@ -473,8 +453,6 @@ type ChatThreadMessagesProps = {
       { success: true }
     >,
   ) => Promise<void> | void;
-  createDocumentMatters: readonly NeedsMatterMatter[];
-  isLoadingCreateDocumentMatters: boolean;
   showThinkingIndicator?: boolean | undefined;
   showToolCallDetails?: boolean | undefined;
   showToolCalls?: boolean | undefined;
@@ -492,15 +470,7 @@ type ChatResendOptions = {
 };
 
 export const ChatThreadMessages = ({
-  activeOrganizationId,
-  alwaysApprovedTools,
   approvalPendingMessageId,
-  blockedApprovalTools,
-  conversationApprovedTools,
-  handleAllowInConversation,
-  handleAlwaysAllow,
-  handleApprove,
-  handleDeny,
   error,
   isGenerating = false,
   messages,
@@ -509,8 +479,6 @@ export const ChatThreadMessages = ({
   onAskUserSubmit,
   onCreateDocumentResolve,
   onOpenCreatedDocument,
-  createDocumentMatters,
-  isLoadingCreateDocumentMatters,
   showThinkingIndicator = false,
   showToolCallDetails,
   showToolCalls,
@@ -540,18 +508,6 @@ export const ChatThreadMessages = ({
             {message.role === "assistant" ? (
               <>
                 <AssistantMessageParts
-                  activeOrganizationId={activeOrganizationId}
-                  alwaysApprovedTools={alwaysApprovedTools}
-                  blockedApprovalTools={blockedApprovalTools}
-                  conversationApprovedTools={conversationApprovedTools}
-                  createDocumentMatters={createDocumentMatters}
-                  handleAllowInConversation={handleAllowInConversation}
-                  handleAlwaysAllow={handleAlwaysAllow}
-                  handleApprove={handleApprove}
-                  handleDeny={handleDeny}
-                  isLoadingCreateDocumentMatters={
-                    isLoadingCreateDocumentMatters
-                  }
                   message={message}
                   onAskUserSubmit={onAskUserSubmit}
                   onCreateDocumentResolve={onCreateDocumentResolve}
@@ -561,7 +517,6 @@ export const ChatThreadMessages = ({
                   workspaceId={workspaceId}
                 />
                 <SourceChips
-                  activeOrganizationId={activeOrganizationId}
                   messageId={message.id}
                   parts={message.parts}
                   workspaceId={workspaceId}
@@ -621,16 +576,6 @@ export const ChatThreadMessages = ({
 
 type AssistantMessagePartsProps = Pick<
   ChatThreadMessagesProps,
-  | "activeOrganizationId"
-  | "alwaysApprovedTools"
-  | "blockedApprovalTools"
-  | "conversationApprovedTools"
-  | "createDocumentMatters"
-  | "handleAllowInConversation"
-  | "handleAlwaysAllow"
-  | "handleApprove"
-  | "handleDeny"
-  | "isLoadingCreateDocumentMatters"
   | "onAskUserSubmit"
   | "onCreateDocumentResolve"
   | "onOpenCreatedDocument"
@@ -650,16 +595,6 @@ type AssistantMessagePartsProps = Pick<
  * remount on every streaming text delta.
  */
 const AssistantMessageParts = ({
-  activeOrganizationId,
-  alwaysApprovedTools,
-  blockedApprovalTools,
-  conversationApprovedTools,
-  createDocumentMatters,
-  handleAllowInConversation,
-  handleAlwaysAllow,
-  handleApprove,
-  handleDeny,
-  isLoadingCreateDocumentMatters,
   message,
   onAskUserSubmit,
   onCreateDocumentResolve,
@@ -700,9 +635,7 @@ const AssistantMessageParts = ({
         if (part.type === "tool-create-document") {
           return (
             <NeedsMatterCard
-              isLoadingMatters={isLoadingCreateDocumentMatters}
               key={part.toolCallId}
-              matters={createDocumentMatters}
               onOpenCreated={onOpenCreatedDocument}
               onResolve={onCreateDocumentResolve}
               part={part}
@@ -713,15 +646,7 @@ const AssistantMessageParts = ({
         if (isApprovalPart(part)) {
           return (
             <ToolApprovalCard
-              activeOrganizationId={activeOrganizationId}
-              alwaysApprovedTools={alwaysApprovedTools}
-              blockedApprovalTools={blockedApprovalTools}
-              conversationApprovedTools={conversationApprovedTools}
               key={part.toolCallId}
-              onAllowInConversation={handleAllowInConversation}
-              onAlwaysAllow={handleAlwaysAllow}
-              onApprove={handleApprove}
-              onDeny={handleDeny}
               part={part}
               workspaceId={workspaceId}
             />
@@ -731,7 +656,6 @@ const AssistantMessageParts = ({
         if (isToolUIPart(part)) {
           return (
             <ToolCallCard
-              activeOrganizationId={activeOrganizationId}
               key={part.toolCallId}
               part={part}
               showDetails={shouldShowToolCalls}

@@ -43,7 +43,9 @@ import {
   PromptBarShell,
 } from "@/components/ai-suggestions/host";
 import { useChatEditor } from "@/components/chat-editor-provider";
+import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
+import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useAIKeyGate } from "@/components/require-ai-key";
@@ -126,7 +128,11 @@ export const ChatTabPanel = ({
   };
   const getSendMode = useEffectEvent(() => sendMode);
   const showToolCallDetails = useDevStore((s) => s.showToolCallDetails);
-  const chatContextLabel = useChatContextLabel(tab);
+  const activeOrganizationId = useRouteContext({
+    from: "/_protected",
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const chatContextLabel = useChatContextLabel(tab, activeOrganizationId);
 
   const { openChat, setChatContext, updateLabel } = useInspectorStore(
     useShallow((s) => ({
@@ -137,10 +143,6 @@ export const ChatTabPanel = ({
   );
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const activeOrganizationId = useRouteContext({
-    from: "/_protected",
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
 
   const moveToMain = buildMaximizeTabAction(tab, {
     activeOrganizationId,
@@ -267,116 +269,123 @@ export const ChatTabPanel = ({
   }, [pendingRenameTabId, tab.id, startRenameFromStore, clearRenameRequest]);
 
   return (
-    <ChatTabPanelChrome
-      matterColor={matterColor}
-      onClose={onClose}
-      onLabelContextMenu={onLabelContextMenu}
-      onMoveToMain={moveToMain}
-      anonymized={anonymized}
-      onNewThread={() =>
-        openChat({
-          workspaceId: tabWorkspaceId,
-          contextMatterIds: tab.contextMatterIds,
-          ...(tab.activeDecisionId
-            ? { activeDecisionId: tab.activeDecisionId }
-            : {}),
-        })
-      }
-      onSetAnonymized={setAnonymized}
-      onSetContext={(next) => setChatContext(tab.id, next)}
-      onStartRename={labelRename.startEditing}
-      rename={{
-        active: labelRename.state.mode === "edit",
-        value: labelRename.state.mode === "edit" ? labelRename.state.draft : "",
-        onChange: labelRename.setDraft,
-        onCommit: () => {
-          void labelRename.commit();
-        },
-        onCancel: labelRename.cancel,
+    <ChatMattersContext
+      value={{
+        createDocumentMatters,
+        isLoadingCreateDocumentMatters,
       }}
-      tab={tab}
     >
-      <Conversation className="min-h-0 flex-1">
-        <ConversationContent className="gap-3">
-          {messages.length === 0 && !isGenerating && !error ? (
-            <ChatEmptyState
-              onSelectPrompt={handleSelectPrompt}
-              prompts={savedPrompts}
-            />
-          ) : (
-            <ChatThreadMessages
-              activeOrganizationId={activeOrganizationId}
-              alwaysApprovedTools={alwaysApprovedTools}
-              approvalPendingMessageId={approvalPendingMessageId}
-              conversationApprovedTools={conversationApprovedTools}
-              error={error}
-              handleAllowInConversation={handleAllowInConversation}
-              handleAlwaysAllow={handleAlwaysAllow}
-              handleApprove={handleApprove}
-              handleDeny={handleDeny}
-              isGenerating={isGenerating}
-              messages={messages}
-              onAskUserSubmit={handleAskUserSubmit}
-              onCreateDocumentResolve={handleCreateDocumentResolve}
-              onOpenCreatedDocument={handleOpenCreatedDocument}
-              createDocumentMatters={createDocumentMatters}
-              isLoadingCreateDocumentMatters={isLoadingCreateDocumentMatters}
-              onResend={resendLatestMessage}
-              onSendWithoutAnonymization={sendWithoutAnonymization}
-              showThinkingIndicator
-              showToolCallDetails={showToolCallDetails}
-              streamdownComponents={streamdownComponents}
-              workspaceId={tabWorkspaceId}
-            />
-          )}
-        </ConversationContent>
-        <ConversationScrollButton />
-      </Conversation>
+      <ChatApprovalContext
+        value={{
+          activeOrganizationId,
+          alwaysApprovedTools,
+          conversationApprovedTools,
+          handleAllowInConversation,
+          handleAlwaysAllow,
+          handleApprove,
+          handleDeny,
+        }}
+      >
+        <ChatTabPanelChrome
+          matterColor={matterColor}
+          onClose={onClose}
+          onLabelContextMenu={onLabelContextMenu}
+          onMoveToMain={moveToMain}
+          anonymized={anonymized}
+          onNewThread={() =>
+            openChat({
+              workspaceId: tabWorkspaceId,
+              contextMatterIds: tab.contextMatterIds,
+              ...(tab.activeDecisionId
+                ? { activeDecisionId: tab.activeDecisionId }
+                : {}),
+            })
+          }
+          onSetAnonymized={setAnonymized}
+          onSetContext={(next) => setChatContext(tab.id, next)}
+          onStartRename={labelRename.startEditing}
+          rename={{
+            active: labelRename.state.mode === "edit",
+            value:
+              labelRename.state.mode === "edit" ? labelRename.state.draft : "",
+            onChange: labelRename.setDraft,
+            onCommit: () => {
+              void labelRename.commit();
+            },
+            onCancel: labelRename.cancel,
+          }}
+          tab={tab}
+        >
+          <Conversation className="min-h-0 flex-1">
+            <ConversationContent className="gap-3">
+              {messages.length === 0 && !isGenerating && !error ? (
+                <ChatEmptyState
+                  onSelectPrompt={handleSelectPrompt}
+                  prompts={savedPrompts}
+                />
+              ) : (
+                <ChatThreadMessages
+                  approvalPendingMessageId={approvalPendingMessageId}
+                  error={error}
+                  isGenerating={isGenerating}
+                  messages={messages}
+                  onAskUserSubmit={handleAskUserSubmit}
+                  onCreateDocumentResolve={handleCreateDocumentResolve}
+                  onOpenCreatedDocument={handleOpenCreatedDocument}
+                  onResend={resendLatestMessage}
+                  onSendWithoutAnonymization={sendWithoutAnonymization}
+                  showThinkingIndicator
+                  showToolCallDetails={showToolCallDetails}
+                  streamdownComponents={streamdownComponents}
+                  workspaceId={tabWorkspaceId}
+                />
+              )}
+            </ConversationContent>
+            <ConversationScrollButton />
+          </Conversation>
 
-      <ChatAnonymizationLayer
-        editor={editorController.editor}
-        enabled={anonymized}
-        workspaceId={tabWorkspaceId ?? threadRef.threadId}
-      />
-      <PromptBar
-        editorController={editorController}
-        emptyPlaceholder={
-          <PromptBarPlaceholderContent>
-            {t("chat.contextPlaceholder", { context: chatContextLabel })}
-          </PromptBarPlaceholderContent>
-        }
-        layout="standalone"
-        onStop={() => {
-          void stop();
-        }}
-        onSubmit={({ prompt }) => {
-          void ensureAIAvailable().then((available) => {
-            if (!available) {
-              return;
+          <ChatAnonymizationLayer
+            editor={editorController.editor}
+            enabled={anonymized}
+            workspaceId={tabWorkspaceId ?? threadRef.threadId}
+          />
+          <PromptBar
+            editorController={editorController}
+            emptyPlaceholder={
+              <PromptBarPlaceholderContent>
+                {t("chat.contextPlaceholder", { context: chatContextLabel })}
+              </PromptBarPlaceholderContent>
             }
-            // PromptBar emits the raw editor HTML; the legacy
-            // backend already parses `<entity-mention>` tags out
-            // of the `text` field, so we forward unchanged.
-            void sendMessage({ text: prompt });
-          });
-        }}
-        onTogglePanel={() => {
-          // Standalone has no thread toggle; never called.
-        }}
-        panelOpen={false}
-        pendingCount={0}
-        showThreadToggle={false}
-        status={isGenerating ? "generating" : "idle"}
-      />
-    </ChatTabPanelChrome>
+            layout="standalone"
+            onStop={() => {
+              void stop();
+            }}
+            onSubmit={({ prompt }) => {
+              void ensureAIAvailable().then((available) => {
+                if (!available) {
+                  return;
+                }
+                // PromptBar emits the raw editor HTML; the legacy
+                // backend already parses `<entity-mention>` tags out
+                // of the `text` field, so we forward unchanged.
+                void sendMessage({ text: prompt });
+              });
+            }}
+            onTogglePanel={() => {
+              // Standalone has no thread toggle; never called.
+            }}
+            panelOpen={false}
+            pendingCount={0}
+            showThreadToggle={false}
+            status={isGenerating ? "generating" : "idle"}
+          />
+        </ChatTabPanelChrome>
+      </ChatApprovalContext>
+    </ChatMattersContext>
   );
 };
 
-const useChatContextLabel = (tab: ChatTab) => {
-  const activeOrganizationId = useRouteContext({
-    from: "/_protected",
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+const useChatContextLabel = (tab: ChatTab, activeOrganizationId: string) => {
   const { data } = useQuery(workspacesNavigationOptions(activeOrganizationId));
   const fallbackLabel = tab.label.trim().length > 0 ? tab.label : "chat";
 

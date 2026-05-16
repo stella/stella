@@ -191,6 +191,8 @@ import {
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message";
+import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
+import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import {
   ChatErrorMessage,
   ChatThreadMessages,
@@ -1290,43 +1292,53 @@ const SHARED_CHAT_RENDERER_MESSAGES = [
 function SharedChatRendererSample() {
   return (
     <div className="bg-popover/40 flex flex-col gap-4 rounded-2xl border p-4">
-      <ChatThreadMessages
-        activeOrganizationId="playground"
-        alwaysApprovedTools={new Set()}
-        approvalPendingMessageId={null}
-        conversationApprovedTools={new Set()}
-        handleAllowInConversation={() => {
-          /* no-op in playground */
+      <ChatMattersContext
+        value={{
+          createDocumentMatters: [],
+          isLoadingCreateDocumentMatters: false,
         }}
-        handleAlwaysAllow={() => {
-          /* no-op in playground */
-        }}
-        handleApprove={() => {
-          /* no-op in playground */
-        }}
-        handleDeny={() => {
-          /* no-op in playground */
-        }}
-        messages={SHARED_CHAT_RENDERER_MESSAGES}
-        onAskUserSubmit={() => {
-          /* no-op in playground */
-        }}
-        onCreateDocumentResolve={() => {
-          /* no-op in playground */
-        }}
-        onOpenCreatedDocument={() => {
-          /* no-op in playground */
-        }}
-        createDocumentMatters={[]}
-        isLoadingCreateDocumentMatters={false}
-        onResend={() => {
-          /* no-op in playground */
-        }}
-        showToolCalls={false}
-        streamdownComponents={{
-          a: ({ children, ...props }) => <a {...props}>{children}</a>,
-        }}
-      />
+      >
+        <ChatApprovalContext
+          value={{
+            activeOrganizationId: "dev-active-organization",
+            alwaysApprovedTools: new Set(),
+            conversationApprovedTools: new Set(),
+            handleAllowInConversation: () => {
+              /* no-op in playground */
+            },
+            handleAlwaysAllow: () => {
+              /* no-op in playground */
+            },
+            handleApprove: () => {
+              /* no-op in playground */
+            },
+            handleDeny: () => {
+              /* no-op in playground */
+            },
+          }}
+        >
+          <ChatThreadMessages
+            approvalPendingMessageId={null}
+            messages={SHARED_CHAT_RENDERER_MESSAGES}
+            onAskUserSubmit={() => {
+              /* no-op in playground */
+            }}
+            onCreateDocumentResolve={() => {
+              /* no-op in playground */
+            }}
+            onOpenCreatedDocument={() => {
+              /* no-op in playground */
+            }}
+            onResend={() => {
+              /* no-op in playground */
+            }}
+            showToolCalls={false}
+            streamdownComponents={{
+              a: ({ children, ...props }) => <a {...props}>{children}</a>,
+            }}
+          />
+        </ChatApprovalContext>
+      </ChatMattersContext>
     </div>
   );
 }

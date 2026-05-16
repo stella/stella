@@ -15,7 +15,9 @@ import {
 } from "@/components/ai-elements/conversation";
 import { useChatEditor } from "@/components/chat-editor-provider";
 import { ChatInputSurface } from "@/components/chat-input-surface";
+import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
+import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { getUserMessageHtmlHistory } from "@/components/chat/chat-ui-tools";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
@@ -180,112 +182,128 @@ export const ChatThreadPage = ({
   });
 
   return (
-    <div className="flex w-full max-w-5xl flex-1 flex-col overflow-hidden">
-      <div className="flex items-center justify-between gap-2 px-4 py-2">
-        <div className="flex min-w-0 items-center gap-2">
-          {threadRef.scope === "workspace" ? (
-            <Link
-              className={buttonVariants({
-                variant: "ghost",
-                size: "sm",
-              })}
-              params={{ workspaceId: threadRef.workspaceId }}
-              to="/chat/workspaces/$workspaceId/new"
-            >
-              <PlusIcon />
-              {t("chat.newChat")}
-            </Link>
-          ) : (
-            <Link
-              className={buttonVariants({
-                variant: "ghost",
-                size: "sm",
-              })}
-              to="/chat/new"
-            >
-              <PlusIcon />
-              {t("chat.newChat")}
-            </Link>
-          )}
-          {contextMatterIds !== null && (
-            <ChatMatterPicker
-              matterIds={contextMatterIds}
-              onChange={setContextMatterIds}
-            />
-          )}
-        </div>
-        <div className="flex items-center gap-1">
-          <ChatAnonymizedToggle enabled={anonymized} onChange={setAnonymized} />
-          <Tooltip
-            content={t("chat.moveToSide")}
-            render={
-              <Button onClick={moveToSide} size="icon-sm" variant="ghost">
-                <Maximize2Icon className="size-4" />
-              </Button>
-            }
-          />
-          <ThreadsSheet />
-        </div>
-      </div>
-
-      <Conversation>
-        <ConversationContent className="gap-3">
-          {messages.length === 0 && !isGenerating && !error ? (
-            <div className="m-auto w-full max-w-md px-4">
-              <PromptSuggestions onSelect={selectPrompt} prompts={prompts} />
+    <ChatMattersContext
+      value={{
+        createDocumentMatters,
+        isLoadingCreateDocumentMatters,
+      }}
+    >
+      <ChatApprovalContext
+        value={{
+          activeOrganizationId,
+          alwaysApprovedTools,
+          conversationApprovedTools,
+          handleAllowInConversation,
+          handleAlwaysAllow,
+          handleApprove,
+          handleDeny,
+        }}
+      >
+        <div className="flex w-full max-w-5xl flex-1 flex-col overflow-hidden">
+          <div className="flex items-center justify-between gap-2 px-4 py-2">
+            <div className="flex min-w-0 items-center gap-2">
+              {threadRef.scope === "workspace" ? (
+                <Link
+                  className={buttonVariants({
+                    variant: "ghost",
+                    size: "sm",
+                  })}
+                  params={{ workspaceId: threadRef.workspaceId }}
+                  to="/chat/workspaces/$workspaceId/new"
+                >
+                  <PlusIcon />
+                  {t("chat.newChat")}
+                </Link>
+              ) : (
+                <Link
+                  className={buttonVariants({
+                    variant: "ghost",
+                    size: "sm",
+                  })}
+                  to="/chat/new"
+                >
+                  <PlusIcon />
+                  {t("chat.newChat")}
+                </Link>
+              )}
+              {contextMatterIds !== null && (
+                <ChatMatterPicker
+                  matterIds={contextMatterIds}
+                  onChange={setContextMatterIds}
+                />
+              )}
             </div>
-          ) : (
-            <ChatThreadMessages
-              activeOrganizationId={activeOrganizationId}
-              alwaysApprovedTools={alwaysApprovedTools}
-              approvalPendingMessageId={approvalPendingMessageId}
-              conversationApprovedTools={conversationApprovedTools}
-              error={error}
-              handleAllowInConversation={handleAllowInConversation}
-              handleAlwaysAllow={handleAlwaysAllow}
-              handleApprove={handleApprove}
-              handleDeny={handleDeny}
-              isGenerating={isGenerating}
-              messages={messages}
-              onAskUserSubmit={handleAskUserSubmit}
-              onCreateDocumentResolve={handleCreateDocumentResolve}
-              onOpenCreatedDocument={handleOpenCreatedDocument}
-              createDocumentMatters={createDocumentMatters}
-              isLoadingCreateDocumentMatters={isLoadingCreateDocumentMatters}
-              onResend={resendLatestMessage}
-              onSendWithoutAnonymization={sendWithoutAnonymization}
-              showThinkingIndicator
-              showToolCallDetails={showToolCallDetails}
-              streamdownComponents={streamdownComponents}
-              workspaceId={workspaceId}
-            />
-          )}
-        </ConversationContent>
-        <ConversationScrollButton />
-      </Conversation>
+            <div className="flex items-center gap-1">
+              <ChatAnonymizedToggle
+                enabled={anonymized}
+                onChange={setAnonymized}
+              />
+              <Tooltip
+                content={t("chat.moveToSide")}
+                render={
+                  <Button onClick={moveToSide} size="icon-sm" variant="ghost">
+                    <Maximize2Icon className="size-4" />
+                  </Button>
+                }
+              />
+              <ThreadsSheet />
+            </div>
+          </div>
 
-      <ChatAnonymizationLayer
-        editor={controller.editor}
-        enabled={anonymized}
-        workspaceId={workspaceId ?? threadRef.threadId}
-      />
-      <div className="p-4">
-        <ChatInputSurface
-          anonymized={anonymized}
-          autoFocus
-          controller={controller}
-          isGenerating={isGenerating}
-          onStop={() => {
-            void stop();
-          }}
-          onSubmit={async (draft) => {
-            if (!(await ensureAIAvailable())) {
-              return;
-            }
-            await sendMessage(await buildChatRequestMessage(draft));
-          }}
-        />
-      </div>
-    </div>
+          <Conversation>
+            <ConversationContent className="gap-3">
+              {messages.length === 0 && !isGenerating && !error ? (
+                <div className="m-auto w-full max-w-md px-4">
+                  <PromptSuggestions
+                    onSelect={selectPrompt}
+                    prompts={prompts}
+                  />
+                </div>
+              ) : (
+                <ChatThreadMessages
+                  approvalPendingMessageId={approvalPendingMessageId}
+                  error={error}
+                  isGenerating={isGenerating}
+                  messages={messages}
+                  onAskUserSubmit={handleAskUserSubmit}
+                  onCreateDocumentResolve={handleCreateDocumentResolve}
+                  onOpenCreatedDocument={handleOpenCreatedDocument}
+                  onResend={resendLatestMessage}
+                  onSendWithoutAnonymization={sendWithoutAnonymization}
+                  showThinkingIndicator
+                  showToolCallDetails={showToolCallDetails}
+                  streamdownComponents={streamdownComponents}
+                  workspaceId={workspaceId}
+                />
+              )}
+            </ConversationContent>
+            <ConversationScrollButton />
+          </Conversation>
+
+          <ChatAnonymizationLayer
+            editor={controller.editor}
+            enabled={anonymized}
+            workspaceId={workspaceId ?? threadRef.threadId}
+          />
+          <div className="p-4">
+            <ChatInputSurface
+              anonymized={anonymized}
+              autoFocus
+              controller={controller}
+              isGenerating={isGenerating}
+              onStop={() => {
+                void stop();
+              }}
+              onSubmit={async (draft) => {
+                if (!(await ensureAIAvailable())) {
+                  return;
+                }
+                await sendMessage(await buildChatRequestMessage(draft));
+              }}
+            />
+          </div>
+        </div>
+      </ChatApprovalContext>
+    </ChatMattersContext>
   );
 };
