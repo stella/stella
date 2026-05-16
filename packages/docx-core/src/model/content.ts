@@ -1336,6 +1336,20 @@ export type Column = {
 /**
  * Section properties (w:sectPr)
  */
+export type SectionTextDirection =
+  | "lrTb"
+  | "tbRl"
+  | "btLr"
+  | "lrTbV"
+  | "tbRlV"
+  | "tbLrV"
+  | "tb"
+  | "rl"
+  | "lr"
+  | "tbV"
+  | "rlV"
+  | "lrV";
+
 export type SectionProperties = {
   // Page size
   /** Page width in twips */
@@ -1378,6 +1392,8 @@ export type SectionProperties = {
   sectionStart?: SectionStart;
   /** Vertical alignment of text */
   verticalAlign?: VerticalAlign;
+  /** Section text direction */
+  textDirection?: SectionTextDirection;
   /** Right-to-left section */
   bidi?: boolean;
 
@@ -1398,6 +1414,15 @@ export type SectionProperties = {
     countBy?: number;
     distance?: number;
     restart?: LineNumberRestart;
+  };
+
+  // Page numbers
+  /** Page numbering settings */
+  pageNumbering?: {
+    format?: string;
+    start?: number;
+    chapterStyle?: number;
+    chapterSeparator?: string;
   };
 
   // Page borders
@@ -1443,6 +1468,16 @@ export type SectionProperties = {
   paperSrcFirst?: number;
   /** Other pages paper source */
   paperSrcOther?: number;
+
+  // Section-level flags and relationships
+  /** Protected forms in this section */
+  formProtection?: boolean;
+  /** Suppress endnotes in this section */
+  noEndnote?: boolean;
+  /** Use right-to-left gutter in this section */
+  rtlGutter?: boolean;
+  /** Relationship id for printer settings */
+  printerSettingsRelationshipId?: string;
 };
 
 // ============================================================================
