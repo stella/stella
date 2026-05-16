@@ -45,7 +45,7 @@
     "@t3-oss/env-core": "catalog:",
     "@tanstack/devtools-vite": "^0.6.0",
     "@tanstack/react-devtools": "^0.10.2",
-    "@tanstack/react-form": "^1.31.0",
+    "@tanstack/react-form": "^1.32.0",
     "@tanstack/react-hotkeys": "^0.10.0",
     "@tanstack/react-query": "^5.100.9",
     "@tanstack/react-query-devtools": "^5.100.9",
