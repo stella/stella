@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { Transaction } from "@/api/db";
@@ -20,6 +21,8 @@ const config = {
   permissions: { chat: ["create"] },
   body: resolveFileThreadBodySchema,
 } satisfies HandlerConfig;
+
+const CHAT_THREAD_TITLE_MAX_LENGTH = 255;
 
 type FileThreadLookupInput = {
   entityId: SafeId<"entity">;
@@ -61,6 +64,49 @@ const findFileChatThread = async (
     columns: {
       chatThreadId: true,
     },
+  });
+
+const findFieldKeyedChatThread = async (
+  tx: Transaction,
+  { fieldId, organizationId, userId, workspaceId }: FileThreadLookupInput,
+) =>
+  (
+    await tx
+      .select({ id: chatThreads.id })
+      .from(chatThreads)
+      .where(
+        and(
+          // File chat threads were previously keyed directly by
+          // field UUID. Preserve those rows without constructing
+          // a new branded ID from request input.
+          sql`${chatThreads.id} = ${fieldId}`,
+          eq(chatThreads.organizationId, organizationId),
+          eq(chatThreads.userId, userId),
+          eq(chatThreads.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+
+const insertFileChatThread = async (
+  tx: Transaction,
+  {
+    entityId,
+    fieldId,
+    organizationId,
+    userId,
+    workspaceId,
+  }: FileThreadLookupInput,
+  chatThreadId: SafeId<"chatThread">,
+) =>
+  await tx.insert(fileChatThreads).values({
+    id: createSafeId<"fileChatThread">(),
+    organizationId,
+    workspaceId,
+    userId,
+    entityId,
+    fieldId,
+    chatThreadId,
   });
 
 const createFileChatThread = async (
@@ -109,27 +155,56 @@ const createFileChatThread = async (
     };
   }
 
+  const fieldKeyedThread = await findFieldKeyedChatThread(tx, {
+    entityId,
+    fieldId,
+    organizationId,
+    userId,
+    workspaceId,
+  });
+
+  if (fieldKeyedThread) {
+    await insertFileChatThread(
+      tx,
+      {
+        entityId,
+        fieldId,
+        organizationId,
+        userId,
+        workspaceId,
+      },
+      fieldKeyedThread.id,
+    );
+
+    return {
+      ok: true,
+      chatThreadId: fieldKeyedThread.id,
+    };
+  }
+
   const chatThreadId = createSafeId<"chatThread">();
 
   await tx.insert(chatThreads).values({
     id: chatThreadId,
     organizationId,
-    title: content.fileName,
+    title: content.fileName.slice(0, CHAT_THREAD_TITLE_MAX_LENGTH),
     userId,
     workspaceId,
     contextMatterIds: [],
     dataWorkspaceIds: [workspaceId],
   });
 
-  await tx.insert(fileChatThreads).values({
-    id: createSafeId<"fileChatThread">(),
-    organizationId,
-    workspaceId,
-    userId,
-    entityId,
-    fieldId,
+  await insertFileChatThread(
+    tx,
+    {
+      entityId,
+      fieldId,
+      organizationId,
+      userId,
+      workspaceId,
+    },
     chatThreadId,
-  });
+  );
 
   return {
     ok: true,
