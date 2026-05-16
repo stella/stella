@@ -50,7 +50,7 @@
     "release:check": "bun run lint && bun run typecheck && bun run test && bun run build && bun run pack:dry-run",
     "test": "bun test src",
     "typecheck": "tsgo --noEmit",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware packages/infosoud",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/infosoud",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/infosoud",
     "format": "oxfmt .",
     "prepack": "bun run build"

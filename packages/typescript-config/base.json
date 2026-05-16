@@ -10,6 +10,7 @@
     "resolveJsonModule": true,
     "moduleDetection": "force",
     "verbatimModuleSyntax": true,
+    "noUncheckedSideEffectImports": true,
 
     "incremental": true,
     "disableSourceOfProjectReferenceRedirect": true,

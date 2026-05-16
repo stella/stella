@@ -2,3 +2,10 @@ title = "Stella Gitleaks Configuration"
 
 [extend]
 useDefault = true
+
+[allowlist]
+description = "Generated CycloneDX SBOM import metadata for Astro APIRoute symbols."
+condition = "AND"
+regexTarget = "match"
+paths = ['''^provenance/projects/root/sbom\.cdx\.json$''']
+regexes = ['''APIRoute,astro/APIRoute''']

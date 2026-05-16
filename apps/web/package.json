@@ -11,7 +11,7 @@
     "clean": "git clean -xdf .cache .turbo node_modules",
     "typegen": "bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/langs",
     "typecheck": "tsgo --noEmit",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware apps/web",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/web",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/web",
     "format": "oxfmt -c ../../.oxfmtrc.json .",
     "i18n:check": "bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/langs --check && bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs",

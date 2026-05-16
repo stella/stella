@@ -11,7 +11,7 @@ export default defineConfig({
   extends: [core, react],
   rules: {
     // Override ultracite defaults for Stella
-    "no-console": "warn",
+    "no-console": "error",
     "no-shadow": "error",
     "require-await": "error",
     "no-useless-catch": "error",
@@ -64,7 +64,7 @@ export default defineConfig({
     "sonarjs/no-useless-increment": "error",
     "sonarjs/non-existent-operator": "error",
     "sonarjs/regex-complexity": ["error", { threshold: 30 }],
-    "sonarjs/slow-regex": "warn",
+    "sonarjs/slow-regex": "error",
     "sonarjs/stateful-regex": "error",
     "sonarjs/updated-loop-counter": "error",
 
@@ -768,7 +768,7 @@ export default defineConfig({
           },
         ],
         "no-untyped-updates/no-untyped-updates": "error",
-        "security-guards/no-unscoped-user-query": "warn",
+        "security-guards/no-unscoped-user-query": "error",
         "no-restricted-imports": [
           "error",
           {

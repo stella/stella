@@ -168,7 +168,7 @@ STELLA_API_HOST_PORT=8080 docker compose --env-file apps/api/.env -f docker-comp
 stella publishes a [GitHub Release](https://github.com/stella/stella/releases)
 for every version. Three ways to keep up with it:
 
-- **GitHub Releases** — click *Watch → Custom → Releases* on the repo to get
+- **GitHub Releases** — click _Watch → Custom → Releases_ on the repo to get
   emailed when a new version ships.
 - **RSS / Atom feed** — subscribe to
   [`https://github.com/stella/stella/releases.atom`](https://github.com/stella/stella/releases.atom)

@@ -30,8 +30,8 @@ for (const fixture of fixtures) {
       await page.goto(`/?file=${encodeURIComponent(fixture)}`);
 
       // Wait for the editor to finish rendering
-      // The editor sets data-testid="docx-editor" on the root element
-      await page.waitForSelector('[data-testid="docx-editor"]', {
+      // The editor sets data-testid="folio-editor" on the root element
+      await page.waitForSelector('[data-testid="folio-editor"]', {
         timeout: 10_000,
       });
 
@@ -59,7 +59,7 @@ for (const fixture of fixtures) {
       });
 
       // Screenshot the entire editor area
-      const editor = page.locator('[data-testid="docx-editor"]');
+      const editor = page.locator('[data-testid="folio-editor"]');
       await expect(editor).toHaveScreenshot(`${fixture}.png`, {
         fullPage: false,
       });
