@@ -22,15 +22,15 @@ export default defineConfig({
       sidebar: [
         {
           label: "Getting Started",
-          items: [{ autogenerate: { directory: "getting-started" } }],
+          autogenerate: { directory: "getting-started" },
         },
         {
           label: "Guides",
-          items: [{ autogenerate: { directory: "guides" } }],
+          autogenerate: { directory: "guides" },
         },
         {
           label: "Reference",
-          items: [{ autogenerate: { directory: "reference" } }],
+          autogenerate: { directory: "reference" },
         },
       ],
       customCss: ["./src/styles/custom.css"],
