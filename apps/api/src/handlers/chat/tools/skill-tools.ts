@@ -28,7 +28,6 @@ export const createSkillTools = ({
   userId,
 }: CreateSkillToolsProps) => {
   const availableSkillIds = new Set(skills.map((skill) => skill.name));
-  const allowedSkillDescription = `Available skill names: ${[...availableSkillIds].join(", ")}`;
 
   return {
     "load-skill": tool({
@@ -39,7 +38,12 @@ export const createSkillTools = ({
         "methodology or resource list.",
       inputSchema: valibotSchema(
         v.strictObject({
-          skillName: v.pipe(v.string(), v.description(allowedSkillDescription)),
+          skillName: v.pipe(
+            v.string(),
+            v.description(
+              "Skill name exactly as listed in the chat skill catalog.",
+            ),
+          ),
         }),
       ),
       execute: async ({ skillName }) => {
@@ -79,7 +83,12 @@ export const createSkillTools = ({
         "matter data.",
       inputSchema: valibotSchema(
         v.strictObject({
-          skillName: v.pipe(v.string(), v.description(allowedSkillDescription)),
+          skillName: v.pipe(
+            v.string(),
+            v.description(
+              "Skill name exactly as listed in the chat skill catalog.",
+            ),
+          ),
           path: v.pipe(
             v.string(),
             v.description(

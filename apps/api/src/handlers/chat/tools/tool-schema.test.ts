@@ -68,6 +68,23 @@ describe("chat tool schemas", () => {
     ).not.toThrow();
   });
 
+  test("keeps installed skill names out of tool schema descriptions", () => {
+    const tools = createSkillTools({
+      organizationId,
+      safeDb: unusedSafeDb,
+      skills: [
+        {
+          description: "Private matter-specific workflow.",
+          name: "acme-closing-strategy",
+          version: "1.0",
+        },
+      ],
+      userId,
+    });
+
+    expect(JSON.stringify(tools)).not.toContain("acme-closing-strategy");
+  });
+
   test("chat tools expose readonly data through the Stella API", () => {
     const tools = getChatTools({
       organizationId,

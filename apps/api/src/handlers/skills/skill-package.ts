@@ -7,7 +7,7 @@ import {
   normalizeResourcePath,
   parseSkillFile,
 } from "@stll/skills";
-import type { SkillResourceKind } from "@stll/skills";
+import type { SkillMetadata, SkillResourceKind } from "@stll/skills";
 
 import { safeMcpFetchBytes } from "@/api/handlers/mcp-connectors/url-safety";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -209,6 +209,7 @@ const parseSkillFiles = (files: readonly SkillFile[]): ParsedSkillPackage => {
         "Skill name must use lowercase letters, digits, and hyphens only",
     });
   }
+  assertFrontmatterLimits(parsed.metadata);
   if (parsed.body.length > LIMITS.agentSkillBodyMaxChars) {
     throw new HandlerError({
       status: 400,
@@ -304,6 +305,76 @@ const collectResources = ({
   }
 
   return resources.toSorted((a, b) => a.path.localeCompare(b.path));
+};
+
+const assertFrontmatterLimits = (metadata: SkillMetadata) => {
+  assertFrontmatterField({
+    field: "description",
+    limit: LIMITS.agentSkillDescriptionMaxChars,
+    value: metadata.description,
+  });
+  assertFrontmatterField({
+    field: "version",
+    limit: LIMITS.agentSkillVersionMaxChars,
+    value: metadata.version,
+  });
+  assertFrontmatterField({
+    field: "license",
+    limit: LIMITS.agentSkillLicenseMaxChars,
+    value: metadata.license,
+  });
+  assertFrontmatterField({
+    field: "compatibility",
+    limit: LIMITS.agentSkillCompatibilityMaxChars,
+    value: metadata.compatibility,
+  });
+  assertFrontmatterMetadata(metadata.metadata);
+};
+
+const assertFrontmatterField = ({
+  field,
+  limit,
+  value,
+}: {
+  field: string;
+  limit: number;
+  value: string | null | undefined;
+}) => {
+  if (!value || value.length <= limit) {
+    return;
+  }
+
+  throw new HandlerError({
+    status: 400,
+    message: `Skill ${field} is too large`,
+  });
+};
+
+const assertFrontmatterMetadata = (
+  metadata: Record<string, string> | undefined,
+) => {
+  const entries = Object.entries(metadata ?? {});
+  if (entries.length > LIMITS.agentSkillMetadataEntriesMax) {
+    throw new HandlerError({
+      status: 400,
+      message: "Skill metadata has too many entries",
+    });
+  }
+
+  for (const [key, value] of entries) {
+    if (key.length > LIMITS.agentSkillMetadataKeyMaxChars) {
+      throw new HandlerError({
+        status: 400,
+        message: "Skill metadata key is too large",
+      });
+    }
+    if (value.length > LIMITS.agentSkillMetadataValueMaxChars) {
+      throw new HandlerError({
+        status: 400,
+        message: "Skill metadata value is too large",
+      });
+    }
+  }
 };
 
 const persistedSkillResourceKind = (

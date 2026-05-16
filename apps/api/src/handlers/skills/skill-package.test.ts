@@ -87,6 +87,46 @@ Instructions.`,
     expect(Result.isError(result)).toBe(true);
   });
 
+  test("rejects oversized frontmatter before chat metadata storage", async () => {
+    const result = await parseUploadedSkillPackage(
+      new File(
+        [
+          `---
+name: oversized-frontmatter
+description: ${"x".repeat(LIMITS.agentSkillDescriptionMaxChars + 1)}
+---
+
+Instructions.`,
+        ],
+        "SKILL.md",
+        { type: "text/markdown" },
+      ),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+  });
+
+  test("rejects oversized custom metadata before storage", async () => {
+    const result = await parseUploadedSkillPackage(
+      new File(
+        [
+          `---
+name: oversized-metadata
+description: Metadata value is too large.
+metadata:
+  oversized: ${"x".repeat(LIMITS.agentSkillMetadataValueMaxChars + 1)}
+---
+
+Instructions.`,
+        ],
+        "SKILL.md",
+        { type: "text/markdown" },
+      ),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+  });
+
   test("rejects zip uploads with too many files", async () => {
     const zip = new JSZip();
     zip.file(
