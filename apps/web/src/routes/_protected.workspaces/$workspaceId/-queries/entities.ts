@@ -111,7 +111,8 @@ export const entitiesOptions = (key: EntitiesOptionsInput) =>
             filters: key.filters,
             sorts: key.sorts,
             page: key.page,
-            ...(key.search !== undefined && { search: key.search }),
+            ...(key.search?.trim() && { search: key.search.trim() }),
+            excludedKinds: key.excludedKinds ?? [],
             fieldMode,
             fieldIds:
               fieldMode === "visible"
@@ -147,7 +148,7 @@ export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
           {
             filters: key.filters,
             sorts: key.sorts,
-            ...(key.search !== undefined && { search: key.search }),
+            ...(key.search?.trim() && { search: key.search.trim() }),
             limit: key.limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
             excludedKinds: key.excludedKinds ?? [],
             fieldMode,

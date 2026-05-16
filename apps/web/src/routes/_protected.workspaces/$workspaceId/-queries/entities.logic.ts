@@ -20,12 +20,12 @@ export type EntitiesPageKey = {
   pageSize?: number;
   fieldMode?: EntitiesFieldMode;
   fieldIds?: string[];
+  excludedKinds?: EntityKind[];
   previewableForAi?: boolean;
 };
 
 export type EntitiesWindowKey = Omit<EntitiesPageKey, "page" | "pageSize"> & {
   limit?: number;
-  excludedKinds?: EntityKind[];
 };
 
 export type KanbanGroupKey = Omit<EntitiesWindowKey, "excludedKinds"> & {
@@ -52,6 +52,7 @@ export const entitiesKeys = {
     pageSize,
     fieldMode,
     fieldIds,
+    excludedKinds,
     previewableForAi,
   }: EntitiesPageKey) => {
     const normalizedFieldMode = fieldMode ?? "full";
@@ -68,6 +69,7 @@ export const entitiesKeys = {
           normalizedFieldMode === "visible"
             ? normalizeVisibleFieldIds(fieldIds)
             : [],
+        excludedKinds: excludedKinds?.toSorted() ?? [],
         previewableForAi: previewableForAi ?? false,
       },
     ];

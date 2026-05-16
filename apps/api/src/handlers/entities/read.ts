@@ -28,6 +28,11 @@ const readEntitiesBodySchema = t.Object({
       maxItems: LIMITS.propertiesCount,
     }),
   ),
+  excludedKinds: t.Optional(
+    t.Array(t.UnionEnum(["document", "folder", "task", "message", "link"]), {
+      maxItems: 5,
+    }),
+  ),
   previewableForAi: t.Optional(t.Boolean()),
 });
 
@@ -65,7 +70,7 @@ export const createReadEntitiesHandler = (
           limit: pageSize,
           fieldMode: body.fieldMode ?? "full",
           fieldIds: body.fieldIds ?? [],
-          excludedKinds: [],
+          excludedKinds: body.excludedKinds ?? [],
           previewableForAi: body.previewableForAi ?? false,
           includeTotalCount: true,
         }),

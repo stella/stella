@@ -127,6 +127,22 @@ describe("entity query field selection", () => {
     });
   });
 
+  test("keeps excluded kinds in the page cache identity", () => {
+    expect(
+      entitiesKeys
+        .page({
+          workspaceId: "workspace-1",
+          filters: [],
+          sorts: [],
+          page: 1,
+          excludedKinds: ["task", "folder"],
+        })
+        .at(-1),
+    ).toMatchObject({
+      excludedKinds: ["folder", "task"],
+    });
+  });
+
   test("keeps extra caller fields out of the page cache identity", () => {
     const cleanKey = entitiesKeys.page({
       workspaceId: "workspace-1",

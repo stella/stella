@@ -375,6 +375,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       page,
       fieldMode: "visible",
       fieldIds,
+      excludedKinds: ["task"],
     }),
   );
   const data = useMemo(

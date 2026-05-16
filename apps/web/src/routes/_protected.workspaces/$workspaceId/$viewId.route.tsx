@@ -189,6 +189,9 @@ export const Route = createFileRoute(
         page: deps.page,
         fieldMode,
         fieldIds,
+        ...(activeView.layout.type === "filesystem" && {
+          excludedKinds: ["task"],
+        }),
       }),
     );
 
@@ -317,6 +320,7 @@ function VisibleFieldEntityViewContent({
     page,
     fieldMode: "visible",
     fieldIds,
+    excludedKinds: ["task"],
   });
 
   const { data } = useSuspenseQuery(
@@ -327,6 +331,7 @@ function VisibleFieldEntityViewContent({
       page,
       fieldMode: "visible",
       fieldIds,
+      excludedKinds: ["task"],
     }),
   );
   const totalPages = Math.ceil(data.totalCount / data.pageSize);
