@@ -80,6 +80,7 @@ import {
 } from "@/components/sidebar";
 import { StellaWordmark } from "@/components/stella-wordmark";
 import { PALETTES, THEMES, useTheme } from "@/components/theme-provider";
+import { useInlineRename } from "@/hooks/use-inline-rename";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useSignOut } from "@/hooks/use-sign-out";
 import {
@@ -266,17 +267,33 @@ const MatterItem = ({
   const t = useTranslations();
   const lang = useI18nStore((s) => s.lang);
   const { state, setOpen, isMobile } = useSidebar();
-  const [isRenaming, setIsRenaming] = useState(false);
-  const [renameValue, setRenameValue] = useState(ws.name);
   const [menuOpen, setMenuOpen] = useState(false);
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [ctxAnchor, setCtxAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
   const updateWorkspace = useUpdateWorkspace();
-  const escapedRef = useRef(false);
   const dropRef = useRef<HTMLLIElement>(null);
   const [isDropTarget, setIsDropTarget] = useState(false);
+  const rename = useInlineRename({
+    initial: ws.name,
+    onCommit: (value) => {
+      if (updateWorkspace.isPending) {
+        return;
+      }
+      updateWorkspace.mutate(
+        { workspaceId: ws.id, name: value },
+        {
+          onError: () => {
+            stellaToast.add({
+              title: t("errors.actionFailed"),
+              type: "error",
+            });
+          },
+        },
+      );
+    },
+  });
 
   const canDrag = isPinned && !!onReorder;
   const isCollapsed = state === "collapsed" && !isMobile;
@@ -316,59 +333,23 @@ const MatterItem = ({
 
   const relTime = formatRelativeTime(ws.lastActivityAt, lang);
 
-  const cancelRename = () => {
-    setIsRenaming(false);
-    setRenameValue(ws.name);
-  };
-
   const startRename = () => {
-    escapedRef.current = false;
     setMenuOpen(false);
     setCtxAnchor(null);
-    setRenameValue(ws.name);
 
     if (isCollapsed) {
       setOpen(true);
-      window.requestAnimationFrame(() => setIsRenaming(true));
+      // The sidebar needs a frame to expand before the input can
+      // mount visibly; deferring `startEditing` keeps the rename
+      // affordance lined up with the now-revealed row.
+      window.requestAnimationFrame(() => rename.startEditing());
       return;
     }
 
-    setIsRenaming(true);
+    rename.startEditing();
   };
 
-  const handleRename = () => {
-    if (escapedRef.current) {
-      escapedRef.current = false;
-      cancelRename();
-      return;
-    }
-
-    if (updateWorkspace.isPending) {
-      return;
-    }
-
-    const trimmed = renameValue.trim();
-    if (trimmed.length === 0 || trimmed === ws.name) {
-      cancelRename();
-      return;
-    }
-
-    updateWorkspace.mutate(
-      { workspaceId: ws.id, name: trimmed },
-      {
-        onSuccess: () => setIsRenaming(false),
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
-          cancelRename();
-        },
-      },
-    );
-  };
-
-  if (isRenaming) {
+  if (rename.state.mode === "edit") {
     return (
       <SidebarMenuItem>
         <div className="flex h-8 w-full items-center gap-2 rounded-md px-2">
@@ -376,18 +357,20 @@ const MatterItem = ({
           <Input
             autoFocus
             className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none outline-none focus-visible:ring-0"
-            onBlur={handleRename}
-            onChange={(e) => setRenameValue(e.currentTarget.value)}
+            onBlur={() => {
+              void rename.commit();
+            }}
+            onChange={(e) => rename.setDraft(e.currentTarget.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.currentTarget.blur();
               }
               if (e.key === "Escape") {
-                escapedRef.current = true;
+                rename.cancel();
                 e.currentTarget.blur();
               }
             }}
-            value={renameValue}
+            value={rename.state.draft}
           />
         </div>
       </SidebarMenuItem>

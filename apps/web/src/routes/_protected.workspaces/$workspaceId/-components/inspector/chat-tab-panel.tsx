@@ -49,6 +49,7 @@ import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
+import { useInlineRename } from "@/hooks/use-inline-rename";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
@@ -244,19 +245,12 @@ export const ChatTabPanel = ({
   };
 
   // Inline rename — same UX as file tabs.
-  const [editingLabel, setEditingLabel] = useState(false);
-  const [labelDraft, setLabelDraft] = useState(tab.label);
-  const startRename = () => {
-    setLabelDraft(tab.label);
-    setEditingLabel(true);
-  };
-  const commitRename = () => {
-    const trimmed = labelDraft.trim();
-    setEditingLabel(false);
-    if (trimmed && trimmed !== tab.label) {
-      updateLabel(tab.id, trimmed);
-    }
-  };
+  const labelRename = useInlineRename({
+    initial: tab.label,
+    onCommit: (value) => {
+      updateLabel(tab.id, value);
+    },
+  });
 
   // The shared tab context menu (right-click on rail icon or
   // ribbon label) dispatches `requestRename(tabId)` to the store.
@@ -264,13 +258,13 @@ export const ChatTabPanel = ({
   // rename state locally so they consume the flag here.
   const pendingRenameTabId = useInspectorStore((s) => s.pendingRenameTabId);
   const clearRenameRequest = useInspectorStore((s) => s.clearRenameRequest);
+  const startRenameFromStore = labelRename.startEditing;
   useEffect(() => {
     if (pendingRenameTabId === tab.id) {
-      setLabelDraft(tab.label);
-      setEditingLabel(true);
+      startRenameFromStore();
       clearRenameRequest();
     }
-  }, [pendingRenameTabId, tab.id, tab.label, clearRenameRequest]);
+  }, [pendingRenameTabId, tab.id, startRenameFromStore, clearRenameRequest]);
 
   return (
     <ChatTabPanelChrome
@@ -290,13 +284,15 @@ export const ChatTabPanel = ({
       }
       onSetAnonymized={setAnonymized}
       onSetContext={(next) => setChatContext(tab.id, next)}
-      onStartRename={startRename}
+      onStartRename={labelRename.startEditing}
       rename={{
-        active: editingLabel,
-        value: labelDraft,
-        onChange: setLabelDraft,
-        onCommit: commitRename,
-        onCancel: () => setEditingLabel(false),
+        active: labelRename.state.mode === "edit",
+        value: labelRename.state.mode === "edit" ? labelRename.state.draft : "",
+        onChange: labelRename.setDraft,
+        onCommit: () => {
+          void labelRename.commit();
+        },
+        onCancel: labelRename.cancel,
       }}
       tab={tab}
     >

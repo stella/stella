@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer";
@@ -13,6 +13,7 @@ import {
 } from "@stll/ui/components/avatar";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useInlineRename } from "@/hooks/use-inline-rename";
 import { isFileDisplayable } from "@/lib/types";
 import type {
   WorkspaceEntity,
@@ -72,15 +73,19 @@ export const KanbanCard = ({
     const tab = s.tabs.find((t) => t.id === s.activeId);
     return tab?.type === "pdf" && tab.entityId === entity.entityId;
   });
-  const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState(name);
-
   // For editing, use the text field value (not the file name)
   const textField = Object.values(entity.fields).find(
     (f) => f.content.type === "text",
   );
   const textName =
     textField?.content.type === "text" ? textField.content.value.trim() : "";
+
+  const rename = useInlineRename({
+    initial: name,
+    onCommit: (value) => {
+      onRename?.(entity.entityId, value);
+    },
+  });
 
   const dragRef = useRef<HTMLDivElement>(null);
 
@@ -131,16 +136,7 @@ export const KanbanCard = ({
   }, [entity.entityId, name, entity.kind, file?.mimeType, entity.parentId]);
 
   const startEditing = () => {
-    setEditValue(textName || name);
-    setIsEditing(true);
-  };
-
-  const commitRename = () => {
-    setIsEditing(false);
-    const trimmed = editValue.trim();
-    if (trimmed && trimmed !== name) {
-      onRename?.(entity.entityId, trimmed);
-    }
+    rename.startEditing(textName || name);
   };
 
   const icon = (
@@ -152,20 +148,20 @@ export const KanbanCard = ({
     />
   );
 
-  const nameElement = isEditing ? (
-    <InlineEdit
-      inputClassName="w-full font-medium"
-      onCancel={() => {
-        setIsEditing(false);
-        setEditValue(name);
-      }}
-      onChange={setEditValue}
-      onCommit={commitRename}
-      value={editValue}
-    />
-  ) : (
-    <span className="truncate">{name}</span>
-  );
+  const nameElement =
+    rename.state.mode === "edit" ? (
+      <InlineEdit
+        inputClassName="w-full font-medium"
+        onCancel={rename.cancel}
+        onChange={rename.setDraft}
+        onCommit={() => {
+          void rename.commit();
+        }}
+        value={rename.state.draft}
+      />
+    ) : (
+      <span className="truncate">{name}</span>
+    );
 
   const isTask = entity.kind === "task";
   const visibleCardFields = cardFields ?? [];
