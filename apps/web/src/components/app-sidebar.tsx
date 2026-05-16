@@ -607,10 +607,6 @@ export function AppSidebar(props: AppSidebarProps) {
   const pinnedIds = usePinnedStore((s) => s.pinnedIds);
   const togglePin = usePinnedStore((s) => s.togglePin);
   const reorderPinned = usePinnedStore((s) => s.reorder);
-  const initPinned = usePinnedStore((s) => s.init);
-  useEffect(() => {
-    initPinned(user.id);
-  }, [initPinned, user.id]);
   const { data: workspacesData } = useQuery(
     workspacesNavigationOptions(user.activeOrganizationId),
   );
