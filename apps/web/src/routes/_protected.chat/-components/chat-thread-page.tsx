@@ -166,12 +166,8 @@ export const ChatThreadPage = ({
   };
 
   const selectPrompt = (prompt: ChatPrompt) => {
-    const editor = controller.editor;
-    if (!editor) {
-      return;
-    }
-    editor.commands.setContent(prompt.body);
-    editor.commands.focus("end");
+    controller.setContent(prompt.body);
+    controller.focus();
   };
   const sendWithoutAnonymization = useEffectEvent(async () => {
     await resendLatestMessage({ sendMode: CHAT_SEND_MODE.rawOverride });

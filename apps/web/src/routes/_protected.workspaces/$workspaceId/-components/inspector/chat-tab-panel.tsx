@@ -230,12 +230,8 @@ export const ChatTabPanel = ({
 
   const savedPrompts = useSavedPrompts();
   const handleSelectPrompt = (prompt: ChatPrompt) => {
-    const editor = editorController.editor;
-    if (!editor) {
-      return;
-    }
-    editor.commands.setContent(prompt.body);
-    editor.commands.focus("end");
+    editorController.setContent(prompt.body);
+    editorController.focus();
   };
 
   // Inline rename — same UX as file tabs.

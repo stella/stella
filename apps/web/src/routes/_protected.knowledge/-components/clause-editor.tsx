@@ -145,6 +145,9 @@ export const ClauseEditor = ({
   const contentKey = content.map((p) => p.text).join("\n");
 
   useEffect(() => {
+    if (editor.isDestroyed) {
+      return;
+    }
     const currentText = editor.getText();
     if (currentText !== contentKey) {
       editor.commands.setContent(clauseBodyToTipTap(content));

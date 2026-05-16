@@ -59,6 +59,7 @@ import {
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message";
+import { useChatComposerWiring } from "@/components/chat-editor-provider";
 import type { ChatEditorController } from "@/components/chat-editor-provider";
 import { PromptEditorContent } from "@/components/prompt-editor";
 
@@ -1153,8 +1154,7 @@ export function PromptBar(props: PromptBarProps) {
   } = props;
 
   const t = useTranslations();
-  const { editor, canSubmit, isEmpty, submit, setSubmitHandler } =
-    editorController;
+  const { canSubmit, editor, isEmpty } = editorController;
 
   const isGenerating = status === "generating";
   const busy = isGenerating || status === "applying";
@@ -1189,36 +1189,23 @@ export function PromptBar(props: PromptBarProps) {
     };
   }, [attentionPulseSeq]);
 
-  // Wrap controller.submit so the host's `onSubmit` is the only
-  // outbound channel; the editor's draft (HTML) becomes the prompt.
-  const submitDraft = useCallback(async () => {
-    if (submitDisabled) {
-      return;
-    }
-    if (canSubmitNow && !canSubmitNow()) {
-      return;
-    }
-    await submit((draft) => {
+  // The bar emits `{ prompt }`; the underlying composer emits the
+  // raw editor draft. Adapting here lets the rest of the wiring
+  // (Enter handler, blur/setEditable, submit gating) stay shared.
+  const handleComposerSubmit = useCallback(
+    (draft: { html: string }) => {
       onSubmit({ prompt: draft.html });
-    });
-  }, [canSubmitNow, onSubmit, submit, submitDisabled]);
+    },
+    [onSubmit],
+  );
 
-  // Register Enter handler — TipTap's keymap delegates Enter to
-  // the `setSubmitHandler` registered here. Without this, Enter
-  // inserts a newline.
-  useEffect(() => {
-    setSubmitHandler(submitDraft);
-    return () => {
-      setSubmitHandler(null);
-    };
-  }, [setSubmitHandler, submitDraft]);
-
-  useEffect(() => {
-    editor?.setEditable(!inputDisabled);
-    if (inputDisabled) {
-      editor?.commands.blur();
-    }
-  }, [editor, inputDisabled]);
+  const { submitDraft } = useChatComposerWiring({
+    controller: editorController,
+    inputDisabled,
+    onSubmit: handleComposerSubmit,
+    onSubmitGuard: canSubmitNow,
+    submitDisabled,
+  });
 
   return (
     <PromptBarShell
