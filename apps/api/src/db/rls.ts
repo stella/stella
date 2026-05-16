@@ -210,6 +210,12 @@ export const globalCaseLawPolicies = () => [
     to: stella,
     using: allowAllRows,
   }),
+  p.pgPolicy("case_law_ingestion_access", {
+    for: "all",
+    to: stellaIngestion,
+    using: allowAllRows,
+    withCheck: allowAllRows,
+  }),
 ];
 
 const mcpConnectorVisibleCheck = sql`(
