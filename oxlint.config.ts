@@ -250,7 +250,10 @@ export default defineConfig({
     {
       // Astro's content config wires virtual loader/schema helpers that
       // oxlint's type-aware pass sees as error-typed outside Astro's checker.
-      files: ["apps/docs/src/content.config.ts"],
+      files: [
+        "apps/docs/src/content.config.ts",
+        "apps/landing/src/content.config.ts",
+      ],
       rules: {
         "typescript/no-unsafe-assignment": "off",
         "typescript/no-unsafe-call": "off",
