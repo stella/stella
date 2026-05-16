@@ -17,17 +17,24 @@
  * With an adapter key, runs only that source once and exits.
  */
 
-import { createScopedDb } from "@/api/db";
+import { createIngestionDb } from "@/api/db";
 import { db } from "@/api/db/root";
 import { caseLawIngestionEvents, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS, MAX_CYCLE_MS } from "@/api/handlers/case-law/consts";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { backfillSearchIndex } from "@/api/handlers/case-law/search-index";
-import { toSafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { isS3Stale, refreshS3 } from "@/api/lib/s3";
+
+// Case-law ingestion writes the global corpus. The customer-scoped
+// `stella` role is read-only on case_law_* (see migration
+// 20260510140000); the daemon switches to `stella_ingestion`, which
+// has narrow writes on the corpus and nothing else. Any future code
+// path that strays outside case_law_* will hit a loud
+// `permission denied`.
+const ingestionDb = createIngestionDb(db);
 
 /**
  * Bun's native Postgres pool emits unhandled errors when the
@@ -228,8 +235,6 @@ const daysAgoCursor = (n: number): string => {
   return date;
 };
 
-const scriptUserId = toSafeId<"user">("script_case_law");
-
 type CycleOutcome = "completed" | "failed" | "timeout";
 
 type CycleResult = {
@@ -257,13 +262,6 @@ const runOneCycle = async (
   const startedAt = new Date();
   const t0 = performance.now();
 
-  const scopedDb = createScopedDb(
-    db,
-    [],
-    toSafeId<"organization">(""),
-    scriptUserId,
-  );
-
   let outcome: CycleOutcome = "completed";
   let errorMessage: string | null = null;
   let result: Awaited<ReturnType<typeof runIngestionPipeline>> | null = null;
@@ -274,7 +272,7 @@ const runOneCycle = async (
 
     result = await runIngestionPipeline({
       source,
-      scopedDb,
+      scopedDb: ingestionDb,
       dbSlot: { acquire: acquireDbSlot, release: releaseDbSlot },
       signal: AbortSignal.timeout(cycleMs),
     });
@@ -299,18 +297,20 @@ const runOneCycle = async (
   const dbStatus = outcome === "failed" ? "failed" : "completed";
 
   try {
-    await db.insert(caseLawIngestionEvents).values({
-      sourceId: source.id,
-      status: dbStatus,
-      inserted: result?.inserted ?? 0,
-      skipped: result?.skipped ?? 0,
-      searchVectorFailures: result?.searchVectorFailures ?? 0,
-      pagesProcessed: result?.pagesProcessed ?? 0,
-      cursorBefore,
-      cursorAfter: result !== null ? result.nextCursor : cursorBefore,
-      durationMs,
-      errorMessage,
-      startedAt,
+    await ingestionDb(async (tx) => {
+      await tx.insert(caseLawIngestionEvents).values({
+        sourceId: source.id,
+        status: dbStatus,
+        inserted: result?.inserted ?? 0,
+        skipped: result?.skipped ?? 0,
+        searchVectorFailures: result?.searchVectorFailures ?? 0,
+        pagesProcessed: result?.pagesProcessed ?? 0,
+        cursorBefore,
+        cursorAfter: result !== null ? result.nextCursor : cursorBefore,
+        durationMs,
+        errorMessage,
+        startedAt,
+      });
     });
   } catch (eventError) {
     console.error(
@@ -474,18 +474,11 @@ const healthLoop = (async () => {
 // semaphore with bounded concurrency and a generous statement
 // timeout so long texts don't block other work.
 const searchIndexLoop = (async () => {
-  const scopedDb = createScopedDb(
-    db,
-    [],
-    toSafeId<"organization">(""),
-    scriptUserId,
-  );
-
   while (true) {
     await Bun.sleep(SEARCH_INDEX_INTERVAL_MS);
     try {
       const indexed = await backfillSearchIndex(
-        scopedDb,
+        ingestionDb,
         SEARCH_INDEX_BATCH_SIZE,
       );
       if (indexed > 0) {

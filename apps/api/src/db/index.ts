@@ -9,7 +9,11 @@ import { PG_ERROR } from "@/api/lib/pg-error";
 // Re-export scoped utilities without pulling in the owner-level
 // db initialization. Runtime imports from `@/api/db` stay safe for
 // handlers and tests; `db` now lives in `@/api/db/root`.
-export { createSafeDb, createScopedDb } from "@/api/db/scoped";
+export {
+  createIngestionDb,
+  createSafeDb,
+  createScopedDb,
+} from "@/api/db/scoped";
 export type { Transaction } from "@/api/db/root";
 
 /**

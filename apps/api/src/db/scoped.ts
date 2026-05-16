@@ -13,6 +13,7 @@ import {
   SETTING_USER_ID,
   SETTING_WORKSPACE_IDS,
   stella,
+  stellaIngestion,
 } from "@/api/db/rls";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -89,6 +90,22 @@ export const createScopedDb =
       userId,
       fn,
     );
+
+// SET LOCAL ROLE stella_ingestion per transaction. Used by the
+// case-law ingestion daemon — narrowed to writes on case_law_*
+// (see 20260516000000_case_law_ingestion_role). No app.* settings
+// because the corpus is global; there is no tenant to scope.
+export const createIngestionDb =
+  <TTransaction extends ScopedTransactionBase>(
+    database: AnyDrizzle<TTransaction>,
+  ) =>
+  async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
+    await database.transaction(async (tx: TTransaction) => {
+      await tx.execute(
+        sql`SELECT set_config('role', '${sql.raw(stellaIngestion.name)}', true)`,
+      );
+      return await fn(tx);
+    });
 
 export const createSafeDb =
   <TTransaction extends ScopedTransactionBase>(
