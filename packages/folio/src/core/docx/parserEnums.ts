@@ -31,6 +31,11 @@ import type {
   ParagraphFormatting,
   SdtProperties,
   ShadingProperties,
+  Style,
+  StyleType,
+  TableCellFormatting,
+  TableRowFormatting,
+  TableWidthType,
   TabLeader,
   TabStopAlignment,
   TextEffect,
@@ -318,6 +323,66 @@ export const FieldTypeSchema = v.picklist([
   "USERINITIALS",
   "UNKNOWN",
 ] as const satisfies readonly FieldType[]);
+
+// ---------------------------------------------------------------------------
+// Style enums
+// ---------------------------------------------------------------------------
+
+export const StyleTypeSchema = v.picklist([
+  "paragraph",
+  "character",
+  "numbering",
+  "table",
+] as const satisfies readonly StyleType[]);
+
+type ConditionalStyleType = NonNullable<Style["tblStylePr"]>[number]["type"];
+
+export const ConditionalStyleTypeSchema = v.picklist([
+  "band1Horz",
+  "band1Vert",
+  "band2Horz",
+  "band2Vert",
+  "firstCol",
+  "firstRow",
+  "lastCol",
+  "lastRow",
+  "neCell",
+  "nwCell",
+  "seCell",
+  "swCell",
+  "wholeTable",
+] as const satisfies readonly ConditionalStyleType[]);
+
+// ---------------------------------------------------------------------------
+// Table enums
+// ---------------------------------------------------------------------------
+
+export const TableWidthTypeSchema = v.picklist([
+  "auto",
+  "dxa",
+  "nil",
+  "pct",
+] as const satisfies readonly TableWidthType[]);
+
+export const TableRowHeightRuleSchema = v.picklist([
+  "auto",
+  "atLeast",
+  "exact",
+] as const satisfies readonly NonNullable<TableRowFormatting["heightRule"]>[]);
+
+export const TableCellTextDirectionSchema = v.picklist([
+  "lr",
+  "lrV",
+  "rl",
+  "rlV",
+  "tb",
+  "tbV",
+  "tbRl",
+  "tbRlV",
+  "btLr",
+] as const satisfies readonly NonNullable<
+  TableCellFormatting["textDirection"]
+>[]);
 
 // ---------------------------------------------------------------------------
 // Shading enums
