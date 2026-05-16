@@ -682,16 +682,17 @@ export default defineConfig({
       },
     },
     {
-      // OOXML/slimdom parsers cast XML node values to typed shapes.
-      // slimdom's DOM APIs (getAttribute, childNodes, etc.) return `any`;
-      // the parser functions narrow these to the correct OOXML types via assertion.
-      // Serializer files write back to slimdom nodes with the same any-typed API.
+      // OOXML parsers and serializers operate on fast-xml-parser node trees,
+      // slimdom nodes, and JSZip entries — all FFI boundaries that surface as
+      // any/Record<string, unknown>. OOXML attribute-string narrowing is now
+      // handled by Valibot picklists in parserEnums.ts (see narrowEnum), so
+      // typescript/no-unsafe-type-assertion is enforced here; only true FFI
+      // boundary files keep the rule off via the override below.
       files: [
         "packages/folio/src/core/docx/**/*.ts",
         "packages/folio/src/core/docx/**/*.tsx",
       ],
       rules: {
-        "typescript/no-unsafe-type-assertion": "off",
         "typescript/no-unsafe-assignment": "off",
         "typescript/no-unsafe-member-access": "off",
         "typescript/strict-boolean-expressions": "off",
@@ -716,6 +717,20 @@ export default defineConfig({
 
         "unicorn/prefer-string-starts-ends-with": "off",
         "typescript/prefer-string-starts-ends-with": "off",
+      },
+    },
+    {
+      // FFI-boundary files: fast-xml-parser returns Record<string, unknown>
+      // node trees and JSZip exposes _data via an undocumented internal
+      // property. The casts at this boundary widen library output back to the
+      // shape we know the library produces and cannot be replaced with
+      // structural narrowing without giving up the FFI entirely.
+      files: [
+        "packages/folio/src/core/docx/xmlParser.ts",
+        "packages/folio/src/core/docx/unzip.ts",
+      ],
+      rules: {
+        "typescript/no-unsafe-type-assertion": "off",
       },
     },
     {
@@ -929,6 +944,16 @@ export default defineConfig({
         "typescript/no-unsafe-argument": "off",
         "typescript/no-unsafe-return": "off",
         "typescript/strict-boolean-expressions": "off",
+      },
+    },
+    {
+      // Folio docx test fixtures cast XmlElement subtrees and ProseMirror
+      // mark.attrs values (typed as `any` at the library boundary) into the
+      // shapes the helpers need. Keep no-unsafe-type-assertion off only here
+      // so the rule stays live for product code in packages/folio/src/core/docx.
+      files: ["packages/folio/src/core/docx/__tests__/**/*.{ts,tsx}"],
+      rules: {
+        "typescript/no-unsafe-type-assertion": "off",
       },
     },
   ],

@@ -763,15 +763,17 @@ function parseRunContents(
         contents.push(parseInstrText(child));
         break;
 
-      case "softHyphen":
-        // Soft hyphen
-        contents.push({ type: "softHyphen" } as SoftHyphenContent);
+      case "softHyphen": {
+        const softHyphen: SoftHyphenContent = { type: "softHyphen" };
+        contents.push(softHyphen);
         break;
+      }
 
-      case "noBreakHyphen":
-        // Non-breaking hyphen
-        contents.push({ type: "noBreakHyphen" } as NoBreakHyphenContent);
+      case "noBreakHyphen": {
+        const noBreakHyphen: NoBreakHyphenContent = { type: "noBreakHyphen" };
+        contents.push(noBreakHyphen);
         break;
+      }
 
       case "drawing": {
         // Drawing/image
@@ -795,13 +797,12 @@ function parseRunContents(
         // Marker for last rendered page break - informational only
         break;
 
-      case "cr":
+      case "cr": {
         // Carriage return - treat as line break
-        contents.push({
-          type: "break",
-          breakType: "textWrapping",
-        } as BreakContent);
+        const cr: BreakContent = { type: "break", breakType: "textWrapping" };
+        contents.push(cr);
         break;
+      }
 
       case "AlternateContent": {
         // mc:AlternateContent — prefer mc:Choice over mc:Fallback

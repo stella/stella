@@ -29,6 +29,7 @@ import type {
   ComplexField,
   Field,
   Run,
+  TextContent,
   Theme,
 } from "../types/document";
 import { FieldTypeSchema, narrowEnum } from "./parserEnums";
@@ -425,8 +426,8 @@ export function getFieldDisplayValue(field: Field): string {
  */
 function getRunText(run: Run): string {
   return run.content
-    .filter((c) => c.type === "text")
-    .map((c) => (c as { type: "text"; text: string }).text)
+    .filter((c): c is TextContent => c.type === "text")
+    .map((c) => c.text)
     .join("");
 }
 
@@ -751,19 +752,17 @@ export function formatDate(date: Date, format: string): string {
  * @param content - Array of paragraph content items
  * @returns Array of all fields found
  */
+function isField(item: unknown): item is Field {
+  return (
+    item !== null &&
+    typeof item === "object" &&
+    "type" in item &&
+    (item.type === "simpleField" || item.type === "complexField")
+  );
+}
+
 export function collectFields(content: unknown[]): Field[] {
-  const fields: Field[] = [];
-
-  for (const item of content) {
-    if (item && typeof item === "object" && "type" in item) {
-      const typed = item as { type: string };
-      if (typed.type === "simpleField" || typed.type === "complexField") {
-        fields.push(item as Field);
-      }
-    }
-  }
-
-  return fields;
+  return content.filter(isField);
 }
 
 /**

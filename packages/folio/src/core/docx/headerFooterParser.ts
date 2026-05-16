@@ -201,7 +201,7 @@ export function parseHeader(
     (el: XmlElement) =>
       el.type === "element" &&
       (el.name === "w:hdr" || el.name?.endsWith(":hdr")),
-  ) as XmlElement | undefined;
+  );
 
   if (!rootElement) {
     return result;
@@ -258,7 +258,7 @@ export function parseFooter(
     (el: XmlElement) =>
       el.type === "element" &&
       (el.name === "w:ftr" || el.name?.endsWith(":ftr")),
-  ) as XmlElement | undefined;
+  );
 
   if (!rootElement) {
     return result;

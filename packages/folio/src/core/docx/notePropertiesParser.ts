@@ -24,28 +24,24 @@ import type { XmlElement } from "./xmlParser";
 /**
  * Parse number format from w:numFmt element
  */
+const SUPPORTED_NUMBER_FORMATS = new Map<string, NumberFormat>([
+  ["decimal", "decimal"],
+  ["upperRoman", "upperRoman"],
+  ["lowerRoman", "lowerRoman"],
+  ["upperLetter", "upperLetter"],
+  ["lowerLetter", "lowerLetter"],
+  ["ordinal", "ordinal"],
+  ["cardinalText", "cardinalText"],
+  ["ordinalText", "ordinalText"],
+  ["bullet", "bullet"],
+  ["chicago", "chicago"],
+  ["none", "none"],
+]);
+
 function parseNumberFormat(
   numFmtAttr: string | null,
 ): NumberFormat | undefined {
-  if (!numFmtAttr) {
-    return undefined;
-  }
-
-  const formatMap: Record<string, NumberFormat> = {
-    decimal: "decimal",
-    upperRoman: "upperRoman",
-    lowerRoman: "lowerRoman",
-    upperLetter: "upperLetter",
-    lowerLetter: "lowerLetter",
-    ordinal: "ordinal",
-    cardinalText: "cardinalText",
-    ordinalText: "ordinalText",
-    bullet: "bullet",
-    chicago: "chicago",
-    none: "none",
-  };
-
-  return formatMap[numFmtAttr] as NumberFormat | undefined;
+  return numFmtAttr ? SUPPORTED_NUMBER_FORMATS.get(numFmtAttr) : undefined;
 }
 
 /**

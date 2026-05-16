@@ -920,8 +920,7 @@ function normalizeDeletionContentElement(node: XmlElement): XmlElement {
     mappedName = replaceLocalName(node.name, "instrText");
   }
 
-  // SAFETY: shallow copy of an XmlElement with only name/elements overridden
-  const result = { ...node } as XmlElement;
+  const result: XmlElement = { ...node };
   if (mappedName !== undefined) {
     result.name = mappedName;
   }

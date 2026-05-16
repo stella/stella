@@ -15,7 +15,6 @@
 import type {
   Run,
   RunContent,
-  TextContent,
   TextFormatting,
   ParagraphContent,
   Paragraph,
@@ -299,17 +298,11 @@ function mergeRunContent(
   }
 
   // Merge text at boundary if possible
-  if (
-    result.length > 0 &&
-    content2.length > 0 &&
-    result.at(-1)?.type === "text" &&
-    content2[0]?.type === "text"
-  ) {
-    // Merge the two text nodes
-    const lastText = result.at(-1) as TextContent;
-    const firstText = content2[0] as TextContent;
-
-    // SAFETY: result.length > 0 guaranteed by condition above
+  const lastText = result.at(-1);
+  const firstText = content2[0];
+  if (lastText?.type === "text" && firstText?.type === "text") {
+    // SAFETY: lastText is the same reference as result.at(-1), which
+    // returned a value, so result is non-empty and length - 1 is a valid index.
     result[result.length - 1] = {
       type: "text",
       text: lastText.text + firstText.text,
@@ -401,6 +394,12 @@ export function consolidateRuns(runs: Run[]): Run[] {
  * preserving hyperlinks, bookmarks, and fields as merge boundaries.
  */
 export function consolidateParagraphContent(
+  content: Hyperlink["children"],
+): Hyperlink["children"];
+export function consolidateParagraphContent(
+  content: ParagraphContent[],
+): ParagraphContent[];
+export function consolidateParagraphContent(
   content: ParagraphContent[],
 ): ParagraphContent[] {
   if (content.length <= 1) {
@@ -429,9 +428,7 @@ export function consolidateParagraphContent(
       if (item.type === "hyperlink") {
         const hyperlink: Hyperlink = {
           ...item,
-          children: consolidateParagraphContent(
-            item.children,
-          ) as Hyperlink["children"],
+          children: consolidateParagraphContent(item.children),
         };
         result.push(hyperlink);
       } else {
