@@ -82,15 +82,21 @@ export const useDecisionAnalysis = (
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const queryClient = useQueryClient();
 
+  const stopPolling = useCallback(() => {
+    if (!pollRef.current) {
+      return;
+    }
+    clearInterval(pollRef.current);
+    pollRef.current = null;
+  }, []);
+
   // Reset to idle when decisionId changes (route navigation)
   const prevDecisionId = useRef(decisionId);
   useEffect(() => {
     if (prevDecisionId.current !== decisionId) {
       prevDecisionId.current = decisionId;
       abortRef.current?.abort();
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-      }
+      stopPolling();
 
       if (
         isDecisionAnalysis(existingAnalysis) &&
@@ -110,17 +116,15 @@ export const useDecisionAnalysis = (
     ) {
       setState({ status: "done", analysis: existingAnalysis });
     }
-  }, [existingAnalysis, state.status, decisionId]);
+  }, [existingAnalysis, state.status, decisionId, stopPolling]);
 
   // Cleanup on unmount
   useEffect(
     () => () => {
       abortRef.current?.abort();
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-      }
+      stopPolling();
     },
-    [],
+    [stopPolling],
   );
 
   /** Returns true if analysis resolved (done or error), false if still generating. */
@@ -140,45 +144,40 @@ export const useDecisionAnalysis = (
 
     const analysisResponse = parseAnalysisResponse(data);
     if (analysisResponse) {
-      if (analysisResponse.status === "done") {
-        if (pollRef.current) {
-          clearInterval(pollRef.current);
-          pollRef.current = null;
-        }
-        setState({ status: "done", analysis: analysisResponse.analysis });
-        queryClient.setQueryData(
-          ["case-law-decisions", decisionId],
-          (old: Record<string, unknown> | undefined) =>
-            old ? { ...old, analysis: analysisResponse.analysis } : old,
-        );
-        return true;
+      switch (analysisResponse.status) {
+        case "done":
+          stopPolling();
+          setState({ status: "done", analysis: analysisResponse.analysis });
+          queryClient.setQueryData(
+            ["case-law-decisions", decisionId],
+            (old: Record<string, unknown> | undefined) =>
+              old ? { ...old, analysis: analysisResponse.analysis } : old,
+          );
+          return true;
+
+        case "generating":
+          setState({ status: "generating", tree: analysisResponse.tree });
+          return false;
+
+        case "error":
+          stopPolling();
+          setState({ status: "error", message: analysisResponse.error });
+          return true;
       }
 
-      if (analysisResponse.status === "generating") {
-        setState({ status: "generating", tree: analysisResponse.tree });
-        return false;
-      }
-
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-      setState({ status: "error", message: analysisResponse.error });
-      return true;
+      const unhandledResponse: never = analysisResponse;
+      return unhandledResponse;
     }
 
     // Unexpected response shape (auth failure, server error, etc.)
     // Treat as error to stop polling
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
+    stopPolling();
     setState({
       status: "error",
       message: response.ok ? "Unexpected response" : `HTTP ${response.status}`,
     });
     return true;
-  }, [decisionId, queryClient]);
+  }, [decisionId, queryClient, stopPolling]);
 
   const generate = useCallback(async () => {
     if (state.status === "generating") {
@@ -192,9 +191,7 @@ export const useDecisionAnalysis = (
 
       // Only poll if the first fetch didn't already resolve
       if (!resolved) {
-        if (pollRef.current) {
-          clearInterval(pollRef.current);
-        }
+        stopPolling();
         pollRef.current = setInterval(() => {
           void fetchAnalysis().catch(() => {
             // Ignore poll errors; will retry on next interval
@@ -210,7 +207,7 @@ export const useDecisionAnalysis = (
         message: error instanceof Error ? error.message : "Unknown error",
       });
     }
-  }, [state.status, fetchAnalysis]);
+  }, [state.status, fetchAnalysis, stopPolling]);
 
   return { state, generate };
 };
