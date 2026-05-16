@@ -5,12 +5,10 @@ node_modules
 .pnp
 .pnp.js
 
-# Local env files
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+# Local env files — block all .env* by default, allow only .example
+.env*
+!.env.example
+!.env*.example
 
 # Testing
 coverage
