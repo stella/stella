@@ -2,21 +2,23 @@ import { describe, expect, test } from "bun:test";
 
 import { auditLogs, workspaceMembers } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import addWorkspaceMember from "./workspace-members-add";
+
+type AddMemberCtx = Parameters<typeof addWorkspaceMember.handler>[0];
 
 const createContext = ({
   body,
   safeDb,
   scopedDb,
 }: {
-  body: Parameters<typeof addWorkspaceMember.handler>[0]["body"];
-  safeDb: Parameters<typeof addWorkspaceMember.handler>[0]["safeDb"];
-  scopedDb: Parameters<typeof addWorkspaceMember.handler>[0]["scopedDb"];
-}): Parameters<typeof addWorkspaceMember.handler>[0] =>
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test fixture only provides the fields used by the handler
-  ({
+  body: AddMemberCtx["body"];
+  safeDb: AddMemberCtx["safeDb"];
+  scopedDb: AddMemberCtx["scopedDb"];
+}): AddMemberCtx =>
+  asTestRaw<AddMemberCtx>({
     body,
     safeDb,
     scopedDb,
@@ -28,7 +30,7 @@ const createContext = ({
     },
     user: { id: toSafeId<"user">("user_test123") },
     workspaceId: toSafeId<"workspace">("ws_test123"),
-  }) as Parameters<typeof addWorkspaceMember.handler>[0];
+  });
 
 const selectRowsInOrder = (rowsByCall: unknown[][]) => {
   let callIndex = 0;

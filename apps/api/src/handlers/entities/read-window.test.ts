@@ -56,18 +56,19 @@ const fileFields = [
   },
 ];
 
+type ReadWindowCtx = Parameters<typeof readEntitiesWindow.handler>[0];
+
 const createContext = ({
   body,
   safeDb,
 }: {
   body:
-    | Parameters<typeof readEntitiesWindow.handler>[0]["body"]
+    | ReadWindowCtx["body"]
     | Parameters<typeof readKanbanGroup.handler>[0]["body"]
     | Parameters<typeof readEntities.handler>[0]["body"];
-  safeDb: Parameters<typeof readEntitiesWindow.handler>[0]["safeDb"];
-}): Parameters<typeof readEntitiesWindow.handler>[0] =>
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields used by the safe handler and entity read handlers
-  ({
+  safeDb: ReadWindowCtx["safeDb"];
+}): ReadWindowCtx =>
+  asTestRaw<ReadWindowCtx>({
     workspaceId,
     user: { id: userId },
     session: { activeOrganizationId: organizationId },
@@ -76,7 +77,7 @@ const createContext = ({
     safeDb,
     request: new Request("https://example.test/v1/entities/query-window"),
     route: "/v1/entities/:workspaceId/query-window",
-  }) as Parameters<typeof readEntitiesWindow.handler>[0];
+  });
 
 const createSafeDb = ({
   includeCount,
@@ -138,17 +139,19 @@ describe("entity read handlers", () => {
 
   test("page query unwraps the shared entity query result before building pagination", async () => {
     const result = await readEntities.handler(
-      createContext({
-        body: {
-          page: 1,
-          pageSize: 2,
-          filters: [],
-          sorts: [],
-          fieldMode: "visible",
-          fieldIds: [],
-        },
-        safeDb: createSafeDb({ includeCount: true }),
-      }) as Parameters<typeof readEntities.handler>[0],
+      asTestRaw<Parameters<typeof readEntities.handler>[0]>(
+        createContext({
+          body: {
+            page: 1,
+            pageSize: 2,
+            filters: [],
+            sorts: [],
+            fieldMode: "visible",
+            fieldIds: [],
+          },
+          safeDb: createSafeDb({ includeCount: true }),
+        }),
+      ),
     );
 
     expect("entities" in result).toBe(true);
@@ -162,19 +165,20 @@ describe("entity read handlers", () => {
 
   test("kanban group query paginates one group window", async () => {
     const result = await readKanbanGroup.handler(
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- read and kanban handlers use the same safe handler context shape for this handler-level test
-      createContext({
-        body: {
-          limit: 2,
-          filters: [],
-          sorts: [],
-          fieldMode: "visible",
-          fieldIds: [],
-          groupByPropertyId: "_status",
-          groupValue: "open",
-        },
-        safeDb: createSafeDb({ includeCount: false }),
-      }) as Parameters<typeof readKanbanGroup.handler>[0],
+      asTestRaw<Parameters<typeof readKanbanGroup.handler>[0]>(
+        createContext({
+          body: {
+            limit: 2,
+            filters: [],
+            sorts: [],
+            fieldMode: "visible",
+            fieldIds: [],
+            groupByPropertyId: "_status",
+            groupValue: "open",
+          },
+          safeDb: createSafeDb({ includeCount: false }),
+        }),
+      ),
     );
 
     expect("items" in result).toBe(true);

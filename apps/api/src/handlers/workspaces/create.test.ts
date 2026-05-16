@@ -1,21 +1,23 @@
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import createWorkspaces from "./create";
+
+type CreateWorkspacesCtx = Parameters<typeof createWorkspaces.handler>[0];
 
 const createContext = ({
   body,
   safeDb,
   scopedDb,
 }: {
-  body: Parameters<typeof createWorkspaces.handler>[0]["body"];
-  safeDb: Parameters<typeof createWorkspaces.handler>[0]["safeDb"];
-  scopedDb: Parameters<typeof createWorkspaces.handler>[0]["scopedDb"];
-}): Parameters<typeof createWorkspaces.handler>[0] =>
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test fixture only provides fields touched by the handler
-  ({
+  body: CreateWorkspacesCtx["body"];
+  safeDb: CreateWorkspacesCtx["safeDb"];
+  scopedDb: CreateWorkspacesCtx["scopedDb"];
+}): CreateWorkspacesCtx =>
+  asTestRaw<CreateWorkspacesCtx>({
     body,
     safeDb,
     scopedDb,
@@ -25,7 +27,7 @@ const createContext = ({
       activeOrganizationId: toSafeId<"organization">("org_test123"),
     },
     user: { id: toSafeId<"user">("user_test123") },
-  }) as Parameters<typeof createWorkspaces.handler>[0];
+  });
 
 describe("createWorkspaces", () => {
   test("rejects teammate user IDs outside the active organization", async () => {
