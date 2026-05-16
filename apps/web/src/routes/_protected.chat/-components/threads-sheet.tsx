@@ -1,7 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { Link, useMatch, useNavigate } from "@tanstack/react-router";
 import { MessageSquareIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -24,7 +28,10 @@ import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { toAPIError } from "@/lib/errors";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
-import { groupedChatThreadsOptions } from "@/routes/_protected.chat/-queries";
+import {
+  groupedChatThreadsOptions,
+  mergeGroupedChatThreadPages,
+} from "@/routes/_protected.chat/-queries";
 
 type ThreadsSheetProps = {
   icon?: ReactNode;
@@ -68,7 +75,12 @@ export const ThreadsSheet = ({
     return null;
   })();
 
-  const { data } = useQuery(groupedChatThreadsOptions());
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
+    useInfiniteQuery(groupedChatThreadsOptions());
+  const groupedThreads = useMemo(
+    () => mergeGroupedChatThreadPages(data?.pages),
+    [data?.pages],
+  );
 
   return (
     <Sheet onOpenChange={setIsOpen} open={isOpen}>
@@ -102,17 +114,17 @@ export const ThreadsSheet = ({
           <div className="flex flex-col gap-4">
             <ThreadGroup
               activeThreadRef={activeThreadRef}
-              emptyLabel={t("chat.noThreads")}
+              emptyLabel={hasNextPage ? undefined : t("chat.noThreads")}
               heading={t("navigation.chat")}
               onOpenChange={setIsOpen}
               scope="global"
-              threads={(data?.global ?? []).map((thread) => ({
+              threads={groupedThreads.global.map((thread) => ({
                 createdAt: thread.createdAt,
                 id: thread.id,
                 title: thread.title,
               }))}
             />
-            {(data?.workspaces ?? []).map((workspace) => (
+            {groupedThreads.workspaces.map((workspace) => (
               <ThreadGroup
                 activeThreadRef={activeThreadRef}
                 heading={workspace.workspaceName}
@@ -127,6 +139,19 @@ export const ThreadsSheet = ({
                 workspaceId={workspace.workspaceId}
               />
             ))}
+            {hasNextPage ? (
+              <Button
+                className="self-center"
+                disabled={isFetchingNextPage}
+                onClick={() => {
+                  void fetchNextPage();
+                }}
+                size="sm"
+                variant="ghost"
+              >
+                {isFetchingNextPage ? commonT("loading") : commonT("loadMore")}
+              </Button>
+            ) : null}
           </div>
         </SheetPanel>
       </SheetPopup>

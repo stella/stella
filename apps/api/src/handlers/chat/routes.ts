@@ -13,7 +13,9 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
   .post("/", sendMessage.handler, {
     body: sendMessage.config.body,
   })
-  .get("/threads", getThreads.handler)
+  .get("/threads", getThreads.handler, {
+    query: getThreads.config.query,
+  })
   .delete("/threads/:threadId", deleteThread.handler, {
     query: deleteThread.config.query,
     params: deleteThread.config.params,
