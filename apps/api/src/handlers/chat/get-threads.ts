@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
-import { and, desc, eq, inArray, isNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { chatThreads, workspaces as workspacesTable } from "@/api/db/schema";
@@ -57,16 +57,9 @@ const getThreads = createSafeRootHandler(
       conditions.push(visibleWorkspaceCondition);
     }
     if (cursor) {
-      const cursorCondition = or(
-        lt(chatThreads.updatedAt, cursor.updatedAt),
-        and(
-          eq(chatThreads.updatedAt, cursor.updatedAt),
-          lt(chatThreads.id, cursor.id),
-        ),
+      conditions.push(
+        sql`(${chatThreads.updatedAt}, ${chatThreads.id}) < (${cursor.updatedAt}::timestamp, ${cursor.id}::uuid)`,
       );
-      if (cursorCondition) {
-        conditions.push(cursorCondition);
-      }
     }
 
     const rows = yield* Result.await(
@@ -77,6 +70,10 @@ const getThreads = createSafeRootHandler(
             id: chatThreads.id,
             title: chatThreads.title,
             updatedAt: chatThreads.updatedAt,
+            updatedAtCursor: sql<string>`to_char(
+              ${chatThreads.updatedAt},
+              'YYYY-MM-DD"T"HH24:MI:SS.US'
+            )`,
             workspaceId: chatThreads.workspaceId,
             workspaceName: workspacesTable.name,
           })
@@ -98,7 +95,7 @@ const getThreads = createSafeRootHandler(
       hasMore && lastItem
         ? encodeChatThreadListCursor({
             id: lastItem.id,
-            updatedAt: lastItem.updatedAt,
+            updatedAt: lastItem.updatedAtCursor,
           })
         : null;
 
