@@ -248,6 +248,15 @@ export default defineConfig({
       },
     },
     {
+      // Astro's content config wires virtual loader/schema helpers that
+      // oxlint's type-aware pass sees as error-typed outside Astro's checker.
+      files: ["apps/docs/src/content.config.ts"],
+      rules: {
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-call": "off",
+      },
+    },
+    {
       // One-off DOCX fixture scripts and load-test CLIs intentionally
       // print progress/errors to the terminal; keep product API code on
       // structured logging.
