@@ -24,9 +24,9 @@ type AnalysisState =
   | { status: "error"; message: string };
 
 type AnalysisResponse =
-  | { status: "done"; analysis?: unknown }
-  | { status: "error"; error?: string }
-  | { status: "generating"; analysis?: unknown };
+  | { status: "done"; analysis: DecisionAnalysis }
+  | { status: "generating"; tree: DecisionAnalysis["tree"] }
+  | { status: "error"; error: string };
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -38,22 +38,27 @@ const parseAnalysisResponse = (value: unknown): AnalysisResponse | null => {
     return null;
   }
 
-  if (value["status"] === "done" || value["status"] === "generating") {
+  const status = value["status"];
+
+  if (status === "done") {
+    const analysis = value["analysis"];
+    return isDecisionAnalysis(analysis) ? { status: "done", analysis } : null;
+  }
+
+  if (status === "generating") {
+    const analysis = value["analysis"];
     return {
-      status: value["status"],
-      analysis: value["analysis"],
+      status: "generating",
+      tree: isDecisionAnalysis(analysis) ? analysis.tree : [],
     };
   }
 
-  if (value["status"] === "error") {
-    return typeof value["error"] === "string"
-      ? {
-          status: value["status"],
-          error: value["error"],
-        }
-      : {
-          status: value["status"],
-        };
+  if (status === "error") {
+    const error = value["error"];
+    return {
+      status: "error",
+      error: typeof error === "string" ? error : "Generation failed",
+    };
   }
 
   return null;
@@ -135,10 +140,7 @@ export const useDecisionAnalysis = (
 
     const analysisResponse = parseAnalysisResponse(data);
     if (analysisResponse) {
-      if (
-        analysisResponse.status === "done" &&
-        isDecisionAnalysis(analysisResponse.analysis)
-      ) {
+      if (analysisResponse.status === "done") {
         if (pollRef.current) {
           clearInterval(pollRef.current);
           pollRef.current = null;
@@ -153,26 +155,16 @@ export const useDecisionAnalysis = (
       }
 
       if (analysisResponse.status === "generating") {
-        setState({
-          status: "generating",
-          tree: isDecisionAnalysis(analysisResponse.analysis)
-            ? analysisResponse.analysis.tree
-            : [],
-        });
+        setState({ status: "generating", tree: analysisResponse.tree });
         return false;
       }
 
-      if (analysisResponse.status === "error") {
-        if (pollRef.current) {
-          clearInterval(pollRef.current);
-          pollRef.current = null;
-        }
-        setState({
-          status: "error",
-          message: analysisResponse.error ?? "Generation failed",
-        });
-        return true;
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
       }
+      setState({ status: "error", message: analysisResponse.error });
+      return true;
     }
 
     // Unexpected response shape (auth failure, server error, etc.)
