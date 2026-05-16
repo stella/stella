@@ -126,7 +126,7 @@ export function parseFieldType(instruction: string): FieldType {
 
   // Trim and extract the field name (first word, may have leading backslash)
   const trimmed = instruction.trim();
-  const match = trimmed.match(/^\\?([A-Z][A-Z0-9]*)/i);
+  const match = /^\\?([A-Z][A-Z0-9]*)/i.exec(trimmed);
 
   if (!match) {
     return "UNKNOWN";
@@ -194,7 +194,7 @@ export function parseFieldInstruction(
   const switches: FieldSwitch[] = [];
 
   // Extract the field name part
-  const nameMatch = trimmed.match(/^\\?([A-Z][A-Z0-9]*)/i);
+  const nameMatch = /^\\?([A-Z][A-Z0-9]*)/i.exec(trimmed);
   const fieldNameEnd = nameMatch ? nameMatch[0].length : 0;
 
   // Everything after the field name

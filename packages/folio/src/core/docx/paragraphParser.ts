@@ -1004,7 +1004,7 @@ function parseBookmarkEnd(node: XmlElement): BookmarkEnd {
  */
 function parseFieldType(instruction: string): FieldType {
   // Extract the field name (first word)
-  const match = instruction.trim().match(/^\\?([A-Z]+)/i);
+  const match = /^\\?([A-Z]+)/i.exec(instruction.trim());
   if (!match) {
     return "UNKNOWN";
   }

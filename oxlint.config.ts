@@ -540,7 +540,7 @@ export default defineConfig({
         "typescript/no-unsafe-assignment": "off",
         "typescript/no-unsafe-member-access": "off",
         "typescript/strict-boolean-expressions": "off",
-        "typescript/no-base-to-string": "off",
+        
         "typescript/prefer-nullish-coalescing": "off",
         "typescript/no-non-null-assertion": "off",
         "typescript/no-unnecessary-type-assertion": "off",
@@ -577,13 +577,13 @@ export default defineConfig({
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
         "typescript/consistent-return": "off",
-        "typescript/no-base-to-string": "off",
+        
         "typescript/restrict-template-expressions": "off",
         "typescript/no-unsafe-return": "off",
         "typescript/no-unsafe-call": "off",
         "typescript/no-unsafe-argument": "off",
         
-        "typescript/prefer-regexp-exec": "off",
+        
         
         "typescript/no-deprecated": "off",
         "typescript/promise-function-async": "off",
@@ -633,13 +633,13 @@ export default defineConfig({
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
         "typescript/consistent-return": "off",
-        "typescript/no-base-to-string": "off",
+        
         "typescript/restrict-template-expressions": "off",
         "typescript/no-unsafe-return": "off",
         "typescript/no-unsafe-call": "off",
         "typescript/no-unsafe-argument": "off",
         
-        "typescript/prefer-regexp-exec": "off",
+        
         
         "typescript/no-deprecated": "off",
         "typescript/promise-function-async": "off",
@@ -666,7 +666,7 @@ export default defineConfig({
         "eslint/eqeqeq": "off",
         "typescript/switch-exhaustiveness-check": "off",
         "typescript/promise-function-async": "off",
-        "typescript/prefer-regexp-exec": "off",
+        
         "unicorn/no-array-for-each": "off",
         "typescript/no-unnecessary-type-conversion": "off",
         "typescript/no-duplicate-type-constituents": "off",
@@ -678,7 +678,7 @@ export default defineConfig({
         "typescript/no-unsafe-call": "off",
         "typescript/no-unsafe-argument": "off",
         "typescript/restrict-template-expressions": "off",
-        "typescript/no-base-to-string": "off",
+        
         "unicorn/prefer-string-starts-ends-with": "off",
         "typescript/prefer-string-starts-ends-with": "off",
       },
