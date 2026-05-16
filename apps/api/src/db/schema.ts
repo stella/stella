@@ -2504,6 +2504,9 @@ export const chatThreads = p.pgTable(
     p
       .index("chat_threads_organization_user_idx")
       .on(table.organizationId, table.userId),
+    p
+      .index("chat_threads_org_user_updated_id_idx")
+      .on(table.organizationId, table.userId, table.updatedAt, table.id),
     p.index("chat_threads_user_updated_idx").on(table.userId, table.updatedAt),
     ...chatThreadPolicies(),
   ],

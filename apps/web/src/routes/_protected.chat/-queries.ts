@@ -1,5 +1,5 @@
 import { Chat } from "@ai-sdk/react";
-import { queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import {
   DefaultChatTransport,
@@ -66,9 +66,16 @@ type ActiveExternalContext = {
 
 type ChatThreadKey = ChatThreadRef;
 
-type GroupedChatThreads = Awaited<ReturnType<typeof fetchGroupedChatThreads>>;
+type GroupedChatThreadsPage = Awaited<
+  ReturnType<typeof fetchGroupedChatThreads>
+>;
+export type GroupedChatThreads = Pick<
+  GroupedChatThreadsPage,
+  "global" | "workspaces"
+>;
 
 const APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME = "apply-active-docx-edits";
+const CHAT_THREADS_PAGE_SIZE = 50;
 const CHAT_TRANSPORT_VERSION = 2;
 
 export type ApplyActiveDocxEditsInput =
@@ -196,14 +203,73 @@ const fetchThreadMessages = async (
   return response.data;
 };
 
-const fetchGroupedChatThreads = async () => {
-  const response = await api.chat.threads.get();
+const fetchGroupedChatThreads = async ({
+  cursor,
+  signal,
+}: {
+  cursor?: string | undefined;
+  signal?: AbortSignal | undefined;
+} = {}) => {
+  const response = await api.chat.threads.get({
+    ...(signal !== undefined && { fetch: { signal } }),
+    query: {
+      limit: CHAT_THREADS_PAGE_SIZE,
+      ...(cursor !== undefined && { cursor }),
+    },
+  });
 
   if (response.error) {
     throw toAPIError(response.error);
   }
 
   return response.data;
+};
+
+export const mergeGroupedChatThreadPages = (
+  pages: readonly GroupedChatThreadsPage[] | undefined,
+): GroupedChatThreads => {
+  const global: GroupedChatThreads["global"] = [];
+  const workspacesById = new Map<
+    string,
+    GroupedChatThreads["workspaces"][number]
+  >();
+  const seenThreadIds = new Set<string>();
+
+  for (const page of pages ?? []) {
+    for (const thread of page.global) {
+      if (seenThreadIds.has(thread.id)) {
+        continue;
+      }
+      seenThreadIds.add(thread.id);
+      global.push(thread);
+    }
+
+    for (const workspace of page.workspaces) {
+      const existing = workspacesById.get(workspace.workspaceId);
+      if (!existing) {
+        const threads: typeof workspace.threads = [];
+        for (const thread of workspace.threads) {
+          if (seenThreadIds.has(thread.id)) {
+            continue;
+          }
+          seenThreadIds.add(thread.id);
+          threads.push(thread);
+        }
+        workspacesById.set(workspace.workspaceId, { ...workspace, threads });
+        continue;
+      }
+
+      for (const thread of workspace.threads) {
+        if (seenThreadIds.has(thread.id)) {
+          continue;
+        }
+        seenThreadIds.add(thread.id);
+        existing.threads.push(thread);
+      }
+    }
+  }
+
+  return { global, workspaces: Array.from(workspacesById.values()) };
 };
 
 const getChatApiPath = () => `${env.VITE_API_URL}/v1/chat`;
@@ -531,10 +597,12 @@ export const chatThreadOptions = ({ key, context }: ChatThreadOptionsInput) =>
   });
 
 export const groupedChatThreadsOptions = () =>
-  queryOptions({
+  infiniteQueryOptions({
     queryKey: chatKeys.groupedThreads(),
-    queryFn: async (): Promise<GroupedChatThreads> =>
-      await fetchGroupedChatThreads(),
+    queryFn: async ({ pageParam, signal }): Promise<GroupedChatThreadsPage> =>
+      await fetchGroupedChatThreads({ cursor: pageParam, signal }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
   });
 
 export const invalidateGroupedChatThreads = async (queryClient: QueryClient) =>
