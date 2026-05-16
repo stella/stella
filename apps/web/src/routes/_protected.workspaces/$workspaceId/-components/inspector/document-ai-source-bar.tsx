@@ -1,6 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -16,6 +21,7 @@ import { api } from "@/lib/api";
 import type { Citation } from "@/lib/citations";
 import { iterateJustificationCitations } from "@/lib/citations";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { toAPIError } from "@/lib/errors";
 import {
   getPDFPageIdByNumber,
   useOptionalPDFStore,
@@ -88,7 +94,6 @@ export const DocumentAiSourceBar = ({
   // Eagerly generate bboxes when the justification bar mounts.
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
-  const [isGeneratingBoxes, setIsGeneratingBoxes] = useState(false);
   const setScrollTo = useOptionalPDFStore((s) => s.setScrollTo);
   const pages = useOptionalPDFStore((s) => s.pages);
 
@@ -117,81 +122,82 @@ export const DocumentAiSourceBar = ({
     (citation) => citation.kind === "pdf-bates",
   );
 
-  useEffect(() => {
-    if (
-      !justificationId ||
-      !isActiveTab ||
-      !hasBoundingBoxCitations ||
-      boundingBoxes
-    ) {
-      return undefined;
-    }
+  const generateBoundingBoxes = useMutation({
+    mutationFn: async ({
+      justificationId: id,
+    }: {
+      justificationId: string;
+    }) => {
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        ["bounding-boxes"].post({
+          justificationId: toSafeId<"justification">(id),
+          queryKey: workspaceKeys.justifications(workspaceId),
+        });
 
-    const requestState = { cancelled: false };
-    setIsGeneratingBoxes(true);
-
-    void (async () => {
-      try {
-        const response = await api
-          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          ["bounding-boxes"].post({
-            justificationId: toSafeId<"justification">(justificationId),
-            queryKey: workspaceKeys.justifications(workspaceId),
-          });
-
-        if (requestState.cancelled) {
-          return;
-        }
-
-        if (!response.error) {
-          await queryClient.invalidateQueries({
-            queryKey: workspaceKeys.justifications(workspaceId),
-          });
-        }
-      } catch (error) {
-        if (!requestState.cancelled) {
-          analytics.captureError(error);
-        }
-      } finally {
-        if (!requestState.cancelled) {
-          setIsGeneratingBoxes(false);
-        }
+      if (response.error) {
+        throw toAPIError(response.error);
       }
-    })();
+      return response.data;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: workspaceKeys.justifications(workspaceId),
+      });
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
 
-    return () => {
-      requestState.cancelled = true;
-    };
-  }, [
-    justificationId,
-    hasBoundingBoxCitations,
-    boundingBoxes,
-    isActiveTab,
-    workspaceId,
-    queryClient,
-    analytics,
-  ]);
+  const needsBoxes = Boolean(
+    justificationId && isActiveTab && hasBoundingBoxCitations && !boundingBoxes,
+  );
+  const isGeneratingBoxes = generateBoundingBoxes.isPending;
+  const mutateBoundingBoxes = generateBoundingBoxes.mutate;
+  // Kick off the generation request when the justification bar
+  // mounts with missing bboxes. The mutation hook itself is the
+  // source of truth for `isPending`.
+  useEffect(() => {
+    if (!needsBoxes || !justificationId) {
+      return;
+    }
+    mutateBoundingBoxes({ justificationId });
+  }, [needsBoxes, justificationId, mutateBoundingBoxes]);
 
   useEffect(() => {
     setIsAnswerExpanded(false);
   }, [fieldId]);
 
-  useEffect(() => {
-    if (!isGeneratingBoxes) {
-      return undefined;
-    }
-
-    const interval = window.setInterval(() => {
-      void queryClient.invalidateQueries({
+  // While the mutation is in flight, nudge the justifications cache
+  // every second so the bbox payload appears as soon as the backend
+  // finishes processing.
+  // queryClient is stable across renders so it is safe to omit from
+  // the queryKey here.
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps
+  useQuery({
+    queryKey: ["bounding-boxes-poll", workspaceId, justificationId],
+    queryFn: async () => {
+      await queryClient.invalidateQueries({
         queryKey: workspaceKeys.justifications(workspaceId),
       });
-    }, 1000);
+      return Date.now();
+    },
+    enabled: isGeneratingBoxes,
+    refetchInterval: isGeneratingBoxes ? 1000 : false,
+    staleTime: 0,
+    gcTime: 0,
+  });
 
-    return () => window.clearInterval(interval);
-  }, [isGeneratingBoxes, queryClient, workspaceId]);
-
+  const scrolledForJustificationRef = useRef<string | null>(null);
   useEffect(() => {
     if (!boundingBoxes || !isActiveTab || !pages || !setScrollTo) {
+      return;
+    }
+    if (!justificationId) {
+      return;
+    }
+    if (scrolledForJustificationRef.current === justificationId) {
       return;
     }
 
@@ -208,7 +214,8 @@ export const DocumentAiSourceBar = ({
       pages,
       pageNumber: firstBox.pageNumber,
     });
-    if (pageId && justificationId) {
+    if (pageId) {
+      scrolledForJustificationRef.current = justificationId;
       setScrollTo({
         pageId,
         target: { kind: "justification", id: justificationId },
