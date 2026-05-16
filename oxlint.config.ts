@@ -467,6 +467,7 @@ export default defineConfig({
         "apps/web/src/**/_protected.tsx",
         "apps/web/src/**/kanban-column.tsx",
         "apps/web/src/**/workspace-table.tsx",
+        "apps/web/src/**/workspace-table/**/*.tsx",
         "apps/web/src/**/sidebar.tsx",
         "apps/web/src/**/template-preview.tsx",
         "apps/web/src/**/page-citation.tsx",
