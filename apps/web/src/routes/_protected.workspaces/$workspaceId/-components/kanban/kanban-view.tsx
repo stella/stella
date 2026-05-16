@@ -250,11 +250,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
 
   const statusLabels: Record<string, string> = isStatusGrouping
     ? Object.fromEntries(
-        TASK_STATUS_ORDER.map((s) => [
-          s,
-          // eslint-disable-next-line typescript/no-unsafe-type-assertion
-          t(`tasks.statusValues.${s}` as "tasks.statusValues.open"),
-        ]),
+        TASK_STATUS_ORDER.map((s) => [s, t(`tasks.statusValues.${s}`)]),
       )
     : {};
   const entityKindLabels = {

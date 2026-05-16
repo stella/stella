@@ -13,6 +13,7 @@ import type { ChatMessage } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { parseDataUrl, toDataUrl } from "@/api/lib/data-url";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const fileBytes = new TextEncoder().encode("Jan Novak,Acme");
 const arrayBufferMock = mock(async () =>
@@ -154,10 +155,9 @@ describe("chat attachment hydration", () => {
       delete: deleteMock,
       insert: insertMock,
     };
-    // SAFETY: the upload helper only touches `insert().values()` and
+    // The upload helper only touches `insert().values()` and
     // `delete().where()` in this regression test.
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion
-    const testTx = tx as unknown as Transaction;
+    const testTx = asTestRaw<Transaction>(tx);
     const safeDb: SafeDb = async (callback) =>
       await Result.tryPromise(async () => await callback(testTx));
     const message: ChatMessage = {

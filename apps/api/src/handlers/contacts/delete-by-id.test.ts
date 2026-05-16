@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import type { SafeId } from "@/api/lib/branded-types";
+import { toSafeId } from "@/api/lib/branded-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import deleteContactById from "./delete-by-id";
+
+type DeleteContactCtx = Parameters<typeof deleteContactById.handler>[0];
 
 const createContext = ({
   contactId,
@@ -11,26 +14,20 @@ const createContext = ({
   scopedDb,
 }: {
   contactId: string;
-  safeDb: Parameters<typeof deleteContactById.handler>[0]["safeDb"];
-  scopedDb: Parameters<typeof deleteContactById.handler>[0]["scopedDb"];
-}): Parameters<typeof deleteContactById.handler>[0] =>
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test fixture only provides fields touched by the handler
-  ({
+  safeDb: DeleteContactCtx["safeDb"];
+  scopedDb: DeleteContactCtx["scopedDb"];
+}): DeleteContactCtx =>
+  asTestRaw<DeleteContactCtx>({
     params: { contactId },
     safeDb,
     scopedDb,
     memberRole: { role: "owner" },
     session: {
-      activeOrganizationId:
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded test value
-        "org_test123" as SafeId<"organization">,
+      activeOrganizationId: toSafeId<"organization">("org_test123"),
     },
-    user: {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded test value
-      id: "user_test123" as SafeId<"user">,
-    },
+    user: { id: toSafeId<"user">("user_test123") },
     orgAIConfig: null,
-  }) as Parameters<typeof deleteContactById.handler>[0];
+  });
 
 describe("deleteContactById", () => {
   test("blocks deleting a contact assigned as a matter client", async () => {

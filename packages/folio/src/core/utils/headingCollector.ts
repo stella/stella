@@ -29,7 +29,7 @@ export function collectHeadings(doc: PMNode): HeadingInfo[] {
 
       let effectiveLevel = level;
       if (effectiveLevel === null && styleId) {
-        const match = styleId.match(/^[Hh]eading(\d)$/);
+        const match = /^[Hh]eading(\d)$/.exec(styleId);
         if (match) {
           // SAFETY: capture group [1] always present when regex matches
           effectiveLevel = Number.parseInt(match[1]!, 10) - 1;

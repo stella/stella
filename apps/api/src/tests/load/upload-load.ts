@@ -1,5 +1,7 @@
 /* eslint-disable no-console */
 
+import { readTestJson } from "@/api/tests/helpers/test-tool-set";
+
 /**
  * Load test for the file upload endpoint.
  *
@@ -281,9 +283,7 @@ const main = async () => {
       id: string;
       content: { type: string };
     };
-    // SAFETY: API response shape matches Property[]
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const properties = (await response.json()) as Property[];
+    const properties = await readTestJson<Property[]>(response);
     const fileProp = properties.find((p) => p.content.type === "file");
     if (fileProp === undefined) {
       console.error(

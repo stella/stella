@@ -1,22 +1,23 @@
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import type { SafeId } from "@/api/lib/branded-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import updateWorkspace from "./update-by-id";
+
+type UpdateWorkspaceCtx = Parameters<typeof updateWorkspace.handler>[0];
 
 const createContext = ({
   body,
   safeDb,
   scopedDb,
 }: {
-  body: Parameters<typeof updateWorkspace.handler>[0]["body"];
-  safeDb: Parameters<typeof updateWorkspace.handler>[0]["safeDb"];
-  scopedDb: Parameters<typeof updateWorkspace.handler>[0]["scopedDb"];
-}): Parameters<typeof updateWorkspace.handler>[0] =>
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test fixture only provides the fields used by the handler
-  ({
+  body: UpdateWorkspaceCtx["body"];
+  safeDb: UpdateWorkspaceCtx["safeDb"];
+  scopedDb: UpdateWorkspaceCtx["scopedDb"];
+}): UpdateWorkspaceCtx =>
+  asTestRaw<UpdateWorkspaceCtx>({
     body,
     safeDb,
     scopedDb,
@@ -24,18 +25,11 @@ const createContext = ({
     orgAIConfig: null,
     request: new Request("http://localhost/v1/workspaces/ws_test123"),
     session: {
-      activeOrganizationId:
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded test value
-        "org_test123" as SafeId<"organization">,
+      activeOrganizationId: toSafeId<"organization">("org_test123"),
     },
-    user: {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded test value
-      id: "user_test123" as SafeId<"user">,
-    },
-    workspaceId:
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded test value
-      "ws_test123" as SafeId<"workspace">,
-  }) as Parameters<typeof updateWorkspace.handler>[0];
+    user: { id: toSafeId<"user">("user_test123") },
+    workspaceId: toSafeId<"workspace">("ws_test123"),
+  });
 
 describe("updateWorkspace", () => {
   test("rejects client changes to contacts outside the active organization", async () => {

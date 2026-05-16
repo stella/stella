@@ -1610,8 +1610,22 @@ function convertRunContent(
       return [schema.text(content.id.toString(), [...marks, endnoteMark])];
     }
 
-    default:
+    case "fieldChar":
+    case "instrText":
+      // Complex field structure markers — handled at the run/paragraph
+      // level via `convertField`, not as standalone inline content.
       return [];
+
+    case "noBreakHyphen":
+      return [schema.text("‑", marks)];
+
+    case "softHyphen":
+      return [schema.text("­", marks)];
+
+    case "symbol":
+      // Plain Unicode symbol — fall through to text if the parsed
+      // character is available; otherwise drop.
+      return content.char ? [schema.text(content.char, marks)] : [];
   }
 }
 

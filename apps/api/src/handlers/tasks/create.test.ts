@@ -1,54 +1,51 @@
 import { describe, expect, mock, test } from "bun:test";
 
-import type { SafeId } from "@/api/lib/branded-types";
+import { toSafeId } from "@/api/lib/branded-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createTaskHandler } from "./create";
 
-// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded type in test
-const workspaceId = "ws_test123" as SafeId<"workspace">;
-const userId = "user_abc";
+type CreateTaskCtx = Parameters<typeof createTaskHandler>[0];
+type ScopedDb = CreateTaskCtx["scopedDb"];
+
+const workspaceId = toSafeId<"workspace">("ws_test123");
+const userId = toSafeId<"user">("user_abc");
 
 /** Mock scopedDb that throws if called (validates early return). */
 const throwingScopedDb = () =>
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test mock
-  mock(() => {
-    throw new Error("scopedDb should not be called");
-  }) as unknown as Parameters<typeof createTaskHandler>[0]["scopedDb"];
+  asTestRaw<ScopedDb>(
+    mock(() => {
+      throw new Error("scopedDb should not be called");
+    }),
+  );
 
 /** Mock scopedDb that resolves successfully. */
 const resolvingScopedDb = () =>
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test mock
-  mock(async () => ({ entityId: "fake" })) as unknown as Parameters<
-    typeof createTaskHandler
-  >[0]["scopedDb"] &
-    ReturnType<typeof mock>;
+  asTestRaw<ScopedDb & ReturnType<typeof mock>>(
+    mock(async () => ({ entityId: "fake" })),
+  );
 
 const createHandlerContext = ({
   body,
   safeDb,
   scopedDb,
 }: {
-  body: Parameters<typeof createTaskHandler>[0]["body"];
-  safeDb: Parameters<typeof createTaskHandler>[0]["safeDb"];
-  scopedDb: Parameters<typeof createTaskHandler>[0]["scopedDb"];
-}): Parameters<typeof createTaskHandler>[0] =>
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test fixture only exercises the handler-owned fields accessed before/inside scopedDb
-  ({
+  body: CreateTaskCtx["body"];
+  safeDb: CreateTaskCtx["safeDb"];
+  scopedDb: CreateTaskCtx["scopedDb"];
+}): CreateTaskCtx =>
+  asTestRaw<CreateTaskCtx>({
     workspaceId,
-    user: {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded type in test
-      id: userId as SafeId<"user">,
-    },
+    user: { id: userId },
     session: {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded type in test
-      activeOrganizationId: "org_test123" as SafeId<"organization">,
+      activeOrganizationId: toSafeId<"organization">("org_test123"),
     },
     memberRole: { role: "owner" },
     body,
     safeDb,
     scopedDb,
-  }) as Parameters<typeof createTaskHandler>[0];
+  });
 
 describe("createTaskHandler validation", () => {
   test("invalid status returns 400 before DB call", async () => {

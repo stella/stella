@@ -4,6 +4,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const anonymizeTextFieldsMock = mock();
@@ -305,27 +306,28 @@ const createScopedDb = (
   rows: unknown[] = [],
   extractedContentRow: ExtractedContentRow | null = null,
 ) =>
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test fixture only implements the query shape used by getFetchableEntityMap
-  mock(
-    async (
-      callback: (tx: {
-        query: {
-          extractedContent: {
-            findFirst: () => Promise<ExtractedContentRow | null>;
+  asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
+    mock(
+      async (
+        callback: (tx: {
+          query: {
+            extractedContent: {
+              findFirst: () => Promise<ExtractedContentRow | null>;
+            };
           };
-        };
-        select: () => ReturnType<typeof createSelectBuilder>;
-      }) => unknown,
-    ) =>
-      await callback({
-        query: {
-          extractedContent: {
-            findFirst: async () => extractedContentRow,
+          select: () => ReturnType<typeof createSelectBuilder>;
+        }) => unknown,
+      ) =>
+        await callback({
+          query: {
+            extractedContent: {
+              findFirst: async () => extractedContentRow,
+            },
           },
-        },
-        select: () => createSelectBuilder(rows),
-      }),
-  ) as unknown as McpRequestContext["scopedDb"] & ReturnType<typeof mock>;
+          select: () => createSelectBuilder(rows),
+        }),
+    ),
+  );
 
 const createContext = ({
   accessibleWorkspaceIds = ["ws_1"],

@@ -22,6 +22,7 @@ import type {
   TableCellFormatting,
   SectionProperties,
 } from "../../types/document";
+import type { SpacingExplicit } from "../../types/formatting";
 
 /**
  * Paragraph node attributes - maps to ParagraphFormatting
@@ -39,7 +40,7 @@ export type ParagraphAttrs = {
   spaceAfter?: number;
   lineSpacing?: number;
   lineSpacingRule?: LineSpacingRule;
-  spacingExplicit?: import("../../types/formatting").SpacingExplicit;
+  spacingExplicit?: SpacingExplicit;
 
   // Indentation (in twips)
   indentLeft?: number;

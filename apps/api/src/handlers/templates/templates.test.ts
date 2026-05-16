@@ -15,6 +15,7 @@ import { discoverHandler } from "@/api/handlers/templates/discover";
 import { fillHandler } from "@/api/handlers/templates/fill";
 import { manifestHandler } from "@/api/handlers/templates/manifest";
 import { toSafeId } from "@/api/lib/branded-types";
+import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -421,9 +422,7 @@ describe("template manifest", () => {
     expect(result).toBeInstanceOf(Response);
     const resp = result;
     expect(resp.status).toBe(400);
-    // SAFETY: test asserts 400; response body shape is known
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const body = (await resp.json()) as { error: string };
+    const body = await readTestJson<{ error: string }>(resp);
     expect(body.error).toContain("'path'");
   });
 
@@ -445,9 +444,7 @@ describe("template manifest", () => {
     expect(result).toBeInstanceOf(Response);
     const resp = result;
     expect(resp.status).toBe(400);
-    // SAFETY: test asserts 400; response body shape is known
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const body = (await resp.json()) as { error: string };
+    const body = await readTestJson<{ error: string }>(resp);
     expect(body.error).toContain("'expression'");
   });
 
@@ -484,14 +481,12 @@ describe("handler MIME validation", () => {
       body: { file: pdfFile },
     });
 
-    expect(result).toBeInstanceOf(Response);
-    // SAFETY: test asserts Response; toBeInstanceOf narrows at runtime
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const resp = result as Response;
+    if (!(result instanceof Response)) {
+      throw new Error("Expected a Response");
+    }
+    const resp = result;
     expect(resp.status).toBe(400);
-    // SAFETY: test asserts 400; response body shape is known
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const body = (await resp.json()) as { error: string };
+    const body = await readTestJson<{ error: string }>(resp);
     expect(body.error).toContain("DOCX");
   });
 
@@ -507,9 +502,7 @@ describe("handler MIME validation", () => {
     expect(result).toBeInstanceOf(Response);
     const resp = result;
     expect(resp.status).toBe(400);
-    // SAFETY: test asserts 400; response body shape is known
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const body = (await resp.json()) as { error: string };
+    const body = await readTestJson<{ error: string }>(resp);
     expect(body.error).toContain("DOCX");
   });
 
@@ -529,9 +522,7 @@ describe("handler MIME validation", () => {
     expect(result).toBeInstanceOf(Response);
     const resp = result;
     expect(resp.status).toBe(400);
-    // SAFETY: test asserts 400; response body shape is known
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const body = (await resp.json()) as { error: string };
+    const body = await readTestJson<{ error: string }>(resp);
     expect(body.error).toContain("DOCX");
   });
 });
@@ -553,9 +544,7 @@ describe("fill handler validation", () => {
     expect(result).toBeInstanceOf(Response);
     const resp = result;
     expect(resp.status).toBe(400);
-    // SAFETY: test asserts 400; response body shape is known
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const body = (await resp.json()) as { error: string };
+    const body = await readTestJson<{ error: string }>(resp);
     expect(body.error).toContain("Invalid JSON");
   });
 
@@ -573,9 +562,7 @@ describe("fill handler validation", () => {
     expect(result).toBeInstanceOf(Response);
     const resp = result;
     expect(resp.status).toBe(400);
-    // SAFETY: test asserts 400; response body shape is known
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const body = (await resp.json()) as { error: string };
+    const body = await readTestJson<{ error: string }>(resp);
     expect(body.error).toContain("object");
   });
 
@@ -593,9 +580,7 @@ describe("fill handler validation", () => {
     expect(result).toBeInstanceOf(Response);
     const resp = result;
     expect(resp.status).toBe(400);
-    // SAFETY: test asserts 400; response body shape is known
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const body = (await resp.json()) as { error: string };
+    const body = await readTestJson<{ error: string }>(resp);
     expect(body.error).toContain("object");
   });
 
@@ -613,9 +598,7 @@ describe("fill handler validation", () => {
     expect(result).toBeInstanceOf(Response);
     const resp = result;
     expect(resp.status).toBe(400);
-    // SAFETY: test asserts 400; response body shape is known
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const body = (await resp.json()) as { error: string };
+    const body = await readTestJson<{ error: string }>(resp);
     expect(body.error).toContain("null");
   });
 
@@ -636,9 +619,7 @@ describe("fill handler validation", () => {
     expect(result).toBeInstanceOf(Response);
     const resp = result;
     expect(resp.status).toBe(400);
-    // SAFETY: test asserts 400; response body shape is known
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const body = (await resp.json()) as { error: string };
+    const body = await readTestJson<{ error: string }>(resp);
     expect(body.error).toContain("null");
   });
 });

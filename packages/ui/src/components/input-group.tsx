@@ -58,9 +58,10 @@ function InputGroupAddon({
       data-align={align}
       data-slot="input-group-addon"
       onMouseDown={(e) => {
-        // SAFETY: DOM mouse event target is Element for UI interaction
-        // eslint-disable-next-line typescript/no-unsafe-type-assertion
-        const target = e.target as HTMLElement;
+        const { target } = e;
+        if (!(target instanceof Element)) {
+          return;
+        }
         const isInteractive = target.closest(
           "button, a, input, select, textarea, [role='button'], [role='combobox'], [role='listbox'], [data-slot='select-trigger']",
         );

@@ -29,7 +29,6 @@ import type {
   ComplexField,
   Field,
   Run,
-  Hyperlink,
   Theme,
 } from "../types/document";
 import { parseRun } from "./runParser";
@@ -127,7 +126,7 @@ export function parseFieldType(instruction: string): FieldType {
 
   // Trim and extract the field name (first word, may have leading backslash)
   const trimmed = instruction.trim();
-  const match = trimmed.match(/^\\?([A-Z][A-Z0-9]*)/i);
+  const match = /^\\?([A-Z][A-Z0-9]*)/i.exec(trimmed);
 
   if (!match) {
     return "UNKNOWN";
@@ -195,7 +194,7 @@ export function parseFieldInstruction(
   const switches: FieldSwitch[] = [];
 
   // Extract the field name part
-  const nameMatch = trimmed.match(/^\\?([A-Z][A-Z0-9]*)/i);
+  const nameMatch = /^\\?([A-Z][A-Z0-9]*)/i.exec(trimmed);
   const fieldNameEnd = nameMatch ? nameMatch[0].length : 0;
 
   // Everything after the field name
@@ -754,9 +753,7 @@ export function formatDate(date: Date, format: string): string {
  * @param content - Array of paragraph content items
  * @returns Array of all fields found
  */
-export function collectFields(
-  content: (Run | Hyperlink | Field | unknown)[],
-): Field[] {
+export function collectFields(content: unknown[]): Field[] {
   const fields: Field[] = [];
 
   for (const item of content) {

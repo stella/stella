@@ -4,6 +4,7 @@ import type {
   EmptyAst,
   IngestionResult,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 import { createPagePaginatedFetch } from "./pagination";
 import { mockFetchWithFixtures, saveFixture } from "./test-utils";
@@ -44,7 +45,7 @@ const createTestFetch = (opts?: {
       url: `https://example.com/test-api?page=${page}`,
     }),
 
-    parseResponse: async (resp) => (await resp.json()) as TestResponse, // eslint-disable-line typescript-eslint/no-unsafe-type-assertion
+    parseResponse: async (resp) => await readTestJson<TestResponse>(resp),
 
     extractItems: (data) => ({
       items: data.results,
@@ -52,8 +53,7 @@ const createTestFetch = (opts?: {
     }),
 
     parseItem: async (raw) => {
-      // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-      const item = raw as TestItem;
+      const item = asTestRaw<TestItem>(raw);
       if (opts?.skipEven && item.id % 2 === 0) {
         return null;
       }
@@ -246,12 +246,12 @@ describe("createPagePaginatedFetch", () => {
       buildRequest: (page) => ({
         url: `https://example.com/test-api?page=${page}&pageSize=20`,
       }),
-      parseResponse: async (resp) => (await resp.json()) as TestResponse, // eslint-disable-line typescript-eslint/no-unsafe-type-assertion
+      parseResponse: async (resp) => await readTestJson<TestResponse>(resp),
       extractItems: (data) => ({
         items: data.results,
         total: data.total,
       }),
-      parseItem: async (raw) => itemToDecision(raw as TestItem), // eslint-disable-line typescript-eslint/no-unsafe-type-assertion
+      parseItem: async (raw) => itemToDecision(asTestRaw<TestItem>(raw)),
     });
 
     let cursor: string | null = null;
@@ -271,12 +271,12 @@ describe("createPagePaginatedFetch", () => {
       buildRequest: (page) => ({
         url: `https://example.com/test-api?page=${page}&pageSize=100`,
       }),
-      parseResponse: async (resp) => (await resp.json()) as TestResponse, // eslint-disable-line typescript-eslint/no-unsafe-type-assertion
+      parseResponse: async (resp) => await readTestJson<TestResponse>(resp),
       extractItems: (data) => ({
         items: data.results,
         total: data.total,
       }),
-      parseItem: async (raw) => itemToDecision(raw as TestItem), // eslint-disable-line typescript-eslint/no-unsafe-type-assertion
+      parseItem: async (raw) => itemToDecision(asTestRaw<TestItem>(raw)),
     });
 
     const result = await fetchAtPageSize100(cursor, {});
@@ -307,7 +307,7 @@ describe("createPagePaginatedFetch", () => {
       buildRequest: (page) => ({
         url: `https://example.com/test-api?page=${page}`,
       }),
-      parseResponse: async (resp) => (await resp.json()) as TestResponse, // eslint-disable-line typescript-eslint/no-unsafe-type-assertion
+      parseResponse: async (resp) => await readTestJson<TestResponse>(resp),
       extractItems: (data) => ({
         items: data.results,
         total: data.total,
@@ -318,7 +318,7 @@ describe("createPagePaginatedFetch", () => {
         if (parseCount === 4) {
           controller.abort();
         }
-        return itemToDecision(raw as TestItem); // eslint-disable-line typescript-eslint/no-unsafe-type-assertion
+        return itemToDecision(asTestRaw<TestItem>(raw));
       },
     });
 

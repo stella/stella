@@ -391,7 +391,7 @@ export function parseClipboardHtml(
   // If from our editor, try to parse internal format
   if (fromEditor) {
     // Look for internal data in HTML comments or data attributes
-    const internalMatch = html.match(/data-folio-content="([^"]+)"/);
+    const internalMatch = /data-folio-content="([^"]+)"/.exec(html);
     if (internalMatch) {
       try {
         // SAFETY: match group 1 always captures in this regex
@@ -548,11 +548,11 @@ function processNode(
     return;
   }
 
-  if (node.nodeType !== Node.ELEMENT_NODE) {
+  if (!(node instanceof HTMLElement)) {
     return;
   }
 
-  const element = node as HTMLElement;
+  const element = node;
   const tagName = element.tagName.toLowerCase();
 
   // Merge formatting from this element
@@ -703,7 +703,7 @@ function colorToHex(color: string): string | null {
   }
 
   // RGB/RGBA
-  const rgbMatch = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  const rgbMatch = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(color);
   if (rgbMatch) {
     // SAFETY: regex has 3 capture groups; all present when match succeeds
     const r = Number.parseInt(rgbMatch[1]!, 10).toString(16).padStart(2, "0");

@@ -304,12 +304,11 @@ const MatterItem = ({
         onDragLeave: () => setIsDropTarget(false),
         onDrop: ({ source }) => {
           setIsDropTarget(false);
-          // SAFETY: matterId is always a string; set by our own draggable getInitialData.
-          // eslint-disable-next-line typescript/no-unsafe-type-assertion
-          const draggedId = source.data["matterId"] as string;
-          if (draggedId !== ws.id) {
-            onReorderRef.current?.(draggedId, ws.id);
+          const draggedId = source.data["matterId"];
+          if (typeof draggedId !== "string" || draggedId === ws.id) {
+            return;
           }
+          onReorderRef.current?.(draggedId, ws.id);
         },
       }),
     );

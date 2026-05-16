@@ -84,8 +84,8 @@ const extractHeaderFooterReferences = (
   const pattern = /<w:(headerReference|footerReference)\b[^>]*>/g;
   for (const match of xml.matchAll(pattern)) {
     const tag = match[0];
-    const type = tag.match(/\bw:type="([^"]+)"/)?.at(1) ?? "default";
-    const rId = tag.match(/\br:id="([^"]+)"/)?.at(1);
+    const type = /\bw:type="([^"]+)"/.exec(tag)?.at(1) ?? "default";
+    const rId = /\br:id="([^"]+)"/.exec(tag)?.at(1);
     const element = match[1];
     if (!rId || !element) {
       continue;
@@ -222,7 +222,7 @@ async function readRelsOrStub(zip: JSZip, relsPath: string): Promise<string> {
 function findMaxImageNum(zip: JSZip): number {
   let maxImageNum = 0;
   zip.forEach((relativePath) => {
-    const m = relativePath.match(/^word\/media\/image(\d+)\./);
+    const m = /^word\/media\/image(\d+)\./.exec(relativePath);
     if (m) {
       // SAFETY: capture group [1] always present when regex matches
       const num = Number.parseInt(m[1]!, 10);
@@ -326,7 +326,7 @@ function decodeDataUrl(dataUrl: string): {
   data: ArrayBuffer;
   extension: string;
 } {
-  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
   if (!match) {
     throw new Error("Invalid data URL");
   }

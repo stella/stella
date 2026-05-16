@@ -166,7 +166,11 @@ export function applyFormattingAction(
             "yellow") as NonNullable<TextFormatting["highlight"]>;
         }
         return newFormatting;
-      default:
+      case "alignment":
+      case "applyStyle":
+      case "lineSpacing":
+        // Paragraph-level actions — not handled by this run-formatting
+        // dispatcher; the paragraph handler picks them up elsewhere.
         break;
     }
   }
@@ -203,7 +207,15 @@ export function applyFormattingAction(
       break;
     case "clearFormatting":
       return {};
-    default:
+    case "bulletList":
+    case "numberedList":
+    case "indent":
+    case "outdent":
+    case "insertPageBreak":
+    case "setLtr":
+    case "setRtl":
+      // Block-level actions handled by the document-level dispatcher,
+      // not by this run-formatting function.
       break;
   }
 

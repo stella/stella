@@ -51,24 +51,20 @@ const extractAcceptedText = (xml: string): string[] => {
 
   const texts: string[] = [];
   for (const child of body.childNodes) {
-    if (child.nodeType !== child.ELEMENT_NODE) {
+    if (!(child instanceof slimdom.Element)) {
       continue;
     }
-    // SAFETY: ELEMENT_NODE implies Element in slimdom
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const el = child as slimdom.Element;
+    const el = child;
     if (el.localName !== "p" || el.namespaceURI !== W_NS) {
       continue;
     }
 
     let text = "";
     const walk = (node: slimdom.Node) => {
-      if (node.nodeType !== node.ELEMENT_NODE) {
+      if (!(node instanceof slimdom.Element)) {
         return;
       }
-      // SAFETY: ELEMENT_NODE implies Element in slimdom
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      const n = node as slimdom.Element;
+      const n = node;
       // Skip deleted content
       if (n.localName === "del" && n.namespaceURI === W_NS) {
         return;

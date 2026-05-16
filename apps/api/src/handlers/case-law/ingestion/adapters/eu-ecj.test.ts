@@ -1,5 +1,4 @@
 import { Result } from "better-result";
-/* eslint-disable typescript-eslint/no-unsafe-type-assertion */
 /* eslint-disable typescript-eslint/promise-function-async */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
@@ -7,6 +6,7 @@ import {
   ECJ_LANGUAGES,
   celexToCaseNumber,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import sparqlFixture from "./__fixtures__/eu-ecj-sparql.json";
 
@@ -72,33 +72,35 @@ describe("euEcjAdapter.fetchPage", () => {
   test.skip(
     "parses SPARQL + HTML into multi-lang decisions",
     async () => {
-      globalThis.fetch = mock((url: string) => {
-        const urlStr = url;
+      globalThis.fetch = asFetchMock(
+        mock((url: string) => {
+          const urlStr = url;
 
-        if (urlStr.includes("sparql")) {
-          return Promise.resolve(
-            new Response(JSON.stringify(sparqlFixture), {
-              status: 200,
-              headers: {
-                "Content-Type": "application/sparql-results+json",
-              },
-            }),
-          );
-        }
+          if (urlStr.includes("sparql")) {
+            return Promise.resolve(
+              new Response(JSON.stringify(sparqlFixture), {
+                status: 200,
+                headers: {
+                  "Content-Type": "application/sparql-results+json",
+                },
+              }),
+            );
+          }
 
-        if (urlStr.includes("eur-lex.europa.eu")) {
-          return Promise.resolve(
-            new Response(fulltextHtml, {
-              status: 200,
-              headers: {
-                "Content-Type": "text/html",
-              },
-            }),
-          );
-        }
+          if (urlStr.includes("eur-lex.europa.eu")) {
+            return Promise.resolve(
+              new Response(fulltextHtml, {
+                status: 200,
+                headers: {
+                  "Content-Type": "text/html",
+                },
+              }),
+            );
+          }
 
-        return Promise.resolve(new Response("Not found", { status: 404 }));
-      }) as unknown as typeof fetch;
+          return Promise.resolve(new Response("Not found", { status: 404 }));
+        }),
+      );
 
       const { euEcjAdapter } =
         await import("@/api/handlers/case-law/ingestion/adapters/eu-ecj");
@@ -140,9 +142,11 @@ describe("euEcjAdapter.fetchPage", () => {
   );
 
   test("handles SPARQL error", async () => {
-    globalThis.fetch = mock(() =>
-      Promise.resolve(new Response("Server error", { status: 500 })),
-    ) as unknown as typeof fetch;
+    globalThis.fetch = asFetchMock(
+      mock(() =>
+        Promise.resolve(new Response("Server error", { status: 500 })),
+      ),
+    );
 
     const { euEcjAdapter } =
       await import("@/api/handlers/case-law/ingestion/adapters/eu-ecj");
@@ -156,16 +160,18 @@ describe("euEcjAdapter.fetchPage", () => {
   });
 
   test("handles empty results", async () => {
-    globalThis.fetch = mock(() =>
-      Promise.resolve(
-        new Response(
-          JSON.stringify({
-            results: { bindings: [] },
-          }),
-          { status: 200 },
+    globalThis.fetch = asFetchMock(
+      mock(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              results: { bindings: [] },
+            }),
+            { status: 200 },
+          ),
         ),
       ),
-    ) as unknown as typeof fetch;
+    );
 
     const { euEcjAdapter } =
       await import("@/api/handlers/case-law/ingestion/adapters/eu-ecj");
@@ -181,34 +187,36 @@ describe("euEcjAdapter.fetchPage", () => {
   });
 
   test("skips languages without fulltext", async () => {
-    globalThis.fetch = mock((url: string) => {
-      const urlStr = url;
+    globalThis.fetch = asFetchMock(
+      mock((url: string) => {
+        const urlStr = url;
 
-      if (urlStr.includes("sparql")) {
-        const fixture = {
-          results: {
-            bindings: [sparqlFixture.results.bindings[0]],
-          },
-        };
-        return Promise.resolve(
-          new Response(JSON.stringify(fixture), {
-            status: 200,
-          }),
-        );
-      }
+        if (urlStr.includes("sparql")) {
+          const fixture = {
+            results: {
+              bindings: [sparqlFixture.results.bindings[0]],
+            },
+          };
+          return Promise.resolve(
+            new Response(JSON.stringify(fixture), {
+              status: 200,
+            }),
+          );
+        }
 
-      // Only EN and FR return fulltext
-      if (urlStr.includes("/EN/") || urlStr.includes("/FR/")) {
-        return Promise.resolve(
-          new Response(fulltextHtml, {
-            status: 200,
-            headers: { "Content-Type": "text/html" },
-          }),
-        );
-      }
+        // Only EN and FR return fulltext
+        if (urlStr.includes("/EN/") || urlStr.includes("/FR/")) {
+          return Promise.resolve(
+            new Response(fulltextHtml, {
+              status: 200,
+              headers: { "Content-Type": "text/html" },
+            }),
+          );
+        }
 
-      return Promise.resolve(new Response("Not found", { status: 404 }));
-    }) as unknown as typeof fetch;
+        return Promise.resolve(new Response("Not found", { status: 404 }));
+      }),
+    );
 
     const { euEcjAdapter } =
       await import("@/api/handlers/case-law/ingestion/adapters/eu-ecj");
@@ -227,24 +235,26 @@ describe("euEcjAdapter.fetchPage", () => {
   });
 
   test("no decisions when all languages 404", async () => {
-    globalThis.fetch = mock((url: string) => {
-      const urlStr = url;
+    globalThis.fetch = asFetchMock(
+      mock((url: string) => {
+        const urlStr = url;
 
-      if (urlStr.includes("sparql")) {
-        const fixture = {
-          results: {
-            bindings: [sparqlFixture.results.bindings[0]],
-          },
-        };
-        return Promise.resolve(
-          new Response(JSON.stringify(fixture), {
-            status: 200,
-          }),
-        );
-      }
+        if (urlStr.includes("sparql")) {
+          const fixture = {
+            results: {
+              bindings: [sparqlFixture.results.bindings[0]],
+            },
+          };
+          return Promise.resolve(
+            new Response(JSON.stringify(fixture), {
+              status: 200,
+            }),
+          );
+        }
 
-      return Promise.resolve(new Response("Not found", { status: 404 }));
-    }) as unknown as typeof fetch;
+        return Promise.resolve(new Response("Not found", { status: 404 }));
+      }),
+    );
 
     const { euEcjAdapter } =
       await import("@/api/handlers/case-law/ingestion/adapters/eu-ecj");
@@ -259,34 +269,36 @@ describe("euEcjAdapter.fetchPage", () => {
   });
 
   test("language appears in URLs", async () => {
-    globalThis.fetch = mock((url: string) => {
-      const urlStr = url;
+    globalThis.fetch = asFetchMock(
+      mock((url: string) => {
+        const urlStr = url;
 
-      if (urlStr.includes("sparql")) {
-        const fixture = {
-          results: {
-            bindings: [sparqlFixture.results.bindings[0]],
-          },
-        };
-        return Promise.resolve(
-          new Response(JSON.stringify(fixture), {
-            status: 200,
-          }),
-        );
-      }
+        if (urlStr.includes("sparql")) {
+          const fixture = {
+            results: {
+              bindings: [sparqlFixture.results.bindings[0]],
+            },
+          };
+          return Promise.resolve(
+            new Response(JSON.stringify(fixture), {
+              status: 200,
+            }),
+          );
+        }
 
-      // Only EN
-      if (urlStr.includes("/EN/")) {
-        return Promise.resolve(
-          new Response(fulltextHtml, {
-            status: 200,
-            headers: { "Content-Type": "text/html" },
-          }),
-        );
-      }
+        // Only EN
+        if (urlStr.includes("/EN/")) {
+          return Promise.resolve(
+            new Response(fulltextHtml, {
+              status: 200,
+              headers: { "Content-Type": "text/html" },
+            }),
+          );
+        }
 
-      return Promise.resolve(new Response("Not found", { status: 404 }));
-    }) as unknown as typeof fetch;
+        return Promise.resolve(new Response("Not found", { status: 404 }));
+      }),
+    );
 
     const { euEcjAdapter } =
       await import("@/api/handlers/case-law/ingestion/adapters/eu-ecj");

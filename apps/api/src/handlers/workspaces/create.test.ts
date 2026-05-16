@@ -1,37 +1,33 @@
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import type { SafeId } from "@/api/lib/branded-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import createWorkspaces from "./create";
+
+type CreateWorkspacesCtx = Parameters<typeof createWorkspaces.handler>[0];
 
 const createContext = ({
   body,
   safeDb,
   scopedDb,
 }: {
-  body: Parameters<typeof createWorkspaces.handler>[0]["body"];
-  safeDb: Parameters<typeof createWorkspaces.handler>[0]["safeDb"];
-  scopedDb: Parameters<typeof createWorkspaces.handler>[0]["scopedDb"];
-}): Parameters<typeof createWorkspaces.handler>[0] =>
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test fixture only provides fields touched by the handler
-  ({
+  body: CreateWorkspacesCtx["body"];
+  safeDb: CreateWorkspacesCtx["safeDb"];
+  scopedDb: CreateWorkspacesCtx["scopedDb"];
+}): CreateWorkspacesCtx =>
+  asTestRaw<CreateWorkspacesCtx>({
     body,
     safeDb,
     scopedDb,
     memberRole: { role: "owner" },
     orgAIConfig: null,
     session: {
-      activeOrganizationId:
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded test value
-        "org_test123" as SafeId<"organization">,
+      activeOrganizationId: toSafeId<"organization">("org_test123"),
     },
-    user: {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded test value
-      id: "user_test123" as SafeId<"user">,
-    },
-  }) as Parameters<typeof createWorkspaces.handler>[0];
+    user: { id: toSafeId<"user">("user_test123") },
+  });
 
 describe("createWorkspaces", () => {
   test("rejects teammate user IDs outside the active organization", async () => {

@@ -7,6 +7,18 @@
 
 import { createNodeExtension } from "../create";
 
+type SdtAttrs = {
+  sdtType: string;
+  alias: string | null;
+  tag: string | null;
+  lock: string | null;
+  placeholder: string | null;
+  showingPlaceholder: boolean;
+  dateFormat: string | null;
+  listItems: string | null;
+  checked: string | boolean | null;
+};
+
 export const SdtExtension = createNodeExtension({
   name: "sdt",
   schemaNodeName: "sdt",
@@ -38,7 +50,10 @@ export const SdtExtension = createNodeExtension({
       {
         tag: "span.docx-sdt",
         getAttrs(dom) {
-          const el = dom as HTMLElement;
+          if (!(dom instanceof HTMLElement)) {
+            return false;
+          }
+          const el = dom;
           return {
             sdtType: el.dataset["sdtType"] || "richText",
             alias: el.dataset["alias"] || null,
@@ -62,39 +77,39 @@ export const SdtExtension = createNodeExtension({
       },
     ],
     toDOM(node) {
-      const attrs = node.attrs as Record<string, unknown>;
+      const attrs = node.attrs as SdtAttrs;
       const dataAttrs: Record<string, string> = {
-        class: `docx-sdt docx-sdt-${attrs["sdtType"]}`,
-        "data-sdt-type": String(attrs["sdtType"]),
+        class: `docx-sdt docx-sdt-${attrs.sdtType}`,
+        "data-sdt-type": attrs.sdtType,
       };
 
-      if (attrs["alias"]) {
-        dataAttrs["data-alias"] = String(attrs["alias"]);
+      if (attrs.alias) {
+        dataAttrs["data-alias"] = attrs.alias;
       }
-      if (attrs["tag"]) {
-        dataAttrs["data-tag"] = String(attrs["tag"]);
+      if (attrs.tag) {
+        dataAttrs["data-tag"] = attrs.tag;
       }
-      if (attrs["lock"]) {
-        dataAttrs["data-lock"] = String(attrs["lock"]);
+      if (attrs.lock) {
+        dataAttrs["data-lock"] = attrs.lock;
       }
-      if (attrs["placeholder"]) {
-        dataAttrs["data-placeholder"] = String(attrs["placeholder"]);
+      if (attrs.placeholder) {
+        dataAttrs["data-placeholder"] = attrs.placeholder;
       }
-      if (attrs["showingPlaceholder"]) {
+      if (attrs.showingPlaceholder) {
         dataAttrs["data-showing-placeholder"] = "true";
       }
-      if (attrs["dateFormat"]) {
-        dataAttrs["data-date-format"] = String(attrs["dateFormat"]);
+      if (attrs.dateFormat) {
+        dataAttrs["data-date-format"] = attrs.dateFormat;
       }
-      if (attrs["listItems"]) {
-        dataAttrs["data-list-items"] = String(attrs["listItems"]);
+      if (attrs.listItems) {
+        dataAttrs["data-list-items"] = attrs.listItems;
       }
-      if (attrs["checked"] !== null) {
-        dataAttrs["data-checked"] = String(attrs["checked"]);
+      if (attrs.checked !== null) {
+        dataAttrs["data-checked"] = String(attrs.checked);
       }
 
       // Checkbox renders with a checkbox-like indicator
-      if (attrs["sdtType"] === "checkbox") {
+      if (attrs.sdtType === "checkbox") {
         dataAttrs["style"] =
           "border: 1px solid #ccc; border-radius: 3px; padding: 0 2px; display: inline;";
       } else {

@@ -10,7 +10,7 @@ import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { cn } from "@stll/ui/lib/utils";
 
 const ComboboxContext = React.createContext<{
-  chipsRef: React.RefObject<Element | null> | null;
+  chipsRef: React.RefObject<HTMLDivElement | null> | null;
   multiple: boolean;
 }>({
   chipsRef: null,
@@ -20,7 +20,7 @@ const ComboboxContext = React.createContext<{
 function Combobox<Value, Multiple extends boolean | undefined = false>(
   props: ComboboxPrimitive.Root.Props<Value, Multiple>,
 ): React.JSX.Element {
-  const chipsRef = React.useRef<Element | null>(null);
+  const chipsRef = React.useRef<HTMLDivElement | null>(null);
   const contextValue = React.useMemo(
     () => ({ chipsRef, multiple: !!props.multiple }),
     [chipsRef, props.multiple],
@@ -352,9 +352,10 @@ function ComboboxChips({
       )}
       data-slot="combobox-chips"
       onMouseDown={(e) => {
-        // SAFETY: DOM mouse event target is Element for UI interaction
-        // eslint-disable-next-line typescript/no-unsafe-type-assertion
-        const target = e.target as HTMLElement;
+        const { target } = e;
+        if (!(target instanceof Element)) {
+          return;
+        }
         const isChip = target.closest('[data-slot="combobox-chip"]');
         if (isChip || !chipsRef?.current) {
           return;
@@ -366,9 +367,7 @@ function ComboboxChips({
           input.focus();
         }
       }}
-      // SAFETY: chipsRef is HTMLDivElement from ComboboxPrimitive.Chips
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
-      ref={chipsRef as React.Ref<HTMLDivElement> | null}
+      ref={chipsRef}
       {...props}
     >
       {Boolean(startAddon) && (

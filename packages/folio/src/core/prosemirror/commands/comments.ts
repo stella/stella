@@ -4,6 +4,7 @@
  * PM commands for adding/removing comments and accepting/rejecting tracked changes.
  */
 
+import type { Mark } from "prosemirror-model";
 import type { Command, EditorState } from "prosemirror-state";
 
 /**
@@ -296,7 +297,7 @@ export function findChangeAtPosition(
   // belonging to different `revisionId`s must not be treated as one range.
   let markStart = from;
   let markEnd = from;
-  let foundMark: import("prosemirror-model").Mark | undefined;
+  let foundMark: Mark | undefined;
 
   // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
   node.forEach((child, offset) => {
@@ -327,7 +328,7 @@ export function findChangeAtPosition(
   const children: {
     childStart: number;
     childEnd: number;
-    marks: readonly import("prosemirror-model").Mark[];
+    marks: readonly Mark[];
   }[] = [];
   // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
   node.forEach((child, offset) => {
@@ -372,7 +373,7 @@ export function findChangeAtPosition(
  */
 function expandTrackedChangeRange(
   state: EditorState,
-  mark: import("prosemirror-model").Mark,
+  mark: Mark,
   fromHint: number,
   toHint: number,
 ): { from: number; to: number } {
@@ -482,7 +483,7 @@ export function findPreviousChange(
   // mark (e.g., an `insertion + deletion` overlay where the same text
   // node belongs to two distinct revisions). Skipping by position alone
   // would miss the nearer overlapping change.
-  let resultMark: import("prosemirror-model").Mark | null = null;
+  let resultMark: Mark | null = null;
 
   state.doc.descendants((node, pos) => {
     if (!node.isText) {

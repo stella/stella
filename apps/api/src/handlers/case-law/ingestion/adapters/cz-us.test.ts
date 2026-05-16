@@ -1,9 +1,9 @@
-/* eslint-disable typescript-eslint/no-unsafe-type-assertion */
 /* eslint-disable typescript-eslint/promise-function-async */
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -67,29 +67,33 @@ describe("czUsAdapter.fetchPage", () => {
     const curYr = String(currentYear % 100).padStart(2, "0");
     const prevYr = String((currentYear - 1) % 100).padStart(2, "0");
 
-    globalThis.fetch = mock((input: string | URL | Request) => {
-      const url = resolveUrl(input);
-      if (url.includes("GetAbstract")) {
-        return Promise.resolve(new Response(makeEmptyPage()));
-      }
-      const match = /sz=I-(\d+)-(\d+)_1/.exec(url);
-      const n = match ? Number(match[1]) : 0;
-      const yr = match ? Number(match[2]) : 0;
+    globalThis.fetch = asFetchMock(
+      mock((input: string | URL | Request) => {
+        const url = resolveUrl(input);
+        if (url.includes("GetAbstract")) {
+          return Promise.resolve(new Response(makeEmptyPage()));
+        }
+        const match = /sz=I-(\d+)-(\d+)_1/.exec(url);
+        const n = match ? Number(match[1]) : 0;
+        const yr = match ? Number(match[2]) : 0;
 
-      if (yr === Number(curYr) && n === 1) {
-        return Promise.resolve(
-          new Response(makeTextPage(`I.ÚS 1/${curYr}`, `1. 1. ${currentYear}`)),
-        );
-      }
-      if (yr === Number(prevYr) && n >= 1 && n <= 2) {
-        return Promise.resolve(
-          new Response(
-            makeTextPage(`II.ÚS ${n}/${prevYr}`, `5. 5. ${currentYear - 1}`),
-          ),
-        );
-      }
-      return Promise.resolve(new Response(makeEmptyPage()));
-    }) as unknown as typeof fetch;
+        if (yr === Number(curYr) && n === 1) {
+          return Promise.resolve(
+            new Response(
+              makeTextPage(`I.ÚS 1/${curYr}`, `1. 1. ${currentYear}`),
+            ),
+          );
+        }
+        if (yr === Number(prevYr) && n >= 1 && n <= 2) {
+          return Promise.resolve(
+            new Response(
+              makeTextPage(`II.ÚS ${n}/${prevYr}`, `5. 5. ${currentYear - 1}`),
+            ),
+          );
+        }
+        return Promise.resolve(new Response(makeEmptyPage()));
+      }),
+    );
 
     // Pass null cursor (the real entry point)
     const result = await czUsAdapter.fetchPage(null, {});
@@ -110,20 +114,22 @@ describe("czUsAdapter.fetchPage", () => {
     // Year 2025: numbers 1-5 have decisions, rest are empty.
     const hitNumbers = new Set([1, 2, 3, 4, 5]);
 
-    globalThis.fetch = mock((input: string | URL | Request) => {
-      const url = resolveUrl(input);
-      if (url.includes("GetAbstract")) {
-        return Promise.resolve(new Response(makeEmptyPage()));
-      }
-      const match = /sz=I-(\d+)-(\d+)_1/.exec(url);
-      const n = match ? Number(match[1]) : 0;
-      const yr = match ? Number(match[2]) : 0;
-      const body =
-        yr === 25 && hitNumbers.has(n)
-          ? makeTextPage(`II.ÚS ${n}/25`, "1. 1. 2025")
-          : makeEmptyPage();
-      return Promise.resolve(new Response(body));
-    }) as unknown as typeof fetch;
+    globalThis.fetch = asFetchMock(
+      mock((input: string | URL | Request) => {
+        const url = resolveUrl(input);
+        if (url.includes("GetAbstract")) {
+          return Promise.resolve(new Response(makeEmptyPage()));
+        }
+        const match = /sz=I-(\d+)-(\d+)_1/.exec(url);
+        const n = match ? Number(match[1]) : 0;
+        const yr = match ? Number(match[2]) : 0;
+        const body =
+          yr === 25 && hitNumbers.has(n)
+            ? makeTextPage(`II.ÚS ${n}/25`, "1. 1. 2025")
+            : makeEmptyPage();
+        return Promise.resolve(new Response(body));
+      }),
+    );
 
     const result = await czUsAdapter.fetchPage("1:2025", {});
 
@@ -141,33 +147,35 @@ describe("czUsAdapter.fetchPage", () => {
     // Year 2025: only n=1 has a decision.
     // After 30 consecutive misses, adapter moves to 2024.
     // Year 2024: n=1..3 have decisions.
-    globalThis.fetch = mock((input: string | URL | Request) => {
-      const url = resolveUrl(input);
-      if (url.includes("GetAbstract")) {
+    globalThis.fetch = asFetchMock(
+      mock((input: string | URL | Request) => {
+        const url = resolveUrl(input);
+        if (url.includes("GetAbstract")) {
+          return Promise.resolve(new Response(makeEmptyPage()));
+        }
+
+        const yearMatch = /sz=I-(\d+)-(\d+)_1/.exec(url);
+        if (!yearMatch) {
+          return Promise.resolve(new Response(makeEmptyPage()));
+        }
+
+        const n = Number(yearMatch[1]);
+        const yr = Number(yearMatch[2]);
+
+        if (yr === 25 && n === 1) {
+          return Promise.resolve(
+            new Response(makeTextPage("I.ÚS 1/25", "10. 1. 2025")),
+          );
+        }
+        if (yr === 24 && n >= 1 && n <= 3) {
+          return Promise.resolve(
+            new Response(makeTextPage(`III.ÚS ${n}/24`, "15. 3. 2024")),
+          );
+        }
+
         return Promise.resolve(new Response(makeEmptyPage()));
-      }
-
-      const yearMatch = /sz=I-(\d+)-(\d+)_1/.exec(url);
-      if (!yearMatch) {
-        return Promise.resolve(new Response(makeEmptyPage()));
-      }
-
-      const n = Number(yearMatch[1]);
-      const yr = Number(yearMatch[2]);
-
-      if (yr === 25 && n === 1) {
-        return Promise.resolve(
-          new Response(makeTextPage("I.ÚS 1/25", "10. 1. 2025")),
-        );
-      }
-      if (yr === 24 && n >= 1 && n <= 3) {
-        return Promise.resolve(
-          new Response(makeTextPage(`III.ÚS ${n}/24`, "15. 3. 2024")),
-        );
-      }
-
-      return Promise.resolve(new Response(makeEmptyPage()));
-    }) as unknown as typeof fetch;
+      }),
+    );
 
     const result = await czUsAdapter.fetchPage("1:2025", {});
 
@@ -188,21 +196,23 @@ describe("czUsAdapter.fetchPage", () => {
     // Only year 1993 (93): n=1 has a decision.
     // After 30 misses at FIRST_YEAR, cursor should park at
     // the current year (not null) to avoid re-scanning history.
-    globalThis.fetch = mock((input: string | URL | Request) => {
-      const url = resolveUrl(input);
-      if (url.includes("GetAbstract")) {
+    globalThis.fetch = asFetchMock(
+      mock((input: string | URL | Request) => {
+        const url = resolveUrl(input);
+        if (url.includes("GetAbstract")) {
+          return Promise.resolve(new Response(makeEmptyPage()));
+        }
+
+        const match = /sz=I-(\d+)-93_1/.exec(url);
+        if (match && Number(match[1]) === 1) {
+          return Promise.resolve(
+            new Response(makeTextPage("I.ÚS 1/93", "11. 11. 1993")),
+          );
+        }
+
         return Promise.resolve(new Response(makeEmptyPage()));
-      }
-
-      const match = /sz=I-(\d+)-93_1/.exec(url);
-      if (match && Number(match[1]) === 1) {
-        return Promise.resolve(
-          new Response(makeTextPage("I.ÚS 1/93", "11. 11. 1993")),
-        );
-      }
-
-      return Promise.resolve(new Response(makeEmptyPage()));
-    }) as unknown as typeof fetch;
+      }),
+    );
 
     const result = await czUsAdapter.fetchPage("1:1993", {});
 
@@ -219,17 +229,19 @@ describe("czUsAdapter.fetchPage", () => {
   });
 
   test("respects PAGE_SIZE limit", async () => {
-    globalThis.fetch = mock((input: string | URL | Request) => {
-      const url = resolveUrl(input);
-      if (url.includes("GetAbstract")) {
-        return Promise.resolve(new Response(makeEmptyPage()));
-      }
-      const match = /sz=I-(\d+)-25_1/.exec(url);
-      const n = match ? Number(match[1]) : 0;
-      return Promise.resolve(
-        new Response(makeTextPage(`I.ÚS ${n}/25`, "1. 6. 2025")),
-      );
-    }) as unknown as typeof fetch;
+    globalThis.fetch = asFetchMock(
+      mock((input: string | URL | Request) => {
+        const url = resolveUrl(input);
+        if (url.includes("GetAbstract")) {
+          return Promise.resolve(new Response(makeEmptyPage()));
+        }
+        const match = /sz=I-(\d+)-25_1/.exec(url);
+        const n = match ? Number(match[1]) : 0;
+        return Promise.resolve(
+          new Response(makeTextPage(`I.ÚS ${n}/25`, "1. 6. 2025")),
+        );
+      }),
+    );
 
     const result = await czUsAdapter.fetchPage("1:2025", {});
 
@@ -243,20 +255,22 @@ describe("czUsAdapter.fetchPage", () => {
   });
 
   test("abstract failure does not drop the decision", async () => {
-    globalThis.fetch = mock((input: string | URL | Request) => {
-      const url = resolveUrl(input);
-      if (url.includes("GetAbstract")) {
-        return Promise.reject(new Error("Network error"));
-      }
-      const match = /sz=I-(\d+)-/.exec(url);
-      const n = match ? Number(match[1]) : 0;
-      if (n === 1) {
-        return Promise.resolve(
-          new Response(makeTextPage("IV.ÚS 1/25", "5. 2. 2025")),
-        );
-      }
-      return Promise.resolve(new Response(makeEmptyPage()));
-    }) as unknown as typeof fetch;
+    globalThis.fetch = asFetchMock(
+      mock((input: string | URL | Request) => {
+        const url = resolveUrl(input);
+        if (url.includes("GetAbstract")) {
+          return Promise.reject(new Error("Network error"));
+        }
+        const match = /sz=I-(\d+)-/.exec(url);
+        const n = match ? Number(match[1]) : 0;
+        if (n === 1) {
+          return Promise.resolve(
+            new Response(makeTextPage("IV.ÚS 1/25", "5. 2. 2025")),
+          );
+        }
+        return Promise.resolve(new Response(makeEmptyPage()));
+      }),
+    );
 
     const result = await czUsAdapter.fetchPage("1:2025", {});
 
@@ -278,20 +292,22 @@ describe("czUsAdapter.fetchPage", () => {
       "odůvodnění soudního rozhodnutí, které musí být " +
       "přezkoumatelné a dostatečně podrobné.";
 
-    globalThis.fetch = mock((input: string | URL | Request) => {
-      const url = resolveUrl(input);
-      if (url.includes("GetAbstract")) {
-        return Promise.resolve(new Response(makeAbstractPage(longAbstract)));
-      }
-      const match = /sz=I-(\d+)-/.exec(url);
-      const n = match ? Number(match[1]) : 0;
-      if (n === 1) {
-        return Promise.resolve(
-          new Response(makeTextPage("I.ÚS 1/25", "1. 1. 2025")),
-        );
-      }
-      return Promise.resolve(new Response(makeEmptyPage()));
-    }) as unknown as typeof fetch;
+    globalThis.fetch = asFetchMock(
+      mock((input: string | URL | Request) => {
+        const url = resolveUrl(input);
+        if (url.includes("GetAbstract")) {
+          return Promise.resolve(new Response(makeAbstractPage(longAbstract)));
+        }
+        const match = /sz=I-(\d+)-/.exec(url);
+        const n = match ? Number(match[1]) : 0;
+        if (n === 1) {
+          return Promise.resolve(
+            new Response(makeTextPage("I.ÚS 1/25", "1. 1. 2025")),
+          );
+        }
+        return Promise.resolve(new Response(makeEmptyPage()));
+      }),
+    );
 
     const result = await czUsAdapter.fetchPage("1:2025", {});
 
@@ -310,19 +326,21 @@ describe("czUsAdapter.fetchPage", () => {
   test("AbortError preserves partial results", async () => {
     let callCount = 0;
 
-    globalThis.fetch = mock((input: string | URL | Request) => {
-      const url = resolveUrl(input);
-      if (url.includes("GetAbstract")) {
-        return Promise.resolve(new Response(makeEmptyPage()));
-      }
-      callCount++;
-      if (callCount === 1) {
-        return Promise.resolve(
-          new Response(makeTextPage("I.ÚS 1/25", "1. 1. 2025")),
-        );
-      }
-      return Promise.reject(new DOMException("Aborted", "AbortError"));
-    }) as unknown as typeof fetch;
+    globalThis.fetch = asFetchMock(
+      mock((input: string | URL | Request) => {
+        const url = resolveUrl(input);
+        if (url.includes("GetAbstract")) {
+          return Promise.resolve(new Response(makeEmptyPage()));
+        }
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve(
+            new Response(makeTextPage("I.ÚS 1/25", "1. 1. 2025")),
+          );
+        }
+        return Promise.reject(new DOMException("Aborted", "AbortError"));
+      }),
+    );
 
     const result = await czUsAdapter.fetchPage("1:2025", {});
 
@@ -350,18 +368,20 @@ describe("czUsAdapter.fetchPage", () => {
   </table>
 </body></html>`;
 
-    globalThis.fetch = mock((input: string | URL | Request) => {
-      const url = resolveUrl(input);
-      if (url.includes("GetAbstract")) {
+    globalThis.fetch = asFetchMock(
+      mock((input: string | URL | Request) => {
+        const url = resolveUrl(input);
+        if (url.includes("GetAbstract")) {
+          return Promise.resolve(new Response(makeEmptyPage()));
+        }
+        const match = /sz=I-(\d+)-/.exec(url);
+        const n = match ? Number(match[1]) : 0;
+        if (n === 1) {
+          return Promise.resolve(new Response(html));
+        }
         return Promise.resolve(new Response(makeEmptyPage()));
-      }
-      const match = /sz=I-(\d+)-/.exec(url);
-      const n = match ? Number(match[1]) : 0;
-      if (n === 1) {
-        return Promise.resolve(new Response(html));
-      }
-      return Promise.resolve(new Response(makeEmptyPage()));
-    }) as unknown as typeof fetch;
+      }),
+    );
 
     const result = await czUsAdapter.fetchPage("1:2010", {});
 

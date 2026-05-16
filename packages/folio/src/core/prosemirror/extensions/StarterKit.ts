@@ -85,7 +85,9 @@ export type StarterKitOptions = {
 export function createStarterKit(
   options: StarterKitOptions = {},
 ): AnyExtension[] {
-  const disabled = new Set(options.disable ?? []);
+  const disabled = options.disable
+    ? new Set(options.disable)
+    : new Set<string>();
 
   const extensions: AnyExtension[] = [];
 

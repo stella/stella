@@ -226,11 +226,12 @@ export function ImageSelectionOverlay({
     }
 
     // Use the overlay's own offsetParent (the viewport div) for correct coordinates
-    const parent = overlayRef.current.offsetParent as HTMLElement | null;
-    if (!parent) {
+    const offsetParent = overlayRef.current.offsetParent;
+    if (!(offsetParent instanceof HTMLElement)) {
       setOverlayRect(null);
       return;
     }
+    const parent = offsetParent;
 
     const parentRect = parent.getBoundingClientRect();
     const imageRect = imageInfo.element.getBoundingClientRect();

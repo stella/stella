@@ -85,6 +85,11 @@ function paragraphAttrsToDOMStyle(attrs: ParagraphAttrs): string {
 }
 
 function numFmtToClass(numFmt: NumberFormat | undefined): string {
+  // NumberFormat has 70+ values defined by OOXML; this switch
+  // intentionally classifies only the four whose CSS rendering differs.
+  // Every other format (decimal, Asian numerals, etc.) falls through to
+  // the decimal CSS class, which matches Word's display when the
+  // browser font lacks the specialised glyphs.
   switch (numFmt) {
     case "upperRoman":
       return "docx-list-upper-roman";
@@ -360,8 +365,11 @@ const paragraphNodeSpec: NodeSpec = {
   parseDOM: [
     {
       tag: "p",
-      getAttrs(dom): ParagraphAttrs {
-        const element = dom as HTMLElement;
+      getAttrs(dom): ParagraphAttrs | false {
+        if (!(dom instanceof HTMLElement)) {
+          return false;
+        }
+        const element = dom;
 
         // Start with data-attribute values (from our own editor's copy/paste)
         const paraId = element.dataset["paraId"];

@@ -52,24 +52,20 @@ const extractAcceptedText = (xml: string): string[] => {
 
   const texts: string[] = [];
   for (const child of body.childNodes) {
-    if (child.nodeType !== child.ELEMENT_NODE) {
+    if (!(child instanceof slimdom.Element)) {
       continue;
     }
-    // SAFETY: ELEMENT_NODE implies Element in slimdom
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const el = child as slimdom.Element;
+    const el = child;
     if (el.localName !== "p" || el.namespaceURI !== W_NS) {
       continue;
     }
 
     let text = "";
     const walk = (node: slimdom.Node) => {
-      if (node.nodeType !== node.ELEMENT_NODE) {
+      if (!(node instanceof slimdom.Element)) {
         return;
       }
-      // SAFETY: ELEMENT_NODE implies Element in slimdom
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      const n = node as slimdom.Element;
+      const n = node;
       if (n.localName === "del" && n.namespaceURI === W_NS) {
         return;
       }
@@ -253,10 +249,8 @@ describe("edge case: w:rPrChange IDs duplicated on run split", () => {
     const doc = slimdom.parseXmlDocument(result);
     const allIds: number[] = [];
     const walk = (node: slimdom.Node) => {
-      if (node.nodeType === node.ELEMENT_NODE) {
-        // SAFETY: ELEMENT_NODE implies Element in slimdom
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-        const el = node as slimdom.Element;
+      if (node instanceof slimdom.Element) {
+        const el = node;
         const id = el.getAttributeNS(W_NS, "id") ?? el.getAttribute("w:id");
         if (id !== null) {
           const parsed = Number.parseInt(id, 10);

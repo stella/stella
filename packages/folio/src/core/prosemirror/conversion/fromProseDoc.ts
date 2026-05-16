@@ -16,6 +16,7 @@ import type {
   ImageWrap,
   ImagePosition,
   ImageTransform,
+  ShapeFill,
   ShapeOutline,
   SectionProperties,
   SectionStart,
@@ -952,7 +953,7 @@ function createImageRun(node: PMNode): Run {
   if (attrs.transform) {
     const transformStr = attrs.transform;
     const imgTransform: ImageTransform = {};
-    const rotateMatch = transformStr.match(/rotate\(([-\d.]+)deg\)/);
+    const rotateMatch = /rotate\(([-\d.]+)deg\)/.exec(transformStr);
     if (rotateMatch) {
       // SAFETY: capture group [1] always present when regex matches
       imgTransform.rotation = Number.parseFloat(rotateMatch[1]!);
@@ -1067,9 +1068,7 @@ function createShapeRun(node: PMNode): Run {
         position: number;
         color: string;
       }[];
-      const gradient: NonNullable<
-        import("../../types/content").ShapeFill["gradient"]
-      > = {
+      const gradient: NonNullable<ShapeFill["gradient"]> = {
         type: (attrs.gradientType || "linear") as
           | "linear"
           | "radial"

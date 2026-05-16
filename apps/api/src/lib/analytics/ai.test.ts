@@ -6,6 +6,7 @@ import type {
 import { describe, expect, test } from "bun:test";
 
 import type { OrgAIConfig } from "@/api/lib/ai-models";
+import { asSdkEvent } from "@/api/tests/helpers/test-tool-set";
 
 import { SERVER_ANALYTICS_EVENTS } from "./types";
 import type { Analytics } from "./types";
@@ -123,91 +124,94 @@ describe("createAIAnalyticsCallbacks", () => {
       traceId: "trace_123",
     });
 
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- Synthetic callback event for focused unit coverage
-    callbacks.stepCallbacks.experimental_onStepStart?.({
-      messages: [
-        {
-          content: [{ text: "Summarize this", type: "text" }],
-          role: "user",
-        },
-      ],
-      model: { modelId: "gpt-5.4-mini", provider: "openai" },
-      stepNumber: 0,
-    } as unknown as OnStepStartEvent);
-
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- Synthetic callback event for focused unit coverage
-    callbacks.stepCallbacks.experimental_onToolCallFinish?.({
-      abortSignal: undefined,
-      durationMs: 120,
-      error: undefined,
-      experimental_context: undefined,
-      functionId: undefined,
-      messages: [],
-      metadata: undefined,
-      model: { modelId: "gpt-5.4-mini", provider: "openai" },
-      output: { answer: "42" },
-      stepNumber: 0,
-      success: true,
-      toolCall: {
-        dynamic: false,
-        input: { query: "life" },
-        toolCallId: "tool_123",
-        toolName: "search_docs",
-      },
-    } as unknown as OnToolCallFinishEvent);
-
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- Synthetic callback event for focused unit coverage
-    callbacks.stepCallbacks.onStepFinish?.({
-      content: [],
-      dynamicToolCalls: [],
-      dynamicToolResults: [],
-      experimental_context: undefined,
-      files: [],
-      finishReason: "stop",
-      functionId: undefined,
-      metadata: undefined,
-      model: { modelId: "gpt-5.4-mini", provider: "openai" },
-      providerMetadata: undefined,
-      rawFinishReason: "stop",
-      reasoning: [],
-      reasoningText: undefined,
-      request: {},
-      response: {
-        body: undefined,
-        headers: undefined,
-        id: "resp_123",
+    callbacks.stepCallbacks.experimental_onStepStart?.(
+      asSdkEvent<OnStepStartEvent>({
         messages: [
           {
-            content: [{ text: "Done.", type: "text" }],
-            role: "assistant",
+            content: [{ text: "Summarize this", type: "text" }],
+            role: "user",
           },
         ],
-        modelId: "gpt-5.4-mini",
-        timestamp: new Date(),
-      },
-      sources: [],
-      staticToolCalls: [],
-      staticToolResults: [],
-      stepNumber: 0,
-      text: "Done.",
-      toolCalls: [
-        {
+        model: { modelId: "gpt-5.4-mini", provider: "openai" },
+        stepNumber: 0,
+      }),
+    );
+
+    callbacks.stepCallbacks.experimental_onToolCallFinish?.(
+      asSdkEvent<OnToolCallFinishEvent>({
+        abortSignal: undefined,
+        durationMs: 120,
+        error: undefined,
+        experimental_context: undefined,
+        functionId: undefined,
+        messages: [],
+        metadata: undefined,
+        model: { modelId: "gpt-5.4-mini", provider: "openai" },
+        output: { answer: "42" },
+        stepNumber: 0,
+        success: true,
+        toolCall: {
           dynamic: false,
-          input: {},
+          input: { query: "life" },
           toolCallId: "tool_123",
           toolName: "search_docs",
         },
-      ],
-      toolResults: [],
-      usage: {
-        inputTokenDetails: undefined,
-        inputTokens: 10,
-        outputTokenDetails: undefined,
-        outputTokens: 4,
-        totalTokens: 14,
-      },
-      warnings: undefined,
-    } as unknown as OnStepFinishEvent);
+      }),
+    );
+
+    callbacks.stepCallbacks.onStepFinish?.(
+      asSdkEvent<OnStepFinishEvent>({
+        content: [],
+        dynamicToolCalls: [],
+        dynamicToolResults: [],
+        experimental_context: undefined,
+        files: [],
+        finishReason: "stop",
+        functionId: undefined,
+        metadata: undefined,
+        model: { modelId: "gpt-5.4-mini", provider: "openai" },
+        providerMetadata: undefined,
+        rawFinishReason: "stop",
+        reasoning: [],
+        reasoningText: undefined,
+        request: {},
+        response: {
+          body: undefined,
+          headers: undefined,
+          id: "resp_123",
+          messages: [
+            {
+              content: [{ text: "Done.", type: "text" }],
+              role: "assistant",
+            },
+          ],
+          modelId: "gpt-5.4-mini",
+          timestamp: new Date(),
+        },
+        sources: [],
+        staticToolCalls: [],
+        staticToolResults: [],
+        stepNumber: 0,
+        text: "Done.",
+        toolCalls: [
+          {
+            dynamic: false,
+            input: {},
+            toolCallId: "tool_123",
+            toolName: "search_docs",
+          },
+        ],
+        toolResults: [],
+        usage: {
+          inputTokenDetails: undefined,
+          inputTokens: 10,
+          outputTokenDetails: undefined,
+          outputTokens: 4,
+          totalTokens: 14,
+        },
+        warnings: undefined,
+      }),
+    );
 
     expect(events).toHaveLength(2);
     expect(events[0]?.event).toBe("$ai_span");
@@ -289,17 +293,18 @@ describe("createAIAnalyticsCallbacks", () => {
       traceId: "trace_789",
     });
 
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- Synthetic callback event for focused unit coverage
-    callbacks.stepCallbacks.experimental_onStepStart?.({
-      messages: [
-        {
-          content: [{ text: "Sensitive prompt", type: "text" }],
-          role: "user",
-        },
-      ],
-      model: { modelId: "gpt-5.4-mini", provider: "openai" },
-      stepNumber: 0,
-    } as unknown as OnStepStartEvent);
+    callbacks.stepCallbacks.experimental_onStepStart?.(
+      asSdkEvent<OnStepStartEvent>({
+        messages: [
+          {
+            content: [{ text: "Sensitive prompt", type: "text" }],
+            role: "user",
+          },
+        ],
+        model: { modelId: "gpt-5.4-mini", provider: "openai" },
+        stepNumber: 0,
+      }),
+    );
 
     callbacks.captureError(new Error("stream failed"));
 
@@ -345,63 +350,65 @@ describe("createAIAnalyticsCallbacks", () => {
       traceId: "trace_should_not_leave_basic_mode",
     });
 
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- Synthetic callback event for focused unit coverage
-    callbacks.stepCallbacks.experimental_onStepStart?.({
-      messages: [
-        {
-          content: [{ text: "Privileged client facts", type: "text" }],
-          role: "user",
-        },
-      ],
-      model: { modelId: "runtime-model", provider: "openai.responses" },
-      stepNumber: 0,
-    } as unknown as OnStepStartEvent);
-
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- Synthetic callback event for focused unit coverage
-    callbacks.stepCallbacks.onStepFinish?.({
-      content: [],
-      dynamicToolCalls: [],
-      dynamicToolResults: [],
-      experimental_context: undefined,
-      files: [],
-      finishReason: "stop",
-      functionId: undefined,
-      metadata: undefined,
-      model: { modelId: "runtime-model", provider: "openai.responses" },
-      providerMetadata: undefined,
-      rawFinishReason: "stop",
-      reasoning: [],
-      reasoningText: undefined,
-      request: {},
-      response: {
-        body: undefined,
-        headers: undefined,
-        id: "resp_456",
+    callbacks.stepCallbacks.experimental_onStepStart?.(
+      asSdkEvent<OnStepStartEvent>({
         messages: [
           {
-            content: [{ text: "Sensitive answer", type: "text" }],
-            role: "assistant",
+            content: [{ text: "Privileged client facts", type: "text" }],
+            role: "user",
           },
         ],
-        modelId: "runtime-model",
-        timestamp: new Date(),
-      },
-      sources: [],
-      staticToolCalls: [],
-      staticToolResults: [],
-      stepNumber: 0,
-      text: "Sensitive answer",
-      toolCalls: [],
-      toolResults: [],
-      usage: {
-        inputTokenDetails: undefined,
-        inputTokens: 1200,
-        outputTokenDetails: undefined,
-        outputTokens: 250,
-        totalTokens: 1450,
-      },
-      warnings: undefined,
-    } as unknown as OnStepFinishEvent);
+        model: { modelId: "runtime-model", provider: "openai.responses" },
+        stepNumber: 0,
+      }),
+    );
+
+    callbacks.stepCallbacks.onStepFinish?.(
+      asSdkEvent<OnStepFinishEvent>({
+        content: [],
+        dynamicToolCalls: [],
+        dynamicToolResults: [],
+        experimental_context: undefined,
+        files: [],
+        finishReason: "stop",
+        functionId: undefined,
+        metadata: undefined,
+        model: { modelId: "runtime-model", provider: "openai.responses" },
+        providerMetadata: undefined,
+        rawFinishReason: "stop",
+        reasoning: [],
+        reasoningText: undefined,
+        request: {},
+        response: {
+          body: undefined,
+          headers: undefined,
+          id: "resp_456",
+          messages: [
+            {
+              content: [{ text: "Sensitive answer", type: "text" }],
+              role: "assistant",
+            },
+          ],
+          modelId: "runtime-model",
+          timestamp: new Date(),
+        },
+        sources: [],
+        staticToolCalls: [],
+        staticToolResults: [],
+        stepNumber: 0,
+        text: "Sensitive answer",
+        toolCalls: [],
+        toolResults: [],
+        usage: {
+          inputTokenDetails: undefined,
+          inputTokens: 1200,
+          outputTokenDetails: undefined,
+          outputTokens: 250,
+          totalTokens: 1450,
+        },
+        warnings: undefined,
+      }),
+    );
 
     expect(events).toHaveLength(1);
     const event = events.at(0);

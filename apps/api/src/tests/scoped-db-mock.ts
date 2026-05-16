@@ -6,6 +6,7 @@ import type {
   ScopedDb,
   Transaction,
 } from "@/api/db";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 export const toSafeDbMock =
   (scopedDb: ScopedDb): SafeDb =>
@@ -26,10 +27,8 @@ export const createScopedDbMock = (tx: unknown) => {
     callback: (transaction: Transaction) => Promise<T>,
   ) => {
     callCount += 1;
-
-    // SAFETY: tests provide only the transaction members touched by the handler.
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-    return await callback(tx as Transaction);
+    // Tests provide only the transaction members touched by the handler.
+    return await callback(asTestRaw<Transaction>(tx));
   };
 
   return {

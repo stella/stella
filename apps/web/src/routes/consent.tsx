@@ -15,6 +15,7 @@ import {
 } from "@stll/ui/components/frame";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import type { TranslationKey } from "@/i18n/types";
 import { authClient } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
 import {
@@ -55,7 +56,7 @@ const SCOPE_LABELS = {
   email: "consent.scopeProfile",
   openid: "consent.scopeProfile",
   profile: "consent.scopeProfile",
-} as const;
+} as const satisfies Record<string, TranslationKey>;
 
 type ScopeKey = keyof typeof SCOPE_LABELS;
 
@@ -105,7 +106,7 @@ function ConsentPage() {
       (organization) => organization.id === activeOrganizationId,
     )?.name ?? null;
 
-  const uniqueLabels = new Map<string, string>();
+  const uniqueLabels = new Map<TranslationKey, string>();
   for (const requestedScope of scopes) {
     if (!isScopeKey(requestedScope)) {
       continue;
@@ -176,9 +177,12 @@ function ConsentPage() {
                     key={label}
                   >
                     <span className="text-muted-foreground mt-0.5">&bull;</span>
-                    {/* SAFETY: label comes from SCOPE_LABELS, whose values are
-                        valid translation keys, but use-intl does not accept a
-                        computed nested key type. */}
+                    {/* SAFETY: SCOPE_LABELS `satisfies Record<string,
+                        TranslationKey>` enforces at compile time that every
+                        value is a valid key. The `as never` is required only
+                        because use-intl's `t()` overloads bind tighter for
+                        literal keys; a non-literal `TranslationKey` is
+                        rejected by the no-args overload. */}
                     {/* eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion */}
                     {t(label as never)}
                   </li>

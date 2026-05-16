@@ -243,12 +243,14 @@ export const KanbanColumn = ({
           setClosestColumnEdge(null);
           // Column reorder is handled by the board-level
           // monitor (forgiving: works even if dropped in gap).
-          if (source.data["type"] === ENTITY_DRAG_TYPE) {
-            // SAFETY: entityId is always a string; set by our own draggable getInitialData.
-            // eslint-disable-next-line typescript/no-unsafe-type-assertion
-            const entityId = source.data["entityId"] as string;
-            onDropRef.current(entityId);
+          if (source.data["type"] !== ENTITY_DRAG_TYPE) {
+            return;
           }
+          const entityId = source.data["entityId"];
+          if (typeof entityId !== "string") {
+            return;
+          }
+          onDropRef.current(entityId);
         },
       }),
     ];

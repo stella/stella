@@ -1,22 +1,24 @@
 import { describe, expect, test } from "bun:test";
 
 import { auditLogs, workspaceMembers } from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
+import { toSafeId } from "@/api/lib/branded-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import addWorkspaceMember from "./workspace-members-add";
+
+type AddMemberCtx = Parameters<typeof addWorkspaceMember.handler>[0];
 
 const createContext = ({
   body,
   safeDb,
   scopedDb,
 }: {
-  body: Parameters<typeof addWorkspaceMember.handler>[0]["body"];
-  safeDb: Parameters<typeof addWorkspaceMember.handler>[0]["safeDb"];
-  scopedDb: Parameters<typeof addWorkspaceMember.handler>[0]["scopedDb"];
-}): Parameters<typeof addWorkspaceMember.handler>[0] =>
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- test fixture only provides the fields used by the handler
-  ({
+  body: AddMemberCtx["body"];
+  safeDb: AddMemberCtx["safeDb"];
+  scopedDb: AddMemberCtx["scopedDb"];
+}): AddMemberCtx =>
+  asTestRaw<AddMemberCtx>({
     body,
     safeDb,
     scopedDb,
@@ -24,18 +26,11 @@ const createContext = ({
     orgAIConfig: null,
     request: new Request("http://localhost/v1/workspaces/ws_test123/members"),
     session: {
-      activeOrganizationId:
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded test value
-        "org_test123" as SafeId<"organization">,
+      activeOrganizationId: toSafeId<"organization">("org_test123"),
     },
-    user: {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded test value
-      id: "user_test123" as SafeId<"user">,
-    },
-    workspaceId:
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded test value
-      "ws_test123" as SafeId<"workspace">,
-  }) as Parameters<typeof addWorkspaceMember.handler>[0];
+    user: { id: toSafeId<"user">("user_test123") },
+    workspaceId: toSafeId<"workspace">("ws_test123"),
+  });
 
 const selectRowsInOrder = (rowsByCall: unknown[][]) => {
   let callIndex = 0;
@@ -57,9 +52,9 @@ const isArrayWithLength = (
 describe("addWorkspaceMember", () => {
   test("adds a member to a personal matter", async () => {
     const createdAt = new Date("2026-01-01T00:00:00.000Z");
-    const createdWorkspaceMemberId =
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- branded test value
-      Bun.randomUUIDv7() as SafeId<"workspaceMember">;
+    const createdWorkspaceMemberId = toSafeId<"workspaceMember">(
+      Bun.randomUUIDv7(),
+    );
     const insertedWorkspaceMembers: unknown[] = [];
     const insertedAuditLogs: unknown[] = [];
     const { safeDb, scopedDb } = createScopedDbMock({

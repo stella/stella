@@ -732,7 +732,11 @@ function serializeWrap(wrap: ImageWrap): string {
     case "behind":
     case "inFront":
       return "<wp:wrapNone/>";
-    default:
+    case "inline":
+      // Inline images don't get a wrap element — they're laid out
+      // inline with text via wp:inline. Caller should not invoke
+      // serializeWrap for inline images, but if it slips through we
+      // fall back to wrapNone (matches Word's degenerate handling).
       return "<wp:wrapNone/>";
   }
 }

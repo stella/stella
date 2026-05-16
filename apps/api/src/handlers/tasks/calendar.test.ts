@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import calendarTasks from "./calendar";
 
@@ -18,15 +19,16 @@ const customPropertyId = toSafeId<"property">(
   "00000000-0000-4000-8000-000000000301",
 );
 
+type CalendarCtx = Parameters<typeof calendarTasks.handler>[0];
+
 const createContext = ({
   body,
   safeDb,
 }: {
-  body: Parameters<typeof calendarTasks.handler>[0]["body"];
-  safeDb: Parameters<typeof calendarTasks.handler>[0]["safeDb"];
-}): Parameters<typeof calendarTasks.handler>[0] =>
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields used by the safe handler and calendar task handler
-  ({
+  body: CalendarCtx["body"];
+  safeDb: CalendarCtx["safeDb"];
+}): CalendarCtx =>
+  asTestRaw<CalendarCtx>({
     workspaceId,
     user: { id: userId },
     session: { activeOrganizationId: organizationId },
@@ -35,7 +37,7 @@ const createContext = ({
     safeDb,
     request: new Request("https://example.test/v1/tasks/calendar"),
     route: "/v1/tasks/:workspaceId/calendar",
-  }) as Parameters<typeof calendarTasks.handler>[0];
+  });
 
 const baseBody = {
   dateFrom: "2026-05-01T00:00:00.000Z",
@@ -81,9 +83,7 @@ describe("calendar task handler", () => {
     ];
     const safeDb: Parameters<
       typeof calendarTasks.handler
-    >[0]["safeDb"] = async <T>() =>
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- queued fixture order mirrors handler safeDb calls
-      Result.ok(results.shift() as T);
+    >[0]["safeDb"] = async <T>() => Result.ok(asTestRaw<T>(results.shift()));
 
     const result = await calendarTasks.handler(
       createContext({

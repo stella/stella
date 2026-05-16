@@ -200,9 +200,9 @@ export function renderFragment(
   applyBaseFragmentStyles(el);
 
   // Cast to access common properties
-  const unknownFragment = fragment as { blockId?: unknown; kind?: string };
+  const unknownFragment = fragment as { blockId?: string; kind?: string };
   if (unknownFragment.blockId !== undefined) {
-    el.dataset["blockId"] = String(unknownFragment.blockId);
+    el.dataset["blockId"] = unknownFragment.blockId;
   }
   if (unknownFragment.kind) {
     el.dataset["kind"] = unknownFragment.kind;

@@ -612,8 +612,9 @@ function renderFieldRun(
     case "TIME":
       text = new Date().toLocaleTimeString();
       break;
-    // OTHER fields use fallback
-    default:
+    case "OTHER":
+      // Any field we don't recognise — render the cached fallback Word
+      // last computed (already assigned to `text` above).
       break;
   }
 
@@ -1279,7 +1280,11 @@ export function renderParagraphFragment(
   const borders = block.attrs?.borders;
   if (borders) {
     const borderStyleToCss = (style?: string): string => {
-      // Map OOXML border styles to CSS
+      // Map OOXML border styles to CSS. The OOXML border-style enum has
+      // 40+ decorative variants (threeDEmboss, wavyDouble, etc.); the
+      // common ones below cover ~99% of real-world documents, and the
+      // default falls back to a plain solid line — matches how Word
+      // degrades on platforms without the specialised glyphs.
       switch (style) {
         case "single":
           return "solid";

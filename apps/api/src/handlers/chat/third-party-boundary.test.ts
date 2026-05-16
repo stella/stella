@@ -1,5 +1,4 @@
 import { valibotSchema } from "@ai-sdk/valibot";
-import type { ToolSet } from "ai";
 import { tool } from "ai";
 import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
@@ -16,6 +15,11 @@ import type { ChatMessage } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { toDataUrl } from "@/api/lib/data-url";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import {
+  asChatPart,
+  asTestExecutable,
+  asTestToolSet,
+} from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const anonymizeTextFieldsMock = mock(
@@ -274,10 +278,7 @@ describe("chat third-party anonymization boundary", () => {
         id: "msg_1",
         role: "assistant",
         parts: [
-          // SAFETY: this fixture models a persisted AI SDK tool UI part with
-          // an optional approval property present but undefined.
-          // eslint-disable-next-line typescript/no-unsafe-type-assertion
-          {
+          asChatPart({
             type: "dynamic-tool",
             toolName: "read_secret",
             toolCallId: "call_1",
@@ -285,7 +286,7 @@ describe("chat third-party anonymization boundary", () => {
             input: { query: "Jan Novák" },
             output: { text: "Secret notes" },
             approval: undefined,
-          } as unknown as ChatMessage["parts"][number],
+          }),
         ],
       },
     ];
@@ -322,17 +323,13 @@ describe("chat third-party anonymization boundary", () => {
     };
     const prepared = prepareToolsForThirdParty({
       boundary,
-      // SAFETY: the helper only reads and wraps execute() in this unit test.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
-      tools: tools as unknown as ToolSet,
+      tools: asTestToolSet(tools),
     });
-    // SAFETY: the test fixture above defines this execute signature.
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion
-    const executable = prepared["read_secret"] as
-      | { execute?: (() => Promise<unknown>) | undefined }
-      | undefined;
+    const executable = asTestExecutable<unknown, unknown>(
+      prepared["read_secret"],
+    );
 
-    expect(await executable?.execute?.()).toEqual({
+    expect(await executable?.execute?.(undefined)).toEqual({
       documentId: "doc_123",
       ids: ["person_456"],
       nationalId: "[CUSTOM_1]-123",
@@ -354,21 +351,17 @@ describe("chat third-party anonymization boundary", () => {
     };
     const prepared = prepareToolsForThirdParty({
       boundary,
-      // SAFETY: the helper only reads and wraps execute() in this unit test.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
-      tools: tools as unknown as ToolSet,
+      tools: asTestToolSet(tools),
     });
-    // SAFETY: the test fixture above defines this execute signature.
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion
-    const executable = prepared["external_lookup"] as
-      | { execute?: (() => Promise<unknown>) | undefined }
-      | undefined;
+    const executable = asTestExecutable<unknown, unknown>(
+      prepared["external_lookup"],
+    );
 
     if (!executable?.execute) {
       throw new Error("Expected external tool execute function");
     }
 
-    const output = await executable.execute();
+    const output = await executable.execute(undefined);
     expect(output).toEqual({
       text: "Secret notes for Jan Novák",
     });
@@ -387,15 +380,11 @@ describe("chat third-party anonymization boundary", () => {
     };
     const prepared = prepareToolsForThirdParty({
       boundary,
-      // SAFETY: the helper only reads and wraps execute() in this unit test.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
-      tools: tools as unknown as ToolSet,
+      tools: asTestToolSet(tools),
     });
-    // SAFETY: the test fixture above defines this execute signature.
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion
-    const executable = prepared["official_lookup"] as
-      | { execute?: ((input: { ico: string }) => Promise<unknown>) | undefined }
-      | undefined;
+    const executable = asTestExecutable<{ ico: string }, unknown>(
+      prepared["official_lookup"],
+    );
 
     expect(await executable?.execute?.({ ico: "27082440" })).toEqual({
       ico: "27082440",
@@ -416,19 +405,11 @@ describe("chat third-party anonymization boundary", () => {
     };
     const prepared = prepareToolsForThirdParty({
       boundary,
-      // SAFETY: the helper only reads and wraps execute() in this unit test.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
-      tools: tools as unknown as ToolSet,
+      tools: asTestToolSet(tools),
     });
-    // SAFETY: the test fixture above defines this execute signature.
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion
-    const executable = prepared["unofficial_lookup"] as
-      | {
-          execute?:
-            | ((input: { query: string }) => Promise<unknown>)
-            | undefined;
-        }
-      | undefined;
+    const executable = asTestExecutable<{ query: string }, unknown>(
+      prepared["unofficial_lookup"],
+    );
 
     if (!executable?.execute) {
       throw new Error("Expected unofficial lookup execute function");
@@ -506,19 +487,11 @@ describe("chat third-party anonymization boundary", () => {
     };
     const prepared = prepareToolsForThirdParty({
       boundary,
-      // SAFETY: the helper only reads and wraps execute() in this unit test.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
-      tools: tools as unknown as ToolSet,
+      tools: asTestToolSet(tools),
     });
-    // SAFETY: the test fixture above defines this execute signature.
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion
-    const executable = prepared["list_contacts"] as
-      | {
-          execute?:
-            | ((input: { query: string }) => Promise<unknown>)
-            | undefined;
-        }
-      | undefined;
+    const executable = asTestExecutable<{ query: string }, unknown>(
+      prepared["list_contacts"],
+    );
 
     const output = await executable?.execute?.({ query: "[PERSON_1]" });
 
@@ -551,17 +524,11 @@ describe("chat third-party anonymization boundary", () => {
     };
     const prepared = prepareToolsForThirdParty({
       boundary,
-      // SAFETY: the helper only reads and wraps execute() in this unit test.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
-      tools: tools as unknown as ToolSet,
+      tools: asTestToolSet(tools),
     });
-    // SAFETY: the test fixture above defines this execute signature.
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion
-    const executable = prepared["run_query"] as
-      | {
-          execute?: ((input: { code: string }) => Promise<unknown>) | undefined;
-        }
-      | undefined;
+    const executable = asTestExecutable<{ code: string }, unknown>(
+      prepared["run_query"],
+    );
 
     await executable?.execute?.({
       code: 'return await read.listContacts({query: "PERSON_1"});',
@@ -594,19 +561,11 @@ describe("chat third-party anonymization boundary", () => {
     );
     const prepared = prepareToolsForThirdParty({
       boundary,
-      // SAFETY: the helper only reads and wraps execute() in this unit test.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
-      tools: { external_search: externalTool } as unknown as ToolSet,
+      tools: asTestToolSet({ external_search: externalTool }),
     });
-    // SAFETY: the test fixture above defines this execute signature.
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion
-    const executable = prepared["external_search"] as
-      | {
-          execute?:
-            | ((input: { query: string }) => Promise<unknown>)
-            | undefined;
-        }
-      | undefined;
+    const executable = asTestExecutable<{ query: string }, unknown>(
+      prepared["external_search"],
+    );
 
     await executable?.execute?.({ query: "[PERSON_1]" });
 

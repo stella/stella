@@ -99,6 +99,25 @@ export default defineConfig({
     ],
     "typescript/no-unnecessary-type-arguments": "error",
 
+    // Redundant with switch-exhaustiveness-check: an exhaustive switch
+    // covers every union member by construction, so a `default:` clause
+    // would be unreachable. Use exhaustive cases for internal
+    // discriminated unions; per-line disable switch-exhaustiveness for
+    // genuinely wide enums (OOXML w:numFmt etc.) where default+fallthrough
+    // is the intended behaviour.
+    "default-case": "off",
+
+    // A `default:` clause is treated as exhaustive. Switches without a
+    // default still require every union member to be cased — that's the
+    // safety net for discriminated unions (PM content kinds, action
+    // types). Switches with an explicit default opt out of the check,
+    // which is the right behaviour for catch-all parsers over wide
+    // string enums like OOXML w:numFmt.
+    "typescript/switch-exhaustiveness-check": [
+      "error",
+      { considerDefaultExhaustiveForUnions: true },
+    ],
+
     "unicorn/switch-case-braces": "off",
     "unicorn/number-literal-case": "off",
     "unicorn/escape-case": "off",
@@ -540,17 +559,15 @@ export default defineConfig({
         "typescript/no-unsafe-assignment": "off",
         "typescript/no-unsafe-member-access": "off",
         "typescript/strict-boolean-expressions": "off",
-        "typescript/no-base-to-string": "off",
+
         "typescript/prefer-nullish-coalescing": "off",
         "typescript/no-non-null-assertion": "off",
         "typescript/no-unnecessary-type-assertion": "off",
         "typescript/no-unsafe-return": "off",
-        "typescript/restrict-template-expressions": "off",
-        "typescript/switch-exhaustiveness-check": "off",
+
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
         "typescript/consistent-return": "off",
-        "unicorn/no-useless-collection-argument": "off",
       },
     },
     {
@@ -573,24 +590,17 @@ export default defineConfig({
         "typescript/no-non-null-assertion": "off",
         "typescript/no-unnecessary-type-assertion": "off",
         "typescript/prefer-nullish-coalescing": "off",
-        "typescript/switch-exhaustiveness-check": "off",
+
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
         "typescript/consistent-return": "off",
-        "typescript/no-base-to-string": "off",
-        "typescript/restrict-template-expressions": "off",
+
         "typescript/no-unsafe-return": "off",
         "typescript/no-unsafe-call": "off",
         "typescript/no-unsafe-argument": "off",
-        "typescript/consistent-type-imports": "off",
-        "typescript/prefer-regexp-exec": "off",
-        "typescript/no-redundant-type-constituents": "off",
+
         "typescript/no-deprecated": "off",
         "typescript/promise-function-async": "off",
-        "typescript/no-unnecessary-type-arguments": "off",
-        "typescript/prefer-includes": "off",
-        "typescript/no-floating-promises": "off",
-        "typescript/use-unknown-in-catch-callback-variable": "off",
       },
     },
     {
@@ -631,18 +641,15 @@ export default defineConfig({
         "typescript/no-non-null-assertion": "off",
         "typescript/no-unnecessary-type-assertion": "off",
         "typescript/prefer-nullish-coalescing": "off",
-        "typescript/switch-exhaustiveness-check": "off",
+
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
         "typescript/consistent-return": "off",
-        "typescript/no-base-to-string": "off",
-        "typescript/restrict-template-expressions": "off",
+
         "typescript/no-unsafe-return": "off",
         "typescript/no-unsafe-call": "off",
         "typescript/no-unsafe-argument": "off",
-        "typescript/consistent-type-imports": "off",
-        "typescript/prefer-regexp-exec": "off",
-        "typescript/no-redundant-type-constituents": "off",
+
         "typescript/no-deprecated": "off",
         "typescript/promise-function-async": "off",
       },
@@ -666,21 +673,20 @@ export default defineConfig({
         "typescript/prefer-nullish-coalescing": "off",
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
-        "typescript/switch-exhaustiveness-check": "off",
+
         "typescript/promise-function-async": "off",
-        "typescript/prefer-regexp-exec": "off",
+
         "unicorn/no-array-for-each": "off",
         "typescript/no-unnecessary-type-conversion": "off",
         "typescript/no-duplicate-type-constituents": "off",
-        "typescript/no-redundant-type-constituents": "off",
+
         "eslint/no-control-regex": "off",
         "typescript/no-deprecated": "off",
         "typescript/consistent-return": "off",
         "typescript/no-unsafe-return": "off",
         "typescript/no-unsafe-call": "off",
         "typescript/no-unsafe-argument": "off",
-        "typescript/restrict-template-expressions": "off",
-        "typescript/no-base-to-string": "off",
+
         "unicorn/prefer-string-starts-ends-with": "off",
         "typescript/prefer-string-starts-ends-with": "off",
       },
@@ -725,6 +731,22 @@ export default defineConfig({
       files: ["apps/api/src/handlers/**/*.ts"],
       rules: {
         "no-body-ownership-ids/no-body-ownership-ids": "error",
+        "no-offset-pagination/no-offset-pagination": [
+          "error",
+          {
+            // Legacy offset-paginated list endpoints. New list endpoints must
+            // use cursor pagination and return Page<T>.
+            allowedFiles: [
+              "apps/api/src/handlers/billing-codes/read.ts",
+              "apps/api/src/handlers/expenses/read.ts",
+              "apps/api/src/handlers/invoices/read.ts",
+              "apps/api/src/handlers/rates/entries-read.ts",
+              "apps/api/src/handlers/rates/read.ts",
+              "apps/api/src/handlers/skills/list.ts",
+              "apps/api/src/handlers/time-entries/read.ts",
+            ],
+          },
+        ],
         "no-raw-user-id-schema/no-raw-user-id-schema": "error",
         "no-offset-pagination/no-offset-pagination": [
           "error",
