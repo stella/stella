@@ -81,7 +81,7 @@ const InvoicesList = ({ workspaceId }: { workspaceId: string }) => {
   const [limit, setLimit] = useState(PAGE_SIZE);
   const { data } = useSuspenseQuery(invoicesOptions(workspaceId, { limit }));
 
-  if (data.rows.length === 0) {
+  if (data.items.length === 0) {
     return (
       <div className="text-muted-foreground py-16 text-center text-sm">
         {t("billing.invoices.noInvoices")}
@@ -89,7 +89,7 @@ const InvoicesList = ({ workspaceId }: { workspaceId: string }) => {
     );
   }
 
-  const hasMore = data.rows.length < data.total;
+  const hasMore = data.nextCursor !== null;
 
   return (
     <div className="flex flex-col gap-3">
@@ -114,7 +114,7 @@ const InvoicesList = ({ workspaceId }: { workspaceId: string }) => {
             </tr>
           </thead>
           <tbody>
-            {data.rows.map((invoice) => (
+            {data.items.map((invoice) => (
               <tr
                 className="hover:bg-muted/30 cursor-pointer border-b last:border-0"
                 key={invoice.id}

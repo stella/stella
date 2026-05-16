@@ -21,36 +21,44 @@ export const invoicesRoute = new Elysia({
     validateWorkspaceAccess: true,
   })
   .get("/", readInvoices.handler, {
+    permissions: readInvoices.config.permissions,
     query: readInvoices.config.query,
   })
   .get("/:invoiceId", readInvoiceById.handler, {
     params: readInvoiceById.config.params,
+    permissions: readInvoiceById.config.permissions,
   })
   .put("/", createInvoice.handler, {
-    invalidateQuery: true,
     body: createInvoice.config.body,
+    invalidateQuery: true,
+    permissions: createInvoice.config.permissions,
   })
   .patch("/:invoiceId", updateInvoice.handler, {
+    body: updateInvoice.config.body,
     invalidateQuery: true,
     params: updateInvoice.config.params,
-    body: updateInvoice.config.body,
+    permissions: updateInvoice.config.permissions,
   })
   .post("/:invoiceId/transition", transitionInvoice.handler, {
+    body: transitionInvoice.config.body,
     invalidateQuery: true,
     params: transitionInvoice.config.params,
-    body: transitionInvoice.config.body,
+    permissions: transitionInvoice.config.permissions,
   })
   .delete("/:invoiceId", deleteInvoice.handler, {
     invalidateQuery: true,
     params: deleteInvoice.config.params,
+    permissions: deleteInvoice.config.permissions,
   })
   .post("/:invoiceId/entries", addEntries.handler, {
+    body: addEntries.config.body,
     invalidateQuery: true,
     params: addEntries.config.params,
-    body: addEntries.config.body,
+    permissions: addEntries.config.permissions,
   })
   .delete("/:invoiceId/entries", removeEntries.handler, {
+    body: removeEntries.config.body,
     invalidateQuery: true,
     params: removeEntries.config.params,
-    body: removeEntries.config.body,
+    permissions: removeEntries.config.permissions,
   });

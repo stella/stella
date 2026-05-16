@@ -8,7 +8,7 @@ type InvoiceStatus = "draft" | "finalized" | "sent" | "paid" | "void";
 
 type InvoicesFilters = {
   limit?: number;
-  offset?: number;
+  cursor?: string;
 };
 
 export const invoicesKeys = {

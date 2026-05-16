@@ -60,7 +60,7 @@ export const timeEntriesOptions = (
         throw toAPIError(response.error);
       }
 
-      return response.data;
+      return response.data.items;
     },
   });
 
@@ -84,7 +84,7 @@ export const activeTimerOptions = (workspaceId: string) =>
         throw toAPIError(response.error);
       }
 
-      return response.data.at(0) ?? null;
+      return response.data.items.at(0) ?? null;
     },
     refetchInterval: 60_000,
   });

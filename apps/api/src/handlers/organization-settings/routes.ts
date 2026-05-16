@@ -20,9 +20,12 @@ export const organizationSettingsRoute = new Elysia({
   .guard({
     validateAuth: true,
   })
-  .get("/", readOrganizationSettings.handler)
+  .get("/", readOrganizationSettings.handler, {
+    permissions: readOrganizationSettings.config.permissions,
+  })
   .post("/", updateOrganizationSettings.handler, {
     body: updateOrganizationSettings.config.body,
+    permissions: updateOrganizationSettings.config.permissions,
   })
   .post("/practice-jurisdictions", updatePracticeJurisdictions.handler, {
     body: updatePracticeJurisdictions.config.body,
@@ -30,14 +33,25 @@ export const organizationSettingsRoute = new Elysia({
   })
   .post("/preview", previewOrganizationSettings.handler, {
     body: previewOrganizationSettings.config.body,
+    permissions: previewOrganizationSettings.config.permissions,
   })
-  .get("/ai-availability", readAIAvailability.handler)
-  .get("/ai-config", readAIConfig.handler)
+  .get("/ai-availability", readAIAvailability.handler, {
+    permissions: readAIAvailability.config.permissions,
+  })
+  .get("/ai-config", readAIConfig.handler, {
+    permissions: readAIConfig.config.permissions,
+  })
   .post("/ai-config", updateAIConfig.handler, {
     body: updateAIConfig.config.body,
+    permissions: updateAIConfig.config.permissions,
   })
-  .delete("/ai-config", deleteAIConfig.handler)
-  .get("/anonymization-blacklist", readAnonymizationBlacklist.handler)
+  .delete("/ai-config", deleteAIConfig.handler, {
+    permissions: deleteAIConfig.config.permissions,
+  })
+  .get("/anonymization-blacklist", readAnonymizationBlacklist.handler, {
+    permissions: readAnonymizationBlacklist.config.permissions,
+  })
   .put("/anonymization-blacklist", updateAnonymizationBlacklist.handler, {
     body: updateAnonymizationBlacklist.config.body,
+    permissions: updateAnonymizationBlacklist.config.permissions,
   });

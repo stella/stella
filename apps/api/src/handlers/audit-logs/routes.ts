@@ -11,5 +11,6 @@ export const auditLogsRoute = new Elysia({ prefix: "/audit-logs" })
     // Compliance readers need organization-wide visibility;
     // this is intentionally scoped by auditLog.read rather
     // than workspace membership.
+    permissions: readAuditLogs.config.permissions,
     query: readAuditLogs.config.query,
   });

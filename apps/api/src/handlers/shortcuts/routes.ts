@@ -13,20 +13,26 @@ export const shortcutsRoute = new Elysia({ prefix: "/shortcuts" })
   .use(permissionMacro)
   .use(invalidateQuery)
   .guard({ validateAuth: true })
-  .get("/", listShortcuts.handler)
+  .get("/", listShortcuts.handler, {
+    permissions: listShortcuts.config.permissions,
+  })
   .put("/", createShortcut.handler, {
     body: createShortcut.config.body,
     invalidateQuery: true,
+    permissions: createShortcut.config.permissions,
   })
   .post("/seed", seedShortcuts.handler, {
     invalidateQuery: true,
+    permissions: seedShortcuts.config.permissions,
   })
   .post("/:shortcutId", updateShortcut.handler, {
-    params: updateShortcut.config.params,
     body: updateShortcut.config.body,
     invalidateQuery: true,
+    params: updateShortcut.config.params,
+    permissions: updateShortcut.config.permissions,
   })
   .delete("/:shortcutId", deleteShortcut.handler, {
-    params: deleteShortcut.config.params,
     invalidateQuery: true,
+    params: deleteShortcut.config.params,
+    permissions: deleteShortcut.config.permissions,
   });

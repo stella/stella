@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, lte, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -10,11 +10,19 @@ import {
 import { expenses } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  createCursorPage,
+  decodePaginationCursor,
+  encodePaginationCursor,
+} from "@/api/lib/pagination";
+import { brandPersistedExpenseId } from "@/api/lib/safe-id-boundaries";
 
 const readExpensesQuerySchema = t.Object({
   limit: t.Optional(t.Integer({ minimum: 1, maximum: 200 })),
-  offset: t.Optional(t.Integer({ minimum: 0 })),
+  cursor: t.Optional(t.String({ maxLength: 512 })),
   userId: t.Optional(tUserId),
   matterId: t.Optional(tSafeId("entity")),
   dateFrom: t.Optional(t.String({ format: "date" })),
@@ -29,11 +37,33 @@ const config = {
   query: readExpensesQuerySchema,
 } satisfies HandlerConfig;
 
+type ExpenseCursor = {
+  dateIncurred: string;
+  id: SafeId<"expense">;
+};
+
+const dateCursorPattern = /^\d{4}-\d{2}-\d{2}$/u;
+
+const decodeExpenseCursor = (cursor: string): ExpenseCursor | null => {
+  const parts = decodePaginationCursor(cursor);
+  const dateIncurred = parts?.at(0);
+  const id = parts?.at(1);
+
+  if (
+    typeof dateIncurred !== "string" ||
+    !dateCursorPattern.test(dateIncurred) ||
+    typeof id !== "string"
+  ) {
+    return null;
+  }
+
+  return { dateIncurred, id: brandPersistedExpenseId(id) };
+};
+
 const readExpenses = createSafeHandler(
   config,
   async function* ({ safeDb, session, workspaceId, query }) {
     const limit = query.limit ?? 100;
-    const offset = query.offset ?? 0;
 
     const conditions = [eq(expenses.workspaceId, workspaceId)];
 
@@ -58,6 +88,27 @@ const readExpenses = createSafeHandler(
     if (query.billable !== undefined) {
       conditions.push(eq(expenses.billable, query.billable));
     }
+    if (query.cursor) {
+      const cursor = decodeExpenseCursor(query.cursor);
+
+      if (!cursor) {
+        return Result.err(
+          new HandlerError({ status: 400, message: "Invalid cursor" }),
+        );
+      }
+
+      const cursorCondition = or(
+        gt(expenses.dateIncurred, cursor.dateIncurred),
+        and(
+          eq(expenses.dateIncurred, cursor.dateIncurred),
+          gt(expenses.id, cursor.id),
+        ),
+      );
+
+      if (cursorCondition) {
+        conditions.push(cursorCondition);
+      }
+    }
 
     const rows = yield* Result.await(
       safeDb((tx) =>
@@ -80,15 +131,21 @@ const readExpenses = createSafeHandler(
           })
           .from(expenses)
           .where(and(...conditions))
-          .orderBy(expenses.dateIncurred)
-          .limit(limit)
-          .offset(offset),
+          .orderBy(asc(expenses.dateIncurred), asc(expenses.id))
+          .limit(limit + 1),
       ),
     );
 
+    const page = createCursorPage({
+      rows,
+      limit,
+      cursorForItem: (item) =>
+        encodePaginationCursor([item.dateIncurred, item.id]),
+    });
+
     // Batch-fetch user names
     const userIds = new Set<string>();
-    for (const row of rows) {
+    for (const row of page.items) {
       if (row.userId) {
         userIds.add(row.userId);
       }
@@ -114,8 +171,9 @@ const readExpenses = createSafeHandler(
 
     const userMap = new Map(usersResult.map((u) => [u.id, u.name]));
 
-    return Result.ok(
-      rows.map((row) => ({
+    return Result.ok({
+      ...page,
+      items: page.items.map((row) => ({
         id: row.id,
         userId: row.userId,
         matterId: row.matterId,
@@ -132,7 +190,7 @@ const readExpenses = createSafeHandler(
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt?.toISOString() ?? null,
       })),
-    );
+    });
   },
 );
 

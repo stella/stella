@@ -21,23 +21,30 @@ export const propertiesRoute = new Elysia({
   .put("/", createProperty.handler, {
     body: createProperty.config.body,
     invalidateQuery: true,
+    permissions: createProperty.config.permissions,
   })
   .post("/preview", previewProperty.handler, {
     body: previewProperty.config.body,
+    permissions: previewProperty.config.permissions,
   })
   .post("/suggest-prompt", suggestPromptProperty.handler, {
     body: suggestPromptProperty.config.body,
+    permissions: suggestPromptProperty.config.permissions,
   })
-  .get("/", readProperties.handler)
+  .get("/", readProperties.handler, {
+    permissions: readProperties.config.permissions,
+  })
   .group("/property/:propertyId", (app) =>
     app
       .post("/", updateProperty.handler, {
         body: updateProperty.config.body,
-        params: updateProperty.config.params,
         invalidateQuery: true,
+        params: updateProperty.config.params,
+        permissions: updateProperty.config.permissions,
       })
       .delete("/", deleteProperty.handler, {
-        params: deleteProperty.config.params,
         invalidateQuery: true,
+        params: deleteProperty.config.params,
+        permissions: deleteProperty.config.permissions,
       }),
   );

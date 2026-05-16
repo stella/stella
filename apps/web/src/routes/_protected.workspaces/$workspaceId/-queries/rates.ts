@@ -32,7 +32,7 @@ export const rateTablesOptions = (workspaceId: string) =>
         throw toAPIError(response.error);
       }
 
-      return response.data;
+      return response.data.items;
     },
   });
 
@@ -50,7 +50,7 @@ export const rateEntriesOptions = (workspaceId: string, rateTableId: string) =>
         throw toAPIError(response.error);
       }
 
-      return response.data;
+      return response.data.items;
     },
     enabled: rateTableId.length > 0,
   });

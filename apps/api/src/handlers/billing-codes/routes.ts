@@ -17,17 +17,21 @@ export const billingCodesRoute = new Elysia({
     validateWorkspaceAccess: true,
   })
   .get("/", readBillingCodes.handler, {
+    permissions: readBillingCodes.config.permissions,
     query: readBillingCodes.config.query,
   })
   .put("/", createBillingCode.handler, {
     body: createBillingCode.config.body,
     invalidateQuery: true,
+    permissions: createBillingCode.config.permissions,
   })
   .patch("/", updateBillingCode.handler, {
     body: updateBillingCode.config.body,
     invalidateQuery: true,
+    permissions: updateBillingCode.config.permissions,
   })
   .delete("/", deleteBillingCode.handler, {
     body: deleteBillingCode.config.body,
     invalidateQuery: true,
+    permissions: deleteBillingCode.config.permissions,
   });

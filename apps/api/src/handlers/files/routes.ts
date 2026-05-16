@@ -8,7 +8,7 @@ import {
 } from "@/api/handlers/files/read-by-id";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { workspaceAccessMacro } from "@/api/lib/auth";
+import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 
 const readFileEndpoint = createSafeHandler(
@@ -91,16 +91,20 @@ export const filesRoute = new Elysia({
   prefix: "/files/:workspaceId",
 })
   .use(workspaceAccessMacro)
+  .use(permissionMacro)
   .guard({
     validateWorkspaceAccess: true,
   })
   .get("/url/:fieldId", readFileEndpoint.handler, {
-    query: readFileEndpoint.config.query,
     params: readFileEndpoint.config.params,
+    permissions: readFileEndpoint.config.permissions,
+    query: readFileEndpoint.config.query,
   })
   .get("/print-pdf/:fieldId", printPdfEndpoint.handler, {
     params: printPdfEndpoint.config.params,
+    permissions: printPdfEndpoint.config.permissions,
   })
   .get("/stamped/:fieldId", stampedDownloadEndpoint.handler, {
     params: stampedDownloadEndpoint.config.params,
+    permissions: stampedDownloadEndpoint.config.permissions,
   });

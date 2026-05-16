@@ -65,33 +65,40 @@ export const entitiesRoute = new Elysia({
   .put("/", createEntities.handler, {
     body: createEntities.config.body,
     invalidateQuery: true,
+    permissions: createEntities.config.permissions,
   })
   .post("/upload", uploadEntity.handler, {
     body: uploadEntity.config.body,
     invalidateQuery: true,
+    permissions: uploadEntity.config.permissions,
   })
   .post("/desktop-edit-sessions/open", openDesktopEditSession.handler, {
     body: openDesktopEditSession.config.body,
+    permissions: openDesktopEditSession.config.permissions,
   })
   .post("/desktop-edit-handoffs", createDesktopEditHandoff.handler, {
     body: createDesktopEditHandoff.config.body,
+    permissions: createDesktopEditHandoff.config.permissions,
   })
   .get(
     "/desktop-edit-handoffs/:handoffId/status",
     readDesktopEditHandoffStatus.handler,
     {
       params: readDesktopEditHandoffStatus.config.params,
+      permissions: readDesktopEditHandoffStatus.config.permissions,
     },
   )
   .post("/desktop-edit-sessions/release", releaseDesktopEditLock.handler, {
     body: releaseDesktopEditLock.config.body,
     invalidateQuery: true,
+    permissions: releaseDesktopEditLock.config.permissions,
   })
   .post(
     "/desktop-edit-sessions/request-takeover",
     requestDesktopEditTakeover.handler,
     {
       body: requestDesktopEditTakeover.config.body,
+      permissions: requestDesktopEditTakeover.config.permissions,
     },
   )
   .post("/clip", clipEndpoint.handler, {
@@ -101,69 +108,91 @@ export const entitiesRoute = new Elysia({
   .post("/create-from-legal-source", createFromLegalSource.handler, {
     body: createFromLegalSource.config.body,
     invalidateQuery: true,
+    permissions: createFromLegalSource.config.permissions,
   })
   .post("/query", readEntities.handler, {
     body: readEntities.config.body,
+    permissions: readEntities.config.permissions,
   })
   .post("/query-window", readEntitiesWindow.handler, {
     body: readEntitiesWindow.config.body,
+    permissions: readEntitiesWindow.config.permissions,
   })
   .post("/filesystem-tree", readFilesystemTree.handler, {
     body: readFilesystemTree.config.body,
+    permissions: readFilesystemTree.config.permissions,
   })
   .post("/kanban-group", readKanbanGroup.handler, {
     body: readKanbanGroup.config.body,
+    permissions: readKanbanGroup.config.permissions,
   })
   .post("/organize-suggestions", organizeSuggestions.handler, {
     body: organizeSuggestions.config.body,
+    permissions: organizeSuggestions.config.permissions,
   })
-  .get("/folders", listFolders.handler)
-  .get("/files", listFiles.handler)
+  .get("/folders", listFolders.handler, {
+    permissions: listFolders.config.permissions,
+  })
+  .get("/files", listFiles.handler, {
+    permissions: listFiles.config.permissions,
+  })
   .delete("/", deleteEntities.handler, {
     body: deleteEntities.config.body,
     invalidateQuery: true,
+    permissions: deleteEntities.config.permissions,
   })
   .patch("/move", moveEntity.handler, {
     body: moveEntity.config.body,
     invalidateQuery: true,
+    permissions: moveEntity.config.permissions,
   })
   .patch("/rename", renameEntity.handler, {
     body: renameEntity.config.body,
     invalidateQuery: true,
+    permissions: renameEntity.config.permissions,
   })
   .post("/duplicate", duplicateEntity.handler, {
     body: duplicateEntity.config.body,
     invalidateQuery: true,
+    permissions: duplicateEntity.config.permissions,
   })
   .post("/check-stamp", checkStamp.handler, {
     body: checkStamp.config.body,
+    permissions: checkStamp.config.permissions,
   })
   .get("/summaries", readEntitySummaries.handler, {
+    permissions: readEntitySummaries.config.permissions,
     query: readEntitySummaries.config.query,
   })
   .get("/zip/:entityId", downloadZip.handler, {
     params: downloadZip.config.params,
+    permissions: downloadZip.config.permissions,
   })
   .get("/entity/:entityId", readEntityById.handler, {
     params: readEntityById.config.params,
+    permissions: readEntityById.config.permissions,
   })
   .get("/entity/:entityId/versions", readVersions.handler, {
     params: readVersions.config.params,
+    permissions: readVersions.config.permissions,
   })
   .get("/entity/:entityId/versions/:versionId", readVersionById.handler, {
     params: readVersionById.config.params,
+    permissions: readVersionById.config.permissions,
   })
   .post("/entity/:entityId/compare", compareVersions.handler, {
     body: compareVersions.config.body,
     params: compareVersions.config.params,
+    permissions: compareVersions.config.permissions,
   })
   .patch(
     "/entity/:entityId/versions/:versionId/label",
     updateVersionLabel.handler,
     {
       body: updateVersionLabel.config.body,
-      params: updateVersionLabel.config.params,
       invalidateQuery: true,
+      params: updateVersionLabel.config.params,
+      permissions: updateVersionLabel.config.permissions,
     },
   )
   .patch(
@@ -171,20 +200,27 @@ export const entitiesRoute = new Elysia({
     updateVersionDescription.handler,
     {
       body: updateVersionDescription.config.body,
-      params: updateVersionDescription.config.params,
       invalidateQuery: true,
+      params: updateVersionDescription.config.params,
+      permissions: updateVersionDescription.config.permissions,
     },
   )
   .post(
     "/entity/:entityId/versions/:versionId/restore",
     restoreVersion.handler,
-    { invalidateQuery: true, params: restoreVersion.config.params },
+    {
+      invalidateQuery: true,
+      params: restoreVersion.config.params,
+      permissions: restoreVersion.config.permissions,
+    },
   )
   .delete("/entity/:entityId/versions/:versionId", deleteVersion.handler, {
     invalidateQuery: true,
     params: deleteVersion.config.params,
+    permissions: deleteVersion.config.permissions,
   })
   .post("/upload-version", uploadVersion.handler, {
     body: uploadVersion.config.body,
     invalidateQuery: true,
+    permissions: uploadVersion.config.permissions,
   });

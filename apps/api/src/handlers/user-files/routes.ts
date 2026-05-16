@@ -9,4 +9,5 @@ export const userFilesRoute = new Elysia({ prefix: "/user-files" })
   .guard({ validateAuth: true })
   .get("/:fileId/content", readUserFileContent.handler, {
     params: readUserFileContent.config.params,
+    permissions: readUserFileContent.config.permissions,
   });

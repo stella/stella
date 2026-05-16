@@ -4,6 +4,8 @@ export type Page<T> = {
   limit: number;
 };
 
+type CursorPrimitive = string | number | boolean | null;
+
 type CursorPageOptions<T> = {
   rows: readonly T[];
   limit: number;
@@ -26,4 +28,20 @@ export const createCursorPage = <T>({
         ? cursorForItem(lastItem)
         : null,
   };
+};
+
+export const encodePaginationCursor = (
+  parts: readonly CursorPrimitive[],
+): string => Buffer.from(JSON.stringify(parts)).toString("base64url");
+
+export const decodePaginationCursor = (cursor: string): unknown[] | null => {
+  try {
+    const parsed: unknown = JSON.parse(
+      Buffer.from(cursor, "base64url").toString("utf-8"),
+    );
+
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 };

@@ -18,16 +18,20 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
     validateAuth: true,
   })
   .get("/", readContacts.handler, {
+    permissions: readContacts.config.permissions,
     query: readContacts.config.query,
   })
   .get("/search", searchContacts.handler, {
+    permissions: searchContacts.config.permissions,
     query: searchContacts.config.query,
   })
   .get("/ares", aresLookup.handler, {
+    permissions: aresLookup.config.permissions,
     query: aresLookup.config.query,
   })
   .put("/", createContact.handler, {
     body: createContact.config.body,
+    permissions: createContact.config.permissions,
   })
   .group(
     "/:contactId",
@@ -36,9 +40,14 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
     },
     (app) =>
       app
-        .get("/", readContactById.handler)
+        .get("/", readContactById.handler, {
+          permissions: readContactById.config.permissions,
+        })
         .post("/", updateContactById.handler, {
           body: updateContactById.config.body,
+          permissions: updateContactById.config.permissions,
         })
-        .delete("/", deleteContactById.handler),
+        .delete("/", deleteContactById.handler, {
+          permissions: deleteContactById.config.permissions,
+        }),
   );

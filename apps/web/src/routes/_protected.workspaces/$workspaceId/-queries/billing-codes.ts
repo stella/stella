@@ -32,6 +32,6 @@ export const billingCodesOptions = (
         throw toAPIError(response.error);
       }
 
-      return response.data;
+      return response.data.items;
     },
   });

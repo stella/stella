@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { createCursorPage } from "@/api/lib/pagination";
+import {
+  createCursorPage,
+  decodePaginationCursor,
+  encodePaginationCursor,
+} from "@/api/lib/pagination";
 
 describe("cursor pagination", () => {
   test("returns the requested window and a cursor when another row exists", () => {
@@ -29,5 +33,26 @@ describe("cursor pagination", () => {
       limit: 2,
       nextCursor: null,
     });
+  });
+
+  test("roundtrips opaque cursor parts", () => {
+    const cursor = encodePaginationCursor([
+      "2026-05-16T10:30:00.000Z",
+      "invoice_123",
+      7,
+    ]);
+
+    expect(decodePaginationCursor(cursor)).toEqual([
+      "2026-05-16T10:30:00.000Z",
+      "invoice_123",
+      7,
+    ]);
+  });
+
+  test("rejects malformed cursors", () => {
+    expect(decodePaginationCursor("not-json")).toBeNull();
+    expect(decodePaginationCursor(encodePaginationCursor(["valid"]))).toEqual([
+      "valid",
+    ]);
   });
 });

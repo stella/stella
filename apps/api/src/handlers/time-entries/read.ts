@@ -1,5 +1,15 @@
 import { Result } from "better-result";
-import { and, eq, gte, inArray, isNotNull, lte } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  lte,
+  or,
+} from "drizzle-orm";
 import { t } from "elysia";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -9,11 +19,19 @@ import {
 } from "@/api/db/billing-validators";
 import { timeEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  createCursorPage,
+  decodePaginationCursor,
+  encodePaginationCursor,
+} from "@/api/lib/pagination";
+import { brandPersistedTimeEntryId } from "@/api/lib/safe-id-boundaries";
 
 const readTimeEntriesQuerySchema = t.Object({
   limit: t.Optional(t.Integer({ minimum: 1, maximum: 200 })),
-  offset: t.Optional(t.Integer({ minimum: 0 })),
+  cursor: t.Optional(t.String({ maxLength: 512 })),
   userId: t.Optional(tUserId),
   matterId: t.Optional(tSafeId("entity")),
   dateFrom: t.Optional(t.String({ format: "date" })),
@@ -24,6 +42,29 @@ const readTimeEntriesQuerySchema = t.Object({
   hasActiveTimer: t.Optional(t.BooleanString()),
 });
 
+type TimeEntryCursor = {
+  dateWorked: string;
+  id: SafeId<"timeEntry">;
+};
+
+const dateCursorPattern = /^\d{4}-\d{2}-\d{2}$/u;
+
+const decodeTimeEntryCursor = (cursor: string): TimeEntryCursor | null => {
+  const parts = decodePaginationCursor(cursor);
+  const dateWorked = parts?.at(0);
+  const id = parts?.at(1);
+
+  if (
+    typeof dateWorked !== "string" ||
+    !dateCursorPattern.test(dateWorked) ||
+    typeof id !== "string"
+  ) {
+    return null;
+  }
+
+  return { dateWorked, id: brandPersistedTimeEntryId(id) };
+};
+
 const readTimeEntries = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
@@ -31,7 +72,6 @@ const readTimeEntries = createSafeHandler(
   },
   async function* ({ safeDb, session, workspaceId, query }) {
     const limit = query.limit ?? 100;
-    const offset = query.offset ?? 0;
 
     const conditions = [eq(timeEntries.workspaceId, workspaceId)];
 
@@ -58,6 +98,27 @@ const readTimeEntries = createSafeHandler(
     }
     if (query.hasActiveTimer) {
       conditions.push(isNotNull(timeEntries.timerStartedAt));
+    }
+    if (query.cursor) {
+      const cursor = decodeTimeEntryCursor(query.cursor);
+
+      if (!cursor) {
+        return Result.err(
+          new HandlerError({ status: 400, message: "Invalid cursor" }),
+        );
+      }
+
+      const cursorCondition = or(
+        gt(timeEntries.dateWorked, cursor.dateWorked),
+        and(
+          eq(timeEntries.dateWorked, cursor.dateWorked),
+          gt(timeEntries.id, cursor.id),
+        ),
+      );
+
+      if (cursorCondition) {
+        conditions.push(cursorCondition);
+      }
     }
 
     const rows = yield* Result.await(
@@ -88,15 +149,21 @@ const readTimeEntries = createSafeHandler(
           })
           .from(timeEntries)
           .where(and(...conditions))
-          .orderBy(timeEntries.dateWorked)
-          .limit(limit)
-          .offset(offset),
+          .orderBy(asc(timeEntries.dateWorked), asc(timeEntries.id))
+          .limit(limit + 1),
       ),
     );
 
+    const page = createCursorPage({
+      rows,
+      limit,
+      cursorForItem: (item) =>
+        encodePaginationCursor([item.dateWorked, item.id]),
+    });
+
     // Batch-fetch user names
     const userIds = new Set<string>();
-    for (const row of rows) {
+    for (const row of page.items) {
       if (row.userId) {
         userIds.add(row.userId);
       }
@@ -122,8 +189,9 @@ const readTimeEntries = createSafeHandler(
 
     const userMap = new Map(usersResult.map((u) => [u.id, u.name]));
 
-    return Result.ok(
-      rows.map((row) => ({
+    return Result.ok({
+      ...page,
+      items: page.items.map((row) => ({
         id: row.id,
         userId: row.userId,
         matterId: row.matterId,
@@ -147,7 +215,7 @@ const readTimeEntries = createSafeHandler(
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt?.toISOString() ?? null,
       })),
-    );
+    });
   },
 );
 

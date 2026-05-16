@@ -1,14 +1,22 @@
 import { Result } from "better-result";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, gt, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import { billingCodes } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  createCursorPage,
+  decodePaginationCursor,
+  encodePaginationCursor,
+} from "@/api/lib/pagination";
+import { brandPersistedBillingCodeId } from "@/api/lib/safe-id-boundaries";
 
 const readBillingCodesQuerySchema = t.Object({
   limit: t.Optional(t.Integer({ minimum: 1, maximum: 1000 })),
-  offset: t.Optional(t.Integer({ minimum: 0 })),
+  cursor: t.Optional(t.String({ maxLength: 512 })),
   type: t.Optional(t.Union([t.Literal("task"), t.Literal("activity")])),
   active: t.Optional(t.BooleanString()),
 });
@@ -18,11 +26,33 @@ const config = {
   query: readBillingCodesQuerySchema,
 } satisfies HandlerConfig;
 
+type BillingCodeCursor = {
+  sortOrder: number;
+  code: string;
+  id: SafeId<"billingCode">;
+};
+
+const decodeBillingCodeCursor = (cursor: string): BillingCodeCursor | null => {
+  const parts = decodePaginationCursor(cursor);
+  const sortOrder = parts?.at(0);
+  const code = parts?.at(1);
+  const id = parts?.at(2);
+
+  if (
+    typeof sortOrder !== "number" ||
+    typeof code !== "string" ||
+    typeof id !== "string"
+  ) {
+    return null;
+  }
+
+  return { sortOrder, code, id: brandPersistedBillingCodeId(id) };
+};
+
 const readBillingCodes = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, query }) {
     const limit = query.limit ?? 500;
-    const offset = query.offset ?? 0;
 
     const conditions = [eq(billingCodes.workspaceId, workspaceId)];
 
@@ -31,6 +61,32 @@ const readBillingCodes = createSafeHandler(
     }
     if (query.active !== undefined) {
       conditions.push(eq(billingCodes.active, query.active));
+    }
+    if (query.cursor) {
+      const cursor = decodeBillingCodeCursor(query.cursor);
+
+      if (!cursor) {
+        return Result.err(
+          new HandlerError({ status: 400, message: "Invalid cursor" }),
+        );
+      }
+
+      const cursorCondition = or(
+        gt(billingCodes.sortOrder, cursor.sortOrder),
+        and(
+          eq(billingCodes.sortOrder, cursor.sortOrder),
+          gt(billingCodes.code, cursor.code),
+        ),
+        and(
+          eq(billingCodes.sortOrder, cursor.sortOrder),
+          eq(billingCodes.code, cursor.code),
+          gt(billingCodes.id, cursor.id),
+        ),
+      );
+
+      if (cursorCondition) {
+        conditions.push(cursorCondition);
+      }
     }
 
     const rows = yield* Result.await(
@@ -46,13 +102,23 @@ const readBillingCodes = createSafeHandler(
           })
           .from(billingCodes)
           .where(and(...conditions))
-          .orderBy(asc(billingCodes.sortOrder), asc(billingCodes.code))
-          .limit(limit)
-          .offset(offset),
+          .orderBy(
+            asc(billingCodes.sortOrder),
+            asc(billingCodes.code),
+            asc(billingCodes.id),
+          )
+          .limit(limit + 1),
       ),
     );
 
-    return Result.ok(rows);
+    return Result.ok(
+      createCursorPage({
+        rows,
+        limit,
+        cursorForItem: (item) =>
+          encodePaginationCursor([item.sortOrder, item.code, item.id]),
+      }),
+    );
   },
 );
 
