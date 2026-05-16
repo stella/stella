@@ -32,30 +32,3 @@ export const useAddWorkspaceMember = () => {
     },
   });
 };
-
-type RemoveMemberVars = {
-  workspaceId: string;
-  userId: string;
-};
-
-export const useRemoveWorkspaceMember = () => {
-  const analytics = useAnalytics();
-
-  return useMutation({
-    mutationFn: async ({ workspaceId, userId }: RemoveMemberVars) => {
-      const response = await api
-        .workspaces({ workspaceId })
-        .members({ userId })
-        .delete({
-          queryKey: workspaceMembersKeys.all(workspaceId),
-        });
-
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-    },
-  });
-};

@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useForm } from "@tanstack/react-form";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -13,12 +13,14 @@ import { Label } from "@stll/ui/components/label";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/components/tabs";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
+import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import {
-  useCreateBillingCode,
-  useDeleteBillingCode,
-  useUpdateBillingCode,
-} from "@/routes/_protected.workspaces/$workspaceId/-mutations/billing-codes";
-import { billingCodesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/billing-codes";
+  billingCodesKeys,
+  billingCodesOptions,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/billing-codes";
 
 type BillingCodesDialogProps = {
   open: boolean;
@@ -38,10 +40,92 @@ export const BillingCodesDialog = ({
   const { data: codes } = useSuspenseQuery(
     billingCodesOptions(workspaceId, activeTab),
   );
+  const analytics = useAnalytics();
 
-  const createCode = useCreateBillingCode();
-  const deleteCode = useDeleteBillingCode();
-  const updateCode = useUpdateBillingCode();
+  const createCode = useMutation({
+    mutationFn: async ({
+      workspaceId: ws,
+      ...body
+    }: {
+      workspaceId: string;
+      type: "task" | "activity";
+      code: string;
+      label: string;
+      active?: boolean;
+      sortOrder?: number;
+    }) => {
+      const response = await api["billing-codes"]({
+        workspaceId: toSafeId<"workspace">(ws),
+      }).put({
+        queryKey: billingCodesKeys.all(ws),
+        ...body,
+      });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
+  const deleteCode = useMutation({
+    mutationFn: async ({
+      workspaceId: ws,
+      id,
+    }: {
+      workspaceId: string;
+      id: string;
+    }) => {
+      const response = await api["billing-codes"]({
+        workspaceId: toSafeId<"workspace">(ws),
+      }).delete({
+        queryKey: billingCodesKeys.all(ws),
+        id: toSafeId<"billingCode">(id),
+      });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
+  const updateCode = useMutation({
+    mutationFn: async ({
+      workspaceId: ws,
+      ...body
+    }: {
+      workspaceId: string;
+      id: string;
+      code?: string;
+      label?: string;
+      active?: boolean;
+      sortOrder?: number;
+    }) => {
+      const response = await api["billing-codes"]({
+        workspaceId: toSafeId<"workspace">(ws),
+      }).patch({
+        queryKey: billingCodesKeys.all(ws),
+        ...body,
+        id: toSafeId<"billingCode">(body.id),
+      });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
 
   const handleDelete = (id: string) => {
     deleteCode.mutate(

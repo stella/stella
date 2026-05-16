@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import {
+  useMutation,
   useQuery,
   useQueryClient,
   useSuspenseQuery,
@@ -39,22 +40,24 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { ContactPicker } from "@/components/contact-picker";
+import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { useCreateContact } from "@/routes/_protected.contacts/-mutations";
 import { contactsKeys } from "@/routes/_protected.contacts/-queries";
 import { MATTER_INFO_ICON_SLOT_CLASS } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-info-layout";
-import {
-  useAddParty,
-  useRemoveParty,
-} from "@/routes/_protected.workspaces/$workspaceId/-mutations/workspace-contacts";
 import {
   PARTY_ROLES,
   PARTY_ROLE_LABEL_KEYS,
   toPartyRole,
 } from "@/routes/_protected.workspaces/$workspaceId/-party-roles";
 import type { PartyRole } from "@/routes/_protected.workspaces/$workspaceId/-party-roles";
-import { workspaceContactsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-contacts";
+import {
+  workspaceContactsKeys,
+  workspaceContactsOptions,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-contacts";
 import { useUpdateWorkspace } from "@/routes/_protected.workspaces/-mutations";
 import {
   workspaceOptions,
@@ -436,7 +439,31 @@ type PartyRowProps = {
 const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const removeParty = useRemoveParty();
+  const analytics = useAnalytics();
+  const removeParty = useMutation({
+    mutationFn: async (vars: {
+      workspaceId: string;
+      workspaceContactId: string;
+    }) => {
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(vars.workspaceId) })
+        .contacts({
+          workspaceContactId: toSafeId<"workspaceContact">(
+            vars.workspaceContactId,
+          ),
+        })
+        .delete({
+          queryKey: workspaceContactsKeys.all(vars.workspaceId),
+        });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
 
   if (!party.contact) {
     return null;
@@ -522,7 +549,36 @@ const AddPartyDialog = ({
 }: AddPartyDialogProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const addParty = useAddParty();
+  const analytics = useAnalytics();
+  const addParty = useMutation({
+    mutationFn: async ({
+      workspaceId: ws,
+      ...body
+    }: {
+      workspaceId: string;
+      contactId: string;
+      role: PartyRole;
+      isPrimary?: boolean;
+      notes?: string | null;
+    }) => {
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(ws) })
+        .contacts.put({
+          ...body,
+          contactId: toSafeId<"contact">(body.contactId),
+          queryKey: workspaceContactsKeys.all(ws),
+        });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
   const [isOpen, setIsOpen] = useState(false);
   const [selectedContact, setSelectedContact] = useState<{
     id: string;
