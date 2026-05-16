@@ -364,9 +364,9 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
   );
 
   return (
-    <ChatEditorManagerContext.Provider value={contextValue}>
+    <ChatEditorManagerContext value={contextValue}>
       {children}
-    </ChatEditorManagerContext.Provider>
+    </ChatEditorManagerContext>
   );
 };
 

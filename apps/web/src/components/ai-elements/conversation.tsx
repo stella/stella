@@ -24,7 +24,7 @@ export const Conversation = ({
   const stickToBottom = useStickToBottom();
 
   return (
-    <StickToBottomContext.Provider value={stickToBottom}>
+    <StickToBottomContext value={stickToBottom}>
       <div
         className={cn("relative flex-1 overflow-y-hidden", className)}
         role="log"
@@ -32,7 +32,7 @@ export const Conversation = ({
       >
         {children}
       </div>
-    </StickToBottomContext.Provider>
+    </StickToBottomContext>
   );
 };
 

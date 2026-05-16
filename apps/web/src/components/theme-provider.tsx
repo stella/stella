@@ -161,11 +161,7 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
     [theme, setTheme, palette, setPalette, resolvedTheme],
   );
 
-  return (
-    <ThemeProviderContext.Provider value={value}>
-      {children}
-    </ThemeProviderContext.Provider>
-  );
+  return <ThemeProviderContext value={value}>{children}</ThemeProviderContext>;
 };
 
 export const useTheme = (): ThemeProviderState => {
