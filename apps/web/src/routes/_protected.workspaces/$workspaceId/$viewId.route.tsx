@@ -289,6 +289,10 @@ function EntityViewContent({
     return <ViewShell activeView={activeView} workspaceId={workspaceId} />;
   }
 
+  if (activeView.layout.type === "kanban") {
+    return <ViewShell activeView={activeView} workspaceId={workspaceId} />;
+  }
+
   return (
     <FullEntityViewContent
       activeView={activeView}
