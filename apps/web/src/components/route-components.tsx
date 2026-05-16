@@ -47,6 +47,62 @@ const AUTO_RETRY_LIMIT = 5;
 const AUTO_RETRY_DELAY_MS = 3000;
 let networkRetryCount = 0;
 
+type UseNetworkRetryOptions = {
+  networkError: boolean;
+  retry: () => void;
+};
+
+type UseNetworkRetryResult = {
+  isAutoRetrying: boolean;
+  retriesExhausted: boolean;
+};
+
+/** Drive the auto-retry lifecycle for transient network errors.
+ *  - Resets the module-scoped counter when the error is cleared
+ *    or the component unmounts (i.e. recovery succeeded).
+ *  - Schedules a single delayed retry per render where the error
+ *    is still network-shaped and the counter is below the limit.
+ *  - Cleans up the pending timer on unmount or when the network
+ *    flag flips, so a stale retry never fires after recovery. */
+const useNetworkRetry = ({
+  networkError,
+  retry,
+}: UseNetworkRetryOptions): UseNetworkRetryResult => {
+  const [isAutoRetrying, setIsAutoRetrying] = useState(
+    () => networkError && networkRetryCount < AUTO_RETRY_LIMIT,
+  );
+
+  useEffect(() => {
+    if (!networkError) {
+      networkRetryCount = 0;
+      setIsAutoRetrying(false);
+      return undefined;
+    }
+
+    if (networkRetryCount >= AUTO_RETRY_LIMIT) {
+      setIsAutoRetrying(false);
+      return undefined;
+    }
+
+    networkRetryCount += 1;
+    setIsAutoRetrying(true);
+    const timer = setTimeout(retry, AUTO_RETRY_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [networkError, retry]);
+
+  useEffect(
+    () => () => {
+      networkRetryCount = 0;
+    },
+    [],
+  );
+
+  return {
+    isAutoRetrying,
+    retriesExhausted: networkError && networkRetryCount >= AUTO_RETRY_LIMIT,
+  };
+};
+
 export const DefaultErrorComponent = ({
   error,
   reset,
@@ -59,9 +115,6 @@ export const DefaultErrorComponent = ({
   const showUnauthorizedError =
     isUnauthorizedError(error) || isMemberError(error);
   const networkError = isNetworkError(error);
-  const [isAutoRetrying, setIsAutoRetrying] = useState(
-    () => networkError && networkRetryCount < AUTO_RETRY_LIMIT,
-  );
 
   const retryErroredQueries = useCallback(() => {
     startTransition(async () => {
@@ -75,7 +128,6 @@ export const DefaultErrorComponent = ({
           analytics.captureError(refetchError);
         });
 
-      setIsAutoRetrying(false);
       reset();
       // Don't reset networkRetryCount here. If the error
       // persists, the error boundary re-catches and the
@@ -85,45 +137,35 @@ export const DefaultErrorComponent = ({
     });
   }, [queryClient, analytics, reset]);
 
-  // Reset the retry counter when the component unmounts
-  // (successful recovery) or when the error is no longer
-  // a network error.
-  useEffect(() => {
-    if (!networkError) {
-      networkRetryCount = 0;
-    }
-    return () => {
-      networkRetryCount = 0;
-    };
-  }, [networkError]);
+  const { isAutoRetrying, retriesExhausted: retriesAtLimit } = useNetworkRetry({
+    networkError,
+    retry: retryErroredQueries,
+  });
 
+  // Capture errors that aren't auth/cancel/network noise once,
+  // plus network errors once retries are exhausted. Keeping the
+  // two cases in one effect avoids the prior staggered chain.
   useEffect(() => {
-    if (showUnauthorizedError || networkError || isCancelledError) {
+    if (showUnauthorizedError || isCancelledError) {
       return;
     }
 
-    analytics.captureError(error);
-  }, [error, analytics, showUnauthorizedError, networkError, isCancelledError]);
+    if (!networkError) {
+      analytics.captureError(error);
+      return;
+    }
 
-  // Capture network errors only once retries are exhausted,
-  // avoiding inflated error counts during transient outages.
-  useEffect(() => {
-    if (networkError && networkRetryCount >= AUTO_RETRY_LIMIT) {
+    if (retriesAtLimit) {
       analytics.captureError(error);
     }
-  }, [networkError, error, analytics]);
-
-  // Auto-retry on transient network errors.
-  useEffect(() => {
-    if (!networkError || networkRetryCount >= AUTO_RETRY_LIMIT) {
-      setIsAutoRetrying(false);
-      return undefined;
-    }
-    networkRetryCount += 1;
-    setIsAutoRetrying(true);
-    const timer = setTimeout(retryErroredQueries, AUTO_RETRY_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [networkError, retryErroredQueries]);
+  }, [
+    error,
+    analytics,
+    showUnauthorizedError,
+    networkError,
+    isCancelledError,
+    retriesAtLimit,
+  ]);
 
   const t = useTranslations();
 
@@ -143,8 +185,7 @@ export const DefaultErrorComponent = ({
   // Network error: show "Connection lost" with reconnecting
   // indicator instead of generic "Something went wrong".
   if (networkError) {
-    const retriesExhausted =
-      networkRetryCount >= AUTO_RETRY_LIMIT && !isPending;
+    const retriesExhausted = retriesAtLimit && !isPending;
 
     return (
       <StatusMessage
