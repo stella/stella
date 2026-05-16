@@ -9,6 +9,12 @@
  * enabling binary search to find exact character positions.
  */
 
+import {
+  closestHtmlElement,
+  findHtmlElement,
+  queryHtmlElement,
+} from "../utils/domGuards";
+
 /**
  * Find ProseMirror position from a click using DOM-based detection.
  *
@@ -28,33 +34,32 @@ export function clickToPositionDom(
   const elements = document.elementsFromPoint(clientX, clientY);
 
   // Find the page element
-  const pageEl = elements.find((el) =>
+  const pageEl = findHtmlElement(elements, (el) =>
     el.classList.contains("layout-page"),
-  ) as HTMLElement | null;
+  );
   if (!pageEl) {
     return null;
   }
 
   // Find span with PM position data
-  const spanEl = elements.find(
+  const spanEl = findHtmlElement(
+    elements,
     (el) =>
       el.tagName === "SPAN" &&
-      (el as HTMLElement).dataset["pmStart"] !== undefined &&
-      (el as HTMLElement).dataset["pmEnd"] !== undefined,
-  ) as HTMLElement | null;
+      el.dataset["pmStart"] !== undefined &&
+      el.dataset["pmEnd"] !== undefined,
+  );
 
   if (spanEl) {
     return findPositionInSpan(spanEl, clientX, clientY);
   }
 
   // Check for empty paragraphs (including inside table cells)
-  const emptyRun = elements.find((el) =>
+  const emptyRun = findHtmlElement(elements, (el) =>
     el.classList.contains("layout-empty-run"),
-  ) as HTMLElement | null;
+  );
   if (emptyRun) {
-    const paragraph = emptyRun.closest(
-      ".layout-paragraph",
-    ) as HTMLElement | null;
+    const paragraph = closestHtmlElement(emptyRun, ".layout-paragraph");
     if (paragraph && paragraph.dataset["pmStart"]) {
       return Number(paragraph.dataset["pmStart"]);
     }
@@ -63,11 +68,12 @@ export function clickToPositionDom(
   // Check for paragraph elements directly (handles clicks in whitespace
   // to the right of text, or table cells where the narrow empty-run span
   // isn't hit but the parent paragraph div is)
-  const paragraphEl = elements.find(
+  const paragraphEl = findHtmlElement(
+    elements,
     (el) =>
       el.classList.contains("layout-paragraph") &&
-      (el as HTMLElement).dataset["pmStart"] !== undefined,
-  ) as HTMLElement | null;
+      el.dataset["pmStart"] !== undefined,
+  );
   if (paragraphEl && paragraphEl.dataset["pmStart"]) {
     // Try to find the nearest span within this paragraph so clicks to the
     // right of text land at the end of the line, not the paragraph start.
@@ -81,9 +87,9 @@ export function clickToPositionDom(
   // Check if click is within a table cell. When clicking in empty space below
   // text in a cell, restrict the search to spans within that cell to avoid
   // the cursor jumping to a different cell (fixes #54).
-  const cellEl = elements.find((el) =>
+  const cellEl = findHtmlElement(elements, (el) =>
     el.classList.contains("layout-table-cell"),
-  ) as HTMLElement | null;
+  );
   if (cellEl) {
     return findNearestSpanInElement(cellEl, clientX, clientY);
   }
@@ -229,13 +235,9 @@ function findNearestSpanInElement(
   clientY: number,
 ): number | null {
   // Check for empty paragraphs within this element
-  const emptyRun = element.querySelector(
-    ".layout-empty-run",
-  ) as HTMLElement | null;
+  const emptyRun = queryHtmlElement(element, ".layout-empty-run");
   if (emptyRun) {
-    const paragraph = emptyRun.closest(
-      ".layout-paragraph",
-    ) as HTMLElement | null;
+    const paragraph = closestHtmlElement(emptyRun, ".layout-paragraph");
     if (paragraph && paragraph.dataset["pmStart"]) {
       return Number(paragraph.dataset["pmStart"]);
     }
@@ -247,22 +249,25 @@ function findNearestSpanInElement(
   let closestLineDistance = Infinity;
 
   for (const line of Array.from(lines)) {
-    const lineEl = line as HTMLElement;
-    const rect = lineEl.getBoundingClientRect();
+    if (!(line instanceof HTMLElement)) {
+      continue;
+    }
+    const rect = line.getBoundingClientRect();
     const centerY = (rect.top + rect.bottom) / 2;
     const distance = Math.abs(clientY - centerY);
 
     if (distance < closestLineDistance) {
       closestLineDistance = distance;
-      closestLine = lineEl;
+      closestLine = line;
     }
   }
 
   if (!closestLine) {
     // No lines - try paragraph directly
-    const paragraph = element.querySelector(
+    const paragraph = queryHtmlElement(
+      element,
       ".layout-paragraph[data-pm-start]",
-    ) as HTMLElement | null;
+    );
     if (paragraph?.dataset["pmStart"]) {
       return Number(paragraph.dataset["pmStart"]);
     }
@@ -278,9 +283,7 @@ function findNearestSpanInElement(
     "span[data-pm-start][data-pm-end]",
   );
   if (lineSpans.length === 0) {
-    const paragraph = closestLine.closest(
-      ".layout-paragraph",
-    ) as HTMLElement | null;
+    const paragraph = closestHtmlElement(closestLine, ".layout-paragraph");
     if (paragraph?.dataset["pmStart"]) {
       return Number(paragraph.dataset["pmStart"]);
     }
@@ -291,7 +294,10 @@ function findNearestSpanInElement(
   let closestSpanDistance = Infinity;
 
   for (const span of Array.from(lineSpans)) {
-    const spanEl = span as HTMLElement;
+    if (!(span instanceof HTMLElement)) {
+      continue;
+    }
+    const spanEl = span;
     const rect = spanEl.getBoundingClientRect();
 
     if (clientX >= rect.left && clientX <= rect.right) {
@@ -340,8 +346,8 @@ function findNearestSpan(
     const paragraphs = pageEl.querySelectorAll(
       ".layout-page-content .layout-paragraph",
     );
-    if (paragraphs.length > 0) {
-      const firstP = paragraphs[0] as HTMLElement;
+    const firstP = paragraphs[0];
+    if (firstP instanceof HTMLElement) {
       return Number(firstP.dataset["pmStart"]) || 0;
     }
     return null;
@@ -353,14 +359,16 @@ function findNearestSpan(
   let closestLineDistance = Infinity;
 
   for (const line of Array.from(lines)) {
-    const lineEl = line as HTMLElement;
-    const rect = lineEl.getBoundingClientRect();
+    if (!(line instanceof HTMLElement)) {
+      continue;
+    }
+    const rect = line.getBoundingClientRect();
     const centerY = (rect.top + rect.bottom) / 2;
     const distance = Math.abs(clientY - centerY);
 
     if (distance < closestLineDistance) {
       closestLineDistance = distance;
-      closestLine = lineEl;
+      closestLine = line;
     }
   }
 
@@ -374,9 +382,7 @@ function findNearestSpan(
   );
   if (lineSpans.length === 0) {
     // Empty line - find PM position from paragraph
-    const paragraph = closestLine.closest(
-      ".layout-paragraph",
-    ) as HTMLElement | null;
+    const paragraph = closestHtmlElement(closestLine, ".layout-paragraph");
     if (paragraph?.dataset["pmStart"]) {
       return Number(paragraph.dataset["pmStart"]);
     }
@@ -388,7 +394,10 @@ function findNearestSpan(
   let closestSpanDistance = Infinity;
 
   for (const span of Array.from(lineSpans)) {
-    const spanEl = span as HTMLElement;
+    if (!(span instanceof HTMLElement)) {
+      continue;
+    }
+    const spanEl = span;
     const rect = spanEl.getBoundingClientRect();
 
     // Check if click is within span bounds
@@ -455,7 +464,10 @@ export function getSelectionRectsFromDom(
   );
 
   for (const span of Array.from(spans)) {
-    const spanEl = span as HTMLElement;
+    if (!(span instanceof HTMLElement)) {
+      continue;
+    }
+    const spanEl = span;
     const pmStart = Number(spanEl.dataset["pmStart"]);
     const pmEnd = Number(spanEl.dataset["pmEnd"]);
 
@@ -489,7 +501,7 @@ export function getSelectionRectsFromDom(
     const clientRects = range.getClientRects();
 
     // Find page index
-    const pageEl = spanEl.closest(".layout-page") as HTMLElement | null;
+    const pageEl = closestHtmlElement(spanEl, ".layout-page");
     const pageIndex = pageEl
       ? Number(pageEl.dataset["pageNumber"] || 1) - 1
       : 0;
@@ -539,7 +551,10 @@ export function getCaretPositionFromDom(
   );
 
   for (const span of Array.from(spans)) {
-    const spanEl = span as HTMLElement;
+    if (!(span instanceof HTMLElement)) {
+      continue;
+    }
+    const spanEl = span;
     const pmStart = Number(spanEl.dataset["pmStart"]);
     const pmEnd = Number(spanEl.dataset["pmEnd"]);
 
@@ -548,12 +563,12 @@ export function getCaretPositionFromDom(
     if (spanEl.classList.contains("layout-run-tab")) {
       if (pmPos >= pmStart && pmPos < pmEnd) {
         const spanRect = spanEl.getBoundingClientRect();
-        const pageEl = spanEl.closest(".layout-page") as HTMLElement | null;
+        const pageEl = closestHtmlElement(spanEl, ".layout-page");
         const pageIndex = pageEl
           ? Number(pageEl.dataset["pageNumber"] || 1) - 1
           : 0;
-        const lineEl = spanEl.closest(".layout-line");
-        const lineHeight = lineEl ? (lineEl as HTMLElement).offsetHeight : 16;
+        const lineEl = closestHtmlElement(spanEl, ".layout-line");
+        const lineHeight = lineEl ? lineEl.offsetHeight : 16;
 
         // Position caret at start of tab (only position within tab)
         return {
@@ -572,12 +587,12 @@ export function getCaretPositionFromDom(
       if (!textNode || textNode.nodeType !== Node.TEXT_NODE) {
         // No text - use span bounds
         const spanRect = spanEl.getBoundingClientRect();
-        const pageEl = spanEl.closest(".layout-page") as HTMLElement | null;
+        const pageEl = closestHtmlElement(spanEl, ".layout-page");
         const pageIndex = pageEl
           ? Number(pageEl.dataset["pageNumber"] || 1) - 1
           : 0;
-        const lineEl = spanEl.closest(".layout-line");
-        const lineHeight = lineEl ? (lineEl as HTMLElement).offsetHeight : 16;
+        const lineEl = closestHtmlElement(spanEl, ".layout-line");
+        const lineHeight = lineEl ? lineEl.offsetHeight : 16;
 
         return {
           x: spanRect.left - overlayRect.left,
@@ -597,12 +612,12 @@ export function getCaretPositionFromDom(
       range.setEnd(text, charIndex);
 
       const rangeRect = range.getBoundingClientRect();
-      const pageEl = spanEl.closest(".layout-page") as HTMLElement | null;
+      const pageEl = closestHtmlElement(spanEl, ".layout-page");
       const pageIndex = pageEl
         ? Number(pageEl.dataset["pageNumber"] || 1) - 1
         : 0;
-      const lineEl = spanEl.closest(".layout-line");
-      const lineHeight = lineEl ? (lineEl as HTMLElement).offsetHeight : 16;
+      const lineEl = closestHtmlElement(spanEl, ".layout-line");
+      const lineHeight = lineEl ? lineEl.offsetHeight : 16;
 
       return {
         x: rangeRect.left - overlayRect.left,
@@ -616,7 +631,10 @@ export function getCaretPositionFromDom(
   // Check empty paragraphs
   const paragraphs = container.querySelectorAll(".layout-paragraph");
   for (const p of Array.from(paragraphs)) {
-    const pEl = p as HTMLElement;
+    if (!(p instanceof HTMLElement)) {
+      continue;
+    }
+    const pEl = p;
     const pStart = Number(pEl.dataset["pmStart"]);
     const pEnd = Number(pEl.dataset["pmEnd"]);
 
@@ -625,12 +643,13 @@ export function getCaretPositionFromDom(
       const targetEl = emptyRun || pEl;
       const rect = targetEl.getBoundingClientRect();
 
-      const pageEl = pEl.closest(".layout-page") as HTMLElement | null;
+      const pageEl = closestHtmlElement(pEl, ".layout-page");
       const pageIndex = pageEl
         ? Number(pageEl.dataset["pageNumber"] || 1) - 1
         : 0;
-      const lineEl = targetEl.closest(".layout-line") || targetEl;
-      const lineHeight = (lineEl as HTMLElement).offsetHeight || 16;
+      const lineCandidate = targetEl.closest(".layout-line") ?? targetEl;
+      const lineHeight =
+        lineCandidate instanceof HTMLElement ? lineCandidate.offsetHeight : 16;
 
       return {
         x: rect.left - overlayRect.left,
