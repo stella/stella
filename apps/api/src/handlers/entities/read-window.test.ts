@@ -119,13 +119,13 @@ describe("entity read handlers", () => {
       }),
     );
 
-    expect("entities" in result).toBe(true);
-    if (!("entities" in result)) {
+    expect("items" in result).toBe(true);
+    if (!("items" in result)) {
       return;
     }
 
-    expect(result.entities).toHaveLength(2);
-    expect(result.entities.at(0)?.fields).toEqual([
+    expect(result.items).toHaveLength(2);
+    expect(result.items.at(0)?.fields).toEqual([
       expect.objectContaining({
         propertyId: "prop_file",
         content: expect.objectContaining({
@@ -178,12 +178,12 @@ describe("entity read handlers", () => {
       }) as Parameters<typeof readKanbanGroup.handler>[0],
     );
 
-    expect("entities" in result).toBe(true);
-    if (!("entities" in result)) {
+    expect("items" in result).toBe(true);
+    if (!("items" in result)) {
       return;
     }
 
-    expect(result.entities).toHaveLength(2);
+    expect(result.items).toHaveLength(2);
     expect(result.limit).toBe(2);
     expect(result.nextCursor).toEqual(expect.any(String));
   });

@@ -7,6 +7,7 @@ import type { ScopedDb } from "@/api/db";
 import { caseLawDecisions } from "@/api/db/schema";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import { createCursorPage } from "@/api/lib/pagination";
 
 export const listDecisionsQuerySchema = t.Object({
   limit: t.Optional(
@@ -104,12 +105,9 @@ export const listDecisionsHandler = async (
       .limit(limit + 1),
   );
 
-  const hasMore = decisions.length > limit;
-  const items = hasMore ? decisions.slice(0, limit) : decisions;
-  const lastItem = hasMore ? items.at(-1) : null;
-  const nextCursor = lastItem
-    ? `${lastItem.createdAt.toISOString()}_${lastItem.id}`
-    : null;
-
-  return { decisions: items, nextCursor };
+  return createCursorPage({
+    rows: decisions,
+    limit,
+    cursorForItem: (item) => `${item.createdAt.toISOString()}_${item.id}`,
+  });
 };

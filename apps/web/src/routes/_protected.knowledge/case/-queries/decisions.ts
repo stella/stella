@@ -132,7 +132,8 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
       }
 
       const facets: SearchFacets = null;
-      return { ...response.data, facets };
+      const { items, ...page } = response.data;
+      return { ...page, decisions: items, facets };
     },
     // SAFETY: TanStack Query needs the initial param typed as
     // string | null; `null` alone infers `null`.

@@ -187,6 +187,7 @@ export default defineConfig({
     "./.oxlint-plugins/security-guards.ts",
     "./.oxlint-plugins/no-unbranded-ownership-id-param.ts",
     "./.oxlint-plugins/no-raw-user-id-schema.ts",
+    "./.oxlint-plugins/no-offset-pagination.ts",
     "./.oxlint-plugins/mcp-security.ts",
     "./.oxlint-plugins/stella-toast.ts",
   ],
@@ -725,6 +726,21 @@ export default defineConfig({
       rules: {
         "no-body-ownership-ids/no-body-ownership-ids": "error",
         "no-raw-user-id-schema/no-raw-user-id-schema": "error",
+        "no-offset-pagination/no-offset-pagination": [
+          "error",
+          {
+            // Existing bounded billing/admin lists. Keep explicit while
+            // these endpoints are migrated or deliberately retained.
+            allowedFiles: [
+              "apps/api/src/handlers/invoices/read.ts",
+              "apps/api/src/handlers/time-entries/read.ts",
+              "apps/api/src/handlers/expenses/read.ts",
+              "apps/api/src/handlers/billing-codes/read.ts",
+              "apps/api/src/handlers/rates/read.ts",
+              "apps/api/src/handlers/rates/entries-read.ts",
+            ],
+          },
+        ],
         "no-untyped-updates/no-untyped-updates": "error",
         "security-guards/no-unscoped-user-query": "warn",
         "no-restricted-imports": [

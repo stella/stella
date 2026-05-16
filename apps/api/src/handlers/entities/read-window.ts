@@ -10,6 +10,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import { createCursorPage } from "@/api/lib/pagination";
 import {
   tViewFilterConditionSchema,
   tViewSortSchema,
@@ -74,14 +75,13 @@ const readEntitiesWindow = createSafeHandler(
       }),
     );
 
-    const hasMore = result.entities.length > limit;
-    const entities = result.entities.slice(0, limit);
-
-    return Result.ok({
-      entities,
-      limit,
-      nextCursor: hasMore ? encodeEntitiesWindowCursor(offset + limit) : null,
-    });
+    return Result.ok(
+      createCursorPage({
+        rows: result.entities,
+        limit,
+        cursorForItem: () => encodeEntitiesWindowCursor(offset + limit),
+      }),
+    );
   },
 );
 

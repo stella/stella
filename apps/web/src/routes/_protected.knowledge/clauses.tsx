@@ -39,7 +39,7 @@ type ClauseListData = Exclude<
   Response
 >;
 
-type ClauseItem = ClauseListData["clauses"][number];
+type ClauseItem = ClauseListData["items"][number];
 
 // ── View discriminated union ─────────────────────────
 
@@ -91,7 +91,7 @@ function RouteComponent() {
       : [];
 
   const initialClauses: ClauseItem[] =
-    clausesData && "clauses" in clausesData ? clausesData.clauses : [];
+    clausesData && "items" in clausesData ? clausesData.items : [];
 
   const initialNextCursor =
     clausesData && "nextCursor" in clausesData ? clausesData.nextCursor : null;
@@ -185,7 +185,7 @@ function RouteComponent() {
         return;
       }
 
-      setExtraClauses((prev) => [...prev, ...data.clauses]);
+      setExtraClauses((prev) => [...prev, ...data.items]);
       setNextCursor(data.nextCursor);
     } finally {
       if (!controller.signal.aborted) {
