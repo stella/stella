@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 import { getDocumentAstMetadata } from "@stll/case-law/document-ast";
 import { Button } from "@stll/ui/components/button";
 
+import type { TranslationKey } from "@/i18n/types";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
 /**
@@ -122,6 +123,20 @@ const SOURCE_FIELD_KEYS = {
   publishedOnWeb: "zverejnenoNaWebu",
 } as const;
 
+type SourceFieldKey =
+  (typeof SOURCE_FIELD_KEYS)[keyof typeof SOURCE_FIELD_KEYS];
+
+const SOURCE_FIELD_LABEL_KEYS = {
+  [SOURCE_FIELD_KEYS.decisionCategory]:
+    "caseLaw.viewer.sourceFields.decisionCategory",
+  [SOURCE_FIELD_KEYS.legalSentence]: "caseLaw.viewer.legalSentence",
+  [SOURCE_FIELD_KEYS.publishedOnWeb]:
+    "caseLaw.viewer.sourceFields.publishedOnWeb",
+} as const satisfies Record<SourceFieldKey, TranslationKey>;
+
+const isSourceFieldKey = (key: string): key is SourceFieldKey =>
+  key in SOURCE_FIELD_LABEL_KEYS;
+
 /** Extract the popular name from source metadata (ÚS decisions). */
 const getPopularName = (meta: Record<string, unknown>): string | null => {
   const val = meta["popularName"];
@@ -138,21 +153,11 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
 
   const sourceFields: { label: string; value: string }[] = [];
   for (const [key, val] of Object.entries(sourceMeta)) {
-    let label: string | null = null;
-    switch (key) {
-      case SOURCE_FIELD_KEYS.decisionCategory:
-        label = t("caseLaw.viewer.sourceFields.decisionCategory");
-        break;
-      case SOURCE_FIELD_KEYS.legalSentence:
-        label = t("caseLaw.viewer.legalSentence");
-        break;
-      case SOURCE_FIELD_KEYS.publishedOnWeb:
-        label = t("caseLaw.viewer.sourceFields.publishedOnWeb");
-        break;
-    }
-    if (!label || val === null || val === undefined) {
+    if (!isSourceFieldKey(key) || val === null || val === undefined) {
       continue;
     }
+    const label = t(SOURCE_FIELD_LABEL_KEYS[key]);
+
     if (Array.isArray(val)) {
       sourceFields.push({ label, value: val.join(", ") });
     } else if (typeof val === "string" || typeof val === "number") {

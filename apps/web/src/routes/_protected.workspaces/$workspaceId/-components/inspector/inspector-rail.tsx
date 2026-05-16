@@ -311,6 +311,7 @@ const VerticalTab = ({
         render={
           <button
             ref={tabRef}
+            aria-label={tooltipLabel}
             className={cn(
               "group/tab relative flex min-h-8 w-full items-center justify-center border-b transition-colors",
               "text-muted-foreground hover:bg-accent hover:text-foreground",

@@ -61,6 +61,7 @@ import {
 } from "@/components/ai-elements/message";
 import type { ChatEditorController } from "@/components/chat-editor-provider";
 import { PromptEditorContent } from "@/components/prompt-editor";
+import type { TranslationKey } from "@/i18n/types";
 
 import type {
   AssistantThreadMessage,
@@ -123,6 +124,12 @@ const SEVERITY_DOT_CLASS: Record<AISuggestionSeverity, string> = {
   style: "bg-foreground/55",
   typo: "bg-muted-foreground",
 };
+
+const SEVERITY_LABEL_KEYS = {
+  substantive: "chat.suggestionSeverity.substantive",
+  style: "chat.suggestionSeverity.style",
+  typo: "chat.suggestionSeverity.typo",
+} as const satisfies Record<AISuggestionSeverity, TranslationKey>;
 
 /**
  * Visual layout mode.
@@ -1788,13 +1795,7 @@ function SuggestionCard(props: SuggestionCardProps) {
     props;
   const isResolvable =
     suggestion.status === "pending" || suggestion.status === "stale";
-  let severityLabel = t("chat.suggestionSeverity.typo");
-
-  if (suggestion.severity === "substantive") {
-    severityLabel = t("chat.suggestionSeverity.substantive");
-  } else if (suggestion.severity === "style") {
-    severityLabel = t("chat.suggestionSeverity.style");
-  }
+  const severityLabel = t(SEVERITY_LABEL_KEYS[suggestion.severity]);
 
   return (
     <div
