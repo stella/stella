@@ -191,7 +191,14 @@ export const ViewSwitcher = ({
   };
 
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div
+      className={cn(
+        "flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-2",
+        "[-ms-overflow-style:none]",
+        "[scrollbar-width:none]",
+        "[&::-webkit-scrollbar]:hidden",
+      )}
+    >
       <Tabs value={activeViewId}>
         <TabsList variant="underline">
           {views.map((view) => {
