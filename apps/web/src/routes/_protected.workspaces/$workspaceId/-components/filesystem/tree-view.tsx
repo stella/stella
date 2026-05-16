@@ -79,7 +79,7 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 import {
-  useEntitiesOptions,
+  useFilesystemEntitiesOptions,
   visibleEntityFieldIds,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
@@ -364,19 +364,15 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   );
 
   const { data: entityData } = useSuspenseQuery(
-    useEntitiesOptions({
+    useFilesystemEntitiesOptions({
       workspaceId,
       filters,
       sorts,
-      page: 1,
       fieldMode: "visible",
       fieldIds,
     }),
   );
-  const data = useMemo(
-    () => entityData.entities.filter((e) => e.kind !== "task"),
-    [entityData.entities],
-  );
+  const data = entityData.entities;
 
   // Build a lookup for drag preview data from selected entities.
   const entityMap = useMemo(() => {

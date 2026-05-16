@@ -2,11 +2,14 @@ import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { createReadEntitiesHandler } from "@/api/handlers/entities/read";
+import { createReadFilesystemTreeHandler } from "@/api/handlers/entities/read-filesystem-tree";
 import { toSafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 
 const queryEntitiesMock = mock();
 
 const readEntities = createReadEntitiesHandler(queryEntitiesMock);
+const readFilesystemTree = createReadFilesystemTreeHandler(queryEntitiesMock);
 
 const workspaceId = toSafeId<"workspace">("ws_entity_read");
 const organizationId = toSafeId<"organization">("org_entity_read");
@@ -81,6 +84,30 @@ describe("entity read handler search", () => {
         offset: 0,
         limit: 50,
         fieldMode: "visible",
+      }),
+    );
+  });
+
+  test("loads a bounded complete filesystem tree without widening page reads", async () => {
+    await readFilesystemTree.handler(
+      createContext({
+        filters: [],
+        sorts: [],
+        search: "closing binder",
+        fieldMode: "visible",
+        fieldIds: [],
+      }) as Parameters<typeof readFilesystemTree.handler>[0],
+    );
+
+    expect(queryEntitiesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId,
+        currentOrganizationId: organizationId,
+        search: "closing binder",
+        offset: 0,
+        limit: LIMITS.entitiesCount,
+        excludedKinds: ["task"],
+        includeTotalCount: false,
       }),
     );
   });

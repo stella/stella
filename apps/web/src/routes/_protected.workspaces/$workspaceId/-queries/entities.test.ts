@@ -127,6 +127,22 @@ describe("entity query field selection", () => {
     });
   });
 
+  test("keeps excluded kinds in the page cache identity", () => {
+    expect(
+      entitiesKeys
+        .page({
+          workspaceId: "workspace-1",
+          filters: [],
+          sorts: [],
+          page: 1,
+          excludedKinds: ["task", "folder"],
+        })
+        .at(-1),
+    ).toMatchObject({
+      excludedKinds: ["folder", "task"],
+    });
+  });
+
   test("keeps extra caller fields out of the page cache identity", () => {
     const cleanKey = entitiesKeys.page({
       workspaceId: "workspace-1",
@@ -169,8 +185,56 @@ describe("entity query field selection", () => {
         fieldMode: "visible",
         fieldIds: ["due", "status"],
         excludedKinds: ["folder", "task"],
+        previewableForAi: false,
       },
     ]);
+  });
+
+  test("keeps filesystem tree cache identity independent from page state", () => {
+    expect(
+      entitiesKeys
+        .filesystemTree({
+          workspaceId: "workspace-1",
+          filters: [],
+          sorts: [],
+          search: " closing binder ",
+          fieldMode: "visible",
+          fieldIds: ["status", "due", "status"],
+        })
+        .at(-1),
+    ).toEqual({
+      filters: [],
+      sorts: [],
+      search: "closing binder",
+      fieldMode: "visible",
+      fieldIds: ["due", "status"],
+    });
+  });
+
+  test("keeps search and AI-previewable state in the window cache identity", () => {
+    const previewKey = entitiesKeys.window({
+      workspaceId: "workspace-1",
+      filters: [],
+      sorts: [],
+      search: " closing binder ",
+      previewableForAi: true,
+    });
+    const regularKey = entitiesKeys.window({
+      workspaceId: "workspace-1",
+      filters: [],
+      sorts: [],
+      search: " closing binder ",
+    });
+
+    expect(previewKey).not.toEqual(regularKey);
+    expect(previewKey.at(-1)).toMatchObject({
+      search: "closing binder",
+      previewableForAi: true,
+    });
+    expect(regularKey.at(-1)).toMatchObject({
+      search: "closing binder",
+      previewableForAi: false,
+    });
   });
 
   test("keeps kanban group value in the cache identity", () => {

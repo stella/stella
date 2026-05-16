@@ -191,7 +191,14 @@ export const ViewSwitcher = ({
   };
 
   return (
-    <div className="flex min-w-0 flex-1 [scrollbar-width:none] items-center gap-1 overflow-x-auto px-2 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+    <div
+      className={cn(
+        "flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-2",
+        "[-ms-overflow-style:none]",
+        "[scrollbar-width:none]",
+        "[&::-webkit-scrollbar]:hidden",
+      )}
+    >
       <Tabs value={activeViewId}>
         <TabsList variant="underline">
           {views.map((view) => {
@@ -405,7 +412,7 @@ const ViewTab = ({
       {isActive && (canUpdateView || canCreateView || canDeleteView) && (
         <ViewTabMenu
           canDelete={canDelete}
-          className="absolute inset-e-0 top-1/2 -translate-y-1/2"
+          className={cn("absolute", "inset-e-0 top-1/2 -translate-y-1/2")}
           onRename={() => {
             setIsRenaming(true);
             setRenameValue(name);

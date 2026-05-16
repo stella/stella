@@ -18,6 +18,7 @@ import {
 const readEntitiesWindowBodySchema = t.Object({
   filters: t.Optional(t.Array(tViewFilterConditionSchema)),
   sorts: t.Optional(t.Array(tViewSortSchema)),
+  search: t.Optional(t.String({ maxLength: LIMITS.searchQueryMaxLength })),
   limit: t.Optional(
     t.Integer({
       minimum: 1,
@@ -36,6 +37,7 @@ const readEntitiesWindowBodySchema = t.Object({
       maxItems: LIMITS.propertiesCount,
     }),
   ),
+  previewableForAi: t.Optional(t.Boolean()),
 });
 
 const config = {
@@ -61,11 +63,13 @@ const readEntitiesWindow = createSafeHandler(
         currentOrganizationId: session.activeOrganizationId,
         filters: body.filters ?? [],
         sorts: body.sorts ?? [],
+        ...(body.search !== undefined && { search: body.search }),
         offset,
         limit: limit + 1,
         fieldMode: body.fieldMode ?? "full",
         fieldIds: body.fieldIds ?? [],
         excludedKinds: body.excludedKinds ?? [],
+        previewableForAi: body.previewableForAi ?? false,
         includeTotalCount: false,
       }),
     );

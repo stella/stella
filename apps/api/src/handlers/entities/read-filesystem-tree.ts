@@ -11,39 +11,26 @@ import {
   tViewSortSchema,
 } from "@/api/lib/views-schema";
 
-const readEntitiesBodySchema = t.Object({
+const readFilesystemTreeBodySchema = t.Object({
   filters: t.Optional(t.Array(tViewFilterConditionSchema)),
   sorts: t.Optional(t.Array(tViewSortSchema)),
-  page: t.Optional(t.Integer({ minimum: 1 })),
   search: t.Optional(t.String({ maxLength: LIMITS.searchQueryMaxLength })),
-  pageSize: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: LIMITS.entitiesPageSizeMax,
-    }),
-  ),
   fieldMode: t.Optional(t.UnionEnum(["full", "visible"])),
   fieldIds: t.Optional(
     t.Array(tSafeId("property"), {
       maxItems: LIMITS.propertiesCount,
     }),
   ),
-  excludedKinds: t.Optional(
-    t.Array(t.UnionEnum(["document", "folder", "task", "message", "link"]), {
-      maxItems: 5,
-    }),
-  ),
-  previewableForAi: t.Optional(t.Boolean()),
 });
 
 const config = {
   permissions: { workspace: ["read"] },
-  body: readEntitiesBodySchema,
+  body: readFilesystemTreeBodySchema,
 } satisfies HandlerConfig;
 
 type QueryEntities = typeof queryEntities;
 
-export const createReadEntitiesHandler = (
+export const createReadFilesystemTreeHandler = (
   queryEntitiesImpl: QueryEntities = queryEntities,
 ) =>
   createSafeHandler(
@@ -55,8 +42,6 @@ export const createReadEntitiesHandler = (
       body,
       user: currentUser,
     }) {
-      const page = body.page ?? 1;
-      const pageSize = body.pageSize ?? LIMITS.entitiesPageSizeDefault;
       const result = yield* Result.await(
         queryEntitiesImpl({
           safeDb,
@@ -66,25 +51,22 @@ export const createReadEntitiesHandler = (
           filters: body.filters ?? [],
           sorts: body.sorts ?? [],
           ...(body.search !== undefined && { search: body.search }),
-          offset: (page - 1) * pageSize,
-          limit: pageSize,
+          offset: 0,
+          limit: LIMITS.entitiesCount,
           fieldMode: body.fieldMode ?? "full",
           fieldIds: body.fieldIds ?? [],
-          excludedKinds: body.excludedKinds ?? [],
-          previewableForAi: body.previewableForAi ?? false,
-          includeTotalCount: true,
+          excludedKinds: ["task"],
+          previewableForAi: false,
+          includeTotalCount: false,
         }),
       );
 
       return Result.ok({
         entities: result.entities,
-        totalCount: result.totalCount ?? 0,
-        page,
-        pageSize,
       });
     },
   );
 
-const readEntities = createReadEntitiesHandler();
+const readFilesystemTree = createReadFilesystemTreeHandler();
 
-export default readEntities;
+export default readFilesystemTree;
