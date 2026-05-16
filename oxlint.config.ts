@@ -738,6 +738,7 @@ export default defineConfig({
               "apps/api/src/handlers/billing-codes/read.ts",
               "apps/api/src/handlers/rates/read.ts",
               "apps/api/src/handlers/rates/entries-read.ts",
+              "apps/api/src/handlers/skills/list.ts",
             ],
           },
         ],

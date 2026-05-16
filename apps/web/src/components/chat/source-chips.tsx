@@ -120,12 +120,7 @@ export const SourceChips = ({
   }
 
   return (
-    <div
-      className={cn(
-        "flex max-w-full flex-nowrap gap-1 overflow-x-auto pb-1",
-        "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-      )}
-    >
+    <div className="flex max-w-full [scrollbar-width:none] flex-nowrap gap-1 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden">
       {uniqueSources.map((part) => (
         <SourceChip
           key={`${messageId}-source-${part.id ?? part.data.entityId}`}
