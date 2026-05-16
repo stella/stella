@@ -56,19 +56,22 @@ export const InviteStep = ({
 
   const processInput = useCallback(
     (raw: string) => {
-      const tokens = raw
-        .split(DELIMITERS)
-        .map((s) => s.trim())
-        .filter(Boolean);
+      const tokens = raw.split(DELIMITERS).flatMap((s) => {
+        const trimmed = s.trim();
+        return trimmed ? [trimmed] : [];
+      });
 
       const valid: string[] = [];
       const invalid: string[] = [];
+      const existingEmailSet = new Set(emails);
+      const validEmailSet = new Set<string>();
 
       for (const token of tokens) {
         const lower = token.toLowerCase();
         if (isValidEmail(lower)) {
-          if (!emails.includes(lower) && !valid.includes(lower)) {
+          if (!existingEmailSet.has(lower) && !validEmailSet.has(lower)) {
             valid.push(lower);
+            validEmailSet.add(lower);
           }
         } else {
           invalid.push(token);
@@ -220,21 +223,32 @@ export const InviteStep = ({
           onClick={() => {
             let finalEmails = emails;
             if (input.trim()) {
-              const tokens = input
-                .split(/[,;\n\t]/)
-                .map((s) => s.trim())
-                .filter(Boolean);
-              const valid = tokens
-                .map((s) => s.toLowerCase())
-                .filter(isValidEmail);
-              const hasInvalid = valid.length < tokens.length;
+              const tokens = input.split(/[,;\n\t]/).flatMap((s) => {
+                const trimmed = s.trim();
+                return trimmed ? [trimmed] : [];
+              });
+              const validEmails: string[] = [];
+              for (const token of tokens) {
+                const email = token.toLowerCase();
+                if (isValidEmail(email)) {
+                  validEmails.push(email);
+                }
+              }
+              const hasInvalid = validEmails.length < tokens.length;
               processInput(input);
               if (hasInvalid) {
                 return;
               }
               // Compute final list synchronously since
               // setEmails is async and won't update yet
-              const deduped = valid.filter((s) => !emails.includes(s));
+              const existingEmails = new Set(emails);
+              const deduped: string[] = [];
+              for (const email of validEmails) {
+                if (!existingEmails.has(email)) {
+                  deduped.push(email);
+                  existingEmails.add(email);
+                }
+              }
               finalEmails = [...emails, ...deduped];
             }
             onNext({ emails: finalEmails });

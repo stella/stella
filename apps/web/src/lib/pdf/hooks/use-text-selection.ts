@@ -13,40 +13,39 @@ export const useTextSelection = (
 ) => {
   useEffect(() => {
     let prevRange: Range | null = null;
-    const ac = new AbortController();
 
-    document.addEventListener(
-      "selectionchange",
-      () => {
-        const selection = document.getSelection();
-        const textLayers = getTextLayers(containerRef.current);
+    const updateSelectionMarkers = () => {
+      const selection = document.getSelection();
+      const textLayers = getTextLayers(containerRef.current);
 
-        if (textLayers.length === 0) {
-          return;
-        }
+      if (textLayers.length === 0) {
+        return;
+      }
 
-        if (!selection || selection.rangeCount === 0) {
-          resetEndMarkers(textLayers);
-          return;
-        }
+      if (!selection || selection.rangeCount === 0) {
+        resetEndMarkers(textLayers);
+        return;
+      }
 
-        const activeTextLayers = getActiveTextLayers(selection, textLayers);
-        updateEndMarkers(textLayers, activeTextLayers);
+      const activeTextLayers = getActiveTextLayers(selection, textLayers);
+      updateEndMarkers(textLayers, activeTextLayers);
 
-        const range = selection.getRangeAt(0);
-        const modifyStart =
-          prevRange &&
-          (range.compareBoundaryPoints(Range.END_TO_END, prevRange) === 0 ||
-            range.compareBoundaryPoints(Range.START_TO_END, prevRange) === 0);
-        const anchor = getSelectionAnchor(range, Boolean(modifyStart));
-        moveEndMarker(anchor, Boolean(modifyStart));
+      const range = selection.getRangeAt(0);
+      const modifyStart =
+        prevRange &&
+        (range.compareBoundaryPoints(Range.END_TO_END, prevRange) === 0 ||
+          range.compareBoundaryPoints(Range.START_TO_END, prevRange) === 0);
+      const anchor = getSelectionAnchor(range, Boolean(modifyStart));
+      moveEndMarker(anchor, Boolean(modifyStart));
 
-        prevRange = range.cloneRange();
-      },
-      { signal: ac.signal },
-    );
+      prevRange = range.cloneRange();
+    };
 
-    return () => ac.abort();
+    document.addEventListener("selectionchange", updateSelectionMarkers);
+
+    return () => {
+      document.removeEventListener("selectionchange", updateSelectionMarkers);
+    };
   }, [containerRef]);
 };
 

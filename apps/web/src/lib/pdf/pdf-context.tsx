@@ -445,11 +445,14 @@ const createPDFStore = ({
     updateVisiblePages: (visiblePageIds) => {
       const { pages } = get();
       const pageIds = Array.from(pages.keys());
+      const pageIndexById = new Map(
+        pageIds.map((pageId, index) => [pageId, index]),
+      );
 
       const expandedSet = new Set(visiblePageIds);
       for (const pageId of visiblePageIds) {
-        const idx = pageIds.indexOf(pageId);
-        if (idx === -1) {
+        const idx = pageIndexById.get(pageId);
+        if (idx === undefined) {
           continue;
         }
 
@@ -469,6 +472,7 @@ const createPDFStore = ({
       }
 
       const newActivePages = pageBuffer.keys();
+      const newActivePageSet = new Set(newActivePages);
       const previousRenderPromises = get().renderPromises;
       const nextRenderPromises = new Map(previousRenderPromises);
       let renderPromisesChanged = false;
@@ -493,7 +497,7 @@ const createPDFStore = ({
       }
 
       for (const pageId of nextRenderPromises.keys()) {
-        if (!newActivePages.includes(pageId)) {
+        if (!newActivePageSet.has(pageId)) {
           nextRenderPromises.delete(pageId);
           renderPromisesChanged = true;
         }
