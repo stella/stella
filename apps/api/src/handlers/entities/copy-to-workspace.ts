@@ -10,6 +10,7 @@ import {
   copyEntities,
   getFolderSubtree,
 } from "@/api/handlers/entities/copy-utils";
+import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -155,9 +156,10 @@ const remapFileIds = (
           ...restContent,
           id: newFileId,
           pdfFileId: null,
-          ...(field.content.pdfDerivative
-            ? { pdfDerivative: { status: "pending" as const } }
-            : {}),
+          pdfDerivative: pdfDerivativeStateForFile({
+            encrypted: field.content.encrypted,
+            mimeType: field.content.mimeType,
+          }),
         },
       };
     });
