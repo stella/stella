@@ -38,6 +38,14 @@ export type CopiedEntity = {
   parentId: SafeId<"entity"> | null;
 };
 
+/** File field info needed for PDF derivative enqueueing. */
+export type CopiedFileField = {
+  entityId: SafeId<"entity">;
+  fieldId: SafeId<"field">;
+  mimeType: string;
+  encrypted: boolean;
+};
+
 /** Escape regex metacharacters. */
 const escapeRegex = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -161,6 +169,8 @@ type CopyEntitiesSuccessResult = {
   entityId: SafeId<"entity">;
   entityIds: SafeId<"entity">[];
   copiedEntities: CopiedEntity[];
+  /** File fields that may need PDF derivative generation. */
+  fileFields: CopiedFileField[];
 };
 
 export type CopyEntitiesResult =
@@ -206,8 +216,9 @@ export const copyEntities = async ({
     };
   }
 
-  // Validate target parent if cross-workspace copy
-  if (targetParentId) {
+  // Validate target parent for cross-workspace copy only.
+  // Same-workspace (duplicate) already validated the parent via the source entity fetch.
+  if (sourceWorkspaceId && targetParentId) {
     const parent = await tx.query.entities.findFirst({
       where: {
         id: { eq: targetParentId },
@@ -236,6 +247,7 @@ export const copyEntities = async ({
   const idMap = new Map<SafeId<"entity">, SafeId<"entity">>();
   const copiedEntities: CopiedEntity[] = [];
   const copiedEntityIds: SafeId<"entity">[] = [];
+  const fileFields: CopiedFileField[] = [];
 
   for (const source of sourceEntities) {
     if (!source.currentVersion) {
@@ -252,12 +264,10 @@ export const copyEntities = async ({
       ? idMap.get(source.parentId)
       : undefined;
 
-    // For root entity: use targetParentId if cross-workspace, else source.parentId
-    // For children: use mapped parent
+    // For root entity: use targetParentId (caller provides the correct value)
+    // For children: use mapped parent from idMap
     const newParentId =
-      source.id === sourceEntityId
-        ? (targetParentId ?? source.parentId)
-        : mappedParentId;
+      source.id === sourceEntityId ? targetParentId : mappedParentId;
 
     const copyName =
       source.id === sourceEntityId
@@ -308,14 +318,29 @@ export const copyEntities = async ({
 
     const sourceFields = source.currentVersion.fields;
     if (sourceFields.length > 0) {
-      await tx.insert(fields).values(
-        sourceFields.map((field) => ({
+      const fieldInserts = sourceFields.map((field) => {
+        const fieldId = createSafeId<"field">();
+
+        // Track file fields for PDF derivative enqueueing
+        if (field.content.type === "file") {
+          fileFields.push({
+            entityId: newEntityId,
+            fieldId,
+            mimeType: field.content.mimeType,
+            encrypted: field.content.encrypted,
+          });
+        }
+
+        return {
+          id: fieldId,
           workspaceId: targetWorkspaceId,
           propertyId: field.propertyId,
           entityVersionId: newVersionId,
           content: field.content,
-        })),
-      );
+        };
+      });
+
+      await tx.insert(fields).values(fieldInserts);
     }
 
     idMap.set(source.id, newEntityId);
@@ -374,5 +399,6 @@ export const copyEntities = async ({
     entityId: rootEntityId,
     entityIds: copiedEntityIds,
     copiedEntities,
+    fileFields,
   };
 };

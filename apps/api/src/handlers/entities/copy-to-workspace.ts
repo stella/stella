@@ -1,30 +1,31 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { t } from "elysia";
 import type { Static } from "elysia";
+import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db";
 import { entities, workspaces } from "@/api/db/schema";
+import type { EntitySnapshot } from "@/api/handlers/entities/copy-utils";
 import {
   copyEntities,
   getFolderSubtree,
 } from "@/api/handlers/entities/copy-utils";
-import type { EntitySnapshot } from "@/api/handlers/entities/copy-utils";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
-import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { createSafeHandler } from "@/api/lib/api-handlers";
+import type { AuditContext } from "@/api/lib/audit-log";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   createAuditContext,
   writeAuditLog,
 } from "@/api/lib/audit-log";
-import type { AuditContext } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
@@ -224,7 +225,7 @@ const copyToWorkspaceHandler = async function* ({
     );
   }
 
-  // Fetch source entity (verified to be in the source workspace)
+  // Fetch source entity
   const source = yield* Result.await(
     safeDb((tx) =>
       tx.query.entities.findFirst({
@@ -481,6 +482,19 @@ const copyToWorkspaceHandler = async function* ({
   // Process search extraction for new entities
   for (const entityId of txResult.entityIds) {
     processExtraction(entityId).catch(captureError);
+  }
+
+  // Enqueue PDF derivative generation for copied file fields
+  for (const fileField of txResult.fileFields) {
+    enqueuePdfDerivativeOrMarkFailed({
+      entityId: fileField.entityId,
+      fieldId: fileField.fieldId,
+      mimeType: fileField.mimeType,
+      encrypted: fileField.encrypted,
+      organizationId,
+      userId,
+      workspaceId: targetWorkspaceId,
+    }).catch(captureError);
   }
 
   // Sync search indexes
