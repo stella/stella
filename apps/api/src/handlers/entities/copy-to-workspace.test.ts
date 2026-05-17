@@ -271,7 +271,8 @@ describe("copy-to-workspace", () => {
     expect(insertedEntities).toHaveLength(1);
     const copiedEntity = insertedEntities.at(0);
     expect(copiedEntity?.kind).toBe("document");
-    expect(copiedEntity?.name).toBe("Report_1.pdf");
+    // Name preserved since no conflict exists in target workspace
+    expect(copiedEntity?.name).toBe("Report.pdf");
 
     // Only ONE field inserted (the file field that matched)
     // The text field should be skipped because "Custom Field" doesn't exist in target
@@ -371,7 +372,8 @@ describe("copy-to-workspace", () => {
     const copiedChild = insertedEntities.at(1);
 
     expect(copiedFolder?.kind).toBe("folder");
-    expect(copiedFolder?.name).toBe("My Folder_1");
+    // Name preserved since no conflict exists in target workspace
+    expect(copiedFolder?.name).toBe("My Folder");
     expect(copiedFolder?.parentId).toBeNull();
 
     expect(copiedChild?.kind).toBe("document");

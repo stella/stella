@@ -45,6 +45,7 @@ type FileMapping = {
   targetKey: string;
   newFileId: string;
   sourceFileId: string;
+  mimeType: string;
 };
 
 type CopyToWorkspaceHandlerProps = {
@@ -97,20 +98,22 @@ const collectFileMappings = (
     for (const field of entity.currentVersion.fields) {
       if (field.content.type === "file" && field.content.id) {
         const newFileId = Bun.randomUUIDv7();
+        const { mimeType } = field.content;
         mappings.push({
           sourceFileId: field.content.id,
           newFileId,
+          mimeType,
           sourceKey: createFileKey({
             organizationId,
             workspaceId: sourceWorkspaceId,
             fileId: field.content.id,
-            mimeType: field.content.mimeType,
+            mimeType,
           }),
           targetKey: createFileKey({
             organizationId,
             workspaceId: targetWorkspaceId,
             fileId: newFileId,
-            mimeType: field.content.mimeType,
+            mimeType,
           }),
         });
       }
@@ -356,10 +359,9 @@ const copyToWorkspaceHandler = async function* ({
   const copiedS3Keys: string[] = [];
 
   try {
-    for (const { sourceKey, targetKey } of fileMappings) {
-      const sourceFile = s3.file(sourceKey);
-      const content = await sourceFile.arrayBuffer();
-      await s3.write(targetKey, new Uint8Array(content));
+    for (const { sourceKey, targetKey, mimeType } of fileMappings) {
+      // Stream directly from source to target without buffering in memory
+      await s3.write(targetKey, s3.file(sourceKey), { type: mimeType });
       copiedS3Keys.push(targetKey);
     }
   } catch (error) {
@@ -380,7 +382,9 @@ const copyToWorkspaceHandler = async function* ({
   // Remap file IDs in source entities to reference the new S3 copies
   const remappedEntities = remapFileIds(sourceEntities, fileMappings);
 
-  // DB transaction phase
+  // DB transaction phase: copy (and delete for moves) in a single transaction
+  // to ensure atomicity — either both succeed or neither does.
+  const sourceEntityIds = sourceEntities.map((e) => e.id);
   const txResult = yield* Result.await(
     safeDb(async (tx) => {
       // Build property map: source ID → target ID for properties present in both workspaces
@@ -424,7 +428,7 @@ const copyToWorkspaceHandler = async function* ({
         propertyIdMap,
       );
 
-      return await copyEntities({
+      const copyResult = await copyEntities({
         tx,
         targetWorkspaceId,
         targetParentId,
@@ -434,22 +438,13 @@ const copyToWorkspaceHandler = async function* ({
         sourceEntities: propertyRemappedEntities,
         sourceWorkspaceId,
       });
-    }),
-  );
 
-  if (!txResult.ok) {
-    await rollbackS3Copies(copiedS3Keys);
-    return Result.err(
-      new HandlerError({ status: txResult.status, message: txResult.message }),
-    );
-  }
+      if (!copyResult.ok) {
+        return copyResult;
+      }
 
-  // Handle delete source (move operation)
-  if (deleteSource) {
-    // Delete source entities from DB
-    const sourceEntityIds = sourceEntities.map((e) => e.id);
-    yield* Result.await(
-      safeDb(async (tx) => {
+      // For move operations, delete source entities in the same transaction
+      if (deleteSource) {
         // Delete in reverse order (children first) to respect FK constraints.
         // The cascade will handle versions and fields.
         for (const id of sourceEntityIds.toReversed()) {
@@ -462,7 +457,7 @@ const copyToWorkspaceHandler = async function* ({
           .where(eq(workspaces.id, sourceWorkspaceId));
 
         await writeAuditLog(
-          txResult.copiedEntities.map((entity) => ({
+          copyResult.copiedEntities.map((entity) => ({
             organizationId: sourceAuditContext.organizationId,
             workspaceId: sourceWorkspaceId,
             userId: sourceAuditContext.userId,
@@ -479,10 +474,21 @@ const copyToWorkspaceHandler = async function* ({
           })),
           tx,
         );
-      }),
-    );
+      }
 
-    // Delete source S3 objects after DB transaction succeeds
+      return copyResult;
+    }),
+  );
+
+  if (!txResult.ok) {
+    await rollbackS3Copies(copiedS3Keys);
+    return Result.err(
+      new HandlerError({ status: txResult.status, message: txResult.message }),
+    );
+  }
+
+  // Delete source S3 objects after DB transaction succeeds (for moves)
+  if (deleteSource) {
     const sourceKeys = fileMappings.map((m) => m.sourceKey);
     await Promise.all(
       sourceKeys.map(

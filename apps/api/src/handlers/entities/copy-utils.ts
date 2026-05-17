@@ -99,6 +99,12 @@ export const resolveEntityName = async ({
       ),
     );
 
+  // If no conflict with the original name, keep it unchanged
+  const siblingNames = new Set(siblings.map((s) => s.name));
+  if (!siblingNames.has(name)) {
+    return name;
+  }
+
   const suffixRe = new RegExp(
     `^${escapeRegex(base)}(?:_(\\d+))?${escapeRegex(ext)}$`,
   );
