@@ -64,16 +64,19 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
   // Conditions are editable from the popover without opening the full
   // composer: replaceValue swaps a dependency in place and we save by
   // round-tripping the whole property through updateProperty.
+  // The mutation payload composes against the latest optimistic
+  // dependencies (not the server snapshot) so two edits fired before
+  // the query refetches don't drop one another's in-flight changes.
   const replaceDependency = (index: number, next: PropertyDependency) => {
     if (property.tool.type !== "ai-model") {
       return;
     }
     const tool = property.tool;
+    const nextDependencies = optimisticDeps.map((dependency, i) =>
+      i === index ? next : dependency,
+    );
     startDepsTransition(async () => {
       applyDependencyReplacement({ index, next });
-      const nextDependencies = tool.dependencies.map((dependency, i) =>
-        i === index ? next : dependency,
-      );
       try {
         await updateProperty.mutateAsync({
           workspaceId,

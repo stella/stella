@@ -395,6 +395,7 @@ export const AnonymizationDenyListCard = () => {
           >
             <Input
               autoComplete="off"
+              disabled={updateMutation.isPending}
               onChange={(event) => setPendingCanonical(event.target.value)}
               placeholder={t(
                 "settings.organization.anonymization.addPlaceholder",
@@ -404,6 +405,7 @@ export const AnonymizationDenyListCard = () => {
             <div className="flex items-center gap-2">
               <Combobox<LabelOption>
                 autoHighlight
+                disabled={updateMutation.isPending}
                 items={[...LABEL_OPTIONS]}
                 itemToStringLabel={(option) => t(LABEL_TRANSLATION_KEY[option])}
                 onValueChange={(next) => {
@@ -436,7 +438,10 @@ export const AnonymizationDenyListCard = () => {
                 </ComboboxPopup>
               </Combobox>
               <AddTermSubmitButton
-                disabled={pendingCanonical.trim().length === 0}
+                disabled={
+                  pendingCanonical.trim().length === 0 ||
+                  updateMutation.isPending
+                }
                 label={t("settings.organization.anonymization.addAction")}
               />
             </div>

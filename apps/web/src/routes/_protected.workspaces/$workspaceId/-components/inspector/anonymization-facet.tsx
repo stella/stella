@@ -654,6 +654,7 @@ export const AnonymizationFacet = ({
       >
         <Input
           autoComplete="off"
+          disabled={createMutation.isPending}
           onChange={(event) => setPendingValue(event.target.value)}
           placeholder={t("inspector.anonymization.addPlaceholder")}
           value={pendingValue}
@@ -661,6 +662,7 @@ export const AnonymizationFacet = ({
         <div className="flex items-center gap-2">
           <Combobox<LabelOption>
             autoHighlight
+            disabled={createMutation.isPending}
             items={[...LABEL_OPTIONS]}
             itemToStringLabel={formatLabel}
             onValueChange={(next) => {
