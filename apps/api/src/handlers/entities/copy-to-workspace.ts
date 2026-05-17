@@ -26,6 +26,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
+import { broadcastQueryInvalidationToTargetWorkspace } from "@/api/lib/invalidate-query-macro";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
@@ -523,6 +524,13 @@ const copyToWorkspaceHandler = async function* ({
   if (deleteSource) {
     syncWorkspaceSearchActivity(sourceWorkspaceId).catch(captureError);
   }
+
+  // Broadcast invalidation to target workspace so other clients viewing it
+  // receive SSE updates. The macro handles the source workspace via ctx.workspaceId.
+  broadcastQueryInvalidationToTargetWorkspace(targetWorkspaceId, [
+    "entities",
+    targetWorkspaceId,
+  ]);
 
   return Result.ok({
     entityId: txResult.entityId,
