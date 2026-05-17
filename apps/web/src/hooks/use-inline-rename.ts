@@ -9,16 +9,21 @@ import { useRef, useState } from "react";
  * validation failures such as 409 conflicts).
  *
  * Commit semantics:
- *  - Empty trimmed value: silently cancel (matches every existing
- *    site, none of which create empty names).
  *  - Trimmed value equals current `initial`: silently cancel.
- *  - `validate` returns a string: stay in edit mode, surface the
- *    string as `state.error`.
- *  - `onCommit` may return a promise; while it is in flight the
- *    state machine stays in `view` mode unless `setError` is
- *    called from inside `onCommit`, in which case the editor
- *    re-enters edit mode with the rejected draft (server-side
- *    validation rollback).
+ *  - `validate` runs next and may return a string for any value
+ *    (including the empty string) to keep the editor open with
+ *    `state.error` set; returning `null` lets the commit proceed.
+ *  - Without `validate`, an empty trimmed value silently cancels
+ *    (default for callers that never create empty names). Callers
+ *    that need to react to empty input (e.g., emit a toast) should
+ *    define `validate` and let it return `null` so the empty
+ *    string is forwarded to `onCommit`.
+ *  - `onCommit` is invoked with the trimmed draft. The hook
+ *    optimistically transitions to `view` before calling it; if
+ *    `setError` runs (either synchronously, awaited, or later
+ *    from a fire-and-forget `mutate({ onError })` callback) the
+ *    editor re-enters edit mode with the rejected draft so
+ *    server-side validation feels inline.
  */
 type InlineRenameState =
   | { mode: "view" }
@@ -70,9 +75,16 @@ export const useInlineRename = ({
   // immediately so `commit()` can see the cancel even before
   // React commits the state transition.
   const cancelledRef = useRef(false);
+  // `generationRef` invalidates `setError` callbacks from a
+  // previous commit cycle. Without it, a stale fire-and-forget
+  // `onError` could clobber a fresh edit the user has already
+  // started or cancelled. Bumped on every commit, cancel, and
+  // explicit `startEditing`.
+  const generationRef = useRef(0);
 
   const startEditing = (override?: string) => {
     cancelledRef.current = false;
+    generationRef.current += 1;
     setState({ mode: "edit", draft: override ?? initial });
   };
 
@@ -84,6 +96,7 @@ export const useInlineRename = ({
 
   const cancel = () => {
     cancelledRef.current = true;
+    generationRef.current += 1;
     setState({ mode: "view" });
   };
 
@@ -93,29 +106,50 @@ export const useInlineRename = ({
       return;
     }
     const trimmed = state.draft.trim();
-    if (!trimmed || trimmed === initial) {
+    if (trimmed === initial) {
       setState({ mode: "view" });
       return;
     }
+    // Run client-side validation before the empty-string
+    // short-circuit so callers that care about required fields
+    // (e.g., `validate: v => v ? null : "name required"`) can opt
+    // into "stay in edit mode with an inline error" semantics.
     const validationError = validate?.(trimmed) ?? null;
     if (validationError !== null) {
       setState({ mode: "edit", draft: state.draft, error: validationError });
       return;
     }
+    if (!trimmed && validate === undefined) {
+      // No validator opted in; preserve the default "empty draft
+      // silently cancels" behaviour matching every existing site.
+      // Callers that supply `validate` (even if it returns `null`)
+      // are saying "I will handle the empty case myself" so we
+      // forward the empty string through to `onCommit`.
+      setState({ mode: "view" });
+      return;
+    }
     // Optimistically exit edit mode; if `onCommit` invokes
-    // `setError`, we flip back to edit with the rejected draft so
-    // server-side validation feels inline. Hold the captured value
-    // in a single-cell ref so the closure can write through it
-    // without TS narrowing the outer binding to its initial null.
-    const errorBox: { current: string | null } = { current: null };
+    // `setError` we flip straight back to edit with the rejected
+    // draft. `setError` updates state directly so it works for
+    // both awaited promises and fire-and-forget patterns such as
+    // TanStack Query's `.mutate({ onError })`, whose callback may
+    // run after `commit()` has already returned.
+    generationRef.current += 1;
+    const generation = generationRef.current;
     setState({ mode: "view" });
-    await onCommit(trimmed, {
+    const result = onCommit(trimmed, {
       setError: (message: string) => {
-        errorBox.current = message;
+        // Ignore stale callbacks from a previous edit cycle the
+        // user has already moved past (cancelled, started over,
+        // or kicked off another commit).
+        if (generationRef.current !== generation) {
+          return;
+        }
+        setState({ mode: "edit", draft: trimmed, error: message });
       },
     });
-    if (errorBox.current !== null) {
-      setState({ mode: "edit", draft: trimmed, error: errorBox.current });
+    if (result instanceof Promise) {
+      await result;
     }
   };
 
