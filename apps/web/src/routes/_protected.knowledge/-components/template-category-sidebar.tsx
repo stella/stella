@@ -269,12 +269,18 @@ const CategoryFormDialog = ({
   initial,
 }: CategoryFormDialogProps) => (
   <Dialog onOpenChange={onOpenChange} open={open}>
-    <CategoryFormDialogBody
-      initial={initial}
-      key={initial?.id ?? "new"}
-      onOpenChange={onOpenChange}
-      onSaved={onSaved}
-    />
+    {/* Mount only while open so each open instantiates a fresh
+        form: cancel-then-reopen discards unsaved edits (the
+        behaviour the removed `open`-driven reset effect provided),
+        and switching between create/edit-for-same-id re-seeds from
+        `initial` without an effect. */}
+    {open ? (
+      <CategoryFormDialogBody
+        initial={initial}
+        onOpenChange={onOpenChange}
+        onSaved={onSaved}
+      />
+    ) : null}
   </Dialog>
 );
 
