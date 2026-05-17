@@ -4,6 +4,7 @@ import {
   useEffect,
   useOptimistic,
   useRef,
+  useState,
   useTransition,
 } from "react";
 
@@ -120,8 +121,7 @@ const EntityMetadataContent = ({
   // `useOptimistic` keeps any newly created property visible until the
   // wrapping transition completes (i.e., until the entity/property
   // queries invalidate and the server-side row shows up). React then
-  // resyncs to the passthrough `properties` value, so we no longer
-  // need to manually prune entries once the field arrives.
+  // resyncs to the passthrough `properties` value.
   const [optimisticProperties, addOptimisticProperty] = useOptimistic(
     properties,
     (current, action: WorkspaceProperty) =>
@@ -130,6 +130,16 @@ const EntityMetadataContent = ({
         : [...current, action],
   );
   const [, startOptimisticTransition] = useTransition();
+  // Track property ids that were just created from this panel and are
+  // still awaiting their first `entity.fields` row. `properties` can
+  // refetch before extraction adds the field, so we can't derive the
+  // pending placeholder from `useOptimistic` alone — once the real
+  // property arrives, React resyncs to the passthrough and the
+  // optimistic-only set empties. The placeholder must persist until
+  // `entity.fields` actually contains the property id.
+  const [pendingPlaceholderIds, setPendingPlaceholderIds] = useState<
+    readonly string[]
+  >([]);
   const activeJustification = useWorkspaceStore((s) =>
     activeJustificationFieldId
       ? (s.justifications.find(
@@ -166,14 +176,35 @@ const EntityMetadataContent = ({
   const entityFieldPropertyIds = new Set(
     entity.fields.map((field) => field.propertyId),
   );
+  const entityFieldPropertyIdsKey = [...entityFieldPropertyIds]
+    .toSorted()
+    .join(",");
+
+  useEffect(() => {
+    const arrivedIds = new Set(
+      entityFieldPropertyIdsKey.split(",").filter((id) => id.length > 0),
+    );
+    setPendingPlaceholderIds((prev) =>
+      prev.every((id) => !arrivedIds.has(id))
+        ? prev
+        : prev.filter((id) => !arrivedIds.has(id)),
+    );
+  }, [entityFieldPropertyIdsKey]);
 
   const serverPropertyIds = new Set(properties.map((property) => property.id));
   const optimisticOnlyProperties = optimisticProperties.filter(
     (property) => !serverPropertyIds.has(property.id),
   );
   const visibleProperties = [...properties, ...optimisticOnlyProperties];
-  const optimisticFields = optimisticOnlyProperties.flatMap((property) => {
-    if (entityFieldPropertyIds.has(property.id)) {
+  const visiblePropertyById = new Map(
+    visibleProperties.map((property) => [property.id, property]),
+  );
+  const optimisticFields = pendingPlaceholderIds.flatMap((propertyId) => {
+    if (entityFieldPropertyIds.has(propertyId)) {
+      return [];
+    }
+    const property = visiblePropertyById.get(propertyId);
+    if (!property) {
       return [];
     }
 
@@ -208,10 +239,16 @@ const EntityMetadataContent = ({
   }) => {
     // The dialog already triggered the workflow itself (entity-scoped
     // when a file source is set, whole-matter otherwise). We dispatch
-    // the optimistic row inside a transition and await the
-    // invalidations inside the same transition body — React keeps the
-    // optimistic property visible until the server queries refresh,
-    // then drops it because the passthrough now contains the real row.
+    // the optimistic property inside a transition and await the
+    // invalidations in the same body — React keeps the optimistic
+    // property visible until the server queries refresh, then drops it
+    // because the passthrough now contains the real row. The pending
+    // placeholder field is tracked separately so it persists until
+    // `entity.fields` actually contains the new property (extraction
+    // can complete after the properties query refetches).
+    setPendingPlaceholderIds((prev) =>
+      prev.includes(property.id) ? prev : [...prev, property.id],
+    );
     startOptimisticTransition(async () => {
       addOptimisticProperty(property);
       await refreshEntityFields();
