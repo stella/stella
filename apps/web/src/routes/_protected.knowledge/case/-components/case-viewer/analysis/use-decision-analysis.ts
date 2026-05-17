@@ -80,11 +80,18 @@ export const useDecisionAnalysis = (
   const hasFreshAnalysis =
     isDecisionAnalysis(existingAnalysis) &&
     !isAnalysisInProgress(existingAnalysis);
-  const [isGenerating, setIsGenerating] = useState(false);
+  // Track which decision the user kicked generation off for. Comparing
+  // against the current `decisionId` in the same render keeps a stale
+  // value from enabling a fetch (and an unintended backend kick-off)
+  // for an unrelated decision during a route transition.
+  const [generatingFor, setGeneratingFor] = useState<string | null>(null);
+  const isGenerating = generatingFor === decisionId;
 
-  // Reset the kick-off flag when the route changes.
+  // Clear the marker once the route moves on so returning to the
+  // original decision lands in `idle` (matching prior behaviour)
+  // instead of resuming a poll the user didn't request again.
   useEffect(() => {
-    setIsGenerating(false);
+    setGeneratingFor(null);
   }, [decisionId]);
 
   const enabled = isGenerating && !hasFreshAnalysis;
@@ -160,8 +167,8 @@ export const useDecisionAnalysis = (
     if (isGenerating) {
       return;
     }
-    setIsGenerating(true);
-  }, [hasErrorResult, hasFreshAnalysis, isGenerating, refetch]);
+    setGeneratingFor(decisionId);
+  }, [decisionId, hasErrorResult, hasFreshAnalysis, isGenerating, refetch]);
 
   const state: AnalysisState = (() => {
     if (hasFreshAnalysis && isDecisionAnalysis(existingAnalysis)) {
