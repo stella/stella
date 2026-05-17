@@ -27,6 +27,18 @@ export const OrganizationListToolbar = () => {
   // prevents flicker between keystrokes; the URL is the source of
   // truth and gets the trimmed value via the debounced writer.
   const [localQuery, setLocalQuery] = useState(q);
+  // Adjusting state during render: when the URL `q` changes to a
+  // value our local mirror has not seen (back/forward navigation,
+  // tab switches landing on a different `?q=`) replace the input
+  // without an effect round-trip. Our own debounced writes also
+  // flow through here, but the post-navigate render arrives only
+  // after the user pauses typing, so `localQuery` already equals
+  // the value being re-set.
+  const [lastSeenUrlQuery, setLastSeenUrlQuery] = useState(q);
+  if (q !== lastSeenUrlQuery) {
+    setLastSeenUrlQuery(q);
+    setLocalQuery(q);
+  }
 
   const updateSearch = useDebouncedCallback((value: string) => {
     // eslint-disable-next-line typescript/no-floating-promises
