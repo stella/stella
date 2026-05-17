@@ -173,6 +173,7 @@ export const CreateMatterDialog = () => {
         <CreateMatterDialogBody
           closeDialog={closeDialog}
           draftClient={draftClient}
+          key={draftClient?.id ?? "new"}
         />
       ) : null}
     </Dialog>
