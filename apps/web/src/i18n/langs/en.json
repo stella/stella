@@ -1812,19 +1812,19 @@
     "archived": "Archived",
     "archivedBadge": "Archived",
     "copyToMatter": {
-      "copied": "Copied to matter",
+      "copied": "Copied to Matter",
       "copyOption": "Copy (keep original)",
-      "description": "Copy or move \"{name}\" to another matter",
-      "menuItem": "Copy/Move to matter",
+      "description": "Copy or move \"{name}\" to another Matter",
+      "menuItem": "Copy/Move to Matter",
       "moveButton": "Move",
       "moveOption": "Move (delete original)",
-      "moved": "Moved to matter",
-      "noOtherMatters": "No other matters available",
+      "moved": "Moved to Matter",
+      "noOtherMatters": "No other Matters available",
       "operation": "Operation",
       "rootFolder": "(Root folder)",
       "targetFolder": "Target folder (optional)",
-      "targetMatter": "Target matter",
-      "title": "Copy to matter"
+      "targetMatter": "Target Matter",
+      "title": "Copy to Matter"
     },
     "create": {
       "ownerTypeToggle": "Matter type",
