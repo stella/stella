@@ -89,7 +89,6 @@ export const CopyToMatterDialog = ({
       if (response.error) {
         const errorMessage =
           typeof response.error.value === "object" &&
-          response.error.value !== null &&
           "message" in response.error.value
             ? response.error.value.message
             : t("errors.actionFailed");
@@ -221,11 +220,15 @@ export const CopyToMatterDialog = ({
               void handleSubmit();
             }}
           >
-            {isSubmitting
-              ? t("common.loading")
-              : mode === "copy"
-                ? t("common.copy")
-                : t("workspaces.copyToMatter.moveButton")}
+            {(() => {
+              if (isSubmitting) {
+                return t("common.loading");
+              }
+              if (mode === "copy") {
+                return t("common.copy");
+              }
+              return t("workspaces.copyToMatter.moveButton");
+            })()}
           </Button>
         </DialogFooter>
       </DialogPopup>
