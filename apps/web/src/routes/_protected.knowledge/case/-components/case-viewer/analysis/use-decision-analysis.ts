@@ -143,12 +143,25 @@ export const useDecisionAnalysis = (
     );
   }, [query.data, decisionId, queryClient]);
 
+  const hasErrorResult = query.data?.kind === "error" || query.isError;
+  const refetch = query.refetch;
+
   const generate = useCallback(() => {
-    if (hasFreshAnalysis || isGenerating) {
+    if (hasFreshAnalysis) {
+      return;
+    }
+    // Allow retry when the previous attempt settled into an error
+    // state: refetch the polling query so it picks up a fresh
+    // result instead of staying on the cached failure.
+    if (isGenerating && hasErrorResult) {
+      void refetch();
+      return;
+    }
+    if (isGenerating) {
       return;
     }
     setIsGenerating(true);
-  }, [hasFreshAnalysis, isGenerating]);
+  }, [hasErrorResult, hasFreshAnalysis, isGenerating, refetch]);
 
   const state: AnalysisState = (() => {
     if (hasFreshAnalysis && isDecisionAnalysis(existingAnalysis)) {
