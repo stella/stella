@@ -338,10 +338,10 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   );
 
   // Ref-backed recency log: "most recent first", capped at
-  // MAX_MOUNTED_PDFS. Mutating during render captures the order of
-  // activations without the setState round-trip the old useEffect
-  // pair needed; the ref is only read inside `mountedPdfIds` below,
-  // which re-memoizes whenever activation or open tabs change.
+  // MAX_MOUNTED_PDFS. The ref is written inside `useEffect` (commit
+  // phase) so the recency reflects committed renders only; reading
+  // during render derives `mountedPdfIds` purely from the previous
+  // committed recency plus the current activation/open tabs.
   const pdfRecencyRef = useRef<string[]>([]);
 
   const mountedPdfIds = useMemo(() => {
@@ -354,7 +354,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         next.length = MAX_MOUNTED_PDFS;
       }
     }
-    pdfRecencyRef.current = next;
 
     const set = new Set(next);
     // Always include the active PDF (in case it's not a PDF tab but
@@ -364,6 +363,13 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     }
     return set;
   }, [activeId, activeTab?.type, pdfTabs]);
+
+  // Commit the latest recency snapshot after the render commits so
+  // discarded renders (Strict Mode, Concurrent) don't pollute the
+  // ref — only the set actually shown to the user is recorded.
+  useEffect(() => {
+    pdfRecencyRef.current = Array.from(mountedPdfIds);
+  }, [mountedPdfIds]);
 
   const panelQueryClient = useQueryClient();
 
