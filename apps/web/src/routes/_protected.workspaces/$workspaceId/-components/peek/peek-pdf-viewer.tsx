@@ -406,6 +406,9 @@ export const PreparedPdfPrintButton = ({
         fieldId,
         signal: controller.signal,
       });
+      if (controller.signal.aborted) {
+        return;
+      }
       printPdfBuffer(data);
     } catch (error: unknown) {
       if (controller.signal.aborted) {
@@ -413,7 +416,9 @@ export const PreparedPdfPrintButton = ({
       }
       analytics.captureError(error);
     } finally {
-      setIsPrinting(false);
+      if (!controller.signal.aborted) {
+        setIsPrinting(false);
+      }
     }
   }, [analytics, fieldId, workspaceId]);
 
