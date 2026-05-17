@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2, UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -19,9 +19,24 @@ import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import type { TranslationKey } from "@/i18n/types";
-import type { OrgAnonymizationBlacklistEntry } from "@/routes/_protected.settings/-mutations/anonymization-blacklist";
-import { useUpdateOrganizationAnonymizationBlacklist } from "@/routes/_protected.settings/-mutations/anonymization-blacklist";
-import { organizationAnonymizationBlacklistOptions } from "@/routes/_protected.settings/-queries/anonymization-blacklist";
+import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
+import { toAPIError } from "@/lib/errors";
+import {
+  organizationAnonymizationBlacklistKeys,
+  organizationAnonymizationBlacklistOptions,
+} from "@/routes/_protected.settings/-queries/anonymization-blacklist";
+
+type OrgAnonymizationBlacklistEntry = {
+  canonical: string;
+  label: string;
+  variants?: readonly string[];
+  enabled?: boolean;
+};
+
+type UpdateBlacklistVars = {
+  entries: readonly OrgAnonymizationBlacklistEntry[];
+};
 
 // Entity labels come from the pipeline package so the firm-wide
 // catalog never drifts out of sync with the recogniser's known
@@ -235,8 +250,39 @@ const dedupeByCanonical = (
 
 export const AnonymizationDenyListCard = () => {
   const t = useTranslations();
+  const analytics = useAnalytics();
+  const queryClient = useQueryClient();
   const blacklistQuery = useQuery(organizationAnonymizationBlacklistOptions);
-  const updateMutation = useUpdateOrganizationAnonymizationBlacklist();
+  // Replace the org-wide deny list. Endpoint performs a full
+  // upsert: rows missing from the request are deleted, present
+  // rows are upserted (keyed on lowercased canonical). Callers
+  // therefore submit the full target list, not a delta.
+  const updateMutation = useMutation({
+    mutationFn: async ({ entries }: UpdateBlacklistVars) => {
+      const response = await api["organization-settings"][
+        "anonymization-blacklist"
+      ].put({
+        entries: entries.map((entry) => ({
+          canonical: entry.canonical,
+          label: entry.label,
+          ...(entry.variants ? { variants: [...entry.variants] } : {}),
+          ...(entry.enabled !== undefined ? { enabled: entry.enabled } : {}),
+        })),
+      });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: organizationAnonymizationBlacklistKeys.all,
+      });
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [pendingCanonical, setPendingCanonical] = useState("");

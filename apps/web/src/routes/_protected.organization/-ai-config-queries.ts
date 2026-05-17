@@ -4,6 +4,10 @@ import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import type { QueryOptionsInput } from "@/lib/react-query";
 
+type OrganizationAIConfigKey = {
+  organizationId: string;
+};
+
 export const aiConfigKeys = {
   all: ["organization-ai-config"] as const,
   availabilityRoot: ["organization-ai-availability"] as const,
@@ -15,10 +19,6 @@ export const aiConfigKeys = {
     ...aiConfigKeys.availabilityRoot,
     organizationId,
   ],
-};
-
-type OrganizationAIConfigKey = {
-  organizationId: string;
 };
 
 type AIConfigOptionsInput = QueryOptionsInput<OrganizationAIConfigKey>;

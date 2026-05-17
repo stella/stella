@@ -14,13 +14,11 @@ type JustificationsKey = {
 
 export const workspaceKeys = {
   workflow: (workspaceId: string) => [
-    ...workspacesKeys.all,
-    workspaceId,
+    ...workspacesKeys.byId(workspaceId),
     "workflow",
   ],
   justifications: (workspaceId: string) => [
-    ...workspacesKeys.all,
-    workspaceId,
+    ...workspacesKeys.byId(workspaceId),
     "justifications",
   ],
   justificationsByEntities: ({ workspaceId, entityIds }: JustificationsKey) => [

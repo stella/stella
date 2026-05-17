@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { UseMutationResult } from "@tanstack/react-query";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -38,7 +38,11 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { UserAvatar } from "@/components/user-avatar";
 import type { TranslationKey } from "@/i18n/types";
+import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
+import { toAPIError } from "@/lib/errors";
 import { resolveMatterColor } from "@/lib/matter-colors";
+import { toSafeId } from "@/lib/safe-id";
 import {
   presetUpdatedFrom,
   searchFacetOptions,
@@ -61,13 +65,26 @@ import type {
   RecentSearch,
   SearchRecentsScope,
 } from "@/lib/search-recents";
-import type { SearchSummaryData } from "@/lib/search/mutations";
-import {
-  useCreateSearchSummaryChatMutation,
-  useRefineSearchMutation,
-  useSummarizeSearchMutation,
-} from "@/lib/search/mutations";
+import { stripUndefined } from "@/lib/utils";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
+
+type SearchSummaryCitation = {
+  id: string;
+  number: number;
+  title: string;
+  type: string;
+  reason: string;
+};
+
+type CreateSearchSummaryChatVars = SearchAISummaryParams & {
+  title: string;
+  summary: string;
+  citations: SearchSummaryCitation[];
+};
+
+type SearchSummaryData = NonNullable<
+  Awaited<ReturnType<typeof api.search.summary.post>>["data"]
+>;
 
 const DEBOUNCE_MS = 300;
 const VIRTUAL_HIT_ESTIMATE_PX = 76;
@@ -350,11 +367,89 @@ export const SearchDialog = ({
     ...searchFilterParams,
   };
 
-  const summarizeSearchMutation = useSummarizeSearchMutation();
+  const analytics = useAnalytics();
 
-  const refineSearchMutation = useRefineSearchMutation();
+  const summarizeSearchMutation = useMutation({
+    mutationFn: async (params: SearchAISummaryParams) => {
+      const response = await api.search.summary.post(
+        stripUndefined({
+          query: params.query,
+          locale: params.locale,
+          originalQuery: params.originalQuery,
+          workspaceIds: params.workspaceIds.map((id) =>
+            toSafeId<"workspace">(id),
+          ),
+          types: params.types,
+          editedByUserIds: params.editedByUserIds,
+          mimeTypes: params.mimeTypes,
+          updatedFrom: params.updatedFrom,
+          updatedTo: params.updatedTo,
+          limit: params.limit,
+        }),
+      );
 
-  const createSummaryChatMutation = useCreateSearchSummaryChatMutation();
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
+
+  const refineSearchMutation = useMutation({
+    mutationFn: async (vars: { query: string; locale: string }) => {
+      const response = await api.search.refine.post({
+        query: vars.query,
+        locale: vars.locale,
+      });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
+
+  const createSummaryChatMutation = useMutation({
+    mutationFn: async (vars: CreateSearchSummaryChatVars) => {
+      const response = await api.search.summary.chat.post(
+        stripUndefined({
+          query: vars.query,
+          title: vars.title,
+          summary: vars.summary,
+          citations: vars.citations.map((citation) => ({
+            number: citation.number,
+          })),
+          originalQuery: vars.originalQuery,
+          workspaceIds: vars.workspaceIds.map((id) =>
+            toSafeId<"workspace">(id),
+          ),
+          types: vars.types,
+          editedByUserIds: vars.editedByUserIds,
+          mimeTypes: vars.mimeTypes,
+          updatedFrom: vars.updatedFrom,
+          updatedTo: vars.updatedTo,
+          limit: vars.limit,
+        }),
+      );
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
 
   const clearSearchQuery = () => {
     debouncedSetQuery.cancel();

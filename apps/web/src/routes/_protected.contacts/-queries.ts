@@ -3,13 +3,18 @@ import { queryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 
+type ContactsListKey = {
+  type?: "person" | "organization" | undefined;
+  q?: string | undefined;
+};
+
 export const contactsKeys = {
   all: ["contacts"],
   lists: () => [...contactsKeys.all, "list"],
-  list: (filters?: {
-    type?: "person" | "organization" | undefined;
-    q?: string | undefined;
-  }) => [...contactsKeys.lists(), filters],
+  list: (key?: ContactsListKey) => [
+    ...contactsKeys.lists(),
+    key ? { type: key.type, q: key.q } : undefined,
+  ],
   byId: (contactId: string) => [...contactsKeys.all, contactId],
 };
 

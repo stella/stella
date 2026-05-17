@@ -11,13 +11,18 @@ type InvoicesFilters = {
   cursor?: string;
 };
 
+type InvoicesListKey = {
+  limit?: number | undefined;
+  cursor?: string | undefined;
+};
+
 const getInitialInvoicesPageParam = (): string | undefined => undefined;
 
 export const invoicesKeys = {
   all: (workspaceId: string) => ["invoices", workspaceId],
-  list: (workspaceId: string, filters: InvoicesFilters) => [
+  list: (workspaceId: string, key: InvoicesListKey) => [
     ...invoicesKeys.all(workspaceId),
-    filters,
+    { limit: key.limit, cursor: key.cursor },
   ],
   byId: (workspaceId: string, id: string) => [
     ...invoicesKeys.all(workspaceId),

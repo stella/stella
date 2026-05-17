@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useForm } from "@tanstack/react-form";
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { ArrowLeftIcon, PlusIcon, StarIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -21,16 +21,14 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { UserIdentity } from "@/components/user-avatar";
+import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
+import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
 import {
-  useCreateRateEntry,
-  useCreateRateTable,
-  useDeleteRateEntry,
-  useDeleteRateTable,
-  useUpdateRateTable,
-} from "@/routes/_protected.workspaces/$workspaceId/-mutations/rates";
-import {
   rateEntriesOptions,
+  ratesKeys,
   rateTablesOptions,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/rates";
 
@@ -90,10 +88,89 @@ const RateTablesView = ({
   const [showForm, setShowForm] = useState(false);
 
   const { data: tables } = useSuspenseQuery(rateTablesOptions(workspaceId));
+  const analytics = useAnalytics();
 
-  const createTable = useCreateRateTable();
-  const deleteTable = useDeleteRateTable();
-  const updateTable = useUpdateRateTable();
+  const createTable = useMutation({
+    mutationFn: async ({
+      workspaceId: ws,
+      ...body
+    }: {
+      workspaceId: string;
+      name: string;
+      currency: string;
+      isDefault?: boolean;
+    }) => {
+      const response = await api
+        .rates({ workspaceId: toSafeId<"workspace">(ws) })
+        .put({
+          queryKey: ratesKeys.all(ws),
+          ...body,
+        });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
+  const deleteTable = useMutation({
+    mutationFn: async ({
+      workspaceId: ws,
+      id,
+    }: {
+      workspaceId: string;
+      id: string;
+    }) => {
+      const response = await api
+        .rates({ workspaceId: toSafeId<"workspace">(ws) })
+        .delete({
+          queryKey: ratesKeys.all(ws),
+          id: toSafeId<"rateTable">(id),
+        });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
+  const updateTable = useMutation({
+    mutationFn: async ({
+      workspaceId: ws,
+      ...body
+    }: {
+      workspaceId: string;
+      id: string;
+      name?: string;
+      currency?: string;
+      isDefault?: boolean;
+    }) => {
+      const response = await api
+        .rates({ workspaceId: toSafeId<"workspace">(ws) })
+        .patch({
+          queryKey: ratesKeys.all(ws),
+          ...body,
+          id: toSafeId<"rateTable">(body.id),
+        });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
 
   const handleSetDefault = (id: string) => {
     updateTable.mutate(
@@ -336,9 +413,73 @@ const RateEntriesView = ({
   const { data: org } = useSuspenseQuery(organizationOptions);
 
   const table = tables.find((tbl) => tbl.id === rateTableId);
+  const analytics = useAnalytics();
 
-  const createEntry = useCreateRateEntry();
-  const deleteEntry = useDeleteRateEntry();
+  const createEntry = useMutation({
+    mutationFn: async ({
+      workspaceId: ws,
+      rateTableId: rtId,
+      ...body
+    }: {
+      workspaceId: string;
+      rateTableId: string;
+      userId?: string | null;
+      hourlyRate: number;
+      effectiveFrom: string;
+      effectiveTo?: string | null;
+    }) => {
+      const { userId, ...restBody } = body;
+      const response = await api
+        .rates({ workspaceId: toSafeId<"workspace">(ws) })({
+          rateTableId: toSafeId<"rateTable">(rtId),
+        })
+        .entries.put({
+          queryKey: ratesKeys.all(ws),
+          ...restBody,
+          ...(userId !== undefined && {
+            userId: userId === null ? null : toSafeId<"user">(userId),
+          }),
+        });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
+  const deleteEntry = useMutation({
+    mutationFn: async ({
+      workspaceId: ws,
+      rateTableId: rtId,
+      id,
+    }: {
+      workspaceId: string;
+      rateTableId: string;
+      id: string;
+    }) => {
+      const response = await api
+        .rates({ workspaceId: toSafeId<"workspace">(ws) })({
+          rateTableId: toSafeId<"rateTable">(rtId),
+        })
+        .entries.delete({
+          queryKey: ratesKeys.all(ws),
+          id: toSafeId<"rateEntry">(id),
+        });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
 
   const members = org.members;
 

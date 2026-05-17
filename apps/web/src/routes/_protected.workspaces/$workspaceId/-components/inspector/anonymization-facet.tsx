@@ -15,7 +15,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   ChevronDown,
   ChevronRight,
@@ -45,6 +45,10 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import type { TranslationKey } from "@/i18n/types";
+import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
+import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import { useAnonymizationActiveStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-active-store";
 import { AnonymizationContextMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-context-menu";
 import {
@@ -54,15 +58,19 @@ import {
 import { useAnonymizationSelectionStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-selection-store";
 import { useDocumentTextSelection } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/document-text-selection-store";
 import {
-  useCreateAnonymizationAllowlistEntry,
-  useDeleteAnonymizationAllowlistEntry,
-} from "@/routes/_protected.workspaces/$workspaceId/-mutations/anonymization-allowlist";
+  anonymizationAllowlistKeys,
+  anonymizationAllowlistOptions,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-allowlist";
 import {
-  useCreateAnonymizationTerms,
-  useDeleteAnonymizationTerm,
-} from "@/routes/_protected.workspaces/$workspaceId/-mutations/anonymization-terms";
-import { anonymizationAllowlistOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-allowlist";
-import { anonymizationTermsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-terms";
+  anonymizationTermsKeys,
+  anonymizationTermsOptions,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-terms";
+
+// Org-wide ignore lands behind a dedicated org-settings handler
+// with `organizationSettings` permissions; until that ships, the
+// workspace endpoint accepts doc and workspace scopes only so a
+// workspace editor cannot mask data firm-wide.
+type AllowlistScope = "document" | "workspace";
 
 /**
  * Labels users can pick from when tagging a new term. Mirrors
@@ -183,11 +191,66 @@ export const AnonymizationFacet = ({
   onOpenFullView,
 }: AnonymizationFacetProps) => {
   const t = useTranslations();
+  const analytics = useAnalytics();
   const formatLabel = (label: string): string =>
     isLabelTranslationKey(label) ? t(LABEL_TRANSLATION_KEYS[label]) : label;
   const termsQuery = useQuery(anonymizationTermsOptions(workspaceId));
-  const createMutation = useCreateAnonymizationTerms();
-  const deleteMutation = useDeleteAnonymizationTerm();
+  const createMutation = useMutation({
+    mutationFn: async (vars: {
+      workspaceId: string;
+      entries: readonly {
+        canonical: string;
+        label: string;
+        variants?: readonly string[];
+      }[];
+    }) => {
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(vars.workspaceId) })
+        ["anonymization-terms"].put({
+          entries: vars.entries.map((entry) =>
+            entry.variants
+              ? {
+                  canonical: entry.canonical,
+                  label: entry.label,
+                  variants: [...entry.variants],
+                }
+              : {
+                  canonical: entry.canonical,
+                  label: entry.label,
+                },
+          ),
+          queryKey: anonymizationTermsKeys.all(vars.workspaceId),
+        });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
+  const deleteMutation = useMutation({
+    mutationFn: async (vars: { workspaceId: string; entryId: string }) => {
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(vars.workspaceId) })
+        ["anonymization-terms"]({
+          entryId: toSafeId<"anonymizationBlacklistEntry">(vars.entryId),
+        })
+        .delete({
+          queryKey: anonymizationTermsKeys.all(vars.workspaceId),
+        });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
 
   const [pendingValue, setPendingValue] = useState("");
   const [pendingLabel, setPendingLabel] = useState<LabelOption>(DEFAULT_LABEL);
@@ -324,8 +387,67 @@ export const AnonymizationFacet = ({
     enabled: activeFieldId !== null,
   });
   const allowlistEntries = allowlistQuery.data?.entries;
-  const createAllowlistMutation = useCreateAnonymizationAllowlistEntry();
-  const deleteAllowlistMutation = useDeleteAnonymizationAllowlistEntry();
+  const createAllowlistMutation = useMutation({
+    mutationFn: async (vars: {
+      workspaceId: string;
+      entityId: string | null;
+      canonical: string;
+      label: string;
+      scope: AllowlistScope;
+    }) => {
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(vars.workspaceId) })
+        ["anonymization-allowlist"].put({
+          canonical: vars.canonical,
+          label: vars.label,
+          scope: vars.scope,
+          ...(vars.scope === "document" && vars.entityId
+            ? { entityId: toSafeId<"entity">(vars.entityId) }
+            : {}),
+          // Workspace-scoped writes affect every doc in the
+          // workspace, so invalidate by the workspace-only key
+          // prefix; that wakes up every open document's
+          // entity-keyed allowlist query. Doc-scoped writes only
+          // need to refresh their own query.
+          queryKey:
+            vars.scope === "workspace"
+              ? anonymizationAllowlistKeys.workspace(vars.workspaceId)
+              : anonymizationAllowlistKeys.all({
+                  workspaceId: vars.workspaceId,
+                  entityId: vars.entityId,
+                }),
+        });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
+  const deleteAllowlistMutation = useMutation({
+    mutationFn: async (vars: { workspaceId: string; entryId: string }) => {
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(vars.workspaceId) })
+        ["anonymization-allowlist"]({
+          entryId: toSafeId<"anonymizationAllowlistEntry">(vars.entryId),
+        })
+        .delete({
+          // The caller doesn't know whether the deleted row was
+          // doc- or workspace-scoped, so broadcast on the
+          // workspace-prefix key. That refreshes every open
+          // document's allowlist query in this workspace.
+          queryKey: anonymizationAllowlistKeys.workspace(vars.workspaceId),
+        });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
   // Restrict the visible workspace vocabulary to entries whose
   // canonical form is actually present in the open document. When
   // no document is open (peek mode, file list) `activeFieldId` is

@@ -14,6 +14,12 @@ type SkillsPageKey = {
   limit: number;
 };
 
+type ClausesListKey = {
+  categoryId?: string | null | undefined;
+  search?: string | undefined;
+  limit?: number | undefined;
+};
+
 export const knowledgeKeys = {
   shortcuts: {
     all: ["shortcuts"] as const,
@@ -42,11 +48,12 @@ export const knowledgeKeys = {
   },
   clauses: {
     all: ["clauses"] as const,
-    list: (params: {
-      categoryId?: string | null;
-      search?: string;
-      limit?: number;
-    }) => [...knowledgeKeys.clauses.all, "list", params] as const,
+    list: (key: ClausesListKey) =>
+      [
+        ...knowledgeKeys.clauses.all,
+        "list",
+        { categoryId: key.categoryId, search: key.search, limit: key.limit },
+      ] as const,
   },
   clauseCategories: {
     all: ["clause-categories"] as const,

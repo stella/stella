@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ComponentProps } from "react";
 
 import {
+  useMutation,
   useQuery,
   useQueryClient,
   useSuspenseQuery,
@@ -33,13 +34,14 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { UserIdentity } from "@/components/user-avatar";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
 import { MATTER_INFO_ICON_SLOT_CLASS } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-info-layout";
-import {
-  useAddWorkspaceMember,
-  useRemoveWorkspaceMember,
-} from "@/routes/_protected.workspaces/$workspaceId/-mutations/workspace-members";
+import { useAddWorkspaceMember } from "@/routes/_protected.workspaces/$workspaceId/-mutations/workspace-members";
 import {
   workspaceMembersKeys,
   workspaceMembersOptions,
@@ -118,7 +120,24 @@ const MemberRow = ({
 }: MemberRowProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const removeMember = useRemoveWorkspaceMember();
+  const analytics = useAnalytics();
+  const removeMember = useMutation({
+    mutationFn: async (vars: { workspaceId: string; userId: string }) => {
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(vars.workspaceId) })
+        .members({ userId: toSafeId<"user">(vars.userId) })
+        .delete({
+          queryKey: workspaceMembersKeys.all(vars.workspaceId),
+        });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
 
   const handleRemove = () => {
     removeMember.mutate(
