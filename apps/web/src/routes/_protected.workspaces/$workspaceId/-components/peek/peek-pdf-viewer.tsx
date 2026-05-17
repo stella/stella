@@ -317,20 +317,40 @@ export const PeekPrintButton = () => {
   const analytics = useAnalytics();
   const pdfDocument = usePDFStore((s) => s.document);
   const [isPrinting, setIsPrinting] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(
+    () => () => {
+      abortControllerRef.current?.abort();
+    },
+    [],
+  );
 
   const handlePrint = useCallback(async () => {
     if (!pdfDocument) {
       return;
     }
 
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setIsPrinting(true);
     try {
       const data = await pdfDocument.document.getData();
+      if (controller.signal.aborted) {
+        return;
+      }
       printPdfBuffer(data.slice().buffer);
     } catch (error: unknown) {
+      if (controller.signal.aborted) {
+        return;
+      }
       analytics.captureError(error);
     } finally {
-      setIsPrinting(false);
+      if (!controller.signal.aborted) {
+        setIsPrinting(false);
+      }
     }
   }, [analytics, pdfDocument]);
 
