@@ -70,6 +70,11 @@ export const ShortcutFormDialog = ({
   initial,
 }: ShortcutFormDialogProps) => (
   <Dialog onOpenChange={onOpenChange} open={open}>
+    {/* Mount only while open so each open instantiates a fresh
+        form: cancel-then-reopen discards unsaved edits and stale
+        validation errors (the behaviour the removed `open`-driven
+        reset effect provided), and switching between create/edit-
+        for-same-id re-seeds from `initial` without an effect. */}
     {open ? (
       <ShortcutFormDialogBody
         canManageTeam={canManageTeam}

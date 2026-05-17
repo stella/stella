@@ -75,13 +75,19 @@ export const ClauseFormDialog = ({
   initial,
 }: ClauseFormDialogProps) => (
   <Dialog onOpenChange={onOpenChange} open={open}>
-    <ClauseFormDialogBody
-      categories={categories}
-      initial={initial}
-      key={initial?.id ?? "new"}
-      onOpenChange={onOpenChange}
-      onSaved={onSaved}
-    />
+    {/* Mount only while open so each open instantiates a fresh
+        form: cancel-then-reopen discards unsaved edits (the
+        behaviour the removed `open`-driven reset effect provided),
+        and switching between create/edit-for-same-id re-seeds from
+        `initial` without an effect. */}
+    {open ? (
+      <ClauseFormDialogBody
+        categories={categories}
+        initial={initial}
+        onOpenChange={onOpenChange}
+        onSaved={onSaved}
+      />
+    ) : null}
   </Dialog>
 );
 
