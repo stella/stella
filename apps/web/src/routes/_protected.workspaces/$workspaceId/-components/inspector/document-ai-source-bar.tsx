@@ -31,6 +31,8 @@ import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-
 import { workspaceKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
+const BBOX_POLL_INTERVAL_MS = 1000;
+
 export const DocumentAiSourceBar = ({
   activeTab,
   fieldId,
@@ -164,25 +166,22 @@ export const DocumentAiSourceBar = ({
     setIsAnswerExpanded(false);
   }, [fieldId]);
 
-  // While the mutation is in flight, nudge the justifications cache
-  // every second so the bbox payload appears as soon as the backend
-  // finishes processing.
-  // queryClient is stable across renders so it is safe to omit from
-  // the queryKey here.
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps
-  useQuery({
-    queryKey: ["bounding-boxes-poll", workspaceId, justificationId],
-    queryFn: async () => {
-      await queryClient.invalidateQueries({
+  // Nudge the justifications cache every second while we still need
+  // bboxes. POST success doesn't guarantee the payload is in cache
+  // yet, so we keep polling until `needsBoxes` flips false.
+  useEffect(() => {
+    if (!needsBoxes) {
+      return undefined;
+    }
+    const id = window.setInterval(() => {
+      void queryClient.invalidateQueries({
         queryKey: workspaceKeys.justifications(workspaceId),
       });
-      return Date.now();
-    },
-    enabled: isGeneratingBoxes,
-    refetchInterval: isGeneratingBoxes ? 1000 : false,
-    staleTime: 0,
-    gcTime: 0,
-  });
+    }, BBOX_POLL_INTERVAL_MS);
+    return () => {
+      window.clearInterval(id);
+    };
+  }, [needsBoxes, queryClient, workspaceId]);
 
   const scrolledForJustificationRef = useRef<string | null>(null);
   useEffect(() => {
