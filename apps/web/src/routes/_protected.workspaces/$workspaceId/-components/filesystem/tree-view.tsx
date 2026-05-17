@@ -1110,10 +1110,18 @@ const FilesystemRow = ({
   getSelectedEntities,
 }: FilesystemRowProps) => {
   const t = useTranslations();
-  const [contextAnchor, setContextAnchor] = useState<{
-    getBoundingClientRect: () => DOMRect;
-  } | null>(null);
-  const isContextOpen = contextAnchor !== null;
+  // RowActions can open via two paths: a trigger-button click (anchors
+  // the menu to the ellipsis button) or a right-click on the row (anchors
+  // to the cursor position). Model both with a discriminated union so the
+  // anchor and open state stay in sync.
+  const [menuState, setMenuState] = useState<
+    | { type: "closed" }
+    | { type: "trigger" }
+    | { type: "context"; anchor: { getBoundingClientRect: () => DOMRect } }
+  >({ type: "closed" });
+  const isContextOpen = menuState.type !== "closed";
+  const contextAnchor =
+    menuState.type === "context" ? menuState.anchor : undefined;
   const [editValue, setEditValue] = useState("");
   const isFolder = node.kind === "folder";
   const isEditing = editingEntityId === node.entityId;
@@ -1156,8 +1164,11 @@ const FilesystemRow = ({
     }
     const x = e.clientX;
     const y = e.clientY;
-    setContextAnchor({
-      getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
+    setMenuState({
+      type: "context",
+      anchor: {
+        getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
+      },
     });
   };
 
@@ -1515,7 +1526,11 @@ const FilesystemRow = ({
         onOpen={openInInspector}
         onOpenChange={(o) => {
           if (!o) {
-            setContextAnchor(null);
+            setMenuState({ type: "closed" });
+          } else if (menuState.type === "closed") {
+            // Trigger-button click: Base UI positions the menu against
+            // the trigger element, so no virtual anchor is needed.
+            setMenuState({ type: "trigger" });
           }
         }}
         onRename={startEditing}
