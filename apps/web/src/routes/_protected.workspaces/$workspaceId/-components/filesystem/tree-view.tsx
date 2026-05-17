@@ -335,10 +335,10 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   }, []);
 
   // Background right-click context menu
-  const [bgContextOpen, setBgContextOpen] = useState(false);
   const [bgContextAnchor, setBgContextAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
+  const isBgContextOpen = bgContextAnchor !== null;
 
   const { filters, sorts, hiddenProperties } = view.layout;
   const primarySort = sorts.at(0) ?? null;
@@ -587,7 +587,6 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     setBgContextAnchor({
       getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
     });
-    setBgContextOpen(true);
   }, []);
 
   const handleFolderCreated = useCallback((entityId: string) => {
@@ -907,12 +906,11 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         anchor={bgContextAnchor}
         onFolderCreated={handleFolderCreated}
         onOpenChange={(o) => {
-          setBgContextOpen(o);
           if (!o) {
             setBgContextAnchor(null);
           }
         }}
-        open={bgContextOpen}
+        open={isBgContextOpen}
         parentId={currentFolderId}
         showTaskOption={false}
         render={
@@ -954,10 +952,10 @@ const ColumnHeaderCell = ({
 }: ColumnHeaderCellProps) => {
   const t = useTranslations();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [contextOpen, setContextOpen] = useState(false);
   const [contextAnchor, setContextAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
+  const isContextOpen = contextAnchor !== null;
   const isActive = activeSort?.propertyId === propertyId;
   const SortIcon = activeSort?.desc ? ArrowDownIcon : ArrowUpIcon;
 
@@ -998,7 +996,6 @@ const ColumnHeaderCell = ({
       setContextAnchor({
         getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
       });
-      setContextOpen(true);
     },
     [onHide],
   );
@@ -1034,12 +1031,11 @@ const ColumnHeaderCell = ({
       {onHide && (
         <Menu
           onOpenChange={(open) => {
-            setContextOpen(open);
             if (!open) {
               setContextAnchor(null);
             }
           }}
-          open={contextOpen}
+          open={isContextOpen}
         >
           <MenuTrigger
             render={
@@ -1055,7 +1051,7 @@ const ColumnHeaderCell = ({
             <MenuItem
               onClick={() => {
                 onHide();
-                setContextOpen(false);
+                setContextAnchor(null);
               }}
             >
               <EyeOffIcon className="size-4" />
@@ -1114,7 +1110,18 @@ const FilesystemRow = ({
   getSelectedEntities,
 }: FilesystemRowProps) => {
   const t = useTranslations();
-  const [contextOpen, setContextOpen] = useState(false);
+  // RowActions can open via two paths: a trigger-button click (anchors
+  // the menu to the ellipsis button) or a right-click on the row (anchors
+  // to the cursor position). Model both with a discriminated union so the
+  // anchor and open state stay in sync.
+  const [menuState, setMenuState] = useState<
+    | { type: "closed" }
+    | { type: "trigger" }
+    | { type: "context"; anchor: { getBoundingClientRect: () => DOMRect } }
+  >({ type: "closed" });
+  const isContextOpen = menuState.type !== "closed";
+  const contextAnchor =
+    menuState.type === "context" ? menuState.anchor : undefined;
   const [editValue, setEditValue] = useState("");
   const isFolder = node.kind === "folder";
   const isEditing = editingEntityId === node.entityId;
@@ -1148,10 +1155,6 @@ const FilesystemRow = ({
     onStartEditing(null);
   };
 
-  const [contextAnchor, setContextAnchor] = useState<{
-    getBoundingClientRect: () => DOMRect;
-  } | null>(null);
-
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -1161,10 +1164,12 @@ const FilesystemRow = ({
     }
     const x = e.clientX;
     const y = e.clientY;
-    setContextAnchor({
-      getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
+    setMenuState({
+      type: "context",
+      anchor: {
+        getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
+      },
     });
-    setContextOpen(true);
   };
 
   // Drag + drop support via pragmatic-drag-and-drop.
@@ -1501,13 +1506,13 @@ const FilesystemRow = ({
   // selectedIds before RowActions re-renders. Using a ref preserves
   // the selection snapshot from when the menu was triggered.
   const bulkEntitiesRef = useRef<WorkspaceEntity[] | undefined>(undefined);
-  if (contextOpen && isBulkSelected) {
+  if (isContextOpen && isBulkSelected) {
     bulkEntitiesRef.current = getSelectedEntities(selectedIds);
-  } else if (!contextOpen) {
+  } else if (!isContextOpen) {
     bulkEntitiesRef.current = undefined;
   }
   let bulkEntities: WorkspaceEntity[] | undefined;
-  if (contextOpen) {
+  if (isContextOpen) {
     bulkEntities = bulkEntitiesRef.current;
   } else if (isBulkSelected) {
     bulkEntities = getSelectedEntities(selectedIds);
@@ -1520,14 +1525,17 @@ const FilesystemRow = ({
         entity={node}
         onOpen={openInInspector}
         onOpenChange={(o) => {
-          setContextOpen(o);
           if (!o) {
-            setContextAnchor(null);
+            setMenuState({ type: "closed" });
+          } else if (menuState.type === "closed") {
+            // Trigger-button click: Base UI positions the menu against
+            // the trigger element, so no virtual anchor is needed.
+            setMenuState({ type: "trigger" });
           }
         }}
         onRename={startEditing}
         onSubfolderCreated={onSubfolderCreated}
-        open={contextOpen}
+        open={isContextOpen}
         selectedEntities={bulkEntities}
         workspaceId={workspaceId}
       />

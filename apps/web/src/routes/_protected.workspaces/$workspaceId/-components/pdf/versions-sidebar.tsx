@@ -310,10 +310,10 @@ function VersionItem({
   const t = useTranslations();
   const isSelected = version.file?.fieldId === currentFieldId;
   const isCurrent = version.id === currentVersionId;
-  const [contextOpen, setContextOpen] = useState(false);
   const [contextAnchor, setContextAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
+  const isContextOpen = contextAnchor !== null;
 
   // Build translated label → color map for this render
   const labelColorMap = new Map(
@@ -337,7 +337,6 @@ function VersionItem({
     setContextAnchor({
       getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
     });
-    setContextOpen(true);
   };
 
   return (
@@ -424,9 +423,8 @@ function VersionItem({
       </button>
 
       <Menu
-        open={contextOpen}
+        open={isContextOpen}
         onOpenChange={(o) => {
-          setContextOpen(o);
           if (!o) {
             setContextAnchor(null);
           }
@@ -462,7 +460,7 @@ function VersionItem({
                 if (value) {
                   onSetLabel(version.id, value);
                   e.currentTarget.reset();
-                  setContextOpen(false);
+                  setContextAnchor(null);
                 }
               }}
             >
