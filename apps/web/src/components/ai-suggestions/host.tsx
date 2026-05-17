@@ -62,6 +62,7 @@ import {
 import { useChatComposerWiring } from "@/components/chat-editor-provider";
 import type { ChatEditorController } from "@/components/chat-editor-provider";
 import { PromptEditorContent } from "@/components/prompt-editor";
+import { usePulse } from "@/hooks/use-pulse";
 import type { TranslationKey } from "@/i18n/types";
 
 import type {
@@ -71,6 +72,7 @@ import type {
   ThreadMessage,
   UserThreadMessage,
 } from "./types";
+import { useAISuggestionThread } from "./use-ai-suggestion-thread";
 
 /**
  * localStorage key for the per-user "apply with tracked changes?"
@@ -226,7 +228,17 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
     | { kind: "group"; messageId: string }
     | null
   >(null);
-  const [messages, setMessages] = useState<ThreadMessage[]>([]);
+  const {
+    messages,
+    setMessages,
+    allSuggestions,
+    allCitations,
+    pendingAccepts,
+    setPendingAccepts,
+    updateAssistantMessage,
+    updateSuggestion,
+    applyResultToMessages,
+  } = useAISuggestionThread({ editorView });
   const [panelOpen, setPanelOpen] = useState(false);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [activeCitationId, setActiveCitationId] = useState<string | null>(null);
@@ -236,7 +248,6 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
    * handle at the top of the panel.
    */
   const [panelHeight, setPanelHeight] = useState<number | null>(null);
-  const [pendingAccepts, setPendingAccepts] = useState<string[]>([]);
 
   /**
    * Effective apply mode. When the stored preference is null we
@@ -256,26 +267,6 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
   const generationToken = useRef(0);
 
   // ---- derived state -------------------------------------------------------
-
-  const allSuggestions = useMemo<AISuggestion[]>(() => {
-    const out: AISuggestion[] = [];
-    for (const m of messages) {
-      if (m.role === "assistant") {
-        out.push(...m.suggestions);
-      }
-    }
-    return out;
-  }, [messages]);
-
-  const allCitations = useMemo<AICitation[]>(() => {
-    const out: AICitation[] = [];
-    for (const m of messages) {
-      if (m.role === "assistant") {
-        out.push(...m.citations);
-      }
-    }
-    return out;
-  }, [messages]);
 
   /**
    * Folio range citations flattened for the decoration plugin.
@@ -349,74 +340,6 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
     const meta = setActiveCitationMeta(activeCitationId);
     editorView.dispatch(editorView.state.tr.setMeta(meta.key, meta.payload));
   }, [editorView, activeCitationId]);
-
-  // Recompute stale status whenever the document changes.
-  useEffect(() => {
-    if (!editorView || allSuggestions.length === 0) {
-      return;
-    }
-    const doc = editorView.state.doc;
-    setMessages((prev) => {
-      const messagesState = { changed: false };
-      const next = prev.map<ThreadMessage>((m) => {
-        if (m.role !== "assistant" || m.suggestions.length === 0) {
-          return m;
-        }
-        const suggestionsState = { changed: false };
-        const updated = m.suggestions.map((s): AISuggestion => {
-          if (s.status !== "pending" && s.status !== "stale") {
-            return s;
-          }
-          const anchor = resolveSuggestionAnchor(doc, s);
-          const nextStatus: AISuggestion["status"] =
-            anchor === null ? "stale" : "pending";
-          if (nextStatus === s.status) {
-            return s;
-          }
-          suggestionsState.changed = true;
-          return { ...s, status: nextStatus };
-        });
-        if (!suggestionsState.changed) {
-          return m;
-        }
-        messagesState.changed = true;
-        return { ...m, suggestions: updated };
-      });
-      return messagesState.changed ? next : prev;
-    });
-  }, [editorView, allSuggestions, editorView?.state.doc]);
-
-  // ---- helpers -------------------------------------------------------------
-
-  const updateAssistantMessage = useCallback(
-    (
-      id: string,
-      mutate: (m: AssistantThreadMessage) => AssistantThreadMessage,
-    ) => {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.role === "assistant" && m.id === id ? mutate(m) : m,
-        ),
-      );
-    },
-    [],
-  );
-
-  const updateSuggestion = useCallback(
-    (
-      messageId: string,
-      suggestionId: string,
-      mutate: (s: AISuggestion) => AISuggestion,
-    ) => {
-      updateAssistantMessage(messageId, (m) => ({
-        ...m,
-        suggestions: m.suggestions.map((s) =>
-          s.id === suggestionId ? mutate(s) : s,
-        ),
-      }));
-    },
-    [updateAssistantMessage],
-  );
 
   // ---- generate ------------------------------------------------------------
 
@@ -579,6 +502,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       documentTextProp,
       config,
       updateAssistantMessage,
+      setMessages,
       mode,
     ],
   );
@@ -604,32 +528,6 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       return null;
     },
     [messages],
-  );
-
-  const applyResultToMessages = useCallback(
-    (result: { applied: string[]; stale: string[] }) => {
-      setMessages((prev) =>
-        prev.map<ThreadMessage>((m) => {
-          if (m.role !== "assistant" || m.suggestions.length === 0) {
-            return m;
-          }
-          const suggestionState = { changed: false };
-          const next = m.suggestions.map((s): AISuggestion => {
-            if (result.applied.includes(s.id)) {
-              suggestionState.changed = true;
-              return { ...s, status: "accepted" };
-            }
-            if (result.stale.includes(s.id)) {
-              suggestionState.changed = true;
-              return { ...s, status: "stale" };
-            }
-            return s;
-          });
-          return suggestionState.changed ? { ...m, suggestions: next } : m;
-        }),
-      );
-    },
-    [],
   );
 
   // Apply a single suggestion at the given mode. Split out from
@@ -671,6 +569,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       editorView,
       author,
       applyResultToMessages,
+      setPendingAccepts,
     ],
   );
 
@@ -746,7 +645,15 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       });
       applyResultToMessages(result);
     },
-    [messages, readOnly, config, editorView, author, applyResultToMessages],
+    [
+      messages,
+      readOnly,
+      config,
+      editorView,
+      author,
+      applyResultToMessages,
+      setPendingAccepts,
+    ],
   );
 
   const handleAcceptGroup = useCallback(
@@ -838,6 +745,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
     applyMode,
     author,
     applyResultToMessages,
+    setPendingAccepts,
   ]);
 
   // ---- focus + scroll-to ---------------------------------------------------
@@ -1171,24 +1079,18 @@ export function PromptBar(props: PromptBarProps) {
   // user clicks the AI-suggestions chip so they see the bar light
   // up and connect "the suggestions came from this chat". One-shot
   // 1.4s ring; restart when the seq advances.
-  const [attention, setAttention] = useState(false);
+  const { isPulsing: attention, pulse: triggerAttention } = usePulse(1400);
   const lastAttentionSeq = useRef(attentionPulseSeq);
   useEffect(() => {
     if (
       attentionPulseSeq === undefined ||
       attentionPulseSeq === lastAttentionSeq.current
     ) {
-      return undefined;
+      return;
     }
     lastAttentionSeq.current = attentionPulseSeq;
-    setAttention(true);
-    const timer = window.setTimeout(() => {
-      setAttention(false);
-    }, 1400);
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [attentionPulseSeq]);
+    triggerAttention();
+  }, [attentionPulseSeq, triggerAttention]);
 
   // The bar emits `{ prompt }`; the underlying composer emits the
   // raw editor draft. Adapting here lets the rest of the wiring

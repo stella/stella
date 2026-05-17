@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -8,6 +8,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
+import { usePulse } from "@/hooks/use-pulse";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import type { FileTab } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { entityVersionsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
@@ -95,18 +96,16 @@ const FacetBar = ({
   onChange,
 }: FacetBarProps) => {
   const t = useTranslations();
-  const [pulsing, setPulsing] = useState(false);
+  const { isPulsing: pulsing, pulse } = usePulse(1400);
   const lastPulseSeq = useRef<number | undefined>(pulseSeq);
 
   useEffect(() => {
     if (pulseSeq === undefined || pulseSeq === lastPulseSeq.current) {
-      return undefined;
+      return;
     }
     lastPulseSeq.current = pulseSeq;
-    setPulsing(true);
-    const timer = window.setTimeout(() => setPulsing(false), 1400);
-    return () => window.clearTimeout(timer);
-  }, [pulseSeq]);
+    pulse();
+  }, [pulseSeq, pulse]);
 
   const labels: Record<Facet, string> = {
     preview: t("inspector.facet.preview"),
