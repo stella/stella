@@ -160,6 +160,7 @@ export const entitiesRoute = new Elysia({
   .post("/copy-to-workspace", copyToWorkspace.handler, {
     body: copyToWorkspace.config.body,
     invalidateQuery: true,
+    permissions: copyToWorkspace.config.permissions,
   })
   .post("/check-stamp", checkStamp.handler, {
     body: checkStamp.config.body,
