@@ -25,6 +25,7 @@ export type EntitySnapshot = {
   kind: EntityKind;
   name: string;
   parentId: SafeId<"entity"> | null;
+  readOnly?: boolean;
   currentVersion: {
     fields: EntityFieldSnapshot[];
   } | null;

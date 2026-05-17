@@ -245,9 +245,11 @@ const FolderPicker = ({
   onSelect,
 }: FolderPickerProps) => {
   const t = useTranslations();
-  const { data: folders, isLoading } = useQuery(
-    workspaceFoldersOptions(workspaceId),
-  );
+  const {
+    data: folders,
+    isLoading,
+    isError,
+  } = useQuery(workspaceFoldersOptions(workspaceId));
 
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
     new Set(),
@@ -257,6 +259,14 @@ const FolderPicker = ({
     return (
       <div className="border-border h-32 rounded-md border p-2">
         <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="border-border h-32 rounded-md border p-2">
+        <p className="text-destructive text-sm">{t("errors.actionFailed")}</p>
       </div>
     );
   }

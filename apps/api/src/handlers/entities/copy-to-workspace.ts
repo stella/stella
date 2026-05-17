@@ -22,7 +22,6 @@ import {
   createAuditContext,
   writeAuditLog,
 } from "@/api/lib/audit-log";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -207,6 +206,21 @@ const remapPropertyIds = (
     };
   });
 
+/**
+ * Best-effort cleanup of S3 keys. Failures are silently ignored
+ * since this is rollback/cleanup code.
+ */
+const rollbackS3Copies = async (keys: string[]): Promise<void> => {
+  const s3 = getS3();
+  await Promise.all(
+    keys.map(async (key) => {
+      await s3.delete(key).catch(() => {
+        // Intentional no-op: best-effort cleanup
+      });
+    }),
+  );
+};
+
 const copyToWorkspaceHandler = async function* ({
   safeDb,
   organizationId,
@@ -286,6 +300,7 @@ const copyToWorkspaceHandler = async function* ({
             kind: true,
             name: true,
             parentId: true,
+            readOnly: true,
           },
           with: {
             currentVersion: {
@@ -311,6 +326,20 @@ const copyToWorkspaceHandler = async function* ({
         new HandlerError({ status: 404, message: "Entity not found" }),
       );
     }
+
+    // For move operations, check if any entity in the subtree is read-only
+    if (deleteSource) {
+      const readOnlyEntity = subtree.find((e) => e.readOnly);
+      if (readOnlyEntity) {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: "Cannot move folder containing read-only entities",
+          }),
+        );
+      }
+    }
+
     sourceEntities = subtree;
   }
 
@@ -334,15 +363,7 @@ const copyToWorkspaceHandler = async function* ({
       copiedS3Keys.push(targetKey);
     }
   } catch (error) {
-    // Rollback S3 copies on failure
-    await Promise.all(
-      copiedS3Keys.map(
-        async (key) =>
-          await s3.delete(key).catch(() => {
-            // Intentional no-op: best-effort cleanup
-          }),
-      ),
-    );
+    await rollbackS3Copies(copiedS3Keys);
     captureError(error, {
       sourceWorkspaceId,
       targetWorkspaceId,
@@ -417,15 +438,7 @@ const copyToWorkspaceHandler = async function* ({
   );
 
   if (!txResult.ok) {
-    // Rollback S3 copies on DB failure
-    await Promise.all(
-      copiedS3Keys.map(
-        async (key) =>
-          await s3.delete(key).catch(() => {
-            // Intentional no-op: best-effort cleanup
-          }),
-      ),
-    );
+    await rollbackS3Copies(copiedS3Keys);
     return Result.err(
       new HandlerError({ status: txResult.status, message: txResult.message }),
     );
@@ -437,8 +450,8 @@ const copyToWorkspaceHandler = async function* ({
     const sourceEntityIds = sourceEntities.map((e) => e.id);
     yield* Result.await(
       safeDb(async (tx) => {
-        // Delete in reverse order (children first) by deleting all at once
-        // The cascade will handle versions and fields
+        // Delete in reverse order (children first) to respect FK constraints.
+        // The cascade will handle versions and fields.
         for (const id of sourceEntityIds.toReversed()) {
           await tx.delete(entities).where(eq(entities.id, id));
         }
@@ -532,8 +545,7 @@ const copyToWorkspace = createSafeHandler(
 
     // Validate access to target workspace
     const targetWorkspace = accessibleWorkspaces.find(
-      (w: AccessibleWorkspace) =>
-        w.id === targetWorkspaceId && w.status === "active",
+      (w) => w.id === targetWorkspaceId && w.status === "active",
     );
     if (!targetWorkspace) {
       return Result.err(
