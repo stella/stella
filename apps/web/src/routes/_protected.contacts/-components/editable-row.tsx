@@ -54,12 +54,15 @@ export const EditableRow = ({
 
   const rename = useInlineRename({
     initial: value ?? "",
-    // `displayName` is the only required text field on a contact;
-    // surface the empty case to `onCommit` (and therefore the
-    // toast) by declaring a validator that always passes. Other
-    // fields keep the hook's default "empty draft silently
-    // cancels" behaviour.
-    ...(field === "displayName" ? { validate: () => null } : {}),
+    // Every contact field handles the empty case explicitly in
+    // `onCommit`: `displayName` toasts (it's required), the
+    // numeric fields parse to `null`, and the remaining optional
+    // strings send `null` to clear a previously saved value.
+    // Declaring a pass-through validator opts out of the hook's
+    // default "empty draft silently cancels" so users can wipe
+    // optional rows such as prefix, tax ID, currency, default
+    // hourly rate, or payment terms back to empty.
+    validate: () => null,
     onCommit: (trimmed) => {
       if (maxLength !== undefined && trimmed.length > maxLength) {
         stellaToast.add({
