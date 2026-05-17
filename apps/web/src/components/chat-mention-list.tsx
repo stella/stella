@@ -1,11 +1,11 @@
 import {
-  forwardRef,
   useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
   useState,
 } from "react";
+import type { Ref } from "react";
 
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import {
@@ -124,15 +124,26 @@ type DrillDownState = {
   name: string;
 };
 
-export const ChatMentionList = forwardRef<
-  ReturnType<NonNullable<SuggestionOptions["render"]>>,
-  SuggestionProps<ChatMentionOption> & {
-    loadWorkspaceEntities: (
-      workspace: ChatMentionOption,
-      query: string,
-    ) => Promise<ChatMentionOption[]>;
-  }
->(({ items, command, clientRect, loadWorkspaceEntities, query }, ref) => {
+type ChatMentionListHandle = ReturnType<
+  NonNullable<SuggestionOptions["render"]>
+>;
+
+type ChatMentionListProps = SuggestionProps<ChatMentionOption> & {
+  loadWorkspaceEntities: (
+    workspace: ChatMentionOption,
+    query: string,
+  ) => Promise<ChatMentionOption[]>;
+  ref?: Ref<ChatMentionListHandle>;
+};
+
+export const ChatMentionList = ({
+  items,
+  command,
+  clientRect,
+  loadWorkspaceEntities,
+  query,
+  ref,
+}: ChatMentionListProps) => {
   const t = useTranslations();
   const categoryLabel = useCategoryLabel();
   const [isOpen, setIsOpen] = useState(true);
@@ -461,6 +472,4 @@ export const ChatMentionList = forwardRef<
       </PopoverPopup>
     </Popover>
   );
-});
-
-ChatMentionList.displayName = "ChatMentionList";
+};

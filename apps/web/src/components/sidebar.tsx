@@ -138,7 +138,7 @@ function SidebarProvider({
   );
 
   return (
-    <SidebarContext.Provider value={contextValue}>
+    <SidebarContext value={contextValue}>
       <div
         className={cn(
           "group/sidebar-wrapper has-data-[variant=inset]:bg-sidebar flex min-h-svh w-full",
@@ -158,7 +158,7 @@ function SidebarProvider({
       >
         {children}
       </div>
-    </SidebarContext.Provider>
+    </SidebarContext>
   );
 }
 
