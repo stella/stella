@@ -38,6 +38,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
 import { MATTER_INFO_ICON_SLOT_CLASS } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-info-layout";
 import { useAddWorkspaceMember } from "@/routes/_protected.workspaces/$workspaceId/-mutations/workspace-members";
@@ -123,8 +124,8 @@ const MemberRow = ({
   const removeMember = useMutation({
     mutationFn: async (vars: { workspaceId: string; userId: string }) => {
       const response = await api
-        .workspaces({ workspaceId: vars.workspaceId })
-        .members({ userId: vars.userId })
+        .workspaces({ workspaceId: toSafeId<"workspace">(vars.workspaceId) })
+        .members({ userId: toSafeId<"user">(vars.userId) })
         .delete({
           queryKey: workspaceMembersKeys.all(vars.workspaceId),
         });
