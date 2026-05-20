@@ -362,6 +362,21 @@ describe("validateOutboundFetchTarget", () => {
     expect(result.value.addresses).toEqual([{ address: "8.8.8.8", family: 4 }]);
     expect(result.value.url.hostname).toBe("8.8.8.8");
   });
+
+  test("accepts a bracketed public IPv6 literal and returns a bare resolved address", async () => {
+    const result = await validateOutboundFetchTarget(
+      "https://[2606:4700:4700::1111]/v1",
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+
+    expect(result.value.addresses).toEqual([
+      { address: "2606:4700:4700::1111", family: 6 },
+    ]);
+  });
 });
 
 const withHttpServer = async (

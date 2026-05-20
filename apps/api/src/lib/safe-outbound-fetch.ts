@@ -800,22 +800,27 @@ const isBlockedIPv6 = (host: string): boolean => {
 const resolvePublicAddresses = async (
   hostname: string,
 ): Promise<Result<SafeOutboundAddress[], SafeOutboundFetchError>> => {
-  const literalFamily = isIP(hostname);
+  const normalizedHost =
+    hostname.startsWith("[") && hostname.endsWith("]")
+      ? hostname.slice(1, -1)
+      : hostname;
+
+  const literalFamily = isIP(normalizedHost);
   if (literalFamily !== 0) {
-    return isPrivateResolvedAddress(hostname)
+    return isPrivateResolvedAddress(normalizedHost)
       ? Result.err(
           new SafeOutboundFetchError({ message: "URL host is not allowed" }),
         )
       : Result.ok([
           {
-            address: hostname,
+            address: normalizedHost,
             family: literalFamily === 6 ? 6 : 4,
           },
         ]);
   }
 
   const addresses = await Result.tryPromise({
-    try: async () => await lookup(hostname, { all: true }),
+    try: async () => await lookup(normalizedHost, { all: true }),
     catch: (cause) =>
       new SafeOutboundFetchError({
         message: "URL host could not be resolved",
@@ -845,19 +850,9 @@ const resolvePublicAddresses = async (
 };
 
 const isPrivateResolvedAddress = (address: string): boolean => {
-  if (address.startsWith("::ffff:")) {
-    return isPrivateResolvedAddress(address.slice("::ffff:".length));
-  }
-
-  if (isIP(address) === 6) {
-    const normalized = address.toLowerCase();
-    return (
-      normalized === "::" ||
-      normalized === "::1" ||
-      normalized.startsWith("fc") ||
-      normalized.startsWith("fd") ||
-      normalized.startsWith("fe80:")
-    );
+  const family = isIP(address);
+  if (family === 6) {
+    return isBlockedIPv6(address);
   }
 
   const ipv4 = parseIPv4(address);
