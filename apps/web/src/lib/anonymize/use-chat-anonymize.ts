@@ -62,7 +62,7 @@ export const useChatAnonymizePreview = ({
   enabled: boolean;
   text: string;
   workspaceId: string;
-}): ChatAnonPair[] | null => {
+}): readonly ChatAnonPair[] | null => {
   const [debouncedText] = useDebounce(text, ANON_PREVIEW_DEBOUNCE_MS);
   const shouldRun = enabled && debouncedText.trim().length > 0;
   const result = useQuery({
