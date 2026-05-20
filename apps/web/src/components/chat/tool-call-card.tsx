@@ -207,9 +207,11 @@ const resolveIconHref = (item: CatalogItem): string | undefined => {
 };
 
 export const ToolCallCard = ({
+  activeOrganizationId,
   part,
   showDetails,
 }: {
+  activeOrganizationId: string;
   part: ToolPart;
   /** Show expandable raw output (dev mode). */
   showDetails?: boolean;
@@ -220,7 +222,7 @@ export const ToolCallCard = ({
   const hasCatalogEntry =
     mcpToolInfo !== null || NATIVE_TOOL_BRANDS[name] !== undefined;
   const { data: catalogData } = useQuery({
-    ...mcpConnectorsOptions(),
+    ...mcpConnectorsOptions(activeOrganizationId),
     enabled: hasCatalogEntry,
   });
   const catalogEntry = findCatalogEntry({

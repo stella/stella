@@ -433,6 +433,7 @@ const getRetryableAssistantMessageId = (
 };
 
 type ChatThreadMessagesProps = {
+  activeOrganizationId: string;
   alwaysApprovedTools: ReadonlySet<ToolApprovalGrant>;
   approvalPendingMessageId: string | null;
   blockedApprovalTools?: ReadonlySet<ApprovalToolName> | undefined;
@@ -491,6 +492,7 @@ type ChatResendOptions = {
 };
 
 export const ChatThreadMessages = ({
+  activeOrganizationId,
   alwaysApprovedTools,
   approvalPendingMessageId,
   blockedApprovalTools,
@@ -538,6 +540,7 @@ export const ChatThreadMessages = ({
             {message.role === "assistant" ? (
               <>
                 <AssistantMessageParts
+                  activeOrganizationId={activeOrganizationId}
                   alwaysApprovedTools={alwaysApprovedTools}
                   blockedApprovalTools={blockedApprovalTools}
                   conversationApprovedTools={conversationApprovedTools}
@@ -558,6 +561,7 @@ export const ChatThreadMessages = ({
                   workspaceId={workspaceId}
                 />
                 <SourceChips
+                  activeOrganizationId={activeOrganizationId}
                   messageId={message.id}
                   parts={message.parts}
                   workspaceId={workspaceId}
@@ -617,6 +621,7 @@ export const ChatThreadMessages = ({
 
 type AssistantMessagePartsProps = Pick<
   ChatThreadMessagesProps,
+  | "activeOrganizationId"
   | "alwaysApprovedTools"
   | "blockedApprovalTools"
   | "conversationApprovedTools"
@@ -645,6 +650,7 @@ type AssistantMessagePartsProps = Pick<
  * remount on every streaming text delta.
  */
 const AssistantMessageParts = ({
+  activeOrganizationId,
   alwaysApprovedTools,
   blockedApprovalTools,
   conversationApprovedTools,
@@ -707,6 +713,7 @@ const AssistantMessageParts = ({
         if (isApprovalPart(part)) {
           return (
             <ToolApprovalCard
+              activeOrganizationId={activeOrganizationId}
               alwaysApprovedTools={alwaysApprovedTools}
               blockedApprovalTools={blockedApprovalTools}
               conversationApprovedTools={conversationApprovedTools}
@@ -724,6 +731,7 @@ const AssistantMessageParts = ({
         if (isToolUIPart(part)) {
           return (
             <ToolCallCard
+              activeOrganizationId={activeOrganizationId}
               key={part.toolCallId}
               part={part}
               showDetails={shouldShowToolCalls}

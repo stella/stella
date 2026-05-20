@@ -6,7 +6,12 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Link, useMatch, useNavigate } from "@tanstack/react-router";
+import {
+  getRouteApi,
+  Link,
+  useMatch,
+  useNavigate,
+} from "@tanstack/react-router";
 import { MessageSquareIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -39,6 +44,8 @@ type ThreadsSheetProps = {
   triggerVariant?: "section" | "toolbar";
 };
 
+const protectedRouteApi = getRouteApi("/_protected");
+
 export const ThreadsSheet = ({
   icon,
   label,
@@ -48,6 +55,9 @@ export const ThreadsSheet = ({
   const commonT = useTranslations("common");
   const [isOpen, setIsOpen] = useState(false);
   const triggerLabel = label ?? commonT("history");
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
 
   const globalThreadMatch = useMatch({
     from: "/_protected/chat/$threadId",
@@ -76,7 +86,7 @@ export const ThreadsSheet = ({
   })();
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    useInfiniteQuery(groupedChatThreadsOptions());
+    useInfiniteQuery(groupedChatThreadsOptions(activeOrganizationId));
   const groupedThreads = useMemo(
     () => mergeGroupedChatThreadPages(data?.pages),
     [data?.pages],
@@ -171,6 +181,9 @@ const DeleteThreadButton = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
 
   const deleteThread = useMutation({
     mutationFn: async ({
@@ -193,7 +206,7 @@ const DeleteThreadButton = ({
     },
     onSettled: async () => {
       await queryClient.invalidateQueries({
-        queryKey: groupedChatThreadsOptions().queryKey,
+        queryKey: groupedChatThreadsOptions(activeOrganizationId).queryKey,
       });
     },
     onError: () => {

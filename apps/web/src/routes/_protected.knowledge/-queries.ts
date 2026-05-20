@@ -22,54 +22,86 @@ type ClausesListKey = {
 
 export const knowledgeKeys = {
   shortcuts: {
-    all: ["shortcuts"] as const,
-    list: () => [...knowledgeKeys.shortcuts.all, "list"] as const,
+    all: (organizationId: string) => ["shortcuts", organizationId],
+    list: (organizationId: string) => [
+      ...knowledgeKeys.shortcuts.all(organizationId),
+      "list",
+    ],
   },
   skills: {
-    all: ["skills"] as const,
-    list: (key: SkillsPageKey) =>
-      [...knowledgeKeys.skills.all, "list", key] as const,
+    all: (organizationId: string) => ["skills", organizationId],
+    list: (organizationId: string, { limit }: SkillsPageKey) => [
+      ...knowledgeKeys.skills.all(organizationId),
+      "list",
+      { limit },
+    ],
   },
   templates: {
-    all: ["templates"] as const,
-    list: (categoryId?: string | null) =>
-      [...knowledgeKeys.templates.all, "list", { categoryId }] as const,
-    detail: (templateId: string) =>
-      [...knowledgeKeys.templates.all, templateId, "detail"] as const,
-    preview: (templateId: string) =>
-      [...knowledgeKeys.templates.all, templateId, "preview"] as const,
-    versions: (templateId: string) =>
-      [...knowledgeKeys.templates.all, templateId, "versions"] as const,
-    clauses: (templateId: string) =>
-      [...knowledgeKeys.templates.all, templateId, "clauses"] as const,
+    all: (organizationId: string) => ["templates", organizationId],
+    list: (organizationId: string, categoryId?: string | null) => [
+      ...knowledgeKeys.templates.all(organizationId),
+      "list",
+      { categoryId: categoryId ?? null },
+    ],
+    detail: (organizationId: string, templateId: string) => [
+      ...knowledgeKeys.templates.all(organizationId),
+      templateId,
+      "detail",
+    ],
+    preview: (organizationId: string, templateId: string) => [
+      ...knowledgeKeys.templates.all(organizationId),
+      templateId,
+      "preview",
+    ],
+    versions: (organizationId: string, templateId: string) => [
+      ...knowledgeKeys.templates.all(organizationId),
+      templateId,
+      "versions",
+    ],
+    clauses: (organizationId: string, templateId: string) => [
+      ...knowledgeKeys.templates.all(organizationId),
+      templateId,
+      "clauses",
+    ],
   },
   templateCategories: {
-    all: ["template-categories"] as const,
+    all: (organizationId: string) => ["template-categories", organizationId],
   },
   clauses: {
-    all: ["clauses"] as const,
-    list: (key: ClausesListKey) =>
-      [
-        ...knowledgeKeys.clauses.all,
-        "list",
-        { categoryId: key.categoryId, search: key.search, limit: key.limit },
-      ] as const,
+    all: (organizationId: string) => ["clauses", organizationId],
+    list: (
+      organizationId: string,
+      { categoryId, search, limit }: ClausesListKey,
+    ) => [
+      ...knowledgeKeys.clauses.all(organizationId),
+      "list",
+      { categoryId: categoryId ?? null, search, limit },
+    ],
   },
   clauseCategories: {
-    all: ["clause-categories"] as const,
+    all: (organizationId: string) => ["clause-categories", organizationId],
   },
   mcp: {
-    all: ["mcp"] as const,
-    connectors: () => [...knowledgeKeys.mcp.all, "connectors"] as const,
-    connections: () => [...knowledgeKeys.mcp.all, "connections"] as const,
+    all: (organizationId: string) => ["mcp", organizationId],
+    connectors: (organizationId: string) => [
+      ...knowledgeKeys.mcp.all(organizationId),
+      "connectors",
+    ],
+    connections: (organizationId: string) => [
+      ...knowledgeKeys.mcp.all(organizationId),
+      "connections",
+    ],
   },
 };
 
 // ── Template queries ────────────────────────────────
 
-export const templatesOptions = (categoryId?: string | null) =>
+export const templatesOptions = (
+  organizationId: string,
+  categoryId?: string | null,
+) =>
   queryOptions({
-    queryKey: knowledgeKeys.templates.list(categoryId),
+    queryKey: knowledgeKeys.templates.list(organizationId, categoryId),
     queryFn: async ({ signal }) => {
       const query: {
         categoryId?: SafeId<"templateCategory"> | "uncategorized";
@@ -93,9 +125,12 @@ export const templatesOptions = (categoryId?: string | null) =>
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 
-export const templateDetailOptions = (templateId: string) =>
+export const templateDetailOptions = (
+  organizationId: string,
+  templateId: string,
+) =>
   queryOptions({
-    queryKey: knowledgeKeys.templates.detail(templateId),
+    queryKey: knowledgeKeys.templates.detail(organizationId, templateId),
     queryFn: async ({ signal }) => {
       const response = await api
         .templates({ templateId: toSafeId<"template">(templateId) })
@@ -110,9 +145,12 @@ export const templateDetailOptions = (templateId: string) =>
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 
-export const templatePreviewOptions = (templateId: string) =>
+export const templatePreviewOptions = (
+  organizationId: string,
+  templateId: string,
+) =>
   queryOptions({
-    queryKey: knowledgeKeys.templates.preview(templateId),
+    queryKey: knowledgeKeys.templates.preview(organizationId, templateId),
     queryFn: async ({ signal }) => {
       const response = await api
         .templates({ templateId: toSafeId<"template">(templateId) })
@@ -127,9 +165,12 @@ export const templatePreviewOptions = (templateId: string) =>
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 
-export const templateVersionsOptions = (templateId: string) =>
+export const templateVersionsOptions = (
+  organizationId: string,
+  templateId: string,
+) =>
   queryOptions({
-    queryKey: knowledgeKeys.templates.versions(templateId),
+    queryKey: knowledgeKeys.templates.versions(organizationId, templateId),
     queryFn: async ({ signal }) => {
       const response = await api
         .templates({ templateId: toSafeId<"template">(templateId) })
@@ -144,9 +185,12 @@ export const templateVersionsOptions = (templateId: string) =>
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 
-export const templateClausesOptions = (templateId: string) =>
+export const templateClausesOptions = (
+  organizationId: string,
+  templateId: string,
+) =>
   queryOptions({
-    queryKey: knowledgeKeys.templates.clauses(templateId),
+    queryKey: knowledgeKeys.templates.clauses(organizationId, templateId),
     queryFn: async ({ signal }) => {
       const response = await api
         .templates({ templateId: toSafeId<"template">(templateId) })
@@ -163,9 +207,9 @@ export const templateClausesOptions = (templateId: string) =>
 
 // ── Category queries ────────────────────────────────
 
-export const templateCategoriesOptions = () =>
+export const templateCategoriesOptions = (organizationId: string) =>
   queryOptions({
-    queryKey: knowledgeKeys.templateCategories.all,
+    queryKey: knowledgeKeys.templateCategories.all(organizationId),
     queryFn: async ({ signal }) => {
       const response = await api["template-categories"].get({
         fetch: { signal },
@@ -180,9 +224,9 @@ export const templateCategoriesOptions = () =>
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 
-export const clauseCategoriesOptions = () =>
+export const clauseCategoriesOptions = (organizationId: string) =>
   queryOptions({
-    queryKey: knowledgeKeys.clauseCategories.all,
+    queryKey: knowledgeKeys.clauseCategories.all(organizationId),
     queryFn: async ({ signal }) => {
       const response = await api["clause-categories"].get({
         fetch: { signal },
@@ -199,13 +243,12 @@ export const clauseCategoriesOptions = () =>
 
 // ── Clause queries ──────────────────────────────────
 
-export const clausesOptions = (params: {
-  categoryId?: string | null;
-  search?: string;
-  limit?: number;
-}) =>
+export const clausesOptions = (
+  organizationId: string,
+  params: ClausesListKey,
+) =>
   queryOptions({
-    queryKey: knowledgeKeys.clauses.list(params),
+    queryKey: knowledgeKeys.clauses.list(organizationId, params),
     queryFn: async ({ signal }) => {
       const query: {
         categoryId?: SafeId<"clauseCategory">;
@@ -240,9 +283,9 @@ export const clausesOptions = (params: {
 
 // ── Shortcuts queries ────────────────────────────────
 
-export const shortcutsOptions = () =>
+export const shortcutsOptions = (organizationId: string) =>
   queryOptions({
-    queryKey: knowledgeKeys.shortcuts.list(),
+    queryKey: knowledgeKeys.shortcuts.list(organizationId),
     queryFn: async ({ signal }) => {
       const response = await api.shortcuts.get({ fetch: { signal } });
       if (response.error) {
@@ -255,9 +298,11 @@ export const shortcutsOptions = () =>
 
 // ── Skills queries ───────────────────────────────────
 
-export const skillsOptions = () =>
+export const skillsOptions = (organizationId: string) =>
   infiniteQueryOptions({
-    queryKey: knowledgeKeys.skills.list({ limit: SKILLS_PAGE_SIZE }),
+    queryKey: knowledgeKeys.skills.list(organizationId, {
+      limit: SKILLS_PAGE_SIZE,
+    }),
     queryFn: async ({ pageParam, signal }) => {
       const response = await api.skills.get({
         query: {
@@ -278,9 +323,9 @@ export const skillsOptions = () =>
 
 // ── MCP queries ─────────────────────────────────────
 
-export const mcpConnectorsOptions = () =>
+export const mcpConnectorsOptions = (organizationId: string) =>
   queryOptions({
-    queryKey: knowledgeKeys.mcp.connectors(),
+    queryKey: knowledgeKeys.mcp.connectors(organizationId),
     queryFn: async ({ signal }) => {
       const response = await api.mcp.connectors.get({ fetch: { signal } });
       if (response.error) {
@@ -291,9 +336,9 @@ export const mcpConnectorsOptions = () =>
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 
-export const mcpConnectionsOptions = () =>
+export const mcpConnectionsOptions = (organizationId: string) =>
   queryOptions({
-    queryKey: knowledgeKeys.mcp.connections(),
+    queryKey: knowledgeKeys.mcp.connections(organizationId),
     queryFn: async ({ signal }) => {
       const response = await api.mcp.connections.get({ fetch: { signal } });
       if (response.error) {

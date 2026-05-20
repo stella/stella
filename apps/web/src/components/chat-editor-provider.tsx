@@ -12,6 +12,7 @@ import type React from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
 import HardBreak from "@tiptap/extension-hard-break";
 import History from "@tiptap/extension-history";
 import Paragraph from "@tiptap/extension-paragraph";
@@ -210,6 +211,8 @@ const isSelectionAtStart = ({ selection }: EditorState) =>
 
 const isSelectionAtEnd = ({ doc, selection }: EditorState) =>
   selection.empty && selection.to >= doc.content.size - 1;
+
+const protectedRouteApi = getRouteApi("/_protected");
 
 export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
   const registrationsRef = useRef(new Map<string, RegisteredExtension>());
@@ -470,6 +473,9 @@ export const useChatEditor = ({
   const placeholderRef = useRef(resolvedPlaceholder);
   placeholderRef.current = resolvedPlaceholder;
   const queryClient = useQueryClient();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const submitHandlerRef = useRef<(() => Promise<void>) | null>(null);
   const fileIdCounterRef = useRef(0);
@@ -686,7 +692,9 @@ export const useChatEditor = ({
     }
   });
 
-  const { data: shortcuts = [] } = useQuery(shortcutsOptions());
+  const { data: shortcuts = [] } = useQuery(
+    shortcutsOptions(activeOrganizationId),
+  );
   const allPrompts = useMemo(
     () =>
       shortcuts.map((s) => ({

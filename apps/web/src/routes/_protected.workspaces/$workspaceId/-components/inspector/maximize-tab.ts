@@ -10,6 +10,7 @@ import type { InspectorTab } from "@/routes/_protected.workspaces/$workspaceId/-
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
 type MaximizeContext = {
+  activeOrganizationId: string;
   navigate: ReturnType<typeof useNavigate>;
   queryClient: QueryClient;
 };
@@ -29,7 +30,7 @@ type MaximizeContext = {
  */
 export const buildMaximizeTabAction = (
   tab: InspectorTab,
-  { navigate, queryClient }: MaximizeContext,
+  { activeOrganizationId, navigate, queryClient }: MaximizeContext,
 ): (() => void) | undefined => {
   if (tab.type !== "chat") {
     return undefined;
@@ -46,12 +47,12 @@ export const buildMaximizeTabAction = (
     // would respond with an empty `contextMatterIds`.
     const threadKey =
       tabWorkspaceId === undefined
-        ? chatKeys.thread({
+        ? chatKeys.thread(activeOrganizationId, {
             scope: "global",
             threadId: tab.id,
             allowMissingThread: true,
           })
-        : chatKeys.thread({
+        : chatKeys.thread(activeOrganizationId, {
             scope: "workspace",
             threadId: tab.id,
             workspaceId: tabWorkspaceId,

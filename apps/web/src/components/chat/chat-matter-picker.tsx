@@ -1,6 +1,7 @@
 import { useDeferredValue, useMemo, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
 import { ChevronDownIcon, LayersIcon, SearchIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -14,6 +15,8 @@ import {
 
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
+
+const protectedRouteApi = getRouteApi("/_protected");
 
 /**
  * Matter context picker rendered in the chat tab header.
@@ -70,7 +73,10 @@ export const ChatMatterPicker = ({
   // Cache hit thanks to chat-mention-providers and the app sidebar
   // — the navigation list is already in flight on any workspace
   // page.
-  const { data } = useQuery(workspacesNavigationOptions);
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data } = useQuery(workspacesNavigationOptions(activeOrganizationId));
   const workspaces = data?.workspaces;
 
   const personalLabel = t("workspaces.parties.personalLabel");

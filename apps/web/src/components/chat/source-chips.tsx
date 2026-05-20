@@ -37,6 +37,7 @@ type SourceDocumentPart = {
 };
 
 type SourceChipsProps = {
+  activeOrganizationId: string;
   messageId: string;
   parts: ChatMessage["parts"];
   workspaceId?: string | undefined;
@@ -77,6 +78,7 @@ const getMcpToolInfo = (part: ToolPart): McpToolInfo | null => {
 };
 
 export const SourceChips = ({
+  activeOrganizationId,
   messageId,
   parts,
   workspaceId,
@@ -89,7 +91,7 @@ export const SourceChips = ({
     (source) => source.connectorSlug !== undefined,
   );
   const { data: mcpConnectorsData } = useQuery({
-    ...mcpConnectorsOptions(),
+    ...mcpConnectorsOptions(activeOrganizationId),
     enabled: hasMcpExternalSources,
   });
   const uniqueExternalSourcesWithIcons = useMemo(

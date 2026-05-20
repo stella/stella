@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
 import { SearchIcon, TextQuoteIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -39,6 +40,8 @@ type LinkClauseDialogProps = {
 
 // ── Component ────────────────────────────────────────
 
+const protectedRouteApi = getRouteApi("/_protected");
+
 export const LinkClauseDialog = ({
   open,
   onOpenChange,
@@ -47,6 +50,9 @@ export const LinkClauseDialog = ({
   onLinked,
 }: LinkClauseDialogProps) => {
   const t = useTranslations();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
   const [selectedCategory, setSelectedCategory] = useState("");
   const [search, setSearch] = useState("");
   const [selectedClauseId, setSelectedClauseId] = useState<string | null>(null);
@@ -54,7 +60,7 @@ export const LinkClauseDialog = ({
   const [linking, setLinking] = useState(false);
 
   const { data: catData } = useQuery({
-    ...clauseCategoriesOptions(),
+    ...clauseCategoriesOptions(activeOrganizationId),
     enabled: open,
   });
   const {
@@ -62,7 +68,7 @@ export const LinkClauseDialog = ({
     isLoading: clausesLoading,
     isError: clausesError,
   } = useQuery({
-    ...clausesOptions({ limit: 200 }),
+    ...clausesOptions(activeOrganizationId, { limit: 200 }),
     enabled: open,
   });
 

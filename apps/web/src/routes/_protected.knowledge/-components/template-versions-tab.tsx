@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
 import { DownloadIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
@@ -19,17 +20,22 @@ type TemplateVersionsTabProps = {
 
 // ── Component ────────────────────────────────────────
 
+const protectedRouteApi = getRouteApi("/_protected");
+
 export const TemplateVersionsTab = ({
   templateId,
 }: TemplateVersionsTabProps) => {
   const t = useTranslations();
   const format = useFormatter();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
 
   const {
     data: versionsData,
     isLoading,
     isError,
-  } = useQuery(templateVersionsOptions(templateId));
+  } = useQuery(templateVersionsOptions(activeOrganizationId, templateId));
 
   const versions =
     versionsData && "versions" in versionsData ? versionsData.versions : [];

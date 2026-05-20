@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
 
 import type {
   ChatMentionOption,
@@ -9,6 +10,8 @@ import type {
 import { buildWorkspaceMentionOptions } from "@/components/chat-mention-helpers";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
+
+const protectedRouteApi = getRouteApi("/_protected");
 
 type MentionProviders = {
   getItems: (categories: MentionCategory[]) => ChatMentionOption[];
@@ -27,7 +30,12 @@ export const ChatMentionProviders = ({
   children: React.ReactNode;
 }) => {
   const queryClient = useQueryClient();
-  const { data: workspacesData } = useQuery(workspacesNavigationOptions);
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data: workspacesData } = useQuery(
+    workspacesNavigationOptions(activeOrganizationId),
+  );
   const workspaces = workspacesData?.workspaces;
   // eslint-disable-next-line @tanstack/query/exhaustive-deps -- the query client is an app-scope dependency, not part of this query's cache identity.
   const { data: firstViewIdsByWorkspaceId } = useQuery({

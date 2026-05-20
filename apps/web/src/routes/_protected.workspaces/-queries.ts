@@ -7,9 +7,14 @@ export const workspacesKeys = {
   all: ["workspaces"],
   list: (activeOrganizationId: string) => [
     ...workspacesKeys.all,
+    "list",
     activeOrganizationId,
   ],
-  navigation: () => [...workspacesKeys.all, "navigation"],
+  navigation: (activeOrganizationId: string) => [
+    ...workspacesKeys.all,
+    "navigation",
+    activeOrganizationId,
+  ],
   byId: (workspaceId: string) => [...workspacesKeys.all, workspaceId],
   overview: (workspaceId: string) => [
     ...workspacesKeys.byId(workspaceId),
@@ -39,20 +44,21 @@ export const workspacesOptions = (activeOrganizationId: string) =>
     refetchOnMount: "always",
   });
 
-export const workspacesNavigationOptions = queryOptions({
-  queryKey: workspacesKeys.navigation(),
-  queryFn: async ({ signal }) => {
-    const response = await api.workspaces.navigation.get({
-      fetch: { signal },
-    });
+export const workspacesNavigationOptions = (activeOrganizationId: string) =>
+  queryOptions({
+    queryKey: workspacesKeys.navigation(activeOrganizationId),
+    queryFn: async ({ signal }) => {
+      const response = await api.workspaces.navigation.get({
+        fetch: { signal },
+      });
 
-    if (response.error) {
-      throw toAPIError(response.error);
-    }
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
 
-    return response.data;
-  },
-});
+      return response.data;
+    },
+  });
 
 export const workspaceOptions = (workspaceId: string) =>
   queryOptions({

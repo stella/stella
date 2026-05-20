@@ -30,11 +30,13 @@ describe("chatKeys", () => {
       workspaceId: "ws-1",
     } as const;
 
-    expect(chatKeys.thread(base)).toEqual(
-      chatKeys.thread({ ...base, contextKind: "plain" }),
+    expect(chatKeys.thread("org_test", base)).toEqual(
+      chatKeys.thread("org_test", { ...base, contextKind: "plain" }),
     );
-    expect(chatKeys.thread({ ...base, contextKind: "plain" })).not.toEqual(
-      chatKeys.thread({ ...base, contextKind: "active-docx-edit" }),
+    expect(
+      chatKeys.thread("org_test", { ...base, contextKind: "plain" }),
+    ).not.toEqual(
+      chatKeys.thread("org_test", { ...base, contextKind: "active-docx-edit" }),
     );
   });
 });
@@ -44,12 +46,12 @@ describe("matchesChatThreadAcrossScopes", () => {
   const otherThreadId = toChatThreadId("thread-B");
 
   test("matches the global scope's key for the same thread", () => {
-    const key = chatKeys.thread({ scope: "global", threadId });
+    const key = chatKeys.thread("org_test", { scope: "global", threadId });
     expect(matchesChatThreadAcrossScopes(key, threadId)).toBe(true);
   });
 
   test("matches the workspace scope's key for the same thread", () => {
-    const key = chatKeys.thread({
+    const key = chatKeys.thread("org_test", {
       scope: "workspace",
       workspaceId: "ws-1",
       threadId,
@@ -60,13 +62,16 @@ describe("matchesChatThreadAcrossScopes", () => {
   test("rejects keys for other threads", () => {
     expect(
       matchesChatThreadAcrossScopes(
-        chatKeys.thread({ scope: "global", threadId: otherThreadId }),
+        chatKeys.thread("org_test", {
+          scope: "global",
+          threadId: otherThreadId,
+        }),
         threadId,
       ),
     ).toBe(false);
     expect(
       matchesChatThreadAcrossScopes(
-        chatKeys.thread({
+        chatKeys.thread("org_test", {
           scope: "workspace",
           workspaceId: "ws-1",
           threadId: otherThreadId,

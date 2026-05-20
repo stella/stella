@@ -13,7 +13,7 @@ describe("workspace update cache invalidation", () => {
       workspacesKeys.all,
     );
     expect(
-      workspacesKeys.navigation().slice(0, workspacesKeys.all.length),
+      workspacesKeys.navigation("org_test").slice(0, workspacesKeys.all.length),
     ).toEqual(workspacesKeys.all);
   });
 });

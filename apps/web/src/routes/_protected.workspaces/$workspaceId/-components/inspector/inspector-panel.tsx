@@ -8,7 +8,7 @@ import {
 } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMatch, useNavigate } from "@tanstack/react-router";
+import { getRouteApi, useMatch, useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
@@ -62,9 +62,14 @@ const hasInAppHistoryEntry = (): boolean => {
   return typeof idx === "number" && idx > 0;
 };
 
+const protectedRouteApi = getRouteApi("/_protected");
+
 export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const t = useTranslations();
   const canUpdateEntity = usePermissions({ entity: ["update"] });
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
   const { tabs, activeId } = useInspectorStore(
     useShallow((s) => ({
       tabs: s.tabs,
@@ -380,6 +385,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     },
     onMaximize: activeTab
       ? buildMaximizeTabAction(activeTab, {
+          activeOrganizationId,
           navigate,
           queryClient: panelQueryClient,
         })

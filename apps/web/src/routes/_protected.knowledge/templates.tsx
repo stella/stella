@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
   CheckCircle2Icon,
@@ -84,9 +84,14 @@ export const Route = createFileRoute("/_protected/knowledge/templates")({
   component: RouteComponent,
 });
 
+const protectedRouteApi = getRouteApi("/_protected");
+
 function RouteComponent() {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
   const [view, setView] = useState<View>({ kind: "list" });
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null,
@@ -96,8 +101,10 @@ function RouteComponent() {
     data: templatesData,
     isLoading: templatesLoading,
     isError: templatesError,
-  } = useQuery(templatesOptions(selectedCategoryId));
-  const { data: categoriesData } = useQuery(templateCategoriesOptions());
+  } = useQuery(templatesOptions(activeOrganizationId, selectedCategoryId));
+  const { data: categoriesData } = useQuery(
+    templateCategoriesOptions(activeOrganizationId),
+  );
 
   const templates =
     templatesData && "templates" in templatesData
@@ -115,22 +122,22 @@ function RouteComponent() {
   const invalidateTemplates = useCallback(() => {
     queryClient
       .invalidateQueries({
-        queryKey: knowledgeKeys.templates.all,
+        queryKey: knowledgeKeys.templates.all(activeOrganizationId),
       })
       .catch(() => {
         /* fire-and-forget */
       });
-  }, [queryClient]);
+  }, [queryClient, activeOrganizationId]);
 
   const invalidateCategories = useCallback(() => {
     queryClient
       .invalidateQueries({
-        queryKey: knowledgeKeys.templateCategories.all,
+        queryKey: knowledgeKeys.templateCategories.all(activeOrganizationId),
       })
       .catch(() => {
         /* fire-and-forget */
       });
-  }, [queryClient]);
+  }, [queryClient, activeOrganizationId]);
 
   if (view.kind === "configure") {
     return (
@@ -438,11 +445,15 @@ const TemplateDetail = ({
   const format = useFormatter();
   const queryClient = useQueryClient();
 
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+
   const {
     data: detailData,
     isLoading,
     isError,
-  } = useQuery(templateDetailOptions(template.id));
+  } = useQuery(templateDetailOptions(activeOrganizationId, template.id));
 
   const detail =
     detailData &&
@@ -635,7 +646,10 @@ const TemplateDetail = ({
     // Invalidate the detail query to pick up new manifest
     queryClient
       .invalidateQueries({
-        queryKey: knowledgeKeys.templates.detail(template.id),
+        queryKey: knowledgeKeys.templates.detail(
+          activeOrganizationId,
+          template.id,
+        ),
       })
       .catch(() => {
         /* fire-and-forget */
@@ -647,7 +661,15 @@ const TemplateDetail = ({
       type: "success",
       title: t("templates.fieldsUpdated"),
     });
-  }, [state, detail, fieldEdit, template.id, t, queryClient]);
+  }, [
+    state,
+    detail,
+    fieldEdit,
+    template.id,
+    t,
+    queryClient,
+    activeOrganizationId,
+  ]);
 
   const fields = detail?.manifest?.fields ?? [];
   const fieldCount = detail?.manifest?.fields.length ?? template.fieldCount;

@@ -50,10 +50,6 @@ export const useCreateWorkspace = () => {
       queryClient.invalidateQueries({
         queryKey: workspacesKeys.all,
       });
-      // eslint-disable-next-line typescript/no-floating-promises
-      queryClient.invalidateQueries({
-        queryKey: workspacesKeys.navigation(),
-      });
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -140,10 +136,6 @@ export const useUnarchiveWorkspace = () => {
       queryClient.invalidateQueries({
         queryKey: workspacesKeys.all,
       });
-      // eslint-disable-next-line typescript/no-floating-promises
-      queryClient.invalidateQueries({
-        queryKey: workspacesKeys.navigation(),
-      });
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -207,9 +199,6 @@ export const useDuplicateWorkspace = () => {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: workspacesKeys.all });
-      void queryClient.invalidateQueries({
-        queryKey: workspacesKeys.navigation(),
-      });
     },
     onError: (error) => {
       analytics.captureError(error);

@@ -24,6 +24,11 @@ export const invoicesKeys = {
     ...invoicesKeys.all(workspaceId),
     { limit: key.limit, cursor: key.cursor },
   ],
+  infinite: (workspaceId: string, limit: number) => [
+    ...invoicesKeys.all(workspaceId),
+    "infinite",
+    { limit },
+  ],
   byId: (workspaceId: string, id: string) => [
     ...invoicesKeys.all(workspaceId),
     id,
@@ -38,7 +43,10 @@ export const invoicesOptions = (
     queryKey: invoicesKeys.list(workspaceId, filters),
     queryFn: async ({ signal }) => {
       const response = await api.invoices({ workspaceId }).get({
-        query: filters,
+        query: {
+          ...(filters.limit !== undefined && { limit: filters.limit }),
+          ...(filters.cursor !== undefined && { cursor: filters.cursor }),
+        },
         fetch: { signal },
       });
 
@@ -52,7 +60,7 @@ export const invoicesOptions = (
 
 export const invoicesInfiniteOptions = (workspaceId: string, limit: number) =>
   infiniteQueryOptions({
-    queryKey: [...invoicesKeys.all(workspaceId), "infinite", { limit }],
+    queryKey: invoicesKeys.infinite(workspaceId, limit),
     queryFn: async ({ pageParam, signal }) => {
       const response = await api.invoices({ workspaceId }).get({
         query: {

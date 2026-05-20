@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Input } from "@stll/ui/components/input";
@@ -12,6 +13,8 @@ import type {
   EditableField,
 } from "@/routes/_protected.contacts/-components/types";
 import { useUpdateContact } from "@/routes/_protected.contacts/-mutations";
+
+const protectedRouteApi = getRouteApi("/_protected");
 
 const FIELD_MAX_LENGTH: Partial<Record<EditableField, number>> = {
   prefix: 32,
@@ -44,6 +47,9 @@ export const EditableRow = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const updateContact = useUpdateContact();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState(value ?? "");
 
@@ -97,7 +103,9 @@ export const EditableRow = ({
       { contactId: contact.id, ...payload },
       {
         onSuccess: () => {
-          void invalidateContactCaches(queryClient, contact.id, {
+          void invalidateContactCaches(queryClient, {
+            activeOrganizationId,
+            contactId: contact.id,
             invalidateWorkspaces: field === "displayName",
           });
         },

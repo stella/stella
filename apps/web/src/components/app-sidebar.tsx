@@ -627,7 +627,9 @@ export function AppSidebar(props: AppSidebarProps) {
   useEffect(() => {
     initPinned(user.id);
   }, [initPinned, user.id]);
-  const { data: workspacesData } = useQuery(workspacesNavigationOptions);
+  const { data: workspacesData } = useQuery(
+    workspacesNavigationOptions(user.activeOrganizationId),
+  );
   const workspaces = workspacesData?.workspaces;
   const { data: organization } = useQuery(organizationOptions);
 
