@@ -303,7 +303,7 @@ export const ChatTabPanel = ({
           }
           onSetAnonymized={setAnonymized}
           onSetContext={(next) => setChatContext(tab.id, next)}
-          onStartRename={labelRename.startEditing}
+          onStartRename={() => labelRename.startEditing()}
           rename={{
             active: labelRename.state.mode === "edit",
             value:
