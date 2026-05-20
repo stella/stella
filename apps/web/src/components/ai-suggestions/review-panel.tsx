@@ -585,23 +585,24 @@ export const ReviewPanel = ({
       </header>
 
       <div className="flex-1 overflow-y-auto px-2 py-2">
-        {hideAccepted && reviewedCount > 0 && (
-          // Surface for "I just hid these" — without the count and
-          // a one-click way back, the toggle in the popover is
-          // unfindable for anyone who didn't set it themselves.
-          <button
-            className="text-muted-foreground hover:bg-muted hover:text-foreground mb-2 flex w-full items-center justify-between rounded-md px-2 py-1.5 text-[11px] transition-colors"
-            onClick={() => setHideAccepted(false)}
-            type="button"
-          >
-            <span>
-              {t("docxReview.hiddenCount", { count: String(reviewedCount) })}
-            </span>
-            <span className="text-foreground font-medium">
-              {t("docxReview.showHidden")}
-            </span>
-          </button>
-        )}
+        {hideAccepted &&
+          reviewedCount > 0 && (
+            // Surface for "I just hid these" — without the count and
+            // a one-click way back, the toggle in the popover is
+            // unfindable for anyone who didn't set it themselves.
+            <button
+              className="text-muted-foreground hover:bg-muted hover:text-foreground mb-2 flex w-full items-center justify-between rounded-md px-2 py-1.5 text-[11px] transition-colors"
+              onClick={() => setHideAccepted(false)}
+              type="button"
+            >
+              <span>
+                {t("docxReview.hiddenCount", { count: String(reviewedCount) })}
+              </span>
+              <span className="text-foreground font-medium">
+                {t("docxReview.showHidden")}
+              </span>
+            </button>
+          )}
         {groups.length === 0 ? (
           <p className="text-muted-foreground px-2 py-6 text-center text-xs">
             {t("docxReview.empty")}
