@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import {
   DownloadIcon,
   FileUpIcon,
@@ -45,6 +45,8 @@ export const Route = createFileRoute("/_protected/knowledge/skills")({
   component: SkillsPage,
 });
 
+const protectedRouteApi = getRouteApi("/_protected");
+
 type SkillScope = "team" | "private";
 
 type InstalledSkill = {
@@ -81,8 +83,11 @@ function SkillsPage() {
   const t = useTranslations();
   const tSkills = useTranslations("knowledge.agentSkills");
   const queryClient = useQueryClient();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
-    useInfiniteQuery(skillsOptions());
+    useInfiniteQuery(skillsOptions(activeOrganizationId));
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -96,7 +101,9 @@ function SkillsPage() {
   const builtIn = firstPage?.builtIn ?? [];
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: knowledgeKeys.skills.all });
+    void queryClient.invalidateQueries({
+      queryKey: knowledgeKeys.skills.all(activeOrganizationId),
+    });
   };
 
   const teamSkills = installed.filter((skill) => skill.scope === "team");

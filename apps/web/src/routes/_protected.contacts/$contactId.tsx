@@ -1,7 +1,12 @@
 import { useState } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  getRouteApi,
+  Link,
+  useNavigate,
+} from "@tanstack/react-router";
 import { ArrowLeftIcon, BuildingIcon, PlusIcon, UserIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -38,12 +43,19 @@ export const Route = createFileRoute("/_protected/contacts/$contactId")({
   ),
 });
 
+const protectedRouteApi = getRouteApi("/_protected");
+
 function ContactDetailPage() {
   const t = useTranslations();
   const contactId = Route.useParams({ select: (p) => p.contactId });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { data: contact } = useSuspenseQuery(contactOptions(contactId));
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data: contact } = useSuspenseQuery(
+    contactOptions(activeOrganizationId, contactId),
+  );
   const deleteContact = useDeleteContact();
   const canCreateMatter = usePermissions({ workspace: ["create"] });
   const canDeleteContact = usePermissions({ contact: ["delete"] });

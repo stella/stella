@@ -9,6 +9,7 @@ import {
 import type { RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -54,6 +55,8 @@ import { MeasuredPdfProvider } from "@/routes/_protected.workspaces/$workspaceId
 const SERVER_PREVIEW_ERROR_THRESHOLD = 500;
 
 const toastedPreviewFailures = new Set<string>();
+
+const protectedRouteApi = getRouteApi("/_protected");
 
 export type ExternalReferencePanelProps = {
   onClose: () => void;
@@ -568,6 +571,9 @@ export const ExternalReferencePanel = ({
   workspaceId,
 }: ExternalReferencePanelProps) => {
   const t = useTranslations();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
   const fallbackChatThreadIdRef = useRef(createChatThreadId());
   const safeHref = sanitizeHref(tab.url);
   const [confirmHref, setConfirmHref] = useState<string | undefined>();
@@ -708,7 +714,7 @@ export const ExternalReferencePanel = ({
     highlightKey,
   });
   const { data: mcpConnectorsData } = useQuery({
-    ...mcpConnectorsOptions(),
+    ...mcpConnectorsOptions(activeOrganizationId),
     enabled: connectorSlug !== undefined,
   });
   const iconHref =

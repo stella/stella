@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import {
   FileTextIcon,
   LayersIcon,
@@ -242,6 +242,8 @@ type VerticalTabProps = {
   onClose: () => void;
 };
 
+const protectedRouteApi = getRouteApi("/_protected");
+
 const VerticalTab = ({
   tab,
   active,
@@ -252,12 +254,15 @@ const VerticalTab = ({
   const tabRef = useRef<HTMLButtonElement>(null);
   const tabNavigate = useNavigate();
   const tabQueryClient = useQueryClient();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
   const externalConnectorSlug =
     tab.type === "external" ? tab.connectorSlug : undefined;
   const storedExternalIconHref =
     tab.type === "external" ? tab.iconHref : undefined;
   const { data: mcpConnectorsData } = useQuery({
-    ...mcpConnectorsOptions(),
+    ...mcpConnectorsOptions(activeOrganizationId),
     enabled:
       externalConnectorSlug !== undefined &&
       storedExternalIconHref === undefined,
@@ -276,6 +281,7 @@ const VerticalTab = ({
     tabId: tab.id,
     onClose,
     onMaximize: buildMaximizeTabAction(tab, {
+      activeOrganizationId,
       navigate: tabNavigate,
       queryClient: tabQueryClient,
     }),

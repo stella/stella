@@ -6,7 +6,12 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  getRouteApi,
+  Link,
+  useNavigate,
+} from "@tanstack/react-router";
 import {
   HistoryIcon,
   LayersIcon,
@@ -56,6 +61,8 @@ export const Route = createFileRoute("/_protected/chat/")({
   component: ChatIndex,
 });
 
+const protectedRouteApi = getRouteApi("/_protected");
+
 function ChatIndex() {
   const t = useTranslations();
   const lang = useI18nStore((s) => s.lang);
@@ -72,10 +79,15 @@ function ChatIndex() {
   const controller = useChatEditor({ threadRef });
   const prompts = useSavedPrompts();
   const pinnedOrder = usePinnedStore((s) => s.pinnedOrder);
-  const { data: workspacesData } = useQuery(workspacesNavigationOptions);
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data: workspacesData } = useQuery(
+    workspacesNavigationOptions(activeOrganizationId),
+  );
   const workspaces = workspacesData?.workspaces;
   const { data: groupedThreadPages } = useInfiniteQuery(
-    groupedChatThreadsOptions(),
+    groupedChatThreadsOptions(activeOrganizationId),
   );
   const groupedThreads = useMemo(
     () => mergeGroupedChatThreadPages(groupedThreadPages?.pages),
@@ -228,6 +240,7 @@ function ChatIndex() {
                 const message = await buildChatRequestMessage(draft);
                 const { chat } = await queryClient.ensureQueryData(
                   chatThreadOptions({
+                    activeOrganizationId,
                     key: threadRef,
                     context: {
                       allowMissingThread: true,

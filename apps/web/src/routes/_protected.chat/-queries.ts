@@ -137,11 +137,17 @@ const getChatRuntimeContextKind = (
 
 export const chatKeys = {
   all: ["chat"],
-  groupedThreads: () => [...chatKeys.all, "threads", "grouped"],
-  thread: (key: ChatThreadQueryKey) =>
+  groupedThreads: (activeOrganizationId: string) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    "threads",
+    "grouped",
+  ],
+  thread: (activeOrganizationId: string, key: ChatThreadQueryKey) =>
     key.scope === "global"
       ? [
           ...chatKeys.all,
+          activeOrganizationId,
           "thread",
           key.scope,
           key.threadId,
@@ -151,6 +157,7 @@ export const chatKeys = {
         ]
       : [
           ...chatKeys.all,
+          activeOrganizationId,
           "thread",
           key.scope,
           key.workspaceId,
@@ -544,11 +551,19 @@ export type ChatThreadFetched = {
   contextMatterIds: string[];
 };
 
-export const chatThreadOptions = ({ key, context }: ChatThreadOptionsInput) =>
+export type ChatThreadOptionsArgs = ChatThreadOptionsInput & {
+  activeOrganizationId: string;
+};
+
+export const chatThreadOptions = ({
+  activeOrganizationId,
+  key,
+  context,
+}: ChatThreadOptionsArgs) =>
   queryOptions({
     staleTime: STALE_TIME.FIVETEEN.MINUTES,
     gcTime: STALE_TIME.FIVETEEN.MINUTES,
-    queryKey: chatKeys.thread({
+    queryKey: chatKeys.thread(activeOrganizationId, {
       ...key,
       allowMissingThread: context.allowMissingThread,
       contextKind: getChatRuntimeContextKind(context),
@@ -596,9 +611,9 @@ export const chatThreadOptions = ({ key, context }: ChatThreadOptionsInput) =>
     },
   });
 
-export const groupedChatThreadsOptions = () =>
+export const groupedChatThreadsOptions = (activeOrganizationId: string) =>
   infiniteQueryOptions({
-    queryKey: chatKeys.groupedThreads(),
+    queryKey: chatKeys.groupedThreads(activeOrganizationId),
     queryFn: async ({ pageParam, signal }): Promise<GroupedChatThreadsPage> =>
       await fetchGroupedChatThreads({ cursor: pageParam, signal }),
     initialPageParam: undefined as string | undefined,
@@ -607,7 +622,16 @@ export const groupedChatThreadsOptions = () =>
 
 export const invalidateGroupedChatThreads = async (queryClient: QueryClient) =>
   await queryClient.invalidateQueries({
-    queryKey: chatKeys.groupedThreads(),
+    // Match every cached `["chat", <orgId>, "threads", "grouped"]` entry —
+    // we cannot reconstruct orgId here so we walk by structural shape.
+    predicate: (query) => {
+      const queryKey = query.queryKey;
+      return (
+        queryKey.at(0) === "chat" &&
+        queryKey.at(2) === "threads" &&
+        queryKey.at(3) === "grouped"
+      );
+    },
   });
 
 export const invalidateChatThread = async ({
@@ -622,19 +646,19 @@ export const invalidateChatThread = async ({
       const queryKey = query.queryKey;
       if (
         queryKey.at(0) !== "chat" ||
-        queryKey.at(1) !== "thread" ||
-        queryKey.at(2) !== threadRef.scope
+        queryKey.at(2) !== "thread" ||
+        queryKey.at(3) !== threadRef.scope
       ) {
         return false;
       }
 
       if (threadRef.scope === "global") {
-        return queryKey.at(3) === threadRef.threadId;
+        return queryKey.at(4) === threadRef.threadId;
       }
 
       return (
-        queryKey.at(3) === threadRef.workspaceId &&
-        queryKey.at(4) === threadRef.threadId
+        queryKey.at(4) === threadRef.workspaceId &&
+        queryKey.at(5) === threadRef.threadId
       );
     },
   });
@@ -648,15 +672,18 @@ export const matchesChatThreadAcrossScopes = (
   queryKey: readonly unknown[],
   threadId: ChatThreadId,
 ): boolean => {
-  if (queryKey.at(0) !== "chat" || queryKey.at(1) !== "thread") {
+  if (queryKey.at(0) !== "chat" || queryKey.at(2) !== "thread") {
     return false;
   }
-  const scope = queryKey.at(2);
+  // queryKey.at(1) is the orgId; we accept any value here since
+  // the predicate is used to invalidate the same thread across
+  // surfaces (and orgs) when scope changes.
+  const scope = queryKey.at(3);
   if (scope === "global") {
-    return queryKey.at(3) === threadId;
+    return queryKey.at(4) === threadId;
   }
   if (scope === "workspace") {
-    return queryKey.at(4) === threadId;
+    return queryKey.at(5) === threadId;
   }
   return false;
 };

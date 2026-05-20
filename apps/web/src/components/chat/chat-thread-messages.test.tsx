@@ -43,6 +43,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activeOrganizationId="org_test"
         alwaysApprovedTools={new Set()}
         approvalPendingMessageId={null}
         conversationApprovedTools={new Set()}
@@ -84,6 +85,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activeOrganizationId="org_test"
         alwaysApprovedTools={new Set()}
         approvalPendingMessageId={null}
         conversationApprovedTools={new Set()}
@@ -127,6 +129,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activeOrganizationId="org_test"
         alwaysApprovedTools={new Set()}
         approvalPendingMessageId={null}
         conversationApprovedTools={new Set()}
@@ -165,6 +168,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activeOrganizationId="org_test"
         alwaysApprovedTools={new Set()}
         approvalPendingMessageId={null}
         conversationApprovedTools={new Set()}
@@ -195,6 +199,7 @@ describe("chat thread messages", () => {
   test("shows a resendable chat message when the chat runtime errors", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activeOrganizationId="org_test"
         alwaysApprovedTools={new Set()}
         approvalPendingMessageId={null}
         conversationApprovedTools={new Set()}
@@ -225,6 +230,7 @@ describe("chat thread messages", () => {
   test("offers a raw-send override when anonymization blocks an attachment", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activeOrganizationId="org_test"
         alwaysApprovedTools={new Set()}
         approvalPendingMessageId={null}
         conversationApprovedTools={new Set()}

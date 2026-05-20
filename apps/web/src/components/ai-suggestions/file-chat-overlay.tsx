@@ -25,6 +25,7 @@ import {
 import type { RefObject } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
 import { LoaderCircleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
@@ -508,6 +509,8 @@ type FileChatOverlayProps = {
   requestDocxEditMode?: (() => boolean | Promise<boolean>) | undefined;
 };
 
+const protectedRouteApi = getRouteApi("/_protected");
+
 export const FileChatOverlay = ({
   workspaceId,
   chatThreadId,
@@ -575,6 +578,9 @@ const FileChatOverlayInner = ({
   onNewThread,
 }: FileChatOverlayInnerProps) => {
   const t = useTranslations();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
   const userContext = useChatUserContext();
   const getUserContext = useEffectEvent(() => userContext);
   const lastSentDocxEditSnapshotRef = useRef<FolioAIEditSnapshot | null>(null);
@@ -713,6 +719,7 @@ const FileChatOverlayInner = ({
 
   const { data } = useSuspenseQuery(
     chatThreadOptions({
+      activeOrganizationId,
       key: threadRef,
       context: {
         allowMissingThread: true,
@@ -890,6 +897,7 @@ const FileChatOverlayInner = ({
             style={{ scrollbarGutter: "stable" }}
           >
             <ChatThreadMessages
+              activeOrganizationId={activeOrganizationId}
               alwaysApprovedTools={alwaysApprovedTools}
               approvalPendingMessageId={approvalPendingMessageId}
               blockedApprovalTools={blockedApprovalTools}

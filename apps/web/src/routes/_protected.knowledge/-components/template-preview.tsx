@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
 import { AlertTriangleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -271,11 +272,16 @@ const SectionDivider = ({ label }: { label: string }) => (
 
 // ── Main component ───────────────────────────────────────
 
+const protectedRouteApi = getRouteApi("/_protected");
+
 export const TemplatePreview = ({ templateId }: { templateId: string }) => {
   const t = useTranslations("templates");
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
 
   const { data, isLoading, isError } = useQuery(
-    templatePreviewOptions(templateId),
+    templatePreviewOptions(activeOrganizationId, templateId),
   );
 
   if (isLoading) {

@@ -1,7 +1,7 @@
 import { useEffectEvent, useMemo, useState } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { Maximize2Icon, PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -47,6 +47,8 @@ type ChatThreadPageProps = {
   workspaceId?: string | undefined;
 };
 
+const protectedRouteApi = getRouteApi("/_protected");
+
 export const ChatThreadPage = ({
   threadRef,
   workspaceId,
@@ -57,6 +59,9 @@ export const ChatThreadPage = ({
   const getUserContext = useEffectEvent(() => userContext);
   const showToolCallDetails = useDevStore((state) => state.showToolCallDetails);
   const prompts = useSavedPrompts();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
 
   // Local copy of the persisted contextMatterIds, seeded from the
   // server and re-seeded whenever the page navigates to a different
@@ -80,6 +85,7 @@ export const ChatThreadPage = ({
 
   const { data } = useSuspenseQuery(
     chatThreadOptions({
+      activeOrganizationId,
       key: threadRef,
       // A thread can be opened (e.g. via "Move to main" from the
       // inspector) before its first message has reached the server,
@@ -230,6 +236,7 @@ export const ChatThreadPage = ({
             </div>
           ) : (
             <ChatThreadMessages
+              activeOrganizationId={activeOrganizationId}
               alwaysApprovedTools={alwaysApprovedTools}
               approvalPendingMessageId={approvalPendingMessageId}
               conversationApprovedTools={conversationApprovedTools}

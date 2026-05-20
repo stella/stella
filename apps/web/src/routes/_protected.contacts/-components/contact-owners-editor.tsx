@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import {
@@ -18,11 +19,16 @@ import { organizationOptions } from "@/routes/_protected.organization/-queries";
 
 const NO_OWNER_VALUE = "__none";
 
+const protectedRouteApi = getRouteApi("/_protected");
+
 export const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const updateContact = useUpdateContact();
   const { data: organization } = useQuery(organizationOptions);
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
 
   const memberItems = (organization?.members ?? []).map((member) => ({
     email: member.user.email,
@@ -47,7 +53,9 @@ export const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
       },
       {
         onSuccess: () => {
-          void invalidateContactCaches(queryClient, contact.id, {
+          void invalidateContactCaches(queryClient, {
+            activeOrganizationId,
+            contactId: contact.id,
             invalidateWorkspaces: field === "responsibleAttorneyId",
           });
         },

@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/components/toast";
@@ -51,9 +51,14 @@ export const Route = createFileRoute("/_protected/knowledge/clauses")({
   component: RouteComponent,
 });
 
+const protectedRouteApi = getRouteApi("/_protected");
+
 function RouteComponent() {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
   const [view, setView] = useState<View>({ kind: "list" });
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -69,13 +74,15 @@ function RouteComponent() {
   // Abort in-flight load-more requests when filters change.
   const loadMoreAbort = useRef<AbortController | null>(null);
 
-  const { data: categoriesData } = useQuery(clauseCategoriesOptions());
+  const { data: categoriesData } = useQuery(
+    clauseCategoriesOptions(activeOrganizationId),
+  );
   const {
     data: clausesData,
     isLoading,
     isError,
   } = useQuery({
-    ...clausesOptions({
+    ...clausesOptions(activeOrganizationId, {
       categoryId: selectedCategory,
       search: searchQuery,
     }),
@@ -201,19 +208,19 @@ function RouteComponent() {
     setNextCursor(undefined);
     queryClient
       .invalidateQueries({
-        queryKey: knowledgeKeys.clauses.all,
+        queryKey: knowledgeKeys.clauses.all(activeOrganizationId),
       })
       .catch(() => {
         /* fire-and-forget */
       });
     queryClient
       .invalidateQueries({
-        queryKey: knowledgeKeys.clauseCategories.all,
+        queryKey: knowledgeKeys.clauseCategories.all(activeOrganizationId),
       })
       .catch(() => {
         /* fire-and-forget */
       });
-  }, [queryClient]);
+  }, [queryClient, activeOrganizationId]);
 
   // ── Back to list ───────────────────────────────────
 
@@ -266,7 +273,8 @@ function RouteComponent() {
         onCategoriesChanged={() => {
           queryClient
             .invalidateQueries({
-              queryKey: knowledgeKeys.clauseCategories.all,
+              queryKey:
+                knowledgeKeys.clauseCategories.all(activeOrganizationId),
             })
             .catch(() => {
               /* fire-and-forget */

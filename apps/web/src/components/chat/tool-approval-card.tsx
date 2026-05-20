@@ -282,6 +282,7 @@ const ActiveDocxEditSummary = ({ input }: ActiveDocxEditSummaryProps) => {
 // -- Main card --
 
 type ToolApprovalCardProps = {
+  activeOrganizationId: string;
   alwaysApprovedTools: ReadonlySet<ToolApprovalGrant>;
   part: ApprovalToolPart;
   onAllowInConversation: (
@@ -303,6 +304,7 @@ type ToolApprovalCardProps = {
 };
 
 export const ToolApprovalCard = ({
+  activeOrganizationId,
   alwaysApprovedTools,
   part,
   onAllowInConversation,
@@ -342,7 +344,7 @@ export const ToolApprovalCard = ({
   const label = externalMcpProviderName ?? t(getChatToolTitleKey(name));
   const externalMcpConnectorSlug = getExternalMcpConnectorSlug(name);
   const { data: mcpConnectorsData } = useQuery({
-    ...mcpConnectorsOptions(),
+    ...mcpConnectorsOptions(activeOrganizationId),
     enabled: externalMcpConnectorSlug !== null,
   });
   const mcpIconHref =

@@ -77,7 +77,7 @@ export const useChatSession = ({
     from: "/_protected",
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const { data: mcpCatalog } = useQuery(mcpConnectorsOptions());
+  const { data: mcpCatalog } = useQuery(mcpConnectorsOptions(organizationId));
   const mcpConnectorIdentities =
     mcpCatalog?.connectors ?? EMPTY_MCP_CONNECTOR_IDENTITIES;
   const [conversationApprovedTools, setConversationApprovedTools] = useState(
@@ -187,7 +187,7 @@ export const useChatSession = ({
   );
 
   const { data: workspacesNavigation, isPending: isLoadingMatters } = useQuery(
-    workspacesNavigationOptions,
+    workspacesNavigationOptions(organizationId),
   );
   const createDocumentMatters: readonly NeedsMatterMatter[] = useMemo(
     () =>

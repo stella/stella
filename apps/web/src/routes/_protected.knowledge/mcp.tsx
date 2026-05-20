@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import {
   CircleHelpIcon,
   ExternalLinkIcon,
@@ -42,6 +42,8 @@ import {
 export const Route = createFileRoute("/_protected/knowledge/mcp")({
   component: McpPage,
 });
+
+const protectedRouteApi = getRouteApi("/_protected");
 
 type McpConnector = {
   id: string;
@@ -100,11 +102,16 @@ const sortCatalogItems = <
 function McpPage() {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
 
   const { data: connectorsData, isLoading: connectorsLoading } = useQuery(
-    mcpConnectorsOptions(),
+    mcpConnectorsOptions(activeOrganizationId),
   );
-  const { data: connectionsData } = useQuery(mcpConnectionsOptions());
+  const { data: connectionsData } = useQuery(
+    mcpConnectionsOptions(activeOrganizationId),
+  );
 
   const connectors = connectorsData?.connectors ?? [];
   const nativeTools = connectorsData?.nativeTools ?? [];
@@ -121,7 +128,7 @@ function McpPage() {
             type: "success",
           });
           void queryClient.invalidateQueries({
-            queryKey: knowledgeKeys.mcp.all,
+            queryKey: knowledgeKeys.mcp.all(activeOrganizationId),
           });
           return;
         }
@@ -131,7 +138,7 @@ function McpPage() {
           type: "error",
         });
       }),
-    [queryClient, t],
+    [activeOrganizationId, queryClient, t],
   );
 
   return (
@@ -165,7 +172,7 @@ function McpPage() {
             <AddServerCard
               onChanged={() => {
                 void queryClient.invalidateQueries({
-                  queryKey: knowledgeKeys.mcp.all,
+                  queryKey: knowledgeKeys.mcp.all(activeOrganizationId),
                 });
               }}
             />
@@ -176,7 +183,7 @@ function McpPage() {
         nativeTools={sortCatalogItems(nativeTools)}
         onChanged={() => {
           void queryClient.invalidateQueries({
-            queryKey: knowledgeKeys.mcp.all,
+            queryKey: knowledgeKeys.mcp.all(activeOrganizationId),
           });
         }}
         userCanManageCustomConnectors={canManageCustomConnectors}

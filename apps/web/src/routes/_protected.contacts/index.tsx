@@ -2,7 +2,12 @@ import { useState } from "react";
 
 import { useForm, useStore } from "@tanstack/react-form";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  getRouteApi,
+  Link,
+  useNavigate,
+} from "@tanstack/react-router";
 import {
   BuildingIcon,
   EllipsisVerticalIcon,
@@ -80,6 +85,8 @@ export const Route = createFileRoute("/_protected/contacts/")({
   component: ContactsPage,
 });
 
+const protectedRouteApi = getRouteApi("/_protected");
+
 function ContactsPage() {
   const t = useTranslations();
   const tContacts = useTranslations("contacts");
@@ -94,9 +101,12 @@ function ContactsPage() {
   }, 300);
 
   const typeFilter = filter === "all" ? undefined : filter;
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
 
   const { data, isLoading } = useQuery(
-    contactsOptions({
+    contactsOptions(activeOrganizationId, {
       type: typeFilter,
       q: debouncedQuery || undefined,
     }),
@@ -472,12 +482,17 @@ const CreateContactDialog = ({
 }: CreateContactDialogProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
   const [isAresLoading, setIsAresLoading] = useState(false);
   const [aresBillingAddress, setAresBillingAddress] =
     useState<BillingAddress | null>(null);
   const createContact = useCreateContact();
   const schema = createContactSchema(t("common.required"));
-  const { data: mcpCatalog } = useQuery(mcpConnectorsOptions());
+  const { data: mcpCatalog } = useQuery(
+    mcpConnectorsOptions(activeOrganizationId),
+  );
   const isAresEnabled =
     mcpCatalog?.nativeTools.find((tool) => tool.slug === ARES_NATIVE_TOOL_SLUG)
       ?.enabled ?? false;

@@ -5,9 +5,11 @@ import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 
 export const taskKeys = {
-  all: (workspaceId: string) => ["tasks", workspaceId] as const,
-  detail: (workspaceId: string, taskId: string) =>
-    ["tasks", workspaceId, taskId] as const,
+  all: (workspaceId: string) => ["tasks", workspaceId],
+  detail: (workspaceId: string, taskId: string) => [
+    ...taskKeys.all(workspaceId),
+    taskId,
+  ],
 };
 
 const getTaskEndpoint = (workspaceId: string, taskId: string) =>

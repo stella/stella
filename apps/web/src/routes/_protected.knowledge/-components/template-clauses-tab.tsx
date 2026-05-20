@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
 import {
   AlertTriangleIcon,
   PlusIcon,
@@ -64,16 +65,21 @@ type TemplateClausesTabProps = {
 
 // ── Component ────────────────────────────────────────
 
+const protectedRouteApi = getRouteApi("/_protected");
+
 export const TemplateClausesTab = ({
   templateId,
   clauseSlots,
 }: TemplateClausesTabProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
   const [linkOpen, setLinkOpen] = useState(false);
 
   const { data, isLoading, isError } = useQuery(
-    templateClausesOptions(templateId),
+    templateClausesOptions(activeOrganizationId, templateId),
   );
 
   const links: LinkedClause[] =
@@ -82,12 +88,15 @@ export const TemplateClausesTab = ({
   const invalidateLinks = useCallback(() => {
     queryClient
       .invalidateQueries({
-        queryKey: knowledgeKeys.templates.clauses(templateId),
+        queryKey: knowledgeKeys.templates.clauses(
+          activeOrganizationId,
+          templateId,
+        ),
       })
       .catch(() => {
         /* fire-and-forget */
       });
-  }, [queryClient, templateId]);
+  }, [activeOrganizationId, queryClient, templateId]);
 
   if (isLoading) {
     return (

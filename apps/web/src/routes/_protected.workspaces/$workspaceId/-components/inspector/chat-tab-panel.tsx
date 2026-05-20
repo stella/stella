@@ -23,7 +23,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouteContext } from "@tanstack/react-router";
 import { ArrowUpIcon, Maximize2Icon, SquarePenIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
@@ -136,8 +136,16 @@ export const ChatTabPanel = ({
   );
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const activeOrganizationId = useRouteContext({
+    from: "/_protected",
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
 
-  const moveToMain = buildMaximizeTabAction(tab, { navigate, queryClient });
+  const moveToMain = buildMaximizeTabAction(tab, {
+    activeOrganizationId,
+    navigate,
+    queryClient,
+  });
 
   const threadRef = useMemo<ChatThreadRef>(
     () =>
@@ -163,6 +171,7 @@ export const ChatTabPanel = ({
   // tab; the thread will be created idempotently on the first send.
   const { data } = useSuspenseQuery(
     chatThreadOptions({
+      activeOrganizationId,
       key: threadRef,
       context: {
         allowMissingThread: true,
@@ -300,6 +309,7 @@ export const ChatTabPanel = ({
             />
           ) : (
             <ChatThreadMessages
+              activeOrganizationId={activeOrganizationId}
               alwaysApprovedTools={alwaysApprovedTools}
               approvalPendingMessageId={approvalPendingMessageId}
               conversationApprovedTools={conversationApprovedTools}
@@ -367,7 +377,11 @@ export const ChatTabPanel = ({
 };
 
 const useChatContextLabel = (tab: ChatTab) => {
-  const { data } = useQuery(workspacesNavigationOptions);
+  const activeOrganizationId = useRouteContext({
+    from: "/_protected",
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data } = useQuery(workspacesNavigationOptions(activeOrganizationId));
   const fallbackLabel = tab.label.trim().length > 0 ? tab.label : "chat";
 
   return useMemo(() => {

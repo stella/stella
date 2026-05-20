@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Textarea } from "@stll/ui/components/textarea";
@@ -10,10 +11,15 @@ import { invalidateContactCaches } from "@/routes/_protected.contacts/-component
 import type { ContactData } from "@/routes/_protected.contacts/-components/types";
 import { useUpdateContact } from "@/routes/_protected.contacts/-mutations";
 
+const protectedRouteApi = getRouteApi("/_protected");
+
 export const ContactNotesEditor = ({ contact }: { contact: ContactData }) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const updateContact = useUpdateContact();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
   const [draft, setDraft] = useState(contact.notes ?? "");
   const latestServerNotesRef = useRef(contact.notes ?? "");
   const skipNextSaveRef = useRef(false);
@@ -44,7 +50,10 @@ export const ContactNotesEditor = ({ contact }: { contact: ContactData }) => {
       },
       {
         onSuccess: () => {
-          void invalidateContactCaches(queryClient, contact.id);
+          void invalidateContactCaches(queryClient, {
+            activeOrganizationId,
+            contactId: contact.id,
+          });
         },
         onError: () => {
           stellaToast.add({

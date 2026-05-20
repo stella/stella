@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { PencilIcon, PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -37,6 +37,8 @@ export const Route = createFileRoute("/_protected/knowledge/prompts")({
   component: PromptsPage,
 });
 
+const protectedRouteApi = getRouteApi("/_protected");
+
 // ── Types ────────────────────────────────────────────
 
 type ShortcutRow = {
@@ -56,8 +58,13 @@ function PromptsPage() {
   const t = useTranslations();
   const tSkills = useTranslations("knowledge.skills");
   const queryClient = useQueryClient();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
 
-  const { data: shortcuts = [], isLoading } = useQuery(shortcutsOptions());
+  const { data: shortcuts = [], isLoading } = useQuery(
+    shortcutsOptions(activeOrganizationId),
+  );
   const { data: role } = useQuery(roleOptions);
 
   const canManageTeam = role === "owner" || role === "admin";
@@ -67,11 +74,11 @@ function PromptsPage() {
     if (!isLoading && shortcuts.length === 0) {
       void api.shortcuts.seed.post({ queryKey: ["shortcuts"] }).then(() => {
         void queryClient.invalidateQueries({
-          queryKey: knowledgeKeys.shortcuts.all,
+          queryKey: knowledgeKeys.shortcuts.all(activeOrganizationId),
         });
       });
     }
-  }, [isLoading, shortcuts.length, queryClient]);
+  }, [activeOrganizationId, isLoading, shortcuts.length, queryClient]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ShortcutInitial | undefined>();
@@ -84,7 +91,7 @@ function PromptsPage() {
 
   const invalidate = () => {
     void queryClient.invalidateQueries({
-      queryKey: knowledgeKeys.shortcuts.all,
+      queryKey: knowledgeKeys.shortcuts.all(activeOrganizationId),
     });
   };
 

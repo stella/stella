@@ -10,28 +10,36 @@ type ContactsListKey = {
 
 export const contactsKeys = {
   all: ["contacts"],
-  lists: () => [...contactsKeys.all, "list"],
-  list: (key?: ContactsListKey) => [
-    ...contactsKeys.lists(),
-    key ? { type: key.type, q: key.q } : undefined,
+  scoped: (activeOrganizationId: string) => [
+    ...contactsKeys.all,
+    activeOrganizationId,
   ],
-  byId: (contactId: string) => [...contactsKeys.all, contactId],
+  lists: (activeOrganizationId: string) => [
+    ...contactsKeys.scoped(activeOrganizationId),
+    "list",
+  ],
+  list: (activeOrganizationId: string, { type, q }: ContactsListKey) => [
+    ...contactsKeys.lists(activeOrganizationId),
+    { type, q },
+  ],
+  byId: (activeOrganizationId: string, contactId: string) => [
+    ...contactsKeys.scoped(activeOrganizationId),
+    contactId,
+  ],
 };
 
-export const contactsOptions = (filters?: {
-  type?: "person" | "organization" | undefined;
-  q?: string | undefined;
-}) =>
+export const contactsOptions = (
+  activeOrganizationId: string,
+  filters: ContactsListKey = {},
+) =>
   queryOptions({
-    queryKey: contactsKeys.list(filters),
+    queryKey: contactsKeys.list(activeOrganizationId, filters),
     queryFn: async ({ signal }) => {
       const response = await api.contacts.get({
         query: {
           limit: 50,
-          ...(filters?.type !== undefined && {
-            type: filters.type,
-          }),
-          ...(filters?.q !== undefined && { q: filters.q }),
+          ...(filters.type !== undefined && { type: filters.type }),
+          ...(filters.q !== undefined && { q: filters.q }),
         },
         fetch: { signal },
       });
@@ -44,9 +52,12 @@ export const contactsOptions = (filters?: {
     },
   });
 
-export const contactOptions = (contactId: string) =>
+export const contactOptions = (
+  activeOrganizationId: string,
+  contactId: string,
+) =>
   queryOptions({
-    queryKey: contactsKeys.byId(contactId),
+    queryKey: contactsKeys.byId(activeOrganizationId, contactId),
     queryFn: async ({ signal }) => {
       const response = await api
         .contacts({ contactId })
