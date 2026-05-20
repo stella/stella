@@ -50,12 +50,10 @@ type FileViewerWithAIProps = {
    */
   workspaceId?: string | undefined;
   /**
-   * Stable identifier for this file's chat thread. Use the file's
-   * entity id (or any per-file unique string) so drafts + history
-   * persist across mounts and stay isolated from other files'
-   * chats.
+   * Explicit thread id for previews that do not resolve through
+   * the workspace file-chat mapping.
    */
-  chatThreadId: ChatThreadId;
+  chatThreadId?: ChatThreadId | undefined;
   /**
    * Optional file context surfaced to the model so prompts can
    * reference "the file you're looking at" — entity id and human
@@ -87,6 +85,14 @@ export function FileViewerWithAI({
   requestDocxEditMode,
   children,
 }: FileViewerWithAIProps) {
+  const overlayKey = [
+    chatThreadId ?? "mapped-file-chat",
+    workspaceId ?? "",
+    activeFile?.entityId ?? "",
+    activeFile?.fileFieldId ?? "",
+    activeExternal?.url ?? "",
+  ].join(":");
+
   return (
     <div
       className={cn("relative h-full w-full", className)}
@@ -99,7 +105,7 @@ export function FileViewerWithAI({
         chatThreadId={chatThreadId}
         docxEditable={docxEditable}
         docxEditorRef={docxEditorRef}
-        key={chatThreadId}
+        key={overlayKey}
         requestDocxEditMode={requestDocxEditMode}
         workspaceId={workspaceId}
       />

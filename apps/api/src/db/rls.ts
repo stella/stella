@@ -96,6 +96,12 @@ const chatMessageScopeCheck = sql`(
   )
 )`;
 
+const fileChatThreadScopeCheck = sql`(
+  ${userCheck} AND
+  ${organizationCheck} AND
+  ${workspaceCheck}
+)`;
+
 export const wsPolicies = () => [
   p.pgPolicy("workspace_select", {
     for: "select",
@@ -485,5 +491,28 @@ export const chatMessagePolicies = () => [
     for: "delete",
     to: stella,
     using: chatMessageScopeCheck,
+  }),
+];
+
+export const fileChatThreadPolicies = () => [
+  p.pgPolicy("file_chat_thread_select", {
+    for: "select",
+    to: stella,
+    using: fileChatThreadScopeCheck,
+  }),
+  p.pgPolicy("file_chat_thread_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: fileChatThreadScopeCheck,
+  }),
+  p.pgPolicy("file_chat_thread_update", {
+    for: "update",
+    to: stella,
+    using: fileChatThreadScopeCheck,
+  }),
+  p.pgPolicy("file_chat_thread_delete", {
+    for: "delete",
+    to: stella,
+    using: fileChatThreadScopeCheck,
   }),
 ];

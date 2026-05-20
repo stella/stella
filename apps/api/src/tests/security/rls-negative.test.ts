@@ -19,6 +19,7 @@ import {
   entityVersions,
   expenses,
   fields,
+  fileChatThreads,
   invoices,
   justifications,
   matterCounters,
@@ -188,6 +189,20 @@ describe("chat SELECT — wrong user or workspace", () => {
       (tx) =>
         tx.$count(chatThreads, eq(chatThreads.id, ids.chatThreadWorkspaceB1)),
       ids.userA1,
+    );
+    expect(c).toBe(0);
+  });
+
+  test("different user in the same workspace cannot read file chat mappings", async () => {
+    const c = await scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      (tx) =>
+        tx.$count(
+          fileChatThreads,
+          eq(fileChatThreads.id, ids.fileChatThreadA1),
+        ),
+      ids.userA2,
     );
     expect(c).toBe(0);
   });

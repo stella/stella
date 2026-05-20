@@ -6,7 +6,6 @@ import { produce } from "immer";
 
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { StellaMark } from "@/components/stella-mark";
-import { chatThreadIdFromFileFieldId } from "@/lib/chat-thread-ref";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
@@ -77,7 +76,6 @@ const FullscreenPdfViewer = () => {
           ? { entityId, fileFieldId: fieldId, fileName: file.fileName }
           : undefined
       }
-      chatThreadId={chatThreadIdFromFileFieldId(fieldId)}
       workspaceId={workspaceId}
     >
       <CreatingBBoxes />
