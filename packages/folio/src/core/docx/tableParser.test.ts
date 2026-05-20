@@ -89,3 +89,22 @@ describe("inferImplicitSingleCellRowSpans", () => {
     expect(table.rows[1]?.cells[0]?.formatting?.gridSpan ?? 1).toBe(1);
   });
 });
+
+describe("table borders", () => {
+  test("preserves unknown border styles for fallback rendering", () => {
+    const table = parseTableXml(`<w:tbl ${NS}>
+      <w:tblPr>
+        <w:tblBorders>
+          <w:top w:val="dashDotDot" w:sz="8" w:color="00AAFF"/>
+        </w:tblBorders>
+      </w:tblPr>
+      <w:tr><w:tc><w:p/></w:tc></w:tr>
+    </w:tbl>`);
+
+    expect(table.formatting?.borders?.top).toMatchObject({
+      color: { rgb: "00AAFF" },
+      size: 8,
+      style: "dashDotDot",
+    });
+  });
+});

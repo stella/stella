@@ -141,9 +141,8 @@ function parseBorderSpec(element: XmlElement | null): BorderSpec | undefined {
     return undefined;
   }
 
-  const styleStr = getAttribute(element, "w", "val");
-  // Unknown / missing border style → render no border (Word does the same).
-  const style = narrowEnum(styleStr, BorderStyleSchema) ?? "none";
+  const rawStyle = getAttribute(element, "w", "val") ?? "none";
+  const style = narrowEnum(rawStyle, BorderStyleSchema) ?? rawStyle;
 
   const border: BorderSpec = { style };
 

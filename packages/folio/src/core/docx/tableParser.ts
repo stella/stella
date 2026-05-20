@@ -153,9 +153,8 @@ export function parseBorderSpec(
     return undefined;
   }
 
-  // Unknown / missing border style → render no border (Word does the same).
-  const style =
-    narrowEnum(getAttribute(element, "w", "val"), BorderStyleSchema) ?? "none";
+  const rawStyle = getAttribute(element, "w", "val") ?? "none";
+  const style = narrowEnum(rawStyle, BorderStyleSchema) ?? rawStyle;
 
   const border: BorderSpec = { style };
 
