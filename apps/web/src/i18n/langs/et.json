@@ -1811,6 +1811,21 @@
     "archiveMatter": "Arhiveeri",
     "archived": "Arhiveeritud",
     "archivedBadge": "Archived",
+    "copyToMatter": {
+      "copied": "Kopeeritud toimikusse",
+      "copyOption": "Kopeeri (säilita originaal)",
+      "description": "Kopeeri või teisalda \"{name}\" teise toimikusse",
+      "menuItem": "Kopeeri/Teisalda toimikusse",
+      "moveButton": "Teisalda",
+      "moveOption": "Teisalda (kustuta originaal)",
+      "moved": "Teisaldatud toimikusse",
+      "noOtherMatters": "Teisi toimikuid pole saadaval",
+      "operation": "Toiming",
+      "rootFolder": "(Juurkaust)",
+      "targetFolder": "Sihtkaust (valikuline)",
+      "targetMatter": "Sihttoimik",
+      "title": "Kopeeri toimikusse"
+    },
     "create": {
       "ownerTypeToggle": "Toimiku tüüp",
       "personalDescription": "Isiklikud asjad on privaatsed ega vaja klienti. Saate need hiljem edutada, et meeskonnaga jagada."

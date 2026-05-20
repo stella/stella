@@ -1811,6 +1811,21 @@
     "archiveMatter": "Arhivēt",
     "archived": "Arhivēts",
     "archivedBadge": "Archived",
+    "copyToMatter": {
+      "copied": "Nokopēts lietā",
+      "copyOption": "Kopēt (saglabāt oriģinālu)",
+      "description": "Kopēt vai pārvietot \"{name}\" uz citu lietu",
+      "menuItem": "Kopēt/Pārvietot uz lietu",
+      "moveButton": "Pārvietot",
+      "moveOption": "Pārvietot (dzēst oriģinālu)",
+      "moved": "Pārvietots uz lietu",
+      "noOtherMatters": "Nav pieejamas citas lietas",
+      "operation": "Darbība",
+      "rootFolder": "(Saknes mape)",
+      "targetFolder": "Mērķa mape (neobligāti)",
+      "targetMatter": "Mērķa lieta",
+      "title": "Kopēt uz lietu"
+    },
     "create": {
       "ownerTypeToggle": "Lietas veids",
       "personalDescription": "Personīgās lietas ir privātas un nav nepieciešams klients. Vēlāk tās var paaugstināt, lai dalītos ar komandu."

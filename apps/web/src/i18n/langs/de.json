@@ -1811,6 +1811,21 @@
     "archiveMatter": "Archivieren",
     "archived": "Archiviert",
     "archivedBadge": "Archived",
+    "copyToMatter": {
+      "copied": "In Akte kopiert",
+      "copyOption": "Kopieren (Original behalten)",
+      "description": "\"{name}\" in eine andere Akte kopieren oder verschieben",
+      "menuItem": "In Akte kopieren/verschieben",
+      "moveButton": "Verschieben",
+      "moveOption": "Verschieben (Original löschen)",
+      "moved": "In Akte verschoben",
+      "noOtherMatters": "Keine anderen Akten verfügbar",
+      "operation": "Vorgang",
+      "rootFolder": "(Stammordner)",
+      "targetFolder": "Zielordner (optional)",
+      "targetMatter": "Zielakte",
+      "title": "In Akte kopieren"
+    },
     "create": {
       "ownerTypeToggle": "Aktentyp",
       "personalDescription": "Persönliche Akten sind privat und benötigen keinen Klienten. Sie können später hochgestuft werden, um sie mit dem Team zu teilen."

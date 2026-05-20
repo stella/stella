@@ -25,6 +25,13 @@ export const broadcastQueryInvalidationToOrganization = (
   broadcastToOrganization(organizationId, createInvalidateQueryEvent(queryKey));
 };
 
+export const broadcastQueryInvalidationToTargetWorkspace = (
+  workspaceId: SafeId<"workspace">,
+  queryKey: string[],
+) => {
+  broadcast(workspaceId, createInvalidateQueryEvent(queryKey));
+};
+
 export const invalidateQuery = new Elysia({ name: "invalidateQueryMacro" })
   .use(authMacro)
   .macro("invalidateQuery", {

@@ -1811,6 +1811,21 @@
     "archiveMatter": "Archiver",
     "archived": "Archivé",
     "archivedBadge": "Archived",
+    "copyToMatter": {
+      "copied": "Copié dans le dossier",
+      "copyOption": "Copier (conserver l'original)",
+      "description": "Copier ou déplacer \"{name}\" vers un autre dossier",
+      "menuItem": "Copier/Déplacer vers un dossier",
+      "moveButton": "Déplacer",
+      "moveOption": "Déplacer (supprimer l'original)",
+      "moved": "Déplacé dans le dossier",
+      "noOtherMatters": "Aucun autre dossier disponible",
+      "operation": "Opération",
+      "rootFolder": "(Dossier racine)",
+      "targetFolder": "Dossier cible (optionnel)",
+      "targetMatter": "Dossier cible",
+      "title": "Copier vers un dossier"
+    },
     "create": {
       "ownerTypeToggle": "Type de dossier",
       "personalDescription": "Les dossiers personnels sont privés et ne nécessitent pas de client. Vous pourrez les promouvoir plus tard pour les partager avec l'équipe."

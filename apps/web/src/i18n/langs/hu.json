@@ -1811,6 +1811,21 @@
     "archiveMatter": "Archiválás",
     "archived": "Archivált",
     "archivedBadge": "Archived",
+    "copyToMatter": {
+      "copied": "Másolva az ügyiratba",
+      "copyOption": "Másolás (eredeti megtartása)",
+      "description": "\"{name}\" másolása vagy áthelyezése másik ügyiratba",
+      "menuItem": "Másolás/Áthelyezés ügyiratba",
+      "moveButton": "Áthelyezés",
+      "moveOption": "Áthelyezés (eredeti törlése)",
+      "moved": "Áthelyezve az ügyiratba",
+      "noOtherMatters": "Nincs más elérhető ügyirat",
+      "operation": "Művelet",
+      "rootFolder": "(Gyökérmappa)",
+      "targetFolder": "Célmappa (opcionális)",
+      "targetMatter": "Célügyirat",
+      "title": "Másolás ügyiratba"
+    },
     "create": {
       "ownerTypeToggle": "Ügy típusa",
       "personalDescription": "A személyes ügyek privátak és nem igényelnek ügyfelet. Később előléptethetők, hogy megoszthassa a csapattal."

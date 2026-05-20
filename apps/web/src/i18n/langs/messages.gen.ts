@@ -1814,6 +1814,21 @@ type Messages = {
     "archiveMatter": "Archive";
     "archived": "Archived";
     "archivedBadge": "Archived";
+    "copyToMatter": {
+      "copied": "Copied to Matter";
+      "copyOption": "Copy (keep original)";
+      "description": "Copy or move \"{name}\" to another Matter";
+      "menuItem": "Copy/Move to Matter";
+      "moveButton": "Move";
+      "moveOption": "Move (delete original)";
+      "moved": "Moved to Matter";
+      "noOtherMatters": "No other Matters available";
+      "operation": "Operation";
+      "rootFolder": "(Root folder)";
+      "targetFolder": "Target folder (optional)";
+      "targetMatter": "Target Matter";
+      "title": "Copy to Matter";
+    };
     "create": {
       "ownerTypeToggle": "Matter type";
       "personalDescription": "Personal matters are private to you and don't need a client. You can promote them later to share with the team.";

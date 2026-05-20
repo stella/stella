@@ -1811,6 +1811,21 @@
     "archiveMatter": "Archivar",
     "archived": "Archivado",
     "archivedBadge": "Archived",
+    "copyToMatter": {
+      "copied": "Copiado al asunto",
+      "copyOption": "Copiar (mantener original)",
+      "description": "Copiar o mover \"{name}\" a otro asunto",
+      "menuItem": "Copiar/Mover a asunto",
+      "moveButton": "Mover",
+      "moveOption": "Mover (eliminar original)",
+      "moved": "Movido al asunto",
+      "noOtherMatters": "No hay otros asuntos disponibles",
+      "operation": "Operación",
+      "rootFolder": "(Carpeta raíz)",
+      "targetFolder": "Carpeta de destino (opcional)",
+      "targetMatter": "Asunto de destino",
+      "title": "Copiar a asunto"
+    },
     "create": {
       "ownerTypeToggle": "Tipo de asunto",
       "personalDescription": "Los asuntos personales son privados y no requieren cliente. Puede promocionarlos más tarde para compartir con el equipo."

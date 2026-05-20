@@ -1811,6 +1811,21 @@
     "archiveMatter": "Archivovat",
     "archived": "Archivované",
     "archivedBadge": "Archivováno",
+    "copyToMatter": {
+      "copied": "Zkopírováno do spisu",
+      "copyOption": "Kopírovat (ponechat originál)",
+      "description": "Zkopírovat nebo přesunout \"{name}\" do jiného spisu",
+      "menuItem": "Kopírovat/Přesunout do spisu",
+      "moveButton": "Přesunout",
+      "moveOption": "Přesunout (smazat originál)",
+      "moved": "Přesunuto do spisu",
+      "noOtherMatters": "Žádné další spisy nejsou k dispozici",
+      "operation": "Operace",
+      "rootFolder": "(Kořenová složka)",
+      "targetFolder": "Cílová složka (volitelné)",
+      "targetMatter": "Cílový spis",
+      "title": "Kopírovat do spisu"
+    },
     "create": {
       "ownerTypeToggle": "Typ spisu",
       "personalDescription": "Osobní spisy jsou soukromé a nepotřebují klienta. Později je můžete povýšit a sdílet s týmem."

@@ -1811,6 +1811,21 @@
     "archiveMatter": "Archyvuoti",
     "archived": "Archyvuota",
     "archivedBadge": "Archived",
+    "copyToMatter": {
+      "copied": "Nukopijuota į bylą",
+      "copyOption": "Kopijuoti (palikti originalą)",
+      "description": "Kopijuoti arba perkelti \"{name}\" į kitą bylą",
+      "menuItem": "Kopijuoti/Perkelti į bylą",
+      "moveButton": "Perkelti",
+      "moveOption": "Perkelti (ištrinti originalą)",
+      "moved": "Perkelta į bylą",
+      "noOtherMatters": "Nėra kitų bylų",
+      "operation": "Veiksmas",
+      "rootFolder": "(Šakninis aplankas)",
+      "targetFolder": "Paskirties aplankas (neprivaloma)",
+      "targetMatter": "Paskirties byla",
+      "title": "Kopijuoti į bylą"
+    },
     "create": {
       "ownerTypeToggle": "Bylos tipas",
       "personalDescription": "Asmeninės bylos yra privačios ir nereikalauja kliento. Galite jas vėliau paaukštinti, kad pasidalintumėte su komanda."

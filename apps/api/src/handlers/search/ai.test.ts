@@ -23,10 +23,19 @@ const dbWhereMock = mock(() => ({ limit: dbLimitMock }));
 const dbFromMock = mock(() => ({ where: dbWhereMock }));
 const dbSelectMock = mock(() => ({ from: dbFromMock }));
 
-void mock.module("@/api/db/root", () => ({
+// eslint-disable-next-line typescript-eslint/no-floating-promises -- Bun mock.module is sync for registration
+mock.module("@/api/db/root", () => ({
   db: {
     select: dbSelectMock,
   },
+}));
+
+// Mock index-global directly to prevent transitive db/root imports that
+// require a live database connection and cause flaky failures in CI.
+// eslint-disable-next-line typescript-eslint/no-floating-promises -- Bun mock.module is sync for registration
+mock.module("@/api/lib/search/index-global", () => ({
+  searchGlobal: searchGlobalMock,
+  syncWorkspaceSearchActivity: mock(),
 }));
 
 beforeEach(() => {

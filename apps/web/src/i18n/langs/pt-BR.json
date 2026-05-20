@@ -1811,6 +1811,21 @@
     "archiveMatter": "Arquivar",
     "archived": "Arquivado",
     "archivedBadge": "Arquivado",
+    "copyToMatter": {
+      "copied": "Copiado para o caso",
+      "copyOption": "Copiar (manter original)",
+      "description": "Copiar ou mover \"{name}\" para outro caso",
+      "menuItem": "Copiar/Mover para caso",
+      "moveButton": "Mover",
+      "moveOption": "Mover (excluir original)",
+      "moved": "Movido para o caso",
+      "noOtherMatters": "Nenhum outro caso disponível",
+      "operation": "Operação",
+      "rootFolder": "(Pasta raiz)",
+      "targetFolder": "Pasta de destino (opcional)",
+      "targetMatter": "Caso de destino",
+      "title": "Copiar para caso"
+    },
     "create": {
       "ownerTypeToggle": "Tipo de caso",
       "personalDescription": "Casos pessoais são privados para você e não precisam de cliente. Você pode promovê-los depois para compartilhar com a equipe."

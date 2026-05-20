@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
@@ -8,6 +10,7 @@ import {
   EyeIcon,
   FileOutputIcon,
   FolderPlusIcon,
+  FolderSyncIcon,
   LaptopIcon,
   LockOpenIcon,
   Maximize2Icon,
@@ -53,6 +56,7 @@ import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceCellMetadata, WorkspaceEntity } from "@/lib/types";
 import { isFileDisplayable } from "@/lib/types";
 import { CellMetadataMenuSection } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
+import { CopyToMatterDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { getPdfDownloadFileName } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
@@ -112,6 +116,7 @@ export const RowActions = ({
   const navigate = useNavigate();
   const deleteEntities = useDeleteEntities();
   const requestChatAbout = useRequestChatAbout(workspaceId);
+  const [copyToMatterOpen, setCopyToMatterOpen] = useState(false);
   const file = getFirstFile(entity);
   const name = getEntityName(entity);
   const isFolder = entity.kind === "folder";
@@ -583,6 +588,16 @@ export const RowActions = ({
               <CopyIcon />
               {t("common.duplicate")}
             </MenuItem>
+            {!isBulk && (
+              <MenuItem
+                onClick={() => {
+                  setCopyToMatterOpen(true);
+                }}
+              >
+                <FolderSyncIcon />
+                {t("workspaces.copyToMatter.menuItem")}
+              </MenuItem>
+            )}
 
             <MenuSeparator />
 
@@ -630,6 +645,15 @@ export const RowActions = ({
           </>
         )}
       </MenuPopup>
+      {!isBulk && (
+        <CopyToMatterDialog
+          entityId={entity.entityId}
+          entityName={name}
+          onOpenChange={setCopyToMatterOpen}
+          open={copyToMatterOpen}
+          sourceWorkspaceId={workspaceId}
+        />
+      )}
     </Menu>
   );
 };
