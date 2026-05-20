@@ -62,6 +62,30 @@ describe("mcpConnectorCatalogMetadata", () => {
       }),
     );
   });
+
+  it("recommends built-in BOE for Spanish practice", () => {
+    const tools = getNativeToolCatalog({
+      practiceJurisdictions: [{ countryCode: "ES", isPrimary: true }],
+    });
+
+    expect(tools).toContainEqual(
+      expect.objectContaining({
+        slug: "boe",
+        isRecommended: true,
+        recommendedJurisdictions: ["ES"],
+      }),
+    );
+  });
+
+  it("does not recommend BOE outside Spanish practice", () => {
+    const tools = getNativeToolCatalog({
+      practiceJurisdictions: [{ countryCode: "CZ", isPrimary: true }],
+    });
+
+    expect(tools).toContainEqual(
+      expect.objectContaining({ slug: "boe", isRecommended: false }),
+    );
+  });
 });
 
 describe("isNativeToolEnabledForOrg", () => {

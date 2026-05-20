@@ -63,6 +63,7 @@
         "@stll/anonymize-data": "catalog:",
         "@stll/anonymize-wasm": "catalog:",
         "@stll/ares": "workspace:*",
+        "@stll/boe": "workspace:*",
         "@stll/case-law": "workspace:*",
         "@stll/docx-core": "workspace:*",
         "@stll/docx-utils": "workspace:*",
@@ -314,6 +315,15 @@
       "dependencies": {
         "@stll/stdnum": "^0.0.1",
       },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/boe": {
+      "name": "@stll/boe",
+      "version": "0.1.0",
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
@@ -1611,6 +1621,8 @@
     "@stll/api": ["@stll/api@workspace:apps/api"],
 
     "@stll/ares": ["@stll/ares@workspace:packages/ares"],
+
+    "@stll/boe": ["@stll/boe@workspace:packages/boe"],
 
     "@stll/case-law": ["@stll/case-law@workspace:packages/case-law"],
 

@@ -1,0 +1,58 @@
+{
+  "name": "@stll/boe",
+  "version": "0.1.0",
+  "description": "Typed client for the Spanish BOE (Boletín Oficial del Estado) open-data API",
+  "keywords": [
+    "boe",
+    "borme",
+    "legal",
+    "legislation",
+    "registry",
+    "spain"
+  ],
+  "homepage": "https://github.com/stella/stella/tree/main/packages/boe",
+  "bugs": {
+    "url": "https://github.com/stella/stella/issues"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stella/stella.git",
+    "directory": "packages/boe"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "bun": "./src/index.ts",
+      "types": "./src/index.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "clean": "git clean -xdf dist .cache .turbo node_modules",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "pack:dry-run": "bun pm pack --dry-run",
+    "test": "bun test src",
+    "typecheck": "tsgo --noEmit",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware packages/boe",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/boe",
+    "format": "oxfmt .",
+    "prepack": "bun run build"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  }
+}

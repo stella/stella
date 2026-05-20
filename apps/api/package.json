@@ -53,6 +53,7 @@
     "@stll/anonymize-data": "catalog:",
     "@stll/anonymize-wasm": "catalog:",
     "@stll/ares": "workspace:*",
+    "@stll/boe": "workspace:*",
     "@stll/case-law": "workspace:*",
     "@stll/docx-core": "workspace:*",
     "@stll/docx-utils": "workspace:*",

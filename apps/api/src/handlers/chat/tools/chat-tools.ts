@@ -10,6 +10,7 @@ import {
 } from "@/api/handlers/chat/tools/active-docx-edit-tool";
 import { createAresTools } from "@/api/handlers/chat/tools/ares-tools";
 import type { AuthorizedToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
+import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
 import {
   CREATE_DOCUMENT_TOOL_NAME,
   createCreateDocumentTool,
@@ -30,6 +31,7 @@ type OrgTools = ReturnType<typeof createOrgTools>;
 type ChatExecutionTools = ReturnType<typeof createChatExecutionTools>;
 type SkillTools = ReturnType<typeof createSkillTools>;
 type AresTools = ReturnType<typeof createAresTools>;
+type BoeTools = ReturnType<typeof createBoeTools>;
 type ActiveDocxEditTools = ReturnType<typeof createActiveDocxEditTools>;
 type CreateDocumentTools = ReturnType<typeof createCreateDocumentTools>;
 
@@ -37,6 +39,7 @@ type BuiltInChatTools = OrgTools &
   ChatExecutionTools &
   SkillTools &
   AresTools &
+  BoeTools &
   WorkspaceTools &
   ActiveDocxEditTools &
   CreateDocumentTools;
@@ -86,6 +89,12 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   ares_lookup_company: CHAT_TOOL_POLICY_KIND.publicOfficial,
   ares_search_companies: CHAT_TOOL_POLICY_KIND.publicOfficial,
   "ask-user": CHAT_TOOL_POLICY_KIND.internal,
+  boe_find_related_laws: CHAT_TOOL_POLICY_KIND.publicOfficial,
+  boe_get_law: CHAT_TOOL_POLICY_KIND.publicOfficial,
+  boe_get_law_block: CHAT_TOOL_POLICY_KIND.publicOfficial,
+  boe_get_law_structure: CHAT_TOOL_POLICY_KIND.publicOfficial,
+  boe_search_legislation: CHAT_TOOL_POLICY_KIND.publicOfficial,
+  borme_get_summary: CHAT_TOOL_POLICY_KIND.publicOfficial,
   "create-document": CHAT_TOOL_POLICY_KIND.internal,
   "describe-stella-api": CHAT_TOOL_POLICY_KIND.internal,
   "load-skill": CHAT_TOOL_POLICY_KIND.internal,
@@ -129,6 +138,8 @@ export const getChatTools = ({
   });
   const aresDisabled = disabledNativeToolSlugs?.includes("ares") ?? false;
   const aresTools = aresDisabled ? {} : createAresTools();
+  const boeDisabled = disabledNativeToolSlugs?.includes("boe") ?? false;
+  const boeTools = boeDisabled ? {} : createBoeTools();
   const activeDocxEditTools = hasActiveFileChat
     ? createActiveDocxEditTools()
     : {};
@@ -159,6 +170,7 @@ export const getChatTools = ({
       ...executionTools,
       ...skillTools,
       ...aresTools,
+      ...boeTools,
       ...workspaceTools,
       ...createDocumentTools,
       ...activeDocxEditTools,
