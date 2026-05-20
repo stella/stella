@@ -26,6 +26,7 @@ import type {
 export type {
   ThemeColorSlot,
   ColorValue,
+  KnownBorderStyle,
   BorderSpec,
   ShadingProperties,
 } from "./colors";

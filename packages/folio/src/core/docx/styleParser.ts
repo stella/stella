@@ -30,15 +30,32 @@ import type {
   BorderSpec,
   ShadingProperties,
   TabStop,
-  TabStopAlignment,
-  TabLeader,
-  UnderlineStyle,
   TableBorders,
   CellMargins,
   TableLook,
   TableMeasurement,
 } from "../types/document";
 import { mergeTextFormatting } from "../utils/textFormattingMerge";
+import {
+  BorderStyleSchema,
+  ConditionalStyleTypeSchema,
+  EmphasisMarkSchema,
+  FontThemeSchema,
+  HighlightColorSchema,
+  LineSpacingRuleSchema,
+  ParagraphAlignmentSchema,
+  ShadingPatternSchema,
+  StyleTypeSchema,
+  TableCellTextDirectionSchema,
+  TableRowHeightRuleSchema,
+  TableWidthTypeSchema,
+  TabLeaderSchema,
+  TabStopAlignmentSchema,
+  TextEffectSchema,
+  ThemeColorSlotSchema,
+  UnderlineStyleSchema,
+  narrowEnum,
+} from "./parserEnums";
 import { resolveThemeFontRef } from "./themeParser";
 import {
   parseXmlDocument,
@@ -93,7 +110,7 @@ function parseRunProperties(
   // Underline
   const u = findChild(rPr, "w", "u");
   if (u) {
-    const style = getAttribute(u, "w", "val") as UnderlineStyle | null;
+    const style = narrowEnum(getAttribute(u, "w", "val"), UnderlineStyleSchema);
     if (style) {
       formatting.underline = { style };
       const colorVal = getAttribute(u, "w", "color");
@@ -160,9 +177,12 @@ function parseRunProperties(
   // Highlight
   const highlight = findChild(rPr, "w", "highlight");
   if (highlight) {
-    const val = getAttribute(highlight, "w", "val");
+    const val = narrowEnum(
+      getAttribute(highlight, "w", "val"),
+      HighlightColorSchema,
+    );
     if (val) {
-      formatting.highlight = val as NonNullable<TextFormatting["highlight"]>;
+      formatting.highlight = val;
     }
   }
 
@@ -214,14 +234,10 @@ function parseRunProperties(
     }
 
     // Theme font references - resolve to actual font names
-    const asciiTheme = getAttribute(rFonts, "w", "asciiTheme");
+    const asciiThemeRaw = getAttribute(rFonts, "w", "asciiTheme");
+    const asciiTheme = narrowEnum(asciiThemeRaw, FontThemeSchema);
     if (asciiTheme) {
-      fontFamily.asciiTheme =
-        asciiTheme as TextFormatting["fontFamily"] extends {
-          asciiTheme?: infer T;
-        }
-          ? T
-          : never;
+      fontFamily.asciiTheme = asciiTheme;
       // Also resolve the actual font name for convenience
       if (theme && !fontFamily.ascii) {
         const resolved = resolveThemeFontRef(theme, asciiTheme);
@@ -303,20 +319,18 @@ function parseRunProperties(
   // Text effects
   const effect = findChild(rPr, "w", "effect");
   if (effect) {
-    const val = getAttribute(effect, "w", "val");
+    const val = narrowEnum(getAttribute(effect, "w", "val"), TextEffectSchema);
     if (val) {
-      formatting.effect = val as NonNullable<TextFormatting["effect"]>;
+      formatting.effect = val;
     }
   }
 
   // Emphasis mark
   const em = findChild(rPr, "w", "em");
   if (em) {
-    const val = getAttribute(em, "w", "val");
+    const val = narrowEnum(getAttribute(em, "w", "val"), EmphasisMarkSchema);
     if (val) {
-      formatting.emphasisMark = val as NonNullable<
-        TextFormatting["emphasisMark"]
-      >;
+      formatting.emphasisMark = val;
     }
   }
 
@@ -381,8 +395,9 @@ function parseColorValue(
     color.auto = true;
   }
 
-  if (themeColor) {
-    color.themeColor = themeColor as NonNullable<ColorValue["themeColor"]>;
+  const validatedThemeColor = narrowEnum(themeColor, ThemeColorSlotSchema);
+  if (validatedThemeColor) {
+    color.themeColor = validatedThemeColor;
   }
 
   if (themeTint) {
@@ -419,11 +434,12 @@ function parseShadingProperties(
   }
 
   const themeFill = getAttribute(shd, "w", "themeFill");
-  if (themeFill) {
+  const validatedThemeFill = narrowEnum(themeFill, ThemeColorSlotSchema);
+  if (validatedThemeFill) {
     if (!props.fill) {
       props.fill = {};
     }
-    props.fill.themeColor = themeFill as NonNullable<ColorValue["themeColor"]>;
+    props.fill.themeColor = validatedThemeFill;
   }
 
   const themeFillTint = getAttribute(shd, "w", "themeFillTint");
@@ -436,9 +452,12 @@ function parseShadingProperties(
     props.fill.themeShade = themeFillShade;
   }
 
-  const pattern = getAttribute(shd, "w", "val");
+  const pattern = narrowEnum(
+    getAttribute(shd, "w", "val"),
+    ShadingPatternSchema,
+  );
   if (pattern) {
-    props.pattern = pattern as NonNullable<ShadingProperties["pattern"]>;
+    props.pattern = pattern;
   }
 
   return Object.keys(props).length > 0 ? props : undefined;
@@ -452,14 +471,13 @@ function parseBorderSpec(border: XmlElement | null): BorderSpec | undefined {
     return undefined;
   }
 
-  const style = getAttribute(border, "w", "val");
-  if (!style) {
+  const rawStyle = getAttribute(border, "w", "val");
+  if (!rawStyle) {
     return undefined;
   }
 
-  const spec: BorderSpec = {
-    style: style as BorderSpec["style"],
-  };
+  const style = narrowEnum(rawStyle, BorderStyleSchema) ?? rawStyle;
+  const spec: BorderSpec = { style };
 
   const colorVal = getAttribute(border, "w", "color");
   const themeColor = getAttribute(border, "w", "themeColor");
@@ -512,17 +530,23 @@ function parseTabStops(tabs: XmlElement | null): TabStop[] | undefined {
 
   for (const tab of tabElements) {
     const pos = parseNumericAttribute(tab, "w", "pos");
-    const val = getAttribute(tab, "w", "val");
+    const alignment = narrowEnum(
+      getAttribute(tab, "w", "val"),
+      TabStopAlignmentSchema,
+    );
 
-    if (pos !== undefined && val) {
+    if (pos !== undefined && alignment) {
       const tabStop: TabStop = {
         position: pos,
-        alignment: val as TabStopAlignment,
+        alignment,
       };
 
-      const leader = getAttribute(tab, "w", "leader");
+      const leader = narrowEnum(
+        getAttribute(tab, "w", "leader"),
+        TabLeaderSchema,
+      );
       if (leader) {
-        tabStop.leader = leader as TabLeader;
+        tabStop.leader = leader;
       }
 
       result.push(tabStop);
@@ -548,11 +572,12 @@ function parseParagraphProperties(
   // Alignment
   const jc = findChild(pPr, "w", "jc");
   if (jc) {
-    const val = getAttribute(jc, "w", "val");
+    const val = narrowEnum(
+      getAttribute(jc, "w", "val"),
+      ParagraphAlignmentSchema,
+    );
     if (val) {
-      formatting.alignment = val as NonNullable<
-        ParagraphFormatting["alignment"]
-      >;
+      formatting.alignment = val;
     }
   }
 
@@ -580,11 +605,12 @@ function parseParagraphProperties(
       formatting.lineSpacing = line;
     }
 
-    const lineRule = getAttribute(spacing, "w", "lineRule");
+    const lineRule = narrowEnum(
+      getAttribute(spacing, "w", "lineRule"),
+      LineSpacingRuleSchema,
+    );
     if (lineRule) {
-      formatting.lineSpacingRule = lineRule as NonNullable<
-        ParagraphFormatting["lineSpacingRule"]
-      >;
+      formatting.lineSpacingRule = lineRule;
     }
 
     const beforeAuto = getAttribute(spacing, "w", "beforeAutospacing");
@@ -778,13 +804,12 @@ function parseTableMeasurement(
   }
 
   const w = parseNumericAttribute(element, "w", "w");
-  const type = getAttribute(element, "w", "type");
+  const rawType = getAttribute(element, "w", "type");
+  const type =
+    rawType === null ? "dxa" : narrowEnum(rawType, TableWidthTypeSchema);
 
   if (w !== undefined && type) {
-    return {
-      value: w,
-      type: type as TableMeasurement["type"],
-    };
+    return { value: w, type };
   }
 
   return undefined;
@@ -1066,11 +1091,12 @@ function parseTableRowProperties(
     if (heightResult) {
       formatting.height = heightResult;
     }
-    const hRule = getAttribute(trHeight, "w", "hRule");
+    const hRule = narrowEnum(
+      getAttribute(trHeight, "w", "hRule"),
+      TableRowHeightRuleSchema,
+    );
     if (hRule) {
-      formatting.heightRule = hRule as NonNullable<
-        TableRowFormatting["heightRule"]
-      >;
+      formatting.heightRule = hRule;
     }
   }
 
@@ -1165,11 +1191,12 @@ function parseTableCellProperties(
   // Text direction
   const textDirection = findChild(tcPr, "w", "textDirection");
   if (textDirection) {
-    const val = getAttribute(textDirection, "w", "val");
+    const val = narrowEnum(
+      getAttribute(textDirection, "w", "val"),
+      TableCellTextDirectionSchema,
+    );
     if (val) {
-      formatting.textDirection = val as NonNullable<
-        TableCellFormatting["textDirection"]
-      >;
+      formatting.textDirection = val;
     }
   }
 
@@ -1217,7 +1244,7 @@ function parseStyle(styleEl: XmlElement, theme: Theme | null): Style {
   const rawType = getAttribute(styleEl, "w", "type");
   const style: Style = {
     styleId: getAttribute(styleEl, "w", "styleId") ?? "",
-    type: rawType === null ? "paragraph" : (rawType as StyleType),
+    type: narrowEnum(rawType, StyleTypeSchema) ?? "paragraph",
   };
 
   // Default flag
@@ -1351,11 +1378,13 @@ function parseStyle(styleEl: XmlElement, theme: Theme | null): Style {
     style.tblStylePr = [];
 
     for (const tblStylePr of tblStylePrs) {
-      const typeAttr = getAttribute(tblStylePr, "w", "type");
-      if (typeAttr) {
+      const conditionalType = narrowEnum(
+        getAttribute(tblStylePr, "w", "type"),
+        ConditionalStyleTypeSchema,
+      );
+      if (conditionalType) {
         const conditionalStyle: NonNullable<Style["tblStylePr"]>[number] = {
-          // SAFETY: OOXML conditional format type string from XML attribute; cast to union type
-          type: typeAttr as NonNullable<Style["tblStylePr"]>[number]["type"],
+          type: conditionalType,
         };
 
         const condPPr = findChild(tblStylePr, "w", "pPr");
@@ -1460,32 +1489,42 @@ function mergeParagraphFormatting(
     return { ...source };
   }
 
-  const result = { ...target };
+  const result: ParagraphFormatting = { ...target };
 
-  for (const key of Object.keys(source) as (keyof ParagraphFormatting)[]) {
+  // SAFETY: Object.keys returns string[]; widening to ParagraphFormatting's
+  // keys is sound here because source is typed as ParagraphFormatting and
+  // own-enumerable string keys of a typed object are a subset of its keys.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  const sourceKeys = Object.keys(source) as (keyof ParagraphFormatting)[];
+
+  for (const key of sourceKeys) {
     const value = source[key];
-    if (value !== undefined) {
-      if (key === "runProperties") {
-        const mergedRunProps = mergeTextFormatting(
-          result.runProperties,
-          source.runProperties,
-        );
-        if (mergedRunProps) {
-          result.runProperties = mergedRunProps;
-        }
-      } else if (key === "borders" || key === "numPr" || key === "frame") {
-        const baseValue = result[key] as Record<string, unknown> | undefined;
-        const sourceValue = value as Record<string, unknown> | undefined;
-        (result as Record<string, unknown>)[key] = {
-          ...baseValue,
-          ...sourceValue,
-        };
-      } else if (key === "tabs" && Array.isArray(value)) {
-        result.tabs = [...value];
-      } else {
-        // SAFETY: dynamic property copy across matching ParagraphFormatting keys
-        (result as Record<string, unknown>)[key] = value;
+    if (value === undefined) {
+      continue;
+    }
+    if (key === "runProperties") {
+      const mergedRunProps = mergeTextFormatting(
+        result.runProperties,
+        source.runProperties,
+      );
+      if (mergedRunProps) {
+        result.runProperties = mergedRunProps;
       }
+    } else if (key === "borders" || key === "numPr" || key === "frame") {
+      // SAFETY: deep-merge known nested-object keys; both sides have the
+      // same shape per the union narrowing on `key`.
+      const baseValue = result[key] as Record<string, unknown> | undefined;
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      const sourceValue = value as Record<string, unknown> | undefined;
+      (result as Record<string, unknown>)[key] = {
+        ...baseValue,
+        ...sourceValue,
+      };
+    } else if (key === "tabs" && Array.isArray(value)) {
+      result.tabs = [...value];
+    } else {
+      // SAFETY: dynamic property copy across matching ParagraphFormatting keys
+      (result as Record<string, unknown>)[key] = value;
     }
   }
 

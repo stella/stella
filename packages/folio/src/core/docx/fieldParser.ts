@@ -29,8 +29,10 @@ import type {
   ComplexField,
   Field,
   Run,
+  TextContent,
   Theme,
 } from "../types/document";
+import { FieldTypeSchema, narrowEnum } from "./parserEnums";
 import { parseRun } from "./runParser";
 import type { StyleMap } from "./styleParser";
 import { getAttribute, findChildren } from "./xmlParser";
@@ -134,22 +136,19 @@ export function parseFieldType(instruction: string): FieldType {
 
   // SAFETY: match succeeded and group 1 always captures in this regex
   const fieldName = match[1]!.toUpperCase();
-
-  if (KNOWN_FIELD_TYPES.includes(fieldName as FieldType)) {
-    return fieldName as FieldType;
-  }
-
-  return "UNKNOWN";
+  return narrowEnum(fieldName, FieldTypeSchema) ?? "UNKNOWN";
 }
 
 /**
- * Check if a field type is a known type
+ * Check if a field type is a known type. The sentinel "UNKNOWN" value
+ * is not considered a "known" type even though it belongs to FieldType.
  *
  * @param type - Field type string to check
  * @returns true if it's a known field type
  */
 export function isKnownFieldType(type: string): type is FieldType {
-  return KNOWN_FIELD_TYPES.includes(type as FieldType);
+  const narrowed = narrowEnum(type, FieldTypeSchema);
+  return narrowed !== undefined && narrowed !== "UNKNOWN";
 }
 
 // ============================================================================
@@ -427,8 +426,8 @@ export function getFieldDisplayValue(field: Field): string {
  */
 function getRunText(run: Run): string {
   return run.content
-    .filter((c) => c.type === "text")
-    .map((c) => (c as { type: "text"; text: string }).text)
+    .filter((c): c is TextContent => c.type === "text")
+    .map((c) => c.text)
     .join("");
 }
 
@@ -753,19 +752,17 @@ export function formatDate(date: Date, format: string): string {
  * @param content - Array of paragraph content items
  * @returns Array of all fields found
  */
+function isField(item: unknown): item is Field {
+  return (
+    item !== null &&
+    typeof item === "object" &&
+    "type" in item &&
+    (item.type === "simpleField" || item.type === "complexField")
+  );
+}
+
 export function collectFields(content: unknown[]): Field[] {
-  const fields: Field[] = [];
-
-  for (const item of content) {
-    if (item && typeof item === "object" && "type" in item) {
-      const typed = item as { type: string };
-      if (typed.type === "simpleField" || typed.type === "complexField") {
-        fields.push(item as Field);
-      }
-    }
-  }
-
-  return fields;
+  return content.filter(isField);
 }
 
 /**

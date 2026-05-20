@@ -13,6 +13,15 @@ import type {
   ColorValue,
 } from "../types/document";
 import {
+  ImageHorizontalAlignmentSchema,
+  ImageHorizontalRelativeToSchema,
+  ImageVerticalAlignmentSchema,
+  ImageVerticalRelativeToSchema,
+  ImageWrapTextSchema,
+  ShapeOutlineStyleSchema,
+  narrowEnum,
+} from "./parserEnums";
+import {
   getChildElements,
   getAttribute,
   getTextContent,
@@ -227,9 +236,12 @@ export function parseOutline(
 
   const prstDash = children.find((el) => el.name === "a:prstDash");
   if (prstDash) {
-    const val = getAttribute(prstDash, null, "val");
+    const val = narrowEnum(
+      getAttribute(prstDash, null, "val"),
+      ShapeOutlineStyleSchema,
+    );
     if (val) {
-      outline.style = val as NonNullable<ShapeOutline["style"]>;
+      outline.style = val;
     }
   }
 
@@ -250,18 +262,19 @@ export function parsePositionH(
     return undefined;
   }
 
-  const relativeTo = getAttribute(posH, null, "relativeFrom") ?? "column";
+  const relativeTo =
+    narrowEnum(
+      getAttribute(posH, null, "relativeFrom"),
+      ImageHorizontalRelativeToSchema,
+    ) ?? "column";
 
   const alignEl = findByFullName(posH, "wp:align");
   if (alignEl) {
     const text = getTextContent(alignEl);
-    const result: ImagePosition["horizontal"] = {
-      relativeTo: relativeTo as ImagePosition["horizontal"]["relativeTo"],
-    };
-    if (text) {
-      result.alignment = text as NonNullable<
-        ImagePosition["horizontal"]["alignment"]
-      >;
+    const result: ImagePosition["horizontal"] = { relativeTo };
+    const alignment = narrowEnum(text, ImageHorizontalAlignmentSchema);
+    if (alignment) {
+      result.alignment = alignment;
     }
     return result;
   }
@@ -271,14 +284,12 @@ export function parsePositionH(
     const text = getTextContent(posOffsetEl);
     const posOffset = Number.parseInt(text, 10);
     return {
-      relativeTo: relativeTo as ImagePosition["horizontal"]["relativeTo"],
+      relativeTo,
       posOffset: Number.isNaN(posOffset) ? 0 : posOffset,
     };
   }
 
-  return {
-    relativeTo: relativeTo as ImagePosition["horizontal"]["relativeTo"],
-  };
+  return { relativeTo };
 }
 
 /**
@@ -291,18 +302,19 @@ export function parsePositionV(
     return undefined;
   }
 
-  const relativeTo = getAttribute(posV, null, "relativeFrom") ?? "paragraph";
+  const relativeTo =
+    narrowEnum(
+      getAttribute(posV, null, "relativeFrom"),
+      ImageVerticalRelativeToSchema,
+    ) ?? "paragraph";
 
   const alignEl = findByFullName(posV, "wp:align");
   if (alignEl) {
     const text = getTextContent(alignEl);
-    const result: ImagePosition["vertical"] = {
-      relativeTo: relativeTo as ImagePosition["vertical"]["relativeTo"],
-    };
-    if (text) {
-      result.alignment = text as NonNullable<
-        ImagePosition["vertical"]["alignment"]
-      >;
+    const result: ImagePosition["vertical"] = { relativeTo };
+    const alignment = narrowEnum(text, ImageVerticalAlignmentSchema);
+    if (alignment) {
+      result.alignment = alignment;
     }
     return result;
   }
@@ -312,14 +324,12 @@ export function parsePositionV(
     const text = getTextContent(posOffsetEl);
     const posOffset = Number.parseInt(text, 10);
     return {
-      relativeTo: relativeTo as ImagePosition["vertical"]["relativeTo"],
+      relativeTo,
       posOffset: Number.isNaN(posOffset) ? 0 : posOffset,
     };
   }
 
-  return {
-    relativeTo: relativeTo as ImagePosition["vertical"]["relativeTo"],
-  };
+  return { relativeTo };
 }
 
 /**
@@ -414,9 +424,12 @@ export function parseWrapElement(
 
   const wrap: ImageWrap = { type };
 
-  const wrapText = getAttribute(wrapEl, null, "wrapText");
+  const wrapText = narrowEnum(
+    getAttribute(wrapEl, null, "wrapText"),
+    ImageWrapTextSchema,
+  );
   if (wrapText) {
-    wrap.wrapText = wrapText as NonNullable<ImageWrap["wrapText"]>;
+    wrap.wrapText = wrapText;
   }
 
   // Wrap child distances take priority, then anchor-level

@@ -74,6 +74,22 @@ describe("serializeSectionProperties", () => {
     ).toBe("");
   });
 
+  test("preserves unknown page border styles for fallback rendering", () => {
+    const section = parseSectPr(`
+      <w:sectPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:pgBorders>
+          <w:top w:val="dashDotDot" w:sz="8" w:color="00AAFF"/>
+        </w:pgBorders>
+      </w:sectPr>
+    `);
+
+    expect(section.pageBorders?.top).toMatchObject({
+      color: { rgb: "00AAFF" },
+      size: 8,
+      style: "dashDotDot",
+    });
+  });
+
   test("serializes parsed background and text direction properties", () => {
     expect(
       serializeSectionProperties({

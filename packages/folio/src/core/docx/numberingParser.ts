@@ -17,11 +17,14 @@ import type {
   NumberingInstance,
   ListLevel,
   NumberFormat,
-  LevelSuffix,
   ParagraphFormatting,
   TextFormatting,
-  ThemeColorSlot,
 } from "../types/document";
+import {
+  LevelSuffixSchema,
+  ThemeColorSlotSchema,
+  narrowEnum,
+} from "./parserEnums";
 import {
   parseXmlDocument,
   findChild,
@@ -308,9 +311,12 @@ function parseListLevel(element: XmlElement): ListLevel | null {
   // Parse suffix
   const suffEl = findChild(element, "w", "suff");
   if (suffEl) {
-    const suffVal = getAttribute(suffEl, "w", "val");
-    if (suffVal === "tab" || suffVal === "space" || suffVal === "nothing") {
-      level.suffix = suffVal as LevelSuffix;
+    const suffix = narrowEnum(
+      getAttribute(suffEl, "w", "val"),
+      LevelSuffixSchema,
+    );
+    if (suffix) {
+      level.suffix = suffix;
     }
   }
 
@@ -586,14 +592,14 @@ function parseLevelRunProps(rPr: XmlElement): TextFormatting {
     const val = getAttribute(colorEl, "w", "val");
     const themeColor = getAttribute(colorEl, "w", "themeColor");
 
+    const validatedThemeColor = narrowEnum(themeColor, ThemeColorSlotSchema);
     if (val === "auto") {
       formatting.color = { auto: true };
-    } else if (themeColor) {
+    } else if (validatedThemeColor) {
       const themeTint = getAttribute(colorEl, "w", "themeTint");
       const themeShade = getAttribute(colorEl, "w", "themeShade");
       formatting.color = {
-        // SAFETY: OOXML theme color string from XML attribute; cast to ThemeColorSlot union
-        themeColor: themeColor as ThemeColorSlot,
+        themeColor: validatedThemeColor,
         ...(themeTint != null ? { themeTint } : {}),
         ...(themeShade != null ? { themeShade } : {}),
       };

@@ -232,7 +232,7 @@ export function parseFootnotes(
     (el: XmlElement) =>
       el.type === "element" &&
       (el.name === "w:footnotes" || el.name?.endsWith(":footnotes")),
-  ) as XmlElement | undefined;
+  );
 
   if (!rootElement) {
     return createFootnoteMap(byId, footnotes);
@@ -352,7 +352,7 @@ export function parseEndnotes(
     (el: XmlElement) =>
       el.type === "element" &&
       (el.name === "w:endnotes" || el.name?.endsWith(":endnotes")),
-  ) as XmlElement | undefined;
+  );
 
   if (!rootElement) {
     return createEndnoteMap(byId, endnotes);
