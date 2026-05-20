@@ -1,6 +1,7 @@
-import { BoeValidationError, searchConsolidatedLegislation } from "@stll/boe";
 import { Result } from "better-result";
 import { t } from "elysia";
+
+import { BoeValidationError, searchConsolidatedLegislation } from "@stll/boe";
 
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -13,7 +14,7 @@ const querySchema = t.Object({
   matterCode: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
   dateFrom: t.Optional(t.String({ pattern: "^\\d{8}$" })),
   dateTo: t.Optional(t.String({ pattern: "^\\d{8}$" })),
-  offset: t.Optional(t.Numeric({ minimum: 0, maximum: 10_000 })),
+  cursor: t.Optional(t.String({ pattern: "^\\d+$", maxLength: 5 })),
   limit: t.Optional(t.Numeric({ minimum: 1, maximum: 100 })),
 });
 
@@ -38,9 +39,17 @@ const boeSearch = createSafeRootHandler(
       );
     }
 
+    const { cursor, ...searchOptions } = query;
+    const offset =
+      cursor === undefined ? undefined : Number.parseInt(cursor, 10);
+
     const result = yield* Result.await(
       Result.tryPromise({
-        try: async () => await searchConsolidatedLegislation(query),
+        try: async () =>
+          await searchConsolidatedLegislation({
+            ...searchOptions,
+            offset,
+          }),
         catch: mapBoeError,
       }),
     );

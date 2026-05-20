@@ -1,7 +1,8 @@
-import { findRelatedLaws, RELATION_TYPES } from "@stll/boe";
-import type { RelationType } from "@stll/boe";
 import { Result } from "better-result";
 import { t } from "elysia";
+
+import { findRelatedLaws, RELATION_TYPES } from "@stll/boe";
+import type { RelationType } from "@stll/boe";
 
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";

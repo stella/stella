@@ -1,4 +1,7 @@
 import { valibotSchema } from "@ai-sdk/valibot";
+import { tool } from "ai";
+import * as v from "valibot";
+
 import {
   findRelatedLaws,
   getBormeSummary,
@@ -8,8 +11,6 @@ import {
   RELATION_TYPES,
   searchConsolidatedLegislation,
 } from "@stll/boe";
-import { tool } from "ai";
-import * as v from "valibot";
 
 const lawIdSchema = v.pipe(
   v.string(),

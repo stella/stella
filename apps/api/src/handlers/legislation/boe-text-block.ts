@@ -1,6 +1,7 @@
-import { getLawTextBlock } from "@stll/boe";
 import { Result } from "better-result";
 import { t } from "elysia";
+
+import { getLawTextBlock } from "@stll/boe";
 
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
