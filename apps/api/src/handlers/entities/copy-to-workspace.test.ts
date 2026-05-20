@@ -29,7 +29,19 @@ void mock.module("@/api/lib/search/process-extraction", () => ({
 
 const syncWorkspaceSearchActivityMock = mock(async () => {});
 void mock.module("@/api/lib/search/index-global", () => ({
+  rebuildSupplementalSearchIndex: mock(async () => undefined),
+  reindexWorkspacesForContact: mock(async () => undefined),
+  searchGlobal: mock(async () => ({
+    facets: { editor: [], mimeType: [], type: [], workspace: [] },
+    hits: [],
+    nextCursor: null,
+    totalCount: 0,
+  })),
+  searchGlobalFacet: mock(async () => []),
   syncWorkspaceSearchActivity: syncWorkspaceSearchActivityMock,
+  upsertContactSearchDocument: mock(async () => undefined),
+  upsertWorkspaceSearchDocument: mock(async () => undefined),
+  upsertWorkspaceSearchDocuments: mock(async () => undefined),
 }));
 
 const { default: copyToWorkspace } = await import("./copy-to-workspace");

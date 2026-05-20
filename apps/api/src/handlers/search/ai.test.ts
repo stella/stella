@@ -34,8 +34,14 @@ mock.module("@/api/db/root", () => ({
 // require a live database connection and cause flaky failures in CI.
 // eslint-disable-next-line typescript-eslint/no-floating-promises -- Bun mock.module is sync for registration
 mock.module("@/api/lib/search/index-global", () => ({
+  rebuildSupplementalSearchIndex: mock(async () => undefined),
+  reindexWorkspacesForContact: mock(async () => undefined),
   searchGlobal: searchGlobalMock,
-  syncWorkspaceSearchActivity: mock(),
+  searchGlobalFacet: mock(async () => []),
+  syncWorkspaceSearchActivity: mock(async () => undefined),
+  upsertContactSearchDocument: mock(async () => undefined),
+  upsertWorkspaceSearchDocument: mock(async () => undefined),
+  upsertWorkspaceSearchDocuments: mock(async () => undefined),
 }));
 
 beforeEach(() => {
