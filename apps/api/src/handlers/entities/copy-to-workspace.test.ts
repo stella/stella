@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { auditLogs, documentCounters, entities, fields } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
@@ -100,6 +100,15 @@ const isInsertedField = (value: unknown): value is InsertedField =>
   "workspaceId" in value &&
   "propertyId" in value &&
   "content" in value;
+
+beforeEach(() => {
+  arrayBufferMock.mockClear();
+  fileMock.mockClear();
+  writeMock.mockClear();
+  s3DeleteMock.mockClear();
+  processExtractionMock.mockClear();
+  syncWorkspaceSearchActivityMock.mockClear();
+});
 
 const createContext = ({
   safeDb,
@@ -284,6 +293,95 @@ describe("copy-to-workspace", () => {
     // S3 file was copied
     expect(fileMock).toHaveBeenCalled();
     expect(writeMock).toHaveBeenCalled();
+  });
+
+  test("does not copy files for fields without a target property", async () => {
+    const insertedFields: InsertedField[] = [];
+    let nextDocumentSequence = 0;
+
+    const sourceEntity = {
+      id: documentId,
+      kind: "document" as const,
+      name: "Orphan-prone.pdf",
+      parentId: null,
+      readOnly: false,
+      currentVersion: {
+        id: toSafeId<"entityVersion">("version_1"),
+        fields: [{ propertyId: sourceFilePropertyId, content: fileContent }],
+      },
+    };
+
+    const tx = {
+      query: {
+        entities: {
+          findFirst: async () => sourceEntity,
+          findMany: async () => [sourceEntity],
+        },
+        properties: {
+          findMany: async (opts: {
+            where: { workspaceId: { eq: string } };
+          }) => {
+            if (opts.where.workspaceId.eq === sourceWorkspaceId) {
+              return [
+                {
+                  id: sourceFilePropertyId,
+                  name: "Source File",
+                  content: filePropertyContent,
+                },
+              ];
+            }
+            return [];
+          },
+        },
+        workspaces: {
+          findFirst: async () => ({ reference: null }),
+        },
+      },
+      $count: async () => 0,
+      select: () => ({
+        from: () => ({
+          where: async () => [],
+        }),
+      }),
+      insert: (table: unknown) => ({
+        values: (value: unknown) => {
+          if (table === documentCounters) {
+            return {
+              onConflictDoUpdate: () => ({
+                returning: async () => {
+                  nextDocumentSequence += 1;
+                  return [{ lastValue: nextDocumentSequence }];
+                },
+              }),
+            };
+          }
+
+          if (table === fields && Array.isArray(value)) {
+            for (const v of value) {
+              if (isInsertedField(v)) {
+                insertedFields.push(v);
+              }
+            }
+          }
+
+          return undefined;
+        },
+      }),
+      update: () => ({
+        set: () => ({
+          where: async () => {},
+        }),
+      }),
+    };
+
+    const { safeDb } = createScopedDbMock(tx);
+    await copyToWorkspace.handler(
+      createContext({ safeDb, entityId: documentId }),
+    );
+
+    expect(insertedFields).toHaveLength(0);
+    expect(fileMock).not.toHaveBeenCalled();
+    expect(writeMock).not.toHaveBeenCalled();
   });
 
   test("copies folder tree with children", async () => {

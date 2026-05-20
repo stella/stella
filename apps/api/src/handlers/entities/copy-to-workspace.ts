@@ -347,9 +347,57 @@ const copyToWorkspaceHandler = async function* ({
     sourceEntities = subtree;
   }
 
-  // Collect file mappings for S3 copy
-  const fileMappings = collectFileMappings(
+  // Build property map before copying S3 objects. Fields whose
+  // properties do not exist in the target workspace are dropped, so
+  // their files must not be copied either.
+  const requiredPropertyIds = collectPropertyIds(sourceEntities);
+  const propertyIdMap = new Map<SafeId<"property">, SafeId<"property">>();
+
+  if (requiredPropertyIds.size > 0) {
+    const properties = yield* Result.await(
+      safeDb(async (tx) => {
+        const [sourceProperties, targetProperties] = await Promise.all([
+          tx.query.properties.findMany({
+            where: {
+              workspaceId: { eq: sourceWorkspaceId },
+              id: { in: [...requiredPropertyIds] },
+            },
+            columns: { id: true, name: true, content: true },
+          }),
+          tx.query.properties.findMany({
+            where: { workspaceId: { eq: targetWorkspaceId } },
+            columns: { id: true, name: true, content: true },
+          }),
+        ]);
+
+        return { sourceProperties, targetProperties };
+      }),
+    );
+
+    const targetByKey = new Map<string, SafeId<"property">>();
+    for (const prop of properties.targetProperties) {
+      const key = `${prop.name}:${prop.content.type}`;
+      targetByKey.set(key, prop.id);
+    }
+
+    for (const sourceProp of properties.sourceProperties) {
+      const key = `${sourceProp.name}:${sourceProp.content.type}`;
+      const targetId = targetByKey.get(key);
+      if (targetId) {
+        propertyIdMap.set(sourceProp.id, targetId);
+      }
+    }
+  }
+
+  const propertyRemappedEntities = remapPropertyIds(
     sourceEntities,
+    propertyIdMap,
+  );
+
+  // Collect file mappings for S3 copy after property remapping, so
+  // files from dropped fields do not leave orphaned target objects.
+  const fileMappings = collectFileMappings(
+    propertyRemappedEntities,
     organizationId,
     sourceWorkspaceId,
     targetWorkspaceId,
@@ -377,58 +425,14 @@ const copyToWorkspaceHandler = async function* ({
     );
   }
 
-  // Collect property IDs needed for copy
-  const requiredPropertyIds = collectPropertyIds(sourceEntities);
-
   // Remap file IDs in source entities to reference the new S3 copies
-  const remappedEntities = remapFileIds(sourceEntities, fileMappings);
+  const remappedEntities = remapFileIds(propertyRemappedEntities, fileMappings);
 
   // DB transaction phase: copy (and delete for moves) in a single transaction
   // to ensure atomicity — either both succeed or neither does.
   const sourceEntityIds = sourceEntities.map((e) => e.id);
   const txResult = yield* Result.await(
     safeDb(async (tx) => {
-      // Build property map: source ID → target ID for properties present in both workspaces
-      const propertyIdMap = new Map<SafeId<"property">, SafeId<"property">>();
-
-      if (requiredPropertyIds.size > 0) {
-        const [sourceProperties, targetProperties] = await Promise.all([
-          tx.query.properties.findMany({
-            where: {
-              workspaceId: { eq: sourceWorkspaceId },
-              id: { in: [...requiredPropertyIds] },
-            },
-            columns: { id: true, name: true, content: true },
-          }),
-          tx.query.properties.findMany({
-            where: { workspaceId: { eq: targetWorkspaceId } },
-            columns: { id: true, name: true, content: true },
-          }),
-        ]);
-
-        // Index target properties by name+type for matching
-        const targetByKey = new Map<string, SafeId<"property">>();
-        for (const prop of targetProperties) {
-          const key = `${prop.name}:${prop.content.type}`;
-          targetByKey.set(key, prop.id);
-        }
-
-        // Map source properties to matching target properties
-        for (const sourceProp of sourceProperties) {
-          const key = `${sourceProp.name}:${sourceProp.content.type}`;
-          const targetId = targetByKey.get(key);
-          if (targetId) {
-            propertyIdMap.set(sourceProp.id, targetId);
-          }
-        }
-      }
-
-      // Remap property IDs to target workspace equivalents
-      const propertyRemappedEntities = remapPropertyIds(
-        remappedEntities,
-        propertyIdMap,
-      );
-
       const copyResult = await copyEntities({
         tx,
         targetWorkspaceId,
@@ -436,7 +440,7 @@ const copyToWorkspaceHandler = async function* ({
         userId,
         auditContext: targetAuditContext,
         sourceEntityId,
-        sourceEntities: propertyRemappedEntities,
+        sourceEntities: remappedEntities,
         sourceWorkspaceId,
       });
 

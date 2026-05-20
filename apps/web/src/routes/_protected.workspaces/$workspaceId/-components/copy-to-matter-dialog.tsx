@@ -296,18 +296,15 @@ const FolderPicker = ({
 
     return (
       <div key={folder.entityId}>
-        <button
-          className={cn(
-            "hover:bg-accent flex w-full items-center gap-1 rounded px-2 py-1 text-start text-sm",
-            isSelected && "bg-accent",
-          )}
-          onClick={() => onSelect(folder.entityId)}
+        <div
+          className="flex items-center gap-1"
           style={{ paddingLeft: `${depth * 16 + 8}px` }}
-          type="button"
         >
           {hasChildren ? (
             <button
               className="hover:bg-muted rounded p-0.5"
+              aria-expanded={isExpanded}
+              aria-label={folder.name}
               onClick={(e) => {
                 e.stopPropagation();
                 toggleExpand(folder.entityId);
@@ -324,9 +321,18 @@ const FolderPicker = ({
           ) : (
             <span className="w-4" />
           )}
-          <FolderIcon className="size-4" />
-          <span className="truncate">{folder.name}</span>
-        </button>
+          <button
+            className={cn(
+              "hover:bg-accent flex min-w-0 flex-1 items-center gap-1 rounded px-2 py-1 text-start text-sm",
+              isSelected && "bg-accent",
+            )}
+            onClick={() => onSelect(folder.entityId)}
+            type="button"
+          >
+            <FolderIcon className="size-4 shrink-0" />
+            <span className="truncate">{folder.name}</span>
+          </button>
+        </div>
         {hasChildren && isExpanded && (
           <div>{children.map((child) => renderFolder(child, depth + 1))}</div>
         )}
