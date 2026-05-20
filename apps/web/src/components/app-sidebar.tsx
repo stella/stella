@@ -277,8 +277,9 @@ const MatterItem = ({
   const [isDropTarget, setIsDropTarget] = useState(false);
   const rename = useInlineRename({
     initial: ws.name,
-    onCommit: (value) => {
+    onCommit: (value, { setError }) => {
       if (updateWorkspace.isPending) {
+        setError(t("errors.actionFailed"));
         return;
       }
       updateWorkspace.mutate(
