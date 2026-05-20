@@ -14,6 +14,7 @@ import type {
   NoteNumberRestart,
   NumberFormat,
 } from "../types/document";
+import { narrowEnum, NumberFormatSchema } from "./parserEnums";
 import { findChild, getAttribute, parseNumericAttribute } from "./xmlParser";
 import type { XmlElement } from "./xmlParser";
 
@@ -21,27 +22,10 @@ import type { XmlElement } from "./xmlParser";
 // HELPER PARSERS
 // ============================================================================
 
-/**
- * Parse number format from w:numFmt element
- */
-const SUPPORTED_NUMBER_FORMATS = new Map<string, NumberFormat>([
-  ["decimal", "decimal"],
-  ["upperRoman", "upperRoman"],
-  ["lowerRoman", "lowerRoman"],
-  ["upperLetter", "upperLetter"],
-  ["lowerLetter", "lowerLetter"],
-  ["ordinal", "ordinal"],
-  ["cardinalText", "cardinalText"],
-  ["ordinalText", "ordinalText"],
-  ["bullet", "bullet"],
-  ["chicago", "chicago"],
-  ["none", "none"],
-]);
-
 function parseNumberFormat(
   numFmtAttr: string | null,
 ): NumberFormat | undefined {
-  return numFmtAttr ? SUPPORTED_NUMBER_FORMATS.get(numFmtAttr) : undefined;
+  return narrowEnum(numFmtAttr, NumberFormatSchema);
 }
 
 /**

@@ -20,7 +20,6 @@ import type {
   BookmarkEnd,
   SimpleField,
   ComplexField,
-  FieldType,
   Theme,
   ColorValue,
   BorderSpec,
@@ -42,11 +41,11 @@ import {
   parseBookmarkStart as parseBookmarkStartFromModule,
   parseBookmarkEnd as parseBookmarkEndFromModule,
 } from "./bookmarkParser";
+import { parseFieldType } from "./fieldParser";
 import { parseHyperlink as parseHyperlinkFromModule } from "./hyperlinkParser";
 import type { NumberingMap } from "./numberingParser";
 import {
   BorderStyleSchema,
-  FieldTypeSchema,
   FrameWrapSchema,
   FrameXAlignSchema,
   FrameYAlignSchema,
@@ -1020,21 +1019,6 @@ function parseBookmarkStart(node: XmlElement): BookmarkStart {
  */
 function parseBookmarkEnd(node: XmlElement): BookmarkEnd {
   return parseBookmarkEndFromModule(node);
-}
-
-/**
- * Parse field type from instruction string
- */
-function parseFieldType(instruction: string): FieldType {
-  // Extract the field name (first word)
-  const match = /^\\?([A-Z]+)/i.exec(instruction.trim());
-  if (!match) {
-    return "UNKNOWN";
-  }
-
-  // SAFETY: capture group [1] always present when regex matches
-  const fieldName = match[1]!.toUpperCase();
-  return narrowEnum(fieldName, FieldTypeSchema) ?? "UNKNOWN";
 }
 
 /**

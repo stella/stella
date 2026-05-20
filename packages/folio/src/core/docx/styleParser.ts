@@ -803,10 +803,9 @@ function parseTableMeasurement(
   }
 
   const w = parseNumericAttribute(element, "w", "w");
-  const type = narrowEnum(
-    getAttribute(element, "w", "type"),
-    TableWidthTypeSchema,
-  );
+  const rawType = getAttribute(element, "w", "type");
+  const type =
+    rawType === null ? "dxa" : narrowEnum(rawType, TableWidthTypeSchema);
 
   if (w !== undefined && type) {
     return { value: w, type };
