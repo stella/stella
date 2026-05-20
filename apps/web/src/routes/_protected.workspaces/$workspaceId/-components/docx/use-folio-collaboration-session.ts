@@ -186,14 +186,14 @@ export const useFolioCollaborationSession = ({
           return token;
         }
 
-        const refreshed = await api
-          .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          ["folio-collab-sessions"].open.post({
-            entityId: toSafeId<"entity">(entityId),
-            propertyId: toSafeId<"property">(propertyId),
-          });
+        const refreshed = await api["folio-collab-sessions"][
+          "refresh-token"
+        ].post({
+          sessionId,
+          token,
+        });
 
-        if (refreshed.error || refreshed.data.collabSessionId !== sessionId) {
+        if (refreshed.error) {
           return null;
         }
 
