@@ -193,6 +193,7 @@ function RouteComponent() {
     <RouteComponentInner
       entityId={entityId}
       initialFieldId={initialFieldId}
+      key={initialFieldId}
       workspaceId={workspaceId}
     />
   );
@@ -239,10 +240,6 @@ function RouteComponentInner({
   const openFileForEntity = useInspectorStore((s) => s.openFileForEntity);
   const currentFileFieldIdsByPropertyRef = useRef(new Map<string, string>());
   const navigate = Route.useNavigate();
-
-  useEffect(() => {
-    setActiveFieldId(initialFieldId);
-  }, [initialFieldId]);
 
   useLayoutEffect(() => {
     if (!justificationId || justificationPage === undefined) {

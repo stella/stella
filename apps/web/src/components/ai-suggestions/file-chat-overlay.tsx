@@ -59,7 +59,6 @@ import type {
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
-import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
@@ -509,66 +508,35 @@ type FileChatOverlayProps = {
   docxEditorRef?: RefObject<DocxEditorRef | null> | undefined;
   docxEditable?: boolean | undefined;
   requestDocxEditMode?: (() => boolean | Promise<boolean>) | undefined;
+  /**
+   * Invoked when the user explicitly starts a new thread from the
+   * overlay UI. Owners should swap the `chatThreadId` they pass in
+   * for a fresh value.
+   */
+  onNewThread: () => void;
 };
 
 const protectedRouteApi = getRouteApi("/_protected");
 
-export const FileChatOverlay = ({
-  workspaceId,
-  chatThreadId,
-  activeFile,
-  activeExternal,
-  docxEditable,
-  docxEditorRef,
-  requestDocxEditMode,
-}: FileChatOverlayProps) => {
-  const [currentChatThreadId, setCurrentChatThreadId] = useState(chatThreadId);
+export const FileChatOverlay = (props: FileChatOverlayProps) => (
+  // Suspense boundary keeps the chat-thread fetch local to the
+  // overlay — without it, a cold cache propagates the suspension
+  // up to the file route and shows the route's pending screen.
+  <Suspense
+    fallback={
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center"
+      >
+        <LoaderCircleIcon className="text-muted-foreground size-4 animate-spin" />
+      </div>
+    }
+  >
+    <FileChatOverlayInner {...props} />
+  </Suspense>
+);
 
-  useEffect(() => {
-    setCurrentChatThreadId(chatThreadId);
-  }, [chatThreadId]);
-
-  return (
-    // Suspense boundary keeps the chat-thread fetch local to the
-    // overlay — without it, a cold cache propagates the suspension
-    // up to the file route and shows the route's pending screen.
-    <Suspense
-      fallback={
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center"
-        >
-          <LoaderCircleIcon className="text-muted-foreground size-4 animate-spin" />
-        </div>
-      }
-    >
-      <FileChatOverlayInner
-        activeFile={activeFile}
-        activeExternal={activeExternal}
-        chatThreadId={currentChatThreadId}
-        docxEditable={docxEditable}
-        docxEditorRef={docxEditorRef}
-        onNewThread={() => {
-          // The previous thread's queued/accepted/rejected
-          // suggestions belong to that thread's history. Carrying
-          // them into a fresh thread invites the user to act on
-          // proposals they no longer have context for; reset the
-          // session whenever they explicitly start a new chat.
-          if (activeFile) {
-            useReviewStore.getState().resetSession(activeFile.entityId);
-          }
-          setCurrentChatThreadId(createChatThreadId());
-        }}
-        requestDocxEditMode={requestDocxEditMode}
-        workspaceId={workspaceId}
-      />
-    </Suspense>
-  );
-};
-
-type FileChatOverlayInnerProps = FileChatOverlayProps & {
-  onNewThread: () => void;
-};
+type FileChatOverlayInnerProps = FileChatOverlayProps;
 
 const FileChatOverlayInner = ({
   workspaceId,

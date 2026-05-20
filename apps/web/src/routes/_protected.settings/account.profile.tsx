@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import {
@@ -46,6 +46,21 @@ function isCommonTimezone(tz: string): tz is CommonTimezone {
 }
 
 function ProfilePage() {
+  const { data: session } = useSuspenseQuery(sessionOptions);
+  const user = session?.user;
+
+  return (
+    <ProfilePageBody
+      key={[
+        user?.id ?? "anonymous",
+        user?.preferredName ?? "",
+        user?.wordEditShortcut ?? "",
+      ].join(":")}
+    />
+  );
+}
+
+function ProfilePageBody() {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const { data: session } = useSuspenseQuery(sessionOptions);
@@ -57,11 +72,6 @@ function ProfilePage() {
   const [wordEditShortcut, setWordEditShortcut] = useState(
     () => session?.user.wordEditShortcut ?? "",
   );
-
-  useEffect(() => {
-    setPreferredName(session?.user.preferredName ?? "");
-    setWordEditShortcut(session?.user.wordEditShortcut ?? "");
-  }, [session?.user.preferredName, session?.user.wordEditShortcut]);
 
   const updateTimezone = useMutation({
     mutationFn: async (timezoneId: string) => {

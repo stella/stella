@@ -140,6 +140,12 @@ export const Route = createFileRoute("/_protected")({
       },
     );
 
+    // Seed the pinned-matters store from localStorage before the
+    // sidebar renders. The store's `init` is idempotent (skips when
+    // the same userId is already loaded), so re-runs on navigation
+    // cost nothing and a render-time effect is unnecessary.
+    usePinnedStore.getState().init(context.session.userId);
+
     return {
       user: {
         id: context.session.userId,

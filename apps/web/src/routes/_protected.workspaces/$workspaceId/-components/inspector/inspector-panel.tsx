@@ -331,45 +331,45 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   // The active tab is always mounted; the rest are the most recently
   // viewed ones. Tabs beyond the limit unmount (and re-load on switch).
   const MAX_MOUNTED_PDFS = 3;
-  const [recentPdfIds, setRecentPdfIds] = useState<string[]>([]);
 
   const pdfTabs = useMemo(
     () => tabs.filter((tab): tab is FileTab => tab.type === "pdf"),
     [tabs],
   );
 
-  // Update recency order when the active PDF changes.
-  useEffect(() => {
-    if (!activeId || activeTab?.type !== "pdf") {
-      return;
-    }
-    setRecentPdfIds((prev) => {
-      const next = prev.filter((id) => id !== activeId);
+  // Ref-backed recency log: "most recent first", capped at
+  // MAX_MOUNTED_PDFS. The ref is written inside `useEffect` (commit
+  // phase) so the recency reflects committed renders only; reading
+  // during render derives `mountedPdfIds` purely from the previous
+  // committed recency plus the current activation/open tabs.
+  const pdfRecencyRef = useRef<string[]>([]);
+
+  const mountedPdfIds = useMemo(() => {
+    const openIds = new Set(pdfTabs.map((tab) => tab.id));
+    let next = pdfRecencyRef.current.filter((id) => openIds.has(id));
+    if (activeId && activeTab?.type === "pdf") {
+      next = next.filter((id) => id !== activeId);
       next.unshift(activeId);
       if (next.length > MAX_MOUNTED_PDFS) {
         next.length = MAX_MOUNTED_PDFS;
       }
-      return next;
-    });
-  }, [activeId, activeTab?.type]);
+    }
 
-  // Also prune closed tabs from the recency list.
-  useEffect(() => {
-    const openIds = new Set(pdfTabs.map((tab) => tab.id));
-    setRecentPdfIds((prev) => {
-      const next = prev.filter((id) => openIds.has(id));
-      return next.length === prev.length ? prev : next;
-    });
-  }, [pdfTabs]);
-
-  const mountedPdfIds = useMemo(() => {
-    const set = new Set(recentPdfIds);
-    // Always include the active PDF.
+    const set = new Set(next);
+    // Always include the active PDF (in case it's not a PDF tab but
+    // we want the set to mirror the union of recent + active).
     if (activeId && activeTab?.type === "pdf") {
       set.add(activeId);
     }
     return set;
-  }, [recentPdfIds, activeId, activeTab?.type]);
+  }, [activeId, activeTab?.type, pdfTabs]);
+
+  // Commit the latest recency snapshot after the render commits so
+  // discarded renders (Strict Mode, Concurrent) don't pollute the
+  // ref — only the set actually shown to the user is recorded.
+  useEffect(() => {
+    pdfRecencyRef.current = Array.from(mountedPdfIds);
+  }, [mountedPdfIds]);
 
   const panelQueryClient = useQueryClient();
 

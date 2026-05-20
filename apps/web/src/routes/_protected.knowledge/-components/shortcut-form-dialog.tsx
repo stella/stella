@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -68,7 +68,37 @@ export const ShortcutFormDialog = ({
   onSaved,
   canManageTeam,
   initial,
-}: ShortcutFormDialogProps) => {
+}: ShortcutFormDialogProps) => (
+  <Dialog onOpenChange={onOpenChange} open={open}>
+    {/* Mount only while open so each open instantiates a fresh
+        form: cancel-then-reopen discards unsaved edits and stale
+        validation errors (the behaviour the removed `open`-driven
+        reset effect provided), and switching between create/edit-
+        for-same-id re-seeds from `initial` without an effect. */}
+    {open ? (
+      <ShortcutFormDialogBody
+        canManageTeam={canManageTeam}
+        initial={initial}
+        onOpenChange={onOpenChange}
+        onSaved={onSaved}
+      />
+    ) : null}
+  </Dialog>
+);
+
+type ShortcutFormDialogBodyProps = {
+  onOpenChange: (open: boolean) => void;
+  onSaved: () => void;
+  canManageTeam: boolean;
+  initial: ShortcutInitial | undefined;
+};
+
+const ShortcutFormDialogBody = ({
+  onOpenChange,
+  onSaved,
+  canManageTeam,
+  initial,
+}: ShortcutFormDialogBodyProps) => {
   const t = useTranslations();
   const isEdit = !!initial?.id;
 
@@ -80,19 +110,6 @@ export const ShortcutFormDialog = ({
     scope: initial?.scope ?? "private",
   }));
   const [commandError, setCommandError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (open) {
-      setForm({
-        name: initial?.name ?? "",
-        description: initial?.description ?? "",
-        command: initial?.command ?? "",
-        prompt: initial?.prompt ?? "",
-        scope: initial?.scope ?? "private",
-      });
-      setCommandError(null);
-    }
-  }, [open, initial]);
 
   const validateCommand = (cmd: string): string | null => {
     if (!cmd) {
@@ -179,136 +196,129 @@ export const ShortcutFormDialog = ({
     !commandError;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogPopup className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>
-            {isEdit
-              ? t("knowledge.skills.editShortcut")
-              : t("knowledge.skills.addShortcut")}
-          </DialogTitle>
-        </DialogHeader>
+    <DialogPopup className="sm:max-w-lg">
+      <DialogHeader>
+        <DialogTitle>
+          {isEdit
+            ? t("knowledge.skills.editShortcut")
+            : t("knowledge.skills.addShortcut")}
+        </DialogTitle>
+      </DialogHeader>
 
-        <DialogPanel className="flex flex-col gap-4">
-          {/* Name */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium" htmlFor="shortcut-name">
-              {t("knowledge.skills.form.name")}
-            </label>
+      <DialogPanel className="flex flex-col gap-4">
+        {/* Name */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium" htmlFor="shortcut-name">
+            {t("knowledge.skills.form.name")}
+          </label>
+          <Input
+            id="shortcut-name"
+            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+            placeholder={t("knowledge.skills.form.namePlaceholder")}
+            value={form.name}
+          />
+        </div>
+
+        {/* Description */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium" htmlFor="shortcut-description">
+            {t("knowledge.skills.form.description")}
+          </label>
+          <Input
+            id="shortcut-description"
+            onChange={(e) =>
+              setForm((f) => ({ ...f, description: e.target.value }))
+            }
+            placeholder={t("knowledge.skills.form.descriptionPlaceholder")}
+            value={form.description}
+          />
+        </div>
+
+        {/* Command */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium" htmlFor="shortcut-command">
+            {t("knowledge.skills.form.command")}
+          </label>
+          <div className="flex items-stretch">
+            <span className="bg-muted border-border flex items-center rounded-s-md border border-e-0 px-3 text-sm">
+              {t("knowledge.skills.form.commandPrefix")}
+            </span>
             <Input
-              id="shortcut-name"
-              placeholder={t("knowledge.skills.form.namePlaceholder")}
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              className={cn(
+                "rounded-s-none",
+                commandError && "border-destructive",
+              )}
+              id="shortcut-command"
+              onChange={(e) => handleCommandChange(e.target.value)}
+              placeholder={t("knowledge.skills.form.commandPlaceholder")}
+              value={form.command}
             />
           </div>
-
-          {/* Description */}
-          <div className="flex flex-col gap-1.5">
-            <label
-              className="text-sm font-medium"
-              htmlFor="shortcut-description"
-            >
-              {t("knowledge.skills.form.description")}
-            </label>
-            <Input
-              id="shortcut-description"
-              placeholder={t("knowledge.skills.form.descriptionPlaceholder")}
-              value={form.description}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, description: e.target.value }))
-              }
-            />
-          </div>
-
-          {/* Command */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium" htmlFor="shortcut-command">
-              {t("knowledge.skills.form.command")}
-            </label>
-            <div className="flex items-stretch">
-              <span className="bg-muted border-border flex items-center rounded-s-md border border-e-0 px-3 text-sm">
-                {t("knowledge.skills.form.commandPrefix")}
-              </span>
-              <Input
-                id="shortcut-command"
-                className={cn(
-                  "rounded-s-none",
-                  commandError && "border-destructive",
-                )}
-                placeholder={t("knowledge.skills.form.commandPlaceholder")}
-                value={form.command}
-                onChange={(e) => handleCommandChange(e.target.value)}
-              />
-            </div>
-            {commandError ? (
-              <p className="text-destructive text-xs">{commandError}</p>
-            ) : (
-              <p className="text-muted-foreground text-xs">
-                {t("knowledge.skills.form.commandHint")}
-              </p>
-            )}
-          </div>
-
-          {/* Prompt */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium" htmlFor="shortcut-prompt">
-              {t("knowledge.skills.form.prompt")}
-            </label>
-            <Textarea
-              id="shortcut-prompt"
-              className="min-h-30 resize-y"
-              placeholder={t("knowledge.skills.form.promptPlaceholder")}
-              value={form.prompt}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, prompt: e.target.value }))
-              }
-            />
-          </div>
-
-          {/* Scope — only shown on create and only for admins/owners */}
-          {!isEdit && canManageTeam && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium" htmlFor="shortcut-scope">
-                {t("knowledge.skills.form.scope")}
-              </label>
-              <Select
-                value={form.scope}
-                onValueChange={(v) => {
-                  if (v !== "team" && v !== "private") {
-                    return;
-                  }
-                  setForm((f) => ({ ...f, scope: v }));
-                }}
-              >
-                <SelectTrigger id="shortcut-scope">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectPopup>
-                  <SelectItem value="private">
-                    {t("knowledge.skills.form.scopePrivate")}
-                  </SelectItem>
-                  <SelectItem value="team">
-                    {t("knowledge.skills.form.scopeTeam")}
-                  </SelectItem>
-                </SelectPopup>
-              </Select>
-            </div>
+          {commandError ? (
+            <p className="text-destructive text-xs">{commandError}</p>
+          ) : (
+            <p className="text-muted-foreground text-xs">
+              {t("knowledge.skills.form.commandHint")}
+            </p>
           )}
-        </DialogPanel>
+        </div>
 
-        <DialogFooter>
-          <DialogClose render={<Button variant="ghost" />}>
-            {t("common.cancel")}
-          </DialogClose>
-          <Button
-            disabled={!canSubmit || saveShortcut.isPending}
-            onClick={handleSubmit}
-          >
-            {isEdit ? t("common.save") : t("common.add")}
-          </Button>
-        </DialogFooter>
-      </DialogPopup>
-    </Dialog>
+        {/* Prompt */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium" htmlFor="shortcut-prompt">
+            {t("knowledge.skills.form.prompt")}
+          </label>
+          <Textarea
+            className="min-h-30 resize-y"
+            id="shortcut-prompt"
+            onChange={(e) => setForm((f) => ({ ...f, prompt: e.target.value }))}
+            placeholder={t("knowledge.skills.form.promptPlaceholder")}
+            value={form.prompt}
+          />
+        </div>
+
+        {/* Scope — only shown on create and only for admins/owners */}
+        {!isEdit && canManageTeam && (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium" htmlFor="shortcut-scope">
+              {t("knowledge.skills.form.scope")}
+            </label>
+            <Select
+              onValueChange={(v) => {
+                if (v !== "team" && v !== "private") {
+                  return;
+                }
+                setForm((f) => ({ ...f, scope: v }));
+              }}
+              value={form.scope}
+            >
+              <SelectTrigger id="shortcut-scope">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup>
+                <SelectItem value="private">
+                  {t("knowledge.skills.form.scopePrivate")}
+                </SelectItem>
+                <SelectItem value="team">
+                  {t("knowledge.skills.form.scopeTeam")}
+                </SelectItem>
+              </SelectPopup>
+            </Select>
+          </div>
+        )}
+      </DialogPanel>
+
+      <DialogFooter>
+        <DialogClose render={<Button variant="ghost" />}>
+          {t("common.cancel")}
+        </DialogClose>
+        <Button
+          disabled={!canSubmit || saveShortcut.isPending}
+          onClick={handleSubmit}
+        >
+          {isEdit ? t("common.save") : t("common.add")}
+        </Button>
+      </DialogFooter>
+    </DialogPopup>
   );
 };

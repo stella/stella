@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -73,7 +73,37 @@ export const ClauseFormDialog = ({
   onSaved,
   categories,
   initial,
-}: ClauseFormDialogProps) => {
+}: ClauseFormDialogProps) => (
+  <Dialog onOpenChange={onOpenChange} open={open}>
+    {/* Mount only while open so each open instantiates a fresh
+        form: cancel-then-reopen discards unsaved edits (the
+        behaviour the removed `open`-driven reset effect provided),
+        and switching between create/edit-for-same-id re-seeds from
+        `initial` without an effect. */}
+    {open ? (
+      <ClauseFormDialogBody
+        categories={categories}
+        initial={initial}
+        onOpenChange={onOpenChange}
+        onSaved={onSaved}
+      />
+    ) : null}
+  </Dialog>
+);
+
+type ClauseFormDialogBodyProps = {
+  onOpenChange: (open: boolean) => void;
+  onSaved: () => void;
+  categories: CategoryOption[];
+  initial: ClauseFormDialogProps["initial"];
+};
+
+const ClauseFormDialogBody = ({
+  onOpenChange,
+  onSaved,
+  categories,
+  initial,
+}: ClauseFormDialogBodyProps) => {
   const t = useTranslations();
   const isEdit = !!initial?.id;
 
@@ -87,21 +117,6 @@ export const ClauseFormDialog = ({
     bodyParagraphs: initial?.bodyParagraphs ?? DEFAULT_BODY,
   }));
   const [saving, setSaving] = useState(false);
-
-  // Reset form when dialog opens to reflect latest data
-  useEffect(() => {
-    if (open) {
-      setForm({
-        id: initial?.id,
-        title: initial?.title ?? "",
-        description: initial?.description ?? "",
-        usageNotes: initial?.usageNotes ?? "",
-        language: initial?.language ?? "",
-        categoryId: initial?.categoryId ?? "",
-        bodyParagraphs: initial?.bodyParagraphs ?? DEFAULT_BODY,
-      });
-    }
-  }, [open, initial]);
 
   const handleSave = useCallback(async () => {
     if (!form.title.trim()) {
@@ -188,139 +203,135 @@ export const ClauseFormDialog = ({
   }, [form, isEdit, t, onOpenChange, onSaved]);
 
   return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogPopup className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>
-            {isEdit ? t("clauses.editClause") : t("clauses.createClause")}
-          </DialogTitle>
-        </DialogHeader>
-        <DialogPanel className="grid gap-4">
+    <DialogPopup className="sm:max-w-lg">
+      <DialogHeader>
+        <DialogTitle>
+          {isEdit ? t("clauses.editClause") : t("clauses.createClause")}
+        </DialogTitle>
+      </DialogHeader>
+      <DialogPanel className="grid gap-4">
+        <div className="grid gap-1.5">
+          <label className="text-sm font-medium" htmlFor="clause-title">
+            {t("clauses.titleLabel")}
+          </label>
+          <Input
+            id="clause-title"
+            onChange={(e) =>
+              setForm((f) => ({
+                ...f,
+                title: e.target.value,
+              }))
+            }
+            placeholder={t("clauses.titlePlaceholder")}
+            value={form.title}
+          />
+        </div>
+
+        <div className="grid gap-1.5">
+          <label className="text-sm font-medium" htmlFor="clause-description">
+            {t("common.description")}
+          </label>
+          <Input
+            id="clause-description"
+            onChange={(e) =>
+              setForm((f) => ({
+                ...f,
+                description: e.target.value,
+              }))
+            }
+            placeholder={t("clauses.descriptionPlaceholder")}
+            value={form.description}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
           <div className="grid gap-1.5">
-            <label className="text-sm font-medium" htmlFor="clause-title">
-              {t("clauses.titleLabel")}
+            <label className="text-sm font-medium" htmlFor="clause-language">
+              {t("common.language")}
             </label>
             <Input
-              id="clause-title"
+              id="clause-language"
+              maxLength={10}
               onChange={(e) =>
                 setForm((f) => ({
                   ...f,
-                  title: e.target.value,
+                  language: e.target.value,
                 }))
               }
-              placeholder={t("clauses.titlePlaceholder")}
-              value={form.title}
+              placeholder={t("clauses.languagePlaceholder")}
+              value={form.language}
             />
           </div>
 
           <div className="grid gap-1.5">
-            <label className="text-sm font-medium" htmlFor="clause-description">
-              {t("common.description")}
-            </label>
-            <Input
-              id="clause-description"
-              onChange={(e) =>
+            <span className="text-sm font-medium">{t("common.category")}</span>
+            <Select
+              onValueChange={(val) =>
                 setForm((f) => ({
                   ...f,
-                  description: e.target.value,
+                  categoryId: val ?? "",
                 }))
               }
-              placeholder={t("clauses.descriptionPlaceholder")}
-              value={form.description}
-            />
+              value={form.categoryId || undefined}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={t("common.uncategorized")} />
+              </SelectTrigger>
+              <SelectPopup>
+                {categories.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
           </div>
+        </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-1.5">
-              <label className="text-sm font-medium" htmlFor="clause-language">
-                {t("common.language")}
-              </label>
-              <Input
-                id="clause-language"
-                maxLength={10}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    language: e.target.value,
-                  }))
-                }
-                placeholder={t("clauses.languagePlaceholder")}
-                value={form.language}
-              />
-            </div>
+        <div className="grid gap-1.5">
+          <span className="text-sm font-medium">{t("clauses.body")}</span>
+          <ClauseEditor
+            content={form.bodyParagraphs}
+            onChange={(paragraphs) =>
+              setForm((f) => ({
+                ...f,
+                bodyParagraphs: paragraphs,
+              }))
+            }
+          />
+        </div>
 
-            <div className="grid gap-1.5">
-              <span className="text-sm font-medium">
-                {t("common.category")}
-              </span>
-              <Select
-                onValueChange={(val) =>
-                  setForm((f) => ({
-                    ...f,
-                    categoryId: val ?? "",
-                  }))
-                }
-                value={form.categoryId || undefined}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={t("common.uncategorized")} />
-                </SelectTrigger>
-                <SelectPopup>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid gap-1.5">
-            <span className="text-sm font-medium">{t("clauses.body")}</span>
-            <ClauseEditor
-              content={form.bodyParagraphs}
-              onChange={(paragraphs) =>
-                setForm((f) => ({
-                  ...f,
-                  bodyParagraphs: paragraphs,
-                }))
-              }
-            />
-          </div>
-
-          <div className="grid gap-1.5">
-            <label className="text-sm font-medium" htmlFor="clause-usage-notes">
-              {t("clauses.usageNotes")}
-            </label>
-            <Textarea
-              className="min-h-[60px]"
-              id="clause-usage-notes"
-              onChange={(e) =>
-                setForm((f) => ({
-                  ...f,
-                  usageNotes: e.target.value,
-                }))
-              }
-              placeholder={t("clauses.usageNotesPlaceholder")}
-              value={form.usageNotes}
-            />
-          </div>
-        </DialogPanel>
-        <DialogFooter>
-          <DialogClose render={<Button variant="ghost" />}>
-            {t("common.cancel")}
-          </DialogClose>
-          <Button
-            disabled={saving || !form.title.trim()}
-            onClick={() => {
-              void handleSave();
-            }}
-          >
-            {t("common.save")}
-          </Button>
-        </DialogFooter>
-      </DialogPopup>
-    </Dialog>
+        <div className="grid gap-1.5">
+          <label className="text-sm font-medium" htmlFor="clause-usage-notes">
+            {t("clauses.usageNotes")}
+          </label>
+          <Textarea
+            className="min-h-[60px]"
+            id="clause-usage-notes"
+            onChange={(e) =>
+              setForm((f) => ({
+                ...f,
+                usageNotes: e.target.value,
+              }))
+            }
+            placeholder={t("clauses.usageNotesPlaceholder")}
+            value={form.usageNotes}
+          />
+        </div>
+      </DialogPanel>
+      <DialogFooter>
+        <DialogClose render={<Button variant="ghost" />}>
+          {t("common.cancel")}
+        </DialogClose>
+        <Button
+          disabled={saving || !form.title.trim()}
+          onClick={() => {
+            void handleSave();
+          }}
+        >
+          {t("common.save")}
+        </Button>
+      </DialogFooter>
+    </DialogPopup>
   );
 };

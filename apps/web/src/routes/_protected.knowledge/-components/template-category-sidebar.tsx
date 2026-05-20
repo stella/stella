@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 import {
   MoreHorizontalIcon,
@@ -255,27 +255,50 @@ const CategoryRow = ({
 
 // ── Category Form Dialog ────────────────────────────
 
+type CategoryFormDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSaved: () => void;
+  initial?: { id: string; name: string };
+};
+
 const CategoryFormDialog = ({
   open,
   onOpenChange,
   onSaved,
   initial,
-}: {
-  open: boolean;
+}: CategoryFormDialogProps) => (
+  <Dialog onOpenChange={onOpenChange} open={open}>
+    {/* Mount only while open so each open instantiates a fresh
+        form: cancel-then-reopen discards unsaved edits (the
+        behaviour the removed `open`-driven reset effect provided),
+        and switching between create/edit-for-same-id re-seeds from
+        `initial` without an effect. */}
+    {open ? (
+      <CategoryFormDialogBody
+        initial={initial}
+        onOpenChange={onOpenChange}
+        onSaved={onSaved}
+      />
+    ) : null}
+  </Dialog>
+);
+
+type CategoryFormDialogBodyProps = {
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
-  initial?: { id: string; name: string };
-}) => {
+  initial: { id: string; name: string } | undefined;
+};
+
+const CategoryFormDialogBody = ({
+  onOpenChange,
+  onSaved,
+  initial,
+}: CategoryFormDialogBodyProps) => {
   const t = useTranslations();
   const isEdit = !!initial?.id;
   const [name, setName] = useState(initial?.name ?? "");
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setName(initial?.name ?? "");
-    }
-  }, [open, initial?.name]);
 
   const handleSave = useCallback(async () => {
     if (!name.trim()) {
@@ -327,45 +350,41 @@ const CategoryFormDialog = ({
   }, [name, isEdit, initial, t, onOpenChange, onSaved]);
 
   return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogPopup className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle>
-            {isEdit
-              ? t("templates.editCategory")
-              : t("templates.createCategory")}
-          </DialogTitle>
-        </DialogHeader>
-        <DialogPanel className="grid gap-4">
-          <div className="grid gap-1.5">
-            <label
-              className="text-sm font-medium"
-              htmlFor="template-category-name"
-            >
-              {t("templates.categoryName")}
-            </label>
-            <Input
-              id="template-category-name"
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t("templates.categoryName")}
-              value={name}
-            />
-          </div>
-        </DialogPanel>
-        <DialogFooter>
-          <DialogClose render={<Button variant="ghost" />}>
-            {t("common.cancel")}
-          </DialogClose>
-          <Button
-            disabled={saving || !name.trim()}
-            onClick={() => {
-              void handleSave();
-            }}
+    <DialogPopup className="sm:max-w-sm">
+      <DialogHeader>
+        <DialogTitle>
+          {isEdit ? t("templates.editCategory") : t("templates.createCategory")}
+        </DialogTitle>
+      </DialogHeader>
+      <DialogPanel className="grid gap-4">
+        <div className="grid gap-1.5">
+          <label
+            className="text-sm font-medium"
+            htmlFor="template-category-name"
           >
-            {t("common.save")}
-          </Button>
-        </DialogFooter>
-      </DialogPopup>
-    </Dialog>
+            {t("templates.categoryName")}
+          </label>
+          <Input
+            id="template-category-name"
+            onChange={(e) => setName(e.target.value)}
+            placeholder={t("templates.categoryName")}
+            value={name}
+          />
+        </div>
+      </DialogPanel>
+      <DialogFooter>
+        <DialogClose render={<Button variant="ghost" />}>
+          {t("common.cancel")}
+        </DialogClose>
+        <Button
+          disabled={saving || !name.trim()}
+          onClick={() => {
+            void handleSave();
+          }}
+        >
+          {t("common.save")}
+        </Button>
+      </DialogFooter>
+    </DialogPopup>
   );
 };

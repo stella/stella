@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
@@ -24,6 +24,7 @@ import {
 } from "@/components/empty-screen";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
+import { ensureCriticalQueryData } from "@/lib/react-query";
 import { roleOptions } from "@/routes/-queries";
 import {
   knowledgeKeys,
@@ -34,6 +35,23 @@ import { ShortcutFormDialog } from "./-components/shortcut-form-dialog";
 import type { ShortcutInitial } from "./-components/shortcut-form-dialog";
 
 export const Route = createFileRoute("/_protected/knowledge/prompts")({
+  // Seed the default shortcuts before the page renders, so the
+  // component never has to write to the DB during a render-phase
+  // effect. The backend handler is idempotent at the user level
+  // (existing private shortcuts short-circuit the seed).
+  loader: async ({ context }) => {
+    const activeOrganizationId = context.user.activeOrganizationId;
+    const existing = await ensureCriticalQueryData(
+      context.queryClient,
+      shortcutsOptions(activeOrganizationId),
+    );
+    if (existing.length === 0) {
+      await api.shortcuts.seed.post({ queryKey: ["shortcuts"] });
+      await context.queryClient.invalidateQueries({
+        queryKey: knowledgeKeys.shortcuts.all(activeOrganizationId),
+      });
+    }
+  },
   component: PromptsPage,
 });
 
@@ -68,17 +86,6 @@ function PromptsPage() {
   const { data: role } = useQuery(roleOptions);
 
   const canManageTeam = role === "owner" || role === "admin";
-
-  // Seed defaults on first mount if no shortcuts exist yet
-  useEffect(() => {
-    if (!isLoading && shortcuts.length === 0) {
-      void api.shortcuts.seed.post({ queryKey: ["shortcuts"] }).then(() => {
-        void queryClient.invalidateQueries({
-          queryKey: knowledgeKeys.shortcuts.all(activeOrganizationId),
-        });
-      });
-    }
-  }, [activeOrganizationId, isLoading, shortcuts.length, queryClient]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ShortcutInitial | undefined>();
