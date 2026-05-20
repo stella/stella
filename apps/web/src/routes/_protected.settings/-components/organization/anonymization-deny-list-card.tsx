@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2, UploadIcon } from "lucide-react";
@@ -290,7 +291,7 @@ export const AnonymizationDenyListCard = () => {
 
   const entries = blacklistQuery.data?.entries ?? [];
 
-  const submitTerm = () => {
+  const submitTerm = async () => {
     const canonical = pendingCanonical.trim();
     if (canonical.length === 0) {
       return;
@@ -304,27 +305,22 @@ export const AnonymizationDenyListCard = () => {
       })),
       { canonical, label: pendingLabel },
     ]);
-    updateMutation.mutate(
-      { entries: next },
-      {
-        onSuccess: () => {
-          setPendingCanonical("");
-          setPendingLabel(DEFAULT_LABEL);
-          stellaToast.add({
-            title: t("settings.organization.anonymization.termAddedToast", {
-              value: canonical,
-            }),
-            type: "success",
-          });
-        },
-        onError: (error) => {
-          stellaToast.add({
-            title: error instanceof Error ? error.message : String(error),
-            type: "error",
-          });
-        },
-      },
-    );
+    try {
+      await updateMutation.mutateAsync({ entries: next });
+      setPendingCanonical("");
+      setPendingLabel(DEFAULT_LABEL);
+      stellaToast.add({
+        title: t("settings.organization.anonymization.termAddedToast", {
+          value: canonical,
+        }),
+        type: "success",
+      });
+    } catch (error) {
+      stellaToast.add({
+        title: error instanceof Error ? error.message : String(error),
+        type: "error",
+      });
+    }
   };
 
   const removeEntry = (canonical: string) => {
@@ -394,11 +390,8 @@ export const AnonymizationDenyListCard = () => {
       <FramePanel>
         <div className="flex flex-col gap-3 p-1">
           <form
+            action={submitTerm}
             className="flex flex-col gap-2 rounded-md border p-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              submitTerm();
-            }}
           >
             <Input
               autoComplete="off"
@@ -444,16 +437,13 @@ export const AnonymizationDenyListCard = () => {
                   </ComboboxEmpty>
                 </ComboboxPopup>
               </Combobox>
-              <Button
+              <AddTermSubmitButton
                 disabled={
                   pendingCanonical.trim().length === 0 ||
                   updateMutation.isPending
                 }
-                size="sm"
-                type="submit"
-              >
-                {t("settings.organization.anonymization.addAction")}
-              </Button>
+                label={t("settings.organization.anonymization.addAction")}
+              />
             </div>
             <div className="flex items-center gap-2">
               <Button
@@ -533,5 +523,20 @@ export const AnonymizationDenyListCard = () => {
         </div>
       </FramePanel>
     </Frame>
+  );
+};
+
+const AddTermSubmitButton = ({
+  disabled,
+  label,
+}: {
+  disabled: boolean;
+  label: string;
+}) => {
+  const { pending } = useFormStatus();
+  return (
+    <Button disabled={disabled || pending} size="sm" type="submit">
+      {label}
+    </Button>
   );
 };

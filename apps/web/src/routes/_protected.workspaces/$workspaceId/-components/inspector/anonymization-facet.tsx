@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
@@ -347,37 +348,34 @@ export const AnonymizationFacet = ({
     // same string still re-fires the prefill.
   }, [folioSelection]);
 
-  const addTerm = (canonical: string, label: LabelOption) => {
+  const addTerm = async (canonical: string, label: LabelOption) => {
     const trimmed = canonical.trim();
     if (trimmed.length === 0) {
       return;
     }
-    createMutation.mutate(
-      {
+    try {
+      await createMutation.mutateAsync({
         workspaceId,
         entries: [{ canonical: trimmed, label }],
-      },
-      {
-        onSuccess: () => {
-          setPendingValue("");
-          setPendingLabel(DEFAULT_LABEL);
-          stellaToast.add({
-            title: t("inspector.anonymization.termAddedToast", {
-              value: trimmed,
-            }),
-            type: "success",
-          });
-        },
-        onError: (error) => {
-          stellaToast.add({
-            title: error instanceof Error ? error.message : String(error),
-            type: "error",
-          });
-        },
-      },
-    );
+      });
+      setPendingValue("");
+      setPendingLabel(DEFAULT_LABEL);
+      stellaToast.add({
+        title: t("inspector.anonymization.termAddedToast", {
+          value: trimmed,
+        }),
+        type: "success",
+      });
+    } catch (error) {
+      stellaToast.add({
+        title: error instanceof Error ? error.message : String(error),
+        type: "error",
+      });
+    }
   };
-  const submitTerm = () => addTerm(pendingValue, pendingLabel);
+  const submitTerm = async () => {
+    await addTerm(pendingValue, pendingLabel);
+  };
 
   const allEntries = termsQuery.data?.entries;
   const matchSnapshot = useAnonymizationMatches(activeFieldId);
@@ -651,11 +649,8 @@ export const AnonymizationFacet = ({
       </h3>
 
       <form
+        action={submitTerm}
         className="flex flex-col gap-2 rounded-md border p-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          submitTerm();
-        }}
       >
         <Input
           autoComplete="off"
@@ -695,15 +690,10 @@ export const AnonymizationFacet = ({
               </ComboboxEmpty>
             </ComboboxPopup>
           </Combobox>
-          <Button
-            disabled={
-              pendingValue.trim().length === 0 || createMutation.isPending
-            }
-            size="sm"
-            type="submit"
-          >
-            {t("inspector.anonymization.addAction")}
-          </Button>
+          <AddTermSubmitButton
+            disabled={pendingValue.trim().length === 0}
+            label={t("inspector.anonymization.addAction")}
+          />
         </div>
       </form>
 
@@ -1005,8 +995,25 @@ export const AnonymizationFacet = ({
         </div>
       )}
       <AnonymizationContextMenu
-        onAnonymize={(selection) => addTerm(selection, pendingLabel)}
+        onAnonymize={(selection) => {
+          void addTerm(selection, pendingLabel);
+        }}
       />
     </div>
+  );
+};
+
+const AddTermSubmitButton = ({
+  disabled,
+  label,
+}: {
+  disabled: boolean;
+  label: string;
+}) => {
+  const { pending } = useFormStatus();
+  return (
+    <Button disabled={disabled || pending} size="sm" type="submit">
+      {label}
+    </Button>
   );
 };

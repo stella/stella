@@ -1,4 +1,10 @@
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useOptimistic,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 
 import { EyeOffIcon, PencilLineIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -27,6 +33,11 @@ type PropertyPopoverProps = {
   header: TableHeader;
 };
 
+type ReplaceAction = {
+  index: number;
+  next: PropertyDependency;
+};
+
 export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
   const t = useTranslations();
   const { workspaceId, id, name } = property;
@@ -41,57 +52,71 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
   // a save from silently rewriting the file column as text/manual.
   const canEditViaComposer = property.content.type !== "file";
 
-  // Local optimistic copy of the dependencies. The conditions sub-modal
-  // can fire several edits in quick succession; rebuilding from
-  // `property.tool.dependencies` each time would clobber an in-flight
-  // change with the snapshot from the previous render. We keep the
-  // local copy authoritative while a mutation is pending and only
-  // re-sync from the prop when it settles.
-  const initialDeps =
+  // `useOptimistic` mirrors the server `dependencies` while a save is
+  // in flight so rapid successive edits compose against the latest
+  // user intent. Once the transition settles, React reverts to the
+  // passthrough server value — no manual resync effect needed.
+  const serverDependencies =
     property.tool.type === "ai-model" ? property.tool.dependencies : [];
-  const [localDeps, setLocalDeps] = useState<PropertyDependency[]>(initialDeps);
-  const isUpdatePending = updateProperty.isPending;
+  const [optimisticDeps, applyDependencyReplacement] = useOptimistic(
+    serverDependencies,
+    (current, action: ReplaceAction) =>
+      current.map((dependency, index) =>
+        index === action.index ? action.next : dependency,
+      ),
+  );
+  const [immediateDeps, setImmediateDeps] = useState<
+    PropertyDependency[] | null
+  >(null);
+  const displayedDependencies = immediateDeps ?? optimisticDeps;
+  const latestDependenciesRef = useRef(displayedDependencies);
+  const dependencyGenerationRef = useRef(0);
+  const [, startDepsTransition] = useTransition();
 
   useEffect(() => {
-    if (isUpdatePending) {
-      return;
-    }
-    if (property.tool.type !== "ai-model") {
-      setLocalDeps([]);
-      return;
-    }
-    setLocalDeps(property.tool.dependencies);
-  }, [property, isUpdatePending]);
+    latestDependenciesRef.current = displayedDependencies;
+  }, [displayedDependencies]);
 
   // Conditions are editable from the popover without opening the full
   // composer: replaceValue swaps a dependency in place and we save by
   // round-tripping the whole property through updateProperty.
+  // The mutation payload composes against the latest optimistic
+  // dependencies (not the server snapshot) so two edits fired before
+  // the query refetches don't drop one another's in-flight changes.
   const replaceDependency = (index: number, next: PropertyDependency) => {
     if (property.tool.type !== "ai-model") {
       return;
     }
-    const nextDependencies = localDeps.map((d, i) => (i === index ? next : d));
-    setLocalDeps(nextDependencies);
-    updateProperty.mutate(
-      {
-        workspaceId,
-        propertyId: id,
-        name,
-        content: property.content,
-        tool: { ...property.tool, dependencies: nextDependencies },
-      },
-      {
-        onSuccess: () => {
-          void startWorkflow();
-        },
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
-        },
-      },
+    const tool = property.tool;
+    const nextDependencies = latestDependenciesRef.current.map(
+      (dependency, i) => (i === index ? next : dependency),
     );
+    const generation = dependencyGenerationRef.current + 1;
+    dependencyGenerationRef.current = generation;
+    latestDependenciesRef.current = nextDependencies;
+    setImmediateDeps(nextDependencies);
+    startDepsTransition(async () => {
+      applyDependencyReplacement({ index, next });
+      try {
+        await updateProperty.mutateAsync({
+          workspaceId,
+          propertyId: id,
+          name,
+          content: property.content,
+          tool: { ...tool, dependencies: nextDependencies },
+        });
+        void startWorkflow();
+      } catch {
+        stellaToast.add({
+          title: t("errors.actionFailed"),
+          type: "error",
+        });
+      } finally {
+        if (dependencyGenerationRef.current === generation) {
+          setImmediateDeps(null);
+        }
+      }
+    });
   };
 
   return (
@@ -133,7 +158,7 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
             <Separator />
             <div className="flex flex-col p-1">
               <PropertyConditions
-                dependencies={localDeps}
+                dependencies={displayedDependencies}
                 replaceValue={replaceDependency}
                 workspaceId={workspaceId}
               />

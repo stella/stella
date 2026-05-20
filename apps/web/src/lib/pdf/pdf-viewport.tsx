@@ -5,9 +5,9 @@ import {
   useId,
   useRef,
   useState,
-  useTransition,
 } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import { useFormStatus } from "react-dom";
 
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -206,18 +206,14 @@ const PDFPasswordPrompt = ({
   const id = useId();
   const t = useTranslations();
   const [value, setValue] = useState("");
-  const [isPending, startFormTransition] = useTransition();
 
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-4 px-4 py-6">
       <form
-        className="w-full max-w-sm space-y-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          startFormTransition(() => {
-            onSubmit(value);
-          });
+        action={() => {
+          onSubmit(value);
         }}
+        className="w-full max-w-sm space-y-3"
       >
         <Field invalid={incorrectPassword}>
           <FieldLabel htmlFor={id}>
@@ -239,10 +235,17 @@ const PDFPasswordPrompt = ({
             </FieldError>
           )}
         </Field>
-        <Button className="w-full" disabled={isPending} type="submit">
-          {t("workspaces.pdf.unlock")}
-        </Button>
+        <PDFPasswordSubmitButton label={t("workspaces.pdf.unlock")} />
       </form>
     </div>
+  );
+};
+
+const PDFPasswordSubmitButton = ({ label }: { label: string }) => {
+  const { pending } = useFormStatus();
+  return (
+    <Button className="w-full" disabled={pending} type="submit">
+      {label}
+    </Button>
   );
 };

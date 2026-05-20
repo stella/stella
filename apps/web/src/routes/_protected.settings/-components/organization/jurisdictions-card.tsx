@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useOptimistic, useRef, useState, useTransition } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -21,25 +21,23 @@ export const OrganizationJurisdictionsCard = () => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const { data: settings } = useQuery(organizationSettingsOptions);
+  const serverSelected = settings?.practiceJurisdictions ?? [];
 
-  // Local optimistic state so rapid edits compose against the latest user
-  // intent rather than the (stale) server-cached `selected`. Without this,
-  // clicking two countries before the first mutation settles makes the
-  // second click compute `next` from the pre-first-click value and silently
-  // drop the first selection.
-  const [localSelected, setLocalSelected] = useState<PracticeJurisdiction[]>(
-    () => settings?.practiceJurisdictions ?? [],
+  // `useOptimistic` mirrors the server value and applies the latest user
+  // intent until the wrapping transition settles. When the mutation
+  // rejects (or the request unmounts), React automatically reverts the
+  // optimistic value back to the passthrough server state — no manual
+  // rollback needed.
+  const [optimisticSelected, applyOptimisticSelection] = useOptimistic(
+    serverSelected,
+    (_current, next: PracticeJurisdiction[]) => next,
   );
-  const [hasLocalEdit, setHasLocalEdit] = useState(false);
-
-  // Reconcile from server only when the user isn't mid-edit. Once mutations
-  // settle and we're back in sync, drop the local-edit flag so future server
-  // refreshes (e.g., another tab edited) flow back through.
-  useEffect(() => {
-    if (!hasLocalEdit && settings) {
-      setLocalSelected(settings.practiceJurisdictions);
-    }
-  }, [settings, hasLocalEdit]);
+  const [immediateSelected, setImmediateSelected] = useState<
+    PracticeJurisdiction[] | null
+  >(null);
+  const selectionGenerationRef = useRef(0);
+  const selected = immediateSelected ?? optimisticSelected;
+  const [, startSelectionTransition] = useTransition();
 
   const updateMutation = useMutation({
     mutationFn: async (next: PracticeJurisdiction[]) => {
@@ -55,19 +53,13 @@ export const OrganizationJurisdictionsCard = () => {
       await queryClient.invalidateQueries({
         queryKey: organizationSettingsKeys.all,
       });
-      setHasLocalEdit(false);
     },
-    onError: (error, attemptedNext) => {
+    onError: (error) => {
       analytics.captureError(error);
       stellaToast.add({
         title: t("errors.actionFailed"),
         type: "error",
       });
-      // Roll back to whatever the server still reports.
-      setLocalSelected(settings?.practiceJurisdictions ?? []);
-      setHasLocalEdit(false);
-      // attemptedNext intentionally ignored after rollback.
-      void attemptedNext;
     },
   });
 
@@ -77,11 +69,26 @@ export const OrganizationJurisdictionsCard = () => {
         <div className="flex flex-col gap-3 p-1">
           <JurisdictionPicker
             onChange={(next) => {
-              setLocalSelected(next);
-              setHasLocalEdit(true);
-              updateMutation.mutate(next);
+              const generation = selectionGenerationRef.current + 1;
+              selectionGenerationRef.current = generation;
+              setImmediateSelected(next);
+              startSelectionTransition(async () => {
+                applyOptimisticSelection(next);
+                try {
+                  await updateMutation.mutateAsync(next);
+                } catch {
+                  // The error toast is surfaced via the mutation's
+                  // `onError`. Swallow here so the transition resolves
+                  // and React reverts `optimisticSelected` to the
+                  // server value automatically.
+                } finally {
+                  if (selectionGenerationRef.current === generation) {
+                    setImmediateSelected(null);
+                  }
+                }
+              });
             }}
-            selected={localSelected}
+            selected={selected}
           />
         </div>
       </FramePanel>
