@@ -21,6 +21,7 @@ import type {
   OrgAIProviderConfig,
 } from "@/api/lib/ai-models";
 import { probeProvider } from "@/api/lib/ai-provider-probe";
+import type { ProviderProbeResult } from "@/api/lib/ai-provider-probe";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -222,7 +223,7 @@ const updateAIConfig = createSafeRootHandler(
   },
 );
 
-type ValidationResult = { valid: true } | { valid: false; error: string };
+type ValidationResult = ProviderProbeResult;
 
 type ProviderConfigInput = {
   provider: BYOKProvider;
@@ -506,10 +507,7 @@ const validateProviderKey = async (
   if (result.isErr()) {
     return { valid: false, error: result.error };
   }
-  if (!result.value.valid) {
-    return { valid: false, error: result.value.error ?? "Unknown error" };
-  }
-  return { valid: true };
+  return result.value;
 };
 
 const collectAzureDeployments = (

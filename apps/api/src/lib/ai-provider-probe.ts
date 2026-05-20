@@ -24,7 +24,9 @@ export const PROVIDER_PROBE_VALUES = [
 
 export type ProviderProbeValue = (typeof PROVIDER_PROBE_VALUES)[number];
 
-export type ProviderProbeResult = { valid: boolean; error?: string };
+export type ProviderProbeResult =
+  | { valid: true }
+  | { valid: false; error: string };
 
 type ProbeTarget = {
   url: string;
