@@ -109,6 +109,22 @@ export const useFolioCollaborationSession = ({
     let disposed = false;
     const isDisposed = () => disposed;
     let provider: HocuspocusProvider | null = null;
+    let openingSession: { sessionId: string; token: string } | null = null;
+    const cancelOpeningSession = async () => {
+      const session = openingSession;
+      if (session === null) {
+        return;
+      }
+
+      openingSession = null;
+      try {
+        await api["folio-collab-sessions"]({
+          sessionId: session.sessionId,
+        }).cancel.post({ token: session.token });
+      } catch {
+        // Best-effort cleanup for abandoned session opens.
+      }
+    };
     setState({ status: "opening", collaboration: null });
 
     void (async () => {
@@ -137,6 +153,13 @@ export const useFolioCollaborationSession = ({
 
       const sessionId = response.data.collabSessionId;
       let token = response.data.token;
+      openingSession = { sessionId, token };
+
+      if (isDisposed()) {
+        await cancelOpeningSession();
+        return;
+      }
+
       let tokenExpiresAtMs = Date.parse(response.data.tokenExpiresAt);
       const seedDocumentBuffer = await (async () => {
         if (!response.data.shouldSeed) {
@@ -151,6 +174,7 @@ export const useFolioCollaborationSession = ({
       })();
 
       if (isDisposed()) {
+        await cancelOpeningSession();
         return;
       }
 
@@ -189,6 +213,7 @@ export const useFolioCollaborationSession = ({
 
       const awareness = provider.awareness;
       if (!awareness) {
+        await cancelOpeningSession();
         provider.destroy();
         setState({
           status: "error",
@@ -312,6 +337,7 @@ export const useFolioCollaborationSession = ({
         shouldSeed: response.data.shouldSeed,
         yXmlFragment,
       };
+      openingSession = null;
 
       setState({
         status: "ready",
@@ -328,6 +354,7 @@ export const useFolioCollaborationSession = ({
         },
       });
     })().catch((error: unknown) => {
+      void cancelOpeningSession();
       if (isDisposed()) {
         return;
       }
@@ -344,6 +371,7 @@ export const useFolioCollaborationSession = ({
 
     return () => {
       disposed = true;
+      void cancelOpeningSession();
       provider?.destroy();
     };
   }, [
