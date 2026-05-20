@@ -313,11 +313,12 @@ function parseBorderSpec(border: XmlElement | null): BorderSpec | undefined {
     return undefined;
   }
 
-  const style = narrowEnum(getAttribute(border, "w", "val"), BorderStyleSchema);
-  if (!style) {
+  const rawStyle = getAttribute(border, "w", "val");
+  if (!rawStyle) {
     return undefined;
   }
 
+  const style = narrowEnum(rawStyle, BorderStyleSchema) ?? rawStyle;
   const spec: BorderSpec = { style };
 
   const colorVal = getAttribute(border, "w", "color");

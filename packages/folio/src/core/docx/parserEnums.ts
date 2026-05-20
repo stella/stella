@@ -23,7 +23,6 @@
 import * as v from "valibot";
 
 import type {
-  BorderSpec,
   EmphasisMark,
   FieldType,
   FloatingTableProperties,
@@ -48,6 +47,7 @@ import type {
   TextFormatting,
   ThemeColorSlot,
   UnderlineStyle,
+  KnownBorderStyle,
 } from "../types/document";
 
 /**
@@ -113,7 +113,7 @@ export const BorderStyleSchema = v.picklist([
   "outset",
   "inset",
   "nil",
-] as const satisfies readonly BorderSpec["style"][]);
+] as const satisfies readonly KnownBorderStyle[]);
 
 // ---------------------------------------------------------------------------
 // Run formatting enums

@@ -41,34 +41,36 @@ export type ColorValue = {
   auto?: boolean;
 };
 
+export type KnownBorderStyle =
+  | "none"
+  | "single"
+  | "double"
+  | "dotted"
+  | "dashed"
+  | "thick"
+  | "triple"
+  | "thinThickSmallGap"
+  | "thickThinSmallGap"
+  | "thinThickMediumGap"
+  | "thickThinMediumGap"
+  | "thinThickLargeGap"
+  | "thickThinLargeGap"
+  | "wave"
+  | "doubleWave"
+  | "dashSmallGap"
+  | "dashDotStroked"
+  | "threeDEmboss"
+  | "threeDEngrave"
+  | "outset"
+  | "inset"
+  | "nil";
+
 /**
  * Border specification for any border (paragraph, table, page)
  */
 export type BorderSpec = {
-  /** Border style */
-  style:
-    | "none"
-    | "single"
-    | "double"
-    | "dotted"
-    | "dashed"
-    | "thick"
-    | "triple"
-    | "thinThickSmallGap"
-    | "thickThinSmallGap"
-    | "thinThickMediumGap"
-    | "thickThinMediumGap"
-    | "thinThickLargeGap"
-    | "thickThinLargeGap"
-    | "wave"
-    | "doubleWave"
-    | "dashSmallGap"
-    | "dashDotStroked"
-    | "threeDEmboss"
-    | "threeDEngrave"
-    | "outset"
-    | "inset"
-    | "nil";
+  /** Border style. Unknown OOXML styles are preserved for fallback rendering. */
+  style: string;
   /** Color of the border */
   color?: ColorValue;
   /** Width in eighths of a point (1/8 pt) */
