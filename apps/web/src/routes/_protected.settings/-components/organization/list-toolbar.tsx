@@ -35,11 +35,6 @@ export const OrganizationListToolbar = () => {
   // after the user pauses typing, so `localQuery` already equals
   // the value being re-set.
   const [lastSeenUrlQuery, setLastSeenUrlQuery] = useState(q);
-  if (q !== lastSeenUrlQuery) {
-    setLastSeenUrlQuery(q);
-    setLocalQuery(q);
-  }
-
   const updateSearch = useDebouncedCallback((value: string) => {
     // eslint-disable-next-line typescript/no-floating-promises
     navigate({
@@ -47,6 +42,12 @@ export const OrganizationListToolbar = () => {
       search: (prev) => ({ ...prev, q: value || undefined }),
     });
   }, 300);
+
+  if (q !== lastSeenUrlQuery) {
+    updateSearch.cancel();
+    setLastSeenUrlQuery(q);
+    setLocalQuery(q);
+  }
 
   return (
     <div className="border-border/60 flex items-center gap-2 border-b px-2 py-2">

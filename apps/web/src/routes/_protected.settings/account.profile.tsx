@@ -47,8 +47,17 @@ function isCommonTimezone(tz: string): tz is CommonTimezone {
 
 function ProfilePage() {
   const { data: session } = useSuspenseQuery(sessionOptions);
+  const user = session?.user;
 
-  return <ProfilePageBody key={session?.user.id ?? "anonymous"} />;
+  return (
+    <ProfilePageBody
+      key={[
+        user?.id ?? "anonymous",
+        user?.preferredName ?? "",
+        user?.wordEditShortcut ?? "",
+      ].join(":")}
+    />
+  );
 }
 
 function ProfilePageBody() {
