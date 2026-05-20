@@ -1,12 +1,7 @@
 import { useState } from "react";
 import type { ComponentProps } from "react";
 
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -232,7 +227,8 @@ export const AddMemberDialog = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const addMember = useAddWorkspaceMember();
-  const { data: org } = useSuspenseQuery(organizationOptions);
+  const orgQuery = useQuery(organizationOptions);
+  const org = orgQuery.data;
   const { data: existingMembers = [] } = useQuery(
     workspaceMembersOptions(workspaceId),
   );
@@ -240,9 +236,8 @@ export const AddMemberDialog = ({
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   const existingUserIds = new Set(existingMembers.map((m) => m.userId));
-  const availableMembers = org.members.filter(
-    (m) => !existingUserIds.has(m.userId),
-  );
+  const availableMembers =
+    org?.members.filter((m) => !existingUserIds.has(m.userId)) ?? [];
 
   const memberItems = availableMembers.map((m) => ({
     email: m.user.email,

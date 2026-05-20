@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
   Loader2Icon,
@@ -42,13 +43,21 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
-import { userErrorMessage } from "@/lib/errors";
+import {
+  toAPIError,
+  userErrorFromThrown,
+  userErrorMessage,
+} from "@/lib/errors";
 import { ClauseBody } from "@/routes/_protected.knowledge/-components/clause-body";
 import { diffClauseBodies } from "@/routes/_protected.knowledge/-components/clause-diff";
 import type { ParagraphDiff } from "@/routes/_protected.knowledge/-components/clause-diff";
 import { ClauseDiffView } from "@/routes/_protected.knowledge/-components/clause-diff-view";
 import { ClauseFormDialog } from "@/routes/_protected.knowledge/-components/clause-form-dialog";
 import type { BlockDirectiveKind } from "@/routes/_protected.knowledge/-components/paragraph-rendering";
+import {
+  clauseDetailOptions,
+  knowledgeKeys,
+} from "@/routes/_protected.knowledge/-queries";
 
 // ── Types ────────────────────────────────────────────
 
@@ -122,6 +131,7 @@ type CategoryOption = {
 };
 
 type ClauseDetailViewProps = {
+  organizationId: string;
   clauseId: string;
   categories: CategoryOption[];
   onBack: () => void;
@@ -131,86 +141,55 @@ type ClauseDetailViewProps = {
 // ── Main Component ───────────────────────────────────
 
 export const ClauseDetailView = ({
+  organizationId,
   clauseId,
   categories,
   onBack,
   onDeleted,
 }: ClauseDetailViewProps) => {
   const t = useTranslations();
+  const queryClient = useQueryClient();
   const canEditClause = usePermissions({ clause: ["update"] });
   const canDeleteClause = usePermissions({ clause: ["delete"] });
-  const [state, setState] = useState<
-    | { kind: "loading" }
-    | { kind: "ready"; detail: ClauseDetail }
-    | { kind: "error" }
-  >({ kind: "loading" });
+  const detailQuery = useQuery(clauseDetailOptions(organizationId, clauseId));
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
-  const load = useCallback(async () => {
-    const response = await api.clauses({ clauseId }).get();
+  // SAFETY: The API returns body as ClauseParagraph[]
+  // but Eden types it as unknown due to JSONB.
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  const detail = detailQuery.data as unknown as ClauseDetail | undefined;
 
-    if (response.error) {
+  const refreshDetail = useCallback(() => {
+    void queryClient.invalidateQueries({
+      queryKey: knowledgeKeys.clauses.detail(organizationId, clauseId),
+    });
+  }, [clauseId, organizationId, queryClient]);
+
+  const deleteClause = useMutation({
+    mutationFn: async () => {
+      const response = await api.clauses({ clauseId }).delete();
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
       stellaToast.add({
-        type: "error",
-        title: t("clauses.loadFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
+        type: "success",
+        title: t("clauses.clauseDeleted"),
       });
-      setState({ kind: "error" });
-      return;
-    }
-
-    const data = response.data;
-    if (data instanceof Response) {
-      setState({ kind: "error" });
-      return;
-    }
-
-    // SAFETY: The API returns body as ClauseParagraph[]
-    // but Eden types it as unknown due to JSONB.
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion
-    const detail = data as unknown as ClauseDetail;
-    setState({ kind: "ready", detail });
-  }, [clauseId, t]);
-
-  useEffect(() => {
-    const doLoad = async () => {
-      await load();
-    };
-
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    doLoad();
-  }, [load]);
-
-  const handleDelete = useCallback(async () => {
-    setDeleting(true);
-    const response = await api.clauses({ clauseId }).delete();
-
-    setDeleting(false);
-
-    if (response.error) {
+      setDeleteOpen(false);
+      onDeleted();
+    },
+    onError: (error) => {
       stellaToast.add({
         type: "error",
         title: t("clauses.deleteFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
+        description: userErrorFromThrown(error, t("common.unexpectedError")),
       });
-      return;
-    }
-
-    stellaToast.add({
-      type: "success",
-      title: t("clauses.clauseDeleted"),
-    });
-    setDeleteOpen(false);
-    onDeleted();
-  }, [clauseId, t, onDeleted]);
+    },
+  });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -220,7 +199,7 @@ export const ClauseDetailView = ({
           {t("clauses.backToList")}
         </Button>
 
-        {state.kind === "ready" && (
+        {detail && (
           <div className="flex gap-1">
             {canEditClause && (
               <Button
@@ -254,9 +233,9 @@ export const ClauseDetailView = ({
                       {t("common.cancel")}
                     </AlertDialogClose>
                     <Button
-                      disabled={deleting}
+                      disabled={deleteClause.isPending}
                       onClick={() => {
-                        void handleDelete();
+                        deleteClause.mutate();
                       }}
                       variant="destructive"
                     >
@@ -270,7 +249,7 @@ export const ClauseDetailView = ({
         )}
       </div>
 
-      {state.kind === "loading" && (
+      {detailQuery.isPending && (
         <div className="flex flex-1 items-center justify-center p-8">
           <p className="text-muted-foreground text-sm">
             {t("clauses.loading")}
@@ -278,7 +257,7 @@ export const ClauseDetailView = ({
         </div>
       )}
 
-      {state.kind === "error" && (
+      {detailQuery.isError && (
         <div className="flex flex-1 items-center justify-center p-8">
           <p className="text-muted-foreground text-sm">
             {t("clauses.loadFailed")}
@@ -286,28 +265,24 @@ export const ClauseDetailView = ({
         </div>
       )}
 
-      {state.kind === "ready" && (
+      {detail && (
         <DetailContent
           categories={categories}
           clauseId={clauseId}
-          detail={state.detail}
-          onRefresh={() => {
-            void load();
-          }}
+          detail={detail}
+          onRefresh={refreshDetail}
         />
       )}
 
-      {state.kind === "ready" && (
+      {detail && (
         <ClauseFormDialog
           categories={categories}
           initial={{
-            ...state.detail,
-            bodyParagraphs: state.detail.body,
+            ...detail,
+            bodyParagraphs: detail.body,
           }}
           onOpenChange={setEditOpen}
-          onSaved={() => {
-            void load();
-          }}
+          onSaved={refreshDetail}
           open={editOpen}
         />
       )}

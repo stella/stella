@@ -8,11 +8,7 @@ import {
   useTransition,
 } from "react";
 
-import {
-  useQuery,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
 
@@ -73,6 +69,8 @@ type FieldInfoRow = {
   content: EntityField["content"] | undefined;
 };
 
+const EMPTY_PROPERTIES: WorkspaceProperty[] = [];
+
 export const EntityMetadataPanel = ({
   workspaceId,
   entityId,
@@ -81,15 +79,17 @@ export const EntityMetadataPanel = ({
   activeJustificationFieldId = null,
   onAiFieldClick,
 }: EntityMetadataPanelProps) => {
-  const { data: entity } = useSuspenseQuery(
-    entityOptions(workspaceId, entityId),
-  );
+  const entityQuery = useQuery(entityOptions(workspaceId, entityId));
+
+  if (entityQuery.isError || !entityQuery.data) {
+    return null;
+  }
 
   return (
     <EntityMetadataContent
       activeJustificationFieldId={activeJustificationFieldId}
       currentFilePropertyId={currentFilePropertyId}
-      entity={entity}
+      entity={entityQuery.data}
       entityId={entityId}
       fileFieldId={fileFieldId}
       onAiFieldClick={onAiFieldClick}
@@ -111,7 +111,8 @@ const EntityMetadataContent = ({
   const queryClient = useQueryClient();
   const isWorkflowRunning = useIsWorkflowRunning(workspaceId);
   const sawWorkflowRunning = useRef(false);
-  const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
+  const propertiesQuery = useQuery(propertiesOptions(workspaceId));
+  const properties = propertiesQuery.data ?? EMPTY_PROPERTIES;
   // Version metadata renders in shared chrome (sidepeek + fullscreen);
   // use a non-suspending query so a cache miss does not collapse the
   // surrounding layout.
@@ -190,6 +191,13 @@ const EntityMetadataContent = ({
         : prev.filter((id) => !arrivedIds.has(id)),
     );
   }, [entityFieldPropertyIdsKey]);
+
+  if (propertiesQuery.isError) {
+    return null;
+  }
+  if (propertiesQuery.data === undefined) {
+    return null;
+  }
 
   const serverPropertyIds = new Set(properties.map((property) => property.id));
   const optimisticOnlyProperties = optimisticProperties.filter(

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -25,7 +26,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { api } from "@/lib/api";
-import { userErrorMessage } from "@/lib/errors";
+import { APIError, toAPIError, userErrorFromThrown } from "@/lib/errors";
 
 // ── Types ────────────────────────────────────────────
 
@@ -79,7 +80,6 @@ export const ShortcutFormDialog = ({
     scope: initial?.scope ?? "private",
   }));
   const [commandError, setCommandError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -113,45 +113,22 @@ export const ShortcutFormDialog = ({
     setCommandError(validateCommand(lower));
   };
 
-  const handleSubmit = async () => {
-    const err = validateCommand(form.command);
-    if (err) {
-      setCommandError(err);
-      return;
-    }
-    if (!form.name.trim() || !form.command || !form.prompt.trim()) {
-      return;
-    }
-
-    setSaving(true);
-
-    if (isEdit && initial.id) {
-      const response = await api.shortcuts({ shortcutId: initial.id }).post({
-        name: form.name.trim(),
-        description: form.description.trim() || null,
-        command: form.command,
-        prompt: form.prompt.trim(),
-        queryKey: ["shortcuts"],
-      });
-
-      setSaving(false);
-
-      if (response.error) {
-        if (response.error.status === 409) {
-          setCommandError(t("knowledge.skills.errors.commandConflict"));
-          return;
-        }
-        stellaToast.add({
-          title: t("common.unexpectedError"),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-          type: "error",
+  const saveShortcut = useMutation({
+    mutationFn: async () => {
+      if (isEdit && initial.id) {
+        const response = await api.shortcuts({ shortcutId: initial.id }).post({
+          name: form.name.trim(),
+          description: form.description.trim() || null,
+          command: form.command,
+          prompt: form.prompt.trim(),
+          queryKey: ["shortcuts"],
         });
-        return;
+        if (response.error) {
+          throw toAPIError(response.error);
+        }
+        return response.data;
       }
-    } else {
+
       const trimmedDescription = form.description.trim();
       const response = await api.shortcuts.put({
         name: form.name.trim(),
@@ -161,28 +138,38 @@ export const ShortcutFormDialog = ({
         scope: form.scope,
         queryKey: ["shortcuts"],
       });
-
-      setSaving(false);
-
       if (response.error) {
-        if (response.error.status === 409) {
-          setCommandError(t("knowledge.skills.errors.commandConflict"));
-          return;
-        }
-        stellaToast.add({
-          title: t("common.unexpectedError"),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-          type: "error",
-        });
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      onSaved();
+      onOpenChange(false);
+    },
+    onError: (error: unknown) => {
+      if (APIError.is(error) && error.status === 409) {
+        setCommandError(t("knowledge.skills.errors.commandConflict"));
         return;
       }
-    }
+      stellaToast.add({
+        title: t("common.unexpectedError"),
+        description: userErrorFromThrown(error, t("common.unexpectedError")),
+        type: "error",
+      });
+    },
+  });
 
-    onSaved();
-    onOpenChange(false);
+  const handleSubmit = () => {
+    const err = validateCommand(form.command);
+    if (err) {
+      setCommandError(err);
+      return;
+    }
+    if (!form.name.trim() || !form.command || !form.prompt.trim()) {
+      return;
+    }
+    saveShortcut.mutate();
   };
 
   const canSubmit =
@@ -315,10 +302,8 @@ export const ShortcutFormDialog = ({
             {t("common.cancel")}
           </DialogClose>
           <Button
-            disabled={!canSubmit || saving}
-            onClick={() => {
-              void handleSubmit();
-            }}
+            disabled={!canSubmit || saveShortcut.isPending}
+            onClick={handleSubmit}
           >
             {isEdit ? t("common.save") : t("common.add")}
           </Button>

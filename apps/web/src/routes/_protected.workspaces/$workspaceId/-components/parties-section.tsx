@@ -1,11 +1,6 @@
 import { useState } from "react";
 
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   BuildingIcon,
@@ -71,7 +66,8 @@ type PartiesSectionProps = {
 export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const { data: workspace } = useSuspenseQuery(workspaceOptions(workspaceId));
+  const workspaceQuery = useQuery(workspaceOptions(workspaceId));
+  const workspace = workspaceQuery.data;
   const { data: parties = [] } = useQuery(
     workspaceContactsOptions(workspaceId),
   );
@@ -126,6 +122,10 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
       },
     );
   };
+
+  if (workspaceQuery.isError || !workspace) {
+    return null;
+  }
 
   const { client } = workspace;
   if (!client) {

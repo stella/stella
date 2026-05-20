@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -16,6 +16,7 @@ import { api } from "@/lib/api";
 import type { Citation } from "@/lib/citations";
 import { iterateJustificationCitations } from "@/lib/citations";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { toAPIError } from "@/lib/errors";
 import {
   getPDFPageIdByNumber,
   useOptionalPDFStore,
@@ -29,6 +30,8 @@ import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-quer
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { workspaceKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
+
+const BBOX_POLL_INTERVAL_MS = 1000;
 
 export const DocumentAiSourceBar = ({
   activeTab,
@@ -44,10 +47,10 @@ export const DocumentAiSourceBar = ({
   const t = useTranslations();
   const openFile = useInspectorStore((s) => s.openFile);
 
-  const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
-  const { data: entity } = useSuspenseQuery(
-    entityOptions(workspaceId, activeTab.entityId),
-  );
+  const propertiesQuery = useQuery(propertiesOptions(workspaceId));
+  const properties = propertiesQuery.data;
+  const entityQuery = useQuery(entityOptions(workspaceId, activeTab.entityId));
+  const entity = entityQuery.data;
   useSyncJustifications({
     workspaceId,
     entityIds: [activeTab.entityId],
@@ -58,7 +61,7 @@ export const DocumentAiSourceBar = ({
   );
 
   const slots = useMemo(() => {
-    if (!justification) {
+    if (!justification || !entity || !properties) {
       return [];
     }
     return Object.values(entity.fields)
@@ -88,9 +91,12 @@ export const DocumentAiSourceBar = ({
   // Eagerly generate bboxes when the justification bar mounts.
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
-  const [isGeneratingBoxes, setIsGeneratingBoxes] = useState(false);
   const setScrollTo = useOptionalPDFStore((s) => s.setScrollTo);
   const pages = useOptionalPDFStore((s) => s.pages);
+  const [
+    stoppedBoundingBoxJustificationId,
+    setStoppedBoundingBoxJustificationId,
+  ] = useState<string | null>(null);
 
   const justificationId = justification?.id;
   const boundingBoxes = justification?.boundingBoxes;
@@ -117,81 +123,88 @@ export const DocumentAiSourceBar = ({
     (citation) => citation.kind === "pdf-bates",
   );
 
-  useEffect(() => {
-    if (
-      !justificationId ||
-      !isActiveTab ||
-      !hasBoundingBoxCitations ||
-      boundingBoxes
-    ) {
-      return undefined;
-    }
+  const generateBoundingBoxes = useMutation({
+    mutationFn: async ({
+      justificationId: id,
+    }: {
+      justificationId: string;
+    }) => {
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        ["bounding-boxes"].post({
+          justificationId: toSafeId<"justification">(id),
+          queryKey: workspaceKeys.justifications(workspaceId),
+        });
 
-    const requestState = { cancelled: false };
-    setIsGeneratingBoxes(true);
-
-    void (async () => {
-      try {
-        const response = await api
-          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          ["bounding-boxes"].post({
-            justificationId: toSafeId<"justification">(justificationId),
-            queryKey: workspaceKeys.justifications(workspaceId),
-          });
-
-        if (requestState.cancelled) {
-          return;
-        }
-
-        if (!response.error) {
-          await queryClient.invalidateQueries({
-            queryKey: workspaceKeys.justifications(workspaceId),
-          });
-        }
-      } catch (error) {
-        if (!requestState.cancelled) {
-          analytics.captureError(error);
-        }
-      } finally {
-        if (!requestState.cancelled) {
-          setIsGeneratingBoxes(false);
-        }
+      if (response.error) {
+        throw toAPIError(response.error);
       }
-    })();
+      return response.data;
+    },
+    onSuccess: async (data, variables) => {
+      await queryClient.invalidateQueries({
+        queryKey: workspaceKeys.justifications(workspaceId),
+      });
 
-    return () => {
-      requestState.cancelled = true;
-    };
-  }, [
-    justificationId,
-    hasBoundingBoxCitations,
-    boundingBoxes,
-    isActiveTab,
-    workspaceId,
-    queryClient,
-    analytics,
-  ]);
+      if (data.boxes.length === 0) {
+        setStoppedBoundingBoxJustificationId(variables.justificationId);
+      }
+    },
+    onError: (error, variables) => {
+      analytics.captureError(error);
+      setStoppedBoundingBoxJustificationId(variables.justificationId);
+    },
+  });
+
+  const needsBoxes = Boolean(
+    justificationId &&
+    isActiveTab &&
+    hasBoundingBoxCitations &&
+    !boundingBoxes &&
+    stoppedBoundingBoxJustificationId !== justificationId,
+  );
+  const isGeneratingBoxes = generateBoundingBoxes.isPending;
+  const mutateBoundingBoxes = generateBoundingBoxes.mutate;
+  // Kick off the generation request when the justification bar
+  // mounts with missing bboxes. The mutation hook itself is the
+  // source of truth for `isPending`.
+  useEffect(() => {
+    if (!needsBoxes || !justificationId) {
+      return;
+    }
+    mutateBoundingBoxes({ justificationId });
+  }, [needsBoxes, justificationId, mutateBoundingBoxes]);
 
   useEffect(() => {
     setIsAnswerExpanded(false);
   }, [fieldId]);
 
+  // Nudge the justifications cache every second while we still need
+  // bboxes. POST success doesn't guarantee the payload is in cache
+  // yet, so we keep polling until `needsBoxes` flips false.
   useEffect(() => {
-    if (!isGeneratingBoxes) {
+    if (!needsBoxes) {
       return undefined;
     }
-
-    const interval = window.setInterval(() => {
+    const id = window.setInterval(() => {
       void queryClient.invalidateQueries({
         queryKey: workspaceKeys.justifications(workspaceId),
       });
-    }, 1000);
+    }, BBOX_POLL_INTERVAL_MS);
+    return () => {
+      window.clearInterval(id);
+    };
+  }, [needsBoxes, queryClient, workspaceId]);
 
-    return () => window.clearInterval(interval);
-  }, [isGeneratingBoxes, queryClient, workspaceId]);
-
+  const scrolledForJustificationRef = useRef<string | null>(null);
   useEffect(() => {
     if (!boundingBoxes || !isActiveTab || !pages || !setScrollTo) {
+      return;
+    }
+    if (!justificationId) {
+      return;
+    }
+    if (scrolledForJustificationRef.current === justificationId) {
       return;
     }
 
@@ -208,7 +221,8 @@ export const DocumentAiSourceBar = ({
       pages,
       pageNumber: firstBox.pageNumber,
     });
-    if (pageId && justificationId) {
+    if (pageId) {
+      scrolledForJustificationRef.current = justificationId;
       setScrollTo({
         pageId,
         target: { kind: "justification", id: justificationId },
@@ -244,7 +258,7 @@ export const DocumentAiSourceBar = ({
     setActiveJustification,
   ]);
 
-  if (!justification) {
+  if (!justification || !entity || !properties) {
     return null;
   }
 

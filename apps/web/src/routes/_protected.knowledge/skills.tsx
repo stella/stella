@@ -1,6 +1,10 @@
 import { useMemo, useRef, useState } from "react";
 
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import {
   DownloadIcon,
@@ -34,7 +38,11 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { api } from "@/lib/api";
-import { userErrorMessage } from "@/lib/errors";
+import {
+  toAPIError,
+  userErrorFromThrown,
+  userErrorMessage,
+} from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import {
   knowledgeKeys,
@@ -432,7 +440,6 @@ function UploadSkillDialog({
   const [file, setFile] = useState<File | null>(null);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [scope, setScope] = useState<SkillScope>("private");
-  const [saving, setSaving] = useState(false);
 
   const setFirstFile = (files: FileList | null) => {
     const selectedFile = files?.item(0);
@@ -453,35 +460,38 @@ function UploadSkillDialog({
     setIsDraggingFile(true);
   };
 
-  const submit = async () => {
-    if (!file) {
-      return;
-    }
-
-    setSaving(true);
-    const response = await api.skills.upload.post({
-      file,
-      scope,
-      queryKey: ["skills"],
-    });
-    setSaving(false);
-
-    if (response.error) {
+  const uploadSkill = useMutation({
+    mutationFn: async (payload: { file: File; scope: SkillScope }) => {
+      const response = await api.skills.upload.post({
+        file: payload.file,
+        scope: payload.scope,
+        queryKey: ["skills"],
+      });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      onChanged();
+      setFile(null);
+      onOpenChange(false);
+    },
+    onError: (error) => {
       const fallback = t("common.unexpectedError");
       stellaToast.add({
         title: fallback,
-        description:
-          typeof response.error.status === "number"
-            ? userErrorMessage(response.error, fallback)
-            : fallback,
+        description: userErrorFromThrown(error, fallback),
         type: "error",
       });
+    },
+  });
+
+  const submit = () => {
+    if (!file) {
       return;
     }
-
-    onChanged();
-    setFile(null);
-    onOpenChange(false);
+    uploadSkill.mutate({ file, scope });
   };
 
   return (
@@ -544,9 +554,9 @@ function UploadSkillDialog({
             {t("common.cancel")}
           </DialogClose>
           <Button
-            disabled={!file || saving}
+            disabled={!file || uploadSkill.isPending}
             onClick={() => {
-              void submit();
+              submit();
             }}
           >
             <DownloadIcon className="me-1.5 size-4" />
@@ -568,36 +578,39 @@ function ImportSkillDialog({
   const tSkills = useTranslations("knowledge.agentSkills");
   const [url, setUrl] = useState("");
   const [scope, setScope] = useState<SkillScope>("private");
-  const [saving, setSaving] = useState(false);
 
-  const submit = async () => {
-    if (!url.trim()) {
-      return;
-    }
-
-    setSaving(true);
-    const response = await api.skills["import-url"].post({
-      scope,
-      url: url.trim(),
-      queryKey: ["skills"],
-    });
-    setSaving(false);
-
-    if (response.error) {
+  const importSkill = useMutation({
+    mutationFn: async (payload: { url: string; scope: SkillScope }) => {
+      const response = await api.skills["import-url"].post({
+        scope: payload.scope,
+        url: payload.url,
+        queryKey: ["skills"],
+      });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      onChanged();
+      onOpenChange(false);
+    },
+    onError: (error) => {
       const fallback = t("common.unexpectedError");
       stellaToast.add({
         title: fallback,
-        description:
-          typeof response.error.status === "number"
-            ? userErrorMessage(response.error, fallback)
-            : fallback,
+        description: userErrorFromThrown(error, fallback),
         type: "error",
       });
+    },
+  });
+
+  const submit = () => {
+    const trimmed = url.trim();
+    if (!trimmed) {
       return;
     }
-
-    onChanged();
-    onOpenChange(false);
+    importSkill.mutate({ url: trimmed, scope });
   };
 
   return (
@@ -626,9 +639,9 @@ function ImportSkillDialog({
             {t("common.cancel")}
           </DialogClose>
           <Button
-            disabled={!url.trim() || saving}
+            disabled={!url.trim() || importSkill.isPending}
             onClick={() => {
-              void submit();
+              submit();
             }}
           >
             <GlobeIcon className="me-1.5 size-4" />

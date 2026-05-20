@@ -7,6 +7,7 @@ import {
 } from "react";
 import type { Ref } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import {
   ArrowLeftIcon,
@@ -154,7 +155,7 @@ export const ChatMentionList = ({
   const categoryLabel = useCategoryLabel();
   const [isOpen, setIsOpen] = useState(true);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [drillState, setDrillState] = useState<DrillState>({ kind: "none" });
+  const [drillTarget, setDrillTarget] = useState<DrillTarget | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const lastClientRectRef = useRef<DOMRect | null>(null);
   const latestClientRect = clientRect?.() ?? null;
@@ -176,61 +177,57 @@ export const ChatMentionList = ({
     [clientRect],
   );
 
-  const drillTarget = drillState.kind === "none" ? null : drillState.target;
+  const drillDownQuery = useQuery({
+    queryKey: [
+      "chat-mention-entities",
+      drillTarget,
+      query,
+      loadWorkspaceEntities,
+    ],
+    queryFn: async () => {
+      if (drillTarget === null) {
+        return [];
+      }
+      return await loadWorkspaceEntities(
+        {
+          id: drillTarget.workspaceId,
+          label: drillTarget.name,
+          category: "workspace",
+          kind: "workspace",
+          mimeType: null,
+          sourceViewId: drillTarget.viewId,
+        },
+        query,
+      );
+    },
+    enabled: drillTarget !== null,
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+  });
+
+  const drillState: DrillState = (() => {
+    if (drillTarget === null) {
+      return { kind: "none" };
+    }
+    if (drillDownQuery.isError) {
+      return { kind: "error", target: drillTarget };
+    }
+    if (drillDownQuery.isSuccess) {
+      return {
+        kind: "loaded",
+        target: drillTarget,
+        items: drillDownQuery.data,
+      };
+    }
+    return { kind: "loading", target: drillTarget };
+  })();
+
   const drillItems = drillState.kind === "loaded" ? drillState.items : [];
   const activeItems = drillTarget ? drillItems : items;
   const safeIndex = Math.min(
     selectedIndex,
     Math.max(0, activeItems.length - 1),
   );
-
-  useEffect(() => {
-    if (drillTarget === null) {
-      return undefined;
-    }
-
-    let cancelled = false;
-    setDrillState((prev) => {
-      if (prev.kind === "loading" && prev.target === drillTarget) {
-        return prev;
-      }
-      return { kind: "loading", target: drillTarget };
-    });
-
-    void loadWorkspaceEntities(
-      {
-        id: drillTarget.workspaceId,
-        label: drillTarget.name,
-        category: "workspace",
-        kind: "workspace",
-        mimeType: null,
-        sourceViewId: drillTarget.viewId,
-      },
-      query,
-    )
-      .then((nextItems) => {
-        if (cancelled) {
-          return;
-        }
-
-        setDrillState({
-          kind: "loaded",
-          target: drillTarget,
-          items: nextItems,
-        });
-      })
-      .catch(() => {
-        if (cancelled) {
-          return;
-        }
-
-        setDrillState({ kind: "error", target: drillTarget });
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [drillTarget, loadWorkspaceEntities, query]);
 
   // Scroll the selected item into view on index change
   useEffect(() => {
@@ -252,19 +249,16 @@ export const ChatMentionList = ({
       return;
     }
 
-    setDrillState({
-      kind: "loading",
-      target: {
-        workspaceId: workspace.id,
-        viewId: workspace.sourceViewId,
-        name: workspace.label,
-      },
+    setDrillTarget({
+      workspaceId: workspace.id,
+      viewId: workspace.sourceViewId,
+      name: workspace.label,
     });
     setSelectedIndex(0);
   };
 
   const handleBack = () => {
-    setDrillState({ kind: "none" });
+    setDrillTarget(null);
     setSelectedIndex(0);
   };
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { useMutation } from "@tanstack/react-query";
 import {
   DownloadIcon,
   MoreHorizontalIcon,
@@ -43,7 +44,11 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
-import { userErrorMessage } from "@/lib/errors";
+import {
+  toAPIError,
+  userErrorFromThrown,
+  userErrorMessage,
+} from "@/lib/errors";
 import { ClauseImportDialog } from "@/routes/_protected.knowledge/-components/clause-import-dialog";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 
@@ -383,31 +388,29 @@ const CategoryRow = ({
   const canDeleteClause = usePermissions({ clause: ["delete"] });
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
-  const handleDelete = useCallback(async () => {
-    setDeleting(true);
-    const response = await api["clause-categories"]({
-      categoryId: category.id,
-    }).delete();
-
-    setDeleting(false);
-
-    if (response.error) {
+  const deleteCategory = useMutation({
+    mutationFn: async () => {
+      const response = await api["clause-categories"]({
+        categoryId: category.id,
+      }).delete();
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      setDeleteOpen(false);
+      onCategoriesChanged();
+    },
+    onError: (error) => {
       stellaToast.add({
         type: "error",
         title: t("clauses.deleteFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
+        description: userErrorFromThrown(error, t("common.unexpectedError")),
       });
-      return;
-    }
-
-    setDeleteOpen(false);
-    onCategoriesChanged();
-  }, [category.id, t, onCategoriesChanged]);
+    },
+  });
 
   return (
     <div className="group flex items-center">
@@ -465,9 +468,9 @@ const CategoryRow = ({
               {t("common.cancel")}
             </AlertDialogClose>
             <Button
-              disabled={deleting}
+              disabled={deleteCategory.isPending}
               onClick={() => {
-                void handleDelete();
+                deleteCategory.mutate();
               }}
               variant="destructive"
             >

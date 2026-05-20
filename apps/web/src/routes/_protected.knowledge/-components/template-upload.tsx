@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 
+import { useMutation } from "@tanstack/react-query";
 import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -8,7 +9,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
-import { userErrorMessage } from "@/lib/errors";
+import { toAPIError, userErrorFromThrown } from "@/lib/errors";
 
 type DiscoverResponse = Awaited<ReturnType<typeof api.templates.discover.post>>;
 
@@ -24,11 +25,36 @@ type TemplateUploadProps = {
 export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
   const t = useTranslations();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [loading, setLoading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
 
+  const discoverMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const response = await api.templates.discover.post({ file });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      const { data } = response;
+      if (data instanceof Response) {
+        throw new TypeError("Unexpected response shape");
+      }
+      return { file, data };
+    },
+    onSuccess: ({ file, data }) => {
+      onDiscovered(file, data);
+    },
+    onError: (error) => {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.discoveryFailed"),
+        description: userErrorFromThrown(error, t("common.unexpectedError")),
+      });
+    },
+  });
+  const loading = discoverMutation.isPending;
+
+  const mutateDiscover = discoverMutation.mutate;
   const discover = useCallback(
-    async (file: File) => {
+    (file: File) => {
       if (file.type !== DOCX_MIME) {
         stellaToast.add({
           type: "error",
@@ -36,45 +62,15 @@ export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
         });
         return;
       }
-
-      setLoading(true);
-      const response = await api.templates.discover.post({
-        file,
-      });
-
-      setLoading(false);
-
-      if (response.error) {
-        stellaToast.add({
-          type: "error",
-          title: t("templates.discoveryFailed"),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        return;
-      }
-
-      const { data } = response;
-      if (data instanceof Response) {
-        stellaToast.add({
-          type: "error",
-          title: t("templates.discoveryFailed"),
-        });
-        return;
-      }
-
-      onDiscovered(file, data);
+      mutateDiscover(file);
     },
-    [onDiscovered, t],
+    [mutateDiscover, t],
   );
 
   const handleFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.item(0);
       if (file) {
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
         discover(file);
       }
       // Reset so the same file can be re-selected
@@ -89,7 +85,6 @@ export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
       setIsDragOver(false);
       const file = e.dataTransfer.files.item(0);
       if (file) {
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
         discover(file);
       }
     },
