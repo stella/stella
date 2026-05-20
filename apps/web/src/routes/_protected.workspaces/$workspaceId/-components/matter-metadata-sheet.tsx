@@ -57,9 +57,12 @@ export const MatterMetadataPanel = ({
     null,
   );
   const [nameValue, setNameValue] = useState("");
+  const [nameDirty, setNameDirty] = useState(false);
   const escapedNameRef = useRef(false);
   const [referenceValue, setReferenceValue] = useState("");
+  const [referenceDirty, setReferenceDirty] = useState(false);
   const [referenceError, setReferenceError] = useState("");
+  const seededWorkspaceIdRef = useRef<string | null>(null);
 
   const workspaceQuery = useQuery(workspaceOptions(workspaceId));
   const workspace = workspaceQuery.data;
@@ -73,11 +76,25 @@ export const MatterMetadataPanel = ({
     if (!workspace) {
       return;
     }
-    escapedNameRef.current = false;
-    setNameValue(workspace.name);
-    setReferenceValue(workspace.reference);
-    setReferenceError("");
-  }, [workspace]);
+    if (seededWorkspaceIdRef.current !== workspaceId) {
+      seededWorkspaceIdRef.current = workspaceId;
+      escapedNameRef.current = false;
+      setNameDirty(false);
+      setReferenceDirty(false);
+      setNameValue(workspace.name);
+      setReferenceValue(workspace.reference);
+      setReferenceError("");
+      return;
+    }
+
+    if (!nameDirty) {
+      setNameValue(workspace.name);
+    }
+    if (!referenceDirty) {
+      setReferenceValue(workspace.reference);
+      setReferenceError("");
+    }
+  }, [nameDirty, referenceDirty, workspace, workspaceId]);
 
   const handleSaveName = () => {
     if (!workspace) {
@@ -86,12 +103,14 @@ export const MatterMetadataPanel = ({
     if (escapedNameRef.current) {
       escapedNameRef.current = false;
       setNameValue(workspace.name);
+      setNameDirty(false);
       return;
     }
 
     const trimmed = nameValue.trim();
     if (!trimmed || trimmed === workspace.name) {
       setNameValue(workspace.name);
+      setNameDirty(false);
       return;
     }
 
@@ -102,6 +121,9 @@ export const MatterMetadataPanel = ({
         name: trimmed,
       },
       {
+        onSuccess: () => {
+          setNameDirty(false);
+        },
         onError: (error) => {
           const message =
             APIError.is(error) && error.status < 500
@@ -109,6 +131,7 @@ export const MatterMetadataPanel = ({
               : t("errors.actionFailed");
           stellaToast.add({ title: message, type: "error" });
           setNameValue(fallbackName);
+          setNameDirty(false);
         },
       },
     );
@@ -120,6 +143,8 @@ export const MatterMetadataPanel = ({
     }
     const trimmed = referenceValue.trim();
     if (!trimmed || trimmed === workspace.reference) {
+      setReferenceValue(workspace.reference);
+      setReferenceDirty(false);
       return;
     }
 
@@ -132,6 +157,7 @@ export const MatterMetadataPanel = ({
       },
       {
         onSuccess: () => {
+          setReferenceDirty(false);
           // eslint-disable-next-line typescript/no-floating-promises
           queryClient.invalidateQueries({
             queryKey: workspacesKeys.byId(workspaceId),
@@ -148,6 +174,7 @@ export const MatterMetadataPanel = ({
               ? error.message
               : t("errors.actionFailed");
           stellaToast.add({ title: message, type: "error" });
+          setReferenceDirty(false);
         },
       },
     );
@@ -250,7 +277,10 @@ export const MatterMetadataPanel = ({
             className="rounded-md shadow-none"
             disabled={updateWorkspace.isPending}
             onBlur={handleSaveName}
-            onChange={(e) => setNameValue(e.target.value)}
+            onChange={(e) => {
+              setNameDirty(true);
+              setNameValue(e.target.value);
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.currentTarget.blur();
@@ -280,6 +310,7 @@ export const MatterMetadataPanel = ({
               className="w-36 shrink-0 rounded-md shadow-none"
               onBlur={handleSaveReference}
               onChange={(e) => {
+                setReferenceDirty(true);
                 setReferenceValue(e.target.value);
                 setReferenceError("");
               }}

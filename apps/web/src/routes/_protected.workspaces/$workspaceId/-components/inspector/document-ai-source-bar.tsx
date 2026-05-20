@@ -93,6 +93,10 @@ export const DocumentAiSourceBar = ({
   const analytics = useAnalytics();
   const setScrollTo = useOptionalPDFStore((s) => s.setScrollTo);
   const pages = useOptionalPDFStore((s) => s.pages);
+  const [
+    stoppedBoundingBoxJustificationId,
+    setStoppedBoundingBoxJustificationId,
+  ] = useState<string | null>(null);
 
   const justificationId = justification?.id;
   const boundingBoxes = justification?.boundingBoxes;
@@ -137,18 +141,27 @@ export const DocumentAiSourceBar = ({
       }
       return response.data;
     },
-    onSuccess: async () => {
+    onSuccess: async (data, variables) => {
       await queryClient.invalidateQueries({
         queryKey: workspaceKeys.justifications(workspaceId),
       });
+
+      if (data.boxes.length === 0) {
+        setStoppedBoundingBoxJustificationId(variables.justificationId);
+      }
     },
-    onError: (error) => {
+    onError: (error, variables) => {
       analytics.captureError(error);
+      setStoppedBoundingBoxJustificationId(variables.justificationId);
     },
   });
 
   const needsBoxes = Boolean(
-    justificationId && isActiveTab && hasBoundingBoxCitations && !boundingBoxes,
+    justificationId &&
+    isActiveTab &&
+    hasBoundingBoxCitations &&
+    !boundingBoxes &&
+    stoppedBoundingBoxJustificationId !== justificationId,
   );
   const isGeneratingBoxes = generateBoundingBoxes.isPending;
   const mutateBoundingBoxes = generateBoundingBoxes.mutate;
