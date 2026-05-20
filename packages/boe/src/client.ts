@@ -149,9 +149,7 @@ export const searchConsolidatedLegislation = async (
 
   const url = `${LEGISLATION_ENDPOINT}?${params.toString()}`;
   const data = await boeGet<BoeSearchResponse>(url);
-  return (
-    data ?? { data: { resultados: [], total: 0, offset, limit }, status: "OK" }
-  );
+  return data ?? { data: [], status: { code: "200", text: "ok" } };
 };
 
 // ---------------------------------------------------------------------------

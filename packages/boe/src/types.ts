@@ -14,14 +14,14 @@ export type BoeSearchHit = {
   url_html_consolidada?: string;
 };
 
+export type BoeStatus = {
+  code?: string;
+  text?: string;
+};
+
 export type BoeSearchResponse = {
-  data?: {
-    total?: number;
-    offset?: number;
-    limit?: number;
-    resultados?: BoeSearchHit[];
-  };
-  status?: string;
+  data?: BoeSearchHit[];
+  status?: BoeStatus;
 };
 
 // ---------------------------------------------------------------------------
@@ -36,7 +36,7 @@ export type BoeSearchResponse = {
 
 export type BoeLawEnvelope = {
   data?: unknown;
-  status?: string;
+  status?: BoeStatus;
 };
 
 export type ConsolidatedLawSections = {
@@ -63,28 +63,50 @@ export type ConsolidatedLawResult = {
 export type BormeAnnouncement = {
   identificador?: string;
   titulo?: string;
-  url_pdf?: { texto?: string };
+  url_pdf?: {
+    pagina_final?: string;
+    pagina_inicial?: string;
+    szBytes?: string;
+    szKBytes?: string;
+    texto?: string;
+  };
   url_html?: string;
+  url_xml?: string;
+};
+
+export type BormeSectionGroup = {
+  codigo?: string;
+  nombre?: string;
+  item?: BormeAnnouncement[] | BormeAnnouncement;
 };
 
 export type BormeProvincialSection = {
+  apartado?: BormeSectionGroup[] | BormeSectionGroup;
   codigo?: string;
+  item?: BormeAnnouncement[] | BormeAnnouncement;
   nombre?: string;
-  items?: { item?: BormeAnnouncement[] | BormeAnnouncement };
+};
+
+export type BormeDailyIssue = {
+  numero?: string;
+  seccion?: BormeProvincialSection[] | BormeProvincialSection;
+  sumario_diario?: {
+    identificador?: string;
+    url_pdf?: { szBytes?: string; szKBytes?: string; texto?: string };
+  };
 };
 
 export type BormeSummaryResponse = {
   data?: {
     sumario?: {
-      diario?: {
-        sumario_diario?: {
-          fecha?: string;
-          seccion?: BormeProvincialSection[] | BormeProvincialSection;
-        };
-      }[];
+      diario?: BormeDailyIssue[] | BormeDailyIssue;
+      metadatos?: {
+        fecha_publicacion?: string;
+        publicacion?: string;
+      };
     };
   };
-  status?: string;
+  status?: BoeStatus;
 };
 
 // ---------------------------------------------------------------------------
@@ -92,6 +114,6 @@ export type BormeSummaryResponse = {
 // ---------------------------------------------------------------------------
 
 export type BoeErrorResponse = {
-  status?: { code?: string; text?: string };
+  status?: BoeStatus;
   data?: { description?: string } | null;
 };
