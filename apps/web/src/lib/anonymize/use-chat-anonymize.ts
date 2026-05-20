@@ -62,7 +62,7 @@ export const useChatAnonymizePreview = ({
   enabled: boolean;
   text: string;
   workspaceId: string;
-}): { pairs: ChatAnonPair[] | null; isPending: boolean } => {
+}): readonly ChatAnonPair[] | null => {
   const [debouncedText] = useDebounce(text, ANON_PREVIEW_DEBOUNCE_MS);
   const shouldRun = enabled && debouncedText.trim().length > 0;
   const result = useQuery({
@@ -81,10 +81,7 @@ export const useChatAnonymizePreview = ({
   });
 
   if (!shouldRun) {
-    return { pairs: null, isPending: false };
+    return null;
   }
-  return {
-    pairs: result.data?.pairs ?? null,
-    isPending: result.isFetching,
-  };
+  return result.data?.pairs ?? null;
 };

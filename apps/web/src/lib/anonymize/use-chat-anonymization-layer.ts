@@ -62,7 +62,7 @@ export const useChatAnonymizationLayer = ({
   // it — typing with anonymized mode off must not pay any
   // per-keystroke React render cost from this layer.
   const text = useChatDraftText(editor, enabled);
-  const { pairs } = useChatAnonymizePreview({
+  const pairs = useChatAnonymizePreview({
     enabled,
     text,
     workspaceId,
