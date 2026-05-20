@@ -14,6 +14,7 @@ import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
+import { useChatApproval } from "@/components/chat/chat-approval-context";
 import {
   getChatToolTitleKey,
   getApprovalToolName,
@@ -25,7 +26,6 @@ import type {
   ApprovalToolName,
   ApprovalToolPart,
   ChatUITools,
-  ToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import type { WorkspaceProperty } from "@/lib/types";
@@ -282,39 +282,24 @@ const ActiveDocxEditSummary = ({ input }: ActiveDocxEditSummaryProps) => {
 // -- Main card --
 
 type ToolApprovalCardProps = {
-  activeOrganizationId: string;
-  alwaysApprovedTools: ReadonlySet<ToolApprovalGrant>;
   part: ApprovalToolPart;
-  onAllowInConversation: (
-    id: string,
-    toolName: ApprovalToolName,
-  ) => void | PromiseLike<void>;
-  onAlwaysAllow: (
-    id: string,
-    toolName: ApprovalToolName,
-  ) => void | PromiseLike<void>;
-  onApprove: (
-    id: string,
-    toolName: ApprovalToolName,
-  ) => void | PromiseLike<void>;
-  onDeny: (id: string) => void | PromiseLike<void>;
-  conversationApprovedTools: ReadonlySet<ToolApprovalGrant>;
-  blockedApprovalTools?: ReadonlySet<ApprovalToolName> | undefined;
   workspaceId?: string | undefined;
 };
 
 export const ToolApprovalCard = ({
-  activeOrganizationId,
-  alwaysApprovedTools,
   part,
-  onAllowInConversation,
-  onAlwaysAllow,
-  onApprove,
-  onDeny,
-  conversationApprovedTools,
-  blockedApprovalTools,
   workspaceId,
 }: ToolApprovalCardProps) => {
+  const {
+    activeOrganizationId,
+    alwaysApprovedTools,
+    conversationApprovedTools,
+    blockedApprovalTools,
+    handleAllowInConversation: onAllowInConversation,
+    handleAlwaysAllow: onAlwaysAllow,
+    handleApprove: onApprove,
+    handleDeny: onDeny,
+  } = useChatApproval();
   const t = useTranslations();
   const name = getApprovalToolName(part);
   const autoApproveRef = useRef(false);

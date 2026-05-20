@@ -15,6 +15,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useChatMatters } from "@/components/chat/chat-matters-context";
 import type { ChatUITools } from "@/components/chat/chat-ui-tools";
 import { resolveMatterColor } from "@/lib/matter-colors";
 
@@ -32,8 +33,6 @@ export type NeedsMatterMatter = {
 
 type NeedsMatterCardProps = {
   part: CreateDocumentPart;
-  matters: readonly NeedsMatterMatter[];
-  isLoadingMatters: boolean;
   onResolve: (
     toolCallId: string,
     matterId: string,
@@ -44,11 +43,13 @@ type NeedsMatterCardProps = {
 
 export const NeedsMatterCard = ({
   part,
-  matters,
-  isLoadingMatters,
   onResolve,
   onOpenCreated,
 }: NeedsMatterCardProps) => {
+  const {
+    createDocumentMatters: matters,
+    isLoadingCreateDocumentMatters: isLoadingMatters,
+  } = useChatMatters();
   const t = useTranslations();
 
   // Streaming-tolerant input read. While the AI is producing the

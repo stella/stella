@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
+import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
+import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import messages from "@/i18n/langs/en.json";
 import type Messages from "@/i18n/langs/messages.gen";
@@ -26,7 +28,26 @@ const renderWithProviders = (children: ReactNode) =>
         messages={messages as Messages}
         timeZone="UTC"
       >
-        {children}
+        <ChatMattersContext
+          value={{
+            createDocumentMatters: [],
+            isLoadingCreateDocumentMatters: false,
+          }}
+        >
+          <ChatApprovalContext
+            value={{
+              activeOrganizationId: "test-active-organization",
+              alwaysApprovedTools: new Set(),
+              conversationApprovedTools: new Set(),
+              handleAllowInConversation: () => {},
+              handleAlwaysAllow: () => {},
+              handleApprove: () => {},
+              handleDeny: () => {},
+            }}
+          >
+            {children}
+          </ChatApprovalContext>
+        </ChatMattersContext>
       </IntlProvider>
     </QueryClientProvider>,
   );
@@ -43,20 +64,11 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
-        activeOrganizationId="org_test"
-        alwaysApprovedTools={new Set()}
         approvalPendingMessageId={null}
-        conversationApprovedTools={new Set()}
-        handleAllowInConversation={() => {}}
-        handleAlwaysAllow={() => {}}
-        handleApprove={() => {}}
-        handleDeny={() => {}}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
         onOpenCreatedDocument={() => {}}
-        createDocumentMatters={[]}
-        isLoadingCreateDocumentMatters={false}
         showToolCalls={false}
         streamdownComponents={{
           a: ({ children, ...props }) => <a {...props}>{children}</a>,
@@ -85,20 +97,11 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
-        activeOrganizationId="org_test"
-        alwaysApprovedTools={new Set()}
         approvalPendingMessageId={null}
-        conversationApprovedTools={new Set()}
-        handleAllowInConversation={() => {}}
-        handleAlwaysAllow={() => {}}
-        handleApprove={() => {}}
-        handleDeny={() => {}}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
         onOpenCreatedDocument={() => {}}
-        createDocumentMatters={[]}
-        isLoadingCreateDocumentMatters={false}
         onResend={() => {}}
         showToolCalls={false}
         streamdownComponents={{
@@ -129,20 +132,11 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
-        activeOrganizationId="org_test"
-        alwaysApprovedTools={new Set()}
         approvalPendingMessageId={null}
-        conversationApprovedTools={new Set()}
-        handleAllowInConversation={() => {}}
-        handleAlwaysAllow={() => {}}
-        handleApprove={() => {}}
-        handleDeny={() => {}}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
         onOpenCreatedDocument={() => {}}
-        createDocumentMatters={[]}
-        isLoadingCreateDocumentMatters={false}
         onResend={() => {}}
         showToolCalls={false}
         streamdownComponents={{
@@ -168,21 +162,12 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
-        activeOrganizationId="org_test"
-        alwaysApprovedTools={new Set()}
         approvalPendingMessageId={null}
-        conversationApprovedTools={new Set()}
-        handleAllowInConversation={() => {}}
-        handleAlwaysAllow={() => {}}
-        handleApprove={() => {}}
-        handleDeny={() => {}}
         isGenerating
         messages={chatMessages}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
         onOpenCreatedDocument={() => {}}
-        createDocumentMatters={[]}
-        isLoadingCreateDocumentMatters={false}
         onResend={() => {}}
         showToolCalls={false}
         streamdownComponents={{
@@ -199,21 +184,12 @@ describe("chat thread messages", () => {
   test("shows a resendable chat message when the chat runtime errors", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
-        activeOrganizationId="org_test"
-        alwaysApprovedTools={new Set()}
         approvalPendingMessageId={null}
-        conversationApprovedTools={new Set()}
         error={new Error("provider details must stay hidden")}
-        handleAllowInConversation={() => {}}
-        handleAlwaysAllow={() => {}}
-        handleApprove={() => {}}
-        handleDeny={() => {}}
         messages={[]}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
         onOpenCreatedDocument={() => {}}
-        createDocumentMatters={[]}
-        isLoadingCreateDocumentMatters={false}
         onResend={() => {}}
         showToolCallDetails={false}
         streamdownComponents={{
@@ -230,10 +206,7 @@ describe("chat thread messages", () => {
   test("offers a raw-send override when anonymization blocks an attachment", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
-        activeOrganizationId="org_test"
-        alwaysApprovedTools={new Set()}
         approvalPendingMessageId={null}
-        conversationApprovedTools={new Set()}
         error={
           new Error(
             JSON.stringify({
@@ -243,16 +216,10 @@ describe("chat thread messages", () => {
             }),
           )
         }
-        handleAllowInConversation={() => {}}
-        handleAlwaysAllow={() => {}}
-        handleApprove={() => {}}
-        handleDeny={() => {}}
         messages={[]}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
         onOpenCreatedDocument={() => {}}
-        createDocumentMatters={[]}
-        isLoadingCreateDocumentMatters={false}
         onResend={() => {}}
         onSendWithoutAnonymization={() => {}}
         showToolCallDetails={false}

@@ -1,5 +1,3 @@
-import { useState } from "react";
-
 import { useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -7,6 +5,7 @@ import { useTranslations } from "use-intl";
 import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { useInlineRename } from "@/hooks/use-inline-rename";
 import { invalidateContactCaches } from "@/routes/_protected.contacts/-components/contact-caches";
 import type {
   ContactData,
@@ -50,77 +49,74 @@ export const EditableRow = ({
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const [isEditing, setIsEditing] = useState(false);
-  const [inputValue, setInputValue] = useState(value ?? "");
 
   const maxLength = FIELD_MAX_LENGTH[field];
 
-  const handleSave = () => {
-    setIsEditing(false);
-    const trimmed = inputValue.trim();
-    const current = value ?? "";
-
-    if (trimmed === current) {
-      return;
-    }
-
-    if (maxLength !== undefined && trimmed.length > maxLength) {
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
-      setInputValue(value ?? "");
-      return;
-    }
-
-    let payload: Record<string, unknown>;
-    if (field === "defaultHourlyRate" || field === "paymentTermDays") {
-      const parsed = trimmed ? Number.parseInt(trimmed, 10) : null;
-      if (parsed !== null && (Number.isNaN(parsed) || parsed < 0)) {
-        setInputValue(value ?? "");
-        return;
-      }
-      if (field === "paymentTermDays" && parsed !== null && parsed > 365) {
-        setInputValue(value ?? "");
-        return;
-      }
-      payload = { [field]: parsed };
-    } else if (field === "displayName") {
-      if (!trimmed) {
+  const rename = useInlineRename({
+    initial: value ?? "",
+    // Every contact field handles the empty case explicitly in
+    // `onCommit`: `displayName` toasts (it's required), the
+    // numeric fields parse to `null`, and the remaining optional
+    // strings send `null` to clear a previously saved value.
+    // Declaring a pass-through validator opts out of the hook's
+    // default "empty draft silently cancels" so users can wipe
+    // optional rows such as prefix, tax ID, currency, default
+    // hourly rate, or payment terms back to empty.
+    validate: () => null,
+    onCommit: (trimmed) => {
+      if (maxLength !== undefined && trimmed.length > maxLength) {
         stellaToast.add({
           title: t("errors.actionFailed"),
           type: "error",
         });
-        setInputValue(value ?? "");
         return;
       }
-      payload = { displayName: trimmed };
-    } else {
-      payload = { [field]: trimmed || null };
-    }
 
-    updateContact.mutate(
-      { contactId: contact.id, ...payload },
-      {
-        onSuccess: () => {
-          void invalidateContactCaches(queryClient, {
-            activeOrganizationId,
-            contactId: contact.id,
-            invalidateWorkspaces: field === "displayName",
-          });
-        },
-        onError: () => {
+      let payload: Record<string, unknown>;
+      if (field === "defaultHourlyRate" || field === "paymentTermDays") {
+        const parsed = trimmed ? Number.parseInt(trimmed, 10) : null;
+        if (parsed !== null && (Number.isNaN(parsed) || parsed < 0)) {
+          return;
+        }
+        if (field === "paymentTermDays" && parsed !== null && parsed > 365) {
+          return;
+        }
+        payload = { [field]: parsed };
+      } else if (field === "displayName") {
+        if (!trimmed) {
           stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
-          setInputValue(value ?? "");
-        },
-      },
-    );
-  };
+          return;
+        }
+        payload = { displayName: trimmed };
+      } else {
+        payload = { [field]: trimmed || null };
+      }
 
-  if (isEditing) {
+      updateContact.mutate(
+        { contactId: contact.id, ...payload },
+        {
+          onSuccess: () => {
+            void invalidateContactCaches(queryClient, {
+              activeOrganizationId,
+              contactId: contact.id,
+              invalidateWorkspaces: field === "displayName",
+            });
+          },
+          onError: () => {
+            stellaToast.add({
+              title: t("errors.actionFailed"),
+              type: "error",
+            });
+          },
+        },
+      );
+    },
+  });
+
+  if (rename.state.mode === "edit") {
     return (
       <div className="flex items-baseline gap-2">
         {label && (
@@ -130,19 +126,21 @@ export const EditableRow = ({
           autoFocus
           className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none outline-none focus-visible:ring-0"
           maxLength={maxLength}
-          onBlur={handleSave}
-          onChange={(e) => setInputValue(e.target.value)}
+          onBlur={() => {
+            void rename.commit();
+          }}
+          onChange={(e) => rename.setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.currentTarget.blur();
             }
             if (e.key === "Escape") {
-              setInputValue(value ?? "");
-              setIsEditing(false);
+              rename.cancel();
+              e.currentTarget.blur();
             }
           }}
           type={type}
-          value={inputValue}
+          value={rename.state.draft}
         />
       </div>
     );
@@ -155,10 +153,7 @@ export const EditableRow = ({
       )}
       <button
         className="hover:text-foreground cursor-text text-start text-sm"
-        onClick={() => {
-          setInputValue(value ?? "");
-          setIsEditing(true);
-        }}
+        onClick={() => rename.startEditing()}
         type="button"
       >
         {value || <span className="text-foreground-subtle">—</span>}
