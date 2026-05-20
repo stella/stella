@@ -3,7 +3,11 @@ import type { SQL } from "drizzle-orm";
 import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import { chatThreads, workspaces as workspacesTable } from "@/api/db/schema";
+import {
+  chatMessages,
+  chatThreads,
+  workspaces as workspacesTable,
+} from "@/api/db/schema";
 import {
   decodeChatThreadListCursor,
   encodeChatThreadListCursor,
@@ -45,6 +49,11 @@ const getThreads = createSafeRootHandler(
     const conditions: SQL[] = [
       eq(chatThreads.organizationId, session.activeOrganizationId),
       eq(chatThreads.userId, user.id),
+      sql`exists (
+        select 1
+        from ${chatMessages}
+        where ${chatMessages.threadId} = ${chatThreads.id}
+      )`,
     ];
     const visibleWorkspaceCondition =
       visibleWorkspaceIds.length > 0

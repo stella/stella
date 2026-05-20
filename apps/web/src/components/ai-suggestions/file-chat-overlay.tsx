@@ -619,10 +619,7 @@ const ResolvedFileChatOverlay = ({
   );
 };
 
-type FileChatOverlayInnerProps = Omit<
-  FileChatOverlayProps,
-  "chatThreadId"
-> & {
+type FileChatOverlayInnerProps = Omit<FileChatOverlayProps, "chatThreadId"> & {
   chatThreadId: ChatThreadId;
 };
 
