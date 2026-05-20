@@ -19,6 +19,7 @@ import {
 } from "@/components/ai-elements/message";
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import { AskUserCard } from "@/components/chat/ask-user-card";
+import { useChatApproval } from "@/components/chat/chat-approval-context";
 import type {
   AskUserOutput,
   ChatAnonRestoration,
@@ -485,6 +486,7 @@ export const ChatThreadMessages = ({
   streamdownComponents,
   workspaceId,
 }: ChatThreadMessagesProps) => {
+  const { activeOrganizationId } = useChatApproval();
   const retryableAssistantMessageId = useMemo(
     () => getRetryableAssistantMessageId(messages),
     [messages],
@@ -508,6 +510,7 @@ export const ChatThreadMessages = ({
             {message.role === "assistant" ? (
               <>
                 <AssistantMessageParts
+                  activeOrganizationId={activeOrganizationId}
                   message={message}
                   onAskUserSubmit={onAskUserSubmit}
                   onCreateDocumentResolve={onCreateDocumentResolve}
@@ -517,6 +520,7 @@ export const ChatThreadMessages = ({
                   workspaceId={workspaceId}
                 />
                 <SourceChips
+                  activeOrganizationId={activeOrganizationId}
                   messageId={message.id}
                   parts={message.parts}
                   workspaceId={workspaceId}
@@ -582,6 +586,7 @@ type AssistantMessagePartsProps = Pick<
   | "streamdownComponents"
   | "workspaceId"
 > & {
+  activeOrganizationId: string;
   message: PersistedChatMessage;
   shouldShowToolCalls: boolean;
 };
@@ -595,6 +600,7 @@ type AssistantMessagePartsProps = Pick<
  * remount on every streaming text delta.
  */
 const AssistantMessageParts = ({
+  activeOrganizationId,
   message,
   onAskUserSubmit,
   onCreateDocumentResolve,
@@ -656,6 +662,7 @@ const AssistantMessageParts = ({
         if (isToolUIPart(part)) {
           return (
             <ToolCallCard
+              activeOrganizationId={activeOrganizationId}
               key={part.toolCallId}
               part={part}
               showDetails={shouldShowToolCalls}

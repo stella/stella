@@ -548,7 +548,11 @@ const ChatTabPanelChrome = ({
  */
 const PromptBarPlaceholder = ({ tab }: { tab: ChatTab }) => {
   const t = useTranslations();
-  const chatContextLabel = useChatContextLabel(tab);
+  const activeOrganizationId = useRouteContext({
+    from: "/_protected",
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const chatContextLabel = useChatContextLabel(tab, activeOrganizationId);
   return (
     <PromptBarShell aria-hidden="true" layout="standalone">
       <div className="flex min-h-8 min-w-0 flex-1 items-center px-1.5">
