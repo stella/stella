@@ -1,4 +1,10 @@
-import { useOptimistic, useState, useTransition } from "react";
+import {
+  useEffect,
+  useOptimistic,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 
 import { EyeOffIcon, PencilLineIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -59,7 +65,17 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
         index === action.index ? action.next : dependency,
       ),
   );
+  const [immediateDeps, setImmediateDeps] = useState<
+    PropertyDependency[] | null
+  >(null);
+  const displayedDependencies = immediateDeps ?? optimisticDeps;
+  const latestDependenciesRef = useRef(displayedDependencies);
+  const dependencyGenerationRef = useRef(0);
   const [, startDepsTransition] = useTransition();
+
+  useEffect(() => {
+    latestDependenciesRef.current = displayedDependencies;
+  }, [displayedDependencies]);
 
   // Conditions are editable from the popover without opening the full
   // composer: replaceValue swaps a dependency in place and we save by
@@ -72,9 +88,13 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
       return;
     }
     const tool = property.tool;
-    const nextDependencies = optimisticDeps.map((dependency, i) =>
-      i === index ? next : dependency,
+    const nextDependencies = latestDependenciesRef.current.map(
+      (dependency, i) => (i === index ? next : dependency),
     );
+    const generation = dependencyGenerationRef.current + 1;
+    dependencyGenerationRef.current = generation;
+    latestDependenciesRef.current = nextDependencies;
+    setImmediateDeps(nextDependencies);
     startDepsTransition(async () => {
       applyDependencyReplacement({ index, next });
       try {
@@ -91,6 +111,10 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
           title: t("errors.actionFailed"),
           type: "error",
         });
+      } finally {
+        if (dependencyGenerationRef.current === generation) {
+          setImmediateDeps(null);
+        }
       }
     });
   };
@@ -134,7 +158,7 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
             <Separator />
             <div className="flex flex-col p-1">
               <PropertyConditions
-                dependencies={optimisticDeps}
+                dependencies={displayedDependencies}
                 replaceValue={replaceDependency}
                 workspaceId={workspaceId}
               />

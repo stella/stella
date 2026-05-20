@@ -1,4 +1,4 @@
-import { useOptimistic, useTransition } from "react";
+import { useOptimistic, useRef, useState, useTransition } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -32,6 +32,11 @@ export const OrganizationJurisdictionsCard = () => {
     serverSelected,
     (_current, next: PracticeJurisdiction[]) => next,
   );
+  const [immediateSelected, setImmediateSelected] = useState<
+    PracticeJurisdiction[] | null
+  >(null);
+  const selectionGenerationRef = useRef(0);
+  const selected = immediateSelected ?? optimisticSelected;
   const [, startSelectionTransition] = useTransition();
 
   const updateMutation = useMutation({
@@ -64,17 +69,26 @@ export const OrganizationJurisdictionsCard = () => {
         <div className="flex flex-col gap-3 p-1">
           <JurisdictionPicker
             onChange={(next) => {
+              const generation = selectionGenerationRef.current + 1;
+              selectionGenerationRef.current = generation;
+              setImmediateSelected(next);
               startSelectionTransition(async () => {
                 applyOptimisticSelection(next);
-                await updateMutation.mutateAsync(next).catch(() => {
+                try {
+                  await updateMutation.mutateAsync(next);
+                } catch {
                   // The error toast is surfaced via the mutation's
                   // `onError`. Swallow here so the transition resolves
                   // and React reverts `optimisticSelected` to the
                   // server value automatically.
-                });
+                } finally {
+                  if (selectionGenerationRef.current === generation) {
+                    setImmediateSelected(null);
+                  }
+                }
               });
             }}
-            selected={optimisticSelected}
+            selected={selected}
           />
         </div>
       </FramePanel>
