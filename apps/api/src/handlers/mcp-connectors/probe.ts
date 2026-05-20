@@ -2,9 +2,9 @@ import { Result, TaggedError } from "better-result";
 
 import { discoverOAuthMetadata } from "@/api/handlers/mcp-connectors/oauth";
 import {
-  safeMcpFetchBytes,
-  validateSafeMcpFetchUrl,
-} from "@/api/handlers/mcp-connectors/url-safety";
+  safeOutboundFetchBytes,
+  validateOutboundFetchTarget,
+} from "@/api/lib/safe-outbound-fetch";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 const PROBE_TIMEOUT_MS = 10_000;
@@ -28,16 +28,16 @@ export type McpProbeResult =
 export const probeMcpServer = async (
   rawUrl: string,
 ): Promise<Result<McpProbeResult, McpProbeError>> => {
-  const safeUrl = await validateSafeMcpFetchUrl(rawUrl);
-  if (Result.isError(safeUrl)) {
+  const target = await validateOutboundFetchTarget(rawUrl);
+  if (Result.isError(target)) {
     return Result.err(
       new McpProbeError({
-        message: safeUrl.error.message,
-        cause: safeUrl.error,
+        message: target.error.message,
+        cause: target.error,
       }),
     );
   }
-  const url = safeUrl.value;
+  const url = target.value.url;
 
   const oauth = await discoverOAuthMetadata(url.toString());
   if (Result.isOk(oauth)) {
@@ -51,7 +51,7 @@ export const probeMcpServer = async (
 
   const anonymous = await Result.tryPromise({
     try: async () =>
-      await safeMcpFetchBytes({
+      await safeOutboundFetchBytes({
         body: JSON.stringify({
           jsonrpc: "2.0",
           id: 1,

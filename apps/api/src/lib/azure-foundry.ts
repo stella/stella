@@ -1,4 +1,6 @@
-import { validateSafeBaseURL } from "@/api/lib/safe-base-url";
+import { Result } from "better-result";
+
+import { parseSafeOutboundUrl } from "@/api/lib/safe-outbound-fetch";
 
 export const AZURE_FOUNDRY_DEFAULT_API_VERSION = "v1";
 
@@ -15,12 +17,15 @@ export type AzureFoundryBaseURLResult =
 export const normalizeAzureFoundryBaseURL = (
   rawEndpoint: string,
 ): AzureFoundryBaseURLResult => {
-  const safeURL = validateSafeBaseURL(rawEndpoint.trim());
-  if (!safeURL.ok) {
-    return { ok: false, error: safeURL.error.replace("Base URL", "Endpoint") };
+  const safeURL = parseSafeOutboundUrl(rawEndpoint.trim());
+  if (Result.isError(safeURL)) {
+    return {
+      ok: false,
+      error: safeURL.error.message.replace(/^URL\b/, "Endpoint"),
+    };
   }
 
-  const parsed = new URL(safeURL.url);
+  const parsed = safeURL.value;
   if (parsed.search || parsed.hash) {
     return {
       ok: false,

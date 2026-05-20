@@ -2,9 +2,9 @@ import { Result } from "better-result";
 import * as cheerio from "cheerio";
 
 import {
-  parseSafeMcpUrl,
-  safeMcpFetchBytes,
-} from "@/api/handlers/mcp-connectors/url-safety";
+  parseSafeOutboundUrl,
+  safeOutboundFetchBytes,
+} from "@/api/lib/safe-outbound-fetch";
 
 const ICON_DISCOVERY_TIMEOUT_MS = 5000;
 const ICON_HTML_MAX_CHARS = 200_000;
@@ -13,7 +13,7 @@ const ICON_HTML_MAX_BYTES = 300_000;
 export const discoverMcpIconUrl = async (
   rawUrl: string,
 ): Promise<string | null> => {
-  const parsed = parseSafeMcpUrl(rawUrl);
+  const parsed = parseSafeOutboundUrl(rawUrl);
   if (Result.isError(parsed)) {
     return null;
   }
@@ -21,7 +21,7 @@ export const discoverMcpIconUrl = async (
   const rootUrl = new URL("/", parsed.value.origin);
   const htmlResult = await Result.tryPromise({
     try: async () => {
-      const response = await safeMcpFetchBytes({
+      const response = await safeOutboundFetchBytes({
         headers: { Accept: "text/html" },
         maxBytes: ICON_HTML_MAX_BYTES,
         timeoutMs: ICON_DISCOVERY_TIMEOUT_MS,
@@ -73,7 +73,7 @@ const findIconInHtml = ({
     }
 
     const iconUrl = new URL(href, rootUrl);
-    const safe = parseSafeMcpUrl(iconUrl.toString());
+    const safe = parseSafeOutboundUrl(iconUrl.toString());
     if (Result.isOk(safe)) {
       return safe.value.toString();
     }

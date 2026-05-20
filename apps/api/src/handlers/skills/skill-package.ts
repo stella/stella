@@ -9,9 +9,9 @@ import {
 } from "@stll/skills";
 import type { SkillMetadata, SkillResourceKind } from "@stll/skills";
 
-import { safeMcpFetchBytes } from "@/api/handlers/mcp-connectors/url-safety";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
+import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
 const SKILL_FILE_NAME = "SKILL.md";
 const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -728,7 +728,7 @@ const fetchSafeBytes = async (
   url: URL,
   maxBytes = FILE_SIZE_LIMIT_BYTES.skillPack,
 ) => {
-  const response = await safeMcpFetchBytes({
+  const response = await safeOutboundFetchBytes({
     headers: GITHUB_FETCH_HEADERS,
     maxBytes,
     timeoutMs: GITHUB_API_TIMEOUT_MS,
@@ -765,7 +765,7 @@ const githubRefKindExists = async ({
   ref: string;
   repo: string;
 }): Promise<boolean> => {
-  const response = await safeMcpFetchBytes({
+  const response = await safeOutboundFetchBytes({
     headers: GITHUB_FETCH_HEADERS,
     maxBytes: FILE_SIZE_LIMIT_BYTES.skillPack,
     timeoutMs: GITHUB_API_TIMEOUT_MS,
