@@ -1,4 +1,5 @@
 import { selectStableArrayBuffer } from "./array-buffer-utils";
+import type { EditSessionState } from "./use-edit-session";
 
 export type DocxPreviewFile = {
   fileId: string;
@@ -72,6 +73,45 @@ export const selectEditorBuffer = (
   }
 
   return options.preservedLoadedBuffer ?? options.previewBuffer;
+};
+
+type SelectDocxBrowserEditorBufferOptions = {
+  collaborationSeedBuffer: ArrayBuffer | null;
+  isCollaborativeEditing: boolean;
+  lastEditingBuffer: ArrayBuffer | null;
+  preservedLoadedBuffer: ArrayBuffer | null;
+  previewBuffer?: ArrayBuffer | undefined;
+  state: EditSessionState;
+};
+
+export const selectDocxBrowserEditorBuffer = ({
+  collaborationSeedBuffer,
+  isCollaborativeEditing,
+  lastEditingBuffer,
+  preservedLoadedBuffer,
+  previewBuffer,
+  state,
+}: SelectDocxBrowserEditorBufferOptions) => {
+  if (isCollaborativeEditing) {
+    return collaborationSeedBuffer ?? previewBuffer;
+  }
+
+  if (state.status === "editing") {
+    return selectEditorBuffer({
+      status: state.status,
+      editingBuffer: state.buffer,
+      lastEditingBuffer,
+      preservedLoadedBuffer,
+      previewBuffer,
+    });
+  }
+
+  return selectEditorBuffer({
+    status: state.status,
+    lastEditingBuffer,
+    preservedLoadedBuffer,
+    previewBuffer,
+  });
 };
 
 type ShouldFinalizeEditSessionOptions = {

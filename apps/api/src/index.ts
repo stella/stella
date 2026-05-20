@@ -22,6 +22,7 @@ import { expensesRoute } from "@/api/handlers/expenses/routes";
 import { externalPreviewRoute } from "@/api/handlers/external-preview/routes";
 import { fieldsRoute } from "@/api/handlers/fields/routes";
 import { filesRoute } from "@/api/handlers/files/routes";
+import { folioCollabRoute } from "@/api/handlers/folio-collab/routes";
 import { healthRoute } from "@/api/handlers/health/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { mcpConnectorsRoute } from "@/api/handlers/mcp-connectors/routes";
@@ -303,6 +304,7 @@ const api = new Elysia()
       .use(workspacesRoute)
       .use(propertiesRoute)
       .use(filesRoute)
+      .use(folioCollabRoute)
       .use(desktopEditSessionsRoute)
       .use(entitiesRoute)
       .use(fieldsRoute)

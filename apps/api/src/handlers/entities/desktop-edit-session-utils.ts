@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db";
 import { fields } from "@/api/db/schema";
@@ -17,6 +17,21 @@ type DocxFieldContent = Extract<FieldContent, { type: "file" }> & {
 type DocxFieldEntry = {
   content: FieldContent;
   propertyId: SafeId<"property">;
+};
+
+export const lockDocxEditTarget = async ({
+  entityId,
+  propertyId,
+  tx,
+  workspaceId,
+}: {
+  entityId: SafeId<"entity">;
+  propertyId: SafeId<"property">;
+  tx: DatabaseTransaction;
+  workspaceId: SafeId<"workspace">;
+}) => {
+  const lockKey = `docx-edit:${workspaceId}:${entityId}:${propertyId}`;
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
 };
 
 export const asDocxFieldContent = (

@@ -36,6 +36,14 @@ import {
 import { CellSelection } from "prosemirror-tables";
 import { EditorView } from "prosemirror-view";
 import type { DirectEditorProps } from "prosemirror-view";
+import {
+  initProseMirrorDoc,
+  prosemirrorToYXmlFragment,
+  relativePositionToAbsolutePosition,
+  ySyncPluginKey,
+} from "y-prosemirror";
+import * as Y from "yjs";
+import type { XmlFragment } from "yjs";
 
 import { toProseDoc, createEmptyDoc } from "../core/prosemirror/conversion";
 import { fromProseDoc } from "../core/prosemirror/conversion/fromProseDoc";
@@ -70,6 +78,11 @@ export type HiddenProseMirrorProps = {
   onSelectionChange?: (state: EditorState) => void;
   /** External ProseMirror plugins */
   externalPlugins?: Plugin[];
+  /** Yjs-backed collaboration document owner. */
+  collaboration?: HiddenProseMirrorCollaboration | undefined;
+  onRemoteSelectionsChange?:
+    | ((selections: HiddenProseMirrorRemoteSelection[]) => void)
+    | undefined;
   /** Extension manager for plugins/schema/commands (optional — falls back to default) */
   extensionManager?: ExtensionManager;
   /** Callback when EditorView is ready */
@@ -80,6 +93,28 @@ export type HiddenProseMirrorProps = {
   onKeyDown?: (view: EditorView, event: KeyboardEvent) => boolean;
   /** Callback when a readonly user action would mutate the document. */
   onReadOnlyEditAttempt?: () => void;
+};
+
+export type HiddenProseMirrorCollaboration = {
+  awareness?: CollaborationAwareness | undefined;
+  onSeeded?: (() => void) | undefined;
+  shouldSeed?: boolean | undefined;
+  yXmlFragment: XmlFragment;
+};
+
+export type HiddenProseMirrorRemoteSelection = {
+  anchor: number;
+  clientId: number;
+  color: string;
+  head: number;
+  name: string;
+};
+
+type CollaborationAwareness = {
+  clientID: number;
+  getStates(): Map<number, unknown>;
+  off(event: "change" | "update", handler: () => void): void;
+  on(event: "change" | "update", handler: () => void): void;
 };
 
 export type HiddenProseMirrorRef = {
@@ -115,6 +150,123 @@ export type HiddenProseMirrorRef = {
   setCellSelection(anchorCellPos: number, headCellPos: number): void;
   /** Scroll the PM view to selection (no-op since hidden) */
   scrollToSelection(): void;
+};
+
+type YSyncState = {
+  binding: {
+    mapping: Parameters<typeof relativePositionToAbsolutePosition>[3];
+  };
+  doc: Y.Doc;
+  type: XmlFragment;
+};
+
+type AwarenessCursor = {
+  anchor: Record<string, unknown>;
+  head: Record<string, unknown>;
+};
+
+type AwarenessUser = {
+  color: string;
+  name: string;
+};
+
+const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const isYSyncState = (value: unknown): value is YSyncState => {
+  if (!isObjectRecord(value)) {
+    return false;
+  }
+  const binding = value["binding"];
+  return (
+    value["doc"] instanceof Y.Doc &&
+    value["type"] instanceof Y.XmlFragment &&
+    isObjectRecord(binding) &&
+    binding["mapping"] instanceof Map
+  );
+};
+
+const readAwarenessCursor = (state: unknown): AwarenessCursor | null => {
+  if (!isObjectRecord(state)) {
+    return null;
+  }
+  const cursor = state["cursor"];
+  if (!isObjectRecord(cursor)) {
+    return null;
+  }
+  const anchor = cursor["anchor"];
+  const head = cursor["head"];
+  if (!isObjectRecord(anchor) || !isObjectRecord(head)) {
+    return null;
+  }
+  return { anchor, head };
+};
+
+const readAwarenessUser = (state: unknown, clientId: number): AwarenessUser => {
+  if (!isObjectRecord(state) || !isObjectRecord(state["user"])) {
+    return {
+      color: "var(--doc-image-selection)",
+      name: `User ${clientId}`,
+    };
+  }
+
+  const user = state["user"];
+  return {
+    color:
+      typeof user["color"] === "string"
+        ? user["color"]
+        : "var(--doc-image-selection)",
+    name: typeof user["name"] === "string" ? user["name"] : `User ${clientId}`,
+  };
+};
+
+const collectRemoteSelections = (
+  state: EditorState,
+  awareness: CollaborationAwareness,
+): HiddenProseMirrorRemoteSelection[] => {
+  const syncState: unknown = ySyncPluginKey.getState(state);
+  if (!isYSyncState(syncState)) {
+    return [];
+  }
+
+  const selections: HiddenProseMirrorRemoteSelection[] = [];
+  for (const [clientId, remoteState] of awareness.getStates()) {
+    if (clientId === awareness.clientID) {
+      continue;
+    }
+
+    const cursor = readAwarenessCursor(remoteState);
+    if (cursor === null) {
+      continue;
+    }
+
+    const anchor = relativePositionToAbsolutePosition(
+      syncState.doc,
+      syncState.type,
+      Y.createRelativePositionFromJSON(cursor.anchor),
+      syncState.binding.mapping,
+    );
+    const head = relativePositionToAbsolutePosition(
+      syncState.doc,
+      syncState.type,
+      Y.createRelativePositionFromJSON(cursor.head),
+      syncState.binding.mapping,
+    );
+    if (anchor === null || head === null) {
+      continue;
+    }
+
+    const user = readAwarenessUser(remoteState, clientId);
+    selections.push({
+      anchor,
+      clientId,
+      color: user.color,
+      head,
+      name: user.name,
+    });
+  }
+
+  return selections;
 };
 
 // ============================================================================
@@ -156,14 +308,33 @@ function createInitialState(
   styles: StyleDefinitions | null | undefined,
   manager?: ExtensionManager,
   externalPlugins: Plugin[] = [],
+  collaboration?: HiddenProseMirrorCollaboration,
 ): EditorState {
   const activeSchema = manager?.getSchema() ?? schema;
-  let doc = createEmptyDoc();
+  let localDoc = createEmptyDoc();
   if (document) {
-    doc =
+    localDoc =
       styles === undefined || styles === null
         ? toProseDoc(document)
         : toProseDoc(document, { styles });
+  }
+
+  if (collaboration) {
+    if (collaboration.shouldSeed && collaboration.yXmlFragment.length === 0) {
+      prosemirrorToYXmlFragment(localDoc, collaboration.yXmlFragment);
+      collaboration.onSeeded?.();
+    }
+
+    const { doc } = initProseMirrorDoc(
+      collaboration.yXmlFragment,
+      activeSchema,
+    );
+
+    return EditorState.create({
+      doc,
+      schema: activeSchema,
+      plugins: [...externalPlugins, ...(manager?.getPlugins() ?? [])],
+    });
   }
 
   // External plugins go first so they can intercept before extension keymaps
@@ -174,7 +345,7 @@ function createInitialState(
   ];
 
   return EditorState.create({
-    doc,
+    doc: localDoc,
     schema: activeSchema,
     plugins,
   });
@@ -215,11 +386,13 @@ const HiddenProseMirrorComponent = forwardRef<
     onTransaction,
     onSelectionChange,
     externalPlugins = [],
+    collaboration,
     extensionManager,
     onEditorViewReady,
     onEditorViewDestroy,
     onKeyDown,
     onReadOnlyEditAttempt,
+    onRemoteSelectionsChange,
   } = props;
 
   // Refs
@@ -231,6 +404,7 @@ const HiddenProseMirrorComponent = forwardRef<
   // Track the document identity to detect truly external changes
   // vs changes that originated from editing (which get passed back through props)
   const lastDocumentIdRef = useRef<string | null>(null);
+  const lastCollaborationFragmentRef = useRef<XmlFragment | null>(null);
   // Track if we've initialized - first render needs to set up state
   const isInitializedRef = useRef(false);
 
@@ -242,6 +416,7 @@ const HiddenProseMirrorComponent = forwardRef<
   const onEditorViewDestroyRef = useRef(onEditorViewDestroy);
   const onKeyDownRef = useRef(onKeyDown);
   const onReadOnlyEditAttemptRef = useRef(onReadOnlyEditAttempt);
+  const onRemoteSelectionsChangeRef = useRef(onRemoteSelectionsChange);
 
   // Keep refs in sync
   readOnlyRef.current = readOnly;
@@ -251,6 +426,7 @@ const HiddenProseMirrorComponent = forwardRef<
   onEditorViewDestroyRef.current = onEditorViewDestroy;
   onKeyDownRef.current = onKeyDown;
   onReadOnlyEditAttemptRef.current = onReadOnlyEditAttempt;
+  onRemoteSelectionsChangeRef.current = onRemoteSelectionsChange;
 
   // Keep document ref in sync
   documentRef.current = document;
@@ -273,6 +449,7 @@ const HiddenProseMirrorComponent = forwardRef<
       styles,
       extensionManager,
       externalPlugins,
+      collaboration,
     );
 
     const editorProps: DirectEditorProps = {
@@ -297,6 +474,12 @@ const HiddenProseMirrorComponent = forwardRef<
         // Notify about selection changes (use ref to avoid dependency issues)
         if (transaction.selectionSet || transaction.docChanged) {
           onSelectionChangeRef.current?.(newState);
+        }
+
+        if (collaboration?.awareness) {
+          onRemoteSelectionsChangeRef.current?.(
+            collectRemoteSelections(newState, collaboration.awareness),
+          );
         }
       },
       // Intercept key events before ProseMirror processes them
@@ -349,9 +532,35 @@ const HiddenProseMirrorComponent = forwardRef<
     document,
     styles,
     externalPlugins,
+    collaboration,
     extensionManager,
     // Callbacks removed from dependencies - accessed via refs
   ]);
+
+  useEffect(() => {
+    const awareness = collaboration?.awareness;
+    if (!awareness || !viewRef.current) {
+      onRemoteSelectionsChangeRef.current?.([]);
+      return undefined;
+    }
+
+    const publishRemoteSelections = () => {
+      if (!viewRef.current) {
+        return;
+      }
+      onRemoteSelectionsChangeRef.current?.(
+        collectRemoteSelections(viewRef.current.state, awareness),
+      );
+    };
+
+    awareness.on("change", publishRemoteSelections);
+    publishRemoteSelections();
+
+    return () => {
+      awareness.off("change", publishRemoteSelections);
+      onRemoteSelectionsChangeRef.current?.([]);
+    };
+  }, [collaboration?.awareness]);
 
   /**
    * Destroy EditorView
@@ -401,14 +610,23 @@ const HiddenProseMirrorComponent = forwardRef<
     };
 
     const currentDocId = getDocumentId(document);
+    const currentCollaborationFragment = collaboration?.yXmlFragment ?? null;
+    const collaborationSourceChanged =
+      currentCollaborationFragment !== lastCollaborationFragmentRef.current;
+
+    if (collaboration && !collaborationSourceChanged) {
+      return;
+    }
 
     // Skip if this is the same document (likely passed back after internal edit)
     // Only reset state if:
     // 1. Not yet initialized (first mount)
     // 2. Document identity changed (truly external change like loading a new file)
+    // 3. Collaboration starts/stops or switches sessions
     if (
       isInitializedRef.current &&
-      currentDocId === lastDocumentIdRef.current
+      currentDocId === lastDocumentIdRef.current &&
+      !collaborationSourceChanged
     ) {
       return;
     }
@@ -416,6 +634,7 @@ const HiddenProseMirrorComponent = forwardRef<
     // Update tracking refs
     isInitializedRef.current = true;
     lastDocumentIdRef.current = currentDocId;
+    lastCollaborationFragmentRef.current = currentCollaborationFragment;
 
     // Create new state from document
     const newState = createInitialState(
@@ -423,12 +642,13 @@ const HiddenProseMirrorComponent = forwardRef<
       styles,
       extensionManager,
       externalPlugins,
+      collaboration,
     );
     viewRef.current.updateState(newState);
 
     // Use ref to avoid infinite loop when callback is unstable
     onSelectionChangeRef.current?.(newState);
-  }, [document, styles, extensionManager, externalPlugins]);
+  }, [document, styles, extensionManager, externalPlugins, collaboration]);
   // NOTE: onSelectionChange removed from dependencies - accessed via ref to prevent infinite loops
 
   // Update editable state

@@ -1,5 +1,6 @@
 export { DocxEditor } from "./components/DocxEditor";
 export type {
+  DocxEditorCollaboration,
   DocxEditorProps,
   DocxEditorRef,
 } from "./components/DocxEditor.props";

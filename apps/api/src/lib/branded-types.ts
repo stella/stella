@@ -33,6 +33,8 @@ export type SafeIdType =
   | "entityVersion"
   | "expense"
   | "field"
+  | "folioCollabSession"
+  | "folioCollabSessionToken"
   | "folder"
   | "infoSoudTrackedCase"
   | "invoice"

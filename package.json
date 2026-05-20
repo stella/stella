@@ -19,6 +19,7 @@
     "dev:ai-tools": "bun --cwd apps/api dev:ai-tools",
     "dev:all": "turbo dev",
     "dev:api": "bun packages/scripts/src/dev-runner.ts dev:api",
+    "dev:collab": "bun --cwd apps/collab dev",
     "dev:desktop": "bun packages/scripts/src/dev-runner.ts dev:desktop",
     "dev:web": "bun packages/scripts/src/dev-runner.ts dev:web",
     "typegen": "turbo run typegen",

@@ -16,6 +16,7 @@ import {
 import type { CSSProperties, ReactNode, RefObject } from "react";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useRouteContext } from "@tanstack/react-router";
 import {
   CheckCircle2Icon,
   EyeIcon,
@@ -31,6 +32,7 @@ import { FormattingBar, setAnonymizationTermsMeta } from "@stll/folio";
 import type {
   AnonymizationTerm,
   DocxCompatibility,
+  DocxEditorCollaboration,
   DocxEditorRef,
   EditorMode,
 } from "@stll/folio";
@@ -52,6 +54,7 @@ import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-a
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { StatusMessage } from "@/components/route-components";
 import Tooltip from "@/components/tooltip";
+import { env } from "@/env";
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
 import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
 import {
@@ -59,6 +62,7 @@ import {
   useDocxWheelZoom,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-preview-zoom";
 import { useDocxBlockScroll } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll";
+import { useFolioCollaborationSession } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { useIsAnonymizationActive } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-active-store";
 import { useAnonymizationMatchesStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-matches-store";
@@ -70,7 +74,7 @@ import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.c
 
 import {
   getDocxEditBlockReason,
-  selectEditorBuffer,
+  selectDocxBrowserEditorBuffer,
   selectPreviewFile,
   shouldFinalizeEditSession,
 } from "./docx-browser-editor.logic";
@@ -84,7 +88,18 @@ const DocxEditor = lazy(async () => {
 });
 
 const CHANGE_CHECKPOINT_DELAY = 2000;
+const COLLABORATOR_COLOR_SPACE = 16_777_215;
 const noop = () => undefined;
+
+const colorFromStableId = (value: string) => {
+  let hash = 0;
+  for (const character of value) {
+    hash =
+      (hash * 31 + (character.codePointAt(0) ?? 0)) % COLLABORATOR_COLOR_SPACE;
+  }
+  const color = (hash * 2_654_435_761) % COLLABORATOR_COLOR_SPACE;
+  return `#${color.toString(16).padStart(6, "0")}`;
+};
 
 type AutosaveStatus = "synced" | "pending" | "syncing";
 
@@ -105,6 +120,7 @@ type DocxBrowserEditorBaseProps = {
   onSaved?: ((fieldId: string) => void) | undefined;
   onReadonlyEditAttempt?: (() => void) | undefined;
   onScrollTopChange?: ((scrollTop: number) => void) | undefined;
+  collaboration?: DocxEditorCollaboration | undefined;
   scaleOffset?: number | undefined;
   actionsKey?: string | undefined;
   actionsMapRef?: RefObject<Map<string, DocxBrowserEditorActions>> | undefined;
@@ -162,6 +178,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     actionsRef,
     actionBarControls,
     canUnlock = true,
+    collaboration,
     isEditing = true,
     initialScrollTop,
     onClose,
@@ -524,9 +541,15 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   );
   const changeCheckpointIdleCallbackRef = useRef<number | null>(null);
   const [editorMode, setEditorMode] = useState<EditorMode>("editing");
-  const [compatibility, setCompatibility] = useState<DocxCompatibility | null>(
-    null,
-  );
+  const editTargetKey = `${workspaceId}:${entityId}:${propertyId}:${fieldId}`;
+  const [compatibilityState, setCompatibilityState] = useState<{
+    targetKey: string;
+    value: DocxCompatibility | null;
+  }>({ targetKey: editTargetKey, value: null });
+  const compatibility =
+    compatibilityState.targetKey === editTargetKey
+      ? compatibilityState.value
+      : null;
   const [isPromptingUnlock, setIsPromptingUnlock] = useState(false);
   const [autosaveStatus, setAutosaveStatus] =
     useState<AutosaveStatus>("synced");
@@ -542,6 +565,28 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       ? { placeholderData: previewPlaceholder }
       : { placeholderData: keepPreviousData }),
   });
+  const canAutoRequestCollaboration =
+    isEditing &&
+    !previewFileQuery.isPlaceholderData &&
+    compatibility?.canSafelyEdit === true;
+  const collaborationRuntime = useDocxBrowserCollaboration({
+    canUnlock,
+    externalCollaboration: collaboration,
+    entityId,
+    fieldId,
+    propertyId,
+    initiallyRequested: canAutoRequestCollaboration,
+    workspaceId,
+  });
+  const {
+    activeCollaboration,
+    cancelCollaboration,
+    collaborationEnabled,
+    collaborationSession,
+    collaborationState,
+    isCollaborativeEditing,
+    requestCollaboration,
+  } = collaborationRuntime;
 
   if (previewFileQuery.error) {
     throw previewFileQuery.error;
@@ -560,9 +605,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     isDirty,
     open,
     markDirty,
-    saveCheckpoint,
-    finalize,
-    cancel,
+    saveCheckpoint: saveDesktopCheckpoint,
+    finalize: finalizeDesktopSession,
+    cancel: cancelDesktopSession,
     resetError,
   } = useEditSession({
     workspaceId,
@@ -597,6 +642,36 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     onCancelled: onClose,
   });
 
+  const saveActiveCheckpoint =
+    collaborationSession?.saveCheckpoint ?? saveDesktopCheckpoint;
+  const finalizeActiveSession =
+    collaborationSession?.finalize ?? finalizeDesktopSession;
+  const cancelActiveSession = useCallback(async () => {
+    if (collaborationSession !== null) {
+      const cancelled = await collaborationSession.cancel();
+      if (!cancelled) {
+        stellaToast.add({
+          description: t("folio.saveCheckpointFailedDescription"),
+          title: t("folio.saveCheckpointFailedTitle"),
+          type: "error",
+        });
+        return;
+      }
+
+      cancelCollaboration();
+      onClose();
+      return;
+    }
+
+    await cancelDesktopSession();
+  }, [
+    cancelCollaboration,
+    cancelDesktopSession,
+    collaborationSession,
+    onClose,
+    t,
+  ]);
+
   useEffect(() => {
     if (optimisticPreviewRef.current?.fieldId === fieldId) {
       return;
@@ -611,8 +686,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       clearTimeout(lockedEditPromptTimerRef.current);
       lockedEditPromptTimerRef.current = null;
     }
-    setCompatibility(null);
-  }, [fieldId]);
+    setCompatibilityState({ targetKey: editTargetKey, value: null });
+  }, [editTargetKey, fieldId]);
 
   const reportUnsupportedEditAttempt = useCallback(() => {
     stellaToast.warning(t("folio.unsupportedDocxEditTitle"), {
@@ -628,6 +703,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   }, [t]);
 
   const requestEditMode = useCallback(async () => {
+    if (isCollaborativeEditing) {
+      return true;
+    }
+
     if (state.status === "editing") {
       return true;
     }
@@ -649,6 +728,11 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       return false;
     }
 
+    if (collaborationEnabled) {
+      requestCollaboration();
+      return false;
+    }
+
     didOpenRef.current = true;
     errorToastShownRef.current = false;
     const opened = await open();
@@ -659,8 +743,11 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     return opened;
   }, [
     compatibility?.canSafelyEdit,
+    collaborationEnabled,
+    isCollaborativeEditing,
     open,
     previewFile,
+    requestCollaboration,
     reportPendingCompatibility,
     reportUnsupportedEditAttempt,
     state.status,
@@ -682,14 +769,20 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       reportUnsupportedEditAttempt();
       return;
     }
+    if (collaborationEnabled) {
+      requestCollaboration();
+      return;
+    }
     didOpenRef.current = true;
     errorToastShownRef.current = false;
     void open();
   }, [
     compatibility,
+    collaborationEnabled,
     isEditing,
     open,
     previewFile,
+    requestCollaboration,
     reportUnsupportedEditAttempt,
     state.status,
   ]);
@@ -725,7 +818,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     resetError();
   }, [onClose, resetError, state, t]);
 
-  const isUnlocked = state.status === "editing";
+  const isUnlocked = isCollaborativeEditing || state.status === "editing";
   const wasUnlockedRef = useRef(false);
 
   useEffect(() => {
@@ -809,13 +902,13 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     void (async () => {
       const buffer = await ref.save({ selective: true });
       if (buffer) {
-        const saved = await saveCheckpoint(buffer);
+        const saved = await saveActiveCheckpoint(buffer);
         setAutosaveStatus(saved ? "synced" : "pending");
         return;
       }
       setAutosaveStatus("pending");
     })();
-  }, [saveCheckpoint]);
+  }, [saveActiveCheckpoint]);
 
   // Awaitable variant of `saveChangeCheckpoint` for callers that
   // need to wait for the round-trip before navigating (e.g. the
@@ -833,9 +926,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       setAutosaveStatus("pending");
       return;
     }
-    const saved = await saveCheckpoint(buffer);
+    const saved = await saveActiveCheckpoint(buffer);
     setAutosaveStatus(saved ? "synced" : "pending");
-  }, [clearQueuedChangeCheckpoint, saveCheckpoint]);
+  }, [clearQueuedChangeCheckpoint, saveActiveCheckpoint]);
 
   // Cmd+S / Ctrl+S checkpoints only while the document is actively editable.
   useEffect(() => {
@@ -859,7 +952,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       void (async () => {
         const buffer = await ref.save({ selective: true });
         if (buffer) {
-          const saved = await saveCheckpoint(buffer);
+          const saved = await saveActiveCheckpoint(buffer);
           setAutosaveStatus(saved ? "synced" : "pending");
           return;
         }
@@ -868,7 +961,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [clearQueuedChangeCheckpoint, isUnlocked, saveCheckpoint]);
+  }, [clearQueuedChangeCheckpoint, isUnlocked, saveActiveCheckpoint]);
 
   useEffect(
     () => () => {
@@ -932,7 +1025,28 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         hasPendingEditorChanges,
       })
     ) {
-      await cancel();
+      if (isCollaborativeEditing) {
+        if (collaborationSession === null) {
+          return;
+        }
+
+        const finalized = await collaborationSession.finalize();
+        if (finalized === null) {
+          setAutosaveStatus("pending");
+          stellaToast.add({
+            description: t("folio.saveCheckpointFailedDescription"),
+            title: t("folio.editSaveFailedTitle"),
+            type: "error",
+          });
+          return;
+        }
+        if (finalized.outcome === "finalized") {
+          onSaved?.(finalized.fieldId);
+        }
+        onClose();
+        return;
+      }
+      await cancelActiveSession();
       return;
     }
 
@@ -947,7 +1061,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     }
 
     setAutosaveStatus("syncing");
-    const saved = await saveCheckpoint(buffer);
+    const saved = await saveActiveCheckpoint(buffer);
     if (!saved) {
       setAutosaveStatus("pending");
       stellaToast.add({
@@ -975,15 +1089,42 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     }
     finalizedBufferRef.current = buffer;
     hasSessionChangesRef.current = false;
-    await finalize();
+    if (isCollaborativeEditing) {
+      if (collaborationSession === null) {
+        return;
+      }
+
+      const collaborativeFinalized = await collaborationSession.finalize();
+      if (collaborativeFinalized === null) {
+        hasSessionChangesRef.current = true;
+        setAutosaveStatus("pending");
+        stellaToast.add({
+          description: t("folio.saveCheckpointFailedDescription"),
+          title: t("folio.editSaveFailedTitle"),
+          type: "error",
+        });
+        return;
+      }
+      if (collaborativeFinalized.outcome === "finalized") {
+        onSaved?.(collaborativeFinalized.fieldId);
+      }
+      onClose();
+      return;
+    }
+
+    await finalizeActiveSession();
   }, [
-    cancel,
+    cancelActiveSession,
     clearQueuedChangeCheckpoint,
+    collaborationSession,
     fieldId,
-    finalize,
+    finalizeActiveSession,
+    isCollaborativeEditing,
     isDirty,
+    onClose,
+    onSaved,
     previewFile,
-    saveCheckpoint,
+    saveActiveCheckpoint,
     t,
   ]);
 
@@ -991,8 +1132,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     clearQueuedChangeCheckpoint();
     preservedLoadedBufferRef.current = null;
     hasSessionChangesRef.current = false;
-    await cancel();
-  }, [cancel, clearQueuedChangeCheckpoint]);
+    await cancelActiveSession();
+  }, [cancelActiveSession, clearQueuedChangeCheckpoint]);
 
   const flashUnlockControl = useCallback(() => {
     setIsPromptingUnlock(true);
@@ -1024,6 +1165,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       reportUnsupportedEditAttempt();
       return;
     }
+    if (collaborationEnabled) {
+      requestCollaboration();
+      return;
+    }
     if (
       previewFile !== null &&
       state.status === "idle" &&
@@ -1036,10 +1181,12 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   }, [
     canUnlock,
     compatibility?.canSafelyEdit,
+    collaborationEnabled,
     flashUnlockControl,
     onBlockedUnlock,
     open,
     previewFile,
+    requestCollaboration,
     reportPendingCompatibility,
     reportUnsupportedEditAttempt,
     state.status,
@@ -1066,7 +1213,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     const actions: DocxBrowserEditorActions = {
       cancel: handleCancel,
       finalize: () => {
-        if (state.status === "editing") {
+        if (isCollaborativeEditing || state.status === "editing") {
           void handleFinalize();
         }
       },
@@ -1101,6 +1248,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     flushPendingChanges,
     handleCancel,
     handleFinalize,
+    isCollaborativeEditing,
     requestEditMode,
     state.status,
   ]);
@@ -1114,23 +1262,20 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     preservedLoadedBufferRef.current?.fieldId === fieldId
       ? preservedLoadedBufferRef.current.buffer
       : null;
-  const editorBuffer = selectEditorBuffer(
-    state.status === "editing"
-      ? {
-          status: state.status,
-          editingBuffer: state.buffer,
-          lastEditingBuffer: lastEditingBufferRef.current,
-          preservedLoadedBuffer,
-          previewBuffer: previewFile?.buffer,
-        }
-      : {
-          status: state.status,
-          lastEditingBuffer: lastEditingBufferRef.current,
-          preservedLoadedBuffer,
-          previewBuffer: previewFile?.buffer,
-        },
-  );
-  if (state.status === "editing" && editorBuffer !== undefined) {
+  const collaborationSeedBuffer =
+    collaborationSession?.seedDocumentBuffer ?? null;
+  const editorBuffer = selectDocxBrowserEditorBuffer({
+    collaborationSeedBuffer,
+    isCollaborativeEditing,
+    lastEditingBuffer: lastEditingBufferRef.current,
+    preservedLoadedBuffer,
+    previewBuffer: previewFile?.buffer,
+    state,
+  });
+  if (
+    (state.status === "editing" || isCollaborativeEditing) &&
+    editorBuffer !== undefined
+  ) {
     lastEditingBufferRef.current = editorBuffer;
     preservedLoadedBufferRef.current = null;
   }
@@ -1159,7 +1304,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
                         "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
                     )}
                     disabled={
-                      state.status === "opening" || state.status === "saving"
+                      state.status === "opening" ||
+                      state.status === "saving" ||
+                      collaborationState.status === "opening"
                     }
                     onClick={handleToggleLock}
                     size={showLockLabel ? "sm" : "icon-sm"}
@@ -1236,6 +1383,22 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     );
   }
 
+  if (collaborationState.status === "error") {
+    return (
+      <StatusMessage
+        actionButton={
+          <Button onClick={onClose} size="sm" variant="outline">
+            {t("common.close")}
+          </Button>
+        }
+        className="h-full w-full"
+        description={collaborationState.message}
+        status="error"
+        title={t("folio.editOpenFailedTitle")}
+      />
+    );
+  }
+
   if (previewFile === null || editorBuffer === undefined) {
     return (
       <DocxEditorLoadingFallback
@@ -1251,6 +1414,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   }
 
   const previewIdentity = previewFile.fileId;
+  const collaborationIdentity = collaborationSession?.sessionId ?? "local";
 
   return (
     <div ref={containerRef} className="flex h-full w-full min-w-0 flex-col">
@@ -1286,7 +1450,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
             }
           >
             <DocxEditor
-              key={`docx-${previewIdentity}`}
+              key={`docx-${previewIdentity}-${collaborationIdentity}`}
               ref={editorRef}
               autoOpenReviewSidebar={false}
               className="folio-docx-preview folio-peek h-full"
@@ -1299,7 +1463,14 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
                 }
               }}
               onCompatibilityChange={(nextCompatibility) => {
-                setCompatibility(nextCompatibility);
+                if (previewFileQuery.isPlaceholderData) {
+                  return;
+                }
+
+                setCompatibilityState({
+                  targetKey: editTargetKey,
+                  value: nextCompatibility,
+                });
                 onCompatibilityChange?.(nextCompatibility);
               }}
               onAnonymizationMatchesChange={handleAnonymizationMatchesChange}
@@ -1310,6 +1481,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
               onEditorViewReady={setEditorViewForAnonymization}
               showToolbar={showActionBar ? true : isUnlocked}
               toolbarExtra={toolbarExtra}
+              {...(activeCollaboration !== undefined
+                ? { collaboration: activeCollaboration }
+                : {})}
               {...(isUnlocked ? { onChange: handleChange } : {})}
               onReadonlyEditAttempt={handleLockedEditAttempt}
               {...(initialScrollTop !== undefined ? { initialScrollTop } : {})}
@@ -1334,6 +1508,84 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       </div>
     </div>
   );
+};
+
+type UseDocxBrowserCollaborationOptions = {
+  canUnlock: boolean;
+  entityId: string;
+  externalCollaboration?: DocxEditorCollaboration | undefined;
+  fieldId: string;
+  initiallyRequested: boolean;
+  propertyId: string;
+  workspaceId: string;
+};
+
+type CollaborationRequestState = {
+  requested: boolean;
+  targetKey: string;
+};
+
+const useDocxBrowserCollaboration = ({
+  canUnlock,
+  entityId,
+  externalCollaboration,
+  fieldId,
+  initiallyRequested,
+  propertyId,
+  workspaceId,
+}: UseDocxBrowserCollaborationOptions) => {
+  const targetKey = `${workspaceId}:${entityId}:${propertyId}:${fieldId}`;
+  const [requestState, setRequestState] = useState<CollaborationRequestState>({
+    requested: initiallyRequested,
+    targetKey,
+  });
+  const requested =
+    requestState.targetKey === targetKey
+      ? requestState.requested
+      : initiallyRequested;
+  const currentUser = useRouteContext({
+    from: "/_protected",
+    select: (ctx) => ({
+      email: ctx.user.email,
+      id: ctx.user.id,
+      name: ctx.user.name,
+    }),
+  });
+  const collaborationEnabled =
+    env.VITE_FEATURE_FOLIO_COLLAB && env.VITE_COLLAB_URL !== undefined;
+  const collaborationState = useFolioCollaborationSession({
+    enabled: collaborationEnabled && requested && canUnlock,
+    entityId,
+    fieldId,
+    propertyId,
+    user: {
+      color: colorFromStableId(currentUser.id),
+      name: currentUser.name ?? currentUser.email,
+    },
+    workspaceId,
+  });
+  useEffect(() => {
+    setRequestState({ requested: initiallyRequested, targetKey });
+  }, [initiallyRequested, targetKey]);
+  const collaborationSession =
+    collaborationState.status === "ready" ? collaborationState.session : null;
+  const cancelCollaboration = useCallback(() => {
+    setRequestState({ requested: false, targetKey });
+  }, [targetKey]);
+  const requestCollaboration = useCallback(() => {
+    setRequestState({ requested: true, targetKey });
+  }, [targetKey]);
+
+  return {
+    activeCollaboration:
+      collaborationSession?.collaboration ?? externalCollaboration,
+    cancelCollaboration,
+    collaborationEnabled,
+    collaborationSession,
+    collaborationState,
+    isCollaborativeEditing: collaborationSession !== null,
+    requestCollaboration,
+  };
 };
 
 const AutosaveIndicator = ({ status }: { status: AutosaveStatus }) => {

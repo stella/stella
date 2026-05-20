@@ -4,7 +4,11 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import type { SafeDb, Transaction } from "@/api/db";
-import { desktopEditSessions, entityVersions } from "@/api/db/schema";
+import {
+  desktopEditSessions,
+  entityVersions,
+  folioCollabSessions,
+} from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -20,6 +24,7 @@ import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { broadcast } from "@/api/lib/sse";
 
 import {
+  lockDocxEditTarget,
   presignDocxDownloadFromFileId,
   presignDocxFieldDownload,
   readCurrentDocxTarget,
@@ -218,6 +223,13 @@ export const openDesktopEditSessionHandler = async function* ({
   if (force) {
     yield* Result.await(
       safeDb(async (tx) => {
+        await lockDocxEditTarget({
+          entityId,
+          propertyId,
+          tx,
+          workspaceId,
+        });
+
         const existing = await tx
           .select({ id: desktopEditSessions.id })
           .from(desktopEditSessions)
@@ -250,6 +262,13 @@ export const openDesktopEditSessionHandler = async function* ({
 
   const runOpenSession = async ({ allowInsert }: { allowInsert: boolean }) =>
     await safeDb(async (tx) => {
+      await lockDocxEditTarget({
+        entityId,
+        propertyId,
+        tx,
+        workspaceId,
+      });
+
       const existingSession = await readExistingOpenDesktopEditSession({
         entityId,
         propertyId,
@@ -286,6 +305,29 @@ export const openDesktopEditSessionHandler = async function* ({
           error: {
             message: "Target property is not an editable DOCX field.",
             statusCode: 400 as const,
+          },
+        } as const;
+      }
+
+      const collabSessions = await tx
+        .select({ id: folioCollabSessions.id })
+        .from(folioCollabSessions)
+        .where(
+          and(
+            eq(folioCollabSessions.entityId, entityId),
+            eq(folioCollabSessions.propertyId, propertyId),
+            eq(folioCollabSessions.workspaceId, workspaceId),
+            eq(folioCollabSessions.status, "open"),
+          ),
+        )
+        .limit(1);
+
+      if (collabSessions.at(0)) {
+        return {
+          error: {
+            message:
+              "This document already has a collaborative edit session open.",
+            statusCode: 409 as const,
           },
         } as const;
       }
