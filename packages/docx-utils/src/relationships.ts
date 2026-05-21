@@ -1,6 +1,6 @@
 /** Find the next available rId in a relationships XML string */
 export const findNextRId = (relsXml: string): string => {
-  const matches = relsXml.matchAll(/Id="rId(\d+)"/g);
+  const matches = relsXml.matchAll(/Id="rId(\d+)"/gu);
   let max = 0;
   for (const m of matches) {
     const n = Number.parseInt(m[1] ?? "0", 10);

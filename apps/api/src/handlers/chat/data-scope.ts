@@ -82,7 +82,7 @@ export const extractAssistantWorkspaceIds = (
 const WORKSPACE_KEY_FIELDS = new Set(["workspaceId", "matterRef"]);
 
 const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
 const collectStructuralWorkspaceIds = (
   value: unknown,
@@ -115,7 +115,7 @@ const collectStructuralWorkspaceIds = (
 // The entity form's second segment (the entity UUID) is intentionally
 // not captured — only the workspace it belongs to gates RLS.
 const STELLA_TEXT_REF_WORKSPACE_REGEX =
-  /#stella-(?:workspace|entity)=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/g;
+  /#stella-(?:workspace|entity)=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gu;
 
 const collectTextRefWorkspaceIds = (
   part: unknown,

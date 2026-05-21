@@ -43,8 +43,8 @@ type ValidationResult = {
 
 const normalize = (text: string): string =>
   text
-    .replace(/\s+/g, " ")
-    .replace(/\u00a0/g, " ")
+    .replace(/\s+/gu, " ")
+    .replace(/\u00a0/gu, " ")
     .trim()
     .toLowerCase();
 
@@ -75,16 +75,16 @@ const trimNonLetters = (word: string): string => {
 
 const extractWords = (text: string): Set<string> => {
   const words = new Set<string>();
-  for (const w of text.split(/\s+/)) {
+  for (const w of text.split(/\s+/u)) {
     // Strip brackets first (anonymization markers like
     // "[o]rganizace" or "[OBRÁZEK]"), then trim remaining
     // non-letter chars from edges.
-    const noBrackets = w.replace(/[[\]]/g, "");
+    const noBrackets = w.replace(/[[\]]/gu, "");
     const clean = trimNonLetters(noBrackets.toLowerCase());
     if (
       clean.length >= 3 &&
-      !/^\d+$/.test(clean) &&
-      !/^\[\d+\]$/.test(w.toLowerCase()) &&
+      !/^\d+$/u.test(clean) &&
+      !/^\[\d+\]$/u.test(w.toLowerCase()) &&
       !SKIP_WORDS.has(clean)
     ) {
       words.add(clean);
@@ -154,13 +154,13 @@ export const validateAst = (
           .parent()
           .closest(contentSelector)
           .text()
-          .replace(/\s+/g, " ")
+          .replace(/\s+/gu, " ")
           .trim();
         if (seen.has(parentText)) {
           return;
         }
       }
-      const text = $el.text().replace(/\s+/g, " ").trim();
+      const text = $el.text().replace(/\s+/gu, " ").trim();
       if (text && !seen.has(text)) {
         seen.add(text);
         originalParts.push(text);

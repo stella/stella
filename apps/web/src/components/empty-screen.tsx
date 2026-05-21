@@ -495,7 +495,7 @@ const toYouTubeEmbedUrl = (url: string): string | undefined => {
   }
 
   const parsed = new URL(safeUrl);
-  const host = parsed.hostname.replace(/^www\./, "");
+  const host = parsed.hostname.replace(/^www\./u, "");
   const id = getYouTubeVideoId(host, parsed);
   if (!id) {
     return undefined;
@@ -533,7 +533,7 @@ const getEmbedPathId = (parsed: URL): string | undefined => {
 };
 
 const normalizeYouTubeId = (id: string | undefined): string | undefined => {
-  if (!id || !/^[A-Za-z0-9_-]{11}$/.test(id)) {
+  if (!id || !/^[A-Za-z0-9_-]{11}$/u.test(id)) {
     return undefined;
   }
   return id;

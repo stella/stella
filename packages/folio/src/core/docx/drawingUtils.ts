@@ -62,7 +62,7 @@ const SCHEME_TO_THEME_COLOR: Record<string, ColorValue["themeColor"]> = {
  * Anything else is rejected so untrusted DOCX input cannot smuggle markup through
  * downstream renderers that interpolate the value into HTML/SVG.
  */
-const HEX_COLOR_RE = /^[0-9A-Fa-f]{6}$/;
+const HEX_COLOR_RE = /^[0-9A-Fa-f]{6}$/u;
 
 function isHexColor(val: string | undefined | null): val is string {
   return typeof val === "string" && HEX_COLOR_RE.test(val);

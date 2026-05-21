@@ -33,8 +33,8 @@ import {
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const EMPTY_COMMENT_IDS: ReadonlySet<string> = new Set();
-const DOCX_HEADER_RE = /^word\/header\d+\.xml$/;
-const DOCX_FOOTER_RE = /^word\/footer\d+\.xml$/;
+const DOCX_HEADER_RE = /^word\/header\d+\.xml$/u;
+const DOCX_FOOTER_RE = /^word\/footer\d+\.xml$/u;
 
 const elementsByLocalName = (
   parent: slimdom.Element | slimdom.Document,
@@ -557,7 +557,7 @@ const readCommentText = (comment: slimdom.Element): string => {
   const paragraphTexts: string[] = [];
 
   for (const paragraph of paragraphs) {
-    const text = collectPlainText(paragraph).replace(/\s+/g, " ").trim();
+    const text = collectPlainText(paragraph).replace(/\s+/gu, " ").trim();
     if (text) {
       paragraphTexts.push(text);
     }
@@ -567,7 +567,7 @@ const readCommentText = (comment: slimdom.Element): string => {
     return paragraphTexts.join("\n");
   }
 
-  return collectPlainText(comment).replace(/\s+/g, " ").trim();
+  return collectPlainText(comment).replace(/\s+/gu, " ").trim();
 };
 
 type CommentRecord = {
@@ -747,7 +747,7 @@ const detectKind = (
   }
 
   const styleId = getStyleId(paragraph);
-  if (styleId && /^heading/i.test(styleId)) {
+  if (styleId && /^heading/iu.test(styleId)) {
     return { kind: "heading", displayLabel: styleId };
   }
 
@@ -785,7 +785,7 @@ const extractBlocksFromXmlDocument = (
       moveRangeState,
       rangedCommentIds,
     )
-      .replace(/\s+/g, " ")
+      .replace(/\s+/gu, " ")
       .trim();
     if (text.length === 0) {
       continue;

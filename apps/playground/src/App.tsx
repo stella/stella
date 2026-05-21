@@ -253,6 +253,7 @@ export function App() {
           Open
         </Button>
         <input
+          aria-label="Open .docx file"
           id="file-input"
           type="file"
           accept=".docx"

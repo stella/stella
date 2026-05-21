@@ -116,7 +116,7 @@ export const namespaceMcpToolName = ({
   ].join("__");
 
 const sanitizeToolNamePart = (value: string): string =>
-  value.replace(/[^a-zA-Z0-9_-]/g, "_");
+  value.replace(/[^a-zA-Z0-9_-]/gu, "_");
 
 export const loadExternalMcpToolsForUser = async ({
   organizationId,
@@ -414,7 +414,7 @@ const summarizeExternalMcpToolNames = (
 
   const readableTools = toolNames
     .slice(0, 6)
-    .map((name) => name.replaceAll(/[_-]+/g, " "))
+    .map((name) => name.replaceAll(/[_-]+/gu, " "))
     .join(", ");
   return `External MCP tools: ${readableTools}.`;
 };

@@ -41,7 +41,7 @@ const HIGHLIGHT_HEX_TO_NAME: Record<string, string> = {
 };
 
 export function mapHexToHighlightName(hex: string): string | null {
-  const normalized = hex.replace(/^#/, "").toUpperCase();
+  const normalized = hex.replace(/^#/u, "").toUpperCase();
   return HIGHLIGHT_HEX_TO_NAME[normalized] || null;
 }
 
@@ -150,7 +150,7 @@ export function applyFormattingAction(
       case "textColor": {
         const val = action.value;
         if (typeof val === "string") {
-          newFormatting.color = { rgb: val.replace(/^#/, "").toUpperCase() };
+          newFormatting.color = { rgb: val.replace(/^#/u, "").toUpperCase() };
         } else if (val.auto) {
           delete newFormatting.color;
         } else {

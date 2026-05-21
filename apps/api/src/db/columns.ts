@@ -28,7 +28,7 @@ export const jsonb = customType<{
       ? null
       : sql`${JSON.stringify(value)}::text::jsonb`,
   fromDriver: (value): unknown => {
-    if (typeof value === "string" && /^[{[]/.test(value.trimStart())) {
+    if (typeof value === "string" && /^[{[]/u.test(value.trimStart())) {
       try {
         const parsed: unknown = JSON.parse(value);
         return parsed;

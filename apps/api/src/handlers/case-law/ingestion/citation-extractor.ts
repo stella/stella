@@ -20,28 +20,28 @@ type ExtractedCitation = {
 // Group 1 captures the bare case number to deduplicate
 // against the unprefixed pattern below.
 const PL_PREFIXED_PATTERN =
-  /sygn\.\s*(?:akt\s+)?([IVX]{1,4}\s+[A-Za-z]{1,5}\s+\d{1,6}\/\d{2,4})/g;
+  /sygn\.\s*(?:akt\s+)?([IVX]{1,4}\s+[A-Za-z]{1,5}\s+\d{1,6}\/\d{2,4})/gu;
 
 const CITATION_PATTERNS: RegExp[] = [
   // Czech case number: "sp. zn. 21 Cdo 1234/2020"
-  /sp\.\s*zn\.\s*(\d{1,3}\s+[A-Za-z]{1,5}\s+\d{1,6}\/\d{4})/g,
+  /sp\.\s*zn\.\s*(\d{1,3}\s+[A-Za-z]{1,5}\s+\d{1,6}\/\d{4})/gu,
 
   // ECLI: "ECLI:CZ:NS:2020:21.CDO.1234.2020.1"
-  /ECLI:[A-Z]{2}:[A-Z]{1,8}:\d{4}:[\w.]+/g,
+  /ECLI:[A-Z]{2}:[A-Z]{1,8}:\d{4}:[\w.]+/gu,
 
   // Czech collection: "č. 123/2020 Sb. rozh. tr."
-  /[čc]\.\s*\d{1,5}\/\d{4}\s+Sb\.\s*(?:rozh\.\s*(?:tr|ob)\.?|NS)/g,
+  /[čc]\.\s*\d{1,5}\/\d{4}\s+Sb\.\s*(?:rozh\.\s*(?:tr|ob)\.?|NS)/gu,
 
   // Slovak case number: "sp. zn. 1Cdo/123/2020"
-  /sp\.\s*zn\.\s*\d{1,3}[A-Za-z]{1,5}\/\d{1,6}\/\d{4}/g,
+  /sp\.\s*zn\.\s*\d{1,3}[A-Za-z]{1,5}\/\d{1,6}\/\d{4}/gu,
 
   // Generic: "rozsudek č.j. 5 As 123/2020"
-  /[čc]\.\s*j\.\s*(\d{1,3}\s+[A-Za-z]{1,5}\s+\d{1,6}\/\d{4})/g,
+  /[čc]\.\s*j\.\s*(\d{1,3}\s+[A-Za-z]{1,5}\s+\d{1,6}\/\d{4})/gu,
 
   PL_PREFIXED_PATTERN,
 
   // Polish case number without prefix: "II CSK 123/20", "II ACa 45/20"
-  /\b[IVX]{2,4}\s+[A-Za-z]{2,5}\s+\d{1,6}\/\d{2,4}\b/g,
+  /\b[IVX]{2,4}\s+[A-Za-z]{2,5}\s+\d{1,6}\/\d{2,4}\b/gu,
 ];
 
 /** Strip known prefixes to get the bare case number. */
@@ -49,19 +49,19 @@ const stripPrefix = (text: string): string => {
   const trimmed = text.trim();
 
   // Czech: "sp. zn. 21 Cdo 1234/2020"
-  const spZn = /^sp\.\s*zn\.\s*(.+)/i.exec(trimmed);
+  const spZn = /^sp\.\s*zn\.\s*(.+)/iu.exec(trimmed);
   if (spZn?.[1]) {
     return spZn[1].trim();
   }
 
   // Czech: "č. j. 5 As 123/2020" or "č.j. 5 As 123/2020"
-  const cj = /^[čc]\.\s*j\.\s*(.+)/i.exec(trimmed);
+  const cj = /^[čc]\.\s*j\.\s*(.+)/iu.exec(trimmed);
   if (cj?.[1]) {
     return cj[1].trim();
   }
 
   // Polish: "sygn. akt II CSK 123/20"
-  const sygn = /^sygn\.\s*(?:akt\s+)?(.+)/i.exec(trimmed);
+  const sygn = /^sygn\.\s*(?:akt\s+)?(.+)/iu.exec(trimmed);
   if (sygn?.[1]) {
     return sygn[1].trim();
   }

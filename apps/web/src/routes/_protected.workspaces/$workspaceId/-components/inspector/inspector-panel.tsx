@@ -418,28 +418,29 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
       {/* Chat content — sidepeek chat tab. Mounts FileAIChatHost in
           standalone layout so the bar + thread fill the panel
           instead of overlaying a file viewer. */}
-      {!minimized && activeTab?.type === "chat" && (
-        // Local Suspense boundary so the chat-thread fetch (cold
-        // cache: a brand-new chat tab) doesn't bubble up to the
-        // workspace route's pending component. The fallback is a
-        // visual shell that mirrors the real panel's chrome —
-        // header, empty state with saved prompts, prompt-bar
-        // shape — so the user sees the expected interface
-        // immediately and the data hydrates a frame later, no
-        // spinner.
-        <Suspense
-          fallback={
-            <ChatTabPanelShell matterColor={matterColor} tab={activeTab} />
-          }
-        >
-          <ChatTabPanel
-            matterColor={activeMatterPanelColor}
-            onClose={() => handleCloseTab(activeTab.id)}
-            onLabelContextMenu={ribbonContextMenu.openAt}
-            tab={activeTab}
-          />
-        </Suspense>
-      )}
+      {!minimized &&
+        activeTab?.type === "chat" && (
+          // Local Suspense boundary so the chat-thread fetch (cold
+          // cache: a brand-new chat tab) doesn't bubble up to the
+          // workspace route's pending component. The fallback is a
+          // visual shell that mirrors the real panel's chrome —
+          // header, empty state with saved prompts, prompt-bar
+          // shape — so the user sees the expected interface
+          // immediately and the data hydrates a frame later, no
+          // spinner.
+          <Suspense
+            fallback={
+              <ChatTabPanelShell matterColor={matterColor} tab={activeTab} />
+            }
+          >
+            <ChatTabPanel
+              matterColor={activeMatterPanelColor}
+              onClose={() => handleCloseTab(activeTab.id)}
+              onLabelContextMenu={ribbonContextMenu.openAt}
+              tab={activeTab}
+            />
+          </Suspense>
+        )}
 
       {!minimized && activeTab?.type === "external" && (
         <ExternalReferencePanel

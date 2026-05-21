@@ -18,11 +18,11 @@ export const DANGEROUS_CHARS = new RegExp(
     "\u2060" +
     "\uFFF9-\uFFFB" +
     "]",
-  "g",
+  "gu",
 );
 
 export const stripDangerousChars = (value: string): string =>
-  value.replace(DANGEROUS_CHARS, "").replace(/\u00A0/g, " ");
+  value.replace(DANGEROUS_CHARS, "").replace(/\u00A0/gu, " ");
 
 const sanitizeMetadataValue = (value: unknown): JsonValue => {
   if (typeof value === "string") {

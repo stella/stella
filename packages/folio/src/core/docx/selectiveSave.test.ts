@@ -263,7 +263,7 @@ describe("Selective XML Patch with real DOCX", () => {
     expect(count).toBeGreaterThan(0);
 
     // Try to find paraIds in the XML
-    const paraIdPattern = /w14:paraId="([^"]+)"/g;
+    const paraIdPattern = /w14:paraId="([^"]+)"/gu;
     const ids: string[] = [];
     let m: RegExpExecArray | null;
     while ((m = paraIdPattern.exec(xml)) !== null) {
@@ -602,7 +602,7 @@ describe("buildPatchedDocumentXml with real DOCX XML", () => {
     const originalXml = await getDocumentXml(buffer);
 
     // Find all paraIds
-    const paraIdPattern = /w14:paraId="([^"]+)"/g;
+    const paraIdPattern = /w14:paraId="([^"]+)"/gu;
     const allIds: string[] = [];
     let m: RegExpExecArray | null;
     while ((m = paraIdPattern.exec(originalXml)) !== null) {
@@ -638,7 +638,7 @@ describe("buildPatchedDocumentXml with real DOCX XML", () => {
     }
     const origParagraph = originalXml.slice(origOffsets.start, origOffsets.end);
     const modifiedParagraph = origParagraph.replace(
-      /<w:t[^>]*>[^<]*<\/w:t>/,
+      /<w:t[^>]*>[^<]*<\/w:t>/u,
       "<w:t>PATCHED_TEXT</w:t>",
     );
 
@@ -1000,7 +1000,7 @@ describe("Selective save with headers/footers", () => {
     const zip = await JSZip.loadAsync(result);
     let found = false;
     for (const [filePath, file] of Object.entries(zip.files)) {
-      if (/word\/(header|footer)\d*\.xml/.test(filePath)) {
+      if (/word\/(header|footer)\d*\.xml/u.test(filePath)) {
         const xml = await file.async("text");
         if (xml.includes("[HF_MODIFIED]")) {
           found = true;
@@ -1103,7 +1103,7 @@ describe("Selective save edge cases", () => {
     const xml = await getDocumentXml(buffer);
 
     // Count paraIds
-    const paraIdPattern = /w14:paraId="([^"]+)"/g;
+    const paraIdPattern = /w14:paraId="([^"]+)"/gu;
     const ids: string[] = [];
     let m: RegExpExecArray | null;
     while ((m = paraIdPattern.exec(xml)) !== null) {

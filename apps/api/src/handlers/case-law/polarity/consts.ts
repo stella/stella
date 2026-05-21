@@ -58,6 +58,6 @@ export const isValidPolarity = (value: string): value is Polarity =>
  * forms accumulate.
  */
 export const phraseToPattern = (phrase: string): string => {
-  const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return escaped.replace(/\s+/g, "\\s+");
+  const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return escaped.replace(/\s+/gu, "\\s+");
 };

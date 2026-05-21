@@ -61,7 +61,7 @@ const extractTexts = async (buffer: Buffer): Promise<string[]> => {
   const zip = await JSZip.loadAsync(buffer);
   const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
   const texts: string[] = [];
-  for (const match of xml.matchAll(/<w:t[^>]*>(.*?)<\/w:t>/g)) {
+  for (const match of xml.matchAll(/<w:t[^>]*>(.*?)<\/w:t>/gu)) {
     if (match[1] !== undefined) {
       texts.push(match[1]);
     }
@@ -71,12 +71,12 @@ const extractTexts = async (buffer: Buffer): Promise<string[]> => {
 
 // ── Arbitraries ──────────────────────────────────────────
 
-const IDENT_RE = /^[a-z]{2,10}$/;
-const LEAF_RE = /^[A-Za-z0-9 ]{1,20}$/;
-const IDENT_UNDERSCORE_RE = /^[a-z_]{1,8}$/;
-const HAS_LETTER_RE = /[a-z]/;
-const NUMERIC_INDEX_SUFFIX_RE = /\.\d+$/;
-const DIRECTIVE_RE = /\{\{[#/]/;
+const IDENT_RE = /^[a-z]{2,10}$/u;
+const LEAF_RE = /^[A-Za-z0-9 ]{1,20}$/u;
+const IDENT_UNDERSCORE_RE = /^[a-z_]{1,8}$/u;
+const HAS_LETTER_RE = /[a-z]/u;
+const NUMERIC_INDEX_SUFFIX_RE = /\.\d+$/u;
+const DIRECTIVE_RE = /\{\{[#/]/u;
 
 /** XML-safe identifier (letters only, 2-10 chars). */
 const identifier = fc

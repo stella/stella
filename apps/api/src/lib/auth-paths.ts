@@ -11,7 +11,7 @@ export const OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH =
 export const OPENID_CONFIGURATION_DISCOVERY_PATH =
   "/.well-known/openid-configuration" as const;
 
-const withTrailingSlash = (url: string) => `${url.replace(/\/$/, "")}/`;
+const withTrailingSlash = (url: string) => `${url.replace(/\/$/u, "")}/`;
 
 export const getAuthIssuerUrl = () =>
   new URL(

@@ -618,7 +618,7 @@ export const isPdfBytes = (body: ArrayBuffer): boolean => {
 };
 
 const normalizeWhitespace = (value: string): string =>
-  value.replaceAll(/\s+/g, " ").trim();
+  value.replaceAll(/\s+/gu, " ").trim();
 
 const normalizeMarkdownText = (value: string): string =>
   value

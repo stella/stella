@@ -111,7 +111,7 @@ export const redactPdf = async (
     const compositeKey = `${entity.label}\0${entity.text}`;
     const placeholder =
       placeholderMap.get(compositeKey) ??
-      `[${entity.label.toUpperCase().replace(/\s+/g, "_")}]`;
+      `[${entity.label.toUpperCase().replace(/\s+/gu, "_")}]`;
 
     // Determine what text to overlay based on operator
     const opType = resolveOperator(config, entity.label);
@@ -240,7 +240,7 @@ export const redactPdf = async (
         // If still too wide at MIN size, abbreviate
         if (!fitsAtSize(displayText, size)) {
           // [CZECH_BIRTH_NUMBER_1] → [CZE_B_N_1]
-          const m = /^\[(.+?)(?:_(\d+))?\]$/.exec(displayText);
+          const m = /^\[(.+?)(?:_(\d+))?\]$/u.exec(displayText);
           if (m) {
             const label = m[1] ?? "";
             const suffix = m[2] ?? "";

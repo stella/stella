@@ -10,7 +10,7 @@ const redirectToFrontend = ({
   request: Request;
 }) => {
   const url = new URL(request.url);
-  const redirectUrl = new URL(path, `${env.FRONTEND_URL.replace(/\/$/, "")}/`);
+  const redirectUrl = new URL(path, `${env.FRONTEND_URL.replace(/\/$/u, "")}/`);
   redirectUrl.search = url.search;
 
   return Response.redirect(redirectUrl.toString(), 302);

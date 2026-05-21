@@ -87,7 +87,7 @@ const extractJavaScriptUrls = (html: string): string[] =>
   Array.from(
     new Set(
       Array.from(
-        html.matchAll(/(?:src|href)="([^"]+\.js(?:\?[^"]*)?)"/g),
+        html.matchAll(/(?:src|href)="([^"]+\.js(?:\?[^"]*)?)"/gu),
         (match) => {
           const url = match[1];
           if (!url) {
@@ -103,7 +103,7 @@ const extractJavaScriptUrls = (html: string): string[] =>
 const extractChunkUrls = (scriptText: string): string[] =>
   Array.from(
     new Set(
-      Array.from(scriptText.matchAll(/chunk-[A-Z0-9]+\.js/g), ([chunk]) =>
+      Array.from(scriptText.matchAll(/chunk-[A-Z0-9]+\.js/gu), ([chunk]) =>
         new URL(chunk, ROOT_URL).toString(),
       ),
     ),
@@ -276,7 +276,7 @@ const normalizeJavaScriptStrings = (literal: string): string => {
 
 const toJsonObjectLiteral = (literal: string): string =>
   normalizeJavaScriptStrings(literal).replaceAll(
-    /([{,]\s*)([A-Za-z_][A-Za-z0-9_]*):/g,
+    /([{,]\s*)([A-Za-z_][A-Za-z0-9_]*):/gu,
     (_match, prefix: string, key: string) => `${prefix}"${key}":`,
   );
 
@@ -299,7 +299,7 @@ const collectTopLevelStringEntries = (
   const entries: Record<string, string> = {};
 
   for (const [key, entryValue] of Object.entries(value)) {
-    if (!/^[A-Z][A-Z0-9_]{2,}$/.test(key) || typeof entryValue !== "string") {
+    if (!/^[A-Z][A-Z0-9_]{2,}$/u.test(key) || typeof entryValue !== "string") {
       continue;
     }
 
@@ -327,7 +327,7 @@ const collectScopedStringEntries = (
   const scopedEntries: [string, Record<string, string>][] = [];
 
   for (const [key, entryValue] of Object.entries(value)) {
-    if (!/^[a-z]{2,3}$/.test(key) || !isRecord(entryValue)) {
+    if (!/^[a-z]{2,3}$/u.test(key) || !isRecord(entryValue)) {
       continue;
     }
 
@@ -350,7 +350,7 @@ const collectScopedNestedStringEntries = (
   const scopedEntries: [string, Record<string, string>][] = [];
 
   for (const [scope, scopeValue] of Object.entries(value)) {
-    if (!/^[a-z]{2,3}$/.test(scope) || !isRecord(scopeValue)) {
+    if (!/^[a-z]{2,3}$/u.test(scope) || !isRecord(scopeValue)) {
       continue;
     }
 

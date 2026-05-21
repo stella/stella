@@ -124,8 +124,8 @@ const FLOAT_FLOATING_TEXTBOX: Run = {
 };
 
 const ANY_DECIMAL_IN_EMU_ATTR =
-  /(?:cx|cy|distT|distB|distL|distR|lIns|tIns|rIns|bIns)="-?\d+\.\d+"/;
-const POSOFFSET_DECIMAL = /<wp:posOffset>-?\d+\.\d+<\/wp:posOffset>/;
+  /(?:cx|cy|distT|distB|distL|distR|lIns|tIns|rIns|bIns)="-?\d+\.\d+"/u;
+const POSOFFSET_DECIMAL = /<wp:posOffset>-?\d+\.\d+<\/wp:posOffset>/u;
 
 describe("image EMU attributes are integer-only (issue #417)", () => {
   test("inline image with float dimensions serializes integer cx/cy/distT/distB", () => {
@@ -202,7 +202,7 @@ describe("run formatting integer attributes (issue #417)", () => {
 
     const xml = serializeRun(run);
 
-    expect(xml).not.toMatch(/w:val="-?\d+\.\d+"/);
+    expect(xml).not.toMatch(/w:val="-?\d+\.\d+"/u);
     expect(xml).toContain('<w:sz w:val="22"/>');
     expect(xml).toContain('<w:szCs w:val="22"/>');
     expect(xml).toContain('<w:spacing w:val="20"/>');

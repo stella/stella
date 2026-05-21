@@ -190,7 +190,7 @@ describe("injectStamp", () => {
     const footer = await readZipFile(second, "word/footer1.xml");
     expect(footer).toContain(stamp);
     expect(footer).not.toContain("2026/001/001.v1");
-    const bookmarkCount = (footer?.match(/stella_dms_ref/g) ?? []).length;
+    const bookmarkCount = (footer?.match(/stella_dms_ref/gu) ?? []).length;
     expect(bookmarkCount).toBeLessThanOrEqual(2);
 
     const customXml = await readZipFile(second, "docProps/custom.xml");

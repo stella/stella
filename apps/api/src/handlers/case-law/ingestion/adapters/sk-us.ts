@@ -88,7 +88,7 @@ const parseCursor = (cursor: string | null): YearCursor => {
   }
 
   // New format: "YYYY:offset"
-  const match = /^(\d{4}):(\d+)$/.exec(cursor);
+  const match = /^(\d{4}):(\d+)$/u.exec(cursor);
   if (match?.[1] && match[2]) {
     return {
       year: Number.parseInt(match[1], 10),
@@ -224,7 +224,7 @@ const parseApiDate = (raw: string | undefined): string | undefined => {
   if (!raw) {
     return undefined;
   }
-  const match = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(raw);
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})/u.exec(raw);
   if (!match?.[1] || !match[2] || !match[3]) {
     return undefined;
   }

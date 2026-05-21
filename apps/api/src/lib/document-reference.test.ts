@@ -5,7 +5,7 @@ import {
   toDocumentReference,
 } from "@/api/lib/document-reference";
 
-const ALLOWED_CHARS = /^[abcdefghjkmnpqrstuvwxyz23456789]+$/;
+const ALLOWED_CHARS = /^[abcdefghjkmnpqrstuvwxyz23456789]+$/u;
 
 describe("toDocumentReference", () => {
   test("formats with matter ref, padded seq, and version", () => {

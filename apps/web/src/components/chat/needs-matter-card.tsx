@@ -202,7 +202,7 @@ const extractPreviewSnippet = (source: string): string => {
   if (!trimmed) {
     return "";
   }
-  const lines = trimmed.split(/\r?\n/);
+  const lines = trimmed.split(/\r?\n/u);
   const out: string[] = [];
   for (const raw of lines) {
     const line = raw.trim();
@@ -213,7 +213,7 @@ const extractPreviewSnippet = (source: string): string => {
       continue;
     }
     if (line.startsWith("@")) {
-      const stripped = line.replace(/^@\w+\s*/, "").trim();
+      const stripped = line.replace(/^@\w+\s*/u, "").trim();
       if (stripped) {
         out.push(stripped);
       }

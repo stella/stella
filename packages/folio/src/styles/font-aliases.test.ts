@@ -8,7 +8,7 @@ describe("font aliases", () => {
       "utf-8",
     );
     const boldBlocks = css.match(
-      /@font-face\s*{[^}]*font-weight:\s*700;[^}]*}/g,
+      /@font-face\s*\{[^}]*font-weight:\s*700;[^}]*\}/gu,
     );
 
     expect(boldBlocks).not.toBeNull();

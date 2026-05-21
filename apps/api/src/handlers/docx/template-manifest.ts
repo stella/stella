@@ -66,10 +66,10 @@ const isInputType = (value: string): value is InputType =>
 
 const escapeXml = (s: string): string =>
   s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/&/gu, "&amp;")
+    .replace(/</gu, "&lt;")
+    .replace(/>/gu, "&gt;")
+    .replace(/"/gu, "&quot;");
 
 const buildFieldXml = (field: FieldMeta): string => {
   const attrs: string[] = [`path="${escapeXml(field.path)}"`];
@@ -428,7 +428,7 @@ export const stripManifest = async (docxBuffer: Buffer): Promise<Buffer> => {
 
   // Clean up empty customXml directory entries
   const customXmlDir = "customXml/";
-  const remaining = zip.file(new RegExp(`^${customXmlDir}`));
+  const remaining = zip.file(new RegExp(`^${customXmlDir}`, "u"));
   if (remaining.length === 0) {
     zip.remove("customXml/_rels/");
     zip.remove(customXmlDir);
@@ -440,7 +440,10 @@ export const stripManifest = async (docxBuffer: Buffer): Promise<Buffer> => {
     let ctXml = await ctEntry.async("string");
     // Remove the Override for itemProps1.xml
     ctXml = ctXml.replace(
-      new RegExp(`<Override[^>]*PartName="/${CUSTOM_XML_PROPS_PATH}"[^>]*/>`),
+      new RegExp(
+        `<Override[^>]*PartName="/${CUSTOM_XML_PROPS_PATH}"[^>]*/>`,
+        "u",
+      ),
       "",
     );
     zip.file(CONTENT_TYPES_PATH, ctXml);

@@ -434,4 +434,4 @@ const classifyJustificationParagraph = (
 
 // ── Patterns ───────────────────────────────────────────────
 
-const NUMBERED_PARA_RE = /^(\d+)\.\s+/;
+const NUMBERED_PARA_RE = /^(\d+)\.\s+/u;

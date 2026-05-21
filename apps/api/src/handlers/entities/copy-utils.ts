@@ -49,9 +49,9 @@ export type CopiedFileField = {
 
 /** Escape regex metacharacters. */
 const escapeRegex = (value: string) =>
-  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
-const trailingSuffixRe = /_\d+$/;
+const trailingSuffixRe = /_\d+$/u;
 
 type ResolveEntityNameProps = {
   tx: Transaction;
@@ -107,6 +107,7 @@ export const resolveEntityName = async ({
 
   const suffixRe = new RegExp(
     `^${escapeRegex(base)}(?:_(\\d+))?${escapeRegex(ext)}$`,
+    "u",
   );
 
   let maxN = 0;

@@ -101,7 +101,7 @@ export const parseLegalSource = (
     pending = null;
   };
 
-  const lines = source.replace(/\r\n?/g, "\n").split("\n");
+  const lines = source.replace(/\r\n?/gu, "\n").split("\n");
   for (const [index, rawLine] of lines.entries()) {
     const lineNumber = index + 1;
     const line = rawLine.trimEnd();
@@ -142,7 +142,7 @@ export const parseLegalSource = (
     }
 
     if (trimmed.startsWith("@")) {
-      const [rawDirective = "", ...rest] = trimmed.split(/\s+/);
+      const [rawDirective = "", ...rest] = trimmed.split(/\s+/u);
       const canonicalDirective =
         DIRECTIVE_ALIASES[rawDirective.toLowerCase()] ??
         rawDirective.toLowerCase();
@@ -224,7 +224,7 @@ export const parseLegalSource = (
           pending = {
             type: "list",
             line: lineNumber,
-            ordered: /\bordered\b/i.test(argument),
+            ordered: /\bordered\b/iu.test(argument),
             heading: argument,
             lines: [],
           };
@@ -771,7 +771,7 @@ const parseSignatureParties = (
   };
 
   if (heading.trim()) {
-    startParty(heading.trim().replace(/^party:\s*/i, ""));
+    startParty(heading.trim().replace(/^party:\s*/iu, ""));
   }
 
   for (const line of lines) {
@@ -820,27 +820,27 @@ const parseSignatureParties = (
   });
 };
 
-const ORDERED_LIST_MARKER_RE = /^(\d+(?:\.\d+)+|\d+[.)])\s+/;
+const ORDERED_LIST_MARKER_RE = /^(\d+(?:\.\d+)+|\d+[.)])\s+/u;
 const MANUAL_NUMBERING_PREFIX_RE =
-  /^(\d+(?:\.\d+)+|\d+[.)]|[A-Za-z][.)]|\([a-zivx]+\))\s+/;
+  /^(\d+(?:\.\d+)+|\d+[.)]|[A-Za-z][.)]|\([a-zivx]+\))\s+/u;
 
 const stripListMarker = (line: string, ordered: boolean): string => {
   const trimmed = line.trim();
   if (ordered) {
     return trimmed.replace(ORDERED_LIST_MARKER_RE, "");
   }
-  return trimmed.replace(/^[-*•]\s+/, "");
+  return trimmed.replace(/^[-*•]\s+/u, "");
 };
 
 const parsePipeRow = (line: string): string[] =>
   line
-    .replace(/^\|/, "")
-    .replace(/\|$/, "")
+    .replace(/^\|/u, "")
+    .replace(/\|$/u, "")
     .split("|")
     .map((cell) => cell.trim());
 
 const isMarkdownDividerRow = (row: string[]): boolean =>
-  row.every((cell) => /^:?-{3,}:?$/.test(cell));
+  row.every((cell) => /^:?-{3,}:?$/u.test(cell));
 
 const compactParagraphs = (lines: string[]): string[] => {
   const paragraphs: string[] = [];

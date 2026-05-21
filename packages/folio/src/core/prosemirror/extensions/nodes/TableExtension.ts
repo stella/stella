@@ -92,12 +92,12 @@ function parseCssColorToColorValue(cssColor: string): ColorValue | null {
   if (!cssColor || cssColor === "transparent" || cssColor === "inherit") {
     return null;
   }
-  const hexMatch = /#([0-9a-fA-F]{6})/.exec(cssColor);
+  const hexMatch = /#([0-9a-fA-F]{6})/u.exec(cssColor);
   if (hexMatch) {
     // SAFETY: capture group 1 exists when match succeeds
     return { rgb: (hexMatch[1] ?? "").toUpperCase() };
   }
-  const shortHex = /#([0-9a-fA-F]{3})$/.exec(cssColor);
+  const shortHex = /#([0-9a-fA-F]{3})$/u.exec(cssColor);
   if (shortHex) {
     // SAFETY: capture group 1 exists when match succeeds
     const hex3 = shortHex[1] ?? "";
@@ -107,7 +107,7 @@ function parseCssColorToColorValue(cssColor: string): ColorValue | null {
     const b = hex3[2] ?? "";
     return { rgb: (r + r + g + g + b + b).toUpperCase() };
   }
-  const rgbMatch = /rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/.exec(cssColor);
+  const rgbMatch = /rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/u.exec(cssColor);
   if (rgbMatch) {
     // SAFETY: capture groups 1-3 exist when the rgb() regex matches
     const hex = [rgbMatch[1] ?? "0", rgbMatch[2] ?? "0", rgbMatch[3] ?? "0"]
@@ -1984,7 +1984,7 @@ export const TablePluginExtension = createExtension({
         if (dispatch) {
           const tr = state.tr;
           const cells = getTargetCellPositions(state);
-          const bgColor = color ? color.replace(/^#/, "") : null;
+          const bgColor = color ? color.replace(/^#/u, "") : null;
 
           for (const { pos, node } of cells) {
             tr.setNodeMarkup(tr.mapping.map(pos), undefined, {
@@ -2667,7 +2667,7 @@ export const TablePluginExtension = createExtension({
         if (dispatch) {
           const tr = state.tr;
           const cells = getTargetCellPositions(state);
-          const rgb = color.replace(/^#/, "");
+          const rgb = color.replace(/^#/u, "");
           const defaultBorder = { style: "single", size: 4 };
           const { cellByPos, cellByRC } = buildTableGrid(
             context.table,

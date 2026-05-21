@@ -26,7 +26,7 @@ const MIN_DUPLICATE_OVERLAP_COUNT = 2;
 const MIN_DUPLICATE_OVERLAP_RATIO = 0.75;
 
 const normalizeMatterName = (value: string) =>
-  value.trim().replace(/\s+/g, " ").toLowerCase();
+  value.trim().replace(/\s+/gu, " ").toLowerCase();
 
 const tokenizeMatterName = (value: string) =>
   normalizeMatterName(value)

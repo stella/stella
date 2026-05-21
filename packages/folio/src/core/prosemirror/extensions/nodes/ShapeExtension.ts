@@ -65,8 +65,8 @@ const SVG_NS = "http://www.w3.org/2000/svg";
  * set of well-known keywords. Reject anything else so a crafted DOCX cannot
  * smuggle attribute-injection payloads or `url(...)` references.
  */
-const HEX_COLOR_ATTR_RE = /^#[0-9A-Fa-f]{6}$/;
-const VAR_COLOR_RE = /^var\(--[a-z0-9-]+(?:,\s*#[0-9A-Fa-f]{6})?\)$/i;
+const HEX_COLOR_ATTR_RE = /^#[0-9A-Fa-f]{6}$/u;
+const VAR_COLOR_RE = /^var\(--[a-z0-9-]+(?:,\s*#[0-9A-Fa-f]{6})?\)$/iu;
 const NAMED_COLORS = new Set([
   "none",
   "transparent",
@@ -109,7 +109,7 @@ const CSS_FLOATS = new Set<NonNullable<ShapeAttrs["cssFloat"]>>([
  * a crafted DOCX cannot inject arbitrary CSS via the inline `style` attribute.
  */
 const SAFE_TRANSFORM_TOKEN_RE =
-  /^(?:rotate\(-?\d+(?:\.\d+)?deg\)|scaleX\(-1\)|scaleY\(-1\))$/;
+  /^(?:rotate\(-?\d+(?:\.\d+)?deg\)|scaleX\(-1\)|scaleY\(-1\))$/u;
 
 export function sanitizeTransform(
   value: string | null | undefined,
@@ -117,7 +117,7 @@ export function sanitizeTransform(
   if (!value) {
     return null;
   }
-  const tokens = value.trim().split(/\s+/);
+  const tokens = value.trim().split(/\s+/u);
   if (tokens.length === 0) {
     return null;
   }
@@ -159,7 +159,7 @@ export function sanitizeSvgId(value: string | null | undefined): string | null {
   if (!value) {
     return null;
   }
-  const sanitized = value.replace(/[^a-zA-Z0-9_-]/g, "");
+  const sanitized = value.replace(/[^a-zA-Z0-9_-]/gu, "");
   return sanitized.length > 0 ? sanitized : null;
 }
 

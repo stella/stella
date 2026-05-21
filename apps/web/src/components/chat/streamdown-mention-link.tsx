@@ -65,9 +65,9 @@ const DOCUMENT_MIME_BY_EXTENSION: Record<string, string> = {
   xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 };
 
-const ENTITY_EXTENSION_RE = /\.([A-Za-z0-9]{1,8})$/;
-const FOLDER_LABEL_RE = /^(?:folder|složka|priečinok)\b/i;
-const TASK_LABEL_RE = /^(?:task|úkol|úloha)\b/i;
+const ENTITY_EXTENSION_RE = /\.([A-Za-z0-9]{1,8})$/u;
+const FOLDER_LABEL_RE = /^(?:folder|složka|priečinok)\b/iu;
+const TASK_LABEL_RE = /^(?:task|úkol|úloha)\b/iu;
 
 const getPlainText = (node: React.ReactNode): string | null => {
   if (typeof node === "string" || typeof node === "number") {
@@ -595,7 +595,7 @@ const useFolioChipChildren = (
   if (text.length === 0 || text.toLowerCase().startsWith("#folio:")) {
     // Strip the `b-` prefix and any leading zeros so the fallback
     // reads as a clean ordinal — e.g. `b-0064` → `64` → "str. 64".
-    const numeric = blockId.replace(/^b-0*/, "") || blockId;
+    const numeric = blockId.replace(/^b-0*/u, "") || blockId;
     return t("chat.folioCitationFallback", { n: numeric });
   }
   return children;

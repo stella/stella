@@ -71,7 +71,7 @@ const HEALTH_PATH = "/health";
 const DEFAULT_API_PORT = 3001;
 const SESSION_ID_HEADER = "x-posthog-session-id";
 const SESSION_ID_MAX_LENGTH = 64;
-const SESSION_ID_PATTERN = /^[\w-]+$/;
+const SESSION_ID_PATTERN = /^[\w-]+$/u;
 const S3_REFRESH_CHECK_INTERVAL_MS = 60_000;
 
 const STATUS_BY_ELYSIA_CODE: Partial<Record<string, number>> = {
@@ -175,7 +175,7 @@ const api = new Elysia()
       origin: (() => {
         const origins: (string | RegExp)[] = [env.FRONTEND_URL];
         if (env.isDev) {
-          origins.push(/^chrome-extension:\/\//);
+          origins.push(/^chrome-extension:\/\//u);
           origins.push(...DEV_INSPECTOR_ORIGINS);
         }
         if (env.EXTENSION_ORIGIN) {
@@ -298,7 +298,7 @@ const api = new Elysia()
           generator: scopedGenerator("api"),
           context: new InMemoryRateLimitContext(),
           skip: (req) =>
-            /\/entities\/[^/]+\/upload$/.test(new URL(req.url).pathname),
+            /\/entities\/[^/]+\/upload$/u.test(new URL(req.url).pathname),
         }),
       )
       .use(workspaceEventsRoute)

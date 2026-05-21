@@ -105,7 +105,7 @@ const readSkillMetadata = (skillId: string): SkillMetadata =>
   parseSkillFile(getSkill(skillId).source).metadata;
 
 const getSkill = (skillId: string) => {
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(skillId)) {
+  if (!/^[a-z0-9][a-z0-9-]*$/u.test(skillId)) {
     throw new Error("Invalid skill id");
   }
 
@@ -163,7 +163,7 @@ const parseSimpleFrontmatter = (source: string): Frontmatter => {
       continue;
     }
 
-    if (parsingMetadata && /^\s+/.test(line)) {
+    if (parsingMetadata && /^\s+/u.test(line)) {
       const metadataEntry = parseFrontmatterEntry(line.trim());
       if (metadataEntry) {
         frontmatter.metadata ??= {};
@@ -250,7 +250,7 @@ const setFrontmatterValue = ({
 
 const stripYamlString = (value: string): string => {
   const trimmed = value.trim();
-  return trimmed.replace(/^["']|["']$/g, "");
+  return trimmed.replace(/^["']|["']$/gu, "");
 };
 
 export const normalizeResourcePath = (resourcePath: string): string => {

@@ -294,7 +294,7 @@ function isFieldRun(run: Run): run is FieldRun {
  * Check if text run is empty (only whitespace or no text)
  */
 function isEmptyTextRun(run: TextRun): boolean {
-  return !run.text || run.text.replace(/\u00a0/g, " ").trim().length === 0;
+  return !run.text || run.text.replace(/\u00a0/gu, " ").trim().length === 0;
 }
 
 /**

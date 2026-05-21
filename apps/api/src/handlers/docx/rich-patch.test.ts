@@ -135,7 +135,7 @@ describe("owned OOXML placeholder patching", () => {
     expect(result.xml).toContain("What a ");
     expect(result.xml).toContain("sweet");
     expect(result.xml).toContain(" text!");
-    expect(result.xml.match(/<w:b(?=[\\s/>])/g)).toHaveLength(3);
+    expect(result.xml.match(/<w:b(?=[\\s/>])/gu)).toHaveLength(3);
   });
 
   test("replaces multiple placeholders in one text run", () => {
@@ -184,7 +184,7 @@ describe("owned OOXML placeholder patching", () => {
       },
     });
 
-    expect(result.xml.match(/<w:p/g)).toHaveLength(2);
+    expect(result.xml.match(/<w:p/gu)).toHaveLength(2);
     expect(result.xml).toContain("First paragraph");
     expect(result.xml).toContain("Second paragraph");
   });

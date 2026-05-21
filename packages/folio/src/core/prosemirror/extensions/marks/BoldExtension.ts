@@ -27,7 +27,7 @@ export const BoldExtension = createMarkExtension({
       {
         style: "font-weight",
         getAttrs: (value) =>
-          /^(bold(er)?|[5-9]\d{2})$/.test(value) ? null : false,
+          /^(bold(er)?|[5-9]\d{2})$/u.test(value) ? null : false,
       },
     ],
     toDOM() {

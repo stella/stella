@@ -128,7 +128,7 @@ export function parseFieldType(instruction: string): FieldType {
 
   // Trim and extract the field name (first word, may have leading backslash)
   const trimmed = instruction.trim();
-  const match = /^\\?([A-Z][A-Z0-9]*)/i.exec(trimmed);
+  const match = /^\\?([A-Z][A-Z0-9]*)/iu.exec(trimmed);
 
   if (!match) {
     return "UNKNOWN";
@@ -193,14 +193,14 @@ export function parseFieldInstruction(
   const switches: FieldSwitch[] = [];
 
   // Extract the field name part
-  const nameMatch = /^\\?([A-Z][A-Z0-9]*)/i.exec(trimmed);
+  const nameMatch = /^\\?([A-Z][A-Z0-9]*)/iu.exec(trimmed);
   const fieldNameEnd = nameMatch ? nameMatch[0].length : 0;
 
   // Everything after the field name
   const remaining = trimmed.slice(fieldNameEnd).trim();
 
   // Extract switches (start with \)
-  const switchRegex = /\\(\*|@|#|!|[a-z])\s*(?:"([^"]*)"|([\S]*))?/gi;
+  const switchRegex = /\\(\*|@|#|!|[a-z])\s*(?:"([^"]*)"|([\S]*))?/giu;
   let switchMatch;
   const switchPositions: { start: number; end: number }[] = [];
 
@@ -697,47 +697,47 @@ export function formatDate(date: Date, format: string): string {
   let result = format;
 
   // Year
-  result = result.replace(/yyyy/g, date.getFullYear().toString());
+  result = result.replace(/yyyy/gu, date.getFullYear().toString());
   result = result.replace(
-    /yy/g,
+    /yy/gu,
     (date.getFullYear() % 100).toString().padStart(2, "0"),
   );
 
   // Month - do longer patterns first
   // SAFETY: getMonth() returns 0-11, matching array indices
-  result = result.replace(/MMMM/g, months[date.getMonth()]!);
-  result = result.replace(/MMM/g, shortMonths[date.getMonth()]!);
-  result = result.replace(/MM/g, pad(date.getMonth() + 1));
-  result = result.replace(/M/g, (date.getMonth() + 1).toString());
+  result = result.replace(/MMMM/gu, months[date.getMonth()]!);
+  result = result.replace(/MMM/gu, shortMonths[date.getMonth()]!);
+  result = result.replace(/MM/gu, pad(date.getMonth() + 1));
+  result = result.replace(/M/gu, (date.getMonth() + 1).toString());
 
   // Day - do longer patterns first
   // SAFETY: getDay() returns 0-6, matching array indices
-  result = result.replace(/dddd/g, days[date.getDay()]!);
-  result = result.replace(/ddd/g, shortDays[date.getDay()]!);
-  result = result.replace(/dd/g, pad(date.getDate()));
-  result = result.replace(/d/g, date.getDate().toString());
+  result = result.replace(/dddd/gu, days[date.getDay()]!);
+  result = result.replace(/ddd/gu, shortDays[date.getDay()]!);
+  result = result.replace(/dd/gu, pad(date.getDate()));
+  result = result.replace(/d/gu, date.getDate().toString());
 
   // Hour (12-hour)
   const hour12 = date.getHours() % 12 || 12;
-  result = result.replace(/hh/g, pad(hour12));
-  result = result.replace(/h/g, hour12.toString());
+  result = result.replace(/hh/gu, pad(hour12));
+  result = result.replace(/h/gu, hour12.toString());
 
   // Hour (24-hour)
-  result = result.replace(/HH/g, pad(date.getHours()));
-  result = result.replace(/H/g, date.getHours().toString());
+  result = result.replace(/HH/gu, pad(date.getHours()));
+  result = result.replace(/H/gu, date.getHours().toString());
 
   // Minute (use lowercase m for minutes - distinguished by context)
   // This is simplified - in OOXML, 'm' in date context is month, in time context is minute
-  result = result.replace(/mm/g, pad(date.getMinutes()));
+  result = result.replace(/mm/gu, pad(date.getMinutes()));
 
   // Second
-  result = result.replace(/ss/g, pad(date.getSeconds()));
-  result = result.replace(/s/g, date.getSeconds().toString());
+  result = result.replace(/ss/gu, pad(date.getSeconds()));
+  result = result.replace(/s/gu, date.getSeconds().toString());
 
   // AM/PM
   const ampm = date.getHours() >= 12 ? "PM" : "AM";
-  result = result.replace(/AM\/PM/g, ampm);
-  result = result.replace(/am\/pm/g, ampm.toLowerCase());
+  result = result.replace(/AM\/PM/gu, ampm);
+  result = result.replace(/am\/pm/gu, ampm.toLowerCase());
 
   return result;
 }

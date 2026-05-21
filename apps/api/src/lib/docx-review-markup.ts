@@ -39,7 +39,7 @@ const escapeReviewAttribute = (value: string): string =>
 
 const DOCX_REVIEW_TAG_TEXT_PATTERN = new RegExp(
   `</?(?:${DOCX_REVIEW_TAG_NAMES.join("|")})(?=\\s|>)`,
-  "g",
+  "gu",
 );
 
 export const escapeDocxReviewText = (value: string): string =>
@@ -60,7 +60,7 @@ const normalizeReviewDate = (value: string | undefined): string | undefined => {
   }
 
   const trimmed = value.trim();
-  return /^\d{4}-\d{2}-\d{2}/.test(trimmed) ? trimmed.slice(0, 10) : trimmed;
+  return /^\d{4}-\d{2}-\d{2}/u.test(trimmed) ? trimmed.slice(0, 10) : trimmed;
 };
 
 const renderMetadataAttributes = (metadata: DocxReviewMetadata): string => {

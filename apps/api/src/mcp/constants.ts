@@ -67,11 +67,11 @@ export const getMcpBaseUrl = () => env.PUBLIC_URL ?? env.BETTER_AUTH_URL;
 export const getMcpResourceUrl = (mode: McpMode = "default") =>
   new URL(
     getMcpModeConfig(mode).httpPath,
-    `${getMcpBaseUrl().replace(/\/$/, "")}/`,
+    `${getMcpBaseUrl().replace(/\/$/u, "")}/`,
   ).toString();
 
 export const getMcpProtectedResourceMetadataUrl = (mode: McpMode = "default") =>
   new URL(
     getMcpModeConfig(mode).discoveryPath,
-    `${getMcpBaseUrl().replace(/\/$/, "")}/`,
+    `${getMcpBaseUrl().replace(/\/$/u, "")}/`,
   ).toString();

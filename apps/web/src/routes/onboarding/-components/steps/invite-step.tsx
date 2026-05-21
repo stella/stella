@@ -7,7 +7,7 @@ import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 import { cn } from "@stll/ui/lib/utils";
 
-const DELIMITERS = /[,;\n\t]/;
+const DELIMITERS = /[,;\n\t]/u;
 
 const getDomain = (email: string) => email.split("@")[1]?.toLowerCase() ?? "";
 

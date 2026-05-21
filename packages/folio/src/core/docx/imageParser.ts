@@ -335,7 +335,7 @@ function normalizeMediaPath(targetPath: string): string {
   }
 
   // Remove leading slashes
-  let normalized = targetPath.replace(/^\/+/, "");
+  let normalized = targetPath.replace(/^\/+/u, "");
 
   // Ensure word/ prefix for media files
   if (!normalized.startsWith("word/")) {
@@ -428,7 +428,7 @@ function resolveImageData(
     }
 
     // Try without word/ prefix
-    const altPath = targetPath.replace(/^\/+/, "");
+    const altPath = targetPath.replace(/^\/+/u, "");
     const altMediaFile = findMediaCaseInsensitive(media, altPath);
     if (altMediaFile) {
       const src = altMediaFile.dataUrl || altMediaFile.base64;

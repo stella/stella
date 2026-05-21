@@ -68,7 +68,7 @@ export const anonymizationDecorationsKey: PluginKey<AnonymizationDecorationState
   ));
 
 export const slugAnonymizationLabel = (label: string): string =>
-  label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  label.toLowerCase().replace(/[^a-z0-9]+/gu, "-");
 
 type CompiledTerm = {
   regex: RegExp;
@@ -78,11 +78,11 @@ type CompiledTerm = {
 const buildMatcher = (terms: readonly AnonymizationTerm[]): CompiledTerm[] => {
   const escapeChar = (value: string): string =>
     value
-      .replaceAll(/[\\^$.*+?()[\]{}|]/g, "\\$&")
+      .replaceAll(/[\\^$.*+?()[\]{}|]/gu, "\\$&")
       // A typed whitespace run matches the non-breaking, narrow
       // no-break and figure spaces typography commonly inserts —
       // purely a normalisation concern, not language logic.
-      .replaceAll(/\s+/g, "\\s+");
+      .replaceAll(/\s+/gu, "\\s+");
 
   // One regex per term (canonical + variants). The plugin only
   // does literal, word-bounded matching; morphology and other

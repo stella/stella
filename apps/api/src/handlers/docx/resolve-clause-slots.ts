@@ -14,7 +14,7 @@ import type { RichPatchValue } from "./types";
 
 // ── Version parsing ──────────────────────────────────
 
-const VERSION_NUM_RE = /^v(\d+)$/;
+const VERSION_NUM_RE = /^v(\d+)$/u;
 
 // ── Public API ───────────────────────────────────────
 

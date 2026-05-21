@@ -165,7 +165,7 @@ describe("applyEdits", () => {
     const result = applyEdits(xml, edits, AUTHOR, idGen);
 
     // The split fragments should retain w:b
-    const boldCount = (result.match(/w:b\/>/g) ?? []).length;
+    const boldCount = (result.match(/w:b\/>/gu) ?? []).length;
     // Original rPr is cloned for before/after fragments
     expect(boldCount).toBeGreaterThanOrEqual(2);
   });

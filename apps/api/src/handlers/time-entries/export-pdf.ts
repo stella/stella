@@ -171,14 +171,14 @@ const buildMinimalPdf = (lines: readonly string[]): Uint8Array => {
 
   // Replace non-ASCII characters with '?' since Helvetica
   // cannot render them; keeps string length === byte length.
-  const toAscii = (s: string) => s.replace(/[^\u0020-\u007E]/g, "?");
+  const toAscii = (s: string) => s.replace(/[^\u0020-\u007E]/gu, "?");
 
   // Escape special PDF characters in text
   const escPdf = (s: string) =>
     toAscii(s)
-      .replace(/\\/g, "\\\\")
-      .replace(/\(/g, "\\(")
-      .replace(/\)/g, "\\)");
+      .replace(/\\/gu, "\\\\")
+      .replace(/\(/gu, "\\(")
+      .replace(/\)/gu, "\\)");
 
   // ~50 lines per page at 10pt with 14pt leading
   const linesPerPage = 50;

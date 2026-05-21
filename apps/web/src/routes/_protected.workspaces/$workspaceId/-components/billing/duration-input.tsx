@@ -7,10 +7,10 @@ import { cn } from "@stll/ui/lib/utils";
 
 const BILLING_INCREMENT = 6;
 
-const RE_HM = /^(?:(\d+)h)?\s*(?:(\d+)m)?$/i;
-const RE_COLON = /^(\d+):(\d{1,2})$/;
-const RE_DECIMAL = /^(\d+(?:\.\d+))$/;
-const RE_PLAIN = /^(\d+)$/;
+const RE_HM = /^(?:(\d+)h)?\s*(?:(\d+)m)?$/iu;
+const RE_COLON = /^(\d+):(\d{1,2})$/u;
+const RE_DECIMAL = /^(\d+(?:\.\d+))$/u;
+const RE_PLAIN = /^(\d+)$/u;
 
 /**
  * Parses a user-entered duration string into minutes.

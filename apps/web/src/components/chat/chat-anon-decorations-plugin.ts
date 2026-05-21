@@ -23,7 +23,7 @@ type PluginState = {
 };
 
 const META_KEY = "stll.anon.pairs";
-const REGEX_SPECIALS = /[\\^$.*+?()[\]{}|]/g;
+const REGEX_SPECIALS = /[\\^$.*+?()[\]{}|]/gu;
 const escapeRegex = (value: string) => value.replaceAll(REGEX_SPECIALS, "\\$&");
 export const CHAT_ANON_DECORATIONS_PLUGIN_NAME = "stll-anon-decorations";
 export const CHAT_ANON_DECORATIONS_PLUGIN_KEY_PREFIX = `${CHAT_ANON_DECORATIONS_PLUGIN_NAME}$`;
@@ -62,7 +62,7 @@ const buildDecorations = (
   );
   const pattern = new RegExp(
     sorted.map((pair) => escapeRegex(pair.original)).join("|"),
-    "g",
+    "gu",
   );
   const lookup = new Map(
     sorted.map((pair) => [pair.original, pair.placeholder]),

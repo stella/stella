@@ -367,8 +367,8 @@ export function serializeTextFormatting(
     } else if (!formatting.shading) {
       // Custom color not in OOXML predefined set — use w:shd as fallback.
       // Only emit if value looks like a valid hex color.
-      const hex = formatting.highlight.replace(/^#/, "");
-      if (/^[0-9a-fA-F]{6}$/.test(hex)) {
+      const hex = formatting.highlight.replace(/^#/u, "");
+      if (/^[0-9a-fA-F]{6}$/u.test(hex)) {
         parts.push(`<w:shd w:val="clear" w:color="auto" w:fill="${hex}"/>`);
       }
     }

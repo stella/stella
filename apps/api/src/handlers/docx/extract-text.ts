@@ -23,7 +23,7 @@ import type {
  */
 const DIRECTIVE_RE =
   // oxlint-disable-next-line sonarjs/slow-regex -- DOCX directive text is one paragraph collected from OOXML
-  /^\s*\{\{(#if|#elseif|#else|#each|\/if|\/each)\s*(.*?)\}\}\s*$/;
+  /^\s*\{\{(#if|#elseif|#else|#each|\/if|\/each)\s*(.*?)\}\}\s*$/u;
 
 const DIRECTIVE_KIND_MAP: Record<string, BlockDirectiveKind> = {
   "#if": "if",
@@ -712,6 +712,6 @@ export const extractMarkdown = async (
   // Collapse multiple blank lines into one
   return lines
     .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\n{3,}/gu, "\n\n")
     .trim();
 };

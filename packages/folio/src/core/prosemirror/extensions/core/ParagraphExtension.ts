@@ -78,7 +78,7 @@ function paragraphAttrsToDOMStyle(attrs: ParagraphAttrs): string {
   }
   return Object.entries({ ...style, ...customStyle })
     .map(([key, value]) => {
-      const cssKey = key.replace(/([A-Z])/g, "-$1").toLowerCase();
+      const cssKey = key.replace(/([A-Z])/gu, "-$1").toLowerCase();
       return `${cssKey}: ${value}`;
     })
     .join("; ");
@@ -163,7 +163,7 @@ function cssLengthToTwips(value: string): number | undefined {
     return Math.round(num * (1440 / 2.54));
   }
   // Bare number — treat as pixels (browser computed style default)
-  if (/^[\d.]+$/.test(trimmed)) {
+  if (/^[\d.]+$/u.test(trimmed)) {
     return Math.round(num * 15);
   }
   return undefined;
@@ -220,7 +220,7 @@ function cssLineHeightToSpacing(
   }
 
   // Absolute length (has a unit like pt, px, etc.)
-  if (/[a-z]/i.test(trimmed)) {
+  if (/[a-z]/iu.test(trimmed)) {
     const twips = cssLengthToTwips(trimmed);
     if (twips === undefined) {
       return undefined;

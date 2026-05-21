@@ -137,7 +137,7 @@ const CDM_TYPE_MAP: Record<string, string> = {
  * Query the Cellar SPARQL endpoint for CJEU decisions
  * within a date range.
  */
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
 
 const queryDecisions = async (
   dateFrom: string,
@@ -223,7 +223,7 @@ LIMIT ${SPARQL_LIMIT}`.trim();
  *      "62023TJ0201" → "T-201/23"
  */
 export const celexToCaseNumber = (celex: string): string => {
-  const match = /^6(\d{4})(CJ|TJ|CC|CO|TO|FJ)(\d+)/.exec(celex);
+  const match = /^6(\d{4})(CJ|TJ|CC|CO|TO|FJ)(\d+)/u.exec(celex);
   if (!match) {
     return celex;
   }
@@ -276,23 +276,23 @@ const fetchFulltext = async (
     // everything up to the outermost </div> before <!--,
     // avoiding early termination on inner div comments.
     const bodyMatch =
-      /<div[^>]*id="TexteOnly"[^>]*>([\s\S]*)<\/div>\s*<!--/i.exec(html);
+      /<div[^>]*id="TexteOnly"[^>]*>([\s\S]*)<\/div>\s*<!--/iu.exec(html);
     if (!bodyMatch) {
       // Fallback: extract <body> content
-      const fallback = /<body[^>]*>([\s\S]*)<\/body>/i.exec(html);
+      const fallback = /<body[^>]*>([\s\S]*)<\/body>/iu.exec(html);
       if (!fallback?.[1]) {
         return undefined;
       }
       const text = stripHtml(fallback[1])
         // eslint-disable-next-line no-control-regex -- strip control chars for PG
-        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/gu, "")
         .trim();
       return text.length > 100 ? text : undefined;
     }
 
     const text = stripHtml(bodyMatch[1] ?? "")
       // eslint-disable-next-line no-control-regex -- strip control chars for PG
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/gu, "")
       .trim();
     return text.length > 100 ? text : undefined;
   } catch (error) {

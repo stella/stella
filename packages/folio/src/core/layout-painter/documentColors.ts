@@ -1,4 +1,4 @@
-const HEX_COLOR_RE = /^#?[0-9a-f]{6}$/i;
+const HEX_COLOR_RE = /^#?[0-9a-f]{6}$/iu;
 const BLACK_TEXT_COLOR = "#000000";
 const WHITE_TEXT_COLOR = "#FFFFFF";
 const BLACK_LUMINANCE = 0;
@@ -10,7 +10,7 @@ function normalizeHexColor(color: string): string | null {
   if (!HEX_COLOR_RE.test(trimmed)) {
     return null;
   }
-  return `#${trimmed.replace(/^#/, "").toUpperCase()}`;
+  return `#${trimmed.replace(/^#/u, "").toUpperCase()}`;
 }
 
 function relativeLuminance(hexColor: string): number | null {

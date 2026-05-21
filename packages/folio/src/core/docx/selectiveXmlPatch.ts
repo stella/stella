@@ -23,7 +23,7 @@ export function findParagraphOffsets(
   // Pattern matches <w:p followed by whitespace or >, then any attrs, then the paraId.
   // This covers all attribute orderings since [^>]* matches any attributes before paraId.
   const escaped = escapeRegExp(paraId);
-  const pattern = new RegExp(`<w:p[\\s][^>]*w14:paraId="${escaped}"`, "g");
+  const pattern = new RegExp(`<w:p[\\s][^>]*w14:paraId="${escaped}"`, "gu");
 
   const matches: number[] = [];
   let match: RegExpExecArray | null;
@@ -120,7 +120,7 @@ export function extractParagraphXml(
  */
 export function countParagraphElements(xml: string): number {
   let count = 0;
-  const pattern = /<w:p[\s>]/g;
+  const pattern = /<w:p[\s>]/gu;
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(xml)) !== null) {
     // Verify this is actually <w:p and not <w:pPr etc.
@@ -138,7 +138,7 @@ export function countParagraphElements(xml: string): number {
  */
 function collectParaIds(xml: string): Map<string, number> {
   const ids = new Map<string, number>();
-  const pattern = /w14:paraId="([^"]+)"/g;
+  const pattern = /w14:paraId="([^"]+)"/gu;
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(xml)) !== null) {
     // SAFETY: capture group [1] always present when regex matches
@@ -268,5 +268,5 @@ export function buildPatchedDocumentXml(
 }
 
 function escapeRegExp(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return str.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }

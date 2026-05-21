@@ -11,7 +11,7 @@ import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
  * because Elysia consumes `.source` (which strips flags).
  */
 const UUID_REGEX: RegExp =
-  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/u;
 
 /**
  * Elysia schema for UUID string validation.

@@ -4,7 +4,7 @@ import { extname, join, relative } from "node:path";
 
 const REPO_ROOT = join(import.meta.dirname, "../../../../..");
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx"]);
-const TEST_FILE_PATTERN = /\.(test|spec)\.tsx?$/;
+const TEST_FILE_PATTERN = /\.(test|spec)\.tsx?$/u;
 
 const listSourceFiles = (relativeDir: string): string[] => {
   const root = join(REPO_ROOT, relativeDir);
@@ -46,8 +46,8 @@ describe("SSE auth invariants", () => {
     for (const path of eventSourceFiles) {
       const source = readSource(path);
 
-      expect(source).not.toMatch(/[?&](?:token|auth|authorization)=/i);
-      expect(source).not.toMatch(/\b(?:authToken|sessionToken)\b/);
+      expect(source).not.toMatch(/[?&](?:token|auth|authorization)=/iu);
+      expect(source).not.toMatch(/\b(?:authToken|sessionToken)\b/u);
       expect(source).toContain("withCredentials: true");
     }
   });
@@ -62,9 +62,9 @@ describe("SSE auth invariants", () => {
     for (const path of sseHandlerFiles) {
       const source = readSource(path);
 
-      expect(source).not.toMatch(/\bquery\s*\.\s*token\b/);
-      expect(source).not.toMatch(/\bvalidateBearerAuth\b/);
-      expect(source).not.toMatch(/\btoken\s*:\s*t\.String\b/);
+      expect(source).not.toMatch(/\bquery\s*\.\s*token\b/u);
+      expect(source).not.toMatch(/\bvalidateBearerAuth\b/u);
+      expect(source).not.toMatch(/\btoken\s*:\s*t\.String\b/u);
     }
   });
 });

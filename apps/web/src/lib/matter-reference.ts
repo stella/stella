@@ -5,9 +5,9 @@
 export const DEFAULT_MATTER_NUMBER_PATTERN = "{SEQ}";
 export const DEFAULT_MATTER_NUMBER_PADDING = 3;
 
-const TOKEN_REGEX = /\{(SEQ|YYYY|YY|MM)\}/g;
+const TOKEN_REGEX = /\{(SEQ|YYYY|YY|MM)\}/gu;
 
-const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
 const tokenToRegex = (token: string, padding: number): string => {
   if (token === "{SEQ}") {
@@ -42,7 +42,7 @@ export const matchesPattern = (
   }
   body += escapeRegex(pattern.slice(lastIndex));
 
-  return new RegExp(`^${body}$`).test(reference);
+  return new RegExp(`^${body}$`, "u").test(reference);
 };
 
 export const previewReference = ({

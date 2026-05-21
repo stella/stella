@@ -40,7 +40,7 @@ const fetchCzSupremeFulltext = async (
     const html = await response.text();
 
     const parts = html.match(
-      /<font[^>]*face="Times New Roman"[^>]*>([\s\S]*?)<\/font>/gi,
+      /<font[^>]*face="Times New Roman"[^>]*>([\s\S]*?)<\/font>/giu,
     );
     if (!parts || parts.length === 0) {
       return undefined;
@@ -73,7 +73,7 @@ const fetchCzSupremeAdminFulltext = async (
   documentUrl: string,
 ): Promise<string | undefined> => {
   // Extract document ID from URL like .../DokumentDetail/Index/744029
-  const idMatch = /\/(\d+)$/.exec(documentUrl);
+  const idMatch = /\/(\d+)$/u.exec(documentUrl);
   if (!idMatch?.[1]) {
     return undefined;
   }

@@ -24,7 +24,7 @@ export const authorizationServerMetadataUrls = (
     ];
   }
 
-  const path = authorizationServerUrl.pathname.replace(/\/$/, "");
+  const path = authorizationServerUrl.pathname.replace(/\/$/u, "");
 
   return [
     new URL(

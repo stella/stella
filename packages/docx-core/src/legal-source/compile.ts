@@ -253,7 +253,7 @@ const paragraph = (
 // reviewing lawyer sees at a glance everything still pending.
 // Surrounding text inherits the run options (bold/italic) but not
 // the highlight.
-const PLACEHOLDER_PATTERN = /\[\[([^\][]+?)\]\]/g;
+const PLACEHOLDER_PATTERN = /\[\[([^\][]+?)\]\]/gu;
 
 const textRunsWithPlaceholders = (
   text: string,

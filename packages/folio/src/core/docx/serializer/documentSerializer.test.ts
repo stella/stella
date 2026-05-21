@@ -9,7 +9,7 @@ import { serializeDocument } from "./documentSerializer";
 // compute twips as `inches * 1440`, which produces drift like
 // `0.7 * 1440 === 1008.0000000000001`.
 const ANY_DECIMAL_IN_TWIPS_ATTR =
-  /w:(top|right|bottom|left|header|footer|gutter|w|h|sz|space|num|countBy|start|distance)="-?\d+\.\d+"/;
+  /w:(top|right|bottom|left|header|footer|gutter|w|h|sz|space|num|countBy|start|distance)="-?\d+\.\d+"/u;
 
 describe("document section properties are integer-only (issue #417)", () => {
   test("createEmptyDocument with fractional inches produces no float twips", () => {

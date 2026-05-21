@@ -516,7 +516,7 @@ const FulltextFallback = ({
   rangesByPieceId: Record<string, SearchMatchRange[]>;
   text: string;
 }) => {
-  const paragraphs = text.split(/\n{2,}/);
+  const paragraphs = text.split(/\n{2,}/u);
 
   return (
     <>
@@ -714,7 +714,7 @@ export const DecisionText = ({
       }
     } else if (decision.fulltext) {
       for (const [index, paragraph] of decision.fulltext
-        .split(/\n{2,}/)
+        .split(/\n{2,}/u)
         .entries()) {
         pieces.push({
           id: `fulltext:${index}`,

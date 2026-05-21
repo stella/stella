@@ -84,7 +84,7 @@ describe("injectComments", () => {
     expect(result.commentsXml).toContain("Comment 2");
 
     // Should have two commentRangeStart elements
-    const startCount = (result.documentXml.match(/w:commentRangeStart/g) ?? [])
+    const startCount = (result.documentXml.match(/w:commentRangeStart/gu) ?? [])
       .length;
     expect(startCount).toBe(2);
   });

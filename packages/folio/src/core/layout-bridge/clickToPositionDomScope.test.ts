@@ -25,7 +25,7 @@ describe("clickToPositionDom selector scope (issue #406)", () => {
     // body scope. Search for the bare selector with `container.` as the
     // receiver — that's the dangerous form that hits HF spans.
     const dangerous = SOURCE.match(
-      /container\.querySelectorAll\([^)]*"span\[data-pm-start\]\[data-pm-end\]"/g,
+      /container\.querySelectorAll\([^)]*"span\[data-pm-start\]\[data-pm-end\]"/gu,
     );
 
     expect(dangerous).toBeNull();
@@ -36,7 +36,7 @@ describe("clickToPositionDom selector scope (issue #406)", () => {
     // whole `.layout-page` and contains header/footer subtrees, so the
     // bare selector form is also dangerous here.
     const dangerous = SOURCE.match(
-      /pageEl\.querySelectorAll\([^)]*"span\[data-pm-start\]\[data-pm-end\]"/g,
+      /pageEl\.querySelectorAll\([^)]*"span\[data-pm-start\]\[data-pm-end\]"/gu,
     );
 
     expect(dangerous).toBeNull();
@@ -46,7 +46,7 @@ describe("clickToPositionDom selector scope (issue #406)", () => {
     // `pageEl.querySelectorAll('.layout-line')` would also match HF lines
     // and lead the click resolver to an HF position; scope it.
     const dangerous = SOURCE.match(
-      /pageEl\.querySelectorAll\(\s*"\.layout-line"/g,
+      /pageEl\.querySelectorAll\(\s*"\.layout-line"/gu,
     );
 
     expect(dangerous).toBeNull();

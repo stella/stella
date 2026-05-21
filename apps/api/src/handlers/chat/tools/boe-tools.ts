@@ -12,6 +12,9 @@ import {
   searchConsolidatedLegislation,
 } from "@stll/boe";
 
+// @valibot/to-json-schema rejects regex flags, so v.regex literals
+// in this file deliberately omit the `u` flag.
+/* eslint-disable require-unicode-regexp */
 const lawIdSchema = v.pipe(
   v.string(),
   v.regex(

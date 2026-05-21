@@ -61,7 +61,6 @@ export const ClientGroupHeader = ({
                 });
               }
             }}
-            // eslint-disable-next-line jsx-a11y/prefer-tag-over-role
             role="link"
             tabIndex={0}
           >

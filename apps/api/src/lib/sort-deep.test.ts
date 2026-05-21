@@ -62,7 +62,7 @@ describe("sortDeep", () => {
   });
 
   test("non-index string keys are sorted ascending at every level", () => {
-    const isIndex = (k: string) => /^(?:0|[1-9]\d*)$/.test(k);
+    const isIndex = (k: string) => /^(?:0|[1-9]\d*)$/u.test(k);
 
     const assertKeysSorted = (v: unknown): void => {
       if (typeof v === "object" && v !== null && !Array.isArray(v)) {

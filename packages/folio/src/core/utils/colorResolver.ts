@@ -327,7 +327,7 @@ export function resolveColor(
   }
 
   // Ensure proper format
-  return `#${hexColor.toUpperCase().replace(/^#/, "")}`;
+  return `#${hexColor.toUpperCase().replace(/^#/u, "")}`;
 }
 
 /**
@@ -387,7 +387,7 @@ export function isBlack(
   }
 
   const resolved = resolveColor(color, theme);
-  const hex = resolved.replace(/^#/, "").toLowerCase();
+  const hex = resolved.replace(/^#/u, "").toLowerCase();
 
   // Check if it's black or very dark
   const rgb = hexToRgb(hex);
@@ -412,7 +412,7 @@ export function isWhite(
   }
 
   const resolved = resolveColor(color, theme);
-  const hex = resolved.replace(/^#/, "").toLowerCase();
+  const hex = resolved.replace(/^#/u, "").toLowerCase();
 
   // Check if it's white or very light
   const rgb = hexToRgb(hex);
@@ -437,7 +437,7 @@ export function getContrastingColor(
   }
 
   const bgResolved = resolveColor(backgroundColor, theme);
-  const bgHex = bgResolved.replace(/^#/, "");
+  const bgHex = bgResolved.replace(/^#/u, "");
   const bgRgb = hexToRgb(bgHex);
 
   // Calculate relative luminance using sRGB formula
@@ -474,15 +474,15 @@ export function parseColorString(
 
   // Assume it's an RGB hex value
   // Remove # if present and normalize to 6 chars
-  const hex = normalized.replace(/^#/, "").toUpperCase();
+  const hex = normalized.replace(/^#/u, "").toUpperCase();
 
   // Validate hex format
-  if (/^[0-9A-F]{6}$/i.test(hex)) {
+  if (/^[0-9A-F]{6}$/iu.test(hex)) {
     return { rgb: hex };
   }
 
   // 3-character shorthand
-  if (/^[0-9A-F]{3}$/i.test(hex)) {
+  if (/^[0-9A-F]{3}$/iu.test(hex)) {
     const expanded = hex
       .split("")
       .map((c) => c + c)
@@ -533,7 +533,7 @@ export function createThemeColor(
  * @returns ColorValue object
  */
 export function createRgbColor(hex: string): ColorValue {
-  return { rgb: hex.replace(/^#/, "").toUpperCase() };
+  return { rgb: hex.replace(/^#/u, "").toUpperCase() };
 }
 
 /**
@@ -550,7 +550,7 @@ export function darkenColor(
   percent: number,
 ): string {
   const resolved = resolveColor(color, theme);
-  const hex = resolved.replace(/^#/, "");
+  const hex = resolved.replace(/^#/u, "");
   const shade = 1 - percent / 100;
   return `#${applyShade(hex, shade)}`;
 }
@@ -569,7 +569,7 @@ export function lightenColor(
   percent: number,
 ): string {
   const resolved = resolveColor(color, theme);
-  const hex = resolved.replace(/^#/, "");
+  const hex = resolved.replace(/^#/u, "");
   const tint = percent / 100;
   return `#${applyTint(hex, tint)}`;
 }
@@ -589,8 +589,8 @@ export function blendColors(
   ratio: number,
   theme: Theme | null | undefined,
 ): string {
-  const resolved1 = resolveColor(color1, theme).replace(/^#/, "");
-  const resolved2 = resolveColor(color2, theme).replace(/^#/, "");
+  const resolved1 = resolveColor(color1, theme).replace(/^#/u, "");
+  const resolved2 = resolveColor(color2, theme).replace(/^#/u, "");
 
   const rgb1 = hexToRgb(resolved1);
   const rgb2 = hexToRgb(resolved2);

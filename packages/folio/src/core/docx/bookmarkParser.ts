@@ -354,7 +354,7 @@ export function validateBookmarkName(name: string): {
   }
 
   // Check first character (letter or underscore)
-  if (!/^[a-zA-Z_]/.test(name)) {
+  if (!/^[a-zA-Z_]/u.test(name)) {
     return {
       valid: false,
       error: "Bookmark name must start with a letter or underscore",
@@ -362,7 +362,7 @@ export function validateBookmarkName(name: string): {
   }
 
   // Check remaining characters (letters, digits, underscores)
-  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/u.test(name)) {
     return {
       valid: false,
       error: "Bookmark name can only contain letters, digits, and underscores",

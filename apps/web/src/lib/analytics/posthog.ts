@@ -24,13 +24,13 @@ const isWebAnalyticsEvent = (event: string): event is WebAnalyticsEvent =>
 //   `Promise.reject()` that carries no reason. No stack, no
 //   message — filtering loses zero debuggable signal.
 const EXCEPTION_NOISE_PATTERNS: readonly RegExp[] = [
-  /^ResizeObserver loop/i,
-  /^Script error\.?$/i,
-  /^(?:Error: )?undefined$/i,
+  /^ResizeObserver loop/iu,
+  /^Script error\.?$/iu,
+  /^(?:Error: )?undefined$/iu,
   // Match only the empty form, not rejections that carry a useful
   // string (e.g. `Promise.reject("API_TIMEOUT")`) which we want to
   // keep capturing.
-  /^Non-Error promise rejection captured with value: (?:undefined|null)$/i,
+  /^Non-Error promise rejection captured with value: (?:undefined|null)$/iu,
 ];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

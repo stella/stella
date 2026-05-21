@@ -122,7 +122,10 @@ export const exportLedesHandler = async ({
 
   const lines = ["LEDES1998B[]", header];
   const now = new Date();
-  const invoiceDate = (now.toISOString().split("T")[0] ?? "").replace(/-/g, "");
+  const invoiceDate = (now.toISOString().split("T")[0] ?? "").replace(
+    /-/gu,
+    "",
+  );
 
   let lineItemNumber = 0;
 
@@ -133,10 +136,10 @@ export const exportLedesHandler = async ({
       billedMinutes: row.billedMinutes,
       hourlyRateCents: row.rateAtEntry,
     });
-    const dateFormatted = row.dateWorked.replace(/-/g, "");
+    const dateFormatted = row.dateWorked.replace(/-/gu, "");
     const userName = row.userId ? (userMap.get(row.userId) ?? "") : "";
     const narrative = (row.invoiceNarrative ?? row.narrative).replace(
-      /\|/g,
+      /\|/gu,
       " ",
     );
 

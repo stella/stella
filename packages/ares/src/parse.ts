@@ -109,7 +109,7 @@ const formatMoney = (
     const numeric = value.split(";", 1).at(0) ?? value;
     const formatted = Number(numeric)
       .toLocaleString("cs-CZ")
-      .replace(/\u00a0/g, " ");
+      .replace(/\u00a0/gu, " ");
     return `${formatted},- ${currencyStr}`.trim();
   } catch {
     return `${value} ${currencyStr}`.trim();

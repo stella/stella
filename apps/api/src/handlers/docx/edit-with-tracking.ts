@@ -34,7 +34,7 @@ const COMMENTS_REL_TYPE =
 
 // ── Settings: enable track-revisions ──────────────────────
 
-const SETTINGS_OPEN_RE = /(<w:settings\b[^>]*>)/;
+const SETTINGS_OPEN_RE = /(<w:settings\b[^>]*>)/u;
 
 const ensureTrackRevisions = (settingsXml: string): string => {
   if (settingsXml.includes("w:trackRevisions")) {
@@ -67,7 +67,7 @@ const ensureCommentsRel = (relsXml: string): string => {
   }
 
   // Find the highest rId to generate a new unique one
-  const idMatches = [...relsXml.matchAll(/rId(\d+)/g)];
+  const idMatches = [...relsXml.matchAll(/rId(\d+)/gu)];
   let maxId = 0;
   for (const match of idMatches) {
     maxId = Math.max(maxId, Number.parseInt(match[1] ?? "0", 10));

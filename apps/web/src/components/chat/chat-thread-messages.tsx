@@ -44,7 +44,7 @@ const USER_STREAMDOWN_COMPONENTS = {
 };
 
 const escapeRegExp = (value: string) =>
-  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
 const collectAnonRestorations = (
   parts: readonly ChatPart[],
@@ -102,7 +102,7 @@ const getMentionTagAttr = (attrs: string, name: string) => {
   const attrName = escapeRegExp(name);
   const match = new RegExp(
     `(?:^|\\s)${attrName}\\s*=\\s*(["'])(.*?)\\1`,
-    "i",
+    "iu",
   ).exec(attrs);
 
   return match?.[2] ?? null;

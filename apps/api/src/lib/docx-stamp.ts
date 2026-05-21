@@ -52,24 +52,24 @@ const FMTID = "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}";
 
 // ── Top-level regex (oxlint: prefer-regex-literals) ───────────
 
-const PID_RE = /pid="(\d+)"/g;
-const WID_RE = /w:id="(\d+)"/g;
-const FOOTER_FILE_RE = /^word\/footer\d+\.xml$/;
-const WT_TEXT_RE = /<w:t[^>]*>([^<]*)<\/w:t>/g;
-const STL_CODE_RE = /stl:([abcdefghjkmnpqrstuvwxyz23456789]{10})/;
+const PID_RE = /pid="(\d+)"/gu;
+const WID_RE = /w:id="(\d+)"/gu;
+const FOOTER_FILE_RE = /^word\/footer\d+\.xml$/u;
+const WT_TEXT_RE = /<w:t[^>]*>([^<]*)<\/w:t>/gu;
+const STL_CODE_RE = /stl:([abcdefghjkmnpqrstuvwxyz23456789]{10})/u;
 // oxlint-disable-next-line sonarjs/slow-regex -- footer text is bounded OOXML text and suffix is short
-const STL_SUFFIX_RE = /\s*stl:[abcdefghjkmnpqrstuvwxyz23456789]+\s*$/;
-const SECT_PR_RE = /(<w:sectPr[^>]*>)/;
-const CLOSING_BODY_RE = /<\/w:body>/;
-const CLOSING_FTR_RE = /<\/w:ftr>/;
-const STRIP_PATH_RE = /^.*\//;
+const STL_SUFFIX_RE = /\s*stl:[abcdefghjkmnpqrstuvwxyz23456789]+\s*$/u;
+const SECT_PR_RE = /(<w:sectPr[^>]*>)/u;
+const CLOSING_BODY_RE = /<\/w:body>/u;
+const CLOSING_FTR_RE = /<\/w:ftr>/u;
+const STRIP_PATH_RE = /^.*\//u;
 const FOOTER_REL_RE =
-  /Id="([^"]+)"[^>]*Type="[^"]*\/footer"[^>]*Target="([^"]+)"/g;
+  /Id="([^"]+)"[^>]*Type="[^"]*\/footer"[^>]*Target="([^"]+)"/gu;
 const DEFAULT_FOOTER_REF_RE =
-  /w:footerReference[^>]*w:type="default"[^>]*r:id="([^"]+)"/;
-const PLACEHOLDER_REF_RE = /\{\{STELLA_REF\}\}/g;
-const PLACEHOLDER_CODE_RE = /\{\{STELLA_CODE\}\}/g;
-const PLACEHOLDER_ID_RE = /\{\{STELLA_ID\}\}/g;
+  /w:footerReference[^>]*w:type="default"[^>]*r:id="([^"]+)"/u;
+const PLACEHOLDER_REF_RE = /\{\{STELLA_REF\}\}/gu;
+const PLACEHOLDER_CODE_RE = /\{\{STELLA_CODE\}\}/gu;
+const PLACEHOLDER_ID_RE = /\{\{STELLA_ID\}\}/gu;
 
 // ── Public API ──────────────────────────────────────────
 
@@ -254,6 +254,7 @@ const upsertProperty = (xml: string, name: string, value: string): string => {
   const re = new RegExp(
     `(<property[^>]*name="${name}"[^>]*>` +
       "\\s*<vt:lpwstr>)[^<]*(</vt:lpwstr>\\s*</property>)",
+    "u",
   );
   if (re.test(xml)) {
     return xml.replace(re, `$1${escapeXml(value)}$2`);
@@ -659,6 +660,7 @@ const replaceStampParagraph = (
   // Match the entire paragraph containing the bookmark
   const re = new RegExp(
     `<w:p>[\\s\\S]*?w:name="${STAMP_BOOKMARK}"[\\s\\S]*?</w:p>`,
+    "u",
   );
 
   if (re.test(footerXml)) {
@@ -685,6 +687,7 @@ const ensureHyperlinkRel = (rels: string, rId: string, url: string): string => {
   // Update existing stella hyperlink target
   const existingRe = new RegExp(
     `(<Relationship Id="${rId}"[^>]*Target=")[^"]*("[^>]*/>)`,
+    "u",
   );
   if (existingRe.test(rels)) {
     return rels.replace(existingRe, `$1${escapeXml(url)}$2`);
@@ -768,6 +771,7 @@ const extractBookmarkText = (
   const re = new RegExp(
     `<w:bookmarkStart[^>]*w:name="${STAMP_BOOKMARK}"` +
       "[\\s\\S]*?<w:bookmarkEnd[^>]*/>",
+    "u",
   );
   const match = re.exec(xml);
   if (!match) {
@@ -808,6 +812,7 @@ const extractBookmarkText = (
 const parseCustomProperty = (xml: string, name: string): string | null => {
   const re = new RegExp(
     `<property[^>]*name="${name}"[^>]*>\\s*<vt:lpwstr>([^<]*)</vt:lpwstr>`,
+    "u",
   );
   const match = re.exec(xml);
   return match?.[1] ?? null;

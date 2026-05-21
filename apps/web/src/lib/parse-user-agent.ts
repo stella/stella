@@ -4,23 +4,23 @@ type ParsedUserAgent = {
 };
 
 const BROWSERS = [
-  [/Edg(?:e|A)?\//, "Edge"],
-  [/OPR\/|Opera\//, "Opera"],
-  [/Vivaldi\//, "Vivaldi"],
-  [/CriOS\//, "Chrome"],
-  [/FxiOS\//, "Firefox"],
-  [/Firefox\//, "Firefox"],
-  [/Chrome\//, "Chrome"],
-  [/Safari\//, "Safari"],
+  [/Edg(?:e|A)?\//u, "Edge"],
+  [/OPR\/|Opera\//u, "Opera"],
+  [/Vivaldi\//u, "Vivaldi"],
+  [/CriOS\//u, "Chrome"],
+  [/FxiOS\//u, "Firefox"],
+  [/Firefox\//u, "Firefox"],
+  [/Chrome\//u, "Chrome"],
+  [/Safari\//u, "Safari"],
 ] as const satisfies readonly (readonly [RegExp, string])[];
 
 const OPERATING_SYSTEMS = [
-  [/Windows/, "Windows"],
-  [/iPhone|iPad|iPod/, "iOS"],
-  [/Android/, "Android"],
-  [/Mac OS X|macOS/, "macOS"],
-  [/CrOS/, "ChromeOS"],
-  [/Linux/, "Linux"],
+  [/Windows/u, "Windows"],
+  [/iPhone|iPad|iPod/u, "iOS"],
+  [/Android/u, "Android"],
+  [/Mac OS X|macOS/u, "macOS"],
+  [/CrOS/u, "ChromeOS"],
+  [/Linux/u, "Linux"],
 ] as const satisfies readonly (readonly [RegExp, string])[];
 
 export const parseUserAgent = (

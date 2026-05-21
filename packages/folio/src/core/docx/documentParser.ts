@@ -289,7 +289,7 @@ function toRoman(numParam: number): string {
 /**
  * Regular expression to match template variables {{...}}
  */
-const TEMPLATE_VARIABLE_REGEX = /\{([a-zA-Z_][a-zA-Z0-9_\-.]*)\}/g;
+const TEMPLATE_VARIABLE_REGEX = /\{([a-zA-Z_][a-zA-Z0-9_\-.]*)\}/gu;
 
 /**
  * Extract template variables from text
@@ -893,7 +893,7 @@ export function getParagraphCount(body: DocumentBody): number {
 export function getWordCount(body: DocumentBody): number {
   const text = getDocumentText(body);
   // Simple word counting - split by whitespace
-  const words = text.trim().split(/\s+/);
+  const words = text.trim().split(/\s+/u);
   return words.length > 0 && words[0] !== "" ? words.length : 0;
 }
 

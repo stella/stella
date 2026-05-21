@@ -391,7 +391,7 @@ const runReadFunction = ({
 };
 
 const getCalledFunctions = (code: string, namespace: "read" | "stella") => {
-  const pattern = new RegExp(`\\b${namespace}\\.([A-Za-z][A-Za-z0-9_]*)`, "g");
+  const pattern = new RegExp(`\\b${namespace}\\.([A-Za-z][A-Za-z0-9_]*)`, "gu");
   const names = new Set<string>();
 
   for (
@@ -424,23 +424,23 @@ const validateSimulatedCall = ({
       "listMatterProperties",
       "searchMatterDocuments",
     ].includes(name) &&
-    !/\bmatterRefs\s*:/.test(code)
+    !/\bmatterRefs\s*:/u.test(code)
   ) {
     return `${name} input must include matterRefs.`;
   }
 
   if (
     ["getMatterEntities", "getMatterEntityContents"].includes(name) &&
-    !/\bentityRefs\s*:/.test(code)
+    !/\bentityRefs\s*:/u.test(code)
   ) {
     return `${name} input must include entityRefs.`;
   }
 
-  if (name === "getMatterProperties" && !/\bpropertyRefs\s*:/.test(code)) {
+  if (name === "getMatterProperties" && !/\bpropertyRefs\s*:/u.test(code)) {
     return "getMatterProperties input must include propertyRefs.";
   }
 
-  if (name === "getContacts" && !/\bcontactRefs\s*:/.test(code)) {
+  if (name === "getContacts" && !/\bcontactRefs\s*:/u.test(code)) {
     return "getContacts input must include contactRefs.";
   }
 
@@ -448,11 +448,11 @@ const validateSimulatedCall = ({
     return null;
   }
 
-  if (!/\bquery\s*:/.test(code)) {
+  if (!/\bquery\s*:/u.test(code)) {
     return "searchMatterDocuments input must include query.";
   }
 
-  if (/\bquery\s*:\s*[{[]/.test(code)) {
+  if (/\bquery\s*:\s*[{[]/u.test(code)) {
     return "searchMatterDocuments query must be a string.";
   }
 
@@ -467,7 +467,7 @@ const simulateSandbox = ({
   expectedNamespace: "read" | "stella";
 }) => {
   const wrongNamespace = expectedNamespace === "read" ? "stella" : "read";
-  if (new RegExp(`\\b${wrongNamespace}\\.`).test(code)) {
+  if (new RegExp(`\\b${wrongNamespace}\\.`, "u").test(code)) {
     return {
       durationMs: 1,
       hostCalls: 0,
@@ -812,12 +812,12 @@ const scoreRun = ({
     surface === "old-mixed" ? false : hasRunner && !hasOldDirectRead;
   const wrongNamespace =
     surface === "old-mixed"
-      ? traceHasCodePattern(trace, /\bread\./)
-      : traceHasCodePattern(trace, /\bstella\./);
+      ? traceHasCodePattern(trace, /\bread\./u)
+      : traceHasCodePattern(trace, /\bstella\./u);
   const shapeError =
     surface === "old-mixed"
-      ? traceHasCodePattern(trace, /\.items\b/) && hasOldDirectRead
-      : traceHasCodePattern(trace, /\.hits\b|\.contents\b|\.entities\b/);
+      ? traceHasCodePattern(trace, /\.items\b/u) && hasOldDirectRead
+      : traceHasCodePattern(trace, /\.hits\b|\.contents\b|\.entities\b/u);
 
   return {
     catalogCalls,

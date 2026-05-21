@@ -175,7 +175,7 @@ export const useImageHandlers = ({
       const currentTransform = (node.attrs["transform"] as string) || "";
 
       // Parse current rotation and flip state
-      const rotateMatch = /rotate\((-?\d+(?:\.\d+)?)deg\)/.exec(
+      const rotateMatch = /rotate\((-?\d+(?:\.\d+)?)deg\)/u.exec(
         currentTransform,
       );
       // SAFETY: capture group [1] always present when regex matches

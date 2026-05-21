@@ -70,14 +70,14 @@ const toYearSuffix = (year: number): string =>
   String(year % 100).padStart(2, "0");
 
 // oxlint-disable-next-line sonarjs/slow-regex -- registry sign is a short label extracted from NALUS metadata
-const REGISTRY_SIGN_PATTERN = /^(.+?)\s+ze\s+dne\s+(.+)$/;
-const DOC_CONTENT_PATTERN = /class="DocContent">([\s\S]*?)<\/table>/;
+const REGISTRY_SIGN_PATTERN = /^(.+?)\s+ze\s+dne\s+(.+)$/u;
+const DOC_CONTENT_PATTERN = /class="DocContent">([\s\S]*?)<\/table>/u;
 // oxlint-disable-next-line sonarjs/slow-regex -- judge extraction scans one decision signature block
-const JUDGE_PATTERN = /(\S+(?:\s+\S+){0,2})\s+\(soudce\s+zpravodaj\)/i;
+const JUDGE_PATTERN = /(\S+(?:\s+\S+){0,2})\s+\(soudce\s+zpravodaj\)/iu;
 
 /** Extract text from a labeled span. */
 const extractLabel = (html: string, labelId: string): string | undefined => {
-  const pattern = new RegExp(`id="${labelId}"[^>]*>([\\s\\S]*?)</span>`, "i");
+  const pattern = new RegExp(`id="${labelId}"[^>]*>([\\s\\S]*?)</span>`, "iu");
   const match = html.match(pattern);
   if (!match?.[1]) {
     return undefined;
@@ -112,7 +112,7 @@ const buildEcli = (
   counter: number,
 ): string | undefined => {
   // "II.ÚS 3436/14" or "Pl.ÚS 24/10"
-  const match = /^([IVX]+|Pl)\.ÚS\s+(\d+)\/(\d+)$/.exec(caseNumber);
+  const match = /^([IVX]+|Pl)\.ÚS\s+(\d+)\/(\d+)$/u.exec(caseNumber);
   if (!match?.[1] || !match[2] || !match[3]) {
     return undefined;
   }
@@ -147,11 +147,11 @@ const parseRegistrySign = (
  * Returns undefined if the counter is not present.
  */
 const extractEcliCounter = (html: string): number | undefined => {
-  const hidden = /name="registrySignHidden"[^>]*value="([^"]*)"/.exec(html);
+  const hidden = /name="registrySignHidden"[^>]*value="([^"]*)"/u.exec(html);
   if (!hidden?.[1]) {
     return undefined;
   }
-  const counterMatch = /#(\d+)/.exec(hidden[1]);
+  const counterMatch = /#(\d+)/u.exec(hidden[1]);
   return counterMatch?.[1] ? Number.parseInt(counterMatch[1], 10) : undefined;
 };
 

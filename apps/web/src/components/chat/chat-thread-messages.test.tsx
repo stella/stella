@@ -112,8 +112,8 @@ describe("chat thread messages", () => {
 
     expect(html).toContain("First answer");
     expect(html).toContain("Second answer");
-    expect(html.match(/>Copy<\/button>/g)?.length).toBe(2);
-    expect(html.match(/>Retry<\/button>/g)?.length).toBe(1);
+    expect(html.match(/>Copy<\/button>/gu)?.length).toBe(2);
+    expect(html.match(/>Retry<\/button>/gu)?.length).toBe(1);
   });
 
   test("hides retry when a later user message is the final turn", () => {
@@ -147,7 +147,7 @@ describe("chat thread messages", () => {
 
     expect(html).toContain("Answer before retry");
     expect(html).toContain("Follow-up prompt");
-    expect(html.match(/>Copy<\/button>/g)?.length).toBe(1);
+    expect(html.match(/>Copy<\/button>/gu)?.length).toBe(1);
     expect(html).not.toContain(">Retry</button>");
   });
 

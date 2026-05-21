@@ -14,7 +14,7 @@ export const statusDesktopEditSessionParamsSchema = t.Object({
 
 const SESSION_TOKEN_LENGTH = 64;
 const BEARER_PREFIX = "Bearer ";
-const SESSION_TOKEN_PATTERN = /^[a-f0-9]{64}$/;
+const SESSION_TOKEN_PATTERN = /^[a-f0-9]{64}$/u;
 
 export const statusDesktopEditSessionHeadersSchema = t.Object({
   authorization: t.Optional(t.String()),

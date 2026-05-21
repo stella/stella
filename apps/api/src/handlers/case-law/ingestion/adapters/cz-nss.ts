@@ -46,7 +46,7 @@ const DEFAULT_LOOKBACK_DAYS = 30;
 const extractHiddenField = (html: string, name: string): string | undefined => {
   const pattern = new RegExp(
     `<input[^>]*name=["']${name}["'][^>]*value=["']([^"']*)["']`,
-    "i",
+    "iu",
   );
   const match = html.match(pattern);
   return match?.[1];
@@ -64,7 +64,7 @@ const extractFormFields = (html: string): Map<string, string> => {
 
   // Hidden inputs (token, FormularCiselnik, etc.)
   const hiddenPattern =
-    /<input\b(?=[^>]*\btype=["']hidden["'])(?=[^>]*\bname=["']([^"']*)["'])(?=[^>]*\bvalue=["']([^"']*)["'])[^>]*>/gi;
+    /<input\b(?=[^>]*\btype=["']hidden["'])(?=[^>]*\bname=["']([^"']*)["'])(?=[^>]*\bvalue=["']([^"']*)["'])[^>]*>/giu;
   let match: RegExpExecArray | null;
   while ((match = hiddenPattern.exec(html)) !== null) {
     if (match[1] !== undefined && match[2] !== undefined) {
@@ -74,7 +74,7 @@ const extractFormFields = (html: string): Map<string, string> => {
 
   // Text inputs (date fields in vyhledavaciSekce)
   const textPattern =
-    /<input[^>]*\btype=["']text["'][^>]*\bname=["']([^"']*)["'][^>]*>/gi;
+    /<input[^>]*\btype=["']text["'][^>]*\bname=["']([^"']*)["'][^>]*>/giu;
   while ((match = textPattern.exec(html)) !== null) {
     if (match[1] && !fields.has(match[1])) {
       fields.set(match[1], "");
@@ -83,7 +83,7 @@ const extractFormFields = (html: string): Map<string, string> => {
 
   // Also try reversed order (name before type)
   const textPattern2 =
-    /<input[^>]*\bname=["']([^"']*)["'][^>]*\btype=["']text["'][^>]*>/gi;
+    /<input[^>]*\bname=["']([^"']*)["'][^>]*\btype=["']text["'][^>]*>/giu;
   while ((match = textPattern2.exec(html)) !== null) {
     if (match[1] && !fields.has(match[1])) {
       fields.set(match[1], "");
@@ -104,7 +104,7 @@ const extractAntiforgeryToken = (html: string): string | undefined =>
  */
 const extractCurrParams = (html: string): string | undefined => {
   // currParams is passed to the JavaScript pagination function
-  const match = /currParams\s*[:=]\s*["']([^"']+)["']/.exec(html);
+  const match = /currParams\s*[:=]\s*["']([^"']+)["']/u.exec(html);
   if (match?.[1]) {
     try {
       return decodeURIComponent(match[1]);
@@ -211,7 +211,7 @@ type ParsedRow = {
 const parseResultRows = (html: string): ParsedRow[] => {
   const rows: ParsedRow[] = [];
 
-  const tbodyPattern = /<tbody>([\s\S]*?)<\/tbody>/gi;
+  const tbodyPattern = /<tbody>([\s\S]*?)<\/tbody>/giu;
   let tbodyMatch: RegExpExecArray | null;
 
   while ((tbodyMatch = tbodyPattern.exec(html)) !== null) {
@@ -224,7 +224,7 @@ const parseResultRows = (html: string): ParsedRow[] => {
     // Stop at comma to exclude publication reference (e.g. ", č. 421/2004 Sb. NSS")
     const citMatch =
       // oxlint-disable-next-line sonarjs/slow-regex -- tbody blocks are bounded search-result rows from NSS
-      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.|&#x10[dD];j\.|&#26[89];j\.)[\s]*([^",]+?)(?:-\d+)?[",]/i.exec(
+      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.|&#x10[dD];j\.|&#26[89];j\.)[\s]*([^",]+?)(?:-\d+)?[",]/iu.exec(
         block,
       );
     const caseNumber = citMatch?.[1]?.trim();
@@ -239,14 +239,14 @@ const parseResultRows = (html: string): ParsedRow[] => {
       continue;
     }
 
-    const detailMatch = /href="\/DokumentDetail\/Index\/(\d+)"/.exec(block);
+    const detailMatch = /href="\/DokumentDetail\/Index\/(\d+)"/u.exec(block);
     const documentId = detailMatch?.[1];
     const documentUrl = documentId
       ? `${BASE_URL}/DokumentDetail/Index/${documentId}`
       : undefined;
 
     const cells: string[] = [];
-    const cellPattern = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+    const cellPattern = /<td[^>]*>([\s\S]*?)<\/td>/giu;
     let cellMatch: RegExpExecArray | null;
     while ((cellMatch = cellPattern.exec(block)) !== null) {
       if (cellMatch[1]) {
@@ -257,14 +257,14 @@ const parseResultRows = (html: string): ParsedRow[] => {
     let decisionDate: string | undefined;
     let decisionType: string | undefined;
     for (const cell of cells) {
-      if (!decisionDate && /\d{1,2}\.\s*\d{1,2}\.\s*\d{4}/.test(cell)) {
+      if (!decisionDate && /\d{1,2}\.\s*\d{1,2}\.\s*\d{4}/u.test(cell)) {
         decisionDate = cell;
       } else if (
         !decisionType &&
         cell !== caseNumber &&
         cell.length > 2 &&
         cell.length < 50 &&
-        !/^\d+$/.test(cell)
+        !/^\d+$/u.test(cell)
       ) {
         decisionType = cell;
       }
@@ -404,7 +404,7 @@ type DetailMetadata = {
 
 /** Extract a div's value text by its ID, skipping the label span. */
 const extractDivText = (html: string, divId: string): string | undefined => {
-  const pattern = new RegExp(`id="${divId}"[^>]*>([\\s\\S]*?)</div>`, "i");
+  const pattern = new RegExp(`id="${divId}"[^>]*>([\\s\\S]*?)</div>`, "iu");
   const match = html.match(pattern);
   if (!match?.[1]) {
     return undefined;
@@ -412,7 +412,7 @@ const extractDivText = (html: string, divId: string): string | undefined => {
 
   // Structure: <span class="det-textitle">Label:</span>
   //            <span class="det-textval" title="Value">Value</span>
-  const valPattern = /class="det-textval[^"]*"[^>]*>([\s\S]*?)<\/span>/gi;
+  const valPattern = /class="det-textval[^"]*"[^>]*>([\s\S]*?)<\/span>/giu;
   let valMatch: RegExpExecArray | null;
   const texts: string[] = [];
   while ((valMatch = valPattern.exec(match[1])) !== null) {
@@ -800,20 +800,20 @@ export const czNssAdapter: SourceAdapter = {
 
       const countPatterns = [
         // oxlint-disable-next-line sonarjs/slow-regex -- count labels are matched once against one NSS result page
-        /Nalezeno\s+(\d[\d\s]*)\s+záznam/i,
+        /Nalezeno\s+(\d[\d\s]*)\s+záznam/iu,
         // oxlint-disable-next-line sonarjs/slow-regex -- count labels are matched once against one NSS result page
-        /Celkem\s+(\d[\d\s]*)\s+záznam/i,
+        /Celkem\s+(\d[\d\s]*)\s+záznam/iu,
         // oxlint-disable-next-line sonarjs/slow-regex -- count labels are matched once against one NSS result page
-        /(\d[\d\s]*)\s+výsledk/i,
-        /resCount[^>]*>(\d[\d\s]*)</i,
-        /myResCount[^>]*>(\d[\d\s]*)</i,
-        /pocetZaznamu[^>]*>(\d[\d\s]*)</i,
+        /(\d[\d\s]*)\s+výsledk/iu,
+        /resCount[^>]*>(\d[\d\s]*)</iu,
+        /myResCount[^>]*>(\d[\d\s]*)</iu,
+        /pocetZaznamu[^>]*>(\d[\d\s]*)</iu,
       ];
 
       for (const pattern of countPatterns) {
         const match = html.match(pattern);
         if (match?.[1]) {
-          const cleaned = match[1].replace(/\s/g, "");
+          const cleaned = match[1].replace(/\s/gu, "");
           const parsed = Number.parseInt(cleaned, 10);
           if (!Number.isNaN(parsed) && parsed > 0) {
             return parsed;

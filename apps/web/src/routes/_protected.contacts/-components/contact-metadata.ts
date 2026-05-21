@@ -7,7 +7,7 @@ import type {
   ContactMetadata,
 } from "@/routes/_protected.contacts/-components/types";
 
-export const DATA_BOX_ID_PATTERN = /^[a-z0-9]{7}$/;
+export const DATA_BOX_ID_PATTERN = /^[a-z0-9]{7}$/u;
 export const EMAIL_SCHEMA = v.pipe(v.string(), v.trim(), v.email());
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

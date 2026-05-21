@@ -19,7 +19,7 @@ import type { ChatAnonRestoration } from "@/components/chat/chat-ui-tools";
 // non-prose containers.
 const SKIP_PARENT_TAGS = new Set(["a", "button", "pre", "script", "style"]);
 
-const REGEX_SPECIALS = /[\\^$.*+?()[\]{}|]/g;
+const REGEX_SPECIALS = /[\\^$.*+?()[\]{}|]/gu;
 
 const escapeRegex = (value: string) => value.replaceAll(REGEX_SPECIALS, "\\$&");
 
@@ -57,7 +57,7 @@ export function rehypeAnonSpans(
   );
   const pattern = new RegExp(
     sorted.map((pair) => escapeRegex(pair.original)).join("|"),
-    "g",
+    "gu",
   );
 
   const splitTextNode = (text: Text): ElementContent[] => {

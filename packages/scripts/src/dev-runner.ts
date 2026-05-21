@@ -294,7 +294,7 @@ export const resolveOffset = ({
 
   const configuredInstance = devInstance?.trim();
   if (configuredInstance) {
-    if (/^\d+$/.test(configuredInstance)) {
+    if (/^\d+$/u.test(configuredInstance)) {
       const resolvedOffset = Number.parseInt(configuredInstance, 10);
       validateOffset(resolvedOffset, "numeric STELLA_DEV_INSTANCE");
 
@@ -548,7 +548,7 @@ export const parseForeignPortOwners = ({
     }
 
     const seen = new Set<number>();
-    for (const match of (portsField ?? "").matchAll(/:(\d+)->/g)) {
+    for (const match of (portsField ?? "").matchAll(/:(\d+)->/gu)) {
       const hostPort = Number.parseInt(match[1] ?? "", 10);
       if (
         Number.isNaN(hostPort) ||
@@ -665,7 +665,7 @@ export const parseDockerComposePsJson = (output: string) => {
   }
 
   const statuses: DockerComposeServiceStatus[] = [];
-  for (const line of trimmed.split(/\r?\n/)) {
+  for (const line of trimmed.split(/\r?\n/u)) {
     const status = normalizeComposeServiceStatus(readJson(line));
     if (status) {
       statuses.push(status);

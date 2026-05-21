@@ -241,7 +241,7 @@ describe("parseUsDecisionHtml", () => {
 
       // No paragraph should start with "1. " or "2. "
       const numberedParas = documentAst.blocks.filter(
-        (b) => b.type === "paragraph" && /^\d+\.\s/.test(b.plainText),
+        (b) => b.type === "paragraph" && /^\d+\.\s/u.test(b.plainText),
       );
       expect(numberedParas.length).toBe(0);
 

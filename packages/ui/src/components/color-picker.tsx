@@ -82,9 +82,9 @@ const DEFAULT_PRESETS: ColorPreset[] = [
 // Helpers
 // ---------------------------------------------------------------------------
 
-const isValidHex = (hex: string) => /^[0-9A-Fa-f]{6}$/.test(hex);
+const isValidHex = (hex: string) => /^[0-9A-Fa-f]{6}$/u.test(hex);
 
-const normalizeHex = (hex: string) => hex.replace(/^#/, "").toUpperCase();
+const normalizeHex = (hex: string) => hex.replace(/^#/u, "").toUpperCase();
 
 /** CSS color to render for a preset swatch. */
 const swatchColor = (preset: ColorPreset) => preset.color ?? `#${preset.value}`;
@@ -101,7 +101,7 @@ const isLightHex = (hex: string): boolean => {
 };
 
 /** Check if a value looks like a 6-char hex (no CSS vars, no named colors). */
-const looksLikeHex = (v: string) => /^[0-9A-Fa-f]{6}$/.test(v);
+const looksLikeHex = (v: string) => /^[0-9A-Fa-f]{6}$/u.test(v);
 
 // ---------------------------------------------------------------------------
 // ColorSwatch (internal)
@@ -182,7 +182,7 @@ function ColorPickerContent({
   /** Called when the hex text input changes. */
   const handleInputChange = (raw: string) => {
     const cleaned = raw
-      .replace(/[^0-9A-Fa-f]/g, "")
+      .replace(/[^0-9A-Fa-f]/gu, "")
       .slice(0, 6)
       .toUpperCase();
     setInputHex(cleaned);
@@ -199,6 +199,7 @@ function ColorPickerContent({
         <PopoverPrimitive.Close
           render={
             <button
+              aria-label="No color"
               className="text-muted-foreground hover:bg-accent hover:text-accent-foreground flex h-6 w-full items-center gap-1.5 rounded px-1 text-[11px] transition-colors"
               onClick={onClear}
               type="button"

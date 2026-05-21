@@ -377,7 +377,7 @@ const getExportBaseName = (name: string): string => {
   if (!trimmed) {
     return "table";
   }
-  return trimmed.replaceAll(/[/:*?"<>|\\]/g, "_");
+  return trimmed.replaceAll(/[/:*?"<>|\\]/gu, "_");
 };
 
 const getExportFileName = (

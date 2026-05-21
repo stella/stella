@@ -12,7 +12,7 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: /^@stll\/ui\/(.*)/,
+        find: /^@stll\/ui\/(.*)/u,
         replacement: path.join(monorepoRoot, "packages/ui/src/$1"),
       },
       {
@@ -24,7 +24,7 @@ export default defineConfig({
         replacement: path.join(monorepoRoot, "packages/folio/src/index.ts"),
       },
       {
-        find: /^@stll\/docx-utils(.*)/,
+        find: /^@stll\/docx-utils(.*)/u,
         replacement: path.join(monorepoRoot, "packages/docx-utils/src$1"),
       },
     ],

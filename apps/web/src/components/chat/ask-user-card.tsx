@@ -39,7 +39,7 @@ type AskUserCardProps = {
   restorationPairs?: readonly ChatAnonRestoration[] | undefined;
 };
 
-const REGEX_SPECIALS = /[\\^$.*+?()[\]{}|]/g;
+const REGEX_SPECIALS = /[\\^$.*+?()[\]{}|]/gu;
 const escapeRegex = (value: string) => value.replaceAll(REGEX_SPECIALS, "\\$&");
 
 const EMPTY_RESTORATION_PAIRS: readonly ChatAnonRestoration[] = Object.freeze(
@@ -74,7 +74,7 @@ const renderAnonPills = (
   );
   const pattern = new RegExp(
     sorted.map((pair) => escapeRegex(pair.original)).join("|"),
-    "g",
+    "gu",
   );
   const nodes: ReactNode[] = [];
   let lastEnd = 0;

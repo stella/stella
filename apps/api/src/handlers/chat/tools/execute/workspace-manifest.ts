@@ -21,6 +21,9 @@ import { LIMITS } from "@/api/lib/limits";
 
 const entityKindSchema = v.picklist(ENTITY_KINDS);
 const propertyStatusSchema = v.picklist(PROPERTY_STATUSES);
+// @valibot/to-json-schema rejects regex flags, so v.regex literals
+// in this file deliberately omit the `u` flag.
+/* eslint-disable require-unicode-regexp */
 const matterRefSchema = v.pipe(
   v.string(),
   v.regex(/^mat_\d+$/),
@@ -36,6 +39,7 @@ const propertyRefSchema = v.pipe(
   v.regex(/^prop_\d+$/),
   v.description("Short property ref returned by Stella tools"),
 );
+/* eslint-enable require-unicode-regexp */
 const storedFileIdSchema = v.pipe(
   v.string(),
   v.uuid(),
@@ -305,6 +309,7 @@ const listMatterEntitiesInputSchema = v.strictObject({
   parentRef: v.optional(
     v.pipe(
       v.string(),
+      // eslint-disable-next-line require-unicode-regexp -- @valibot/to-json-schema rejects regex flags
       v.regex(/^ent_\d+$/),
       v.description("Optional parent folder entity ref"),
     ),

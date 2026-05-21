@@ -551,6 +551,7 @@ function VersionItem({
 
 // -- Utilities --
 
-const firstName = (fullName: string) => fullName.split(/\s+/).at(0) ?? fullName;
+const firstName = (fullName: string) =>
+  fullName.split(/\s+/u).at(0) ?? fullName;
 
 const DEFAULT_LABEL_COLOR = "bg-foreground-disabled";

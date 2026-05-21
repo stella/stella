@@ -31,7 +31,6 @@ export const BottomRow = ({
       onFolderCreated={onFolderCreated}
       uploadOnly
       render={
-        // oxlint-disable-next-line jsx_a11y/prefer-tag-over-role
         <WorkspaceGridRow className={bottomRowClassName} role="button">
           <WorkspaceGridCell
             className="z-10 flex items-center justify-center border-t-2"
