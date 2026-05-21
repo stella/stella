@@ -12,9 +12,22 @@ import * as v from "valibot";
 
 import { resolveDatabaseUrl } from "@/api/db-url";
 
+const databasePoolMaxSchema = v.optional(
+  v.pipe(
+    v.string(),
+    v.digits(),
+    v.transform(Number),
+    v.integer(),
+    v.minValue(1),
+  ),
+  "5",
+);
+
 export const envBase = createEnv({
   server: {
     DATABASE_URL: v.pipe(v.string(), v.url()),
+    DATABASE_ROOT_POOL_MAX: databasePoolMaxSchema,
+    DATABASE_RLS_POOL_MAX: databasePoolMaxSchema,
     S3_ENDPOINT: v.string(),
     S3_BUCKET: v.string(),
     S3_CREDENTIALS_PROVIDER: v.optional(

@@ -1,3 +1,4 @@
+import { SQL } from "bun";
 import { drizzle } from "drizzle-orm/bun-sql";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -7,8 +8,13 @@ import type { TransactionOf } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
 
 const databaseRelations = { ...relations, ...authRelationsPart };
-const rawRlsDb = drizzle(envBase.DATABASE_URL, {
-  relations: databaseRelations,
+const rootClient = new SQL({
+  url: envBase.DATABASE_URL,
+  max: envBase.DATABASE_ROOT_POOL_MAX,
+});
+const rlsClient = new SQL({
+  url: envBase.DATABASE_URL,
+  max: envBase.DATABASE_RLS_POOL_MAX,
 });
 
 /**
@@ -17,7 +23,13 @@ const rawRlsDb = drizzle(envBase.DATABASE_URL, {
  * for internal infrastructure such as workspace resolution and
  * Better Auth.
  */
-export const rootDb = drizzle(envBase.DATABASE_URL, {
+export const rootDb = drizzle({
+  client: rootClient,
+  relations: databaseRelations,
+});
+
+const rawRlsDb = drizzle({
+  client: rlsClient,
   relations: databaseRelations,
 });
 

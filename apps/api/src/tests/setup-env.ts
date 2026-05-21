@@ -1,5 +1,5 @@
 process.env["DATABASE_URL"] ??=
-  "postgres://stella:stella@localhost:5432/stella";
+  "postgres://postgres:postgres@localhost:5432/stella";
 process.env["S3_ENDPOINT"] ??= "http://localhost:9000";
 process.env["S3_BUCKET"] ??= "stella-test";
 process.env["S3_REGION"] ??= "us-east-1";
