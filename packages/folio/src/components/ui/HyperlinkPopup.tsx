@@ -20,7 +20,15 @@ export type HyperlinkPopupData = {
   href: string;
   displayText: string;
   tooltip?: string;
-  anchorRect: DOMRect;
+  /**
+   * Live reference to the anchor element. The popup recomputes its position
+   * from this element's bounding rect on every scroll/resize so it stays
+   * pinned to the link as the page scrolls (eigenpal #514). Required because
+   * the popup is `position: fixed` to the viewport — without a live
+   * reference, the popup stays at the original screen position while the
+   * link moves out from under it.
+   */
+  anchorEl: HTMLAnchorElement;
 };
 
 export type HyperlinkPopupProps = {
@@ -48,6 +56,10 @@ export function HyperlinkPopup({
   const [editUrl, setEditUrl] = useState("");
   const popupRef = useRef<HTMLDivElement>(null);
   const textInputRef = useRef<HTMLInputElement>(null);
+  const [anchorPosition, setAnchorPosition] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
 
   useEffect(() => {
     if (data) {
@@ -55,6 +67,31 @@ export function HyperlinkPopup({
       setEditText(data.displayText);
       setEditUrl(data.href);
     }
+  }, [data]);
+
+  // Recompute popup position from the live anchor element on every scroll /
+  // resize / layout change. `position: fixed` snapshots the click-time rect,
+  // so without this the popup stays at the original viewport position while
+  // the link scrolls away beneath it. Re-reading on each animation frame
+  // keeps the popup pinned to the link without a permanent rAF loop — we
+  // only update when the browser tells us layout changed.
+  useEffect(() => {
+    if (!data) {
+      setAnchorPosition(null);
+      return;
+    }
+    const anchor = data.anchorEl;
+    const update = () => {
+      const rect = anchor.getBoundingClientRect();
+      setAnchorPosition({ top: rect.bottom + 4, left: rect.left });
+    };
+    update();
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
   }, [data]);
 
   useEffect(() => {
@@ -126,8 +163,13 @@ export function HyperlinkPopup({
     return null;
   }
 
-  const top = data.anchorRect.bottom + 4;
-  const left = data.anchorRect.left;
+  // Render off-screen until the first scroll/resize listener fires; this
+  // happens synchronously after the initial useEffect so it's a single frame.
+  if (!anchorPosition) {
+    return null;
+  }
+  const top = anchorPosition.top;
+  const left = anchorPosition.left;
 
   const iconBtn =
     "flex size-7 items-center justify-center rounded text-[var(--doc-text-muted)] hover:bg-[var(--doc-bg-hover)] transition-colors";
