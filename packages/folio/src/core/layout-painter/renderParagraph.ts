@@ -833,14 +833,22 @@ function measureFollowingContentWidth(
     if (isTabRun(run) || isLineBreakRun(run)) {
       break;
     }
+    // Apply horizontalScale to match what the renderer's main loop does to
+    // currentX (`measuredWidth * (run.horizontalScale ?? 100) / 100`). Without
+    // this, expanded/compressed text after a tab over/under-estimates the
+    // trailing width and the right-edge check fires (or doesn't) at the wrong
+    // threshold, causing alignment drift on scaled TOC entries.
+    const scale = (run as { horizontalScale?: number }).horizontalScale ?? 100;
     if (isTextRun(run)) {
       const text = run.allCaps ? run.text.toLocaleUpperCase() : run.text;
-      width += measureText(
-        text,
-        run.fontSize ?? 11,
-        run.fontFamily ?? "Calibri",
-        runMeasureStyle(run),
-      );
+      width +=
+        measureText(
+          text,
+          run.fontSize ?? 11,
+          run.fontFamily ?? "Calibri",
+          runMeasureStyle(run),
+        ) *
+        (scale / 100);
     } else if (isFieldRun(run)) {
       let fieldText = run.fallback ?? "";
       if (run.fieldType === "PAGE" && context) {
@@ -848,13 +856,17 @@ function measureFollowingContentWidth(
       } else if (run.fieldType === "NUMPAGES" && context) {
         fieldText = String(context.totalPages);
       }
-      width += measureText(
-        run.allCaps ? fieldText.toLocaleUpperCase() : fieldText,
-        run.fontSize ?? 11,
-        run.fontFamily ?? "Calibri",
-        runMeasureStyle(run),
-      );
+      width +=
+        measureText(
+          run.allCaps ? fieldText.toLocaleUpperCase() : fieldText,
+          run.fontSize ?? 11,
+          run.fontFamily ?? "Calibri",
+          runMeasureStyle(run),
+        ) *
+        (scale / 100);
     } else if (isImageRun(run) && !isFloatingImageRun(run)) {
+      // Inline images aren't horizontally scaled by w:w on the surrounding
+      // text run; their own width attribute is authoritative.
       width += run.width || 0;
     }
   }
@@ -1190,7 +1202,12 @@ export function renderLine(
         // appended (see below).
         lineEl.style.display = "flex";
         lineEl.style.alignItems = "baseline";
-        lineEl.style.whiteSpace = "nowrap";
+        // `pre` matches the non-flex path on the same renderLine: it both
+        // preserves consecutive spaces (TOC titles can carry XML-preserved
+        // multi-spaces) and disallows mid-line wrap, which is the property
+        // the flex anchor needs. `nowrap` would prevent wrap but collapse
+        // consecutive spaces, silently changing rendered content.
+        lineEl.style.whiteSpace = "pre";
         lineEl.style.textIndent = "0";
         // Centered / right-aligned paragraphs need explicit justify-content:
         // flex defaults to flex-start regardless of the parent's text-align,

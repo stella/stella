@@ -124,7 +124,9 @@ describe("renderLine right-tab flex anchor", () => {
     expect(lineEl.dataset["flexLine"]).toBe("true");
     expect(lineEl.style["display"]).toBe("flex");
     expect(lineEl.style["alignItems"]).toBe("baseline");
-    expect(lineEl.style["whiteSpace"]).toBe("nowrap");
+    // `pre` (not `nowrap`) so consecutive XML-preserved spaces in TOC titles
+    // survive the flex switch; `pre` also disallows mid-line wrap.
+    expect(lineEl.style["whiteSpace"]).toBe("pre");
 
     const tabEl = findTabEl(lineEl);
     expect(tabEl).toBeDefined();
