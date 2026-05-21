@@ -1,7 +1,7 @@
 import { and, asc, eq, isNull, lt, or, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db";
-import { db } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
 import { infoSoudTrackedCases } from "@/api/db/schema";
 import { createInfoSoudClient } from "@/api/handlers/workspaces/infosoud-common";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -64,7 +64,7 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
           continue;
         }
 
-        const importResult = await db.transaction(async (tx) => {
+        const importResult = await rootDb.transaction(async (tx) => {
           const result = await importInfoSoudAgendaItems({
             actorUserId: trackedCase.createdBy,
             agendaItems,
@@ -121,7 +121,7 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
 };
 
 const loadNextTrackedCaseBatch = async (syncStartedAt: Date) =>
-  await db
+  await rootDb
     .select()
     .from(infoSoudTrackedCases)
     .where(
@@ -169,7 +169,7 @@ const markTrackedCaseFailed = async ({
   error,
   trackedCaseId,
 }: MarkTrackedCaseFailedOptions): Promise<void> => {
-  await db
+  await rootDb
     .update(infoSoudTrackedCases)
     .set({
       lastSyncAttemptAt: new Date(),

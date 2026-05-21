@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 
-import { db } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
 import type { SchedulerPayload, SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobs } from "@/api/db/schema";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
@@ -24,7 +24,7 @@ export const ensureSchedulerJob = async ({
   task,
 }: SchedulerJobDefinition): Promise<void> => {
   const nextRunAt = computeNextRunAt(schedule);
-  const [existingJob] = await db
+  const [existingJob] = await rootDb
     .select({
       schedule: schedulerJobs.schedule,
       task: schedulerJobs.task,
@@ -37,7 +37,7 @@ export const ensureSchedulerJob = async ({
     existingJob.task !== task ||
     !sameSchedule(existingJob.schedule, schedule);
 
-  await db
+  await rootDb
     .insert(schedulerJobs)
     .values({
       description,

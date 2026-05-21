@@ -31,7 +31,7 @@ import type { ScopedDb } from "@/api/db";
 // a fire-and-forget background task after the request scope has
 // ended.
 // eslint-disable-next-line no-restricted-imports
-import { db as rootDb } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
 import {
   getModelForRole,

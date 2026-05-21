@@ -1,7 +1,7 @@
 /**
  * Scoped database utilities — extracted from db/index.ts so
  * test files can import createScopedDb without triggering
- * the prod `db = drizzle(DATABASE_URL, ...)` initialization.
+ * the prod `rootDb = drizzle(DATABASE_URL, ...)` initialization.
  */
 
 import { Result, UnhandledException } from "better-result";
@@ -39,6 +39,21 @@ export type AnyDrizzle<
 export type TransactionOf<TDatabase extends AnyDrizzle> =
   TDatabase extends AnyDrizzle<infer TTransaction> ? TTransaction : never;
 
+const RLS_DATABASE_MARKER: unique symbol = Symbol("stella.rlsDatabase");
+
+export type RlsDatabaseMarker = {
+  readonly [RLS_DATABASE_MARKER]: true;
+};
+
+export type RlsDatabase<
+  TTransaction extends ScopedTransactionBase = ScopedTransactionBase,
+> = AnyDrizzle<TTransaction> & RlsDatabaseMarker;
+
+export const markRlsDatabase = <TDatabase extends AnyDrizzle>(
+  database: TDatabase,
+): TDatabase & RlsDatabaseMarker =>
+  Object.assign(database, { [RLS_DATABASE_MARKER]: true as const });
+
 export type SafeDbRetryConfig<E = unknown> = {
   retry?: {
     times: number;
@@ -54,7 +69,7 @@ const runScopedTransaction = async <
   TTransaction extends ScopedTransactionBase,
   T,
 >(
-  database: AnyDrizzle<TTransaction>,
+  database: RlsDatabase<TTransaction>,
   workspaceIds: SafeId<"workspace">[],
   organizationId: SafeId<"organization">,
   userId: SafeId<"user">,
@@ -77,7 +92,7 @@ const runScopedTransaction = async <
 
 export const createScopedDb =
   <TTransaction extends ScopedTransactionBase>(
-    database: AnyDrizzle<TTransaction>,
+    database: RlsDatabase<TTransaction>,
     workspaceIds: SafeId<"workspace">[],
     organizationId: SafeId<"organization">,
     userId: SafeId<"user">,
@@ -97,7 +112,7 @@ export const createScopedDb =
 // because the corpus is global; there is no tenant to scope.
 export const createIngestionDb =
   <TTransaction extends ScopedTransactionBase>(
-    database: AnyDrizzle<TTransaction>,
+    database: RlsDatabase<TTransaction>,
   ) =>
   async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
     await database.transaction(async (tx: TTransaction) => {
@@ -109,7 +124,7 @@ export const createIngestionDb =
 
 export const createSafeDb =
   <TTransaction extends ScopedTransactionBase>(
-    database: AnyDrizzle<TTransaction>,
+    database: RlsDatabase<TTransaction>,
     workspaceIds: SafeId<"workspace">[],
     organizationId: SafeId<"organization">,
     userId: SafeId<"user">,

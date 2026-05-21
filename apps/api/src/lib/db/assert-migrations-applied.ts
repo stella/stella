@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import { db } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
 import { logger } from "@/api/lib/observability/logger";
 
 const MIGRATIONS_DIR = resolve(process.cwd(), "drizzle");
@@ -29,7 +29,7 @@ const queryAppliedHashes = async (): Promise<Set<string>> => {
   // on rows applied by older drizzle versions). Hash is the SHA-256
   // of the migration.sql contents at apply time, so a mismatch
   // also catches a file edited after it was applied.
-  const result = await db.execute<AppliedMigrationRow>(
+  const result = await rootDb.execute<AppliedMigrationRow>(
     sql`SELECT hash FROM drizzle.__drizzle_migrations`,
   );
   return new Set(result.map((row) => row.hash));

@@ -19,7 +19,7 @@
 
 import JSZip from "jszip";
 
-import { db } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
 import {
   clauseCategories,
   clauses,
@@ -2193,7 +2193,7 @@ export async function seedTemplates(
 
   // ── 1. Clause categories ────────────────────────────
   for (const cat of CLAUSE_CATS) {
-    await db
+    await rootDb
       .insert(clauseCategories)
       .values({
         id: scopedSeedId(cat.label),
@@ -2212,7 +2212,7 @@ export async function seedTemplates(
     const clauseId = scopedSeedId(c.label);
     const versionId = scopedSeedId(`${c.label}-v1`);
 
-    await db
+    await rootDb
       .insert(clauses)
       .values({
         id: clauseId,
@@ -2228,7 +2228,7 @@ export async function seedTemplates(
       })
       .onConflictDoNothing();
 
-    await db
+    await rootDb
       .insert(clauseVersions)
       .values({
         id: versionId,
@@ -2242,7 +2242,7 @@ export async function seedTemplates(
     // 3. Clause variants
     if (c.variants) {
       for (const [vi, v] of c.variants.entries()) {
-        await db
+        await rootDb
           .insert(clauseVariants)
           .values({
             id: scopedSeedId(`${c.label}-var-${vi}`),
@@ -2261,7 +2261,7 @@ export async function seedTemplates(
 
   // ── 4. Template categories ──────────────────────────
   for (const cat of TEMPLATE_CATS) {
-    await db
+    await rootDb
       .insert(templateCategories)
       .values({
         id: scopedSeedId(cat.label),
@@ -2299,7 +2299,7 @@ export async function seedTemplates(
     await getS3().write(s3Key, new Uint8Array(docxBuffer));
 
     // Insert template
-    await db
+    await rootDb
       .insert(templates)
       .values({
         id: templateId,
@@ -2320,7 +2320,7 @@ export async function seedTemplates(
     const versionS3Key = `${ORG_ID}/templates/${templateId}/v1.docx`;
     await getS3().write(versionS3Key, new Uint8Array(docxBuffer));
 
-    await db
+    await rootDb
       .insert(templateVersions)
       .values({
         id: versionId,
@@ -2355,7 +2355,7 @@ export async function seedTemplates(
       }
     }
 
-    await db
+    await rootDb
       .insert(templateClauses)
       .values({
         id: scopedSeedId(`link-${link.templateLabel}-${link.slotName}`),

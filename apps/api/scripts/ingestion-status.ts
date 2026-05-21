@@ -11,7 +11,7 @@
 
 import { count, desc, eq, gte, sql } from "drizzle-orm";
 
-import { db } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
 import {
   caseLawDecisions,
   caseLawIngestionEvents,
@@ -22,7 +22,7 @@ import {
 const ONE_HOUR_AGO = new Date(Date.now() - 60 * 60 * 1000);
 const ONE_DAY_AGO = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-const sources = await db
+const sources = await rootDb
   .select({
     id: caseLawSources.id,
     adapterKey: caseLawSources.adapterKey,
@@ -43,13 +43,13 @@ console.log("\n=== Case Law Ingestion Status ===\n");
 
 for (const source of sources) {
   // Total decisions for this source
-  const [totalRow] = await db
+  const [totalRow] = await rootDb
     .select({ total: count() })
     .from(caseLawDecisions)
     .where(eq(caseLawDecisions.sourceId, source.id));
 
   // Decisions inserted in last hour
-  const [hourRow] = await db
+  const [hourRow] = await rootDb
     .select({
       inserted: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}), 0)`,
     })
@@ -60,7 +60,7 @@ for (const source of sources) {
     );
 
   // Decisions inserted in last 24h
-  const [dayRow] = await db
+  const [dayRow] = await rootDb
     .select({
       inserted: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}), 0)`,
     })
@@ -71,7 +71,7 @@ for (const source of sources) {
     );
 
   // Recent failures count
-  const [failRow] = await db
+  const [failRow] = await rootDb
     .select({ total: count() })
     .from(caseLawIngestionFailures)
     .where(
@@ -80,7 +80,7 @@ for (const source of sources) {
     );
 
   // Last event
-  const [lastEvent] = await db
+  const [lastEvent] = await rootDb
     .select({
       status: caseLawIngestionEvents.status,
       inserted: caseLawIngestionEvents.inserted,
@@ -95,7 +95,7 @@ for (const source of sources) {
     .limit(1);
 
   // Top failure types (last 24h)
-  const topFailures = await db
+  const topFailures = await rootDb
     .select({
       errorType: caseLawIngestionFailures.errorType,
       count: count(),
@@ -146,15 +146,15 @@ for (const source of sources) {
 }
 
 // Summary
-const [totalDecisions] = await db
+const [totalDecisions] = await rootDb
   .select({ total: count() })
   .from(caseLawDecisions);
 
-const [totalEvents] = await db
+const [totalEvents] = await rootDb
   .select({ total: count() })
   .from(caseLawIngestionEvents);
 
-const [totalFailures] = await db
+const [totalFailures] = await rootDb
   .select({ total: count() })
   .from(caseLawIngestionFailures)
   .where(gte(caseLawIngestionFailures.createdAt, ONE_DAY_AGO));

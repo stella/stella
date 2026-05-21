@@ -1,19 +1,19 @@
 import { sql } from "drizzle-orm";
 
-import { db } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
 import { caseLawCourtWeights, caseLawFtsConfigs } from "@/api/db/schema";
 
 type CourtWeightRow = typeof caseLawCourtWeights.$inferInsert;
 type FtsConfigRow = typeof caseLawFtsConfigs.$inferInsert;
 
 export const readCourtWeightRows = async () =>
-  await db.select().from(caseLawCourtWeights);
+  await rootDb.select().from(caseLawCourtWeights);
 
 export const readFtsConfigRows = async () =>
-  await db.select().from(caseLawFtsConfigs);
+  await rootDb.select().from(caseLawFtsConfigs);
 
 export const upsertCourtWeightRows = async (rows: CourtWeightRow[]) =>
-  await db
+  await rootDb
     .insert(caseLawCourtWeights)
     .values(rows)
     .onConflictDoUpdate({
@@ -26,7 +26,7 @@ export const upsertCourtWeightRows = async (rows: CourtWeightRow[]) =>
     });
 
 export const upsertFtsConfigRows = async (rows: FtsConfigRow[]) =>
-  await db
+  await rootDb
     .insert(caseLawFtsConfigs)
     .values(rows)
     .onConflictDoUpdate({

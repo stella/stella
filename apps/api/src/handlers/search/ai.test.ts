@@ -25,7 +25,7 @@ const dbSelectMock = mock(() => ({ from: dbFromMock }));
 
 // eslint-disable-next-line typescript-eslint/no-floating-promises -- Bun mock.module is sync for registration
 mock.module("@/api/db/root", () => ({
-  db: {
+  rootDb: {
     select: dbSelectMock,
   },
 }));

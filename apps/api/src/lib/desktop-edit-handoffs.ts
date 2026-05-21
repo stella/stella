@@ -3,7 +3,7 @@ import { and, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
 import { createSafeDb } from "@/api/db";
 import type { SafeDb } from "@/api/db";
 import { member } from "@/api/db/auth-schema";
-import { db } from "@/api/db/root";
+import { rootDb, rlsDb } from "@/api/db/root";
 import {
   desktopEditHandoffs,
   desktopEditSessions,
@@ -37,7 +37,7 @@ export const consumeDesktopEditHandoff = async (
   const now = new Date();
   const tokenHash = hashDesktopEditHandoffToken(handoffToken);
 
-  const rows = await db
+  const rows = await rootDb
     .update(desktopEditHandoffs)
     .set({ consumedAt: now })
     .where(
@@ -71,7 +71,7 @@ export const markDesktopEditHandoffOpened = async ({
   sessionId: SafeId<"desktopEditSession">;
 }): Promise<boolean> => {
   const tokenHash = hashDesktopEditHandoffToken(handoffToken);
-  const rows = await db
+  const rows = await rootDb
     .update(desktopEditHandoffs)
     .set({
       desktopSessionId: sessionId,
@@ -102,7 +102,7 @@ export const readDesktopEditHandoffAccess = async ({
   createdBy: string;
   workspaceId: SafeId<"workspace">;
 }) => {
-  const rows = await db
+  const rows = await rootDb
     .select({
       organizationId: workspaces.organizationId,
       organizationRole: member.role,
@@ -148,4 +148,4 @@ export const createDesktopEditHandoffSafeDb = ({
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
-}): SafeDb => createSafeDb(db, [workspaceId], organizationId, userId);
+}): SafeDb => createSafeDb(rlsDb, [workspaceId], organizationId, userId);

@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
-import { db } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
 import type { LinkMetadata, searchDocuments } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics";
@@ -58,7 +58,7 @@ const extractFieldText = (content: FieldContent): string => {
 const buildSearchDocument = async (
   entityId: SafeId<"entity">,
 ): Promise<SearchDocumentRow | null> => {
-  const entity = await db.query.entities.findFirst({
+  const entity = await rootDb.query.entities.findFirst({
     where: { id: { eq: entityId } },
     columns: {
       id: true,
@@ -181,7 +181,7 @@ export const upsertSearchDocument = async (
 
   const regconfig = doc.language ?? "simple";
 
-  await db.execute(sql`
+  await rootDb.execute(sql`
     INSERT INTO search_documents (
       entity_id, organization_id, workspace_id,
       kind, title, searchable_text, language,

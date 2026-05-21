@@ -9,7 +9,7 @@
  * round-trip to RDS, well under a millisecond inside the VPC.
  */
 
-import { db } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
 import { decryptAIConfig } from "@/api/lib/ai-config-crypto";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
@@ -18,7 +18,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 export const loadOrgAIConfig = async (
   organizationId: SafeId<"organization">,
 ): Promise<OrgAIConfig | null> => {
-  const row = await db.query.organizationSettings.findFirst({
+  const row = await rootDb.query.organizationSettings.findFirst({
     where: { organizationId: { eq: organizationId } },
     columns: {
       aiConfigEncrypted: true,

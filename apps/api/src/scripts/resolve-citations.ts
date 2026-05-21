@@ -17,7 +17,7 @@
 
 import { eq, isNull, sql } from "drizzle-orm";
 
-import { db } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
 import {
   caseLawCitations,
   caseLawDecisions,
@@ -110,7 +110,7 @@ const seedRules = async () => {
 
   let upserted = 0;
   for (const rule of SEED_RULES) {
-    await db
+    await rootDb
       .insert(caseLawPolarityRules)
       .values({
         pattern: rule.pattern,
@@ -185,7 +185,7 @@ const resolveCitations = async (): Promise<ResolveStats> => {
   };
 
   // Count unresolved
-  const [countRow] = await db
+  const [countRow] = await rootDb
     .select({ count: sql<number>`count(*)` })
     .from(caseLawCitations)
     .where(isNull(caseLawCitations.citedDecisionId));
@@ -196,7 +196,7 @@ const resolveCitations = async (): Promise<ResolveStats> => {
 
   // Build a lookup index of case_number → decision_id
   console.log("  Building case number index...");
-  const decisions = await db
+  const decisions = await rootDb
     .select({
       id: caseLawDecisions.id,
       caseNumber: caseLawDecisions.caseNumber,
@@ -237,7 +237,7 @@ const resolveCitations = async (): Promise<ResolveStats> => {
   let offset = 0;
 
   while (true) {
-    const batch = await db
+    const batch = await rootDb
       .select({
         id: caseLawCitations.id,
         citingDecisionId: caseLawCitations.citingDecisionId,
@@ -308,7 +308,7 @@ const resolveCitations = async (): Promise<ResolveStats> => {
       }
 
       if (validId && !DRY_RUN) {
-        await db
+        await rootDb
           .update(caseLawCitations)
           .set({ citedDecisionId: validId })
           .where(eq(caseLawCitations.id, row.id));
@@ -350,7 +350,7 @@ const resolveCitations = async (): Promise<ResolveStats> => {
 
 const classifyWithRules = async () => {
   // Load rules
-  const rules = await db
+  const rules = await rootDb
     .select()
     .from(caseLawPolarityRules)
     .where(sql`${caseLawPolarityRules.source} IN ('manual', 'llm-promoted')`);
@@ -369,7 +369,7 @@ const classifyWithRules = async () => {
   console.log(`\nClassifying polarity with ${compiled.length} rules...`);
 
   // Count unclassified resolved citations
-  const [polRow] = await db
+  const [polRow] = await rootDb
     .select({ count: sql<number>`count(*)` })
     .from(caseLawCitations)
     .where(
@@ -385,7 +385,7 @@ const classifyWithRules = async () => {
   let noMatch = 0;
 
   while (true) {
-    const batch = await db
+    const batch = await rootDb
       .select({
         id: caseLawCitations.id,
         citingDecisionId: caseLawCitations.citingDecisionId,
@@ -405,7 +405,7 @@ const classifyWithRules = async () => {
 
     for (const row of batch) {
       // Get the citing decision's sections for context
-      const [decision] = await db
+      const [decision] = await rootDb
         .select({ sections: caseLawDecisions.sections })
         .from(caseLawDecisions)
         .where(eq(caseLawDecisions.id, row.citingDecisionId))
@@ -426,7 +426,7 @@ const classifyWithRules = async () => {
       for (const rule of compiled) {
         if (context && rule.pattern.test(context)) {
           if (!DRY_RUN && !REPORT_ONLY) {
-            await db
+            await rootDb
               .update(caseLawCitations)
               .set({
                 polarity: rule.polarity,
@@ -443,7 +443,7 @@ const classifyWithRules = async () => {
       if (!matched) {
         // Set as "unknown" so we don't re-process
         if (!DRY_RUN && !REPORT_ONLY) {
-          await db
+          await rootDb
             .update(caseLawCitations)
             .set({ polarity: "unknown" })
             .where(eq(caseLawCitations.id, row.id));
@@ -476,7 +476,7 @@ const printReport = async () => {
   console.log("\n=== CITATION REPORT ===\n");
 
   // Overall stats
-  const [overall] = await db.execute(sql`
+  const [overall] = await rootDb.execute(sql`
     SELECT
       COUNT(*) as total,
       COUNT(cited_decision_id) as resolved,
@@ -491,7 +491,7 @@ const printReport = async () => {
   console.log("Overall:", JSON.stringify(overall));
 
   // Top resolved citations (most cited decisions)
-  const topCited = await db.execute(sql`
+  const topCited = await rootDb.execute(sql`
     SELECT
       d.case_number,
       d.court,
@@ -524,7 +524,7 @@ const printReport = async () => {
   }
 
   // Sample unresolved citations
-  const unresolved = await db.execute(sql`
+  const unresolved = await rootDb.execute(sql`
     SELECT citation_text, COUNT(*) as cnt
     FROM case_law_citations
     WHERE cited_decision_id IS NULL
@@ -547,7 +547,7 @@ const printReport = async () => {
   }
 
   // Sample ambiguous citations (same case number, multiple decisions)
-  const ambiguous = await db.execute(sql`
+  const ambiguous = await rootDb.execute(sql`
     SELECT case_number, COUNT(*) as decision_count
     FROM case_law_decisions
     GROUP BY case_number
@@ -570,7 +570,7 @@ const printReport = async () => {
     "negative",
     "neutral",
   ] as const) {
-    const examples = await db.execute(sql`
+    const examples = await rootDb.execute(sql`
       SELECT
         c.citation_text,
         d_citing.case_number as citing_case,
@@ -620,7 +620,7 @@ const printReport = async () => {
   }
 
   // Sample UNKNOWN polarity (need LLM or manual review)
-  const unknownPol = await db.execute(sql`
+  const unknownPol = await rootDb.execute(sql`
     SELECT
       c.citation_text,
       d_citing.case_number as citing_case,

@@ -11,7 +11,7 @@
 
 import { eq, sql } from "drizzle-orm";
 
-import { db } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { stripHtml } from "@/api/handlers/case-law/ingestion/adapters/utils";
@@ -122,7 +122,7 @@ const CONFIGS: BackfillConfig[] = [
 
 const backfillAdapter = async (config: BackfillConfig) => {
   // Get source ID
-  const [source] = await db
+  const [source] = await rootDb
     .select({ id: caseLawSources.id })
     .from(caseLawSources)
     .where(eq(caseLawSources.adapterKey, config.adapterKey))
@@ -134,7 +134,7 @@ const backfillAdapter = async (config: BackfillConfig) => {
   }
 
   // Count missing
-  const result = await db
+  const result = await rootDb
     .select({ count: sql<number>`count(*)` })
     .from(caseLawDecisions)
     .where(
@@ -153,7 +153,7 @@ const backfillAdapter = async (config: BackfillConfig) => {
   let failed = 0;
 
   while (true) {
-    const batch = await db
+    const batch = await rootDb
       .select({
         id: caseLawDecisions.id,
         sourceUrl: caseLawDecisions.sourceUrl,
@@ -177,7 +177,7 @@ const backfillAdapter = async (config: BackfillConfig) => {
 
       if (!url) {
         // No URL available — mark as empty to prevent re-query
-        await db
+        await rootDb
           .update(caseLawDecisions)
           .set({ fulltext: "" })
           .where(eq(caseLawDecisions.id, row.id));
@@ -191,7 +191,7 @@ const backfillAdapter = async (config: BackfillConfig) => {
       // Always update the row — set empty string on failure so
       // the NULL check no longer matches and we don't re-query
       // this row forever.
-      await db
+      await rootDb
         .update(caseLawDecisions)
         .set({ fulltext: fulltext ?? "" })
         .where(eq(caseLawDecisions.id, row.id));

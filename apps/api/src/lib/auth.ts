@@ -20,7 +20,7 @@ import type { PermissionInput } from "@stll/permissions";
 
 import { createSafeDb, createScopedDb } from "@/api/db";
 import { authSchema } from "@/api/db/auth-schema";
-import { db } from "@/api/db/root";
+import { rootDb, rlsDb } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
@@ -176,7 +176,7 @@ const isMcpResourceScope = (
   (MCP_ALL_RESOURCE_SCOPES as readonly string[]).includes(scope);
 
 // Lazy singleton: `betterAuth()` eagerly resolves the
-// database adapter, which accesses `db`. Deferring to
+// database adapter, which accesses `rootDb`. Deferring to
 // first use prevents the TDZ error when the test runner
 // evaluates this module before db/index.ts finishes.
 const createAuth = () => {
@@ -294,7 +294,7 @@ const createAuth = () => {
         },
       },
     },
-    database: drizzleAdapter(db, {
+    database: drizzleAdapter(rootDb, {
       provider: "pg",
       schema: authSchema,
       transaction: true,
@@ -342,7 +342,7 @@ const createAuth = () => {
         roles,
         organizationHooks: {
           async afterRemoveMember({ member, organization: org }) {
-            await db.transaction(
+            await rootDb.transaction(
               async (tx) =>
                 await revokeOrganizationMemberAuthArtifacts(tx, {
                   organizationId: org.id,
@@ -450,7 +450,7 @@ const createAuth = () => {
         try {
           const { user, session } = newSession;
 
-          const previousSessions = await db.query.session.findMany({
+          const previousSessions = await rootDb.query.session.findMany({
             where: {
               userId: user.id,
               id: { ne: session.id },
@@ -562,7 +562,7 @@ export const getSessionAndMemberRole = async (
   const memberRoleResult =
     session && user && activeOrganizationId
       ? await Result.tryPromise(async () => {
-          const row = await db.query.member.findFirst({
+          const row = await rootDb.query.member.findFirst({
             where: {
               userId: { eq: user.id },
               organizationId: { eq: activeOrganizationId },
@@ -621,7 +621,7 @@ export const resolveAccessibleWorkspaces = async (
     // matter (clientId IS NULL) they themselves are a member of.
     // Without this gate, an org owner could open a personal
     // scratchpad they were not explicitly added to by URL.
-    const accessibleWorkspaces = await db
+    const accessibleWorkspaces = await rootDb
       .select({
         id: workspaces.id,
         status: workspaces.status,
@@ -653,7 +653,7 @@ export const resolveAccessibleWorkspaces = async (
   // JOIN with workspaces filters by org, preventing
   // cross-org leaks when a user belongs to multiple
   // organizations.
-  const accessibleWorkspaces = await db
+  const accessibleWorkspaces = await rootDb
     .select({
       id: workspaceMembers.workspaceId,
       status: workspaces.status,
@@ -718,13 +718,13 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
       ]);
 
       const scopedDb = createScopedDb(
-        db,
+        rlsDb,
         accessibleWorkspaces.map((w) => w.id),
         activeOrganizationId,
         userId,
       );
       const safeDb = createSafeDb(
-        db,
+        rlsDb,
         accessibleWorkspaces.map((w) => w.id),
         activeOrganizationId,
         userId,
