@@ -298,7 +298,22 @@ export default defineConfig({
       // requires a new migration on any byte-level change. Keep regex
       // flags off here so adding the rule globally doesn't force an
       // empty migration.
-      files: ["apps/api/src/db/schema.ts", "apps/api/src/db/auth-schema.ts"],
+      //
+      // The remaining files contain HTML-stripping / markdown-escape /
+      // CSS-quoting regexes that CodeQL flags as XSS or escape-bypass
+      // when re-analysed. Each has been verified to be safe in context
+      // (output is plain text, an HTML AST parser, the CSSOM, or
+      // already markdown-escaped upstream), so keep the regexes byte-
+      // identical to main and disable the rule here.
+      files: [
+        "apps/api/src/db/schema.ts",
+        "apps/api/src/db/auth-schema.ts",
+        "apps/api/src/handlers/case-law/ingestion/adapters/utils.ts",
+        "apps/api/src/lib/markdown/html-to-markdown.ts",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx",
+        "packages/folio/src/core/utils/clipboard.ts",
+        "packages/folio/src/core/utils/fontResolver.ts",
+      ],
       rules: { "require-unicode-regexp": "off" },
     },
     {

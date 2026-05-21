@@ -2,12 +2,12 @@ import * as cheerio from "cheerio";
 import { isTag, isText } from "domhandler";
 import type { AnyNode, Element } from "domhandler";
 
-const INLINE_ESCAPE = /([\\`*_~[\]<>])/gu;
+const INLINE_ESCAPE = /([\\`*_~[\]<>])/g;
 
 const escapeText = (text: string): string =>
   text.replace(INLINE_ESCAPE, "\\$1");
 
-const collapseWhitespace = (text: string): string => text.replace(/\s+/gu, " ");
+const collapseWhitespace = (text: string): string => text.replace(/\s+/g, " ");
 
 const endsWithWhitespace = (text: string): boolean =>
   text.length === 0 || text.endsWith(" ") || text.endsWith("\n");
@@ -64,7 +64,7 @@ const wrapInlineCode = (text: string): string => {
     return "``";
   }
   let longestRun = 0;
-  for (const run of text.match(/`+/gu) ?? []) {
+  for (const run of text.match(/`+/g) ?? []) {
     longestRun = Math.max(longestRun, run.length);
   }
   const fence = "`".repeat(longestRun + 1);
@@ -162,13 +162,13 @@ const renderList = (el: Element, ordered: boolean): string => {
       const marker = ordered ? `${index + 1}. ` : "- ";
       const indent = " ".repeat(marker.length);
       const content = renderListItem(li);
-      return marker + content.replace(/\n/gu, `\n${indent}`);
+      return marker + content.replace(/\n/g, `\n${indent}`);
     })
     .join("\n");
 };
 
 const renderTableCell = (cell: Element): string =>
-  renderInline(cell.children).replace(/\|/gu, "\\|").replace(/\n/gu, " ");
+  renderInline(cell.children).replace(/\|/g, "\\|").replace(/\n/g, " ");
 
 const collectTableRows = (parent: Element): string[][] => {
   const rows: string[][] = [];
@@ -258,8 +258,7 @@ const renderBlock = (el: Element): string => {
       const codeEl = el.children.find(
         (c): c is Element => isTag(c) && tagNameOf(c) === "code",
       );
-      const lang =
-        codeEl?.attribs["class"]?.match(/language-(\S+)/u)?.[1] ?? "";
+      const lang = codeEl?.attribs["class"]?.match(/language-(\S+)/)?.[1] ?? "";
       const text = trimTrailingNewlines(rawText(codeEl ?? el));
       return `\`\`\`${lang}\n${text}\n\`\`\``;
     }

@@ -164,7 +164,7 @@ export function getClipboardImageFiles(
   for (const file of files) {
     const rawName = file.name.trim();
     const baseName = rawName
-      ? rawName.replace(/\.[^/.]+$/u, "").toLowerCase()
+      ? rawName.replace(/\.[^/.]+$/, "").toLowerCase()
       : "";
     const key = baseName || `size:${file.size}`;
     const bucket = groups.get(key);
@@ -391,7 +391,7 @@ export function parseClipboardHtml(
   // If from our editor, try to parse internal format
   if (fromEditor) {
     // Look for internal data in HTML comments or data attributes
-    const internalMatch = /data-folio-content="([^"]+)"/u.exec(html);
+    const internalMatch = /data-folio-content="([^"]+)"/.exec(html);
     if (internalMatch) {
       try {
         // SAFETY: match group 1 always captures in this regex
@@ -446,30 +446,30 @@ export function cleanWordHtml(html: string): string {
   let cleaned = html;
 
   // Remove Word-specific comments
-  cleaned = cleaned.replace(/<!--\[if[\s\S]*?<!\[endif\]-->/giu, "");
-  cleaned = cleaned.replace(/<!--[\s\S]*?-->/gu, "");
+  cleaned = cleaned.replace(/<!--\[if[\s\S]*?<!\[endif\]-->/gi, "");
+  cleaned = cleaned.replace(/<!--[\s\S]*?-->/g, "");
 
   // Remove XML declarations
-  cleaned = cleaned.replace(/<\?xml[^>]*>/giu, "");
+  cleaned = cleaned.replace(/<\?xml[^>]*>/gi, "");
 
   // Remove o: (Office) namespace tags
-  cleaned = cleaned.replace(/<o:[^>]*>[\s\S]*?<\/o:[^>]*>/giu, "");
-  cleaned = cleaned.replace(/<o:[^>]*\/>/giu, "");
+  cleaned = cleaned.replace(/<o:[^>]*>[\s\S]*?<\/o:[^>]*>/gi, "");
+  cleaned = cleaned.replace(/<o:[^>]*\/>/gi, "");
 
   // Remove w: (Word) namespace tags
-  cleaned = cleaned.replace(/<w:[^>]*>[\s\S]*?<\/w:[^>]*>/giu, "");
-  cleaned = cleaned.replace(/<w:[^>]*\/>/giu, "");
+  cleaned = cleaned.replace(/<w:[^>]*>[\s\S]*?<\/w:[^>]*>/gi, "");
+  cleaned = cleaned.replace(/<w:[^>]*\/>/gi, "");
 
   cleaned = cleanWordAttributes(cleaned);
 
   // Remove empty spans
-  cleaned = cleaned.replace(/<span[^>]*>\s*<\/span>/giu, "");
+  cleaned = cleaned.replace(/<span[^>]*>\s*<\/span>/gi, "");
 
   // Remove font tags (convert to spans with style if needed)
-  cleaned = cleaned.replace(/<\/?font[^>]*>/giu, "");
+  cleaned = cleaned.replace(/<\/?font[^>]*>/gi, "");
 
   // Normalize whitespace
-  cleaned = cleaned.replace(/\s+/gu, " ").trim();
+  cleaned = cleaned.replace(/\s+/g, " ").trim();
 
   return cleaned;
 }
@@ -662,7 +662,7 @@ function extractFormatting(element: HTMLElement): TextFormatting {
   if (style.fontFamily) {
     // SAFETY: split always returns at least one element
     const fontFamily = style.fontFamily
-      .replace(/["']/gu, "")
+      .replace(/["']/g, "")
       .split(",")[0]!
       .trim();
     if (fontFamily) {
@@ -703,7 +703,7 @@ function colorToHex(color: string): string | null {
   }
 
   // RGB/RGBA
-  const rgbMatch = /rgba?\((\d+),\s*(\d+),\s*(\d+)/u.exec(color);
+  const rgbMatch = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(color);
   if (rgbMatch) {
     // SAFETY: regex has 3 capture groups; all present when match succeeds
     const r = Number.parseInt(rgbMatch[1]!, 10).toString(16).padStart(2, "0");
@@ -840,11 +840,11 @@ function runToHtml(run: Run): string {
  */
 function escapeHtml(text: string): string {
   return text
-    .replace(/&/gu, "&amp;")
-    .replace(/</gu, "&lt;")
-    .replace(/>/gu, "&gt;")
-    .replace(/"/gu, "&quot;")
-    .replace(/'/gu, "&#39;");
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 /**

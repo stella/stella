@@ -11,7 +11,7 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 export const INGESTION_USER_AGENT =
   process.env["INGESTION_USER_AGENT"] ?? "Mozilla/5.0 (compatible)";
 
-const CE_DATE_PATTERN = /^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})$/u;
+const CE_DATE_PATTERN = /^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})$/;
 
 /** SHA-256 content hash via Bun.CryptoHasher. */
 export const hashContent = (input: string): string => {
@@ -66,28 +66,28 @@ export const toOptionalValue = <T>(
  */
 export const stripHtml = (html: string): string =>
   html
-    .replace(/<br\s*\/?>/giu, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
     // oxlint-disable-next-line sonarjs/slow-regex -- adapter strips known court HTML fragments before parsing text
-    .replace(/<[^>]*>/gu, "")
-    .replace(/&nbsp;/gu, " ")
-    .replace(/&amp;/gu, "&")
-    .replace(/&lt;/gu, "<")
-    .replace(/&gt;/gu, ">")
-    .replace(/&#x([0-9a-f]+);/giu, (match, hex: string) => {
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#x([0-9a-f]+);/gi, (match, hex: string) => {
       try {
         return String.fromCodePoint(Number.parseInt(hex, 16));
       } catch {
         return match;
       }
     })
-    .replace(/&#(\d+);/gu, (match, dec: string) => {
+    .replace(/&#(\d+);/g, (match, dec: string) => {
       try {
         return String.fromCodePoint(Number.parseInt(dec, 10));
       } catch {
         return match;
       }
     })
-    .replace(/\n{3,}/gu, "\n\n")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 
 /**
