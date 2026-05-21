@@ -1,12 +1,11 @@
 import Elysia from "elysia";
 
-import {
-  handleValidateProvider,
-  validateProviderBody,
-} from "@/api/handlers/ai-config/validate-provider";
+import validateProvider from "@/api/handlers/ai-config/validate-provider";
+import { sessionAuthMacro } from "@/api/lib/auth";
 
-export const aiConfigPublicRoute = new Elysia({ prefix: "/ai-config" }).post(
-  "/validate-provider",
-  async ({ body, request }) => await handleValidateProvider({ body, request }),
-  { body: validateProviderBody },
-);
+export const aiConfigPublicRoute = new Elysia({ prefix: "/ai-config" })
+  .use(sessionAuthMacro)
+  .guard({ validateSession: true })
+  .post("/validate-provider", validateProvider.handler, {
+    body: validateProvider.config.body,
+  });

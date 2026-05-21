@@ -33,9 +33,22 @@ export type HandlerConfig = InputSchema & {
   permissions: PermissionInput;
 };
 
+export type SessionHandlerConfig = InputSchema;
+
 type ConfigRouteSchema<TConfig extends HandlerConfig> = UnwrapRoute<
   Omit<TConfig, "permissions">
 >;
+
+type SessionConfigRouteSchema<TConfig extends SessionHandlerConfig> =
+  UnwrapRoute<TConfig>;
+
+type SessionHandlerContext<
+  TConfig extends SessionHandlerConfig = SessionHandlerConfig,
+> = Context<SessionConfigRouteSchema<TConfig>> & {
+  user: {
+    id: SafeId<"user">;
+  };
+};
 
 type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
   Context<ConfigRouteSchema<TConfig>> & {
@@ -96,8 +109,8 @@ type SafeHandlerFn<TContext, TResult> = (
 >;
 
 type SafeHandlerDefinition<
-  TConfig extends HandlerConfig = HandlerConfig,
-  TContext = RootHandlerContext<TConfig>,
+  TConfig extends InputSchema = InputSchema,
+  TContext = Context<UnwrapRoute<TConfig>>,
   TResult = unknown,
 > = {
   config: TConfig;
@@ -117,6 +130,102 @@ function toSafeStatusResponse(
   return status(statusCode, body);
 }
 
+type SafeHandlerLogContext = {
+  request: Request;
+  route: string;
+};
+
+const runSafeHandler = async <TContext extends SafeHandlerLogContext, TResult>(
+  ctx: TContext,
+  handler: SafeHandlerFn<TContext, TResult>,
+): Promise<SafeHandlerResult<TResult>> => {
+  try {
+    const result = await Result.gen(() => handler(ctx));
+
+    if (Result.isOk(result)) {
+      return result.value;
+    }
+
+    const error = result.error;
+
+    if (HandlerError.is(error)) {
+      const statusCode = error.status;
+
+      if (statusCode >= 500) {
+        logAndCaptureSafeError({
+          request: ctx.request,
+          route: ctx.route,
+          error,
+          statusCode,
+        });
+      }
+
+      return toSafeStatusResponse(error.status, safeErrorBody(error));
+    }
+
+    if (DatabaseError.is(error)) {
+      logAndCaptureSafeError({
+        request: ctx.request,
+        route: ctx.route,
+        error,
+        statusCode: 500,
+      });
+
+      return toSafeStatusResponse(500, {
+        message: "Internal server error",
+      });
+    }
+
+    if (DatabaseRlsError.is(error)) {
+      logAndCaptureSafeError({
+        request: ctx.request,
+        route: ctx.route,
+        error,
+        statusCode: 400,
+      });
+
+      return toSafeStatusResponse(400, { message: "Access denied" });
+    }
+
+    logAndCaptureSafeError({
+      request: ctx.request,
+      route: ctx.route,
+      error,
+      statusCode: 500,
+    });
+
+    return toSafeStatusResponse(500, { message: "Internal server error" });
+  } catch (error) {
+    // A typed HandlerError thrown synchronously (or escaping the
+    // Result.gen pipeline) must still surface as its own status,
+    // not a generic 500. Without this branch a deeper handler
+    // that throws HandlerError for a recoverable condition (e.g.
+    // an AI request hitting a role the org has not configured a
+    // BYOK key for) gets reported to the user as "Internal
+    // server error" with no actionable detail.
+    if (HandlerError.is(error)) {
+      if (error.status >= 500) {
+        logAndCaptureSafeError({
+          request: ctx.request,
+          route: ctx.route,
+          error,
+          statusCode: error.status,
+        });
+      }
+      return toSafeStatusResponse(error.status, safeErrorBody(error));
+    }
+
+    logAndCaptureSafeError({
+      request: ctx.request,
+      route: ctx.route,
+      error,
+      statusCode: 500,
+    });
+
+    return toSafeStatusResponse(500, { message: "Internal server error" });
+  }
+};
+
 const createSafeScopedHandler = <
   TConfig extends HandlerConfig,
   TContext extends BaseHandlerContext<TConfig>,
@@ -135,91 +244,7 @@ const createSafeScopedHandler = <
       return toSafeStatusResponse(403, { message: "Forbidden" });
     }
 
-    try {
-      const result = await Result.gen(() => handler(ctx));
-
-      if (Result.isOk(result)) {
-        return result.value;
-      }
-
-      const error = result.error;
-
-      if (HandlerError.is(error)) {
-        const statusCode = error.status;
-
-        if (statusCode >= 500) {
-          logAndCaptureSafeError({
-            request: ctx.request,
-            route: ctx.route,
-            error,
-            statusCode,
-          });
-        }
-
-        return toSafeStatusResponse(error.status, safeErrorBody(error));
-      }
-
-      if (DatabaseError.is(error)) {
-        logAndCaptureSafeError({
-          request: ctx.request,
-          route: ctx.route,
-          error,
-          statusCode: 500,
-        });
-
-        return toSafeStatusResponse(500, {
-          message: "Internal server error",
-        });
-      }
-
-      if (DatabaseRlsError.is(error)) {
-        logAndCaptureSafeError({
-          request: ctx.request,
-          route: ctx.route,
-          error,
-          statusCode: 400,
-        });
-
-        return toSafeStatusResponse(400, { message: "Access denied" });
-      }
-
-      logAndCaptureSafeError({
-        request: ctx.request,
-        route: ctx.route,
-        error,
-        statusCode: 500,
-      });
-
-      return toSafeStatusResponse(500, { message: "Internal server error" });
-    } catch (error) {
-      // A typed HandlerError thrown synchronously (or escaping the
-      // Result.gen pipeline) must still surface as its own status,
-      // not a generic 500. Without this branch a deeper handler
-      // that throws HandlerError for a recoverable condition (e.g.
-      // an AI request hitting a role the org has not configured a
-      // BYOK key for) gets reported to the user as "Internal
-      // server error" with no actionable detail.
-      if (HandlerError.is(error)) {
-        if (error.status >= 500) {
-          logAndCaptureSafeError({
-            request: ctx.request,
-            route: ctx.route,
-            error,
-            statusCode: error.status,
-          });
-        }
-        return toSafeStatusResponse(error.status, safeErrorBody(error));
-      }
-
-      logAndCaptureSafeError({
-        request: ctx.request,
-        route: ctx.route,
-        error,
-        statusCode: 500,
-      });
-
-      return toSafeStatusResponse(500, { message: "Internal server error" });
-    }
+    return await runSafeHandler(ctx, handler);
   },
 });
 
@@ -239,6 +264,18 @@ export const createSafeHandler = <TConfig extends HandlerConfig, TResult>(
   handler: SafeHandlerFn<WorkspaceHandlerContext<TConfig>, TResult>,
 ): SafeHandlerDefinition<TConfig, WorkspaceHandlerContext<TConfig>, TResult> =>
   createSafeScopedHandler(config, handler);
+
+export const createSafeSessionHandler = <
+  TConfig extends SessionHandlerConfig,
+  TResult,
+>(
+  config: TConfig,
+  handler: SafeHandlerFn<SessionHandlerContext<TConfig>, TResult>,
+): SafeHandlerDefinition<TConfig, SessionHandlerContext<TConfig>, TResult> => ({
+  config,
+  handler: async (ctx): Promise<SafeHandlerResult<TResult>> =>
+    await runSafeHandler(ctx, handler),
+});
 
 type LogAndCaptureSafeErrorProps = {
   request: Request;
