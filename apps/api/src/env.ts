@@ -8,6 +8,8 @@ const featureFlagSchema = v.optional(
   "false",
 );
 
+const DEPLOYED_NODE_ENVS = new Set(["production", "staging"]);
+
 /**
  * API-specific environment variables. These are only required
  * when the full API server boots (auth, email, gotenberg, redis,
@@ -109,8 +111,14 @@ const envApi = createEnv({
     GOTENBERG_URL: v.pipe(v.string(), v.url()),
     GOTENBERG_USERNAME: v.string(),
     GOTENBERG_PASSWORD: v.string(),
-    CONTENT_ENCRYPTION_KEY: v.optional(
-      v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/iu)),
+    CONTENT_ENCRYPTION_KEY: v.pipe(
+      v.optional(v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/iu))),
+      v.check(
+        (value) =>
+          value !== undefined ||
+          !DEPLOYED_NODE_ENVS.has(process.env.NODE_ENV ?? ""),
+        "CONTENT_ENCRYPTION_KEY is required when NODE_ENV is 'production' or 'staging'.",
+      ),
     ),
     EXTENSION_ORIGIN: v.optional(v.string()),
 

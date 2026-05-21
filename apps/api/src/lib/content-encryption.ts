@@ -3,9 +3,11 @@
  * file content. Defense-in-depth: even if the DB is
  * compromised, extracted text stays encrypted.
  *
- * When CONTENT_ENCRYPTION_KEY is absent (dev mode), content
- * is stored as plaintext wrapped in a no-op envelope so the
- * schema stays consistent.
+ * When CONTENT_ENCRYPTION_KEY is absent, content is stored
+ * as plaintext wrapped in a no-op envelope so the schema
+ * stays consistent. The env validator (`apps/api/src/env.ts`)
+ * requires the key when NODE_ENV is 'production' or 'staging',
+ * so this fallback only fires in local dev / tests.
  */
 
 import { hkdf } from "node:crypto";
