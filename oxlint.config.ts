@@ -294,6 +294,14 @@ export default defineConfig({
       rules: { "sonarjs/cognitive-complexity": ["error", 200] },
     },
     {
+      // Drizzle schema files are guarded by check-migrations.sh, which
+      // requires a new migration on any byte-level change. Keep regex
+      // flags off here so adding the rule globally doesn't force an
+      // empty migration.
+      files: ["apps/api/src/db/schema.ts", "apps/api/src/db/auth-schema.ts"],
+      rules: { "require-unicode-regexp": "off" },
+    },
+    {
       // Case-law ingestion parsers/adapters intentionally encode many source
       // quirks. Tighten this after parser-specific refactors.
       files: ["apps/api/src/handlers/case-law/ingestion/**/*.ts"],

@@ -2983,9 +2983,6 @@ export const PROMPT_SHORTCUT_SCOPES = ["team", "private"] as const;
 export type PromptShortcutScope = (typeof PROMPT_SHORTCUT_SCOPES)[number];
 
 export const RESERVED_SHORTCUT_COMMANDS = ["model", "new"] as const;
-// Keep flagless: this file is the drizzle schema, and CI demands a
-// new migration on any byte-level change to it.
-// eslint-disable-next-line require-unicode-regexp
 export const SHORTCUT_COMMAND_PATTERN = /^[a-z0-9][a-z0-9_-]{0,48}$/;
 
 export const promptShortcuts = p.pgTable(
