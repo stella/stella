@@ -21,7 +21,7 @@ export const normalizeAzureFoundryBaseURL = (
   if (Result.isError(safeURL)) {
     return {
       ok: false,
-      error: safeURL.error.message.replace(/^URL\b/, "Endpoint"),
+      error: safeURL.error.message.replace(/^URL\b/u, "Endpoint"),
     };
   }
 

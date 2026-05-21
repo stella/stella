@@ -1,9 +1,9 @@
 // BOE document IDs follow the pattern BOE-[A|B|C|S|T]-YYYY-NNNNN.
 // A = Disposiciones generales, B = Autoridades y personal, etc.
 // We accept any single uppercase letter to stay forward-compatible.
-const LAW_ID_PATTERN = /^BOE-[A-Z]-\d{4}-\d+$/;
+const LAW_ID_PATTERN = /^BOE-[A-Z]-\d{4}-\d+$/u;
 
-const DATE_PATTERN = /^\d{8}$/;
+const DATE_PATTERN = /^\d{8}$/u;
 
 export const validateLawId = (id: string): boolean => LAW_ID_PATTERN.test(id);
 
