@@ -169,4 +169,9 @@ export const API_RATE_LIMITS = {
   api: { duration: 60_000, max: 1000 },
   /** File uploads: 500 req/min (separate budget). */
   upload: { duration: 60_000, max: 500 },
+  /** Folio collaborative-edit token endpoints: 30 req/min per IP.
+   *  Each authorize/refresh/snapshot call runs a multi-table join
+   *  against unauthenticated input, so the budget is intentionally
+   *  much tighter than the general API. */
+  folioCollab: { duration: 60_000, max: 30 },
 } as const;

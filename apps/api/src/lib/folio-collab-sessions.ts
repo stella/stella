@@ -25,7 +25,14 @@ export const FOLIO_COLLAB_TOKEN_TTL_MS = 60 * 60 * 1000;
 
 const FOLIO_COLLAB_TOKEN_PART_LENGTH = 32;
 export const FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE = "application/octet-stream";
-export const FOLIO_COLLAB_SNAPSHOT_MAX_BYTES = 50 * 1024 * 1024;
+/**
+ * Yjs collaborative-edit snapshots are deltas over the base DOCX,
+ * not the document itself. 10 MB comfortably covers extended
+ * editing sessions (a heavily-edited 100-page document hovers at
+ * a few hundred kB of Yjs state) while keeping per-instance peak
+ * memory bounded under concurrent traffic.
+ */
+export const FOLIO_COLLAB_SNAPSHOT_MAX_BYTES = 10 * 1024 * 1024;
 export const FOLIO_COLLAB_SNAPSHOT_MAX_BASE64_LENGTH =
   Math.ceil(FOLIO_COLLAB_SNAPSHOT_MAX_BYTES / 3) * 4;
 
@@ -213,30 +220,29 @@ export const loadFolioCollabSnapshot = async (
 };
 
 export const storeFolioCollabSnapshot = async ({
-  snapshotBase64,
+  snapshotBytes,
   value,
 }: {
-  snapshotBase64: string;
+  snapshotBytes: Uint8Array;
   value: AuthorizedFolioCollabSession;
 }) => {
-  const buffer = Buffer.from(snapshotBase64, "base64");
   const key = createFileKey({
     fileId: value.yjsSnapshotFileId,
     mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
     organizationId: value.organizationId,
     workspaceId: value.workspaceId,
   });
-  await getS3().write(key, buffer);
+  await getS3().write(key, snapshotBytes);
 
   const storedAt = new Date();
   await rootDb
     .update(folioCollabSessions)
     .set({
       seededAt: storedAt,
-      yjsSnapshotSizeBytes: buffer.byteLength,
+      yjsSnapshotSizeBytes: snapshotBytes.byteLength,
       yjsSnapshotUpdatedAt: storedAt,
     })
     .where(eq(folioCollabSessions.id, value.sessionId));
 
-  return { storedAt, sizeBytes: buffer.byteLength };
+  return { storedAt, sizeBytes: snapshotBytes.byteLength };
 };

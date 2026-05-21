@@ -305,7 +305,19 @@ const api = new Elysia()
       .use(workspacesRoute)
       .use(propertiesRoute)
       .use(filesRoute)
-      .use(folioCollabRoute)
+      .use(
+        new Elysia()
+          .use(
+            rateLimit({
+              scoping: "scoped",
+              duration: API_RATE_LIMITS.folioCollab.duration,
+              max: API_RATE_LIMITS.folioCollab.max,
+              generator: scopedGenerator("folio-collab"),
+              context: new InMemoryRateLimitContext(),
+            }),
+          )
+          .use(folioCollabRoute),
+      )
       .use(desktopEditSessionsRoute)
       .use(entitiesRoute)
       .use(fieldsRoute)
