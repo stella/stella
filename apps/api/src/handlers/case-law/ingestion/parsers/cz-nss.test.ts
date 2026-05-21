@@ -221,7 +221,7 @@ describe("parseNssDecisionHtml", () => {
 
       // Paragraphs should not start with [1] or [2]
       const numberedParas = documentAst.blocks.filter(
-        (b) => b.type === "paragraph" && /^\[\d+\]/.test(b.plainText),
+        (b) => b.type === "paragraph" && /^\[\d+\]/u.test(b.plainText),
       );
       expect(numberedParas.length).toBe(0);
 
@@ -240,8 +240,8 @@ describe("parseNssDecisionHtml", () => {
 
       const holdings = findAllByRole(documentAst.blocks, "holding");
       expect(holdings.length).toBeGreaterThanOrEqual(2);
-      expect(holdings[0]?.plainText).toMatch(/^I\.\s/);
-      expect(holdings[1]?.plainText).toMatch(/^II\.\s/);
+      expect(holdings[0]?.plainText).toMatch(/^I\.\s/u);
+      expect(holdings[1]?.plainText).toMatch(/^II\.\s/u);
     });
 
     test("handles <ol start=N> attribute", () => {
@@ -269,7 +269,7 @@ describe("parseNssDecisionHtml", () => {
 
       const holdings = findAllByRole(documentAst.blocks, "holding");
       expect(holdings.length).toBe(1);
-      expect(holdings[0]?.plainText).toMatch(/^III\.\s/);
+      expect(holdings[0]?.plainText).toMatch(/^III\.\s/u);
     });
   });
 
@@ -430,7 +430,7 @@ describe("parseNssDecisionHtml", () => {
       );
       expect(para).toBeDefined();
       // The spacer span text should not appear
-      expect(para?.plainText).not.toMatch(/^\s{3}/);
+      expect(para?.plainText).not.toMatch(/^\s{3}/u);
     });
 
     test("preserves words inside Aspose spacer spans (old exports)", () => {

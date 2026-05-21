@@ -1408,6 +1408,7 @@ function ThreadPanel(props: ThreadPanelProps) {
           aria-label={t("chat.resizeThread")}
           onPointerDown={handleResizeStart}
           onDoubleClick={() => onResize(null)}
+          tabIndex={-1}
           className="group absolute inset-x-0 -top-3 z-20 flex h-3 cursor-ns-resize touch-none items-center justify-center select-none"
         >
           <div className="bg-foreground-subtle group-hover:bg-primary h-1 w-12 rounded-full transition-colors" />

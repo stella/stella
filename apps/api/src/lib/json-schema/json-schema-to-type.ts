@@ -24,7 +24,7 @@ import type { JsonSchema } from "@valibot/to-json-schema";
 type JsonSchemaDefinition = JsonSchema | boolean;
 
 const INDENT = "  ";
-const IDENTIFIER_PATTERN = /^[$A-Z_a-z][$\w]*$/;
+const IDENTIFIER_PATTERN = /^[$A-Z_a-z][$\w]*$/u;
 
 const escapePropertyName = (propertyName: string): string =>
   IDENTIFIER_PATTERN.test(propertyName)

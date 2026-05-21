@@ -356,13 +356,13 @@ function buildMediaMap(
       if (converted) {
         const mediaFile: MediaFile = {
           path,
-          filename: filename.replace(/\.tiff?$/i, ".png"),
+          filename: filename.replace(/\.tiff?$/iu, ".png"),
           mimeType: "image/png",
           data: converted.data,
           dataUrl: converted.dataUrl,
         };
         media.set(path, mediaFile);
-        const normalizedPath = path.replace(/^word\//, "");
+        const normalizedPath = path.replace(/^word\//u, "");
         if (normalizedPath !== path) {
           media.set(normalizedPath, mediaFile);
         }
@@ -382,7 +382,7 @@ function buildMediaMap(
     media.set(path, mediaFile);
 
     // Also map normalized paths (without "word/" prefix)
-    const normalizedPath = path.replace(/^word\//, "");
+    const normalizedPath = path.replace(/^word\//u, "");
     if (normalizedPath !== path) {
       media.set(normalizedPath, mediaFile);
     }

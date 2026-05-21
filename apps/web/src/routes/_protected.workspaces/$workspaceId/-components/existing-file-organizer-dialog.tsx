@@ -379,7 +379,7 @@ export const ExistingFileOrganizerDialog = ({
     if (source.length === 0) {
       return;
     }
-    const sanitizedName = newName.replace(/\//g, " ").trim();
+    const sanitizedName = newName.replace(/\//gu, " ").trim();
     if (sanitizedName.length === 0) {
       return;
     }

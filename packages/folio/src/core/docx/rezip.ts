@@ -58,7 +58,7 @@ export class DocxPackageFidelityError extends Error {
  */
 export function findMaxRId(relsXml: string): number {
   let maxId = 0;
-  for (const match of relsXml.matchAll(/Id="rId(\d+)"/g)) {
+  for (const match of relsXml.matchAll(/Id="rId(\d+)"/gu)) {
     // SAFETY: capture group [1] always present when regex matches
     const id = Number.parseInt(match[1]!, 10);
     if (id > maxId) {
@@ -69,7 +69,7 @@ export function findMaxRId(relsXml: string): number {
 }
 
 const countDocumentSections = (xml: string): number =>
-  Array.from(xml.matchAll(/<w:sectPr\b/g)).length;
+  Array.from(xml.matchAll(/<w:sectPr\b/gu)).length;
 
 type HeaderFooterReference = {
   element: string;
@@ -81,11 +81,11 @@ const extractHeaderFooterReferences = (
   xml: string,
 ): HeaderFooterReference[] => {
   const references: HeaderFooterReference[] = [];
-  const pattern = /<w:(headerReference|footerReference)\b[^>]*>/g;
+  const pattern = /<w:(headerReference|footerReference)\b[^>]*>/gu;
   for (const match of xml.matchAll(pattern)) {
     const tag = match[0];
-    const type = /\bw:type="([^"]+)"/.exec(tag)?.at(1) ?? "default";
-    const rId = /\br:id="([^"]+)"/.exec(tag)?.at(1);
+    const type = /\bw:type="([^"]+)"/u.exec(tag)?.at(1) ?? "default";
+    const rId = /\br:id="([^"]+)"/u.exec(tag)?.at(1);
     const element = match[1];
     if (!rId || !element) {
       continue;
@@ -196,7 +196,7 @@ function collectImageParts(doc: Document): DocxPart[] {
         continue;
       }
       const filename = headerFooterFilename(rel.target);
-      const basename = filename.replace(/^word\//, "");
+      const basename = filename.replace(/^word\//u, "");
       parts.push({
         relsPath: `word/_rels/${basename}.rels`,
         blocks: headerFooter.content,
@@ -214,7 +214,7 @@ async function readRelsOrStub(zip: JSZip, relsPath: string): Promise<string> {
   const file = zip.file(relsPath);
   const xml = file ? await file.async("text") : EMPTY_RELS_XML;
   return xml.replace(
-    /<Relationships([^>]*)\/>/,
+    /<Relationships([^>]*)\/>/u,
     "<Relationships$1></Relationships>",
   );
 }
@@ -222,7 +222,7 @@ async function readRelsOrStub(zip: JSZip, relsPath: string): Promise<string> {
 function findMaxImageNum(zip: JSZip): number {
   let maxImageNum = 0;
   zip.forEach((relativePath) => {
-    const m = /^word\/media\/image(\d+)\./.exec(relativePath);
+    const m = /^word\/media\/image(\d+)\./u.exec(relativePath);
     if (m) {
       // SAFETY: capture group [1] always present when regex matches
       const num = Number.parseInt(m[1]!, 10);
@@ -326,7 +326,7 @@ function decodeDataUrl(dataUrl: string): {
   data: ArrayBuffer;
   extension: string;
 } {
-  const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
+  const match = /^data:([^;]+);base64,(.+)$/u.exec(dataUrl);
   if (!match) {
     throw new Error("Invalid data URL");
   }
@@ -548,7 +548,7 @@ export async function repackDocx(
   for (const [path, file] of Object.entries(originalZip.files)) {
     // Skip directories
     if (file.dir) {
-      newZip.folder(path.replace(/\/$/, ""));
+      newZip.folder(path.replace(/\/$/u, ""));
       continue;
     }
 
@@ -656,7 +656,7 @@ export async function repackDocxFromRaw(
   for (const [path, file] of Object.entries(rawContent.originalZip.files)) {
     // Skip directories
     if (file.dir) {
-      newZip.folder(path.replace(/\/$/, ""));
+      newZip.folder(path.replace(/\/$/u, ""));
       continue;
     }
 
@@ -1107,7 +1107,7 @@ export function updateCoreProperties(
     // Update dcterms:modified
     if (result.includes("<dcterms:modified")) {
       result = result.replace(
-        /<dcterms:modified[^>]*>[^<]*<\/dcterms:modified>/,
+        /<dcterms:modified[^>]*>[^<]*<\/dcterms:modified>/u,
         `<dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified>`,
       );
     } else {
@@ -1123,7 +1123,7 @@ export function updateCoreProperties(
     // Update cp:lastModifiedBy
     if (result.includes("<cp:lastModifiedBy")) {
       result = result.replace(
-        /<cp:lastModifiedBy>[^<]*<\/cp:lastModifiedBy>/,
+        /<cp:lastModifiedBy>[^<]*<\/cp:lastModifiedBy>/u,
         `<cp:lastModifiedBy>${escapeXml(options.modifiedBy)}</cp:lastModifiedBy>`,
       );
     } else {

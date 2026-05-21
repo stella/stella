@@ -72,7 +72,7 @@ const envApi = createEnv({
       v.pipe(
         v.string(),
         v.regex(
-          /^[A-Za-z0-9_-]+$/,
+          /^[A-Za-z0-9_-]+$/u,
           "BETTER_AUTH_COOKIE_PREFIX may only contain letters, numbers, underscores, and hyphens",
         ),
       ),
@@ -110,7 +110,7 @@ const envApi = createEnv({
     GOTENBERG_USERNAME: v.string(),
     GOTENBERG_PASSWORD: v.string(),
     CONTENT_ENCRYPTION_KEY: v.optional(
-      v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/i)),
+      v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/iu)),
     ),
     EXTENSION_ORIGIN: v.optional(v.string()),
 

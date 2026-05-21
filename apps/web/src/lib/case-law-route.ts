@@ -1,5 +1,5 @@
 const UUID_REGEX =
-  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/u;
 
 export type CaseLawDecisionSearchHit = {
   caseNumber: string;
@@ -13,9 +13,9 @@ export const isCaseLawDecisionId = (value: string): boolean =>
 export const slugifyCaseLawCaseNumber = (caseNumber: string): string =>
   caseNumber
     .toLowerCase()
-    .replace(/\//g, "-")
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "");
+    .replace(/\//gu, "-")
+    .replace(/\s+/gu, "-")
+    .replace(/[^a-z0-9-]/gu, "");
 
 export const createCaseLawDecisionRouteParam = ({
   caseNumber,
@@ -34,7 +34,7 @@ export const decodeCaseLawDecisionRef = (value: string): string => {
 };
 
 const normalizeDecisionRef = (value: string): string =>
-  value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
+  value.normalize("NFKC").toLowerCase().replace(/\s+/gu, " ").trim();
 
 export const pickCaseLawDecisionHit = (
   decisionRef: string,

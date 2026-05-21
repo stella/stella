@@ -51,7 +51,7 @@ const resolveFooterLabels = (language: string | undefined): FooterLabels => {
   }
   // Match `cs-CZ` → `cs`; locale tags downstream are normalised
   // case-insensitively.
-  const primary = language.toLowerCase().split(/[-_]/)[0] ?? "";
+  const primary = language.toLowerCase().split(/[-_]/u)[0] ?? "";
   return FOOTER_LABELS[primary] ?? FOOTER_LABEL_FALLBACK;
 };
 
@@ -511,7 +511,7 @@ const serializeStyle = (style: Style): string => {
         type: "paragraph",
         formatting: style.pPr,
         content: [],
-      }).replace(/^<w:pPr>|<\/w:pPr>$/g, "")
+      }).replace(/^<w:pPr>|<\/w:pPr>$/gu, "")
     : "";
   const rPr = serializeRunProperties(style.rPr);
   return [

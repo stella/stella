@@ -121,7 +121,7 @@ type ExtraColumn =
       label: string;
     };
 
-const ACTIONS_COL_RE = / 2rem$/;
+const ACTIONS_COL_RE = / 2rem$/u;
 
 const isFilesystemMetadataId = (id: string): id is FilesystemMetadataId =>
   FILESYSTEM_METADATA_IDS.some((metadataId) => metadataId === id);

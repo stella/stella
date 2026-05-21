@@ -72,7 +72,7 @@ const searchProviderSearchMock = mock(
 const readEntityByIdHandlerMock = mock();
 const searchDecisionsHandlerMock = mock();
 const readDecisionHandlerMock = mock();
-const APP_BASE_URL = env.FRONTEND_URL.replace(/\/$/, "");
+const APP_BASE_URL = env.FRONTEND_URL.replace(/\/$/u, "");
 
 type AnonymizationBlacklistEntryInput = {
   canonical: string;

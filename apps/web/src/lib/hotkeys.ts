@@ -63,7 +63,7 @@ export const SHORTCUT_HINT_GROUPS = [
 export type ShortcutHint =
   (typeof SHORTCUT_HINT_GROUPS)[number]["hints"][number];
 
-const CTRL_PREFIX_RE = /^Ctrl\+/;
+const CTRL_PREFIX_RE = /^Ctrl\+/u;
 
 /**
  * Simulate a hotkey by dispatching synthetic keyboard events.

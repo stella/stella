@@ -1206,7 +1206,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           let rgb = colorVal.rgb;
           if (!rgb || rgb === "auto") {
             const resolved = resolveColor(colorVal, theme);
-            rgb = resolved.replace(/^#/, "");
+            rgb = resolved.replace(/^#/u, "");
           }
           borderSpecRef.current = {
             ...borderSpecRef.current,
@@ -1598,7 +1598,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
               if (action.type === "cellFillColor") {
                 setCellFillColor(action.color)(view.state, view.dispatch);
               } else if (action.type === "borderColor") {
-                const rgb = action.color.replace(/^#/, "");
+                const rgb = action.color.replace(/^#/u, "");
                 borderSpecRef.current = {
                   ...borderSpecRef.current,
                   color: { rgb },
@@ -1614,7 +1614,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
                 setCellBorder(action.side, {
                   style: action.style,
                   size: action.size,
-                  color: { rgb: action.color.replace(/^#/, "") },
+                  color: { rgb: action.color.replace(/^#/u, "") },
                 })(view.state, view.dispatch);
               } else if (action.type === "cellVerticalAlign") {
                 setCellVerticalAlign(action.align)(view.state, view.dispatch);

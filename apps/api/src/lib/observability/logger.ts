@@ -3,7 +3,7 @@ import { logs, SeverityNumber } from "@opentelemetry/api-logs";
 
 const otelLogger = logs.getLogger("stella.api");
 const SENSITIVE_ATTRIBUTE_KEY_PATTERN =
-  /(?:body|content|email|fileName|message|name|title)/i;
+  /(?:body|content|email|fileName|message|name|title)/iu;
 
 type LoggerAttributeValue = boolean | number | string;
 

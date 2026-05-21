@@ -90,6 +90,7 @@ const OwnerTypeToggle = ({
         onClick={() => onChange("client")}
         role="radio"
         size="sm"
+        tabIndex={value === "client" ? 0 : -1}
         variant={value === "client" ? "default" : "ghost"}
       >
         {t("workspaces.ownerType.client")}
@@ -99,6 +100,7 @@ const OwnerTypeToggle = ({
         onClick={() => onChange("personal")}
         role="radio"
         size="sm"
+        tabIndex={value === "personal" ? 0 : -1}
         variant={value === "personal" ? "default" : "ghost"}
       >
         {t("workspaces.ownerType.personal")}

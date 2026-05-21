@@ -105,7 +105,7 @@ const AUTOMATIC_TEXT_COLOR_VALUES = new Set(["auto", "windowtext"]);
 const DEFAULT_BLACK_TEXT_COLOR_VALUES = new Set(["000000", "000"]);
 
 function normalizeTextColorValue(color: string): string {
-  return color.trim().toLowerCase().replace(/^#/, "");
+  return color.trim().toLowerCase().replace(/^#/u, "");
 }
 
 function isAutomaticTextColor(color: string): boolean {

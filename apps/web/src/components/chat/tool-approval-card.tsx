@@ -681,7 +681,7 @@ const findMcpConnectorIconHref = ({
 };
 
 const sanitizeMcpToolNamePart = (value: string): string =>
-  value.replace(/[^a-zA-Z0-9_-]/g, "_");
+  value.replace(/[^a-zA-Z0-9_-]/gu, "_");
 
 const fallbackIconUrl = (rawUrl: string): string | undefined => {
   try {
@@ -775,7 +775,7 @@ const formatReadableInputValue = ({
 
 const humanizeIdentifier = (value: string): string =>
   value
-    .replaceAll(/[_-]+/g, " ")
-    .replaceAll(/\s+/g, " ")
+    .replaceAll(/[_-]+/gu, " ")
+    .replaceAll(/\s+/gu, " ")
     .trim()
     .replace(/^\p{L}/u, (match) => match.toLocaleUpperCase());

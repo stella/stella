@@ -37,13 +37,14 @@ type BoldRange = {
  */
 export const normalizeSpanText = (text: string): string =>
   text
-    .replace(/\u00A0/g, " ")
-    .replace(/ {2,}/g, " ")
+    .replace(/\u00A0/gu, " ")
+    .replace(/ {2,}/gu, " ")
     .trim();
 
 // ── Bold detection ───────────────────────────────────────
 
-export const isBoldFont = (fontName: string): boolean => /bold/i.test(fontName);
+export const isBoldFont = (fontName: string): boolean =>
+  /bold/iu.test(fontName);
 
 /**
  * Map bold state from individual spans onto a line's text.
@@ -66,7 +67,7 @@ export const buildBoldRanges = (
   let offset = 0;
 
   for (const span of spans) {
-    const text = span.text.replace(/\u00A0/g, " ");
+    const text = span.text.replace(/\u00A0/gu, " ");
     if (!text.trim()) {
       continue;
     }

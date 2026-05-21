@@ -815,7 +815,8 @@ export function measureTableCellBlockVisualHeight(
   const paragraphMeasure = blockMeasure;
   const nonEmptyRuns = paragraphBlock.runs.filter(
     (run) =>
-      run.kind !== "text" || run.text.replace(/\u00a0/g, " ").trim().length > 0,
+      run.kind !== "text" ||
+      run.text.replace(/\u00a0/gu, " ").trim().length > 0,
   );
   if (paragraphMeasure.lines.length !== 1 || nonEmptyRuns.length === 0) {
     return paragraphMeasure.totalHeight;
@@ -4073,7 +4074,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
 
                 // Find word start (go back until whitespace/punctuation)
                 let start = offset;
-                while (start > 0 && /\w/.test(pmAlignedText[start - 1]!)) {
+                while (start > 0 && /\w/u.test(pmAlignedText[start - 1]!)) {
                   // SAFETY: start > 0
                   start--;
                 }
@@ -4082,7 +4083,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
                 let end = offset;
                 while (
                   end < pmAlignedText.length &&
-                  /\w/.test(pmAlignedText[end]!)
+                  /\w/u.test(pmAlignedText[end]!)
                 ) {
                   // SAFETY: end < pmAlignedText.length
                   end++;

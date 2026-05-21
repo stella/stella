@@ -319,7 +319,7 @@ export const extractTitle = (parts: ChatMessage["parts"]) => {
   const plainText = cheerio
     .load(raw, undefined, false)
     .text()
-    .replaceAll(/\s+/g, " ")
+    .replaceAll(/\s+/gu, " ")
     .trim();
 
   if (plainText.length > TITLE_MAX_LENGTH) {
@@ -1007,7 +1007,7 @@ type SanitizePromptValueProps = {
 };
 
 const sanitizePromptValue = ({ maxLength, text }: SanitizePromptValueProps) =>
-  text.replace(/[\r\n]/g, " ").slice(0, maxLength);
+  text.replace(/[\r\n]/gu, " ").slice(0, maxLength);
 
 const sanitizePromptBlock = ({ maxLength, text }: SanitizePromptValueProps) =>
   text.replaceAll("\0", "").slice(0, maxLength);

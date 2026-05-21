@@ -58,7 +58,7 @@ export const Route = createFileRoute(
     // Reject obviously invalid viewIds (e.g. "workspaces" from stale doubled
     // URLs). Allow UUIDs and the special "all" slug used by the PDF viewer.
     const VALID_VIEW_ID =
-      /^(?:all|[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12})$/i;
+      /^(?:all|[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12})$/iu;
     if (!VALID_VIEW_ID.test(params.viewId)) {
       if (import.meta.env.DEV) {
         // eslint-disable-next-line no-console

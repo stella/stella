@@ -208,7 +208,7 @@ const compactContent = (value: unknown): string => {
   if (typeof value !== "string") {
     return "";
   }
-  return value.replace(/\s+/g, " ").trim();
+  return value.replace(/\s+/gu, " ").trim();
 };
 
 const truncate = (text: string, maxLength: number): string =>

@@ -78,6 +78,7 @@ export const VersionsFacet = ({
           // skipped the URL sync.
           const onDocumentRoute = new RegExp(
             `^/workspaces/${workspaceId}/[^/]+/document(?:/|$|\\?)`,
+            "u",
           ).test(pathname);
           if (onDocumentRoute) {
             // Pull the current viewId out of the path (typically

@@ -18,7 +18,7 @@ const compact = (parts: readonly (string | null | undefined)[]): string =>
 export const normalizeFileNameForSearch = (name: string): string => {
   const lastDot = name.lastIndexOf(".");
   const base = lastDot > 0 ? name.slice(0, lastDot) : name;
-  return base.replace(/[._-]+/g, " ");
+  return base.replace(/[._-]+/gu, " ");
 };
 
 export const normalizeFileNameVariantForSearch = (
@@ -34,7 +34,7 @@ export const normalizeFileNameVariantForSearch = (
 };
 
 const normalizeTextForLexemes = (text: string): string =>
-  text.replace(/[._-]+/g, " ");
+  text.replace(/[._-]+/gu, " ");
 
 export const removeSearchDiacritics = (text: string): string =>
   text.normalize("NFD").replace(/\p{Diacritic}/gu, "");

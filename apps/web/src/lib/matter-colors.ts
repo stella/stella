@@ -28,7 +28,7 @@ export const getMatterSwatch = (id: string) => {
 
 export const getMatterColor = (id: string) => `var(${getMatterSwatch(id)})`;
 
-const hexColorPattern = /^#?[0-9A-Fa-f]{6}$/;
+const hexColorPattern = /^#?[0-9A-Fa-f]{6}$/u;
 
 const toPickerColor = (color: string) => {
   if (color.startsWith("--option-")) {

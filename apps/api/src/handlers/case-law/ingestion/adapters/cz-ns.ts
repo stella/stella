@@ -115,17 +115,17 @@ const entryField = (
 /** Metadata label patterns on detail pages. */
 const LABEL_PATTERNS: Record<string, RegExp> = {
   decisionDate:
-    /Datum rozhodnutí:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/i,
-  ecli: /ECLI:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/i,
+    /Datum rozhodnutí:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/iu,
+  ecli: /ECLI:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/iu,
   decisionType:
-    /Typ rozhodnutí:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/i,
+    /Typ rozhodnutí:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/iu,
   keywords:
-    /Heslo:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/i,
+    /Heslo:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/iu,
   statutes:
-    /Dotčené předpisy:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/i,
+    /Dotčené předpisy:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/iu,
   category:
-    /Kategorie rozhodnutí:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/i,
-  legalSentence: /Právní věta:<\/font><\/b><\/td><td[^>]*>([\s\S]*?)<\/td>/i,
+    /Kategorie rozhodnutí:<\/font><\/b><\/td><td[^>]*><b><font[^>]*>([\s\S]*?)<\/font>/iu,
+  legalSentence: /Právní věta:<\/font><\/b><\/td><td[^>]*>([\s\S]*?)<\/td>/iu,
 };
 
 /**
@@ -160,7 +160,7 @@ const BODY_END_MARKER = "Citace rozhodnutí";
 const extractFulltext = (html: string): string | undefined => {
   // Decision text is in <font face="Times New Roman"> tags
   const parts = html.match(
-    /<font[^>]*face="Times New Roman"[^>]*>([\s\S]*?)<\/font>/gi,
+    /<font[^>]*face="Times New Roman"[^>]*>([\s\S]*?)<\/font>/giu,
   );
   if (!parts || parts.length === 0) {
     return undefined;

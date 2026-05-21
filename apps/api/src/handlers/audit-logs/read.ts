@@ -16,7 +16,7 @@ import { brandPersistedAuditLogId } from "@/api/lib/safe-id-boundaries";
 
 const CURSOR_SEPARATOR = "|";
 const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
 const encodeCursor = (createdAt: Date, id: string): string =>
   `${createdAt.toISOString()}${CURSOR_SEPARATOR}${id}`;

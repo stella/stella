@@ -39,6 +39,6 @@ const normalizeUrl = (rawUrl: string): string => {
 
   const normalized = url.toString();
   return url.pathname === "/" && url.search.length === 0
-    ? normalized.replace(/\/$/, "")
+    ? normalized.replace(/\/$/u, "")
     : normalized;
 };

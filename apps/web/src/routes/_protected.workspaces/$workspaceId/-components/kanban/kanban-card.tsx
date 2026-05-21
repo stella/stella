@@ -285,7 +285,6 @@ export const KanbanCard = ({
             }
           }}
           ref={cardRef}
-          // eslint-disable-next-line jsx-a11y/prefer-tag-over-role
           role="button"
           tabIndex={0}
         >
@@ -329,7 +328,6 @@ export const KanbanCard = ({
             }
           }}
           ref={cardRef}
-          // eslint-disable-next-line jsx-a11y/prefer-tag-over-role
           role="button"
           tabIndex={0}
         >

@@ -18,7 +18,7 @@ export const MCP_TOOL_EXECUTION_OPTIONS: ToolExecutionOptions = {
   toolCallId: "mcp",
 };
 
-const getAppBaseUrl = () => env.FRONTEND_URL.replace(/\/$/, "");
+const getAppBaseUrl = () => env.FRONTEND_URL.replace(/\/$/u, "");
 
 export const stringProp = (
   description: string,
@@ -172,9 +172,9 @@ export const buildDocumentUrl = ({
 const slugifyCaseNumber = (caseNumber: string) =>
   caseNumber
     .toLowerCase()
-    .replace(/\//g, "-")
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "");
+    .replace(/\//gu, "-")
+    .replace(/\s+/gu, "-")
+    .replace(/[^a-z0-9-]/gu, "");
 
 export const buildCaseLawDecisionUrl = ({
   caseNumber,

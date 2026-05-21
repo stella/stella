@@ -20,8 +20,8 @@ describe("renderedPageBreakBefore round-trip", () => {
     expect(parsed.renderedPageBreakBefore).toBe(true);
 
     const xml = serializeParagraph(parsed as never);
-    expect(xml).toMatch(/<w:lastRenderedPageBreak\/>/);
-    expect(xml).toMatch(/<w:r[^>]*><w:lastRenderedPageBreak\/>/);
+    expect(xml).toMatch(/<w:lastRenderedPageBreak\/>/u);
+    expect(xml).toMatch(/<w:r[^>]*><w:lastRenderedPageBreak\/>/u);
   });
 
   test("serializer injects marker into the first run inside a hyperlink wrapper", () => {
@@ -44,7 +44,7 @@ describe("renderedPageBreakBefore round-trip", () => {
 
     const xml = serializeParagraph(paragraph as never);
     expect(xml).toMatch(
-      /<w:hyperlink[^>]*>[^<]*<w:r[^>]*><w:lastRenderedPageBreak\/>/,
+      /<w:hyperlink[^>]*>[^<]*<w:r[^>]*><w:lastRenderedPageBreak\/>/u,
     );
   });
 });

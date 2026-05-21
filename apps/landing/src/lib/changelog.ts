@@ -10,15 +10,15 @@ export type ChangelogRelease = {
 };
 
 const CHANGELOG_DIR = resolveRepoPath("docs", "changelog");
-const STABLE_CHANGELOG_FILE_PATTERN = /^v\d+\.\d+\.\d+\.md$/;
+const STABLE_CHANGELOG_FILE_PATTERN = /^v\d+\.\d+\.\d+\.md$/u;
 
 export const releaseAnchorId = (tagName: string) =>
   tagName
     .toLowerCase()
     .replaceAll(".", "-")
-    .replace(/[^a-z0-9-]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
+    .replace(/[^a-z0-9-]/gu, "-")
+    .replace(/-+/gu, "-")
+    .replace(/^-|-$/gu, "");
 
 export const getChangelogReleases = (): ChangelogRelease[] => {
   if (!existsSync(CHANGELOG_DIR)) {
@@ -32,7 +32,7 @@ export const getChangelogReleases = (): ChangelogRelease[] => {
       continue;
     }
 
-    const tagName = fileName.replace(/\.md$/, "");
+    const tagName = fileName.replace(/\.md$/u, "");
     const markdown = readFileSync(join(CHANGELOG_DIR, fileName), "utf-8");
     const heading = findHeading(markdown, 1);
     const description =
@@ -68,7 +68,7 @@ const findHeading = (markdown: string, level: 1 | 2) => {
 };
 
 const normalizeMarkdownText = (text: string) =>
-  stripMarkdownLinks(text).replace(/[*_`]/g, "").replace(/\s+/g, " ").trim();
+  stripMarkdownLinks(text).replace(/[*_`]/gu, "").replace(/\s+/gu, " ").trim();
 
 const stripMarkdownLinks = (text: string) => {
   let output = "";

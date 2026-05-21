@@ -23,7 +23,7 @@ function isMacPlatform(): boolean {
   if (typeof navigator === "undefined") {
     return false;
   }
-  return /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+  return /Mac|iPod|iPhone|iPad/u.test(navigator.platform);
 }
 
 /**

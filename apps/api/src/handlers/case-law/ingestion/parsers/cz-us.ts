@@ -173,7 +173,7 @@ const extractHiddenMetadata = ($: cheerio.CheerioAPI): HiddenMetadata => ({
 
 // ── Cross-reference extraction ────────────────────────────
 
-const CROSS_REF_HREF_RE = /GetRegSignDecisions\.aspx\?sz=/i;
+const CROSS_REF_HREF_RE = /GetRegSignDecisions\.aspx\?sz=/iu;
 
 /**
  * Extract cross-reference links to other ÚS decisions from
@@ -318,7 +318,7 @@ const RTF_NUMERIC_CONTROL_WORDS = new Set([
   "tx",
 ]);
 
-const RTF_CONTROL_WORD_RE = /\\([a-z]+)(-?\d*)\s?/gi;
+const RTF_CONTROL_WORD_RE = /\\([a-z]+)(-?\d*)\s?/giu;
 
 const stripIgnoredRtfControlWord = (
   match: string,
@@ -344,18 +344,18 @@ const stripIgnoredRtfControlWord = (
 const stripRtfControls = (text: string): string =>
   text
     // Remove \uN Unicode escapes followed by a replacement char
-    .replace(/\\u-?\d+\s?\??/g, "")
+    .replace(/\\u-?\d+\s?\??/gu, "")
     // Remove \' hex escapes (e.g., \'e9 for é) — these are
     // already decoded in the hidden field value
-    .replace(/\\'[0-9a-fA-F]{2}/g, "")
+    .replace(/\\'[0-9a-fA-F]{2}/gu, "")
     // Remove font/color/style control words we don't handle.
     .replace(RTF_CONTROL_WORD_RE, stripIgnoredRtfControlWord)
     // Remove \{ and \} escaped braces
-    .replace(/\\[{}]/g, "")
+    .replace(/\\[{}]/gu, "")
     // Remove remaining curly braces (RTF grouping)
-    .replace(/[{}]/g, "")
+    .replace(/[{}]/gu, "")
     // Collapse multiple spaces
-    .replace(/ {2,}/g, " ");
+    .replace(/ {2,}/gu, " ");
 
 /**
  * Parse RTF bold markers (`\b` / `\b0`) into Inline nodes.
@@ -368,15 +368,15 @@ const parseRtfInlines = (rtf: string): Inline[] => {
   const inlines: Inline[] = [];
 
   // Split on \b and \b0 markers, keeping the delimiters
-  const parts = cleaned.split(/(\\b0?\s?)/);
+  const parts = cleaned.split(/(\\b0?\s?)/u);
   let bold = false;
 
   for (const part of parts) {
-    if (/^\\b0\s?$/.test(part)) {
+    if (/^\\b0\s?$/u.test(part)) {
       bold = false;
       continue;
     }
-    if (/^\\b\s?$/.test(part)) {
+    if (/^\\b\s?$/u.test(part)) {
       bold = true;
       continue;
     }
@@ -416,7 +416,7 @@ const extractLinesFromRtf = (rtfContent: string): ParsedLine[] => {
   // matching \pard (paragraph defaults). Uses [a-zA-Z]
   // instead of \w because RTF control words are alpha-only;
   // digits after \par are content (e.g., \par1. Soud...).
-  const segments = rtfContent.split(/\\par(?![a-zA-Z])\s*/i);
+  const segments = rtfContent.split(/\\par(?![a-zA-Z])\s*/iu);
 
   const lines: ParsedLine[] = [];
   for (const segment of segments) {
@@ -513,34 +513,34 @@ const extractLines = ($: cheerio.CheerioAPI): ParsedLine[] => {
 // ── Patterns ───────────────────────────────────────────────
 
 /** Decorative lines to skip entirely. */
-const SKIP_RE = /^\[OBRÁZEK\]|^Česká republika$|^ČESKÁ REPUBLIKA$/;
+const SKIP_RE = /^\[OBRÁZEK\]|^Česká republika$|^ČESKÁ REPUBLIKA$/u;
 
 /** Decision title (level 1). */
 const TITLE_RE =
-  /^(N\s*[ÁA]\s*L\s*[ÉE]\s*Z|U\s*S\s*N\s*E\s*S\s*E\s*N\s*[ÍI]|Ústavního soudu|Jménem republiky)$/i;
+  /^(N\s*[ÁA]\s*L\s*[ÉE]\s*Z|U\s*S\s*N\s*E\s*S\s*E\s*N\s*[ÍI]|Ústavního soudu|Jménem republiky)$/iu;
 
 /** Normalize spaced text like "t a k t o" -> "takto". */
 const collapseSpaces = (text: string): string =>
-  text.replace(/(\S)\s+(?=\S)/g, "$1");
+  text.replace(/(\S)\s+(?=\S)/gu, "$1");
 
 /** "takto:" separator (with spaced variants). */
 // oxlint-disable-next-line sonarjs/slow-regex -- matched against individual normalized parser lines
-const TAKTO_RE = /^t\s*a\s*k\s*t\s*o\s*:?\s*$/i;
+const TAKTO_RE = /^t\s*a\s*k\s*t\s*o\s*:?\s*$/iu;
 
 /** "Odůvodnění:" separator (with spaced variants). */
 const ODUVODNENI_RE =
   // oxlint-disable-next-line sonarjs/slow-regex -- matched against individual normalized parser lines
-  /^(?:O\s*d\s*[uů]\s*v\s*o\s*d\s*n\s*[eě]\s*n\s*[ií]|Odůvodnění)\s*:?\s*$/i;
+  /^(?:O\s*d\s*[uů]\s*v\s*o\s*d\s*n\s*[eě]\s*n\s*[ií]|Odůvodnění)\s*:?\s*$/iu;
 
 /**
  * Section heading in Odůvodnění: standalone Roman numeral,
  * or Roman numeral followed by a short title on the same or
  * next line.
  */
-const SECTION_ROMAN_RE = /^((?:X{0,3}(?:IX|IV|V?I{0,3})))\.?\s*$/;
+const SECTION_ROMAN_RE = /^((?:X{0,3}(?:IX|IV|V?I{0,3})))\.?\s*$/u;
 
 /** Numbered paragraph: "1. ...", "2. ..." */
-const NUMBERED_PARA_RE = /^(\d+)\.\s+/;
+const NUMBERED_PARA_RE = /^(\d+)\.\s+/u;
 
 // ── Block classification ───────────────────────────────────
 

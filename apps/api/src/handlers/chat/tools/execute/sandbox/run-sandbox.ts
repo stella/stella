@@ -910,7 +910,7 @@ const classifyVmError = (
   if (hasDeadlinePassed(deadline)) {
     return createTimeoutError(limits);
   }
-  if (/out of memory|memory/i.test(message)) {
+  if (/out of memory|memory/iu.test(message)) {
     return createMemoryError(message);
   }
 

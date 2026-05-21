@@ -93,7 +93,7 @@ const hasHtmlTags = (content: string): boolean =>
 
 const normalizeWhitespace = (text: string): string =>
   text
-    .replace(/\u00a0/g, " ")
+    .replace(/\u00a0/gu, " ")
     // oxlint-disable-next-line sonarjs/slow-regex -- source text is already split from one court document and replacement is line-local
     .replace(/[ \t]+\n/gu, "\n")
     .trim();

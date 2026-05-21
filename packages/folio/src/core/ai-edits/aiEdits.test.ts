@@ -195,7 +195,7 @@ describe("Folio AI edit operations", () => {
         text: "Payment one.",
       },
     ]);
-    expect(snapshot.anchors["b-0001"]?.textHash).toMatch(/^h/);
+    expect(snapshot.anchors["b-0001"]?.textHash).toMatch(/^h/u);
   });
 
   test("captures formatted preview runs in the AI-facing block snapshot", () => {

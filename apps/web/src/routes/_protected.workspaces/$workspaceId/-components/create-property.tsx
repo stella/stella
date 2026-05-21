@@ -167,7 +167,7 @@ const buildContent = (
 const promptFromHtml = (html: string): string =>
   // Strip HTML tags to get a quick "is the prompt empty" check.
   // eslint-disable-next-line sonarjs/slow-regex
-  html.replace(/<[^>]+>/g, "").trim();
+  html.replace(/<[^>]+>/gu, "").trim();
 
 export const CreateProperty = ({
   workspaceId,

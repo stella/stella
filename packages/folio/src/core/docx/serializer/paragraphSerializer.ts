@@ -896,10 +896,10 @@ function serializeTrackedChange(
       if (item.type === "run") {
         if (tag === "del" || tag === "moveFrom") {
           return serializeRun(item)
-            .replace(/<w:t\b/g, "<w:delText")
-            .replace(/<\/w:t>/g, "</w:delText>")
-            .replace(/<w:instrText\b/g, "<w:delInstrText")
-            .replace(/<\/w:instrText>/g, "</w:delInstrText>");
+            .replace(/<w:t\b/gu, "<w:delText")
+            .replace(/<\/w:t>/gu, "</w:delText>")
+            .replace(/<w:instrText\b/gu, "<w:delInstrText")
+            .replace(/<\/w:instrText>/gu, "</w:delInstrText>");
         }
         return serializeRun(item);
       }
@@ -1025,7 +1025,7 @@ export function serializeParagraph(paragraph: Paragraph): string {
 }
 
 function injectRenderedPageBreakIntoFirstRun(xml: string): string | null {
-  const runOpeningTag = /<w:r(?=[\s>/])[^>]*>/;
+  const runOpeningTag = /<w:r(?=[\s>/])[^>]*>/u;
   if (!runOpeningTag.test(xml)) {
     return null;
   }

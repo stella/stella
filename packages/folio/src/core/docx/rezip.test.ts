@@ -360,7 +360,7 @@ describe("repackDocx", () => {
       .filter(([path, file]) => path.startsWith("word/media/") && !file.dir)
       .map(([path]) => path);
 
-    expect(headerRels?.match(/relationships\/image/g)).toHaveLength(1);
+    expect(headerRels?.match(/relationships\/image/gu)).toHaveLength(1);
     expect(headerRels).toContain('Target="media/image1.png"');
     expect(headerXml).toContain('r:embed="rId1"');
     expect(mediaFiles).toEqual(["word/media/image1.png"]);

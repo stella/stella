@@ -64,12 +64,12 @@ export const resolveDatabaseUrl = (
   // but URL delimiters in it would otherwise be spliced into the
   // path/query and could smuggle `sslmode=disable` or point at a
   // different database. Same idea for DB_PORT, which must be numeric.
-  if (/[/?#@\s]/.test(DB_HOST)) {
+  if (/[/?#@\s]/u.test(DB_HOST)) {
     throw new Error(
       "DB_HOST must not contain URL delimiters (/, ?, #, @, whitespace)",
     );
   }
-  if (!/^\d+$/.test(DB_PORT)) {
+  if (!/^\d+$/u.test(DB_PORT)) {
     throw new Error("DB_PORT must be numeric");
   }
   const auth = `${encodeURIComponent(DB_USER)}:${encodeURIComponent(DB_PASSWORD)}`;

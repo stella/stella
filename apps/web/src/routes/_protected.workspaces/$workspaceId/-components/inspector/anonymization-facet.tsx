@@ -322,7 +322,7 @@ export const AnonymizationFacet = ({
       if (raw.length === 0) {
         return;
       }
-      const single = raw.replace(/\s+/g, " ").trim();
+      const single = raw.replace(/\s+/gu, " ").trim();
       if (single.length < 2 || single.length > 200) {
         return;
       }

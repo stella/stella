@@ -700,7 +700,7 @@ const AddPartyDialog = ({
               <SelectTrigger>
                 <SelectValue>
                   {(current) =>
-                    // oxlint-disable-next-line typescript/strict-boolean-expressions: tsgo issue
+                    // oxlint-disable-next-line typescript/strict-boolean-expressions -- tsgo issue
                     current
                       ? roleItems.find((r) => r.value === current)?.label
                       : t("common.selectARole")

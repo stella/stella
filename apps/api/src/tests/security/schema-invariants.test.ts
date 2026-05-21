@@ -29,7 +29,7 @@ const extractCheckValues = (
       Array.isArray(chunk.value)
     ) {
       const str = String(chunk.value[0] ?? "");
-      const match = /IN\s*\(([^)]+)\)/i.exec(str);
+      const match = /IN\s*\(([^)]+)\)/iu.exec(str);
       if (match?.[1]) {
         inList = match[1];
         break;
@@ -41,7 +41,7 @@ const extractCheckValues = (
     throw new Error(`Could not parse IN list from "${constraintName}"`);
   }
 
-  return inList.split(",").map((v) => v.trim().replace(/^'|'$/g, ""));
+  return inList.split(",").map((v) => v.trim().replace(/^'|'$/gu, ""));
 };
 
 describe("schema invariants", () => {

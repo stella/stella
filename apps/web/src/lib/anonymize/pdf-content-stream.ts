@@ -86,7 +86,7 @@ const getContentStreams = (
   }
 
   if (contents.type === "stream") {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- discriminated by type check
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- discriminated by type check
     return [contents as PdfStream];
   }
 
@@ -98,7 +98,7 @@ const getContentStreams = (
       if (item) {
         const resolved = item.type === "ref" ? ctx.resolve(item) : item;
         if (resolved?.type === "stream") {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- discriminated by type check
+          // eslint-disable-next-line typescript/no-unsafe-type-assertion -- discriminated by type check
           streams.push(resolved as PdfStream);
         }
       }
@@ -164,7 +164,7 @@ const neutraliseTextOperators = (
   // PDF generators may mix \r\n, \r, and \n in the same
   // stream; normalising to a single EOL changes byte
   // length and corrupts the stream.
-  const parts = content.split(/(\r\n|\r|\n)/);
+  const parts = content.split(/(\r\n|\r|\n)/u);
   // parts = [line0, eol0, line1, eol1, ..., lastLine]
   const lines: string[] = [];
   const eols: string[] = [];
@@ -195,7 +195,7 @@ const neutraliseTextOperators = (
     // zone, collect lines until '] TJ'.
     if (tjBuffer !== null) {
       tjBuffer.push(line);
-      if (/]\s*TJ\s*$/.test(trimmed)) {
+      if (/\]\s*TJ\s*$/u.test(trimmed)) {
         // End of multi-line TJ: neutralise all lines
         for (const buffered of tjBuffer) {
           result.push(replaceStringContent(buffered));
@@ -206,7 +206,7 @@ const neutraliseTextOperators = (
     }
 
     // Track text position from Td/TD operators
-    const tdMatch = /^([\d.-]+)\s+([\d.-]+)\s+T[dD]$/.exec(trimmed);
+    const tdMatch = /^([\d.-]+)\s+([\d.-]+)\s+T[dD]$/u.exec(trimmed);
     if (tdMatch) {
       tx += Number(tdMatch[1]);
       ty += Number(tdMatch[2]);
@@ -216,7 +216,7 @@ const neutraliseTextOperators = (
 
     // Track text position from Tm operator (set text matrix)
     const tmMatch =
-      /^[\d.-]+\s+[\d.-]+\s+[\d.-]+\s+[\d.-]+\s+([\d.-]+)\s+([\d.-]+)\s+Tm$/.exec(
+      /^[\d.-]+\s+[\d.-]+\s+[\d.-]+\s+[\d.-]+\s+([\d.-]+)\s+([\d.-]+)\s+Tm$/u.exec(
         trimmed,
       );
     if (tmMatch) {
@@ -247,7 +247,7 @@ const neutraliseTextOperators = (
     // when current position is in a redaction zone.
     // ' and " imply T* before showing text, so they
     // also make position uncertain.
-    const isTextOp = /(?:Tj|TJ|'|")\s*$/.test(trimmed);
+    const isTextOp = /(?:Tj|TJ|'|")\s*$/u.test(trimmed);
     if (isTextOp && (trimmed.endsWith("'") || trimmed.endsWith('"'))) {
       positionUncertain = true;
     }
@@ -261,7 +261,7 @@ const neutraliseTextOperators = (
 
     // Detect start of a multi-line TJ array in a
     // redaction zone: line has '[' but no closing '] TJ'.
-    if (inZone && trimmed.includes("[") && !/]\s*TJ\s*$/.test(trimmed)) {
+    if (inZone && trimmed.includes("[") && !/\]\s*TJ\s*$/u.test(trimmed)) {
       tjBuffer = [line];
       continue;
     }

@@ -122,11 +122,11 @@ const SPACED_WORD = /(?<=\s|^)(\p{L} (?:\p{L} )*\p{L})( ?[,:;.!?])?(?=\s|$)/gu;
  * words are padded with extra spaces for alignment.
  */
 const collapseMultiSpaces = (text: string): string =>
-  text.replace(/ {2,}/g, " ");
+  text.replace(/ {2,}/gu, " ");
 
 const collapseSpacedLetters = (text: string): string =>
   collapseMultiSpaces(
-    text.replace(SPACED_WORD, (match) => match.replace(/ /g, "")),
+    text.replace(SPACED_WORD, (match) => match.replace(/ /gu, "")),
   );
 
 export const sanitizeResult = (r: IngestionResult): IngestionResult => {
@@ -139,7 +139,7 @@ export const sanitizeResult = (r: IngestionResult): IngestionResult => {
   // Strip header fragments that the Cheerio extractor sometimes
   // captures alongside the actual decision type value.
   const DECISION_TYPE_NOISE =
-    /česk[áa]\s+republik[ay]|jm[ée]nem\s+republik[ay]/gi;
+    /česk[áa]\s+republik[ay]|jm[ée]nem\s+republik[ay]/giu;
 
   const normalizeDecisionType = (
     raw: string | undefined,
@@ -157,7 +157,9 @@ export const sanitizeResult = (r: IngestionResult): IngestionResult => {
   // that the regex wouldn't match, so we walk the tree.
   const deepSanitizeImpl = (val: unknown, key?: string): unknown => {
     if (typeof val === "string") {
-      const stripped = val.replace(DANGEROUS_CHARS, "").replace(/\u00A0/g, " ");
+      const stripped = val
+        .replace(DANGEROUS_CHARS, "")
+        .replace(/\u00A0/gu, " ");
       // Collapse spaced-out letters in plainText only (used for
       // the DB full-text search index). Inline text is left
       // verbatim so the reader displays exactly what the court

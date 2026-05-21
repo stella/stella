@@ -87,7 +87,7 @@ type TablePaddingSide = keyof typeof DEFAULT_TABLE_CELL_MARGIN_TWIPS;
 const DEFAULT_BLACK_TEXT_COLOR_VALUES = new Set(["000000", "000"]);
 
 function normalizeResolvedTextColor(color: string): string {
-  return color.trim().toLowerCase().replace(/^#/, "");
+  return color.trim().toLowerCase().replace(/^#/u, "");
 }
 
 function isDefaultBlackResolvedTextColor(color: string): boolean {
@@ -227,7 +227,7 @@ function resolveListTemplate(
   levelFormats: NumberFormat[] | undefined,
   forceDecimal = false,
 ): string {
-  return template.replace(/%(\d)([.):\]])?/g, (_match, digit, punct = "") => {
+  return template.replace(/%(\d)([.):\]])?/gu, (_match, digit, punct = "") => {
     const index = Number.parseInt(String(digit), 10) - 1;
     if (index < 0) {
       return "";

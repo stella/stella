@@ -112,7 +112,7 @@ const authenticate = async (
 
   // Extract the session cookie name and value. Dev runs may use a
   // per-port cookie prefix so multiple localhost servers can coexist.
-  const match = /^([^=]*\.session_token)=([^;]+)/.exec(setCookie);
+  const match = /^([^=]*\.session_token)=([^;]+)/u.exec(setCookie);
   if (!match) {
     throw new Error("Could not parse session cookie");
   }

@@ -78,7 +78,7 @@ import {
 
 // ─── Mock file generators ───────────────────────────────
 
-const fileExtRe = /\.(pdf|docx)$/;
+const fileExtRe = /\.(pdf|docx)$/u;
 
 const PDF_MIME = "application/pdf" as const;
 const DOCX_MIME =
@@ -351,10 +351,10 @@ const createMockPdf = (title: string, bodyText?: string): Buffer => {
 
 const xmlEscape = (s: string): string =>
   s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/&/gu, "&amp;")
+    .replace(/</gu, "&lt;")
+    .replace(/>/gu, "&gt;")
+    .replace(/"/gu, "&quot;");
 
 const createMockDocx = async (
   title: string,

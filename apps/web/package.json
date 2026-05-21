@@ -29,7 +29,7 @@
     "@hocuspocus/provider": "^4.0.0",
     "@libpdf/core": "catalog:",
     "@posthog/react": "^1.9.0",
-    "@pydantic/genai-prices": "^0.0.56",
+    "@pydantic/genai-prices": "^0.0.60",
     "@stll/anonymize-chat": "workspace:*",
     "@stll/anonymize-data": "catalog:",
     "@stll/anonymize-wasm": "catalog:",
@@ -81,7 +81,7 @@
     "immer": "^11.1.8",
     "lucide-react": "catalog:",
     "pdfjs-dist": "^5.7.284",
-    "posthog-js": "^1.372.10",
+    "posthog-js": "^1.373.5",
     "prosemirror-view": "^1.41.8",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
@@ -107,7 +107,7 @@
     "@vitejs/plugin-react": "catalog:",
     "babel-plugin-react-compiler": "^1.0.0",
     "elysia": "catalog:",
-    "react-grab": "0.1.33",
+    "react-grab": "0.1.34",
     "rollup-plugin-visualizer": "^7.0.1",
     "typescript": "catalog:"
   }

@@ -31,7 +31,7 @@ import type {
 const CONDITION_TOKEN_RE =
   /"(?:[^"\\]|\\.)*"|==|!=|>=|<=|>|<|!(?!=)|and\b|or\b|([\p{L}\p{N}_.]+)/gu;
 
-const NUMERIC_LITERAL_RE = /^[\d_]+$/;
+const NUMERIC_LITERAL_RE = /^[\d_]+$/u;
 
 const COMPARISON_OPS = new Set(["==", "!=", ">=", "<=", ">", "<"]);
 

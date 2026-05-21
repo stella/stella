@@ -2983,7 +2983,7 @@ export const PROMPT_SHORTCUT_SCOPES = ["team", "private"] as const;
 export type PromptShortcutScope = (typeof PROMPT_SHORTCUT_SCOPES)[number];
 
 export const RESERVED_SHORTCUT_COMMANDS = ["model", "new"] as const;
-export const SHORTCUT_COMMAND_PATTERN = /^[a-z0-9][a-z0-9_-]{0,48}$/;
+export const SHORTCUT_COMMAND_PATTERN = /^[a-z0-9][a-z0-9_-]{0,48}$/u;
 
 export const promptShortcuts = p.pgTable(
   "prompt_shortcuts",

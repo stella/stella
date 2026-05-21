@@ -653,6 +653,7 @@ function ChatUseSwitchButton({
       onClick={onToggle}
       role="switch"
       size="sm"
+      tabIndex={0}
       variant="outline"
     >
       <span>{t("knowledge.mcp.useInChat")}</span>

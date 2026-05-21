@@ -20,7 +20,7 @@ export const getInitials = (name: string | null): string => {
     return "?";
   }
 
-  const parts = trimmed.split(/\s+/);
+  const parts = trimmed.split(/\s+/u);
   if (parts.length >= 2) {
     const a = parts.at(0) ?? "";
     const b = parts.at(1) ?? "";

@@ -53,7 +53,7 @@ const ONE_SECOND_MS = 1000;
 const SERVER_DISTINCT_ID = "server";
 const ERROR_CAUSE_MAX_DEPTH = 3;
 const RESOURCE_EXHAUSTED_CODE = "RESOURCE_EXHAUSTED";
-const GEMINI_QUOTA_PATTERN = /quota/i;
+const GEMINI_QUOTA_PATTERN = /quota/iu;
 const isLocalPostHogDebugEnabled = (): boolean =>
   env.isDev && env.POSTHOG_LOCAL_DEBUG;
 
@@ -271,7 +271,7 @@ const SAFE_PROVIDER_CODES: ReadonlySet<string> = new Set([
   "UNKNOWN",
 ]);
 
-const SAFE_PROVIDER_CODE_PREFIX = /^([A-Z][A-Z_]+)(?::|\s|$)/;
+const SAFE_PROVIDER_CODE_PREFIX = /^([A-Z][A-Z_]+)(?::|\s|$)/u;
 
 const extractSafeProviderCode = (message: string): string | undefined => {
   const match = SAFE_PROVIDER_CODE_PREFIX.exec(message);

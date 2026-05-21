@@ -232,7 +232,6 @@ const SelectAllHeader = ({ state, onToggle }: SelectAllHeaderProps) => {
         )}
         data-select-all-state={state.key}
         onClick={onToggle}
-        // eslint-disable-next-line jsx-a11y/prefer-tag-over-role
         role="checkbox"
         type="button"
       >

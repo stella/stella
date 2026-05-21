@@ -247,8 +247,7 @@ function parseThemeFonts(fontElement: XmlElement | null): ThemeFont {
       getAttribute(font, null, "typeface");
 
     if (script && typeface) {
-      result.fonts = result.fonts || {};
-      result.fonts[script] = typeface;
+      (result.fonts ??= {})[script] = typeface;
     }
   }
 

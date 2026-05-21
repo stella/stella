@@ -36,8 +36,8 @@ type PageTextResult = ReturnType<PDFPage["extractText"]>;
 type Span = PageTextResult["lines"][number]["spans"][number];
 
 const buildCssFont = (span: Span): string => {
-  const isBold = /bold/i.test(span.fontName);
-  const isItalic = /italic|oblique/i.test(span.fontName);
+  const isBold = /bold/iu.test(span.fontName);
+  const isItalic = /italic|oblique/iu.test(span.fontName);
   const weight = isBold ? "bold" : "normal";
   const fontStyle = isItalic ? "italic" : "normal";
   return `${fontStyle} ${weight} ${span.fontSize}px sans-serif`;

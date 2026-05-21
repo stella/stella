@@ -15,7 +15,7 @@ export type WordDiffSegment = {
   text: string;
 };
 
-const tokenize = (s: string): string[] => s.match(/\s+|\S+/g) ?? [];
+const tokenize = (s: string): string[] => s.match(/\s+|\S+/gu) ?? [];
 
 export const diffWordSegments = (
   before: string,

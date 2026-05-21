@@ -34,7 +34,7 @@ import { userErrorMessage } from "@/lib/errors";
 
 type FillFormat = "docx" | "pdf";
 
-const DOCX_EXT_RE = /\.docx$/i;
+const DOCX_EXT_RE = /\.docx$/iu;
 
 type DiscoverResponse = Awaited<ReturnType<typeof api.templates.discover.post>>;
 

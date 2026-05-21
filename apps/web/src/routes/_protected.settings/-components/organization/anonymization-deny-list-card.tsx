@@ -172,7 +172,7 @@ const parseCsvLine = (
   // canonicals, so the unquoted parser keeps the import short
   // and predictable. Variants column uses `|` as inner
   // separator to avoid colliding with the CSV delimiter.
-  const cells = line.split(/[,;]/).map((cell) => cell.trim());
+  const cells = line.split(/[,;]/u).map((cell) => cell.trim());
   const canonical = cells[0] ?? "";
   if (canonical.length === 0) {
     return null;
@@ -208,7 +208,9 @@ const parseImport = (
     return parseJson(trimmed, defaultLabel);
   }
 
-  const lines = trimmed.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  const lines = trimmed
+    .split(/\r?\n/u)
+    .filter((line) => line.trim().length > 0);
   if (lines.length === 0) {
     return null;
   }
@@ -224,7 +226,7 @@ const parseImport = (
 
   // CSV: drop an optional header row (`canonical,...`).
   const headerLooksLikeHeader =
-    first.toLowerCase().split(/[,;]/).at(0)?.trim() === "canonical";
+    first.toLowerCase().split(/[,;]/u).at(0)?.trim() === "canonical";
   const dataLines = headerLooksLikeHeader ? lines.slice(1) : lines;
   const rows: OrgAnonymizationBlacklistEntry[] = [];
   for (const line of dataLines) {

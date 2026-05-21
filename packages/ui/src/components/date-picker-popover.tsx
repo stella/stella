@@ -542,6 +542,7 @@ function DatePickerPopover({
                 onKeyDown={handleGridKeyDown}
                 ref={gridRef}
                 role="grid"
+                tabIndex={-1}
               >
                 {days.map((day) => {
                   const isSelected = day.date === value;
@@ -712,7 +713,7 @@ const MonthGrid = ({
                 role="gridcell"
                 type="button"
               >
-                {!/^\d/.test(labels[i] ?? "") && (
+                {!/^\d/u.test(labels[i] ?? "") && (
                   <span
                     aria-hidden="true"
                     className={cn(

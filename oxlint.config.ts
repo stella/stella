@@ -28,6 +28,22 @@ export default defineConfig({
     "unicorn/no-useless-undefined": "off",
     "unicorn/prefer-array-find": "error",
     "unicorn/prefer-at": "error",
+    // Stylistic only; the negated form (`a !== b ? x : y`) is often
+    // clearer than the swapped equivalent. No bug-catching value.
+    "unicorn/no-negated-condition": "off",
+    // Net-positive a11y rule but blanket-disabled here because many
+    // role attributes live on coss/Base UI primitives where swapping
+    // to a semantic tag breaks composition (e.g. `<div role="row">`
+    // inside a non-table grid). Re-enable and clean up per-file.
+    "jsx-a11y/prefer-tag-over-role": "off",
+    // Disabled: rule misses `<label htmlFor={dynamicId}>` pairs and
+    // floods file dialogs with false positives. Re-enable once it
+    // supports computed htmlFor.
+    "jsx-a11y/control-has-associated-label": "off",
+    // Disabled: the `??=` form it suggests can re-trigger
+    // `typescript/no-unnecessary-condition` on typed-as-defined
+    // properties (e.g. `result.fonts ??= {}`). Pure stylistic anyway.
+    "logical-assignment-operators": "off",
 
     "react/rules-of-hooks": "error",
 
@@ -790,22 +806,6 @@ export default defineConfig({
           },
         ],
         "no-raw-user-id-schema/no-raw-user-id-schema": "error",
-        "no-offset-pagination/no-offset-pagination": [
-          "error",
-          {
-            // Existing bounded billing/admin lists. Keep explicit while
-            // these endpoints are migrated or deliberately retained.
-            allowedFiles: [
-              "apps/api/src/handlers/invoices/read.ts",
-              "apps/api/src/handlers/time-entries/read.ts",
-              "apps/api/src/handlers/expenses/read.ts",
-              "apps/api/src/handlers/billing-codes/read.ts",
-              "apps/api/src/handlers/rates/read.ts",
-              "apps/api/src/handlers/rates/entries-read.ts",
-              "apps/api/src/handlers/skills/list.ts",
-            ],
-          },
-        ],
         "no-untyped-updates/no-untyped-updates": "error",
         "security-guards/no-unscoped-user-query": "error",
         "no-restricted-imports": [

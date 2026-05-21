@@ -157,7 +157,7 @@ function ProfilePageBody() {
               <SelectPopup>
                 {COMMON_TIMEZONES.map((tz) => (
                   <SelectItem key={tz} value={tz}>
-                    {tz.replace(/_/g, " ")}
+                    {tz.replace(/_/gu, " ")}
                   </SelectItem>
                 ))}
               </SelectPopup>

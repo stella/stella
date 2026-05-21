@@ -482,7 +482,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       if (selection.from === selection.to) {
         return;
       }
-      const single = selection.text.replace(/\s+/g, " ").trim();
+      const single = selection.text.replace(/\s+/gu, " ").trim();
       if (single.length < 2 || single.length > 200) {
         return;
       }

@@ -73,7 +73,7 @@ describe("czUsAdapter.fetchPage", () => {
         if (url.includes("GetAbstract")) {
           return Promise.resolve(new Response(makeEmptyPage()));
         }
-        const match = /sz=I-(\d+)-(\d+)_1/.exec(url);
+        const match = /sz=I-(\d+)-(\d+)_1/u.exec(url);
         const n = match ? Number(match[1]) : 0;
         const yr = match ? Number(match[2]) : 0;
 
@@ -120,7 +120,7 @@ describe("czUsAdapter.fetchPage", () => {
         if (url.includes("GetAbstract")) {
           return Promise.resolve(new Response(makeEmptyPage()));
         }
-        const match = /sz=I-(\d+)-(\d+)_1/.exec(url);
+        const match = /sz=I-(\d+)-(\d+)_1/u.exec(url);
         const n = match ? Number(match[1]) : 0;
         const yr = match ? Number(match[2]) : 0;
         const body =
@@ -154,7 +154,7 @@ describe("czUsAdapter.fetchPage", () => {
           return Promise.resolve(new Response(makeEmptyPage()));
         }
 
-        const yearMatch = /sz=I-(\d+)-(\d+)_1/.exec(url);
+        const yearMatch = /sz=I-(\d+)-(\d+)_1/u.exec(url);
         if (!yearMatch) {
           return Promise.resolve(new Response(makeEmptyPage()));
         }
@@ -203,7 +203,7 @@ describe("czUsAdapter.fetchPage", () => {
           return Promise.resolve(new Response(makeEmptyPage()));
         }
 
-        const match = /sz=I-(\d+)-93_1/.exec(url);
+        const match = /sz=I-(\d+)-93_1/u.exec(url);
         if (match && Number(match[1]) === 1) {
           return Promise.resolve(
             new Response(makeTextPage("I.ÚS 1/93", "11. 11. 1993")),
@@ -235,7 +235,7 @@ describe("czUsAdapter.fetchPage", () => {
         if (url.includes("GetAbstract")) {
           return Promise.resolve(new Response(makeEmptyPage()));
         }
-        const match = /sz=I-(\d+)-25_1/.exec(url);
+        const match = /sz=I-(\d+)-25_1/u.exec(url);
         const n = match ? Number(match[1]) : 0;
         return Promise.resolve(
           new Response(makeTextPage(`I.ÚS ${n}/25`, "1. 6. 2025")),
@@ -261,7 +261,7 @@ describe("czUsAdapter.fetchPage", () => {
         if (url.includes("GetAbstract")) {
           return Promise.reject(new Error("Network error"));
         }
-        const match = /sz=I-(\d+)-/.exec(url);
+        const match = /sz=I-(\d+)-/u.exec(url);
         const n = match ? Number(match[1]) : 0;
         if (n === 1) {
           return Promise.resolve(
@@ -298,7 +298,7 @@ describe("czUsAdapter.fetchPage", () => {
         if (url.includes("GetAbstract")) {
           return Promise.resolve(new Response(makeAbstractPage(longAbstract)));
         }
-        const match = /sz=I-(\d+)-/.exec(url);
+        const match = /sz=I-(\d+)-/u.exec(url);
         const n = match ? Number(match[1]) : 0;
         if (n === 1) {
           return Promise.resolve(
@@ -374,7 +374,7 @@ describe("czUsAdapter.fetchPage", () => {
         if (url.includes("GetAbstract")) {
           return Promise.resolve(new Response(makeEmptyPage()));
         }
-        const match = /sz=I-(\d+)-/.exec(url);
+        const match = /sz=I-(\d+)-/u.exec(url);
         const n = match ? Number(match[1]) : 0;
         if (n === 1) {
           return Promise.resolve(new Response(html));

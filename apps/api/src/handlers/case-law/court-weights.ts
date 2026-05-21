@@ -37,7 +37,7 @@ export const loadCourtWeights = async (): Promise<CourtWeightMap> => {
   for (const row of rows) {
     const entries = map.get(row.country) ?? [];
     entries.push({
-      pattern: new RegExp(row.courtPattern, "i"),
+      pattern: new RegExp(row.courtPattern, "iu"),
       tier: row.tier,
       tierLabel: row.tierLabel,
       weight: row.weight,

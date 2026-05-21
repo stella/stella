@@ -330,7 +330,7 @@ const firstVisibleRangeRect = (range: Range): DOMRect | undefined => {
 };
 
 const sanitizeHighlightKey = (value: string): string =>
-  value.replaceAll(/[^a-zA-Z0-9_-]/g, "_");
+  value.replaceAll(/[^a-zA-Z0-9_-]/gu, "_");
 
 export const ExternalSourceLogo = ({
   className,
@@ -388,7 +388,7 @@ export const findMcpConnectorIconHref = ({
 };
 
 const sanitizeMcpToolNamePart = (value: string): string =>
-  value.replaceAll(/[^a-zA-Z0-9_-]/g, "_");
+  value.replaceAll(/[^a-zA-Z0-9_-]/gu, "_");
 
 const fallbackIconUrl = (rawUrl: string): string | undefined => {
   try {

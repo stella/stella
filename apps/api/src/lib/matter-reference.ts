@@ -6,8 +6,8 @@ class PatternError extends TaggedError("PatternError")<{
 
 const RECOGNIZED_TOKENS = ["{SEQ}", "{YYYY}", "{YY}", "{MM}"] as const;
 // oxlint-disable-next-line sonarjs/slow-regex -- matter patterns are user input capped by MAX_REFERENCE_LENGTH validation
-const TOKEN_REGEX = /\{[^}]+\}/g;
-const FORBIDDEN_CHARS = /[<>&]/;
+const TOKEN_REGEX = /\{[^}]+\}/gu;
+const FORBIDDEN_CHARS = /[<>&]/u;
 
 const MIN_PADDING = 1;
 const MAX_PADDING = 6;

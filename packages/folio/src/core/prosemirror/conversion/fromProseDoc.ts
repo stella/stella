@@ -953,7 +953,7 @@ function createImageRun(node: PMNode): Run {
   if (attrs.transform) {
     const transformStr = attrs.transform;
     const imgTransform: ImageTransform = {};
-    const rotateMatch = /rotate\(([-\d.]+)deg\)/.exec(transformStr);
+    const rotateMatch = /rotate\(([-\d.]+)deg\)/u.exec(transformStr);
     if (rotateMatch) {
       // SAFETY: capture group [1] always present when regex matches
       imgTransform.rotation = Number.parseFloat(rotateMatch[1]!);

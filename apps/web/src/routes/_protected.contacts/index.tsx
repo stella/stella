@@ -439,7 +439,7 @@ type AresAddress = {
   textAddress: string | null;
 };
 
-const normalizeIcoInput = (value: string) => value.replaceAll(/\D/g, "");
+const normalizeIcoInput = (value: string) => value.replaceAll(/\D/gu, "");
 
 const formatStreetLine = (address: AresAddress) => {
   const street = address.street ?? address.municipalityPart ?? "";

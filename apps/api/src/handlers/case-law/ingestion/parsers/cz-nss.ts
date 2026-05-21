@@ -432,7 +432,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
 };
 
 const parseFontSize = (style: string): number => {
-  const match = /font-size:\s*(\d+)pt/.exec(style);
+  const match = /font-size:\s*(\d+)pt/u.exec(style);
   return match ? Number(match[1]) : 12;
 };
 
@@ -443,41 +443,41 @@ const parseFontSize = (style: string): number => {
  * [OBRÁZEK] is always dropped regardless of suffix
  * (e.g. "[OBRÁZEK]ČESKÁ REPUBLIKA" in one <p>).
  */
-const SKIP_RE = /^\[OBRÁZEK\]|^pokračování$|^ČESKÁ REPUBLIKA$/;
+const SKIP_RE = /^\[OBRÁZEK\]|^pokračování$|^ČESKÁ REPUBLIKA$/u;
 
 /** Decision title. */
-const TITLE_RE = /^(ROZSUDEK|USNESENÍ|JMÉNEM REPUBLIKY)$/;
+const TITLE_RE = /^(ROZSUDEK|USNESENÍ|JMÉNEM REPUBLIKY)$/u;
 
 /** "takto:" separator. */
 // oxlint-disable-next-line sonarjs/slow-regex -- matched against individual normalized parser lines
-const TAKTO_RE = /^t\s*a\s*k\s*t\s*o\s*:?\s*$/i;
+const TAKTO_RE = /^t\s*a\s*k\s*t\s*o\s*:?\s*$/iu;
 
 /** "Odůvodnění:" separator. */
 const ODUVODNENI_RE =
   // oxlint-disable-next-line sonarjs/slow-regex -- matched against individual normalized parser lines
-  /^(?:O\s*d\s*ů\s*v\s*o\s*d\s*n\s*ě\s*n\s*í|Odůvodnění)\s*:?\s*$/i;
+  /^(?:O\s*d\s*ů\s*v\s*o\s*d\s*n\s*ě\s*n\s*í|Odůvodnění)\s*:?\s*$/iu;
 
 /** "Poučení:" as standalone or inline prefix. */
 const POUCENI_STANDALONE_RE =
   // oxlint-disable-next-line sonarjs/slow-regex -- matched against individual normalized parser lines
-  /^(?:P\s*o\s*u\s*č\s*e\s*n\s*í|Poučení)\s*:?\s*$/i;
-const POUCENI_INLINE_RE = /^(?:P\s*o\s*u\s*č\s*e\s*n\s*í|Poučení)\s*:\s*/i;
+  /^(?:P\s*o\s*u\s*č\s*e\s*n\s*í|Poučení)\s*:?\s*$/iu;
+const POUCENI_INLINE_RE = /^(?:P\s*o\s*u\s*č\s*e\s*n\s*í|Poučení)\s*:\s*/iu;
 
 /**
  * Ruling item: Roman numeral + period + text.
  * Only matched in the výrok zone (before Odůvodnění).
  */
-const RULING_ITEM_RE = /^((?:X{0,3}(?:IX|IV|V?I{0,3})))\.\s+(.+)/;
+const RULING_ITEM_RE = /^((?:X{0,3}(?:IX|IV|V?I{0,3})))\.\s+(.+)/u;
 
 /**
  * Section heading in Odůvodnění: Roman numeral + title text.
  * May include sub-headings like "III. A", "III. B".
  */
 const SECTION_HEADING_RE =
-  /^((?:X{0,3}(?:IX|IV|V?I{0,3})))\.\s*(?:[A-Z]\s+)?[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]/;
+  /^((?:X{0,3}(?:IX|IV|V?I{0,3})))\.\s*(?:[A-Z]\s+)?[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]/u;
 
 /** Numbered paragraph: [1], [2], ... */
-const NUMBERED_PARA_RE = /^\[(\d+)\]\s*/;
+const NUMBERED_PARA_RE = /^\[(\d+)\]\s*/u;
 
 /**
  * Closing line: "V Brně dne ...", "Praha 10. březen 2026",
@@ -595,7 +595,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
       centered &&
       !TITLE_RE.test(plainText) &&
       !sawCaseNumber &&
-      /\d/.test(plainText)
+      /\d/u.test(plainText)
     ) {
       sawCaseNumber = true;
       blockIndex += 1;

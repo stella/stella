@@ -375,7 +375,7 @@ export function FormattingBar(props: FormattingBarProps) {
           <ColorPicker
             presets={DOCUMENT_COLOR_PRESETS}
             columns={8}
-            value={currentFormatting.color?.replace(/^#/, "").toUpperCase()}
+            value={currentFormatting.color?.replace(/^#/u, "").toUpperCase()}
             onSelect={handleTextColorSelect}
             onClear={handleTextColorClear}
           >
@@ -450,6 +450,7 @@ export function FormattingBar(props: FormattingBarProps) {
       style={inline ? { display: "contents", ...style } : style}
       role="toolbar"
       aria-label={t("formattingToolbar")}
+      tabIndex={-1}
       onMouseDown={inline ? undefined : handleBarMouseDown}
       onMouseUp={inline ? undefined : handleBarMouseUp}
     >

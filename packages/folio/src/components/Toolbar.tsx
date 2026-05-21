@@ -117,6 +117,7 @@ export function Toolbar({
       style={style}
       role="toolbar"
       aria-label="Formatting toolbar"
+      tabIndex={-1}
       data-testid="toolbar"
       onMouseDown={handleToolbarMouseDown}
       onMouseUp={handleToolbarMouseUp}

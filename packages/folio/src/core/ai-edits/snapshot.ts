@@ -10,7 +10,7 @@ import type {
 } from "./types";
 
 export const normalizeFolioAIBlockText = (text: string): string =>
-  text.replace(/\s+/g, " ").trim();
+  text.replace(/\s+/gu, " ").trim();
 
 export const hashFolioAIBlockText = (text: string): string => {
   let hash = 5381;
@@ -111,7 +111,7 @@ const getDisplayLabel = (node: PMNode): string | undefined => {
   }
 
   const styleId: unknown = node.attrs["styleId"];
-  if (typeof styleId === "string" && /^heading/i.test(styleId)) {
+  if (typeof styleId === "string" && /^heading/iu.test(styleId)) {
     return styleId;
   }
 
@@ -288,7 +288,7 @@ const getFontFamilyFromAttrs = (attrs: object): string | undefined => {
 
 const getColorFromAttrs = (attrs: object): string | undefined => {
   const rgb: unknown = Reflect.get(attrs, "rgb") ?? Reflect.get(attrs, "val");
-  if (typeof rgb !== "string" || !/^[0-9a-fA-F]{6}$/.test(rgb)) {
+  if (typeof rgb !== "string" || !/^[0-9a-fA-F]{6}$/u.test(rgb)) {
     return undefined;
   }
 

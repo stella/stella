@@ -59,7 +59,7 @@ const isPreferencesTab = (value: string | null): value is PreferencesTab =>
   value !== null && (PREFERENCES_TABS as readonly string[]).includes(value);
 
 const getInitialTab = (): PreferencesTab => {
-  const tab = window.location.hash.replace(/^#/, "");
+  const tab = window.location.hash.replace(/^#/u, "");
   return isPreferencesTab(tab) ? tab : "general";
 };
 

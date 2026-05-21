@@ -49,7 +49,7 @@ function parseCommentsExtensible(xml: string): Map<string, string> {
   // Find the root element (may be w16cex:commentsExtensible or similar)
   const container = findChild(root, "w16cex", "commentsExtensible") ?? root;
   for (const child of getChildElements(container)) {
-    const localName = child.name?.replace(/^.*:/, "") ?? "";
+    const localName = child.name?.replace(/^.*:/u, "") ?? "";
     if (localName !== "comment") {
       continue;
     }
@@ -100,7 +100,7 @@ function parseCommentsExtended(xml: string): Map<string, CommentExtendedInfo> {
   const root = parseXml(xml);
   const container = findChild(root, "w15", "commentsEx") ?? root;
   for (const child of getChildElements(container)) {
-    const localName = child.name?.replace(/^.*:/, "") ?? "";
+    const localName = child.name?.replace(/^.*:/u, "") ?? "";
     if (localName !== "commentEx") {
       continue;
     }
@@ -174,7 +174,7 @@ export function parseComments(
   const paraIdByCommentIndex = new Map<number, string>();
 
   for (const child of children) {
-    const localName = child.name?.replace(/^.*:/, "") ?? "";
+    const localName = child.name?.replace(/^.*:/u, "") ?? "";
     if (localName !== "comment") {
       continue;
     }
@@ -199,7 +199,7 @@ export function parseComments(
       getAttribute(child, "w", "paraId");
     if (!rawParaId) {
       for (const sub of getChildElements(child)) {
-        const subLocal = sub.name?.replace(/^.*:/, "") ?? "";
+        const subLocal = sub.name?.replace(/^.*:/u, "") ?? "";
         if (subLocal !== "p") {
           continue;
         }
@@ -226,7 +226,7 @@ export function parseComments(
     // Parse comment content (paragraphs)
     const paragraphs: Paragraph[] = [];
     for (const contentChild of getChildElements(child)) {
-      const contentName = contentChild.name?.replace(/^.*:/, "") ?? "";
+      const contentName = contentChild.name?.replace(/^.*:/u, "") ?? "";
       if (contentName === "p") {
         const paragraph = parseParagraph(
           contentChild,

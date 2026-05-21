@@ -353,7 +353,7 @@ const normalizeDecisionDate = (
   raw: string | null | undefined,
   content: string | null | undefined,
 ): string | undefined => {
-  if (raw && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+  if (raw && /^\d{4}-\d{2}-\d{2}$/u.test(raw)) {
     const year = Number.parseInt(raw.slice(0, 4), 10);
     if (year >= 1900 && year <= new Date().getFullYear() + 1) {
       return raw;

@@ -173,9 +173,9 @@ export const deanonymizeFromBoundary = ({
   return deanonymise(text, boundary.redactionMap);
 };
 
-const PLACEHOLDER_LIKE = /\[[A-Z][A-Z0-9_]*]/;
-const PLACEHOLDER_INNER_RE = /^[A-Z][A-Z0-9_]*$/;
-const REGEX_SPECIALS = /[\\^$.*+?()[\]{}|]/g;
+const PLACEHOLDER_LIKE = /\[[A-Z][A-Z0-9_]*\]/u;
+const PLACEHOLDER_INNER_RE = /^[A-Z][A-Z0-9_]*$/u;
+const REGEX_SPECIALS = /[\\^$.*+?()[\]{}|]/gu;
 const escapeRegex = (value: string) => value.replaceAll(REGEX_SPECIALS, "\\$&");
 
 /**
@@ -269,7 +269,7 @@ const buildLenientReplacer = (
   if (bracketless.length > 0) {
     parts.push(`\\b(?:${bracketless.join("|")})\\b`);
   }
-  return { pattern: new RegExp(parts.join("|"), "g"), lookup };
+  return { pattern: new RegExp(parts.join("|"), "gu"), lookup };
 };
 
 const walkLenient = (value: unknown, replacer: LenientReplacer): unknown => {
@@ -622,7 +622,7 @@ const TECHNICAL_IDENTIFIER_KEYS = new Set([
 ]);
 
 const TECHNICAL_IDENTIFIER_PATTERN =
-  /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|[a-z][a-z0-9]*_[A-Za-z0-9-]+)$/i;
+  /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|[a-z][a-z0-9]*_[A-Za-z0-9-]+)$/iu;
 
 const shouldPreserveStructuredString = (
   key: string,

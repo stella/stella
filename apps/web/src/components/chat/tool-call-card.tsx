@@ -428,7 +428,7 @@ function ToolCallLeadingIcon({
 }
 
 const sanitizeMcpToolNamePart = (value: string): string =>
-  value.replace(/[^a-zA-Z0-9_-]/g, "_");
+  value.replace(/[^a-zA-Z0-9_-]/gu, "_");
 
 const fallbackIconUrl = (rawUrl: string): string | undefined => {
   try {

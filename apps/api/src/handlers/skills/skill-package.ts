@@ -14,11 +14,11 @@ import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
 const SKILL_FILE_NAME = "SKILL.md";
-const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/u;
 const GITHUB_API_TIMEOUT_MS = 10_000;
 const GITHUB_REF_CANDIDATE_LIMIT = 16;
 const GITHUB_SKILL_FILE_MAX_BYTES = LIMITS.agentSkillResourceMaxChars * 4;
-const GITHUB_COMMIT_SHA_PATTERN = /^[a-f0-9]{40}$/i;
+const GITHUB_COMMIT_SHA_PATTERN = /^[a-f0-9]{40}$/iu;
 const UTF8_DECODER = new TextDecoder("utf-8", { fatal: true });
 const GITHUB_SKILL_HOSTNAMES = new Set([
   "github.com",

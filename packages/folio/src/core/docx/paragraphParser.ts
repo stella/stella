@@ -90,7 +90,7 @@ function parseSdtProperties(sdtPr: XmlElement | null): SdtProperties {
     if (el.type !== "element") {
       continue;
     }
-    const name = el.name?.replace(/^w:/, "") ?? "";
+    const name = el.name?.replace(/^w:/u, "") ?? "";
 
     switch (name) {
       case "alias": {
@@ -203,7 +203,7 @@ function extractMathText(el: XmlElement): string {
   if (el.elements) {
     for (const child of el.elements) {
       // m:t elements contain the actual math text
-      const childName = child.name?.replace(/^.*:/, "") ?? "";
+      const childName = child.name?.replace(/^.*:/u, "") ?? "";
       if (childName === "t" && child.elements) {
         for (const t of child.elements) {
           if (t.type === "text" && typeof t.text === "string") {

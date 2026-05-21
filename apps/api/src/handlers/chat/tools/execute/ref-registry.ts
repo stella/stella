@@ -11,26 +11,26 @@ import {
 
 export const CHAT_ENTITY_REF_PREFIX = "#stella-entity-ref=";
 export const CHAT_WORKSPACE_REF_PREFIX = "#stella-workspace-ref=";
-const REGEX_SPECIAL_CHARS = /[.*+?^${}()|[\]\\]/g;
+const REGEX_SPECIAL_CHARS = /[.*+?^${}()|[\]\\]/gu;
 const UUID_PATTERN =
   "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 
 const createRefLinkRegex = (prefix: string) =>
   new RegExp(
     `${prefix.replaceAll(REGEX_SPECIAL_CHARS, "\\$&")}([^\\s)]+)`,
-    "g",
+    "gu",
   );
 
 const ENTITY_REF_LINK_REGEX = createRefLinkRegex(CHAT_ENTITY_REF_PREFIX);
 const WORKSPACE_REF_LINK_REGEX = createRefLinkRegex(CHAT_WORKSPACE_REF_PREFIX);
-const UUID_REGEX = new RegExp(`^${UUID_PATTERN}$`, "i");
+const UUID_REGEX = new RegExp(`^${UUID_PATTERN}$`, "iu");
 const PERSISTED_ENTITY_LINK_REGEX = new RegExp(
   `#stella-entity=(${UUID_PATTERN}):(${UUID_PATTERN})`,
-  "gi",
+  "giu",
 );
 const PERSISTED_WORKSPACE_LINK_REGEX = new RegExp(
   `#stella-workspace=(${UUID_PATTERN})`,
-  "gi",
+  "giu",
 );
 
 const escapeMarkdownLinkLabel = (label: string) =>

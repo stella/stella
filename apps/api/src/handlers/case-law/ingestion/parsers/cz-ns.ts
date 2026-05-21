@@ -77,7 +77,7 @@ export const parseNsDecisionHtml = (
 // ── Metadata extraction ────────────────────────────────────
 
 const parseDominoDate = (raw: string): string | null => {
-  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(raw);
+  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/u.exec(raw);
   if (!match) {
     return null;
   }
@@ -108,7 +108,7 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
 
   const splitBrValues = (td: cheerio.Cheerio<AnyNode>) =>
     ($(td).html() ?? "")
-      .split(/<br\s*\/?>/i)
+      .split(/<br\s*\/?>/iu)
       .map((s) => cheerio.load(s).text().trim())
       .filter(Boolean);
 
@@ -550,13 +550,13 @@ export const blocksToPlainText = (blocks: readonly Block[]): string =>
   blocks
     .map((block) => block.plainText)
     .join("\n\n")
-    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\n{3,}/gu, "\n\n")
     .trim();
 
 // ── Pattern constants ─────────────────────────────────────
 
 // oxlint-disable-next-line sonarjs/slow-regex -- title detection runs on one paragraph line
-const DECISION_TITLE_RE = /^[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]\s+[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ\s]+$/;
+const DECISION_TITLE_RE = /^[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]\s+[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ\s]+$/u;
 
 const DECISION_TYPE_WORDS = new Set([
   "ROZSUDEK",
@@ -569,9 +569,9 @@ const DECISION_TYPE_WORDS = new Set([
 // "Stručné odůvodnění (§ ...)", and spaced variants.
 // Anchored to start of line to avoid false positives.
 const SECTION_HEADING_RE =
-  /^(?:S\s*t\s*r\s*u\s*[čc]\s*n\s*[ée]\s+)?O\s*d\s*[uů]\s*v\s*o\s*d\s*n\s*[eě]\s*n\s*[ií]/i;
+  /^(?:S\s*t\s*r\s*u\s*[čc]\s*n\s*[ée]\s+)?O\s*d\s*[uů]\s*v\s*o\s*d\s*n\s*[eě]\s*n\s*[ií]/iu;
 
-const RULING_ITEM_RE = /^([IVXLCDM]+\.)\s+/;
+const RULING_ITEM_RE = /^([IVXLCDM]+\.)\s+/u;
 
 const isDecisionTitle = (plainText: string): boolean => {
   const trimmed = plainText.trim();
@@ -628,7 +628,7 @@ const shouldMerge = (prev: Block, next: Block): prev is InlineBlock => {
   }
 
   // Very short fragment (continuation like "." or "se odmítá")
-  if (nextText.length < 30 && !/[.!?:]\s*$/.test(prevText)) {
+  if (nextText.length < 30 && !/[.!?:]\s*$/u.test(prevText)) {
     return true;
   }
 
@@ -704,9 +704,9 @@ const mergeBlocks = (
       // Check for embedded title
       const titleMatch =
         // oxlint-disable-next-line sonarjs/slow-regex -- first paragraph text is bounded by parser block splitting
-        /([A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]\s+[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ\s]{5,})\s*$/.exec(text);
+        /([A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]\s+[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ\s]{5,})\s*$/u.exec(text);
       // oxlint-disable-next-line sonarjs/slow-regex -- first paragraph text is bounded by parser block splitting
-      const caseMatch = /(\d+\s+\w+\s+\d+\/\d{4}[^\s]*)/.exec(text);
+      const caseMatch = /(\d+\s+\w+\s+\d+\/\d{4}[^\s]*)/u.exec(text);
 
       if (titleMatch && caseMatch) {
         // Replace the merged block with case-number + title
@@ -735,7 +735,7 @@ const mergeBlocks = (
         merged.splice(firstParaIdx, 1, ...replacements);
       } else if (
         firstPara.plainText.length < 30 &&
-        /^\d+\s+\w+\s+\d+\/\d{4}/.test(firstPara.plainText)
+        /^\d+\s+\w+\s+\d+\/\d{4}/u.test(firstPara.plainText)
       ) {
         firstPara.role = "case-number";
       }
@@ -749,7 +749,7 @@ const mergeBlocks = (
   // get role "holding".
   // Match "takto:", "takto :", "t a k t o :", etc.
   // oxlint-disable-next-line sonarjs/slow-regex -- matched against individual block plainText
-  const TAKTO_RE = /t\s*a\s*k\s*t\s*o\s*:?\s*$/i;
+  const TAKTO_RE = /t\s*a\s*k\s*t\s*o\s*:?\s*$/iu;
   let inHolding = false;
 
   for (const block of merged) {

@@ -399,7 +399,7 @@ const getResolvedTextPrefixLength = (text: string) => {
   }
 
   const markerSuffix = text.slice(markerIndex);
-  return /[\s)]/.test(markerSuffix) ? text.length : markerIndex;
+  return /[\s)]/u.test(markerSuffix) ? text.length : markerIndex;
 };
 
 // A token like `[PERSON_1]` may straddle two text deltas. Hold back
@@ -416,10 +416,10 @@ const getResolvedTextPrefixLength = (text: string) => {
 // The one-delta latency penalty for markdown `[link text](url)`
 // is acceptable; once the next char arrives it's lowercase, the
 // regex stops matching, and the buffered `[` flushes.
-const PARTIAL_PLACEHOLDER_TAIL = /\[[A-Z][A-Z0-9_]*$|\[$/;
-const PLACEHOLDER_TOKEN = /\[[A-Z][A-Z0-9_]*]/g;
-const PLACEHOLDER_INNER_TOKEN = /^[A-Z][A-Z0-9_]*$/;
-const REGEX_SPECIALS = /[\\^$.*+?()[\]{}|]/g;
+const PARTIAL_PLACEHOLDER_TAIL = /\[[A-Z][A-Z0-9_]*$|\[$/u;
+const PLACEHOLDER_TOKEN = /\[[A-Z][A-Z0-9_]*\]/gu;
+const PLACEHOLDER_INNER_TOKEN = /^[A-Z][A-Z0-9_]*$/u;
+const REGEX_SPECIALS = /[\\^$.*+?()[\]{}|]/gu;
 
 const getDeanonymisablePrefixLength = (text: string): number => {
   const match = PARTIAL_PLACEHOLDER_TAIL.exec(text);
@@ -511,7 +511,7 @@ const buildLenientPlaceholderCollector = (
   }
 
   return {
-    pattern: new RegExp(patterns.join("|"), "g"),
+    pattern: new RegExp(patterns.join("|"), "gu"),
     placeholderByToken,
   };
 };

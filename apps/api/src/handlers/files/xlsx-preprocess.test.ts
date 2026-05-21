@@ -7,7 +7,7 @@ import { applyFitToPage, patchSheetXml } from "./xlsx-preprocess";
 const EXPECTED_FIT_TO_PAGE = 'fitToPage="1"';
 const EXPECTED_FIT_TO_WIDTH = 'fitToWidth="1"';
 const REGEX_WORKSHEET_WITH_SHEET_PR =
-  /<worksheet[^>]*><sheetPr><pageSetUpPr fitToPage="1"\/><\/sheetPr>/;
+  /<worksheet[^>]*><sheetPr><pageSetUpPr fitToPage="1"\/><\/sheetPr>/u;
 
 // ── patchSheetXml ────────────────────────────────────────
 
@@ -70,7 +70,7 @@ describe("patchSheetXml", () => {
     const out = patchSheetXml(xml);
 
     // Verify exactly one fitToPage was inserted
-    expect(out.match(/fitToPage="1"/g)?.length).toBe(1);
+    expect(out.match(/fitToPage="1"/gu)?.length).toBe(1);
 
     // Original sheetPr content preserved and structured correctly
     expect(out).toContain(
@@ -89,7 +89,7 @@ describe("patchSheetXml", () => {
 
     const out = patchSheetXml(xml);
 
-    expect(out.match(/fitToPage="1"/g)?.length).toBe(1);
+    expect(out.match(/fitToPage="1"/gu)?.length).toBe(1);
     expect(out).toContain(
       '<sheetPr codeName="Sheet1"><pageSetUpPr fitToPage="1"/></sheetPr>',
     );
@@ -110,7 +110,7 @@ describe("patchSheetXml", () => {
     // Should flip fitToPage to 1
     expect(out).toContain(EXPECTED_FIT_TO_PAGE);
     // Should not have duplicate fitToPage
-    expect(out.match(/fitToPage/g)?.length).toBe(1);
+    expect(out.match(/fitToPage/gu)?.length).toBe(1);
   });
 
   it("is idempotent when settings are already correct", () => {
@@ -129,8 +129,8 @@ describe("patchSheetXml", () => {
     expect(out2).toContain(EXPECTED_FIT_TO_PAGE);
     expect(out2).toContain(EXPECTED_FIT_TO_WIDTH);
     // No duplication
-    expect(out2.match(/fitToPage/g)?.length).toBe(1);
-    expect(out2.match(/fitToWidth/g)?.length).toBe(1);
+    expect(out2.match(/fitToPage/gu)?.length).toBe(1);
+    expect(out2.match(/fitToWidth/gu)?.length).toBe(1);
   });
 });
 

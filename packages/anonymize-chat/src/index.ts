@@ -204,7 +204,7 @@ export const buildChatAnonPipelineConfig = ({
  * collide.
  */
 const normalizeForExclusion = (value: string): string =>
-  value.normalize("NFKC").toLowerCase().replaceAll(/\s+/g, " ").trim();
+  value.normalize("NFKC").toLowerCase().replaceAll(/\s+/gu, " ").trim();
 
 export const runChatAnonPipeline = async ({
   context: providedContext,

@@ -939,7 +939,7 @@ const previewRunStyle = (
 };
 
 const cssFontFamily = (fontFamily: string | undefined): string | undefined => {
-  const first = fontFamily?.split(",").at(0)?.trim().replace(/["']/g, "");
+  const first = fontFamily?.split(",").at(0)?.trim().replace(/["']/gu, "");
   if (!first || !/^[\p{L}\p{N} ._-]+$/u.test(first)) {
     return undefined;
   }

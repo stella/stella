@@ -68,35 +68,35 @@ const normalizeCitation = (
   }
 
   // Czech: "sp. zn. 33 Cdo 2178/2018" → "33 Cdo 2178/2018"
-  const spZn = /^sp\.\s*zn\.\s*(.+)/i.exec(trimmed);
+  const spZn = /^sp\.\s*zn\.\s*(.+)/iu.exec(trimmed);
   if (spZn?.[1]) {
     return { caseNumber: spZn[1].trim() };
   }
 
   // Czech file number: "č. j. 5 As 123/2020" → "5 As 123/2020"
-  const cj = /^[čc]\.\s*j\.\s*(.+)/i.exec(trimmed);
+  const cj = /^[čc]\.\s*j\.\s*(.+)/iu.exec(trimmed);
   if (cj?.[1]) {
     return { caseNumber: cj[1].trim() };
   }
 
   // Czech collection: "č. 123/2020 Sb. rozh. tr." — no case number
-  if (/^[čc]\.\s*\d+\/\d+\s+Sb\./.test(trimmed)) {
+  if (/^[čc]\.\s*\d+\/\d+\s+Sb\./u.test(trimmed)) {
     return {};
   }
 
   // Polish: "sygn. akt II CSK 123/20" → "II CSK 123/20"
-  const sygn = /^sygn\.\s*(?:akt\s+)?(.+)/i.exec(trimmed);
+  const sygn = /^sygn\.\s*(?:akt\s+)?(.+)/iu.exec(trimmed);
   if (sygn?.[1]) {
     return { caseNumber: sygn[1].trim() };
   }
 
   // Polish bare: "II CSK 123/20" — already a case number
-  if (/^[IVX]{2,4}\s+[A-Za-z]{2,5}\s+\d/.test(trimmed)) {
+  if (/^[IVX]{2,4}\s+[A-Za-z]{2,5}\s+\d/u.test(trimmed)) {
     return { caseNumber: trimmed };
   }
 
   // Slovak: "1Cdo/123/2020" — already a case number
-  if (/^\d{1,3}[A-Za-z]+\/\d+\/\d{4}$/.test(trimmed)) {
+  if (/^\d{1,3}[A-Za-z]+\/\d+\/\d{4}$/u.test(trimmed)) {
     return { caseNumber: trimmed };
   }
 
@@ -362,7 +362,7 @@ const classifyWithRules = async () => {
 
   const compiled = rules.map((r) => ({
     id: r.id,
-    pattern: new RegExp(r.pattern, "i"),
+    pattern: new RegExp(r.pattern, "iu"),
     polarity: r.polarity,
   }));
 
@@ -608,7 +608,7 @@ const printReport = async () => {
         const end = Math.min(ft.length, citPos + citationText.length + 80);
         const context =
           citPos !== -1
-            ? `...${ft.slice(start, end).replace(/\n/g, " ")}...`
+            ? `...${ft.slice(start, end).replace(/\n/gu, " ")}...`
             : "(context not found in fulltext)";
 
         console.log(`  ${citingCase} → ${citedCase}`);
@@ -648,7 +648,7 @@ const printReport = async () => {
       const end = Math.min(ft.length, citPos + citationText.length + 100);
       const context =
         citPos !== -1
-          ? `...${ft.slice(start, end).replace(/\n/g, " ")}...`
+          ? `...${ft.slice(start, end).replace(/\n/gu, " ")}...`
           : "(context not found)";
 
       console.log(`  ${citingCase} → ${citedCase}`);

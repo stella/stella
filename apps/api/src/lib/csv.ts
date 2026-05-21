@@ -6,7 +6,7 @@
  * formula neutralization (=, +, -, @, tab, CR, LF prefixes).
  */
 
-const FORMULA_PREFIX_RE = /^\s*[=+\-@\t\r\n]/;
+const FORMULA_PREFIX_RE = /^\s*[=+\-@\t\r\n]/u;
 
 /**
  * Escape a value for safe inclusion in a CSV cell.
@@ -30,7 +30,7 @@ export const escapeCSV = (value: string): string => {
     return value;
   }
 
-  const escaped = value.replace(/"/g, '""');
+  const escaped = value.replace(/"/gu, '""');
   if (isFormula) {
     return `"\t${escaped}"`;
   }

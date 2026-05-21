@@ -96,16 +96,16 @@ const extractAcceptedText = (xml: string): string[] => {
 /** Strip chars illegal in XML 1.0 text; normalize line endings. */
 const sanitizeForXml = (s: string): string =>
   s
-    .replace(/[<>&"']/g, "")
+    .replace(/[<>&"']/gu, "")
     // eslint-disable-next-line no-control-regex -- strip XML-illegal control chars
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/gu, "")
     // Lone surrogates and non-characters are forbidden in XML 1.0.
     // fast-check unit:"binary" produces raw UTF-16 code units which
     // can include these.
-    .replace(/[\uD800-\uDFFF\uFFFE\uFFFF]/g, "")
+    .replace(/[\uD800-\uDFFF\uFFFE\uFFFF]/gu, "")
     // XML parsers normalize \r\n → \n and lone \r → \n.
     // Reflect this so test data matches parsed output.
-    .replace(/\r\n?/g, "\n")
+    .replace(/\r\n?/gu, "\n")
     .trim();
 
 /** Any Unicode string safe for XML text nodes. */

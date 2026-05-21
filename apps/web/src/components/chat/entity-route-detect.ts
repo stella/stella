@@ -25,6 +25,7 @@ export const isEntityActiveInMainRoute = (
   }
   const onDocumentRoute = new RegExp(
     `^/workspaces/${workspaceId}/[^/]+/document(?:/|$|\\?)`,
+    "u",
   ).test(location.pathname);
   if (!onDocumentRoute) {
     return false;

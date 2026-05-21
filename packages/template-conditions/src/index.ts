@@ -56,7 +56,7 @@ type Token =
 const TOKEN_RE =
   /("(?:[^"\\]|\\.)*"|==|!=|>=|<=|>|<|!(?!=)|and\b|or\b|[()]|[\p{L}\p{N}_.]+)/gu;
 
-const STARTS_WITH_DIGIT_RE = /^\d/;
+const STARTS_WITH_DIGIT_RE = /^\d/u;
 
 const tokenize = (expr: string): Token[] => {
   const tokens: Token[] = [];
@@ -84,7 +84,7 @@ const tokenize = (expr: string): Token[] => {
     } else if (raw.startsWith('"')) {
       tokens.push({
         type: "string",
-        raw: raw.slice(1, -1).replace(/\\"/g, '"'),
+        raw: raw.slice(1, -1).replace(/\\"/gu, '"'),
       });
     } else {
       tokens.push({ type: "value", raw });
@@ -100,7 +100,7 @@ const parseNumeric = (raw: string): number | undefined => {
   if (!STARTS_WITH_DIGIT_RE.test(raw)) {
     return undefined;
   }
-  const cleaned = raw.replace(/_/g, "");
+  const cleaned = raw.replace(/_/gu, "");
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : undefined;
 };

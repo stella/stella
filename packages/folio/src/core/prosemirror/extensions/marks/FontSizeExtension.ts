@@ -17,14 +17,14 @@ export const FontSizeExtension = createMarkExtension({
       {
         style: "font-size",
         getAttrs: (value) => {
-          const pxMatch = /^([\d.]+)px$/.exec(value);
+          const pxMatch = /^([\d.]+)px$/u.exec(value);
           if (pxMatch) {
             // SAFETY: capture group [1] always present when regex matches
             const px = Number.parseFloat(pxMatch[1] ?? "0");
             const pt = px * 0.75;
             return { size: Math.round(pt * 2) };
           }
-          const ptMatch = /^([\d.]+)pt$/.exec(value);
+          const ptMatch = /^([\d.]+)pt$/u.exec(value);
           if (ptMatch) {
             // SAFETY: capture group [1] always present when regex matches
             return {

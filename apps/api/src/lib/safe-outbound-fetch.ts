@@ -651,7 +651,7 @@ const trimTrailingDots = (s: string): string => {
 type IPv4 = readonly [number, number, number, number];
 
 const parseOctet = (s: string): number | undefined => {
-  if (s === "" || !/^\d+$/.test(s)) {
+  if (s === "" || !/^\d+$/u.test(s)) {
     return undefined;
   }
   const n = Number(s);
@@ -746,15 +746,15 @@ const isBlockedIPv6 = (host: string): boolean => {
   // leading-zero forms like `fe8::` to worry about, and matching
   // shorter prefixes here would over-block legitimate addresses.
 
-  if (/^fe[89ab][0-9a-f]:/.test(compressed)) {
+  if (/^fe[89ab][0-9a-f]:/u.test(compressed)) {
     return true;
   }
 
-  if (/^f[cd][0-9a-f]{2}:/.test(compressed)) {
+  if (/^f[cd][0-9a-f]{2}:/u.test(compressed)) {
     return true;
   }
 
-  if (/^ff[0-9a-f]{2}:/.test(compressed)) {
+  if (/^ff[0-9a-f]{2}:/u.test(compressed)) {
     return true;
   }
 
@@ -766,7 +766,7 @@ const isBlockedIPv6 = (host: string): boolean => {
     return true;
   }
 
-  const dotted = /^::(?:ffff:)?(\d{1,3}(?:\.\d{1,3}){3})$/.exec(compressed);
+  const dotted = /^::(?:ffff:)?(\d{1,3}(?:\.\d{1,3}){3})$/u.exec(compressed);
   const dottedIp = dotted?.[1];
   if (dottedIp !== undefined) {
     const ipv4 = parseIPv4(dottedIp);
@@ -777,7 +777,7 @@ const isBlockedIPv6 = (host: string): boolean => {
 
   // The URL parser normalizes ::ffff:127.0.0.1 → ::ffff:7f00:1.
   // Decode the trailing two hextets back to four IPv4 octets.
-  const hex = /^::(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(compressed);
+  const hex = /^::(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/u.exec(compressed);
   const hexHigh = hex?.[1];
   const hexLow = hex?.[2];
   if (hexHigh !== undefined && hexLow !== undefined) {

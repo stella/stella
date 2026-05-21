@@ -58,7 +58,7 @@ function formatDate(dateStr: string | undefined, locale: string): string {
 
 function getInitials(name: string): string {
   return name
-    .split(/\s+/)
+    .split(/\s+/u)
     .map((w) => w[0])
     .join("")
     .toUpperCase()
@@ -950,6 +950,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                   onKeyDown={(e) => e.stopPropagation()}
                   onMouseDown={(e) => e.stopPropagation()}
                   role="menu"
+                  tabIndex={-1}
                   style={{
                     position: "absolute",
                     top: 28,
@@ -1027,10 +1028,10 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
   };
 
   return (
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- stopPropagation prevents global handlers from hijacking clicks inside the sidebar
     <aside
       ref={sidebarRef}
       className="docx-comments-sidebar"
-      role="complementary"
       aria-label="Comments"
       style={{
         position: "absolute",

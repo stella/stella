@@ -53,7 +53,7 @@ COUNTRY_CODE_BY_EMAIL_TLD.set("uk", "GB");
 
 const COUNTRY_CODE_SET = new Set<string>(COUNTRY_CODES);
 
-const LOCALE_REGION_PATTERN = /[-_]([A-Za-z]{2})\b/;
+const LOCALE_REGION_PATTERN = /[-_]([A-Za-z]{2})\b/u;
 
 export const createCountryOptions = (locale: string): CountryOption[] => {
   const names = new Intl.DisplayNames([locale], { type: "region" });

@@ -76,13 +76,13 @@ describe("resolveDatabaseUrl", () => {
         DB_USER: "appuser",
         DB_NAME: "appdb",
       }),
-    ).toThrow(/DB_PASSWORD/);
+    ).toThrow(/DB_PASSWORD/u);
   });
 
   test("throws when components are partially set", () => {
     expect(() =>
       resolveDatabaseUrl({ DB_HOST: "db.example", DB_USER: "appuser" }),
-    ).toThrow(/incomplete.*DB_PORT.*DB_PASSWORD.*DB_NAME/);
+    ).toThrow(/incomplete.*DB_PORT.*DB_PASSWORD.*DB_NAME/u);
   });
 
   test.each([["disable"], ["allow"], ["prefer"], ["bogus"]])(
@@ -90,7 +90,7 @@ describe("resolveDatabaseUrl", () => {
     (sslmode) => {
       expect(() =>
         resolveDatabaseUrl({ ...components, DB_SSLMODE: sslmode }),
-      ).toThrow(/DB_SSLMODE must be one of/);
+      ).toThrow(/DB_SSLMODE must be one of/u);
     },
   );
 
@@ -111,7 +111,7 @@ describe("resolveDatabaseUrl", () => {
     ["db .example"],
   ])("throws on DB_HOST containing URL delimiter: %s", (host) => {
     expect(() => resolveDatabaseUrl({ ...components, DB_HOST: host })).toThrow(
-      /DB_HOST must not contain URL delimiters/,
+      /DB_HOST must not contain URL delimiters/u,
     );
   });
 
@@ -120,7 +120,7 @@ describe("resolveDatabaseUrl", () => {
     (port) => {
       expect(() =>
         resolveDatabaseUrl({ ...components, DB_PORT: port }),
-      ).toThrow(/DB_PORT must be numeric/);
+      ).toThrow(/DB_PORT must be numeric/u);
     },
   );
 });

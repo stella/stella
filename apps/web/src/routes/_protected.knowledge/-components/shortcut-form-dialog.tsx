@@ -57,7 +57,7 @@ type ShortcutFormDialogProps = {
   initial?: ShortcutInitial;
 };
 
-const COMMAND_PATTERN = /^[a-z0-9][a-z0-9_-]{0,48}$/;
+const COMMAND_PATTERN = /^[a-z0-9][a-z0-9_-]{0,48}$/u;
 const RESERVED_COMMANDS = ["model", "new"] as const;
 
 // ── Component ────────────────────────────────────────
@@ -125,7 +125,7 @@ const ShortcutFormDialogBody = ({
   };
 
   const handleCommandChange = (value: string) => {
-    const lower = value.toLowerCase().replace(/\s/g, "");
+    const lower = value.toLowerCase().replace(/\s/gu, "");
     setForm((f) => ({ ...f, command: lower }));
     setCommandError(validateCommand(lower));
   };

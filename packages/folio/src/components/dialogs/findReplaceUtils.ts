@@ -88,7 +88,7 @@ export function createDefaultFindOptions(): FindOptions {
  * Escape string for use in regex pattern
  */
 export function escapeRegexString(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return str.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 /**
@@ -142,7 +142,7 @@ export function findAllMatches(
   }
 
   const escapeRegex = (str: string) =>
-    str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    str.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
   let pattern: string;
   if (options.matchWholeWord) {

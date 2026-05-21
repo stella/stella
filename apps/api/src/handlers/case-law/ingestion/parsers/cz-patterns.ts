@@ -11,11 +11,11 @@ export const CZ_CLOSING_RE =
 
 /** Judge name prefix: JUDr., Mgr., doc., prof. */
 export const CZ_JUDGE_NAME_RE =
-  /^(?:JUDr\.|Mgr\.|doc\.|prof\.|PhDr\.|Ing\.|Bc\.|RNDr\.|MUDr\.)\s+/;
+  /^(?:JUDr\.|Mgr\.|doc\.|prof\.|PhDr\.|Ing\.|Bc\.|RNDr\.|MUDr\.)\s+/u;
 
 /**
  * Judge function title (substring match): předseda/předsedkyně
  * senátu, soudce zpravodaj, samosoudce, v. r.
  */
 export const CZ_JUDGE_TITLE_RE =
-  /(?:předsed(?:a|kyně|y)\s+senátu:?|samosoudce|samosoudkyně|soud(?:ce|kyně)\s+zpravodaj|v\.\s*r\.\s*$)/i;
+  /(?:předsed(?:a|kyně|y)\s+senátu:?|samosoudce|samosoudkyně|soud(?:ce|kyně)\s+zpravodaj|v\.\s*r\.\s*$)/iu;

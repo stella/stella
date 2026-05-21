@@ -230,7 +230,7 @@ export const filterReviewSuggestions = (
 export const computeInitialsFrom = (name: string): string => {
   const parts = name
     .trim()
-    .split(/\s+/)
+    .split(/\s+/u)
     .filter((part) => part.length > 0);
   if (parts.length === 0) {
     return "";

@@ -14,7 +14,7 @@ describe("buildVersionStamp", () => {
 
     expect(result.stamp).toBe("2026/001/015.v3");
     expect(result.verificationCode).toMatch(
-      /^[abcdefghjkmnpqrstuvwxyz23456789]{10}$/,
+      /^[abcdefghjkmnpqrstuvwxyz23456789]{10}$/u,
     );
   });
 

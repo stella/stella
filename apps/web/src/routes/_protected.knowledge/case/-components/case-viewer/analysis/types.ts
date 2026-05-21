@@ -87,7 +87,7 @@ const CATEGORY_I18N: Record<string, TranslationKey> = {
  * Falls back to capitalising the raw key for unknown categories.
  */
 export const formatCategoryLabel = (category: string): string =>
-  category.replace(/-/g, " ");
+  category.replace(/-/gu, " ");
 
 /** Get the i18n message key for a core category, or null. */
 export const getCategoryI18nKey = (category: string): TranslationKey | null =>

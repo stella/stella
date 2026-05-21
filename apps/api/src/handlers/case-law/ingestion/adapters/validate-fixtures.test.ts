@@ -62,30 +62,30 @@ const validateDecision = (
   // Required fields
   expect(d.caseNumber, `${prefix}.caseNumber`).toBeTruthy();
   expect(d.court, `${prefix}.court`).toBeTruthy();
-  expect(d.country, `${prefix}.country`).toMatch(/^[A-Z]{2,3}$/);
-  expect(d.language, `${prefix}.language`).toMatch(/^[a-z]{2}$/);
+  expect(d.country, `${prefix}.country`).toMatch(/^[A-Z]{2,3}$/u);
+  expect(d.language, `${prefix}.language`).toMatch(/^[a-z]{2}$/u);
   expect(d.rawHash, `${prefix}.rawHash`).toHaveLength(64);
   expect(typeof d.metadata, `${prefix}.metadata type`).toBe("object");
 
   // Date format if present
   if (d.decisionDate) {
     expect(d.decisionDate, `${prefix}.decisionDate`).toMatch(
-      /^\d{4}-\d{2}-\d{2}$/,
+      /^\d{4}-\d{2}-\d{2}$/u,
     );
   }
 
   // ECLI format if present
   if (d.ecli) {
-    expect(d.ecli, `${prefix}.ecli`).toMatch(/^ECLI:/);
+    expect(d.ecli, `${prefix}.ecli`).toMatch(/^ECLI:/u);
   }
 
   // URL format if present
   if (d.sourceUrl) {
-    expect(d.sourceUrl, `${prefix}.sourceUrl`).toMatch(/^https?:\/\//);
+    expect(d.sourceUrl, `${prefix}.sourceUrl`).toMatch(/^https?:\/\//u);
   }
 
   if (d.documentUrl) {
-    expect(d.documentUrl, `${prefix}.documentUrl`).toMatch(/^https?:\/\//);
+    expect(d.documentUrl, `${prefix}.documentUrl`).toMatch(/^https?:\/\//u);
   }
 };
 
@@ -102,7 +102,7 @@ describe("fixture validation", () => {
       // Fixture metadata
       expect(data.adapter, `${filename}.adapter`).toBeTruthy();
       expect(data.recordedAt, `${filename}.recordedAt`).toMatch(
-        /^\d{4}-\d{2}-\d{2}/,
+        /^\d{4}-\d{2}-\d{2}/u,
       );
       expect(data.page, `${filename}.page`).toBeDefined();
       expect(

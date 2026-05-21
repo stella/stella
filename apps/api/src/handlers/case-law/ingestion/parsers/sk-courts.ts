@@ -180,7 +180,7 @@ const extractLines = async (pdfBytes: Uint8Array): Promise<PdfLine[]> => {
       const text = segments
         .map((s) => s.text)
         .join(" ")
-        .replace(/ {2,}/g, " ")
+        .replace(/ {2,}/gu, " ")
         .trim();
       if (!text) {
         continue;
@@ -281,7 +281,7 @@ const buildSpanSegments = (
   if (firstTextSpan) {
     const firstText = normalizeSpanText(firstTextSpan.text);
     const leadingGap = lineBbox.x - leftMargin;
-    const startsWithContinuation = /^[,;.)\s]/.test(firstText);
+    const startsWithContinuation = /^[,;.)\s]/u.test(firstText);
     if (leadingGap > REDACTION_MIN_GAP && startsWithContinuation) {
       segments.push({
         text: ANONYMIZED_PLACEHOLDER,
@@ -335,7 +335,7 @@ const buildSpanSegments = (
 
   // Clean up: trim each segment text
   for (const seg of segments) {
-    seg.text = seg.text.replace(/ {2,}/g, " ").trim();
+    seg.text = seg.text.replace(/ {2,}/gu, " ").trim();
   }
 
   return segments.filter((s) => s.text !== "");
@@ -492,8 +492,8 @@ const SPACED_WORD_RE =
 
 const normalizeSpaced = (text: string): string =>
   text
-    .replace(SPACED_WORD_RE, (match) => match.replace(/ /g, ""))
-    .replace(/ {2,}/g, " ");
+    .replace(SPACED_WORD_RE, (match) => match.replace(/ /gu, ""))
+    .replace(/ {2,}/gu, " ");
 
 const HOLDING_MARKERS = ["rozhodol:", "rozhodol :", "rozhodla:", "rozhodlo:"];
 
@@ -528,7 +528,7 @@ const CLOSING_RE = /^Vo?\s+\p{Lu}\p{Ll}+\s+(?:dňa\s|\d{1,2}\.\s)/u;
 
 /** Judge signature: title prefix */
 const SIGNATURE_RE =
-  /^(?:JUDr\.|Mgr\.|doc\.|Ing\.|PhDr\.|RNDr\.|MUDr\.|PaedDr\.)\s/;
+  /^(?:JUDr\.|Mgr\.|doc\.|Ing\.|PhDr\.|RNDr\.|MUDr\.|PaedDr\.)\s/u;
 
 const createIdGenerator = (): (() => string) => {
   let counter = 0;
@@ -549,7 +549,7 @@ type Section = "preamble" | "holding" | "reasoning" | "instruction" | "closing";
  * This is more robust than matching digit patterns alone.
  */
 const isPageNumber = (line: PdfLine, allLines: readonly PdfLine[]): boolean => {
-  if (!/^\d{1,4}$/.test(line.text.trim())) {
+  if (!/^\d{1,4}$/u.test(line.text.trim())) {
     return false;
   }
   if (line.bold) {
@@ -687,7 +687,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
     // are page numbers — drop them entirely.
     if (section === "closing") {
       // Drop page numbers (standalone digits)
-      if (/^\d{1,3}$/.test(text.trim())) {
+      if (/^\d{1,3}$/u.test(text.trim())) {
         continue;
       }
       blocks.push({

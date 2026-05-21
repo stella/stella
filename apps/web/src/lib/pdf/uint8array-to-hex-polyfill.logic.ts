@@ -12,6 +12,7 @@ export const installUint8ArrayToHexPolyfill = () => {
   // eslint-disable-next-line no-extend-native -- PDF.js v5 calls the platform Uint8Array#toHex API; older browsers need this compatibility shim.
   Object.defineProperty(Uint8Array.prototype, "toHex", {
     configurable: true,
+    // eslint-disable-next-line func-name-matching -- name kept for stack traces; semantically matches the "toHex" property
     value: function toHex(this: Uint8Array): string {
       if (!(this instanceof Uint8Array)) {
         throw new TypeError(

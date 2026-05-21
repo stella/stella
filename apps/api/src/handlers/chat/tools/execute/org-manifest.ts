@@ -21,6 +21,9 @@ import { LIMITS } from "@/api/lib/limits";
 
 const entityKindSchema = v.picklist(ENTITY_KINDS);
 
+// @valibot/to-json-schema rejects regex flags, so v.regex literals
+// in this file deliberately omit the `u` flag.
+/* eslint-disable require-unicode-regexp */
 const matterRefSchema = v.pipe(
   v.string(),
   v.regex(/^mat_\d+$/),
@@ -38,6 +41,7 @@ const contactRefSchema = v.pipe(
   v.regex(/^contact_\d+$/),
   v.description("Short contact ref returned by Stella tools"),
 );
+/* eslint-enable require-unicode-regexp */
 
 const matterRefsSchema = v.pipe(
   v.array(matterRefSchema),

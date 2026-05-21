@@ -20,7 +20,7 @@ const MONOLINGUAL_COUNTRIES = new Set(["CZE", "SVK", "POL", "AUT"]);
  */
 const humanizeSourceUrl = (url: string): string => {
   // Regional courts: API endpoint → public page
-  const finaldocMatch = /rozhodnuti\.justice\.cz\/api\/finaldoc\/(.+)/.exec(
+  const finaldocMatch = /rozhodnuti\.justice\.cz\/api\/finaldoc\/(.+)/u.exec(
     url,
   );
   if (finaldocMatch) {
@@ -35,7 +35,7 @@ const sourceLabel = (url: string): string => {
     return url;
   }
 
-  return new URL(url).hostname.replace(/^www\./, "");
+  return new URL(url).hostname.replace(/^www\./u, "");
 };
 
 type MetadataPanelProps = {

@@ -146,7 +146,7 @@ const findDuplicateConnector = async ({
 const slugify = (value: string): string => {
   let slug = value
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/[^a-z0-9]+/gu, "-")
     .slice(0, 60);
 
   while (slug.startsWith("-")) {

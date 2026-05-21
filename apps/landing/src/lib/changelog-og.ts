@@ -188,7 +188,7 @@ const wrapText = (
   fontSize: number,
   maxLines: number,
 ) => {
-  const words = text.trim().split(/\s+/);
+  const words = text.trim().split(/\s+/u);
   const lines: string[] = [];
   let currentLine = "";
 
@@ -256,16 +256,16 @@ const characterWidthRatio = (character: string) => {
   if (character === " ") {
     return 0.28;
   }
-  if (/[,.:;|!]/.test(character)) {
+  if (/[,.:;|!]/u.test(character)) {
     return 0.22;
   }
-  if (/[ijlI]/.test(character)) {
+  if (/[ijlI]/u.test(character)) {
     return 0.28;
   }
-  if (/[mwMW]/.test(character)) {
+  if (/[mwMW]/u.test(character)) {
     return 0.78;
   }
-  if (/[A-Z]/.test(character)) {
+  if (/[A-Z]/u.test(character)) {
     return 0.62;
   }
   return 0.52;
@@ -273,10 +273,10 @@ const characterWidthRatio = (character: string) => {
 
 const escapeXml = (value: string) =>
   value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/&/gu, "&amp;")
+    .replace(/</gu, "&lt;")
+    .replace(/>/gu, "&gt;")
+    .replace(/"/gu, "&quot;");
 
 function resolveLandingPath(...segments: string[]) {
   const fromLanding = join(process.cwd(), ...segments);

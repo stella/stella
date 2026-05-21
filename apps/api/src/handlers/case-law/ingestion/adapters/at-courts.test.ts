@@ -43,7 +43,7 @@ describe("at-courts adapter", () => {
       // RIS provides ECLI for most decisions.
       const withEcli = page.decisions.find((d) => d.ecli);
       expect(withEcli).toBeDefined();
-      expect(withEcli?.ecli).toMatch(/^ECLI:AT:/);
+      expect(withEcli?.ecli).toMatch(/^ECLI:AT:/u);
 
       // RIS provides fulltext HTML.
       const withFulltext = page.decisions.find((d) => d.fulltext);

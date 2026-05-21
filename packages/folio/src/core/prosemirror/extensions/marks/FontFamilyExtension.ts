@@ -27,7 +27,7 @@ export const FontFamilyExtension = createMarkExtension({
           // SAFETY: split always returns at least one element
           const firstFont = (value.split(",")[0] ?? "")
             .trim()
-            .replace(/['"]/g, "");
+            .replace(/['"]/gu, "");
           if (firstFont) {
             return { ascii: firstFont };
           }

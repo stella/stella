@@ -99,7 +99,7 @@ function toDisplayName(fontFamily: string, fonts: FontOption[]): string {
   }
   // Extract first font name from CSS value
   // SAFETY: split always returns at least one element
-  return (fontFamily.split(",")[0] ?? "").replace(/['"]/g, "").trim();
+  return (fontFamily.split(",")[0] ?? "").replace(/['"]/gu, "").trim();
 }
 
 export function FontPicker({

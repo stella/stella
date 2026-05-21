@@ -52,7 +52,7 @@ export const AnonymizationContextMenu = ({
       if (!selection || selection.rangeCount === 0) {
         return;
       }
-      const raw = selection.toString().replace(/\s+/g, " ").trim();
+      const raw = selection.toString().replace(/\s+/gu, " ").trim();
       if (
         raw.length < MIN_SELECTION_CHARS ||
         raw.length > MAX_SELECTION_CHARS
@@ -92,6 +92,7 @@ export const AnonymizationContextMenu = ({
       style={{ left: menu.x, top: menu.y }}
       onContextMenu={(event) => event.preventDefault()}
       role="menu"
+      tabIndex={-1}
     >
       <button
         className="hover:bg-accent hover:text-accent-foreground flex w-full items-center rounded px-2 py-1.5 text-start"

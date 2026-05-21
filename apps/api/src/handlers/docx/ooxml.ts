@@ -51,7 +51,7 @@ const INT32_MAX = 2_147_483_647;
  * values starting from 1, avoiding collisions with existing IDs.
  */
 /** Regex matching header and footer XML entry paths. */
-export const HEADER_FOOTER_RE = /^word\/(header|footer)\d+\.xml$/;
+export const HEADER_FOOTER_RE = /^word\/(header|footer)\d+\.xml$/u;
 
 // ── Text helpers ─────────────────────────────────────────
 

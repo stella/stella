@@ -297,8 +297,8 @@ const createPDFStore = ({
         return 0;
       }
 
-      const escaped = searchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const regex = new RegExp(escaped, "gi");
+      const escaped = searchText.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+      const regex = new RegExp(escaped, "giu");
       const newEntities: EntityOverlay[] = [];
       let match: RegExpExecArray | null;
 

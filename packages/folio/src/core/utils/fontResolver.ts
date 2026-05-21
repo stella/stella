@@ -345,8 +345,8 @@ function quoteFontName(fontName: string): string {
   }
 
   // Quote if contains spaces or special characters
-  if (/[\s,'"()]/.test(fontName)) {
-    return `"${fontName.replace(/"/g, '\\"')}"`;
+  if (/[\s,'"()]/u.test(fontName)) {
+    return `"${fontName.replace(/"/gu, '\\"')}"`;
   }
 
   return fontName;

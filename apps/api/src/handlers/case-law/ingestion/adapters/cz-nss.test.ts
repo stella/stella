@@ -13,8 +13,8 @@ import { describe, expect, test } from "bun:test";
 const stripHtml = (html: string): string =>
   html
     // oxlint-disable-next-line sonarjs/slow-regex -- test fixture HTML is small and controlled
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
+    .replace(/<[^>]+>/gu, " ")
+    .replace(/\s+/gu, " ")
     .trim();
 
 type ParsedRow = {
@@ -29,7 +29,7 @@ const BASE_URL = "https://vyhledavac.nssoud.cz";
 const parseResultRows = (html: string): ParsedRow[] => {
   const rows: ParsedRow[] = [];
 
-  const tbodyPattern = /<tbody>([\s\S]*?)<\/tbody>/gi;
+  const tbodyPattern = /<tbody>([\s\S]*?)<\/tbody>/giu;
   let tbodyMatch: RegExpExecArray | null;
 
   while ((tbodyMatch = tbodyPattern.exec(html)) !== null) {
@@ -40,7 +40,7 @@ const parseResultRows = (html: string): ParsedRow[] => {
 
     const citMatch =
       // oxlint-disable-next-line sonarjs/slow-regex -- test fixture rows are bounded representative NSS HTML snippets
-      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.)[\s]*([^"]+?)(?:-\d+)?"/i.exec(
+      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.)[\s]*([^"]+?)(?:-\d+)?"/iu.exec(
         block,
       );
     const caseNumber = citMatch?.[1]?.trim();
@@ -48,13 +48,13 @@ const parseResultRows = (html: string): ParsedRow[] => {
       continue;
     }
 
-    const detailMatch = /href="(\/DokumentDetail\/Index\/\d+)"/.exec(block);
+    const detailMatch = /href="(\/DokumentDetail\/Index\/\d+)"/u.exec(block);
     const documentUrl = detailMatch?.[1]
       ? `${BASE_URL}${detailMatch[1]}`
       : undefined;
 
     const cells: string[] = [];
-    const cellPattern = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+    const cellPattern = /<td[^>]*>([\s\S]*?)<\/td>/giu;
     let cellMatch: RegExpExecArray | null;
     while ((cellMatch = cellPattern.exec(block)) !== null) {
       if (cellMatch[1]) {
@@ -65,14 +65,14 @@ const parseResultRows = (html: string): ParsedRow[] => {
     let decisionDate: string | undefined;
     let decisionType: string | undefined;
     for (const cell of cells) {
-      if (!decisionDate && /\d{1,2}\.\s*\d{1,2}\.\s*\d{4}/.test(cell)) {
+      if (!decisionDate && /\d{1,2}\.\s*\d{1,2}\.\s*\d{4}/u.test(cell)) {
         decisionDate = cell;
       } else if (
         !decisionType &&
         cell !== caseNumber &&
         cell.length > 2 &&
         cell.length < 50 &&
-        !/^\d+$/.test(cell)
+        !/^\d+$/u.test(cell)
       ) {
         decisionType = cell;
       }

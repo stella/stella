@@ -41,7 +41,7 @@ type StellaToolName =
   | "search_case_law"
   | "search_across_matters";
 
-const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 
 export const STELLA_TOOL_DEFINITIONS = [
   {

@@ -16,8 +16,8 @@ export type SanitizedFileName = string & {
  * or cause path-traversal issues on downstream systems.
  */
 // eslint-disable-next-line no-control-regex -- intentional: strip null byte and other unsafe characters
-const UNSAFE_CHARS_RE = /["/\\<>\r\n\0|*?:]/g;
-const PATH_TRAVERSAL_RE = /\.\./g;
+const UNSAFE_CHARS_RE = /["/\\<>\r\n\0|*?:]/gu;
+const PATH_TRAVERSAL_RE = /\.\./gu;
 
 const stripLeadingAndTrailingDots = (name: string): string => {
   let start = 0;
@@ -48,4 +48,4 @@ export const sanitizeFilename = (name: string): SanitizedFileName => {
 };
 
 /** Matches a trailing `.docx` extension (case-insensitive). */
-export const DOCX_EXT_RE = /\.docx$/i;
+export const DOCX_EXT_RE = /\.docx$/iu;

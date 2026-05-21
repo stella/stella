@@ -1241,7 +1241,7 @@ function resolveThemedBorderColors(
     resolved[side] = {
       ...border,
       color: {
-        rgb: resolveColor(border.color, theme).replace(/^#/, ""),
+        rgb: resolveColor(border.color, theme).replace(/^#/u, ""),
       },
     };
   }

@@ -26,19 +26,19 @@ const LEGACY_COURT_TIERS: CourtWeightEntry[] = [
     weight: 4,
     tier: 4,
     tierLabel: "constitutional",
-    pattern: /ústavní soud|ústavný súd/i,
+    pattern: /ústavní soud|ústavný súd/iu,
   },
   {
     weight: 3,
     tier: 3,
     tierLabel: "supreme",
-    pattern: /nejvyšší|najvyšší/i,
+    pattern: /nejvyšší|najvyšší/iu,
   },
   {
     weight: 2,
     tier: 2,
     tierLabel: "regional",
-    pattern: /vrchní soud|krajský soud|městský soud|krajský súd/i,
+    pattern: /vrchní soud|krajský soud|městský soud|krajský súd/iu,
   },
 ];
 
@@ -192,7 +192,7 @@ export const courtWeightSql = (
 
   const cases = source
     .map((e) => {
-      const src = e.pattern.source.replace(/'/g, "''");
+      const src = e.pattern.source.replace(/'/gu, "''");
       return `WHEN ${courtColumn} ~* '${src}' THEN ${e.weight}`;
     })
     .join("\n      ");
