@@ -9,7 +9,7 @@ export const rootDbCaseLawDecisionFindFirstMock = mock(
 );
 
 void mock.module("@/api/db/root", () => ({
-  db: {
+  rootDb: {
     execute: rootDbExecuteMock,
     query: {
       caseLawDecisions: {

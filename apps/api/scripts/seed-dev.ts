@@ -23,7 +23,7 @@
 
 import { sql } from "drizzle-orm";
 
-import { db } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
 import {
   billingCodes,
   chatMessages,
@@ -3799,28 +3799,28 @@ export async function seed(organizationId?: string, userId?: string) {
   ];
 
   if (allSeedWorkspaceIds.length > 0) {
-    await db
+    await rootDb
       .delete(chatMessages)
       .where(sql`${chatMessages.workspaceId} IN ${allSeedWorkspaceIds}`);
-    await db
+    await rootDb
       .delete(chatThreads)
       .where(sql`${chatThreads.workspaceId} IN ${allSeedWorkspaceIds}`);
     // property_dependencies.depends_on_property_id uses ON DELETE RESTRICT,
     // which blocks the workspace cascade from removing properties. Clear
     // dependencies first so the cascade can complete.
-    await db
+    await rootDb
       .delete(propertyDependencies)
       .where(
         sql`${propertyDependencies.workspaceId} IN ${allSeedWorkspaceIds}`,
       );
-    await db
+    await rootDb
       .delete(workspaces)
       .where(sql`${workspaces.id} IN ${allSeedWorkspaceIds}`);
   }
   if (allSeedContactIds.length > 0) {
     // Delete any workspaces referencing seed contacts (including
     // manually-created ones) to avoid FK constraint violations.
-    const clientWorkspaces = await db.query.workspaces.findMany({
+    const clientWorkspaces = await rootDb.query.workspaces.findMany({
       where: { clientId: { in: allSeedContactIds } },
       columns: { id: true },
     });
@@ -3829,22 +3829,22 @@ export async function seed(organizationId?: string, userId?: string) {
       // chat_messages.workspace_id and chat_threads.workspace_id are
       // ON DELETE RESTRICT, same as property_dependencies; clear them
       // before the workspace delete cascades.
-      await db
+      await rootDb
         .delete(chatMessages)
         .where(sql`${chatMessages.workspaceId} IN ${clientWorkspaceIds}`);
-      await db
+      await rootDb
         .delete(chatThreads)
         .where(sql`${chatThreads.workspaceId} IN ${clientWorkspaceIds}`);
-      await db
+      await rootDb
         .delete(propertyDependencies)
         .where(
           sql`${propertyDependencies.workspaceId} IN ${clientWorkspaceIds}`,
         );
     }
-    await db
+    await rootDb
       .delete(workspaces)
       .where(sql`${workspaces.clientId} IN ${allSeedContactIds}`);
-    await db
+    await rootDb
       .delete(contacts)
       .where(sql`${contacts.id} IN ${allSeedContactIds}`);
   }
@@ -3854,7 +3854,7 @@ export async function seed(organizationId?: string, userId?: string) {
   // 1. Contacts (original orgs + people)
   const coreContacts = [...orgContacts, ...personContacts];
   for (const c of coreContacts) {
-    await db
+    await rootDb
       .insert(contacts)
       .values({
         id: c.id,
@@ -3888,7 +3888,7 @@ export async function seed(organizationId?: string, userId?: string) {
   }
   // 1b. Additional org contacts for overview stress-testing
   for (const c of moreOrgContacts) {
-    await db
+    await rootDb
       .insert(contacts)
       .values({
         id: c.id,
@@ -3917,7 +3917,7 @@ export async function seed(organizationId?: string, userId?: string) {
 
   // 2. Workspaces
   for (const ws of seedWorkspaces) {
-    await db
+    await rootDb
       .insert(workspaces)
       .values({
         id: ws.id,
@@ -3935,7 +3935,7 @@ export async function seed(organizationId?: string, userId?: string) {
   for (const mw of MORE_WORKSPACES) {
     const clientId = seedId(mw.clientLabel);
     const wsId = seedId(`extra-ws-${mw.reference}`);
-    await db
+    await rootDb
       .insert(workspaces)
       .values({
         id: wsId,
@@ -3959,7 +3959,7 @@ export async function seed(organizationId?: string, userId?: string) {
   ];
   for (const wsId of allWsIds) {
     for (const uid of seedUserIds) {
-      await db
+      await rootDb
         .insert(workspaceMembers)
         .values({
           id: seedId(`wm-${wsId}-${uid}`),
@@ -3986,7 +3986,7 @@ export async function seed(organizationId?: string, userId?: string) {
     allProperties.push(...buildProperties(wsId, label));
   }
   for (const prop of allProperties) {
-    await db
+    await rootDb
       .insert(properties)
       .values({
         id: prop.id,
@@ -4023,7 +4023,7 @@ export async function seed(organizationId?: string, userId?: string) {
     allEntities.push(...buildEntities(wsId, label));
   }
   for (const [ei, e] of allEntities.entries()) {
-    await db
+    await rootDb
       .insert(entities)
       .values({
         id: e.entityId,
@@ -4036,7 +4036,7 @@ export async function seed(organizationId?: string, userId?: string) {
       })
       .onConflictDoNothing();
 
-    await db
+    await rootDb
       .insert(entityVersions)
       .values({
         id: e.versionId,
@@ -4046,7 +4046,7 @@ export async function seed(organizationId?: string, userId?: string) {
       .onConflictDoNothing();
 
     // Link currentVersionId
-    await db
+    await rootDb
       .update(entities)
       .set({ currentVersionId: e.versionId })
       .where((await import("drizzle-orm")).eq(entities.id, e.entityId));
@@ -4111,7 +4111,7 @@ export async function seed(organizationId?: string, userId?: string) {
       const pdfFileId: UserFileId | null = null;
 
       // ── File field ──
-      await db
+      await rootDb
         .insert(fields)
         .values({
           id: seedId(`${wsLabel}-field-file-${j}`),
@@ -4139,13 +4139,13 @@ export async function seed(organizationId?: string, userId?: string) {
       // (workspaces may belong to an org created before
       // the seed ran, e.g. via manual signup).
       if (docText) {
-        const ws = await db.query.workspaces.findFirst({
+        const ws = await rootDb.query.workspaces.findFirst({
           where: { id: { eq: toWs(wsId) } },
           columns: { organizationId: true },
         });
         const ecOrgId = ws?.organizationId ?? ORG_ID;
 
-        await db
+        await rootDb
           .insert(extractedContent)
           .values({
             entityId: entity.entityId,
@@ -4211,7 +4211,7 @@ export async function seed(organizationId?: string, userId?: string) {
     allFields.push(...buildFields(plan.wsLabel, wsEntities));
   }
   for (const f of allFields) {
-    await db
+    await rootDb
       .insert(fields)
       .values({
         id: f.id,
@@ -4232,7 +4232,7 @@ export async function seed(organizationId?: string, userId?: string) {
     );
   }
   for (const justification of allJustifications) {
-    await db
+    await rootDb
       .insert(justifications)
       .values({
         id: justification.id,
@@ -4253,8 +4253,8 @@ export async function seed(organizationId?: string, userId?: string) {
   // Index-time SQL calls `unaccent(...)` and runtime headlines use
   // the `stella_unaccent` regconfig; without these the first
   // `upsertSearchDocument` aborts the whole seed.
-  await db.execute(sql`CREATE EXTENSION IF NOT EXISTS unaccent`);
-  await db.execute(sql`
+  await rootDb.execute(sql`CREATE EXTENSION IF NOT EXISTS unaccent`);
+  await rootDb.execute(sql`
     DO $$
     BEGIN
       IF NOT EXISTS (
@@ -4268,7 +4268,7 @@ export async function seed(organizationId?: string, userId?: string) {
     END
     $$;
   `);
-  await db.execute(sql`
+  await rootDb.execute(sql`
     ALTER TEXT SEARCH CONFIGURATION public.stella_unaccent
       ALTER MAPPING FOR
         asciiword,
@@ -4279,11 +4279,11 @@ export async function seed(organizationId?: string, userId?: string) {
         hword_part
       WITH unaccent, simple
   `);
-  await db.execute(sql`
+  await rootDb.execute(sql`
     ALTER TABLE search_documents
       ADD COLUMN IF NOT EXISTS tsv tsvector
   `);
-  await db.execute(sql`
+  await rootDb.execute(sql`
     CREATE INDEX IF NOT EXISTS search_documents_tsv_idx
       ON search_documents USING gin (tsv)
   `);
@@ -4298,7 +4298,7 @@ export async function seed(organizationId?: string, userId?: string) {
 
   // 8. Workspace contacts (parties)
   for (const party of seedParties) {
-    await db
+    await rootDb
       .insert(workspaceContacts)
       .values({
         id: party.id,
@@ -4314,7 +4314,7 @@ export async function seed(organizationId?: string, userId?: string) {
   // 9. Billing codes
   const billingCodeSeeds = buildBillingCodes();
   for (const bc of billingCodeSeeds) {
-    await db
+    await rootDb
       .insert(billingCodes)
       .values({
         id: bc.id,
@@ -4335,7 +4335,7 @@ export async function seed(organizationId?: string, userId?: string) {
     userRates: seedUserRates,
   });
   for (const rt of rateTableSeeds) {
-    await db
+    await rootDb
       .insert(rateTables)
       .values({
         id: rt.id,
@@ -4348,7 +4348,7 @@ export async function seed(organizationId?: string, userId?: string) {
       .onConflictDoNothing();
   }
   for (const re of rateEntrySeeds) {
-    await db
+    await rootDb
       .insert(rateEntries)
       .values({
         id: re.id,
@@ -4368,7 +4368,7 @@ export async function seed(organizationId?: string, userId?: string) {
   // that reference them)
   const invoiceSeeds = buildInvoices();
   for (const inv of invoiceSeeds) {
-    await db
+    await rootDb
       .insert(invoices)
       .values({
         id: inv.id,
@@ -4393,7 +4393,7 @@ export async function seed(organizationId?: string, userId?: string) {
     seedUserRates,
   );
   for (const te of extTimeEntries) {
-    await db
+    await rootDb
       .insert(timeEntries)
       .values({
         id: te.id,
@@ -4421,7 +4421,7 @@ export async function seed(organizationId?: string, userId?: string) {
   // 13. Expenses (~50)
   const expenseSeeds = buildExpenses(seedUserIds);
   for (const exp of expenseSeeds) {
-    await db
+    await rootDb
       .insert(expenses)
       .values({
         id: exp.id,
@@ -4482,7 +4482,7 @@ if (import.meta.main) {
       user: authUser,
     } = await import("@/api/db/auth-schema");
 
-    const activeSessions = await db
+    const activeSessions = await rootDb
       .select({
         userId: authSession.userId,
         organizationId: authSession.activeOrganizationId,
@@ -4520,7 +4520,7 @@ if (import.meta.main) {
       };
     }
 
-    const firstMember = await db.query.member.findFirst({
+    const firstMember = await rootDb.query.member.findFirst({
       columns: { userId: true, organizationId: true },
       where: { role: "owner" },
       orderBy: { createdAt: "desc" },

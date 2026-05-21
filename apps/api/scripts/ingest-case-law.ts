@@ -18,7 +18,7 @@
  */
 
 import { createIngestionDb } from "@/api/db";
-import { db } from "@/api/db/root";
+import { rootDb, rlsDb } from "@/api/db/root";
 import { caseLawIngestionEvents, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS, MAX_CYCLE_MS } from "@/api/handlers/case-law/consts";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters";
@@ -34,7 +34,7 @@ import { isS3Stale, refreshS3 } from "@/api/lib/s3";
 // has narrow writes on the corpus and nothing else. Any future code
 // path that strays outside case_law_* will hit a loud
 // `permission denied`.
-const ingestionDb = createIngestionDb(db);
+const ingestionDb = createIngestionDb(rlsDb);
 
 /**
  * Bun's native Postgres pool emits unhandled errors when the
@@ -200,7 +200,7 @@ const ensureSource = async (
   name: string,
   initialCursor: string | null,
 ) => {
-  const existing = await db.query.caseLawSources.findFirst({
+  const existing = await rootDb.query.caseLawSources.findFirst({
     where: { adapterKey },
   });
 
@@ -208,7 +208,7 @@ const ensureSource = async (
     return existing;
   }
 
-  const [created] = await db
+  const [created] = await rootDb
     .insert(caseLawSources)
     .values({
       adapterKey,

@@ -4,7 +4,7 @@ import { roles } from "@stll/permissions";
 
 import type { ScopedDb, Transaction } from "@/api/db";
 import { member } from "@/api/db/auth-schema";
-import { db } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
 import type { FolioCollabTokenPermissions } from "@/api/db/schema";
 import {
   folioCollabSessions,
@@ -100,7 +100,7 @@ export const authorizeFolioCollabSession = async ({
 }): Promise<FolioCollabSessionAuthorizationResult> => {
   const tokenHash = hashFolioCollabToken(token);
 
-  const rows = await db
+  const rows = await rootDb
     .select({
       canEdit: folioCollabSessionTokens.permissions,
       expiresAt: folioCollabSessionTokens.expiresAt,
@@ -187,7 +187,7 @@ export const authorizeFolioCollabSession = async ({
 export const loadFolioCollabSnapshot = async (
   value: AuthorizedFolioCollabSession,
 ) => {
-  const sessions = await db
+  const sessions = await rootDb
     .select({
       yjsSnapshotFileId: folioCollabSessions.yjsSnapshotFileId,
       yjsSnapshotUpdatedAt: folioCollabSessions.yjsSnapshotUpdatedAt,
@@ -229,7 +229,7 @@ export const storeFolioCollabSnapshot = async ({
   await getS3().write(key, buffer);
 
   const storedAt = new Date();
-  await db
+  await rootDb
     .update(folioCollabSessions)
     .set({
       seededAt: storedAt,

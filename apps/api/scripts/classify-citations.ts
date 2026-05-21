@@ -20,7 +20,7 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 
 import { createScopedDb } from "@/api/db";
-import { db } from "@/api/db/root";
+import { rootDb, rlsDb } from "@/api/db/root";
 import {
   caseLawCitations,
   caseLawDecisions,
@@ -78,7 +78,7 @@ const seedRules = async () => {
   console.log(`Seeding ${SEED_RULES.length} polarity rules...`);
 
   for (const rule of SEED_RULES) {
-    await db
+    await rootDb
       .insert(caseLawPolarityRules)
       .values({
         pattern: rule.pattern,
@@ -98,7 +98,7 @@ const main = async () => {
   const scriptUserId = toSafeId<"user">("script_case_law");
   // SAFETY: CLI script operates on global case law data (no tenant).
   const scopedDb = createScopedDb(
-    db,
+    rlsDb,
     [],
     toSafeId<"organization">(""),
     scriptUserId,
@@ -114,7 +114,7 @@ const main = async () => {
   }
 
   // Fetch unclassified citations with their decision context
-  const citations = await db
+  const citations = await rootDb
     .select({
       id: caseLawCitations.id,
       citationText: caseLawCitations.citationText,

@@ -1,4 +1,5 @@
 import { defineRelationsPart } from "drizzle-orm";
+import type { InferSelectModel } from "drizzle-orm";
 import {
   boolean,
   index,
@@ -34,6 +35,34 @@ export const user = pgTable(
       .notNull(),
   },
   () => [...authUserPolicies()],
+);
+
+type AuthUserColumnNameByField = Record<
+  keyof InferSelectModel<typeof user>,
+  string
+>;
+
+/**
+ * Columns the scoped `stella` role may read from Better Auth's
+ * `user` table. Better Auth's Drizzle adapter fetches full user
+ * rows during session resolution, so every column on this table
+ * needs an explicit grant decision here and in migrations.
+ */
+export const AUTH_USER_STELLA_SELECT_COLUMNS = {
+  id: "id",
+  name: "name",
+  email: "email",
+  emailVerified: "email_verified",
+  image: "image",
+  timezoneId: "timezone_id",
+  preferredName: "preferred_name",
+  wordEditShortcut: "word_edit_shortcut",
+  createdAt: "created_at",
+  updatedAt: "updated_at",
+} as const satisfies AuthUserColumnNameByField;
+
+export const AUTH_USER_STELLA_SELECT_COLUMN_NAMES = Object.values(
+  AUTH_USER_STELLA_SELECT_COLUMNS,
 );
 
 export const session = pgTable(

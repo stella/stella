@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { and, asc, eq, inArray, isNull, lte, or } from "drizzle-orm";
 
-import { db } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
 import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -225,7 +225,7 @@ const acquireDueJobs = async ({
 
   const now = new Date();
   const leaseExpiresAt = new Date(now.getTime() + leaseMs);
-  const candidates = await db
+  const candidates = await rootDb
     .select()
     .from(schedulerJobs)
     .where(dueJobPredicate(now))
@@ -234,7 +234,7 @@ const acquireDueJobs = async ({
   const acquired: SchedulerJob[] = [];
 
   for (const candidate of candidates) {
-    const [job] = await db
+    const [job] = await rootDb
       .update(schedulerJobs)
       .set({
         lockedAt: now,
@@ -265,7 +265,7 @@ const releaseUnstartedJobs = async ({
     return;
   }
 
-  await db
+  await rootDb
     .update(schedulerJobs)
     .set({
       lockedAt: null,
@@ -295,7 +295,7 @@ const renewJobLeaseBeforeStart = async ({
   runnerId,
 }: RenewJobLeaseBeforeStartOptions): Promise<SchedulerJob | null> => {
   const now = new Date();
-  const [leasedJob] = await db
+  const [leasedJob] = await rootDb
     .update(schedulerJobs)
     .set({
       lockedAt: now,
@@ -333,7 +333,7 @@ const startUnstartedJobsHeartbeat = ({
       return;
     }
 
-    await db
+    await rootDb
       .update(schedulerJobs)
       .set({
         lockedUntil: new Date(Date.now() + leaseMs),
@@ -396,7 +396,7 @@ const startLeaseHeartbeat = ({
       return;
     }
 
-    await db
+    await rootDb
       .update(schedulerJobs)
       .set({
         lockedUntil: new Date(Date.now() + leaseMs),
@@ -506,7 +506,7 @@ const createRun = async ({
   runnerId,
   startedAt,
 }: CreateRunOptions): Promise<SafeId<"schedulerJobRun">> => {
-  const [run] = await db
+  const [run] = await rootDb
     .insert(schedulerJobRuns)
     .values({
       jobId: job.id,
@@ -539,7 +539,7 @@ const finishRunSuccess = async ({
 }: FinishRunOptions): Promise<void> => {
   const finishedAt = new Date();
 
-  await db
+  await rootDb
     .update(schedulerJobRuns)
     .set({
       durationMs: durationMs(startedAt, finishedAt),
@@ -548,7 +548,7 @@ const finishRunSuccess = async ({
     })
     .where(eq(schedulerJobRuns.id, runId));
 
-  await db
+  await rootDb
     .update(schedulerJobs)
     .set({
       lastError: null,
@@ -572,7 +572,7 @@ const finishRunSkipped = async ({
 }: FinishRunOptions): Promise<void> => {
   const finishedAt = new Date();
 
-  await db
+  await rootDb
     .update(schedulerJobRuns)
     .set({
       durationMs: durationMs(startedAt, finishedAt),
@@ -582,7 +582,7 @@ const finishRunSkipped = async ({
     })
     .where(eq(schedulerJobRuns.id, runId));
 
-  await db
+  await rootDb
     .update(schedulerJobs)
     .set({
       lockedAt: null,
@@ -608,7 +608,7 @@ const finishRunFailure = async ({
   const finishedAt = new Date();
   const sanitizedError = errorTag(error);
 
-  await db
+  await rootDb
     .update(schedulerJobRuns)
     .set({
       durationMs: durationMs(startedAt, finishedAt),
@@ -618,7 +618,7 @@ const finishRunFailure = async ({
     })
     .where(eq(schedulerJobRuns.id, runId));
 
-  await db
+  await rootDb
     .update(schedulerJobs)
     .set({
       lastError: sanitizedError,

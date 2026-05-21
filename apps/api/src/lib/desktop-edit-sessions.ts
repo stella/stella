@@ -4,7 +4,7 @@ import { roles } from "@stll/permissions";
 
 import type { ScopedDb } from "@/api/db";
 import { member, user } from "@/api/db/auth-schema";
-import { db } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
 import {
   desktopEditSessions,
   workspaceMembers,
@@ -103,7 +103,7 @@ export const authorizeDesktopEditSession = async ({
 }): Promise<DesktopEditSessionAuthorizationResult> => {
   const tokenHash = hashDesktopEditSessionToken(sessionToken);
 
-  const rows = await db
+  const rows = await rootDb
     .select({
       createdBy: desktopEditSessions.createdBy,
       fileName: desktopEditSessions.fileName,
@@ -183,7 +183,7 @@ export const authorizeDesktopEditSession = async ({
 export const readDesktopEditSessionEventState = async (
   sessionId: SafeId<"desktopEditSession">,
 ) => {
-  const sessions = await db
+  const sessions = await rootDb
     .select({
       organizationRole: member.role,
       workspaceMemberId: workspaceMembers.id,
@@ -223,7 +223,7 @@ export const readDesktopEditSessionEventState = async (
     return null;
   }
 
-  const pendingRequests = await db
+  const pendingRequests = await rootDb
     .select({
       requestedByName: user.name,
       requestedAt: desktopEditSessions.takeoverRequestedAt,

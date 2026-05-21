@@ -15,11 +15,11 @@
 
 import { sql } from "drizzle-orm";
 
-import { db } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
 
 const applyPgFtsMigration = async () => {
   // Check if an existing generated column needs migration
-  const colInfo = await db.execute(sql`
+  const colInfo = await rootDb.execute(sql`
     SELECT is_generated
     FROM information_schema.columns
     WHERE table_name = 'search_documents'
@@ -31,21 +31,21 @@ const applyPgFtsMigration = async () => {
 
   if (isGenerated) {
     console.log("Migrating tsv from generated to regular column...");
-    await db.execute(sql`
+    await rootDb.execute(sql`
       ALTER TABLE search_documents DROP COLUMN tsv
     `);
   }
 
   console.log("Adding tsvector column to search_documents...");
 
-  await db.execute(sql`
+  await rootDb.execute(sql`
     ALTER TABLE search_documents
       ADD COLUMN IF NOT EXISTS tsv tsvector
   `);
 
   console.log("Creating GIN index on tsv column...");
 
-  await db.execute(sql`
+  await rootDb.execute(sql`
     CREATE INDEX IF NOT EXISTS search_documents_tsv_idx
       ON search_documents USING gin (tsv)
   `);
@@ -54,7 +54,7 @@ const applyPgFtsMigration = async () => {
   // no tsv yet (e.g. after migration from generated col).
   console.log("Backfilling tsv for existing rows...");
 
-  await db.execute(sql`
+  await rootDb.execute(sql`
     UPDATE search_documents
     SET tsv = to_tsvector(
       coalesce(language, 'simple')::regconfig,
@@ -71,14 +71,14 @@ const applyPgFtsMigration = async () => {
 const applyCaseLawSearchMigration = async () => {
   console.log("Adding tsvector column to case_law_search_documents...");
 
-  await db.execute(sql`
+  await rootDb.execute(sql`
     ALTER TABLE case_law_search_documents
       ADD COLUMN IF NOT EXISTS tsv tsvector
   `);
 
   console.log("Creating GIN index on case_law tsv column...");
 
-  await db.execute(sql`
+  await rootDb.execute(sql`
     CREATE INDEX IF NOT EXISTS case_law_search_docs_tsv_idx
       ON case_law_search_documents USING gin (tsv)
   `);
@@ -88,7 +88,7 @@ const applyCaseLawSearchMigration = async () => {
   // match the search query path (plainto_tsquery('simple', ...)).
   console.log("Backfilling case_law tsv with unaccent config...");
 
-  await db.execute(sql`
+  await rootDb.execute(sql`
     UPDATE case_law_search_documents sd
     SET
       regconfig = 'simple',
@@ -115,10 +115,10 @@ const applyCaseLawSearchMigration = async () => {
 
 const ensureUnaccentExtension = async () => {
   console.log("Ensuring unaccent extension...");
-  await db.execute(sql`CREATE EXTENSION IF NOT EXISTS unaccent`);
+  await rootDb.execute(sql`CREATE EXTENSION IF NOT EXISTS unaccent`);
 
   console.log("Ensuring unaccent text search config...");
-  await db.execute(sql`
+  await rootDb.execute(sql`
     DO $$
     BEGIN
       IF NOT EXISTS (
@@ -132,7 +132,7 @@ const ensureUnaccentExtension = async () => {
     END
     $$;
   `);
-  await db.execute(sql`
+  await rootDb.execute(sql`
     ALTER TEXT SEARCH CONFIGURATION public.stella_unaccent
       ALTER MAPPING FOR
         asciiword,

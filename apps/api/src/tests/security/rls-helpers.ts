@@ -1134,8 +1134,34 @@ const fetchTablePrivilegesForRole = async (
 
 type ColumnPrivilegeRow = {
   column_name: string;
-  privilege: "UPDATE";
+  privilege: "SELECT" | "UPDATE";
   table_name: string;
+};
+
+export const fetchStellaUserSelectColumnPrivileges = async (
+  db: TestDatabase,
+): Promise<ColumnPrivilegeRow[]> => {
+  const rows = await db.execute<ColumnPrivilegeRow>(sql`
+    SELECT c.relname AS table_name,
+           a.attname AS column_name,
+           'SELECT' AS privilege
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN pg_attribute a ON a.attrelid = c.oid
+    WHERE n.nspname = 'public'
+      AND c.relname = 'user'
+      AND c.relkind IN ('r', 'p')
+      AND a.attnum > 0
+      AND NOT a.attisdropped
+      AND has_column_privilege(
+        ${stella.name},
+        c.oid,
+        a.attname,
+        'SELECT'
+      )
+    ORDER BY c.relname, a.attname
+  `);
+  return rows.rows;
 };
 
 export const fetchStellaIngestionColumnPrivileges = async (

@@ -8,7 +8,7 @@
 
 import { panic } from "better-result";
 
-import { db } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
 import { extractedContent } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { createFileKey } from "@/api/handlers/files/utils";
@@ -59,7 +59,7 @@ const pickExtractionSource = (
 export const processExtraction = async (
   entityId: SafeId<"entity">,
 ): Promise<void> => {
-  const entity = await db.query.entities.findFirst({
+  const entity = await rootDb.query.entities.findFirst({
     where: { id: { eq: entityId } },
     columns: { id: true, workspaceId: true },
     with: {
@@ -112,7 +112,7 @@ export const processExtraction = async (
       if (text) {
         const encrypted = await encryptContent(workspace.organizationId, text);
 
-        await db
+        await rootDb
           .insert(extractedContent)
           .values({
             workspaceId: wsId,

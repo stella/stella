@@ -9,7 +9,7 @@ import type {
   workspaces,
 } from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
-import { createScopedDb } from "@/api/db/scoped";
+import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -119,8 +119,8 @@ describe("branded types", () => {
   });
 
   describe("createScopedDb", () => {
-    test("requires branded workspace ID arrays", () => {
-      const fakeDb = {
+    test("requires an explicitly marked RLS database", () => {
+      const fakeDb = markRlsDatabase({
         transaction: async <TResult>(
           fn: (tx: {
             execute: (query: unknown) => Promise<unknown>;
@@ -129,7 +129,7 @@ describe("branded types", () => {
           await fn({
             execute: async (_query: unknown) => ({}),
           }),
-      } satisfies AnyDrizzle;
+      } satisfies AnyDrizzle);
 
       createScopedDb(
         fakeDb,

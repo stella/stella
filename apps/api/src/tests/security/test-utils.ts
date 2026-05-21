@@ -6,8 +6,8 @@ import { drizzle } from "drizzle-orm/pglite";
 import * as authSchema from "@/api/db/auth-schema";
 import * as rlsExports from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
-import { createScopedDb } from "@/api/db/scoped";
-import type { TransactionOf } from "@/api/db/scoped";
+import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import type { RlsDatabaseMarker, TransactionOf } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -22,15 +22,43 @@ const allRelations = {
   ...authSchema.authRelationsPart,
 };
 
-export type TestDatabase = ReturnType<typeof drizzle<typeof allRelations>>;
+const quoteSqlIdentifier = (identifier: string) =>
+  `"${identifier.replaceAll('"', '""')}"`;
+
+const AUTH_TABLES_SQL = [
+  "user",
+  "organization",
+  "member",
+  "session",
+  "account",
+  "verification",
+  "invitation",
+  "jwks",
+  "oauth_client",
+  "oauth_refresh_token",
+  "oauth_access_token",
+  "oauth_consent",
+]
+  .map(quoteSqlIdentifier)
+  .join(", ");
+
+const AUTH_USER_STELLA_SELECT_COLUMNS_SQL =
+  authSchema.AUTH_USER_STELLA_SELECT_COLUMN_NAMES.map(quoteSqlIdentifier).join(
+    ", ",
+  );
+
+type RawTestDatabase = ReturnType<typeof drizzle<typeof allRelations>>;
+export type TestDatabase = RawTestDatabase & RlsDatabaseMarker;
 export type TestDatabaseTransaction = TransactionOf<TestDatabase>;
 
 const createTestDb = async (): Promise<TestDatabase> => {
   const client = await PGlite.create();
-  const testDb = drizzle({
-    client,
-    relations: allRelations,
-  });
+  const testDb = markRlsDatabase(
+    drizzle({
+      client,
+      relations: allRelations,
+    }),
+  );
   const pushSchemaDb = drizzle({ client });
 
   await testDb.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
@@ -45,6 +73,32 @@ const createTestDb = async (): Promise<TestDatabase> => {
     sql.raw(`
       GRANT SELECT, INSERT, UPDATE, DELETE
         ON ALL TABLES IN SCHEMA public TO stella
+    `),
+  );
+  await testDb.execute(
+    sql.raw(`
+      REVOKE ALL PRIVILEGES ON TABLE ${AUTH_TABLES_SQL} FROM stella
+    `),
+  );
+  await testDb.execute(
+    sql.raw(`
+      GRANT SELECT (${AUTH_USER_STELLA_SELECT_COLUMNS_SQL})
+        ON TABLE "user" TO stella
+    `),
+  );
+  await testDb.execute(
+    sql.raw(`
+      GRANT SELECT ON TABLE "organization" TO stella
+    `),
+  );
+  await testDb.execute(
+    sql.raw(`
+      GRANT SELECT ON TABLE "member" TO stella
+    `),
+  );
+  await testDb.execute(
+    sql.raw(`
+      GRANT UPDATE (last_active_workspace_id) ON TABLE "member" TO stella
     `),
   );
   await testDb.execute(

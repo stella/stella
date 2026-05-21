@@ -23,7 +23,7 @@ import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
-import { db } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 
 import {
@@ -96,7 +96,7 @@ const ensureUserExists = async ({
   image?: string;
 }) => {
   if (
-    await db.query.user.findFirst({
+    await rootDb.query.user.findFirst({
       where: { id },
       columns: { id: true },
     })
@@ -104,7 +104,7 @@ const ensureUserExists = async ({
     return;
   }
 
-  await db.insert(user).values({
+  await rootDb.insert(user).values({
     id,
     name,
     email,
@@ -117,7 +117,7 @@ const ensureUserExists = async ({
 
 export const ensureOrganizationExists = async (organizationId: string) => {
   if (
-    await db.query.organization.findFirst({
+    await rootDb.query.organization.findFirst({
       where: { id: { eq: organizationId } },
       columns: { id: true },
     })
@@ -127,7 +127,7 @@ export const ensureOrganizationExists = async (organizationId: string) => {
 
   const org = getSeedOrganizationIdentity(organizationId);
 
-  await db.insert(organization).values({
+  await rootDb.insert(organization).values({
     id: org.id,
     name: org.name,
     slug: org.slug,
@@ -144,7 +144,7 @@ export const ensureMembershipExists = async ({
   userId: string;
   role: typeof DEFAULT_MEMBER_ROLE | typeof OWNER_MEMBER_ROLE;
 }) => {
-  const existingMembership = await db
+  const existingMembership = await rootDb
     .select({ id: member.id })
     .from(member)
     .where(
@@ -156,7 +156,7 @@ export const ensureMembershipExists = async ({
     return;
   }
 
-  await db.insert(member).values({
+  await rootDb.insert(member).values({
     id: buildMemberId(organizationId, userId),
     organizationId,
     userId,
@@ -202,7 +202,7 @@ export async function ensurePrimarySeedUserInOrganization({
 }) {
   await ensureOrganizationExists(organizationId);
 
-  const existingUser = await db.query.user.findFirst({
+  const existingUser = await rootDb.query.user.findFirst({
     where: { id: { eq: userId } },
     columns: { id: true },
   });
@@ -252,14 +252,14 @@ async function seed() {
     process.exit(1);
   }
 
-  const existingUsers = await db
+  const existingUsers = await rootDb
     .select({ id: user.id })
     .from(user)
     .where(inArray(user.id, ALL_TEST_USER_IDS));
   const existingUserIds = new Set(
     existingUsers.map((existingUser) => existingUser.id),
   );
-  const orgExistedBeforeSeed = !!(await db.query.organization.findFirst({
+  const orgExistedBeforeSeed = !!(await rootDb.query.organization.findFirst({
     where: { id: { eq: TEST_ORG.id } },
     columns: { id: true },
   }));
@@ -290,13 +290,13 @@ async function seed() {
   console.log("Ensured memberships for test organization users");
 
   // --- session (always refresh expiry) ---
-  const existingSession = await db.query.session.findFirst({
+  const existingSession = await rootDb.query.session.findFirst({
     where: { id: { eq: SESSION_ID } },
     columns: { id: true },
   });
 
   if (existingSession) {
-    await db
+    await rootDb
       .update(session)
       .set({
         expiresAt,
@@ -305,7 +305,7 @@ async function seed() {
       .where(eq(session.id, SESSION_ID));
     console.log("Refreshed test session expiry");
   } else {
-    await db.insert(session).values({
+    await rootDb.insert(session).values({
       id: SESSION_ID,
       token: SESSION_TOKEN,
       userId: TEST_USER.id,

@@ -1,7 +1,7 @@
 import { and, asc, eq, gt, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { db } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
 import type {
   ContactAddress,
@@ -506,7 +506,7 @@ export const searchGlobal = async ({
   });
 
   const entityPromise = rowsWhen(hasSelectedEntityType(selected), () =>
-    db.execute(sql`
+    rootDb.execute(sql`
       SELECT
         sd.entity_id AS id,
         sd.workspace_id,
@@ -546,7 +546,7 @@ export const searchGlobal = async ({
   const matterPromise = rowsWhen(
     !restrictToEntities && shouldSearchType(selected, "matter"),
     () =>
-      db.execute(sql`
+      rootDb.execute(sql`
       SELECT
         wsd.workspace_id AS id,
         wsd.title,
@@ -575,7 +575,7 @@ export const searchGlobal = async ({
       accessibleWorkspaceIds.length > 0 &&
       shouldSearchType(selected, "contact"),
     () =>
-      db.execute(sql`
+      rootDb.execute(sql`
       SELECT
         csd.contact_id AS id,
         csd.contact_type,
@@ -601,7 +601,7 @@ export const searchGlobal = async ({
   const caseLawPromise = rowsWhen(
     !restrictToEntities && shouldSearchType(selected, "case-law"),
     () =>
-      db.execute(sql`
+      rootDb.execute(sql`
       SELECT
         clsd.decision_id AS id,
         d.case_number,
@@ -628,7 +628,7 @@ export const searchGlobal = async ({
 
   const countPromises = [
     countWhen(isFirstPage && hasSelectedEntityType(selected), () =>
-      db.execute(sql`
+      rootDb.execute(sql`
         SELECT count(*)::int AS total
         FROM search_documents sd
         LEFT JOIN entities e
@@ -649,7 +649,7 @@ export const searchGlobal = async ({
         !restrictToEntities &&
         shouldSearchType(selected, "matter"),
       () =>
-        db.execute(sql`
+        rootDb.execute(sql`
         SELECT count(*)::int AS total
         FROM workspace_search_documents wsd
         WHERE wsd.organization_id = ${organizationId}
@@ -664,7 +664,7 @@ export const searchGlobal = async ({
         accessibleWorkspaceIds.length > 0 &&
         shouldSearchType(selected, "contact"),
       () =>
-        db.execute(sql`
+        rootDb.execute(sql`
         SELECT count(*)::int AS total
         FROM contact_search_documents csd
         WHERE csd.organization_id = ${organizationId}
@@ -678,7 +678,7 @@ export const searchGlobal = async ({
         !restrictToEntities &&
         shouldSearchType(selected, "case-law"),
       () =>
-        db.execute(sql`
+        rootDb.execute(sql`
         SELECT count(*)::int AS total
         FROM case_law_search_documents clsd
         WHERE clsd.tsv @@ ${tsQuery}
@@ -690,7 +690,7 @@ export const searchGlobal = async ({
   const entityTypeFacetPromise = rowsWhen(
     isFirstPage && hasSelectedEntityType(selected),
     () =>
-      db.execute(sql`
+      rootDb.execute(sql`
       SELECT sd.kind AS value, count(*)::int AS count
       FROM search_documents sd
       LEFT JOIN entities e
@@ -712,7 +712,7 @@ export const searchGlobal = async ({
   const matterTypeFacetCountPromise = countWhen(
     isFirstPage && !restrictToEntities,
     () =>
-      db.execute(sql`
+      rootDb.execute(sql`
       SELECT count(*)::int AS total
       FROM workspace_search_documents wsd
       WHERE wsd.organization_id = ${organizationId}
@@ -725,7 +725,7 @@ export const searchGlobal = async ({
   const contactTypeFacetCountPromise = countWhen(
     isFirstPage && !restrictToEntities && accessibleWorkspaceIds.length > 0,
     () =>
-      db.execute(sql`
+      rootDb.execute(sql`
         SELECT count(*)::int AS total
         FROM contact_search_documents csd
         WHERE csd.organization_id = ${organizationId}
@@ -738,7 +738,7 @@ export const searchGlobal = async ({
   const caseLawTypeFacetCountPromise = countWhen(
     isFirstPage && !restrictToEntities,
     () =>
-      db.execute(sql`
+      rootDb.execute(sql`
       SELECT count(*)::int AS total
       FROM case_law_search_documents clsd
       WHERE clsd.tsv @@ ${tsQuery}
@@ -781,7 +781,7 @@ export const searchGlobal = async ({
     isFirstPage &&
       (hasSelectedEntityType(selected) || shouldSearchType(selected, "matter")),
     () =>
-      db.execute(sql`
+      rootDb.execute(sql`
         SELECT value, label, count(*)::int AS count
         FROM (
           ${entityWorkspaceFacetQuery}
@@ -799,7 +799,7 @@ export const searchGlobal = async ({
   const editorFacetPromise = rowsWhen(
     isFirstPage && hasSelectedEntityType(selected),
     () =>
-      db.execute(sql`
+      rootDb.execute(sql`
       SELECT editor.id AS value, editor.name AS label, count(*)::int AS count
       FROM search_documents sd
       LEFT JOIN entities e
@@ -823,7 +823,7 @@ export const searchGlobal = async ({
   const mimeTypeFacetPromise = rowsWhen(
     isFirstPage && hasSelectedEntityType(selected),
     () =>
-      db.execute(sql`
+      rootDb.execute(sql`
       SELECT mime_type.value AS value, mime_type.value AS label, count(*)::int AS count
       FROM search_documents sd
       LEFT JOIN entities e
@@ -1010,7 +1010,7 @@ export const searchGlobalFacet = async ({
     if (!hasSelectedEntityType(selected)) {
       return { buckets: [] };
     }
-    const rows = await db.execute(sql`
+    const rows = await rootDb.execute(sql`
       SELECT editor.id AS value, editor.name AS label, count(*)::int AS count
       FROM search_documents sd
       LEFT JOIN entities e
@@ -1036,7 +1036,7 @@ export const searchGlobalFacet = async ({
     if (!hasSelectedEntityType(selected)) {
       return { buckets: [] };
     }
-    const rows = await db.execute(sql`
+    const rows = await rootDb.execute(sql`
       SELECT mime_type.value AS value, mime_type.value AS label, count(*)::int AS count
       FROM search_documents sd
       LEFT JOIN entities e
@@ -1098,7 +1098,7 @@ export const searchGlobalFacet = async ({
     `
     : emptyWorkspaceFacetQuery;
 
-  const rows = await db.execute(sql`
+  const rows = await rootDb.execute(sql`
     SELECT value, label, count(*)::int AS count
     FROM (
       ${entityWorkspaceFacetQuery}
@@ -1117,7 +1117,7 @@ export const searchGlobalFacet = async ({
 export const upsertContactSearchDocument = async (
   contactId: SafeId<"contact">,
 ): Promise<void> => {
-  const contact = await db.query.contacts.findFirst({
+  const contact = await rootDb.query.contacts.findFirst({
     where: { id: { eq: contactId } },
     columns: {
       id: true,
@@ -1163,7 +1163,7 @@ export const upsertContactSearchDocument = async (
     contact.currency,
   ]);
 
-  await db.execute(sql`
+  await rootDb.execute(sql`
     INSERT INTO contact_search_documents (
       contact_id, organization_id, contact_type,
       title, searchable_text, updated_at, tsv
@@ -1195,7 +1195,7 @@ export const upsertContactSearchDocument = async (
 export const upsertWorkspaceSearchDocument = async (
   workspaceId: SafeId<"workspace">,
 ): Promise<void> => {
-  const workspace = await db.query.workspaces.findFirst({
+  const workspace = await rootDb.query.workspaces.findFirst({
     where: { id: { eq: workspaceId } },
     columns: {
       id: true,
@@ -1282,7 +1282,7 @@ export const upsertWorkspaceSearchDocument = async (
       ...workspace.workspaceContacts.map(({ contact }) => contact?.updatedAt),
     ]) ?? workspace.lastActivityAt;
 
-  await db.execute(sql`
+  await rootDb.execute(sql`
     INSERT INTO workspace_search_documents (
       workspace_id, organization_id,
       title, searchable_text, updated_at, tsv
@@ -1312,7 +1312,7 @@ export const upsertWorkspaceSearchDocument = async (
 export const syncWorkspaceSearchActivity = async (
   workspaceId: SafeId<"workspace">,
 ): Promise<void> => {
-  await db.execute(sql`
+  await rootDb.execute(sql`
     UPDATE workspace_search_documents wsd
     SET updated_at = w.last_activity_at
     FROM workspaces w
@@ -1349,7 +1349,7 @@ export const upsertWorkspaceSearchDocuments = async (
 export const reindexWorkspacesForContact = async (
   contactId: SafeId<"contact">,
 ): Promise<void> => {
-  const contact = await db.query.contacts.findFirst({
+  const contact = await rootDb.query.contacts.findFirst({
     where: { id: { eq: contactId } },
     columns: { organizationId: true },
   });
@@ -1358,7 +1358,7 @@ export const reindexWorkspacesForContact = async (
     return;
   }
 
-  const rows = await db
+  const rows = await rootDb
     .select({ id: workspaces.id })
     .from(workspaces)
     .leftJoin(
@@ -1386,7 +1386,7 @@ export const rebuildSupplementalSearchIndex = async (
   let hasMoreContacts = true;
 
   while (hasMoreContacts) {
-    const batch = await db
+    const batch = await rootDb
       .select({ id: contacts.id })
       .from(contacts)
       .where(
@@ -1412,7 +1412,7 @@ export const rebuildSupplementalSearchIndex = async (
   let hasMoreWorkspaces = true;
 
   while (hasMoreWorkspaces) {
-    const batch = await db
+    const batch = await rootDb
       .select({ id: workspaces.id })
       .from(workspaces)
       .where(

@@ -16,7 +16,7 @@
 
 import { count, eq, gt, sql } from "drizzle-orm";
 
-import { db } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
 import {
   caseLawCitations,
   caseLawDecisions,
@@ -202,7 +202,7 @@ const getSourceTotals = async (): Promise<SourceTotal[]> => {
 // ── Queries ─────────────────────────────────────────────
 
 const getSources = () =>
-  db
+  rootDb
     .select({
       id: caseLawSources.id,
       adapterKey: caseLawSources.adapterKey,
@@ -215,7 +215,7 @@ const getSources = () =>
     .orderBy(caseLawSources.adapterKey);
 
 const getDecisionCounts = () =>
-  db
+  rootDb
     .select({
       sourceId: caseLawDecisions.sourceId,
       total: count(),
@@ -224,7 +224,7 @@ const getDecisionCounts = () =>
     .groupBy(caseLawDecisions.sourceId);
 
 const getGrowthCounts = (sinceDate: Date) =>
-  db
+  rootDb
     .select({
       sourceId: caseLawDecisions.sourceId,
       inserted: count(),
@@ -234,7 +234,7 @@ const getGrowthCounts = (sinceDate: Date) =>
     .groupBy(caseLawDecisions.sourceId);
 
 const getSearchIndexCoverage = () =>
-  db
+  rootDb
     .select({
       sourceId: caseLawDecisions.sourceId,
       isIndexed:
@@ -254,7 +254,7 @@ const getSearchIndexCoverage = () =>
     );
 
 const getCitationStats = () =>
-  db
+  rootDb
     .select({
       sourceId: caseLawDecisions.sourceId,
       total: count(),
@@ -287,7 +287,7 @@ const getAllFieldCoverage = () => {
     }),
   );
 
-  return db
+  return rootDb
     .select({
       sourceId: caseLawDecisions.sourceId,
       total: count(),

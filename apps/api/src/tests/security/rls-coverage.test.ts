@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
+import { AUTH_USER_STELLA_SELECT_COLUMN_NAMES } from "@/api/db/auth-schema";
 import {
   SETTING_ORGANIZATION_ID,
   SETTING_USER_ID,
@@ -14,6 +15,7 @@ import {
   fetchStellaIngestionColumnPrivileges,
   fetchStellaIngestionPolicies,
   fetchStellaIngestionTablePrivileges,
+  fetchStellaUserSelectColumnPrivileges,
   fetchStellaTablePrivileges,
   fetchStellaPolicies,
 } from "@/api/tests/security/rls-helpers";
@@ -209,11 +211,21 @@ describe("policy coverage", () => {
     }
 
     const tablePrivileges = await fetchStellaTablePrivileges(testDb);
+    const userColumnPrivileges =
+      await fetchStellaUserSelectColumnPrivileges(testDb);
     const privilegesFor = (table: string) =>
       tablePrivileges
         .filter((p) => p.table_name === table)
         .map((p) => p.privilege)
         .sort();
+
+    expect(privilegesFor("user")).toEqual([]);
+    expect(
+      userColumnPrivileges
+        .filter((p) => p.table_name === "user" && p.privilege === "SELECT")
+        .map((p) => p.column_name)
+        .sort(),
+    ).toEqual(AUTH_USER_STELLA_SELECT_COLUMN_NAMES.toSorted());
 
     for (const table of GLOBAL_CASE_LAW_TABLES) {
       const globalPolicy = policies.find(

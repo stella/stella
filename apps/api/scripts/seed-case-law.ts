@@ -25,7 +25,7 @@ import type { PersistedDecisionAnalysis } from "@stll/case-law/analysis";
 import type { DocumentAst } from "@stll/case-law/document-ast";
 
 import { createScopedDb } from "@/api/db";
-import { db } from "@/api/db/root";
+import { rootDb, rlsDb } from "@/api/db/root";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import { indexDecision } from "@/api/handlers/case-law/search-index";
@@ -121,8 +121,8 @@ const loadFixtures = async (): Promise<CaseLawFixture[]> => {
 };
 
 const ensureSearchPreviewConfig = async () => {
-  await db.execute(sql`CREATE EXTENSION IF NOT EXISTS unaccent`);
-  await db.execute(sql`
+  await rootDb.execute(sql`CREATE EXTENSION IF NOT EXISTS unaccent`);
+  await rootDb.execute(sql`
     DO $$
     BEGIN
       IF NOT EXISTS (
@@ -136,7 +136,7 @@ const ensureSearchPreviewConfig = async () => {
     END
     $$;
   `);
-  await db.execute(sql`
+  await rootDb.execute(sql`
     ALTER TEXT SEARCH CONFIGURATION public.stella_unaccent
       ALTER MAPPING FOR
         asciiword,
@@ -155,7 +155,7 @@ export async function seedCaseLaw() {
   }
 
   const scopedDb = createScopedDb(
-    db,
+    rlsDb,
     [],
     DEFAULT_ORG_ID,
     toSafeId<"user">(DEFAULT_USER_ID),
@@ -173,7 +173,7 @@ export async function seedCaseLaw() {
     const adapterKey = source.adapter_key;
 
     const findSourceId = () =>
-      db.query.caseLawSources.findFirst({
+      rootDb.query.caseLawSources.findFirst({
         where: { adapterKey: { eq: adapterKey } },
         columns: { id: true },
       });
@@ -181,7 +181,7 @@ export async function seedCaseLaw() {
     const existingSource = await findSourceId();
     let sourceId = existingSource?.id;
     if (!sourceId) {
-      const inserted = await db
+      const inserted = await rootDb
         .insert(caseLawSources)
         .values({
           id: sourceIdFor(adapterKey),
@@ -210,7 +210,7 @@ export async function seedCaseLaw() {
       const fulltext =
         d.fulltext ?? d.sections?.map((s) => s.text).join("\n\n") ?? "";
 
-      const result = await db
+      const result = await rootDb
         .insert(caseLawDecisions)
         .values({
           id,
@@ -246,7 +246,7 @@ export async function seedCaseLaw() {
       // the actual row.
       let decisionId = result.at(0)?.id;
       if (!decisionId) {
-        const existing = await db
+        const existing = await rootDb
           .select({ id: caseLawDecisions.id })
           .from(caseLawDecisions)
           .where(

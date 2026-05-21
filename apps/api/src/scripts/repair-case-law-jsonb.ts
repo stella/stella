@@ -34,7 +34,7 @@
 
 import { sql } from "drizzle-orm";
 
-import { db } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
 
 const BATCH_SIZE = 2000;
 const STATEMENT_TIMEOUT_MS = 120_000;
@@ -50,7 +50,7 @@ const repairBatch = async (
 ): Promise<BatchResult | null> => {
   const cursorClause = cursorId ? sql`WHERE id > ${cursorId}::uuid` : sql``;
 
-  const rows = await db.execute(sql`
+  const rows = await rootDb.execute(sql`
     WITH batch AS (
       SELECT id
       FROM case_law_decisions
@@ -129,7 +129,9 @@ const main = async () => {
   // Lift the per-statement timeout for this session so a heavy
   // batch that has to read TOAST pages doesn't get cancelled mid-
   // way through a write.
-  await db.execute(sql.raw(`SET statement_timeout = ${STATEMENT_TIMEOUT_MS}`));
+  await rootDb.execute(
+    sql.raw(`SET statement_timeout = ${STATEMENT_TIMEOUT_MS}`),
+  );
 
   console.log("Starting case_law_decisions JSONB repair");
   console.log(

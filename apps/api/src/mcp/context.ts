@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { createSafeDb, createScopedDb } from "@/api/db";
 import type { SafeDb, ScopedDb } from "@/api/db";
 import { member } from "@/api/db/auth-schema";
-import { db } from "@/api/db/root";
+import { rootDb, rlsDb } from "@/api/db/root";
 import { resolveAccessibleWorkspaces } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isMemberRole } from "@/api/lib/member-roles";
@@ -34,7 +34,7 @@ export const resolveMcpSessionContext = async (
     userId: session.userId,
   });
 
-  const memberRow = await db
+  const memberRow = await rootDb
     .select({ role: member.role })
     .from(member)
     .where(
@@ -76,8 +76,8 @@ export const resolveMcpSessionContext = async (
     accessibleWorkspaceIdSet: new Set(usableWorkspaceIds),
     memberRole,
     organizationId,
-    safeDb: createSafeDb(db, allWorkspaceIds, organizationId, userId),
-    scopedDb: createScopedDb(db, allWorkspaceIds, organizationId, userId),
+    safeDb: createSafeDb(rlsDb, allWorkspaceIds, organizationId, userId),
+    scopedDb: createScopedDb(rlsDb, allWorkspaceIds, organizationId, userId),
     userId,
   };
 };
