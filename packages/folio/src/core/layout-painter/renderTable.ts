@@ -8,7 +8,10 @@
  * - Basic cell styling (borders, backgrounds)
  */
 
-import { measureParagraph } from "../layout-bridge/measuring";
+import {
+  clampFloatingWrapMargins,
+  measureParagraph,
+} from "../layout-bridge/measuring";
 import type { FloatingImageZone } from "../layout-bridge/measuring";
 import type {
   TableFragment,
@@ -240,7 +243,19 @@ function renderCellContent(
           rightMargin = contentWidth - (img.x - img.distLeft);
         }
       }
-      return { leftMargin, rightMargin, topY: rectTop, bottomY: rectBottom };
+      // See clampFloatingWrapMargins doc — near-full-width floats can compute
+      // a wrap margin >= contentWidth and collapse subsequent lines to ~1 glyph.
+      const clamped = clampFloatingWrapMargins(
+        leftMargin,
+        rightMargin,
+        contentWidth,
+      );
+      return {
+        leftMargin: clamped.leftMargin,
+        rightMargin: clamped.rightMargin,
+        topY: rectTop,
+        bottomY: rectBottom,
+      };
     });
 
     // Render floating image layer within the cell

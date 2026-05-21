@@ -424,12 +424,18 @@ function renderTextRun(run: TextRun, doc: Document): HTMLElement {
       anchor.title = run.hyperlink.tooltip;
     }
     anchor.textContent = run.text;
-    // Style hyperlink — default Word hyperlink color is blue (#0563c1)
-    const hyperlinkColor = getHyperlinkTextColor(run, span.style.color);
-    anchor.style.color = hyperlinkColor;
-    anchor.style.textDecoration = "underline";
-    // Override span color to match anchor (prevents color mismatch in selection)
-    span.style.color = hyperlinkColor;
+    // TOC entries opt out of the Hyperlink character style — Word renders
+    // them in the paragraph's own colour, no underline. The bridge sets
+    // `noDefaultStyle: true` and strips resolved colour/underline; here we
+    // skip the link fallback so the anchor inherits from the wrapping span.
+    if (!run.hyperlink.noDefaultStyle) {
+      // Default Word hyperlink color is blue (#0563c1)
+      const hyperlinkColor = getHyperlinkTextColor(run, span.style.color);
+      anchor.style.color = hyperlinkColor;
+      anchor.style.textDecoration = "underline";
+      // Override span color to match anchor (prevents color mismatch in selection)
+      span.style.color = hyperlinkColor;
+    }
     span.append(anchor);
   } else {
     // Set text content
@@ -440,7 +446,24 @@ function renderTextRun(run: TextRun, doc: Document): HTMLElement {
 }
 
 /**
- * Render a tab run with calculated width
+ * Number of leader characters to fill the tab's inner span. The inner span
+ * uses `overflow: hidden` so excess characters are clipped invisibly; we just
+ * need enough to span the widest realistic tab stop at the thinnest leader
+ * (a dot at small font sizes). 1000 covers wide-landscape pages with ~2px dots.
+ */
+const LEADER_FILL_COUNT = 1000;
+
+/**
+ * Render a tab run with calculated width.
+ *
+ * Leader characters (dot/hyphen/underscore for TOC entries) render in an
+ * absolute-positioned inner span over a baseline-aligned zero-width-space.
+ * The earlier SVG background-image approach sat at the line's bottom edge,
+ * misaligned with the surrounding text baseline and broken under flex layout
+ * (where the outer's height collapses to the inner content). The
+ * outer-with-ZWSP + inner-absolute pattern keeps the tab's baseline anchored
+ * to the surrounding text and lets the right-tab flex anchor compute a stable
+ * height for the line.
  */
 function renderTabRun(
   run: TabRun,
@@ -453,25 +476,33 @@ function renderTabRun(
 
   span.style.display = "inline-block";
   span.style.width = `${width}px`;
-  span.style.overflow = "hidden";
 
   applyPmPositions(span, run.pmStart, run.pmEnd);
 
-  // Render leader character if specified
-  if (leader && leader !== "none") {
-    const leaderChar = getLeaderChar(leader);
-    if (leaderChar) {
-      // Fill with leader characters
-      span.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(
-        `<svg xmlns='http://www.w3.org/2000/svg' width='4' height='16'><text x='0' y='12' font-size='12' fill='%23000'>${leaderChar}</text></svg>`,
-      )}")`;
-      span.style.backgroundRepeat = "repeat-x";
-      span.style.backgroundPosition = "bottom";
-    }
-  }
+  const leaderChar = leader && leader !== "none" ? getLeaderChar(leader) : null;
 
-  // Tab character for accessibility (but invisible)
-  span.textContent = "\u00A0"; // Non-breaking space for layout
+  if (leaderChar) {
+    // Outer span holds a zero-width space so its baseline aligns with the
+    // surrounding text. Inner absolutely-positioned span carries the dots
+    // and clips horizontally; keeping `overflow: hidden` off the outer
+    // avoids the inline-block baseline-at-margin-edge problem.
+    span.style.position = "relative";
+    span.textContent = "\u200B"; // zero-width space
+
+    const inner = doc.createElement("span");
+    inner.style.position = "absolute";
+    inner.style.left = "0";
+    inner.style.right = "0";
+    inner.style.top = "0";
+    inner.style.bottom = "0";
+    inner.style.overflow = "hidden";
+    inner.style.whiteSpace = "nowrap";
+    inner.textContent = leaderChar.repeat(LEADER_FILL_COUNT);
+    span.append(inner);
+  } else {
+    // No leader: a single nbsp carries the line-height for layout.
+    span.textContent = "\u00A0";
+  }
 
   return span;
 }
@@ -518,6 +549,16 @@ function renderInlineImageRun(run: ImageRun, doc: Document): HTMLElement {
   // Inline images should flow with text
   img.style.display = "inline";
   img.style.verticalAlign = "middle";
+
+  // wp:inline distT/distB: the measurer folds these into maxImageHeightPx;
+  // applying them as margins here keeps the margin-box footprint consistent
+  // with the line height the measurer reserved.
+  if (run.distTop) {
+    img.style.marginTop = `${run.distTop}px`;
+  }
+  if (run.distBottom) {
+    img.style.marginBottom = `${run.distBottom}px`;
+  }
 
   applyPmPositions(img, run.pmStart, run.pmEnd);
 
@@ -618,42 +659,16 @@ function renderFieldRun(
       break;
   }
 
-  // Create a text run with the resolved value
+  // Spread the whole FieldRun so every RunFormatting field carries through —
+  // Word renders the field result with the result run's full w:rPr. Explicit
+  // enumeration silently drops future RunFormatting fields and dropped the
+  // footer page-number's font/colour (eigenpal #575). The extra `fieldType`,
+  // `fallback`, and `kind: "field"` keys are inert on TextRun, but we still
+  // overwrite `kind` and `text` to the resolved values.
   const resolvedRun: TextRun = {
+    ...run,
     kind: "text",
     text,
-    ...(run.bold !== undefined ? { bold: run.bold } : {}),
-    ...(run.italic !== undefined ? { italic: run.italic } : {}),
-    ...(run.underline !== undefined ? { underline: run.underline } : {}),
-    ...(run.strike !== undefined ? { strike: run.strike } : {}),
-    ...(run.color !== undefined ? { color: run.color } : {}),
-    ...(run.textColorSource !== undefined
-      ? { textColorSource: run.textColorSource }
-      : {}),
-    ...(run.highlight !== undefined ? { highlight: run.highlight } : {}),
-    ...(run.fontFamily !== undefined ? { fontFamily: run.fontFamily } : {}),
-    ...(run.fontSize !== undefined ? { fontSize: run.fontSize } : {}),
-    ...(run.letterSpacing !== undefined
-      ? { letterSpacing: run.letterSpacing }
-      : {}),
-    ...(run.allCaps !== undefined ? { allCaps: run.allCaps } : {}),
-    ...(run.smallCaps !== undefined ? { smallCaps: run.smallCaps } : {}),
-    ...(run.positionPx !== undefined ? { positionPx: run.positionPx } : {}),
-    ...(run.horizontalScale !== undefined
-      ? { horizontalScale: run.horizontalScale }
-      : {}),
-    ...(run.kerningMinPt !== undefined
-      ? { kerningMinPt: run.kerningMinPt }
-      : {}),
-    ...(run.imprint !== undefined ? { imprint: run.imprint } : {}),
-    ...(run.emboss !== undefined ? { emboss: run.emboss } : {}),
-    ...(run.textShadow !== undefined ? { textShadow: run.textShadow } : {}),
-    ...(run.textOutline !== undefined ? { textOutline: run.textOutline } : {}),
-    ...(run.emphasisMark !== undefined
-      ? { emphasisMark: run.emphasisMark }
-      : {}),
-    ...(run.pmStart !== undefined ? { pmStart: run.pmStart } : {}),
-    ...(run.pmEnd !== undefined ? { pmEnd: run.pmEnd } : {}),
   };
 
   return renderTextRun(resolvedRun, doc);
@@ -762,7 +777,89 @@ type RenderLineOptions = {
   floatingMargins?: { leftMargin: number; rightMargin: number };
   /** Track inline image runs already rendered in this paragraph fragment to prevent duplicates */
   renderedInlineImageKeys?: Set<string>;
+  /**
+   * Rightmost x where inline content may render, in content-area coords. Used
+   * by the right-tab anchor (TOC pattern); passed in directly rather than
+   * recomposed from `leftIndentPx + availableWidth` because availableWidth
+   * excludes the hung-out region for some inputs and would drift.
+   */
+  lineRightEdgePx?: number;
 };
+
+/**
+ * Sub-pixel tolerance when comparing canvas-measured widths against the DOM's
+ * actual right edge. Accumulated rounding from canvas measureText vs. browser
+ * layout can leave a right-anchored tab one pixel short, so the flex anchor
+ * must trigger within this slack.
+ */
+const RIGHT_EDGE_EPSILON_PX = 0.5;
+
+/**
+ * Build a TextMeasureStyle from a TextRun or FieldRun's relevant fields.
+ */
+function runMeasureStyle(run: TextRun | FieldRun): TextMeasureStyle {
+  return {
+    ...(run.bold !== undefined ? { bold: run.bold } : {}),
+    ...(run.italic !== undefined ? { italic: run.italic } : {}),
+    ...(run.letterSpacing !== undefined
+      ? { letterSpacing: run.letterSpacing }
+      : {}),
+    ...(run.smallCaps !== undefined ? { smallCaps: run.smallCaps } : {}),
+  };
+}
+
+/**
+ * Sum the pixel widths of runs that follow a tab on the same line, up to the
+ * next tab or line break. Measures per-run so the right-tab anchor reserves
+ * the exact space the trailing content will take when it uses a different
+ * font/size from the default (e.g. TOC page numbers). Floating images
+ * contribute 0 inline width — they render at the page level.
+ */
+function measureFollowingContentWidth(
+  runs: Run[],
+  tabRunIndex: number,
+  measureText: (
+    text: string,
+    fontSize?: number,
+    fontFamily?: string,
+    style?: TextMeasureStyle,
+  ) => number,
+  context?: RenderContext,
+): number {
+  let width = 0;
+  for (let i = tabRunIndex + 1; i < runs.length; i++) {
+    // SAFETY: i < runs.length
+    const run = runs[i]!;
+    if (isTabRun(run) || isLineBreakRun(run)) {
+      break;
+    }
+    if (isTextRun(run)) {
+      const text = run.allCaps ? run.text.toLocaleUpperCase() : run.text;
+      width += measureText(
+        text,
+        run.fontSize ?? 11,
+        run.fontFamily ?? "Calibri",
+        runMeasureStyle(run),
+      );
+    } else if (isFieldRun(run)) {
+      let fieldText = run.fallback ?? "";
+      if (run.fieldType === "PAGE" && context) {
+        fieldText = String(context.pageNumber);
+      } else if (run.fieldType === "NUMPAGES" && context) {
+        fieldText = String(context.totalPages);
+      }
+      width += measureText(
+        run.allCaps ? fieldText.toLocaleUpperCase() : fieldText,
+        run.fontSize ?? 11,
+        run.fontFamily ?? "Calibri",
+        runMeasureStyle(run),
+      );
+    } else if (isImageRun(run) && !isFloatingImageRun(run)) {
+      width += run.width || 0;
+    }
+  }
+  return width;
+}
 
 /**
  * Build a stable key for an inline image run.
@@ -925,6 +1022,19 @@ export function renderLine(
   if (runsForLine.length === 1 && isImageRun(runsForLine[0]!)) {
     lineEl.style.display = "flex";
     lineEl.style.alignItems = "center";
+  } else if (runsForLine.some(isImageRun)) {
+    // Image flowing alongside text/tabs (logo + label header). Word seats an
+    // inline image as a tall glyph on the text baseline, so baseline-align
+    // the row — the image bottom then lands on the text baseline. The line
+    // height was measured to match (imageH + text descent). Stays paired
+    // with the measurer's `fromRun !== toRun` branch.
+    lineEl.style.display = "flex";
+    lineEl.style.alignItems = "baseline";
+    // Flex blockifies the run spans, so they'd otherwise inherit the line's
+    // image-inflated line-height as their own box height — fattening each
+    // text run to the full band and breaking baseline alignment. Reset to
+    // the font's natural line box; the line div keeps its explicit `height`.
+    lineEl.style.lineHeight = "normal";
   }
 
   // Handle empty lines
@@ -1029,12 +1139,119 @@ export function renderLine(
         measureText,
       );
 
-      // Render tab with calculated width and leader
-      const tabEl = renderTabRun(run, doc, tabResult.width, tabResult.leader);
+      // Right-tab anchor (TOC pattern): when an end-aligned tab's stop is at
+      // (or past) the line's right edge AND no later tab follows on this
+      // line, promote the line to flex and let flex layout pin the trailing
+      // content flush right. This sidesteps canvas-vs-DOM measurement drift
+      // that otherwise leaves the page number a pixel short of the margin.
+      const lineRightEdgeX = options?.lineRightEdgePx;
+      const followingWidthForCheck =
+        lineRightEdgeX !== undefined
+          ? measureFollowingContentWidth(
+              runsForLine,
+              i,
+              measureText,
+              options?.context,
+            )
+          : 0;
+      let hasFollowingTab = false;
+      for (let j = i + 1; j < runsForLine.length; j++) {
+        // SAFETY: j < runsForLine.length
+        const next = runsForLine[j]!;
+        if (isLineBreakRun(next)) {
+          break;
+        }
+        if (isTabRun(next)) {
+          hasFollowingTab = true;
+          break;
+        }
+      }
+      const useRightAnchor =
+        lineRightEdgeX !== undefined &&
+        tabResult.alignment === "end" &&
+        !hasFollowingTab &&
+        currentX + tabResult.width + followingWidthForCheck >=
+          lineRightEdgeX - RIGHT_EDGE_EPSILON_PX;
+
+      if (useRightAnchor) {
+        // Promote to flex row. text-indent applies per flex item (not to the
+        // group), so a hanging-indent paragraph would pull every text item
+        // left including the page number — the orchestrator re-applies the
+        // hanging via margin-left on the first child instead.
+        lineEl.style.display = "flex";
+        lineEl.style.alignItems = "baseline";
+        lineEl.style.whiteSpace = "nowrap";
+        lineEl.style.textIndent = "0";
+        lineEl.dataset["flexLine"] = "true";
+        if (
+          options?.isFirstLine &&
+          options.firstLineIndentPx !== undefined &&
+          options.firstLineIndentPx < 0 &&
+          lineEl.firstElementChild instanceof HTMLElement
+        ) {
+          lineEl.firstElementChild.style.marginLeft = `${options.firstLineIndentPx}px`;
+        }
+
+        // The tab flex-grows to fill the remaining line space; the leader
+        // inside is absolutely positioned and clips to the tab's box.
+        const tabEl = renderTabRun(run, doc, 0, tabResult.leader);
+        tabEl.style.flex = "1 1 0";
+        tabEl.style.minWidth = "0";
+        tabEl.style.width = "auto";
+        lineEl.append(tabEl);
+
+        // Render the remaining runs into the line at their natural width.
+        // Flex layout puts them flush against the line's right edge.
+        for (let j = i + 1; j < runsForLine.length; j++) {
+          // SAFETY: j < runsForLine.length
+          const next = runsForLine[j]!;
+          if (isTabRun(next) || isLineBreakRun(next)) {
+            break;
+          }
+          if (isTextRun(next)) {
+            lineEl.append(renderTextRun(next, doc));
+          } else if (isFieldRun(next) && options?.context) {
+            lineEl.append(renderFieldRun(next, doc, options.context));
+          } else if (isImageRun(next)) {
+            // Floating images render in dedicated layers — skip here so we
+            // don't double-render. Inline images render via getInlineImageRunKey
+            // bookkeeping so the orchestrator doesn't repaint them.
+            if (isFloatingImageRun(next)) {
+              continue;
+            }
+            const imageKey = getInlineImageRunKey(next);
+            if (!options?.renderedInlineImageKeys?.has(imageKey)) {
+              options?.renderedInlineImageKeys?.add(imageKey);
+              lineEl.append(renderImageRun(next, doc));
+            }
+          } else {
+            lineEl.append(renderRun(next, doc, options?.context));
+          }
+        }
+
+        break;
+      }
+
+      // Fallback path: not a right-anchored tab. Clamp the tab width so it
+      // doesn't overshoot the line's right edge when the stop sits just past
+      // the content area (Word TOC styles author stops a hair beyond the
+      // margin); without this, the painted tab spills into the right margin.
+      let tabWidth = tabResult.width;
+      if (
+        lineRightEdgeX !== undefined &&
+        currentX + tabWidth + followingWidthForCheck > lineRightEdgeX
+      ) {
+        tabWidth = Math.max(
+          1,
+          lineRightEdgeX - currentX - followingWidthForCheck,
+        );
+      }
+
+      const tabEl = renderTabRun(run, doc, tabWidth, tabResult.leader);
       lineEl.append(tabEl);
 
       // Update X position
-      currentX += tabResult.width;
+      currentX += tabWidth;
     } else if (isTextRun(run)) {
       const runEl = renderTextRun(run, doc);
 
@@ -1465,7 +1682,19 @@ export function renderParagraphFragment(
         rightMargin: lineRightOffset,
       },
       renderedInlineImageKeys,
+      // Absolute right edge in content-area coords. The fragment starts at
+      // content-area-x=0 with full content-area width; the rightmost x where
+      // inline content can land is `fragment.width - indentRight - lineRightOffset`.
+      // Used by the right-tab anchor — see RenderLineOptions.lineRightEdgePx.
+      lineRightEdgePx: fragment.width - indentRight - lineRightOffset,
     });
+
+    // If renderLine promoted this line to flex (right-tab anchor for TOC
+    // entries), text-indent must NOT apply: it would shift the first inline
+    // content INSIDE EACH flex item (e.g. the page-number anchor), pulling
+    // it left by `hanging`. Right-tab anchored lines re-apply the hanging
+    // offset as margin-left on the first item inside renderLine itself.
+    const isFlexLine = lineEl.dataset["flexLine"] === "true";
 
     // Apply left offset from floating images (lines start after the floating image)
     // Also constrain width so text doesn't overflow into the image area
@@ -1501,16 +1730,20 @@ export function renderParagraphFragment(
       if (indentLeft !== 0 && hasHanging) {
         // Hanging indent: first line starts at (indentLeft - hanging)
         lineEl.style.paddingLeft = `${Math.max(indentLeft, 0)}px`;
-        lineEl.style.textIndent = `-${indent.hanging ?? 0}px`;
+        if (!isFlexLine) {
+          lineEl.style.textIndent = `-${indent.hanging ?? 0}px`;
+        }
       } else if (indentLeft !== 0 && hasFirstLine) {
         // First line indent: first line starts at (indentLeft + firstLine)
         lineEl.style.paddingLeft = `${Math.max(indentLeft, 0)}px`;
-        lineEl.style.textIndent = `${indent.firstLine ?? 0}px`;
+        if (!isFlexLine) {
+          lineEl.style.textIndent = `${indent.firstLine ?? 0}px`;
+        }
       } else if (indentLeft > 0) {
         // Just left indent, no special first line treatment
         lineEl.style.paddingLeft = `${indentLeft}px`;
-      } else if (hasFirstLine) {
-        // No left indent, but has first line indent
+      } else if (hasFirstLine && !isFlexLine) {
+        // No left indent, but has first line indent.
         lineEl.style.textIndent = `${indent.firstLine ?? 0}px`;
       }
       // No hanging without left indent (handled by firstLineOffset in measurement)

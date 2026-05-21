@@ -782,6 +782,31 @@ function buildImageRun(
 }
 
 /**
+ * Paragraph styleId pattern used by Word for TOC entries (TOC, TOC1, TOC2, …).
+ * Hyperlinks inside these paragraphs must render in the paragraph's own colour,
+ * not the Hyperlink character style — see {@link stripTocHyperlinkStyle}.
+ */
+const TOC_STYLE_ID = /^TOC\d*$/i;
+
+/**
+ * In TOC paragraphs, strip the resolved Hyperlink character-style colour and
+ * underline so the painter's link fallback doesn't fire. The PM doc keeps the
+ * original marks so copy/paste out of a TOC still carries the Hyperlink
+ * styling like Word does. Applies to both text and field runs — a TOC entry's
+ * page number is a PAGEREF field inside the entry's hyperlink.
+ *
+ * Mutates `formatting` in place; cheaper than re-cloning per run.
+ */
+function stripTocHyperlinkStyle(formatting: RunFormatting): void {
+  if (!formatting.hyperlink) {
+    return;
+  }
+  formatting.hyperlink = { ...formatting.hyperlink, noDefaultStyle: true };
+  delete formatting.color;
+  delete formatting.underline;
+}
+
+/**
  * Convert a paragraph node to runs.
  */
 function paragraphToRuns(
@@ -796,6 +821,9 @@ function paragraphToRuns(
     node.attrs as PMParagraphAttrs,
     theme,
   );
+  const paragraphStyleId = (node.attrs as PMParagraphAttrs).styleId;
+  const inTocParagraph =
+    typeof paragraphStyleId === "string" && TOC_STYLE_ID.test(paragraphStyleId);
 
   // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
   node.forEach((child, childOffset) => {
@@ -804,6 +832,9 @@ function paragraphToRuns(
     if (child.isText && child.text) {
       // Text node - create text run
       const formatting = extractRunFormatting(child.marks, theme);
+      if (inTocParagraph) {
+        stripTocHyperlinkStyle(formatting);
+      }
       const run: TextRun = {
         kind: "text",
         text: child.text,
@@ -865,8 +896,12 @@ function paragraphToRuns(
       } else if (ft === "TIME") {
         mappedType = "TIME";
       }
+      const extractedFieldFormatting = extractRunFormatting(child.marks, theme);
+      if (inTocParagraph) {
+        stripTocHyperlinkStyle(extractedFieldFormatting);
+      }
       const fieldFormatting = markDefaultBlackTextColorSource(
-        extractRunFormatting(child.marks, theme),
+        extractedFieldFormatting,
         paraDefaults,
       );
       const run: FieldRun = {

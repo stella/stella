@@ -5,7 +5,10 @@
  * Each page contains positioned fragments within a content area.
  */
 
-import { measureParagraph } from "../layout-bridge/measuring";
+import {
+  clampFloatingWrapMargins,
+  measureParagraph,
+} from "../layout-bridge/measuring";
 import type { FloatingImageZone } from "../layout-bridge/measuring";
 import type {
   Page,
@@ -807,7 +810,20 @@ function rectsToFloatingZones(
       }
     }
 
-    return { leftMargin, rightMargin, topY: rectTop, bottomY: rectBottom };
+    // Near-full-width floats can compute a wrap margin >= contentWidth; if we
+    // let that propagate, body text after the float collapses to ~1 glyph per
+    // line. Word falls back to full content width in that case.
+    const clamped = clampFloatingWrapMargins(
+      leftMargin,
+      rightMargin,
+      contentWidth,
+    );
+    return {
+      leftMargin: clamped.leftMargin,
+      rightMargin: clamped.rightMargin,
+      topY: rectTop,
+      bottomY: rectBottom,
+    };
   });
 }
 

@@ -2,7 +2,11 @@ import { describe, expect, test } from "bun:test";
 
 import { hashParagraphBlock } from "./cache";
 import { buildFontString, resetCanvasContext } from "./measureContainer";
-import { getRunCharWidths, measureParagraph } from "./measureParagraph";
+import {
+  clampFloatingWrapMargins,
+  getRunCharWidths,
+  measureParagraph,
+} from "./measureParagraph";
 
 const PT_TO_PX = 96 / 72;
 
@@ -244,6 +248,110 @@ describe("inline image paragraph measurement", () => {
       expect(measure.lines.at(1)?.width).toBe(20);
     });
   });
+
+  // Regression: a logo + label header line (image flowing alongside text) used
+  // to inherit the image-only branch's `imageH + descent*2` line box, which
+  // centered the text inside an inflated band and left it floating above the
+  // paragraph border (eigenpal #580). Word baseline-aligns the row and sizes
+  // the line as `imageH + text descent`.
+  test("image-with-text line sizes as imageH + text descent (baseline-aligned)", () => {
+    withFakeTextMeasure(() => {
+      const imageHeight = 40;
+      const measure = measureParagraph(
+        {
+          kind: "paragraph",
+          id: "logo-label",
+          runs: [
+            {
+              kind: "image",
+              src: "data:image/png;base64,",
+              width: 80,
+              height: imageHeight,
+            },
+            { kind: "text", text: "Header" },
+          ],
+        },
+        600,
+      );
+
+      const line = measure.lines.at(0);
+      expect(line).toBeDefined();
+      // Line height should equal imageH + a single descent buffer; the
+      // image-alone branch would emit imageH + descent*2, so check that the
+      // height is strictly less than that.
+      const descent = line?.descent ?? 0;
+      expect(descent).toBeGreaterThan(0);
+      expect(line?.lineHeight).toBe(imageHeight + descent);
+      expect(line?.ascent).toBe(imageHeight);
+    });
+  });
+
+  test("image-only line keeps imageH + descent*2 breathing-room band", () => {
+    const imageHeight = 40;
+    const measure = measureParagraph(
+      {
+        kind: "paragraph",
+        id: "logo-alone",
+        runs: [
+          {
+            kind: "image",
+            src: "data:image/png;base64,",
+            width: 80,
+            height: imageHeight,
+          },
+        ],
+        attrs: {
+          defaultFontSize: 11,
+          defaultFontFamily: "Calibri",
+        },
+      },
+      600,
+    );
+
+    const line = measure.lines.at(0);
+    expect(line).toBeDefined();
+    const descent = line?.descent ?? 0;
+    expect(line?.lineHeight).toBe(imageHeight + descent * 2);
+    expect(line?.ascent).toBe(imageHeight + descent);
+  });
+
+  test("inline image footprint includes its wp:inline distT/distB", () => {
+    withFakeTextMeasure(() => {
+      // distTop/distBottom = 8 each = 16px of extra footprint; the line
+      // height must reserve that or the painter's per-image margin spills
+      // past the line's reserved height.
+      const imageHeight = 20;
+      const distTop = 8;
+      const distBottom = 8;
+      const measure = measureParagraph(
+        {
+          kind: "paragraph",
+          id: "logo-dist",
+          runs: [
+            {
+              kind: "image",
+              src: "data:image/png;base64,",
+              width: 80,
+              height: imageHeight,
+              distTop,
+              distBottom,
+            },
+            { kind: "text", text: "Header" },
+          ],
+        },
+        600,
+      );
+
+      const line = measure.lines.at(0);
+      expect(line).toBeDefined();
+      const descent = line?.descent ?? 0;
+      // Footprint = imageHeight + distTop + distBottom; the image-with-text
+      // branch adds a single descent buffer below baseline.
+      expect(line?.lineHeight).toBe(
+        imageHeight + distTop + distBottom + descent,
+      );
+    });
+  });
 });
 
 describe("paragraph indentation measurement", () => {
@@ -360,5 +468,56 @@ describe("all-caps paragraph measurement", () => {
     });
 
     expect(spacedHash).not.toBe(plainHash);
+  });
+});
+
+describe("clampFloatingWrapMargins", () => {
+  // A near-full-width floating table or image computes a left/right wrap
+  // margin that extends past contentWidth (margins are `rectRight` or
+  // `contentWidth - (x - distLeft)`, both of which can spill). Without
+  // clamping, getFloatingMargins propagates that margin into the line and
+  // measureParagraph collapses every wrapped line to ~1 glyph wide — the
+  // "single character per line after a wide float" symptom.
+  test("zeros margins that exceed content width", () => {
+    expect(clampFloatingWrapMargins(698, 0, 671)).toEqual({
+      leftMargin: 0,
+      rightMargin: 0,
+    });
+    expect(clampFloatingWrapMargins(0, 700, 671)).toEqual({
+      leftMargin: 0,
+      rightMargin: 0,
+    });
+  });
+
+  test("zeros when combined side margins cover the content area", () => {
+    expect(clampFloatingWrapMargins(400, 300, 671)).toEqual({
+      leftMargin: 0,
+      rightMargin: 0,
+    });
+  });
+
+  test("preserves valid one-sided margins", () => {
+    expect(clampFloatingWrapMargins(200, 0, 671)).toEqual({
+      leftMargin: 200,
+      rightMargin: 0,
+    });
+    expect(clampFloatingWrapMargins(0, 150, 671)).toEqual({
+      leftMargin: 0,
+      rightMargin: 150,
+    });
+  });
+
+  test("clamps negative inputs to 0", () => {
+    expect(clampFloatingWrapMargins(-5, -10, 671)).toEqual({
+      leftMargin: 0,
+      rightMargin: 0,
+    });
+  });
+
+  test("falls back to contentWidth=1 floor for non-positive contentWidth", () => {
+    expect(clampFloatingWrapMargins(0, 0, 0)).toEqual({
+      leftMargin: 0,
+      rightMargin: 0,
+    });
   });
 });

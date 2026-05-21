@@ -138,6 +138,195 @@ describe("toFlowBlocks field handling", () => {
       fallback: "Clause 4.2",
     });
   });
+
+  // Regression: PAGE field rendered with the painter's default font/colour
+  // (eigenpal #575) when the bridge skipped extractRunFormatting for field
+  // nodes. Word renders a field result with the result run's own w:rPr, so
+  // marks attached to the field node must land on the FieldRun.
+  test("propagates field-node character marks to the FieldRun formatting", () => {
+    const bold = schema.marks["bold"]?.create();
+    // fontSize mark stores half-points (the OOXML <w:sz>) — 28 = 14pt.
+    const fontSize = schema.marks["fontSize"]?.create({ size: 28 });
+    const textColor = schema.marks["textColor"]?.create({ rgb: "FF0000" });
+    if (!bold || !fontSize || !textColor) {
+      throw new Error("Expected bold/fontSize/textColor marks in schema");
+    }
+    const doc = schema.node("doc", null, [
+      schema.node("paragraph", null, [
+        schema.node(
+          "field",
+          {
+            fieldType: "PAGE",
+            instruction: " PAGE ",
+            displayText: "1",
+            fieldKind: "simple",
+          },
+          undefined,
+          [bold, fontSize, textColor],
+        ),
+      ]),
+    ]);
+
+    const blocks = toFlowBlocks(doc);
+    const paragraph = blocks.at(0);
+    if (paragraph?.kind !== "paragraph") {
+      throw new Error("Expected paragraph block");
+    }
+    const fieldRun = paragraph.runs.at(0);
+    if (fieldRun?.kind !== "field") {
+      throw new Error("Expected field run");
+    }
+
+    expect(fieldRun.bold).toBe(true);
+    expect(fieldRun.fontSize).toBe(14);
+    expect(fieldRun.color).toBe("#FF0000");
+  });
+});
+
+describe("toFlowBlocks TOC hyperlink style strip", () => {
+  // Regression eigenpal #566: in TOCx paragraphs, Word renders hyperlinks in
+  // the paragraph's own colour (no blue + underline). Without stripping the
+  // resolved Hyperlink character-style here, the painter's link fallback
+  // applies blue + underline and TOC entries look like web links.
+  test("strips resolved color/underline on hyperlink text in a TOC paragraph", () => {
+    const linkMark = schema.marks["hyperlink"]?.create({
+      href: "#_Toc1",
+    });
+    const underline = schema.marks["underline"]?.create({ style: "single" });
+    const textColor = schema.marks["textColor"]?.create({ rgb: "0563C1" });
+    if (!linkMark || !underline || !textColor) {
+      throw new Error("Expected hyperlink/underline/textColor marks");
+    }
+
+    const doc = schema.node("doc", null, [
+      schema.node("paragraph", { styleId: "TOC1" }, [
+        schema.text("Section 1", [linkMark, underline, textColor]),
+      ]),
+    ]);
+
+    const blocks = toFlowBlocks(doc);
+    const paragraph = blocks.at(0);
+    if (paragraph?.kind !== "paragraph") {
+      throw new Error("Expected paragraph block");
+    }
+    const run = paragraph.runs.at(0);
+    if (run?.kind !== "text") {
+      throw new Error("Expected text run");
+    }
+
+    expect(run.hyperlink?.href).toBe("#_Toc1");
+    expect(run.hyperlink?.noDefaultStyle).toBe(true);
+    expect(run.color).toBeUndefined();
+    expect(run.underline).toBeUndefined();
+  });
+
+  // The page-number end of a TOC entry is a PAGEREF field inside the
+  // hyperlink — the strip must reach field runs too, not just text runs.
+  test("strips resolved color/underline on a field run inside a TOC paragraph", () => {
+    const linkMark = schema.marks["hyperlink"]?.create({
+      href: "#_Toc1",
+    });
+    const underline = schema.marks["underline"]?.create({ style: "single" });
+    const textColor = schema.marks["textColor"]?.create({ rgb: "0563C1" });
+    if (!linkMark || !underline || !textColor) {
+      throw new Error("Expected hyperlink/underline/textColor marks");
+    }
+
+    const doc = schema.node("doc", null, [
+      schema.node("paragraph", { styleId: "TOC2" }, [
+        schema.node(
+          "field",
+          {
+            fieldType: "OTHER",
+            instruction: " PAGEREF _Toc1 \\h ",
+            displayText: "5",
+            fieldKind: "complex",
+          },
+          undefined,
+          [linkMark, underline, textColor],
+        ),
+      ]),
+    ]);
+
+    const blocks = toFlowBlocks(doc);
+    const paragraph = blocks.at(0);
+    if (paragraph?.kind !== "paragraph") {
+      throw new Error("Expected paragraph block");
+    }
+    const fieldRun = paragraph.runs.at(0);
+    if (fieldRun?.kind !== "field") {
+      throw new Error("Expected field run");
+    }
+
+    expect(fieldRun.hyperlink?.noDefaultStyle).toBe(true);
+    expect(fieldRun.color).toBeUndefined();
+    expect(fieldRun.underline).toBeUndefined();
+  });
+
+  // Non-TOC paragraphs must NOT be stripped — Word still renders normal-body
+  // hyperlinks with the Hyperlink character style (blue + underline). The
+  // strip is keyed to styleId /^TOC\d*$/i; everything else passes through.
+  test("does not strip hyperlinks in non-TOC paragraphs", () => {
+    const linkMark = schema.marks["hyperlink"]?.create({
+      href: "https://example.com",
+    });
+    const underline = schema.marks["underline"]?.create({ style: "single" });
+    const textColor = schema.marks["textColor"]?.create({ rgb: "0563C1" });
+    if (!linkMark || !underline || !textColor) {
+      throw new Error("Expected hyperlink/underline/textColor marks");
+    }
+
+    const doc = schema.node("doc", null, [
+      schema.node("paragraph", null, [
+        schema.text("body link", [linkMark, underline, textColor]),
+      ]),
+    ]);
+
+    const blocks = toFlowBlocks(doc);
+    const paragraph = blocks.at(0);
+    if (paragraph?.kind !== "paragraph") {
+      throw new Error("Expected paragraph block");
+    }
+    const run = paragraph.runs.at(0);
+    if (run?.kind !== "text") {
+      throw new Error("Expected text run");
+    }
+
+    expect(run.hyperlink?.noDefaultStyle).toBeUndefined();
+    expect(run.color).toBeDefined();
+    expect(run.underline).toBeDefined();
+  });
+
+  // TOC, TOC1..TOC9 should all match. TOCHeading (Word's TOC title) is its
+  // own styleId and is NOT a TOC entry — no strip.
+  test("TOC styleId regex matches TOC and TOC1..N but not TOCHeading", () => {
+    const linkMark = schema.marks["hyperlink"]?.create({ href: "#x" });
+    if (!linkMark) {
+      throw new Error("Expected hyperlink mark");
+    }
+    const docFor = (styleId: string) =>
+      schema.node("doc", null, [
+        schema.node("paragraph", { styleId }, [schema.text("x", [linkMark])]),
+      ]);
+    const firstRunHyperlinkStripped = (styleId: string) => {
+      const blocks = toFlowBlocks(docFor(styleId));
+      const para = blocks.at(0);
+      if (para?.kind !== "paragraph") {
+        throw new Error("Expected paragraph block");
+      }
+      const run = para.runs.at(0);
+      if (run?.kind !== "text") {
+        throw new Error("Expected text run");
+      }
+      return run.hyperlink?.noDefaultStyle === true;
+    };
+
+    expect(firstRunHyperlinkStripped("TOC")).toBe(true);
+    expect(firstRunHyperlinkStripped("TOC1")).toBe(true);
+    expect(firstRunHyperlinkStripped("toc3")).toBe(true);
+    expect(firstRunHyperlinkStripped("TOCHeading")).toBe(false);
+    expect(firstRunHyperlinkStripped("Normal")).toBe(false);
+  });
 });
 
 describe("toFlowBlocks list numbering", () => {

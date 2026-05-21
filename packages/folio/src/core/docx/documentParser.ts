@@ -524,17 +524,56 @@ function scanRunForTextBoxDrawings(xmlRun: XmlElement): TextBoxRunScan {
   const textBoxDrawings: XmlElement[] = [];
   let hasNonTextBoxContent = false;
 
+  const visitDrawing = (drawingEl: XmlElement): void => {
+    if (isTextBoxDrawing(drawingEl)) {
+      textBoxDrawings.push(drawingEl);
+      return;
+    }
+    hasNonTextBoxContent = true;
+  };
+
   for (const el of getChildElements(xmlRun)) {
     const name = getLocalName(el.name ?? "");
     if (name === "rPr") {
       continue;
     }
-    if (name !== "drawing") {
-      hasNonTextBoxContent = true;
+    if (name === "drawing") {
+      visitDrawing(el);
       continue;
     }
-    if (isTextBoxDrawing(el)) {
-      textBoxDrawings.push(el);
+    if (name === "AlternateContent") {
+      // Word stores anchored wps:wsp text boxes inside mc:AlternateContent —
+      // Choice Requires="wps" holds the modern shape, Fallback holds a VML
+      // rendering. Prefer Choice; if it has no drawing, fall back to Fallback
+      // so we keep some shape data either way (matches the run-content parser).
+      const branches = getChildElements(el);
+      const choice = branches.find(
+        (b) => getLocalName(b.name ?? "") === "Choice",
+      );
+      const fallback = branches.find(
+        (b) => getLocalName(b.name ?? "") === "Fallback",
+      );
+      let foundInBranch = false;
+      const tryBranch = (branch: XmlElement | undefined): boolean => {
+        if (!branch) {
+          return false;
+        }
+        let found = false;
+        for (const innerEl of getChildElements(branch)) {
+          if (getLocalName(innerEl.name ?? "") === "drawing") {
+            visitDrawing(innerEl);
+            found = true;
+          }
+        }
+        return found;
+      };
+      foundInBranch = tryBranch(choice);
+      if (!foundInBranch) {
+        foundInBranch = tryBranch(fallback);
+      }
+      if (!foundInBranch) {
+        hasNonTextBoxContent = true;
+      }
       continue;
     }
     hasNonTextBoxContent = true;

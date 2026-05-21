@@ -1879,10 +1879,12 @@ function convertHyperlink(
       // Add link mark to run marks
       const allMarks = [...runMarks, linkMark];
 
+      // Delegate to convertRunContent so tabs/breaks/fields/symbols inside
+      // a hyperlink round-trip (eigenpal #566). The earlier text-only loop
+      // silently dropped TOC entries' tab between title and page number,
+      // collapsing the right-aligned page number flush against the title.
       for (const content of child.content) {
-        if (content.type === "text" && content.text) {
-          nodes.push(schema.text(content.text, allMarks));
-        }
+        nodes.push(...convertRunContent(content, allMarks));
       }
     }
   }

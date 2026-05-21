@@ -218,6 +218,95 @@ describe("toProseDoc", () => {
     expect(tableCellBorderColor(attrs, "top")?.themeColor).toBeUndefined();
   });
 
+  test("resolves themed table-cell border color with themeTint to the modified RGB", () => {
+    const document: Document = {
+      package: {
+        theme: officeTheme,
+        document: {
+          content: [
+            {
+              type: "table",
+              rows: [
+                {
+                  type: "tableRow",
+                  cells: [
+                    {
+                      type: "tableCell",
+                      formatting: {
+                        borders: {
+                          left: {
+                            style: "single",
+                            size: 4,
+                            color: {
+                              themeColor: "accent1",
+                              themeTint: "33",
+                            },
+                          },
+                        },
+                      },
+                      content: [{ type: "paragraph", content: [] }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const attrs = firstTableCellAttrs(document);
+
+    // accent1 (4472C4) blended toward white with tint 0x33/0xFF.
+    expect(tableCellBorderColor(attrs, "left")?.rgb).toBe("DAE3F3");
+    expect(tableCellBorderColor(attrs, "left")?.themeColor).toBeUndefined();
+  });
+
+  test("passes plain RGB and auto table-cell border colors through unchanged", () => {
+    const document: Document = {
+      package: {
+        theme: officeTheme,
+        document: {
+          content: [
+            {
+              type: "table",
+              rows: [
+                {
+                  type: "tableRow",
+                  cells: [
+                    {
+                      type: "tableCell",
+                      formatting: {
+                        borders: {
+                          top: {
+                            style: "single",
+                            size: 8,
+                            color: { rgb: "FF0000" },
+                          },
+                          bottom: {
+                            style: "single",
+                            size: 8,
+                            color: { rgb: "auto" },
+                          },
+                        },
+                      },
+                      content: [{ type: "paragraph", content: [] }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const attrs = firstTableCellAttrs(document);
+
+    expect(tableCellBorderColor(attrs, "top")?.rgb).toBe("FF0000");
+    expect(tableCellBorderColor(attrs, "bottom")?.rgb).toBe("auto");
+  });
+
   test("keeps unresolved themed table-cell border colors when no document theme exists", () => {
     const document: Document = {
       package: {
