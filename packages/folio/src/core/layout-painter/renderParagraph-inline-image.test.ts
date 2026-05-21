@@ -106,6 +106,49 @@ describe("renderLine inline image handling", () => {
     expect(imageEl?.style.width).toBe("186px");
     expect(imageEl?.style.height).toBe("29px");
   });
+
+  // Regression chatgpt-codex on #410: the image+text flex branch fired on
+  // `runsForLine.some(isImageRun)`, which also matched FLOATING images. Those
+  // render in a page-level layer and `continue` in the main loop, so a line
+  // that wraps around a floating image (text-only inline content) was being
+  // forced into flex/baseline layout — changing alignment + indent + line
+  // height for normal body text. Must be gated to non-floating images.
+  test("does not flex-promote a line whose only image is floating", () => {
+    const floatingImage: ImageRun = {
+      kind: "image",
+      src: "data:image/png;base64,",
+      width: 100,
+      height: 80,
+      displayMode: "float",
+      wrapType: "square",
+      pmStart: 1,
+      pmEnd: 2,
+    };
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "wrap-around-float",
+      runs: [floatingImage, { kind: "text", text: "Body text wrapping" }],
+      pmStart: 0,
+      pmEnd: 20,
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 1,
+      toChar: 18,
+      width: 400,
+      ascent: 12,
+      descent: 3,
+      lineHeight: 15,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+
+    // The line still contains an ImageRun in its run slice, but it's
+    // floating — flex promotion must not fire.
+    expect(lineEl.style.display).not.toBe("flex");
+    expect(lineEl.style.alignItems).not.toBe("baseline");
+  });
 });
 
 describe("renderLine scaled text handling", () => {

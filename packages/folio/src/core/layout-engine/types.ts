@@ -47,7 +47,7 @@ export type RunFormatting = {
   textOutline?: boolean;
   emphasisMark?: "dot" | "comma" | "circle" | "underDot";
   /** Hyperlink info if this run is a link */
-  hyperlink?: { href: string; tooltip?: string };
+  hyperlink?: HyperlinkInfo;
   /** Footnote reference ID (if this run contains a footnote reference) */
   footnoteRefId?: number;
   /** Endnote reference ID (if this run contains an endnote reference) */
@@ -72,6 +72,14 @@ export type RunFormatting = {
 export type HyperlinkInfo = {
   href: string;
   tooltip?: string;
+  /**
+   * When true, the painter must not apply Word-default link styling
+   * (blue + underline) to this run. Set by the bridge for TOC entries —
+   * Word renders TOCx hyperlinks in the paragraph's own colour, not in
+   * the Hyperlink character style. The PM doc keeps the original marks
+   * so copy/paste out of a TOC still carries Hyperlink styling.
+   */
+  noDefaultStyle?: boolean;
 };
 
 /**

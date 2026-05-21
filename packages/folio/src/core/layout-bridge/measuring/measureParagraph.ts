@@ -321,6 +321,31 @@ function findWordBreaks(text: string): number[] {
 const DEFAULT_TAB_WIDTH = 48;
 
 /**
+ * When a float's wrap margins consume the entire content width (or more),
+ * there is no horizontal strip beside it for body text. Word renders the
+ * following lines at full content width instead of collapsing them to a
+ * 1-glyph column. Unchecked margins from near-full-width tables/images can
+ * exceed contentWidth and collapse every wrap line to ~1 character.
+ *
+ * Returned margins are zeroed when either side alone is >= contentWidth or
+ * their sum is >= contentWidth. Otherwise the original (non-negative) values
+ * pass through unchanged.
+ */
+export function clampFloatingWrapMargins(
+  leftMargin: number,
+  rightMargin: number,
+  contentWidth: number,
+): { leftMargin: number; rightMargin: number } {
+  const cw = Math.max(1, contentWidth);
+  const lm = Math.max(0, leftMargin);
+  const rm = Math.max(0, rightMargin);
+  if (lm >= cw || rm >= cw || lm + rm >= cw) {
+    return { leftMargin: 0, rightMargin: 0 };
+  }
+  return { leftMargin: lm, rightMargin: rm };
+}
+
+/**
  * Calculate width reduction for a line based on floating image zones.
  * Returns the left and right margins that need to be applied.
  */
@@ -558,14 +583,34 @@ export function measureParagraph(
       currentLine.maxFontMetrics,
     );
 
-    // If an inline image is taller than the text-based line height, reserve
-    // descender room on both sides to avoid clipping image-only table rows.
+    // If an inline image is taller than the text-based line height, the line
+    // grows to fit the image. Word seats an inline image as a tall glyph on
+    // the text baseline.
     const finalTypography = { ...typography };
     if (currentLine.maxImageHeightPx > finalTypography.lineHeight) {
       const imageHeight = currentLine.maxImageHeightPx;
       const buffer = finalTypography.descent;
-      finalTypography.lineHeight = imageHeight + buffer * 2;
-      finalTypography.ascent = imageHeight + buffer;
+      // `fromRun === toRun` with a tall image present means the line holds
+      // exactly that one image (no flowing text/tabs). Must stay paired with
+      // the painter's image-only `runsForLine.length === 1 && isImageRun(...)`
+      // test in renderLine — the two pick paired line-height + alignment
+      // strategies and disagreeing reintroduces the floating-label bug.
+      if (currentLine.fromRun === currentLine.toRun) {
+        // Image alone on the line: grow to the image height plus the parent
+        // font's descent on BOTH sides so the row has visible breathing room
+        // above and below the image (Word's render gives a few px of cell
+        // padding even with tcMar=0).
+        finalTypography.lineHeight = imageHeight + buffer * 2;
+        finalTypography.ascent = imageHeight + buffer;
+      } else {
+        // Image flowing with text/tabs (e.g. a logo + label header line):
+        // the full image height sits above the baseline and only the text
+        // descent is reserved below — no extra leading above the image. The
+        // painter baseline-aligns the row so the image bottom lands on the
+        // text baseline.
+        finalTypography.lineHeight = imageHeight + buffer;
+        finalTypography.ascent = imageHeight;
+      }
     }
 
     const line: MeasuredLine = {
@@ -736,9 +781,15 @@ export function measureParagraph(
       const imageWidth = run.width;
       const imageHeight = run.height;
 
-      // Track image height separately (already in pixels, not points)
-      if (imageHeight > currentLine.maxImageHeightPx) {
-        currentLine.maxImageHeightPx = imageHeight;
+      // The image's vertical footprint in the line includes its wp:inline
+      // distT/distB wrap distances. These default to 0 for inline images
+      // (unlike the block path's synthetic 6px). The painter applies them as
+      // top/bottom margins on the <img>, so the run's flex baseline (the
+      // margin-box edge) stays consistent with this reserved height.
+      const imageFootprintPx =
+        imageHeight + (run.distTop ?? 0) + (run.distBottom ?? 0);
+      if (imageFootprintPx > currentLine.maxImageHeightPx) {
+        currentLine.maxImageHeightPx = imageFootprintPx;
       }
 
       if (

@@ -4,7 +4,13 @@
  * Edit mode: text + URL inputs with Apply.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   ClipboardCopyIcon,
@@ -20,7 +26,15 @@ export type HyperlinkPopupData = {
   href: string;
   displayText: string;
   tooltip?: string;
-  anchorRect: DOMRect;
+  /**
+   * Live reference to the anchor element. The popup recomputes its position
+   * from this element's bounding rect on every scroll/resize so it stays
+   * pinned to the link as the page scrolls (eigenpal #514). Required because
+   * the popup is `position: fixed` to the viewport — without a live
+   * reference, the popup stays at the original screen position while the
+   * link moves out from under it.
+   */
+  anchorEl: HTMLAnchorElement;
 };
 
 export type HyperlinkPopupProps = {
@@ -48,6 +62,10 @@ export function HyperlinkPopup({
   const [editUrl, setEditUrl] = useState("");
   const popupRef = useRef<HTMLDivElement>(null);
   const textInputRef = useRef<HTMLInputElement>(null);
+  const [anchorPosition, setAnchorPosition] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
 
   useEffect(() => {
     if (data) {
@@ -55,6 +73,54 @@ export function HyperlinkPopup({
       setEditText(data.displayText);
       setEditUrl(data.href);
     }
+  }, [data]);
+
+  // Recompute popup position from the live anchor element on every scroll /
+  // resize / layout change. `position: fixed` snapshots the click-time rect,
+  // so without this the popup stays at the original viewport position while
+  // the link scrolls away beneath it.
+  //
+  // `useLayoutEffect` runs the initial read BEFORE the browser paints so the
+  // popup never appears at the default (0,0) for a frame — without this we
+  // saw a single-frame flicker when the popup mounted.
+  //
+  // The scroll/resize callback is rAF-throttled so high-frequency listeners
+  // (touch-scroll, smooth-scroll, ResizeObserver bursts) coalesce to one
+  // update per frame. Connected-check guards against the anchor being
+  // detached mid-scroll (document edits, page unmount) — without it,
+  // `getBoundingClientRect()` returns all-zeros and the popup snaps to the
+  // viewport top-left.
+  useLayoutEffect(() => {
+    if (!data) {
+      setAnchorPosition(null);
+      return;
+    }
+    const anchor = data.anchorEl;
+    let rafId: number | null = null;
+    const read = () => {
+      rafId = null;
+      if (!anchor.isConnected) {
+        return;
+      }
+      const rect = anchor.getBoundingClientRect();
+      setAnchorPosition({ top: rect.bottom + 4, left: rect.left });
+    };
+    const update = () => {
+      if (rafId !== null) {
+        return;
+      }
+      rafId = requestAnimationFrame(read);
+    };
+    read();
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
   }, [data]);
 
   useEffect(() => {
@@ -126,8 +192,13 @@ export function HyperlinkPopup({
     return null;
   }
 
-  const top = data.anchorRect.bottom + 4;
-  const left = data.anchorRect.left;
+  // Render off-screen until the first scroll/resize listener fires; this
+  // happens synchronously after the initial useEffect so it's a single frame.
+  if (!anchorPosition) {
+    return null;
+  }
+  const top = anchorPosition.top;
+  const left = anchorPosition.left;
 
   const iconBtn =
     "flex size-7 items-center justify-center rounded text-[var(--doc-text-muted)] hover:bg-[var(--doc-bg-hover)] transition-colors";

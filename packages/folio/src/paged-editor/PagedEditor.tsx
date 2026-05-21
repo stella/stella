@@ -236,7 +236,7 @@ export type PagedEditorProps = {
     href: string;
     displayText: string;
     tooltip?: string;
-    anchorRect: DOMRect;
+    anchorEl: HTMLAnchorElement;
   }) => void;
   /** Callback when user right-clicks on the pages (for context menu). */
   onContextMenu?: (data: {
@@ -3988,10 +3988,9 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             if (!hasRangeSelection) {
               const displayText = anchorEl.textContent || "";
               const tooltip = anchorEl.getAttribute("title") || undefined;
-              const anchorRect = anchorEl.getBoundingClientRect();
               const clickData: Parameters<
                 NonNullable<typeof onHyperlinkClick>
-              >[0] = { href, displayText, anchorRect };
+              >[0] = { href, displayText, anchorEl };
               if (tooltip) {
                 clickData.tooltip = tooltip;
               }
