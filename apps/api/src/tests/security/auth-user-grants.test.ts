@@ -5,11 +5,18 @@ import { resolve } from "node:path";
 import { AUTH_USER_STELLA_SELECT_COLUMN_NAMES } from "@/api/db/auth-schema";
 
 const DRIZZLE_DIR = resolve(import.meta.dir, "../../../drizzle");
+const SQL_IDENTIFIER_PATTERN = /"([^"]+)"|([a-z_][a-z0-9_]*)/giu;
+const GRANT_SELECT_COLUMN_PREFIX_PATTERN = /^GRANT\s+SELECT\s*\(/iu;
+const GRANT_SELECT_COLUMN_TABLE_PATTERN = /\)\s+ON\s+TABLE\s+/iu;
 
 const identifierNamesFromSql = (sqlList: string): string[] =>
-  [...sqlList.matchAll(/"([^"]+)"|([a-z_][a-z0-9_]*)/giu)].map(
-    (match) => match[1] ?? match[2] ?? "",
-  );
+  [...sqlList.matchAll(SQL_IDENTIFIER_PATTERN)].map((match) => {
+    if (match[1] !== undefined) {
+      return match[1];
+    }
+
+    return match[2]?.toLowerCase() ?? "";
+  });
 
 const parseColumnList = (sqlList: string): string[] =>
   identifierNamesFromSql(sqlList).filter((name) => name.length > 0);
@@ -48,22 +55,26 @@ const tableSelectGrantList = (statement: string): string | null => {
 };
 
 const userColumnSelectGrantList = (statement: string): string | null => {
-  const prefix = "GRANT SELECT (";
-  if (!statement.toUpperCase().startsWith(prefix)) {
+  const prefixMatch = GRANT_SELECT_COLUMN_PREFIX_PATTERN.exec(statement);
+  if (!prefixMatch) {
     return null;
   }
 
-  const body = statement.slice(prefix.length);
-  const marker = ') ON TABLE "USER" TO ';
-  const suffixStart = body.toUpperCase().lastIndexOf(marker);
-  if (
-    suffixStart === -1 ||
-    !isStellaIdentifier(body.slice(suffixStart + marker.length))
-  ) {
+  const body = statement.slice(prefixMatch[0].length);
+  const tableMarkerMatch = GRANT_SELECT_COLUMN_TABLE_PATTERN.exec(body);
+  if (!tableMarkerMatch) {
     return null;
   }
 
-  return body.slice(0, suffixStart);
+  const tableTarget = stripTargetRole(
+    body.slice(tableMarkerMatch.index + tableMarkerMatch[0].length),
+    "TO",
+  );
+  if (!tableTarget || identifierNamesFromSql(tableTarget).at(-1) !== "user") {
+    return null;
+  }
+
+  return body.slice(0, tableMarkerMatch.index);
 };
 
 const stripTargetRole = (
@@ -96,6 +107,25 @@ const migrationSqlFiles = () =>
     .toSorted();
 
 describe("auth user RLS grants", () => {
+  test("parses SQL identifier variants used by grants", () => {
+    expect(identifierNamesFromSql('public."user", ID, email_verified')).toEqual(
+      ["public", "user", "id", "email_verified"],
+    );
+  });
+
+  test("recognizes schema-qualified user column grants", () => {
+    expect(
+      userColumnSelectGrantList(
+        'GRANT SELECT (ID, "email_verified") ON TABLE public."user" TO "stella"',
+      ),
+    ).toBe('ID, "email_verified"');
+    expect(
+      userColumnSelectGrantList(
+        'GRANT SELECT (id) ON TABLE public."account" TO stella',
+      ),
+    ).toBeNull();
+  });
+
   test("migrations grant stella every Better Auth user column explicitly", () => {
     const grantedColumns = new Set<string>();
     let hasTableLevelUserSelect = false;
