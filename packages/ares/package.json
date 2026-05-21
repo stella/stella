@@ -51,7 +51,7 @@
     "prepack": "bun run build"
   },
   "dependencies": {
-    "@stll/stdnum": "^0.0.1"
+    "@stll/stdnum": "^1.0.0"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
