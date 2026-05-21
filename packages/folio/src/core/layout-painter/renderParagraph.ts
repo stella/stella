@@ -1030,6 +1030,15 @@ export function renderLine(
     // with the measurer's `fromRun !== toRun` branch.
     lineEl.style.display = "flex";
     lineEl.style.alignItems = "baseline";
+    // Flex defaults to flex-start regardless of the parent's text-align, so
+    // a centred / right-aligned paragraph would left-align after the flex
+    // switch. Mirror the paragraph alignment onto justify-content so
+    // image+text header lines stay centred / right-aligned like Word.
+    if (alignment === "center") {
+      lineEl.style.justifyContent = "center";
+    } else if (alignment === "right") {
+      lineEl.style.justifyContent = "flex-end";
+    }
     // Flex blockifies the run spans, so they'd otherwise inherit the line's
     // image-inflated line-height as their own box height — fattening each
     // text run to the full band and breaking baseline alignment. Reset to
@@ -1176,21 +1185,24 @@ export function renderLine(
       if (useRightAnchor) {
         // Promote to flex row. text-indent applies per flex item (not to the
         // group), so a hanging-indent paragraph would pull every text item
-        // left including the page number — the orchestrator re-applies the
-        // hanging via margin-left on the first child instead.
+        // left including the page number — we re-apply the first-line
+        // indent as margin-left on the first flex child after the tab is
+        // appended (see below).
         lineEl.style.display = "flex";
         lineEl.style.alignItems = "baseline";
         lineEl.style.whiteSpace = "nowrap";
         lineEl.style.textIndent = "0";
-        lineEl.dataset["flexLine"] = "true";
-        if (
-          options?.isFirstLine &&
-          options.firstLineIndentPx !== undefined &&
-          options.firstLineIndentPx < 0 &&
-          lineEl.firstElementChild instanceof HTMLElement
-        ) {
-          lineEl.firstElementChild.style.marginLeft = `${options.firstLineIndentPx}px`;
+        // Centered / right-aligned paragraphs need explicit justify-content:
+        // flex defaults to flex-start regardless of the parent's text-align,
+        // so without this the page number is still flush right (the anchor's
+        // whole point) but the title — and any other trailing content — would
+        // ignore the paragraph's alignment.
+        if (alignment === "center") {
+          lineEl.style.justifyContent = "center";
+        } else if (alignment === "right") {
+          lineEl.style.justifyContent = "flex-end";
         }
+        lineEl.dataset["flexLine"] = "true";
 
         // The tab flex-grows to fill the remaining line space; the leader
         // inside is absolutely positioned and clips to the tab's box.
@@ -1199,6 +1211,21 @@ export function renderLine(
         tabEl.style.minWidth = "0";
         tabEl.style.width = "auto";
         lineEl.append(tabEl);
+
+        // Re-apply the first-line indent as margin-left on the first flex
+        // child now that we know what it is (the tab itself when no prior
+        // runs rendered, or the earlier text/image otherwise). Done AFTER
+        // append so we don't no-op on tab-first lines (firstElementChild
+        // would be null pre-append). Both negative (hanging) and positive
+        // (firstLine) offsets are honoured.
+        if (
+          options?.isFirstLine &&
+          options.firstLineIndentPx !== undefined &&
+          options.firstLineIndentPx !== 0 &&
+          lineEl.firstElementChild instanceof HTMLElement
+        ) {
+          lineEl.firstElementChild.style.marginLeft = `${options.firstLineIndentPx}px`;
+        }
 
         // Render the remaining runs into the line at their natural width.
         // Flex layout puts them flush against the line's right edge.

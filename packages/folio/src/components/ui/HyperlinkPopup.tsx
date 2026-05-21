@@ -4,7 +4,13 @@
  * Edit mode: text + URL inputs with Apply.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   ClipboardCopyIcon,
@@ -72,23 +78,46 @@ export function HyperlinkPopup({
   // Recompute popup position from the live anchor element on every scroll /
   // resize / layout change. `position: fixed` snapshots the click-time rect,
   // so without this the popup stays at the original viewport position while
-  // the link scrolls away beneath it. Re-reading on each animation frame
-  // keeps the popup pinned to the link without a permanent rAF loop — we
-  // only update when the browser tells us layout changed.
-  useEffect(() => {
+  // the link scrolls away beneath it.
+  //
+  // `useLayoutEffect` runs the initial read BEFORE the browser paints so the
+  // popup never appears at the default (0,0) for a frame — without this we
+  // saw a single-frame flicker when the popup mounted.
+  //
+  // The scroll/resize callback is rAF-throttled so high-frequency listeners
+  // (touch-scroll, smooth-scroll, ResizeObserver bursts) coalesce to one
+  // update per frame. Connected-check guards against the anchor being
+  // detached mid-scroll (document edits, page unmount) — without it,
+  // `getBoundingClientRect()` returns all-zeros and the popup snaps to the
+  // viewport top-left.
+  useLayoutEffect(() => {
     if (!data) {
       setAnchorPosition(null);
       return;
     }
     const anchor = data.anchorEl;
-    const update = () => {
+    let rafId: number | null = null;
+    const read = () => {
+      rafId = null;
+      if (!anchor.isConnected) {
+        return;
+      }
       const rect = anchor.getBoundingClientRect();
       setAnchorPosition({ top: rect.bottom + 4, left: rect.left });
     };
-    update();
+    const update = () => {
+      if (rafId !== null) {
+        return;
+      }
+      rafId = requestAnimationFrame(read);
+    };
+    read();
     window.addEventListener("scroll", update, true);
     window.addEventListener("resize", update);
     return () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
       window.removeEventListener("scroll", update, true);
       window.removeEventListener("resize", update);
     };
