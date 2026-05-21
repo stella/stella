@@ -592,6 +592,40 @@ export const getSessionAndMemberRole = async (
   };
 };
 
+export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
+  validateSession: {
+    async resolve({ status, request }) {
+      const sessionResult = await Result.tryPromise(
+        async () =>
+          await getAuth().api.getSession({
+            headers: request.headers,
+          }),
+      );
+
+      if (Result.isError(sessionResult)) {
+        return status(500);
+      }
+
+      const session = sessionResult.value?.session;
+      const user = sessionResult.value?.user;
+      if (!session || !user) {
+        return status(401);
+      }
+
+      const userId = toSafeId<"user">(user.id);
+      enrichRequestContext(request, {
+        posthogDistinctId: userId,
+      });
+
+      return {
+        user: {
+          id: userId,
+        },
+      };
+    },
+  },
+});
+
 export const ADMIN_BYPASS_ROLES: readonly MemberRole[] = ["owner", "admin"];
 
 export type AccessibleWorkspace = {
