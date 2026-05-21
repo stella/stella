@@ -1034,12 +1034,18 @@ export function renderLine(
   if (runsForLine.length === 1 && isImageRun(runsForLine[0]!)) {
     lineEl.style.display = "flex";
     lineEl.style.alignItems = "center";
-  } else if (runsForLine.some(isImageRun)) {
-    // Image flowing alongside text/tabs (logo + label header). Word seats an
-    // inline image as a tall glyph on the text baseline, so baseline-align
-    // the row — the image bottom then lands on the text baseline. The line
-    // height was measured to match (imageH + text descent). Stays paired
-    // with the measurer's `fromRun !== toRun` branch.
+  } else if (runsForLine.some((r) => isImageRun(r) && !isFloatingImageRun(r))) {
+    // Inline image flowing alongside text/tabs (logo + label header). Word
+    // seats an inline image as a tall glyph on the text baseline, so
+    // baseline-align the row — the image bottom then lands on the text
+    // baseline. The line height was measured to match (imageH + text
+    // descent). Stays paired with the measurer's `fromRun !== toRun` branch.
+    //
+    // Gated to NON-floating images: floating images render in a page-level
+    // (or cell-level) layer and `continue` in the main loop, so a line that
+    // only contains floating images shouldn't be flex-promoted — that would
+    // change alignment / indent / line-height semantics for normal text
+    // wrapping around a floating object.
     lineEl.style.display = "flex";
     lineEl.style.alignItems = "baseline";
     // Flex defaults to flex-start regardless of the parent's text-align, so
