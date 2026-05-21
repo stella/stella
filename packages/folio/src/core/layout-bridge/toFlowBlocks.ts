@@ -786,7 +786,7 @@ function buildImageRun(
  * Hyperlinks inside these paragraphs must render in the paragraph's own colour,
  * not the Hyperlink character style — see {@link stripTocHyperlinkStyle}.
  */
-const TOC_STYLE_ID = /^TOC\d*$/i;
+const TOC_STYLE_ID = /^TOC\d*$/iu;
 
 /**
  * In TOC paragraphs, strip the resolved Hyperlink character-style colour and
