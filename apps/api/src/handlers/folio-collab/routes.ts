@@ -152,13 +152,13 @@ export const folioCollabRoute = new Elysia({
         return status(403, { message: "Collaborative edit is read-only." });
       }
 
-      const buffer = Buffer.from(body.snapshotBase64, "base64");
-      if (buffer.byteLength > FOLIO_COLLAB_SNAPSHOT_MAX_BYTES) {
+      const snapshotBytes = Buffer.from(body.snapshotBase64, "base64");
+      if (snapshotBytes.byteLength > FOLIO_COLLAB_SNAPSHOT_MAX_BYTES) {
         return status(413, { message: "Collaborative snapshot too large." });
       }
 
       const { storedAt } = await storeFolioCollabSnapshot({
-        snapshotBase64: body.snapshotBase64,
+        snapshotBytes,
         value,
       });
 
