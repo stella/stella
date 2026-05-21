@@ -100,7 +100,7 @@
     "@rolldown/plugin-babel": "^0.2.2",
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
-    "@tanstack/router-plugin": "^1.168.0",
+    "@tanstack/router-plugin": "^1.168.2",
     "@types/babel__core": "^7.20.5",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
