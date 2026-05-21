@@ -12,6 +12,14 @@ import * as v from "valibot";
 
 import { resolveDatabaseUrl } from "@/api/db-url";
 
+/**
+ * NODE_ENV values that identify a deployed (non-local) Stella
+ * environment. Used to gate strict env validation and the
+ * `isDev` default below. Kept here so every entrypoint that
+ * imports `envBase` sees the same definition.
+ */
+export const DEPLOYED_NODE_ENVS = new Set(["production", "staging"]);
+
 const databasePoolMaxSchema = v.optional(
   v.pipe(
     v.string(),
@@ -47,7 +55,10 @@ export const envBase = createEnv({
       v.pipe(v.string(), v.parseBoolean()),
       "false",
     ),
-    isDev: v.optional(v.boolean(), process.env.NODE_ENV !== "production"),
+    isDev: v.optional(
+      v.boolean(),
+      !DEPLOYED_NODE_ENVS.has(process.env.NODE_ENV ?? ""),
+    ),
   },
   emptyStringAsUndefined: true,
   runtimeEnv: { ...process.env, DATABASE_URL: resolveDatabaseUrl() },

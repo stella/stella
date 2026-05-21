@@ -1,14 +1,12 @@
 import { createEnv } from "@t3-oss/env-core";
 import * as v from "valibot";
 
-import { envBase } from "@/api/env-base";
+import { DEPLOYED_NODE_ENVS, envBase } from "@/api/env-base";
 
 const featureFlagSchema = v.optional(
   v.pipe(v.string(), v.parseBoolean()),
   "false",
 );
-
-const DEPLOYED_NODE_ENVS = new Set(["production", "staging"]);
 
 /**
  * API-specific environment variables. These are only required
