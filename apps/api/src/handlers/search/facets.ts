@@ -30,7 +30,9 @@ export const searchFacetsBodySchema = t.Object({
   types: t.Array(t.UnionEnum(GLOBAL_SEARCH_RESULT_TYPES), {
     maxItems: GLOBAL_SEARCH_RESULT_TYPES.length,
   }),
-  kinds: t.Array(entityKindSchema, { maxItems: ENTITY_KINDS.length }),
+  kinds: t.Optional(
+    t.Array(entityKindSchema, { maxItems: ENTITY_KINDS.length }),
+  ),
   editedByUserIds: t.Array(tUserId, { maxItems: 64 }),
   mimeTypes: t.Array(t.String({ minLength: 1, maxLength: 128 })),
   updatedFrom: t.Optional(isoDateTime),
@@ -69,7 +71,7 @@ export const searchFacetsHandler = async ({
     return resolved.response;
   }
 
-  const types = body.types.length > 0 ? body.types : body.kinds;
+  const types = body.types.length > 0 ? body.types : (body.kinds ?? []);
 
   return await searchGlobalFacet({
     facet: body.facet,
