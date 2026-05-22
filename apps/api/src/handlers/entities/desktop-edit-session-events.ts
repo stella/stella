@@ -8,6 +8,8 @@ import {
   DESKTOP_EDIT_SESSION_TAKEN_OVER_MESSAGE,
   readDesktopEditSessionEventState,
 } from "@/api/lib/desktop-edit-sessions";
+import { broadcastSessionEvent, registerSessionDelivery } from "@/api/lib/sse";
+import type { SSEEvent } from "@/api/lib/sse";
 
 const SESSION_TOKEN_LENGTH = 64;
 const BEARER_PREFIX = "Bearer ";
@@ -44,15 +46,35 @@ const formatSSE = (event: { type: string; data: unknown }): Uint8Array => {
 };
 
 /**
- * Push an event to all SSE connections for a given session.
- * Called from takeover request, release, and expiry handlers.
+ * Internal close signal carried over the SSE channel. Never enqueued
+ * to clients — it tears down the streams instead.
  */
-export const pushSessionEvent = (
+const SESSION_CLOSE_SIGNAL = "__desktop_edit_session_closed__";
+
+/**
+ * Deliver a session event to SSE connections held by THIS instance.
+ * Invoked by the Redis pub/sub fan-out (and by the local fallback when
+ * Redis is unavailable). The close signal tears the streams down
+ * rather than enqueueing a chunk.
+ */
+const deliverSessionEventLocal = (
   sessionId: SafeId<"desktopEditSession">,
-  event: { type: string; data: unknown },
+  event: SSEEvent,
 ): void => {
   const conns = connections.get(sessionId);
   if (!conns) {
+    return;
+  }
+
+  if (event.type === SESSION_CLOSE_SIGNAL) {
+    for (const conn of conns) {
+      try {
+        conn.controller.close();
+      } catch {
+        // Already closed.
+      }
+    }
+    connections.delete(sessionId);
     return;
   }
 
@@ -61,30 +83,38 @@ export const pushSessionEvent = (
     try {
       conn.controller.enqueue(encoded);
     } catch {
-      // Connection closed; will be cleaned up on cancel
+      conns.delete(conn);
     }
+  }
+
+  if (conns.size === 0 && connections.get(sessionId) === conns) {
+    connections.delete(sessionId);
   }
 };
 
+// Cross-instance fan-out: every API instance receives session messages
+// on the shared Redis channel and delivers to its local streams.
+registerSessionDelivery(deliverSessionEventLocal);
+
 /**
- * Close all SSE connections for a session (e.g., on session close).
+ * Push an event to all SSE connections for a session, across every API
+ * instance. Called from takeover request, release, and expiry handlers.
+ */
+export const pushSessionEvent = (
+  sessionId: SafeId<"desktopEditSession">,
+  event: SSEEvent,
+): void => {
+  broadcastSessionEvent(sessionId, event);
+};
+
+/**
+ * Close all SSE connections for a session, across every API instance
+ * (e.g., on session finalize or close).
  */
 export const closeSessionConnections = (
   sessionId: SafeId<"desktopEditSession">,
 ): void => {
-  const conns = connections.get(sessionId);
-  if (!conns) {
-    return;
-  }
-
-  for (const conn of conns) {
-    try {
-      conn.controller.close();
-    } catch {
-      // Already closed
-    }
-  }
-  connections.delete(sessionId);
+  broadcastSessionEvent(sessionId, { type: SESSION_CLOSE_SIGNAL, data: null });
 };
 
 type DesktopEditSessionEventsHandlerProps = {
