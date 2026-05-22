@@ -2,6 +2,8 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
+import { ENTITY_KINDS } from "@/api/db/schema";
+import { entityKindSchema } from "@/api/db/schema-validators";
 import { resolveSelectedWorkspaceIds } from "@/api/handlers/search/search";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
@@ -28,6 +30,9 @@ export const searchFacetsBodySchema = t.Object({
   types: t.Array(t.UnionEnum(GLOBAL_SEARCH_RESULT_TYPES), {
     maxItems: GLOBAL_SEARCH_RESULT_TYPES.length,
   }),
+  kinds: t.Optional(
+    t.Array(entityKindSchema, { maxItems: ENTITY_KINDS.length }),
+  ),
   editedByUserIds: t.Array(tUserId, { maxItems: 64 }),
   mimeTypes: t.Array(t.String({ minLength: 1, maxLength: 128 })),
   updatedFrom: t.Optional(isoDateTime),
@@ -66,6 +71,8 @@ export const searchFacetsHandler = async ({
     return resolved.response;
   }
 
+  const types = body.types.length > 0 ? body.types : (body.kinds ?? []);
+
   return await searchGlobalFacet({
     facet: body.facet,
     search: body.search,
@@ -73,7 +80,7 @@ export const searchFacetsHandler = async ({
     organizationId,
     accessibleWorkspaceIds,
     selectedWorkspaceIds: resolved.ids,
-    types: body.types,
+    types,
     editedByUserIds: body.editedByUserIds,
     mimeTypes: body.mimeTypes,
     updatedFrom: body.updatedFrom,

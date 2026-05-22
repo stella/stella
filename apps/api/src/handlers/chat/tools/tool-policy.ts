@@ -67,6 +67,9 @@ type ToolDefinitionWithPolicy = ToolDefinition & {
 export const getChatToolPolicy = (
   toolDefinition: ToolDefinition,
 ): ChatToolPolicy =>
+  // SAFETY: widening to read the optional Stella-private policy symbol that
+  // applyChatToolPolicy attaches via Object.assign. The symbol property is
+  // typed optional and the ?? fallback covers tools that were never tagged.
   (toolDefinition as ToolDefinitionWithPolicy)[CHAT_TOOL_POLICY_SYMBOL] ??
   CHAT_TOOL_POLICIES.internal;
 
