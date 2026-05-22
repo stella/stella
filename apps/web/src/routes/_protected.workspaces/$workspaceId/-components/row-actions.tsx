@@ -180,7 +180,6 @@ export const RowActions = ({
   const msg: Msg = {
     downloading: t("workspaces.files.downloadAsZip"),
     failed: t("errors.actionFailed"),
-    empty: t("workspaces.files.emptyFolderDownload"),
   };
 
   const handleZipDownload = async () => {
@@ -721,7 +720,7 @@ const CreateSubfolderMenuItem = ({
 // -- Helpers (avoid duplicating logic between single/bulk) --
 
 type FileRef = { fieldId: string; fileName: string; mimeType: string | null };
-type Msg = { downloading: string; failed: string; empty: string };
+type Msg = { downloading: string; failed: string };
 
 const downloadEntityAsZip = async (
   workspaceId: string,
@@ -747,14 +746,6 @@ const downloadEntityAsZip = async (
   }
 
   const response = responseResult.value;
-
-  // The endpoint 404s when a folder has nothing to archive: it is empty,
-  // holds only subfolders, or was removed since the list loaded. That is
-  // an expected outcome, not a failure — surface it as a plain notice.
-  if (response.status === 404) {
-    stellaToast.update(toastId, { title: msg.empty, type: "info" });
-    return;
-  }
 
   if (!response.ok) {
     stellaToast.update(toastId, { title: msg.failed, type: "error" });

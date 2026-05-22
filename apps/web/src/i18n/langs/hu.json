@@ -1909,7 +1909,6 @@
       "downloadAsZip": ".zip fájl letöltése",
       "downloadOriginal": "Eredeti fájl",
       "downloadPdf": "PDF",
-      "emptyFolderDownload": "Nincsenek letölthető fájlok",
       "maxEntitiesReached": "Elérte a maximális entitásszámot",
       "rateLimited": "Sebességkorlát; folytatás {seconds, number} mp múlva",
       "renamedToAvoidConflicts": "{count, plural, one {# fájl átnevezve az ütközések elkerülése érdekében} other {# fájl átnevezve az ütközések elkerülése érdekében}}",

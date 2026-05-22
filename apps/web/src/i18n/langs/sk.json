@@ -1909,7 +1909,6 @@
       "downloadAsZip": "Stiahnuť .zip súbor",
       "downloadOriginal": "Pôvodný súbor",
       "downloadPdf": "PDF",
-      "emptyFolderDownload": "Žiadne súbory na stiahnutie",
       "maxEntitiesReached": "Dosiahnutý maximálny počet entít",
       "rateLimited": "Obmedzenie rýchlosti; pokračovanie za {seconds, number} s",
       "renamedToAvoidConflicts": "{count, plural, one {# súbor premenovaný kvôli konfliktu} few {# súbory premenované kvôli konfliktom} other {# súborov premenovaných kvôli konfliktom}}",

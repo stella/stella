@@ -1912,7 +1912,6 @@ type Messages = {
       "downloadAsZip": "Download as ZIP";
       "downloadOriginal": "Original file";
       "downloadPdf": "PDF";
-      "emptyFolderDownload": "No files to download";
       "maxEntitiesReached": "Max entities count reached";
       "rateLimited": "Rate limited; resuming in {seconds, number}s";
       "renamedToAvoidConflicts": "{count, plural, one {# file renamed to avoid conflicts} other {# files renamed to avoid conflicts}}";

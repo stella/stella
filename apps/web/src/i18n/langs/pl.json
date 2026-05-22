@@ -1909,7 +1909,6 @@
       "downloadAsZip": "Pobierz plik .zip",
       "downloadOriginal": "Oryginalny plik",
       "downloadPdf": "PDF",
-      "emptyFolderDownload": "Brak plików do pobrania",
       "maxEntitiesReached": "Osiągnięto maksymalną liczbę elementów",
       "rateLimited": "Ograniczenie szybkości; wznowienie za {seconds, number} s",
       "renamedToAvoidConflicts": "{count, plural, one {# plik został przemianowany, aby uniknąć konfliktów} few {# pliki zostały przemianowane, aby uniknąć konfliktów} many {# plików zostało przemianowanych, aby uniknąć konfliktów} other {# plików zostało przemianowanych, aby uniknąć konfliktów}}",

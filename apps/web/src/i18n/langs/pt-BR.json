@@ -1909,7 +1909,6 @@
       "downloadAsZip": "Baixe como ZIP",
       "downloadOriginal": "Arquivo original",
       "downloadPdf": "PDF",
-      "emptyFolderDownload": "Nenhum arquivo para baixar",
       "maxEntitiesReached": "Contagem máxima de entidades atingida",
       "rateLimited": "Limite de taxa atingido; retomando em {seconds, number}s",
       "renamedToAvoidConflicts": "{count, plural, one {# arquivo renomeado para evitar conflitos} many {# arquivos renomeados para evitar conflitos} other {# arquivos renomeados para evitar conflitos}}",
