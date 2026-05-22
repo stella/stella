@@ -1,8 +1,7 @@
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { toSecret } from "@/api/lib/secret-brands";
-import type { Secret } from "@/api/lib/secret-brands";
+import type { Secret, SecretKind } from "@/api/lib/secret-brands";
 
 type SecretPurpose =
   | "mcp_access_token"
@@ -24,6 +23,12 @@ type DecryptedKind<P extends SecretPurpose> = P extends "mcp_access_token"
         : never;
 
 type DecryptedFor<P extends SecretPurpose> = Secret<DecryptedKind<P>>;
+
+// The only MCP secret brand-mint boundary. This module decrypts and validates
+// the envelope before applying the nominal brand selected by SecretPurpose.
+const toDecryptedSecret = <K extends SecretKind>(value: string): Secret<K> =>
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  value as Secret<K>;
 
 type SecretEnvelope = {
   connectorId: SafeId<"mcpConnector">;
@@ -101,8 +106,6 @@ export const decryptMcpSecret = async <P extends SecretPurpose>({
     });
   }
 
-  // This module is the brand-mint boundary for MCP secrets: the value is
-  // decrypted and the envelope validated above, so toSecret may brand it.
   // DecryptedKind<P> fixes the brand from the SecretPurpose discriminator.
-  return toSecret<DecryptedKind<P>>(parsed.secret);
+  return toDecryptedSecret<DecryptedKind<P>>(parsed.secret);
 };

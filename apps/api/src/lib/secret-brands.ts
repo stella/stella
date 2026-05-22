@@ -7,8 +7,8 @@
 // SafeIdType and the two cannot accidentally cross-cast.
 //
 // Brand boundaries:
-//   - Decryption helpers (decryptMcpSecret) mint brands from raw strings via
-//     the purpose discriminator.
+//   - Decryption helpers (decryptMcpSecret) mint brands from raw strings at
+//     the decrypt boundary via a local cast and the purpose discriminator.
 //   - Consumers receive branded values and pass them as branded named-arg
 //     fields; TypeScript catches both swaps and any plain-string detours.
 //   - The brand carries no runtime cost; logs/serialization see plain strings,
@@ -34,13 +34,3 @@ export type AuthSecret = Secret<"AuthSecret">;
 export type ClientSecret = Secret<"ClientSecret">;
 export type RefreshToken = Secret<"RefreshToken">;
 export type StaticBearerToken = Secret<"StaticBearerToken">;
-
-// Brand-mint boundary: every call site of toSecret must sit inside a
-// trusted module (decrypt/env-load) that has already validated the value.
-// Mirrors the toSafeId pattern in branded-types.ts. The no-restricted-imports
-// override in oxlint.config.ts limits the importable surface.
-// SAFETY: nominal brand; the caller asserts the value originated from a
-// trusted boundary and matches the declared kind.
-export const toSecret = <K extends SecretKind>(value: string): Secret<K> =>
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
-  value as Secret<K>;

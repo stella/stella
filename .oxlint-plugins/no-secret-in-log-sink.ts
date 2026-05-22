@@ -190,10 +190,14 @@ const checkExpression = (context, node, contextLabel) => {
     case "NewExpression": {
       // A call wrapping a secret-named argument still leaks it into the
       // sink (`JSON.stringify(String(apiKey))`). Recurse into arguments,
-      // except for masking helpers whose result is the safe form.
+      // and into method receivers (`apiKey.trim()`), except for masking
+      // helpers whose result is the safe form.
       const calleeName = getCalleeName(node.callee);
       if (calleeName !== null && MASKING_CALLEES.has(calleeName)) {
         break;
+      }
+      if (node.callee?.type === "MemberExpression") {
+        checkExpression(context, node.callee, contextLabel);
       }
       for (const arg of node.arguments) {
         checkExpression(context, arg, contextLabel);

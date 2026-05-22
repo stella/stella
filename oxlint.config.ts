@@ -585,12 +585,6 @@ export default defineConfig({
                 message:
                   "Only approved boundary modules and tests may brand raw IDs with toSafeId.",
               },
-              {
-                name: "@/api/lib/secret-brands",
-                importNames: ["toSecret"],
-                message:
-                  "Only the MCP secret decrypt boundary (crypto.ts) may mint secret brands with toSecret.",
-              },
             ],
           },
         ],
@@ -860,12 +854,6 @@ export default defineConfig({
                   "Handlers must receive SafeId from macros (workspaceAccessMacro, authMacro) or actor session validation, not construct it from raw strings.",
               },
               {
-                name: "@/api/lib/secret-brands",
-                importNames: ["toSecret"],
-                message:
-                  "Only the MCP secret decrypt boundary (crypto.ts) may mint secret brands with toSecret.",
-              },
-              {
                 name: "@/api/db",
                 importNames: ["createScopedDb"],
                 message:
@@ -892,13 +880,6 @@ export default defineConfig({
           },
         ],
       },
-    },
-    {
-      // crypto.ts is the MCP secret decrypt + brand-mint boundary: it is the
-      // one module permitted to call toSecret. Mirrors how the SafeId
-      // brand-mint boundaries opt out of no-restricted-imports above.
-      files: ["apps/api/src/handlers/mcp-connectors/crypto.ts"],
-      rules: { "no-restricted-imports": "off" },
     },
     {
       files: [
