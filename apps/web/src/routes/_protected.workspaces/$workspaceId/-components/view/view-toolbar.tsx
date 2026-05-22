@@ -40,9 +40,9 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
-import { env } from "@/env";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { apiUrl } from "@/lib/api-url";
 import { ClientOperationError } from "@/lib/errors";
 import type { ViewLayout, WorkspaceProperty, WorkspaceView } from "@/lib/types";
 import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
@@ -295,8 +295,7 @@ const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
     setExportingFormat(format);
     const result = await Result.tryPromise(async () => {
       const url = new URL(
-        `/v1/views/${workspaceId}/view/${view.id}/export`,
-        env.VITE_API_URL,
+        apiUrl(`/views/${workspaceId}/view/${view.id}/export`),
       );
       url.searchParams.set("format", format);
 

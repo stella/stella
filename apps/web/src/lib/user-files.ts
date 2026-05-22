@@ -1,4 +1,4 @@
-import { env } from "@/env";
+import { apiUrl } from "@/lib/api-url";
 
 const USER_FILE_URL_PREFIX = "stella://file::";
 
@@ -17,5 +17,5 @@ export const getUserFileContentUrl = (url: string): string | null => {
     return null;
   }
 
-  return `${env.VITE_API_URL}/v1/user-files/${fileId}/content`;
+  return apiUrl(`/user-files/${fileId}/content`);
 };

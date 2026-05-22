@@ -20,9 +20,9 @@ import {
   hasApprovalResponseAwaitingModelStep,
   hasApprovedActiveDocxEditAwaitingClientOutput,
 } from "@/components/chat/chat-ui-tools";
-import { env } from "@/env";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { apiUrl } from "@/lib/api-url";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
@@ -312,7 +312,7 @@ export const mergeGroupedChatThreadPages = (
   return { global, workspaces: Array.from(workspacesById.values()) };
 };
 
-const getChatApiPath = () => `${env.VITE_API_URL}/v1/chat`;
+const getChatApiPath = () => apiUrl("/chat");
 
 export const buildSendRequestBody = ({
   context,

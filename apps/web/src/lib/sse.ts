@@ -2,8 +2,8 @@ import { useEffect, useRef } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 
-import { env } from "@/env";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { apiUrl } from "@/lib/api-url";
 
 const INVALIDATE_QUERY_EVENT_TYPE = "invalidate-query";
 const WORKSPACE_SSE_EVENT_SOURCE_INIT = {
@@ -20,7 +20,7 @@ type UseWorkspaceSSEOptions = {
 };
 
 const getWorkspaceSSEUrl = (workspaceId: string) =>
-  `${env.VITE_API_URL}/v1/workspaces/${workspaceId}/events`;
+  apiUrl(`/workspaces/${workspaceId}/events`);
 
 const parseWorkspaceSSEEvent = (data: string): WorkspaceSSEEvent | null => {
   const parsed: unknown = JSON.parse(data);

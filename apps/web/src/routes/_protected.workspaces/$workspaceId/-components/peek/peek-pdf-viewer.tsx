@@ -30,8 +30,8 @@ import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import { PDF_MIME_TYPE } from "@/consts";
-import { env } from "@/env";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { apiUrl } from "@/lib/api-url";
 import { DOCX_MIME } from "@/lib/consts";
 import { APIError } from "@/lib/errors";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
@@ -301,7 +301,7 @@ export const fetchPrintPdf = async ({
     ? AbortSignal.any([signal, timeoutSignal])
     : timeoutSignal;
   const response = await fetch(
-    `${env.VITE_API_URL}/v1/files/${workspaceId}/print-pdf/${fieldId}`,
+    apiUrl(`/files/${workspaceId}/print-pdf/${fieldId}`),
     { credentials: "include", signal: combinedSignal },
   );
 
