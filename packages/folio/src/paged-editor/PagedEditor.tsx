@@ -2002,12 +2002,12 @@ export function PagedEditor(
         }
 
         // Compute anchor Y positions for comments sidebar (works without DOM queries).
-        // This is expensive on docs with many comments/tracked changes, so typing
-        // layouts skip it and let the idle full-layout reconcile update the sidebar.
-        const shouldComputeAnchorPositions =
-          onAnchorPositionsChange &&
-          (options.forceFull === true || !options.dirtyRange);
-        if (shouldComputeAnchorPositions) {
+        // Runs on every layout pass, including incremental typing passes — gating on
+        // forceFull/dirtyRange left cards stuck at stale Y positions until the 200ms
+        // idle reconcile, so they drifted away from their anchor text while editing.
+        // The walk only visits text nodes carrying a comment/insertion/deletion mark
+        // and is RAF-throttled, so the cost is bounded.
+        if (onAnchorPositionsChange) {
           const positions = computeAnchorPositions(
             hiddenPMRef.current?.getView() ?? null,
             newLayout,
