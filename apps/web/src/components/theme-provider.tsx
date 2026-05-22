@@ -1,11 +1,4 @@
-import {
-  createContext,
-  use,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { createContext, use, useEffect, useState } from "react";
 import type { PropsWithChildren } from "react";
 
 import { PALETTE_STORAGE_KEY, THEME_STORAGE_KEY } from "@/consts";
@@ -79,15 +72,15 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
     resolveTheme(theme),
   );
 
-  const setTheme = useCallback((next: Theme) => {
+  const setTheme = (next: Theme) => {
     localStorage.setItem(THEME_STORAGE_KEY, next);
     setThemeState(next);
-  }, []);
+  };
 
-  const setPalette = useCallback((next: Palette) => {
+  const setPalette = (next: Palette) => {
     localStorage.setItem(PALETTE_STORAGE_KEY, next);
     setPaletteState(next);
-  }, []);
+  };
 
   useEffect(() => {
     const root = document.documentElement;
@@ -150,12 +143,13 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  const value = useMemo(
-    () => ({ theme, setTheme, palette, setPalette, resolvedTheme }),
-    [theme, setTheme, palette, setPalette, resolvedTheme],
+  return (
+    <ThemeProviderContext
+      value={{ theme, setTheme, palette, setPalette, resolvedTheme }}
+    >
+      {children}
+    </ThemeProviderContext>
   );
-
-  return <ThemeProviderContext value={value}>{children}</ThemeProviderContext>;
 };
 
 export const useTheme = (): ThemeProviderState => use(ThemeProviderContext);
