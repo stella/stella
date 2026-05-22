@@ -9,8 +9,9 @@
 // remaining sinks (JSON.stringify, analytics helpers, Sentry, `new <…>Error`).
 //
 // Strategy: identifier-name driven. Forbid a fixed set of secret-suggestive
-// names from appearing as ObjectExpression keys, Identifier values, or
-// TemplateLiteral expressions inside known sink calls. The rule is intentionally
+// names from appearing as ObjectExpression keys, MemberExpression properties,
+// Identifier values, or TemplateLiteral expressions inside known sink calls.
+// The rule is intentionally
 // crude — it cannot follow type information, but the same crudeness means it
 // catches `const k = apiKey; JSON.stringify({ k })` no better than it catches
 // the direct form. Accept that gap; pair the rule with named brands for the
@@ -25,7 +26,9 @@
 // Flagged:
 //   JSON.stringify({ apiKey })
 //   JSON.stringify({ providerKey: apiKey })
+//   JSON.stringify({ token: session.refreshToken })   // member access
 //   captureError(err, { refreshToken })
+//   captureError(err, creds.clientSecret)              // member access
 //   new Error(`probe failed: ${apiKey}`)
 //   new APIError({ message: "x", cause: { clientSecret } })
 
@@ -146,8 +149,34 @@ const checkExpression = (context, node, contextLabel) => {
       break;
     case "TSAsExpression":
     case "TSSatisfiesExpression":
+    case "TSNonNullExpression":
     case "ChainExpression":
       checkExpression(context, node.expression, contextLabel);
+      break;
+    case "MemberExpression": {
+      // `creds.clientSecret`, `session["refreshToken"]` — the accessed
+      // property name is visible in the AST even when the value's type
+      // is not. Mirrors the ObjectExpression key check. Member access
+      // is the dominant real-world leak path, so it must be covered.
+      const propertyName = getPropertyName(node.property);
+      if (propertyName !== null && SECRET_NAMES.has(propertyName)) {
+        context.report({
+          node,
+          messageId: "secretInSink",
+          data: { name: propertyName, sink: contextLabel },
+        });
+        break;
+      }
+      // Non-secret leaf: keep walking the object chain so a secret read
+      // deeper in the access (`getCreds().clientSecret`) is still caught.
+      checkExpression(context, node.object, contextLabel);
+      break;
+    }
+    case "AwaitExpression":
+      checkExpression(context, node.argument, contextLabel);
+      break;
+    case "AssignmentExpression":
+      checkExpression(context, node.right, contextLabel);
       break;
     case "ArrayExpression":
       for (const element of node.elements) {
