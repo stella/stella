@@ -417,11 +417,10 @@ const FilesystemOrganizerAction = ({
   const [open, setOpen] = useState(false);
   const selectedIds = useWorkspaceStore((state) => state.filesystemSelectedIds);
 
-  // Folders and files are both fetched unpaginated and independent of
-  // the FilesystemView's current page so the organizer always operates
-  // on the whole matter. useQuery (not useSuspenseQuery) keeps a cache
-  // miss from suspending the toolbar chrome — the action button just
-  // stays disabled until the data resolves.
+  // Folders and files are fetched across all paginated organizer pages,
+  // independent of the FilesystemView's current page. useQuery (not
+  // useSuspenseQuery) keeps a cache miss from suspending the toolbar
+  // chrome — the action button just stays disabled until the data resolves.
   const { data: foldersData } = useQuery(workspaceFoldersOptions(workspaceId));
   const allFolders = useMemo(() => foldersData ?? [], [foldersData]);
   const { data: filesData } = useQuery(workspaceFilesOptions(workspaceId));

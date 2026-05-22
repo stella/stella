@@ -516,7 +516,6 @@ const exportTableView = createSafeHandler(
         currentOrganizationId: session.activeOrganizationId,
         filters: layout.filters,
         sorts: layout.sorts,
-        offset: 0,
         limit: LIMITS.exportRowLimit,
         fieldMode: "visible",
         fieldIds,

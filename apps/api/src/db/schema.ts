@@ -848,6 +848,15 @@ export const entities = p.pgTable(
   (table) => [
     p.index("entities_workspace_id_idx").on(table.workspaceId),
     p
+      .index("entities_ws_created_at_id_idx")
+      .on(table.workspaceId, table.createdAt, table.id),
+    p
+      .index("entities_ws_updated_at_id_idx")
+      .on(table.workspaceId, table.updatedAt, table.id),
+    p
+      .index("entities_ws_kind_created_at_id_idx")
+      .on(table.workspaceId, table.kind, table.createdAt, table.id),
+    p
       .index("entities_parent_id_idx")
       .on(table.parentId)
       .where(isNotNull(table.parentId)),

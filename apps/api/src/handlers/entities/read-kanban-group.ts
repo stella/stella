@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { t } from "elysia";
@@ -176,7 +176,6 @@ const readKanbanGroup = createSafeHandler(
       return Result.err(conditionResult.error);
     }
 
-    const offset = cursorResult.value;
     const limit = body.limit ?? LIMITS.entitiesWindowSizeDefault;
     const result = yield* Result.await(
       queryEntities({
@@ -186,7 +185,7 @@ const readKanbanGroup = createSafeHandler(
         currentOrganizationId: session.activeOrganizationId,
         filters: body.filters ?? [],
         sorts: body.sorts ?? [],
-        offset,
+        cursor: cursorResult.value,
         limit: limit + 1,
         fieldMode: body.fieldMode ?? "full",
         fieldIds: body.fieldIds ?? [],
@@ -199,7 +198,11 @@ const readKanbanGroup = createSafeHandler(
       createCursorPage({
         rows: result.entities,
         limit,
-        cursorForItem: () => encodeEntitiesWindowCursor(offset + limit),
+        cursorForItem: (item) =>
+          encodeEntitiesWindowCursor(
+            result.cursorValuesByEntityId.get(item.entityId) ??
+              panic("Missing cursor values for Kanban group item"),
+          ),
       }),
     );
   },

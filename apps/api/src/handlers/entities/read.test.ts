@@ -35,6 +35,7 @@ describe("entity read handler search", () => {
     queryEntitiesMock.mockReset();
     queryEntitiesMock.mockResolvedValue(
       Result.ok({
+        cursorValuesByEntityId: new Map(),
         entities: [],
         totalCount: 0,
       }),
@@ -46,7 +47,7 @@ describe("entity read handler search", () => {
       createContext({
         filters: [],
         sorts: [],
-        page: 2,
+        page: 1,
         pageSize: 50,
         search: "closing binder",
         fieldMode: "visible",
@@ -59,8 +60,8 @@ describe("entity read handler search", () => {
         workspaceId,
         currentOrganizationId: organizationId,
         search: "closing binder",
-        offset: 50,
-        limit: 50,
+        cursor: null,
+        limit: 51,
       }),
     );
   });
@@ -81,8 +82,8 @@ describe("entity read handler search", () => {
     expect(queryEntitiesMock).toHaveBeenCalledWith(
       expect.objectContaining({
         previewableForAi: true,
-        offset: 0,
-        limit: 50,
+        cursor: null,
+        limit: 51,
         fieldMode: "visible",
       }),
     );
@@ -104,7 +105,6 @@ describe("entity read handler search", () => {
         workspaceId,
         currentOrganizationId: organizationId,
         search: "closing binder",
-        offset: 0,
         limit: LIMITS.entitiesCount,
         excludedKinds: ["task"],
         includeTotalCount: false,

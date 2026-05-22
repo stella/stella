@@ -17,23 +17,17 @@ import {
 } from "@/lib/react-query";
 import { optionalSearchStringSchema } from "@/lib/schema";
 import type { WorkspaceView } from "@/lib/types";
-import { EntityPagination } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-pagination";
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
 import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar";
-import { chunkJustificationEntityIds } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
-import { useSyncTable } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-table";
 import {
   DEFAULT_ENTITY_WINDOW_SIZE,
-  entitiesOptions,
   entitiesWindowOptions,
   filesystemEntitiesOptions,
-  useEntitiesOptions,
   visibleEntityFieldIds,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { timeEntriesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
-import { justificationsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 import { workspaceMembersOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-members";
 import {
   getWeekStart,
@@ -53,7 +47,6 @@ export const Route = createFileRoute(
 )({
   component: RouteComponent,
   validateSearch: searchSchema,
-  loaderDeps: ({ search }) => ({ page: search.page ?? 1 }),
   beforeLoad: ({ params }) => {
     // Reject obviously invalid viewIds (e.g. "workspaces" from stale doubled
     // URLs). Allow UUIDs and the special "all" slug used by the PDF viewer.
@@ -74,7 +67,7 @@ export const Route = createFileRoute(
       });
     }
   },
-  loader: async ({ context, deps, params }) => {
+  loader: async ({ context, params }) => {
     const { workspaceId, viewId } = params;
     const { queryClient } = context;
 
@@ -195,42 +188,13 @@ export const Route = createFileRoute(
       return;
     }
 
-    const entities = await ensureCriticalQueryData(
-      queryClient,
-      entitiesOptions({
-        workspaceId,
-        filters: activeView.layout.filters,
-        sorts: activeView.layout.sorts,
-        page: deps.page,
-        fieldMode,
-        fieldIds,
-      }),
-    );
-
-    if (entities.entities.length === 0) {
-      return;
-    }
-
-    for (const entityIds of chunkJustificationEntityIds(
-      entities.entities.map((entity) => entity.entityId),
-    )) {
-      void prefetchNonCriticalQuery(
-        queryClient,
-        justificationsOptions({ workspaceId, entityIds }),
-        (error: unknown) => {
-          getAnalytics().captureError(error);
-        },
-      );
-    }
+    return;
   },
 });
 
 function RouteComponent() {
   const { workspaceId, viewId } = Route.useParams({
     select: (p) => ({ workspaceId: p.workspaceId, viewId: p.viewId }),
-  });
-  const page = Route.useSearch({
-    select: (s) => s.page ?? 1,
   });
   const viewsQueryOptions = viewsOptions(workspaceId);
   const { data: activeView } = useSuspenseQuery({
@@ -249,21 +213,13 @@ function RouteComponent() {
   }
 
   return (
-    <EntityViewContent
-      activeView={activeView}
-      page={page}
-      workspaceId={workspaceId}
-    />
+    <EntityViewContent activeView={activeView} workspaceId={workspaceId} />
   );
 }
 
 type ViewContentProps = {
   activeView: WorkspaceView;
   workspaceId: string;
-};
-
-type EntityViewContentProps = ViewContentProps & {
-  page: number;
 };
 
 type VisibleFieldsView = WorkspaceView & {
@@ -274,11 +230,7 @@ function OverviewViewContent({ activeView, workspaceId }: ViewContentProps) {
   return <ViewShell activeView={activeView} workspaceId={workspaceId} />;
 }
 
-function EntityViewContent({
-  activeView,
-  page,
-  workspaceId,
-}: EntityViewContentProps) {
+function EntityViewContent({ activeView, workspaceId }: ViewContentProps) {
   if (hasVisibleFieldsLayout(activeView)) {
     return (
       <VisibleFieldEntityViewContent
@@ -300,13 +252,7 @@ function EntityViewContent({
     return <ViewShell activeView={activeView} workspaceId={workspaceId} />;
   }
 
-  return (
-    <FullEntityViewContent
-      activeView={activeView}
-      page={page}
-      workspaceId={workspaceId}
-    />
-  );
+  return <ViewShell activeView={activeView} workspaceId={workspaceId} />;
 }
 
 const hasVisibleFieldsLayout = (
@@ -320,65 +266,13 @@ function VisibleFieldEntityViewContent({
   return <ViewShell activeView={activeView} workspaceId={workspaceId} />;
 }
 
-function FullEntityViewContent({
-  activeView,
-  page,
-  workspaceId,
-}: EntityViewContentProps) {
-  useSyncTable({
-    workspaceId,
-    filters: activeView.layout.filters,
-    sorts: activeView.layout.sorts,
-    page,
-  });
-
-  const { data } = useSuspenseQuery(
-    useEntitiesOptions({
-      workspaceId,
-      filters: activeView.layout.filters,
-      sorts: activeView.layout.sorts,
-      page,
-    }),
-  );
-  const totalPages = Math.ceil(data.totalCount / data.pageSize);
-
-  return (
-    <ViewShell
-      activeView={activeView}
-      page={page}
-      totalPages={totalPages}
-      workspaceId={workspaceId}
-    />
-  );
-}
-
-type ViewShellProps = ViewContentProps & {
-  page?: number;
-  totalPages?: number;
-};
-
-function ViewShell({
-  activeView,
-  page,
-  totalPages,
-  workspaceId,
-}: ViewShellProps) {
+function ViewShell({ activeView, workspaceId }: ViewContentProps) {
   const navigate = Route.useNavigate();
   const matches = useMatches();
   const isOnPdfRoute = matches.some((m) => m.fullPath.endsWith("/document"));
 
-  const setPage = (newPage: number) => {
-    // eslint-disable-next-line typescript/no-floating-promises
-    navigate({
-      search: (prev) => ({
-        ...prev,
-        page: newPage === 1 ? undefined : newPage,
-      }),
-    });
-  };
-
-  // File detail view: hide ViewSwitcher + pagination; breadcrumbs
-  // provide navigation back to the matter.
+  // File detail view: hide the view chrome; breadcrumbs provide navigation
+  // back to the matter.
   if (isOnPdfRoute) {
     return <Outlet />;
   }
@@ -410,13 +304,6 @@ function ViewShell({
         <div className="flex-1 overflow-auto">
           <Outlet />
         </div>
-        {page !== undefined && totalPages !== undefined && totalPages > 1 && (
-          <EntityPagination
-            onPageChange={setPage}
-            page={page}
-            totalPages={totalPages}
-          />
-        )}
       </div>
     </>
   );

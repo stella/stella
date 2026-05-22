@@ -137,9 +137,11 @@ export const entitiesRoute = new Elysia({
     permissions: organizeSuggestions.config.permissions,
   })
   .get("/folders", listFolders.handler, {
+    query: listFolders.config.query,
     permissions: listFolders.config.permissions,
   })
   .get("/files", listFiles.handler, {
+    query: listFiles.config.query,
     permissions: listFiles.config.permissions,
   })
   .delete("/", deleteEntities.handler, {

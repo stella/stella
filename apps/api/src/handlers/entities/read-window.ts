@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { t } from "elysia";
 
 import { queryEntities } from "@/api/handlers/entities/query-entities";
@@ -54,7 +54,6 @@ const readEntitiesWindow = createSafeHandler(
       return Result.err(cursorResult.error);
     }
 
-    const offset = cursorResult.value;
     const limit = body.limit ?? LIMITS.entitiesWindowSizeDefault;
     const result = yield* Result.await(
       queryEntities({
@@ -65,7 +64,7 @@ const readEntitiesWindow = createSafeHandler(
         filters: body.filters ?? [],
         sorts: body.sorts ?? [],
         ...(body.search !== undefined && { search: body.search }),
-        offset,
+        cursor: cursorResult.value,
         limit: limit + 1,
         fieldMode: body.fieldMode ?? "full",
         fieldIds: body.fieldIds ?? [],
@@ -79,7 +78,11 @@ const readEntitiesWindow = createSafeHandler(
       createCursorPage({
         rows: result.entities,
         limit,
-        cursorForItem: () => encodeEntitiesWindowCursor(offset + limit),
+        cursorForItem: (item) =>
+          encodeEntitiesWindowCursor(
+            result.cursorValuesByEntityId.get(item.entityId) ??
+              panic("Missing cursor values for entity window item"),
+          ),
       }),
     );
   },

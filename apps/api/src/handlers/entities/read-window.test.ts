@@ -13,7 +13,11 @@ const organizationId = toSafeId<"organization">("org_entity_window");
 const userId = toSafeId<"user">("user_entity_window");
 const createdAt = new Date("2026-01-01T00:00:00.000Z");
 
-const idRows = [{ id: "doc_1" }, { id: "doc_2" }, { id: "doc_3" }];
+const idRows = [
+  { id: "doc_1", cursorValues: ["2026-01-01T00:00:00.000Z", "doc_1"] },
+  { id: "doc_2", cursorValues: ["2026-01-01T00:00:00.000Z", "doc_2"] },
+  { id: "doc_3", cursorValues: ["2026-01-01T00:00:00.000Z", "doc_3"] },
+];
 const entityRows = idRows.map(({ id }, index) => ({
   id,
   kind: "document" as const,
@@ -159,8 +163,9 @@ describe("entity read handlers", () => {
       return;
     }
 
-    expect(result.entities).toHaveLength(3);
+    expect(result.entities).toHaveLength(2);
     expect(result.totalCount).toBe(3);
+    expect(result.nextCursor).toEqual(expect.any(String));
   });
 
   test("kanban group query paginates one group window", async () => {
