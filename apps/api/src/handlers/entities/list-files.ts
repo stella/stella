@@ -5,10 +5,10 @@ import { t } from "elysia";
 import type { SafeDb } from "@/api/db";
 import { entities, fields } from "@/api/db/schema";
 import {
-  decodeEntityListCursor,
-  encodeEntityListCursor,
+  decodeEntityFileListCursor,
+  encodeEntityFileListCursor,
+  entityFileListCursorCondition,
   entityListTimestampCursorExpr,
-  entityListCursorCondition,
 } from "@/api/handlers/entities/list-cursor";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -36,14 +36,15 @@ const listFilesHandler = async function* ({
   workspaceId,
 }: ListFilesHandlerProps) {
   const limit = query.limit ?? LIMITS.entitiesWindowSizeDefault;
-  const cursor = decodeEntityListCursor(query.cursor);
-  const cursorCondition = entityListCursorCondition(cursor);
+  const cursor = decodeEntityFileListCursor(query.cursor);
+  const cursorCondition = entityFileListCursorCondition(cursor);
   const rows = yield* Result.await(
     safeDb((tx) =>
       tx
         .select({
           createdAt: entityListTimestampCursorExpr(sql`${entities.createdAt}`),
           entityId: entities.id,
+          fieldId: fields.id,
           name: entities.name,
           parentId: entities.parentId,
           fieldContent: fields.content,
@@ -64,7 +65,7 @@ const listFilesHandler = async function* ({
             ...(cursorCondition ? [cursorCondition] : []),
           ),
         )
-        .orderBy(asc(entities.createdAt), asc(entities.id))
+        .orderBy(asc(entities.createdAt), asc(entities.id), asc(fields.id))
         .limit(limit + 1),
     ),
   );
@@ -77,7 +78,10 @@ const listFilesHandler = async function* ({
     mimeType: string;
   };
 
-  const files: (FileRow & { createdAt: string })[] = [];
+  const files: (FileRow & {
+    createdAt: string;
+    fieldId: SafeId<"field">;
+  })[] = [];
   for (const row of rows) {
     const content = row.fieldContent;
     if (content.type !== "file") {
@@ -88,6 +92,7 @@ const listFilesHandler = async function* ({
       name: row.name,
       parentId: row.parentId,
       createdAt: row.createdAt,
+      fieldId: row.fieldId,
       fileName: content.fileName,
       mimeType: content.mimeType,
     });
@@ -97,12 +102,18 @@ const listFilesHandler = async function* ({
     rows: files,
     limit,
     cursorForItem: (item) =>
-      encodeEntityListCursor({ createdAt: item.createdAt, id: item.entityId }),
+      encodeEntityFileListCursor({
+        createdAt: item.createdAt,
+        fieldId: item.fieldId,
+        id: item.entityId,
+      }),
   });
 
   return Result.ok({
     ...page,
-    items: page.items.map(({ createdAt: _createdAt, ...file }) => file),
+    items: page.items.map(
+      ({ createdAt: _createdAt, fieldId: _fieldId, ...file }) => file,
+    ),
   });
 };
 

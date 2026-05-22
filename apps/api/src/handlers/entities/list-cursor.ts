@@ -1,14 +1,17 @@
 import { and, gt, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { entities } from "@/api/db/schema";
+import { entities, fields } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
-import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
+import {
+  brandPersistedEntityId,
+  brandPersistedFieldId,
+} from "@/api/lib/safe-id-boundaries";
 
 export const ENTITY_LIST_TIMESTAMP_CURSOR_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.US';
 
@@ -23,6 +26,10 @@ type EntityListCursor = {
   id: SafeId<"entity">;
 };
 
+type EntityFileListCursor = EntityListCursor & {
+  fieldId: SafeId<"field">;
+};
+
 export const encodeEntityListCursor = ({
   createdAt,
   id,
@@ -30,6 +37,16 @@ export const encodeEntityListCursor = ({
   createdAt: string;
   id: SafeId<"entity"> | string;
 }): string => encodePaginationCursor([createdAt, id]);
+
+export const encodeEntityFileListCursor = ({
+  createdAt,
+  fieldId,
+  id,
+}: {
+  createdAt: string;
+  fieldId: SafeId<"field"> | string;
+  id: SafeId<"entity"> | string;
+}): string => encodePaginationCursor([createdAt, id, fieldId]);
 
 export const decodeEntityListCursor = (
   cursor: string | undefined,
@@ -39,8 +56,12 @@ export const decodeEntityListCursor = (
   }
 
   const parts = decodePaginationCursor(cursor);
-  const createdAt = parts?.at(0);
-  const id = parts?.at(1);
+  if (!parts || parts.length !== 2) {
+    throw new HandlerError({ status: 400, message: "Invalid cursor" });
+  }
+
+  const createdAt = parts.at(0);
+  const id = parts.at(1);
 
   if (
     typeof createdAt !== "string" ||
@@ -51,6 +72,38 @@ export const decodeEntityListCursor = (
   }
 
   return { createdAt, id: brandPersistedEntityId(id) };
+};
+
+export const decodeEntityFileListCursor = (
+  cursor: string | undefined,
+): EntityFileListCursor | null => {
+  if (cursor === undefined) {
+    return null;
+  }
+
+  const parts = decodePaginationCursor(cursor);
+  if (!parts || parts.length !== 3) {
+    throw new HandlerError({ status: 400, message: "Invalid cursor" });
+  }
+
+  const createdAt = parts.at(0);
+  const id = parts.at(1);
+  const fieldId = parts.at(2);
+
+  if (
+    typeof createdAt !== "string" ||
+    !entityListTimestampCursorPattern.test(createdAt) ||
+    typeof id !== "string" ||
+    typeof fieldId !== "string"
+  ) {
+    throw new HandlerError({ status: 400, message: "Invalid cursor" });
+  }
+
+  return {
+    createdAt,
+    fieldId: brandPersistedFieldId(fieldId),
+    id: brandPersistedEntityId(id),
+  };
 };
 
 export const entityListCursorCondition = (
@@ -66,6 +119,29 @@ export const entityListCursorCondition = (
       and(
         sql`${entities.createdAt} = ${cursor.createdAt}::timestamp`,
         gt(entities.id, cursor.id),
+      ),
+    ) ?? undefined
+  );
+};
+
+export const entityFileListCursorCondition = (
+  cursor: EntityFileListCursor | null,
+): SQL | undefined => {
+  if (cursor === null) {
+    return undefined;
+  }
+
+  return (
+    or(
+      sql`${entities.createdAt} > ${cursor.createdAt}::timestamp`,
+      and(
+        sql`${entities.createdAt} = ${cursor.createdAt}::timestamp`,
+        gt(entities.id, cursor.id),
+      ),
+      and(
+        sql`${entities.createdAt} = ${cursor.createdAt}::timestamp`,
+        sql`${entities.id} = ${cursor.id}`,
+        gt(fields.id, cursor.fieldId),
       ),
     ) ?? undefined
   );
