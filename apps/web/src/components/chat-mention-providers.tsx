@@ -1,4 +1,4 @@
-import { createContext, use } from "react";
+import { createContext, use, useMemo } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -59,22 +59,25 @@ export const ChatMentionProviders = ({
     enabled: workspaces !== undefined && workspaces.length > 0,
   });
 
-  const value: MentionProviders = {
-    getItems: (categories) => {
-      const items: ChatMentionOption[] = [];
+  const value = useMemo<MentionProviders>(
+    () => ({
+      getItems: (categories) => {
+        const items: ChatMentionOption[] = [];
 
-      if (categories.includes("workspace") && workspaces) {
-        items.push(
-          ...buildWorkspaceMentionOptions({
-            firstViewIdsByWorkspaceId,
-            workspaces,
-          }),
-        );
-      }
+        if (categories.includes("workspace") && workspaces) {
+          items.push(
+            ...buildWorkspaceMentionOptions({
+              firstViewIdsByWorkspaceId,
+              workspaces,
+            }),
+          );
+        }
 
-      return items;
-    },
-  };
+        return items;
+      },
+    }),
+    [firstViewIdsByWorkspaceId, workspaces],
+  );
 
   return (
     <MentionProvidersContext value={value}>{children}</MentionProvidersContext>
