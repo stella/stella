@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { resolveS3Credentials } from "@/api/lib/s3";
+import { getS3, isS3Stale, resolveS3Credentials } from "@/api/lib/s3";
 
 const jsonResponse = (body: unknown): Response =>
   new Response(JSON.stringify(body), { status: 200 });
@@ -20,6 +20,12 @@ const requestUrl = (input: string | URL | Request): string => {
 };
 
 describe("resolveS3Credentials", () => {
+  test("treats a lazily built fallback client as stale", () => {
+    getS3();
+
+    expect(isS3Stale()).toBe(true);
+  });
+
   test("prefers ECS task credentials over static credentials for AWS S3 endpoints", async () => {
     const requestedUrls: string[] = [];
     const fetchImpl = async (

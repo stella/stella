@@ -309,22 +309,28 @@ export const refreshS3 = async (): Promise<void> => {
 };
 
 const CREDENTIAL_MAX_AGE_MS = 50 * 60 * 1000;
-let _client: S3Client = buildS3Client(
-  envBase.S3_ACCESS_KEY_ID && envBase.S3_SECRET_ACCESS_KEY
-    ? {
-        accessKeyId: envBase.S3_ACCESS_KEY_ID,
-        secretAccessKey: envBase.S3_SECRET_ACCESS_KEY,
-      }
-    : null,
-);
-let _clientCreatedAt = Date.now();
 
-/** Returns the current S3 client (synchronous). */
-export const getS3 = (): S3Client => _client;
+// Lazily built so that importing this module's pure helpers
+// (presignDownloadUrl, contentDisposition) does not construct an S3
+// client at import time. refreshS3() — called at startup and
+// periodically — replaces the client with credentials resolved via
+// the configured provider.
+let _client: S3Client | null = null;
+let _clientCreatedAt = 0;
 
-/** True when credentials are older than 50 minutes. */
+/**
+ * Returns the S3 client, building one from static env credentials on
+ * first use. In normal operation refreshS3() runs at startup before
+ * any request, so the lazy build here is only a fallback.
+ */
+export const getS3 = (): S3Client => {
+  _client ??= buildS3Client(staticCredentialsFromEnv());
+  return _client;
+};
+
+/** True when credentials are older than 50 minutes (or not yet built). */
 export const isS3Stale = (): boolean =>
-  Date.now() - _clientCreatedAt > CREDENTIAL_MAX_AGE_MS;
+  !_client || Date.now() - _clientCreatedAt > CREDENTIAL_MAX_AGE_MS;
 
 /**
  * Generate a presigned GET URL that forces the browser to
