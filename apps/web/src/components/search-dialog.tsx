@@ -20,7 +20,11 @@ import {
 import { useDebouncedCallback } from "use-debounce";
 import { useLocale, useTranslations } from "use-intl";
 
-import type { GlobalSearchHit, GlobalSearchResultType } from "@stll/api/types";
+import type {
+  EntityKind,
+  GlobalSearchHit,
+  GlobalSearchResultType,
+} from "@stll/api/types";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import {
@@ -364,6 +368,7 @@ export const SearchDialog = ({
 
   const facetSearchParams = {
     query: searchQuery,
+    kinds: [] satisfies EntityKind[],
     ...searchFilterParams,
   };
 
@@ -1479,6 +1484,7 @@ type SearchableFacetGroupProps = {
     query: string;
     workspaceIds: string[];
     types: GlobalSearchResultType[];
+    kinds: EntityKind[];
     editedByUserIds: string[];
     mimeTypes: string[];
     updatedFrom?: string | undefined;

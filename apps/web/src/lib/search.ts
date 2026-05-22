@@ -50,6 +50,7 @@ type SearchFacetParams = {
   query: string;
   workspaceIds: string[];
   types: GlobalSearchResultType[];
+  kinds: EntityKind[];
   editedByUserIds: string[];
   mimeTypes: string[];
   updatedFrom?: string | undefined;
@@ -100,6 +101,7 @@ const searchKeys = {
         query: params.query,
         workspaceIds: params.workspaceIds,
         types: params.types,
+        kinds: params.kinds,
         editedByUserIds: params.editedByUserIds,
         mimeTypes: params.mimeTypes,
         updatedFrom: params.updatedFrom,
@@ -156,6 +158,7 @@ export const searchFacetOptions = (params: SearchFacetParams) =>
             toSafeId<"workspace">(id),
           ),
           types: params.types,
+          kinds: params.kinds,
           editedByUserIds: params.editedByUserIds,
           mimeTypes: params.mimeTypes,
           updatedFrom: params.updatedFrom,
