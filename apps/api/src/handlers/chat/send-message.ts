@@ -66,7 +66,10 @@ import {
 import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { getDisabledNativeToolSlugs } from "@/api/handlers/mcp-connectors/catalog-metadata";
-import { requireAIAvailable } from "@/api/lib/ai-models";
+import {
+  requireAIAvailable,
+  validateDevModelOverride,
+} from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -106,6 +109,9 @@ const sendMessage = createSafeRootHandler(
           message: "Dev model overrides are only available locally.",
         }),
       );
+    }
+    if (body.devModelId) {
+      yield* validateDevModelOverride(body.devModelId, orgAIConfig);
     }
 
     const accessibleWorkspaceIds = activeWorkspaceIds;
