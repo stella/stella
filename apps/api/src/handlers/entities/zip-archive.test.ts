@@ -150,6 +150,21 @@ describe("buildArchivePaths", () => {
     expect(paths.get("b")).toBe("Matter/Contracts (2)");
   });
 
+  test("does not let documents reserve sibling folder segments", () => {
+    const paths = buildArchivePaths({
+      rootId: "root",
+      rootName: "Matter",
+      nodes: [
+        { id: "a", parentId: "root", kind: "document", name: "Contracts" },
+        { id: "b", parentId: "root", kind: "folder", name: "Contracts" },
+        { id: "c", parentId: "b", kind: "document", name: "brief.pdf" },
+      ],
+    });
+
+    expect(paths.get("b")).toBe("Matter/Contracts");
+    expect(paths.get("c")).toBe("Matter/Contracts/brief.pdf");
+  });
+
   test("falls back to the root on a parentId cycle without hanging", () => {
     const nodes: ArchiveNode[] = [
       { id: "a", parentId: "b", kind: "folder", name: "A" },

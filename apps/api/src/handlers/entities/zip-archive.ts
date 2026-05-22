@@ -41,7 +41,7 @@ const uniqueSegment = (seen: Set<string>, segment: string): string => {
  * Map every descendant entity id — and the root id — to its archive
  * path. Paths are rooted at the folder's own (sanitized) name so the
  * `.zip` unpacks into a folder rather than loose files. Every segment is
- * sanitized and same-named siblings receive a deterministic suffix. The
+ * sanitized and same-named sibling folders receive a deterministic suffix. The
  * `parentId` chain is walked once and memoised. A node whose parent is
  * missing, or a `parentId` cycle, falls back to the root so a malformed
  * tree cannot recurse without end.
@@ -60,7 +60,7 @@ export const buildArchivePaths = ({
   }
 
   const paths = new Map<string, string>();
-  const seenSegmentsByParentId = new Map<string, Set<string>>();
+  const seenFolderSegmentsByParentId = new Map<string, Set<string>>();
   paths.set(rootId, sanitizedRoot);
   const resolving = new Set<string>();
 
@@ -75,9 +75,18 @@ export const buildArchivePaths = ({
       return sanitizedRoot;
     }
     resolving.add(id);
-    const seenSegments = seenSegmentsByParentId.get(node.parentId) ?? new Set();
-    seenSegmentsByParentId.set(node.parentId, seenSegments);
-    const segment = uniqueSegment(seenSegments, sanitizeFilename(node.name));
+    const sanitizedSegment = sanitizeFilename(node.name);
+    if (node.kind !== "folder") {
+      const path = `${resolve(node.parentId)}/${sanitizedSegment}`;
+      resolving.delete(id);
+      paths.set(id, path);
+      return path;
+    }
+
+    const seenSegments =
+      seenFolderSegmentsByParentId.get(node.parentId) ?? new Set();
+    seenFolderSegmentsByParentId.set(node.parentId, seenSegments);
+    const segment = uniqueSegment(seenSegments, sanitizedSegment);
     const path = `${resolve(node.parentId)}/${segment}`;
     resolving.delete(id);
     paths.set(id, path);
