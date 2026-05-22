@@ -86,7 +86,7 @@ export const AIConfigCard = () => {
         providers: providerValues,
       }),
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally depends only on `configured` (see comment above); the full `config` identity would overwrite user edits on every refetch.
   }, [config?.configured]);
 
   const updateProviders = (nextProviders: ProviderCredentialDraft[]) => {
