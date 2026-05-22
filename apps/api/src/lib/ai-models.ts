@@ -72,15 +72,15 @@ export type AIProvider =
 export const DEFAULT_MODELS = {
   google: {
     fast: "gemini-3.1-flash-lite-preview",
-    chat: "gemini-3.1-flash-lite-preview",
+    chat: "gemini-3.5-flash",
     reasoning: "gemini-3.1-pro-preview",
-    pdf: "gemini-3.1-flash-lite-preview",
+    pdf: "gemini-3.5-flash",
   },
   openrouter: {
     fast: "google/gemini-3.1-flash-lite-preview",
-    chat: "google/gemini-3.1-flash-lite-preview",
+    chat: "google/gemini-3.5-flash",
     reasoning: "google/gemini-3.1-pro-preview",
-    pdf: "google/gemini-3.1-flash-lite-preview",
+    pdf: "google/gemini-3.5-flash",
   },
   openai: {
     fast: "gpt-5.4-nano",
@@ -125,11 +125,9 @@ export const DEFAULT_MODELS = {
  */
 export const BYOK_MODEL_OPTIONS = {
   google: [
-    "gemini-3-pro-preview",
-    "gemini-3-flash-preview",
-    "gemini-2.5-pro",
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
+    "gemini-3.1-pro-preview",
+    "gemini-3.5-flash",
+    "gemini-3.1-flash-lite-preview",
   ],
   anthropic: [
     "claude-opus-4-7",
@@ -147,9 +145,9 @@ export const BYOK_MODEL_OPTIONS = {
   openai: ["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.2"],
   azure_foundry: [],
   openrouter: [
-    "google/gemini-3-flash-preview",
     "google/gemini-3.1-pro-preview",
-    "google/gemini-2.5-flash-lite",
+    "google/gemini-3.5-flash",
+    "google/gemini-3.1-flash-lite-preview",
     "anthropic/claude-opus-4.5",
     "anthropic/claude-sonnet-4.5",
     "openai/gpt-5.4",

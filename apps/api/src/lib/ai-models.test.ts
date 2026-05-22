@@ -60,7 +60,7 @@ describe("REGIONAL_PROVIDERS", () => {
 describe("isAllowedBYOKModel", () => {
   test("accepts curated catalog models", () => {
     expect(isAllowedBYOKModel("anthropic", "claude-opus-4-7")).toBe(true);
-    expect(isAllowedBYOKModel("google", "gemini-3-pro-preview")).toBe(true);
+    expect(isAllowedBYOKModel("google", "gemini-3.5-flash")).toBe(true);
     expect(isAllowedBYOKModel("mistral", "mistral-medium-3-5")).toBe(true);
     expect(isAllowedBYOKModel("mistral", "mistral-large-latest")).toBe(true);
     expect(isAllowedBYOKModel("openai", "gpt-5.4")).toBe(true);
@@ -73,7 +73,7 @@ describe("isAllowedBYOKModel", () => {
   test("rejects models outside the curated catalog", () => {
     expect(isAllowedBYOKModel("openrouter", "x-ai/grok-4")).toBe(false);
     expect(isAllowedBYOKModel("anthropic", "claude-2")).toBe(false);
-    expect(isAllowedBYOKModel("google", "gemini-1.5-pro")).toBe(false);
+    expect(isAllowedBYOKModel("google", "gemini-2.5-pro")).toBe(false);
     expect(isAllowedBYOKModel("mistral", "pixtral-large-latest")).toBe(false);
     expect(isAllowedBYOKModel("mistral", "mistral-tiny")).toBe(false);
     expect(isAllowedBYOKModel("openai", "gpt-4o")).toBe(false);

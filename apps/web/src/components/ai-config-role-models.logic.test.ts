@@ -134,8 +134,8 @@ describe("BYOK provider and model configuration", () => {
       ]),
     ).toContainEqual({
       provider: "openrouter",
-      modelId: "google/gemini-3-flash-preview",
-      value: "openrouter::google/gemini-3-flash-preview",
+      modelId: "google/gemini-3.5-flash",
+      value: "openrouter::google/gemini-3.5-flash",
     });
   });
 
@@ -154,8 +154,8 @@ describe("BYOK provider and model configuration", () => {
     });
     expect(modelOptions).toContainEqual({
       provider: "google",
-      modelId: "gemini-3-pro-preview",
-      value: "google::gemini-3-pro-preview",
+      modelId: "gemini-3.5-flash",
+      value: "google::gemini-3.5-flash",
     });
     expect(modelOptions).toContainEqual({
       provider: "mistral",
@@ -179,8 +179,8 @@ describe("BYOK provider and model configuration", () => {
     });
     expect(modelOptions).not.toContainEqual({
       provider: "google",
-      modelId: "gemini-1.5-pro",
-      value: "google::gemini-1.5-pro",
+      modelId: "gemini-2.5-pro",
+      value: "google::gemini-2.5-pro",
     });
     expect(modelOptions).not.toContainEqual({
       provider: "mistral",

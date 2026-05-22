@@ -26,6 +26,11 @@ import {
 } from "@stll/ui/components/menu";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import {
+  MODEL_OPTIONS_BY_PROVIDER,
+  PROVIDER_KEYS,
+  PROVIDER_LABELS,
+} from "@/components/ai-config-role-models.logic";
 import { env } from "@/env";
 import { api } from "@/lib/api";
 import { useDevStore } from "@/lib/dev-store";
@@ -41,58 +46,24 @@ const aiSdkDevtoolsUrl = (() => {
 })();
 
 /**
- * Models available in the dev model selector.
+ * Options for the dev-only chat-model override.
  *
- * Grouped by role (matching ai-models.ts constants on the
- * backend) and by provider for manual overrides.
+ * Sourced from MODEL_OPTIONS_BY_PROVIDER — the same catalog the org
+ * BYOK picker uses — so this list never drifts from the real model
+ * catalog. The selected id is routed through the active provider by
+ * getModelById on the API, so pick a model whose provider matches
+ * the running backend.
  */
-const CHAT_MODELS = [
-  // Default: uses CHAT_MODEL from ai-models.ts
-  { value: "", label: "Default (Gemini 3 Flash)" },
-
-  // --- Low ($0.50–$3/M output) ---
-  { value: "openai/gpt-5-mini", label: "GPT-5 Mini · Low" },
-  { value: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash · Low" },
-  {
-    value: "google/gemini-3-flash-preview",
-    label: "Gemini 3.0 Flash · Low",
-  },
-  {
-    value: "perplexity/sonar",
-    label: "Sonar (web search) · Low",
-  },
-
-  // --- Mid ($5–$12/M output) ---
-  {
-    value: "anthropic/claude-haiku-4-5",
-    label: "Claude Haiku 4.5 · Mid",
-  },
-  { value: "openai/o3", label: "o3 · Mid" },
-  { value: "openai/gpt-5", label: "GPT-5 · Mid" },
-  {
-    value: "google/gemini-3-pro-preview",
-    label: "Gemini 3.0 Pro · Mid",
-  },
-  {
-    value: "google/gemini-3.1-pro-preview",
-    label: "Gemini 3.1 Pro · Mid",
-  },
-
-  // --- High ($14–$15/M output) ---
-  {
-    value: "openai/gpt-5.3-codex",
-    label: "GPT-5.3 Codex · High",
-  },
-  { value: "openai/gpt-5.4", label: "GPT-5.4 · High" },
-  {
-    value: "perplexity/sonar-pro",
-    label: "Sonar Pro (web search) · High",
-  },
-  {
-    value: "anthropic/claude-sonnet-4-6",
-    label: "Claude Sonnet 4.6 · High",
-  },
-] as const;
+const CHAT_MODELS: { value: string; label: string }[] = [
+  // Empty value falls through to getModelForRole("chat") on the API.
+  { value: "", label: "Default (chat role)" },
+  ...PROVIDER_KEYS.flatMap((provider) =>
+    MODEL_OPTIONS_BY_PROVIDER[provider].map((modelId) => ({
+      value: modelId,
+      label: `${PROVIDER_LABELS[provider]} · ${modelId}`,
+    })),
+  ),
+];
 
 const SEED_STATUS_POLL_INTERVAL_MS = 1000;
 const SEED_STATUS_MAX_POLLS = 180;
