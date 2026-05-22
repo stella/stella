@@ -306,32 +306,7 @@ const dateSortKey = ({
   type: "date",
 });
 
-const displayedNameExpr = (): SQL => sql`COALESCE(
-  NULLIF(${entities.name}, ''),
-  (
-    SELECT NULLIF(${fields.content}->>'fileName', '')
-    FROM ${fields}
-    WHERE ${fields.workspaceId} = ${entities.workspaceId}
-      AND ${fields.entityVersionId} = ${entities.currentVersionId}
-      AND ${fields.content}->>'type' = 'file'
-    ORDER BY ${fields.propertyId} ASC
-    LIMIT 1
-  ),
-  (
-    SELECT NULLIF(BTRIM(${fields.content}->>'value'), '')
-    FROM ${fields}
-    WHERE ${fields.workspaceId} = ${entities.workspaceId}
-      AND ${fields.entityVersionId} = ${entities.currentVersionId}
-      AND ${fields.content}->>'type' = 'text'
-    ORDER BY ${fields.propertyId} ASC
-    LIMIT 1
-  ),
-  CASE
-    WHEN ${entities.kind} = 'folder' THEN 'Untitled Folder'
-    WHEN ${entities.kind} = 'task' THEN 'Untitled Task'
-    ELSE 'Untitled'
-  END
-)`;
+const displayedNameExpr = (): SQL => sql`${entities.displayName}`;
 
 const propertySortValueExpr = (propertyId: string): SQL => sql`(
   SELECT COALESCE(
