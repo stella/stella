@@ -1,7 +1,7 @@
 import {
   createContext,
+  use,
   useCallback,
-  useContext,
   useEffect,
   useEffectEvent,
   useMemo,
@@ -374,7 +374,7 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
 };
 
 export const useChatEditorExtensions = () => {
-  const context = useContext(ChatEditorManagerContext);
+  const context = use(ChatEditorManagerContext);
 
   if (context === null) {
     panic("useChatEditorExtensions must be used within ChatEditorProvider");
@@ -386,7 +386,7 @@ export const useChatEditorExtensions = () => {
 };
 
 export const useChatEditorManager = () => {
-  const context = useContext(ChatEditorManagerContext);
+  const context = use(ChatEditorManagerContext);
 
   if (context === null) {
     panic("useChatEditorManager must be used within ChatEditorProvider");

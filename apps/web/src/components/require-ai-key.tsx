@@ -1,8 +1,8 @@
 import type { PropsWithChildren } from "react";
 import {
   createContext,
+  use,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useState,
@@ -10,6 +10,7 @@ import {
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useRouteContext } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -121,10 +122,10 @@ export function AIAvailabilityProvider({ children }: PropsWithChildren) {
 }
 
 export const useAIKeyGate = () => {
-  const context = useContext(AIAvailabilityContext);
+  const context = use(AIAvailabilityContext);
 
   if (!context) {
-    throw new Error("useAIKeyGate must be used within AIAvailabilityProvider");
+    panic("useAIKeyGate must be used within AIAvailabilityProvider");
   }
 
   return context;

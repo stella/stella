@@ -1,5 +1,7 @@
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, use, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
+
+import { panic } from "better-result";
 
 const NEAR_BOTTOM_THRESHOLD_PX = 50;
 
@@ -15,11 +17,10 @@ export const StickToBottomContext = createContext<StickToBottomContext | null>(
 );
 
 export const useStickToBottomContext = (): StickToBottomContext => {
-  const ctx = useContext(StickToBottomContext);
+  const ctx = use(StickToBottomContext);
   if (!ctx) {
-    throw new Error(
-      "useStickToBottomContext must be used within a " +
-        "StickToBottom provider",
+    panic(
+      "useStickToBottomContext must be used within a StickToBottom provider",
     );
   }
   return ctx;
