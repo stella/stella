@@ -68,66 +68,172 @@ export const finalizeFolioCollabSessionHandler = async ({
     return status(403, { message: "Collaborative edit is read-only." });
   }
 
-  const uploadedKeys: string[] = [];
-  let checkpointKeyToDelete: string | null = null;
+  const { organizationId, scopedDb, userId, workspaceId } =
+    authorizedSession.value;
+
+  const deleteS3Key = async (key: string, context: Record<string, string>) => {
+    await getS3()
+      .delete(key)
+      .catch((error: unknown) => {
+        captureError(error, context);
+      });
+  };
+
+  // Phase A: non-locking read. entity_versions rows are immutable
+  // once written, so reading the base version outside the heavy
+  // write txn is safe; the session row may move under us, but we
+  // re-verify inside the write txn before we commit any rows.
+  const sessionPreview = await scopedDb(async (tx) => {
+    const rows = await tx
+      .select({
+        baseVersionId: folioCollabSessions.baseVersionId,
+        docxCheckpointFileId: folioCollabSessions.docxCheckpointFileId,
+        docxCheckpointScanWarnings:
+          folioCollabSessions.docxCheckpointScanWarnings,
+        docxCheckpointSha256Hex: folioCollabSessions.docxCheckpointSha256Hex,
+        docxCheckpointSizeBytes: folioCollabSessions.docxCheckpointSizeBytes,
+        docxCheckpointUpdatedAt: folioCollabSessions.docxCheckpointUpdatedAt,
+        entityId: folioCollabSessions.entityId,
+        fileName: folioCollabSessions.fileName,
+        propertyId: folioCollabSessions.propertyId,
+        status: folioCollabSessions.status,
+      })
+      .from(folioCollabSessions)
+      .where(
+        and(
+          eq(folioCollabSessions.id, sessionId),
+          eq(folioCollabSessions.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1);
+    return rows.at(0);
+  });
+
+  if (!sessionPreview) {
+    return status(404, { message: "Collaborative edit session not found." });
+  }
+
+  if (sessionPreview.status !== "open") {
+    return status(409, {
+      message: "Collaborative edit session is already closed.",
+    });
+  }
+
+  const checkpointSha256Hex = sessionPreview.docxCheckpointSha256Hex;
+  const checkpointSizeBytes = sessionPreview.docxCheckpointSizeBytes;
+  if (
+    checkpointSha256Hex === null ||
+    checkpointSizeBytes === null ||
+    sessionPreview.docxCheckpointUpdatedAt === null
+  ) {
+    await scopedDb(async (tx) => {
+      await tx
+        .update(folioCollabSessions)
+        .set({ closedAt: new Date(), status: "cancelled" })
+        .where(eq(folioCollabSessions.id, sessionId));
+    });
+    return { outcome: "no_changes" } as const;
+  }
+
+  const checkpointKey = createFileKey({
+    fileId: sessionPreview.docxCheckpointFileId,
+    mimeType: DOCX_MIME_TYPE,
+    organizationId,
+    workspaceId,
+  });
+
+  const baseVersion = await scopedDb(
+    async (tx) =>
+      await tx.query.entityVersions.findFirst({
+        where: {
+          entityId: { eq: sessionPreview.entityId },
+          id: { eq: sessionPreview.baseVersionId },
+          workspaceId: { eq: workspaceId },
+        },
+        columns: { versionNumber: true },
+        with: {
+          fields: { columns: { content: true, propertyId: true } },
+        },
+      }),
+  );
+
+  if (!baseVersion) {
+    return status(409, { message: "Base entity version not found." });
+  }
+
+  const baseFileField = findDocxFieldForProperty({
+    fieldEntries: baseVersion.fields,
+    propertyId: sessionPreview.propertyId,
+  });
+
+  if (!baseFileField) {
+    return status(409, {
+      message: "Collaborative edit session source file is no longer available.",
+    });
+  }
+
+  if (checkpointSha256Hex === baseFileField.sha256Hex) {
+    await scopedDb(async (tx) => {
+      await tx
+        .update(folioCollabSessions)
+        .set({ closedAt: new Date(), status: "cancelled" })
+        .where(eq(folioCollabSessions.id, sessionId));
+    });
+    await deleteS3Key(checkpointKey, { checkpointKey, sessionId });
+    return { outcome: "no_changes" } as const;
+  }
+
+  // Phase B: heavy IO + DOCX validation, all OUTSIDE the txn. The
+  // source bytes are written to S3 before we open the txn; any
+  // commit failure rolls them back via uploadedKeys.
+  const checkpointBuffer = await getS3().file(checkpointKey).arrayBuffer();
+  const validation = await validateDocxBuffer(checkpointBuffer);
+  if (!validation.valid) {
+    return status(422, {
+      message: `Document validation failed: ${validation.error}`,
+    });
+  }
+
+  const storedBytes = new Uint8Array(checkpointBuffer);
+  const nextVersionNumber = baseVersion.versionNumber + 1;
+  const nextVersionId = createSafeId<"entityVersion">();
+  const sourceFileId = Bun.randomUUIDv7();
+  const sourceKey = createFileKey({
+    fileId: sourceFileId,
+    mimeType: DOCX_MIME_TYPE,
+    organizationId,
+    workspaceId,
+  });
+  const uploadedKeys: string[] = [sourceKey];
   let shouldRollbackUploadedKeys = true;
-
-  const deleteCheckpointKey = async (checkpointKey: string) => {
-    await getS3()
-      .delete(checkpointKey)
-      .catch((error: unknown) => {
-        captureError(error, { checkpointKey, sessionId });
-      });
-  };
-  const deletePendingCheckpointKey = async () => {
-    const checkpointKey = checkpointKeyToDelete;
-    if (checkpointKey === null) {
-      return;
-    }
-
-    checkpointKeyToDelete = null;
-    await deleteCheckpointKey(checkpointKey);
-  };
-
-  const deleteUploadedKey = async (uploadedKey: string) => {
-    await getS3()
-      .delete(uploadedKey)
-      .catch((error: unknown) => {
-        captureError(error, { rollbackKey: uploadedKey, sessionId });
-      });
+  const rollbackUploadedKeys = async () => {
+    await Promise.all(
+      uploadedKeys.map(
+        async (key) => await deleteS3Key(key, { rollbackKey: key, sessionId }),
+      ),
+    );
   };
 
   try {
-    const result = await authorizedSession.value.scopedDb(async (tx) => {
+    await getS3().write(sourceKey, storedBytes);
+
+    // Phase C: txn — lock + verify state hasn't drifted + write rows.
+    const result = await scopedDb(async (tx) => {
       const lockedSessions = await tx
         .select({
-          baseVersionId: folioCollabSessions.baseVersionId,
-          docxCheckpointFileId: folioCollabSessions.docxCheckpointFileId,
-          docxCheckpointScanWarnings:
-            folioCollabSessions.docxCheckpointScanWarnings,
           docxCheckpointSha256Hex: folioCollabSessions.docxCheckpointSha256Hex,
-          docxCheckpointSizeBytes: folioCollabSessions.docxCheckpointSizeBytes,
-          docxCheckpointUpdatedAt: folioCollabSessions.docxCheckpointUpdatedAt,
-          entityId: folioCollabSessions.entityId,
-          fileName: folioCollabSessions.fileName,
-          id: folioCollabSessions.id,
-          propertyId: folioCollabSessions.propertyId,
           status: folioCollabSessions.status,
         })
         .from(folioCollabSessions)
         .where(
           and(
             eq(folioCollabSessions.id, sessionId),
-            eq(
-              folioCollabSessions.workspaceId,
-              authorizedSession.value.workspaceId,
-            ),
+            eq(folioCollabSessions.workspaceId, workspaceId),
           ),
         )
         .for("update");
 
       const editSession = lockedSessions.at(0);
-
       if (!editSession) {
         return {
           error: {
@@ -136,7 +242,6 @@ export const finalizeFolioCollabSessionHandler = async ({
           },
         } as const;
       }
-
       if (editSession.status !== "open") {
         return {
           error: {
@@ -145,31 +250,25 @@ export const finalizeFolioCollabSessionHandler = async ({
           },
         } as const;
       }
-
-      if (
-        editSession.docxCheckpointSha256Hex === null ||
-        editSession.docxCheckpointSizeBytes === null ||
-        editSession.docxCheckpointUpdatedAt === null
-      ) {
-        await tx
-          .update(folioCollabSessions)
-          .set({ closedAt: new Date(), status: "cancelled" })
-          .where(eq(folioCollabSessions.id, editSession.id));
-
-        return { outcome: "no_changes" } as const;
+      if (editSession.docxCheckpointSha256Hex !== checkpointSha256Hex) {
+        return {
+          error: {
+            message: "Collaborative edit checkpoint changed during finalize.",
+            statusCode: 409,
+          },
+        } as const;
       }
 
       const lockedEntities = await tx
         .select({
           currentVersionId: entities.currentVersionId,
           docSequence: entities.docSequence,
-          id: entities.id,
         })
         .from(entities)
         .where(
           and(
-            eq(entities.id, editSession.entityId),
-            eq(entities.workspaceId, authorizedSession.value.workspaceId),
+            eq(entities.id, sessionPreview.entityId),
+            eq(entities.workspaceId, workspaceId),
           ),
         )
         .for("update");
@@ -181,22 +280,14 @@ export const finalizeFolioCollabSessionHandler = async ({
         } as const;
       }
 
-      const checkpointKey = createFileKey({
-        fileId: editSession.docxCheckpointFileId,
-        mimeType: DOCX_MIME_TYPE,
-        organizationId: authorizedSession.value.organizationId,
-        workspaceId: authorizedSession.value.workspaceId,
-      });
-
-      if (entity.currentVersionId !== editSession.baseVersionId) {
+      if (entity.currentVersionId !== sessionPreview.baseVersionId) {
         await tx
           .update(folioCollabSessions)
           .set({ closedAt: new Date(), status: "cancelled" })
-          .where(eq(folioCollabSessions.id, editSession.id));
-
-        checkpointKeyToDelete = checkpointKey;
+          .where(eq(folioCollabSessions.id, sessionId));
 
         return {
+          deleteCheckpoint: true,
           error: {
             message:
               "This document changed in Stella while collaborative editing was open.",
@@ -205,67 +296,8 @@ export const finalizeFolioCollabSessionHandler = async ({
         } as const;
       }
 
-      const baseVersion = await tx.query.entityVersions.findFirst({
-        where: {
-          entityId: { eq: editSession.entityId },
-          id: { eq: editSession.baseVersionId },
-          workspaceId: { eq: authorizedSession.value.workspaceId },
-        },
-        columns: { versionNumber: true },
-        with: {
-          fields: { columns: { content: true, propertyId: true } },
-        },
-      });
-
-      if (!baseVersion) {
-        return {
-          error: {
-            message: "Base entity version not found.",
-            statusCode: 409,
-          },
-        } as const;
-      }
-
-      const baseFileField = findDocxFieldForProperty({
-        fieldEntries: baseVersion.fields,
-        propertyId: editSession.propertyId,
-      });
-
-      if (!baseFileField) {
-        return {
-          error: {
-            message:
-              "Collaborative edit session source file is no longer available.",
-            statusCode: 409,
-          },
-        } as const;
-      }
-
-      if (editSession.docxCheckpointSha256Hex === baseFileField.sha256Hex) {
-        await tx
-          .update(folioCollabSessions)
-          .set({ closedAt: new Date(), status: "cancelled" })
-          .where(eq(folioCollabSessions.id, editSession.id));
-
-        checkpointKeyToDelete = checkpointKey;
-
-        return { outcome: "no_changes" } as const;
-      }
-
-      const checkpointBuffer = await getS3().file(checkpointKey).arrayBuffer();
-      const validation = await validateDocxBuffer(checkpointBuffer);
-      if (!validation.valid) {
-        return {
-          error: {
-            message: `Document validation failed: ${validation.error}`,
-            statusCode: 422 as const,
-          },
-        } as const;
-      }
-
-      const nextVersionNumber = baseVersion.versionNumber + 1;
       const workspace = await tx.query.workspaces.findFirst({
-        where: { id: { eq: authorizedSession.value.workspaceId } },
+        where: { id: { eq: workspaceId } },
         columns: { reference: true },
       });
 
@@ -277,35 +309,22 @@ export const finalizeFolioCollabSessionHandler = async ({
           panic("Workspace not found for finalized collaborative edit session"),
       });
 
-      const storedBytes = new Uint8Array(checkpointBuffer);
-      const nextVersionId = createSafeId<"entityVersion">();
-      const sourceFileId = Bun.randomUUIDv7();
-      const sourceKey = createFileKey({
-        fileId: sourceFileId,
-        mimeType: DOCX_MIME_TYPE,
-        organizationId: authorizedSession.value.organizationId,
-        workspaceId: authorizedSession.value.workspaceId,
-      });
-      uploadedKeys.push(sourceKey);
-
-      await getS3().write(sourceKey, storedBytes);
-
       await tx.insert(entityVersions).values({
-        entityId: editSession.entityId,
+        entityId: sessionPreview.entityId,
         id: nextVersionId,
         stamp: nextVersionStamp.stamp,
         verificationCode: nextVersionStamp.verificationCode,
         versionNumber: nextVersionNumber,
-        workspaceId: authorizedSession.value.workspaceId,
+        workspaceId,
       });
 
       const clonedFields = cloneFieldsForRevision({
         currentFields: baseVersion.fields,
         entityVersionId: nextVersionId,
-        propertyId: editSession.propertyId,
+        propertyId: sessionPreview.propertyId,
         replacementContent: {
           encrypted: false,
-          fileName: editSession.fileName,
+          fileName: sessionPreview.fileName,
           id: sourceFileId,
           mimeType: DOCX_MIME_TYPE,
           pdfFileId: null,
@@ -313,15 +332,15 @@ export const finalizeFolioCollabSessionHandler = async ({
             encrypted: false,
             mimeType: DOCX_MIME_TYPE,
           }),
-          sha256Hex: editSession.docxCheckpointSha256Hex,
-          sizeBytes: editSession.docxCheckpointSizeBytes,
+          sha256Hex: checkpointSha256Hex,
+          sizeBytes: checkpointSizeBytes,
           type: "file",
           version: 1,
-          ...(editSession.docxCheckpointScanWarnings !== null && {
-            scanWarnings: editSession.docxCheckpointScanWarnings,
+          ...(sessionPreview.docxCheckpointScanWarnings !== null && {
+            scanWarnings: sessionPreview.docxCheckpointScanWarnings,
           }),
         },
-        workspaceId: authorizedSession.value.workspaceId,
+        workspaceId,
       });
 
       const insertedFields = await tx
@@ -330,22 +349,22 @@ export const finalizeFolioCollabSessionHandler = async ({
         .returning({ id: fields.id, propertyId: fields.propertyId });
 
       const nextField = insertedFields.find(
-        (field) => field.propertyId === editSession.propertyId,
+        (field) => field.propertyId === sessionPreview.propertyId,
       );
 
       await tx
         .update(entities)
         .set({
           currentVersionId: nextVersionId,
-          lastEditedBy: authorizedSession.value.userId,
+          lastEditedBy: userId,
           updatedAt: new Date(),
         })
-        .where(eq(entities.id, editSession.entityId));
+        .where(eq(entities.id, sessionPreview.entityId));
 
       await tx
         .update(workspaces)
         .set({ lastActivityAt: new Date() })
-        .where(eq(workspaces.id, authorizedSession.value.workspaceId));
+        .where(eq(workspaces.id, workspaceId));
 
       await tx
         .update(folioCollabSessions)
@@ -354,12 +373,10 @@ export const finalizeFolioCollabSessionHandler = async ({
           finalizedVersionId: nextVersionId,
           status: "finalized",
         })
-        .where(eq(folioCollabSessions.id, editSession.id));
-
-      checkpointKeyToDelete = checkpointKey;
+        .where(eq(folioCollabSessions.id, sessionId));
 
       return {
-        entityId: editSession.entityId,
+        entityId: sessionPreview.entityId,
         fieldId:
           nextField?.id ??
           panic("Finalized collaborative edit session field was not inserted"),
@@ -370,38 +387,36 @@ export const finalizeFolioCollabSessionHandler = async ({
     });
 
     if ("error" in result) {
-      await Promise.all(uploadedKeys.map(deleteUploadedKey));
-      await deletePendingCheckpointKey();
-
+      await rollbackUploadedKeys();
+      if ("deleteCheckpoint" in result) {
+        await deleteS3Key(checkpointKey, { checkpointKey, sessionId });
+      }
       return status(result.error.statusCode, { message: result.error.message });
     }
 
     shouldRollbackUploadedKeys = false;
-    await deletePendingCheckpointKey();
+    await deleteS3Key(checkpointKey, { checkpointKey, sessionId });
 
-    broadcast(authorizedSession.value.workspaceId, {
+    broadcast(workspaceId, {
       type: "invalidate-query",
-      data: ["entities", authorizedSession.value.workspaceId],
+      data: ["entities", workspaceId],
     });
 
-    if (result.outcome === "finalized") {
-      await processCollaborativeEditDerivatives({
-        entityId: result.entityId,
-        fieldId: result.fieldId,
-        organizationId: authorizedSession.value.organizationId,
-        userId: authorizedSession.value.userId,
-        versionId: result.versionId,
-        workspaceId: authorizedSession.value.workspaceId,
-        scopedDb: authorizedSession.value.scopedDb,
-      });
-    }
+    await processCollaborativeEditDerivatives({
+      entityId: result.entityId,
+      fieldId: result.fieldId,
+      organizationId,
+      scopedDb,
+      userId,
+      versionId: result.versionId,
+      workspaceId,
+    });
 
     return result;
   } catch (error) {
     if (shouldRollbackUploadedKeys) {
-      await Promise.all(uploadedKeys.map(deleteUploadedKey));
+      await rollbackUploadedKeys();
     }
-
     throw error;
   }
 };

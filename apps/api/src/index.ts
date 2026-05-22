@@ -18,10 +18,12 @@ import { contactsRoute } from "@/api/handlers/contacts/routes";
 import { devPublicRoute, devRoute } from "@/api/handlers/dev/routes";
 import { desktopEditSessionsRoute } from "@/api/handlers/entities/desktop-edit-sessions-route";
 import { entitiesRoute } from "@/api/handlers/entities/routes";
+import { isUploadRateLimitedPath } from "@/api/handlers/entities/upload-rate-limit";
 import { expensesRoute } from "@/api/handlers/expenses/routes";
 import { externalPreviewRoute } from "@/api/handlers/external-preview/routes";
 import { fieldsRoute } from "@/api/handlers/fields/routes";
 import { filesRoute } from "@/api/handlers/files/routes";
+import { isFolioCollabRateLimitedPath } from "@/api/handlers/folio-collab/rate-limit";
 import { folioCollabRoute } from "@/api/handlers/folio-collab/routes";
 import { healthRoute } from "@/api/handlers/health/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
@@ -297,15 +299,38 @@ const api = new Elysia()
           max: API_RATE_LIMITS.api.max,
           generator: scopedGenerator("api"),
           context: new InMemoryRateLimitContext(),
-          skip: (req) =>
-            /\/entities\/[^/]+\/upload$/u.test(new URL(req.url).pathname),
+          skip: (req) => {
+            // Endpoints with a dedicated rate-limit budget are excluded
+            // from the shared `api` bucket so unrelated `/v1` traffic on
+            // the same IP cannot drain their quota (see `upload` and
+            // `folioCollab` in API_RATE_LIMITS). Each path is matched by
+            // its canonical helper so this skip stays in lockstep with
+            // the dedicated limiter that owns it.
+            const { pathname } = new URL(req.url);
+            return (
+              isUploadRateLimitedPath(pathname) ||
+              isFolioCollabRateLimitedPath(pathname)
+            );
+          },
         }),
       )
       .use(workspaceEventsRoute)
       .use(workspacesRoute)
       .use(propertiesRoute)
       .use(filesRoute)
-      .use(folioCollabRoute)
+      .use(
+        new Elysia()
+          .use(
+            rateLimit({
+              scoping: "scoped",
+              duration: API_RATE_LIMITS.folioCollab.duration,
+              max: API_RATE_LIMITS.folioCollab.max,
+              generator: scopedGenerator("folio-collab"),
+              context: new InMemoryRateLimitContext(),
+            }),
+          )
+          .use(folioCollabRoute),
+      )
       .use(desktopEditSessionsRoute)
       .use(entitiesRoute)
       .use(fieldsRoute)
