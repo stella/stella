@@ -1281,11 +1281,11 @@
         "title": "Kikötések"
       },
       "connectors": {
-        "description": "A Stella összekapcsolása ellenőrzött külső eszközszerverekkel",
+        "description": "A stella összekapcsolása külső eszközökkel",
         "title": "MCP"
       },
       "mcp": {
-        "description": "A Stella összekapcsolása ellenőrzött külső eszközszerverekkel",
+        "description": "A stella összekapcsolása külső eszközökkel",
         "title": "MCP"
       },
       "prompts": {

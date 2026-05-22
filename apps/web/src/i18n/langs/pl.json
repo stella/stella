@@ -1281,11 +1281,11 @@
         "title": "Klauzule"
       },
       "connectors": {
-        "description": "Połącz Stellę ze zweryfikowanymi zewnętrznymi serwerami narzędzi",
+        "description": "Połącz stellę z zewnętrznymi narzędziami",
         "title": "MCP"
       },
       "mcp": {
-        "description": "Połącz Stellę ze zweryfikowanymi zewnętrznymi serwerami narzędzi",
+        "description": "Połącz stellę z zewnętrznymi narzędziami",
         "title": "MCP"
       },
       "prompts": {

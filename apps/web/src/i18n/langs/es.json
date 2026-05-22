@@ -1281,11 +1281,11 @@
         "title": "Cláusulas"
       },
       "connectors": {
-        "description": "Conecte Stella a servidores externos de herramientas verificados",
+        "description": "Conecte stella a herramientas externas",
         "title": "MCP"
       },
       "mcp": {
-        "description": "Conecte Stella a servidores externos de herramientas verificados",
+        "description": "Conecte stella a herramientas externas",
         "title": "MCP"
       },
       "prompts": {

@@ -1281,11 +1281,11 @@
         "title": "Vzorová ustanovení"
       },
       "connectors": {
-        "description": "Připojení Stelly k ověřeným externím nástrojům",
+        "description": "Připojení stelly k externím nástrojům",
         "title": "MCP"
       },
       "mcp": {
-        "description": "Připojení Stelly k ověřeným externím nástrojům",
+        "description": "Připojení stelly k externím nástrojům",
         "title": "MCP"
       },
       "prompts": {
