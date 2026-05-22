@@ -192,6 +192,8 @@ export const ChatTabPanel = ({
     messages,
     resendLatestMessage,
     sendMessage,
+    queuedMessages,
+    removeQueuedMessage,
     stop,
     isGenerating,
     alwaysApprovedTools,
@@ -332,8 +334,10 @@ export const ChatTabPanel = ({
                   onAskUserSubmit={handleAskUserSubmit}
                   onCreateDocumentResolve={handleCreateDocumentResolve}
                   onOpenCreatedDocument={handleOpenCreatedDocument}
+                  onRemoveQueuedMessage={removeQueuedMessage}
                   onResend={resendLatestMessage}
                   onSendWithoutAnonymization={sendWithoutAnonymization}
+                  queuedMessages={queuedMessages}
                   showThinkingIndicator
                   showToolCallDetails={showToolCallDetails}
                   streamdownComponents={streamdownComponents}
@@ -376,6 +380,7 @@ export const ChatTabPanel = ({
             }}
             panelOpen={false}
             pendingCount={0}
+            queueWhileGenerating
             showThreadToggle={false}
             status={isGenerating ? "generating" : "idle"}
           />

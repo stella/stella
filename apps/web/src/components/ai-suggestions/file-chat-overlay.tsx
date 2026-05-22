@@ -800,6 +800,8 @@ const FileChatOverlayInner = ({
     messages,
     resendLatestMessage,
     sendMessage,
+    queuedMessages,
+    removeQueuedMessage,
     stop,
     isGenerating,
     alwaysApprovedTools,
@@ -976,7 +978,9 @@ const FileChatOverlayInner = ({
                 onAskUserSubmit={handleAskUserSubmit}
                 onCreateDocumentResolve={handleCreateDocumentResolve}
                 onOpenCreatedDocument={handleOpenCreatedDocument}
+                onRemoveQueuedMessage={removeQueuedMessage}
                 onResend={resendLatestMessage}
+                queuedMessages={queuedMessages}
                 showThinkingIndicator
                 showToolCallDetails={showToolCallDetails}
                 streamdownComponents={streamdownComponents}
@@ -1029,6 +1033,7 @@ const FileChatOverlayInner = ({
           onTogglePanel={() => setPanelOpen((v) => !v)}
           panelOpen={panelOpen}
           pendingCount={0}
+          queueWhileGenerating
           sendDisabledReason={
             activeFile && docxEditorRef && !editorReady
               ? "editor-loading"

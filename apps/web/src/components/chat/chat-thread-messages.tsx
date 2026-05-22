@@ -3,7 +3,14 @@ import type { ComponentProps } from "react";
 
 import { isToolUIPart } from "ai";
 import type { FileUIPart } from "ai";
-import { CopyIcon, FileTextIcon, RotateCcwIcon } from "lucide-react";
+import {
+  ClockIcon,
+  CopyIcon,
+  FileTextIcon,
+  PaperclipIcon,
+  RotateCcwIcon,
+  XIcon,
+} from "lucide-react";
 import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
@@ -36,6 +43,7 @@ import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import type { TranslationKey } from "@/i18n/types";
 import { getUserFileContentUrl } from "@/lib/user-files";
+import type { QueuedChatMessage } from "@/routes/_protected.chat/-hooks/use-chat-session";
 
 const USER_STREAMDOWN_COMPONENTS = {
   a: (props: ComponentProps<"a">) => (
@@ -457,6 +465,13 @@ type ChatThreadMessagesProps = {
   showThinkingIndicator?: boolean | undefined;
   showToolCallDetails?: boolean | undefined;
   showToolCalls?: boolean | undefined;
+  /**
+   * Messages the user composed while a response was streaming.
+   * Rendered as dimmed "pending" bubbles below the transcript;
+   * `useChatSession` dispatches them once the turn finishes.
+   */
+  queuedMessages?: readonly QueuedChatMessage[] | undefined;
+  onRemoveQueuedMessage?: ((id: string) => void) | undefined;
   streamdownComponents: {
     a: (props: ComponentProps<"a">) => React.ReactNode;
     "stll-anon"?: (
@@ -483,6 +498,8 @@ export const ChatThreadMessages = ({
   showThinkingIndicator = false,
   showToolCallDetails,
   showToolCalls,
+  queuedMessages,
+  onRemoveQueuedMessage,
   streamdownComponents,
   workspaceId,
 }: ChatThreadMessagesProps) => {
@@ -574,7 +591,76 @@ export const ChatThreadMessages = ({
       {showThinkingIndicator &&
         isGenerating &&
         !hasVisibleContent(messages) && <ThinkingIndicator />}
+      {onRemoveQueuedMessage &&
+        queuedMessages !== undefined &&
+        queuedMessages.length > 0 && (
+          <QueuedUserMessages
+            messages={queuedMessages}
+            onRemove={onRemoveQueuedMessage}
+          />
+        )}
     </>
+  );
+};
+
+type QueuedUserMessagesProps = {
+  messages: readonly QueuedChatMessage[];
+  onRemove: (id: string) => void;
+};
+
+/**
+ * Pending user messages — composed mid-stream and waiting their
+ * turn. Rendered below the live transcript as dimmed bubbles so the
+ * user can see what is queued and cancel any of it before it sends.
+ */
+const QueuedUserMessages = ({
+  messages,
+  onRemove,
+}: QueuedUserMessagesProps) => {
+  const t = useTranslations();
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-muted-foreground ms-auto flex items-center gap-1 text-xs">
+        <ClockIcon aria-hidden="true" className="size-3" />
+        {t("chat.queuedNotice")}
+      </p>
+      {messages.map((queued) => {
+        const text = queued.text.trim()
+          ? normalizeUserMessageTextForDisplay(queued.text)
+          : "";
+        return (
+          <Message from="user" key={queued.id}>
+            <div className="ms-auto flex max-w-full items-start gap-1">
+              <Button
+                aria-label={t("chat.cancelQueuedMessage")}
+                className="mt-0.5 shrink-0"
+                onClick={() => onRemove(queued.id)}
+                size="icon-xs"
+                variant="ghost"
+              >
+                <XIcon className="size-3.5" />
+              </Button>
+              <MessageContent className="opacity-60">
+                {text.length > 0 && (
+                  <UserMessageText
+                    restorationPairs={EMPTY_RESTORATION_PAIRS}
+                    text={text}
+                  />
+                )}
+                {queued.fileCount > 0 && (
+                  <span className="text-muted-foreground flex items-center gap-1 text-xs">
+                    <PaperclipIcon aria-hidden="true" className="size-3" />
+                    {t("chat.queuedAttachmentCount", {
+                      count: queued.fileCount,
+                    })}
+                  </span>
+                )}
+              </MessageContent>
+            </div>
+          </Message>
+        );
+      })}
+    </div>
   );
 };
 

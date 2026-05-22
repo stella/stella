@@ -112,6 +112,8 @@ export const ChatThreadPage = ({
     messages,
     resendLatestMessage,
     sendMessage,
+    queuedMessages,
+    removeQueuedMessage,
     stop,
     isGenerating,
     alwaysApprovedTools,
@@ -268,8 +270,10 @@ export const ChatThreadPage = ({
                   onAskUserSubmit={handleAskUserSubmit}
                   onCreateDocumentResolve={handleCreateDocumentResolve}
                   onOpenCreatedDocument={handleOpenCreatedDocument}
+                  onRemoveQueuedMessage={removeQueuedMessage}
                   onResend={resendLatestMessage}
                   onSendWithoutAnonymization={sendWithoutAnonymization}
+                  queuedMessages={queuedMessages}
                   showThinkingIndicator
                   showToolCallDetails={showToolCallDetails}
                   streamdownComponents={streamdownComponents}

@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import type { ComponentProps } from "react";
@@ -12,6 +13,7 @@ import type { Chat } from "@ai-sdk/react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
 import { isToolUIPart } from "ai";
+import { v7 as uuidv7 } from "uuid";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
 
@@ -67,6 +69,47 @@ export type ResendLatestMessageOptions = {
 const EMPTY_MCP_CONNECTOR_IDENTITIES: readonly McpConnectorApprovalIdentity[] =
   [];
 
+/**
+ * Payload shape accepted by the AI SDK's `sendMessage`. Surfaces
+ * only ever pass `{ text }`, `{ files }`, or `{ text, files }`, but
+ * the queue keeps the SDK's full union so it can hold whatever a
+ * caller hands `sendMessage`.
+ */
+type ChatSendMessageInput = NonNullable<
+  Parameters<Chat<PersistedChatMessage>["sendMessage"]>[0]
+>;
+
+/**
+ * A user message composed while a response was still streaming.
+ * `useChatSession` holds these in a queue and dispatches them —
+ * oldest first — once the turn finishes. `text` is the raw editor
+ * HTML (rendered like any sent user message); `fileCount` lets the
+ * pending bubble show an attachment hint without the view ever
+ * touching the file payloads.
+ */
+export type QueuedChatMessage = {
+  id: string;
+  text: string;
+  fileCount: number;
+};
+
+type QueuedChatEntry = QueuedChatMessage & {
+  /** Fully-built payload handed to the AI SDK on dispatch. */
+  message: ChatSendMessageInput;
+};
+
+/**
+ * Pull a display preview out of an outgoing chat payload. The SDK
+ * union has no discriminator, so the `text`/`files` shapes our
+ * surfaces send are told apart structurally with `in`.
+ */
+const describeQueuedMessage = (
+  message: ChatSendMessageInput,
+): Pick<QueuedChatMessage, "fileCount" | "text"> => ({
+  text: "text" in message ? message.text : "",
+  fileCount: "files" in message ? message.files.length : 0,
+});
+
 export const useChatSession = ({
   chat,
   conversationId,
@@ -98,12 +141,32 @@ export const useChatSession = ({
     addToolOutput,
   } = useChat({ chat });
 
+  // Mirrors `isGenerating` (computed below) so the stable
+  // `sendMessage` callback can branch on the live value without
+  // being rebuilt on every status change.
+  const isGeneratingRef = useRef(false);
+  const [queuedMessages, setQueuedMessages] = useState<QueuedChatEntry[]>([]);
+
   const sendMessage = useCallback(
-    async (message: Parameters<typeof sendChatMessage>[0]) => {
+    async (message: ChatSendMessageInput) => {
+      // A response is still streaming — hold the message in the
+      // queue instead of firing an overlapping request. The drain
+      // effect below dispatches it once the turn finishes.
+      if (isGeneratingRef.current) {
+        setQueuedMessages((prev) => [
+          ...prev,
+          { id: uuidv7(), message, ...describeQueuedMessage(message) },
+        ]);
+        return;
+      }
       await sendChatMessage(message);
     },
     [sendChatMessage],
   );
+
+  const removeQueuedMessage = useCallback((id: string) => {
+    setQueuedMessages((prev) => prev.filter((entry) => entry.id !== id));
+  }, []);
 
   const resendLatestMessage = useCallback(
     async ({ messageId, sendMode }: ResendLatestMessageOptions = {}) => {
@@ -316,6 +379,31 @@ export const useChatSession = ({
   );
   const isGenerating =
     status === "submitted" || status === "streaming" || hasRunningToolCall;
+  isGeneratingRef.current = isGenerating;
+
+  // Drain the queue one message per turn. When the response
+  // finishes (`isGenerating` falls back to false) the oldest queued
+  // message is dispatched; sending it flips the status straight
+  // back, so the next queued message waits for that turn to end
+  // too — queued messages never overlap a stream. We hold the
+  // queue if the turn ended in error: firing every queued message
+  // into a failing provider just burns quota and spams the user
+  // with repeats of the same error. The next manual send (or a
+  // successful `regenerate`) lifts the gate.
+  const wasGeneratingRef = useRef(isGenerating);
+  useEffect(() => {
+    const finishedTurn = wasGeneratingRef.current && !isGenerating;
+    wasGeneratingRef.current = isGenerating;
+    if (!finishedTurn || status === "error") {
+      return;
+    }
+    const next = queuedMessages.at(0);
+    if (!next) {
+      return;
+    }
+    setQueuedMessages((prev) => prev.slice(1));
+    void sendChatMessage(next.message);
+  }, [isGenerating, queuedMessages, sendChatMessage, status]);
 
   useEffect(() => {
     setConversationApprovedTools(readConversationApprovedTools(conversationId));
@@ -375,6 +463,8 @@ export const useChatSession = ({
     messages,
     resendLatestMessage,
     sendMessage,
+    queuedMessages,
+    removeQueuedMessage,
     stop,
     isGenerating,
     alwaysApprovedTools,

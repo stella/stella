@@ -343,6 +343,7 @@
     "attachFile": "Załącz plik",
     "attachedImage": "Załączony obraz",
     "attachment": "Załącznik",
+    "cancelQueuedMessage": "Cancel queued message",
     "caseLawGreeting": "Zapytaj mnie o to orzeczenie — mam dostęp do pełnej treści.",
     "chatAbout": "Omów na czacie",
     "contextPlaceholder": "Czat o {context}, / dla umiejętności, @ aby dodać kontekst",
@@ -426,6 +427,8 @@
       },
       "tryOne": "Zacznij od jednego z tych"
     },
+    "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
+    "queuedNotice": "Queued — sends when the current response finishes",
     "removeSuggestion": "(usuń)",
     "resend": "Wyślij ponownie",
     "resizeThread": "Zmień rozmiar konwersacji",

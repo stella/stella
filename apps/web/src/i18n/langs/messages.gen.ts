@@ -346,6 +346,7 @@ type Messages = {
     "attachFile": "Attach file";
     "attachedImage": "Attached image";
     "attachment": "Attachment";
+    "cancelQueuedMessage": "Cancel queued message";
     "caseLawGreeting": "Ask about this decision — its full text is available here.";
     "chatAbout": "Chat about this";
     "contextPlaceholder": "Chat about {context}, / for prompts, @ to add context";
@@ -429,6 +430,8 @@ type Messages = {
       };
       "tryOne": "Try one of these to start";
     };
+    "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}";
+    "queuedNotice": "Queued — sends when the current response finishes";
     "removeSuggestion": "(remove)";
     "resend": "Resend";
     "resizeThread": "Resize conversation";

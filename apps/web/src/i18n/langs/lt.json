@@ -343,6 +343,7 @@
     "attachFile": "Prisegti failą",
     "attachedImage": "Pridėtas vaizdas",
     "attachment": "Priedas",
+    "cancelQueuedMessage": "Cancel queued message",
     "caseLawGreeting": "Klausk apie šį sprendimą — visas tekstas pasiekiamas čia.",
     "chatAbout": "Įterpti į AI pokalbį",
     "contextPlaceholder": "Pokalbis apie {context}, / įgūdžiams, @ kontekstui pridėti",
@@ -426,6 +427,8 @@
       },
       "tryOne": "Pradėk vienu iš šių"
     },
+    "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
+    "queuedNotice": "Queued — sends when the current response finishes",
     "removeSuggestion": "(pašalinti)",
     "resend": "Siųsti dar kartą",
     "resizeThread": "Keisti pokalbio dydį",
