@@ -1553,7 +1553,11 @@ const FilesystemRow = ({
         <div className={gridCls} style={{ gridTemplateColumns: gridTemplate }}>
           <button
             className="text-start"
-            onClick={() => {
+            onClick={(e) => {
+              if (e.metaKey || e.ctrlKey) {
+                onSelect(node.entityId, true);
+                return;
+              }
               if (currentFolderId) {
                 onNavigateToFolder(node.entityId);
               } else {
