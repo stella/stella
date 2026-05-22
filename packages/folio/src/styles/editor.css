@@ -167,6 +167,21 @@
   display: inline-block;
 }
 
+/* Overlay caret blink — driven by a CSS animation so the cursor never
+ * triggers React re-renders while it blinks. The overlay caret restarts the
+ * cycle (visible first) by remounting, keyed on its position, after typing
+ * or navigation. */
+@keyframes folio-caret-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
 .docx-paragraph-editable {
   cursor: text;
 }

@@ -15,15 +15,8 @@
  * so that ProseMirror's internal measurements stay valid.
  */
 
-import {
-  useRef,
-  useEffect,
-  useCallback,
-  useImperativeHandle,
-  forwardRef,
-  memo,
-} from "react";
-import type { CSSProperties } from "react";
+import { useRef, useEffect, useCallback, useImperativeHandle } from "react";
+import type { CSSProperties, Ref } from "react";
 
 import { undo, redo } from "prosemirror-history";
 import type { Transaction, Command, Plugin } from "prosemirror-state";
@@ -56,6 +49,8 @@ import { isReadOnlyEditKey } from "./readOnlyEditAttempt";
 import "prosemirror-view/style/prosemirror.css";
 
 import "../core/prosemirror/editor.css";
+
+const EMPTY_EXTERNAL_PLUGINS: Plugin[] = [];
 
 // ============================================================================
 // TYPES
@@ -373,11 +368,11 @@ function stateToDocument(
 /**
  * HiddenProseMirror - Off-screen ProseMirror editor for keyboard input
  */
-const HiddenProseMirrorComponent = forwardRef<
-  HiddenProseMirrorRef,
-  HiddenProseMirrorProps
->(function HiddenProseMirror(props, ref) {
+export function HiddenProseMirror(
+  props: HiddenProseMirrorProps & { ref?: Ref<HiddenProseMirrorRef> },
+) {
   const {
+    ref,
     document,
     styles,
     theme: _theme,
@@ -385,7 +380,7 @@ const HiddenProseMirrorComponent = forwardRef<
     readOnly = false,
     onTransaction,
     onSelectionChange,
-    externalPlugins = [],
+    externalPlugins = EMPTY_EXTERNAL_PLUGINS,
     collaboration,
     extensionManager,
     onEditorViewReady,
@@ -815,6 +810,4 @@ const HiddenProseMirrorComponent = forwardRef<
       // DO NOT set aria-hidden - this editor provides semantic structure
     />
   );
-});
-
-export const HiddenProseMirror = memo(HiddenProseMirrorComponent);
+}

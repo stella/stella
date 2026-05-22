@@ -9,13 +9,14 @@
  * renders selection rectangles in container-relative coordinates.
  */
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 
 import type {
   SelectionRect,
   CaretPosition,
 } from "../core/layout-bridge/selectionRects";
 import type { Layout, FlowBlock, Measure } from "../core/layout-engine/types";
+import "../styles/editor.css";
 
 // =============================================================================
 // TYPES
@@ -69,7 +70,8 @@ const caretStyles = (
   caret: CaretPosition,
   color: string,
   width: number,
-  visible: boolean,
+  isFocused: boolean,
+  blinkInterval: number,
 ): React.CSSProperties => ({
   position: "absolute",
   left: caret.x,
@@ -77,8 +79,13 @@ const caretStyles = (
   width,
   height: caret.height,
   backgroundColor: color,
-  opacity: visible ? 1 : 0,
-  transition: "opacity 0.05s ease-out",
+  // Solid when focused; the animation (when blinking is enabled) takes over
+  // the opacity. `blinkInterval === 0` keeps the caret solid with no blink.
+  opacity: isFocused ? 1 : 0,
+  animation:
+    isFocused && blinkInterval > 0
+      ? `folio-caret-blink ${blinkInterval * 2}ms steps(1, end) infinite`
+      : undefined,
   pointerEvents: "none",
 });
 
@@ -100,7 +107,12 @@ const selectionRectStyles = (
 // =============================================================================
 
 /**
- * Caret component with blinking animation.
+ * Caret component.
+ *
+ * The blink is a pure CSS animation (`folio-caret-blink`), so the cursor
+ * never drives React state updates while it blinks. The parent remounts this
+ * component — keyed on caret position — after typing or navigation, which
+ * restarts the animation from its solid phase so the caret shows immediately.
  */
 const Caret: React.FC<{
   position: CaretPosition;
@@ -108,72 +120,12 @@ const Caret: React.FC<{
   width: number;
   blinkInterval: number;
   isFocused: boolean;
-}> = ({ position, color, width, blinkInterval, isFocused }) => {
-  const [visible, setVisible] = useState(isFocused);
-  const blinkTimerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    // Clear any existing timer
-    if (blinkTimerRef.current) {
-      window.clearInterval(blinkTimerRef.current);
-      blinkTimerRef.current = null;
-    }
-
-    // Only blink when focused and interval is set
-    if (isFocused && blinkInterval === 0) {
-      setVisible(true);
-    } else if (isFocused && blinkInterval > 0) {
-      setVisible(true);
-      blinkTimerRef.current = window.setInterval(() => {
-        setVisible((v) => !v);
-      }, blinkInterval);
-    } else {
-      // Hide caret when not focused
-      setVisible(false);
-    }
-
-    return () => {
-      if (blinkTimerRef.current) {
-        window.clearInterval(blinkTimerRef.current);
-      }
-    };
-  }, [isFocused, blinkInterval]);
-
-  // Reset blink cycle when position changes (show immediately after typing/navigation)
-  useEffect(() => {
-    if (!isFocused) {
-      return;
-    }
-
-    setVisible(true);
-
-    // Restart blink timer from this moment
-    if (blinkTimerRef.current) {
-      window.clearInterval(blinkTimerRef.current);
-    }
-    if (blinkInterval === 0) {
-      return undefined;
-    }
-    if (blinkInterval > 0) {
-      blinkTimerRef.current = window.setInterval(() => {
-        setVisible((v) => !v);
-      }, blinkInterval);
-    }
-
-    return () => {
-      if (blinkTimerRef.current) {
-        window.clearInterval(blinkTimerRef.current);
-      }
-    };
-  }, [position.x, position.y, isFocused, blinkInterval]);
-
-  return (
-    <div
-      style={caretStyles(position, color, width, visible)}
-      data-testid="caret"
-    />
-  );
-};
+}> = ({ position, color, width, blinkInterval, isFocused }) => (
+  <div
+    style={caretStyles(position, color, width, isFocused, blinkInterval)}
+    data-testid="caret"
+  />
+);
 
 /**
  * Selection rectangle component.
@@ -222,9 +174,11 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
           />
         ))}
 
-      {/* Render caret for collapsed selection */}
+      {/* Render caret for collapsed selection. The `key` remounts the caret
+          when it moves, restarting the CSS blink from its visible phase. */}
       {hasCollapsedSelection && (
         <Caret
+          key={`${caretPosition.x}-${caretPosition.y}-${caretPosition.height}`}
           position={caretPosition}
           color={caretColor}
           width={caretWidth}

@@ -14,9 +14,8 @@ import React, {
   useState,
   useImperativeHandle,
   useLayoutEffect,
-  forwardRef,
 } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, Ref } from "react";
 
 import { undo, redo } from "prosemirror-history";
 import { EditorState } from "prosemirror-state";
@@ -99,23 +98,20 @@ const labelStyle: CSSProperties = {
 // COMPONENT
 // ============================================================================
 
-export const InlineHeaderFooterEditor = forwardRef<
-  InlineHeaderFooterEditorRef,
-  InlineHeaderFooterEditorProps
->(function InlineHeaderFooterEditor(
-  {
-    headerFooter,
-    position,
-    styles,
-    targetElement,
-    parentElement,
-    onSave,
-    onClose,
-    onSelectionChange,
-    onRemove,
-  },
+export function InlineHeaderFooterEditor({
   ref,
-) {
+  headerFooter,
+  position,
+  styles,
+  targetElement,
+  parentElement,
+  onSave,
+  onClose,
+  onSelectionChange,
+  onRemove,
+}: InlineHeaderFooterEditorProps & {
+  ref?: Ref<InlineHeaderFooterEditorRef>;
+}) {
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const [isDirty, setIsDirty] = useState(false);
@@ -362,7 +358,7 @@ export const InlineHeaderFooterEditor = forwardRef<
       )}
     </div>
   );
-});
+}
 
 // ============================================================================
 // OPTIONS MENU SUB-COMPONENT

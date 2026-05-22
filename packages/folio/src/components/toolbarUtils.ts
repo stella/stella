@@ -238,3 +238,64 @@ export function hasActiveFormatting(formatting?: SelectionFormatting): boolean {
     formatting.subscript
   );
 }
+
+// ============================================================================
+// SELECTION FORMATTING EQUALITY
+// ============================================================================
+
+function areListStatesEqual(
+  a: SelectionFormatting["listState"],
+  b: SelectionFormatting["listState"],
+): boolean {
+  if (a === b) {
+    return true;
+  }
+  if (!a || !b) {
+    return false;
+  }
+  return (
+    a.type === b.type &&
+    a.level === b.level &&
+    a.isInList === b.isInList &&
+    a.numId === b.numId
+  );
+}
+
+/**
+ * Structural equality for two `SelectionFormatting` objects.
+ *
+ * `buildSelectionFormatting` allocates a fresh object on every selection
+ * change, so callers use this to preserve the previous reference when the
+ * formatting is unchanged — letting `setState` bail out and skip a render of
+ * the toolbar and editor on ordinary typing.
+ */
+export function areSelectionFormattingEqual(
+  a: SelectionFormatting | null | undefined,
+  b: SelectionFormatting | null | undefined,
+): boolean {
+  if (a === b) {
+    return true;
+  }
+  if (!a || !b) {
+    return false;
+  }
+
+  return (
+    a.bold === b.bold &&
+    a.italic === b.italic &&
+    a.underline === b.underline &&
+    a.strike === b.strike &&
+    a.superscript === b.superscript &&
+    a.subscript === b.subscript &&
+    a.fontFamily === b.fontFamily &&
+    a.fontSize === b.fontSize &&
+    a.color === b.color &&
+    a.highlight === b.highlight &&
+    a.alignment === b.alignment &&
+    a.lineSpacing === b.lineSpacing &&
+    areListStatesEqual(a.listState, b.listState) &&
+    a.styleId === b.styleId &&
+    a.indentLeft === b.indentLeft &&
+    a.bidi === b.bidi
+  );
+}
