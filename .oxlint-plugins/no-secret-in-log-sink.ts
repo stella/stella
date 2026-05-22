@@ -11,22 +11,25 @@
 // Strategy: identifier-name driven. Forbid a fixed set of secret-suggestive
 // names from appearing as ObjectExpression keys, MemberExpression properties,
 // Identifier values, or TemplateLiteral expressions inside known sink calls.
-// The rule is intentionally
-// crude — it cannot follow type information, but the same crudeness means it
-// catches `const k = apiKey; JSON.stringify({ k })` no better than it catches
-// the direct form. Accept that gap; pair the rule with named brands for the
-// type-level mix-up class of bug.
+// The walk descends through call wrappers too (`String(apiKey)`), skipping
+// only masking helpers whose job is to render the value safe to serialize.
+// The rule is intentionally crude — it cannot follow type information, so an
+// aliased secret (`const k = apiKey; JSON.stringify({ k })`) still slips
+// past. Accept that gap; pair the rule with named brands for the type-level
+// mix-up class of bug.
 //
 // Safe patterns (current codebase, all unchanged):
 //   createOpenRouter({ apiKey: key })          // SDK init, not a sink
 //   body.set("client_secret", clientSecret)    // URL body, not a sink
 //   JSON.stringify(config)                     // variable, no forbidden name
 //   { apiKey: maskApiKey(raw) }                // masked, returned to client
+//   JSON.stringify(maskApiKey(apiKey))         // masking helper, not recursed
 //
 // Flagged:
 //   JSON.stringify({ apiKey })
 //   JSON.stringify({ providerKey: apiKey })
 //   JSON.stringify({ token: session.refreshToken })   // member access
+//   JSON.stringify(String(apiKey))                    // call wrapper
 //   captureError(err, { refreshToken })
 //   captureError(err, creds.clientSecret)              // member access
 //   new Error(`probe failed: ${apiKey}`)
@@ -56,6 +59,11 @@ const SINK_CALLEES = new Set([
   "captureMessage",
   "posthog.capture",
 ]);
+
+// Callees whose entire purpose is to render a secret safe to serialize
+// (mask / redact). When one of these wraps a sink argument the walk does
+// not descend into it. Add new redaction helpers here as they appear.
+const MASKING_CALLEES = new Set(["maskApiKey"]);
 
 const isErrorConstructor = (node) => {
   if (node.type !== "NewExpression") {
@@ -178,6 +186,20 @@ const checkExpression = (context, node, contextLabel) => {
     case "AssignmentExpression":
       checkExpression(context, node.right, contextLabel);
       break;
+    case "CallExpression":
+    case "NewExpression": {
+      // A call wrapping a secret-named argument still leaks it into the
+      // sink (`JSON.stringify(String(apiKey))`). Recurse into arguments,
+      // except for masking helpers whose result is the safe form.
+      const calleeName = getCalleeName(node.callee);
+      if (calleeName !== null && MASKING_CALLEES.has(calleeName)) {
+        break;
+      }
+      for (const arg of node.arguments) {
+        checkExpression(context, arg, contextLabel);
+      }
+      break;
+    }
     case "ArrayExpression":
       for (const element of node.elements) {
         checkExpression(context, element, contextLabel);
