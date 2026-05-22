@@ -58,14 +58,22 @@ export const MODEL_ROLES = [
   "pdf",
 ] as const satisfies readonly ModelRole[];
 
-export type AIProvider =
-  | "google"
-  | "openrouter"
-  | "openai"
-  | "azure_foundry"
-  | "anthropic"
-  | "mistral"
-  | "openai_compatible";
+export const AI_PROVIDERS = [
+  "google",
+  "openrouter",
+  "openai",
+  "azure_foundry",
+  "anthropic",
+  "mistral",
+  "openai_compatible",
+] as const;
+
+export type AIProvider = (typeof AI_PROVIDERS)[number];
+
+const AI_PROVIDER_VALUES = new Set<string>(AI_PROVIDERS);
+
+const isAIProvider = (value: string): value is AIProvider =>
+  AI_PROVIDER_VALUES.has(value);
 
 // -- Default model IDs per provider -----------------------------
 
@@ -575,6 +583,22 @@ export type ResolvedModelInfo = {
   region?: DataRegion | undefined;
 };
 
+type ModelOverride = {
+  modelId: string;
+  provider?: AIProvider | undefined;
+};
+
+const decodeModelOverride = (value: string): ModelOverride => {
+  const [providerRaw, ...modelParts] = value.split("::");
+  const modelId = modelParts.join("::");
+
+  if (providerRaw && modelId && isAIProvider(providerRaw)) {
+    return { provider: providerRaw, modelId };
+  }
+
+  return { modelId: value };
+};
+
 // -- BYOK factory cache -----------------------------------------
 
 /**
@@ -754,12 +778,15 @@ export const getModelInfoById = (
   modelId: string,
   orgConfig?: OrgAIConfig | null,
 ): ResolvedModelInfo => {
+  const override = decodeModelOverride(modelId);
   if (orgConfig) {
-    const providerConfig = getPrimaryOrgProvider(orgConfig);
+    const providerConfig = override.provider
+      ? getOrgProviderConfig(orgConfig, override.provider)
+      : getPrimaryOrgProvider(orgConfig);
     return {
       keySource: "byok",
       provider: providerConfig.provider,
-      modelId,
+      modelId: override.modelId,
       region:
         providerConfig.provider === "azure_foundry"
           ? undefined
@@ -767,10 +794,11 @@ export const getModelInfoById = (
     };
   }
 
+  const provider = override.provider ?? getActiveProvider();
   return {
     keySource: "instance",
-    provider: getActiveProvider(),
-    modelId,
+    provider,
+    modelId: override.modelId,
   };
 };
 
@@ -785,10 +813,19 @@ export const getModelById = (
   modelId: string,
   orgConfig?: OrgAIConfig | null,
 ): LanguageModel => {
+  const override = decodeModelOverride(modelId);
   if (orgConfig) {
+    const providerConfig = override.provider
+      ? getOrgProviderConfig(orgConfig, override.provider)
+      : getPrimaryOrgProvider(orgConfig);
     return withLocalAIDevTools(
-      getCachedFactory(getPrimaryOrgProvider(orgConfig))(modelId),
+      getCachedFactory(providerConfig)(override.modelId),
     );
   }
-  return withLocalAIDevTools(getInstanceFactory()(modelId));
+  if (override.provider) {
+    return withLocalAIDevTools(
+      createModelFactory({ provider: override.provider })(override.modelId),
+    );
+  }
+  return withLocalAIDevTools(getInstanceFactory()(override.modelId));
 };

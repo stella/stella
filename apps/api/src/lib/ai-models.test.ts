@@ -14,6 +14,7 @@ process.env["SMTP_PORT"] ??= "1025";
 
 const {
   getModelForRole,
+  getModelInfoById,
   getModelInfoForRole,
   isAllowedBYOKModel,
   REGIONAL_PROVIDERS,
@@ -87,6 +88,45 @@ describe("isAllowedBYOKModel", () => {
 });
 
 describe("BYOK model overrides", () => {
+  test("reports provider-qualified dev model overrides", () => {
+    expect(
+      getModelInfoById("openrouter::google/gemini-3.5-flash"),
+    ).toMatchObject({
+      keySource: "instance",
+      modelId: "google/gemini-3.5-flash",
+      provider: "openrouter",
+    });
+  });
+
+  test("routes provider-qualified BYOK dev model overrides through the selected provider", () => {
+    const orgConfig: OrgAIConfig = {
+      providers: [
+        {
+          apiKey: "sk-org-google",
+          provider: "google",
+        },
+        {
+          apiKey: "sk-or-v1-org",
+          provider: "openrouter",
+        },
+      ],
+      overrideModels: {
+        chat: { provider: "google", modelId: "gemini-3.5-flash" },
+        fast: { provider: "google", modelId: "gemini-3.1-flash-lite-preview" },
+        reasoning: { provider: "google", modelId: "gemini-3.1-pro-preview" },
+        pdf: { provider: "google", modelId: "gemini-3.5-flash" },
+      },
+    };
+
+    expect(
+      getModelInfoById("openrouter::google/gemini-3.5-flash", orgConfig),
+    ).toMatchObject({
+      keySource: "byok",
+      modelId: "google/gemini-3.5-flash",
+      provider: "openrouter",
+    });
+  });
+
   test("uses a per-role provider-qualified model selection", () => {
     const orgConfig: OrgAIConfig = {
       providers: [

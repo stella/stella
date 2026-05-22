@@ -43,7 +43,7 @@ const OPENROUTER_MARKUP = 1.055;
 // SOURCE: github.com/pydantic/genai-prices PR #379 (merged 2026-05-19)
 const PENDING_MODEL_PRICES: Provider = {
   id: "stella-pending-prices",
-  name: "Google",
+  name: PROVIDER_LABELS.google,
   api_pattern: ".*",
   models: [
     {

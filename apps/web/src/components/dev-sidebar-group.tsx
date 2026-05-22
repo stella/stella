@@ -27,6 +27,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import {
+  encodeModelSelection,
   MODEL_OPTIONS_BY_PROVIDER,
   PROVIDER_KEYS,
   PROVIDER_LABELS,
@@ -50,16 +51,15 @@ const aiSdkDevtoolsUrl = (() => {
  *
  * Sourced from MODEL_OPTIONS_BY_PROVIDER — the same catalog the org
  * BYOK picker uses — so this list never drifts from the real model
- * catalog. The selected id is routed through the active provider by
- * getModelById on the API, so pick a model whose provider matches
- * the running backend.
+ * catalog. Values carry the provider so the API routes the override
+ * through the matching model factory instead of the active provider.
  */
 const CHAT_MODELS: { value: string; label: string }[] = [
   // Empty value falls through to getModelForRole("chat") on the API.
   { value: "", label: "Default (chat role)" },
   ...PROVIDER_KEYS.flatMap((provider) =>
     MODEL_OPTIONS_BY_PROVIDER[provider].map((modelId) => ({
-      value: modelId,
+      value: encodeModelSelection({ provider, modelId }),
       label: `${PROVIDER_LABELS[provider]} · ${modelId}`,
     })),
   ),
