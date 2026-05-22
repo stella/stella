@@ -15,6 +15,19 @@ type ResolveWorkflowTargetEntityIdsArgs = {
 const isExplicitWorkflowTarget = ({ kind }: WorkflowTargetEntityRow) =>
   kind !== "folder";
 
+const dedupeEntityIds = (ids: readonly SafeId<"entity">[]) => {
+  const seen = new Set<SafeId<"entity">>();
+  const uniqueIds: SafeId<"entity">[] = [];
+  for (const id of ids) {
+    if (seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    uniqueIds.push(id);
+  }
+  return uniqueIds;
+};
+
 export const resolveWorkflowTargetEntityIds = ({
   entityRows,
   inputEntityIds,
@@ -33,11 +46,17 @@ export const resolveWorkflowTargetEntityIds = ({
 
   const targetIds =
     inputEntityIds && inputEntityIds.length > 0
-      ? inputEntityIds.filter((id) => entityIdsByKind.explicitTargets.has(id))
+      ? dedupeEntityIds(
+          inputEntityIds.filter((id) =>
+            entityIdsByKind.explicitTargets.has(id),
+          ),
+        )
       : [...entityIdsByKind.documents];
 
   const targetSet = new Set(targetIds);
-  const prioritized = (inputOrder ?? []).filter((id) => targetSet.has(id));
+  const prioritized = dedupeEntityIds(inputOrder ?? []).filter((id) =>
+    targetSet.has(id),
+  );
   const prioritizedSet = new Set(prioritized);
   const remaining = targetIds.filter((id) => !prioritizedSet.has(id));
   return [...prioritized, ...remaining];
