@@ -1,7 +1,7 @@
 import { createEnv } from "@t3-oss/env-core";
 import * as v from "valibot";
 
-import { envBase } from "@/api/env-base";
+import { DEPLOYED_NODE_ENVS, envBase } from "@/api/env-base";
 
 const featureFlagSchema = v.optional(
   v.pipe(v.string(), v.parseBoolean()),
@@ -110,7 +110,13 @@ const envApi = createEnv({
     GOTENBERG_USERNAME: v.string(),
     GOTENBERG_PASSWORD: v.string(),
     CONTENT_ENCRYPTION_KEY: v.optional(
-      v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/iu)),
+      v.pipe(
+        v.string(),
+        v.regex(
+          /^[0-9a-f]{64}$/iu,
+          "CONTENT_ENCRYPTION_KEY must be a 64-character hex string",
+        ),
+      ),
     ),
     EXTENSION_ORIGIN: v.optional(v.string()),
 
@@ -154,6 +160,15 @@ if (
 ) {
   throw new Error(
     "MICROSOFT_AUTH_TENANT_ID is required when Microsoft OAuth is configured.",
+  );
+}
+
+if (
+  DEPLOYED_NODE_ENVS.has(process.env.NODE_ENV ?? "") &&
+  !envApi.CONTENT_ENCRYPTION_KEY
+) {
+  throw new Error(
+    "CONTENT_ENCRYPTION_KEY is required when NODE_ENV is 'production' or 'staging'.",
   );
 }
 
