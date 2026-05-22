@@ -1281,11 +1281,11 @@
         "title": "Sąlygos"
       },
       "connectors": {
-        "description": "Prijunkite Stella prie patikrintų išorinių įrankių serverių",
+        "description": "Prijunkite stella prie išorinių įrankių",
         "title": "MCP"
       },
       "mcp": {
-        "description": "Prijunkite Stella prie patikrintų išorinių įrankių serverių",
+        "description": "Prijunkite stella prie išorinių įrankių",
         "title": "MCP"
       },
       "prompts": {

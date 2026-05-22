@@ -1281,11 +1281,11 @@
         "title": "Klauzulas"
       },
       "connectors": {
-        "description": "Savienojiet Stella ar pārbaudītiem ārējiem rīku serveriem",
+        "description": "Savienojiet stella ar ārējiem rīkiem",
         "title": "MCP"
       },
       "mcp": {
-        "description": "Savienojiet Stella ar pārbaudītiem ārējiem rīku serveriem",
+        "description": "Savienojiet stella ar ārējiem rīkiem",
         "title": "MCP"
       },
       "prompts": {

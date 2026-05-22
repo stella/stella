@@ -1281,11 +1281,11 @@
         "title": "Klauslid"
       },
       "connectors": {
-        "description": "Ühendage Stella kontrollitud väliste tööriistaserveritega",
+        "description": "Ühendage stella väliste tööriistadega",
         "title": "MCP"
       },
       "mcp": {
-        "description": "Ühendage Stella kontrollitud väliste tööriistaserveritega",
+        "description": "Ühendage stella väliste tööriistadega",
         "title": "MCP"
       },
       "prompts": {

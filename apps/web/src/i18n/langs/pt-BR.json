@@ -1285,7 +1285,7 @@
         "title": "Conectores"
       },
       "mcp": {
-        "description": "Conecte a Stella a servidores externos de ferramentas verificados",
+        "description": "Conecte a stella a ferramentas externas",
         "title": "MCP"
       },
       "prompts": {
