@@ -854,6 +854,13 @@ export const entities = p.pgTable(
       .index("entities_ws_updated_at_id_idx")
       .on(table.workspaceId, table.updatedAt, table.id),
     p
+      .index("entities_ws_updated_at_coalesce_id_idx")
+      .on(
+        table.workspaceId,
+        sql`COALESCE(${table.updatedAt}, '0001-01-01 00:00:00'::timestamp)`,
+        table.id,
+      ),
+    p
       .index("entities_ws_kind_created_at_id_idx")
       .on(table.workspaceId, table.kind, table.createdAt, table.id),
     p

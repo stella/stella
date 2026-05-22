@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db";
@@ -7,6 +7,7 @@ import { entities } from "@/api/db/schema";
 import {
   decodeEntityListCursor,
   encodeEntityListCursor,
+  entityListTimestampCursorExpr,
   entityListCursorCondition,
 } from "@/api/handlers/entities/list-cursor";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -41,7 +42,7 @@ const listFoldersHandler = async function* ({
     safeDb((tx) =>
       tx
         .select({
-          createdAt: entities.createdAt,
+          createdAt: entityListTimestampCursorExpr(sql`${entities.createdAt}`),
           id: entities.id,
           name: entities.name,
           parentId: entities.parentId,

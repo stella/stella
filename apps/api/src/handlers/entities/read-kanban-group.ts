@@ -53,7 +53,7 @@ const readKanbanGroupBodySchema = t.Object({
       maximum: LIMITS.entitiesWindowSizeMax,
     }),
   ),
-  cursor: t.Optional(t.String({ maxLength: 512 })),
+  cursor: t.Optional(t.String()),
   fieldMode: t.Optional(t.UnionEnum(["full", "visible"])),
   fieldIds: t.Optional(
     t.Array(tSafeId("property"), {

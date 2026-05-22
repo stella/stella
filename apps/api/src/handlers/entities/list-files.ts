@@ -7,6 +7,7 @@ import { entities, fields } from "@/api/db/schema";
 import {
   decodeEntityListCursor,
   encodeEntityListCursor,
+  entityListTimestampCursorExpr,
   entityListCursorCondition,
 } from "@/api/handlers/entities/list-cursor";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -41,7 +42,7 @@ const listFilesHandler = async function* ({
     safeDb((tx) =>
       tx
         .select({
-          createdAt: entities.createdAt,
+          createdAt: entityListTimestampCursorExpr(sql`${entities.createdAt}`),
           entityId: entities.id,
           name: entities.name,
           parentId: entities.parentId,
@@ -76,7 +77,7 @@ const listFilesHandler = async function* ({
     mimeType: string;
   };
 
-  const files: (FileRow & { createdAt: Date })[] = [];
+  const files: (FileRow & { createdAt: string })[] = [];
   for (const row of rows) {
     const content = row.fieldContent;
     if (content.type !== "file") {

@@ -1,7 +1,7 @@
 import { matchError, panic, Result } from "better-result";
 import { Queue, Worker } from "bullmq";
 import { sleep } from "bun";
-import { and, asc, count, eq, gt, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
 import Redis from "ioredis";
 
 import { isMockAI } from "@/api/consts";
@@ -284,31 +284,6 @@ const readFullWorkflowSnapshotCursor = async ({
   return row.value;
 };
 
-const countFullWorkflowTargets = async ({
-  createdAtCutoff,
-  scopedDb,
-  workspaceId,
-}: {
-  createdAtCutoff: string;
-  scopedDb: ScopedDb;
-  workspaceId: SafeId<"workspace">;
-}): Promise<number> => {
-  const rows = await scopedDb((tx) =>
-    tx
-      .select({ total: count() })
-      .from(entities)
-      .where(
-        and(
-          eq(entities.workspaceId, workspaceId),
-          eq(entities.kind, "document"),
-          sql`${entities.createdAt} <= ${createdAtCutoff}::timestamp`,
-        ),
-      ),
-  );
-
-  return rows.at(0)?.total ?? 0;
-};
-
 const fetchFullWorkflowTargetBatch = async ({
   createdAtCutoff,
   lastCursor,
@@ -349,19 +324,16 @@ const fetchFullWorkflowTargetBatch = async ({
       .limit(LIMITS.workflowEntityBatchSize),
   );
 
-const enqueueFullWorkflowTargets = async ({
+const collectFullWorkflowTargetIds = async ({
   createdAtCutoff,
-  executionPlan,
-  organizationId,
-  q,
-  requestId,
   scopedDb,
-  userId,
   workspaceId,
-}: Omit<EnqueueEntityJobsArgs, "entityIds"> & {
+}: {
   createdAtCutoff: string;
   scopedDb: ScopedDb;
-}): Promise<void> => {
+  workspaceId: SafeId<"workspace">;
+}): Promise<SafeId<"entity">[]> => {
+  const entityIds: SafeId<"entity">[] = [];
   let lastCursor: FullWorkflowTargetCursor | null = null;
 
   while (true) {
@@ -373,22 +345,16 @@ const enqueueFullWorkflowTargets = async ({
     });
 
     if (rows.length === 0) {
-      return;
+      return entityIds;
     }
 
-    await enqueueEntityJobs({
-      entityIds: rows.map((row) => row.id),
-      executionPlan,
-      organizationId,
-      q,
-      requestId,
-      userId,
-      workspaceId,
-    });
+    for (const row of rows) {
+      entityIds.push(row.id);
+    }
 
     const lastRow = rows.at(-1);
     if (!lastRow) {
-      return;
+      return entityIds;
     }
     lastCursor = lastRow;
   }
@@ -470,15 +436,19 @@ export const startWorkflow = async ({
           inputOrder,
         })
       : [];
-    const targetCount = isExplicitRun
-      ? explicitEntityIds.length
-      : await countFullWorkflowTargets({
+    const fullWorkflowEntityIds = isExplicitRun
+      ? []
+      : await collectFullWorkflowTargetIds({
           createdAtCutoff:
             fullWorkflowCreatedAtCutoff ??
-            panic("Full workflow target count requires a snapshot cursor"),
+            panic("Full workflow target collection requires a snapshot cursor"),
           scopedDb,
           workspaceId,
         });
+    const targetEntityIds = isExplicitRun
+      ? explicitEntityIds
+      : fullWorkflowEntityIds;
+    const targetCount = targetEntityIds.length;
 
     if (targetCount === 0) {
       await redis.del(workflowKey(workspaceId, "running"));
@@ -509,31 +479,16 @@ export const startWorkflow = async ({
     broadcastWorkflowStatus(workspaceId, true);
 
     const q = getQueue();
-    if (isExplicitRun) {
-      for (const chunk of chunkItems(
-        explicitEntityIds,
-        LIMITS.workflowEntityBatchSize,
-      )) {
-        await enqueueEntityJobs({
-          entityIds: chunk,
-          executionPlan,
-          organizationId,
-          q,
-          requestId,
-          userId,
-          workspaceId,
-        });
-      }
-    } else {
-      await enqueueFullWorkflowTargets({
-        createdAtCutoff:
-          fullWorkflowCreatedAtCutoff ??
-          panic("Full workflow target enqueue requires a snapshot cursor"),
+    for (const chunk of chunkItems(
+      targetEntityIds,
+      LIMITS.workflowEntityBatchSize,
+    )) {
+      await enqueueEntityJobs({
+        entityIds: chunk,
         executionPlan,
         organizationId,
         q,
         requestId,
-        scopedDb,
         userId,
         workspaceId,
       });

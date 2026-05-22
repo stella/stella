@@ -21,7 +21,7 @@ const readEntitiesBodySchema = t.Object({
   filters: t.Optional(t.Array(tViewFilterConditionSchema)),
   sorts: t.Optional(t.Array(tViewSortSchema)),
   page: t.Optional(t.Integer({ minimum: 1 })),
-  cursor: t.Optional(t.String({ maxLength: 512 })),
+  cursor: t.Optional(t.String()),
   search: t.Optional(t.String({ maxLength: LIMITS.searchQueryMaxLength })),
   pageSize: t.Optional(
     t.Integer({

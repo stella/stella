@@ -26,7 +26,7 @@ const readEntitiesWindowBodySchema = t.Object({
       maximum: LIMITS.entitiesWindowSizeMax,
     }),
   ),
-  cursor: t.Optional(t.String({ maxLength: 512 })),
+  cursor: t.Optional(t.String()),
   excludedKinds: t.Optional(
     t.Array(t.UnionEnum(["document", "folder", "task", "message", "link"]), {
       maxItems: 5,
