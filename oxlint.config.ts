@@ -226,6 +226,7 @@ export default defineConfig({
     "./.oxlint-plugins/mcp-security.ts",
     "./.oxlint-plugins/auth-lifecycle.ts",
     "./.oxlint-plugins/stella-toast.ts",
+    "./.oxlint-plugins/no-secret-in-log-sink.ts",
   ],
 
   overrides: [
@@ -562,6 +563,7 @@ export default defineConfig({
         "auth-lifecycle/no-direct-auth-artifact-delete": "error",
         "mcp-security/no-direct-oauth-client-join": "error",
         "no-raw-error-logging/no-raw-error-logging": "error",
+        "no-secret-in-log-sink/no-secret-in-log-sink": "error",
       },
     },
     {
