@@ -136,6 +136,20 @@ describe("buildArchivePaths", () => {
     expect(paths.get("x")).toBe("Mat_ter/a_b");
   });
 
+  test("suffixes same-named sibling folders deterministically", () => {
+    const paths = buildArchivePaths({
+      rootId: "root",
+      rootName: "Matter",
+      nodes: [
+        { id: "b", parentId: "root", kind: "folder", name: "Contracts" },
+        { id: "a", parentId: "root", kind: "folder", name: "Contracts" },
+      ],
+    });
+
+    expect(paths.get("a")).toBe("Matter/Contracts");
+    expect(paths.get("b")).toBe("Matter/Contracts (2)");
+  });
+
   test("falls back to the root on a parentId cycle without hanging", () => {
     const nodes: ArchiveNode[] = [
       { id: "a", parentId: "b", kind: "folder", name: "A" },

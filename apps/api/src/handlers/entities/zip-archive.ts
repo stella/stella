@@ -17,13 +17,34 @@ type BuildArchivePathsArgs = {
   nodes: readonly ArchiveNode[];
 };
 
+const compareArchiveNode = (a: ArchiveNode, b: ArchiveNode): number =>
+  a.parentId.localeCompare(b.parentId) ||
+  sanitizeFilename(a.name).localeCompare(sanitizeFilename(b.name)) ||
+  a.id.localeCompare(b.id);
+
+const uniqueSegment = (seen: Set<string>, segment: string): string => {
+  if (!seen.has(segment)) {
+    seen.add(segment);
+    return segment;
+  }
+
+  let n = 2;
+  while (seen.has(`${segment} (${n})`)) {
+    n++;
+  }
+  const unique = `${segment} (${n})`;
+  seen.add(unique);
+  return unique;
+};
+
 /**
  * Map every descendant entity id — and the root id — to its archive
  * path. Paths are rooted at the folder's own (sanitized) name so the
  * `.zip` unpacks into a folder rather than loose files. Every segment is
- * sanitized; the `parentId` chain is walked once and memoised. A node
- * whose parent is missing, or a `parentId` cycle, falls back to the root
- * so a malformed tree cannot recurse without end.
+ * sanitized and same-named siblings receive a deterministic suffix. The
+ * `parentId` chain is walked once and memoised. A node whose parent is
+ * missing, or a `parentId` cycle, falls back to the root so a malformed
+ * tree cannot recurse without end.
  */
 export const buildArchivePaths = ({
   rootId,
@@ -31,13 +52,15 @@ export const buildArchivePaths = ({
   nodes,
 }: BuildArchivePathsArgs): Map<string, string> => {
   const sanitizedRoot = sanitizeFilename(rootName);
+  const orderedNodes = [...nodes].sort(compareArchiveNode);
 
   const nodeById = new Map<string, ArchiveNode>();
-  for (const node of nodes) {
+  for (const node of orderedNodes) {
     nodeById.set(node.id, node);
   }
 
   const paths = new Map<string, string>();
+  const seenSegmentsByParentId = new Map<string, Set<string>>();
   paths.set(rootId, sanitizedRoot);
   const resolving = new Set<string>();
 
@@ -52,13 +75,16 @@ export const buildArchivePaths = ({
       return sanitizedRoot;
     }
     resolving.add(id);
-    const path = `${resolve(node.parentId)}/${sanitizeFilename(node.name)}`;
+    const seenSegments = seenSegmentsByParentId.get(node.parentId) ?? new Set();
+    seenSegmentsByParentId.set(node.parentId, seenSegments);
+    const segment = uniqueSegment(seenSegments, sanitizeFilename(node.name));
+    const path = `${resolve(node.parentId)}/${segment}`;
     resolving.delete(id);
     paths.set(id, path);
     return path;
   };
 
-  for (const node of nodes) {
+  for (const node of orderedNodes) {
     resolve(node.id);
   }
   return paths;

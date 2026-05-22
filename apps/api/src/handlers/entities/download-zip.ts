@@ -16,10 +16,12 @@ import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { contentDisposition } from "@/api/lib/content-disposition";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 const downloadZipParamsSchema = workspaceParams({
   entityId: tSafeId("entity"),
@@ -161,7 +163,8 @@ const downloadZipHandler = async function* ({
     rootName: folder.name,
     nodes: descendants,
   });
-  const rootPath = paths.get(rootId) ?? folder.name;
+  const rootPath = paths.get(rootId) ?? sanitizeFilename(folder.name);
+  const zipFileName = sanitizeFilename(`${rootPath.slice(0, 251)}.zip`);
 
   // Every folder becomes a directory entry, so empty folders survive.
   const folderPaths = [rootPath];
@@ -186,7 +189,7 @@ const downloadZipHandler = async function* ({
     const directory = paths.get(node.parentId) ?? rootPath;
     return [
       {
-        rawPath: `${directory}/${content.fileName}`,
+        rawPath: `${directory}/${sanitizeFilename(content.fileName)}`,
         fileId: content.fileId,
         mimeType: content.mimeType,
       },
@@ -270,7 +273,7 @@ const downloadZipHandler = async function* ({
     new Response(makeZip(archiveEntries()), {
       headers: {
         "Content-Type": "application/zip",
-        "Content-Disposition": 'attachment; filename="folder.zip"',
+        "Content-Disposition": contentDisposition(zipFileName),
       },
     }),
   );
