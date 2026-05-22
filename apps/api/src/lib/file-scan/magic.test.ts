@@ -40,6 +40,11 @@ describe("declaredMimeMatchesMagic", () => {
     expect(declaredMimeMatchesMagic("image/jpeg", GIF_HEADER)).toBe(false);
   });
 
+  test("known type lookup is case-insensitive", () => {
+    expect(declaredMimeMatchesMagic("Image/PNG", PNG_HEADER)).toBe(true);
+    expect(declaredMimeMatchesMagic("Image/PNG", PDF_HEADER)).toBe(false);
+  });
+
   test("WEBP requires the form type at offset 8, not just the RIFF tag", () => {
     // RIFF container that is not WEBP (e.g. a WAV) must not pass.
     const riffWav = bytes(
