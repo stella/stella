@@ -221,6 +221,9 @@ const checkExpression = (context, node, contextLabel) => {
     case "AssignmentExpression":
       checkExpression(context, node.right, contextLabel);
       break;
+    case "SpreadElement":
+      checkExpression(context, node.argument, contextLabel);
+      break;
     case "CallExpression":
     case "NewExpression": {
       // A call wrapping a secret-named argument still leaks it into the

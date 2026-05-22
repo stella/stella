@@ -20,6 +20,7 @@ describe("secret guardrails", () => {
     expect(pluginSource).toContain(
       "checkExpression(context, prop.key, contextLabel)",
     );
+    expect(pluginSource).toContain('case "SpreadElement":');
   });
 
   test("secret brands are minted only at the MCP decrypt boundary", () => {
