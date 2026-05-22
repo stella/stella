@@ -1909,6 +1909,7 @@
       "downloadAsZip": "Laadi alla .zip-fail",
       "downloadOriginal": "Algfail",
       "downloadPdf": "PDF",
+      "emptyFolderDownload": "Selles kaustas pole allalaaditavaid faile",
       "maxEntitiesReached": "Kirjete piirarv on täis",
       "rateLimited": "Kiiruspiirang; jätkatakse {seconds, number} s pärast",
       "renamedToAvoidConflicts": "{count, plural, one {# fail nimetati konfliktide vältimiseks ümber} other {# faili nimetati konfliktide vältimiseks ümber}}",

@@ -48,6 +48,7 @@ import Tooltip from "@/components/tooltip";
 import { PDF_MIME_TYPE } from "@/consts";
 import { env } from "@/env";
 import { api } from "@/lib/api";
+import { apiUrl } from "@/lib/api-url";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { DOCX_MIME } from "@/lib/consts";
 import { openDocxInDesktop } from "@/lib/desktop-bridge";
@@ -179,6 +180,7 @@ export const RowActions = ({
   const msg: Msg = {
     downloading: t("workspaces.files.downloadAsZip"),
     failed: t("errors.actionFailed"),
+    empty: t("workspaces.files.emptyFolderDownload"),
   };
 
   const handleZipDownload = async () => {
@@ -719,7 +721,7 @@ const CreateSubfolderMenuItem = ({
 // -- Helpers (avoid duplicating logic between single/bulk) --
 
 type FileRef = { fieldId: string; fileName: string; mimeType: string | null };
-type Msg = { downloading: string; failed: string };
+type Msg = { downloading: string; failed: string; empty: string };
 
 const downloadEntityAsZip = async (
   workspaceId: string,
@@ -732,25 +734,37 @@ const downloadEntityAsZip = async (
     title: msg.downloading,
   });
 
-  const blobResult = await Result.tryPromise(async () => {
-    const response = await fetch(
-      `/api/entities/${workspaceId}/zip/${entity.entityId}`,
-      { credentials: "include" },
-    );
-    if (!response.ok) {
-      throw new ClientOperationError({
-        action: "downloadEntityAsZip",
-        message: "Failed to download ZIP",
-      });
-    }
-    return await response.blob();
-  });
+  const responseResult = await Result.tryPromise(
+    async () =>
+      await fetch(apiUrl(`/entities/${workspaceId}/zip/${entity.entityId}`), {
+        credentials: "include",
+      }),
+  );
+
+  if (Result.isError(responseResult)) {
+    stellaToast.update(toastId, { title: msg.failed, type: "error" });
+    return;
+  }
+
+  const response = responseResult.value;
+
+  // The endpoint 404s when a folder has nothing to archive: it is empty,
+  // holds only subfolders, or was removed since the list loaded. That is
+  // an expected outcome, not a failure — surface it as a plain notice.
+  if (response.status === 404) {
+    stellaToast.update(toastId, { title: msg.empty, type: "info" });
+    return;
+  }
+
+  if (!response.ok) {
+    stellaToast.update(toastId, { title: msg.failed, type: "error" });
+    return;
+  }
+
+  const blobResult = await Result.tryPromise(async () => await response.blob());
 
   if (Result.isError(blobResult)) {
-    stellaToast.update(toastId, {
-      title: msg.failed,
-      type: "error",
-    });
+    stellaToast.update(toastId, { title: msg.failed, type: "error" });
     return;
   }
 
