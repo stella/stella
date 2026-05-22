@@ -1,9 +1,16 @@
 import { Result } from "better-result";
+import { makeZip } from "client-zip";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import JSZip from "jszip";
 
 import type { SafeDb } from "@/api/db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
+import {
+  buildArchivePaths,
+  buildErrorManifest,
+  mapOrderedConcurrent,
+  uniquePath,
+} from "@/api/handlers/entities/zip-archive";
+import type { ArchiveNode } from "@/api/handlers/entities/zip-archive";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -13,11 +20,17 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 const downloadZipParamsSchema = workspaceParams({
   entityId: tSafeId("entity"),
 });
+
+// At most this many files are fetched from S3 at once. Bounds the
+// archive's memory footprint (≈ this many files) and the load on storage.
+const FETCH_CONCURRENCY = 6;
+const PRESIGN_TTL_SECONDS = 900;
+const FETCH_TIMEOUT_MS = 30_000;
+const ERROR_MANIFEST_NAME = "_DOWNLOAD ERRORS.txt";
 
 type DownloadZipHandlerProps = {
   safeDb: SafeDb;
@@ -26,24 +39,20 @@ type DownloadZipHandlerProps = {
   workspaceId: SafeId<"workspace">;
 };
 
-// One descendant of the folder being archived. `kind` distinguishes
-// folders (→ directory entries) from documents (→ files).
-type DescendantRow = {
-  id: SafeId<"entity">;
-  parentId: SafeId<"entity">;
-  kind: string;
-  name: string;
-};
-
-type FileContent = {
-  fileName: string;
+// A document descendant with an uploaded file, placed at `path`.
+type ArchiveFile = {
+  path: string;
   fileId: string;
   mimeType: string;
 };
 
+type FetchedFile =
+  | { type: "file"; path: string; data: Uint8Array }
+  | { type: "error"; path: string; fileId: string };
+
 /**
  * Collect every descendant of `parentId` with the fields needed to
- * rebuild the folder tree, using a recursive CTE (single query).
+ * rebuild the folder tree, in one recursive CTE.
  */
 const collectDescendants = async (
   safeDb: SafeDb,
@@ -51,7 +60,7 @@ const collectDescendants = async (
   workspaceId: SafeId<"workspace">,
 ) =>
   await safeDb((tx) =>
-    tx.execute<DescendantRow>(sql`
+    tx.execute<ArchiveNode>(sql`
     WITH RECURSIVE descendants AS (
       SELECT ${entities.id}, ${entities.parentId}, ${entities.kind}, ${entities.name}
       FROM ${entities}
@@ -67,29 +76,6 @@ const collectDescendants = async (
   `),
   );
 
-// Append " (n)" before the extension until `path` is unique within the
-// archive. Same-named files can legitimately share a directory because
-// entity names are not unique, so collisions must not silently drop a file.
-const uniquePath = (seen: Set<string>, path: string): string => {
-  if (!seen.has(path)) {
-    seen.add(path);
-    return path;
-  }
-  const dotIndex = path.lastIndexOf(".");
-  const slashIndex = path.lastIndexOf("/");
-  const hasExtension = dotIndex > slashIndex + 1;
-  const base = hasExtension ? path.slice(0, dotIndex) : path;
-  const extension = hasExtension ? path.slice(dotIndex) : "";
-
-  let n = 2;
-  while (seen.has(`${base} (${n})${extension}`)) {
-    n++;
-  }
-  const candidate = `${base} (${n})${extension}`;
-  seen.add(candidate);
-  return candidate;
-};
-
 const downloadZipHandler = async function* ({
   safeDb,
   entityId,
@@ -99,11 +85,7 @@ const downloadZipHandler = async function* ({
   const folderRows = yield* Result.await(
     safeDb((tx) =>
       tx
-        .select({
-          id: entities.id,
-          kind: entities.kind,
-          name: entities.name,
-        })
+        .select({ id: entities.id, kind: entities.kind, name: entities.name })
         .from(entities)
         .where(
           and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
@@ -125,17 +107,20 @@ const downloadZipHandler = async function* ({
     );
   }
 
-  const descendantRows = yield* Result.await(
+  const descendants = yield* Result.await(
     collectDescendants(safeDb, entityId, workspaceId),
   );
 
-  // Look up file content for the document descendants in one query.
-  const fileContentByEntityId = new Map<string, FileContent>();
-  if (descendantRows.length > 0) {
-    const descendantIds = descendantRows.map(({ id }) =>
-      brandPersistedEntityId(String(id)),
+  // Uploaded-file content for the document descendants, in one query.
+  const fileContentByEntityId = new Map<
+    string,
+    { fileId: string; fileName: string; mimeType: string }
+  >();
+  if (descendants.length > 0) {
+    const descendantIds = descendants.map((node) =>
+      brandPersistedEntityId(node.id),
     );
-    const rows = yield* Result.await(
+    const fieldRows = yield* Result.await(
       safeDb((tx) =>
         tx
           .select({
@@ -158,101 +143,131 @@ const downloadZipHandler = async function* ({
           .where(inArray(entityVersions.entityId, descendantIds)),
       ),
     );
-    for (const row of rows) {
+    for (const row of fieldRows) {
       if (row.content.type === "file") {
         fileContentByEntityId.set(String(row.entityId), {
-          fileName: row.content.fileName,
           fileId: row.content.id,
+          fileName: row.content.fileName,
           mimeType: row.content.mimeType,
         });
       }
     }
   }
 
-  // Rebuild the tree → archive paths, rooted at the folder's own name so
-  // the downloaded `.zip` unpacks into a folder rather than loose files.
-  const rootName = sanitizeFilename(folder.name);
-  const nodeById = new Map<string, DescendantRow>();
-  for (const row of descendantRows) {
-    nodeById.set(String(row.id), row);
-  }
+  // Rebuild the tree → archive paths, rooted at the folder's own name.
+  const rootId = String(entityId);
+  const paths = buildArchivePaths({
+    rootId,
+    rootName: folder.name,
+    nodes: descendants,
+  });
+  const rootPath = paths.get(rootId) ?? folder.name;
 
-  const pathCache = new Map<string, string>();
-  // Archive path of an entity used as a directory. A parent id outside the
-  // descendant set is the root folder itself.
-  const dirPathOf = (id: string): string => {
-    const cached = pathCache.get(id);
-    if (cached !== undefined) {
-      return cached;
-    }
-    const node = nodeById.get(id);
-    const path =
-      node === undefined
-        ? rootName
-        : `${dirPathOf(String(node.parentId))}/${sanitizeFilename(node.name)}`;
-    pathCache.set(id, path);
-    return path;
-  };
-
-  const zip = new JSZip();
-  // Register the root, then every folder, so empty folders survive.
-  zip.folder(rootName);
-  for (const node of descendantRows) {
-    if (node.kind === "folder") {
-      zip.folder(dirPathOf(String(node.id)));
-    }
-  }
-
-  // Stream each file from S3 into its directory.
-  const errors: string[] = [];
-  const seenPaths = new Set<string>();
-  for (const node of descendantRows) {
-    const file = fileContentByEntityId.get(String(node.id));
-    if (file === undefined) {
+  // Every folder becomes a directory entry, so empty folders survive.
+  const folderPaths = [rootPath];
+  for (const node of descendants) {
+    if (node.kind !== "folder") {
       continue;
     }
+    const path = paths.get(node.id);
+    if (path !== undefined) {
+      folderPaths.push(path);
+    }
+  }
+  folderPaths.sort();
 
+  // Order files, then de-duplicate, so the archive is deterministic
+  // regardless of the recursive CTE's row order.
+  const rawFiles = descendants.flatMap((node) => {
+    const content = fileContentByEntityId.get(node.id);
+    if (content === undefined) {
+      return [];
+    }
+    const directory = paths.get(node.parentId) ?? rootPath;
+    return [
+      {
+        rawPath: `${directory}/${content.fileName}`,
+        fileId: content.fileId,
+        mimeType: content.mimeType,
+      },
+    ];
+  });
+  rawFiles.sort(
+    (a, b) =>
+      a.rawPath.localeCompare(b.rawPath) || a.fileId.localeCompare(b.fileId),
+  );
+
+  const seenPaths = new Set<string>();
+  const files: ArchiveFile[] = rawFiles.map((file) => ({
+    path: uniquePath(seenPaths, file.rawPath),
+    fileId: file.fileId,
+    mimeType: file.mimeType,
+  }));
+
+  // --- Everything below runs lazily, as the response stream is consumed.
+
+  const fetchFile = async (file: ArchiveFile): Promise<FetchedFile> => {
     const key = createFileKey({
       organizationId,
       workspaceId,
       fileId: file.fileId,
       mimeType: file.mimeType,
     });
-
-    const presignedUrl = getS3().presign(key, { expiresIn: 900 });
-    const response = await fetch(presignedUrl, {
-      signal: AbortSignal.timeout(30_000),
+    const presignedUrl = getS3().presign(key, {
+      expiresIn: PRESIGN_TTL_SECONDS,
     });
+    const fetched = await Result.tryPromise(async () => {
+      const response = await fetch(presignedUrl, {
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (!response.ok) {
+        throw new Error(`storage responded ${response.status}`);
+      }
+      return new Uint8Array(await response.arrayBuffer());
+    });
+    if (Result.isError(fetched)) {
+      return { type: "error", path: file.path, fileId: file.fileId };
+    }
+    return { type: "file", path: file.path, data: fetched.value };
+  };
 
-    if (!response.ok) {
-      errors.push(file.fileId);
-      continue;
+  const archiveEntries = async function* () {
+    for (const folderPath of folderPaths) {
+      yield { name: `${folderPath}/` };
     }
 
-    const blob = await response.arrayBuffer();
-    const directory = dirPathOf(String(node.parentId));
-    const path = uniquePath(
-      seenPaths,
-      `${directory}/${sanitizeFilename(file.fileName)}`,
-    );
-    zip.file(path, blob);
-  }
+    const failedPaths: string[] = [];
+    const failedFileIds: string[] = [];
+    for await (const result of mapOrderedConcurrent(
+      files,
+      FETCH_CONCURRENCY,
+      fetchFile,
+    )) {
+      if (result.type === "error") {
+        failedPaths.push(result.path);
+        failedFileIds.push(result.fileId);
+        continue;
+      }
+      yield { name: result.path, input: result.data };
+    }
 
-  if (errors.length > 0) {
-    captureError(
-      new Error(`${errors.length} file(s) failed to fetch from S3`),
-      { fileIds: errors.join(","), entityId },
-    );
-  }
-
-  const zipBuffer = await zip.generateAsync({
-    type: "arraybuffer",
-    compression: "DEFLATE",
-    compressionOptions: { level: 6 },
-  });
+    // Failures surface in two places: a notice inside the archive so the
+    // user sees what is missing, and telemetry (file ids only — never
+    // names) so the failure is observable server-side.
+    if (failedPaths.length > 0) {
+      captureError(
+        new Error(`${failedPaths.length} file(s) failed to fetch from S3`),
+        { entityId, fileIds: failedFileIds.join(",") },
+      );
+      yield {
+        name: `${rootPath}/${ERROR_MANIFEST_NAME}`,
+        input: buildErrorManifest(failedPaths),
+      };
+    }
+  };
 
   return Result.ok(
-    new Response(zipBuffer, {
+    new Response(makeZip(archiveEntries()), {
       headers: {
         "Content-Type": "application/zip",
         "Content-Disposition": 'attachment; filename="folder.zip"',
