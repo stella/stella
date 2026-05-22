@@ -83,8 +83,12 @@ const deliverSessionEventLocal = (
     try {
       conn.controller.enqueue(encoded);
     } catch {
-      // Connection closed; will be cleaned up on cancel.
+      conns.delete(conn);
     }
+  }
+
+  if (conns.size === 0 && connections.get(sessionId) === conns) {
+    connections.delete(sessionId);
   }
 };
 

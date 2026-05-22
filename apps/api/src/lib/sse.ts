@@ -17,6 +17,8 @@ const KEEP_ALIVE_INTERVAL_MS = 20_000;
 /** Redis pub/sub channel for cross-instance SSE broadcasts. */
 const REDIS_CHANNEL = "sse:broadcast";
 
+const INSTANCE_ID = `api:${process.pid}:${Bun.randomUUIDv7()}`;
+
 export type SSEEvent = {
   type: string;
   data: unknown;
@@ -139,6 +141,7 @@ type RedisPayload = {
   scope: "workspace" | "organization" | "session";
   id: string;
   event: SSEEvent;
+  originInstanceId?: string | undefined;
 };
 
 const parseRedisPayload = (raw: string): RedisPayload | null => {
@@ -175,6 +178,11 @@ const parseRedisPayload = (raw: string): RedisPayload | null => {
     scope,
     id: parsed.id,
     event: { type: event.type, data: "data" in event ? event.data : undefined },
+    originInstanceId:
+      "originInstanceId" in parsed &&
+      typeof parsed.originInstanceId === "string"
+        ? parsed.originInstanceId
+        : undefined,
   };
 };
 
@@ -206,7 +214,7 @@ const initRedis = async () => {
             brandPersistedOrganizationId(parsed.id),
             parsed.event,
           );
-        } else {
+        } else if (parsed.originInstanceId !== INSTANCE_ID) {
           sessionDeliveryHandler?.(
             brandPersistedDesktopEditSessionId(parsed.id),
             parsed.event,
@@ -308,14 +316,20 @@ export const broadcastSessionEvent = (
   sessionId: SafeId<"desktopEditSession">,
   event: SSEEvent,
 ): void => {
-  const payload: RedisPayload = { scope: "session", id: sessionId, event };
+  sessionDeliveryHandler?.(sessionId, event);
+
+  const payload: RedisPayload = {
+    scope: "session",
+    id: sessionId,
+    event,
+    originInstanceId: INSTANCE_ID,
+  };
   publisher
     .publish(REDIS_CHANNEL, JSON.stringify(payload))
     .catch((error: unknown) => {
       logger.warn("sse.redis_publish_failed", {
         "error.type": errorTag(error),
       });
-      sessionDeliveryHandler?.(sessionId, event);
     });
 };
 
