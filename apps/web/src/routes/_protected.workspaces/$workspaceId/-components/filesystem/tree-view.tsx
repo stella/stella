@@ -1554,8 +1554,9 @@ const FilesystemRow = ({
           <button
             className="text-start"
             onClick={(e) => {
-              if (e.metaKey || e.ctrlKey) {
-                onSelect(node.entityId, true);
+              const isMeta = e.metaKey || e.ctrlKey;
+              onSelect(node.entityId, isMeta);
+              if (isMeta) {
                 return;
               }
               if (currentFolderId) {
