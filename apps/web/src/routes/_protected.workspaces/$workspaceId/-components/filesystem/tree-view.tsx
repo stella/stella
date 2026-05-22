@@ -62,6 +62,7 @@ import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-comp
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
+import { getFolderClickIntent } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view-selection.logic";
 import { flattenFilesystemRows } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-virtualization";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -880,6 +881,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                         name: newName,
                       });
                     }}
+                    onClearSelection={clearSelection}
                     onSelect={handleSelect}
                     onStartEditing={setEditingEntityId}
                     onSubfolderCreated={handleSubfolderCreated}
@@ -1081,6 +1083,7 @@ type FilesystemRowProps = {
   onNavigateToFolder: (folderId: string) => void;
   onStartEditing: (entityId: string | null) => void;
   onRename: (entityId: string, newName: string) => void;
+  onClearSelection: () => void;
   onSelect: (entityId: string, meta: boolean) => void;
   onSubfolderCreated: (entityId: string, parentId: string) => void;
   getSelectedDragItems: (ids: Set<string>) => DragPreviewData[];
@@ -1104,6 +1107,7 @@ const FilesystemRow = ({
   onNavigateToFolder,
   onStartEditing,
   onRename,
+  onClearSelection,
   onSelect,
   onSubfolderCreated,
   getSelectedDragItems,
@@ -1554,12 +1558,18 @@ const FilesystemRow = ({
           <button
             className="text-start"
             onClick={(e) => {
-              const isMeta = e.metaKey || e.ctrlKey;
-              onSelect(node.entityId, isMeta);
-              if (isMeta) {
+              const intent = getFolderClickIntent({
+                currentFolderId,
+                hasModifier: e.metaKey || e.ctrlKey,
+              });
+
+              if (intent.type === "toggle-selection") {
+                onSelect(node.entityId, true);
                 return;
               }
-              if (currentFolderId) {
+
+              onClearSelection();
+              if (intent.type === "clear-and-navigate") {
                 onNavigateToFolder(node.entityId);
               } else {
                 onToggleFolder(node.entityId);
