@@ -16,6 +16,7 @@ import type {
   CaretPosition,
 } from "../core/layout-bridge/selectionRects";
 import type { Layout, FlowBlock, Measure } from "../core/layout-engine/types";
+import "../styles/editor.css";
 
 // =============================================================================
 // TYPES

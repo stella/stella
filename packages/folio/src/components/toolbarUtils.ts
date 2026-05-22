@@ -270,9 +270,16 @@ function areListStatesEqual(
  * the toolbar and editor on ordinary typing.
  */
 export function areSelectionFormattingEqual(
-  a: SelectionFormatting,
-  b: SelectionFormatting,
+  a: SelectionFormatting | null | undefined,
+  b: SelectionFormatting | null | undefined,
 ): boolean {
+  if (a === b) {
+    return true;
+  }
+  if (!a || !b) {
+    return false;
+  }
+
   return (
     a.bold === b.bold &&
     a.italic === b.italic &&

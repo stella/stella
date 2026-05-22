@@ -50,6 +50,8 @@ import "prosemirror-view/style/prosemirror.css";
 
 import "../core/prosemirror/editor.css";
 
+const EMPTY_EXTERNAL_PLUGINS: Plugin[] = [];
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -378,7 +380,7 @@ export function HiddenProseMirror(
     readOnly = false,
     onTransaction,
     onSelectionChange,
-    externalPlugins = [],
+    externalPlugins = EMPTY_EXTERNAL_PLUGINS,
     collaboration,
     extensionManager,
     onEditorViewReady,
