@@ -235,6 +235,7 @@ const HIGH_TEXT_SENTINEL = "\uffff";
 const LOW_DATE_SENTINEL = "0001-01-01";
 const HIGH_DATE_SENTINEL = "9999-12-31";
 const LOW_TIMESTAMP_SENTINEL = new Date("0001-01-01T00:00:00.000Z");
+const dateCursorPattern = /^(\d{4})-(\d{2})-(\d{2})$/u;
 const timestampCursorPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/u;
 
 const orderSortKey = ({ direction, expr }: EntitySortKey): SQL =>
@@ -279,6 +280,18 @@ const defaultNullableTextSortKey = ({
   textSortKey({
     direction,
     expr: sql`COALESCE(${expr}, ${HIGH_TEXT_SENTINEL})`,
+  });
+
+const legacyNullableTextSortKey = ({
+  direction,
+  expr,
+}: {
+  direction: SortDirection;
+  expr: SQL;
+}): EntitySortKey =>
+  textSortKey({
+    direction,
+    expr: sql`COALESCE(${expr}, '')`,
   });
 
 const timestampSortKey = ({
@@ -400,7 +413,7 @@ const buildViewSortKeys = (sorts: readonly ViewSort[]): EntitySortKey[] => {
     }
 
     keys.push(
-      defaultNullableTextSortKey({
+      legacyNullableTextSortKey({
         direction: sort.desc ? "desc" : "asc",
         expr: propertySortValueExpr(sort.propertyId),
       }),
@@ -457,14 +470,57 @@ const buildSortKeys = ({
   textSortKey({ direction: "asc", expr: sql`${entities.id}` }),
 ];
 
+export const buildEntitySortExpressions = ({
+  search,
+  sorts,
+}: {
+  search?: string | undefined;
+  sorts: readonly ViewSort[];
+}): SQL[] => buildSortKeys({ search, sorts }).map(orderSortKey);
+
+const isValidDateCursorValue = (value: string): boolean => {
+  const match = dateCursorPattern.exec(value);
+  if (!match) {
+    return false;
+  }
+
+  const [, yearPart, monthPart, dayPart] = match;
+  const year = Number(yearPart);
+  const month = Number(monthPart);
+  const day = Number(dayPart);
+  if (year < 1 || month < 1 || month > 12) {
+    return false;
+  }
+
+  const isLeapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [
+    31,
+    isLeapYear ? 29 : 28,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
+  ];
+  return day >= 1 && day <= (daysInMonth.at(month - 1) ?? 0);
+};
+
 const parseCursorValue = (
   key: EntitySortKey,
   value: EntitiesWindowCursorValue,
 ): number | string | null => {
   switch (key.type) {
-    case "date":
     case "string":
       return typeof value === "string" ? value : null;
+    case "date":
+      return typeof value === "string" && isValidDateCursorValue(value)
+        ? value
+        : null;
     case "number":
       return typeof value === "number" && Number.isFinite(value) ? value : null;
     case "timestamp": {

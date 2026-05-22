@@ -7,6 +7,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import readEntities from "./read";
 import readKanbanGroup from "./read-kanban-group";
 import readEntitiesWindow from "./read-window";
+import { encodeEntitiesWindowCursor } from "./window-cursor";
 
 const workspaceId = toSafeId<"workspace">("ws_entity_window");
 const organizationId = toSafeId<"organization">("org_entity_window");
@@ -194,5 +195,32 @@ describe("entity read handlers", () => {
     expect(result.items).toHaveLength(2);
     expect(result.limit).toBe(2);
     expect(result.nextCursor).toEqual(expect.any(String));
+  });
+
+  test("window query rejects malformed date cursor values before querying", async () => {
+    const safeDb: Parameters<
+      typeof readEntitiesWindow.handler
+    >[0]["safeDb"] = async () => {
+      throw new Error("safeDb should not be called");
+    };
+
+    const result = await readEntitiesWindow.handler(
+      createContext({
+        body: {
+          limit: 2,
+          filters: [],
+          sorts: [{ propertyId: "_due-date", desc: false }],
+          cursor: encodeEntitiesWindowCursor(["2026-99-99", "doc_1"]),
+          fieldMode: "visible",
+          fieldIds: [],
+        },
+        safeDb,
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Invalid cursor" },
+    });
   });
 });
