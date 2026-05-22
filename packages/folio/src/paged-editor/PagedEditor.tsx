@@ -20,11 +20,9 @@ import React, {
   useCallback,
   useEffect,
   useMemo,
-  forwardRef,
   useImperativeHandle,
-  memo,
 } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, Ref } from "react";
 
 import { NodeSelection, TextSelection } from "prosemirror-state";
 import type { EditorState, Transaction, Plugin } from "prosemirror-state";
@@ -1476,1487 +1474,1519 @@ function buildFootnoteRenderItems(
 /**
  * PagedEditor - Main paginated editing component.
  */
-const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
-  function PagedEditor(props, ref) {
-    const {
-      document,
-      styles,
-      theme: _theme,
-      sectionProperties,
-      headerContent,
-      footerContent,
-      firstPageHeaderContent,
-      firstPageFooterContent,
-      readOnly = false,
-      pageGap = DEFAULT_PAGE_GAP,
-      zoom = 1,
-      onDocumentChange,
-      onReadOnlyEditAttempt,
-      onSelectionChange,
-      onSelectionTextChange,
-      externalPlugins = EMPTY_PLUGINS,
-      collaboration,
-      extensionManager,
-      onHeaderFooterDoubleClick,
-      hfEditMode,
-      onBodyClick,
-      className,
-      style,
-      commentsSidebarOpen = false,
-      sidebarOverlay,
-      scrollContainerRef: scrollContainerRefProp,
-      onHyperlinkClick,
-      onContextMenu,
-      onAnchorPositionsChange,
-      onTotalPagesChange,
-      anchorPositionMode = "comments-and-revisions",
-      onAnonymizationTermClick,
-      selectedAnonymizationCanonical = null,
-      anonymizationSelectionSeq,
-    } = props;
+export function PagedEditor(
+  props: PagedEditorProps & { ref?: Ref<PagedEditorRef> },
+) {
+  const {
+    ref,
+    document,
+    styles,
+    theme: _theme,
+    sectionProperties,
+    headerContent,
+    footerContent,
+    firstPageHeaderContent,
+    firstPageFooterContent,
+    readOnly = false,
+    pageGap = DEFAULT_PAGE_GAP,
+    zoom = 1,
+    onDocumentChange,
+    onReadOnlyEditAttempt,
+    onSelectionChange,
+    onSelectionTextChange,
+    externalPlugins = EMPTY_PLUGINS,
+    collaboration,
+    extensionManager,
+    onHeaderFooterDoubleClick,
+    hfEditMode,
+    onBodyClick,
+    className,
+    style,
+    commentsSidebarOpen = false,
+    sidebarOverlay,
+    scrollContainerRef: scrollContainerRefProp,
+    onHyperlinkClick,
+    onContextMenu,
+    onAnchorPositionsChange,
+    onTotalPagesChange,
+    anchorPositionMode = "comments-and-revisions",
+    onAnonymizationTermClick,
+    selectedAnonymizationCanonical = null,
+    anonymizationSelectionSeq,
+  } = props;
 
-    // Resolve the scroll container: prefer parent-provided ref, fallback to own container
-    const getScrollContainer = useCallback((): HTMLDivElement | null => {
-      if (
-        scrollContainerRefProp &&
-        typeof scrollContainerRefProp === "object"
-      ) {
-        return (
-          scrollContainerRefProp as React.RefObject<HTMLDivElement | null>
-        ).current;
-      }
-      return containerRef.current;
-    }, [scrollContainerRefProp]);
+  // Resolve the scroll container: prefer parent-provided ref, fallback to own container
+  const getScrollContainer = useCallback((): HTMLDivElement | null => {
+    if (scrollContainerRefProp && typeof scrollContainerRefProp === "object") {
+      return (scrollContainerRefProp as React.RefObject<HTMLDivElement | null>)
+        .current;
+    }
+    return containerRef.current;
+  }, [scrollContainerRefProp]);
 
-    // Refs
-    const containerRef = useRef<HTMLDivElement>(null);
-    const pagesContainerRef = useRef<HTMLDivElement>(null);
-    const hiddenPMRef = useRef<HiddenProseMirrorRef>(null);
-    const painterRef = useRef<LayoutPainter | null>(null);
+  // Refs
+  const containerRef = useRef<HTMLDivElement>(null);
+  const pagesContainerRef = useRef<HTMLDivElement>(null);
+  const hiddenPMRef = useRef<HiddenProseMirrorRef>(null);
+  const painterRef = useRef<LayoutPainter | null>(null);
 
-    // Visual line navigation (ArrowUp/ArrowDown with sticky X)
-    const { handlePMKeyDown } = useVisualLineNavigation({ pagesContainerRef });
+  // Visual line navigation (ArrowUp/ArrowDown with sticky X)
+  const { handlePMKeyDown } = useVisualLineNavigation({ pagesContainerRef });
 
-    // Stable ref for drag-extend callback (avoids circular deps with getPositionFromMouse)
-    // oxlint-disable-next-line eslint/no-empty-function
-    const dragExtendRef = useRef<(cx: number, cy: number) => void>(() => {});
+  // Stable ref for drag-extend callback (avoids circular deps with getPositionFromMouse)
+  // oxlint-disable-next-line eslint/no-empty-function
+  const dragExtendRef = useRef<(cx: number, cy: number) => void>(() => {});
 
-    // Store callbacks in refs to avoid infinite re-render loops
-    // when parent passes unstable callback references
-    const onSelectionChangeRef = useRef(onSelectionChange);
-    const onSelectionTextChangeRef = useRef(onSelectionTextChange);
-    const onDocumentChangeRef = useRef(onDocumentChange);
-    const onTotalPagesChangeRef = useRef(onTotalPagesChange);
-    const lastTotalPagesRef = useRef<number | null>(null);
+  // Store callbacks in refs to avoid infinite re-render loops
+  // when parent passes unstable callback references
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  const onSelectionTextChangeRef = useRef(onSelectionTextChange);
+  const onDocumentChangeRef = useRef(onDocumentChange);
+  const onTotalPagesChangeRef = useRef(onTotalPagesChange);
+  const lastTotalPagesRef = useRef<number | null>(null);
 
-    // Keep refs in sync with latest props
-    onSelectionChangeRef.current = onSelectionChange;
-    onSelectionTextChangeRef.current = onSelectionTextChange;
-    onDocumentChangeRef.current = onDocumentChange;
-    onTotalPagesChangeRef.current = onTotalPagesChange;
+  // Keep refs in sync with latest props
+  onSelectionChangeRef.current = onSelectionChange;
+  onSelectionTextChangeRef.current = onSelectionTextChange;
+  onDocumentChangeRef.current = onDocumentChange;
+  onTotalPagesChangeRef.current = onTotalPagesChange;
 
-    // State
-    const [layout, setLayout] = useState<Layout | null>(null);
-    const [blocks, setBlocks] = useState<FlowBlock[]>([]);
-    const [measures, setMeasures] = useState<Measure[]>([]);
-    const layoutArtifactsRef = useRef<{
-      blocks: FlowBlock[];
-      blockWidths: number[];
-      measures: Measure[];
-    } | null>(null);
-    const [isFocused, setIsFocused] = useState(false);
-    const [selectionRects, setSelectionRects] = useState<SelectionRect[]>([]);
-    const [caretPosition, setCaretPosition] = useState<CaretPosition | null>(
-      null,
-    );
-    const [anonymizationRectGroups, setAnonymizationRectGroups] = useState<
-      AnonymizationRectGroup[]
-    >([]);
-    // Plain ref to the latest match list so the recompute effect
-    // doesn't depend on a state setter callback that would trigger
-    // its own re-run.
-    const anonymizationMatchesRef = useRef<readonly AnonymizationMatch[]>([]);
-    const [remoteSelections, setRemoteSelections] = useState<
-      HiddenProseMirrorRemoteSelection[]
-    >([]);
-    const suppressSelectionOverlayRef = useRef(false);
-    const revealSelectionOverlayTimerRef = useRef<number | null>(null);
+  // State
+  const [layout, setLayout] = useState<Layout | null>(null);
+  const [blocks, setBlocks] = useState<FlowBlock[]>([]);
+  const [measures, setMeasures] = useState<Measure[]>([]);
+  const layoutArtifactsRef = useRef<{
+    blocks: FlowBlock[];
+    blockWidths: number[];
+    measures: Measure[];
+  } | null>(null);
+  const [isFocused, setIsFocused] = useState(false);
+  const [selectionRects, setSelectionRects] = useState<SelectionRect[]>([]);
+  const [caretPosition, setCaretPosition] = useState<CaretPosition | null>(
+    null,
+  );
+  const [anonymizationRectGroups, setAnonymizationRectGroups] = useState<
+    AnonymizationRectGroup[]
+  >([]);
+  // Plain ref to the latest match list so the recompute effect
+  // doesn't depend on a state setter callback that would trigger
+  // its own re-run.
+  const anonymizationMatchesRef = useRef<readonly AnonymizationMatch[]>([]);
+  const [remoteSelections, setRemoteSelections] = useState<
+    HiddenProseMirrorRemoteSelection[]
+  >([]);
+  const suppressSelectionOverlayRef = useRef(false);
+  const revealSelectionOverlayTimerRef = useRef<number | null>(null);
 
-    // Image selection state
-    const [selectedImageInfo, setSelectedImageInfo] =
-      useState<ImageSelectionInfo | null>(null);
-    const isImageInteractingRef = useRef(false);
+  // Image selection state
+  const [selectedImageInfo, setSelectedImageInfo] =
+    useState<ImageSelectionInfo | null>(null);
+  const isImageInteractingRef = useRef(false);
 
-    /** Build ImageSelectionInfo from a DOM element with data-pm-start */
-    const buildImageSelectionInfo = useCallback(
-      (el: HTMLElement, pmPos: number): ImageSelectionInfo => {
-        const imgTagCandidate =
-          el.tagName === "IMG" ? el : el.querySelector("img");
-        const imgTag =
-          imgTagCandidate instanceof HTMLElement ? imgTagCandidate : null;
-        const element = imgTag ?? el;
-        const rect = element.getBoundingClientRect();
-        return {
-          element,
-          pmPos,
-          width: Math.round(rect.width / zoom),
-          height: Math.round(rect.height / zoom),
-        };
-      },
-      [zoom],
-    );
+  /** Build ImageSelectionInfo from a DOM element with data-pm-start */
+  const buildImageSelectionInfo = useCallback(
+    (el: HTMLElement, pmPos: number): ImageSelectionInfo => {
+      const imgTagCandidate =
+        el.tagName === "IMG" ? el : el.querySelector("img");
+      const imgTag =
+        imgTagCandidate instanceof HTMLElement ? imgTagCandidate : null;
+      const element = imgTag ?? el;
+      const rect = element.getBoundingClientRect();
+      return {
+        element,
+        pmPos,
+        width: Math.round(rect.width / zoom),
+        height: Math.round(rect.height / zoom),
+      };
+    },
+    [zoom],
+  );
 
-    // Drag selection state
-    const isDraggingRef = useRef(false);
-    const dragAnchorRef = useRef<number | null>(null);
+  // Drag selection state
+  const isDraggingRef = useRef(false);
+  const dragAnchorRef = useRef<number | null>(null);
 
-    // Column resize state
-    const isResizingColumnRef = useRef(false);
-    const resizeStartXRef = useRef(0);
-    const resizeColumnIndexRef = useRef(0);
-    const resizeTablePmStartRef = useRef(0);
-    const resizeOrigWidthsRef = useRef({
-      left: 0,
-      right: 0,
-    });
-    const resizeHandleRef = useRef<HTMLElement | null>(null);
+  // Column resize state
+  const isResizingColumnRef = useRef(false);
+  const resizeStartXRef = useRef(0);
+  const resizeColumnIndexRef = useRef(0);
+  const resizeTablePmStartRef = useRef(0);
+  const resizeOrigWidthsRef = useRef({
+    left: 0,
+    right: 0,
+  });
+  const resizeHandleRef = useRef<HTMLElement | null>(null);
 
-    // Row resize state
-    const isResizingRowRef = useRef(false);
-    const resizeStartYRef = useRef(0);
-    const resizeRowIndexRef = useRef(0);
-    const resizeRowTablePmStartRef = useRef(0);
-    const resizeRowOrigHeightRef = useRef(0); // twips
-    const resizeRowHandleRef = useRef<HTMLElement | null>(null);
-    const resizeRowIsEdgeRef = useRef(false);
+  // Row resize state
+  const isResizingRowRef = useRef(false);
+  const resizeStartYRef = useRef(0);
+  const resizeRowIndexRef = useRef(0);
+  const resizeRowTablePmStartRef = useRef(0);
+  const resizeRowOrigHeightRef = useRef(0); // twips
+  const resizeRowHandleRef = useRef<HTMLElement | null>(null);
+  const resizeRowIsEdgeRef = useRef(false);
 
-    // Right edge resize state (grows last column only)
-    const isResizingRightEdgeRef = useRef(false);
-    const resizeRightEdgeStartXRef = useRef(0);
-    const resizeRightEdgeColIndexRef = useRef(0);
-    const resizeRightEdgePmStartRef = useRef(0);
-    const resizeRightEdgeOrigWidthRef = useRef(0); // twips
-    const resizeRightEdgeHandleRef = useRef<HTMLElement | null>(null);
+  // Right edge resize state (grows last column only)
+  const isResizingRightEdgeRef = useRef(false);
+  const resizeRightEdgeStartXRef = useRef(0);
+  const resizeRightEdgeColIndexRef = useRef(0);
+  const resizeRightEdgePmStartRef = useRef(0);
+  const resizeRightEdgeOrigWidthRef = useRef(0); // twips
+  const resizeRightEdgeHandleRef = useRef<HTMLElement | null>(null);
 
-    // Cell selection drag state
-    const isCellDraggingRef = useRef(false);
-    const cellDragAnchorPosRef = useRef<number | null>(null);
-    const cellDragLastPmPosRef = useRef<number | null>(null);
-    const cellDragOverflowXRef = useRef<number | null>(null);
-    const CELL_SELECT_OVERFLOW_PX = 5; // px of continued drag after text selection maxes out
+  // Cell selection drag state
+  const isCellDraggingRef = useRef(false);
+  const cellDragAnchorPosRef = useRef<number | null>(null);
+  const cellDragLastPmPosRef = useRef<number | null>(null);
+  const cellDragOverflowXRef = useRef<number | null>(null);
+  const CELL_SELECT_OVERFLOW_PX = 5; // px of continued drag after text selection maxes out
 
-    // Table quick action insert button state
-    type TableInsertButtonState = {
-      type: "row" | "column";
-      /** Pixel position relative to viewport container */
-      x: number;
-      y: number;
-      /** PM position inside target cell (to set selection before dispatching) */
-      cellPmPos: number;
-    };
-    const [tableInsertButton, setTableInsertButton] =
-      useState<TableInsertButtonState | null>(null);
-    const tableInsertHideTimerRef = useRef<ReturnType<
-      typeof setTimeout
-    > | null>(null);
+  // Table quick action insert button state
+  type TableInsertButtonState = {
+    type: "row" | "column";
+    /** Pixel position relative to viewport container */
+    x: number;
+    y: number;
+    /** PM position inside target cell (to set selection before dispatching) */
+    cellPmPos: number;
+  };
+  const [tableInsertButton, setTableInsertButton] =
+    useState<TableInsertButtonState | null>(null);
+  const tableInsertHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
-    const clearTableInsertTimer = useCallback(() => {
+  const clearTableInsertTimer = useCallback(() => {
+    if (tableInsertHideTimerRef.current) {
+      clearTimeout(tableInsertHideTimerRef.current);
+      tableInsertHideTimerRef.current = null;
+    }
+  }, []);
+
+  // Cleanup timer on unmount
+  useEffect(
+    () => () => {
       if (tableInsertHideTimerRef.current) {
         clearTimeout(tableInsertHideTimerRef.current);
-        tableInsertHideTimerRef.current = null;
       }
-    }, []);
+    },
+    [],
+  );
 
-    // Cleanup timer on unmount
-    useEffect(
-      () => () => {
-        if (tableInsertHideTimerRef.current) {
-          clearTimeout(tableInsertHideTimerRef.current);
+  // Selection gate - ensures selection renders only when layout is current
+  const syncCoordinator = useMemo(() => new LayoutSelectionGate(), []);
+
+  // Compute page size and margins
+  const pageSize = useMemo(
+    () => getPageSize(sectionProperties),
+    [sectionProperties],
+  );
+  const margins = useMemo(
+    () => getMargins(sectionProperties),
+    [sectionProperties],
+  );
+  const columns = useMemo(
+    () => getColumns(sectionProperties),
+    [sectionProperties],
+  );
+  const contentWidth = pageSize.w - margins.left - margins.right;
+
+  // Initialize painter using useMemo to ensure it's ready before first render callbacks
+  const painter = useMemo(
+    () =>
+      new LayoutPainter({
+        pageGap,
+        showShadow: false,
+      }),
+    [pageGap],
+  );
+
+  // Keep ref in sync with memoized painter
+  painterRef.current = painter;
+
+  // =========================================================================
+  // Layout Pipeline
+  // =========================================================================
+
+  /**
+   * Run the full layout pipeline:
+   * 1. Convert PM doc to blocks
+   * 2. Measure blocks
+   * 3. Layout blocks onto pages
+   * 4. Paint pages to DOM
+   */
+  const runLayoutPipeline = useCallback(
+    (
+      state: EditorState,
+      options: { dirtyRange?: DirtyRange; forceFull?: boolean } = {},
+    ) => {
+      // Capture current state sequence for this layout run
+      const currentEpoch = syncCoordinator.getStateSeq();
+
+      // Signal layout is starting
+      syncCoordinator.onLayoutStart();
+
+      try {
+        // Step 1: Convert PM doc to flow blocks
+        const pageContentHeight = pageSize.h - margins.top - margins.bottom;
+        const flowOpts: ToFlowBlocksOptions = {
+          pageContentHeight,
+        };
+        if (_theme !== undefined) {
+          flowOpts.theme = _theme;
         }
-      },
-      [],
-    );
+        const newBlocks = toFlowBlocks(state.doc, flowOpts);
+        setBlocks(newBlocks);
 
-    // Selection gate - ensures selection renders only when layout is current
-    const syncCoordinator = useMemo(() => new LayoutSelectionGate(), []);
+        // Compute per-block widths accounting for section breaks with different column configs
+        const bodyLayoutConfig: SectionLayoutConfig = {
+          pageSize,
+          margins,
+        };
+        if (columns !== undefined) {
+          bodyLayoutConfig.columns = columns;
+        }
+        const blockWidths = computePerBlockWidths({
+          blocks: newBlocks,
+          bodyConfig: bodyLayoutConfig,
+          finalConfig: bodyLayoutConfig,
+        });
+        const incrementalResult =
+          options.dirtyRange && !options.forceFull && layoutArtifactsRef.current
+            ? tryBuildIncrementalMeasures({
+                previousBlocks: layoutArtifactsRef.current.blocks,
+                previousMeasures: layoutArtifactsRef.current.measures,
+                previousBlockWidths: layoutArtifactsRef.current.blockWidths,
+                nextBlocks: newBlocks,
+                nextBlockWidths: blockWidths,
+                dirtyRange: options.dirtyRange,
+                measureBlock: measureSingleBlockWithoutFloatingZones,
+              })
+            : null;
+        const newMeasures =
+          incrementalResult?.measures ?? measureBlocks(newBlocks, blockWidths);
+        layoutArtifactsRef.current = {
+          blocks: newBlocks,
+          blockWidths,
+          measures: newMeasures,
+        };
+        setMeasures(newMeasures);
 
-    // Compute page size and margins
-    const pageSize = useMemo(
-      () => getPageSize(sectionProperties),
-      [sectionProperties],
-    );
-    const margins = useMemo(
-      () => getMargins(sectionProperties),
-      [sectionProperties],
-    );
-    const columns = useMemo(
-      () => getColumns(sectionProperties),
-      [sectionProperties],
-    );
-    const contentWidth = pageSize.w - margins.left - margins.right;
+        // Step 2.5: Collect footnote references from blocks
+        const footnoteRefs = collectFootnoteRefs(newBlocks);
+        const hasFootnotes =
+          footnoteRefs.length > 0 && document?.package.footnotes;
 
-    // Initialize painter using useMemo to ensure it's ready before first render callbacks
-    const painter = useMemo(
-      () =>
-        new LayoutPainter({
+        // Step 2.75: Prepare header/footer content for rendering (needed before layout
+        // to compute effective margins when header content exceeds available space)
+        const hfMetricsHeader: HeaderFooterMetrics = {
+          section: "header",
+          pageSize,
+          margins,
+        };
+        const hfMetricsFooter: HeaderFooterMetrics = {
+          section: "footer",
+          pageSize,
+          margins,
+        };
+        const hfOptions = {
+          ...(styles ? { styles } : {}),
+          ...(_theme !== undefined ? { theme: _theme } : {}),
+          measureBlocks,
+        };
+        const headerContentForRender = convertHeaderFooterToContent(
+          headerContent,
+          contentWidth,
+          hfMetricsHeader,
+          hfOptions,
+        );
+        const footerContentForRender = convertHeaderFooterToContent(
+          footerContent,
+          contentWidth,
+          hfMetricsFooter,
+          hfOptions,
+        );
+        const hasTitlePg = sectionProperties?.titlePg === true;
+        const firstPageHeaderForRender = hasTitlePg
+          ? convertHeaderFooterToContent(
+              firstPageHeaderContent,
+              contentWidth,
+              hfMetricsHeader,
+              hfOptions,
+            )
+          : undefined;
+        const firstPageFooterForRender = hasTitlePg
+          ? convertHeaderFooterToContent(
+              firstPageFooterContent,
+              contentWidth,
+              hfMetricsFooter,
+              hfOptions,
+            )
+          : undefined;
+
+        // Default extender — applied to pages 2+ of every section. It
+        // ignores firstPage H/F so a `<w:titlePg/>` section's
+        // overflowing first-page header doesn't push body content down
+        // on every subsequent page.
+        const extendForHfOverflow = computeHeaderFooterMarginExtender({
+          headerContent: headerContentForRender,
+          footerContent: footerContentForRender,
+          firstPageHeaderContent: firstPageHeaderForRender,
+          firstPageFooterContent: firstPageFooterForRender,
+        });
+        // First-page extender — used only for page 1 of a titlePg
+        // section so the title page's larger header reservation is
+        // honored without leaking onto pages 2+.
+        const extendForFirstPage = computeFirstPageHeaderFooterMarginExtender({
+          headerContent: headerContentForRender,
+          footerContent: footerContentForRender,
+          firstPageHeaderContent: firstPageHeaderForRender,
+          firstPageFooterContent: firstPageFooterForRender,
+        });
+        const effectiveMargins = extendForHfOverflow(margins);
+        const effectiveFirstPageMargins = hasTitlePg
+          ? extendForFirstPage(margins)
+          : undefined;
+        // Section-break blocks carry their own `sb.margins` from
+        // `<w:sectPr>` and the layout engine prefers those over the
+        // body-level fallback. Apply the extension to each one too,
+        // otherwise a footer that overflows on one section silently
+        // re-overlaps body text on the next. (Eigenpal #400.)
+        for (const block of newBlocks) {
+          if (block.kind !== "sectionBreak") {
+            continue;
+          }
+          const sb = block as SectionBreakBlock;
+          if (sb.margins) {
+            sb.margins = extendForHfOverflow(sb.margins);
+          }
+        }
+
+        // Step 3: Layout blocks onto pages (two-pass if footnotes exist)
+        let newLayout: Layout;
+        let pageFootnoteMap = new Map<number, number[]>();
+        let footnoteContentMap = new Map<number, FootnoteContent>();
+
+        // Common layout options for all passes
+        const bodyBreakType = sectionProperties?.sectionStart as
+          | "continuous"
+          | "nextPage"
+          | "evenPage"
+          | "oddPage"
+          | undefined;
+        const layoutOpts: Parameters<typeof layoutDocument>[2] = {
+          pageSize,
+          margins: effectiveMargins,
           pageGap,
-          showShadow: false,
-        }),
-      [pageGap],
-    );
+        };
+        if (effectiveFirstPageMargins !== undefined) {
+          layoutOpts.firstPageMargins = effectiveFirstPageMargins;
+        }
+        if (columns !== undefined) {
+          layoutOpts.columns = columns;
+        }
+        if (bodyBreakType !== undefined) {
+          layoutOpts.bodyBreakType = bodyBreakType;
+        }
 
-    // Keep ref in sync with memoized painter
-    painterRef.current = painter;
+        if (hasFootnotes) {
+          // Build footnote content and measure heights up front. The
+          // per-fn height table feeds into the layout engine so each
+          // body line carrying an fn ref reserves space for that fn
+          // on its host page in a single pass — no convergence loop.
+          footnoteContentMap = buildFootnoteContentMap(
+            document!.package.footnotes!,
+            footnoteRefs,
+            contentWidth,
+            (() => {
+              const footnoteOptions: Parameters<
+                typeof buildFootnoteContentMap
+              >[3] = { measureBlocks };
+              if (styles) {
+                footnoteOptions.styles = styles;
+              }
+              if (_theme !== undefined) {
+                footnoteOptions.theme = _theme;
+              }
+              return footnoteOptions;
+            })(),
+          );
 
-    // =========================================================================
-    // Layout Pipeline
-    // =========================================================================
-
-    /**
-     * Run the full layout pipeline:
-     * 1. Convert PM doc to blocks
-     * 2. Measure blocks
-     * 3. Layout blocks onto pages
-     * 4. Paint pages to DOM
-     */
-    const runLayoutPipeline = useCallback(
-      (
-        state: EditorState,
-        options: { dirtyRange?: DirtyRange; forceFull?: boolean } = {},
-      ) => {
-        // Capture current state sequence for this layout run
-        const currentEpoch = syncCoordinator.getStateSeq();
-
-        // Signal layout is starting
-        syncCoordinator.onLayoutStart();
-
-        try {
-          // Step 1: Convert PM doc to flow blocks
-          const pageContentHeight = pageSize.h - margins.top - margins.bottom;
-          const flowOpts: ToFlowBlocksOptions = {
-            pageContentHeight,
-          };
-          if (_theme !== undefined) {
-            flowOpts.theme = _theme;
+          const footnoteHeightById = new Map<number, number>();
+          // Per-fn vertical margin applied by the painter
+          // (`renderFootnoteArea` sets `marginBottom: 4px` on each
+          // fn entry). Reserved alongside content height so the page
+          // accounts for inter-fn whitespace.
+          const FOOTNOTE_ENTRY_MARGIN = 4;
+          for (const [id, content] of footnoteContentMap) {
+            footnoteHeightById.set(id, content.height + FOOTNOTE_ENTRY_MARGIN);
           }
-          const newBlocks = toFlowBlocks(state.doc, flowOpts);
-          setBlocks(newBlocks);
+          // Note: the layout engine adds the divider's height once
+          // per fn-bearing page (in paginator.addFootnoteHeight); we
+          // pass per-fn (content + entry margin) here.
 
-          // Compute per-block widths accounting for section breaks with different column configs
-          const bodyLayoutConfig: SectionLayoutConfig = {
-            pageSize,
-            margins,
-          };
-          if (columns !== undefined) {
-            bodyLayoutConfig.columns = columns;
-          }
-          const blockWidths = computePerBlockWidths({
-            blocks: newBlocks,
-            bodyConfig: bodyLayoutConfig,
-            finalConfig: bodyLayoutConfig,
+          newLayout = layoutDocument(newBlocks, newMeasures, {
+            ...layoutOpts,
+            footnoteHeightById,
           });
-          const incrementalResult =
-            options.dirtyRange &&
-            !options.forceFull &&
-            layoutArtifactsRef.current
-              ? tryBuildIncrementalMeasures({
-                  previousBlocks: layoutArtifactsRef.current.blocks,
-                  previousMeasures: layoutArtifactsRef.current.measures,
-                  previousBlockWidths: layoutArtifactsRef.current.blockWidths,
-                  nextBlocks: newBlocks,
-                  nextBlockWidths: blockWidths,
-                  dirtyRange: options.dirtyRange,
-                  measureBlock: measureSingleBlockWithoutFloatingZones,
-                })
-              : null;
-          const newMeasures =
-            incrementalResult?.measures ??
-            measureBlocks(newBlocks, blockWidths);
-          layoutArtifactsRef.current = {
-            blocks: newBlocks,
-            blockWidths,
-            measures: newMeasures,
-          };
-          setMeasures(newMeasures);
 
-          // Step 2.5: Collect footnote references from blocks
-          const footnoteRefs = collectFootnoteRefs(newBlocks);
-          const hasFootnotes =
-            footnoteRefs.length > 0 && document?.package.footnotes;
+          // The layout engine assigned `page.footnoteIds` line-by-
+          // line via `paginator.addFootnoteHeight(_, ids)`, so a fn
+          // ref in a continuation fragment of a split paragraph
+          // lands on the page where the ref-bearing line actually
+          // is. Build pageFootnoteMap from those page records (not
+          // from `mapFootnotesToPages`'s pmRange scan, which can't
+          // disambiguate split-paragraph halves; Codex PR #258).
+          pageFootnoteMap = new Map<number, number[]>();
+          for (const page of newLayout.pages) {
+            if (page.footnoteIds && page.footnoteIds.length > 0) {
+              pageFootnoteMap.set(page.number, page.footnoteIds);
+            }
+          }
+        } else {
+          // No footnotes — single pass
+          newLayout = layoutDocument(newBlocks, newMeasures, layoutOpts);
+        }
 
-          // Step 2.75: Prepare header/footer content for rendering (needed before layout
-          // to compute effective margins when header content exceeds available space)
-          const hfMetricsHeader: HeaderFooterMetrics = {
-            section: "header",
-            pageSize,
-            margins,
-          };
-          const hfMetricsFooter: HeaderFooterMetrics = {
-            section: "footer",
-            pageSize,
-            margins,
-          };
-          const hfOptions = {
-            ...(styles ? { styles } : {}),
-            ...(_theme !== undefined ? { theme: _theme } : {}),
-            measureBlocks,
-          };
-          const headerContentForRender = convertHeaderFooterToContent(
-            headerContent,
-            contentWidth,
-            hfMetricsHeader,
-            hfOptions,
-          );
-          const footerContentForRender = convertHeaderFooterToContent(
-            footerContent,
-            contentWidth,
-            hfMetricsFooter,
-            hfOptions,
-          );
-          const hasTitlePg = sectionProperties?.titlePg === true;
-          const firstPageHeaderForRender = hasTitlePg
-            ? convertHeaderFooterToContent(
-                firstPageHeaderContent,
-                contentWidth,
-                hfMetricsHeader,
-                hfOptions,
-              )
-            : undefined;
-          const firstPageFooterForRender = hasTitlePg
-            ? convertHeaderFooterToContent(
-                firstPageFooterContent,
-                contentWidth,
-                hfMetricsFooter,
-                hfOptions,
+        setLayout(newLayout);
+        recordLayoutComplete();
+
+        // Step 4: Paint to DOM
+        if (pagesContainerRef.current && painterRef.current) {
+          // Build block lookup
+          const blockLookup: BlockLookup = new Map();
+          for (let i = 0; i < newBlocks.length; i++) {
+            const block = newBlocks[i];
+            const measure = newMeasures[i];
+            if (block && measure) {
+              blockLookup.set(String(block.id), { block, measure });
+            }
+          }
+          painterRef.current.setBlockLookup(blockLookup);
+
+          // Build per-page footnote render items
+          const footnotesByPage = hasFootnotes
+            ? buildFootnoteRenderItems(
+                pageFootnoteMap,
+                footnoteContentMap,
+                document,
               )
             : undefined;
 
-          // Default extender — applied to pages 2+ of every section. It
-          // ignores firstPage H/F so a `<w:titlePg/>` section's
-          // overflowing first-page header doesn't push body content down
-          // on every subsequent page.
-          const extendForHfOverflow = computeHeaderFooterMarginExtender({
+          // Render pages to container
+          renderPages(newLayout.pages, pagesContainerRef.current, {
+            pageGap,
+            showShadow: true,
+            blockLookup,
             headerContent: headerContentForRender,
             footerContent: footerContentForRender,
             firstPageHeaderContent: firstPageHeaderForRender,
             firstPageFooterContent: firstPageFooterForRender,
+            titlePg: hasTitlePg,
+            headerDistance: sectionProperties?.headerDistance
+              ? twipsToPixels(sectionProperties.headerDistance)
+              : undefined,
+            footerDistance: sectionProperties?.footerDistance
+              ? twipsToPixels(sectionProperties.footerDistance)
+              : undefined,
+            pageBorders: sectionProperties?.pageBorders,
+            theme: _theme,
+            footnotesByPage: footnotesByPage?.size
+              ? footnotesByPage
+              : undefined,
+          } as RenderPageOptions & {
+            pageGap?: number;
+            blockLookup?: BlockLookup;
+            footnotesByPage?: Map<number, FootnoteRenderItem[]>;
           });
-          // First-page extender — used only for page 1 of a titlePg
-          // section so the title page's larger header reservation is
-          // honored without leaking onto pages 2+.
-          const extendForFirstPage = computeFirstPageHeaderFooterMarginExtender(
+        }
+
+        // Compute anchor Y positions for comments sidebar (works without DOM queries).
+        // This is expensive on docs with many comments/tracked changes, so typing
+        // layouts skip it and let the idle full-layout reconcile update the sidebar.
+        const shouldComputeAnchorPositions =
+          onAnchorPositionsChange &&
+          (options.forceFull === true || !options.dirtyRange);
+        if (shouldComputeAnchorPositions) {
+          const positions = computeAnchorPositions(
+            hiddenPMRef.current?.getView() ?? null,
+            newLayout,
+            newBlocks,
+            newMeasures,
+            pageGap,
             {
-              headerContent: headerContentForRender,
-              footerContent: footerContentForRender,
-              firstPageHeaderContent: firstPageHeaderForRender,
-              firstPageFooterContent: firstPageFooterForRender,
+              includeRevisions: anchorPositionMode === "comments-and-revisions",
             },
           );
-          const effectiveMargins = extendForHfOverflow(margins);
-          const effectiveFirstPageMargins = hasTitlePg
-            ? extendForFirstPage(margins)
-            : undefined;
-          // Section-break blocks carry their own `sb.margins` from
-          // `<w:sectPr>` and the layout engine prefers those over the
-          // body-level fallback. Apply the extension to each one too,
-          // otherwise a footer that overflows on one section silently
-          // re-overlaps body text on the next. (Eigenpal #400.)
-          for (const block of newBlocks) {
-            if (block.kind !== "sectionBreak") {
-              continue;
-            }
-            const sb = block as SectionBreakBlock;
-            if (sb.margins) {
-              sb.margins = extendForHfOverflow(sb.margins);
-            }
-          }
-
-          // Step 3: Layout blocks onto pages (two-pass if footnotes exist)
-          let newLayout: Layout;
-          let pageFootnoteMap = new Map<number, number[]>();
-          let footnoteContentMap = new Map<number, FootnoteContent>();
-
-          // Common layout options for all passes
-          const bodyBreakType = sectionProperties?.sectionStart as
-            | "continuous"
-            | "nextPage"
-            | "evenPage"
-            | "oddPage"
-            | undefined;
-          const layoutOpts: Parameters<typeof layoutDocument>[2] = {
-            pageSize,
-            margins: effectiveMargins,
-            pageGap,
-          };
-          if (effectiveFirstPageMargins !== undefined) {
-            layoutOpts.firstPageMargins = effectiveFirstPageMargins;
-          }
-          if (columns !== undefined) {
-            layoutOpts.columns = columns;
-          }
-          if (bodyBreakType !== undefined) {
-            layoutOpts.bodyBreakType = bodyBreakType;
-          }
-
-          if (hasFootnotes) {
-            // Build footnote content and measure heights up front. The
-            // per-fn height table feeds into the layout engine so each
-            // body line carrying an fn ref reserves space for that fn
-            // on its host page in a single pass — no convergence loop.
-            footnoteContentMap = buildFootnoteContentMap(
-              document!.package.footnotes!,
-              footnoteRefs,
-              contentWidth,
-              (() => {
-                const footnoteOptions: Parameters<
-                  typeof buildFootnoteContentMap
-                >[3] = { measureBlocks };
-                if (styles) {
-                  footnoteOptions.styles = styles;
-                }
-                if (_theme !== undefined) {
-                  footnoteOptions.theme = _theme;
-                }
-                return footnoteOptions;
-              })(),
-            );
-
-            const footnoteHeightById = new Map<number, number>();
-            // Per-fn vertical margin applied by the painter
-            // (`renderFootnoteArea` sets `marginBottom: 4px` on each
-            // fn entry). Reserved alongside content height so the page
-            // accounts for inter-fn whitespace.
-            const FOOTNOTE_ENTRY_MARGIN = 4;
-            for (const [id, content] of footnoteContentMap) {
-              footnoteHeightById.set(
-                id,
-                content.height + FOOTNOTE_ENTRY_MARGIN,
-              );
-            }
-            // Note: the layout engine adds the divider's height once
-            // per fn-bearing page (in paginator.addFootnoteHeight); we
-            // pass per-fn (content + entry margin) here.
-
-            newLayout = layoutDocument(newBlocks, newMeasures, {
-              ...layoutOpts,
-              footnoteHeightById,
-            });
-
-            // The layout engine assigned `page.footnoteIds` line-by-
-            // line via `paginator.addFootnoteHeight(_, ids)`, so a fn
-            // ref in a continuation fragment of a split paragraph
-            // lands on the page where the ref-bearing line actually
-            // is. Build pageFootnoteMap from those page records (not
-            // from `mapFootnotesToPages`'s pmRange scan, which can't
-            // disambiguate split-paragraph halves; Codex PR #258).
-            pageFootnoteMap = new Map<number, number[]>();
-            for (const page of newLayout.pages) {
-              if (page.footnoteIds && page.footnoteIds.length > 0) {
-                pageFootnoteMap.set(page.number, page.footnoteIds);
-              }
-            }
-          } else {
-            // No footnotes — single pass
-            newLayout = layoutDocument(newBlocks, newMeasures, layoutOpts);
-          }
-
-          setLayout(newLayout);
-          recordLayoutComplete();
-
-          // Step 4: Paint to DOM
-          if (pagesContainerRef.current && painterRef.current) {
-            // Build block lookup
-            const blockLookup: BlockLookup = new Map();
-            for (let i = 0; i < newBlocks.length; i++) {
-              const block = newBlocks[i];
-              const measure = newMeasures[i];
-              if (block && measure) {
-                blockLookup.set(String(block.id), { block, measure });
-              }
-            }
-            painterRef.current.setBlockLookup(blockLookup);
-
-            // Build per-page footnote render items
-            const footnotesByPage = hasFootnotes
-              ? buildFootnoteRenderItems(
-                  pageFootnoteMap,
-                  footnoteContentMap,
-                  document,
-                )
-              : undefined;
-
-            // Render pages to container
-            renderPages(newLayout.pages, pagesContainerRef.current, {
-              pageGap,
-              showShadow: true,
-              blockLookup,
-              headerContent: headerContentForRender,
-              footerContent: footerContentForRender,
-              firstPageHeaderContent: firstPageHeaderForRender,
-              firstPageFooterContent: firstPageFooterForRender,
-              titlePg: hasTitlePg,
-              headerDistance: sectionProperties?.headerDistance
-                ? twipsToPixels(sectionProperties.headerDistance)
-                : undefined,
-              footerDistance: sectionProperties?.footerDistance
-                ? twipsToPixels(sectionProperties.footerDistance)
-                : undefined,
-              pageBorders: sectionProperties?.pageBorders,
-              theme: _theme,
-              footnotesByPage: footnotesByPage?.size
-                ? footnotesByPage
-                : undefined,
-            } as RenderPageOptions & {
-              pageGap?: number;
-              blockLookup?: BlockLookup;
-              footnotesByPage?: Map<number, FootnoteRenderItem[]>;
-            });
-          }
-
-          // Compute anchor Y positions for comments sidebar (works without DOM queries).
-          // This is expensive on docs with many comments/tracked changes, so typing
-          // layouts skip it and let the idle full-layout reconcile update the sidebar.
-          const shouldComputeAnchorPositions =
-            onAnchorPositionsChange &&
-            (options.forceFull === true || !options.dirtyRange);
-          if (shouldComputeAnchorPositions) {
-            const positions = computeAnchorPositions(
-              hiddenPMRef.current?.getView() ?? null,
-              newLayout,
-              newBlocks,
-              newMeasures,
-              pageGap,
-              {
-                includeRevisions:
-                  anchorPositionMode === "comments-and-revisions",
-              },
-            );
-            onAnchorPositionsChange(positions);
-          }
-        } catch {
-          // Keep the previous anchor positions if layout measurement fails.
+          onAnchorPositionsChange(positions);
         }
-
-        // Signal layout is complete for this sequence
-        syncCoordinator.onLayoutComplete(currentEpoch);
-      },
-      // oxlint-disable-next-line react-hooks/exhaustive-deps
-      [
-        contentWidth,
-        columns,
-        pageSize,
-        margins,
-        pageGap,
-        zoom,
-        syncCoordinator,
-        headerContent,
-        footerContent,
-        firstPageHeaderContent,
-        firstPageFooterContent,
-        _theme,
-        sectionProperties,
-        onAnchorPositionsChange,
-        anchorPositionMode,
-        document,
-      ],
-    );
-    const runLayoutPipelineRef = useRef(runLayoutPipeline);
-    runLayoutPipelineRef.current = runLayoutPipeline;
-
-    // =========================================================================
-    // Coalesced Layout (rAF throttle)
-    // =========================================================================
-
-    /**
-     * Ref holding a pending requestAnimationFrame ID and the latest state.
-     * Multiple rapid transactions (e.g. typing "hello") within the same frame
-     * are coalesced so only the final state triggers an interactive layout pass.
-     */
-    const pendingLayoutRef = useRef<{
-      dirtyRange: DirtyRange | null;
-      rafId: number;
-      state: EditorState;
-    } | null>(null);
-    const idleLayoutTimerRef = useRef<number | null>(null);
-    const documentChangeNotifyTimerRef = useRef<number | null>(null);
-
-    const flushDocumentChangeNotification = useCallback(() => {
-      if (documentChangeNotifyTimerRef.current !== null) {
-        window.clearTimeout(documentChangeNotifyTimerRef.current);
-        documentChangeNotifyTimerRef.current = null;
+      } catch {
+        // Keep the previous anchor positions if layout measurement fails.
       }
 
-      const newDoc = hiddenPMRef.current?.getDocument();
-      if (newDoc) {
-        onDocumentChangeRef.current?.(newDoc);
+      // Signal layout is complete for this sequence
+      syncCoordinator.onLayoutComplete(currentEpoch);
+    },
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+    [
+      contentWidth,
+      columns,
+      pageSize,
+      margins,
+      pageGap,
+      zoom,
+      syncCoordinator,
+      headerContent,
+      footerContent,
+      firstPageHeaderContent,
+      firstPageFooterContent,
+      _theme,
+      sectionProperties,
+      onAnchorPositionsChange,
+      anchorPositionMode,
+      document,
+    ],
+  );
+  const runLayoutPipelineRef = useRef(runLayoutPipeline);
+  runLayoutPipelineRef.current = runLayoutPipeline;
+
+  // =========================================================================
+  // Coalesced Layout (rAF throttle)
+  // =========================================================================
+
+  /**
+   * Ref holding a pending requestAnimationFrame ID and the latest state.
+   * Multiple rapid transactions (e.g. typing "hello") within the same frame
+   * are coalesced so only the final state triggers an interactive layout pass.
+   */
+  const pendingLayoutRef = useRef<{
+    dirtyRange: DirtyRange | null;
+    rafId: number;
+    state: EditorState;
+  } | null>(null);
+  const idleLayoutTimerRef = useRef<number | null>(null);
+  const documentChangeNotifyTimerRef = useRef<number | null>(null);
+
+  const flushDocumentChangeNotification = useCallback(() => {
+    if (documentChangeNotifyTimerRef.current !== null) {
+      window.clearTimeout(documentChangeNotifyTimerRef.current);
+      documentChangeNotifyTimerRef.current = null;
+    }
+
+    const newDoc = hiddenPMRef.current?.getDocument();
+    if (newDoc) {
+      onDocumentChangeRef.current?.(newDoc);
+    }
+  }, []);
+
+  const scheduleDocumentChangeNotification = useCallback(() => {
+    if (documentChangeNotifyTimerRef.current !== null) {
+      window.clearTimeout(documentChangeNotifyTimerRef.current);
+    }
+
+    documentChangeNotifyTimerRef.current = window.setTimeout(() => {
+      documentChangeNotifyTimerRef.current = null;
+      flushDocumentChangeNotification();
+    }, DOCUMENT_CHANGE_NOTIFY_DELAY);
+  }, [flushDocumentChangeNotification]);
+
+  const scheduleIdleFullLayout = useCallback(
+    (state: EditorState) => {
+      if (idleLayoutTimerRef.current !== null) {
+        window.clearTimeout(idleLayoutTimerRef.current);
       }
-    }, []);
+      idleLayoutTimerRef.current = window.setTimeout(() => {
+        idleLayoutTimerRef.current = null;
+        runLayoutPipeline(state, { forceFull: true });
+      }, 200);
+    },
+    [runLayoutPipeline],
+  );
 
-    const scheduleDocumentChangeNotification = useCallback(() => {
-      if (documentChangeNotifyTimerRef.current !== null) {
-        window.clearTimeout(documentChangeNotifyTimerRef.current);
+  /**
+   * Schedule a layout pipeline run for the next animation frame.
+   * If a run is already scheduled, the pending state is replaced so only
+   * the most recent document state gets laid out. A full source-of-truth
+   * reconcile is scheduled after the interactive pass has been idle.
+   */
+  const scheduleLayout = useCallback(
+    (state: EditorState, dirtyRange: DirtyRange | null) => {
+      if (idleLayoutTimerRef.current !== null) {
+        window.clearTimeout(idleLayoutTimerRef.current);
+        idleLayoutTimerRef.current = null;
       }
 
-      documentChangeNotifyTimerRef.current = window.setTimeout(() => {
-        documentChangeNotifyTimerRef.current = null;
-        flushDocumentChangeNotification();
-      }, DOCUMENT_CHANGE_NOTIFY_DELAY);
-    }, [flushDocumentChangeNotification]);
-
-    const scheduleIdleFullLayout = useCallback(
-      (state: EditorState) => {
-        if (idleLayoutTimerRef.current !== null) {
-          window.clearTimeout(idleLayoutTimerRef.current);
-        }
-        idleLayoutTimerRef.current = window.setTimeout(() => {
-          idleLayoutTimerRef.current = null;
-          runLayoutPipeline(state, { forceFull: true });
-        }, 200);
-      },
-      [runLayoutPipeline],
-    );
-
-    /**
-     * Schedule a layout pipeline run for the next animation frame.
-     * If a run is already scheduled, the pending state is replaced so only
-     * the most recent document state gets laid out. A full source-of-truth
-     * reconcile is scheduled after the interactive pass has been idle.
-     */
-    const scheduleLayout = useCallback(
-      (state: EditorState, dirtyRange: DirtyRange | null) => {
-        if (idleLayoutTimerRef.current !== null) {
-          window.clearTimeout(idleLayoutTimerRef.current);
-          idleLayoutTimerRef.current = null;
-        }
-
-        if (pendingLayoutRef.current) {
-          // Already scheduled — just update the state to the latest
-          pendingLayoutRef.current.state = state;
-          pendingLayoutRef.current.dirtyRange = mergeDirtyRanges(
-            pendingLayoutRef.current.dirtyRange,
-            dirtyRange,
-          );
-          return;
-        }
-        const rafId = requestAnimationFrame(() => {
-          const pending = pendingLayoutRef.current;
-          pendingLayoutRef.current = null;
-          if (pending) {
-            const layoutOptions: {
-              dirtyRange?: DirtyRange;
-              forceFull?: boolean;
-            } = {};
-            if (pending.dirtyRange) {
-              layoutOptions.dirtyRange = pending.dirtyRange;
-            }
-            runLayoutPipeline(pending.state, layoutOptions);
-            scheduleIdleFullLayout(pending.state);
-          }
-        });
-        pendingLayoutRef.current = { dirtyRange, rafId, state };
-      },
-      [runLayoutPipeline, scheduleIdleFullLayout],
-    );
-
-    // Clean up pending rAF on unmount
-    useEffect(
-      () => () => {
-        if (pendingLayoutRef.current) {
-          cancelAnimationFrame(pendingLayoutRef.current.rafId);
-          pendingLayoutRef.current = null;
-        }
-        if (idleLayoutTimerRef.current !== null) {
-          window.clearTimeout(idleLayoutTimerRef.current);
-          idleLayoutTimerRef.current = null;
-        }
-        if (documentChangeNotifyTimerRef.current !== null) {
-          window.clearTimeout(documentChangeNotifyTimerRef.current);
-          documentChangeNotifyTimerRef.current = null;
-        }
-      },
-      [],
-    );
-
-    /**
-     * Get caret position using DOM-based measurement.
-     * This uses the browser's text rendering to get precise pixel positions.
-     */
-    const getCaretFromDom = useCallback(
-      (pmPos: number, currentZoom: number = 1): CaretPosition | null => {
-        if (!pagesContainerRef.current) {
-          return null;
-        }
-
-        const overlay = pagesContainerRef.current.parentElement?.querySelector(
-          '[data-testid="selection-overlay"]',
+      if (pendingLayoutRef.current) {
+        // Already scheduled — just update the state to the latest
+        pendingLayoutRef.current.state = state;
+        pendingLayoutRef.current.dirtyRange = mergeDirtyRanges(
+          pendingLayoutRef.current.dirtyRange,
+          dirtyRange,
         );
-        if (!overlay) {
-          return null;
-        }
-
-        const overlayRect = overlay.getBoundingClientRect();
-
-        // Find spans with PM position data
-        const spans = findBodyPmSpans(pagesContainerRef.current);
-
-        for (const spanEl of spans) {
-          const pmStart = Number(spanEl.dataset["pmStart"]);
-          const pmEnd = Number(spanEl.dataset["pmEnd"]);
-
-          // Special handling for tab spans - use exclusive end to avoid boundary conflicts
-          // Tab at [5,6) means position 6 belongs to the next run, not the tab
-          if (spanEl.classList.contains("layout-run-tab")) {
-            if (pmPos >= pmStart && pmPos < pmEnd) {
-              const spanRect = spanEl.getBoundingClientRect();
-              return {
-                x: (spanRect.left - overlayRect.left) / currentZoom,
-                y: (spanRect.top - overlayRect.top) / currentZoom,
-                height: getLineHeight(spanEl),
-                pageIndex: getPageIndex(spanEl),
-              };
-            }
-            continue; // Skip to next span
+        return;
+      }
+      const rafId = requestAnimationFrame(() => {
+        const pending = pendingLayoutRef.current;
+        pendingLayoutRef.current = null;
+        if (pending) {
+          const layoutOptions: {
+            dirtyRange?: DirtyRange;
+            forceFull?: boolean;
+          } = {};
+          if (pending.dirtyRange) {
+            layoutOptions.dirtyRange = pending.dirtyRange;
           }
+          runLayoutPipeline(pending.state, layoutOptions);
+          scheduleIdleFullLayout(pending.state);
+        }
+      });
+      pendingLayoutRef.current = { dirtyRange, rafId, state };
+    },
+    [runLayoutPipeline, scheduleIdleFullLayout],
+  );
 
-          if (
-            spanEl.classList.contains("layout-empty-run") &&
-            pmPos >= pmStart &&
-            pmPos <= pmEnd
-          ) {
+  // Clean up pending rAF on unmount
+  useEffect(
+    () => () => {
+      if (pendingLayoutRef.current) {
+        cancelAnimationFrame(pendingLayoutRef.current.rafId);
+        pendingLayoutRef.current = null;
+      }
+      if (idleLayoutTimerRef.current !== null) {
+        window.clearTimeout(idleLayoutTimerRef.current);
+        idleLayoutTimerRef.current = null;
+      }
+      if (documentChangeNotifyTimerRef.current !== null) {
+        window.clearTimeout(documentChangeNotifyTimerRef.current);
+        documentChangeNotifyTimerRef.current = null;
+      }
+    },
+    [],
+  );
+
+  /**
+   * Get caret position using DOM-based measurement.
+   * This uses the browser's text rendering to get precise pixel positions.
+   */
+  const getCaretFromDom = useCallback(
+    (pmPos: number, currentZoom: number = 1): CaretPosition | null => {
+      if (!pagesContainerRef.current) {
+        return null;
+      }
+
+      const overlay = pagesContainerRef.current.parentElement?.querySelector(
+        '[data-testid="selection-overlay"]',
+      );
+      if (!overlay) {
+        return null;
+      }
+
+      const overlayRect = overlay.getBoundingClientRect();
+
+      // Find spans with PM position data
+      const spans = findBodyPmSpans(pagesContainerRef.current);
+
+      for (const spanEl of spans) {
+        const pmStart = Number(spanEl.dataset["pmStart"]);
+        const pmEnd = Number(spanEl.dataset["pmEnd"]);
+
+        // Special handling for tab spans - use exclusive end to avoid boundary conflicts
+        // Tab at [5,6) means position 6 belongs to the next run, not the tab
+        if (spanEl.classList.contains("layout-run-tab")) {
+          if (pmPos >= pmStart && pmPos < pmEnd) {
             const spanRect = spanEl.getBoundingClientRect();
             return {
               x: (spanRect.left - overlayRect.left) / currentZoom,
               y: (spanRect.top - overlayRect.top) / currentZoom,
-              height: getLineHeight(spanEl, Math.max(16, spanRect.height)),
-              pageIndex: getPageIndex(spanEl),
-            };
-          }
-
-          // For text runs, use inclusive range
-          if (
-            pmPos >= pmStart &&
-            pmPos <= pmEnd &&
-            spanEl.firstChild?.nodeType === Node.TEXT_NODE
-          ) {
-            const textNode = spanEl.firstChild as Text;
-            const charIndex = Math.min(pmPos - pmStart, textNode.length);
-
-            // Create a range at the exact character position
-            const ownerDoc = spanEl.ownerDocument;
-            const range = ownerDoc.createRange();
-            range.setStart(textNode, charIndex);
-            range.setEnd(textNode, charIndex);
-
-            const rangeRect = range.getBoundingClientRect();
-            const spanRect = spanEl.getBoundingClientRect();
-            const useSpanStart =
-              charIndex === 0 ||
-              (rangeRect.width === 0 && rangeRect.left < spanRect.left);
-            const caretLeft = useSpanStart ? spanRect.left : rangeRect.left;
-            const caretTop =
-              rangeRect.height > 0 && !useSpanStart
-                ? rangeRect.top
-                : spanRect.top;
-
-            return {
-              x: (caretLeft - overlayRect.left) / currentZoom,
-              y: (caretTop - overlayRect.top) / currentZoom,
               height: getLineHeight(spanEl),
               pageIndex: getPageIndex(spanEl),
             };
           }
-
-          if (pmPos >= pmStart && pmPos <= pmEnd) {
-            const spanRect = spanEl.getBoundingClientRect();
-            return {
-              x: (spanRect.left - overlayRect.left) / currentZoom,
-              y: (spanRect.top - overlayRect.top) / currentZoom,
-              height: getLineHeight(spanEl, Math.max(16, spanRect.height)),
-              pageIndex: getPageIndex(spanEl),
-            };
-          }
+          continue; // Skip to next span
         }
 
-        // Fallback: try to find position in empty paragraphs (they have empty runs)
-        const emptyRuns = findBodyEmptyRuns(pagesContainerRef.current);
-        for (const emptyRun of emptyRuns) {
-          const paragraph = closestHtmlElement(emptyRun, ".layout-paragraph");
-          if (!paragraph) {
-            continue;
-          }
-          const pmStart = Number(paragraph.dataset["pmStart"]);
-          const pmEnd = Number(paragraph.dataset["pmEnd"]);
-
-          if (pmPos >= pmStart && pmPos <= pmEnd) {
-            const runRect = emptyRun.getBoundingClientRect();
-            return {
-              x: (runRect.left - overlayRect.left) / currentZoom,
-              y: (runRect.top - overlayRect.top) / currentZoom,
-              height: getLineHeight(emptyRun),
-              pageIndex: getPageIndex(paragraph),
-            };
-          }
+        if (
+          spanEl.classList.contains("layout-empty-run") &&
+          pmPos >= pmStart &&
+          pmPos <= pmEnd
+        ) {
+          const spanRect = spanEl.getBoundingClientRect();
+          return {
+            x: (spanRect.left - overlayRect.left) / currentZoom,
+            y: (spanRect.top - overlayRect.top) / currentZoom,
+            height: getLineHeight(spanEl, Math.max(16, spanRect.height)),
+            pageIndex: getPageIndex(spanEl),
+          };
         }
 
-        return null;
-      },
-      [],
-    );
+        // For text runs, use inclusive range
+        if (
+          pmPos >= pmStart &&
+          pmPos <= pmEnd &&
+          spanEl.firstChild?.nodeType === Node.TEXT_NODE
+        ) {
+          const textNode = spanEl.firstChild as Text;
+          const charIndex = Math.min(pmPos - pmStart, textNode.length);
 
-    /**
-     * Update selection overlay from PM selection.
-     */
-    const updateSelectionOverlay = useCallback(
-      (state: EditorState) => {
-        const { from, to } = state.selection;
+          // Create a range at the exact character position
+          const ownerDoc = spanEl.ownerDocument;
+          const range = ownerDoc.createRange();
+          range.setStart(textNode, charIndex);
+          range.setEnd(textNode, charIndex);
 
-        // Always notify selection change (for toolbar sync) even if layout not ready
-        // Use ref to avoid infinite loops when callback is unstable
-        onSelectionChangeRef.current?.(from, to);
-        // `onSelectionTextChange` carries the resolved text
-        // alongside the range so consumers (anonymisation
-        // term prefill, etc.) don't need to hold a reference
-        // to the editor view themselves. `textBetween` with
-        // a single space for both leaf-block and block
-        // separators collapses table cells, paragraphs, and
-        // inline atoms into a single-line phrase.
-        if (onSelectionTextChangeRef.current) {
-          const text =
-            from === to ? "" : state.doc.textBetween(from, to, " ", " ");
-          onSelectionTextChangeRef.current({ from, to, text });
+          const rangeRect = range.getBoundingClientRect();
+          const spanRect = spanEl.getBoundingClientRect();
+          const useSpanStart =
+            charIndex === 0 ||
+            (rangeRect.width === 0 && rangeRect.left < spanRect.left);
+          const caretLeft = useSpanStart ? spanRect.left : rangeRect.left;
+          const caretTop =
+            rangeRect.height > 0 && !useSpanStart
+              ? rangeRect.top
+              : spanRect.top;
+
+          return {
+            x: (caretLeft - overlayRect.left) / currentZoom,
+            y: (caretTop - overlayRect.top) / currentZoom,
+            height: getLineHeight(spanEl),
+            pageIndex: getPageIndex(spanEl),
+          };
         }
 
-        if (suppressSelectionOverlayRef.current) {
-          setCaretPosition(null);
-          setSelectionRects([]);
-          return;
+        if (pmPos >= pmStart && pmPos <= pmEnd) {
+          const spanRect = spanEl.getBoundingClientRect();
+          return {
+            x: (spanRect.left - overlayRect.left) / currentZoom,
+            y: (spanRect.top - overlayRect.top) / currentZoom,
+            height: getLineHeight(spanEl, Math.max(16, spanRect.height)),
+            pageIndex: getPageIndex(spanEl),
+          };
+        }
+      }
+
+      // Fallback: try to find position in empty paragraphs (they have empty runs)
+      const emptyRuns = findBodyEmptyRuns(pagesContainerRef.current);
+      for (const emptyRun of emptyRuns) {
+        const paragraph = closestHtmlElement(emptyRun, ".layout-paragraph");
+        if (!paragraph) {
+          continue;
+        }
+        const pmStart = Number(paragraph.dataset["pmStart"]);
+        const pmEnd = Number(paragraph.dataset["pmEnd"]);
+
+        if (pmPos >= pmStart && pmPos <= pmEnd) {
+          const runRect = emptyRun.getBoundingClientRect();
+          return {
+            x: (runRect.left - overlayRect.left) / currentZoom,
+            y: (runRect.top - overlayRect.top) / currentZoom,
+            height: getLineHeight(emptyRun),
+            pageIndex: getPageIndex(paragraph),
+          };
+        }
+      }
+
+      return null;
+    },
+    [],
+  );
+
+  /**
+   * Update selection overlay from PM selection.
+   */
+  const updateSelectionOverlay = useCallback(
+    (state: EditorState) => {
+      const { from, to } = state.selection;
+
+      // Always notify selection change (for toolbar sync) even if layout not ready
+      // Use ref to avoid infinite loops when callback is unstable
+      onSelectionChangeRef.current?.(from, to);
+      // `onSelectionTextChange` carries the resolved text
+      // alongside the range so consumers (anonymisation
+      // term prefill, etc.) don't need to hold a reference
+      // to the editor view themselves. `textBetween` with
+      // a single space for both leaf-block and block
+      // separators collapses table cells, paragraphs, and
+      // inline atoms into a single-line phrase.
+      if (onSelectionTextChangeRef.current) {
+        const text =
+          from === to ? "" : state.doc.textBetween(from, to, " ", " ");
+        onSelectionTextChangeRef.current({ from, to, text });
+      }
+
+      if (suppressSelectionOverlayRef.current) {
+        setCaretPosition(null);
+        setSelectionRects([]);
+        return;
+      }
+
+      // Update visual cell selection highlighting on visible layout table cells
+      if (pagesContainerRef.current) {
+        // Clear previous cell highlighting
+        const prevSelected = pagesContainerRef.current.querySelectorAll(
+          ".layout-table-cell-selected",
+        );
+        for (const el of Array.from(prevSelected)) {
+          el.classList.remove("layout-table-cell-selected");
         }
 
-        // Update visual cell selection highlighting on visible layout table cells
-        if (pagesContainerRef.current) {
-          // Clear previous cell highlighting
-          const prevSelected = pagesContainerRef.current.querySelectorAll(
-            ".layout-table-cell-selected",
+        // If CellSelection, highlight the corresponding visible cells
+        // Use duck-typing ($anchorCell) instead of instanceof to avoid bundling issues
+        const sel = state.selection as CellSelection;
+        const isCellSel =
+          "$anchorCell" in sel && typeof sel.forEachCell === "function";
+        if (isCellSel) {
+          // Collect ranges [cellStart, cellEnd) for each selected cell
+          const selectedRanges: [number, number][] = [];
+          sel.forEachCell((node, pos) => {
+            selectedRanges.push([pos, pos + node.nodeSize]);
+          });
+
+          // Find visible layout cells whose pmStart falls inside a selected cell range
+          const allCells = htmlQueryAll(
+            pagesContainerRef.current,
+            ".layout-table-cell",
           );
-          for (const el of Array.from(prevSelected)) {
-            el.classList.remove("layout-table-cell-selected");
-          }
-
-          // If CellSelection, highlight the corresponding visible cells
-          // Use duck-typing ($anchorCell) instead of instanceof to avoid bundling issues
-          const sel = state.selection as CellSelection;
-          const isCellSel =
-            "$anchorCell" in sel && typeof sel.forEachCell === "function";
-          if (isCellSel) {
-            // Collect ranges [cellStart, cellEnd) for each selected cell
-            const selectedRanges: [number, number][] = [];
-            sel.forEachCell((node, pos) => {
-              selectedRanges.push([pos, pos + node.nodeSize]);
-            });
-
-            // Find visible layout cells whose pmStart falls inside a selected cell range
-            const allCells = htmlQueryAll(
-              pagesContainerRef.current,
-              ".layout-table-cell",
-            );
-            for (const cellEl of allCells) {
-              const pmStartAttr = cellEl.dataset["pmStart"];
-              if (pmStartAttr !== undefined) {
-                const pmPos = Number(pmStartAttr);
-                for (const [start, end] of selectedRanges) {
-                  if (pmPos >= start && pmPos < end) {
-                    cellEl.classList.add("layout-table-cell-selected");
-                    break;
-                  }
+          for (const cellEl of allCells) {
+            const pmStartAttr = cellEl.dataset["pmStart"];
+            if (pmStartAttr !== undefined) {
+              const pmPos = Number(pmStartAttr);
+              for (const [start, end] of selectedRanges) {
+                if (pmPos >= start && pmPos < end) {
+                  cellEl.classList.add("layout-table-cell-selected");
+                  break;
                 }
               }
             }
           }
         }
+      }
 
-        if (!layout || blocks.length === 0) {
-          return;
-        }
+      if (!layout || blocks.length === 0) {
+        return;
+      }
 
-        // Collapsed selection - show caret
-        if (from === to) {
-          // Use DOM-based caret positioning for accuracy
-          const domCaret = getCaretFromDom(from, zoom);
-          if (domCaret) {
-            setCaretPosition(domCaret);
-          } else {
-            // Fallback to layout-based calculation if DOM not ready
-            const overlay =
-              pagesContainerRef.current?.parentElement?.querySelector(
-                '[data-testid="selection-overlay"]',
-              );
-            const firstPage =
-              pagesContainerRef.current?.querySelector(".layout-page");
-
-            if (overlay && firstPage) {
-              const overlayRect = overlay.getBoundingClientRect();
-              const pageRect = firstPage.getBoundingClientRect();
-              const caret = getCaretPosition(layout, blocks, measures, from);
-
-              if (caret) {
-                setCaretPosition({
-                  ...caret,
-                  x: caret.x + (pageRect.left - overlayRect.left) / zoom,
-                  y: caret.y + (pageRect.top - overlayRect.top) / zoom,
-                });
-              } else {
-                setCaretPosition(null);
-              }
-            } else {
-              setCaretPosition(null);
-            }
-          }
-          setSelectionRects([]);
+      // Collapsed selection - show caret
+      if (from === to) {
+        // Use DOM-based caret positioning for accuracy
+        const domCaret = getCaretFromDom(from, zoom);
+        if (domCaret) {
+          setCaretPosition(domCaret);
         } else {
-          // Range selection - show highlight rectangles using DOM-based approach
+          // Fallback to layout-based calculation if DOM not ready
           const overlay =
             pagesContainerRef.current?.parentElement?.querySelector(
               '[data-testid="selection-overlay"]',
             );
+          const firstPage =
+            pagesContainerRef.current?.querySelector(".layout-page");
 
-          if (overlay && pagesContainerRef.current) {
+          if (overlay && firstPage) {
             const overlayRect = overlay.getBoundingClientRect();
-            const domRects: SelectionRect[] = [];
+            const pageRect = firstPage.getBoundingClientRect();
+            const caret = getCaretPosition(layout, blocks, measures, from);
 
-            // Find spans that intersect with the selection range
-            const spans = findBodyPmSpans(pagesContainerRef.current);
-
-            for (const spanEl of spans) {
-              const pmStart = Number(spanEl.dataset["pmStart"]);
-              const pmEnd = Number(spanEl.dataset["pmEnd"]);
-
-              // Check if this span overlaps with selection
-              if (pmEnd > from && pmStart < to) {
-                // Special handling for tab spans - highlight the full visual width
-                if (spanEl.classList.contains("layout-run-tab")) {
-                  const spanRect = spanEl.getBoundingClientRect();
-                  domRects.push({
-                    x: (spanRect.left - overlayRect.left) / zoom,
-                    y: (spanRect.top - overlayRect.top) / zoom,
-                    width: spanRect.width / zoom,
-                    height: spanRect.height / zoom,
-                    pageIndex: getPageIndex(spanEl),
-                  });
-                  continue;
-                }
-
-                // Find the text node — may be a direct child or inside an <a> for hyperlinks
-                let textNode: Text | null = null;
-                if (spanEl.firstChild?.nodeType === Node.TEXT_NODE) {
-                  textNode = spanEl.firstChild as Text;
-                } else if (
-                  spanEl.firstChild instanceof HTMLElement &&
-                  spanEl.firstChild.tagName === "A" &&
-                  spanEl.firstChild.firstChild?.nodeType === Node.TEXT_NODE
-                ) {
-                  textNode = spanEl.firstChild.firstChild as Text;
-                }
-                if (!textNode) {
-                  continue;
-                }
-                const ownerDoc = spanEl.ownerDocument;
-
-                // Calculate the character range within this span
-                const startChar = Math.max(0, from - pmStart);
-                const endChar = Math.min(textNode.length, to - pmStart);
-
-                if (startChar < endChar) {
-                  const range = ownerDoc.createRange();
-                  range.setStart(textNode, startChar);
-                  range.setEnd(textNode, endChar);
-
-                  // Get all client rects for this range (handles line wraps)
-                  const clientRects = range.getClientRects();
-                  const pageIndex = getPageIndex(spanEl);
-                  for (const rect of Array.from(clientRects)) {
-                    domRects.push({
-                      x: (rect.left - overlayRect.left) / zoom,
-                      y: (rect.top - overlayRect.top) / zoom,
-                      width: rect.width / zoom,
-                      height: rect.height / zoom,
-                      pageIndex,
-                    });
-                  }
-                }
-              }
-            }
-
-            if (domRects.length > 0) {
-              setSelectionRects(domRects);
+            if (caret) {
+              setCaretPosition({
+                ...caret,
+                x: caret.x + (pageRect.left - overlayRect.left) / zoom,
+                y: caret.y + (pageRect.top - overlayRect.top) / zoom,
+              });
             } else {
-              // Fallback to layout-based calculation
-              const firstPage =
-                pagesContainerRef.current.querySelector(".layout-page");
-              if (firstPage) {
-                const pageRect = firstPage.getBoundingClientRect();
-                const pageOffsetX = (pageRect.left - overlayRect.left) / zoom;
-                const pageOffsetY = (pageRect.top - overlayRect.top) / zoom;
-
-                const rects = selectionToRects(
-                  layout,
-                  blocks,
-                  measures,
-                  from,
-                  to,
-                );
-                const adjustedRects = rects.map((rect) => ({
-                  height: rect.height,
-                  pageIndex: rect.pageIndex,
-                  width: rect.width,
-                  x: rect.x + pageOffsetX,
-                  y: rect.y + pageOffsetY,
-                }));
-                setSelectionRects(adjustedRects);
-              } else {
-                setSelectionRects([]);
-              }
+              setCaretPosition(null);
             }
           } else {
-            setSelectionRects([]);
-          }
-          setCaretPosition(null);
-        }
-      },
-      [layout, blocks, measures, getCaretFromDom, zoom],
-      // NOTE: onSelectionChange removed from dependencies - accessed via ref to prevent infinite loops
-    );
-
-    // Project anonymization match ranges onto container-space
-    // rectangles. Mirrors the SelectionOverlay flow: prefer real
-    // DOM rects from the painted page spans (correct for indents,
-    // tabs, justified text, line wraps) and fall back to the
-    // layout-coord projection only when the DOM spans aren't
-    // mounted yet (initial paint, off-screen pages). The hidden
-    // ProseMirror's spans are not used — they sit at -9999px and
-    // would yield bogus coordinates.
-    const updateAnonymizationOverlay = useCallback(() => {
-      const matches = anonymizationMatchesRef.current;
-      if (matches.length === 0) {
-        setAnonymizationRectGroups([]);
-        return;
-      }
-      const pagesContainer = pagesContainerRef.current;
-      if (!pagesContainer) {
-        setAnonymizationRectGroups([]);
-        return;
-      }
-      const overlay = pagesContainer.parentElement?.querySelector(
-        '[data-testid="selection-overlay"]',
-      );
-      const firstPage = pagesContainer.querySelector(".layout-page");
-      if (!overlay || !firstPage) {
-        setAnonymizationRectGroups([]);
-        return;
-      }
-      const overlayRect = overlay.getBoundingClientRect();
-      const pageRect = firstPage.getBoundingClientRect();
-      const pageOffsetX = (pageRect.left - overlayRect.left) / zoom;
-      const pageOffsetY = (pageRect.top - overlayRect.top) / zoom;
-      const pmSpans = findBodyPmSpans(pagesContainer);
-
-      const rectsForMatch = (
-        from: number,
-        to: number,
-      ): AnonymizationRectGroup["rects"] => {
-        const domRects: AnonymizationRectGroup["rects"] = [];
-        for (const spanEl of pmSpans) {
-          const pmStart = Number(spanEl.dataset["pmStart"]);
-          const pmEnd = Number(spanEl.dataset["pmEnd"]);
-          if (!(pmEnd > from && pmStart < to)) {
-            continue;
-          }
-          if (spanEl.classList.contains("layout-run-tab")) {
-            const spanRect = spanEl.getBoundingClientRect();
-            domRects.push({
-              x: (spanRect.left - overlayRect.left) / zoom,
-              y: (spanRect.top - overlayRect.top) / zoom,
-              width: spanRect.width / zoom,
-              height: spanRect.height / zoom,
-              pageIndex: getPageIndex(spanEl),
-            });
-            continue;
-          }
-          let textNode: Text | null = null;
-          if (spanEl.firstChild?.nodeType === Node.TEXT_NODE) {
-            textNode = spanEl.firstChild as Text;
-          } else if (
-            spanEl.firstChild instanceof HTMLElement &&
-            spanEl.firstChild.tagName === "A" &&
-            spanEl.firstChild.firstChild?.nodeType === Node.TEXT_NODE
-          ) {
-            textNode = spanEl.firstChild.firstChild as Text;
-          }
-          if (!textNode) {
-            continue;
-          }
-          const ownerDoc = spanEl.ownerDocument;
-          const startChar = Math.max(0, from - pmStart);
-          const endChar = Math.min(textNode.length, to - pmStart);
-          if (!(startChar < endChar)) {
-            continue;
-          }
-          const range = ownerDoc.createRange();
-          range.setStart(textNode, startChar);
-          range.setEnd(textNode, endChar);
-          const pageIndex = getPageIndex(spanEl);
-          for (const rect of Array.from(range.getClientRects())) {
-            domRects.push({
-              x: (rect.left - overlayRect.left) / zoom,
-              y: (rect.top - overlayRect.top) / zoom,
-              width: rect.width / zoom,
-              height: rect.height / zoom,
-              pageIndex,
-            });
+            setCaretPosition(null);
           }
         }
-        if (domRects.length > 0) {
-          return domRects;
-        }
-        if (!layout || blocks.length === 0) {
-          return [];
-        }
-        return selectionToRects(layout, blocks, measures, from, to).map(
-          (rect) => ({
-            height: rect.height,
-            pageIndex: rect.pageIndex,
-            width: rect.width,
-            x: rect.x + pageOffsetX,
-            y: rect.y + pageOffsetY,
-          }),
+        setSelectionRects([]);
+      } else {
+        // Range selection - show highlight rectangles using DOM-based approach
+        const overlay = pagesContainerRef.current?.parentElement?.querySelector(
+          '[data-testid="selection-overlay"]',
         );
-      };
 
-      const groups: AnonymizationRectGroup[] = [];
-      for (const match of matches) {
-        const rects = rectsForMatch(match.from, match.to);
-        if (rects.length > 0) {
-          groups.push({
-            rects,
-            label: match.label,
-            canonical: match.canonical,
+        if (overlay && pagesContainerRef.current) {
+          const overlayRect = overlay.getBoundingClientRect();
+          const domRects: SelectionRect[] = [];
+
+          // Find spans that intersect with the selection range
+          const spans = findBodyPmSpans(pagesContainerRef.current);
+
+          for (const spanEl of spans) {
+            const pmStart = Number(spanEl.dataset["pmStart"]);
+            const pmEnd = Number(spanEl.dataset["pmEnd"]);
+
+            // Check if this span overlaps with selection
+            if (pmEnd > from && pmStart < to) {
+              // Special handling for tab spans - highlight the full visual width
+              if (spanEl.classList.contains("layout-run-tab")) {
+                const spanRect = spanEl.getBoundingClientRect();
+                domRects.push({
+                  x: (spanRect.left - overlayRect.left) / zoom,
+                  y: (spanRect.top - overlayRect.top) / zoom,
+                  width: spanRect.width / zoom,
+                  height: spanRect.height / zoom,
+                  pageIndex: getPageIndex(spanEl),
+                });
+                continue;
+              }
+
+              // Find the text node — may be a direct child or inside an <a> for hyperlinks
+              let textNode: Text | null = null;
+              if (spanEl.firstChild?.nodeType === Node.TEXT_NODE) {
+                textNode = spanEl.firstChild as Text;
+              } else if (
+                spanEl.firstChild instanceof HTMLElement &&
+                spanEl.firstChild.tagName === "A" &&
+                spanEl.firstChild.firstChild?.nodeType === Node.TEXT_NODE
+              ) {
+                textNode = spanEl.firstChild.firstChild as Text;
+              }
+              if (!textNode) {
+                continue;
+              }
+              const ownerDoc = spanEl.ownerDocument;
+
+              // Calculate the character range within this span
+              const startChar = Math.max(0, from - pmStart);
+              const endChar = Math.min(textNode.length, to - pmStart);
+
+              if (startChar < endChar) {
+                const range = ownerDoc.createRange();
+                range.setStart(textNode, startChar);
+                range.setEnd(textNode, endChar);
+
+                // Get all client rects for this range (handles line wraps)
+                const clientRects = range.getClientRects();
+                const pageIndex = getPageIndex(spanEl);
+                for (const rect of Array.from(clientRects)) {
+                  domRects.push({
+                    x: (rect.left - overlayRect.left) / zoom,
+                    y: (rect.top - overlayRect.top) / zoom,
+                    width: rect.width / zoom,
+                    height: rect.height / zoom,
+                    pageIndex,
+                  });
+                }
+              }
+            }
+          }
+
+          if (domRects.length > 0) {
+            setSelectionRects(domRects);
+          } else {
+            // Fallback to layout-based calculation
+            const firstPage =
+              pagesContainerRef.current.querySelector(".layout-page");
+            if (firstPage) {
+              const pageRect = firstPage.getBoundingClientRect();
+              const pageOffsetX = (pageRect.left - overlayRect.left) / zoom;
+              const pageOffsetY = (pageRect.top - overlayRect.top) / zoom;
+
+              const rects = selectionToRects(
+                layout,
+                blocks,
+                measures,
+                from,
+                to,
+              );
+              const adjustedRects = rects.map((rect) => ({
+                height: rect.height,
+                pageIndex: rect.pageIndex,
+                width: rect.width,
+                x: rect.x + pageOffsetX,
+                y: rect.y + pageOffsetY,
+              }));
+              setSelectionRects(adjustedRects);
+            } else {
+              setSelectionRects([]);
+            }
+          }
+        } else {
+          setSelectionRects([]);
+        }
+        setCaretPosition(null);
+      }
+    },
+    [layout, blocks, measures, getCaretFromDom, zoom],
+    // NOTE: onSelectionChange removed from dependencies - accessed via ref to prevent infinite loops
+  );
+
+  // Project anonymization match ranges onto container-space
+  // rectangles. Mirrors the SelectionOverlay flow: prefer real
+  // DOM rects from the painted page spans (correct for indents,
+  // tabs, justified text, line wraps) and fall back to the
+  // layout-coord projection only when the DOM spans aren't
+  // mounted yet (initial paint, off-screen pages). The hidden
+  // ProseMirror's spans are not used — they sit at -9999px and
+  // would yield bogus coordinates.
+  const updateAnonymizationOverlay = useCallback(() => {
+    const matches = anonymizationMatchesRef.current;
+    if (matches.length === 0) {
+      setAnonymizationRectGroups([]);
+      return;
+    }
+    const pagesContainer = pagesContainerRef.current;
+    if (!pagesContainer) {
+      setAnonymizationRectGroups([]);
+      return;
+    }
+    const overlay = pagesContainer.parentElement?.querySelector(
+      '[data-testid="selection-overlay"]',
+    );
+    const firstPage = pagesContainer.querySelector(".layout-page");
+    if (!overlay || !firstPage) {
+      setAnonymizationRectGroups([]);
+      return;
+    }
+    const overlayRect = overlay.getBoundingClientRect();
+    const pageRect = firstPage.getBoundingClientRect();
+    const pageOffsetX = (pageRect.left - overlayRect.left) / zoom;
+    const pageOffsetY = (pageRect.top - overlayRect.top) / zoom;
+    const pmSpans = findBodyPmSpans(pagesContainer);
+
+    const rectsForMatch = (
+      from: number,
+      to: number,
+    ): AnonymizationRectGroup["rects"] => {
+      const domRects: AnonymizationRectGroup["rects"] = [];
+      for (const spanEl of pmSpans) {
+        const pmStart = Number(spanEl.dataset["pmStart"]);
+        const pmEnd = Number(spanEl.dataset["pmEnd"]);
+        if (!(pmEnd > from && pmStart < to)) {
+          continue;
+        }
+        if (spanEl.classList.contains("layout-run-tab")) {
+          const spanRect = spanEl.getBoundingClientRect();
+          domRects.push({
+            x: (spanRect.left - overlayRect.left) / zoom,
+            y: (spanRect.top - overlayRect.top) / zoom,
+            width: spanRect.width / zoom,
+            height: spanRect.height / zoom,
+            pageIndex: getPageIndex(spanEl),
+          });
+          continue;
+        }
+        let textNode: Text | null = null;
+        if (spanEl.firstChild?.nodeType === Node.TEXT_NODE) {
+          textNode = spanEl.firstChild as Text;
+        } else if (
+          spanEl.firstChild instanceof HTMLElement &&
+          spanEl.firstChild.tagName === "A" &&
+          spanEl.firstChild.firstChild?.nodeType === Node.TEXT_NODE
+        ) {
+          textNode = spanEl.firstChild.firstChild as Text;
+        }
+        if (!textNode) {
+          continue;
+        }
+        const ownerDoc = spanEl.ownerDocument;
+        const startChar = Math.max(0, from - pmStart);
+        const endChar = Math.min(textNode.length, to - pmStart);
+        if (!(startChar < endChar)) {
+          continue;
+        }
+        const range = ownerDoc.createRange();
+        range.setStart(textNode, startChar);
+        range.setEnd(textNode, endChar);
+        const pageIndex = getPageIndex(spanEl);
+        for (const rect of Array.from(range.getClientRects())) {
+          domRects.push({
+            x: (rect.left - overlayRect.left) / zoom,
+            y: (rect.top - overlayRect.top) / zoom,
+            width: rect.width / zoom,
+            height: rect.height / zoom,
+            pageIndex,
           });
         }
       }
-      setAnonymizationRectGroups(groups);
-    }, [layout, blocks, measures, zoom]);
+      if (domRects.length > 0) {
+        return domRects;
+      }
+      if (!layout || blocks.length === 0) {
+        return [];
+      }
+      return selectionToRects(layout, blocks, measures, from, to).map(
+        (rect) => ({
+          height: rect.height,
+          pageIndex: rect.pageIndex,
+          width: rect.width,
+          x: rect.x + pageOffsetX,
+          y: rect.y + pageOffsetY,
+        }),
+      );
+    };
 
-    const hideSelectionOverlayDuringInput = useCallback(
-      (state: EditorState) => {
-        suppressSelectionOverlayRef.current = true;
-        setCaretPosition(null);
+    const groups: AnonymizationRectGroup[] = [];
+    for (const match of matches) {
+      const rects = rectsForMatch(match.from, match.to);
+      if (rects.length > 0) {
+        groups.push({
+          rects,
+          label: match.label,
+          canonical: match.canonical,
+        });
+      }
+    }
+    setAnonymizationRectGroups(groups);
+  }, [layout, blocks, measures, zoom]);
+
+  const hideSelectionOverlayDuringInput = useCallback(
+    (state: EditorState) => {
+      suppressSelectionOverlayRef.current = true;
+      setCaretPosition(null);
+      setSelectionRects([]);
+
+      if (revealSelectionOverlayTimerRef.current !== null) {
+        window.clearTimeout(revealSelectionOverlayTimerRef.current);
+      }
+
+      revealSelectionOverlayTimerRef.current = window.setTimeout(() => {
+        revealSelectionOverlayTimerRef.current = null;
+        suppressSelectionOverlayRef.current = false;
+        updateSelectionOverlay(hiddenPMRef.current?.getState() ?? state);
+      }, SELECTION_REVEAL_AFTER_INPUT_DELAY);
+    },
+    [updateSelectionOverlay],
+  );
+
+  useEffect(
+    () => () => {
+      if (revealSelectionOverlayTimerRef.current !== null) {
+        window.clearTimeout(revealSelectionOverlayTimerRef.current);
+        revealSelectionOverlayTimerRef.current = null;
+      }
+    },
+    [],
+  );
+
+  // =========================================================================
+  // Event Handlers
+  // =========================================================================
+
+  /**
+   * Handle PM transaction - re-layout on content/selection change.
+   */
+  const handleTransaction = useCallback(
+    (transaction: Transaction, newState: EditorState) => {
+      // Keep the anonymization match list mirrored in a ref so the
+      // overlay recompute reads the latest set without depending on
+      // a state setter inside its useCallback closure. We pull off
+      // the plugin's state on every transaction; if the matches
+      // identity changes (term meta or doc edit), schedule a paint.
+      const nextMatches =
+        anonymizationDecorationsKey.getState(newState)?.matches ?? [];
+      const matchesChanged = nextMatches !== anonymizationMatchesRef.current;
+      anonymizationMatchesRef.current = nextMatches;
+      if (matchesChanged) {
+        updateAnonymizationOverlay();
+      }
+
+      if (transaction.docChanged) {
+        // Increment state sequence to signal document changed
+        syncCoordinator.incrementStateSeq();
+
+        hideSelectionOverlayDuringInput(newState);
+
+        // Content changed - schedule layout (coalesced via rAF)
+        scheduleLayout(newState, getTransactionDirtyRange(transaction));
+
+        // Convert back to the Folio document model off the keypress path.
+        scheduleDocumentChangeNotification();
+      }
+
+      // Request selection update (will only execute when layout is current)
+      syncCoordinator.requestRender();
+
+      // Only update selection overlay immediately for non-doc-changing transactions
+      // (e.g. arrow keys, clicks). For doc changes, the overlay will be updated
+      // after layout completes via the useEffect([layout]) hook, avoiding cursor
+      // flicker from stale DOM positions.
+      if (!transaction.docChanged) {
+        updateSelectionOverlay(newState);
+      }
+    },
+    [
+      scheduleLayout,
+      scheduleDocumentChangeNotification,
+      hideSelectionOverlayDuringInput,
+      updateSelectionOverlay,
+      updateAnonymizationOverlay,
+      syncCoordinator,
+    ],
+    // NOTE: onDocumentChange removed from dependencies - accessed via ref to prevent infinite loops
+  );
+
+  /**
+   * Handle selection change from PM.
+   */
+  const handleSelectionChange = useCallback(
+    (state: EditorState) => {
+      // Check if this is an image node selection - suppress text overlay if so
+      const { selection } = state;
+      if (
+        selection instanceof NodeSelection &&
+        selection.node.type.name === "image"
+      ) {
+        // Suppress text selection overlay for image selections
         setSelectionRects([]);
+        setCaretPosition(null);
+      } else if (syncCoordinator.isSafeToRender()) {
+        // Only update overlay when layout is current. When doc changed,
+        // layout is pending and DOM hasn't been updated yet — updating the
+        // overlay now would position the cursor against stale geometry,
+        // causing it to visibly jump. The overlay will be updated after
+        // layout completes via the useEffect([layout]) hook.
+        updateSelectionOverlay(state);
+      }
 
-        if (revealSelectionOverlayTimerRef.current !== null) {
-          window.clearTimeout(revealSelectionOverlayTimerRef.current);
+      // Defer image selection check until after layout update
+      requestAnimationFrame(() => {
+        const view = hiddenPMRef.current?.getView();
+        if (!view) {
+          setSelectedImageInfo(null);
+          return;
         }
-
-        revealSelectionOverlayTimerRef.current = window.setTimeout(() => {
-          revealSelectionOverlayTimerRef.current = null;
-          suppressSelectionOverlayRef.current = false;
-          updateSelectionOverlay(hiddenPMRef.current?.getState() ?? state);
-        }, SELECTION_REVEAL_AFTER_INPUT_DELAY);
-      },
-      [updateSelectionOverlay],
-    );
-
-    useEffect(
-      () => () => {
-        if (revealSelectionOverlayTimerRef.current !== null) {
-          window.clearTimeout(revealSelectionOverlayTimerRef.current);
-          revealSelectionOverlayTimerRef.current = null;
-        }
-      },
-      [],
-    );
-
-    // =========================================================================
-    // Event Handlers
-    // =========================================================================
-
-    /**
-     * Handle PM transaction - re-layout on content/selection change.
-     */
-    const handleTransaction = useCallback(
-      (transaction: Transaction, newState: EditorState) => {
-        // Keep the anonymization match list mirrored in a ref so the
-        // overlay recompute reads the latest set without depending on
-        // a state setter inside its useCallback closure. We pull off
-        // the plugin's state on every transaction; if the matches
-        // identity changes (term meta or doc edit), schedule a paint.
-        const nextMatches =
-          anonymizationDecorationsKey.getState(newState)?.matches ?? [];
-        const matchesChanged = nextMatches !== anonymizationMatchesRef.current;
-        anonymizationMatchesRef.current = nextMatches;
-        if (matchesChanged) {
-          updateAnonymizationOverlay();
-        }
-
-        if (transaction.docChanged) {
-          // Increment state sequence to signal document changed
-          syncCoordinator.incrementStateSeq();
-
-          hideSelectionOverlayDuringInput(newState);
-
-          // Content changed - schedule layout (coalesced via rAF)
-          scheduleLayout(newState, getTransactionDirtyRange(transaction));
-
-          // Convert back to the Folio document model off the keypress path.
-          scheduleDocumentChangeNotification();
-        }
-
-        // Request selection update (will only execute when layout is current)
-        syncCoordinator.requestRender();
-
-        // Only update selection overlay immediately for non-doc-changing transactions
-        // (e.g. arrow keys, clicks). For doc changes, the overlay will be updated
-        // after layout completes via the useEffect([layout]) hook, avoiding cursor
-        // flicker from stale DOM positions.
-        if (!transaction.docChanged) {
-          updateSelectionOverlay(newState);
-        }
-      },
-      [
-        scheduleLayout,
-        scheduleDocumentChangeNotification,
-        hideSelectionOverlayDuringInput,
-        updateSelectionOverlay,
-        updateAnonymizationOverlay,
-        syncCoordinator,
-      ],
-      // NOTE: onDocumentChange removed from dependencies - accessed via ref to prevent infinite loops
-    );
-
-    /**
-     * Handle selection change from PM.
-     */
-    const handleSelectionChange = useCallback(
-      (state: EditorState) => {
-        // Check if this is an image node selection - suppress text overlay if so
-        const { selection } = state;
-        if (
-          selection instanceof NodeSelection &&
-          selection.node.type.name === "image"
-        ) {
-          // Suppress text selection overlay for image selections
-          setSelectionRects([]);
-          setCaretPosition(null);
-        } else if (syncCoordinator.isSafeToRender()) {
-          // Only update overlay when layout is current. When doc changed,
-          // layout is pending and DOM hasn't been updated yet — updating the
-          // overlay now would position the cursor against stale geometry,
-          // causing it to visibly jump. The overlay will be updated after
-          // layout completes via the useEffect([layout]) hook.
-          updateSelectionOverlay(state);
-        }
-
-        // Defer image selection check until after layout update
-        requestAnimationFrame(() => {
-          const view = hiddenPMRef.current?.getView();
-          if (!view) {
-            setSelectedImageInfo(null);
+        const { selection: sel } = view.state;
+        if (sel instanceof NodeSelection && sel.node.type.name === "image") {
+          const pmPos = sel.from;
+          const imgEl = pagesContainerRef.current
+            ? findBodyPmAnchor(pagesContainerRef.current, pmPos)
+            : null;
+          if (imgEl) {
+            setSelectedImageInfo(buildImageSelectionInfo(imgEl, pmPos));
             return;
           }
-          const { selection: sel } = view.state;
-          if (sel instanceof NodeSelection && sel.node.type.name === "image") {
-            const pmPos = sel.from;
-            const imgEl = pagesContainerRef.current
-              ? findBodyPmAnchor(pagesContainerRef.current, pmPos)
-              : null;
-            if (imgEl) {
-              setSelectedImageInfo(buildImageSelectionInfo(imgEl, pmPos));
-              return;
-            }
-          }
-          if (!isImageInteractingRef.current) {
-            setSelectedImageInfo(null);
-          }
-        });
-      },
-      [updateSelectionOverlay, buildImageSelectionInfo, syncCoordinator],
-    );
-
-    /**
-     * Get PM position from mouse coordinates using DOM-based detection.
-     * Falls back to geometry-based calculation if DOM mapping fails.
-     */
-    const getPositionFromMouse = useCallback(
-      (clientX: number, clientY: number): number | null => {
-        if (!pagesContainerRef.current || !layout) {
-          return null;
         }
-
-        // Try DOM-based click mapping first (most accurate)
-        const domPos = clickToPositionDom(
-          pagesContainerRef.current,
-          clientX,
-          clientY,
-          zoom,
-        );
-        if (domPos !== null) {
-          return domPos;
+        if (!isImageInteractingRef.current) {
+          setSelectedImageInfo(null);
         }
+      });
+    },
+    [updateSelectionOverlay, buildImageSelectionInfo, syncCoordinator],
+  );
 
-        // Fallback to geometry-based mapping
-        const pageElements =
-          pagesContainerRef.current.querySelectorAll(".layout-page");
-        let clickedPageIndex = -1;
-        let pageRect: DOMRect | null = null;
+  /**
+   * Get PM position from mouse coordinates using DOM-based detection.
+   * Falls back to geometry-based calculation if DOM mapping fails.
+   */
+  const getPositionFromMouse = useCallback(
+    (clientX: number, clientY: number): number | null => {
+      if (!pagesContainerRef.current || !layout) {
+        return null;
+      }
 
-        for (let i = 0; i < pageElements.length; i++) {
-          const pageEl = pageElements[i]!; // SAFETY: i < pageElements.length
-          const rect = pageEl.getBoundingClientRect();
-          if (
-            clientX >= rect.left &&
-            clientX <= rect.right &&
-            clientY >= rect.top &&
-            clientY <= rect.bottom
-          ) {
-            clickedPageIndex = i;
-            pageRect = rect;
-            break;
-          }
+      // Try DOM-based click mapping first (most accurate)
+      const domPos = clickToPositionDom(
+        pagesContainerRef.current,
+        clientX,
+        clientY,
+        zoom,
+      );
+      if (domPos !== null) {
+        return domPos;
+      }
+
+      // Fallback to geometry-based mapping
+      const pageElements =
+        pagesContainerRef.current.querySelectorAll(".layout-page");
+      let clickedPageIndex = -1;
+      let pageRect: DOMRect | null = null;
+
+      for (let i = 0; i < pageElements.length; i++) {
+        const pageEl = pageElements[i]!; // SAFETY: i < pageElements.length
+        const rect = pageEl.getBoundingClientRect();
+        if (
+          clientX >= rect.left &&
+          clientX <= rect.right &&
+          clientY >= rect.top &&
+          clientY <= rect.bottom
+        ) {
+          clickedPageIndex = i;
+          pageRect = rect;
+          break;
         }
+      }
 
-        if (clickedPageIndex < 0 || !pageRect) {
-          return null;
-        }
+      if (clickedPageIndex < 0 || !pageRect) {
+        return null;
+      }
 
-        const pageX = (clientX - pageRect.left) / zoom;
-        const pageY = (clientY - pageRect.top) / zoom;
+      const pageX = (clientX - pageRect.left) / zoom;
+      const pageY = (clientY - pageRect.top) / zoom;
 
-        const page = layout.pages[clickedPageIndex];
-        if (!page) {
-          return null;
-        }
+      const page = layout.pages[clickedPageIndex];
+      if (!page) {
+        return null;
+      }
 
-        const pageHit = {
-          pageIndex: clickedPageIndex,
-          page,
-          pageY,
-        };
+      const pageHit = {
+        pageIndex: clickedPageIndex,
+        page,
+        pageY,
+      };
 
-        const fragmentHit = hitTestFragment(pageHit, blocks, measures, {
+      const fragmentHit = hitTestFragment(pageHit, blocks, measures, {
+        x: pageX,
+        y: pageY,
+      });
+
+      if (!fragmentHit) {
+        return null;
+      }
+
+      // For table fragments, do cell-level hit testing
+      if (fragmentHit.fragment.kind === "table") {
+        const tableCellHit = hitTestTableCell(pageHit, blocks, measures, {
           x: pageX,
           y: pageY,
         });
-
-        if (!fragmentHit) {
-          return null;
-        }
-
-        // For table fragments, do cell-level hit testing
-        if (fragmentHit.fragment.kind === "table") {
-          const tableCellHit = hitTestTableCell(pageHit, blocks, measures, {
-            x: pageX,
-            y: pageY,
-          });
-          return clickToPosition(fragmentHit, tableCellHit);
-        }
-
-        return clickToPosition(fragmentHit);
-      },
-      [layout, blocks, measures, zoom],
-    );
-
-    /**
-     * Find the table cell position in ProseMirror doc for a given PM position.
-     * Returns the position just inside the cell node, suitable for CellSelection.create().
-     */
-    const findCellPosFromPmPos = useCallback((pmPos: number): number | null => {
-      const view = hiddenPMRef.current?.getView();
-      if (!view) {
-        return null;
+        return clickToPosition(fragmentHit, tableCellHit);
       }
-      try {
-        const $pos = view.state.doc.resolve(pmPos);
-        for (let d = $pos.depth; d > 0; d--) {
-          const node = $pos.node(d);
-          if (
-            node.type.name === "tableCell" ||
-            node.type.name === "tableHeader"
-          ) {
-            // Return position of the cell node itself (before(d)).
-            // CellSelection.create will resolve this and use cellAround() internally.
-            return $pos.before(d);
-          }
+
+      return clickToPosition(fragmentHit);
+    },
+    [layout, blocks, measures, zoom],
+  );
+
+  /**
+   * Find the table cell position in ProseMirror doc for a given PM position.
+   * Returns the position just inside the cell node, suitable for CellSelection.create().
+   */
+  const findCellPosFromPmPos = useCallback((pmPos: number): number | null => {
+    const view = hiddenPMRef.current?.getView();
+    if (!view) {
+      return null;
+    }
+    try {
+      const $pos = view.state.doc.resolve(pmPos);
+      for (let d = $pos.depth; d > 0; d--) {
+        const node = $pos.node(d);
+        if (
+          node.type.name === "tableCell" ||
+          node.type.name === "tableHeader"
+        ) {
+          // Return position of the cell node itself (before(d)).
+          // CellSelection.create will resolve this and use cellAround() internally.
+          return $pos.before(d);
         }
-      } catch {
-        // Position resolution failed
+      }
+    } catch {
+      // Position resolution failed
+    }
+    return null;
+  }, []);
+
+  /**
+   * Find the closest image element from a click target.
+   * Returns the element with data-pm-start if it's an image, or null.
+   */
+  const findImageElement = useCallback(
+    (target: HTMLElement): HTMLElement | null => {
+      const IMAGE_CONTAINER_CLASSES = [
+        "layout-block-image",
+        "layout-image",
+        "layout-page-floating-image",
+      ];
+      const isImageContainer = (el: HTMLElement) =>
+        !!el.dataset["pmStart"] &&
+        IMAGE_CONTAINER_CLASSES.some((c) => el.classList.contains(c));
+
+      // Inline images: <img class="layout-run layout-run-image" data-pm-start="X">
+      if (
+        target.tagName === "IMG" &&
+        target.classList.contains("layout-run-image")
+      ) {
+        return target;
+      }
+      // Click on <img> inside a container div, or directly on the container
+      if (
+        target.tagName === "IMG" &&
+        target.parentElement &&
+        isImageContainer(target.parentElement)
+      ) {
+        return target.parentElement;
+      }
+      if (isImageContainer(target)) {
+        return target;
       }
       return null;
-    }, []);
+    },
+    [],
+  );
 
-    /**
-     * Find the closest image element from a click target.
-     * Returns the element with data-pm-start if it's an image, or null.
-     */
-    const findImageElement = useCallback(
-      (target: HTMLElement): HTMLElement | null => {
-        const IMAGE_CONTAINER_CLASSES = [
-          "layout-block-image",
-          "layout-image",
-          "layout-page-floating-image",
-        ];
-        const isImageContainer = (el: HTMLElement) =>
-          !!el.dataset["pmStart"] &&
-          IMAGE_CONTAINER_CLASSES.some((c) => el.classList.contains(c));
+  /** Scroll visible pages to a ProseMirror position. */
+  const scrollToPositionImpl = useCallback((pmPos: number) => {
+    if (!isValidPmScrollPosition(pmPos)) {
+      return;
+    }
 
-        // Inline images: <img class="layout-run layout-run-image" data-pm-start="X">
-        if (
-          target.tagName === "IMG" &&
-          target.classList.contains("layout-run-image")
-        ) {
-          return target;
-        }
-        // Click on <img> inside a container div, or directly on the container
-        if (
-          target.tagName === "IMG" &&
-          target.parentElement &&
-          isImageContainer(target.parentElement)
-        ) {
-          return target.parentElement;
-        }
-        if (isImageContainer(target)) {
-          return target;
-        }
-        return null;
-      },
-      [],
-    );
+    const pageContainer = pagesContainerRef.current;
+    if (!pageContainer) {
+      return;
+    }
+    // Phase 1: locate the target via per-run DOM if it's already
+    // rendered, otherwise via the page shell (always present
+    // under virtualization). The shell-based path was added to
+    // fix the "many clicks to arrive" bug — a per-run query on a
+    // virtualized doc only sees runs in the currently-rendered
+    // buffer, so each click stepped one buffer-width forward
+    // instead of jumping straight to the target.
+    const exact = findBodyPmAnchor(pageContainer, pmPos);
+    if (exact) {
+      exact.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
 
-    /** Scroll visible pages to a ProseMirror position. */
-    const scrollToPositionImpl = useCallback((pmPos: number) => {
-      if (!isValidPmScrollPosition(pmPos)) {
+    // Walk all currently-rendered runs to see if pmPos falls
+    // inside one of them (block-node positions never match
+    // exactly but usually live inside a known run).
+    let runMatch: HTMLElement | null = null;
+    for (const el of findBodyPmAnchors(pageContainer)) {
+      const start = Number(el.dataset["pmStart"]);
+      if (Number.isNaN(start)) {
+        continue;
+      }
+      const endAttr = el.dataset["pmEnd"];
+      const end = endAttr === undefined ? start : Number(endAttr);
+      if (start <= pmPos && pmPos <= end) {
+        runMatch = el;
+        break;
+      }
+    }
+    if (runMatch) {
+      runMatch.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+
+    // Target lives outside the rendered buffer. Scroll to its
+    // page shell (which exists with correct dimensions even when
+    // empty), then refine to the exact run once the
+    // IntersectionObserver populates the page content.
+    //
+    // TODO: when the AI review session opens, pre-warm the page
+    // shells that contain pending suggestions (one-shot
+    // populate of ~30 pages instead of 200). Lets this scroll
+    // become single-phase again — no rAF refine — and makes
+    // navigation feel instant for long documents.
+    const shellHit = findPageShellForPmPos(pageContainer, pmPos);
+    if (!shellHit) {
+      return;
+    }
+    const { element: shell } = shellHit;
+    shell.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    let attempts = 0;
+    const refine = () => {
+      attempts++;
+      const exactInShell = findBodyPmAnchor(shell, pmPos);
+      if (exactInShell) {
+        exactInShell.scrollIntoView({ behavior: "smooth", block: "center" });
         return;
       }
-
-      const pageContainer = pagesContainerRef.current;
-      if (!pageContainer) {
-        return;
-      }
-      // Phase 1: locate the target via per-run DOM if it's already
-      // rendered, otherwise via the page shell (always present
-      // under virtualization). The shell-based path was added to
-      // fix the "many clicks to arrive" bug — a per-run query on a
-      // virtualized doc only sees runs in the currently-rendered
-      // buffer, so each click stepped one buffer-width forward
-      // instead of jumping straight to the target.
-      const exact = findBodyPmAnchor(pageContainer, pmPos);
-      if (exact) {
-        exact.scrollIntoView({ behavior: "smooth", block: "center" });
-        return;
-      }
-
-      // Walk all currently-rendered runs to see if pmPos falls
-      // inside one of them (block-node positions never match
-      // exactly but usually live inside a known run).
-      let runMatch: HTMLElement | null = null;
-      for (const el of findBodyPmAnchors(pageContainer)) {
+      let bestEl: HTMLElement | null = null;
+      let bestStart = Number.NEGATIVE_INFINITY;
+      for (const el of findBodyPmAnchors(shell)) {
         const start = Number(el.dataset["pmStart"]);
         if (Number.isNaN(start)) {
           continue;
@@ -2964,1913 +2994,1852 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         const endAttr = el.dataset["pmEnd"];
         const end = endAttr === undefined ? start : Number(endAttr);
         if (start <= pmPos && pmPos <= end) {
-          runMatch = el;
+          bestEl = el;
           break;
         }
+        if (start <= pmPos && start > bestStart) {
+          bestStart = start;
+          bestEl = el;
+        }
       }
-      if (runMatch) {
-        runMatch.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (bestEl) {
+        bestEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+      // IntersectionObserver populates on the next tick; give it
+      // a few frames before giving up. ~20 frames covers slow
+      // initial paint on long pages without spinning indefinitely
+      // if the page genuinely has no run at this position.
+      if (attempts < 20) {
+        requestAnimationFrame(refine);
+      }
+    };
+    requestAnimationFrame(refine);
+  }, []);
+
+  const scrollToPageImpl = useCallback(
+    (pageNumber: number) => {
+      const target = getPageScrollTarget(layout, pageNumber);
+      if (!target) {
         return;
       }
 
-      // Target lives outside the rendered buffer. Scroll to its
-      // page shell (which exists with correct dimensions even when
-      // empty), then refine to the exact run once the
-      // IntersectionObserver populates the page content.
-      //
-      // TODO: when the AI review session opens, pre-warm the page
-      // shells that contain pending suggestions (one-shot
-      // populate of ~30 pages instead of 200). Lets this scroll
-      // become single-phase again — no rAF refine — and makes
-      // navigation feel instant for long documents.
-      const shellHit = findPageShellForPmPos(pageContainer, pmPos);
-      if (!shellHit) {
-        return;
-      }
-      const { element: shell } = shellHit;
-      shell.scrollIntoView({ behavior: "smooth", block: "center" });
-
-      let attempts = 0;
-      const refine = () => {
-        attempts++;
-        const exactInShell = findBodyPmAnchor(shell, pmPos);
-        if (exactInShell) {
-          exactInShell.scrollIntoView({ behavior: "smooth", block: "center" });
-          return;
-        }
-        let bestEl: HTMLElement | null = null;
-        let bestStart = Number.NEGATIVE_INFINITY;
-        for (const el of findBodyPmAnchors(shell)) {
-          const start = Number(el.dataset["pmStart"]);
-          if (Number.isNaN(start)) {
-            continue;
-          }
-          const endAttr = el.dataset["pmEnd"];
-          const end = endAttr === undefined ? start : Number(endAttr);
-          if (start <= pmPos && pmPos <= end) {
-            bestEl = el;
-            break;
-          }
-          if (start <= pmPos && start > bestStart) {
-            bestStart = start;
-            bestEl = el;
-          }
-        }
-        if (bestEl) {
-          bestEl.scrollIntoView({ behavior: "smooth", block: "center" });
-          return;
-        }
-        // IntersectionObserver populates on the next tick; give it
-        // a few frames before giving up. ~20 frames covers slow
-        // initial paint on long pages without spinning indefinitely
-        // if the page genuinely has no run at this position.
-        if (attempts < 20) {
-          requestAnimationFrame(refine);
-        }
-      };
-      requestAnimationFrame(refine);
-    }, []);
-
-    const scrollToPageImpl = useCallback(
-      (pageNumber: number) => {
-        const target = getPageScrollTarget(layout, pageNumber);
-        if (!target) {
-          return;
-        }
-
-        if (target.type === "position") {
-          scrollToPositionImpl(target.pmPos);
-          return;
-        }
-
-        const pageContainer = pagesContainerRef.current;
-        const shell = pageContainer?.querySelector<HTMLElement>(
-          `[data-page-number="${String(target.pageIndex + 1)}"]`,
-        );
-        shell?.scrollIntoView({ block: "center", inline: "nearest" });
-      },
-      [layout, scrollToPositionImpl],
-    );
-
-    const focusHiddenEditor = useCallback(() => {
-      if (readOnly) {
-        containerRef.current?.focus({ preventScroll: true });
-        setIsFocused(true);
+      if (target.type === "position") {
+        scrollToPositionImpl(target.pmPos);
         return;
       }
 
-      hiddenPMRef.current?.focus();
+      const pageContainer = pagesContainerRef.current;
+      const shell = pageContainer?.querySelector<HTMLElement>(
+        `[data-page-number="${String(target.pageIndex + 1)}"]`,
+      );
+      shell?.scrollIntoView({ block: "center", inline: "nearest" });
+    },
+    [layout, scrollToPositionImpl],
+  );
+
+  const focusHiddenEditor = useCallback(() => {
+    if (readOnly) {
+      containerRef.current?.focus({ preventScroll: true });
       setIsFocused(true);
-    }, [readOnly]);
+      return;
+    }
 
-    const startPointerTextSelection = useCallback(
-      (clientX: number, clientY: number) => {
-        const pmPos = getPositionFromMouse(clientX, clientY);
+    hiddenPMRef.current?.focus();
+    setIsFocused(true);
+  }, [readOnly]);
 
-        if (pmPos !== null) {
-          const cellPos = findCellPosFromPmPos(pmPos);
-          cellDragAnchorPosRef.current = cellPos;
-          isCellDraggingRef.current = false;
-          cellDragLastPmPosRef.current = null;
-          cellDragOverflowXRef.current = null;
+  const startPointerTextSelection = useCallback(
+    (clientX: number, clientY: number) => {
+      const pmPos = getPositionFromMouse(clientX, clientY);
 
+      if (pmPos !== null) {
+        const cellPos = findCellPosFromPmPos(pmPos);
+        cellDragAnchorPosRef.current = cellPos;
+        isCellDraggingRef.current = false;
+        cellDragLastPmPosRef.current = null;
+        cellDragOverflowXRef.current = null;
+
+        isDraggingRef.current = true;
+        dragAnchorRef.current = pmPos;
+        hiddenPMRef.current?.setSelection(pmPos);
+      } else {
+        cellDragAnchorPosRef.current = null;
+        isCellDraggingRef.current = false;
+        const view = hiddenPMRef.current?.getView();
+        if (view) {
+          const endPos = Math.max(0, view.state.doc.content.size - 1);
+          hiddenPMRef.current?.setSelection(endPos);
+          dragAnchorRef.current = endPos;
           isDraggingRef.current = true;
-          dragAnchorRef.current = pmPos;
-          hiddenPMRef.current?.setSelection(pmPos);
-        } else {
-          cellDragAnchorPosRef.current = null;
-          isCellDraggingRef.current = false;
-          const view = hiddenPMRef.current?.getView();
-          if (view) {
-            const endPos = Math.max(0, view.state.doc.content.size - 1);
-            hiddenPMRef.current?.setSelection(endPos);
-            dragAnchorRef.current = endPos;
-            isDraggingRef.current = true;
-          }
         }
-
-        focusHiddenEditor();
-      },
-      [findCellPosFromPmPos, focusHiddenEditor, getPositionFromMouse],
-    );
-
-    const copySelectionText = useCallback(() => {
-      const view = hiddenPMRef.current?.getView();
-      if (!view) {
-        return false;
       }
 
-      const { from, to } = view.state.selection;
-      if (from === to) {
-        return false;
-      }
+      focusHiddenEditor();
+    },
+    [findCellPosFromPmPos, focusHiddenEditor, getPositionFromMouse],
+  );
 
-      const text = view.state.doc.textBetween(from, to, "\n");
-      if (!text) {
-        return false;
-      }
-
-      // eslint-disable-next-line typescript/no-unnecessary-condition -- Clipboard API may be unavailable in older browsers or insecure contexts.
-      if (navigator.clipboard === undefined) {
-        return false;
-      }
-
-      void navigator.clipboard.writeText(text).catch(() => undefined);
+  const copySelectionText = useCallback(() => {
+    const view = hiddenPMRef.current?.getView();
+    if (!view) {
       return false;
-    }, []);
+    }
 
-    /**
-     * Handle mousedown on pages - start selection or drag.
-     */
-    const handlePagesMouseDown = useCallback(
-      (e: React.MouseEvent) => {
-        if (!hiddenPMRef.current) {
-          return;
-        }
+    const { from, to } = view.state.selection;
+    if (from === to) {
+      return false;
+    }
 
-        // Right-click: prevent default to stop Firefox from resetting selection,
-        // but don't process our selection logic
-        if (e.button === 2) {
-          e.preventDefault();
-          return;
-        }
+    const text = view.state.doc.textBetween(from, to, "\n");
+    if (!text) {
+      return false;
+    }
 
-        if (e.button !== 0) {
-          return;
-        } // Only handle left click
+    // eslint-disable-next-line typescript/no-unnecessary-condition -- Clipboard API may be unavailable in older browsers or insecure contexts.
+    if (navigator.clipboard === undefined) {
+      return false;
+    }
 
-        // Hide table insert button on any mousedown
-        setTableInsertButton(null);
-        clearTableInsertTimer();
+    void navigator.clipboard.writeText(text).catch(() => undefined);
+    return false;
+  }, []);
 
-        const target = e.target instanceof HTMLElement ? e.target : null;
-        if (!target) {
-          return;
-        }
-
-        // Prevent default browser navigation for hyperlink clicks,
-        // but let the rest of the handler run for cursor placement and drag selection.
-        // The popup is shown in handlePagesClick (on mouseup) instead.
-        const anchorClosest = target.closest("a[href]");
-        const anchorEl =
-          anchorClosest instanceof HTMLAnchorElement ? anchorClosest : null;
-        if (anchorEl) {
-          e.preventDefault(); // Prevent navigation only
-        }
-
-        // When in HF edit mode, clicks outside header/footer area close the HF editor
-        if (!readOnly && hfEditMode && onBodyClick) {
-          const isInHfArea =
-            target.closest(".layout-page-header") ||
-            target.closest(".layout-page-footer") ||
-            target.closest(".hf-inline-editor");
-          if (!isInHfArea) {
-            e.preventDefault();
-            e.stopPropagation();
-            onBodyClick();
-            return;
-          }
-        }
-
-        // In normal mode, clicks in header/footer area should place cursor at
-        // start of body content, not inside header/footer (matches Word/Google Docs)
-        if (!readOnly && !hfEditMode) {
-          const isInHfArea =
-            target.closest(".layout-page-header") ||
-            target.closest(".layout-page-footer");
-          if (isInHfArea) {
-            e.preventDefault();
-            // Place cursor at start of body content
-            hiddenPMRef.current.setSelection(0);
-            hiddenPMRef.current.focus();
-            setIsFocused(true);
-            return;
-          }
-        }
-
-        // Column resize: intercept clicks on resize handles
-        if (
-          !readOnly &&
-          target.classList.contains("layout-table-resize-handle")
-        ) {
-          e.preventDefault();
-          e.stopPropagation();
-          isResizingColumnRef.current = true;
-          resizeStartXRef.current = e.clientX;
-          resizeHandleRef.current = target;
-          target.classList.add("dragging");
-
-          const colIndex = Number.parseInt(
-            target.dataset["columnIndex"] ?? "0",
-            10,
-          );
-          resizeColumnIndexRef.current = colIndex;
-          resizeTablePmStartRef.current = Number.parseInt(
-            target.dataset["tablePmStart"] ?? "0",
-            10,
-          );
-
-          // Get current column widths from the ProseMirror doc
-          const view = hiddenPMRef.current.getView();
-          if (view) {
-            const $pos = view.state.doc.resolve(
-              resizeTablePmStartRef.current + 1,
-            );
-            for (let d = $pos.depth; d >= 0; d--) {
-              const node = $pos.node(d);
-              if (node.type.name === "table") {
-                const widths = node.attrs["columnWidths"] as number[] | null;
-                if (
-                  widths &&
-                  widths[colIndex] !== undefined &&
-                  widths[colIndex + 1] !== undefined
-                ) {
-                  resizeOrigWidthsRef.current = {
-                    left: widths[colIndex]!, // SAFETY: guarded by widths[colIndex] !== undefined check above
-                    right: widths[colIndex + 1]!, // SAFETY: guarded by widths[colIndex + 1] !== undefined check above
-                  };
-                }
-                break;
-              }
-            }
-          }
-          return;
-        }
-
-        // Row resize: intercept clicks on row resize handles or bottom edge handle
-        if (
-          !readOnly &&
-          (target.classList.contains("layout-table-row-resize-handle") ||
-            target.classList.contains("layout-table-edge-handle-bottom"))
-        ) {
-          e.preventDefault();
-          e.stopPropagation();
-          isResizingRowRef.current = true;
-          resizeStartYRef.current = e.clientY;
-          resizeRowHandleRef.current = target;
-          resizeRowIsEdgeRef.current = target.dataset["isEdge"] === "bottom";
-          target.classList.add("dragging");
-
-          const rowIndex = Number.parseInt(
-            target.dataset["rowIndex"] ?? "0",
-            10,
-          );
-          resizeRowIndexRef.current = rowIndex;
-          resizeRowTablePmStartRef.current = Number.parseInt(
-            target.dataset["tablePmStart"] ?? "0",
-            10,
-          );
-
-          // Get current row height from ProseMirror doc
-          const view = hiddenPMRef.current.getView();
-          if (view) {
-            const $pos = view.state.doc.resolve(
-              resizeRowTablePmStartRef.current + 1,
-            );
-            for (let d = $pos.depth; d >= 0; d--) {
-              const node = $pos.node(d);
-              if (node.type.name === "table") {
-                if (rowIndex < node.childCount) {
-                  const rowNode = node.child(rowIndex);
-                  const height = rowNode.attrs["height"] as number | null;
-                  if (height) {
-                    resizeRowOrigHeightRef.current = height;
-                  } else {
-                    // Estimate from rendered height: find the row element
-                    const tableEl = target.closest(".layout-table");
-                    const rowEl = tableEl?.querySelector(
-                      `[data-row-index="${rowIndex}"]`,
-                    );
-                    const renderedHeight =
-                      rowEl instanceof HTMLElement
-                        ? rowEl.getBoundingClientRect().height
-                        : 30;
-                    resizeRowOrigHeightRef.current = Math.round(
-                      renderedHeight * 15,
-                    );
-                  }
-                }
-                break;
-              }
-            }
-          }
-          return;
-        }
-
-        // Right edge resize: intercept clicks on right edge handle
-        if (
-          !readOnly &&
-          target.classList.contains("layout-table-edge-handle-right")
-        ) {
-          e.preventDefault();
-          e.stopPropagation();
-          isResizingRightEdgeRef.current = true;
-          resizeRightEdgeStartXRef.current = e.clientX;
-          resizeRightEdgeHandleRef.current = target;
-          target.classList.add("dragging");
-
-          const colIndex = Number.parseInt(
-            target.dataset["columnIndex"] ?? "0",
-            10,
-          );
-          resizeRightEdgeColIndexRef.current = colIndex;
-          resizeRightEdgePmStartRef.current = Number.parseInt(
-            target.dataset["tablePmStart"] ?? "0",
-            10,
-          );
-
-          // Get current last column width from ProseMirror doc
-          const view = hiddenPMRef.current.getView();
-          if (view) {
-            const $pos = view.state.doc.resolve(
-              resizeRightEdgePmStartRef.current + 1,
-            );
-            for (let d = $pos.depth; d >= 0; d--) {
-              const node = $pos.node(d);
-              if (node.type.name === "table") {
-                const widths = node.attrs["columnWidths"] as number[] | null;
-                if (widths && widths[colIndex] !== undefined) {
-                  resizeRightEdgeOrigWidthRef.current = widths[colIndex];
-                }
-                break;
-              }
-            }
-          }
-          return;
-        }
-
-        // Check if the click target is an image element
-        const imageEl = findImageElement(target);
-        if (!readOnly && imageEl) {
-          e.preventDefault();
-          e.stopPropagation();
-
-          const pmStart = imageEl.dataset["pmStart"];
-          if (pmStart !== undefined) {
-            const pos = Number.parseInt(pmStart, 10);
-            hiddenPMRef.current.setNodeSelection(pos);
-            setSelectedImageInfo(buildImageSelectionInfo(imageEl, pos));
-            setSelectionRects([]);
-            setCaretPosition(null);
-          }
-
-          focusHiddenEditor();
-          return;
-        }
-
-        // Clicking outside an image clears image selection
-        setSelectedImageInfo(null);
-
-        e.preventDefault(); // Prevent native text selection
-
-        startPointerTextSelection(e.clientX, e.clientY);
-      },
-      // oxlint-disable-next-line react-hooks/exhaustive-deps
-      [
-        getPositionFromMouse,
-        findCellPosFromPmPos,
-        readOnly,
-        hfEditMode,
-        onBodyClick,
-        zoom,
-        onHyperlinkClick,
-        clearTableInsertTimer,
-        focusHiddenEditor,
-        startPointerTextSelection,
-      ],
-    );
-
-    // Drag auto-scroll: scrolls when dragging near viewport edges
-    const dragAutoScrollCallbackRef = useCallback((cx: number, cy: number) => {
-      dragExtendRef.current(cx, cy);
-    }, []);
-    const {
-      updateMousePosition: updateDragScroll,
-      stopAutoScroll: stopDragAutoScroll,
-    } = useDragAutoScroll({
-      pagesContainerRef,
-      onScrollExtendSelection: dragAutoScrollCallbackRef,
-    });
-
-    // Wire up the drag-extend callback after getPositionFromMouse is available
-    dragExtendRef.current = (cx: number, cy: number) => {
-      if (!isDraggingRef.current || dragAnchorRef.current === null) {
-        return;
-      }
+  /**
+   * Handle mousedown on pages - start selection or drag.
+   */
+  const handlePagesMouseDown = useCallback(
+    (e: React.MouseEvent) => {
       if (!hiddenPMRef.current) {
         return;
       }
-      const pmPos = getPositionFromMouse(cx, cy);
+
+      // Right-click: prevent default to stop Firefox from resetting selection,
+      // but don't process our selection logic
+      if (e.button === 2) {
+        e.preventDefault();
+        return;
+      }
+
+      if (e.button !== 0) {
+        return;
+      } // Only handle left click
+
+      // Hide table insert button on any mousedown
+      setTableInsertButton(null);
+      clearTableInsertTimer();
+
+      const target = e.target instanceof HTMLElement ? e.target : null;
+      if (!target) {
+        return;
+      }
+
+      // Prevent default browser navigation for hyperlink clicks,
+      // but let the rest of the handler run for cursor placement and drag selection.
+      // The popup is shown in handlePagesClick (on mouseup) instead.
+      const anchorClosest = target.closest("a[href]");
+      const anchorEl =
+        anchorClosest instanceof HTMLAnchorElement ? anchorClosest : null;
+      if (anchorEl) {
+        e.preventDefault(); // Prevent navigation only
+      }
+
+      // When in HF edit mode, clicks outside header/footer area close the HF editor
+      if (!readOnly && hfEditMode && onBodyClick) {
+        const isInHfArea =
+          target.closest(".layout-page-header") ||
+          target.closest(".layout-page-footer") ||
+          target.closest(".hf-inline-editor");
+        if (!isInHfArea) {
+          e.preventDefault();
+          e.stopPropagation();
+          onBodyClick();
+          return;
+        }
+      }
+
+      // In normal mode, clicks in header/footer area should place cursor at
+      // start of body content, not inside header/footer (matches Word/Google Docs)
+      if (!readOnly && !hfEditMode) {
+        const isInHfArea =
+          target.closest(".layout-page-header") ||
+          target.closest(".layout-page-footer");
+        if (isInHfArea) {
+          e.preventDefault();
+          // Place cursor at start of body content
+          hiddenPMRef.current.setSelection(0);
+          hiddenPMRef.current.focus();
+          setIsFocused(true);
+          return;
+        }
+      }
+
+      // Column resize: intercept clicks on resize handles
+      if (
+        !readOnly &&
+        target.classList.contains("layout-table-resize-handle")
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        isResizingColumnRef.current = true;
+        resizeStartXRef.current = e.clientX;
+        resizeHandleRef.current = target;
+        target.classList.add("dragging");
+
+        const colIndex = Number.parseInt(
+          target.dataset["columnIndex"] ?? "0",
+          10,
+        );
+        resizeColumnIndexRef.current = colIndex;
+        resizeTablePmStartRef.current = Number.parseInt(
+          target.dataset["tablePmStart"] ?? "0",
+          10,
+        );
+
+        // Get current column widths from the ProseMirror doc
+        const view = hiddenPMRef.current.getView();
+        if (view) {
+          const $pos = view.state.doc.resolve(
+            resizeTablePmStartRef.current + 1,
+          );
+          for (let d = $pos.depth; d >= 0; d--) {
+            const node = $pos.node(d);
+            if (node.type.name === "table") {
+              const widths = node.attrs["columnWidths"] as number[] | null;
+              if (
+                widths &&
+                widths[colIndex] !== undefined &&
+                widths[colIndex + 1] !== undefined
+              ) {
+                resizeOrigWidthsRef.current = {
+                  left: widths[colIndex]!, // SAFETY: guarded by widths[colIndex] !== undefined check above
+                  right: widths[colIndex + 1]!, // SAFETY: guarded by widths[colIndex + 1] !== undefined check above
+                };
+              }
+              break;
+            }
+          }
+        }
+        return;
+      }
+
+      // Row resize: intercept clicks on row resize handles or bottom edge handle
+      if (
+        !readOnly &&
+        (target.classList.contains("layout-table-row-resize-handle") ||
+          target.classList.contains("layout-table-edge-handle-bottom"))
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        isResizingRowRef.current = true;
+        resizeStartYRef.current = e.clientY;
+        resizeRowHandleRef.current = target;
+        resizeRowIsEdgeRef.current = target.dataset["isEdge"] === "bottom";
+        target.classList.add("dragging");
+
+        const rowIndex = Number.parseInt(target.dataset["rowIndex"] ?? "0", 10);
+        resizeRowIndexRef.current = rowIndex;
+        resizeRowTablePmStartRef.current = Number.parseInt(
+          target.dataset["tablePmStart"] ?? "0",
+          10,
+        );
+
+        // Get current row height from ProseMirror doc
+        const view = hiddenPMRef.current.getView();
+        if (view) {
+          const $pos = view.state.doc.resolve(
+            resizeRowTablePmStartRef.current + 1,
+          );
+          for (let d = $pos.depth; d >= 0; d--) {
+            const node = $pos.node(d);
+            if (node.type.name === "table") {
+              if (rowIndex < node.childCount) {
+                const rowNode = node.child(rowIndex);
+                const height = rowNode.attrs["height"] as number | null;
+                if (height) {
+                  resizeRowOrigHeightRef.current = height;
+                } else {
+                  // Estimate from rendered height: find the row element
+                  const tableEl = target.closest(".layout-table");
+                  const rowEl = tableEl?.querySelector(
+                    `[data-row-index="${rowIndex}"]`,
+                  );
+                  const renderedHeight =
+                    rowEl instanceof HTMLElement
+                      ? rowEl.getBoundingClientRect().height
+                      : 30;
+                  resizeRowOrigHeightRef.current = Math.round(
+                    renderedHeight * 15,
+                  );
+                }
+              }
+              break;
+            }
+          }
+        }
+        return;
+      }
+
+      // Right edge resize: intercept clicks on right edge handle
+      if (
+        !readOnly &&
+        target.classList.contains("layout-table-edge-handle-right")
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        isResizingRightEdgeRef.current = true;
+        resizeRightEdgeStartXRef.current = e.clientX;
+        resizeRightEdgeHandleRef.current = target;
+        target.classList.add("dragging");
+
+        const colIndex = Number.parseInt(
+          target.dataset["columnIndex"] ?? "0",
+          10,
+        );
+        resizeRightEdgeColIndexRef.current = colIndex;
+        resizeRightEdgePmStartRef.current = Number.parseInt(
+          target.dataset["tablePmStart"] ?? "0",
+          10,
+        );
+
+        // Get current last column width from ProseMirror doc
+        const view = hiddenPMRef.current.getView();
+        if (view) {
+          const $pos = view.state.doc.resolve(
+            resizeRightEdgePmStartRef.current + 1,
+          );
+          for (let d = $pos.depth; d >= 0; d--) {
+            const node = $pos.node(d);
+            if (node.type.name === "table") {
+              const widths = node.attrs["columnWidths"] as number[] | null;
+              if (widths && widths[colIndex] !== undefined) {
+                resizeRightEdgeOrigWidthRef.current = widths[colIndex];
+              }
+              break;
+            }
+          }
+        }
+        return;
+      }
+
+      // Check if the click target is an image element
+      const imageEl = findImageElement(target);
+      if (!readOnly && imageEl) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const pmStart = imageEl.dataset["pmStart"];
+        if (pmStart !== undefined) {
+          const pos = Number.parseInt(pmStart, 10);
+          hiddenPMRef.current.setNodeSelection(pos);
+          setSelectedImageInfo(buildImageSelectionInfo(imageEl, pos));
+          setSelectionRects([]);
+          setCaretPosition(null);
+        }
+
+        focusHiddenEditor();
+        return;
+      }
+
+      // Clicking outside an image clears image selection
+      setSelectedImageInfo(null);
+
+      e.preventDefault(); // Prevent native text selection
+
+      startPointerTextSelection(e.clientX, e.clientY);
+    },
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+    [
+      getPositionFromMouse,
+      findCellPosFromPmPos,
+      readOnly,
+      hfEditMode,
+      onBodyClick,
+      zoom,
+      onHyperlinkClick,
+      clearTableInsertTimer,
+      focusHiddenEditor,
+      startPointerTextSelection,
+    ],
+  );
+
+  // Drag auto-scroll: scrolls when dragging near viewport edges
+  const dragAutoScrollCallbackRef = useCallback((cx: number, cy: number) => {
+    dragExtendRef.current(cx, cy);
+  }, []);
+  const {
+    updateMousePosition: updateDragScroll,
+    stopAutoScroll: stopDragAutoScroll,
+  } = useDragAutoScroll({
+    pagesContainerRef,
+    onScrollExtendSelection: dragAutoScrollCallbackRef,
+  });
+
+  // Wire up the drag-extend callback after getPositionFromMouse is available
+  dragExtendRef.current = (cx: number, cy: number) => {
+    if (!isDraggingRef.current || dragAnchorRef.current === null) {
+      return;
+    }
+    if (!hiddenPMRef.current) {
+      return;
+    }
+    const pmPos = getPositionFromMouse(cx, cy);
+    if (pmPos === null) {
+      return;
+    }
+    hiddenPMRef.current.setSelection(dragAnchorRef.current, pmPos);
+  };
+
+  /**
+   * Handle mousemove - extend selection during drag.
+   */
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      // Column resize drag
+      if (isResizingColumnRef.current) {
+        e.preventDefault();
+        const delta = e.clientX - resizeStartXRef.current;
+        // Move the handle visually
+        if (resizeHandleRef.current) {
+          const origLeft = Number.parseFloat(
+            resizeHandleRef.current.style.left,
+          );
+          resizeHandleRef.current.style.left = `${origLeft + delta}px`;
+          resizeStartXRef.current = e.clientX;
+
+          // Update stored widths (convert pixel delta to twips: 1px ≈ 15 twips at 96dpi)
+          const deltaTwips = Math.round(delta * 15);
+          const minWidth = 300; // ~0.2 inches minimum
+          const newLeft = resizeOrigWidthsRef.current.left + deltaTwips;
+          const newRight = resizeOrigWidthsRef.current.right - deltaTwips;
+          if (newLeft >= minWidth && newRight >= minWidth) {
+            resizeOrigWidthsRef.current = { left: newLeft, right: newRight };
+          }
+        }
+        return;
+      }
+
+      // Row resize drag
+      if (isResizingRowRef.current) {
+        e.preventDefault();
+        const delta = e.clientY - resizeStartYRef.current;
+        if (resizeRowHandleRef.current) {
+          const origTop = Number.parseFloat(
+            resizeRowHandleRef.current.style.top,
+          );
+          resizeRowHandleRef.current.style.top = `${origTop + delta}px`;
+          resizeStartYRef.current = e.clientY;
+
+          // Update stored height (convert pixel delta to twips)
+          const deltaTwips = Math.round(delta * 15);
+          const minHeight = 200; // ~0.14 inches minimum
+          const newHeight = resizeRowOrigHeightRef.current + deltaTwips;
+          if (newHeight >= minHeight) {
+            resizeRowOrigHeightRef.current = newHeight;
+          }
+        }
+        return;
+      }
+
+      // Right edge resize drag
+      if (isResizingRightEdgeRef.current) {
+        e.preventDefault();
+        const delta = e.clientX - resizeRightEdgeStartXRef.current;
+        if (resizeRightEdgeHandleRef.current) {
+          const origLeft = Number.parseFloat(
+            resizeRightEdgeHandleRef.current.style.left,
+          );
+          resizeRightEdgeHandleRef.current.style.left = `${origLeft + delta}px`;
+          resizeRightEdgeStartXRef.current = e.clientX;
+
+          // Update stored width (convert pixel delta to twips)
+          const deltaTwips = Math.round(delta * 15);
+          const minWidth = 300; // ~0.2 inches minimum
+          const newWidth = resizeRightEdgeOrigWidthRef.current + deltaTwips;
+          if (newWidth >= minWidth) {
+            resizeRightEdgeOrigWidthRef.current = newWidth;
+          }
+        }
+        return;
+      }
+
+      if (!isDraggingRef.current || dragAnchorRef.current === null) {
+        return;
+      }
+      if (!hiddenPMRef.current || !pagesContainerRef.current) {
+        return;
+      }
+
+      // Auto-scroll when dragging near viewport edges
+      updateDragScroll(e.clientX, e.clientY);
+
+      const pmPos = getPositionFromMouse(e.clientX, e.clientY);
       if (pmPos === null) {
         return;
       }
-      hiddenPMRef.current.setSelection(dragAnchorRef.current, pmPos);
-    };
 
-    /**
-     * Handle mousemove - extend selection during drag.
-     */
-    const handleMouseMove = useCallback(
-      (e: MouseEvent) => {
-        // Column resize drag
-        if (isResizingColumnRef.current) {
-          e.preventDefault();
-          const delta = e.clientX - resizeStartXRef.current;
-          // Move the handle visually
-          if (resizeHandleRef.current) {
-            const origLeft = Number.parseFloat(
-              resizeHandleRef.current.style.left,
-            );
-            resizeHandleRef.current.style.left = `${origLeft + delta}px`;
-            resizeStartXRef.current = e.clientX;
-
-            // Update stored widths (convert pixel delta to twips: 1px ≈ 15 twips at 96dpi)
-            const deltaTwips = Math.round(delta * 15);
-            const minWidth = 300; // ~0.2 inches minimum
-            const newLeft = resizeOrigWidthsRef.current.left + deltaTwips;
-            const newRight = resizeOrigWidthsRef.current.right - deltaTwips;
-            if (newLeft >= minWidth && newRight >= minWidth) {
-              resizeOrigWidthsRef.current = { left: newLeft, right: newRight };
-            }
-          }
-          return;
-        }
-
-        // Row resize drag
-        if (isResizingRowRef.current) {
-          e.preventDefault();
-          const delta = e.clientY - resizeStartYRef.current;
-          if (resizeRowHandleRef.current) {
-            const origTop = Number.parseFloat(
-              resizeRowHandleRef.current.style.top,
-            );
-            resizeRowHandleRef.current.style.top = `${origTop + delta}px`;
-            resizeStartYRef.current = e.clientY;
-
-            // Update stored height (convert pixel delta to twips)
-            const deltaTwips = Math.round(delta * 15);
-            const minHeight = 200; // ~0.14 inches minimum
-            const newHeight = resizeRowOrigHeightRef.current + deltaTwips;
-            if (newHeight >= minHeight) {
-              resizeRowOrigHeightRef.current = newHeight;
-            }
-          }
-          return;
-        }
-
-        // Right edge resize drag
-        if (isResizingRightEdgeRef.current) {
-          e.preventDefault();
-          const delta = e.clientX - resizeRightEdgeStartXRef.current;
-          if (resizeRightEdgeHandleRef.current) {
-            const origLeft = Number.parseFloat(
-              resizeRightEdgeHandleRef.current.style.left,
-            );
-            resizeRightEdgeHandleRef.current.style.left = `${origLeft + delta}px`;
-            resizeRightEdgeStartXRef.current = e.clientX;
-
-            // Update stored width (convert pixel delta to twips)
-            const deltaTwips = Math.round(delta * 15);
-            const minWidth = 300; // ~0.2 inches minimum
-            const newWidth = resizeRightEdgeOrigWidthRef.current + deltaTwips;
-            if (newWidth >= minWidth) {
-              resizeRightEdgeOrigWidthRef.current = newWidth;
-            }
-          }
-          return;
-        }
-
-        if (!isDraggingRef.current || dragAnchorRef.current === null) {
-          return;
-        }
-        if (!hiddenPMRef.current || !pagesContainerRef.current) {
-          return;
-        }
-
-        // Auto-scroll when dragging near viewport edges
-        updateDragScroll(e.clientX, e.clientY);
-
-        const pmPos = getPositionFromMouse(e.clientX, e.clientY);
-        if (pmPos === null) {
-          return;
-        }
-
-        // Dragging in table cells: text selection first, cell selection when crossing boundary
-        if (cellDragAnchorPosRef.current !== null) {
-          // If already in cell-drag mode, continue updating cell selection
-          if (isCellDraggingRef.current) {
-            const currentCellPos = findCellPosFromPmPos(pmPos);
-            if (currentCellPos !== null) {
-              hiddenPMRef.current.setCellSelection(
-                cellDragAnchorPosRef.current,
-                currentCellPos,
-              );
-              return;
-            }
-          }
-
-          // Switch to cell selection when drag crosses into a different cell
+      // Dragging in table cells: text selection first, cell selection when crossing boundary
+      if (cellDragAnchorPosRef.current !== null) {
+        // If already in cell-drag mode, continue updating cell selection
+        if (isCellDraggingRef.current) {
           const currentCellPos = findCellPosFromPmPos(pmPos);
-          if (
-            currentCellPos !== null &&
-            currentCellPos !== cellDragAnchorPosRef.current
-          ) {
-            isCellDraggingRef.current = true;
+          if (currentCellPos !== null) {
             hiddenPMRef.current.setCellSelection(
               cellDragAnchorPosRef.current,
               currentCellPos,
             );
+            return;
+          }
+        }
+
+        // Switch to cell selection when drag crosses into a different cell
+        const currentCellPos = findCellPosFromPmPos(pmPos);
+        if (
+          currentCellPos !== null &&
+          currentCellPos !== cellDragAnchorPosRef.current
+        ) {
+          isCellDraggingRef.current = true;
+          hiddenPMRef.current.setCellSelection(
+            cellDragAnchorPosRef.current,
+            currentCellPos,
+          );
+          cellDragOverflowXRef.current = null;
+          return;
+        }
+
+        // Detect when text selection has maxed out within the cell:
+        // If pmPos stops changing but mouse keeps moving, user has dragged past text content
+        if (
+          cellDragLastPmPosRef.current !== null &&
+          pmPos === cellDragLastPmPosRef.current
+        ) {
+          if (cellDragOverflowXRef.current === null) {
+            cellDragOverflowXRef.current = e.clientX;
+          } else if (
+            Math.abs(e.clientX - cellDragOverflowXRef.current) >=
+            CELL_SELECT_OVERFLOW_PX
+          ) {
+            // Overflow threshold reached — select the entire cell
+            isCellDraggingRef.current = true;
+            hiddenPMRef.current.setCellSelection(
+              cellDragAnchorPosRef.current,
+              cellDragAnchorPosRef.current,
+            );
             cellDragOverflowXRef.current = null;
             return;
           }
-
-          // Detect when text selection has maxed out within the cell:
-          // If pmPos stops changing but mouse keeps moving, user has dragged past text content
-          if (
-            cellDragLastPmPosRef.current !== null &&
-            pmPos === cellDragLastPmPosRef.current
-          ) {
-            if (cellDragOverflowXRef.current === null) {
-              cellDragOverflowXRef.current = e.clientX;
-            } else if (
-              Math.abs(e.clientX - cellDragOverflowXRef.current) >=
-              CELL_SELECT_OVERFLOW_PX
-            ) {
-              // Overflow threshold reached — select the entire cell
-              isCellDraggingRef.current = true;
-              hiddenPMRef.current.setCellSelection(
-                cellDragAnchorPosRef.current,
-                cellDragAnchorPosRef.current,
-              );
-              cellDragOverflowXRef.current = null;
-              return;
-            }
-          } else {
-            // Position is still advancing — reset overflow tracking
-            cellDragOverflowXRef.current = null;
-            cellDragLastPmPosRef.current = pmPos;
-          }
+        } else {
+          // Position is still advancing — reset overflow tracking
+          cellDragOverflowXRef.current = null;
+          cellDragLastPmPosRef.current = pmPos;
         }
-
-        // Regular text selection drag (within cell or outside tables)
-        const anchor = dragAnchorRef.current;
-        hiddenPMRef.current.setSelection(anchor, pmPos);
-      },
-      [getPositionFromMouse, findCellPosFromPmPos, updateDragScroll],
-    );
-
-    /**
-     * Handle mouseup - end drag selection.
-     */
-    const handleMouseUp = useCallback(() => {
-      // Commit column resize
-      if (isResizingColumnRef.current) {
-        isResizingColumnRef.current = false;
-        if (resizeHandleRef.current) {
-          resizeHandleRef.current.classList.remove("dragging");
-          resizeHandleRef.current = null;
-        }
-
-        // Update ProseMirror document with new column widths
-        const view = hiddenPMRef.current?.getView();
-        if (view) {
-          const pmStart = resizeTablePmStartRef.current;
-          const colIdx = resizeColumnIndexRef.current;
-          const { left: newLeft, right: newRight } =
-            resizeOrigWidthsRef.current;
-
-          // Find the table node and update columnWidths + cell widths
-          const $pos = view.state.doc.resolve(pmStart + 1);
-          for (let d = $pos.depth; d >= 0; d--) {
-            const node = $pos.node(d);
-            if (node.type.name === "table") {
-              const tablePos = $pos.before(d);
-              const tr = view.state.tr;
-              const widths = [...(node.attrs["columnWidths"] as number[])];
-              widths[colIdx] = newLeft;
-              widths[colIdx + 1] = newRight;
-
-              // Update table columnWidths attr
-              tr.setNodeMarkup(tablePos, undefined, {
-                ...node.attrs,
-                columnWidths: widths,
-              });
-
-              // Update cell width attrs in each row
-              let rowOffset = tablePos + 1;
-              // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node API
-              node.forEach((row) => {
-                let cellOffset = rowOffset + 1;
-                let cellColIdx = 0;
-                // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node API
-                row.forEach((cell) => {
-                  const colspan = (cell.attrs["colspan"] as number) || 1;
-                  if (cellColIdx === colIdx || cellColIdx === colIdx + 1) {
-                    const newWidth = cellColIdx === colIdx ? newLeft : newRight;
-                    tr.setNodeMarkup(tr.mapping.map(cellOffset), undefined, {
-                      ...cell.attrs,
-                      width: newWidth,
-                      widthType: "dxa",
-                      colwidth: null,
-                    });
-                  }
-                  cellOffset += cell.nodeSize;
-                  cellColIdx += colspan;
-                });
-                rowOffset += row.nodeSize;
-              });
-
-              view.dispatch(tr);
-              break;
-            }
-          }
-        }
-        return;
       }
 
-      // Commit row resize
-      if (isResizingRowRef.current) {
-        isResizingRowRef.current = false;
-        if (resizeRowHandleRef.current) {
-          resizeRowHandleRef.current.classList.remove("dragging");
-          resizeRowHandleRef.current = null;
-        }
+      // Regular text selection drag (within cell or outside tables)
+      const anchor = dragAnchorRef.current;
+      hiddenPMRef.current.setSelection(anchor, pmPos);
+    },
+    [getPositionFromMouse, findCellPosFromPmPos, updateDragScroll],
+  );
 
-        const view = hiddenPMRef.current?.getView();
-        if (view) {
-          const pmStart = resizeRowTablePmStartRef.current;
-          const rowIdx = resizeRowIndexRef.current;
-          const newHeight = resizeRowOrigHeightRef.current;
+  /**
+   * Handle mouseup - end drag selection.
+   */
+  const handleMouseUp = useCallback(() => {
+    // Commit column resize
+    if (isResizingColumnRef.current) {
+      isResizingColumnRef.current = false;
+      if (resizeHandleRef.current) {
+        resizeHandleRef.current.classList.remove("dragging");
+        resizeHandleRef.current = null;
+      }
 
-          const $pos = view.state.doc.resolve(pmStart + 1);
-          for (let d = $pos.depth; d >= 0; d--) {
-            const node = $pos.node(d);
-            if (node.type.name === "table") {
-              const tablePos = $pos.before(d);
-              const tr = view.state.tr;
+      // Update ProseMirror document with new column widths
+      const view = hiddenPMRef.current?.getView();
+      if (view) {
+        const pmStart = resizeTablePmStartRef.current;
+        const colIdx = resizeColumnIndexRef.current;
+        const { left: newLeft, right: newRight } = resizeOrigWidthsRef.current;
 
-              // Walk to the target row
-              let rowOffset = tablePos + 1;
-              let idx = 0;
+        // Find the table node and update columnWidths + cell widths
+        const $pos = view.state.doc.resolve(pmStart + 1);
+        for (let d = $pos.depth; d >= 0; d--) {
+          const node = $pos.node(d);
+          if (node.type.name === "table") {
+            const tablePos = $pos.before(d);
+            const tr = view.state.tr;
+            const widths = [...(node.attrs["columnWidths"] as number[])];
+            widths[colIdx] = newLeft;
+            widths[colIdx + 1] = newRight;
+
+            // Update table columnWidths attr
+            tr.setNodeMarkup(tablePos, undefined, {
+              ...node.attrs,
+              columnWidths: widths,
+            });
+
+            // Update cell width attrs in each row
+            let rowOffset = tablePos + 1;
+            // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node API
+            node.forEach((row) => {
+              let cellOffset = rowOffset + 1;
+              let cellColIdx = 0;
               // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node API
-              node.forEach((row) => {
-                if (idx === rowIdx) {
-                  tr.setNodeMarkup(tr.mapping.map(rowOffset), undefined, {
-                    ...row.attrs,
-                    height: newHeight,
-                    heightRule: "atLeast",
+              row.forEach((cell) => {
+                const colspan = (cell.attrs["colspan"] as number) || 1;
+                if (cellColIdx === colIdx || cellColIdx === colIdx + 1) {
+                  const newWidth = cellColIdx === colIdx ? newLeft : newRight;
+                  tr.setNodeMarkup(tr.mapping.map(cellOffset), undefined, {
+                    ...cell.attrs,
+                    width: newWidth,
+                    widthType: "dxa",
+                    colwidth: null,
                   });
                 }
-                rowOffset += row.nodeSize;
-                idx++;
+                cellOffset += cell.nodeSize;
+                cellColIdx += colspan;
               });
+              rowOffset += row.nodeSize;
+            });
 
-              view.dispatch(tr);
-              break;
-            }
+            view.dispatch(tr);
+            break;
           }
         }
-        return;
+      }
+      return;
+    }
+
+    // Commit row resize
+    if (isResizingRowRef.current) {
+      isResizingRowRef.current = false;
+      if (resizeRowHandleRef.current) {
+        resizeRowHandleRef.current.classList.remove("dragging");
+        resizeRowHandleRef.current = null;
       }
 
-      // Commit right edge resize
-      if (isResizingRightEdgeRef.current) {
-        isResizingRightEdgeRef.current = false;
-        if (resizeRightEdgeHandleRef.current) {
-          resizeRightEdgeHandleRef.current.classList.remove("dragging");
-          resizeRightEdgeHandleRef.current = null;
+      const view = hiddenPMRef.current?.getView();
+      if (view) {
+        const pmStart = resizeRowTablePmStartRef.current;
+        const rowIdx = resizeRowIndexRef.current;
+        const newHeight = resizeRowOrigHeightRef.current;
+
+        const $pos = view.state.doc.resolve(pmStart + 1);
+        for (let d = $pos.depth; d >= 0; d--) {
+          const node = $pos.node(d);
+          if (node.type.name === "table") {
+            const tablePos = $pos.before(d);
+            const tr = view.state.tr;
+
+            // Walk to the target row
+            let rowOffset = tablePos + 1;
+            let idx = 0;
+            // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node API
+            node.forEach((row) => {
+              if (idx === rowIdx) {
+                tr.setNodeMarkup(tr.mapping.map(rowOffset), undefined, {
+                  ...row.attrs,
+                  height: newHeight,
+                  heightRule: "atLeast",
+                });
+              }
+              rowOffset += row.nodeSize;
+              idx++;
+            });
+
+            view.dispatch(tr);
+            break;
+          }
         }
+      }
+      return;
+    }
 
-        const view = hiddenPMRef.current?.getView();
-        if (view) {
-          const pmStart = resizeRightEdgePmStartRef.current;
-          const colIdx = resizeRightEdgeColIndexRef.current;
-          const newWidth = resizeRightEdgeOrigWidthRef.current;
+    // Commit right edge resize
+    if (isResizingRightEdgeRef.current) {
+      isResizingRightEdgeRef.current = false;
+      if (resizeRightEdgeHandleRef.current) {
+        resizeRightEdgeHandleRef.current.classList.remove("dragging");
+        resizeRightEdgeHandleRef.current = null;
+      }
 
-          const $pos = view.state.doc.resolve(pmStart + 1);
-          for (let d = $pos.depth; d >= 0; d--) {
-            const node = $pos.node(d);
-            if (node.type.name === "table") {
-              const tablePos = $pos.before(d);
-              const tr = view.state.tr;
+      const view = hiddenPMRef.current?.getView();
+      if (view) {
+        const pmStart = resizeRightEdgePmStartRef.current;
+        const colIdx = resizeRightEdgeColIndexRef.current;
+        const newWidth = resizeRightEdgeOrigWidthRef.current;
 
-              // Update columnWidths — only change last column
-              const widths = [...(node.attrs["columnWidths"] as number[])];
-              widths[colIdx] = newWidth;
+        const $pos = view.state.doc.resolve(pmStart + 1);
+        for (let d = $pos.depth; d >= 0; d--) {
+          const node = $pos.node(d);
+          if (node.type.name === "table") {
+            const tablePos = $pos.before(d);
+            const tr = view.state.tr;
 
-              tr.setNodeMarkup(tablePos, undefined, {
-                ...node.attrs,
-                columnWidths: widths,
-              });
+            // Update columnWidths — only change last column
+            const widths = [...(node.attrs["columnWidths"] as number[])];
+            widths[colIdx] = newWidth;
 
-              // Update cell width attrs in the last column of each row
-              let rowOffset = tablePos + 1;
+            tr.setNodeMarkup(tablePos, undefined, {
+              ...node.attrs,
+              columnWidths: widths,
+            });
+
+            // Update cell width attrs in the last column of each row
+            let rowOffset = tablePos + 1;
+            // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node API
+            node.forEach((row) => {
+              let cellOffset = rowOffset + 1;
+              let cellColIdx = 0;
               // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node API
-              node.forEach((row) => {
-                let cellOffset = rowOffset + 1;
-                let cellColIdx = 0;
-                // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node API
-                row.forEach((cell) => {
-                  const colspan = (cell.attrs["colspan"] as number) || 1;
-                  if (cellColIdx === colIdx) {
-                    tr.setNodeMarkup(tr.mapping.map(cellOffset), undefined, {
-                      ...cell.attrs,
-                      width: newWidth,
-                      widthType: "dxa",
-                      colwidth: null,
-                    });
-                  }
-                  cellOffset += cell.nodeSize;
-                  cellColIdx += colspan;
-                });
-                rowOffset += row.nodeSize;
+              row.forEach((cell) => {
+                const colspan = (cell.attrs["colspan"] as number) || 1;
+                if (cellColIdx === colIdx) {
+                  tr.setNodeMarkup(tr.mapping.map(cellOffset), undefined, {
+                    ...cell.attrs,
+                    width: newWidth,
+                    widthType: "dxa",
+                    colwidth: null,
+                  });
+                }
+                cellOffset += cell.nodeSize;
+                cellColIdx += colspan;
               });
+              rowOffset += row.nodeSize;
+            });
 
-              view.dispatch(tr);
-              break;
-            }
+            view.dispatch(tr);
+            break;
           }
         }
-        return;
       }
+      return;
+    }
 
-      isDraggingRef.current = false;
-      isCellDraggingRef.current = false;
-      cellDragLastPmPosRef.current = null;
-      cellDragOverflowXRef.current = null;
-      stopDragAutoScroll();
-      // Keep dragAnchorRef for potential shift-click extension
-    }, [stopDragAutoScroll]);
+    isDraggingRef.current = false;
+    isCellDraggingRef.current = false;
+    cellDragLastPmPosRef.current = null;
+    cellDragOverflowXRef.current = null;
+    stopDragAutoScroll();
+    // Keep dragAnchorRef for potential shift-click extension
+  }, [stopDragAutoScroll]);
 
-    // Add global mouse event listeners for drag selection
-    useEffect(() => {
-      window.addEventListener("mousemove", handleMouseMove);
-      window.addEventListener("mouseup", handleMouseUp);
+  // Add global mouse event listeners for drag selection
+  useEffect(() => {
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
 
-      return () => {
-        window.removeEventListener("mousemove", handleMouseMove);
-        window.removeEventListener("mouseup", handleMouseUp);
-      };
-    }, [handleMouseMove, handleMouseUp]);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [handleMouseMove, handleMouseUp]);
 
-    /**
-     * Handle mousemove on pages to show table row/column insert buttons.
-     * Detects proximity to table row/column boundaries and shows a floating "+" button.
-     */
-    const handlePagesMouseMove = useCallback(
-      (e: React.MouseEvent) => {
-        // Skip during drags / resizes
-        if (
-          readOnly ||
-          isDraggingRef.current ||
-          isResizingColumnRef.current ||
-          isResizingRowRef.current ||
-          isResizingRightEdgeRef.current ||
-          isCellDraggingRef.current
-        ) {
-          return;
-        }
-
-        const pagesEl = pagesContainerRef.current;
-        if (!pagesEl) {
-          return;
-        }
-
-        const mouseX = e.clientX;
-        const mouseY = e.clientY;
-
-        // Find the table — either directly under the cursor or nearby (for edge hover)
-        const eventTarget = e.target instanceof HTMLElement ? e.target : null;
-        let tableEl = eventTarget
-          ? closestHtmlElement(eventTarget, ".layout-table")
-          : null;
-        if (!tableEl) {
-          // Mouse may be in the margin area near a table — check all tables
-          const tables = htmlQueryAll(pagesEl, ".layout-table");
-          for (const t of tables) {
-            const r = t.getBoundingClientRect();
-            const nearLeft =
-              mouseX >= r.left - TABLE_INSERT_EDGE_PROXIMITY && mouseX < r.left;
-            const nearTop =
-              mouseY >= r.top - TABLE_INSERT_EDGE_PROXIMITY && mouseY < r.top;
-            const withinX =
-              mouseX >= r.left - TABLE_INSERT_EDGE_PROXIMITY &&
-              mouseX <= r.right;
-            const withinY =
-              mouseY >= r.top - TABLE_INSERT_EDGE_PROXIMITY &&
-              mouseY <= r.bottom;
-            if ((nearLeft && withinY) || (nearTop && withinX)) {
-              tableEl = t;
-              break;
-            }
-          }
-        }
-
-        if (!tableEl) {
-          setTableInsertButton(null);
-          return;
-        }
-
-        const tableRect = tableEl.getBoundingClientRect();
-
-        const nearLeftEdge =
-          mouseX < tableRect.left + TABLE_INSERT_EDGE_PROXIMITY &&
-          mouseX >= tableRect.left - TABLE_INSERT_EDGE_PROXIMITY;
-        const nearTopEdge =
-          mouseY < tableRect.top + TABLE_INSERT_EDGE_PROXIMITY &&
-          mouseY >= tableRect.top - TABLE_INSERT_EDGE_PROXIMITY;
-
-        if (!nearLeftEdge && !nearTopEdge) {
-          setTableInsertButton(null);
-          return;
-        }
-
-        const rows = tableEl.querySelectorAll(":scope > .layout-table-row");
-        if (rows.length === 0) {
-          setTableInsertButton(null);
-          return;
-        }
-
-        const viewportEl = pagesEl.parentElement;
-        if (!viewportEl) {
-          return;
-        }
-        const viewportRect = viewportEl.getBoundingClientRect();
-
-        /** Extract PM position from a cell element */
-        const getCellPmPos = (el: HTMLElement | null): number =>
-          el ? Number(el.dataset["pmStart"]) || 0 : 0;
-
-        // Show button centered on the hovered row (left edge hover)
-        if (nearLeftEdge) {
-          for (const row of rows) {
-            const rowRect = row.getBoundingClientRect();
-            if (mouseY >= rowRect.top && mouseY <= rowRect.bottom) {
-              const cell = queryHtmlElement(row, ".layout-table-cell");
-              const pmPos = getCellPmPos(cell);
-              if (!pmPos) {
-                break;
-              }
-              const rowCenterY = rowRect.top + rowRect.height / 2;
-              setTableInsertButton({
-                type: "row",
-                x: tableRect.left - viewportRect.left - 24,
-                y: rowCenterY - viewportRect.top - 10,
-                cellPmPos: pmPos,
-              });
-              clearTableInsertTimer();
-              return;
-            }
-          }
-        }
-
-        // Show button centered on the hovered column (top edge hover)
-        if (nearTopEdge && rows[0]) {
-          const cells = htmlQueryAll(rows[0], ":scope > .layout-table-cell");
-          for (const cellEl of cells) {
-            const cellRect = cellEl.getBoundingClientRect();
-            if (mouseX >= cellRect.left && mouseX <= cellRect.right) {
-              const pmPos = getCellPmPos(cellEl);
-              if (!pmPos) {
-                break;
-              }
-              const cellCenterX = cellRect.left + cellRect.width / 2;
-              setTableInsertButton({
-                type: "column",
-                x: cellCenterX - viewportRect.left - 10,
-                y: tableRect.top - viewportRect.top - 24,
-                cellPmPos: pmPos,
-              });
-              clearTableInsertTimer();
-              return;
-            }
-          }
-        }
-
-        // Not over any row/column — schedule hide with a small delay
-        if (!tableInsertHideTimerRef.current) {
-          tableInsertHideTimerRef.current = setTimeout(() => {
-            setTableInsertButton(null);
-            tableInsertHideTimerRef.current = null;
-          }, TABLE_INSERT_HIDE_DELAY);
-        }
-      },
-      [readOnly, clearTableInsertTimer],
-    );
-
-    /**
-     * Handle table insert button click — set selection to target cell, then insert.
-     */
-    const handleTableInsertClick = useCallback(
-      (e: React.MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!tableInsertButton || !hiddenPMRef.current) {
-          return;
-        }
-
-        const view = hiddenPMRef.current.getView();
-        if (!view) {
-          return;
-        }
-
-        const { type, cellPmPos } = tableInsertButton;
-
-        // Set selection inside the target cell
-        const tr = view.state.tr.setSelection(
-          TextSelection.create(view.state.doc, cellPmPos + 1),
-        );
-        view.dispatch(tr);
-
-        // Dispatch the appropriate insert command
-        if (type === "row") {
-          addRowBelow(view.state, view.dispatch);
-        } else {
-          addColumnRight(view.state, view.dispatch);
-        }
-
-        setTableInsertButton(null);
-        hiddenPMRef.current.focus();
-      },
-      [tableInsertButton],
-    );
-
-    /**
-     * Handle click on pages container (for double-click word selection).
-     */
-    const handlePagesClick = useCallback(
-      (e: React.MouseEvent) => {
-        const target = e.target instanceof HTMLElement ? e.target : null;
-        if (!target) {
-          return;
-        }
-        // Handle hyperlink clicks (single-click only, not drag-to-select)
-        const anchorClosest = target.closest("a[href]");
-        const anchorEl =
-          anchorClosest instanceof HTMLAnchorElement ? anchorClosest : null;
-        if (anchorEl) {
-          e.preventDefault();
-          const href = anchorEl.getAttribute("href") || "";
-          if (href.startsWith("#")) {
-            // Internal bookmark — navigate within document
-            const bookmarkName = href.slice(1);
-            if (bookmarkName && hiddenPMRef.current) {
-              const view = hiddenPMRef.current.getView();
-              if (view) {
-                const targetPos = { value: null as number | null };
-                view.state.doc.descendants((node, pos) => {
-                  if (targetPos.value !== null) {
-                    return false;
-                  }
-                  if (node.type.name === "paragraph") {
-                    const bookmarks = node.attrs["bookmarks"] as
-                      | { id: number; name: string }[]
-                      | undefined;
-                    if (bookmarks?.some((b) => b.name === bookmarkName)) {
-                      targetPos.value = pos;
-                      return false;
-                    }
-                  }
-                  return undefined;
-                });
-                if (targetPos.value !== null) {
-                  const tp = targetPos.value;
-                  scrollToPositionImpl(tp);
-                  hiddenPMRef.current.setSelection(tp + 1);
-                }
-              }
-            }
-          } else if (onHyperlinkClick) {
-            // External hyperlink — show popup only if not a drag-to-select
-            const view = hiddenPMRef.current?.getView();
-            const hasRangeSelection =
-              view && view.state.selection.from !== view.state.selection.to;
-            if (!hasRangeSelection) {
-              const displayText = anchorEl.textContent || "";
-              const tooltip = anchorEl.getAttribute("title") || undefined;
-              const clickData: Parameters<
-                NonNullable<typeof onHyperlinkClick>
-              >[0] = { href, displayText, anchorEl };
-              if (tooltip) {
-                clickData.tooltip = tooltip;
-              }
-              onHyperlinkClick(clickData);
-            }
-          }
-          // External links: already handled by mousedown, just prevent default
-          return;
-        }
-
-        // Double-click on header/footer area triggers editing mode
-        if (!readOnly && e.detail === 2 && onHeaderFooterDoubleClick) {
-          const headerEl = target.closest(".layout-page-header");
-          const footerEl = target.closest(".layout-page-footer");
-          if (headerEl || footerEl) {
-            const pageEl = closestHtmlElement(target, "[data-page-number]");
-            const pageNum = pageEl ? Number(pageEl.dataset["pageNumber"]) : 1;
-            if (headerEl) {
-              e.preventDefault();
-              e.stopPropagation();
-              onHeaderFooterDoubleClick("header", pageNum);
-              return;
-            }
-            if (footerEl) {
-              e.preventDefault();
-              e.stopPropagation();
-              onHeaderFooterDoubleClick("footer", pageNum);
-              return;
-            }
-          }
-        }
-
-        // Double-click: select entire cell (CellSelection) if in table, otherwise word selection
-        if (e.detail === 2 && hiddenPMRef.current) {
-          const pmPos = getPositionFromMouse(e.clientX, e.clientY);
-          if (pmPos !== null) {
-            // If inside a table cell, select the entire cell
-            const cellPos = findCellPosFromPmPos(pmPos);
-            if (cellPos !== null) {
-              e.preventDefault();
-              e.stopPropagation();
-              hiddenPMRef.current.setCellSelection(cellPos, cellPos);
-              return;
-            }
-
-            const view = hiddenPMRef.current.getView();
-            if (view) {
-              const { doc } = view.state;
-              const $pos = doc.resolve(pmPos);
-              const parent = $pos.parent;
-
-              // Find word boundaries.
-              if (parent.isTextblock) {
-                // Build a string aligned 1-to-1 with PM
-                // offsets inside the parent. Atom inline
-                // nodes (tab, hard_break, image) take 1 PM
-                // position but don't appear in
-                // `textContent`, so a tab at offset 0 +
-                // text "(a)" + tab at offset 4 + text
-                // "Equity Financing" has parentSize 21
-                // but textContent length 19. Walking
-                // word boundaries on `textContent` and
-                // then writing back via `$pos.start() +
-                // offset` shifts the resulting selection
-                // by one PM position per atom skipped —
-                // double-clicking "Financing" in such a
-                // paragraph selected "y Financin"
-                // instead. Padding atom nodes with a
-                // non-word character keeps every offset
-                // in PM-position space.
-                const pmAlignedParts: string[] = [];
-                for (let i = 0; i < parent.content.childCount; i++) {
-                  const node = parent.content.child(i);
-                  pmAlignedParts.push(
-                    node.isText ? (node.text ?? "") : " ".repeat(node.nodeSize),
-                  );
-                }
-                const pmAlignedText = pmAlignedParts.join("");
-                const offset = $pos.parentOffset;
-
-                // Find word start (go back until whitespace/punctuation)
-                let start = offset;
-                while (start > 0 && /\w/u.test(pmAlignedText[start - 1]!)) {
-                  // SAFETY: start > 0
-                  start--;
-                }
-
-                // Find word end (go forward until whitespace/punctuation)
-                let end = offset;
-                while (
-                  end < pmAlignedText.length &&
-                  /\w/u.test(pmAlignedText[end]!)
-                ) {
-                  // SAFETY: end < pmAlignedText.length
-                  end++;
-                }
-
-                // Convert to absolute positions
-                const absStart = $pos.start() + start;
-                const absEnd = $pos.start() + end;
-
-                if (absStart < absEnd) {
-                  hiddenPMRef.current.setSelection(absStart, absEnd);
-                }
-              }
-            }
-          }
-        }
-        // Triple-click for paragraph selection
-        if (e.detail === 3 && hiddenPMRef.current) {
-          const pmPos = getPositionFromMouse(e.clientX, e.clientY);
-          if (pmPos !== null) {
-            const view = hiddenPMRef.current.getView();
-            if (view) {
-              const { doc } = view.state;
-              const $pos = doc.resolve(pmPos);
-
-              // Find paragraph start and end
-              const paragraphStart = $pos.start($pos.depth);
-              const paragraphEnd = $pos.end($pos.depth);
-
-              hiddenPMRef.current.setSelection(paragraphStart, paragraphEnd);
-            }
-          }
-        }
-      },
-      // oxlint-disable-next-line react-hooks/exhaustive-deps
-      [
-        getPositionFromMouse,
-        onHeaderFooterDoubleClick,
-        onHyperlinkClick,
-        readOnly,
-      ],
-    );
-
-    /**
-     * Handle right-click on pages — set/preserve selection and show context menu.
-     */
-    const handlePagesContextMenu = useCallback(
-      (e: React.MouseEvent) => {
-        if (!onContextMenu) {
-          return;
-        } // No handler, let browser default
-
-        e.preventDefault();
-
-        const view = hiddenPMRef.current?.getView();
-        if (!view) {
-          return;
-        }
-
-        const { from, to } = view.state.selection;
-        const pmPos = getPositionFromMouse(e.clientX, e.clientY);
-
-        // If the right-click is within the existing selection, keep it
-        // Otherwise, move cursor to the right-click position
-        if (pmPos !== null && (from === to || pmPos < from || pmPos > to)) {
-          hiddenPMRef.current?.setSelection(pmPos);
-          hiddenPMRef.current?.focus();
-          setIsFocused(true);
-        }
-
-        // Read updated selection state after potential change
-        const updatedState = hiddenPMRef.current?.getState();
-        const hasSelection = updatedState
-          ? updatedState.selection.from !== updatedState.selection.to
-          : false;
-
-        onContextMenu({ x: e.clientX, y: e.clientY, hasSelection });
-      },
-      [onContextMenu, getPositionFromMouse],
-    );
-
-    /**
-     * Handle focus on container - redirect to hidden PM.
-     */
-    const handleContainerFocus = useCallback(
-      (e: React.FocusEvent) => {
-        // Don't steal focus from sidebar inputs (textareas, inputs, buttons)
-        if (
-          e.target instanceof HTMLElement &&
-          e.target.closest(".docx-comments-sidebar")
-        ) {
-          return;
-        }
-        focusHiddenEditor();
-      },
-      [focusHiddenEditor],
-    );
-
-    /**
-     * Handle blur from container.
-     */
-    const handleContainerBlur = useCallback((e: React.FocusEvent) => {
-      // Check if focus is moving to hidden PM or staying within container
-      const relatedTarget =
-        e.relatedTarget instanceof HTMLElement ? e.relatedTarget : null;
-      if (relatedTarget && containerRef.current?.contains(relatedTarget)) {
-        return; // Focus staying within editor
-      }
-      // Keep selection visible when focus moves to toolbar or dropdown portals
+  /**
+   * Handle mousemove on pages to show table row/column insert buttons.
+   * Detects proximity to table row/column boundaries and shows a floating "+" button.
+   */
+  const handlePagesMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      // Skip during drags / resizes
       if (
-        relatedTarget?.closest(
-          '[role="toolbar"], [data-radix-popper-content-wrapper], [data-radix-select-content], .docx-table-options-dropdown',
-        )
+        readOnly ||
+        isDraggingRef.current ||
+        isResizingColumnRef.current ||
+        isResizingRowRef.current ||
+        isResizingRightEdgeRef.current ||
+        isCellDraggingRef.current
       ) {
         return;
       }
-      setIsFocused(false);
-    }, []);
 
-    /**
-     * Handle image resize from the overlay.
-     */
-    const handleImageResize = useCallback(
-      (pmPos: number, newWidth: number, newHeight: number) => {
-        const view = hiddenPMRef.current?.getView();
-        if (!view) {
+      const pagesEl = pagesContainerRef.current;
+      if (!pagesEl) {
+        return;
+      }
+
+      const mouseX = e.clientX;
+      const mouseY = e.clientY;
+
+      // Find the table — either directly under the cursor or nearby (for edge hover)
+      const eventTarget = e.target instanceof HTMLElement ? e.target : null;
+      let tableEl = eventTarget
+        ? closestHtmlElement(eventTarget, ".layout-table")
+        : null;
+      if (!tableEl) {
+        // Mouse may be in the margin area near a table — check all tables
+        const tables = htmlQueryAll(pagesEl, ".layout-table");
+        for (const t of tables) {
+          const r = t.getBoundingClientRect();
+          const nearLeft =
+            mouseX >= r.left - TABLE_INSERT_EDGE_PROXIMITY && mouseX < r.left;
+          const nearTop =
+            mouseY >= r.top - TABLE_INSERT_EDGE_PROXIMITY && mouseY < r.top;
+          const withinX =
+            mouseX >= r.left - TABLE_INSERT_EDGE_PROXIMITY && mouseX <= r.right;
+          const withinY =
+            mouseY >= r.top - TABLE_INSERT_EDGE_PROXIMITY && mouseY <= r.bottom;
+          if ((nearLeft && withinY) || (nearTop && withinX)) {
+            tableEl = t;
+            break;
+          }
+        }
+      }
+
+      if (!tableEl) {
+        setTableInsertButton(null);
+        return;
+      }
+
+      const tableRect = tableEl.getBoundingClientRect();
+
+      const nearLeftEdge =
+        mouseX < tableRect.left + TABLE_INSERT_EDGE_PROXIMITY &&
+        mouseX >= tableRect.left - TABLE_INSERT_EDGE_PROXIMITY;
+      const nearTopEdge =
+        mouseY < tableRect.top + TABLE_INSERT_EDGE_PROXIMITY &&
+        mouseY >= tableRect.top - TABLE_INSERT_EDGE_PROXIMITY;
+
+      if (!nearLeftEdge && !nearTopEdge) {
+        setTableInsertButton(null);
+        return;
+      }
+
+      const rows = tableEl.querySelectorAll(":scope > .layout-table-row");
+      if (rows.length === 0) {
+        setTableInsertButton(null);
+        return;
+      }
+
+      const viewportEl = pagesEl.parentElement;
+      if (!viewportEl) {
+        return;
+      }
+      const viewportRect = viewportEl.getBoundingClientRect();
+
+      /** Extract PM position from a cell element */
+      const getCellPmPos = (el: HTMLElement | null): number =>
+        el ? Number(el.dataset["pmStart"]) || 0 : 0;
+
+      // Show button centered on the hovered row (left edge hover)
+      if (nearLeftEdge) {
+        for (const row of rows) {
+          const rowRect = row.getBoundingClientRect();
+          if (mouseY >= rowRect.top && mouseY <= rowRect.bottom) {
+            const cell = queryHtmlElement(row, ".layout-table-cell");
+            const pmPos = getCellPmPos(cell);
+            if (!pmPos) {
+              break;
+            }
+            const rowCenterY = rowRect.top + rowRect.height / 2;
+            setTableInsertButton({
+              type: "row",
+              x: tableRect.left - viewportRect.left - 24,
+              y: rowCenterY - viewportRect.top - 10,
+              cellPmPos: pmPos,
+            });
+            clearTableInsertTimer();
+            return;
+          }
+        }
+      }
+
+      // Show button centered on the hovered column (top edge hover)
+      if (nearTopEdge && rows[0]) {
+        const cells = htmlQueryAll(rows[0], ":scope > .layout-table-cell");
+        for (const cellEl of cells) {
+          const cellRect = cellEl.getBoundingClientRect();
+          if (mouseX >= cellRect.left && mouseX <= cellRect.right) {
+            const pmPos = getCellPmPos(cellEl);
+            if (!pmPos) {
+              break;
+            }
+            const cellCenterX = cellRect.left + cellRect.width / 2;
+            setTableInsertButton({
+              type: "column",
+              x: cellCenterX - viewportRect.left - 10,
+              y: tableRect.top - viewportRect.top - 24,
+              cellPmPos: pmPos,
+            });
+            clearTableInsertTimer();
+            return;
+          }
+        }
+      }
+
+      // Not over any row/column — schedule hide with a small delay
+      if (!tableInsertHideTimerRef.current) {
+        tableInsertHideTimerRef.current = setTimeout(() => {
+          setTableInsertButton(null);
+          tableInsertHideTimerRef.current = null;
+        }, TABLE_INSERT_HIDE_DELAY);
+      }
+    },
+    [readOnly, clearTableInsertTimer],
+  );
+
+  /**
+   * Handle table insert button click — set selection to target cell, then insert.
+   */
+  const handleTableInsertClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!tableInsertButton || !hiddenPMRef.current) {
+        return;
+      }
+
+      const view = hiddenPMRef.current.getView();
+      if (!view) {
+        return;
+      }
+
+      const { type, cellPmPos } = tableInsertButton;
+
+      // Set selection inside the target cell
+      const tr = view.state.tr.setSelection(
+        TextSelection.create(view.state.doc, cellPmPos + 1),
+      );
+      view.dispatch(tr);
+
+      // Dispatch the appropriate insert command
+      if (type === "row") {
+        addRowBelow(view.state, view.dispatch);
+      } else {
+        addColumnRight(view.state, view.dispatch);
+      }
+
+      setTableInsertButton(null);
+      hiddenPMRef.current.focus();
+    },
+    [tableInsertButton],
+  );
+
+  /**
+   * Handle click on pages container (for double-click word selection).
+   */
+  const handlePagesClick = useCallback(
+    (e: React.MouseEvent) => {
+      const target = e.target instanceof HTMLElement ? e.target : null;
+      if (!target) {
+        return;
+      }
+      // Handle hyperlink clicks (single-click only, not drag-to-select)
+      const anchorClosest = target.closest("a[href]");
+      const anchorEl =
+        anchorClosest instanceof HTMLAnchorElement ? anchorClosest : null;
+      if (anchorEl) {
+        e.preventDefault();
+        const href = anchorEl.getAttribute("href") || "";
+        if (href.startsWith("#")) {
+          // Internal bookmark — navigate within document
+          const bookmarkName = href.slice(1);
+          if (bookmarkName && hiddenPMRef.current) {
+            const view = hiddenPMRef.current.getView();
+            if (view) {
+              const targetPos = { value: null as number | null };
+              view.state.doc.descendants((node, pos) => {
+                if (targetPos.value !== null) {
+                  return false;
+                }
+                if (node.type.name === "paragraph") {
+                  const bookmarks = node.attrs["bookmarks"] as
+                    | { id: number; name: string }[]
+                    | undefined;
+                  if (bookmarks?.some((b) => b.name === bookmarkName)) {
+                    targetPos.value = pos;
+                    return false;
+                  }
+                }
+                return undefined;
+              });
+              if (targetPos.value !== null) {
+                const tp = targetPos.value;
+                scrollToPositionImpl(tp);
+                hiddenPMRef.current.setSelection(tp + 1);
+              }
+            }
+          }
+        } else if (onHyperlinkClick) {
+          // External hyperlink — show popup only if not a drag-to-select
+          const view = hiddenPMRef.current?.getView();
+          const hasRangeSelection =
+            view && view.state.selection.from !== view.state.selection.to;
+          if (!hasRangeSelection) {
+            const displayText = anchorEl.textContent || "";
+            const tooltip = anchorEl.getAttribute("title") || undefined;
+            const clickData: Parameters<
+              NonNullable<typeof onHyperlinkClick>
+            >[0] = { href, displayText, anchorEl };
+            if (tooltip) {
+              clickData.tooltip = tooltip;
+            }
+            onHyperlinkClick(clickData);
+          }
+        }
+        // External links: already handled by mousedown, just prevent default
+        return;
+      }
+
+      // Double-click on header/footer area triggers editing mode
+      if (!readOnly && e.detail === 2 && onHeaderFooterDoubleClick) {
+        const headerEl = target.closest(".layout-page-header");
+        const footerEl = target.closest(".layout-page-footer");
+        if (headerEl || footerEl) {
+          const pageEl = closestHtmlElement(target, "[data-page-number]");
+          const pageNum = pageEl ? Number(pageEl.dataset["pageNumber"]) : 1;
+          if (headerEl) {
+            e.preventDefault();
+            e.stopPropagation();
+            onHeaderFooterDoubleClick("header", pageNum);
+            return;
+          }
+          if (footerEl) {
+            e.preventDefault();
+            e.stopPropagation();
+            onHeaderFooterDoubleClick("footer", pageNum);
+            return;
+          }
+        }
+      }
+
+      // Double-click: select entire cell (CellSelection) if in table, otherwise word selection
+      if (e.detail === 2 && hiddenPMRef.current) {
+        const pmPos = getPositionFromMouse(e.clientX, e.clientY);
+        if (pmPos !== null) {
+          // If inside a table cell, select the entire cell
+          const cellPos = findCellPosFromPmPos(pmPos);
+          if (cellPos !== null) {
+            e.preventDefault();
+            e.stopPropagation();
+            hiddenPMRef.current.setCellSelection(cellPos, cellPos);
+            return;
+          }
+
+          const view = hiddenPMRef.current.getView();
+          if (view) {
+            const { doc } = view.state;
+            const $pos = doc.resolve(pmPos);
+            const parent = $pos.parent;
+
+            // Find word boundaries.
+            if (parent.isTextblock) {
+              // Build a string aligned 1-to-1 with PM
+              // offsets inside the parent. Atom inline
+              // nodes (tab, hard_break, image) take 1 PM
+              // position but don't appear in
+              // `textContent`, so a tab at offset 0 +
+              // text "(a)" + tab at offset 4 + text
+              // "Equity Financing" has parentSize 21
+              // but textContent length 19. Walking
+              // word boundaries on `textContent` and
+              // then writing back via `$pos.start() +
+              // offset` shifts the resulting selection
+              // by one PM position per atom skipped —
+              // double-clicking "Financing" in such a
+              // paragraph selected "y Financin"
+              // instead. Padding atom nodes with a
+              // non-word character keeps every offset
+              // in PM-position space.
+              const pmAlignedParts: string[] = [];
+              for (let i = 0; i < parent.content.childCount; i++) {
+                const node = parent.content.child(i);
+                pmAlignedParts.push(
+                  node.isText ? (node.text ?? "") : " ".repeat(node.nodeSize),
+                );
+              }
+              const pmAlignedText = pmAlignedParts.join("");
+              const offset = $pos.parentOffset;
+
+              // Find word start (go back until whitespace/punctuation)
+              let start = offset;
+              while (start > 0 && /\w/u.test(pmAlignedText[start - 1]!)) {
+                // SAFETY: start > 0
+                start--;
+              }
+
+              // Find word end (go forward until whitespace/punctuation)
+              let end = offset;
+              while (
+                end < pmAlignedText.length &&
+                /\w/u.test(pmAlignedText[end]!)
+              ) {
+                // SAFETY: end < pmAlignedText.length
+                end++;
+              }
+
+              // Convert to absolute positions
+              const absStart = $pos.start() + start;
+              const absEnd = $pos.start() + end;
+
+              if (absStart < absEnd) {
+                hiddenPMRef.current.setSelection(absStart, absEnd);
+              }
+            }
+          }
+        }
+      }
+      // Triple-click for paragraph selection
+      if (e.detail === 3 && hiddenPMRef.current) {
+        const pmPos = getPositionFromMouse(e.clientX, e.clientY);
+        if (pmPos !== null) {
+          const view = hiddenPMRef.current.getView();
+          if (view) {
+            const { doc } = view.state;
+            const $pos = doc.resolve(pmPos);
+
+            // Find paragraph start and end
+            const paragraphStart = $pos.start($pos.depth);
+            const paragraphEnd = $pos.end($pos.depth);
+
+            hiddenPMRef.current.setSelection(paragraphStart, paragraphEnd);
+          }
+        }
+      }
+    },
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+    [
+      getPositionFromMouse,
+      onHeaderFooterDoubleClick,
+      onHyperlinkClick,
+      readOnly,
+    ],
+  );
+
+  /**
+   * Handle right-click on pages — set/preserve selection and show context menu.
+   */
+  const handlePagesContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      if (!onContextMenu) {
+        return;
+      } // No handler, let browser default
+
+      e.preventDefault();
+
+      const view = hiddenPMRef.current?.getView();
+      if (!view) {
+        return;
+      }
+
+      const { from, to } = view.state.selection;
+      const pmPos = getPositionFromMouse(e.clientX, e.clientY);
+
+      // If the right-click is within the existing selection, keep it
+      // Otherwise, move cursor to the right-click position
+      if (pmPos !== null && (from === to || pmPos < from || pmPos > to)) {
+        hiddenPMRef.current?.setSelection(pmPos);
+        hiddenPMRef.current?.focus();
+        setIsFocused(true);
+      }
+
+      // Read updated selection state after potential change
+      const updatedState = hiddenPMRef.current?.getState();
+      const hasSelection = updatedState
+        ? updatedState.selection.from !== updatedState.selection.to
+        : false;
+
+      onContextMenu({ x: e.clientX, y: e.clientY, hasSelection });
+    },
+    [onContextMenu, getPositionFromMouse],
+  );
+
+  /**
+   * Handle focus on container - redirect to hidden PM.
+   */
+  const handleContainerFocus = useCallback(
+    (e: React.FocusEvent) => {
+      // Don't steal focus from sidebar inputs (textareas, inputs, buttons)
+      if (
+        e.target instanceof HTMLElement &&
+        e.target.closest(".docx-comments-sidebar")
+      ) {
+        return;
+      }
+      focusHiddenEditor();
+    },
+    [focusHiddenEditor],
+  );
+
+  /**
+   * Handle blur from container.
+   */
+  const handleContainerBlur = useCallback((e: React.FocusEvent) => {
+    // Check if focus is moving to hidden PM or staying within container
+    const relatedTarget =
+      e.relatedTarget instanceof HTMLElement ? e.relatedTarget : null;
+    if (relatedTarget && containerRef.current?.contains(relatedTarget)) {
+      return; // Focus staying within editor
+    }
+    // Keep selection visible when focus moves to toolbar or dropdown portals
+    if (
+      relatedTarget?.closest(
+        '[role="toolbar"], [data-radix-popper-content-wrapper], [data-radix-select-content], .docx-table-options-dropdown',
+      )
+    ) {
+      return;
+    }
+    setIsFocused(false);
+  }, []);
+
+  /**
+   * Handle image resize from the overlay.
+   */
+  const handleImageResize = useCallback(
+    (pmPos: number, newWidth: number, newHeight: number) => {
+      const view = hiddenPMRef.current?.getView();
+      if (!view) {
+        return;
+      }
+
+      try {
+        const node = view.state.doc.nodeAt(pmPos);
+        if (!node || node.type.name !== "image") {
           return;
         }
 
-        try {
-          const node = view.state.doc.nodeAt(pmPos);
-          if (!node || node.type.name !== "image") {
+        const tr = view.state.tr.setNodeMarkup(pmPos, undefined, {
+          ...node.attrs,
+          width: newWidth,
+          height: newHeight,
+        });
+        view.dispatch(tr);
+
+        // Re-select the image after resize
+        hiddenPMRef.current?.setNodeSelection(pmPos);
+      } catch {
+        // Position may have changed during resize
+      }
+    },
+    [],
+  );
+
+  /**
+   * Handle image resize start - prevent text selection during resize.
+   */
+  const handleImageResizeStart = useCallback(() => {
+    isImageInteractingRef.current = true;
+  }, []);
+
+  /**
+   * Handle image resize end.
+   */
+  const handleImageResizeEnd = useCallback(() => {
+    isImageInteractingRef.current = false;
+  }, []);
+
+  /**
+   * Handle image drag-to-move: move image node from its current position
+   * to the drop position determined by mouse coordinates.
+   */
+  const handleImageDragMove = useCallback(
+    (pmPos: number, clientX: number, clientY: number) => {
+      const view = hiddenPMRef.current?.getView();
+      if (!view) {
+        return;
+      }
+
+      try {
+        const node = view.state.doc.nodeAt(pmPos);
+        if (!node || node.type.name !== "image") {
+          return;
+        }
+
+        const isFloating =
+          node.attrs["displayMode"] === "float" ||
+          (node.attrs["wrapType"] &&
+            ["square", "tight", "through"].includes(
+              node.attrs["wrapType"] as string,
+            ));
+
+        if (isFloating) {
+          // For floating images: update position attributes so the image
+          // moves to the drop point while staying floating.
+          // Find the page under the drop point
+          const pages =
+            pagesContainerRef.current?.querySelectorAll(".layout-page");
+          if (!pages || pages.length === 0) {
             return;
           }
+
+          let contentEl: HTMLElement | null = null;
+          for (const page of pages) {
+            const rect = page.getBoundingClientRect();
+            if (clientY >= rect.top && clientY <= rect.bottom) {
+              contentEl = queryHtmlElement(page, ".layout-page-content");
+              break;
+            }
+          }
+          if (!contentEl) {
+            // Fallback to last page if below all pages
+            const lastPage = Array.from(pages).at(-1);
+            contentEl = lastPage
+              ? queryHtmlElement(lastPage, ".layout-page-content")
+              : null;
+          }
+          if (!contentEl) {
+            return;
+          }
+
+          const contentRect = contentEl.getBoundingClientRect();
+          // Convert drop coordinates to content-area-relative pixels
+          const dropX = (clientX - contentRect.left) / zoom;
+          const dropY = (clientY - contentRect.top) / zoom;
+          // Pixels to EMU: px * 914400 / 96
+          const PIXELS_TO_EMU = 914_400 / 96;
+          const hOffsetEmu = Math.round(dropX * PIXELS_TO_EMU);
+          const vOffsetEmu = Math.round(dropY * PIXELS_TO_EMU);
+
+          const newPosition = {
+            horizontal: { posOffset: hOffsetEmu, relativeTo: "margin" },
+            vertical: { posOffset: vOffsetEmu, relativeTo: "margin" },
+          };
 
           const tr = view.state.tr.setNodeMarkup(pmPos, undefined, {
             ...node.attrs,
-            width: newWidth,
-            height: newHeight,
+            position: newPosition,
           });
           view.dispatch(tr);
-
-          // Re-select the image after resize
           hiddenPMRef.current?.setNodeSelection(pmPos);
-        } catch {
-          // Position may have changed during resize
-        }
-      },
-      [],
-    );
-
-    /**
-     * Handle image resize start - prevent text selection during resize.
-     */
-    const handleImageResizeStart = useCallback(() => {
-      isImageInteractingRef.current = true;
-    }, []);
-
-    /**
-     * Handle image resize end.
-     */
-    const handleImageResizeEnd = useCallback(() => {
-      isImageInteractingRef.current = false;
-    }, []);
-
-    /**
-     * Handle image drag-to-move: move image node from its current position
-     * to the drop position determined by mouse coordinates.
-     */
-    const handleImageDragMove = useCallback(
-      (pmPos: number, clientX: number, clientY: number) => {
-        const view = hiddenPMRef.current?.getView();
-        if (!view) {
-          return;
-        }
-
-        try {
-          const node = view.state.doc.nodeAt(pmPos);
-          if (!node || node.type.name !== "image") {
+        } else {
+          // For inline images: move to the drop text position
+          const dropPos = getPositionFromMouse(clientX, clientY);
+          if (dropPos === null) {
+            return;
+          }
+          if (dropPos === pmPos || dropPos === pmPos + 1) {
             return;
           }
 
-          const isFloating =
-            node.attrs["displayMode"] === "float" ||
-            (node.attrs["wrapType"] &&
-              ["square", "tight", "through"].includes(
-                node.attrs["wrapType"] as string,
-              ));
+          let tr = view.state.tr;
 
-          if (isFloating) {
-            // For floating images: update position attributes so the image
-            // moves to the drop point while staying floating.
-            // Find the page under the drop point
-            const pages =
-              pagesContainerRef.current?.querySelectorAll(".layout-page");
-            if (!pages || pages.length === 0) {
-              return;
-            }
-
-            let contentEl: HTMLElement | null = null;
-            for (const page of pages) {
-              const rect = page.getBoundingClientRect();
-              if (clientY >= rect.top && clientY <= rect.bottom) {
-                contentEl = queryHtmlElement(page, ".layout-page-content");
-                break;
-              }
-            }
-            if (!contentEl) {
-              // Fallback to last page if below all pages
-              const lastPage = Array.from(pages).at(-1);
-              contentEl = lastPage
-                ? queryHtmlElement(lastPage, ".layout-page-content")
-                : null;
-            }
-            if (!contentEl) {
-              return;
-            }
-
-            const contentRect = contentEl.getBoundingClientRect();
-            // Convert drop coordinates to content-area-relative pixels
-            const dropX = (clientX - contentRect.left) / zoom;
-            const dropY = (clientY - contentRect.top) / zoom;
-            // Pixels to EMU: px * 914400 / 96
-            const PIXELS_TO_EMU = 914_400 / 96;
-            const hOffsetEmu = Math.round(dropX * PIXELS_TO_EMU);
-            const vOffsetEmu = Math.round(dropY * PIXELS_TO_EMU);
-
-            const newPosition = {
-              horizontal: { posOffset: hOffsetEmu, relativeTo: "margin" },
-              vertical: { posOffset: vOffsetEmu, relativeTo: "margin" },
-            };
-
-            const tr = view.state.tr.setNodeMarkup(pmPos, undefined, {
-              ...node.attrs,
-              position: newPosition,
-            });
-            view.dispatch(tr);
-            hiddenPMRef.current?.setNodeSelection(pmPos);
+          if (dropPos <= pmPos) {
+            tr = tr.delete(pmPos, pmPos + node.nodeSize);
+            tr = tr.insert(dropPos, node);
+            hiddenPMRef.current?.setNodeSelection(dropPos);
           } else {
-            // For inline images: move to the drop text position
-            const dropPos = getPositionFromMouse(clientX, clientY);
-            if (dropPos === null) {
-              return;
-            }
-            if (dropPos === pmPos || dropPos === pmPos + 1) {
-              return;
-            }
-
-            let tr = view.state.tr;
-
-            if (dropPos <= pmPos) {
-              tr = tr.delete(pmPos, pmPos + node.nodeSize);
-              tr = tr.insert(dropPos, node);
-              hiddenPMRef.current?.setNodeSelection(dropPos);
-            } else {
-              tr = tr.delete(pmPos, pmPos + node.nodeSize);
-              const adjusted = dropPos - node.nodeSize;
-              tr = tr.insert(Math.min(adjusted, tr.doc.content.size), node);
-              hiddenPMRef.current?.setNodeSelection(
-                Math.min(adjusted, tr.doc.content.size - 1),
-              );
-            }
-
-            view.dispatch(tr);
-          }
-        } catch {
-          // Position may be invalid
-        }
-      },
-      [getPositionFromMouse, zoom],
-    );
-
-    const handleImageDragStart = useCallback(() => {
-      isImageInteractingRef.current = true;
-    }, []);
-
-    const handleImageDragEnd = useCallback(() => {
-      isImageInteractingRef.current = false;
-    }, []);
-
-    /**
-     * Handle keyboard events on container.
-     * Most keyboard handling is done by ProseMirror, but we intercept
-     * specific keys for navigation and ensure focus stays on hidden PM.
-     */
-    const handleKeyDown = useCallback(
-      (e: React.KeyboardEvent) => {
-        if (
-          readOnly &&
-          (e.metaKey || e.ctrlKey) &&
-          e.key.toLowerCase() === "c"
-        ) {
-          copySelectionText();
-          return;
-        }
-
-        if (readOnly) {
-          if (isReadOnlyEditKey(e)) {
-            onReadOnlyEditAttempt?.();
-            e.preventDefault();
-          }
-          return;
-        }
-
-        // Ensure hidden PM is focused if user types
-        if (!hiddenPMRef.current?.isFocused()) {
-          focusHiddenEditor();
-        }
-
-        // Prevent space from scrolling the container - let PM handle it as text input.
-        // During IME composition, let the browser handle space natively to avoid
-        // duplicating the final composed character (e.g., Korean Hangul).
-        if (
-          e.key === " " &&
-          !e.ctrlKey &&
-          !e.metaKey &&
-          !e.nativeEvent.isComposing
-        ) {
-          e.preventDefault();
-          const view = hiddenPMRef.current?.getView();
-          if (view) {
-            // Route through handleTextInput so plugins (suggestion mode) can intercept
-            const { from, to } = view.state.selection;
-            // oxlint-disable-next-line typescript/no-explicit-any
-            const handled = (view as any).someProp(
-              "handleTextInput",
-              (
-                f: (
-                  v: EditorView,
-                  fr: number,
-                  t: number,
-                  text: string,
-                ) => boolean,
-              ) => f(view, from, to, " "),
+            tr = tr.delete(pmPos, pmPos + node.nodeSize);
+            const adjusted = dropPos - node.nodeSize;
+            tr = tr.insert(Math.min(adjusted, tr.doc.content.size), node);
+            hiddenPMRef.current?.setNodeSelection(
+              Math.min(adjusted, tr.doc.content.size - 1),
             );
-            if (!handled) {
-              view.dispatch(view.state.tr.insertText(" "));
-            }
           }
-          return;
+
+          view.dispatch(tr);
         }
+      } catch {
+        // Position may be invalid
+      }
+    },
+    [getPositionFromMouse, zoom],
+  );
 
-        // PageUp/PageDown - let container handle scrolling
-        if (
-          ["PageUp", "PageDown"].includes(e.key) &&
-          !e.metaKey &&
-          !e.ctrlKey
-        ) {
-          // Let PM handle the cursor movement first
-          // If PM doesn't handle it (at bounds), the container will scroll
+  const handleImageDragStart = useCallback(() => {
+    isImageInteractingRef.current = true;
+  }, []);
+
+  const handleImageDragEnd = useCallback(() => {
+    isImageInteractingRef.current = false;
+  }, []);
+
+  /**
+   * Handle keyboard events on container.
+   * Most keyboard handling is done by ProseMirror, but we intercept
+   * specific keys for navigation and ensure focus stays on hidden PM.
+   */
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (readOnly && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "c") {
+        copySelectionText();
+        return;
+      }
+
+      if (readOnly) {
+        if (isReadOnlyEditKey(e)) {
+          onReadOnlyEditAttempt?.();
+          e.preventDefault();
         }
+        return;
+      }
 
-        // Cmd/Ctrl+Home - scroll to top and move cursor to start
-        if (e.key === "Home" && (e.metaKey || e.ctrlKey)) {
-          const sc = getScrollContainer();
-          if (sc) {
-            sc.scrollTop = 0;
-          }
-        }
+      // Ensure hidden PM is focused if user types
+      if (!hiddenPMRef.current?.isFocused()) {
+        focusHiddenEditor();
+      }
 
-        // Cmd/Ctrl+End - scroll to bottom and move cursor to end
-        if (e.key === "End" && (e.metaKey || e.ctrlKey)) {
-          const sc = getScrollContainer();
-          if (sc) {
-            sc.scrollTop = sc.scrollHeight;
-          }
-        }
-      },
-      [
-        copySelectionText,
-        focusHiddenEditor,
-        getScrollContainer,
-        onReadOnlyEditAttempt,
-        readOnly,
-      ],
-    );
-
-    /**
-     * Handle mousedown on container (outside pages).
-     */
-    const handleContainerMouseDown = useCallback(
-      (e: React.MouseEvent) => {
-        // Don't steal focus from sidebar inputs
-        if (
-          e.target instanceof HTMLElement &&
-          e.target.closest(".docx-comments-sidebar")
-        ) {
-          return;
-        }
-        // Focus hidden PM if clicking outside pages area
-        if (!hiddenPMRef.current?.isFocused()) {
-          focusHiddenEditor();
-        }
-      },
-      [focusHiddenEditor],
-    );
-
-    // =========================================================================
-    // Initial Layout
-    // =========================================================================
-
-    /**
-     * Run initial layout when document or view changes.
-     */
-    const handleEditorViewReady = useCallback(
-      (view: EditorView) => {
-        runLayoutPipeline(view.state);
-        updateSelectionOverlay(view.state);
-        anonymizationMatchesRef.current =
-          anonymizationDecorationsKey.getState(view.state)?.matches ?? [];
-        updateAnonymizationOverlay();
-
-        // Auto-focus the editor so the user can start typing immediately
-        if (!readOnly) {
-          // Use requestAnimationFrame to ensure DOM is ready
-          requestAnimationFrame(() => {
-            view.focus();
-            setIsFocused(true);
-          });
-        }
-      },
-      [
-        runLayoutPipeline,
-        updateSelectionOverlay,
-        updateAnonymizationOverlay,
-        readOnly,
-      ],
-    );
-
-    // Re-paint anonymization overlay whenever a fresh layout lands;
-    // selectionToRects needs the latest layout/blocks/measures to
-    // place rectangles correctly after a doc edit or zoom change.
-    useEffect(() => {
-      updateAnonymizationOverlay();
-    }, [updateAnonymizationOverlay]);
-
-    // Re-layout when web fonts finish loading to fix measurements that were
-    // computed against fallback fonts during initial render.
-    // Uses FontFaceSet.onloadingdone to detect when new fonts complete loading.
-    useEffect(() => {
-      const handleFontsLoaded = () => {
+      // Prevent space from scrolling the container - let PM handle it as text input.
+      // During IME composition, let the browser handle space natively to avoid
+      // duplicating the final composed character (e.g., Korean Hangul).
+      if (
+        e.key === " " &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.nativeEvent.isComposing
+      ) {
+        e.preventDefault();
         const view = hiddenPMRef.current?.getView();
         if (view) {
-          // Clear all cached measurements — font metrics have changed
-          resetCanvasContext();
-          clearAllCaches();
-          runLayoutPipeline(view.state);
-          updateSelectionOverlay(view.state);
+          // Route through handleTextInput so plugins (suggestion mode) can intercept
+          const { from, to } = view.state.selection;
+          // oxlint-disable-next-line typescript/no-explicit-any
+          const handled = (view as any).someProp(
+            "handleTextInput",
+            (
+              f: (
+                v: EditorView,
+                fr: number,
+                t: number,
+                text: string,
+              ) => boolean,
+            ) => f(view, from, to, " "),
+          );
+          if (!handled) {
+            view.dispatch(view.state.tr.insertText(" "));
+          }
         }
-      };
-
-      // Listen for font loading completion events
-      window.document.fonts.addEventListener("loadingdone", handleFontsLoaded);
-      return () => {
-        window.document.fonts.removeEventListener(
-          "loadingdone",
-          handleFontsLoaded,
-        );
-      };
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    // Re-layout when non-document layout inputs change (e.g., after HF editor save
-    // or parent-driven page setup/theme updates).
-    // runLayoutPipeline includes these values in its deps, but it
-    // only runs when explicitly called — this effect triggers it.
-    const layoutInputEpochRef = useRef(0);
-    useEffect(() => {
-      // Skip the initial render — handleEditorViewReady already does the first layout
-      if (layoutInputEpochRef.current === 0) {
-        layoutInputEpochRef.current = 1;
         return;
       }
+
+      // PageUp/PageDown - let container handle scrolling
+      if (["PageUp", "PageDown"].includes(e.key) && !e.metaKey && !e.ctrlKey) {
+        // Let PM handle the cursor movement first
+        // If PM doesn't handle it (at bounds), the container will scroll
+      }
+
+      // Cmd/Ctrl+Home - scroll to top and move cursor to start
+      if (e.key === "Home" && (e.metaKey || e.ctrlKey)) {
+        const sc = getScrollContainer();
+        if (sc) {
+          sc.scrollTop = 0;
+        }
+      }
+
+      // Cmd/Ctrl+End - scroll to bottom and move cursor to end
+      if (e.key === "End" && (e.metaKey || e.ctrlKey)) {
+        const sc = getScrollContainer();
+        if (sc) {
+          sc.scrollTop = sc.scrollHeight;
+        }
+      }
+    },
+    [
+      copySelectionText,
+      focusHiddenEditor,
+      getScrollContainer,
+      onReadOnlyEditAttempt,
+      readOnly,
+    ],
+  );
+
+  /**
+   * Handle mousedown on container (outside pages).
+   */
+  const handleContainerMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      // Don't steal focus from sidebar inputs
+      if (
+        e.target instanceof HTMLElement &&
+        e.target.closest(".docx-comments-sidebar")
+      ) {
+        return;
+      }
+      // Focus hidden PM if clicking outside pages area
+      if (!hiddenPMRef.current?.isFocused()) {
+        focusHiddenEditor();
+      }
+    },
+    [focusHiddenEditor],
+  );
+
+  // =========================================================================
+  // Initial Layout
+  // =========================================================================
+
+  /**
+   * Run initial layout when document or view changes.
+   */
+  const handleEditorViewReady = useCallback(
+    (view: EditorView) => {
+      runLayoutPipeline(view.state);
+      updateSelectionOverlay(view.state);
+      anonymizationMatchesRef.current =
+        anonymizationDecorationsKey.getState(view.state)?.matches ?? [];
+      updateAnonymizationOverlay();
+
+      // Auto-focus the editor so the user can start typing immediately
+      if (!readOnly) {
+        // Use requestAnimationFrame to ensure DOM is ready
+        requestAnimationFrame(() => {
+          view.focus();
+          setIsFocused(true);
+        });
+      }
+    },
+    [
+      runLayoutPipeline,
+      updateSelectionOverlay,
+      updateAnonymizationOverlay,
+      readOnly,
+    ],
+  );
+
+  // Re-paint anonymization overlay whenever a fresh layout lands;
+  // selectionToRects needs the latest layout/blocks/measures to
+  // place rectangles correctly after a doc edit or zoom change.
+  useEffect(() => {
+    updateAnonymizationOverlay();
+  }, [updateAnonymizationOverlay]);
+
+  // Re-layout when web fonts finish loading to fix measurements that were
+  // computed against fallback fonts during initial render.
+  // Uses FontFaceSet.onloadingdone to detect when new fonts complete loading.
+  useEffect(() => {
+    const handleFontsLoaded = () => {
       const view = hiddenPMRef.current?.getView();
       if (view) {
-        runLayoutPipelineRef.current(view.state);
+        // Clear all cached measurements — font metrics have changed
+        resetCanvasContext();
+        clearAllCaches();
+        runLayoutPipeline(view.state);
+        updateSelectionOverlay(view.state);
       }
-    }, [
-      headerContent,
-      footerContent,
-      firstPageHeaderContent,
-      firstPageFooterContent,
-      contentWidth,
-      columns,
-      pageSize,
-      margins,
-      pageGap,
-      sectionProperties,
-      _theme,
-    ]);
+    };
 
-    // Re-compute selection overlay when the container resizes.
-    // Page elements shift during window resize (centering, scrollbar changes),
-    // causing caret/selection coordinates to become stale.
-    useEffect(() => {
-      const container = containerRef.current;
-      if (!container) {
-        return;
-      }
+    // Listen for font loading completion events
+    window.document.fonts.addEventListener("loadingdone", handleFontsLoaded);
+    return () => {
+      window.document.fonts.removeEventListener(
+        "loadingdone",
+        handleFontsLoaded,
+      );
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-      const observer = new ResizeObserver(() => {
-        const state = hiddenPMRef.current?.getState();
-        if (state) {
-          updateSelectionOverlay(state);
-        }
-      });
+  // Re-layout when non-document layout inputs change (e.g., after HF editor save
+  // or parent-driven page setup/theme updates).
+  // runLayoutPipeline includes these values in its deps, but it
+  // only runs when explicitly called — this effect triggers it.
+  const layoutInputEpochRef = useRef(0);
+  useEffect(() => {
+    // Skip the initial render — handleEditorViewReady already does the first layout
+    if (layoutInputEpochRef.current === 0) {
+      layoutInputEpochRef.current = 1;
+      return;
+    }
+    const view = hiddenPMRef.current?.getView();
+    if (view) {
+      runLayoutPipelineRef.current(view.state);
+    }
+  }, [
+    headerContent,
+    footerContent,
+    firstPageHeaderContent,
+    firstPageFooterContent,
+    contentWidth,
+    columns,
+    pageSize,
+    margins,
+    pageGap,
+    sectionProperties,
+    _theme,
+  ]);
 
-      observer.observe(container);
-      return () => observer.disconnect();
-    }, [updateSelectionOverlay]);
+  // Re-compute selection overlay when the container resizes.
+  // Page elements shift during window resize (centering, scrollbar changes),
+  // causing caret/selection coordinates to become stale.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
 
-    // =========================================================================
-    // Imperative Handle
-    // =========================================================================
-
-    useImperativeHandle(
-      ref,
-      () => ({
-        getDocument() {
-          return hiddenPMRef.current?.getDocument() ?? null;
-        },
-        getState() {
-          return hiddenPMRef.current?.getState() ?? null;
-        },
-        getView() {
-          return hiddenPMRef.current?.getView() ?? null;
-        },
-        focus() {
-          hiddenPMRef.current?.focus();
-          setIsFocused(true);
-        },
-        blur() {
-          hiddenPMRef.current?.blur();
-          setIsFocused(false);
-        },
-        isFocused() {
-          return hiddenPMRef.current?.isFocused() ?? false;
-        },
-        dispatch(tr: Transaction) {
-          hiddenPMRef.current?.dispatch(tr);
-        },
-        undo() {
-          return hiddenPMRef.current?.undo() ?? false;
-        },
-        redo() {
-          return hiddenPMRef.current?.redo() ?? false;
-        },
-        canUndo() {
-          return hiddenPMRef.current?.canUndo() ?? false;
-        },
-        canRedo() {
-          return hiddenPMRef.current?.canRedo() ?? false;
-        },
-        setSelection(anchor: number, head?: number) {
-          hiddenPMRef.current?.setSelection(anchor, head);
-        },
-        getLayout() {
-          return layout;
-        },
-        relayout() {
-          const state = hiddenPMRef.current?.getState();
-          if (state) {
-            runLayoutPipeline(state);
-          }
-        },
-        scrollToPosition: scrollToPositionImpl,
-        scrollToPage: scrollToPageImpl,
-      }),
-      [layout, runLayoutPipeline, scrollToPageImpl, scrollToPositionImpl],
-    );
-
-    useEffect(() => {
-      if (!layout) {
-        return;
-      }
-
-      const totalPages = layout.pages.length;
-      if (lastTotalPagesRef.current === totalPages) {
-        return;
-      }
-
-      lastTotalPagesRef.current = totalPages;
-      onTotalPagesChangeRef.current?.(totalPages);
-    }, [layout]);
-
-    // Update selection overlay when layout changes
-    // This is needed because handleEditorViewReady calls runLayoutPipeline which
-    // sets layout asynchronously, so updateSelectionOverlay would return early
-    // if layout is still null. This effect ensures we update once layout is ready.
-    useEffect(() => {
+    const observer = new ResizeObserver(() => {
       const state = hiddenPMRef.current?.getState();
-      if (layout && state) {
+      if (state) {
         updateSelectionOverlay(state);
       }
-    }, [layout, updateSelectionOverlay]);
+    });
 
-    // =========================================================================
-    // Render
-    // =========================================================================
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [updateSelectionOverlay]);
 
-    // Calculate total height for scroll
-    const totalHeight = useMemo(() => {
-      if (!layout) {
-        return DEFAULT_PAGE_HEIGHT + 48;
-      }
-      const numPages = layout.pages.length;
-      return numPages * pageSize.h + (numPages - 1) * pageGap + 48;
-    }, [layout, pageSize.h, pageGap]);
-    const scaledViewportHeight = Math.max(1, totalHeight * zoom);
-    const scaledViewportWidth = Math.max(
-      1,
-      pageSize.w * zoom +
-        (commentsSidebarOpen ? COMMENTS_SIDEBAR_SCROLL_GUTTER : 0),
-    );
-    const viewportExtentStyle: CSSProperties = {
-      position: "relative",
-      width: `max(100%, ${String(scaledViewportWidth)}px)`,
-      height: scaledViewportHeight,
-      backgroundColor: "transparent",
-    };
-    const scaledViewportStyle: CSSProperties = {
-      ...viewportStyles,
-      position: "absolute",
-      top: 0,
-      left: `max(0px, calc((100% - ${String(scaledViewportWidth)}px) / 2))`,
-      width: pageSize.w,
-      minHeight: totalHeight,
-      transform: (() => {
-        const parts: string[] = [];
-        if (zoom !== 1) {
-          parts.push(`scale(${zoom})`);
+  // =========================================================================
+  // Imperative Handle
+  // =========================================================================
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      getDocument() {
+        return hiddenPMRef.current?.getDocument() ?? null;
+      },
+      getState() {
+        return hiddenPMRef.current?.getState() ?? null;
+      },
+      getView() {
+        return hiddenPMRef.current?.getView() ?? null;
+      },
+      focus() {
+        hiddenPMRef.current?.focus();
+        setIsFocused(true);
+      },
+      blur() {
+        hiddenPMRef.current?.blur();
+        setIsFocused(false);
+      },
+      isFocused() {
+        return hiddenPMRef.current?.isFocused() ?? false;
+      },
+      dispatch(tr: Transaction) {
+        hiddenPMRef.current?.dispatch(tr);
+      },
+      undo() {
+        return hiddenPMRef.current?.undo() ?? false;
+      },
+      redo() {
+        return hiddenPMRef.current?.redo() ?? false;
+      },
+      canUndo() {
+        return hiddenPMRef.current?.canUndo() ?? false;
+      },
+      canRedo() {
+        return hiddenPMRef.current?.canRedo() ?? false;
+      },
+      setSelection(anchor: number, head?: number) {
+        hiddenPMRef.current?.setSelection(anchor, head);
+      },
+      getLayout() {
+        return layout;
+      },
+      relayout() {
+        const state = hiddenPMRef.current?.getState();
+        if (state) {
+          runLayoutPipeline(state);
         }
-        return parts.length > 0 ? parts.join(" ") : undefined;
-      })(),
-      transformOrigin: "top left",
-    };
+      },
+      scrollToPosition: scrollToPositionImpl,
+      scrollToPage: scrollToPageImpl,
+    }),
+    [layout, runLayoutPipeline, scrollToPageImpl, scrollToPositionImpl],
+  );
 
-    return (
+  useEffect(() => {
+    if (!layout) {
+      return;
+    }
+
+    const totalPages = layout.pages.length;
+    if (lastTotalPagesRef.current === totalPages) {
+      return;
+    }
+
+    lastTotalPagesRef.current = totalPages;
+    onTotalPagesChangeRef.current?.(totalPages);
+  }, [layout]);
+
+  // Update selection overlay when layout changes
+  // This is needed because handleEditorViewReady calls runLayoutPipeline which
+  // sets layout asynchronously, so updateSelectionOverlay would return early
+  // if layout is still null. This effect ensures we update once layout is ready.
+  useEffect(() => {
+    const state = hiddenPMRef.current?.getState();
+    if (layout && state) {
+      updateSelectionOverlay(state);
+    }
+  }, [layout, updateSelectionOverlay]);
+
+  // =========================================================================
+  // Render
+  // =========================================================================
+
+  // Calculate total height for scroll
+  const totalHeight = useMemo(() => {
+    if (!layout) {
+      return DEFAULT_PAGE_HEIGHT + 48;
+    }
+    const numPages = layout.pages.length;
+    return numPages * pageSize.h + (numPages - 1) * pageGap + 48;
+  }, [layout, pageSize.h, pageGap]);
+  const scaledViewportHeight = Math.max(1, totalHeight * zoom);
+  const scaledViewportWidth = Math.max(
+    1,
+    pageSize.w * zoom +
+      (commentsSidebarOpen ? COMMENTS_SIDEBAR_SCROLL_GUTTER : 0),
+  );
+  const viewportExtentStyle: CSSProperties = {
+    position: "relative",
+    width: `max(100%, ${String(scaledViewportWidth)}px)`,
+    height: scaledViewportHeight,
+    backgroundColor: "transparent",
+  };
+  const scaledViewportStyle: CSSProperties = {
+    ...viewportStyles,
+    position: "absolute",
+    top: 0,
+    left: `max(0px, calc((100% - ${String(scaledViewportWidth)}px) / 2))`,
+    width: pageSize.w,
+    minHeight: totalHeight,
+    transform: (() => {
+      const parts: string[] = [];
+      if (zoom !== 1) {
+        parts.push(`scale(${zoom})`);
+      }
+      return parts.length > 0 ? parts.join(" ") : undefined;
+    })(),
+    transformOrigin: "top left",
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      className={`folio-root paged-editor ${className ?? ""}`}
+      style={{ ...containerStyles, ...style }}
+      tabIndex={0}
+      role="textbox"
+      aria-multiline
+      onFocus={handleContainerFocus}
+      onBlur={handleContainerBlur}
+      onKeyDown={handleKeyDown}
+      onMouseDown={handleContainerMouseDown}
+    >
+      {/* Hidden ProseMirror for keyboard input */}
+      <HiddenProseMirror
+        ref={hiddenPMRef}
+        document={document}
+        widthPx={contentWidth}
+        readOnly={readOnly}
+        onTransaction={handleTransaction}
+        onSelectionChange={handleSelectionChange}
+        onRemoteSelectionsChange={setRemoteSelections}
+        onEditorViewReady={handleEditorViewReady}
+        onKeyDown={handlePMKeyDown}
+        {...(styles !== undefined ? { styles } : {})}
+        externalPlugins={externalPlugins}
+        {...(collaboration !== undefined ? { collaboration } : {})}
+        {...(extensionManager !== undefined ? { extensionManager } : {})}
+        {...(onReadOnlyEditAttempt !== undefined
+          ? { onReadOnlyEditAttempt }
+          : {})}
+      />
+
+      {/* Viewport for visible pages */}
       <div
-        ref={containerRef}
-        className={`folio-root paged-editor ${className ?? ""}`}
-        style={{ ...containerStyles, ...style }}
-        tabIndex={0}
-        role="textbox"
-        aria-multiline
-        onFocus={handleContainerFocus}
-        onBlur={handleContainerBlur}
-        onKeyDown={handleKeyDown}
-        onMouseDown={handleContainerMouseDown}
+        className="paged-editor__viewport-extent"
+        style={viewportExtentStyle}
       >
-        {/* Hidden ProseMirror for keyboard input */}
-        <HiddenProseMirror
-          ref={hiddenPMRef}
-          document={document}
-          widthPx={contentWidth}
-          readOnly={readOnly}
-          onTransaction={handleTransaction}
-          onSelectionChange={handleSelectionChange}
-          onRemoteSelectionsChange={setRemoteSelections}
-          onEditorViewReady={handleEditorViewReady}
-          onKeyDown={handlePMKeyDown}
-          {...(styles !== undefined ? { styles } : {})}
-          externalPlugins={externalPlugins}
-          {...(collaboration !== undefined ? { collaboration } : {})}
-          {...(extensionManager !== undefined ? { extensionManager } : {})}
-          {...(onReadOnlyEditAttempt !== undefined
-            ? { onReadOnlyEditAttempt }
-            : {})}
-        />
+        <div className="paged-editor__viewport" style={scaledViewportStyle}>
+          {/* Pages container */}
+          <div
+            ref={pagesContainerRef}
+            className={`paged-editor__pages${readOnly ? " paged-editor--readonly" : ""}${hfEditMode ? ` paged-editor--hf-editing paged-editor--editing-${hfEditMode}` : ""}`}
+            style={pagesContainerStyles}
+            onMouseDown={handlePagesMouseDown}
+            onMouseMove={handlePagesMouseMove}
+            onClick={handlePagesClick}
+            onContextMenu={handlePagesContextMenu}
+            aria-hidden="true" // Visual only, PM provides semantic content
+          />
 
-        {/* Viewport for visible pages */}
-        <div
-          className="paged-editor__viewport-extent"
-          style={viewportExtentStyle}
-        >
-          <div className="paged-editor__viewport" style={scaledViewportStyle}>
-            {/* Pages container */}
-            <div
-              ref={pagesContainerRef}
-              className={`paged-editor__pages${readOnly ? " paged-editor--readonly" : ""}${hfEditMode ? ` paged-editor--hf-editing paged-editor--editing-${hfEditMode}` : ""}`}
-              style={pagesContainerStyles}
-              onMouseDown={handlePagesMouseDown}
-              onMouseMove={handlePagesMouseMove}
-              onClick={handlePagesClick}
-              onContextMenu={handlePagesContextMenu}
-              aria-hidden="true" // Visual only, PM provides semantic content
-            />
-
-            {/* Anonymization highlights — paints on top of the
+          {/* Anonymization highlights — paints on top of the
                 rendered pages so PII spans the wasm pipeline would
                 redact are visible inline. Always mounted, renders
                 nothing when no terms are pushed. */}
-            <AnonymizationRectsOverlay
-              groups={anonymizationRectGroups}
-              onTermClick={onAnonymizationTermClick}
-              selectedCanonical={selectedAnonymizationCanonical}
-              selectionSeq={anonymizationSelectionSeq}
-            />
+          <AnonymizationRectsOverlay
+            groups={anonymizationRectGroups}
+            onTermClick={onAnonymizationTermClick}
+            selectedCanonical={selectedAnonymizationCanonical}
+            selectionSeq={anonymizationSelectionSeq}
+          />
 
-            {/* Selection overlay */}
-            <SelectionOverlay
-              selectionRects={selectionRects}
-              caretPosition={caretPosition}
-              isFocused={isFocused}
-              pageGap={pageGap}
-            />
-            {layout &&
-              remoteSelections.map((remoteSelection) => (
-                <RemoteSelectionOverlay
-                  key={remoteSelection.clientId}
-                  blocks={blocks}
-                  layout={layout}
-                  measures={measures}
-                  pagesContainer={pagesContainerRef.current}
-                  remoteSelection={remoteSelection}
-                  zoom={zoom}
-                />
-              ))}
-
-            {/* Image selection overlay */}
-            {!readOnly && (
-              <ImageSelectionOverlay
-                imageInfo={selectedImageInfo}
+          {/* Selection overlay */}
+          <SelectionOverlay
+            selectionRects={selectionRects}
+            caretPosition={caretPosition}
+            isFocused={isFocused}
+            pageGap={pageGap}
+          />
+          {layout &&
+            remoteSelections.map((remoteSelection) => (
+              <RemoteSelectionOverlay
+                key={remoteSelection.clientId}
+                blocks={blocks}
+                layout={layout}
+                measures={measures}
+                pagesContainer={pagesContainerRef.current}
+                remoteSelection={remoteSelection}
                 zoom={zoom}
-                isFocused={isFocused}
-                onResize={handleImageResize}
-                onResizeStart={handleImageResizeStart}
-                onResizeEnd={handleImageResizeEnd}
-                onDragMove={handleImageDragMove}
-                onDragStart={handleImageDragStart}
-                onDragEnd={handleImageDragEnd}
               />
-            )}
+            ))}
 
-            {/* Table quick action insert button */}
-            {tableInsertButton && (
-              <button
-                type="button"
-                onMouseDown={handleTableInsertClick}
-                onMouseEnter={clearTableInsertTimer}
-                onMouseLeave={() => setTableInsertButton(null)}
-                style={{
-                  position: "absolute",
-                  left: tableInsertButton.x,
-                  top: tableInsertButton.y,
-                  width: 20,
-                  height: 20,
-                  borderRadius: "4px",
-                  border: "1px solid var(--doc-border, #dadce0)",
-                  backgroundColor: "var(--doc-bg, #f8f9fa)",
-                  color: "var(--doc-text-muted, #5f6368)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: "pointer",
-                  zIndex: 200,
-                  padding: 0,
-                  boxShadow: "none",
-                }}
-                title={
-                  tableInsertButton.type === "row"
-                    ? "Insert row below"
-                    : "Insert column to the right"
-                }
-                aria-label={
-                  tableInsertButton.type === "row"
-                    ? "Insert row below"
-                    : "Insert column to the right"
-                }
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path
-                    d="M6 1v10M1 6h10"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
-            )}
-          </div>
+          {/* Image selection overlay */}
+          {!readOnly && (
+            <ImageSelectionOverlay
+              imageInfo={selectedImageInfo}
+              zoom={zoom}
+              isFocused={isFocused}
+              onResize={handleImageResize}
+              onResizeStart={handleImageResizeStart}
+              onResizeEnd={handleImageResizeEnd}
+              onDragMove={handleImageDragMove}
+              onDragStart={handleImageDragStart}
+              onDragEnd={handleImageDragEnd}
+            />
+          )}
+
+          {/* Table quick action insert button */}
+          {tableInsertButton && (
+            <button
+              type="button"
+              onMouseDown={handleTableInsertClick}
+              onMouseEnter={clearTableInsertTimer}
+              onMouseLeave={() => setTableInsertButton(null)}
+              style={{
+                position: "absolute",
+                left: tableInsertButton.x,
+                top: tableInsertButton.y,
+                width: 20,
+                height: 20,
+                borderRadius: "4px",
+                border: "1px solid var(--doc-border, #dadce0)",
+                backgroundColor: "var(--doc-bg, #f8f9fa)",
+                color: "var(--doc-text-muted, #5f6368)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                zIndex: 200,
+                padding: 0,
+                boxShadow: "none",
+              }}
+              title={
+                tableInsertButton.type === "row"
+                  ? "Insert row below"
+                  : "Insert column to the right"
+              }
+              aria-label={
+                tableInsertButton.type === "row"
+                  ? "Insert row below"
+                  : "Insert column to the right"
+              }
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path
+                  d="M6 1v10M1 6h10"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+          )}
         </div>
-
-        {/* Sidebar overlay — inside scroll container, scrolls with document */}
-        {sidebarOverlay}
       </div>
-    );
-  },
-);
 
-export const PagedEditor = memo(PagedEditorComponent);
+      {/* Sidebar overlay — inside scroll container, scrolls with document */}
+      {sidebarOverlay}
+    </div>
+  );
+}

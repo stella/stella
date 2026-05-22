@@ -396,12 +396,16 @@
       },
       "devDependencies": {
         "@playwright/test": "^1.60.0",
+        "@types/react": "catalog:react19",
+        "@types/react-dom": "catalog:react19",
         "fast-check": "catalog:",
+        "react": "catalog:react19",
+        "react-dom": "catalog:react19",
         "typescript": "catalog:",
       },
       "peerDependencies": {
-        "react": "^18.0.0 || ^19.0.0",
-        "react-dom": "^18.0.0 || ^19.0.0",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
         "use-intl": ">=4.0.0",
       },
     },
