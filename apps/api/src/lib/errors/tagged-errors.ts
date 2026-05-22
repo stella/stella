@@ -4,10 +4,12 @@ import type { ChatTransportErrorCode } from "@stll/anonymize-chat";
 
 export type HandlerErrorStatusCode =
   | 400
+  | 401
   | 402
   | 403
   | 404
   | 409
+  | 413
   | 422
   | 429
   | 500
