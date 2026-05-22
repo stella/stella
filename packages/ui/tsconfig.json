@@ -5,9 +5,6 @@
       "@stll/ui/*": ["./src/*"]
     }
   },
-  "include": [
-    ".",
-    "../../apps/web/src/routes/workspaces/$workspaceId/-components/properties/rich-text-editor.tsx"
-  ],
+  "include": ["."],
   "exclude": ["node_modules", "dist"]
 }

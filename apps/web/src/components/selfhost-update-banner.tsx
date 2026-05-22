@@ -44,6 +44,7 @@ export const SelfhostUpdateBanner = () => {
       try {
         const response = await fetch(RELEASES_API_URL, {
           headers: { Accept: "application/vnd.github+json" },
+          signal: AbortSignal.timeout(8000),
         });
         if (!response.ok) {
           return null;

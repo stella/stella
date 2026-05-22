@@ -16,6 +16,7 @@
     "jszip": "catalog:"
   },
   "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
     "@types/bun": "catalog:",
     "typescript": "catalog:"
   }

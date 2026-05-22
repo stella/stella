@@ -3,14 +3,17 @@
  * for testing template filling. Replaces specific text patterns
  * (party names, prices, dates) with placeholder tags.
  *
- * Run: bun apps/api/src/handlers/docx/prepare-spa-template.ts
+ * Run: bun apps/api/src/scripts/prepare-spa-template.ts
  */
 import JSZip from "jszip";
 
-const INPUT = new URL("fixtures/spa-template.docx", import.meta.url).pathname;
+const INPUT = new URL(
+  "../handlers/docx/fixtures/spa-template.docx",
+  import.meta.url,
+).pathname;
 
 const OUTPUT = new URL(
-  "fixtures/spa-template-with-placeholders.docx",
+  "../handlers/docx/fixtures/spa-template-with-placeholders.docx",
   import.meta.url,
 ).pathname;
 

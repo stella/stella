@@ -70,9 +70,43 @@ export type SearchAISummaryParams = {
   limit?: number | undefined;
 };
 
+// Query keys are reconstructed field-by-field (never spread) so extra
+// properties on a caller-supplied params object cannot leak into the cache
+// identity and trigger spurious refetches.
 const searchKeys = {
   all: ["search"] as const,
-  query: (params: SearchParams) => [...searchKeys.all, params] as const,
+  query: (params: SearchParams) =>
+    [
+      ...searchKeys.all,
+      {
+        query: params.query,
+        workspaceIds: params.workspaceIds,
+        types: params.types,
+        kinds: params.kinds,
+        editedByUserIds: params.editedByUserIds,
+        mimeTypes: params.mimeTypes,
+        updatedFrom: params.updatedFrom,
+        updatedTo: params.updatedTo,
+        limit: params.limit,
+      },
+    ] as const,
+  facet: (params: SearchFacetParams) =>
+    [
+      ...searchKeys.all,
+      "facet",
+      {
+        facet: params.facet,
+        search: params.search,
+        query: params.query,
+        workspaceIds: params.workspaceIds,
+        types: params.types,
+        editedByUserIds: params.editedByUserIds,
+        mimeTypes: params.mimeTypes,
+        updatedFrom: params.updatedFrom,
+        updatedTo: params.updatedTo,
+        limit: params.limit,
+      },
+    ] as const,
 };
 
 export const searchInfiniteOptions = (params: SearchParams) =>
@@ -111,7 +145,7 @@ export const searchInfiniteOptions = (params: SearchParams) =>
 
 export const searchFacetOptions = (params: SearchFacetParams) =>
   queryOptions({
-    queryKey: [...searchKeys.all, "facet", params] as const,
+    queryKey: searchKeys.facet(params),
     queryFn: async ({ signal }) => {
       const response = await api.search.facets.post(
         stripUndefined({

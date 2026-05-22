@@ -2,7 +2,7 @@
   "name": "@stll/api",
   "version": "0.0.0",
   "license": "Apache-2.0",
-  "module": "src/index.js",
+  "module": "src/index.ts",
   "exports": {
     "./types": "./src/types.ts"
   },

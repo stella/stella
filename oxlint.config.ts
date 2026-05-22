@@ -277,14 +277,11 @@ export default defineConfig({
       },
     },
     {
-      // One-off DOCX fixture scripts and load-test CLIs intentionally
-      // print progress/errors to the terminal; keep product API code on
-      // structured logging.
-      files: [
-        "apps/api/src/handlers/docx/generate-spa-filled.ts",
-        "apps/api/src/handlers/docx/prepare-spa-template.ts",
-        "apps/api/src/tests/load/**/*.ts",
-      ],
+      // Load-test CLIs intentionally print progress/errors to the
+      // terminal; keep product API code on structured logging.
+      // (One-off DOCX fixture scripts now live under apps/api/src/scripts,
+      // already covered by the **/scripts/** override above.)
+      files: ["apps/api/src/tests/load/**/*.ts"],
       rules: { "no-console": "off" },
     },
     {

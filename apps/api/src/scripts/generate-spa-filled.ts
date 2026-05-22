@@ -2,13 +2,16 @@
  * Test script: fills the SPA template with mock values
  * to verify the template filling flow.
  *
- * Run: bun apps/api/src/handlers/docx/generate-spa-filled.ts
+ * Run: bun apps/api/src/scripts/generate-spa-filled.ts
  */
 
-import { fillTemplate } from "./patch-template";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { fillTemplate } from "../handlers/docx/patch-template";
 
 const TEMPLATE = new URL(
-  "fixtures/spa-template-with-placeholders.docx",
+  "../handlers/docx/fixtures/spa-template-with-placeholders.docx",
   import.meta.url,
 ).pathname;
 
@@ -25,8 +28,9 @@ const MOCK_VALUES = {
 
 const run = async () => {
   const { buffer } = await fillTemplate(TEMPLATE, MOCK_VALUES);
-  const outputPath = "/Users/sok0/Downloads/stella-spa-filled.docx";
+  const outputPath = join(tmpdir(), "stella-spa-filled.docx");
   await Bun.write(outputPath, buffer);
+  console.log(`Wrote ${outputPath}`);
 };
 
 run().catch((error: unknown) => {

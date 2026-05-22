@@ -3,7 +3,6 @@ import { and, desc, eq } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db";
 import { desktopEditSessions, entityVersions } from "@/api/db/schema";
-import type { FieldContent } from "@/api/db/schema-validators";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -169,13 +168,12 @@ const readVersionsHandler = async function* ({
 
   for (const f of versionFields) {
     if (f.content.type === "file" && !versionFileMap.has(f.entityVersionId)) {
-      const c = f.content as FieldContent & { type: "file" };
       versionFileMap.set(f.entityVersionId, {
         fieldId: f.id,
         propertyId: f.propertyId,
-        fileName: c.fileName,
-        mimeType: c.mimeType,
-        sizeBytes: c.sizeBytes,
+        fileName: f.content.fileName,
+        mimeType: f.content.mimeType,
+        sizeBytes: f.content.sizeBytes,
       });
     }
   }
