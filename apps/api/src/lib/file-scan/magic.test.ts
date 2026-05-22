@@ -7,7 +7,8 @@ const bytes = (...values: number[]): Uint8Array => new Uint8Array(values);
 const PDF_HEADER = bytes(0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37);
 const PNG_HEADER = bytes(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00);
 const JPEG_HEADER = bytes(0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10);
-const GIF_HEADER = bytes(0x47, 0x49, 0x46, 0x38, 0x39, 0x61);
+const GIF_89A_HEADER = bytes(0x47, 0x49, 0x46, 0x38, 0x39, 0x61);
+const GIF_87A_HEADER = bytes(0x47, 0x49, 0x46, 0x38, 0x37, 0x61);
 // `RIFF` + 4-byte size + `WEBP`.
 const WEBP_HEADER = bytes(
   0x52,
@@ -29,7 +30,8 @@ describe("declaredMimeMatchesMagic", () => {
     expect(declaredMimeMatchesMagic("application/pdf", PDF_HEADER)).toBe(true);
     expect(declaredMimeMatchesMagic("image/png", PNG_HEADER)).toBe(true);
     expect(declaredMimeMatchesMagic("image/jpeg", JPEG_HEADER)).toBe(true);
-    expect(declaredMimeMatchesMagic("image/gif", GIF_HEADER)).toBe(true);
+    expect(declaredMimeMatchesMagic("image/gif", GIF_89A_HEADER)).toBe(true);
+    expect(declaredMimeMatchesMagic("image/gif", GIF_87A_HEADER)).toBe(true);
     expect(declaredMimeMatchesMagic("image/webp", WEBP_HEADER)).toBe(true);
   });
 
@@ -37,7 +39,12 @@ describe("declaredMimeMatchesMagic", () => {
     // A PDF declared as a PNG — the spoof this check exists to catch.
     expect(declaredMimeMatchesMagic("image/png", PDF_HEADER)).toBe(false);
     expect(declaredMimeMatchesMagic("application/pdf", PNG_HEADER)).toBe(false);
-    expect(declaredMimeMatchesMagic("image/jpeg", GIF_HEADER)).toBe(false);
+    expect(declaredMimeMatchesMagic("image/jpeg", GIF_89A_HEADER)).toBe(false);
+  });
+
+  test("GIF requires a full GIF87a or GIF89a header", () => {
+    const gif8Spoof = bytes(0x47, 0x49, 0x46, 0x38, 0x00, 0x00);
+    expect(declaredMimeMatchesMagic("image/gif", gif8Spoof)).toBe(false);
   });
 
   test("known type lookup is case-insensitive", () => {

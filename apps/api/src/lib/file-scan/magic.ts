@@ -33,7 +33,8 @@ const WEBP_FORM_TYPE = [0x57, 0x45, 0x42, 0x50] as const;
 const PDF_SIGNATURE = [0x25, 0x50, 0x44, 0x46, 0x2d] as const;
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] as const;
 const JPEG_SIGNATURE = [0xff, 0xd8, 0xff] as const;
-const GIF_SIGNATURE = [0x47, 0x49, 0x46, 0x38] as const;
+const GIF_87A_SIGNATURE = [0x47, 0x49, 0x46, 0x38, 0x37, 0x61] as const;
+const GIF_89A_SIGNATURE = [0x47, 0x49, 0x46, 0x38, 0x39, 0x61] as const;
 
 const MIME_MAGIC_MATCHERS: Record<string, (buffer: Uint8Array) => boolean> = {
   // %PDF-
@@ -43,7 +44,9 @@ const MIME_MAGIC_MATCHERS: Record<string, (buffer: Uint8Array) => boolean> = {
   // JPEG start-of-image marker
   "image/jpeg": (buffer) => startsWith(buffer, JPEG_SIGNATURE),
   // GIF87a / GIF89a
-  "image/gif": (buffer) => startsWith(buffer, GIF_SIGNATURE),
+  "image/gif": (buffer) =>
+    startsWith(buffer, GIF_87A_SIGNATURE) ||
+    startsWith(buffer, GIF_89A_SIGNATURE),
   "image/webp": (buffer) =>
     startsWith(buffer, WEBP_RIFF_TAG) &&
     startsWith(buffer.subarray(8), WEBP_FORM_TYPE),
