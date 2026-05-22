@@ -46,6 +46,14 @@ const WORKFLOW_KEY_PREFIX = "workflow";
 const workflowKey = (workspaceId: SafeId<"workspace">, field: string) =>
   `${WORKFLOW_KEY_PREFIX}:${workspaceId}:${field}`;
 
+const WORKFLOW_RUN_STATE_FIELDS = [
+  "running",
+  "total",
+  "completed",
+  "plan-properties",
+  "request-id",
+] as const;
+
 const EXTRACTION_PREVIEW_EVENT_TYPE = "workflow-extraction-preview";
 const EXTRACTION_PREVIEW_THROTTLE_MS = 500;
 
@@ -101,6 +109,26 @@ const getQueue = (): Queue => {
   });
   return queue;
 };
+
+const clearWorkflowRunState = async (
+  redis: Redis,
+  workspaceId: SafeId<"workspace">,
+): Promise<void> => {
+  await redis.del(
+    ...WORKFLOW_RUN_STATE_FIELDS.map((field) =>
+      workflowKey(workspaceId, field),
+    ),
+  );
+};
+
+const isCurrentWorkflowRequest = async ({
+  requestId,
+  workspaceId,
+}: {
+  requestId: string;
+  workspaceId: SafeId<"workspace">;
+}): Promise<boolean> =>
+  (await getRedis().get(workflowKey(workspaceId, "request-id"))) === requestId;
 
 // Self-heal levers. Tuned conservatively so the happy path is never
 // disrupted, but a stuck job/worker can't block the workspace.
@@ -188,6 +216,7 @@ type FullWorkflowTargetCursor = {
 type EnqueueEntityJobsArgs = {
   entityIds: readonly SafeId<"entity">[];
   executionPlan: ExecutionLevel[];
+  jobIds: readonly string[];
   organizationId: SafeId<"organization">;
   q: Queue;
   requestId: string;
@@ -203,9 +232,18 @@ const chunkItems = <T>(items: readonly T[], size: number): T[][] => {
   return chunks;
 };
 
+const workflowEntityJobId = ({
+  entityId,
+  requestId,
+}: {
+  entityId: SafeId<"entity">;
+  requestId: string;
+}): string => `workflow-${requestId}-${entityId}`;
+
 const enqueueEntityJobs = async ({
   entityIds,
   executionPlan,
+  jobIds,
   organizationId,
   q,
   requestId,
@@ -215,20 +253,44 @@ const enqueueEntityJobs = async ({
   if (entityIds.length === 0) {
     return;
   }
+  if (entityIds.length !== jobIds.length) {
+    return panic("Workflow job IDs must match entity IDs");
+  }
 
   await q.addBulk(
-    entityIds.map((entityId) => ({
-      name: "process-entity",
-      data: {
-        workspaceId,
-        organizationId,
-        userId,
-        entityId,
-        executionPlan,
-        requestId,
-      } satisfies EntityJobData,
-    })),
+    entityIds.map((entityId, index) => {
+      const jobId = jobIds.at(index) ?? panic("Missing workflow job ID");
+      return {
+        name: "process-entity",
+        data: {
+          workspaceId,
+          organizationId,
+          userId,
+          entityId,
+          executionPlan,
+          requestId,
+        } satisfies EntityJobData,
+        opts: { jobId },
+      };
+    }),
   );
+};
+
+const removeQueuedWorkflowJobs = async (
+  q: Queue,
+  jobIds: readonly string[],
+): Promise<void> => {
+  for (const chunk of chunkItems(jobIds, LIMITS.workflowEntityBatchSize)) {
+    await Promise.all(
+      chunk.map(async (jobId) => {
+        try {
+          await q.remove(jobId);
+        } catch (error: unknown) {
+          captureError(error, { workflowJobId: jobId });
+        }
+      }),
+    );
+  }
 };
 
 const fetchExplicitWorkflowTargetRows = async ({
@@ -416,7 +478,7 @@ export const startWorkflow = async ({
     );
 
     if (!hasWork) {
-      await redis.del(workflowKey(workspaceId, "running"));
+      await clearWorkflowRunState(redis, workspaceId);
       return { status: "skipped" };
     }
 
@@ -451,13 +513,19 @@ export const startWorkflow = async ({
     const targetCount = targetEntityIds.length;
 
     if (targetCount === 0) {
-      await redis.del(workflowKey(workspaceId, "running"));
+      await clearWorkflowRunState(redis, workspaceId);
       return { status: "skipped" };
     }
 
     const requestId = Bun.randomUUIDv7();
 
     // Store entity count for completion tracking
+    await redis.set(
+      workflowKey(workspaceId, "request-id"),
+      requestId,
+      "EX",
+      RUNNING_LOCK_TTL_SEC,
+    );
     await redis.set(workflowKey(workspaceId, "total"), String(targetCount));
     await redis.set(workflowKey(workspaceId, "completed"), "0");
 
@@ -479,24 +547,35 @@ export const startWorkflow = async ({
     broadcastWorkflowStatus(workspaceId, true);
 
     const q = getQueue();
-    for (const chunk of chunkItems(
-      targetEntityIds,
-      LIMITS.workflowEntityBatchSize,
-    )) {
-      await enqueueEntityJobs({
-        entityIds: chunk,
-        executionPlan,
-        organizationId,
-        q,
-        requestId,
-        userId,
-        workspaceId,
-      });
+    const queuedJobIds: string[] = [];
+    try {
+      for (const chunk of chunkItems(
+        targetEntityIds,
+        LIMITS.workflowEntityBatchSize,
+      )) {
+        const chunkJobIds = chunk.map((entityId) =>
+          workflowEntityJobId({ entityId, requestId }),
+        );
+        queuedJobIds.push(...chunkJobIds);
+        await enqueueEntityJobs({
+          entityIds: chunk,
+          executionPlan,
+          jobIds: chunkJobIds,
+          organizationId,
+          q,
+          requestId,
+          userId,
+          workspaceId,
+        });
+      }
+    } catch (error: unknown) {
+      await removeQueuedWorkflowJobs(q, queuedJobIds);
+      throw error;
     }
 
     return { status: "started" };
   } catch (error: unknown) {
-    await redis.del(workflowKey(workspaceId, "running"));
+    await clearWorkflowRunState(redis, workspaceId);
     broadcastWorkflowStatus(workspaceId, false);
     captureError(error, { workspaceId });
     return { status: "failed" };
@@ -592,6 +671,14 @@ export const initWorkflowWorker = () => {
       workspaceId: data.workspaceId,
     });
     void (async () => {
+      const isCurrentRequest = await isCurrentWorkflowRequest({
+        requestId: data.requestId,
+        workspaceId: branded.workspaceId,
+      });
+      if (!isCurrentRequest) {
+        return;
+      }
+
       await markPendingPlannedFieldsErrored(data).catch(
         (pendingFieldsError: unknown) => {
           captureError(pendingFieldsError, {
@@ -604,6 +691,7 @@ export const initWorkflowWorker = () => {
         branded.workspaceId,
         branded.organizationId,
         brandPersistedUserId(data.userId),
+        data.requestId,
       );
     })().catch((completionError: unknown) => {
       captureError(completionError, {
@@ -705,6 +793,14 @@ const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
   const userId = brandPersistedUserId(rawUserId);
   const brandedEntityId = brandPersistedEntityId(entityId);
 
+  const isCurrentRequest = await isCurrentWorkflowRequest({
+    requestId,
+    workspaceId: branded.workspaceId,
+  });
+  if (!isCurrentRequest) {
+    return;
+  }
+
   const scopedDb = createRootScopedDb({
     organizationId: branded.organizationId,
     userId,
@@ -712,6 +808,14 @@ const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
   });
 
   for (let level = 0; level < executionPlan.length; level++) {
+    const isStillCurrentRequest = await isCurrentWorkflowRequest({
+      requestId,
+      workspaceId: branded.workspaceId,
+    });
+    if (!isStillCurrentRequest) {
+      return;
+    }
+
     // Honour the worker-level timeout. Throwing here ensures we don't
     // start a new batch (or call onEntityCompleted) after the abort.
     signal.throwIfAborted();
@@ -748,7 +852,12 @@ const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
   // Broadcast entity invalidation so frontend refetches
   broadcastInvalidation(branded.workspaceId, ["entities", branded.workspaceId]);
 
-  await onEntityCompleted(branded.workspaceId, branded.organizationId, userId);
+  await onEntityCompleted(
+    branded.workspaceId,
+    branded.organizationId,
+    userId,
+    requestId,
+  );
 };
 
 type ProcessOneBatchArgs = {
@@ -846,6 +955,14 @@ const processOneBatch = async ({
   signal,
 }: ProcessOneBatchArgs) => {
   signal.throwIfAborted();
+  const isCurrentRequest = await isCurrentWorkflowRequest({
+    requestId,
+    workspaceId,
+  });
+  if (!isCurrentRequest) {
+    return;
+  }
+
   const entityRow = await scopedDb((tx) =>
     tx.query.entities.findFirst({
       columns: { currentVersionId: true },
@@ -968,6 +1085,14 @@ const processOneBatch = async ({
         requestId,
       });
 
+      const isStillCurrentRequest = await isCurrentWorkflowRequest({
+        requestId,
+        workspaceId,
+      });
+      if (!isStillCurrentRequest) {
+        return;
+      }
+
       await setFieldsStatus({
         workspaceId,
         entityVersionId,
@@ -979,6 +1104,13 @@ const processOneBatch = async ({
     }
 
     const processedFields = batchResult.value;
+    const isStillCurrentRequest = await isCurrentWorkflowRequest({
+      requestId,
+      workspaceId,
+    });
+    if (!isStillCurrentRequest) {
+      return;
+    }
 
     // Write AI results to DB
     const allPropertyIds = [
@@ -1048,14 +1180,23 @@ const onEntityCompleted = async (
   workspaceId: SafeId<"workspace">,
   organizationId: SafeId<"organization">,
   userId: SafeId<"user">,
+  requestId: string,
 ) => {
+  const isCurrentRequest = await isCurrentWorkflowRequest({
+    requestId,
+    workspaceId,
+  });
+  if (!isCurrentRequest) {
+    return;
+  }
+
   const redis = getRedis();
   const completed = await redis.incr(workflowKey(workspaceId, "completed"));
   const totalStr = await redis.get(workflowKey(workspaceId, "total"));
   const total = Number(totalStr ?? "0");
 
   if (completed >= total) {
-    await finishWorkflow(workspaceId, organizationId, userId);
+    await finishWorkflow(workspaceId, organizationId, userId, requestId);
     return;
   }
 
@@ -1070,6 +1211,7 @@ const onEntityCompleted = async (
       workflowKey(workspaceId, "plan-properties"),
       RUNNING_LOCK_TTL_SEC,
     ),
+    redis.expire(workflowKey(workspaceId, "request-id"), RUNNING_LOCK_TTL_SEC),
   ]);
 };
 
@@ -1077,7 +1219,16 @@ const finishWorkflow = async (
   workspaceId: SafeId<"workspace">,
   organizationId: SafeId<"organization">,
   userId: SafeId<"user">,
+  requestId: string,
 ) => {
+  const isCurrentRequest = await isCurrentWorkflowRequest({
+    requestId,
+    workspaceId,
+  });
+  if (!isCurrentRequest) {
+    return;
+  }
+
   const redis = getRedis();
   const scopedDb = createRootScopedDb({
     organizationId,
@@ -1129,12 +1280,7 @@ const finishWorkflow = async (
   }
 
   // Clean up Redis state
-  await redis.del(
-    workflowKey(workspaceId, "running"),
-    workflowKey(workspaceId, "total"),
-    workflowKey(workspaceId, "completed"),
-    workflowKey(workspaceId, "plan-properties"),
-  );
+  await clearWorkflowRunState(redis, workspaceId);
 
   // Broadcast completion
   broadcastWorkflowStatus(workspaceId, false);

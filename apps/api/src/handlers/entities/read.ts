@@ -9,7 +9,6 @@ import {
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import {
@@ -64,14 +63,8 @@ export const createReadEntitiesHandler = (
     }) {
       const page = body.page ?? 1;
       const pageSize = body.pageSize ?? LIMITS.entitiesPageSizeDefault;
-      if (page > 1 && body.cursor === undefined) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Cursor is required after the first entity page",
-          }),
-        );
-      }
+      const legacyPageOffset =
+        page > 1 && body.cursor === undefined ? (page - 1) * pageSize : 0;
 
       const cursorResult = decodeEntitiesWindowCursor(body.cursor);
       if (Result.isError(cursorResult)) {
@@ -88,6 +81,7 @@ export const createReadEntitiesHandler = (
           sorts: body.sorts ?? [],
           ...(body.search !== undefined && { search: body.search }),
           cursor: cursorResult.value,
+          offset: legacyPageOffset,
           limit: pageSize + 1,
           fieldMode: body.fieldMode ?? "full",
           fieldIds: body.fieldIds ?? [],

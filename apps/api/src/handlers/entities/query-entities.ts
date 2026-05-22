@@ -105,6 +105,7 @@ type QueryEntitiesProps = {
   sorts: ViewSort[];
   search?: string | undefined;
   cursor?: EntitiesWindowCursorValues | null | undefined;
+  offset?: number | undefined;
   limit: number;
   fieldMode: QueryEntitiesFieldMode;
   fieldIds: SafeId<"property">[];
@@ -575,6 +576,7 @@ const queryEntitiesGenerator = async function* ({
   sorts,
   search,
   cursor,
+  offset = 0,
   limit,
   fieldMode,
   fieldIds,
@@ -625,14 +627,20 @@ const queryEntitiesGenerator = async function* ({
     : Promise.resolve(null);
 
   const [idRowsResult, countRowsResult] = await Promise.all([
-    safeDb((tx) =>
-      tx
+    safeDb((tx) => {
+      const query = tx
         .select({ cursorValues: cursorValuesExpr, id: entities.id })
         .from(entities)
         .where(paginatedWhereClause)
         .orderBy(...sortExpressions)
-        .limit(limit),
-    ),
+        .limit(limit);
+
+      if (offset <= 0) {
+        return query;
+      }
+
+      return query.offset(offset);
+    }),
     countRowsPromise,
   ]);
 

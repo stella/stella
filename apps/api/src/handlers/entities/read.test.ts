@@ -89,6 +89,27 @@ describe("entity read handler search", () => {
     );
   });
 
+  test("keeps legacy page-only pagination working without a cursor", async () => {
+    await readEntities.handler(
+      createContext({
+        filters: [],
+        sorts: [],
+        page: 3,
+        pageSize: 25,
+        fieldMode: "visible",
+        fieldIds: [],
+      }),
+    );
+
+    expect(queryEntitiesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cursor: null,
+        limit: 26,
+        offset: 50,
+      }),
+    );
+  });
+
   test("loads a bounded complete filesystem tree without widening page reads", async () => {
     await readFilesystemTree.handler(
       createContext({
