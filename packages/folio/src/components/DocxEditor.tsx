@@ -225,7 +225,10 @@ import { TextContextMenu } from "./TextContextMenu";
 import type { TextContextAction, TextContextMenuItem } from "./TextContextMenu";
 import { ToolbarButton, ToolbarSeparator } from "./Toolbar";
 import type { FormattingAction } from "./Toolbar";
-import { mapHexToHighlightName } from "./toolbarUtils";
+import {
+  areSelectionFormattingEqual,
+  mapHexToHighlightName,
+} from "./toolbarUtils";
 import { HyperlinkPopup } from "./ui/HyperlinkPopup";
 import { getBuiltinTableStyle } from "./ui/table-styles";
 import type { TableStylePreset } from "./ui/table-styles";
@@ -304,6 +307,87 @@ function buildImagePropertiesData(
     data.borderStyle = ctx.borderStyle;
   }
   return data;
+}
+
+/**
+ * Shared empty formatting object for selections that carry no formatting
+ * (e.g. no active selection). Reusing one reference lets the selection
+ * `setState` bail out instead of allocating a fresh `{}` each time.
+ */
+const EMPTY_SELECTION_FORMATTING: EditorState["selectionFormatting"] = {};
+
+/**
+ * Structural equality for the ProseMirror table context. `getTableContext`
+ * returns a fresh object on every selection change; comparing by value lets
+ * the selection `setState` preserve the previous reference and skip a render.
+ */
+function areTableContextsEqual(
+  a: EditorState["pmTableContext"],
+  b: EditorState["pmTableContext"],
+): boolean {
+  if (a === b) {
+    return true;
+  }
+  if (!a || !b) {
+    return false;
+  }
+  return (
+    a.isInTable === b.isInTable &&
+    a.table === b.table &&
+    a.tablePos === b.tablePos &&
+    a.rowIndex === b.rowIndex &&
+    a.columnIndex === b.columnIndex &&
+    a.rowCount === b.rowCount &&
+    a.columnCount === b.columnCount &&
+    a.hasMultiCellSelection === b.hasMultiCellSelection &&
+    a.canSplitCell === b.canSplitCell &&
+    a.cellBorderColor === b.cellBorderColor &&
+    a.cellBackgroundColor === b.cellBackgroundColor
+  );
+}
+
+/** Structural equality for the image context surfaced to the toolbar. */
+function areImageContextsEqual(
+  a: EditorState["pmImageContext"],
+  b: EditorState["pmImageContext"],
+): boolean {
+  if (a === b) {
+    return true;
+  }
+  if (!a || !b) {
+    return false;
+  }
+  return (
+    a.pos === b.pos &&
+    a.wrapType === b.wrapType &&
+    a.displayMode === b.displayMode &&
+    a.cssFloat === b.cssFloat &&
+    a.transform === b.transform &&
+    a.alt === b.alt &&
+    a.borderWidth === b.borderWidth &&
+    a.borderColor === b.borderColor &&
+    a.borderStyle === b.borderStyle
+  );
+}
+
+/** Structural equality for the active tracked-change context. */
+function areActiveTrackedChangesEqual(
+  a: EditorState["activeTrackedChange"],
+  b: EditorState["activeTrackedChange"],
+): boolean {
+  if (a === b) {
+    return true;
+  }
+  if (!a || !b) {
+    return false;
+  }
+  return (
+    a.type === b.type &&
+    a.author === b.author &&
+    a.date === b.date &&
+    a.from === b.from &&
+    a.to === b.to
+  );
 }
 
 /**
@@ -1224,13 +1308,47 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
 
         if (!selectionState) {
           setFloatingCommentBtn(null);
-          setState((prev) => ({
-            ...prev,
-            selectionFormatting: {},
-            pmTableContext: pmTableCtx,
-            pmImageContext: pmImageCtx,
-            activeTrackedChange: trackedChange,
-          }));
+          setState((prev) => {
+            const selectionFormatting = areSelectionFormattingEqual(
+              prev.selectionFormatting,
+              EMPTY_SELECTION_FORMATTING,
+            )
+              ? prev.selectionFormatting
+              : EMPTY_SELECTION_FORMATTING;
+            const pmTableContext = areTableContextsEqual(
+              prev.pmTableContext,
+              pmTableCtx,
+            )
+              ? prev.pmTableContext
+              : pmTableCtx;
+            const pmImageContext = areImageContextsEqual(
+              prev.pmImageContext,
+              pmImageCtx,
+            )
+              ? prev.pmImageContext
+              : pmImageCtx;
+            const activeTrackedChange = areActiveTrackedChangesEqual(
+              prev.activeTrackedChange,
+              trackedChange,
+            )
+              ? prev.activeTrackedChange
+              : trackedChange;
+            if (
+              selectionFormatting === prev.selectionFormatting &&
+              pmTableContext === prev.pmTableContext &&
+              pmImageContext === prev.pmImageContext &&
+              activeTrackedChange === prev.activeTrackedChange
+            ) {
+              return prev;
+            }
+            return {
+              ...prev,
+              selectionFormatting,
+              pmTableContext,
+              pmImageContext,
+              activeTrackedChange,
+            };
+          });
           return;
         }
 
@@ -1273,18 +1391,64 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(
           textColor,
           listState,
         });
-        setState((prev) => ({
-          ...prev,
-          selectionFormatting: formatting,
-          paragraphIndentLeft: paragraphFormatting.indentLeft ?? 0,
-          paragraphIndentRight: paragraphFormatting.indentRight ?? 0,
-          paragraphFirstLineIndent: paragraphFormatting.indentFirstLine ?? 0,
-          paragraphHangingIndent: paragraphFormatting.hangingIndent ?? false,
-          paragraphTabs: paragraphFormatting.tabs ?? null,
-          pmTableContext: pmTableCtx,
-          pmImageContext: pmImageCtx,
-          activeTrackedChange: trackedChange,
-        }));
+        setState((prev) => {
+          const selectionFormatting = areSelectionFormattingEqual(
+            prev.selectionFormatting,
+            formatting,
+          )
+            ? prev.selectionFormatting
+            : formatting;
+          const pmTableContext = areTableContextsEqual(
+            prev.pmTableContext,
+            pmTableCtx,
+          )
+            ? prev.pmTableContext
+            : pmTableCtx;
+          const pmImageContext = areImageContextsEqual(
+            prev.pmImageContext,
+            pmImageCtx,
+          )
+            ? prev.pmImageContext
+            : pmImageCtx;
+          const activeTrackedChange = areActiveTrackedChangesEqual(
+            prev.activeTrackedChange,
+            trackedChange,
+          )
+            ? prev.activeTrackedChange
+            : trackedChange;
+          const paragraphIndentLeft = paragraphFormatting.indentLeft ?? 0;
+          const paragraphIndentRight = paragraphFormatting.indentRight ?? 0;
+          const paragraphFirstLineIndent =
+            paragraphFormatting.indentFirstLine ?? 0;
+          const paragraphHangingIndent =
+            paragraphFormatting.hangingIndent ?? false;
+          const paragraphTabs = paragraphFormatting.tabs ?? null;
+          if (
+            selectionFormatting === prev.selectionFormatting &&
+            pmTableContext === prev.pmTableContext &&
+            pmImageContext === prev.pmImageContext &&
+            activeTrackedChange === prev.activeTrackedChange &&
+            paragraphIndentLeft === prev.paragraphIndentLeft &&
+            paragraphIndentRight === prev.paragraphIndentRight &&
+            paragraphFirstLineIndent === prev.paragraphFirstLineIndent &&
+            paragraphHangingIndent === prev.paragraphHangingIndent &&
+            paragraphTabs === prev.paragraphTabs
+          ) {
+            return prev;
+          }
+          return {
+            ...prev,
+            selectionFormatting,
+            paragraphIndentLeft,
+            paragraphIndentRight,
+            paragraphFirstLineIndent,
+            paragraphHangingIndent,
+            paragraphTabs,
+            pmTableContext,
+            pmImageContext,
+            activeTrackedChange,
+          };
+        });
 
         // Update floating comment button position
         if (
