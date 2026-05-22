@@ -324,16 +324,13 @@ let _clientCreatedAt = 0;
  * any request, so the lazy build here is only a fallback.
  */
 export const getS3 = (): S3Client => {
-  if (!_client) {
-    _client = buildS3Client(staticCredentialsFromEnv());
-    _clientCreatedAt = Date.now();
-  }
+  _client ??= buildS3Client(staticCredentialsFromEnv());
   return _client;
 };
 
 /** True when credentials are older than 50 minutes (or not yet built). */
 export const isS3Stale = (): boolean =>
-  Date.now() - _clientCreatedAt > CREDENTIAL_MAX_AGE_MS;
+  !_client || Date.now() - _clientCreatedAt > CREDENTIAL_MAX_AGE_MS;
 
 /**
  * Generate a presigned GET URL that forces the browser to
