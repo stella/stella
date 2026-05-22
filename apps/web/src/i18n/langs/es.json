@@ -1909,7 +1909,7 @@
       "downloadAsZip": "Descargar archivo .zip",
       "downloadOriginal": "Archivo original",
       "downloadPdf": "PDF",
-      "emptyFolderDownload": "Esta carpeta no contiene archivos para descargar",
+      "emptyFolderDownload": "No hay archivos para descargar",
       "maxEntitiesReached": "Número máximo de entidades alcanzado",
       "rateLimited": "Límite de velocidad; se reanuda en {seconds, number} s",
       "renamedToAvoidConflicts": "{count, plural, one {# archivo renombrado para evitar conflictos} other {# archivos renombrados para evitar conflictos}}",

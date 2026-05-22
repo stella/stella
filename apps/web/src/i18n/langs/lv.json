@@ -1909,7 +1909,7 @@
       "downloadAsZip": "Lejupielādēt .zip failu",
       "downloadOriginal": "Oriģinālais fails",
       "downloadPdf": "PDF",
-      "emptyFolderDownload": "Šajā mapē nav lejupielādējamu failu",
+      "emptyFolderDownload": "Nav lejupielādējamu failu",
       "maxEntitiesReached": "Sasniegts maksimālais ierakstu skaits",
       "rateLimited": "Ātruma ierobežojums; atsākšana pēc {seconds, number} s",
       "renamedToAvoidConflicts": "{count, plural, zero {# failu pārdēvēti, lai izvairītos no konfliktiem} one {# fails pārdēvēts, lai izvairītos no konfliktiem} other {# faili pārdēvēti, lai izvairītos no konfliktiem}}",
