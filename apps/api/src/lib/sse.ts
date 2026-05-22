@@ -6,6 +6,7 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { redisConnectionOptions } from "@/api/lib/redis-options";
 import {
+  brandPersistedDesktopEditSessionId,
   brandPersistedOrganizationId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
@@ -16,7 +17,7 @@ const KEEP_ALIVE_INTERVAL_MS = 20_000;
 /** Redis pub/sub channel for cross-instance SSE broadcasts. */
 const REDIS_CHANNEL = "sse:broadcast";
 
-type SSEEvent = {
+export type SSEEvent = {
   type: string;
   data: unknown;
 };
@@ -135,7 +136,7 @@ const broadcastLocalToOrganization = (
 // this one) and delivers to local SSE connections.
 
 type RedisPayload = {
-  scope: "workspace" | "organization";
+  scope: "workspace" | "organization" | "session";
   id: string;
   event: SSEEvent;
 };
@@ -154,7 +155,11 @@ const parseRedisPayload = (raw: string): RedisPayload | null => {
     return null;
   }
   const scope = parsed.scope;
-  if (scope !== "workspace" && scope !== "organization") {
+  if (
+    scope !== "workspace" &&
+    scope !== "organization" &&
+    scope !== "session"
+  ) {
     return null;
   }
   const event = parsed.event;
@@ -196,9 +201,14 @@ const initRedis = async () => {
         }
         if (parsed.scope === "workspace") {
           broadcastLocal(brandPersistedWorkspaceId(parsed.id), parsed.event);
-        } else {
+        } else if (parsed.scope === "organization") {
           broadcastLocalToOrganization(
             brandPersistedOrganizationId(parsed.id),
+            parsed.event,
+          );
+        } else {
+          sessionDeliveryHandler?.(
+            brandPersistedDesktopEditSessionId(parsed.id),
             parsed.event,
           );
         }
@@ -262,6 +272,50 @@ export const broadcastToOrganization = (
         "error.type": errorTag(error),
       });
       broadcastLocalToOrganization(organizationId, event);
+    });
+};
+
+// ── Desktop-edit session events ─────────────────────────
+//
+// Session-scoped SSE rides the same Redis channel as workspace
+// broadcasts. The desktop-edit-session-events module owns the
+// per-instance connection registry; it registers a local-delivery
+// handler here so cross-instance session messages reach its streams.
+
+type SessionDeliveryHandler = (
+  sessionId: SafeId<"desktopEditSession">,
+  event: SSEEvent,
+) => void;
+
+let sessionDeliveryHandler: SessionDeliveryHandler | null = null;
+
+/**
+ * Register the local-delivery handler for session-scoped events.
+ * Called once at startup by the desktop-edit-session-events module.
+ */
+export const registerSessionDelivery = (
+  handler: SessionDeliveryHandler,
+): void => {
+  sessionDeliveryHandler = handler;
+};
+
+/**
+ * Broadcast a desktop-edit session event to all API instances via
+ * Redis pub/sub. Falls back to local delivery when Redis is
+ * unavailable so single-instance deployments still get events.
+ */
+export const broadcastSessionEvent = (
+  sessionId: SafeId<"desktopEditSession">,
+  event: SSEEvent,
+): void => {
+  const payload: RedisPayload = { scope: "session", id: sessionId, event };
+  publisher
+    .publish(REDIS_CHANNEL, JSON.stringify(payload))
+    .catch((error: unknown) => {
+      logger.warn("sse.redis_publish_failed", {
+        "error.type": errorTag(error),
+      });
+      sessionDeliveryHandler?.(sessionId, event);
     });
 };
 

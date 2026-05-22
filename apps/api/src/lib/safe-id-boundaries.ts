@@ -40,6 +40,11 @@ export const brandPersistedUserFileId = (
   userFileId: string,
 ): SafeId<"userFile"> => toSafeId<"userFile">(userFileId);
 
+export const brandPersistedDesktopEditSessionId = (
+  desktopEditSessionId: string,
+): SafeId<"desktopEditSession"> =>
+  toSafeId<"desktopEditSession">(desktopEditSessionId);
+
 export const brandPersistedChatThreadId = (
   chatThreadId: string,
 ): SafeId<"chatThread"> => toSafeId<"chatThread">(chatThreadId);
