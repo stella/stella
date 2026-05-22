@@ -101,6 +101,9 @@ const authenticate = async (
   const response = await fetch(`${baseUrl}/api/auth/sign-in/email`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    // SAFETY: load-test fixture credentials sent as a sign-in request body to
+    // the dev API. The string crosses fetch, not a log sink.
+    // eslint-disable-next-line no-secret-in-log-sink/no-secret-in-log-sink
     body: JSON.stringify({ email, password }),
     redirect: "manual",
   });

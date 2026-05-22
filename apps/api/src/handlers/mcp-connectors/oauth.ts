@@ -18,6 +18,7 @@ import type {
   SafeOutboundFetchBody,
   SafeOutboundHeaders,
 } from "@/api/lib/safe-outbound-fetch";
+import type { ClientSecret, RefreshToken } from "@/api/lib/secret-brands";
 
 const OAUTH_FETCH_TIMEOUT_MS = 10_000;
 const OAUTH_FETCH_MAX_BYTES = 1_000_000;
@@ -344,7 +345,7 @@ export const exchangeAuthorizationCode = async ({
 }: {
   authorizationServerUrl: string;
   clientId: string;
-  clientSecret: string | null;
+  clientSecret: ClientSecret | null;
   code: string;
   codeVerifier: string;
   redirectUri: string;
@@ -402,8 +403,8 @@ export const refreshOAuthToken = async ({
 }: {
   authorizationServerUrl: string;
   clientId: string;
-  clientSecret: string | null;
-  refreshToken: string;
+  clientSecret: ClientSecret | null;
+  refreshToken: RefreshToken;
   resourceUrl: string;
 }): Promise<Result<TokenResponse, HandlerError<502>>> => {
   const metadata = await discoverAuthorizationServer(authorizationServerUrl);
