@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 /**
  * Resolve the Postgres connection URL.
  *
@@ -51,26 +53,24 @@ export const resolveDatabaseUrl = (
     const missing = COMPONENT_KEYS.filter((k) =>
       k === "DB_PASSWORD" ? env[k] === undefined : !env[k],
     );
-    throw new Error(
+    panic(
       `DATABASE_URL not set and DB component env vars incomplete; missing: ${missing.join(", ")}`,
     );
   }
 
   const sslmode = DB_SSLMODE ?? "require";
   if (!(ALLOWED_SSLMODES as readonly string[]).includes(sslmode)) {
-    throw new Error(`DB_SSLMODE must be one of ${ALLOWED_SSLMODES.join(", ")}`);
+    panic(`DB_SSLMODE must be one of ${ALLOWED_SSLMODES.join(", ")}`);
   }
   // DB_HOST is left unencoded so IPv6 literals like `[::1]` survive,
   // but URL delimiters in it would otherwise be spliced into the
   // path/query and could smuggle `sslmode=disable` or point at a
   // different database. Same idea for DB_PORT, which must be numeric.
   if (/[/?#@\s]/u.test(DB_HOST)) {
-    throw new Error(
-      "DB_HOST must not contain URL delimiters (/, ?, #, @, whitespace)",
-    );
+    panic("DB_HOST must not contain URL delimiters (/, ?, #, @, whitespace)");
   }
   if (!/^\d+$/u.test(DB_PORT)) {
-    throw new Error("DB_PORT must be numeric");
+    panic("DB_PORT must be numeric");
   }
   const auth = `${encodeURIComponent(DB_USER)}:${encodeURIComponent(DB_PASSWORD)}`;
   const name = encodeURIComponent(DB_NAME);
