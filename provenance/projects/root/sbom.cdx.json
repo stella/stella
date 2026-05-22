@@ -2,7 +2,7 @@
   "bomFormat": "CycloneDX",
   "components": [
     {
-      "bom-ref": "pkg:npm/@ai-sdk/anthropic@3.0.76",
+      "bom-ref": "pkg:npm/@ai-sdk/anthropic@3.0.78",
       "evidence": {
         "identity": [
           {
@@ -50,16 +50,16 @@
           "value": "node_modules/@ai-sdk/anthropic/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/anthropic@3.0.76",
+      "purl": "pkg:npm/%40ai-sdk/anthropic@3.0.78",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.76"
+      "version": "3.0.78"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/azure@3.0.64",
+      "bom-ref": "pkg:npm/@ai-sdk/azure@3.0.65",
       "evidence": {
         "identity": [
           {
@@ -107,16 +107,16 @@
           "value": "node_modules/@ai-sdk/azure/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/azure@3.0.64",
+      "purl": "pkg:npm/%40ai-sdk/azure@3.0.65",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.64"
+      "version": "3.0.65"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/devtools@0.0.17",
+      "bom-ref": "pkg:npm/@ai-sdk/devtools@0.0.18",
       "evidence": {
         "identity": [
           {
@@ -164,16 +164,16 @@
           "value": "node_modules/@ai-sdk/devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/devtools@0.0.17",
+      "purl": "pkg:npm/%40ai-sdk/devtools@0.0.18",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "0.0.17"
+      "version": "0.0.18"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/google-vertex@4.0.125",
+      "bom-ref": "pkg:npm/@ai-sdk/google-vertex@4.0.129",
       "evidence": {
         "identity": [
           {
@@ -221,16 +221,16 @@
           "value": "node_modules/@ai-sdk/google-vertex/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/google-vertex@4.0.125",
+      "purl": "pkg:npm/%40ai-sdk/google-vertex@4.0.129",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "4.0.125"
+      "version": "4.0.129"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/google@3.0.71",
+      "bom-ref": "pkg:npm/@ai-sdk/google@3.0.74",
       "evidence": {
         "identity": [
           {
@@ -290,16 +290,16 @@
           "value": "node_modules/@ai-sdk/google/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/google@3.0.71",
+      "purl": "pkg:npm/%40ai-sdk/google@3.0.74",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.71"
+      "version": "3.0.74"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/mcp@1.0.41",
+      "bom-ref": "pkg:npm/@ai-sdk/mcp@1.0.42",
       "evidence": {
         "identity": [
           {
@@ -350,16 +350,16 @@
           "value": "node_modules/@ai-sdk/mcp/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/mcp@1.0.41",
+      "purl": "pkg:npm/%40ai-sdk/mcp@1.0.42",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "1.0.41"
+      "version": "1.0.42"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/mistral@3.0.36",
+      "bom-ref": "pkg:npm/@ai-sdk/mistral@3.0.37",
       "evidence": {
         "identity": [
           {
@@ -407,16 +407,16 @@
           "value": "node_modules/@ai-sdk/mistral/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/mistral@3.0.36",
+      "purl": "pkg:npm/%40ai-sdk/mistral@3.0.37",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.36"
+      "version": "3.0.37"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/openai@3.0.63",
+      "bom-ref": "pkg:npm/@ai-sdk/openai@3.0.64",
       "evidence": {
         "identity": [
           {
@@ -464,14 +464,14 @@
           "value": "node_modules/@ai-sdk/openai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/openai@3.0.63",
+      "purl": "pkg:npm/%40ai-sdk/openai@3.0.64",
       "scope": "required",
       "tags": [
         "framework",
         "ml"
       ],
       "type": "framework",
-      "version": "3.0.63"
+      "version": "3.0.64"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/provider-utils@4.0.27",
@@ -531,7 +531,7 @@
       "version": "4.0.27"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/react@3.0.179",
+      "bom-ref": "pkg:npm/@ai-sdk/react@3.0.185",
       "evidence": {
         "identity": [
           {
@@ -1638,7 +1638,7 @@
             "location": "packages/folio/src/components/ui/AlignmentButtons.tsx#6"
           },
           {
-            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#7"
+            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#13"
           },
           {
             "location": "packages/folio/src/components/ui/StylePicker.tsx#8"
@@ -1764,13 +1764,13 @@
           "value": "node_modules/@ai-sdk/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/react@3.0.179",
+      "purl": "pkg:npm/%40ai-sdk/react@3.0.185",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.179"
+      "version": "3.0.185"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/valibot@2.0.28",
@@ -2006,7 +2006,7 @@
           "name": "withastro"
         }
       ],
-      "bom-ref": "pkg:npm/@astrojs/react@5.0.4",
+      "bom-ref": "pkg:npm/@astrojs/react@5.0.5",
       "description": "Use React components within Astro",
       "evidence": {
         "identity": [
@@ -3114,7 +3114,7 @@
             "location": "packages/folio/src/components/ui/AlignmentButtons.tsx#6"
           },
           {
-            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#7"
+            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#13"
           },
           {
             "location": "packages/folio/src/components/ui/StylePicker.tsx#8"
@@ -3240,10 +3240,10 @@
           "value": "node_modules/@astrojs/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40astrojs/react@5.0.4",
+      "purl": "pkg:npm/%40astrojs/react@5.0.5",
       "scope": "required",
       "type": "library",
-      "version": "5.0.4"
+      "version": "5.0.5"
     },
     {
       "authors": [
@@ -4241,7 +4241,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1045.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1048.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -4290,13 +4290,13 @@
           "value": "node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1045.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1048.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1045.0"
+      "version": "3.1048.0"
     },
     {
       "authors": [
@@ -5412,7 +5412,7 @@
             "location": "packages/folio/src/components/ui/AlignmentButtons.tsx#6"
           },
           {
-            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#7"
+            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#13"
           },
           {
             "location": "packages/folio/src/components/ui/StylePicker.tsx#8"
@@ -5544,7 +5544,7 @@
       "version": "1.4.1"
     },
     {
-      "bom-ref": "pkg:npm/@better-auth/oauth-provider@1.6.10",
+      "bom-ref": "pkg:npm/@better-auth/oauth-provider@1.6.11",
       "description": "An oauth provider plugin for Better Auth",
       "evidence": {
         "identity": [
@@ -5602,10 +5602,10 @@
           "value": "node_modules/@better-auth/oauth-provider/package.json"
         }
       ],
-      "purl": "pkg:npm/%40better-auth/oauth-provider@1.6.10",
+      "purl": "pkg:npm/%40better-auth/oauth-provider@1.6.11",
       "scope": "required",
       "type": "library",
-      "version": "1.6.10"
+      "version": "1.6.11"
     },
     {
       "authors": [
@@ -6298,7 +6298,7 @@
           "name": "OpenTelemetry Authors"
         }
       ],
-      "bom-ref": "pkg:npm/@opentelemetry/api-logs@0.217.0",
+      "bom-ref": "pkg:npm/@opentelemetry/api-logs@0.218.0",
       "description": "Public logs API for OpenTelemetry",
       "evidence": {
         "identity": [
@@ -6343,13 +6343,13 @@
           "value": "node_modules/@opentelemetry/api-logs/package.json"
         }
       ],
-      "purl": "pkg:npm/%40opentelemetry/api-logs@0.217.0",
+      "purl": "pkg:npm/%40opentelemetry/api-logs@0.218.0",
       "scope": "required",
       "tags": [
         "api"
       ],
       "type": "library",
-      "version": "0.217.0"
+      "version": "0.218.0"
     },
     {
       "authors": [
@@ -7465,7 +7465,7 @@
             "location": "packages/folio/src/components/ui/AlignmentButtons.tsx#6"
           },
           {
-            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#7"
+            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#13"
           },
           {
             "location": "packages/folio/src/components/ui/StylePicker.tsx#8"
@@ -7602,7 +7602,7 @@
           "name": "Pydantic Team"
         }
       ],
-      "bom-ref": "pkg:npm/@pydantic/genai-prices@0.0.56",
+      "bom-ref": "pkg:npm/@pydantic/genai-prices@0.0.60",
       "description": "Calculate prices for calling LLM inference APIs",
       "evidence": {
         "identity": [
@@ -7654,10 +7654,10 @@
           "value": "node_modules/@pydantic/genai-prices/package.json"
         }
       ],
-      "purl": "pkg:npm/%40pydantic/genai-prices@0.0.56",
+      "purl": "pkg:npm/%40pydantic/genai-prices@0.0.60",
       "scope": "required",
       "type": "library",
-      "version": "0.0.56"
+      "version": "0.0.60"
     },
     {
       "bom-ref": "pkg:npm/@react-email/components@1.0.12",
@@ -7941,75 +7941,6 @@
       "version": "0.34.49"
     },
     {
-      "authors": [
-        {
-          "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/javascript/)"
-        }
-      ],
-      "bom-ref": "pkg:npm/@smithy/uuid@1.1.2",
-      "description": "Polyfill for generating UUID v4",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@smithy/uuid/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@smithy/uuid/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/web/src/lib/chat-thread-ref.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-queries.ts#10"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store.ts#1"
-          },
-          {
-            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#31"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/smithy-lang/smithy-typescript/tree/main/packages/uuid"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/smithy-lang/smithy-typescript.git"
-        }
-      ],
-      "group": "@smithy",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-          }
-        }
-      ],
-      "name": "uuid",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@smithy/uuid/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40smithy/uuid@1.1.2",
-      "scope": "required",
-      "type": "library",
-      "version": "1.1.2"
-    },
-    {
       "bom-ref": "pkg:npm/@stll/anonymize-chat@0.0.0",
       "evidence": {
         "identity": [
@@ -8148,7 +8079,7 @@
       "version": "0.0.0"
     },
     {
-      "bom-ref": "pkg:npm/@stll/anonymize-data@0.0.5",
+      "bom-ref": "pkg:npm/@stll/anonymize-data@0.0.6",
       "description": "Deny list dictionaries and config data for @stll/anonymize",
       "evidence": {
         "identity": [
@@ -8196,10 +8127,10 @@
           "value": "node_modules/@stll/anonymize-data/package.json"
         }
       ],
-      "purl": "pkg:npm/%40stll/anonymize-data@0.0.5",
+      "purl": "pkg:npm/%40stll/anonymize-data@0.0.6",
       "scope": "required",
       "type": "library",
-      "version": "0.0.5"
+      "version": "0.0.6"
     },
     {
       "bom-ref": "pkg:npm/@stll/anonymize-wasm@1.4.4",
@@ -9161,6 +9092,61 @@
       "evidence": {
         "identity": [
           {
+            "concludedValue": "node_modules/@stll/anonymize-wasm/node_modules/@stll/stdnum/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@stll/anonymize-wasm/node_modules/@stll/stdnum/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "packages/ares/src/validation.ts#1"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/stella/stdnum#readme"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/stella/stdnum"
+        }
+      ],
+      "group": "@stll",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "stdnum",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@stll/anonymize-wasm/node_modules/@stll/stdnum/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40stll/stdnum@0.0.1",
+      "scope": "required",
+      "type": "library",
+      "version": "0.0.1"
+    },
+    {
+      "bom-ref": "pkg:npm/@stll/stdnum@1.0.0",
+      "description": "Validate, compact, and format standard identifiers for Node.js and Bun. Pure TypeScript, zero dependencies, tree-shakeable per identifier.",
+      "evidence": {
+        "identity": [
+          {
             "concludedValue": "node_modules/@stll/stdnum/package.json",
             "confidence": 0.7,
             "field": "purl",
@@ -9205,10 +9191,10 @@
           "value": "node_modules/@stll/stdnum/package.json"
         }
       ],
-      "purl": "pkg:npm/%40stll/stdnum@0.0.1",
+      "purl": "pkg:npm/%40stll/stdnum@1.0.0",
       "scope": "required",
       "type": "library",
-      "version": "0.0.1"
+      "version": "1.0.0"
     },
     {
       "bom-ref": "pkg:npm/@stll/template-conditions@0.0.0",
@@ -12019,7 +12005,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-devtools@0.10.2",
+      "bom-ref": "pkg:npm/@tanstack/react-devtools@0.10.5",
       "description": "TanStack Devtools is a set of tools for building advanced devtools for your React application.",
       "evidence": {
         "identity": [
@@ -12068,13 +12054,13 @@
           "value": "node_modules/@tanstack/react-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-devtools@0.10.2",
+      "purl": "pkg:npm/%40tanstack/react-devtools@0.10.5",
       "scope": "required",
       "tags": [
         "tools"
       ],
       "type": "library",
-      "version": "0.10.2"
+      "version": "0.10.5"
     },
     {
       "authors": [
@@ -12277,7 +12263,7 @@
           "name": "tannerlinsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-query-devtools@5.100.9",
+      "bom-ref": "pkg:npm/@tanstack/react-query-devtools@5.100.10",
       "description": "Developer tools to interact with and visualize the TanStack/react-query cache",
       "evidence": {
         "identity": [
@@ -12326,13 +12312,13 @@
           "value": "node_modules/@tanstack/react-query-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.100.9",
+      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.100.10",
       "scope": "required",
       "tags": [
         "tools"
       ],
       "type": "library",
-      "version": "5.100.9"
+      "version": "5.100.10"
     },
     {
       "authors": [
@@ -12340,7 +12326,7 @@
           "name": "tannerlinsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-query@5.100.9",
+      "bom-ref": "pkg:npm/@tanstack/react-query@5.100.10",
       "description": "Hooks for managing, caching and syncing asynchronous and remote data in React",
       "evidence": {
         "identity": [
@@ -12962,10 +12948,10 @@
           "value": "node_modules/@tanstack/react-query/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query@5.100.9",
+      "purl": "pkg:npm/%40tanstack/react-query@5.100.10",
       "scope": "required",
       "type": "library",
-      "version": "5.100.9"
+      "version": "5.100.10"
     },
     {
       "authors": [
@@ -12973,7 +12959,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-router-devtools@1.166.13",
+      "bom-ref": "pkg:npm/@tanstack/react-router-devtools@1.167.0",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -13022,10 +13008,10 @@
           "value": "node_modules/@tanstack/react-router-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-router-devtools@1.166.13",
+      "purl": "pkg:npm/%40tanstack/react-router-devtools@1.167.0",
       "scope": "required",
       "type": "library",
-      "version": "1.166.13"
+      "version": "1.167.0"
     },
     {
       "authors": [
@@ -13033,7 +13019,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-router-ssr-query@1.166.12",
+      "bom-ref": "pkg:npm/@tanstack/react-router-ssr-query@1.167.0",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -13082,10 +13068,10 @@
           "value": "node_modules/@tanstack/react-router-ssr-query/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-router-ssr-query@1.166.12",
+      "purl": "pkg:npm/%40tanstack/react-router-ssr-query@1.167.0",
       "scope": "required",
       "type": "library",
-      "version": "1.166.12"
+      "version": "1.167.0"
     },
     {
       "authors": [
@@ -13093,7 +13079,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-router@1.169.2",
+      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.0",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -13523,10 +13509,10 @@
           "value": "node_modules/@tanstack/react-router/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-router@1.169.2",
+      "purl": "pkg:npm/%40tanstack/react-router@1.170.0",
       "scope": "required",
       "type": "library",
-      "version": "1.169.2"
+      "version": "1.170.0"
     },
     {
       "authors": [
@@ -13818,7 +13804,7 @@
       "version": "2.11.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/core@3.23.1",
+      "bom-ref": "pkg:npm/@tiptap/core@3.23.4",
       "description": "headless rich text editor",
       "evidence": {
         "identity": [
@@ -13876,13 +13862,13 @@
           "value": "node_modules/@tiptap/core/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/core@3.23.1",
+      "purl": "pkg:npm/%40tiptap/core@3.23.4",
       "scope": "required",
       "type": "library",
-      "version": "3.23.1"
+      "version": "3.23.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.23.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.23.4",
       "description": "bold extension for tiptap",
       "evidence": {
         "identity": [
@@ -13931,13 +13917,13 @@
           "value": "node_modules/@tiptap/extension-bold/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-bold@3.23.1",
+      "purl": "pkg:npm/%40tiptap/extension-bold@3.23.4",
       "scope": "required",
       "type": "library",
-      "version": "3.23.1"
+      "version": "3.23.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-document@3.23.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-document@3.23.4",
       "description": "document extension for tiptap",
       "evidence": {
         "identity": [
@@ -13989,13 +13975,13 @@
           "value": "node_modules/@tiptap/extension-document/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-document@3.23.1",
+      "purl": "pkg:npm/%40tiptap/extension-document@3.23.4",
       "scope": "required",
       "type": "library",
-      "version": "3.23.1"
+      "version": "3.23.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.23.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.23.4",
       "description": "hard break extension for tiptap",
       "evidence": {
         "identity": [
@@ -14044,13 +14030,13 @@
           "value": "node_modules/@tiptap/extension-hard-break/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.23.1",
+      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.23.4",
       "scope": "required",
       "type": "library",
-      "version": "3.23.1"
+      "version": "3.23.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.23.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.23.4",
       "description": "heading extension for tiptap",
       "evidence": {
         "identity": [
@@ -14099,13 +14085,13 @@
           "value": "node_modules/@tiptap/extension-heading/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-heading@3.23.1",
+      "purl": "pkg:npm/%40tiptap/extension-heading@3.23.4",
       "scope": "required",
       "type": "library",
-      "version": "3.23.1"
+      "version": "3.23.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-history@3.23.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-history@3.23.4",
       "description": "history extension for tiptap",
       "evidence": {
         "identity": [
@@ -14160,13 +14146,13 @@
           "value": "node_modules/@tiptap/extension-history/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-history@3.23.1",
+      "purl": "pkg:npm/%40tiptap/extension-history@3.23.4",
       "scope": "required",
       "type": "library",
-      "version": "3.23.1"
+      "version": "3.23.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.23.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.23.4",
       "description": "italic extension for tiptap",
       "evidence": {
         "identity": [
@@ -14215,13 +14201,13 @@
           "value": "node_modules/@tiptap/extension-italic/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-italic@3.23.1",
+      "purl": "pkg:npm/%40tiptap/extension-italic@3.23.4",
       "scope": "required",
       "type": "library",
-      "version": "3.23.1"
+      "version": "3.23.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.23.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.23.4",
       "description": "mention extension for tiptap",
       "evidence": {
         "identity": [
@@ -14279,13 +14265,13 @@
           "value": "node_modules/@tiptap/extension-mention/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-mention@3.23.1",
+      "purl": "pkg:npm/%40tiptap/extension-mention@3.23.4",
       "scope": "required",
       "type": "library",
-      "version": "3.23.1"
+      "version": "3.23.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.23.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.23.4",
       "description": "paragraph extension for tiptap",
       "evidence": {
         "identity": [
@@ -14340,13 +14326,13 @@
           "value": "node_modules/@tiptap/extension-paragraph/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.23.1",
+      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.23.4",
       "scope": "required",
       "type": "library",
-      "version": "3.23.1"
+      "version": "3.23.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-placeholder@3.23.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-placeholder@3.23.4",
       "description": "placeholder extension for tiptap",
       "evidence": {
         "identity": [
@@ -14401,13 +14387,13 @@
           "value": "node_modules/@tiptap/extension-placeholder/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-placeholder@3.23.1",
+      "purl": "pkg:npm/%40tiptap/extension-placeholder@3.23.4",
       "scope": "required",
       "type": "library",
-      "version": "3.23.1"
+      "version": "3.23.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-text@3.23.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-text@3.23.4",
       "description": "text extension for tiptap",
       "evidence": {
         "identity": [
@@ -14462,13 +14448,13 @@
           "value": "node_modules/@tiptap/extension-text/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-text@3.23.1",
+      "purl": "pkg:npm/%40tiptap/extension-text@3.23.4",
       "scope": "required",
       "type": "library",
-      "version": "3.23.1"
+      "version": "3.23.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/pm@3.23.1",
+      "bom-ref": "pkg:npm/@tiptap/pm@3.23.4",
       "description": "prosemirror wrapper package for tiptap",
       "evidence": {
         "identity": [
@@ -14541,13 +14527,13 @@
           "value": "node_modules/@tiptap/pm/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/pm@3.23.1",
+      "purl": "pkg:npm/%40tiptap/pm@3.23.4",
       "scope": "required",
       "type": "library",
-      "version": "3.23.1"
+      "version": "3.23.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/react@3.23.1",
+      "bom-ref": "pkg:npm/@tiptap/react@3.23.4",
       "description": "React components for tiptap",
       "evidence": {
         "identity": [
@@ -15655,7 +15641,7 @@
             "location": "packages/folio/src/components/ui/AlignmentButtons.tsx#6"
           },
           {
-            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#7"
+            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#13"
           },
           {
             "location": "packages/folio/src/components/ui/StylePicker.tsx#8"
@@ -15781,13 +15767,13 @@
           "value": "node_modules/@tiptap/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/react@3.23.1",
+      "purl": "pkg:npm/%40tiptap/react@3.23.4",
       "scope": "required",
       "type": "library",
-      "version": "3.23.1"
+      "version": "3.23.4"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/suggestion@3.23.1",
+      "bom-ref": "pkg:npm/@tiptap/suggestion@3.23.4",
       "description": "suggestion plugin for tiptap",
       "evidence": {
         "identity": [
@@ -15854,10 +15840,10 @@
           "value": "node_modules/@tiptap/suggestion/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/suggestion@3.23.1",
+      "purl": "pkg:npm/%40tiptap/suggestion@3.23.4",
       "scope": "required",
       "type": "library",
-      "version": "3.23.1"
+      "version": "3.23.4"
     },
     {
       "authors": [
@@ -15929,7 +15915,7 @@
       "version": "1.7.0"
     },
     {
-      "bom-ref": "pkg:npm/ai@6.0.177",
+      "bom-ref": "pkg:npm/ai@6.0.183",
       "description": "AI SDK by Vercel - build apps like ChatGPT, Claude, Gemini, and more with a single interface for any model using the Vercel AI Gateway or go direct to OpenAI, Anthropic, Google, or any other model provider.",
       "evidence": {
         "identity": [
@@ -16119,13 +16105,13 @@
           "value": "node_modules/ai/package.json"
         }
       ],
-      "purl": "pkg:npm/ai@6.0.177",
+      "purl": "pkg:npm/ai@6.0.183",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "6.0.177"
+      "version": "6.0.183"
     },
     {
       "authors": [
@@ -16133,7 +16119,7 @@
           "name": "withastro"
         }
       ],
-      "bom-ref": "pkg:npm/astro@6.3.1",
+      "bom-ref": "pkg:npm/astro@6.3.3",
       "description": "Astro is a modern site builder with web best practices, performance, and DX front-of-mind.",
       "evidence": {
         "identity": [
@@ -16188,16 +16174,16 @@
           "value": "node_modules/astro/package.json"
         }
       ],
-      "purl": "pkg:npm/astro@6.3.1",
+      "purl": "pkg:npm/astro@6.3.3",
       "scope": "required",
       "tags": [
         "web"
       ],
       "type": "library",
-      "version": "6.3.1"
+      "version": "6.3.3"
     },
     {
-      "bom-ref": "pkg:npm/better-auth@1.6.10",
+      "bom-ref": "pkg:npm/better-auth@1.6.11",
       "description": "The most comprehensive authentication framework for TypeScript.",
       "evidence": {
         "identity": [
@@ -16291,13 +16277,13 @@
           "value": "node_modules/better-auth/package.json"
         }
       ],
-      "purl": "pkg:npm/better-auth@1.6.10",
+      "purl": "pkg:npm/better-auth@1.6.11",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "1.6.10"
+      "version": "1.6.11"
     },
     {
       "authors": [
@@ -17328,7 +17314,7 @@
           "name": "Taskforce.sh Inc."
         }
       ],
-      "bom-ref": "pkg:npm/bullmq@5.76.7",
+      "bom-ref": "pkg:npm/bullmq@5.76.8",
       "description": "Queue for messages and jobs based on Redis",
       "evidence": {
         "identity": [
@@ -17383,10 +17369,10 @@
           "value": "node_modules/bullmq/package.json"
         }
       ],
-      "purl": "pkg:npm/bullmq@5.76.7",
+      "purl": "pkg:npm/bullmq@5.76.8",
       "scope": "required",
       "type": "library",
-      "version": "5.76.7"
+      "version": "5.76.8"
     },
     {
       "authors": [
@@ -18117,7 +18103,10 @@
             "location": "apps/api/src/db/auth-schema.ts#1"
           },
           {
-            "location": "apps/api/src/db/auth-schema.ts#9"
+            "location": "apps/api/src/db/auth-schema.ts#2"
+          },
+          {
+            "location": "apps/api/src/db/auth-schema.ts#10"
           },
           {
             "location": "apps/api/src/db/columns.ts#1"
@@ -18135,7 +18124,7 @@
             "location": "apps/api/src/db/rls.ts#2"
           },
           {
-            "location": "apps/api/src/db/root.ts#1"
+            "location": "apps/api/src/db/root.ts#2"
           },
           {
             "location": "apps/api/src/db/schema.ts#4"
@@ -18819,7 +18808,7 @@
             "location": "apps/api/src/scripts/resolve-citations.ts#18"
           },
           {
-            "location": "apps/api/src/db/auth-schema.ts#9"
+            "location": "apps/api/src/db/auth-schema.ts#10"
           },
           {
             "location": "apps/api/src/db/columns.ts#2"
@@ -18840,7 +18829,7 @@
             "location": "apps/api/src/handlers/entities/query-entities.ts#4"
           },
           {
-            "location": "apps/api/src/db/root.ts#1"
+            "location": "apps/api/src/db/root.ts#2"
           }
         ]
       },
@@ -19820,7 +19809,7 @@
           "name": "Amit Gupta (https://solothought.com)"
         }
       ],
-      "bom-ref": "pkg:npm/fast-xml-parser@5.7.2",
+      "bom-ref": "pkg:npm/fast-xml-parser@5.7.3",
       "description": "Validate XML, Parse XML, Build XML without C/C++ based libraries",
       "evidence": {
         "identity": [
@@ -19865,14 +19854,14 @@
           "value": "node_modules/@aws-sdk/xml-builder/node_modules/fast-xml-parser/package.json"
         }
       ],
-      "purl": "pkg:npm/fast-xml-parser@5.7.2",
+      "purl": "pkg:npm/fast-xml-parser@5.7.3",
       "scope": "required",
       "tags": [
         "parse",
         "xml"
       ],
       "type": "library",
-      "version": "5.7.2"
+      "version": "5.7.3"
     },
     {
       "authors": [
@@ -19880,7 +19869,7 @@
           "name": "Amit Gupta (https://solothought.com)"
         }
       ],
-      "bom-ref": "pkg:npm/fast-xml-parser@5.7.3",
+      "bom-ref": "pkg:npm/fast-xml-parser@5.8.0",
       "description": "Validate XML, Parse XML, Build XML without C/C++ based libraries",
       "evidence": {
         "identity": [
@@ -19925,14 +19914,14 @@
           "value": "node_modules/fast-xml-parser/package.json"
         }
       ],
-      "purl": "pkg:npm/fast-xml-parser@5.7.3",
+      "purl": "pkg:npm/fast-xml-parser@5.8.0",
       "scope": "required",
       "tags": [
         "parse",
         "xml"
       ],
       "type": "library",
-      "version": "5.7.3"
+      "version": "5.8.0"
     },
     {
       "authors": [
@@ -20427,7 +20416,7 @@
           "name": "Eric Fennis"
         }
       ],
-      "bom-ref": "pkg:npm/lucide-react@1.14.0",
+      "bom-ref": "pkg:npm/lucide-react@1.16.0",
       "description": "A Lucide icon library package for React applications.",
       "evidence": {
         "identity": [
@@ -21001,7 +20990,7 @@
             "location": "packages/folio/src/components/ui/AlignmentButtons.tsx#14"
           },
           {
-            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#16"
+            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#22"
           },
           {
             "location": "packages/folio/src/components/ui/ListButtons.tsx#10"
@@ -21076,13 +21065,13 @@
           "value": "node_modules/lucide-react/package.json"
         }
       ],
-      "purl": "pkg:npm/lucide-react@1.14.0",
+      "purl": "pkg:npm/lucide-react@1.16.0",
       "scope": "required",
       "tags": [
         "cloud"
       ],
       "type": "library",
-      "version": "1.14.0"
+      "version": "1.16.0"
     },
     {
       "authors": [
@@ -21465,7 +21454,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.372.10",
+      "bom-ref": "pkg:npm/posthog-js@1.373.5",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -21514,10 +21503,10 @@
           "value": "node_modules/posthog-js/lib/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.372.10",
+      "purl": "pkg:npm/posthog-js@1.373.5",
       "scope": "required",
       "type": "library",
-      "version": "1.372.10"
+      "version": "1.373.5"
     },
     {
       "authors": [
@@ -21525,7 +21514,7 @@
           "name": "PostHog <engineering@posthog.com> (https://posthog.com)"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-node@5.33.4",
+      "bom-ref": "pkg:npm/posthog-node@5.34.2",
       "description": "PostHog Node.js integration",
       "evidence": {
         "identity": [
@@ -21570,10 +21559,10 @@
           "value": "node_modules/posthog-node/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-node@5.33.4",
+      "purl": "pkg:npm/posthog-node@5.34.2",
       "scope": "required",
       "type": "library",
-      "version": "5.33.4"
+      "version": "5.34.2"
     },
     {
       "bom-ref": "pkg:npm/prosemirror-commands@1.7.1",
@@ -21804,7 +21793,7 @@
       "version": "1.2.3"
     },
     {
-      "bom-ref": "pkg:npm/prosemirror-model@1.25.4",
+      "bom-ref": "pkg:npm/prosemirror-model@1.25.6",
       "description": "ProseMirror's document model",
       "evidence": {
         "identity": [
@@ -21905,7 +21894,7 @@
       "externalReferences": [
         {
           "type": "vcs",
-          "url": "git://github.com/prosemirror/prosemirror-model.git"
+          "url": "git+https://code.haverbeke.berlin/prosemirror/prosemirror-model.git"
         }
       ],
       "group": "",
@@ -21924,10 +21913,10 @@
           "value": "node_modules/prosemirror-model/package.json"
         }
       ],
-      "purl": "pkg:npm/prosemirror-model@1.25.4",
+      "purl": "pkg:npm/prosemirror-model@1.25.6",
       "scope": "required",
       "type": "library",
-      "version": "1.25.4"
+      "version": "1.25.6"
     },
     {
       "bom-ref": "pkg:npm/prosemirror-state@1.4.4",
@@ -23672,7 +23661,7 @@
             "location": "packages/folio/src/components/ui/AlignmentButtons.tsx#6"
           },
           {
-            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#7"
+            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#13"
           },
           {
             "location": "packages/folio/src/components/ui/StylePicker.tsx#8"
@@ -24263,7 +24252,7 @@
           "name": "Jan Amann <jan@amann.work>"
         }
       ],
-      "bom-ref": "pkg:npm/use-intl@4.11.1",
+      "bom-ref": "pkg:npm/use-intl@4.12.0",
       "description": "Internationalization (i18n) for React",
       "evidence": {
         "identity": [
@@ -24957,7 +24946,7 @@
             "location": "packages/folio/src/components/dialogs/FindReplaceDialog.tsx#21"
           },
           {
-            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#17"
+            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#23"
           },
           {
             "location": "packages/folio/src/components/ui/ListButtons.tsx#11"
@@ -24990,10 +24979,10 @@
           "value": "node_modules/use-intl/package.json"
         }
       ],
-      "purl": "pkg:npm/use-intl@4.11.1",
+      "purl": "pkg:npm/use-intl@4.12.0",
       "scope": "required",
       "type": "library",
-      "version": "4.11.1"
+      "version": "4.12.0"
     },
     {
       "authors": [
