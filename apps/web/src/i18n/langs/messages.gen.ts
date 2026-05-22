@@ -1284,11 +1284,11 @@ type Messages = {
         "title": "Clauses";
       };
       "connectors": {
-        "description": "Connect Stella to vetted external tool servers";
+        "description": "Connect stella to external tools";
         "title": "MCP";
       };
       "mcp": {
-        "description": "Connect Stella to vetted external tool servers";
+        "description": "Connect stella to external tools";
         "title": "MCP";
       };
       "prompts": {

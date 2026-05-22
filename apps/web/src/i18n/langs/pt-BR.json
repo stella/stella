@@ -1281,8 +1281,8 @@
         "title": "Cláusulas"
       },
       "connectors": {
-        "description": "Conecte-se a sistemas externos",
-        "title": "Conectores"
+        "description": "Conecte a stella a ferramentas externas",
+        "title": "MCP"
       },
       "mcp": {
         "description": "Conecte a stella a ferramentas externas",
