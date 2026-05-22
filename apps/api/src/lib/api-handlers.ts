@@ -277,6 +277,32 @@ export const createSafeSessionHandler = <
     await runSafeHandler(ctx, handler),
 });
 
+export type TokenHandlerConfig = InputSchema;
+
+type TokenHandlerContext<
+  TConfig extends TokenHandlerConfig = TokenHandlerConfig,
+> = Context<UnwrapRoute<TConfig>>;
+
+/**
+ * Like `createSafeSessionHandler`, but the framework does not
+ * authenticate the caller — the handler authorizes itself from a
+ * body / param token (e.g. folio-collab session tokens). The
+ * factory gives the handler the same structured error capture,
+ * safe-status responses, and request logging as the org-scoped
+ * variants without claiming a `user.id` that isn't present.
+ */
+export const createSafeTokenHandler = <
+  TConfig extends TokenHandlerConfig,
+  TResult,
+>(
+  config: TConfig,
+  handler: SafeHandlerFn<TokenHandlerContext<TConfig>, TResult>,
+): SafeHandlerDefinition<TConfig, TokenHandlerContext<TConfig>, TResult> => ({
+  config,
+  handler: async (ctx): Promise<SafeHandlerResult<TResult>> =>
+    await runSafeHandler(ctx, handler),
+});
+
 type LogAndCaptureSafeErrorProps = {
   request: Request;
   route: string;

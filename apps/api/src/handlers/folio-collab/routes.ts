@@ -1,20 +1,8 @@
 import Elysia, { status, t } from "elysia";
 
-import {
-  cancelFolioCollabSessionBodySchema,
-  cancelFolioCollabSessionHandler,
-  cancelFolioCollabSessionParamsSchema,
-} from "@/api/handlers/folio-collab/cancel";
-import {
-  checkpointFolioCollabSessionBodySchema,
-  checkpointFolioCollabSessionHandler,
-  checkpointFolioCollabSessionParamsSchema,
-} from "@/api/handlers/folio-collab/checkpoint";
-import {
-  finalizeFolioCollabSessionBodySchema,
-  finalizeFolioCollabSessionHandler,
-  finalizeFolioCollabSessionParamsSchema,
-} from "@/api/handlers/folio-collab/finalize";
+import cancelFolioCollabSession from "@/api/handlers/folio-collab/cancel";
+import checkpointFolioCollabSession from "@/api/handlers/folio-collab/checkpoint";
+import finalizeFolioCollabSession from "@/api/handlers/folio-collab/finalize";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
@@ -168,37 +156,16 @@ export const folioCollabRoute = new Elysia({
   )
   .post(
     "/:sessionId/cancel",
-    async ({ body, params }) =>
-      await cancelFolioCollabSessionHandler({
-        body,
-        sessionId: params.sessionId,
-      }),
-    {
-      body: cancelFolioCollabSessionBodySchema,
-      params: cancelFolioCollabSessionParamsSchema,
-    },
+    cancelFolioCollabSession.handler,
+    cancelFolioCollabSession.config,
   )
   .post(
     "/:sessionId/checkpoint",
-    async ({ body, params }) =>
-      await checkpointFolioCollabSessionHandler({
-        body,
-        sessionId: params.sessionId,
-      }),
-    {
-      body: checkpointFolioCollabSessionBodySchema,
-      params: checkpointFolioCollabSessionParamsSchema,
-    },
+    checkpointFolioCollabSession.handler,
+    checkpointFolioCollabSession.config,
   )
   .post(
     "/:sessionId/finalize",
-    async ({ body, params }) =>
-      await finalizeFolioCollabSessionHandler({
-        body,
-        sessionId: params.sessionId,
-      }),
-    {
-      body: finalizeFolioCollabSessionBodySchema,
-      params: finalizeFolioCollabSessionParamsSchema,
-    },
+    finalizeFolioCollabSession.handler,
+    finalizeFolioCollabSession.config,
   );
