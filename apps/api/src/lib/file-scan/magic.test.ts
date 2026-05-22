@@ -45,6 +45,15 @@ describe("declaredMimeMatchesMagic", () => {
     expect(declaredMimeMatchesMagic("Image/PNG", PDF_HEADER)).toBe(false);
   });
 
+  test("known type lookup strips content type parameters", () => {
+    expect(
+      declaredMimeMatchesMagic("image/png; charset=utf-8", PNG_HEADER),
+    ).toBe(true);
+    expect(
+      declaredMimeMatchesMagic("Image/PNG ; charset=utf-8", PDF_HEADER),
+    ).toBe(false);
+  });
+
   test("WEBP requires the form type at offset 8, not just the RIFF tag", () => {
     // RIFF container that is not WEBP (e.g. a WAV) must not pass.
     const riffWav = bytes(

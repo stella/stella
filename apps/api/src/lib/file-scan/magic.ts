@@ -49,6 +49,11 @@ const MIME_MAGIC_MATCHERS: Record<string, (buffer: Uint8Array) => boolean> = {
     startsWith(buffer.subarray(8), WEBP_FORM_TYPE),
 };
 
+const normalizeDeclaredMimeType = (declaredMimeType: string): string => {
+  const [mediaType = ""] = declaredMimeType.split(";");
+  return mediaType.trim().toLowerCase();
+};
+
 /**
  * Returns `false` only when `declaredMimeType` has a known magic-byte
  * signature and `buffer` does not match it. Unknown declared types
@@ -58,7 +63,8 @@ export const declaredMimeMatchesMagic = (
   declaredMimeType: string,
   buffer: Uint8Array,
 ): boolean => {
-  const matcher = MIME_MAGIC_MATCHERS[declaredMimeType.toLowerCase()];
+  const matcher =
+    MIME_MAGIC_MATCHERS[normalizeDeclaredMimeType(declaredMimeType)];
   if (!matcher) {
     return true;
   }
