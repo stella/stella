@@ -564,6 +564,25 @@ export const auditLogs = p.pgTable(
       to: stella,
       withCheck: organizationCheck,
     }),
+    // Audit logs are append-only: SELECT + INSERT above are the only
+    // operations `stella` ever needs. UPDATE/DELETE are denied today
+    // purely by Postgres' default-deny (no matching policy). These
+    // RESTRICTIVE `false` policies make that immutability explicit and
+    // durable — a RESTRICTIVE policy is AND-ed with every permissive
+    // one, so a future migration adding a permissive UPDATE/DELETE
+    // policy cannot silently unlock mutation of the audit trail.
+    p.pgPolicy("audit_logs_no_update", {
+      as: "restrictive",
+      for: "update",
+      to: stella,
+      using: sql`false`,
+    }),
+    p.pgPolicy("audit_logs_no_delete", {
+      as: "restrictive",
+      for: "delete",
+      to: stella,
+      using: sql`false`,
+    }),
   ],
 );
 

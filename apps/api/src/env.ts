@@ -118,7 +118,7 @@ const envApi = createEnv({
         ),
       ),
     ),
-    EXTENSION_ORIGIN: v.optional(v.string()),
+    EXTENSION_ORIGIN: v.optional(v.pipe(v.string(), v.url())),
 
     /**
      * Comma-separated CIDRs of proxies the API may trust to set

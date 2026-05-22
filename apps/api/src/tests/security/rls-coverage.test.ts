@@ -170,6 +170,27 @@ describe("policy coverage", () => {
     }
   });
 
+  test("audit_logs is append-only: UPDATE and DELETE are denied for stella", async () => {
+    const policies = await fetchStellaPolicies(testDb);
+    const auditPolicies = policies.filter((p) => p.table_name === "audit_logs");
+
+    // SELECT + INSERT are the only operations the audit trail exposes.
+    expect(auditPolicies.filter((p) => p.command === "r")).toHaveLength(1);
+    expect(auditPolicies.filter((p) => p.command === "a")).toHaveLength(1);
+
+    // UPDATE / DELETE are locked by RESTRICTIVE `false` policies. A
+    // RESTRICTIVE policy is AND-ed with every permissive one, so a
+    // later migration that adds a permissive UPDATE/DELETE policy
+    // cannot silently unlock mutation of the audit trail.
+    for (const command of ["w", "d"] as const) {
+      const denyPolicies = auditPolicies.filter((p) => p.command === command);
+      expect(denyPolicies).toHaveLength(1);
+      const denyPolicy = denyPolicies.at(0);
+      expect(denyPolicy?.permissive).toBe(false);
+      expect(denyPolicy?.using_expr).toBe("false");
+    }
+  });
+
   test("auth and global case-law tables have explicit stella policy boundaries", async () => {
     const policies = await fetchStellaPolicies(testDb);
     const commandsFor = (table: string) =>

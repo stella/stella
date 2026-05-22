@@ -1054,6 +1054,8 @@ type PolicyRow = {
   table_name: string;
   policy_name: string;
   command: string;
+  /** `true` for PERMISSIVE, `false` for RESTRICTIVE policies. */
+  permissive: boolean;
   using_expr: string | null;
   check_expr: string | null;
 };
@@ -1084,6 +1086,7 @@ const fetchPoliciesForRole = async (
     SELECT c.relname AS table_name,
            p.polname AS policy_name,
            p.polcmd  AS command,
+           p.polpermissive AS permissive,
            pg_get_expr(p.polqual, p.polrelid)
              AS using_expr,
            pg_get_expr(p.polwithcheck, p.polrelid)
