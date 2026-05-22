@@ -8,7 +8,7 @@ Stella-specific deploy details.
 
 Each release tag (`vX.Y.Z` or `vX.Y.Z-rc.N`) publishes:
 
-- a multi-architecture API image in GHCR,
+- a multi-architecture API image in [GHCR](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry),
 - immutable image references by tag, git SHA, and digest,
 - a `release-manifest.json` file containing the source commit, image digest,
   and migration file inventory,
