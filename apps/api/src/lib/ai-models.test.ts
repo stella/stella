@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { OrgAIConfig } from "@/api/lib/ai-models";
@@ -14,10 +15,12 @@ process.env["SMTP_PORT"] ??= "1025";
 
 const {
   getModelForRole,
+  getModelInfoById,
   getModelInfoForRole,
   isAllowedBYOKModel,
   REGIONAL_PROVIDERS,
   supportsRegion,
+  validateDevModelOverride,
 } = await import("@/api/lib/ai-models");
 
 type AIProvider =
@@ -60,7 +63,7 @@ describe("REGIONAL_PROVIDERS", () => {
 describe("isAllowedBYOKModel", () => {
   test("accepts curated catalog models", () => {
     expect(isAllowedBYOKModel("anthropic", "claude-opus-4-7")).toBe(true);
-    expect(isAllowedBYOKModel("google", "gemini-3-pro-preview")).toBe(true);
+    expect(isAllowedBYOKModel("google", "gemini-3.5-flash")).toBe(true);
     expect(isAllowedBYOKModel("mistral", "mistral-medium-3-5")).toBe(true);
     expect(isAllowedBYOKModel("mistral", "mistral-large-latest")).toBe(true);
     expect(isAllowedBYOKModel("openai", "gpt-5.4")).toBe(true);
@@ -73,7 +76,7 @@ describe("isAllowedBYOKModel", () => {
   test("rejects models outside the curated catalog", () => {
     expect(isAllowedBYOKModel("openrouter", "x-ai/grok-4")).toBe(false);
     expect(isAllowedBYOKModel("anthropic", "claude-2")).toBe(false);
-    expect(isAllowedBYOKModel("google", "gemini-1.5-pro")).toBe(false);
+    expect(isAllowedBYOKModel("google", "gemini-2.5-pro")).toBe(false);
     expect(isAllowedBYOKModel("mistral", "pixtral-large-latest")).toBe(false);
     expect(isAllowedBYOKModel("mistral", "mistral-tiny")).toBe(false);
     expect(isAllowedBYOKModel("openai", "gpt-4o")).toBe(false);
@@ -87,6 +90,104 @@ describe("isAllowedBYOKModel", () => {
 });
 
 describe("BYOK model overrides", () => {
+  test("reports provider-qualified dev model overrides", () => {
+    expect(
+      getModelInfoById("openrouter::google/gemini-3.5-flash"),
+    ).toMatchObject({
+      keySource: "instance",
+      modelId: "google/gemini-3.5-flash",
+      provider: "openrouter",
+    });
+  });
+
+  test("routes provider-qualified BYOK dev model overrides through the selected provider", () => {
+    const orgConfig: OrgAIConfig = {
+      providers: [
+        {
+          apiKey: "sk-org-google",
+          provider: "google",
+        },
+        {
+          apiKey: "sk-or-v1-org",
+          provider: "openrouter",
+        },
+      ],
+      overrideModels: {
+        chat: { provider: "google", modelId: "gemini-3.5-flash" },
+        fast: { provider: "google", modelId: "gemini-3.1-flash-lite-preview" },
+        reasoning: { provider: "google", modelId: "gemini-3.1-pro-preview" },
+        pdf: { provider: "google", modelId: "gemini-3.5-flash" },
+      },
+    };
+
+    expect(
+      getModelInfoById("openrouter::google/gemini-3.5-flash", orgConfig),
+    ).toMatchObject({
+      keySource: "byok",
+      modelId: "google/gemini-3.5-flash",
+      provider: "openrouter",
+    });
+  });
+
+  test("rejects provider-qualified dev overrides without matching BYOK credentials", () => {
+    const orgConfig: OrgAIConfig = {
+      providers: [
+        {
+          apiKey: "sk-org-google",
+          provider: "google",
+        },
+      ],
+      overrideModels: {
+        chat: { provider: "google", modelId: "gemini-3.5-flash" },
+        fast: { provider: "google", modelId: "gemini-3.1-flash-lite-preview" },
+        reasoning: { provider: "google", modelId: "gemini-3.1-pro-preview" },
+        pdf: { provider: "google", modelId: "gemini-3.5-flash" },
+      },
+    };
+
+    const result = validateDevModelOverride(
+      "openrouter::google/gemini-3.5-flash",
+      orgConfig,
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      throw new Error("Expected provider validation to fail");
+    }
+    expect(result.error.status).toBe(400);
+    expect(result.error.message).toContain("openrouter");
+  });
+
+  test("allows provider-qualified dev overrides with matching BYOK credentials", () => {
+    const orgConfig: OrgAIConfig = {
+      providers: [
+        {
+          apiKey: "sk-org-google",
+          provider: "google",
+        },
+        {
+          apiKey: "sk-or-v1-org",
+          provider: "openrouter",
+        },
+      ],
+      overrideModels: {
+        chat: { provider: "google", modelId: "gemini-3.5-flash" },
+        fast: { provider: "google", modelId: "gemini-3.1-flash-lite-preview" },
+        reasoning: { provider: "google", modelId: "gemini-3.1-pro-preview" },
+        pdf: { provider: "google", modelId: "gemini-3.5-flash" },
+      },
+    };
+
+    expect(
+      Result.isOk(
+        validateDevModelOverride(
+          "openrouter::google/gemini-3.5-flash",
+          orgConfig,
+        ),
+      ),
+    ).toBe(true);
+  });
+
   test("uses a per-role provider-qualified model selection", () => {
     const orgConfig: OrgAIConfig = {
       providers: [

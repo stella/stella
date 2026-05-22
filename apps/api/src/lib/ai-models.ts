@@ -58,29 +58,37 @@ export const MODEL_ROLES = [
   "pdf",
 ] as const satisfies readonly ModelRole[];
 
-export type AIProvider =
-  | "google"
-  | "openrouter"
-  | "openai"
-  | "azure_foundry"
-  | "anthropic"
-  | "mistral"
-  | "openai_compatible";
+export const AI_PROVIDERS = [
+  "google",
+  "openrouter",
+  "openai",
+  "azure_foundry",
+  "anthropic",
+  "mistral",
+  "openai_compatible",
+] as const;
+
+export type AIProvider = (typeof AI_PROVIDERS)[number];
+
+const AI_PROVIDER_VALUES = new Set<string>(AI_PROVIDERS);
+
+const isAIProvider = (value: string): value is AIProvider =>
+  AI_PROVIDER_VALUES.has(value);
 
 // -- Default model IDs per provider -----------------------------
 
 export const DEFAULT_MODELS = {
   google: {
     fast: "gemini-3.1-flash-lite-preview",
-    chat: "gemini-3.1-flash-lite-preview",
+    chat: "gemini-3.5-flash",
     reasoning: "gemini-3.1-pro-preview",
-    pdf: "gemini-3.1-flash-lite-preview",
+    pdf: "gemini-3.5-flash",
   },
   openrouter: {
     fast: "google/gemini-3.1-flash-lite-preview",
-    chat: "google/gemini-3.1-flash-lite-preview",
+    chat: "google/gemini-3.5-flash",
     reasoning: "google/gemini-3.1-pro-preview",
-    pdf: "google/gemini-3.1-flash-lite-preview",
+    pdf: "google/gemini-3.5-flash",
   },
   openai: {
     fast: "gpt-5.4-nano",
@@ -125,11 +133,9 @@ export const DEFAULT_MODELS = {
  */
 export const BYOK_MODEL_OPTIONS = {
   google: [
-    "gemini-3-pro-preview",
-    "gemini-3-flash-preview",
-    "gemini-2.5-pro",
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
+    "gemini-3.1-pro-preview",
+    "gemini-3.5-flash",
+    "gemini-3.1-flash-lite-preview",
   ],
   anthropic: [
     "claude-opus-4-7",
@@ -147,9 +153,9 @@ export const BYOK_MODEL_OPTIONS = {
   openai: ["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.2"],
   azure_foundry: [],
   openrouter: [
-    "google/gemini-3-flash-preview",
     "google/gemini-3.1-pro-preview",
-    "google/gemini-2.5-flash-lite",
+    "google/gemini-3.5-flash",
+    "google/gemini-3.1-flash-lite-preview",
     "anthropic/claude-opus-4.5",
     "anthropic/claude-sonnet-4.5",
     "openai/gpt-5.4",
@@ -266,41 +272,15 @@ const resolveProvider = (): AIProvider => {
   );
 };
 
-/**
- * Whether the instance can serve AI to an org that has not set
- * BYOK. False when REQUIRE_PERSONAL_AI_KEY forces BYOK or when
- * no provider has the credentials it needs to run.
- *
- * AI_PROVIDER alone is not enough: an explicit provider must be
- * paired with the matching key (e.g. AI_PROVIDER=openai requires
- * OPENAI_API_KEY) or the model factory will fail at runtime.
- */
-export const hasInstanceProvider = (): boolean => {
+const hasInstanceProviderCredentials = (provider: AIProvider): boolean => {
   if (env.REQUIRE_PERSONAL_AI_KEY) {
     return false;
   }
-  // Mock provider stands in for any real key.
   if (env.USE_MOCK_AI) {
     return true;
   }
-  // Auto-detect path: any single provider key is enough.
-  const hasAnyKey = !!(
-    env.OPENROUTER_API_KEY ||
-    env.GOOGLE_GENERATIVE_AI_API_KEY ||
-    env.GOOGLE_AI_API_KEY_EU ||
-    env.GOOGLE_AI_API_KEY_CH ||
-    env.OPENAI_API_KEY ||
-    (env.AZURE_API_KEY && (env.AZURE_RESOURCE_NAME || env.AZURE_BASE_URL)) ||
-    env.ANTHROPIC_API_KEY ||
-    env.MISTRAL_API_KEY
-  );
-  if (!env.AI_PROVIDER) {
-    return hasAnyKey;
-  }
-  // Explicit provider: each provider has its own credential
-  // requirement. Mirror resolveProvider's expectations so the
-  // gate matches what the model factory would actually accept.
-  switch (env.AI_PROVIDER) {
+
+  switch (provider) {
     case "openrouter":
       return !!env.OPENROUTER_API_KEY;
     case "google":
@@ -322,9 +302,30 @@ export const hasInstanceProvider = (): boolean => {
       return !!env.MISTRAL_API_KEY;
     case "openai_compatible":
       return !!(env.OPENAI_API_KEY && env.AI_PROVIDER_BASE_URL);
-    default:
-      return false;
+    default: {
+      const _exhaustive: never = provider;
+      return _exhaustive;
+    }
   }
+};
+
+/**
+ * Whether the instance can serve AI to an org that has not set
+ * BYOK. False when REQUIRE_PERSONAL_AI_KEY forces BYOK or when
+ * no provider has the credentials it needs to run.
+ *
+ * AI_PROVIDER alone is not enough: an explicit provider must be
+ * paired with the matching key (e.g. AI_PROVIDER=openai requires
+ * OPENAI_API_KEY) or the model factory will fail at runtime.
+ */
+export const hasInstanceProvider = (): boolean => {
+  if (env.REQUIRE_PERSONAL_AI_KEY) {
+    return false;
+  }
+  if (!env.AI_PROVIDER) {
+    return AI_PROVIDERS.some(hasInstanceProviderCredentials);
+  }
+  return hasInstanceProviderCredentials(env.AI_PROVIDER);
 };
 
 /**
@@ -577,6 +578,22 @@ export type ResolvedModelInfo = {
   region?: DataRegion | undefined;
 };
 
+type ModelOverride = {
+  modelId: string;
+  provider?: AIProvider | undefined;
+};
+
+const decodeModelOverride = (value: string): ModelOverride => {
+  const [providerRaw, ...modelParts] = value.split("::");
+  const modelId = modelParts.join("::");
+
+  if (providerRaw && modelId && isAIProvider(providerRaw)) {
+    return { provider: providerRaw, modelId };
+  }
+
+  return { modelId: value };
+};
+
 // -- BYOK factory cache -----------------------------------------
 
 /**
@@ -668,12 +685,54 @@ const withLocalAIDevTools = (model: WrappableLanguageModel): LanguageModel => {
 const getPrimaryOrgProvider = (config: OrgAIConfig): OrgAIProviderConfig =>
   config.providers.at(0) ?? panic("Org AI config has no configured providers");
 
+const findOrgProviderConfig = (
+  config: OrgAIConfig,
+  provider: AIProvider,
+): OrgAIProviderConfig | undefined =>
+  config.providers.find((candidate) => candidate.provider === provider);
+
 const getOrgProviderConfig = (
   config: OrgAIConfig,
   provider: AIProvider,
 ): OrgAIProviderConfig =>
-  config.providers.find((candidate) => candidate.provider === provider) ??
+  findOrgProviderConfig(config, provider) ??
   panic(`Org AI config has no ${provider} provider`);
+
+export const validateDevModelOverride = (
+  modelId: string,
+  orgConfig: OrgAIConfig | null,
+): Result<void, HandlerError<400>> => {
+  const override = decodeModelOverride(modelId);
+  if (!override.provider) {
+    return Result.ok(undefined);
+  }
+
+  if (orgConfig) {
+    if (findOrgProviderConfig(orgConfig, override.provider)) {
+      return Result.ok(undefined);
+    }
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message:
+          `Dev model override provider "${override.provider}" is not ` +
+          "configured for this organization.",
+      }),
+    );
+  }
+
+  if (hasInstanceProviderCredentials(override.provider)) {
+    return Result.ok(undefined);
+  }
+  return Result.err(
+    new HandlerError({
+      status: 400,
+      message:
+        `Dev model override provider "${override.provider}" is not ` +
+        "configured for this deployment.",
+    }),
+  );
+};
 
 /**
  * Get a model instance for a logical role.
@@ -756,12 +815,15 @@ export const getModelInfoById = (
   modelId: string,
   orgConfig?: OrgAIConfig | null,
 ): ResolvedModelInfo => {
+  const override = decodeModelOverride(modelId);
   if (orgConfig) {
-    const providerConfig = getPrimaryOrgProvider(orgConfig);
+    const providerConfig = override.provider
+      ? getOrgProviderConfig(orgConfig, override.provider)
+      : getPrimaryOrgProvider(orgConfig);
     return {
       keySource: "byok",
       provider: providerConfig.provider,
-      modelId,
+      modelId: override.modelId,
       region:
         providerConfig.provider === "azure_foundry"
           ? undefined
@@ -769,10 +831,11 @@ export const getModelInfoById = (
     };
   }
 
+  const provider = override.provider ?? getActiveProvider();
   return {
     keySource: "instance",
-    provider: getActiveProvider(),
-    modelId,
+    provider,
+    modelId: override.modelId,
   };
 };
 
@@ -787,10 +850,19 @@ export const getModelById = (
   modelId: string,
   orgConfig?: OrgAIConfig | null,
 ): LanguageModel => {
+  const override = decodeModelOverride(modelId);
   if (orgConfig) {
+    const providerConfig = override.provider
+      ? getOrgProviderConfig(orgConfig, override.provider)
+      : getPrimaryOrgProvider(orgConfig);
     return withLocalAIDevTools(
-      getCachedFactory(getPrimaryOrgProvider(orgConfig))(modelId),
+      getCachedFactory(providerConfig)(override.modelId),
     );
   }
-  return withLocalAIDevTools(getInstanceFactory()(modelId));
+  if (override.provider) {
+    return withLocalAIDevTools(
+      createModelFactory({ provider: override.provider })(override.modelId),
+    );
+  }
+  return withLocalAIDevTools(getInstanceFactory()(override.modelId));
 };

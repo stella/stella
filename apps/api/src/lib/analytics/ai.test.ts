@@ -66,10 +66,10 @@ const createGoogleOrgAIConfig = (): OrgAIConfig => ({
     },
   ],
   overrideModels: {
-    chat: { provider: "google", modelId: "gemini-2.5-flash" },
-    fast: { provider: "google", modelId: "gemini-2.5-flash" },
-    reasoning: { provider: "google", modelId: "gemini-2.5-pro" },
-    pdf: { provider: "google", modelId: "gemini-2.5-flash" },
+    chat: { provider: "google", modelId: "gemini-3.5-flash" },
+    fast: { provider: "google", modelId: "gemini-3.5-flash" },
+    reasoning: { provider: "google", modelId: "gemini-3.1-pro-preview" },
+    pdf: { provider: "google", modelId: "gemini-3.5-flash" },
   },
 });
 
