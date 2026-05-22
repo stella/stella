@@ -114,9 +114,9 @@ const downloadZipHandler = async function* ({
   );
 
   // Uploaded-file content for the document descendants, in one query.
-  const fileContentByEntityId = new Map<
+  const fileContentsByEntityId = new Map<
     string,
-    { fileId: string; fileName: string; mimeType: string }
+    { fileId: string; fileName: string; mimeType: string }[]
   >();
   if (descendants.length > 0) {
     const descendantIds = descendants.map((node) =>
@@ -147,11 +147,14 @@ const downloadZipHandler = async function* ({
     );
     for (const row of fieldRows) {
       if (row.content.type === "file") {
-        fileContentByEntityId.set(String(row.entityId), {
+        const entityFileContents =
+          fileContentsByEntityId.get(String(row.entityId)) ?? [];
+        entityFileContents.push({
           fileId: row.content.id,
           fileName: row.content.fileName,
           mimeType: row.content.mimeType,
         });
+        fileContentsByEntityId.set(String(row.entityId), entityFileContents);
       }
     }
   }
@@ -182,18 +185,16 @@ const downloadZipHandler = async function* ({
   // Order files, then de-duplicate, so the archive is deterministic
   // regardless of the recursive CTE's row order.
   const rawFiles = descendants.flatMap((node) => {
-    const content = fileContentByEntityId.get(node.id);
-    if (content === undefined) {
+    const contents = fileContentsByEntityId.get(node.id);
+    if (contents === undefined) {
       return [];
     }
     const directory = paths.get(node.parentId) ?? rootPath;
-    return [
-      {
-        rawPath: `${directory}/${sanitizeFilename(content.fileName)}`,
-        fileId: content.fileId,
-        mimeType: content.mimeType,
-      },
-    ];
+    return contents.map((content) => ({
+      rawPath: `${directory}/${sanitizeFilename(content.fileName)}`,
+      fileId: content.fileId,
+      mimeType: content.mimeType,
+    }));
   });
   rawFiles.sort(
     (a, b) =>
@@ -263,7 +264,7 @@ const downloadZipHandler = async function* ({
         { entityId, fileIds: failedFileIds.join(",") },
       );
       yield {
-        name: `${rootPath}/${ERROR_MANIFEST_NAME}`,
+        name: uniquePath(seenPaths, `${rootPath}/${ERROR_MANIFEST_NAME}`),
         input: buildErrorManifest(failedPaths),
       };
     }
