@@ -1,4 +1,5 @@
 import { createEnv } from "@t3-oss/env-core";
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import { DEPLOYED_NODE_ENVS, envBase } from "@/api/env-base";
@@ -158,7 +159,7 @@ if (
   (envApi.MICROSOFT_AUTH_CLIENT_ID || envApi.MICROSOFT_AUTH_CLIENT_SECRET) &&
   !envApi.MICROSOFT_AUTH_TENANT_ID
 ) {
-  throw new Error(
+  panic(
     "MICROSOFT_AUTH_TENANT_ID is required when Microsoft OAuth is configured.",
   );
 }
@@ -167,7 +168,7 @@ if (
   DEPLOYED_NODE_ENVS.has(process.env.NODE_ENV ?? "") &&
   !envApi.CONTENT_ENCRYPTION_KEY
 ) {
-  throw new Error(
+  panic(
     "CONTENT_ENCRYPTION_KEY is required when NODE_ENV is 'production' or 'staging'.",
   );
 }

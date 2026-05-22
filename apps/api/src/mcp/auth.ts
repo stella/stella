@@ -37,12 +37,14 @@ export const getMcpAccessTokenVerificationOptions = (
 export const extractMcpSession = (payload: JWTPayload): McpSession => {
   const userId = payload.sub;
   if (!userId) {
-    throw new Error("Token missing sub claim");
+    throw new McpAuthenticationError({ message: "Token missing sub claim" });
   }
 
   const rawOrganizationId = payload["org_id"];
   if (typeof rawOrganizationId !== "string" || rawOrganizationId.length === 0) {
-    throw new Error("Token missing org_id claim");
+    throw new McpAuthenticationError({
+      message: "Token missing org_id claim",
+    });
   }
 
   const rawScopes = payload["scope"];

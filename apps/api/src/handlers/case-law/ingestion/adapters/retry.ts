@@ -5,6 +5,8 @@
  * all adapters, replacing ad-hoc linear/fixed delays.
  */
 
+import { panic } from "better-result";
+
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -147,5 +149,5 @@ export const fetchWithRetry = async (
   }
 
   // Unreachable: the loop always returns or throws
-  throw new Error("fetchWithRetry: unreachable");
+  return panic("fetchWithRetry: unreachable");
 };

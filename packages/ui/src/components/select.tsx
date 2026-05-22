@@ -66,9 +66,9 @@ function Select<Value, Multiple extends boolean | undefined = false>({
     );
 
   return (
-    <SelectItemDisplaysContext.Provider value={itemDisplays}>
+    <SelectItemDisplaysContext value={itemDisplays}>
       {root}
-    </SelectItemDisplaysContext.Provider>
+    </SelectItemDisplaysContext>
   );
 }
 
@@ -106,7 +106,7 @@ function SelectValue({
   placeholder,
   ...props
 }: SelectPrimitive.Value.Props) {
-  const displays = React.useContext(SelectItemDisplaysContext);
+  const displays = React.use(SelectItemDisplaysContext);
 
   // If the consumer passed children OR there are no rich displays
   // registered, defer to Base UI's default rendering — same plain

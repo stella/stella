@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -45,7 +46,7 @@ export const assertMigrationsApplied = async (): Promise<void> => {
 
   const local = listLocalMigrations();
   if (local.length === 0) {
-    throw new Error(
+    panic(
       `[startup] No migration files at ${MIGRATIONS_DIR}; refusing to start. ` +
         "The runtime image must include apps/api/drizzle/.",
     );
@@ -56,7 +57,7 @@ export const assertMigrationsApplied = async (): Promise<void> => {
 
   if (missing.length > 0) {
     const missingNames = missing.map((m) => m.name).join(", ");
-    throw new Error(
+    panic(
       `[startup] Schema drift: ${missing.length} migration(s) in code are not applied to the database. ` +
         `Code has ${local.length}; DB has ${appliedHashes.size}. ` +
         `Missing or modified after apply: ${missingNames}. ` +
