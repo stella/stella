@@ -2,6 +2,7 @@ import { and, gt, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { entities, fields } from "@/api/db/schema";
+import { isValidTimestampCursorValue } from "@/api/handlers/entities/cursor-validation";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -14,9 +15,6 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 
 export const ENTITY_LIST_TIMESTAMP_CURSOR_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.US';
-
-const entityListTimestampCursorPattern =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/u;
 
 export const entityListTimestampCursorExpr = (expr: SQL): SQL<string> =>
   sql<string>`to_char(${expr}, ${ENTITY_LIST_TIMESTAMP_CURSOR_FORMAT})`;
@@ -65,7 +63,7 @@ export const decodeEntityListCursor = (
 
   if (
     typeof createdAt !== "string" ||
-    !entityListTimestampCursorPattern.test(createdAt) ||
+    !isValidTimestampCursorValue(createdAt) ||
     typeof id !== "string"
   ) {
     throw new HandlerError({ status: 400, message: "Invalid cursor" });
@@ -92,7 +90,7 @@ export const decodeEntityFileListCursor = (
 
   if (
     typeof createdAt !== "string" ||
-    !entityListTimestampCursorPattern.test(createdAt) ||
+    !isValidTimestampCursorValue(createdAt) ||
     typeof id !== "string" ||
     typeof fieldId !== "string"
   ) {

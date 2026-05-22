@@ -223,4 +223,34 @@ describe("entity read handlers", () => {
       response: { message: "Invalid cursor" },
     });
   });
+
+  test("window query rejects malformed timestamp cursor values before querying", async () => {
+    const safeDb: Parameters<
+      typeof readEntitiesWindow.handler
+    >[0]["safeDb"] = async () => {
+      throw new Error("safeDb should not be called");
+    };
+
+    const result = await readEntitiesWindow.handler(
+      createContext({
+        body: {
+          limit: 2,
+          filters: [],
+          sorts: [],
+          cursor: encodeEntitiesWindowCursor([
+            "2026-13-40T25:61:61.999999",
+            "doc_1",
+          ]),
+          fieldMode: "visible",
+          fieldIds: [],
+        },
+        safeDb,
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Invalid cursor" },
+    });
+  });
 });

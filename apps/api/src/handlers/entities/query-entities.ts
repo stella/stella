@@ -18,6 +18,10 @@ import type {
   EntityKind,
   FieldContent,
 } from "@/api/db/schema-validators";
+import {
+  isValidDateCursorValue,
+  isValidTimestampCursorValue,
+} from "@/api/handlers/entities/cursor-validation";
 import type {
   EntitiesWindowCursorValue,
   EntitiesWindowCursorValues,
@@ -235,8 +239,6 @@ const HIGH_TEXT_SENTINEL = "\uffff";
 const LOW_DATE_SENTINEL = "0001-01-01";
 const HIGH_DATE_SENTINEL = "9999-12-31";
 const LOW_TIMESTAMP_SENTINEL = new Date("0001-01-01T00:00:00.000Z");
-const dateCursorPattern = /^(\d{4})-(\d{2})-(\d{2})$/u;
-const timestampCursorPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/u;
 
 const orderSortKey = ({ direction, expr }: EntitySortKey): SQL =>
   direction === "desc" ? sql`${expr} DESC` : sql`${expr} ASC`;
@@ -478,38 +480,6 @@ export const buildEntitySortExpressions = ({
   sorts: readonly ViewSort[];
 }): SQL[] => buildSortKeys({ search, sorts }).map(orderSortKey);
 
-const isValidDateCursorValue = (value: string): boolean => {
-  const match = dateCursorPattern.exec(value);
-  if (!match) {
-    return false;
-  }
-
-  const [, yearPart, monthPart, dayPart] = match;
-  const year = Number(yearPart);
-  const month = Number(monthPart);
-  const day = Number(dayPart);
-  if (year < 1 || month < 1 || month > 12) {
-    return false;
-  }
-
-  const isLeapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
-  const daysInMonth = [
-    31,
-    isLeapYear ? 29 : 28,
-    31,
-    30,
-    31,
-    30,
-    31,
-    31,
-    30,
-    31,
-    30,
-    31,
-  ];
-  return day >= 1 && day <= (daysInMonth.at(month - 1) ?? 0);
-};
-
 const parseCursorValue = (
   key: EntitySortKey,
   value: EntitiesWindowCursorValue,
@@ -527,7 +497,7 @@ const parseCursorValue = (
       if (typeof value !== "string") {
         return null;
       }
-      return timestampCursorPattern.test(value) ? value : null;
+      return isValidTimestampCursorValue(value) ? value : null;
     }
   }
 

@@ -33,6 +33,15 @@ describe("entity list cursor", () => {
     expect(() => decodeEntityListCursor(cursor)).toThrow(HandlerError);
   });
 
+  test("rejects out-of-range timestamps", () => {
+    const cursor = encodeEntityListCursor({
+      createdAt: "2026-13-40T25:61:61.999999",
+      id: "entity_1",
+    });
+
+    expect(() => decodeEntityListCursor(cursor)).toThrow(HandlerError);
+  });
+
   test("file cursor condition includes the field tie-breaker", () => {
     const condition = entityFileListCursorCondition({
       createdAt: "2026-05-22T09:31:31.123456",
@@ -63,5 +72,15 @@ describe("entity list cursor", () => {
       id: toSafeId<"entity">("entity_1"),
     });
     expect(() => decodeEntityListCursor(cursor)).toThrow(HandlerError);
+  });
+
+  test("rejects out-of-range file cursor timestamps", () => {
+    const cursor = encodeEntityFileListCursor({
+      createdAt: "2026-02-29T09:31:31.123456",
+      fieldId: "field_1",
+      id: "entity_1",
+    });
+
+    expect(() => decodeEntityFileListCursor(cursor)).toThrow(HandlerError);
   });
 });
