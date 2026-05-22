@@ -27,6 +27,7 @@ import {
   FolderIcon,
   FolderOpenIcon,
 } from "lucide-react";
+import { useDebouncedCallback } from "use-debounce";
 import { useLocale, useTranslations } from "use-intl";
 
 import {
@@ -1179,7 +1180,6 @@ const FilesystemRow = ({
 
   const moveEntity = useMoveEntity();
   const [isDropTarget, setIsDropTarget] = useState(false);
-  const autoExpandTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Store volatile values in refs so the effect doesn't
   // re-register drag/drop handlers on every render.
@@ -1199,6 +1199,10 @@ const FilesystemRow = ({
   getSelectedDragItemsRef.current = getSelectedDragItems;
   const getSelectedEntitiesRef = useRef(getSelectedEntities);
   getSelectedEntitiesRef.current = getSelectedEntities;
+
+  const scheduleAutoExpand = useDebouncedCallback(() => {
+    onToggleFolderRef.current(node.entityId);
+  }, 600);
 
   useEffect(() => {
     const el = rowRef.current;
@@ -1283,24 +1287,16 @@ const FilesystemRow = ({
               onDragEnter: () => {
                 setIsDropTarget(true);
                 if (!expandedRef.current) {
-                  autoExpandTimer.current = setTimeout(() => {
-                    onToggleFolderRef.current(node.entityId);
-                  }, 600);
+                  scheduleAutoExpand();
                 }
               },
               onDragLeave: () => {
                 setIsDropTarget(false);
-                if (autoExpandTimer.current) {
-                  clearTimeout(autoExpandTimer.current);
-                  autoExpandTimer.current = null;
-                }
+                scheduleAutoExpand.cancel();
               },
               onDrop: ({ source }) => {
                 setIsDropTarget(false);
-                if (autoExpandTimer.current) {
-                  clearTimeout(autoExpandTimer.current);
-                  autoExpandTimer.current = null;
-                }
+                scheduleAutoExpand.cancel();
                 const entityIds = getDragEntityIds(source.data);
                 if (!entityIds) {
                   return;
@@ -1335,10 +1331,7 @@ const FilesystemRow = ({
     );
     return () => {
       cleanup();
-      if (autoExpandTimer.current) {
-        clearTimeout(autoExpandTimer.current);
-        autoExpandTimer.current = null;
-      }
+      scheduleAutoExpand.cancel();
     };
   }, [
     node.entityId,
@@ -1349,6 +1342,7 @@ const FilesystemRow = ({
     isFolder,
     workspaceId,
     t,
+    scheduleAutoExpand,
   ]);
 
   // Shared cells: Name + Type

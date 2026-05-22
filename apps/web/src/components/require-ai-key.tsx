@@ -255,7 +255,7 @@ export function AIKeyRequiredDialog({
         providers: providerValues,
       }),
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally re-syncs only when the dialog opens or `configured` flips; depending on the full `config` identity would overwrite user edits on every refetch.
   }, [open, config?.configured]);
 
   const updateProviders = (nextProviders: ProviderCredentialDraft[]) => {

@@ -851,7 +851,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     // propagates lock-state changes via `updateEditable`. Including
     // it here would tear down + re-create the registration on every
     // toggle, invalidating the token contract documented above.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `isUnlocked` deliberately excluded; see block comment above.
   }, [entityId, requestEditMode]);
 
   useEffect(() => {
