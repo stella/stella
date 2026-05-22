@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo } from "react";
+import { createContext, use, useMemo } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -21,7 +21,7 @@ const MentionProvidersContext = createContext<MentionProviders>({
   getItems: () => [],
 });
 
-export const useMentionProviders = () => useContext(MentionProvidersContext);
+export const useMentionProviders = () => use(MentionProvidersContext);
 
 /** Provides org-level mention sources to any ChatEditor below. */
 export const ChatMentionProviders = ({

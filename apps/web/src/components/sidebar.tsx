@@ -1,10 +1,4 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useState,
-} from "react";
+import { createContext, use, useCallback, useMemo, useState } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { panic } from "better-result";
@@ -56,7 +50,7 @@ type SidebarContextProps = {
 const SidebarContext = createContext<SidebarContextProps | null>(null);
 
 function useSidebar() {
-  const context = useContext(SidebarContext);
+  const context = use(SidebarContext);
   if (!context) {
     panic("useSidebar must be used within a SidebarProvider.");
   }
