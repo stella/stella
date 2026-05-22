@@ -35,7 +35,12 @@
 //   new Error(`probe failed: ${apiKey}`)
 //   new APIError({ message: "x", cause: { clientSecret } })
 
-import { getCalleeName, getPropertyName, isIdentifier } from "./utils.ts";
+import {
+  getCalleeName,
+  getPropertyName,
+  isIdentifier,
+  isStringLiteral,
+} from "./utils.ts";
 
 const SECRET_NAMES = new Set([
   "apiKey",
@@ -99,6 +104,25 @@ const reportIfSecretIdentifier = (context, node, contextLabel) => {
   return false;
 };
 
+const isMaskedSecretValue = (node) => {
+  if (!node) {
+    return false;
+  }
+  switch (node.type) {
+    case "TSAsExpression":
+    case "TSSatisfiesExpression":
+    case "TSNonNullExpression":
+    case "ChainExpression":
+      return isMaskedSecretValue(node.expression);
+    case "CallExpression": {
+      const calleeName = getCalleeName(node.callee);
+      return calleeName !== null && MASKING_CALLEES.has(calleeName);
+    }
+    default:
+      return false;
+  }
+};
+
 const checkObjectExpression = (context, objectNode, contextLabel) => {
   for (const prop of objectNode.properties) {
     if (prop.type === "SpreadElement") {
@@ -112,8 +136,19 @@ const checkObjectExpression = (context, objectNode, contextLabel) => {
       continue;
     }
 
+    const hasDynamicComputedKey =
+      prop.computed === true && !isStringLiteral(prop.key);
+    if (hasDynamicComputedKey) {
+      checkExpression(context, prop.key, contextLabel);
+      checkExpression(context, prop.value, contextLabel);
+      continue;
+    }
+
     const keyName = getPropertyName(prop.key);
     if (keyName !== null && SECRET_NAMES.has(keyName)) {
+      if (isMaskedSecretValue(prop.value)) {
+        continue;
+      }
       context.report({
         node: prop,
         messageId: "secretInSink",
