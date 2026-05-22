@@ -3139,7 +3139,9 @@ export function DocxEditor({
                         selectedAnonymizationCanonical
                       }
                       anonymizationSelectionSeq={anonymizationSelectionSeq}
-                      onAnchorPositionsChange={setAnchorPositions}
+                      {...(showCommentsSidebar
+                        ? { onAnchorPositionsChange: setAnchorPositions }
+                        : {})}
                       onTotalPagesChange={(totalPages) => {
                         setScrollPageInfo((previous) =>
                           updateScrollPageTotal(previous, totalPages),

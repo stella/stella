@@ -501,7 +501,7 @@ const pagesContainerStyles: CSSProperties = {
  * Returns a Map of "comment-{id}" / "revision-{revisionId}" → scroll-container Y.
  */
 function computeAnchorPositions(
-  pmView: EditorView | null,
+  state: EditorState | null,
   layout: Layout,
   blocks: FlowBlock[],
   measures: Measure[],
@@ -509,11 +509,11 @@ function computeAnchorPositions(
   options: { includeRevisions: boolean },
 ): Map<string, number> {
   const positions = new Map<string, number>();
-  if (!pmView?.state) {
+  if (!state) {
     return positions;
   }
 
-  const { doc: pmDoc, schema } = pmView.state;
+  const { doc: pmDoc, schema } = state;
   const commentType = schema.marks["comment"];
   const insertionType = options.includeRevisions
     ? schema.marks["insertion"]
@@ -2005,11 +2005,14 @@ export function PagedEditor(
         // Runs on every layout pass, including incremental typing passes — gating on
         // forceFull/dirtyRange left cards stuck at stale Y positions until the 200ms
         // idle reconcile, so they drifted away from their anchor text while editing.
-        // The walk only visits text nodes carrying a comment/insertion/deletion mark
-        // and is RAF-throttled, so the cost is bounded.
+        // The descendants walk visits every node, but the per-node work is gated by
+        // `isText` plus a comment/insertion/deletion mark check, so it stays cheap
+        // even on long documents; the layout pipeline is RAF-throttled on top of that.
+        // We pass the `state` arg (not the live view) so anchor positions are computed
+        // against the exact same doc snapshot used for `newLayout` / `newMeasures`.
         if (onAnchorPositionsChange) {
           const positions = computeAnchorPositions(
-            hiddenPMRef.current?.getView() ?? null,
+            state,
             newLayout,
             newBlocks,
             newMeasures,
