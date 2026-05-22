@@ -6,6 +6,7 @@ export const LIMITS = {
   entitiesPageSizeMax: 500,
   entitiesWindowSizeDefault: 200,
   entitiesWindowSizeMax: 500,
+  workflowEntityBatchSize: 500,
   calendarTasksMax: 200,
   entitySummariesPageSize: 200,
   viewsCount: 20,

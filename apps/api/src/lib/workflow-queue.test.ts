@@ -38,4 +38,22 @@ describe("workflow entity targeting", () => {
       }),
     ).toEqual([documentA, task, documentB, link]);
   });
+
+  test("deduplicates explicit targets before workflow jobs are counted", () => {
+    expect(
+      resolveWorkflowTargetEntityIds({
+        entityRows,
+        inputEntityIds: [
+          documentA,
+          task,
+          documentA,
+          folder,
+          documentB,
+          task,
+          link,
+        ],
+        inputOrder: [task, task, documentB],
+      }),
+    ).toEqual([task, documentB, documentA, link]);
+  });
 });

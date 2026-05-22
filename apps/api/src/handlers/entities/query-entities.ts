@@ -18,6 +18,14 @@ import type {
   EntityKind,
   FieldContent,
 } from "@/api/db/schema-validators";
+import {
+  isValidDateCursorValue,
+  isValidTimestampCursorValue,
+} from "@/api/handlers/entities/cursor-validation";
+import type {
+  EntitiesWindowCursorValue,
+  EntitiesWindowCursorValues,
+} from "@/api/handlers/entities/window-cursor";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   AGENDA_ITEM_KIND,
@@ -27,10 +35,8 @@ import type {
   AgendaItemKind,
   AgendaItemSource,
 } from "@/api/lib/entity-constants";
-import {
-  buildFilterConditions,
-  buildSortExpressions,
-} from "@/api/lib/entity-filters";
+import { buildFilterConditions } from "@/api/lib/entity-filters";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ViewFilterCondition, ViewSort } from "@/api/lib/views-schema";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -102,7 +108,8 @@ type QueryEntitiesProps = {
   filters: ViewFilterCondition[];
   sorts: ViewSort[];
   search?: string | undefined;
-  offset: number;
+  cursor?: EntitiesWindowCursorValues | null | undefined;
+  offset?: number | undefined;
   limit: number;
   fieldMode: QueryEntitiesFieldMode;
   fieldIds: SafeId<"property">[];
@@ -218,6 +225,374 @@ const buildCellMetadataPredicates = ({
   return predicates;
 };
 
+type SortValueType = "date" | "number" | "string" | "timestamp";
+type SortDirection = "asc" | "desc";
+
+type EntitySortKey = {
+  expr: SQL;
+  cursorExpr: SQL;
+  direction: SortDirection;
+  type: SortValueType;
+};
+
+const HIGH_TEXT_SENTINEL = "\uffff";
+const LOW_DATE_SENTINEL = "0001-01-01";
+const HIGH_DATE_SENTINEL = "9999-12-31";
+const LOW_TIMESTAMP_SENTINEL = new Date("0001-01-01T00:00:00.000Z");
+
+const orderSortKey = ({ direction, expr }: EntitySortKey): SQL =>
+  direction === "desc" ? sql`${expr} DESC` : sql`${expr} ASC`;
+
+const timestampCursorExpr = (expr: SQL): SQL =>
+  sql`to_char(${expr}, 'YYYY-MM-DD"T"HH24:MI:SS.US')`;
+
+const textSortKey = ({
+  direction,
+  expr,
+}: {
+  direction: SortDirection;
+  expr: SQL;
+}): EntitySortKey => ({
+  expr,
+  cursorExpr: expr,
+  direction,
+  type: "string",
+});
+
+const numberSortKey = ({
+  direction,
+  expr,
+}: {
+  direction: SortDirection;
+  expr: SQL;
+}): EntitySortKey => ({
+  expr,
+  cursorExpr: expr,
+  direction,
+  type: "number",
+});
+
+const defaultNullableTextSortKey = ({
+  direction,
+  expr,
+}: {
+  direction: SortDirection;
+  expr: SQL;
+}): EntitySortKey =>
+  textSortKey({
+    direction,
+    expr: sql`COALESCE(${expr}, ${HIGH_TEXT_SENTINEL})`,
+  });
+
+const legacyNullableTextSortKey = ({
+  direction,
+  expr,
+}: {
+  direction: SortDirection;
+  expr: SQL;
+}): EntitySortKey =>
+  textSortKey({
+    direction,
+    expr: sql`COALESCE(${expr}, '')`,
+  });
+
+const timestampSortKey = ({
+  direction,
+  expr,
+}: {
+  direction: SortDirection;
+  expr: SQL;
+}): EntitySortKey => ({
+  expr,
+  cursorExpr: timestampCursorExpr(expr),
+  direction,
+  type: "timestamp",
+});
+
+const dateSortKey = ({
+  direction,
+  expr,
+}: {
+  direction: SortDirection;
+  expr: SQL;
+}): EntitySortKey => ({
+  expr,
+  cursorExpr: expr,
+  direction,
+  type: "date",
+});
+
+const displayedNameExpr = (): SQL => sql`${entities.displayName}`;
+
+const propertySortValueExpr = (propertyId: string): SQL => sql`(
+  SELECT COALESCE(
+    ${fields.content}->>'value',
+    ${fields.content}->>'fileName',
+    ''
+  )
+  FROM ${fields}
+  WHERE ${fields.workspaceId} = ${entities.workspaceId}
+    AND ${fields.entityVersionId} = ${entities.currentVersionId}
+    AND ${fields.propertyId} = ${propertyId}
+  LIMIT 1
+)`;
+
+const internalSortKey = ({
+  desc,
+  propertyId,
+}: {
+  desc: boolean;
+  propertyId: string;
+}): EntitySortKey | null => {
+  const direction: SortDirection = desc ? "desc" : "asc";
+  switch (propertyId) {
+    case "_name":
+      return textSortKey({ direction, expr: displayedNameExpr() });
+    case "_created-by":
+      return defaultNullableTextSortKey({
+        direction,
+        expr: sql`(
+          SELECT ${user.name} FROM ${user}
+          WHERE ${user.id} = ${entities.createdBy}
+        )`,
+      });
+    case "_created-at":
+      return timestampSortKey({ direction, expr: sql`${entities.createdAt}` });
+    case "_updated-at":
+      return timestampSortKey({
+        direction,
+        expr: sql`COALESCE(${entities.updatedAt}, ${LOW_TIMESTAMP_SENTINEL})`,
+      });
+    case "_status":
+      return textSortKey({
+        direction,
+        expr: desc
+          ? sql`COALESCE(${entities.status}, '')`
+          : sql`COALESCE(${entities.status}, ${HIGH_TEXT_SENTINEL})`,
+      });
+    case "_priority":
+      return textSortKey({
+        direction,
+        expr: desc
+          ? sql`COALESCE(${entities.priority}, '')`
+          : sql`COALESCE(${entities.priority}, ${HIGH_TEXT_SENTINEL})`,
+      });
+    case "_due-date":
+      return dateSortKey({
+        direction,
+        expr: desc
+          ? sql`COALESCE(${entities.dueDate}, ${LOW_DATE_SENTINEL})`
+          : sql`COALESCE(${entities.dueDate}, ${HIGH_DATE_SENTINEL})`,
+      });
+    case "_version":
+      return numberSortKey({
+        direction,
+        expr: sql`(
+          SELECT COUNT(*) FROM ${entityVersions}
+          WHERE ${entityVersions.entityId} = ${entities.id}
+        )`,
+      });
+    case "_kind":
+      return textSortKey({ direction, expr: sql`${entities.kind}` });
+    default:
+      return null;
+  }
+};
+
+const buildViewSortKeys = (sorts: readonly ViewSort[]): EntitySortKey[] => {
+  if (sorts.length === 0) {
+    return [
+      timestampSortKey({ direction: "asc", expr: sql`${entities.createdAt}` }),
+    ];
+  }
+
+  const keys: EntitySortKey[] = [];
+  for (const sort of sorts) {
+    const internal = internalSortKey(sort);
+    if (internal) {
+      keys.push(internal);
+      continue;
+    }
+
+    keys.push(
+      legacyNullableTextSortKey({
+        direction: sort.desc ? "desc" : "asc",
+        expr: propertySortValueExpr(sort.propertyId),
+      }),
+    );
+  }
+  return keys;
+};
+
+const buildSearchSortKeys = (search: string | undefined): EntitySortKey[] => {
+  const trimmed = search?.trim() ?? "";
+  if (!trimmed) {
+    return [];
+  }
+
+  const titleExpr = sql`(
+    SELECT sd.title
+    FROM ${searchDocuments} sd
+    WHERE sd.entity_id = ${entities.id}
+    LIMIT 1
+  )`;
+  const normalizedTitle = sql`lower(${titleExpr})`;
+  const normalizedSearch = trimmed.toLowerCase();
+
+  return [
+    numberSortKey({
+      direction: "asc",
+      expr: sql`CASE
+        WHEN ${normalizedTitle} = ${normalizedSearch} THEN 0
+        WHEN ${normalizedTitle} LIKE ${`${normalizedSearch}%`} THEN 1
+        WHEN ${normalizedTitle} LIKE ${`%${normalizedSearch}%`} THEN 2
+        ELSE 3
+      END`,
+    }),
+    numberSortKey({
+      direction: "asc",
+      expr: sql`strpos(${normalizedTitle}, ${normalizedSearch})`,
+    }),
+    numberSortKey({
+      direction: "asc",
+      expr: sql`length(${titleExpr})`,
+    }),
+  ];
+};
+
+const buildSortKeys = ({
+  search,
+  sorts,
+}: {
+  search?: string | undefined;
+  sorts: readonly ViewSort[];
+}): EntitySortKey[] => [
+  ...buildSearchSortKeys(search),
+  ...buildViewSortKeys(sorts),
+  textSortKey({ direction: "asc", expr: sql`${entities.id}` }),
+];
+
+export const buildEntitySortExpressions = ({
+  search,
+  sorts,
+}: {
+  search?: string | undefined;
+  sorts: readonly ViewSort[];
+}): SQL[] => buildSortKeys({ search, sorts }).map(orderSortKey);
+
+const parseCursorValue = (
+  key: EntitySortKey,
+  value: EntitiesWindowCursorValue,
+): number | string | null => {
+  switch (key.type) {
+    case "string":
+      return typeof value === "string" ? value : null;
+    case "date":
+      return typeof value === "string" && isValidDateCursorValue(value)
+        ? value
+        : null;
+    case "number":
+      return typeof value === "number" && Number.isFinite(value) ? value : null;
+    case "timestamp": {
+      if (typeof value !== "string") {
+        return null;
+      }
+      return isValidTimestampCursorValue(value) ? value : null;
+    }
+  }
+
+  return null;
+};
+
+const cursorValueSql = (key: EntitySortKey, value: number | string): SQL => {
+  if (key.type === "timestamp") {
+    return sql`${value}::timestamp`;
+  }
+
+  return sql`${value}`;
+};
+
+const invalidCursor = () =>
+  new HandlerError({ status: 400, message: "Invalid cursor" });
+
+const buildCursorCondition = ({
+  cursor,
+  sortKeys,
+}: {
+  cursor: EntitiesWindowCursorValues | null | undefined;
+  sortKeys: readonly EntitySortKey[];
+}): Result<SQL | null, HandlerError> => {
+  if (!cursor) {
+    return Result.ok(null);
+  }
+
+  if (cursor.length !== sortKeys.length) {
+    return Result.err(invalidCursor());
+  }
+
+  const parsedValues = sortKeys.map((key, index) =>
+    parseCursorValue(key, cursor[index] ?? null),
+  );
+  if (parsedValues.some((value) => value === null)) {
+    return Result.err(invalidCursor());
+  }
+
+  const branches: SQL[] = [];
+  for (let index = 0; index < sortKeys.length; index++) {
+    const key = sortKeys[index];
+    const value = parsedValues[index];
+    if (!key || value === null || value === undefined) {
+      return Result.err(invalidCursor());
+    }
+
+    const prefix: SQL[] = [];
+    for (let prefixIndex = 0; prefixIndex < index; prefixIndex++) {
+      const prefixKey = sortKeys[prefixIndex];
+      const prefixValue = parsedValues[prefixIndex];
+      if (!prefixKey || prefixValue === null || prefixValue === undefined) {
+        return Result.err(invalidCursor());
+      }
+      prefix.push(
+        sql`${prefixKey.expr} = ${cursorValueSql(prefixKey, prefixValue)}`,
+      );
+    }
+
+    const comparison =
+      key.direction === "asc"
+        ? sql`${key.expr} > ${cursorValueSql(key, value)}`
+        : sql`${key.expr} < ${cursorValueSql(key, value)}`;
+    branches.push(and(...prefix, comparison) ?? comparison);
+  }
+
+  return Result.ok(or(...branches) ?? null);
+};
+
+const normalizeCursorValues = (
+  rawValues: unknown,
+): EntitiesWindowCursorValues => {
+  if (Array.isArray(rawValues)) {
+    return rawValues.filter(isGeneratedCursorValue);
+  }
+
+  if (typeof rawValues !== "string") {
+    return [];
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawValues);
+  } catch {
+    return [];
+  }
+
+  return Array.isArray(parsed) ? parsed.filter(isGeneratedCursorValue) : [];
+};
+
+const isGeneratedCursorValue = (
+  value: unknown,
+): value is EntitiesWindowCursorValue =>
+  value === null || typeof value === "string" || typeof value === "number";
+
 const queryEntitiesGenerator = async function* ({
   safeDb,
   workspaceId,
@@ -226,7 +601,8 @@ const queryEntitiesGenerator = async function* ({
   filters,
   sorts,
   search,
-  offset,
+  cursor,
+  offset = 0,
   limit,
   fieldMode,
   fieldIds,
@@ -255,10 +631,20 @@ const queryEntitiesGenerator = async function* ({
     ...previewableConditions,
     ...extraConditions,
   );
-  const sortExpressions = [
-    ...buildSearchSortExpressions(search),
-    ...buildSortExpressions(sorts),
-  ];
+  const sortKeys = buildSortKeys({ search, sorts });
+  const cursorConditionResult = buildCursorCondition({ cursor, sortKeys });
+  if (Result.isError(cursorConditionResult)) {
+    return Result.err(cursorConditionResult.error);
+  }
+  const paginatedWhereClause =
+    cursorConditionResult.value === null
+      ? whereClause
+      : and(whereClause, cursorConditionResult.value);
+  const sortExpressions = sortKeys.map(orderSortKey);
+  const cursorValuesExpr = sql<EntitiesWindowCursorValues>`jsonb_build_array(${sql.join(
+    sortKeys.map((key) => key.cursorExpr),
+    sql`, `,
+  )})`;
 
   const countRowsPromise = includeTotalCount
     ? safeDb((tx) =>
@@ -267,15 +653,20 @@ const queryEntitiesGenerator = async function* ({
     : Promise.resolve(null);
 
   const [idRowsResult, countRowsResult] = await Promise.all([
-    safeDb((tx) =>
-      tx
-        .select({ id: entities.id })
+    safeDb((tx) => {
+      const query = tx
+        .select({ cursorValues: cursorValuesExpr, id: entities.id })
         .from(entities)
-        .where(whereClause)
+        .where(paginatedWhereClause)
         .orderBy(...sortExpressions)
-        .offset(offset)
-        .limit(limit),
-    ),
+        .limit(limit);
+
+      if (offset <= 0) {
+        return query;
+      }
+
+      return query.offset(offset);
+    }),
     countRowsPromise,
   ]);
 
@@ -288,9 +679,13 @@ const queryEntitiesGenerator = async function* ({
   }
 
   const pageIds = idRows.map((r) => r.id);
+  const cursorValuesByEntityId = new Map<string, EntitiesWindowCursorValues>(
+    idRows.map((row) => [row.id, normalizeCursorValues(row.cursorValues)]),
+  );
 
   if (pageIds.length === 0) {
     return Result.ok({
+      cursorValuesByEntityId,
       entities: [],
       totalCount,
     });
@@ -595,6 +990,7 @@ const queryEntitiesGenerator = async function* ({
   }
 
   return Result.ok({
+    cursorValuesByEntityId,
     entities: result,
     totalCount,
   });
@@ -622,33 +1018,6 @@ const buildSearchConditions = ({
         AND sd.workspace_id = ${workspaceId}
         AND sd.title ILIKE ${`%${trimmed}%`}
     )`,
-  ];
-};
-
-const buildSearchSortExpressions = (search: string | undefined): SQL[] => {
-  const trimmed = search?.trim() ?? "";
-  if (!trimmed) {
-    return [];
-  }
-
-  const titleExpr = sql`(
-    SELECT sd.title
-    FROM ${searchDocuments} sd
-    WHERE sd.entity_id = ${entities.id}
-    LIMIT 1
-  )`;
-  const normalizedTitle = sql`lower(${titleExpr})`;
-  const normalizedSearch = trimmed.toLowerCase();
-
-  return [
-    sql`CASE
-      WHEN ${normalizedTitle} = ${normalizedSearch} THEN 0
-      WHEN ${normalizedTitle} LIKE ${`${normalizedSearch}%`} THEN 1
-      WHEN ${normalizedTitle} LIKE ${`%${normalizedSearch}%`} THEN 2
-      ELSE 3
-    END ASC`,
-    sql`strpos(${normalizedTitle}, ${normalizedSearch}) ASC`,
-    sql`length(${titleExpr}) ASC`,
   ];
 };
 

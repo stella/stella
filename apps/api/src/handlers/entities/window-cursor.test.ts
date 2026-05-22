@@ -7,13 +7,28 @@ import {
 } from "@/api/handlers/entities/window-cursor";
 
 describe("entities window cursor", () => {
-  test("round-trips the next offset", () => {
-    const cursor = encodeEntitiesWindowCursor(400);
+  test("round-trips sort tuple values", () => {
+    const cursor = encodeEntitiesWindowCursor([
+      "2026-01-01T00:00:00.000Z",
+      "entity_1",
+    ]);
     const decoded = decodeEntitiesWindowCursor(cursor);
 
     expect(Result.isOk(decoded)).toBe(true);
     if (Result.isOk(decoded)) {
-      expect(decoded.value).toBe(400);
+      expect(decoded.value).toEqual(["2026-01-01T00:00:00.000Z", "entity_1"]);
+    }
+  });
+
+  test("round-trips long tuple values generated from user data", () => {
+    const longName = "a".repeat(1000);
+    const cursor = encodeEntitiesWindowCursor([longName, "entity_1"]);
+    const decoded = decodeEntitiesWindowCursor(cursor);
+
+    expect(cursor.length).toBeGreaterThan(512);
+    expect(Result.isOk(decoded)).toBe(true);
+    if (Result.isOk(decoded)) {
+      expect(decoded.value).toEqual([longName, "entity_1"]);
     }
   });
 

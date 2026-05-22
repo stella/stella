@@ -1,36 +1,50 @@
 import { Result } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
+import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db";
 import { entities, fields } from "@/api/db/schema";
+import {
+  decodeEntityFileListCursor,
+  encodeEntityFileListCursor,
+  entityFileListCursorCondition,
+  entityListTimestampCursorExpr,
+} from "@/api/handlers/entities/list-cursor";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
+import { createCursorPage } from "@/api/lib/pagination";
 
-// Returns every file-bearing entity in the workspace, unpaginated and
-// trimmed to just the columns the organizer needs (entityId,
-// parentId, fileName, mimeType). The workspace cap of
-// LIMITS.entitiesCount = 10 000 keeps the upper bound bounded.
-//
-// The organizer is the only consumer today; the FilesystemView still
-// uses the paginated read endpoint for its UI rows. Adding a
-// dedicated lightweight endpoint avoids loading every entity's full
-// field set when the dialog only needs the file's name + mime type.
+const listFilesQuerySchema = t.Object({
+  limit: t.Optional(
+    t.Integer({ minimum: 1, maximum: LIMITS.entitiesWindowSizeMax }),
+  ),
+  cursor: t.Optional(t.String({ maxLength: 512 })),
+});
+type ListFilesQuery = (typeof listFilesQuerySchema)["static"];
 
 type ListFilesHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
+  query: ListFilesQuery;
 };
 
 const listFilesHandler = async function* ({
+  query,
   safeDb,
   workspaceId,
 }: ListFilesHandlerProps) {
+  const limit = query.limit ?? LIMITS.entitiesWindowSizeDefault;
+  const cursor = decodeEntityFileListCursor(query.cursor);
+  const cursorCondition = entityFileListCursorCondition(cursor);
   const rows = yield* Result.await(
     safeDb((tx) =>
       tx
         .select({
+          createdAt: entityListTimestampCursorExpr(sql`${entities.createdAt}`),
           entityId: entities.id,
+          fieldId: fields.id,
           name: entities.name,
           parentId: entities.parentId,
           fieldContent: fields.content,
@@ -48,9 +62,11 @@ const listFilesHandler = async function* ({
           and(
             eq(entities.workspaceId, workspaceId),
             eq(entities.kind, "document"),
+            ...(cursorCondition ? [cursorCondition] : []),
           ),
         )
-        .orderBy(asc(entities.createdAt)),
+        .orderBy(asc(entities.createdAt), asc(entities.id), asc(fields.id))
+        .limit(limit + 1),
     ),
   );
 
@@ -62,7 +78,10 @@ const listFilesHandler = async function* ({
     mimeType: string;
   };
 
-  const files: FileRow[] = [];
+  const files: (FileRow & {
+    createdAt: string;
+    fieldId: SafeId<"field">;
+  })[] = [];
   for (const row of rows) {
     const content = row.fieldContent;
     if (content.type !== "file") {
@@ -72,22 +91,41 @@ const listFilesHandler = async function* ({
       entityId: row.entityId,
       name: row.name,
       parentId: row.parentId,
+      createdAt: row.createdAt,
+      fieldId: row.fieldId,
       fileName: content.fileName,
       mimeType: content.mimeType,
     });
   }
 
-  return Result.ok({ files });
+  const page = createCursorPage({
+    rows: files,
+    limit,
+    cursorForItem: (item) =>
+      encodeEntityFileListCursor({
+        createdAt: item.createdAt,
+        fieldId: item.fieldId,
+        id: item.entityId,
+      }),
+  });
+
+  return Result.ok({
+    ...page,
+    items: page.items.map(
+      ({ createdAt: _createdAt, fieldId: _fieldId, ...file }) => file,
+    ),
+  });
 };
 
 const config = {
   permissions: { workspace: ["read"] },
+  query: listFilesQuerySchema,
 } satisfies HandlerConfig;
 
 const listFiles = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId }) {
-    return yield* listFilesHandler({ safeDb, workspaceId });
+  async function* ({ query, safeDb, workspaceId }) {
+    return yield* listFilesHandler({ query, safeDb, workspaceId });
   },
 );
 

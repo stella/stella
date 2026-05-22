@@ -392,7 +392,7 @@ describe("applySorts (in-memory)", () => {
 });
 
 describe("buildSortExpressions", () => {
-  test("_name sort uses the displayed entity name fallback chain", () => {
+  test("_name sort uses the materialized display name", () => {
     const [nameSort] = buildSortExpressions([
       { propertyId: "_name", desc: false },
     ]);
@@ -403,11 +403,7 @@ describe("buildSortExpressions", () => {
     const dialect = new PgDialect();
     const sql = dialect.sqlToQuery(nameSort).sql;
 
-    expect(sql).toContain('NULLIF("entities"."name", \'\')');
-    expect(sql).toContain("NULLIF(\"fields\".\"content\"->>'fileName', '')");
-    expect(sql).toContain('"fields"."content"->>\'value\'');
-    expect(sql).toContain('ORDER BY "fields"."property_id" ASC');
-    expect(sql.indexOf("fileName")).toBeLessThan(sql.indexOf("value"));
+    expect(sql).toBe('"entities"."display_name" ASC');
   });
 
   test("metadata table sorts use entity columns, not property field subqueries", () => {

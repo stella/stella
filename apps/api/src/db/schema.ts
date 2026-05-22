@@ -787,6 +787,10 @@ export const entities = p.pgTable(
       },
     ),
     name: p.text("name").notNull(),
+    displayName: p
+      .varchar("display_name", { length: 512 })
+      .notNull()
+      .default("Untitled"),
     createdBy: p
       .text("created_by")
       .references(() => user.id, { onDelete: "set null" }),
@@ -847,6 +851,25 @@ export const entities = p.pgTable(
   },
   (table) => [
     p.index("entities_workspace_id_idx").on(table.workspaceId),
+    p
+      .index("entities_ws_created_at_id_idx")
+      .on(table.workspaceId, table.createdAt, table.id),
+    p
+      .index("entities_ws_updated_at_id_idx")
+      .on(table.workspaceId, table.updatedAt, table.id),
+    p
+      .index("entities_ws_updated_at_coalesce_id_idx")
+      .on(
+        table.workspaceId,
+        sql`COALESCE(${table.updatedAt}, '0001-01-01 00:00:00'::timestamp)`,
+        table.id,
+      ),
+    p
+      .index("entities_ws_display_name_id_idx")
+      .on(table.workspaceId, table.displayName, table.id),
+    p
+      .index("entities_ws_kind_created_at_id_idx")
+      .on(table.workspaceId, table.kind, table.createdAt, table.id),
     p
       .index("entities_parent_id_idx")
       .on(table.parentId)
@@ -1325,6 +1348,9 @@ export const fields = p.pgTable(
     p
       .uniqueIndex("fields_property_id_entity_version_id_key")
       .on(table.propertyId, table.entityVersionId),
+    p
+      .index("fields_ws_entity_version_property_idx")
+      .on(table.workspaceId, table.entityVersionId, table.propertyId),
     p
       .foreignKey({
         columns: [table.propertyId, table.workspaceId],

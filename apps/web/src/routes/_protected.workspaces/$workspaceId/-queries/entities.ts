@@ -332,27 +332,51 @@ export type WorkspaceFolder = {
   parentId: string | null;
 };
 
-// Returns every folder in the workspace, unpaginated. Used by features
-// (e.g. the file organizer) that need a complete folder hierarchy
-// regardless of which page the filesystem view is currently showing.
-export const workspaceFoldersOptions = (workspaceId: string) =>
-  queryOptions({
-    queryKey: [...entitiesKeys.all(workspaceId), "folders"],
-    queryFn: async ({ signal }): Promise<WorkspaceFolder[]> => {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .folders.get({ fetch: { signal } });
+const fetchAllWorkspaceFolders = async ({
+  signal,
+  workspaceId,
+}: {
+  signal: AbortSignal;
+  workspaceId: string;
+}): Promise<WorkspaceFolder[]> => {
+  const folders: WorkspaceFolder[] = [];
+  let cursor: string | undefined;
+  do {
+    const response = await api
+      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+      .folders.get({
+        fetch: { signal },
+        query: {
+          limit: DEFAULT_ENTITY_WINDOW_SIZE,
+          ...(cursor !== undefined && { cursor }),
+        },
+      });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
+    if (response.error) {
+      throw toAPIError(response.error);
+    }
 
-      return response.data.folders.map((folder) => ({
+    folders.push(
+      ...response.data.items.map((folder) => ({
         entityId: folder.id,
         name: folder.name,
         parentId: folder.parentId,
-      }));
-    },
+      })),
+    );
+    cursor = response.data.nextCursor ?? undefined;
+  } while (cursor !== undefined);
+
+  return folders;
+};
+
+// Fetches the complete folder hierarchy in bounded pages. The API
+// response is paginated so large matters never return one giant
+// organizer payload.
+export const workspaceFoldersOptions = (workspaceId: string) =>
+  queryOptions({
+    queryKey: [...entitiesKeys.all(workspaceId), "folders"],
+    queryFn: async ({ signal }) =>
+      await fetchAllWorkspaceFolders({ signal, workspaceId }),
   });
 
 export type WorkspaceFile = {
@@ -363,28 +387,51 @@ export type WorkspaceFile = {
   mimeType: string;
 };
 
-// Returns every file-bearing entity in the workspace, unpaginated, with
-// just the columns the organizer needs. Used by the file organizer so
-// it operates on the whole matter rather than the FilesystemView's
-// current page.
-export const workspaceFilesOptions = (workspaceId: string) =>
-  queryOptions({
-    queryKey: [...entitiesKeys.all(workspaceId), "files"],
-    queryFn: async ({ signal }): Promise<WorkspaceFile[]> => {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .files.get({ fetch: { signal } });
+const fetchAllWorkspaceFiles = async ({
+  signal,
+  workspaceId,
+}: {
+  signal: AbortSignal;
+  workspaceId: string;
+}): Promise<WorkspaceFile[]> => {
+  const files: WorkspaceFile[] = [];
+  let cursor: string | undefined;
+  do {
+    const response = await api
+      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+      .files.get({
+        fetch: { signal },
+        query: {
+          limit: DEFAULT_ENTITY_WINDOW_SIZE,
+          ...(cursor !== undefined && { cursor }),
+        },
+      });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
+    if (response.error) {
+      throw toAPIError(response.error);
+    }
 
-      return response.data.files.map((file) => ({
+    files.push(
+      ...response.data.items.map((file) => ({
         entityId: file.entityId,
         name: file.name,
         parentId: file.parentId,
         fileName: file.fileName,
         mimeType: file.mimeType,
-      }));
-    },
+      })),
+    );
+    cursor = response.data.nextCursor ?? undefined;
+  } while (cursor !== undefined);
+
+  return files;
+};
+
+// Fetches every file-bearing entity in bounded pages, with just the
+// columns the organizer needs. The organizer still operates across the
+// whole matter, but no single request returns the whole file set.
+export const workspaceFilesOptions = (workspaceId: string) =>
+  queryOptions({
+    queryKey: [...entitiesKeys.all(workspaceId), "files"],
+    queryFn: async ({ signal }) =>
+      await fetchAllWorkspaceFiles({ signal, workspaceId }),
   });

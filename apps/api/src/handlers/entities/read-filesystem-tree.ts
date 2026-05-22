@@ -51,7 +51,6 @@ export const createReadFilesystemTreeHandler = (
           filters: body.filters ?? [],
           sorts: body.sorts ?? [],
           ...(body.search !== undefined && { search: body.search }),
-          offset: 0,
           limit: LIMITS.entitiesCount,
           fieldMode: body.fieldMode ?? "full",
           fieldIds: body.fieldIds ?? [],
