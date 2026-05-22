@@ -7,6 +7,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { presignDownloadUrl } from "@/api/lib/s3";
 
+/** Presigned download URLs expire after 15 minutes, matching every
+ *  other read path (`templates/get.ts`, `files/read-by-id.ts`). */
+const PRESIGN_EXPIRES_IN = 900;
+
 // ── Helpers ──────────────────────────────────────────
 
 const verifyTemplateOwnership = async (
@@ -114,7 +118,7 @@ export const getTemplateVersionHandler = async ({
   }
 
   const downloadUrl = presignDownloadUrl(version.s3Key, {
-    expiresIn: 3600,
+    expiresIn: PRESIGN_EXPIRES_IN,
     fileName: template.fileName,
   });
 

@@ -1,5 +1,6 @@
 import { Result, TaggedError } from "better-result";
 
+import { declaredMimeMatchesMagic } from "@/api/lib/file-scan/magic";
 import { mapMatchFinding, scanner } from "@/api/lib/file-scan/pipeline";
 import type { ScanContext } from "@/api/lib/file-scan/scanner";
 import type { ScanFinding, ScanResult } from "@/api/lib/file-scan/types";
@@ -52,6 +53,21 @@ export const scanFile = async ({
           verdict: "reject" as const,
           findings,
         };
+      }
+
+      // Non-ZIP binary types: flag when the client-declared media type
+      // contradicts the file's magic bytes. Text types and any type
+      // without a known signature pass through unchecked. The scan
+      // still continues — a spoofed or polyglot file must also be
+      // inspected by the content scanner below.
+      if (!declaredMimeMatchesMagic(declaredMimeType, buffer)) {
+        findings.push({
+          rule: "mime-magic-mismatch",
+          severity: "reject",
+          message:
+            `File declared as ${declaredMimeType} ` +
+            "but its content does not match that type",
+        });
       }
 
       const ctx: ScanContext = {

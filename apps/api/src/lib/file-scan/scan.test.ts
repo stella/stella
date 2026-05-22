@@ -670,6 +670,18 @@ describe("mime spoofing", () => {
     expect(r.verdict).not.toBe("pass");
     expect(r.findings.some((f) => f.rule.includes("ole"))).toBe(true);
   });
+
+  test("clean PDF declared as image/png → reject (magic mismatch)", async () => {
+    const r = Result.unwrap(
+      await scanFile({
+        buffer: await makePdf(),
+        declaredMimeType: "image/png",
+        fileName: "fake.png",
+      }),
+    );
+    expect(r.verdict).toBe("reject");
+    expect(r.findings.some((f) => f.rule === "mime-magic-mismatch")).toBe(true);
+  });
 });
 
 // -- Integration tests --
