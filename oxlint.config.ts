@@ -227,6 +227,7 @@ export default defineConfig({
     "./.oxlint-plugins/auth-lifecycle.ts",
     "./.oxlint-plugins/stella-toast.ts",
     "./.oxlint-plugins/no-secret-in-log-sink.ts",
+    "./.oxlint-plugins/no-raw-api-url.ts",
   ],
 
   overrides: [
@@ -420,6 +421,7 @@ export default defineConfig({
             ],
           },
         ],
+        "no-raw-api-url/no-raw-api-url": "error",
         "require-router-select/require-router-select": "error",
         "security-guards/no-unsanitized-href": "error",
         "sonarjs/jsx-no-leaked-render": "error",

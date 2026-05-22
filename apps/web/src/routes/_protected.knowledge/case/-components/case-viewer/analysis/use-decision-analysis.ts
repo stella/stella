@@ -15,7 +15,7 @@ import {
   isDecisionAnalysis,
 } from "@stll/case-law/analysis";
 
-import { env } from "@/env";
+import { apiUrl } from "@/lib/api-url";
 
 type AnalysisState =
   | { status: "idle" }
@@ -100,7 +100,7 @@ export const useDecisionAnalysis = (
     queryKey: ["decision-analysis", decisionId],
     queryFn: async ({ signal }): Promise<AnalysisQueryResult> => {
       const response = await fetch(
-        `${env.VITE_API_URL}/v1/case/decisions/${decisionId}/analysis`,
+        apiUrl(`/case/decisions/${decisionId}/analysis`),
         {
           credentials: "include",
           signal,

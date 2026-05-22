@@ -48,6 +48,7 @@ import Tooltip from "@/components/tooltip";
 import { PDF_MIME_TYPE } from "@/consts";
 import { env } from "@/env";
 import { api } from "@/lib/api";
+import { apiUrl } from "@/lib/api-url";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { DOCX_MIME } from "@/lib/consts";
 import { openDocxInDesktop } from "@/lib/desktop-bridge";
@@ -732,25 +733,29 @@ const downloadEntityAsZip = async (
     title: msg.downloading,
   });
 
-  const blobResult = await Result.tryPromise(async () => {
-    const response = await fetch(
-      `/api/entities/${workspaceId}/zip/${entity.entityId}`,
-      { credentials: "include" },
-    );
-    if (!response.ok) {
-      throw new ClientOperationError({
-        action: "downloadEntityAsZip",
-        message: "Failed to download ZIP",
-      });
-    }
-    return await response.blob();
-  });
+  const responseResult = await Result.tryPromise(
+    async () =>
+      await fetch(apiUrl(`/entities/${workspaceId}/zip/${entity.entityId}`), {
+        credentials: "include",
+      }),
+  );
+
+  if (Result.isError(responseResult)) {
+    stellaToast.update(toastId, { title: msg.failed, type: "error" });
+    return;
+  }
+
+  const response = responseResult.value;
+
+  if (!response.ok) {
+    stellaToast.update(toastId, { title: msg.failed, type: "error" });
+    return;
+  }
+
+  const blobResult = await Result.tryPromise(async () => await response.blob());
 
   if (Result.isError(blobResult)) {
-    stellaToast.update(toastId, {
-      title: msg.failed,
-      type: "error",
-    });
+    stellaToast.update(toastId, { title: msg.failed, type: "error" });
     return;
   }
 

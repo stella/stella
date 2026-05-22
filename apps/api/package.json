@@ -71,6 +71,7 @@
     "better-result": "catalog:",
     "bullmq": "^5.76.8",
     "cheerio": "^1.2.0",
+    "client-zip": "^2.5.0",
     "diff": "catalog:",
     "domhandler": "^6.0.1",
     "drizzle-orm": "catalog:",

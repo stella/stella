@@ -39,8 +39,8 @@ import { cn } from "@stll/ui/lib/utils";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
-import { env } from "@/env";
 import { api } from "@/lib/api";
+import { apiUrl } from "@/lib/api-url";
 import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
 import { APIError, toAPIError } from "@/lib/errors";
 import { PDFPage } from "@/lib/pdf/pdf-page";
@@ -656,7 +656,7 @@ export const ExternalReferencePanel = ({
   const externalFilePreviewUrl =
     safeHref === undefined
       ? undefined
-      : `${env.VITE_API_URL}/v1/external-preview/file?url=${encodeURIComponent(safeHref)}`;
+      : apiUrl(`/external-preview/file?url=${encodeURIComponent(safeHref)}`);
   const shouldLoadExternalPdf =
     fetchedPreview?.format === "pdf" && externalFilePreviewUrl !== undefined;
   const externalPdfPreview = useExternalPdfBuffer({
