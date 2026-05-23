@@ -141,18 +141,23 @@ export const useChatSession = ({
     addToolOutput,
   } = useChat({ chat });
 
-  // Mirrors `isGenerating` (computed below) so the stable
-  // `sendMessage` callback can branch on the live value without
-  // being rebuilt on every status change.
+  // Mirror `isGenerating` (computed below) and the live queue into
+  // refs so the stable `sendMessage` callback can branch on the
+  // latest committed values. The refs are assigned in effects (not
+  // during render) so a concurrent re-render that bails out can't
+  // strand them ahead of committed state.
   const isGeneratingRef = useRef(false);
+  const queueRef = useRef<QueuedChatEntry[]>([]);
   const [queuedMessages, setQueuedMessages] = useState<QueuedChatEntry[]>([]);
 
   const sendMessage = useCallback(
     async (message: ChatSendMessageInput) => {
-      // A response is still streaming — hold the message in the
-      // queue instead of firing an overlapping request. The drain
-      // effect below dispatches it once the turn finishes.
-      if (isGeneratingRef.current) {
+      // Enqueue while a turn is streaming — and also when the queue
+      // already has items waiting (e.g. after an errored turn that
+      // gated the queue). Sending directly in that case would jump
+      // the new message ahead of the buffered ones and reorder the
+      // transcript.
+      if (isGeneratingRef.current || queueRef.current.length > 0) {
         setQueuedMessages((prev) => [
           ...prev,
           { id: uuidv7(), message, ...describeQueuedMessage(message) },
@@ -379,7 +384,12 @@ export const useChatSession = ({
   );
   const isGenerating =
     status === "submitted" || status === "streaming" || hasRunningToolCall;
-  isGeneratingRef.current = isGenerating;
+  useEffect(() => {
+    isGeneratingRef.current = isGenerating;
+  }, [isGenerating]);
+  useEffect(() => {
+    queueRef.current = queuedMessages;
+  }, [queuedMessages]);
 
   // Drain the queue one message per turn. When the response
   // finishes (`isGenerating` falls back to false) the oldest queued
