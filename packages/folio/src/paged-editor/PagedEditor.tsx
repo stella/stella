@@ -4520,8 +4520,9 @@ export function PagedEditor(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-layout when non-document layout inputs change (e.g., after HF editor save
-  // or parent-driven page setup/theme updates).
+  // Re-layout when non-document layout inputs change (e.g., after HF editor save,
+  // parent-driven page setup/theme updates, or comment anchor mapping being wired
+  // when the sidebar opens after hidden edits).
   // runLayoutPipeline includes these values in its deps, but it
   // only runs when explicitly called — this effect triggers it.
   const layoutInputEpochRef = useRef(0);
@@ -4547,6 +4548,8 @@ export function PagedEditor(
     pageGap,
     sectionProperties,
     _theme,
+    onAnchorPositionsChange,
+    anchorPositionMode,
   ]);
 
   // Re-compute selection overlay when the container resizes.
