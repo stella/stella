@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -115,7 +116,10 @@ export const AIConfigCard = () => {
         roleModels,
       });
       if (!overrideModels) {
-        throw new Error(t("aiConfig.selectModelForEachRole"));
+        // The Save button is disabled when `canSave` is false, which checks
+        // the same `serializeOverrideModels(...) !== null` invariant. The
+        // inline message at the field below renders the translated guidance.
+        panic("ai-config save fired with no valid override models");
       }
 
       const response = await api["organization-settings"]["ai-config"].post({
