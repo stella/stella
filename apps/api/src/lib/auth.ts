@@ -42,6 +42,7 @@ import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { enrichRequestContext } from "@/api/lib/observability/request-context";
 import { parseUserAgent } from "@/api/lib/parse-user-agent";
+import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import {
   getMcpResourceUrl,
   MCP_ALL_RESOURCE_SCOPES,
@@ -218,47 +219,9 @@ const createAuth = () => {
       enabled: true,
       window: AUTH_RATE_LIMITS.global.window,
       max: AUTH_RATE_LIMITS.global.max,
-      customStorage: (() => {
-        type Entry = {
-          value: { key: string; count: number; lastRequest: number };
-          expiresAt: number;
-        };
-        const store = new Map<string, Entry>();
-        const ttlMs = AUTH_RATE_LIMIT_MAX_WINDOW * 1000;
-        const cleanup = setInterval(() => {
-          const now = Date.now();
-          for (const [k, e] of store) {
-            if (e.expiresAt <= now) {
-              store.delete(k);
-            }
-          }
-        }, 60_000);
-        cleanup.unref();
-        return {
-          // eslint-disable-next-line require-await -- interface requires Promise
-          async get(key: string) {
-            const entry = store.get(key);
-            if (!entry || entry.expiresAt <= Date.now()) {
-              return null;
-            }
-            return entry.value;
-          },
-          // eslint-disable-next-line require-await -- interface requires Promise
-          async set(
-            key: string,
-            value: {
-              key: string;
-              count: number;
-              lastRequest: number;
-            },
-          ) {
-            store.set(key, {
-              value,
-              expiresAt: Date.now() + ttlMs,
-            });
-          },
-        };
-      })(),
+      customStorage: createAuthRateLimitStorage(
+        AUTH_RATE_LIMIT_MAX_WINDOW * 1000,
+      ),
       customRules: {
         "/sign-in/email-otp": AUTH_RATE_LIMITS.signIn,
         "/sign-up/email": AUTH_RATE_LIMITS.signUp,
