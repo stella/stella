@@ -102,6 +102,73 @@ const getIdentifierName = (node: unknown): string | null => {
   return unwrapped.name;
 };
 
+const getBindingIdentifierNames = (node: unknown): string[] => {
+  const unwrapped = unwrapExpression(node);
+  const nodeType = getNodeType(unwrapped);
+  if (nodeType === "Identifier") {
+    const name = getIdentifierName(unwrapped);
+    return name === null ? [] : [name];
+  }
+  if (
+    nodeType === "RestElement" &&
+    typeof unwrapped === "object" &&
+    unwrapped !== null &&
+    "argument" in unwrapped
+  ) {
+    return getBindingIdentifierNames(unwrapped.argument);
+  }
+  if (
+    nodeType === "AssignmentPattern" &&
+    typeof unwrapped === "object" &&
+    unwrapped !== null &&
+    "left" in unwrapped
+  ) {
+    return getBindingIdentifierNames(unwrapped.left);
+  }
+  if (
+    nodeType === "ArrayPattern" &&
+    typeof unwrapped === "object" &&
+    unwrapped !== null &&
+    "elements" in unwrapped &&
+    Array.isArray(unwrapped.elements)
+  ) {
+    return unwrapped.elements.flatMap((element: unknown) =>
+      getBindingIdentifierNames(element),
+    );
+  }
+  if (
+    nodeType !== "ObjectPattern" ||
+    typeof unwrapped !== "object" ||
+    unwrapped === null ||
+    !("properties" in unwrapped) ||
+    !Array.isArray(unwrapped.properties)
+  ) {
+    return [];
+  }
+  const names: string[] = [];
+  for (const property of unwrapped.properties) {
+    const propertyType = getNodeType(property);
+    if (
+      propertyType === "RestElement" &&
+      typeof property === "object" &&
+      property !== null &&
+      "argument" in property
+    ) {
+      names.push(...getBindingIdentifierNames(property.argument));
+      continue;
+    }
+    if (
+      propertyType === "Property" &&
+      typeof property === "object" &&
+      property !== null &&
+      "value" in property
+    ) {
+      names.push(...getBindingIdentifierNames(property.value));
+    }
+  }
+  return names;
+};
+
 const getNodeInit = (node: unknown): unknown => {
   if (typeof node !== "object" || node === null || !("init" in node)) {
     return null;
@@ -121,6 +188,25 @@ const getNodeLeft = (node: unknown): unknown => {
     return null;
   }
   return node.left;
+};
+
+const getNodeRight = (node: unknown): unknown => {
+  if (typeof node !== "object" || node === null || !("right" in node)) {
+    return null;
+  }
+  return node.right;
+};
+
+const getNodeParams = (node: unknown): unknown[] => {
+  if (
+    typeof node !== "object" ||
+    node === null ||
+    !("params" in node) ||
+    !Array.isArray(node.params)
+  ) {
+    return [];
+  }
+  return node.params.map((value: unknown) => value);
 };
 
 const isFetchCallee = (callee: unknown): boolean => {
@@ -155,23 +241,26 @@ const isFetchCallee = (callee: unknown): boolean => {
 
 type RequestConstructorSignalState = "yes" | "no" | "opaque";
 
+const isRequestConstructorExpression = (node: unknown): boolean => {
+  const unwrapped = unwrapExpression(node);
+  return (
+    getNodeType(unwrapped) === "NewExpression" &&
+    typeof unwrapped === "object" &&
+    unwrapped !== null &&
+    "callee" in unwrapped &&
+    isIdentifier(unwrapped.callee, "Request")
+  );
+};
+
 // `fetch(new Request(url, { signal }))` carries the signal on the
 // Request object. Inspect object-literal init args when we can; keep
 // non-literal init args opaque because a variable may carry `signal`.
-const requestConstructorHasSignal = (
+const requestConstructorSignalState = (
   node: unknown,
-): RequestConstructorSignalState => {
+): RequestConstructorSignalState | null => {
   const unwrapped = unwrapExpression(node);
-  if (getNodeType(unwrapped) !== "NewExpression") {
-    return "no";
-  }
-  if (
-    typeof unwrapped !== "object" ||
-    unwrapped === null ||
-    !("callee" in unwrapped) ||
-    !isIdentifier(unwrapped.callee, "Request")
-  ) {
-    return "no";
+  if (!isRequestConstructorExpression(unwrapped)) {
+    return null;
   }
   const requestArguments = getNodeArguments(unwrapped);
   if (requestArguments === null) {
@@ -244,44 +333,175 @@ export default {
         },
       },
       create(context) {
-        const requestSignals = new Map<string, RequestConstructorSignalState>();
+        type RequestSignalScope = Map<string, RequestConstructorSignalState>;
+
+        const requestSignalScopes: RequestSignalScope[] = [];
+        const pushRequestSignalScope = () => {
+          requestSignalScopes.push(new Map());
+        };
+        const popRequestSignalScope = () => {
+          requestSignalScopes.pop();
+          if (requestSignalScopes.length === 0) {
+            pushRequestSignalScope();
+          }
+        };
+        const currentRequestSignalScope = (): RequestSignalScope => {
+          const scope = requestSignalScopes.at(-1);
+          if (scope) {
+            return scope;
+          }
+          pushRequestSignalScope();
+          return currentRequestSignalScope();
+        };
+        const getRequestSignalState = (
+          name: string,
+        ): RequestConstructorSignalState => {
+          for (
+            let index = requestSignalScopes.length - 1;
+            index >= 0;
+            index -= 1
+          ) {
+            const scope = requestSignalScopes.at(index);
+            const state = scope?.get(name);
+            if (state !== undefined) {
+              return state;
+            }
+          }
+          return "no";
+        };
+        const setRequestSignalState = (
+          name: string,
+          state: RequestConstructorSignalState,
+        ) => {
+          currentRequestSignalScope().set(name, state);
+        };
+        const assignRequestSignalState = (
+          name: string,
+          state: RequestConstructorSignalState,
+        ) => {
+          for (
+            let index = requestSignalScopes.length - 1;
+            index >= 0;
+            index -= 1
+          ) {
+            const scope = requestSignalScopes.at(index);
+            if (scope?.has(name)) {
+              scope.set(name, state);
+              return;
+            }
+          }
+          setRequestSignalState(name, state);
+        };
+        const declareFunctionParameters = (node: unknown) => {
+          for (const param of getNodeParams(node)) {
+            for (const identifierName of getBindingIdentifierNames(param)) {
+              setRequestSignalState(identifierName, "no");
+            }
+          }
+        };
         const getFetchInputSignalState = (
           input: unknown,
         ): RequestConstructorSignalState => {
-          const constructorSignal = requestConstructorHasSignal(input);
-          if (constructorSignal !== "no") {
+          const constructorSignal = requestConstructorSignalState(input);
+          if (constructorSignal !== null) {
             return constructorSignal;
           }
           const identifierName = getIdentifierName(input);
           if (identifierName === null) {
             return "no";
           }
-          return requestSignals.get(identifierName) ?? "no";
+          return getRequestSignalState(identifierName);
         };
 
         return {
+          Program() {
+            requestSignalScopes.length = 0;
+            pushRequestSignalScope();
+          },
+          "Program:exit"() {
+            requestSignalScopes.length = 0;
+          },
+          BlockStatement() {
+            pushRequestSignalScope();
+          },
+          "BlockStatement:exit"() {
+            popRequestSignalScope();
+          },
+          FunctionDeclaration(node) {
+            pushRequestSignalScope();
+            declareFunctionParameters(node);
+          },
+          "FunctionDeclaration:exit"() {
+            popRequestSignalScope();
+          },
+          FunctionExpression(node) {
+            pushRequestSignalScope();
+            declareFunctionParameters(node);
+          },
+          "FunctionExpression:exit"() {
+            popRequestSignalScope();
+          },
+          ArrowFunctionExpression(node) {
+            pushRequestSignalScope();
+            declareFunctionParameters(node);
+          },
+          "ArrowFunctionExpression:exit"() {
+            popRequestSignalScope();
+          },
+          CatchClause(node) {
+            pushRequestSignalScope();
+            const param =
+              typeof node === "object" && node !== null && "param" in node
+                ? node.param
+                : null;
+            for (const identifierName of getBindingIdentifierNames(param)) {
+              setRequestSignalState(identifierName, "no");
+            }
+          },
+          "CatchClause:exit"() {
+            popRequestSignalScope();
+          },
           VariableDeclarator(node) {
             const id = getNodeId(node);
             const identifierName = getIdentifierName(id);
-            if (identifierName === null) {
+            const bindingNames = getBindingIdentifierNames(id);
+            if (bindingNames.length === 0) {
               return;
             }
-            const initSignal = requestConstructorHasSignal(getNodeInit(node));
-            if (initSignal !== "no") {
-              requestSignals.set(identifierName, initSignal);
+            const initSignal = requestConstructorSignalState(getNodeInit(node));
+            if (identifierName !== null && initSignal !== null) {
+              setRequestSignalState(identifierName, initSignal);
               return;
             }
-            if (isRequestTypeAnnotation(id)) {
-              requestSignals.set(identifierName, "opaque");
+            if (identifierName !== null && isRequestTypeAnnotation(id)) {
+              setRequestSignalState(identifierName, "opaque");
               return;
             }
-            requestSignals.delete(identifierName);
+            for (const bindingName of bindingNames) {
+              setRequestSignalState(bindingName, "no");
+            }
           },
           AssignmentExpression(node) {
-            const identifierName = getIdentifierName(getNodeLeft(node));
-            if (identifierName !== null) {
-              requestSignals.delete(identifierName);
+            const left = getNodeLeft(node);
+            const identifierName = getIdentifierName(left);
+            if (identifierName === null) {
+              for (const bindingName of getBindingIdentifierNames(left)) {
+                assignRequestSignalState(bindingName, "no");
+              }
+              return;
             }
+            const rightSignal = requestConstructorSignalState(
+              getNodeRight(node),
+            );
+            if (rightSignal !== null) {
+              assignRequestSignalState(identifierName, rightSignal);
+              return;
+            }
+            const nextState =
+              getRequestSignalState(identifierName) === "opaque"
+                ? "opaque"
+                : "no";
+            assignRequestSignalState(identifierName, nextState);
           },
           CallExpression(node) {
             if (!isFetchCallee(node.callee)) {
