@@ -80,7 +80,7 @@ export const fileOptions = (props: FileOptionsProps) =>
         throw toAPIError(response.error);
       }
 
-      const file = await fetch(response.data.presignedUrl);
+      const file = await fetch(response.data.presignedUrl, { signal });
 
       if (!file.ok) {
         throw new APIError({

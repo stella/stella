@@ -228,6 +228,7 @@ export default defineConfig({
     "./.oxlint-plugins/stella-toast.ts",
     "./.oxlint-plugins/no-secret-in-log-sink.ts",
     "./.oxlint-plugins/no-raw-api-url.ts",
+    "./.oxlint-plugins/require-fetch-timeout.ts",
   ],
 
   overrides: [
@@ -539,7 +540,21 @@ export default defineConfig({
         "sonarjs/no-identical-expressions": "error",
         "sonarjs/no-ignored-return": "error",
         "sonarjs/no-use-of-empty-return-value": "error",
+        "require-fetch-timeout/require-fetch-timeout": "error",
       },
+    },
+    {
+      // fetch() without a timeout is allowed in throwaway / non-runtime
+      // surfaces: sandbox playground, load tests, build configs, unit
+      // tests. Product runtime code (apps/api, apps/web, apps/collab,
+      // apps/desktop, packages/*) keeps the guard on.
+      files: [
+        "apps/playground/**/*.{ts,tsx}",
+        "apps/api/src/tests/**/*.ts",
+        "**/*.test.{ts,tsx}",
+        "**/*.config.{ts,tsx}",
+      ],
+      rules: { "require-fetch-timeout/require-fetch-timeout": "off" },
     },
     {
       files: ["apps/api/src/**/*.{ts,tsx}", "apps/api/scripts/**/*.ts"],

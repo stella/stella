@@ -119,7 +119,10 @@ function LoginOrSignup() {
       if (import.meta.env.DEV) {
         const url = new URL("/dev-public/last-otp", env.VITE_API_URL);
         url.searchParams.set("email", parsedValue.email);
-        const response = await fetch(url, { credentials: "include" });
+        const response = await fetch(url, {
+          credentials: "include",
+          signal: AbortSignal.timeout(10_000),
+        });
         if (response.ok) {
           const parsed = v.safeParse(
             v.object({ otp: v.string() }),

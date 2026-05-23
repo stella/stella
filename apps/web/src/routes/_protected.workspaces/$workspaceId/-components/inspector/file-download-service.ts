@@ -30,7 +30,9 @@ export const downloadTabOriginalFile = async ({
     return;
   }
 
-  const fetched = await fetch(response.data.presignedUrl);
+  const fetched = await fetch(response.data.presignedUrl, {
+    signal: AbortSignal.timeout(60_000),
+  });
   if (!fetched.ok) {
     onError(`Download failed (HTTP ${fetched.status}).`);
     return;
