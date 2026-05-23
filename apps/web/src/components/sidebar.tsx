@@ -34,9 +34,6 @@ const SIDEBAR_WIDTH = "16rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";
 const SIDEBAR_WIDTH_ICON = "3rem";
 
-/** React.CSSProperties extended with CSS custom properties. */
-type CSSWithVars = React.CSSProperties & Record<`--${string}`, string>;
-
 type SidebarContextProps = {
   state: "expanded" | "collapsed";
   open: boolean;
@@ -139,15 +136,11 @@ function SidebarProvider({
           className,
         )}
         data-slot="sidebar-wrapper"
-        style={
-          // SAFETY: CSS custom properties are valid but
-          // not in React's CSSProperties type defs.
-          {
-            "--sidebar-width": SIDEBAR_WIDTH,
-            "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
-            ...style,
-          } as CSSWithVars
-        }
+        style={{
+          "--sidebar-width": SIDEBAR_WIDTH,
+          "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
+          ...style,
+        }}
         {...props}
       >
         {children}
@@ -195,12 +188,9 @@ function Sidebar({
           data-sidebar="sidebar"
           data-slot="sidebar"
           side={side}
-          style={
-            // SAFETY: CSS custom properties need CSSWithVars.
-            {
-              "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
-            } as CSSWithVars
-          }
+          style={{
+            "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
+          }}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>{t("navigation.sidebar")}</SheetTitle>
@@ -646,12 +636,9 @@ function SidebarMenuSkeleton({
       <Skeleton
         className="h-4 max-w-(--skeleton-width) flex-1"
         data-sidebar="menu-skeleton-text"
-        style={
-          // SAFETY: CSS custom properties need CSSWithVars.
-          {
-            "--skeleton-width": width,
-          } as CSSWithVars
-        }
+        style={{
+          "--skeleton-width": width,
+        }}
       />
     </div>
   );

@@ -26,7 +26,7 @@ export function createExtension<
   def: ExtensionDefinition<TOptions>,
 ): (options?: Partial<TOptions>) => Extension {
   return (options?: Partial<TOptions>): Extension => {
-    const mergedOptions = { ...def.defaultOptions, ...options } as TOptions;
+    const mergedOptions: TOptions = { ...def.defaultOptions, ...options };
 
     return {
       type: "extension",
@@ -51,7 +51,7 @@ export function createNodeExtension<
   def: NodeExtensionDefinition<TOptions>,
 ): (options?: Partial<TOptions>) => NodeExtension {
   return (options?: Partial<TOptions>): NodeExtension => {
-    const mergedOptions = { ...def.defaultOptions, ...options } as TOptions;
+    const mergedOptions: TOptions = { ...def.defaultOptions, ...options };
     const nodeSpec =
       typeof def.nodeSpec === "function"
         ? def.nodeSpec(mergedOptions)
@@ -82,7 +82,7 @@ export function createMarkExtension<
   def: MarkExtensionDefinition<TOptions>,
 ): (options?: Partial<TOptions>) => MarkExtension {
   return (options?: Partial<TOptions>): MarkExtension => {
-    const mergedOptions = { ...def.defaultOptions, ...options } as TOptions;
+    const mergedOptions: TOptions = { ...def.defaultOptions, ...options };
     const markSpec =
       typeof def.markSpec === "function"
         ? def.markSpec(mergedOptions)

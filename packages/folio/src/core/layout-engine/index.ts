@@ -169,7 +169,7 @@ function applyContextualSpacing(blocks: FlowBlock[]): void {
 export function layoutDocument(
   blocks: FlowBlock[],
   measures: Measure[],
-  options: LayoutOptions = {} as LayoutOptions,
+  options: LayoutOptions,
 ): Layout {
   // Validate input
   if (blocks.length !== measures.length) {

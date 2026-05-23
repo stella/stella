@@ -570,13 +570,17 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
 
   const handleHideColumn = useCallback(
     (propertyId: string) => {
+      // Generic helper preserves the union discriminant. A bare spread of
+      // `view.layout` plus an object literal would collapse the union.
+      const mergeLayout = <L extends ViewLayout>(
+        layout: L,
+        changes: Partial<L>,
+      ): L => ({ ...layout, ...changes });
       updateView.mutate({
         viewId: view.id,
-        // SAFETY: hiddenProperties is part of every layout discriminant.
-        layout: {
-          ...view.layout,
+        layout: mergeLayout(view.layout, {
           hiddenProperties: [...new Set([...hiddenProperties, propertyId])],
-        } as ViewLayout,
+        }),
       });
     },
     [hiddenProperties, updateView, view.id, view.layout],
