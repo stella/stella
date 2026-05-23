@@ -19,6 +19,8 @@
 //   fetch(url, { signal: req.signal, method: "POST" })
 //   fetch(url, opts)                 // opaque variable — can't inspect
 //   fetch(url, { ...rest })          // spread may carry signal
+//   fetch(request)                   // Request-typed variable may carry signal
+//   fetch(request, { method: "POST" }) // Request's signal remains in effect
 //
 // Escape hatch: `// eslint-disable-next-line require-fetch-timeout/require-fetch-timeout`
 // with a `// SAFETY:` comment explaining why the call cannot hang
@@ -45,17 +47,38 @@ const getNodeArguments = (node: unknown): unknown[] | null => {
   return node.arguments.map((value: unknown) => value);
 };
 
+const unwrapExpression = (node: unknown): unknown => {
+  let current = node;
+  while (
+    getNodeType(current) === "TSAsExpression" ||
+    getNodeType(current) === "TSSatisfiesExpression" ||
+    getNodeType(current) === "TSNonNullExpression" ||
+    getNodeType(current) === "TypeCastExpression"
+  ) {
+    if (
+      typeof current !== "object" ||
+      current === null ||
+      !("expression" in current)
+    ) {
+      return current;
+    }
+    current = current.expression;
+  }
+  return current;
+};
+
 const getObjectExpressionProperties = (node: unknown): unknown[] | null => {
+  const unwrapped = unwrapExpression(node);
   if (
-    getNodeType(node) !== "ObjectExpression" ||
-    typeof node !== "object" ||
-    node === null ||
-    !("properties" in node) ||
-    !Array.isArray(node.properties)
+    getNodeType(unwrapped) !== "ObjectExpression" ||
+    typeof unwrapped !== "object" ||
+    unwrapped === null ||
+    !("properties" in unwrapped) ||
+    !Array.isArray(unwrapped.properties)
   ) {
     return null;
   }
-  return node.properties.map((value: unknown) => value);
+  return unwrapped.properties.map((value: unknown) => value);
 };
 
 const getPropertyKey = (node: unknown): unknown => {
@@ -63,6 +86,41 @@ const getPropertyKey = (node: unknown): unknown => {
     return null;
   }
   return node.key;
+};
+
+const getIdentifierName = (node: unknown): string | null => {
+  const unwrapped = unwrapExpression(node);
+  if (
+    typeof unwrapped !== "object" ||
+    unwrapped === null ||
+    getNodeType(unwrapped) !== "Identifier" ||
+    !("name" in unwrapped) ||
+    typeof unwrapped.name !== "string"
+  ) {
+    return null;
+  }
+  return unwrapped.name;
+};
+
+const getNodeInit = (node: unknown): unknown => {
+  if (typeof node !== "object" || node === null || !("init" in node)) {
+    return null;
+  }
+  return node.init;
+};
+
+const getNodeId = (node: unknown): unknown => {
+  if (typeof node !== "object" || node === null || !("id" in node)) {
+    return null;
+  }
+  return node.id;
+};
+
+const getNodeLeft = (node: unknown): unknown => {
+  if (typeof node !== "object" || node === null || !("left" in node)) {
+    return null;
+  }
+  return node.left;
 };
 
 const isFetchCallee = (callee: unknown): boolean => {
@@ -103,18 +161,19 @@ type RequestConstructorSignalState = "yes" | "no" | "opaque";
 const requestConstructorHasSignal = (
   node: unknown,
 ): RequestConstructorSignalState => {
-  if (getNodeType(node) !== "NewExpression") {
+  const unwrapped = unwrapExpression(node);
+  if (getNodeType(unwrapped) !== "NewExpression") {
     return "no";
   }
   if (
-    typeof node !== "object" ||
-    node === null ||
-    !("callee" in node) ||
-    !isIdentifier(node.callee, "Request")
+    typeof unwrapped !== "object" ||
+    unwrapped === null ||
+    !("callee" in unwrapped) ||
+    !isIdentifier(unwrapped.callee, "Request")
   ) {
     return "no";
   }
-  const requestArguments = getNodeArguments(node);
+  const requestArguments = getNodeArguments(unwrapped);
   if (requestArguments === null) {
     return "no";
   }
@@ -126,6 +185,29 @@ const requestConstructorHasSignal = (
     return "opaque";
   }
   return optionsObjectHasSignal(init);
+};
+
+const isRequestTypeAnnotation = (node: unknown): boolean => {
+  if (
+    typeof node !== "object" ||
+    node === null ||
+    !("typeAnnotation" in node) ||
+    typeof node.typeAnnotation !== "object" ||
+    node.typeAnnotation === null ||
+    !("typeAnnotation" in node.typeAnnotation)
+  ) {
+    return false;
+  }
+  const annotation = node.typeAnnotation.typeAnnotation;
+  if (
+    typeof annotation !== "object" ||
+    annotation === null ||
+    getNodeType(annotation) !== "TSTypeReference" ||
+    !("typeName" in annotation)
+  ) {
+    return false;
+  }
+  return isIdentifier(annotation.typeName, "Request");
 };
 
 const optionsObjectHasSignal = (options: unknown): "yes" | "no" | "opaque" => {
@@ -162,7 +244,45 @@ export default {
         },
       },
       create(context) {
+        const requestSignals = new Map<string, RequestConstructorSignalState>();
+        const getFetchInputSignalState = (
+          input: unknown,
+        ): RequestConstructorSignalState => {
+          const constructorSignal = requestConstructorHasSignal(input);
+          if (constructorSignal !== "no") {
+            return constructorSignal;
+          }
+          const identifierName = getIdentifierName(input);
+          if (identifierName === null) {
+            return "no";
+          }
+          return requestSignals.get(identifierName) ?? "no";
+        };
+
         return {
+          VariableDeclarator(node) {
+            const id = getNodeId(node);
+            const identifierName = getIdentifierName(id);
+            if (identifierName === null) {
+              return;
+            }
+            const initSignal = requestConstructorHasSignal(getNodeInit(node));
+            if (initSignal !== "no") {
+              requestSignals.set(identifierName, initSignal);
+              return;
+            }
+            if (isRequestTypeAnnotation(id)) {
+              requestSignals.set(identifierName, "opaque");
+              return;
+            }
+            requestSignals.delete(identifierName);
+          },
+          AssignmentExpression(node) {
+            const identifierName = getIdentifierName(getNodeLeft(node));
+            if (identifierName !== null) {
+              requestSignals.delete(identifierName);
+            }
+          },
           CallExpression(node) {
             if (!isFetchCallee(node.callee)) {
               return;
@@ -171,18 +291,22 @@ export default {
             const [firstArg, options] = node.arguments;
 
             if (options === undefined) {
-              if (requestConstructorHasSignal(firstArg) !== "no") {
+              if (getFetchInputSignalState(firstArg) !== "no") {
                 return;
               }
               context.report({ node, messageId: "missingSignal" });
               return;
             }
 
-            if (getNodeType(options) !== "ObjectExpression") {
+            const unwrappedOptions = unwrapExpression(options);
+            if (getNodeType(unwrappedOptions) !== "ObjectExpression") {
               return;
             }
 
-            if (optionsObjectHasSignal(options) === "no") {
+            if (
+              optionsObjectHasSignal(unwrappedOptions) === "no" &&
+              getFetchInputSignalState(firstArg) === "no"
+            ) {
               context.report({ node, messageId: "missingSignal" });
             }
           },
