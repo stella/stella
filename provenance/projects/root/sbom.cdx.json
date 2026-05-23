@@ -948,7 +948,7 @@
             "location": "apps/web/src/components/shortcut-hints-overlay.tsx#1"
           },
           {
-            "location": "apps/web/src/components/sidebar.tsx#7"
+            "location": "apps/web/src/components/sidebar.tsx#1"
           },
           {
             "location": "apps/web/src/components/stella-mark.tsx#1"
@@ -957,10 +957,10 @@
             "location": "apps/web/src/components/stella-wordmark.tsx#1"
           },
           {
-            "location": "apps/web/src/components/theme-provider.tsx#8"
+            "location": "apps/web/src/components/theme-provider.tsx#1"
           },
           {
-            "location": "apps/web/src/components/theme-provider.tsx#9"
+            "location": "apps/web/src/components/theme-provider.tsx#2"
           },
           {
             "location": "apps/web/src/components/tooltip.tsx#1"
@@ -1575,10 +1575,10 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#21"
+            "location": "packages/folio/src/components/DocxEditor.tsx#20"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#22"
+            "location": "packages/folio/src/components/DocxEditor.tsx#21"
           },
           {
             "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
@@ -1596,10 +1596,10 @@
             "location": "packages/folio/src/components/FormattingBar.tsx#12"
           },
           {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#18"
+            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#17"
           },
           {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#19"
+            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#18"
           },
           {
             "location": "packages/folio/src/components/TextContextMenu.tsx#8"
@@ -1650,10 +1650,10 @@
             "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#18"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#26"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#19"
           },
           {
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#12"
@@ -1662,10 +1662,10 @@
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#13"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#26"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#24"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#27"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
           },
           {
             "location": "packages/folio/src/paged-editor/SelectionOverlay.tsx#12"
@@ -1800,7 +1800,7 @@
             "location": "apps/api/src/env-base.ts#11"
           },
           {
-            "location": "apps/api/src/env.ts#2"
+            "location": "apps/api/src/env.ts#3"
           },
           {
             "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#14"
@@ -2424,7 +2424,7 @@
             "location": "apps/web/src/components/shortcut-hints-overlay.tsx#1"
           },
           {
-            "location": "apps/web/src/components/sidebar.tsx#7"
+            "location": "apps/web/src/components/sidebar.tsx#1"
           },
           {
             "location": "apps/web/src/components/stella-mark.tsx#1"
@@ -2433,10 +2433,10 @@
             "location": "apps/web/src/components/stella-wordmark.tsx#1"
           },
           {
-            "location": "apps/web/src/components/theme-provider.tsx#8"
+            "location": "apps/web/src/components/theme-provider.tsx#1"
           },
           {
-            "location": "apps/web/src/components/theme-provider.tsx#9"
+            "location": "apps/web/src/components/theme-provider.tsx#2"
           },
           {
             "location": "apps/web/src/components/tooltip.tsx#1"
@@ -3051,10 +3051,10 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#21"
+            "location": "packages/folio/src/components/DocxEditor.tsx#20"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#22"
+            "location": "packages/folio/src/components/DocxEditor.tsx#21"
           },
           {
             "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
@@ -3072,10 +3072,10 @@
             "location": "packages/folio/src/components/FormattingBar.tsx#12"
           },
           {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#18"
+            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#17"
           },
           {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#19"
+            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#18"
           },
           {
             "location": "packages/folio/src/components/TextContextMenu.tsx#8"
@@ -3126,10 +3126,10 @@
             "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#18"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#26"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#19"
           },
           {
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#12"
@@ -3138,10 +3138,10 @@
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#13"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#26"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#24"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#27"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
           },
           {
             "location": "packages/folio/src/paged-editor/SelectionOverlay.tsx#12"
@@ -4722,7 +4722,7 @@
             "location": "apps/web/src/components/shortcut-hints-overlay.tsx#1"
           },
           {
-            "location": "apps/web/src/components/sidebar.tsx#7"
+            "location": "apps/web/src/components/sidebar.tsx#1"
           },
           {
             "location": "apps/web/src/components/stella-mark.tsx#1"
@@ -4731,10 +4731,10 @@
             "location": "apps/web/src/components/stella-wordmark.tsx#1"
           },
           {
-            "location": "apps/web/src/components/theme-provider.tsx#8"
+            "location": "apps/web/src/components/theme-provider.tsx#1"
           },
           {
-            "location": "apps/web/src/components/theme-provider.tsx#9"
+            "location": "apps/web/src/components/theme-provider.tsx#2"
           },
           {
             "location": "apps/web/src/components/tooltip.tsx#1"
@@ -5349,10 +5349,10 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#21"
+            "location": "packages/folio/src/components/DocxEditor.tsx#20"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#22"
+            "location": "packages/folio/src/components/DocxEditor.tsx#21"
           },
           {
             "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
@@ -5370,10 +5370,10 @@
             "location": "packages/folio/src/components/FormattingBar.tsx#12"
           },
           {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#18"
+            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#17"
           },
           {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#19"
+            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#18"
           },
           {
             "location": "packages/folio/src/components/TextContextMenu.tsx#8"
@@ -5424,10 +5424,10 @@
             "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#18"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#26"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#19"
           },
           {
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#12"
@@ -5436,10 +5436,10 @@
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#13"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#26"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#24"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#27"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
           },
           {
             "location": "packages/folio/src/paged-editor/SelectionOverlay.tsx#12"
@@ -6775,7 +6775,7 @@
             "location": "apps/web/src/components/shortcut-hints-overlay.tsx#1"
           },
           {
-            "location": "apps/web/src/components/sidebar.tsx#7"
+            "location": "apps/web/src/components/sidebar.tsx#1"
           },
           {
             "location": "apps/web/src/components/stella-mark.tsx#1"
@@ -6784,10 +6784,10 @@
             "location": "apps/web/src/components/stella-wordmark.tsx#1"
           },
           {
-            "location": "apps/web/src/components/theme-provider.tsx#8"
+            "location": "apps/web/src/components/theme-provider.tsx#1"
           },
           {
-            "location": "apps/web/src/components/theme-provider.tsx#9"
+            "location": "apps/web/src/components/theme-provider.tsx#2"
           },
           {
             "location": "apps/web/src/components/tooltip.tsx#1"
@@ -7402,10 +7402,10 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#21"
+            "location": "packages/folio/src/components/DocxEditor.tsx#20"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#22"
+            "location": "packages/folio/src/components/DocxEditor.tsx#21"
           },
           {
             "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
@@ -7423,10 +7423,10 @@
             "location": "packages/folio/src/components/FormattingBar.tsx#12"
           },
           {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#18"
+            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#17"
           },
           {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#19"
+            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#18"
           },
           {
             "location": "packages/folio/src/components/TextContextMenu.tsx#8"
@@ -7477,10 +7477,10 @@
             "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#18"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#26"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#19"
           },
           {
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#12"
@@ -7489,10 +7489,10 @@
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#13"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#26"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#24"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#27"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
           },
           {
             "location": "packages/folio/src/paged-editor/SelectionOverlay.tsx#12"
@@ -7624,7 +7624,7 @@
             "location": "apps/web/src/routes/onboarding/-components/prices-panel.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/onboarding/-components/prices-panel.tsx#4"
+            "location": "apps/web/src/routes/onboarding/-components/prices-panel.tsx#9"
           }
         ]
       },
@@ -8280,7 +8280,7 @@
             "location": "apps/web/src/components/chat/source-chips.tsx#13"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#23"
+            "location": "apps/web/src/components/search-dialog.tsx#27"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#32"
@@ -9357,10 +9357,10 @@
             "location": "apps/web/src/components/dev-sidebar-group.tsx#27"
           },
           {
-            "location": "apps/web/src/components/require-ai-key.tsx#25"
+            "location": "apps/web/src/components/require-ai-key.tsx#26"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#36"
+            "location": "apps/web/src/components/search-dialog.tsx#40"
           },
           {
             "location": "apps/web/src/router.tsx#10"
@@ -9531,7 +9531,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#35"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#44"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#45"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#46"
@@ -9705,19 +9705,19 @@
             "location": "apps/web/src/components/matter-number-hint.tsx#6"
           },
           {
-            "location": "apps/web/src/components/require-ai-key.tsx#15"
+            "location": "apps/web/src/components/require-ai-key.tsx#16"
           },
           {
             "location": "apps/web/src/components/route-components.tsx#15"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#24"
+            "location": "apps/web/src/components/search-dialog.tsx#28"
           },
           {
             "location": "apps/web/src/components/shortcut-hints-overlay.tsx#9"
           },
           {
-            "location": "apps/web/src/components/sidebar.tsx#16"
+            "location": "apps/web/src/components/sidebar.tsx#10"
           },
           {
             "location": "apps/web/src/lib/pdf/pdf-viewport.tsx#16"
@@ -10071,7 +10071,7 @@
             "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#7"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#38"
+            "location": "packages/folio/src/components/DocxEditor.tsx#37"
           },
           {
             "location": "packages/folio/src/components/ErrorBoundary.tsx#28"
@@ -10107,7 +10107,7 @@
             "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#25"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#25"
+            "location": "apps/web/src/components/search-dialog.tsx#29"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx#8"
@@ -10278,7 +10278,7 @@
             "location": "apps/playground/src/App.tsx#12"
           },
           {
-            "location": "apps/web/src/components/sidebar.tsx#18"
+            "location": "apps/web/src/components/sidebar.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/case-search-trigger.tsx#15"
@@ -10431,7 +10431,7 @@
             "location": "apps/web/src/components/shortcut-hints-overlay.tsx#11"
           },
           {
-            "location": "apps/web/src/components/sidebar.tsx#33"
+            "location": "apps/web/src/components/sidebar.tsx#27"
           },
           {
             "location": "apps/web/src/components/tooltip.tsx#10"
@@ -10551,7 +10551,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#36"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#45"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#46"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inline-edit.tsx#4"
@@ -10869,10 +10869,10 @@
             "location": "apps/web/src/components/jurisdiction-picker.tsx#6"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#34"
+            "location": "apps/web/src/components/search-dialog.tsx#38"
           },
           {
-            "location": "apps/web/src/components/sidebar.tsx#17"
+            "location": "apps/web/src/components/sidebar.tsx#11"
           },
           {
             "location": "apps/web/src/lib/pdf/pdf-viewport.tsx#18"
@@ -11121,7 +11121,7 @@
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#156"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#55"
+            "location": "packages/folio/src/components/DocxEditor.tsx#54"
           },
           {
             "location": "packages/folio/src/components/ui/FontPicker.tsx#12"
@@ -11154,7 +11154,7 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#54"
           },
           {
-            "location": "apps/web/src/components/sidebar.tsx#31"
+            "location": "apps/web/src/components/sidebar.tsx#25"
           },
           {
             "location": "apps/web/src/components/tooltip.tsx#9"
@@ -11289,7 +11289,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#21"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#43"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#44"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#45"
@@ -11340,7 +11340,7 @@
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#127"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#48"
+            "location": "packages/folio/src/components/DocxEditor.tsx#47"
           },
           {
             "location": "packages/folio/src/components/FormattingBar.tsx#28"
@@ -11361,7 +11361,7 @@
             "location": "apps/web/src/components/breadcrumbs/workspace-breadcrumb.tsx#12"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#37"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#38"
           },
           {
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#54"
@@ -11388,7 +11388,7 @@
             "location": "apps/web/src/components/date-picker-popover.tsx#4"
           },
           {
-            "location": "apps/web/src/components/require-ai-key.tsx#24"
+            "location": "apps/web/src/components/require-ai-key.tsx#25"
           },
           {
             "location": "apps/web/src/components/shortcut-hints-overlay.tsx#10"
@@ -11508,13 +11508,13 @@
             "location": "packages/ui/src/components/command.tsx#9"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#33"
+            "location": "apps/web/src/components/search-dialog.tsx#37"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#35"
+            "location": "apps/web/src/components/search-dialog.tsx#39"
           },
           {
-            "location": "apps/web/src/components/sidebar.tsx#26"
+            "location": "apps/web/src/components/sidebar.tsx#20"
           },
           {
             "location": "apps/web/src/lib/pdf/pdf-page.tsx#7"
@@ -11547,7 +11547,7 @@
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#169"
           },
           {
-            "location": "apps/web/src/components/sidebar.tsx#25"
+            "location": "apps/web/src/components/sidebar.tsx#19"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#26"
@@ -11559,7 +11559,7 @@
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#168"
           },
           {
-            "location": "apps/web/src/components/sidebar.tsx#32"
+            "location": "apps/web/src/components/sidebar.tsx#26"
           },
           {
             "location": "apps/web/src/main.tsx#8"
@@ -12204,7 +12204,7 @@
             "location": "apps/web/src/components/shortcut-hints-overlay.tsx#4"
           },
           {
-            "location": "apps/web/src/components/sidebar.tsx#9"
+            "location": "apps/web/src/components/sidebar.tsx#3"
           },
           {
             "location": "apps/web/src/router.tsx#3"
@@ -14951,7 +14951,7 @@
             "location": "apps/web/src/components/shortcut-hints-overlay.tsx#1"
           },
           {
-            "location": "apps/web/src/components/sidebar.tsx#7"
+            "location": "apps/web/src/components/sidebar.tsx#1"
           },
           {
             "location": "apps/web/src/components/stella-mark.tsx#1"
@@ -14960,10 +14960,10 @@
             "location": "apps/web/src/components/stella-wordmark.tsx#1"
           },
           {
-            "location": "apps/web/src/components/theme-provider.tsx#8"
+            "location": "apps/web/src/components/theme-provider.tsx#1"
           },
           {
-            "location": "apps/web/src/components/theme-provider.tsx#9"
+            "location": "apps/web/src/components/theme-provider.tsx#2"
           },
           {
             "location": "apps/web/src/components/tooltip.tsx#1"
@@ -15578,10 +15578,10 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#21"
+            "location": "packages/folio/src/components/DocxEditor.tsx#20"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#22"
+            "location": "packages/folio/src/components/DocxEditor.tsx#21"
           },
           {
             "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
@@ -15599,10 +15599,10 @@
             "location": "packages/folio/src/components/FormattingBar.tsx#12"
           },
           {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#18"
+            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#17"
           },
           {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#19"
+            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#18"
           },
           {
             "location": "packages/folio/src/components/TextContextMenu.tsx#8"
@@ -15653,10 +15653,10 @@
             "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#18"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#26"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#19"
           },
           {
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#12"
@@ -15665,10 +15665,10 @@
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#13"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#26"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#24"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#27"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
           },
           {
             "location": "packages/folio/src/paged-editor/SelectionOverlay.tsx#12"
@@ -16322,6 +16322,12 @@
             "location": "apps/api/src/db/scoped.ts#7"
           },
           {
+            "location": "apps/api/src/db-url.ts#1"
+          },
+          {
+            "location": "apps/api/src/env.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/ai-config/validate-provider.ts#1"
           },
           {
@@ -16359,6 +16365,9 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts#10"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts#8"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts#25"
@@ -16667,10 +16676,25 @@
             "location": "apps/api/src/handlers/files/utils.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/folio-collab/authorize.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/folio-collab/cancel.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/folio-collab/checkpoint.ts#1"
           },
           {
             "location": "apps/api/src/handlers/folio-collab/finalize.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/folio-collab/refresh-token.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/folio-collab/snapshot-load.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/folio-collab/snapshot-store.ts#1"
           },
           {
             "location": "apps/api/src/handlers/health/routes.ts#1"
@@ -17135,6 +17159,9 @@
             "location": "apps/api/src/lib/data-url.ts#1"
           },
           {
+            "location": "apps/api/src/lib/db/assert-migrations-applied.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/document-counter.ts#1"
           },
           {
@@ -17219,6 +17246,9 @@
             "location": "apps/api/src/mcp/tool-utils.ts#3"
           },
           {
+            "location": "apps/web/src/hooks/use-stick-to-bottom.ts#4"
+          },
+          {
             "location": "apps/web/src/lib/errors/index.ts#1"
           },
           {
@@ -17246,7 +17276,10 @@
             "location": "apps/web/src/components/chat-editor-provider.tsx#24"
           },
           {
-            "location": "apps/web/src/components/sidebar.tsx#10"
+            "location": "apps/web/src/components/require-ai-key.tsx#13"
+          },
+          {
+            "location": "apps/web/src/components/sidebar.tsx#4"
           },
           {
             "location": "apps/web/src/lib/pdf/pdf-context.tsx#11"
@@ -17496,10 +17529,10 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/sidebar.tsx#11"
+            "location": "apps/web/src/components/sidebar.tsx#5"
           },
           {
-            "location": "apps/web/src/components/sidebar.tsx#12"
+            "location": "apps/web/src/components/sidebar.tsx#6"
           },
           {
             "location": "packages/ui/src/components/button.tsx#7"
@@ -17541,6 +17574,56 @@
       "scope": "required",
       "type": "library",
       "version": "0.7.1"
+    },
+    {
+      "authors": [
+        {
+          "name": "David Junger <tffy@free.fr>"
+        }
+      ],
+      "bom-ref": "pkg:npm/client-zip@2.5.0",
+      "description": "A tiny and fast client-side streaming ZIP generator",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/client-zip/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/client-zip/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/handlers/entities/download-zip.ts#2"
+          }
+        ]
+      },
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "client-zip",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/client-zip/package.json"
+        }
+      ],
+      "purl": "pkg:npm/client-zip@2.5.0",
+      "scope": "required",
+      "type": "library",
+      "version": "2.5.0"
     },
     {
       "authors": [
@@ -18325,10 +18408,16 @@
             "location": "apps/api/src/handlers/entities/desktop-edit-session-utils.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/download-zip.ts#2"
+            "location": "apps/api/src/handlers/entities/download-zip.ts#3"
           },
           {
             "location": "apps/api/src/handlers/entities/finalize-desktop-edit-session.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/list-cursor.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/list-cursor.ts#2"
           },
           {
             "location": "apps/api/src/handlers/entities/list-files.ts#2"
@@ -18421,7 +18510,7 @@
             "location": "apps/api/src/handlers/files/read-by-id.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/folio-collab/cancel.ts#1"
+            "location": "apps/api/src/handlers/folio-collab/cancel.ts#2"
           },
           {
             "location": "apps/api/src/handlers/folio-collab/checkpoint.ts#2"
@@ -18715,7 +18804,7 @@
             "location": "apps/api/src/lib/case-law/case-law-config-store.ts#1"
           },
           {
-            "location": "apps/api/src/lib/db/assert-migrations-applied.ts#1"
+            "location": "apps/api/src/lib/db/assert-migrations-applied.ts#2"
           },
           {
             "location": "apps/api/src/lib/desktop-edit-handoffs.ts#1"
@@ -19213,6 +19302,12 @@
             "location": "apps/api/src/handlers/entities/finalize-desktop-edit-session.ts#4"
           },
           {
+            "location": "apps/api/src/handlers/entities/list-files.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/list-folders.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/entities/move.ts#3"
           },
           {
@@ -19324,7 +19419,7 @@
             "location": "apps/api/src/handlers/files/routes.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/folio-collab/cancel.ts#2"
+            "location": "apps/api/src/handlers/folio-collab/authorize.ts#2"
           },
           {
             "location": "apps/api/src/handlers/folio-collab/cancel.ts#3"
@@ -19333,16 +19428,19 @@
             "location": "apps/api/src/handlers/folio-collab/checkpoint.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/folio-collab/checkpoint.ts#4"
-          },
-          {
             "location": "apps/api/src/handlers/folio-collab/finalize.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/folio-collab/finalize.ts#4"
+            "location": "apps/api/src/handlers/folio-collab/refresh-token.ts#2"
           },
           {
             "location": "apps/api/src/handlers/folio-collab/routes.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/folio-collab/snapshot-load.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/folio-collab/snapshot-store.ts#2"
           },
           {
             "location": "apps/api/src/handlers/health/routes.ts#2"
@@ -20346,13 +20444,7 @@
             "location": "apps/api/src/handlers/docx/patch-template.ts#12"
           },
           {
-            "location": "apps/api/src/handlers/docx/prepare-spa-template.ts#8"
-          },
-          {
             "location": "apps/api/src/handlers/docx/template-manifest.ts#13"
-          },
-          {
-            "location": "apps/api/src/handlers/entities/download-zip.ts#3"
           },
           {
             "location": "apps/api/src/handlers/files/xlsx-preprocess.ts#1"
@@ -20368,6 +20460,9 @@
           },
           {
             "location": "apps/api/src/lib/workflow/docx-blocks.ts#22"
+          },
+          {
+            "location": "apps/api/src/scripts/prepare-spa-template.ts#8"
           },
           {
             "location": "packages/docx-core/src/serialize/docx.ts#1"
@@ -20549,7 +20644,7 @@
             "location": "apps/web/src/components/selfhost-update-banner.tsx#4"
           },
           {
-            "location": "apps/web/src/components/sidebar.tsx#13"
+            "location": "apps/web/src/components/sidebar.tsx#7"
           },
           {
             "location": "apps/web/src/components/theme-picker.tsx#1"
@@ -20972,7 +21067,7 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#21"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#33"
+            "location": "packages/folio/src/components/DocxEditor.tsx#32"
           },
           {
             "location": "packages/folio/src/components/DocxEditorHelpers.tsx#5"
@@ -21707,10 +21802,10 @@
             "location": "packages/folio/src/core/prosemirror/extensions/core/HistoryExtension.ts#5"
           },
           {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#21"
+            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#20"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#28"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#21"
           }
         ]
       },
@@ -22055,19 +22150,19 @@
             "location": "packages/folio/src/paged-editor/useVisualLineNavigation.ts#16"
           },
           {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#22"
+            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#21"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#29"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#22"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#35"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#28"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#29"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#27"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#30"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#28"
           }
         ]
       },
@@ -22125,10 +22220,10 @@
             "location": "packages/folio/src/core/prosemirror/extensions/nodes/TableExtension.ts#17"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#36"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#29"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#31"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#29"
           }
         ]
       },
@@ -22278,31 +22373,31 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#28"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#35"
+            "location": "packages/folio/src/components/DocxEditor.tsx#34"
           },
           {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#23"
+            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#22"
           },
           {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#41"
+            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#40"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#37"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#30"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#38"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#31"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#56"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#49"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#32"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#30"
           },
           {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#41"
+            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#40"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#56"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#49"
           }
         ]
       },
@@ -22971,7 +23066,7 @@
             "location": "apps/web/src/components/shortcut-hints-overlay.tsx#1"
           },
           {
-            "location": "apps/web/src/components/sidebar.tsx#7"
+            "location": "apps/web/src/components/sidebar.tsx#1"
           },
           {
             "location": "apps/web/src/components/stella-mark.tsx#1"
@@ -22980,10 +23075,10 @@
             "location": "apps/web/src/components/stella-wordmark.tsx#1"
           },
           {
-            "location": "apps/web/src/components/theme-provider.tsx#8"
+            "location": "apps/web/src/components/theme-provider.tsx#1"
           },
           {
-            "location": "apps/web/src/components/theme-provider.tsx#9"
+            "location": "apps/web/src/components/theme-provider.tsx#2"
           },
           {
             "location": "apps/web/src/components/tooltip.tsx#1"
@@ -23598,10 +23693,10 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#21"
+            "location": "packages/folio/src/components/DocxEditor.tsx#20"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#22"
+            "location": "packages/folio/src/components/DocxEditor.tsx#21"
           },
           {
             "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
@@ -23619,10 +23714,10 @@
             "location": "packages/folio/src/components/FormattingBar.tsx#12"
           },
           {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#18"
+            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#17"
           },
           {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#19"
+            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#18"
           },
           {
             "location": "packages/folio/src/components/TextContextMenu.tsx#8"
@@ -23673,10 +23768,10 @@
             "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#18"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#26"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#19"
           },
           {
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#12"
@@ -23685,10 +23780,10 @@
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#13"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#26"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#24"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#27"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
           },
           {
             "location": "packages/folio/src/paged-editor/SelectionOverlay.tsx#12"
@@ -24212,6 +24307,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/matter-numbering-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#30"
           }
         ]
       },
@@ -24388,7 +24486,7 @@
             "location": "apps/web/src/components/matter-number-hint.tsx#4"
           },
           {
-            "location": "apps/web/src/components/require-ai-key.tsx#13"
+            "location": "apps/web/src/components/require-ai-key.tsx#14"
           },
           {
             "location": "apps/web/src/components/route-components.tsx#13"
@@ -24403,7 +24501,7 @@
             "location": "apps/web/src/components/shortcut-hints-overlay.tsx#7"
           },
           {
-            "location": "apps/web/src/components/sidebar.tsx#14"
+            "location": "apps/web/src/components/sidebar.tsx#8"
           },
           {
             "location": "apps/web/src/components/theme-picker.tsx#2"
@@ -24688,7 +24786,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/field-value-select.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#30"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#31"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inline-edit.tsx#1"
@@ -24904,7 +25002,7 @@
             "location": "apps/web/src/routes/onboarding/-components/onboarding-wizard.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/onboarding/-components/prices-panel.tsx#5"
+            "location": "apps/web/src/routes/onboarding/-components/prices-panel.tsx#10"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/sidebar-preview.tsx#12"
@@ -24931,7 +25029,7 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#22"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#36"
+            "location": "packages/folio/src/components/DocxEditor.tsx#35"
           },
           {
             "location": "packages/folio/src/components/DocxEditorHelpers.tsx#6"
@@ -25194,7 +25292,7 @@
             "location": "apps/api/src/env-base.ts#11"
           },
           {
-            "location": "apps/api/src/env.ts#2"
+            "location": "apps/api/src/env.ts#3"
           },
           {
             "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#14"
@@ -25419,7 +25517,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session.ts#5"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#44"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#37"
           }
         ]
       },
@@ -25491,10 +25589,10 @@
             "location": "packages/folio/src/components/DocxEditor.props.ts#5"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#45"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#38"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#46"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#39"
           }
         ]
       },
