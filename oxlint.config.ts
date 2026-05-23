@@ -67,6 +67,7 @@ export default defineConfig({
         ],
       },
     ],
+    "no-bare-error/no-bare-error": "error",
     "no-nanoid/no-nanoid": "error",
     "must-use-result/must-use-result": "error",
     "no-any-casts/no-any-casts": "error",
@@ -246,6 +247,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-secret-in-log-sink.ts",
     "./.oxlint-plugins/no-raw-api-url.ts",
     "./.oxlint-plugins/require-fetch-timeout.ts",
+    "./.oxlint-plugins/no-bare-error.ts",
     "./.oxlint-plugins/must-use-result.ts",
     "./.oxlint-plugins/no-any-casts.ts",
     "./.oxlint-plugins/no-dangerous-type-assertions.ts",
@@ -305,6 +307,21 @@ export default defineConfig({
       // already covered by the **/scripts/** override above.)
       files: ["apps/api/src/tests/load/**/*.ts"],
       rules: { "no-console": "off" },
+    },
+    {
+      // `.claude/mcp/**` is local Claude tooling, not shipped product
+      // code. It uses standard Node-style `throw new Error(...)` because
+      // it doesn't depend on better-result.
+      files: [".claude/mcp/**/*.ts"],
+      rules: { "no-bare-error/no-bare-error": "off" },
+    },
+    {
+      // Test-only adapter helper consumed exclusively from
+      // `**/*.test.ts`. Not part of any production code path.
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
+      ],
+      rules: { "no-bare-error/no-bare-error": "off" },
     },
     {
       // Legacy DOCX/editor code has parser and layout state machines that need
@@ -983,6 +1000,7 @@ export default defineConfig({
         "require-await": "off",
         "require-yield": "off",
         "typescript/unbound-method": "off",
+        "no-bare-error/no-bare-error": "off",
         "no-body-ownership-ids/no-body-ownership-ids": "off",
         "no-raw-user-id-schema/no-raw-user-id-schema": "off",
         "no-untyped-updates/no-untyped-updates": "off",
