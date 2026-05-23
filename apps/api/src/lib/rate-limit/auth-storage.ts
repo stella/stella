@@ -55,7 +55,9 @@ export const createAuthRateLimitStorage = (
     lazyConnect: true,
     // Bound every command so a slow or unreachable Redis cannot stall
     // an auth request; a timed-out command rejects and falls back.
+    connectTimeout: 500,
     commandTimeout: 500,
+    enableOfflineQueue: false,
     maxRetriesPerRequest: 1,
   });
   redis.on("error", () => {
@@ -81,7 +83,7 @@ export const createAuthRateLimitStorage = (
     if (!entry || entry.expiresAt <= Date.now()) {
       return null;
     }
-    return entry.value;
+    return { ...entry.value };
   };
 
   return {
@@ -89,10 +91,10 @@ export const createAuthRateLimitStorage = (
       try {
         const raw = await redis.get(`${REDIS_KEY_PREFIX}${key}`);
         if (raw === null) {
-          return null;
+          return readFallback(key);
         }
         const parsed: unknown = JSON.parse(raw);
-        return isRateLimitValue(parsed) ? parsed : null;
+        return isRateLimitValue(parsed) ? { ...parsed } : readFallback(key);
       } catch (error: unknown) {
         logger.warn("auth.rate_limit.redis_get_failed", {
           "error.type": errorTag(error),
@@ -101,13 +103,14 @@ export const createAuthRateLimitStorage = (
       }
     },
     set: async (key, value) => {
+      const snapshot = { ...value };
       // Keep the fallback warm so a later Redis outage still has data
       // from this instance to limit against.
-      fallback.set(key, { value, expiresAt: Date.now() + ttlMs });
+      fallback.set(key, { value: snapshot, expiresAt: Date.now() + ttlMs });
       try {
         await redis.set(
           `${REDIS_KEY_PREFIX}${key}`,
-          JSON.stringify(value),
+          JSON.stringify(snapshot),
           "PX",
           ttlMs,
         );

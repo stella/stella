@@ -4,8 +4,13 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 // reject, simulating an unreachable Redis without real I/O.
 let redisDown = false;
 const redisStore = new Map<string, string>();
+const redisConstructorOptions: unknown[] = [];
 
 class FakeRedis {
+  constructor(_url: string, options: unknown) {
+    redisConstructorOptions.push(options);
+  }
+
   on(): this {
     return this;
   }
@@ -41,6 +46,7 @@ describe("auth rate-limit storage", () => {
   beforeEach(() => {
     redisDown = false;
     redisStore.clear();
+    redisConstructorOptions.length = 0;
   });
 
   test("round-trips through Redis when it is reachable", async () => {
@@ -55,6 +61,18 @@ describe("auth rate-limit storage", () => {
     const storage = createAuthRateLimitStorage(60_000);
 
     expect(await storage.get("ip:9.9.9.9")).toBeNull();
+  });
+
+  test("configures Redis commands to fail fast", () => {
+    createAuthRateLimitStorage(60_000);
+
+    expect(redisConstructorOptions.at(0)).toMatchObject({
+      commandTimeout: 500,
+      connectTimeout: 500,
+      enableOfflineQueue: false,
+      lazyConnect: true,
+      maxRetriesPerRequest: 1,
+    });
   });
 
   test("fails open: a get after Redis goes down reads the fallback", async () => {
@@ -78,5 +96,26 @@ describe("auth rate-limit storage", () => {
 
     // The fallback was still written, so a subsequent get resolves it.
     expect(await storage.get("ip:1.2.3.4")).toEqual(value(2));
+  });
+
+  test("falls back when Redis is reachable but missing a warmed key", async () => {
+    const storage = createAuthRateLimitStorage(60_000);
+    redisDown = true;
+
+    await storage.set("ip:1.2.3.4", value(4));
+    redisDown = false;
+
+    expect(await storage.get("ip:1.2.3.4")).toEqual(value(4));
+  });
+
+  test("stores fallback values as snapshots", async () => {
+    const storage = createAuthRateLimitStorage(60_000);
+    const counter = value(7);
+
+    await storage.set("ip:1.2.3.4", counter);
+    counter.count = 99;
+    redisDown = true;
+
+    expect(await storage.get("ip:1.2.3.4")).toEqual(value(7));
   });
 });
