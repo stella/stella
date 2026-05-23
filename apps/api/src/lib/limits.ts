@@ -10,6 +10,7 @@ export const LIMITS = {
   calendarTasksMax: 200,
   entitySummariesPageSize: 200,
   viewsCount: 20,
+  viewTemplatesPerUser: 50,
   templatesCount: 50,
   clauseCategoriesCount: 100,
   templateCategoriesCount: 100,

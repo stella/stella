@@ -25,6 +25,7 @@ import {
   stella,
   userPolicies,
   workspaceIdCheck,
+  workspaceViewTemplatePolicies,
   wsPolicies,
 } from "@/api/db/rls";
 import type {
@@ -55,7 +56,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import type { CentsAmount } from "@/api/lib/money";
 import { unsafeCents } from "@/api/lib/money";
-import type { ViewLayout } from "@/api/lib/views-schema";
+import type {
+  ViewLayout,
+  ViewTemplateProperty,
+} from "@/api/lib/views-schema";
 
 /** Metadata stored on link entities created by the web clipper. */
 export type LinkMetadata = {
@@ -3022,6 +3026,41 @@ export const workspaceViews = p.pgTable(
   ],
 );
 
+export const workspaceViewTemplates = p.pgTable(
+  "workspace_view_templates",
+  {
+    id: pUuid<"workspaceViewTemplate">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: p.varchar({ length: 256 }).notNull(),
+    layout: jsonb().$type<ViewLayout>().notNull(),
+    templateProperties: jsonb("template_properties")
+      .$type<ViewTemplateProperty[]>()
+      .notNull()
+      .default([]),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p
+      .timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    p
+      .uniqueIndex("workspace_view_templates_user_name_uidx")
+      .on(table.organizationId, table.userId, table.name),
+    p
+      .index("workspace_view_templates_user_created_idx")
+      .on(table.organizationId, table.userId, table.createdAt),
+    ...workspaceViewTemplatePolicies(),
+  ],
+);
+
 // -- Prompt Shortcuts --
 
 export const PROMPT_SHORTCUT_SCOPES = ["team", "private"] as const;
@@ -3242,6 +3281,7 @@ export const relations = defineRelations(
     mcpOAuthState,
     userFiles,
     workspaceViews,
+    workspaceViewTemplates,
     promptShortcuts,
   },
   (r) => ({
@@ -3990,6 +4030,12 @@ export const relations = defineRelations(
       workspace: r.one.workspaces({
         from: r.workspaceViews.workspaceId,
         to: r.workspaces.id,
+      }),
+    },
+    workspaceViewTemplates: {
+      user: r.one.user({
+        from: r.workspaceViewTemplates.userId,
+        to: r.user.id,
       }),
     },
     agentSkills: {

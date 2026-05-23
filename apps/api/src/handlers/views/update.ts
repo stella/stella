@@ -1,14 +1,22 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { roles } from "@stll/permissions";
+
 import { workspaceViews } from "@/api/db/schema";
+import { resolveTemplateProperties } from "@/api/handlers/view-templates/properties";
 import {
+  cleanStalePropertyIds,
   hasDuplicateSorts,
   hasMultipleKindFilters,
 } from "@/api/handlers/views/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditContext,
+} from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
@@ -26,6 +34,11 @@ const updateView = createSafeHandler(
   async function* ({
     safeDb,
     workspaceId,
+    memberRole,
+    session,
+    user,
+    request,
+    server,
     params: { viewId },
     body,
     recordAuditEvent,
@@ -90,8 +103,36 @@ const updateView = createSafeHandler(
       return Result.ok(undefined);
     }
 
-    yield* Result.await(
+    const updateResult = yield* Result.await(
       safeDb(async (tx) => {
+        if (parsedLayout !== undefined) {
+          const resolvedTemplateProperties = await resolveTemplateProperties({
+            tx,
+            workspaceId,
+            layout: parsedLayout,
+            templateProperties: body.templateProperties,
+            canCreateProperties: roles[memberRole.role].authorize({
+              property: ["create"],
+            }).success,
+            auditContext: createAuditContext({
+              organizationId: session.activeOrganizationId,
+              workspaceId,
+              userId: user.id,
+              request,
+              server,
+            }),
+          });
+
+          if (!resolvedTemplateProperties.ok) {
+            return resolvedTemplateProperties;
+          }
+          cleanStalePropertyIds(
+            parsedLayout,
+            resolvedTemplateProperties.propertyIds,
+          );
+          updates.layout = parsedLayout;
+        }
+
         await tx
           .update(workspaceViews)
           .set(updates)
@@ -119,8 +160,19 @@ const updateView = createSafeHandler(
           resourceId: viewId,
           changes,
         });
+
+        return { ok: true as const };
       }),
     );
+
+    if (!updateResult.ok) {
+      return Result.err(
+        new HandlerError({
+          status: updateResult.status,
+          message: updateResult.message,
+        }),
+      );
+    }
 
     broadcast(workspaceId, {
       type: "invalidate-query",

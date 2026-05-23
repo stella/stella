@@ -45,6 +45,7 @@ import {
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { userFilesRoute } from "@/api/handlers/user-files/routes";
 import { verifyAuthRoute, verifyRoute } from "@/api/handlers/verify/routes";
+import { viewTemplatesRoute } from "@/api/handlers/view-templates/routes";
 import { viewsRoute } from "@/api/handlers/views/routes";
 import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
@@ -356,6 +357,7 @@ const api = new Elysia()
       .use(userFilesRoute)
       .use(skillsRoute)
       .use(shortcutsRoute)
+      .use(viewTemplatesRoute)
       .use(viewsRoute)
       .use(tasksRoute)
       .use(myTasksRoute)

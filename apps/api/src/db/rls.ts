@@ -380,6 +380,34 @@ export const promptShortcutPolicies = () => [
   }),
 ];
 
+const workspaceViewTemplateCheck = sql`(
+  ${organizationCheck} AND ${userCheck}
+)`;
+
+export const workspaceViewTemplatePolicies = () => [
+  p.pgPolicy("workspace_view_template_select", {
+    for: "select",
+    to: stella,
+    using: workspaceViewTemplateCheck,
+  }),
+  p.pgPolicy("workspace_view_template_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: workspaceViewTemplateCheck,
+  }),
+  p.pgPolicy("workspace_view_template_update", {
+    for: "update",
+    to: stella,
+    using: workspaceViewTemplateCheck,
+    withCheck: workspaceViewTemplateCheck,
+  }),
+  p.pgPolicy("workspace_view_template_delete", {
+    for: "delete",
+    to: stella,
+    using: workspaceViewTemplateCheck,
+  }),
+];
+
 const agentSkillVisibleCheck = sql`(
   ${organizationCheck} AND (scope = 'team' OR ${userCheck})
 )`;
