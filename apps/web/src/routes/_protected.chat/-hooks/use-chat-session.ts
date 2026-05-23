@@ -149,6 +149,7 @@ export const useChatSession = ({
   const isGeneratingRef = useRef(false);
   const queueRef = useRef<QueuedChatEntry[]>([]);
   const wasGeneratingRef = useRef(false);
+  const conversationIdRef = useRef(conversationId);
   const [queuedMessages, setQueuedMessages] = useState<QueuedChatEntry[]>([]);
 
   const replaceQueuedMessages = useCallback((next: QueuedChatEntry[]) => {
@@ -177,6 +178,13 @@ export const useChatSession = ({
 
   const sendMessage = useCallback(
     async (message: ChatSendMessageInput) => {
+      if (conversationIdRef.current !== conversationId) {
+        conversationIdRef.current = conversationId;
+        isGeneratingRef.current = false;
+        wasGeneratingRef.current = false;
+        replaceQueuedMessages([]);
+      }
+
       if (isGeneratingRef.current) {
         enqueueMessage(message);
         return;
@@ -197,7 +205,13 @@ export const useChatSession = ({
 
       await sendChatMessage(message);
     },
-    [enqueueMessage, sendChatMessage, takeOldestQueuedMessage],
+    [
+      conversationId,
+      enqueueMessage,
+      replaceQueuedMessages,
+      sendChatMessage,
+      takeOldestQueuedMessage,
+    ],
   );
 
   const removeQueuedMessage = useCallback(
@@ -428,6 +442,8 @@ export const useChatSession = ({
   }, [queuedMessages]);
 
   useEffect(() => {
+    conversationIdRef.current = conversationId;
+    isGeneratingRef.current = false;
     replaceQueuedMessages([]);
     wasGeneratingRef.current = false;
   }, [conversationId, replaceQueuedMessages]);
