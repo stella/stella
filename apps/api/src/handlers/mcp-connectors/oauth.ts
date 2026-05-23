@@ -128,7 +128,7 @@ const fetchJson = async <T>({
         throw new FetchBoundaryError({
           url: url.toString(),
           status: response.value.status,
-          body: body.length > 0 ? body.slice(0, 500) : undefined,
+          ...(body.length > 0 ? { body: body.slice(0, 500) } : {}),
           message:
             body.length > 0
               ? `HTTP ${response.value.status}: ${body.slice(0, 500)}`
