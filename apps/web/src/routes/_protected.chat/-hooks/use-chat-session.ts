@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import type { ComponentProps } from "react";
@@ -12,6 +13,7 @@ import type { Chat } from "@ai-sdk/react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
 import { isToolUIPart } from "ai";
+import { v7 as uuidv7 } from "uuid";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
 
@@ -51,6 +53,7 @@ type CreateDocumentSuccess = Extract<CreateDocumentOutput, { success: true }>;
 type UseChatSessionOptions = {
   chat: Chat<PersistedChatMessage>;
   conversationId: string;
+  getSendMode?: (() => ChatSendMode) | undefined;
   workspaceId?: string | undefined;
 };
 
@@ -67,9 +70,55 @@ export type ResendLatestMessageOptions = {
 const EMPTY_MCP_CONNECTOR_IDENTITIES: readonly McpConnectorApprovalIdentity[] =
   [];
 
+/**
+ * Payload shape accepted by the AI SDK's `sendMessage`. Surfaces
+ * only ever pass `{ text }`, `{ files }`, or `{ text, files }`, but
+ * the queue keeps the SDK's full union so it can hold whatever a
+ * caller hands `sendMessage`.
+ */
+type ChatSendMessageInput = NonNullable<
+  Parameters<Chat<PersistedChatMessage>["sendMessage"]>[0]
+>;
+type ChatSendMessageOptions = Parameters<
+  Chat<PersistedChatMessage>["sendMessage"]
+>[1];
+
+/**
+ * A user message composed while a response was still streaming.
+ * `useChatSession` holds these in a queue and dispatches them —
+ * oldest first — once the turn finishes. `text` is the raw editor
+ * HTML (rendered like any sent user message); `fileCount` lets the
+ * pending bubble show an attachment hint without the view ever
+ * touching the file payloads.
+ */
+export type QueuedChatMessage = {
+  id: string;
+  text: string;
+  fileCount: number;
+};
+
+type QueuedChatEntry = QueuedChatMessage & {
+  /** Fully-built payload handed to the AI SDK on dispatch. */
+  message: ChatSendMessageInput;
+  options: ChatSendMessageOptions;
+};
+
+/**
+ * Pull a display preview out of an outgoing chat payload. The SDK
+ * union has no discriminator, so the `text`/`files` shapes our
+ * surfaces send are told apart structurally with `in`.
+ */
+const describeQueuedMessage = (
+  message: ChatSendMessageInput,
+): Pick<QueuedChatMessage, "fileCount" | "text"> => ({
+  text: "text" in message ? message.text : "",
+  fileCount: "files" in message ? message.files.length : 0,
+});
+
 export const useChatSession = ({
   chat,
   conversationId,
+  getSendMode,
   workspaceId,
 }: UseChatSessionOptions) => {
   const navigate = useNavigate();
@@ -98,11 +147,105 @@ export const useChatSession = ({
     addToolOutput,
   } = useChat({ chat });
 
-  const sendMessage = useCallback(
-    async (message: Parameters<typeof sendChatMessage>[0]) => {
-      await sendChatMessage(message);
+  // Mirror `isGenerating` (computed below) and the live queue into
+  // refs so the stable `sendMessage` callback can branch on the
+  // latest committed values. The refs are updated in effects or
+  // queue-event helpers (not during render) so a concurrent re-render
+  // that bails out can't strand them ahead of committed state.
+  const isGeneratingRef = useRef(false);
+  const queueRef = useRef<QueuedChatEntry[]>([]);
+  const wasGeneratingRef = useRef(false);
+  const conversationIdRef = useRef(conversationId);
+  const [queuedMessages, setQueuedMessages] = useState<QueuedChatEntry[]>([]);
+
+  const replaceQueuedMessages = useCallback((next: QueuedChatEntry[]) => {
+    queueRef.current = next;
+    setQueuedMessages(next);
+  }, []);
+
+  const withSendModeSnapshot = useCallback(
+    (options: ChatSendMessageOptions): ChatSendMessageOptions => {
+      const sendMode = getSendMode?.();
+      if (sendMode === undefined) {
+        return options;
+      }
+      return {
+        ...options,
+        body: {
+          sendMode,
+          ...options?.body,
+        },
+      };
     },
-    [sendChatMessage],
+    [getSendMode],
+  );
+
+  const enqueueMessage = useCallback(
+    (message: ChatSendMessageInput, options: ChatSendMessageOptions) => {
+      replaceQueuedMessages([
+        ...queueRef.current,
+        { id: uuidv7(), message, options, ...describeQueuedMessage(message) },
+      ]);
+    },
+    [replaceQueuedMessages],
+  );
+
+  const takeOldestQueuedMessage = useCallback(() => {
+    const next = queueRef.current.at(0);
+    if (!next) {
+      return null;
+    }
+    replaceQueuedMessages(queueRef.current.slice(1));
+    return next;
+  }, [replaceQueuedMessages]);
+
+  const sendMessage = useCallback(
+    async (message: ChatSendMessageInput, options?: ChatSendMessageOptions) => {
+      if (conversationIdRef.current !== conversationId) {
+        conversationIdRef.current = conversationId;
+        isGeneratingRef.current = false;
+        wasGeneratingRef.current = false;
+        replaceQueuedMessages([]);
+      }
+
+      const requestOptions = withSendModeSnapshot(options);
+      if (isGeneratingRef.current) {
+        enqueueMessage(message, requestOptions);
+        return;
+      }
+
+      // When the queue is gated after an errored turn, a manual send
+      // should resume the queue without reordering the transcript:
+      // append the new prompt, then dispatch the oldest waiting one.
+      if (queueRef.current.length > 0) {
+        enqueueMessage(message, requestOptions);
+        const next = takeOldestQueuedMessage();
+        if (next) {
+          isGeneratingRef.current = true;
+          await sendChatMessage(next.message, next.options);
+        }
+        return;
+      }
+
+      await sendChatMessage(message, requestOptions);
+    },
+    [
+      conversationId,
+      enqueueMessage,
+      replaceQueuedMessages,
+      sendChatMessage,
+      takeOldestQueuedMessage,
+      withSendModeSnapshot,
+    ],
+  );
+
+  const removeQueuedMessage = useCallback(
+    (id: string) => {
+      replaceQueuedMessages(
+        queueRef.current.filter((entry) => entry.id !== id),
+      );
+    },
+    [replaceQueuedMessages],
   );
 
   const resendLatestMessage = useCallback(
@@ -316,6 +459,49 @@ export const useChatSession = ({
   );
   const isGenerating =
     status === "submitted" || status === "streaming" || hasRunningToolCall;
+  useEffect(() => {
+    isGeneratingRef.current = isGenerating;
+  }, [isGenerating]);
+  useEffect(() => {
+    queueRef.current = queuedMessages;
+  }, [queuedMessages]);
+
+  useEffect(() => {
+    conversationIdRef.current = conversationId;
+    isGeneratingRef.current = false;
+    replaceQueuedMessages([]);
+    wasGeneratingRef.current = false;
+  }, [conversationId, replaceQueuedMessages]);
+
+  // Drain the queue one message per turn. When the response
+  // finishes (`isGenerating` falls back to false) the oldest queued
+  // message is dispatched; sending it flips the status straight
+  // back, so the next queued message waits for that turn to end
+  // too — queued messages never overlap a stream. We hold the
+  // queue if the turn ended in error: firing every queued message
+  // into a failing provider just burns quota and spams the user
+  // with repeats of the same error. The next manual send (or a
+  // successful `regenerate`) lifts the gate.
+  useEffect(() => {
+    const finishedTurn = wasGeneratingRef.current && !isGenerating;
+    wasGeneratingRef.current = isGenerating;
+    if (!finishedTurn || status === "error") {
+      return;
+    }
+    const next = queuedMessages.at(0);
+    if (!next) {
+      return;
+    }
+    replaceQueuedMessages(queuedMessages.slice(1));
+    isGeneratingRef.current = true;
+    void sendChatMessage(next.message);
+  }, [
+    isGenerating,
+    queuedMessages,
+    replaceQueuedMessages,
+    sendChatMessage,
+    status,
+  ]);
 
   useEffect(() => {
     setConversationApprovedTools(readConversationApprovedTools(conversationId));
@@ -375,6 +561,8 @@ export const useChatSession = ({
     messages,
     resendLatestMessage,
     sendMessage,
+    queuedMessages,
+    removeQueuedMessage,
     stop,
     isGenerating,
     alwaysApprovedTools,

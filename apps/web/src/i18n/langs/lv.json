@@ -343,6 +343,7 @@
     "attachFile": "Pievienot failu",
     "attachedImage": "Pievienots attēls",
     "attachment": "Pielikums",
+    "cancelQueuedMessage": "Cancel queued message",
     "caseLawGreeting": "Uzdod jautājumus par šo lēmumu — pilns teksts ir pieejams šeit.",
     "chatAbout": "Ievietot AI čatā",
     "contextPlaceholder": "Tērzēt par {context}, / prasmēm, @ konteksta pievienošanai",
@@ -426,6 +427,8 @@
       },
       "tryOne": "Izmēģini vienu no tiem"
     },
+    "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
+    "queuedNotice": "Queued — sends when the current response finishes",
     "removeSuggestion": "(noņemt)",
     "resend": "Nosūtīt vēlreiz",
     "resizeThread": "Mainīt sarunas izmēru",

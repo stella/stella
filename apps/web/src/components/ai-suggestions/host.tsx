@@ -988,6 +988,13 @@ type PromptBarProps = {
    * into a dead context.
    */
   sendDisabledReason?: "editor-loading" | undefined;
+  /**
+   * When true the composer keeps accepting input while a response
+   * streams: a send is queued by `useChatSession` and dispatched
+   * once the turn finishes. A dedicated Stop button appears beside
+   * Send instead of the send button morphing into Stop.
+   */
+  queueWhileGenerating?: boolean | undefined;
 };
 
 /**
@@ -1060,6 +1067,7 @@ export function PromptBar(props: PromptBarProps) {
     emptyPlaceholder,
     attentionPulseSeq,
     sendDisabledReason,
+    queueWhileGenerating = false,
   } = props;
 
   const t = useTranslations();
@@ -1074,6 +1082,15 @@ export function PromptBar(props: PromptBarProps) {
   const isSendBlocked = sendDisabledReason !== undefined;
   const inputDisabled = isSendBlocked;
   const submitDisabled = busy || isSendBlocked;
+  // With queuing enabled the composer keeps accepting input while a
+  // response streams — `useChatSession` holds the send until the
+  // turn finishes. The send button stays a send button; a dedicated
+  // Stop button sits beside it instead of the send button morphing.
+  const composerSubmitDisabled = queueWhileGenerating
+    ? status === "applying" || isSendBlocked
+    : submitDisabled;
+  const morphSendToStop = showStop && !queueWhileGenerating;
+  const showQueueStopButton = showStop && queueWhileGenerating;
 
   // Glow on attention pulse — kicked from the inspector when the
   // user clicks the AI-suggestions chip so they see the bar light
@@ -1107,7 +1124,7 @@ export function PromptBar(props: PromptBarProps) {
     inputDisabled,
     onSubmit: handleComposerSubmit,
     onSubmitGuard: canSubmitNow,
-    submitDisabled,
+    submitDisabled: composerSubmitDisabled,
   });
 
   return (
@@ -1192,17 +1209,39 @@ export function PromptBar(props: PromptBarProps) {
         </Tooltip>
       )}
 
+      {showQueueStopButton && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                aria-label={t("chat.stopResponse")}
+                className="rounded-full"
+                onClick={() => onStop()}
+                size="icon-sm"
+                type="button"
+                variant="ghost"
+              >
+                <SquareIcon aria-hidden="true" className="size-3.5" />
+              </Button>
+            }
+          />
+          <TooltipPopup side="top">{t("chat.stopResponse")}</TooltipPopup>
+        </Tooltip>
+      )}
+
       <Tooltip>
         <TooltipTrigger
           render={
             <Button
               aria-label={
-                showStop ? t("chat.stopResponse") : t("chat.sendPrompt")
+                morphSendToStop ? t("chat.stopResponse") : t("chat.sendPrompt")
               }
               className="rounded-full"
-              disabled={showStop ? false : submitDisabled || !canSubmit}
+              disabled={
+                morphSendToStop ? false : composerSubmitDisabled || !canSubmit
+              }
               onClick={() => {
-                if (showStop) {
+                if (morphSendToStop) {
                   onStop();
                   return;
                 }
@@ -1211,7 +1250,7 @@ export function PromptBar(props: PromptBarProps) {
               size="icon"
               type="button"
             >
-              {showStop ? (
+              {morphSendToStop ? (
                 <SquareIcon aria-hidden="true" />
               ) : (
                 <ArrowUpIcon aria-hidden="true" />
@@ -1221,7 +1260,7 @@ export function PromptBar(props: PromptBarProps) {
         />
         <TooltipPopup side="top">
           {(() => {
-            if (showStop) {
+            if (morphSendToStop) {
               return t("chat.stopResponse");
             }
             if (canSubmit) {

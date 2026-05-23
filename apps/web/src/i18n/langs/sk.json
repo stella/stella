@@ -343,6 +343,7 @@
     "attachFile": "Priložiť súbor",
     "attachedImage": "Priložený obrázok",
     "attachment": "Príloha",
+    "cancelQueuedMessage": "Cancel queued message",
     "caseLawGreeting": "Spýtajte sa na toto rozhodnutie — plný text je k dispozícii.",
     "chatAbout": "Vložiť do AI chatu",
     "contextPlaceholder": "Chat o {context}, / pre zručnosti, @ na pridanie kontextu",
@@ -426,6 +427,8 @@
       },
       "tryOne": "Začni s jedným z týchto"
     },
+    "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
+    "queuedNotice": "Queued — sends when the current response finishes",
     "removeSuggestion": "(odstrániť)",
     "resend": "Odoslať znova",
     "resizeThread": "Zmeniť veľkosť konverzácie",

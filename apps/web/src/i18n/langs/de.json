@@ -343,6 +343,7 @@
     "attachFile": "Datei anhängen",
     "attachedImage": "Angehängtes Bild",
     "attachment": "Anhang",
+    "cancelQueuedMessage": "Cancel queued message",
     "caseLawGreeting": "Stelle Fragen zu dieser Entscheidung — der vollständige Text ist hier verfügbar.",
     "chatAbout": "In AI-Chat einfügen",
     "contextPlaceholder": "Chat über {context}, / für Skills, @ für Kontext",
@@ -426,6 +427,8 @@
       },
       "tryOne": "Probiere einen davon zum Start"
     },
+    "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
+    "queuedNotice": "Queued — sends when the current response finishes",
     "removeSuggestion": "(entfernen)",
     "resend": "Erneut senden",
     "resizeThread": "Konversation vergrößern oder verkleinern",

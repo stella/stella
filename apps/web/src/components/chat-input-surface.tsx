@@ -70,11 +70,10 @@ export const ChatInputSurface = ({
     removeFile,
   } = controller;
   const inputDisabled = disabled;
-  // While the assistant is streaming we render Stop in place of Send,
-  // but Enter still calls submit unless we gate it here. Without this
-  // guard, a user pressing Enter during a turn fires an overlapping
-  // `sendMessage` and the two responses interleave.
-  const submitDisabled = disabled || isGenerating;
+  // Submitting stays enabled while the assistant streams: a send
+  // during a turn is queued by `useChatSession` and dispatched once
+  // the response finishes, so overlapping requests can't happen.
+  const submitDisabled = disabled;
 
   const { submitDraft } = useChatComposerWiring({
     controller,
@@ -164,19 +163,22 @@ export const ChatInputSurface = ({
           ref={fileInputRef}
           type="file"
         />
-        {isGenerating && onStop ? (
+        <div className="ms-auto flex items-center gap-1">
+          {isGenerating && onStop && (
+            <Button
+              aria-label={t("chat.stopResponse")}
+              className="shrink-0"
+              onClick={onStop}
+              size="icon-sm"
+              variant="outline"
+            >
+              <SquareIcon className="size-3.5" />
+            </Button>
+          )}
           <Button
-            className="ms-auto shrink-0"
-            onClick={onStop}
-            size="icon-sm"
-            variant="outline"
-          >
-            <SquareIcon className="size-3.5" />
-          </Button>
-        ) : (
-          <Button
+            aria-label={t("chat.sendPrompt")}
             className={cn(
-              "bg-foreground text-background hover:bg-foreground/90 ms-auto shrink-0",
+              "bg-foreground text-background hover:bg-foreground/90 shrink-0",
               (submitDisabled || !canSubmit) && "opacity-50",
             )}
             disabled={submitDisabled || !canSubmit}
@@ -188,7 +190,7 @@ export const ChatInputSurface = ({
           >
             <ArrowUpIcon className="size-3.5" />
           </Button>
-        )}
+        </div>
       </div>
     </div>
   );

@@ -343,6 +343,7 @@
     "attachFile": "Anexar arquivo",
     "attachedImage": "Imagem anexada",
     "attachment": "Anexo",
+    "cancelQueuedMessage": "Cancel queued message",
     "caseLawGreeting": "Pergunte sobre esta decisão; o texto completo está disponível aqui.",
     "chatAbout": "Converse sobre isso",
     "contextPlaceholder": "Converse sobre {context}, / para habilidades, @ para adicionar contexto",
@@ -426,6 +427,8 @@
       },
       "tryOne": "Experimente um destes para começar"
     },
+    "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
+    "queuedNotice": "Queued — sends when the current response finishes",
     "removeSuggestion": "(remover)",
     "resend": "Reenviar",
     "resizeThread": "Redimensionar conversa",

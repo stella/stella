@@ -112,6 +112,8 @@ export const ChatThreadPage = ({
     messages,
     resendLatestMessage,
     sendMessage,
+    queuedMessages,
+    removeQueuedMessage,
     stop,
     isGenerating,
     alwaysApprovedTools,
@@ -127,7 +129,12 @@ export const ChatThreadPage = ({
     isLoadingCreateDocumentMatters,
     streamdownComponents,
     approvalPendingMessageId,
-  } = useChatSession({ chat, conversationId: threadRef.threadId, workspaceId });
+  } = useChatSession({
+    chat,
+    conversationId: threadRef.threadId,
+    getSendMode,
+    workspaceId,
+  });
   const sentMessageHistoryHtml = useMemo(
     () => getUserMessageHtmlHistory(messages),
     [messages],
@@ -268,8 +275,10 @@ export const ChatThreadPage = ({
                   onAskUserSubmit={handleAskUserSubmit}
                   onCreateDocumentResolve={handleCreateDocumentResolve}
                   onOpenCreatedDocument={handleOpenCreatedDocument}
+                  onRemoveQueuedMessage={removeQueuedMessage}
                   onResend={resendLatestMessage}
                   onSendWithoutAnonymization={sendWithoutAnonymization}
+                  queuedMessages={queuedMessages}
                   showThinkingIndicator
                   showToolCallDetails={showToolCallDetails}
                   streamdownComponents={streamdownComponents}
