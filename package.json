@@ -62,7 +62,7 @@
     "lefthook": "^2.1.6",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
-    "oxlint-tsgolint": "^0.22.1",
+    "oxlint-tsgolint": "^0.23.0",
     "sherif": "catalog:",
     "turbo": "^2.9.14",
     "typescript": "catalog:",
