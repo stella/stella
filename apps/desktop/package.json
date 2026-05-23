@@ -26,7 +26,7 @@
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
-    "@tauri-apps/cli": "^2.11.1",
+    "@tauri-apps/cli": "^2.11.2",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "@vitejs/plugin-react": "catalog:",
