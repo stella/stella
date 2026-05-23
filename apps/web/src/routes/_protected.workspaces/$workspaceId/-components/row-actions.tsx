@@ -737,6 +737,7 @@ const downloadEntityAsZip = async (
     async () =>
       await fetch(apiUrl(`/entities/${workspaceId}/zip/${entity.entityId}`), {
         credentials: "include",
+        signal: AbortSignal.timeout(60_000),
       }),
   );
 
@@ -780,7 +781,9 @@ const downloadSingleFile = async (
   }
 
   const blobResult = await Result.tryPromise(async () => {
-    const s3Response = await fetch(response.data.presignedUrl);
+    const s3Response = await fetch(response.data.presignedUrl, {
+      signal: AbortSignal.timeout(60_000),
+    });
     if (!s3Response.ok) {
       throw new ClientOperationError({
         action: "downloadSingleFile",

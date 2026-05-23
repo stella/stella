@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { useForm, useStore } from "@tanstack/react-form";
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -117,24 +118,34 @@ function LoginOrSignup() {
       }
 
       if (import.meta.env.DEV) {
-        const url = new URL("/dev-public/last-otp", env.VITE_API_URL);
-        url.searchParams.set("email", parsedValue.email);
-        const response = await fetch(url, { credentials: "include" });
-        if (response.ok) {
+        // Best-effort convenience: surface the OTP in a toast so the
+        // dev doesn't have to hop to the API logs. Any failure (slow
+        // endpoint, dev API down, timeout) must not block navigation.
+        const probe = await Result.tryPromise(async () => {
+          const url = new URL("/dev-public/last-otp", env.VITE_API_URL);
+          url.searchParams.set("email", parsedValue.email);
+          const response = await fetch(url, {
+            credentials: "include",
+            signal: AbortSignal.timeout(10_000),
+          });
+          if (!response.ok) {
+            return null;
+          }
           const parsed = v.safeParse(
             v.object({ otp: v.string() }),
             await response.json(),
           );
-          if (parsed.success) {
-            stellaToast.add({
-              title: `Dev OTP: ${parsed.output.otp}`,
-              type: "info",
-              // Dev-only convenience toast — once the user reads the
-              // code there's nothing left to do with it. Auto-dismiss
-              // so it doesn't pile up across sign-in attempts.
-              timeout: 8000,
-            });
-          }
+          return parsed.success ? parsed.output.otp : null;
+        });
+        if (Result.isOk(probe) && probe.value !== null) {
+          stellaToast.add({
+            title: `Dev OTP: ${probe.value}`,
+            type: "info",
+            // Dev-only convenience toast — once the user reads the
+            // code there's nothing left to do with it. Auto-dismiss
+            // so it doesn't pile up across sign-in attempts.
+            timeout: 8000,
+          });
         }
       }
 

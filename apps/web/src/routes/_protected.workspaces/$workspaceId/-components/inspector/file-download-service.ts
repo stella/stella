@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
@@ -30,11 +32,25 @@ export const downloadTabOriginalFile = async ({
     return;
   }
 
-  const fetched = await fetch(response.data.presignedUrl);
-  if (!fetched.ok) {
-    onError(`Download failed (HTTP ${fetched.status}).`);
+  const downloaded = await Result.tryPromise(async () => {
+    const fetched = await fetch(response.data.presignedUrl, {
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (!fetched.ok) {
+      return { kind: "http-error" as const, status: fetched.status };
+    }
+    return { kind: "ok" as const, blob: await fetched.blob() };
+  });
+
+  if (Result.isError(downloaded)) {
+    onError("Download timed out or was interrupted.");
     return;
   }
 
-  downloadFile(await fetched.blob(), fileName);
+  if (downloaded.value.kind === "http-error") {
+    onError(`Download failed (HTTP ${downloaded.value.status}).`);
+    return;
+  }
+
+  downloadFile(downloaded.value.blob, fileName);
 };

@@ -304,6 +304,7 @@ const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
         headers: {
           "Accept-Language": locale,
         },
+        signal: AbortSignal.timeout(60_000),
       });
       if (!response.ok) {
         throw new ClientOperationError({
