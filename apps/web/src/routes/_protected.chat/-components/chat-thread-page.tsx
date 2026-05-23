@@ -129,7 +129,12 @@ export const ChatThreadPage = ({
     isLoadingCreateDocumentMatters,
     streamdownComponents,
     approvalPendingMessageId,
-  } = useChatSession({ chat, conversationId: threadRef.threadId, workspaceId });
+  } = useChatSession({
+    chat,
+    conversationId: threadRef.threadId,
+    getSendMode,
+    workspaceId,
+  });
   const sentMessageHistoryHtml = useMemo(
     () => getUserMessageHtmlHistory(messages),
     [messages],

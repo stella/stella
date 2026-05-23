@@ -53,6 +53,7 @@ type CreateDocumentSuccess = Extract<CreateDocumentOutput, { success: true }>;
 type UseChatSessionOptions = {
   chat: Chat<PersistedChatMessage>;
   conversationId: string;
+  getSendMode?: (() => ChatSendMode) | undefined;
   workspaceId?: string | undefined;
 };
 
@@ -78,6 +79,9 @@ const EMPTY_MCP_CONNECTOR_IDENTITIES: readonly McpConnectorApprovalIdentity[] =
 type ChatSendMessageInput = NonNullable<
   Parameters<Chat<PersistedChatMessage>["sendMessage"]>[0]
 >;
+type ChatSendMessageOptions = Parameters<
+  Chat<PersistedChatMessage>["sendMessage"]
+>[1];
 
 /**
  * A user message composed while a response was still streaming.
@@ -96,6 +100,7 @@ export type QueuedChatMessage = {
 type QueuedChatEntry = QueuedChatMessage & {
   /** Fully-built payload handed to the AI SDK on dispatch. */
   message: ChatSendMessageInput;
+  options: ChatSendMessageOptions;
 };
 
 /**
@@ -113,6 +118,7 @@ const describeQueuedMessage = (
 export const useChatSession = ({
   chat,
   conversationId,
+  getSendMode,
   workspaceId,
 }: UseChatSessionOptions) => {
   const navigate = useNavigate();
@@ -157,11 +163,28 @@ export const useChatSession = ({
     setQueuedMessages(next);
   }, []);
 
+  const withSendModeSnapshot = useCallback(
+    (options: ChatSendMessageOptions): ChatSendMessageOptions => {
+      const sendMode = getSendMode?.();
+      if (sendMode === undefined) {
+        return options;
+      }
+      return {
+        ...options,
+        body: {
+          sendMode,
+          ...options?.body,
+        },
+      };
+    },
+    [getSendMode],
+  );
+
   const enqueueMessage = useCallback(
-    (message: ChatSendMessageInput) => {
+    (message: ChatSendMessageInput, options: ChatSendMessageOptions) => {
       replaceQueuedMessages([
         ...queueRef.current,
-        { id: uuidv7(), message, ...describeQueuedMessage(message) },
+        { id: uuidv7(), message, options, ...describeQueuedMessage(message) },
       ]);
     },
     [replaceQueuedMessages],
@@ -177,7 +200,7 @@ export const useChatSession = ({
   }, [replaceQueuedMessages]);
 
   const sendMessage = useCallback(
-    async (message: ChatSendMessageInput) => {
+    async (message: ChatSendMessageInput, options?: ChatSendMessageOptions) => {
       if (conversationIdRef.current !== conversationId) {
         conversationIdRef.current = conversationId;
         isGeneratingRef.current = false;
@@ -185,8 +208,9 @@ export const useChatSession = ({
         replaceQueuedMessages([]);
       }
 
+      const requestOptions = withSendModeSnapshot(options);
       if (isGeneratingRef.current) {
-        enqueueMessage(message);
+        enqueueMessage(message, requestOptions);
         return;
       }
 
@@ -194,16 +218,16 @@ export const useChatSession = ({
       // should resume the queue without reordering the transcript:
       // append the new prompt, then dispatch the oldest waiting one.
       if (queueRef.current.length > 0) {
-        enqueueMessage(message);
+        enqueueMessage(message, requestOptions);
         const next = takeOldestQueuedMessage();
         if (next) {
           isGeneratingRef.current = true;
-          await sendChatMessage(next.message);
+          await sendChatMessage(next.message, next.options);
         }
         return;
       }
 
-      await sendChatMessage(message);
+      await sendChatMessage(message, requestOptions);
     },
     [
       conversationId,
@@ -211,6 +235,7 @@ export const useChatSession = ({
       replaceQueuedMessages,
       sendChatMessage,
       takeOldestQueuedMessage,
+      withSendModeSnapshot,
     ],
   );
 

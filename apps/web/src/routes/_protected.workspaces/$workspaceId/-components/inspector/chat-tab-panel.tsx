@@ -212,6 +212,7 @@ export const ChatTabPanel = ({
   } = useChatSession({
     chat,
     conversationId: threadRef.threadId,
+    getSendMode,
     workspaceId: tabWorkspaceId,
   });
 
