@@ -43,6 +43,14 @@ const isRateLimitValue = (value: unknown): value is RateLimitValue =>
   typeof value.count === "number" &&
   typeof value.lastRequest === "number";
 
+const isStricterRateLimitValue = (
+  candidate: RateLimitValue,
+  current: RateLimitValue,
+): boolean =>
+  candidate.count > current.count ||
+  (candidate.count === current.count &&
+    candidate.lastRequest > current.lastRequest);
+
 /**
  * Build the better-auth rate-limit storage. `ttlMs` is the longest
  * rate-limit window; it expires both Redis keys and fallback entries.
@@ -86,15 +94,42 @@ export const createAuthRateLimitStorage = (
     return { ...entry.value };
   };
 
+  const writeRedis = async (key: string, value: RateLimitValue) => {
+    await redis.set(
+      `${REDIS_KEY_PREFIX}${key}`,
+      JSON.stringify(value),
+      "PX",
+      ttlMs,
+    );
+  };
+
   return {
     get: async (key) => {
       try {
+        const fallbackValue = readFallback(key);
         const raw = await redis.get(`${REDIS_KEY_PREFIX}${key}`);
         if (raw === null) {
-          return readFallback(key);
+          return fallbackValue;
         }
         const parsed: unknown = JSON.parse(raw);
-        return isRateLimitValue(parsed) ? { ...parsed } : readFallback(key);
+        if (!isRateLimitValue(parsed)) {
+          return fallbackValue;
+        }
+        const redisValue = { ...parsed };
+        if (
+          fallbackValue &&
+          isStricterRateLimitValue(fallbackValue, redisValue)
+        ) {
+          try {
+            await writeRedis(key, fallbackValue);
+          } catch (error: unknown) {
+            logger.warn("auth.rate_limit.redis_reconcile_failed", {
+              "error.type": errorTag(error),
+            });
+          }
+          return fallbackValue;
+        }
+        return redisValue;
       } catch (error: unknown) {
         logger.warn("auth.rate_limit.redis_get_failed", {
           "error.type": errorTag(error),
@@ -108,12 +143,7 @@ export const createAuthRateLimitStorage = (
       // from this instance to limit against.
       fallback.set(key, { value: snapshot, expiresAt: Date.now() + ttlMs });
       try {
-        await redis.set(
-          `${REDIS_KEY_PREFIX}${key}`,
-          JSON.stringify(snapshot),
-          "PX",
-          ttlMs,
-        );
+        await writeRedis(key, snapshot);
       } catch (error: unknown) {
         logger.warn("auth.rate_limit.redis_set_failed", {
           "error.type": errorTag(error),

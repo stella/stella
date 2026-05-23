@@ -36,10 +36,10 @@ void mock.module("ioredis", () => ({ default: FakeRedis }));
 const { createAuthRateLimitStorage } =
   await import("@/api/lib/rate-limit/auth-storage");
 
-const value = (count: number) => ({
+const value = (count: number, lastRequest = 1000) => ({
   key: "ip:1.2.3.4",
   count,
-  lastRequest: 1000,
+  lastRequest,
 });
 
 describe("auth rate-limit storage", () => {
@@ -117,5 +117,19 @@ describe("auth rate-limit storage", () => {
     redisDown = true;
 
     expect(await storage.get("ip:1.2.3.4")).toEqual(value(7));
+  });
+
+  test("keeps the stricter fallback counter when Redis has stale data", async () => {
+    const storage = createAuthRateLimitStorage(60_000);
+
+    await storage.set("ip:1.2.3.4", value(5, 1000));
+    redisDown = true;
+    await storage.set("ip:1.2.3.4", value(6, 2000));
+    redisDown = false;
+
+    expect(await storage.get("ip:1.2.3.4")).toEqual(value(6, 2000));
+    expect(redisStore.get("auth:ratelimit:ip:1.2.3.4")).toBe(
+      JSON.stringify(value(6, 2000)),
+    );
   });
 });
