@@ -501,7 +501,7 @@ const pagesContainerStyles: CSSProperties = {
  * Returns a Map of "comment-{id}" / "revision-{revisionId}" → scroll-container Y.
  */
 function computeAnchorPositions(
-  pmView: EditorView | null,
+  state: EditorState | null,
   layout: Layout,
   blocks: FlowBlock[],
   measures: Measure[],
@@ -509,11 +509,11 @@ function computeAnchorPositions(
   options: { includeRevisions: boolean },
 ): Map<string, number> {
   const positions = new Map<string, number>();
-  if (!pmView?.state) {
+  if (!state) {
     return positions;
   }
 
-  const { doc: pmDoc, schema } = pmView.state;
+  const { doc: pmDoc, schema } = state;
   const commentType = schema.marks["comment"];
   const insertionType = options.includeRevisions
     ? schema.marks["insertion"]
@@ -2002,14 +2002,17 @@ export function PagedEditor(
         }
 
         // Compute anchor Y positions for comments sidebar (works without DOM queries).
-        // This is expensive on docs with many comments/tracked changes, so typing
-        // layouts skip it and let the idle full-layout reconcile update the sidebar.
-        const shouldComputeAnchorPositions =
-          onAnchorPositionsChange &&
-          (options.forceFull === true || !options.dirtyRange);
-        if (shouldComputeAnchorPositions) {
+        // Runs on every layout pass, including incremental typing passes — gating on
+        // forceFull/dirtyRange left cards stuck at stale Y positions until the 200ms
+        // idle reconcile, so they drifted away from their anchor text while editing.
+        // The descendants walk visits every node, but the per-node work is gated by
+        // `isText` plus a comment/insertion/deletion mark check, so it stays cheap
+        // even on long documents; the layout pipeline is RAF-throttled on top of that.
+        // We pass the `state` arg (not the live view) so anchor positions are computed
+        // against the exact same doc snapshot used for `newLayout` / `newMeasures`.
+        if (onAnchorPositionsChange) {
           const positions = computeAnchorPositions(
-            hiddenPMRef.current?.getView() ?? null,
+            state,
             newLayout,
             newBlocks,
             newMeasures,
@@ -4517,8 +4520,9 @@ export function PagedEditor(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-layout when non-document layout inputs change (e.g., after HF editor save
-  // or parent-driven page setup/theme updates).
+  // Re-layout when non-document layout inputs change (e.g., after HF editor save,
+  // parent-driven page setup/theme updates, or comment anchor mapping being wired
+  // when the sidebar opens after hidden edits).
   // runLayoutPipeline includes these values in its deps, but it
   // only runs when explicitly called — this effect triggers it.
   const layoutInputEpochRef = useRef(0);
@@ -4544,6 +4548,8 @@ export function PagedEditor(
     pageGap,
     sectionProperties,
     _theme,
+    onAnchorPositionsChange,
+    anchorPositionMode,
   ]);
 
   // Re-compute selection overlay when the container resizes.
