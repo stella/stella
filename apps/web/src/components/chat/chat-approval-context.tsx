@@ -1,5 +1,7 @@
 import { createContext, use } from "react";
 
+import { panic } from "better-result";
+
 import type {
   ApprovalToolName,
   ToolApprovalGrant,
@@ -48,7 +50,7 @@ export const ChatApprovalContext =
 export const useChatApproval = (): ChatApprovalContextValue => {
   const value = use(ChatApprovalContext);
   if (value === null) {
-    throw new Error(
+    panic(
       "useChatApproval must be used inside a <ChatApprovalContext> provider",
     );
   }

@@ -1,5 +1,7 @@
 import { createContext, use } from "react";
 
+import { panic } from "better-result";
+
 import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
 
 /**
@@ -29,9 +31,7 @@ export const ChatMattersContext = createContext<ChatMattersContextValue | null>(
 export const useChatMatters = (): ChatMattersContextValue => {
   const value = use(ChatMattersContext);
   if (value === null) {
-    throw new Error(
-      "useChatMatters must be used inside a <ChatMattersContext> provider",
-    );
+    panic("useChatMatters must be used inside a <ChatMattersContext> provider");
   }
   return value;
 };
