@@ -143,35 +143,71 @@ export const useChatSession = ({
 
   // Mirror `isGenerating` (computed below) and the live queue into
   // refs so the stable `sendMessage` callback can branch on the
-  // latest committed values. The refs are assigned in effects (not
-  // during render) so a concurrent re-render that bails out can't
-  // strand them ahead of committed state.
+  // latest committed values. The refs are updated in effects or
+  // queue-event helpers (not during render) so a concurrent re-render
+  // that bails out can't strand them ahead of committed state.
   const isGeneratingRef = useRef(false);
   const queueRef = useRef<QueuedChatEntry[]>([]);
+  const wasGeneratingRef = useRef(false);
   const [queuedMessages, setQueuedMessages] = useState<QueuedChatEntry[]>([]);
+
+  const replaceQueuedMessages = useCallback((next: QueuedChatEntry[]) => {
+    queueRef.current = next;
+    setQueuedMessages(next);
+  }, []);
+
+  const enqueueMessage = useCallback(
+    (message: ChatSendMessageInput) => {
+      replaceQueuedMessages([
+        ...queueRef.current,
+        { id: uuidv7(), message, ...describeQueuedMessage(message) },
+      ]);
+    },
+    [replaceQueuedMessages],
+  );
+
+  const takeOldestQueuedMessage = useCallback(() => {
+    const next = queueRef.current.at(0);
+    if (!next) {
+      return null;
+    }
+    replaceQueuedMessages(queueRef.current.slice(1));
+    return next;
+  }, [replaceQueuedMessages]);
 
   const sendMessage = useCallback(
     async (message: ChatSendMessageInput) => {
-      // Enqueue while a turn is streaming — and also when the queue
-      // already has items waiting (e.g. after an errored turn that
-      // gated the queue). Sending directly in that case would jump
-      // the new message ahead of the buffered ones and reorder the
-      // transcript.
-      if (isGeneratingRef.current || queueRef.current.length > 0) {
-        setQueuedMessages((prev) => [
-          ...prev,
-          { id: uuidv7(), message, ...describeQueuedMessage(message) },
-        ]);
+      if (isGeneratingRef.current) {
+        enqueueMessage(message);
         return;
       }
+
+      // When the queue is gated after an errored turn, a manual send
+      // should resume the queue without reordering the transcript:
+      // append the new prompt, then dispatch the oldest waiting one.
+      if (queueRef.current.length > 0) {
+        enqueueMessage(message);
+        const next = takeOldestQueuedMessage();
+        if (next) {
+          isGeneratingRef.current = true;
+          await sendChatMessage(next.message);
+        }
+        return;
+      }
+
       await sendChatMessage(message);
     },
-    [sendChatMessage],
+    [enqueueMessage, sendChatMessage, takeOldestQueuedMessage],
   );
 
-  const removeQueuedMessage = useCallback((id: string) => {
-    setQueuedMessages((prev) => prev.filter((entry) => entry.id !== id));
-  }, []);
+  const removeQueuedMessage = useCallback(
+    (id: string) => {
+      replaceQueuedMessages(
+        queueRef.current.filter((entry) => entry.id !== id),
+      );
+    },
+    [replaceQueuedMessages],
+  );
 
   const resendLatestMessage = useCallback(
     async ({ messageId, sendMode }: ResendLatestMessageOptions = {}) => {
@@ -391,6 +427,11 @@ export const useChatSession = ({
     queueRef.current = queuedMessages;
   }, [queuedMessages]);
 
+  useEffect(() => {
+    replaceQueuedMessages([]);
+    wasGeneratingRef.current = false;
+  }, [conversationId, replaceQueuedMessages]);
+
   // Drain the queue one message per turn. When the response
   // finishes (`isGenerating` falls back to false) the oldest queued
   // message is dispatched; sending it flips the status straight
@@ -400,7 +441,6 @@ export const useChatSession = ({
   // into a failing provider just burns quota and spams the user
   // with repeats of the same error. The next manual send (or a
   // successful `regenerate`) lifts the gate.
-  const wasGeneratingRef = useRef(isGenerating);
   useEffect(() => {
     const finishedTurn = wasGeneratingRef.current && !isGenerating;
     wasGeneratingRef.current = isGenerating;
@@ -411,9 +451,16 @@ export const useChatSession = ({
     if (!next) {
       return;
     }
-    setQueuedMessages((prev) => prev.slice(1));
+    replaceQueuedMessages(queuedMessages.slice(1));
+    isGeneratingRef.current = true;
     void sendChatMessage(next.message);
-  }, [isGenerating, queuedMessages, sendChatMessage, status]);
+  }, [
+    isGenerating,
+    queuedMessages,
+    replaceQueuedMessages,
+    sendChatMessage,
+    status,
+  ]);
 
   useEffect(() => {
     setConversationApprovedTools(readConversationApprovedTools(conversationId));
