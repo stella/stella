@@ -203,7 +203,13 @@ export default defineConfig({
     "typescript/return-await": ["error", "error-handling-correctness-only"],
     "typescript/non-nullable-type-assertion-style": "off",
   },
-  ignorePatterns: ["**/routeTree.gen.ts", "**/*.config.js"],
+  ignorePatterns: [
+    "**/routeTree.gen.ts",
+    "**/*.config.js",
+    // Module-augmentation files must use `interface` for declaration
+    // merging; oxlint's --fix would rewrite it to `type` and break it.
+    "types/**/*.d.ts",
+  ],
 
   jsPlugins: [
     "@tanstack/eslint-plugin-query",

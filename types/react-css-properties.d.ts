@@ -7,11 +7,15 @@
 // pass CSS variables without a cast.
 //
 // `interface` is required here: declaration merging only works with
-// interfaces, not type aliases.
-/* oxlint-disable typescript/consistent-type-definitions */
+// interfaces, not type aliases. The file is in `ignorePatterns` in
+// oxlint.config.ts so the autofix for
+// typescript/consistent-type-definitions doesn't rewrite it back to
+// `type` and silently break the augmentation.
 
 import "react";
 
 declare module "react" {
-  type CSSProperties = Record<`--${string}`, string | number | undefined>;
+  interface CSSProperties {
+    [cssVar: `--${string}`]: string | number | undefined;
+  }
 }

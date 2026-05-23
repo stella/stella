@@ -14,7 +14,7 @@ pre-commit:
       run: bun run secrets:check:staged
     lint:
       glob: "**/*.{ts,tsx,js,jsx}"
-      run: bun --bun oxlint -c oxlint.config.ts --threads=2 --deny-warnings --type-aware --fix {staged_files}
+      run: bun --bun oxlint -c oxlint.config.ts --threads=2 --deny-warnings --type-aware --no-error-on-unmatched-pattern --fix {staged_files}
       stage_fixed: true
     format:
       glob: "**/*.{ts,tsx,js,jsx,json,css}"
