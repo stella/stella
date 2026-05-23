@@ -26,6 +26,45 @@
 
 import { getPropertyName, isIdentifier } from "./utils.ts";
 
+const getNodeType = (node: unknown): string | null => {
+  if (typeof node !== "object" || node === null || !("type" in node)) {
+    return null;
+  }
+  return typeof node.type === "string" ? node.type : null;
+};
+
+const getNodeArguments = (node: unknown): unknown[] | null => {
+  if (
+    typeof node !== "object" ||
+    node === null ||
+    !("arguments" in node) ||
+    !Array.isArray(node.arguments)
+  ) {
+    return null;
+  }
+  return node.arguments.map((value: unknown) => value);
+};
+
+const getObjectExpressionProperties = (node: unknown): unknown[] | null => {
+  if (
+    getNodeType(node) !== "ObjectExpression" ||
+    typeof node !== "object" ||
+    node === null ||
+    !("properties" in node) ||
+    !Array.isArray(node.properties)
+  ) {
+    return null;
+  }
+  return node.properties.map((value: unknown) => value);
+};
+
+const getPropertyKey = (node: unknown): unknown => {
+  if (typeof node !== "object" || node === null || !("key" in node)) {
+    return null;
+  }
+  return node.key;
+};
+
 const isFetchCallee = (callee: unknown): boolean => {
   if (isIdentifier(callee, "fetch")) {
     return true;
@@ -56,31 +95,53 @@ const isFetchCallee = (callee: unknown): boolean => {
   );
 };
 
+type RequestConstructorSignalState = "yes" | "no" | "opaque";
+
 // `fetch(new Request(url, { signal }))` carries the signal on the
-// Request object, so we can't see it from this side; treat the call
-// as opaque rather than false-flagging it.
-const isRequestConstructor = (node: unknown): boolean => {
+// Request object. Inspect object-literal init args when we can; keep
+// non-literal init args opaque because a variable may carry `signal`.
+const requestConstructorHasSignal = (
+  node: unknown,
+): RequestConstructorSignalState => {
+  if (getNodeType(node) !== "NewExpression") {
+    return "no";
+  }
   if (
     typeof node !== "object" ||
     node === null ||
-    (node as { type?: unknown }).type !== "NewExpression"
+    !("callee" in node) ||
+    !isIdentifier(node.callee, "Request")
   ) {
-    return false;
+    return "no";
   }
-  return isIdentifier((node as { callee?: unknown }).callee, "Request");
+  const requestArguments = getNodeArguments(node);
+  if (requestArguments === null) {
+    return "no";
+  }
+  const init = requestArguments.at(1);
+  if (init === undefined) {
+    return "no";
+  }
+  if (getNodeType(init) !== "ObjectExpression") {
+    return "opaque";
+  }
+  return optionsObjectHasSignal(init);
 };
 
-const optionsObjectHasSignal = (options: {
-  properties: { type: string; key?: unknown }[];
-}): "yes" | "no" | "opaque" => {
-  for (const prop of options.properties) {
-    if (prop.type === "SpreadElement") {
+const optionsObjectHasSignal = (options: unknown): "yes" | "no" | "opaque" => {
+  const properties = getObjectExpressionProperties(options);
+  if (properties === null) {
+    return "opaque";
+  }
+  for (const prop of properties) {
+    const propType = getNodeType(prop);
+    if (propType === "SpreadElement") {
       return "opaque";
     }
-    if (prop.type !== "Property") {
+    if (propType !== "Property") {
       continue;
     }
-    if (getPropertyName(prop.key) === "signal") {
+    if (getPropertyName(getPropertyKey(prop)) === "signal") {
       return "yes";
     }
   }
@@ -110,14 +171,14 @@ export default {
             const [firstArg, options] = node.arguments;
 
             if (options === undefined) {
-              if (isRequestConstructor(firstArg)) {
+              if (requestConstructorHasSignal(firstArg) !== "no") {
                 return;
               }
               context.report({ node, messageId: "missingSignal" });
               return;
             }
 
-            if (options.type !== "ObjectExpression") {
+            if (getNodeType(options) !== "ObjectExpression") {
               return;
             }
 
