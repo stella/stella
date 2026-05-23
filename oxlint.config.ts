@@ -551,6 +551,7 @@ export default defineConfig({
       files: [
         "apps/playground/**/*.{ts,tsx}",
         "apps/api/src/tests/**/*.ts",
+        "**/scripts/**",
         "**/*.test.{ts,tsx}",
         "**/*.config.{ts,tsx}",
       ],

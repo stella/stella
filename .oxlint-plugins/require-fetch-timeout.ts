@@ -51,8 +51,23 @@ const isFetchCallee = (callee: unknown): boolean => {
   return (
     isIdentifier(member.object, "globalThis") ||
     isIdentifier(member.object, "window") ||
-    isIdentifier(member.object, "self")
+    isIdentifier(member.object, "self") ||
+    isIdentifier(member.object, "global")
   );
+};
+
+// `fetch(new Request(url, { signal }))` carries the signal on the
+// Request object, so we can't see it from this side; treat the call
+// as opaque rather than false-flagging it.
+const isRequestConstructor = (node: unknown): boolean => {
+  if (
+    typeof node !== "object" ||
+    node === null ||
+    (node as { type?: unknown }).type !== "NewExpression"
+  ) {
+    return false;
+  }
+  return isIdentifier((node as { callee?: unknown }).callee, "Request");
 };
 
 const optionsObjectHasSignal = (options: {
@@ -92,9 +107,12 @@ export default {
               return;
             }
 
-            const [, options] = node.arguments;
+            const [firstArg, options] = node.arguments;
 
             if (options === undefined) {
+              if (isRequestConstructor(firstArg)) {
+                return;
+              }
               context.report({ node, messageId: "missingSignal" });
               return;
             }
