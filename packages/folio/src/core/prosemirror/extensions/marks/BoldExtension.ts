@@ -2,6 +2,7 @@
  * Bold Mark Extension
  */
 
+import { panic } from "better-result";
 import { toggleMark } from "prosemirror-commands";
 
 import { createMarkExtension } from "../create";
@@ -37,7 +38,7 @@ export const BoldExtension = createMarkExtension({
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
     const boldType = ctx.schema.marks["bold"];
     if (!boldType) {
-      throw new Error("Missing mark type: bold");
+      panic("Missing mark type: bold");
     }
     return {
       commands: {

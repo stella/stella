@@ -2,6 +2,7 @@
  * Superscript Mark Extension
  */
 
+import { panic } from "better-result";
 import { toggleMark } from "prosemirror-commands";
 
 import { createMarkExtension } from "../create";
@@ -20,7 +21,7 @@ export const SuperscriptExtension = createMarkExtension({
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
     const superscriptType = ctx.schema.marks["superscript"];
     if (!superscriptType) {
-      throw new Error("Missing mark type: superscript");
+      panic("Missing mark type: superscript");
     }
     return {
       commands: {

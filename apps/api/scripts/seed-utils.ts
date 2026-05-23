@@ -5,6 +5,8 @@
  * both `seed-dev.ts` and `seed-templates.ts`.
  */
 
+import { panic } from "better-result";
+
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 
@@ -131,7 +133,7 @@ const getGeneratedSeedColleague = (index: number): SeedColleague => {
     ];
 
   if (!firstName || !lastName) {
-    throw new Error(`Seed data: generated colleague name missing at ${index}`);
+    panic(`Seed data: generated colleague name missing at ${index}`);
   }
 
   const ordinal = String(index + 1).padStart(3, "0");
@@ -160,7 +162,7 @@ export const getSeedColleagues = (
   colleagueCount: number,
 ): readonly SeedColleague[] => {
   if (colleagueCount > SEED_COLLEAGUES.length) {
-    throw new Error(
+    panic(
       `Seed data: requested ${colleagueCount} colleagues but only ${SEED_COLLEAGUES.length} are available`,
     );
   }
@@ -206,7 +208,7 @@ export const pickAuthor = (
 ): string => {
   const id = userIds[index % userIds.length];
   if (!id) {
-    throw new Error("Empty seed user list");
+    panic("Empty seed user list");
   }
   return id;
 };
@@ -249,7 +251,7 @@ export const seedId = <T extends SafeIdType = never>(
 export const at = <T>(arr: readonly T[], i: number): T => {
   const item = arr[i];
   if (item === undefined) {
-    throw new Error(`Seed data: index ${i} out of bounds`);
+    panic(`Seed data: index ${i} out of bounds`);
   }
   return item;
 };

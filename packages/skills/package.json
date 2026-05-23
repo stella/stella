@@ -20,6 +20,9 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/skills",
     "format": "oxfmt ."
   },
+  "dependencies": {
+    "better-result": "catalog:"
+  },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
     "@types/bun": "catalog:",

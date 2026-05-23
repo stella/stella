@@ -16,6 +16,9 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/scripts",
     "format": "oxfmt ."
   },
+  "dependencies": {
+    "better-result": "catalog:"
+  },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
     "@types/bun": "catalog:",

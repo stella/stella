@@ -11,6 +11,8 @@
  *   falling back to fontSize * 1.0 (OOXML spec default single spacing)
  */
 
+import { panic } from "better-result";
+
 import { resolveFontFamily } from "../../utils/fontResolver";
 import { DOCX_BOLD_FONT_WEIGHT } from "../../utils/fontWeights";
 
@@ -85,9 +87,7 @@ export function getCanvasContext(): CanvasRenderingContext2D {
       typeof document !== "undefined" ? document.createElement("canvas") : null;
 
     if (!canvas) {
-      throw new Error(
-        "Canvas not available. Ensure this runs in a DOM environment.",
-      );
+      panic("Canvas not available. Ensure this runs in a DOM environment.");
     }
 
     canvasContext = canvas.getContext("2d");

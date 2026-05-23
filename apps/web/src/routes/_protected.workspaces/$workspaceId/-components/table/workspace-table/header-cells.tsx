@@ -12,6 +12,7 @@ import {
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { flexRender } from "@tanstack/react-table";
 import type { Column } from "@tanstack/react-table";
+import { panic } from "better-result";
 import { CheckIcon, GripVerticalIcon, MinusIcon } from "lucide-react";
 
 import { cn } from "@stll/ui/lib/utils";
@@ -288,7 +289,7 @@ export const getOrderedHeaders = (
 export const getRequiredHeader = (headers: TableHeader[], columnId: string) => {
   const header = headers.find((candidate) => candidate.column.id === columnId);
   if (!header) {
-    throw new Error(`Missing header for workspace table column "${columnId}"`);
+    panic(`Missing header for workspace table column "${columnId}"`);
   }
 
   return header;

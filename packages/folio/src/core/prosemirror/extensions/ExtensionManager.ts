@@ -6,6 +6,7 @@
  * 2. initializeRuntime() — calls onSchemaReady() on each extension, collects plugins/commands/keymaps
  */
 
+import { panic } from "better-result";
 import { keymap } from "prosemirror-keymap";
 import { Schema } from "prosemirror-model";
 import type { NodeSpec, MarkSpec } from "prosemirror-model";
@@ -55,7 +56,7 @@ export class ExtensionManager {
    */
   initializeRuntime(): void {
     if (!this.schema) {
-      throw new Error(
+      panic(
         "ExtensionManager: buildSchema() must be called before initializeRuntime()",
       );
     }
@@ -97,7 +98,7 @@ export class ExtensionManager {
    */
   getSchema(): Schema {
     if (!this.schema) {
-      throw new Error("ExtensionManager: buildSchema() must be called first");
+      panic("ExtensionManager: buildSchema() must be called first");
     }
     return this.schema;
   }

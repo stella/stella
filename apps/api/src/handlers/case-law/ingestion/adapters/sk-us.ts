@@ -22,7 +22,7 @@
  * to the current year on first use.
  */
 
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 
 import {
   ADAPTER_KEYS,
@@ -142,7 +142,7 @@ const getToken = async (signal?: AbortSignal): Promise<string> => {
 
   const data = await response.json();
   if (!isTokenResponse(data)) {
-    throw new Error("SK ÚS OAuth2 token returned an invalid payload");
+    panic("SK ÚS OAuth2 token returned an invalid payload");
   }
 
   // Cache with 30s safety margin
@@ -415,7 +415,7 @@ const executeSearch = async (
   if (!isSearchResponse(data)) {
     invalidateToken();
     const preview = JSON.stringify(data).slice(0, 200);
-    throw new Error(`SK ÚS search returned an invalid payload: ${preview}`);
+    panic(`SK ÚS search returned an invalid payload: ${preview}`);
   }
 
   return data;

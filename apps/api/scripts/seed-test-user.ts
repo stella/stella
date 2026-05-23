@@ -18,6 +18,7 @@
  * session expiry without duplicating data.
  */
 
+import { panic } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
@@ -208,7 +209,7 @@ export async function ensurePrimarySeedUserInOrganization({
   });
 
   if (!existingUser) {
-    throw new Error(
+    panic(
       `Primary seed user ${userId} does not exist; sign in first or run db:seed-test-user`,
     );
   }

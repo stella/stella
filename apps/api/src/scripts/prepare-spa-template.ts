@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * One-off script: inserts {{placeholder}} tags into the SPA DOCX
  * for testing template filling. Replaces specific text patterns
@@ -50,7 +51,7 @@ const run = async () => {
 
   const docEntry = zip.file("word/document.xml");
   if (!docEntry) {
-    throw new Error("No word/document.xml found");
+    panic("No word/document.xml found");
   }
 
   let xml = await docEntry.async("string");

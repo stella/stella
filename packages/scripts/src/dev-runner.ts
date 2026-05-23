@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { panic } from "better-result";
 import {
   copyFileSync,
   existsSync,
@@ -184,7 +185,7 @@ const resolveMaybeRelativePath = (cwd: string, value: string) =>
 
 const validateOffset = (offset: number, source: string) => {
   if (!Number.isInteger(offset) || offset < 0 || offset > MAX_PORT_OFFSET) {
-    throw new Error(
+    panic(
       `${source} must be an integer between 0 and ${String(MAX_PORT_OFFSET)}`,
     );
   }
@@ -234,7 +235,7 @@ export const parseArgs = (args: readonly string[]): ParsedArgs => {
     if (arg === "--port-offset") {
       const value = args[i + 1];
       if (!value) {
-        throw new Error("--port-offset requires a value");
+        panic("--port-offset requires a value");
       }
       portOffset = Number.parseInt(value, 10);
       i++;
@@ -244,7 +245,7 @@ export const parseArgs = (args: readonly string[]): ParsedArgs => {
     if (arg === "--dev-instance") {
       const value = args[i + 1];
       if (!value) {
-        throw new Error("--dev-instance requires a value");
+        panic("--dev-instance requires a value");
       }
       devInstance = value;
       i++;
@@ -254,14 +255,14 @@ export const parseArgs = (args: readonly string[]): ParsedArgs => {
     if (arg === "--infra-offset") {
       const value = args[i + 1];
       if (!value) {
-        throw new Error("--infra-offset requires a value");
+        panic("--infra-offset requires a value");
       }
       infraOffset = Number.parseInt(value, 10);
       i++;
       continue;
     }
 
-    throw new Error(`Unknown argument: ${arg}`);
+    panic(`Unknown argument: ${arg}`);
   }
 
   return {
@@ -1655,7 +1656,7 @@ const main = async () => {
     infraOffset < 0 ||
     infraOffset > MAX_INFRA_OFFSET
   ) {
-    throw new Error(
+    panic(
       `STELLA_INFRA_OFFSET must be an integer between 0 and ${String(MAX_INFRA_OFFSET)}`,
     );
   }

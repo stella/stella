@@ -5,6 +5,7 @@
 
 import type { CSSProperties } from "react";
 
+import { panic } from "better-result";
 import {
   AlignCenterIcon,
   AlignJustifyIcon,
@@ -67,7 +68,7 @@ export function AlignmentButtons({
 }: AlignmentButtonsProps) {
   const defaultOption = OPTIONS[0];
   if (!defaultOption) {
-    throw new Error("AlignmentButtons: OPTIONS is empty");
+    panic("AlignmentButtons: OPTIONS is empty");
   }
   const current = OPTIONS.find((o) => o.value === value) ?? defaultOption;
 

@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 const secretTokenBrand: unique symbol = Symbol("secretToken");
 
 export type SecretToken<TName extends string> = {
@@ -15,7 +17,7 @@ export const createSecretTokenBoundary = <const TName extends string>(
   return {
     create(value: string): SecretToken<TName> {
       if (value.length === 0) {
-        throw new Error(`Cannot create empty secret token: ${name}`);
+        panic(`Cannot create empty secret token: ${name}`);
       }
 
       const token: SecretToken<TName> = {
@@ -40,9 +42,7 @@ export const createSecretTokenBoundary = <const TName extends string>(
       const value = rawTokenValues.get(token);
 
       if (!value) {
-        throw new Error(
-          `Secret token was not created by this boundary: ${name}`,
-        );
+        panic(`Secret token was not created by this boundary: ${name}`);
       }
 
       return value;

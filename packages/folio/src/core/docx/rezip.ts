@@ -29,6 +29,7 @@
  * - docProps/* - Document properties (preserved)
  */
 
+import { panic } from "better-result";
 import JSZip from "jszip";
 
 import type {
@@ -328,7 +329,7 @@ function decodeDataUrl(dataUrl: string): {
 } {
   const match = /^data:([^;]+);base64,(.+)$/u.exec(dataUrl);
   if (!match) {
-    throw new Error("Invalid data URL");
+    panic("Invalid data URL");
   }
 
   // SAFETY: capture groups [1] and [2] always present when regex matches
@@ -927,7 +928,7 @@ export async function addRelationship(
   const relsFile = zip.file(relsPath);
 
   if (!relsFile) {
-    throw new Error("document.xml.rels not found in DOCX");
+    panic("document.xml.rels not found in DOCX");
   }
 
   const relsXml = await relsFile.async("text");

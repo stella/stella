@@ -5,6 +5,7 @@
  * plus an Extension for plugins and commands.
  */
 
+import { panic } from "better-result";
 import type { NodeSpec, Node as PMNode } from "prosemirror-model";
 import { Plugin, PluginKey, TextSelection, Selection } from "prosemirror-state";
 import type { EditorState, Transaction, Command } from "prosemirror-state";
@@ -953,16 +954,16 @@ export const TablePluginExtension = createExtension({
     // Non-null assertions after throw guards; TypeScript does not narrow through
     // nested function boundaries so we assert here.
     if (!schema.nodes["paragraph"]) {
-      throw new Error("Missing node type: paragraph");
+      panic("Missing node type: paragraph");
     }
     if (!schema.nodes["tableCell"]) {
-      throw new Error("Missing node type: tableCell");
+      panic("Missing node type: tableCell");
     }
     if (!schema.nodes["tableRow"]) {
-      throw new Error("Missing node type: tableRow");
+      panic("Missing node type: tableRow");
     }
     if (!schema.nodes["table"]) {
-      throw new Error("Missing node type: table");
+      panic("Missing node type: table");
     }
     const nodeTypeParagraph = schema.nodes["paragraph"];
     const nodeTypeTableCell = schema.nodes["tableCell"];

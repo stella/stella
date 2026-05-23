@@ -55,6 +55,9 @@
     "format": "oxfmt .",
     "prepack": "bun run build"
   },
+  "dependencies": {
+    "better-result": "catalog:"
+  },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
     "@types/bun": "catalog:",

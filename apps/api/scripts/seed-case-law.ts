@@ -16,6 +16,7 @@
  *   bun apps/api/scripts/seed-case-law.ts
  */
 
+import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -151,7 +152,7 @@ const ensureSearchPreviewConfig = async () => {
 
 export async function seedCaseLaw() {
   if (process.env.NODE_ENV === "production") {
-    throw new Error("Refusing to run: NODE_ENV must not be 'production'.");
+    panic("Refusing to run: NODE_ENV must not be 'production'.");
   }
 
   const scopedDb = createScopedDb(
@@ -260,7 +261,7 @@ export async function seedCaseLaw() {
         decisionId = existing.at(0)?.id;
       }
       if (!decisionId) {
-        throw new Error(
+        panic(
           `Could not resolve decision id for ${adapterKey} ${d.case_number} ${d.language}`,
         );
       }

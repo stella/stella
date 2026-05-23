@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 import {
   ArrowRightIcon,
   CheckIcon,
@@ -253,7 +254,7 @@ const ActiveDocxEditSummary = ({ input }: ActiveDocxEditSummaryProps) => {
         });
       default:
         operation satisfies never;
-        throw new Error("Unsupported DOCX edit operation");
+        return panic("Unsupported DOCX edit operation");
     }
   };
 

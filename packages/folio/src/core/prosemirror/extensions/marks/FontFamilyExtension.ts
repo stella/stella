@@ -2,6 +2,8 @@
  * Font Family Mark Extension
  */
 
+import { panic } from "better-result";
+
 import { createMarkExtension } from "../create";
 import type { ExtensionContext, ExtensionRuntime } from "../types";
 import { setMark, removeMark } from "./markUtils";
@@ -56,7 +58,7 @@ export const FontFamilyExtension = createMarkExtension({
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
     const fontFamilyType = ctx.schema.marks["fontFamily"];
     if (!fontFamilyType) {
-      throw new Error("Missing mark type: fontFamily");
+      panic("Missing mark type: fontFamily");
     }
     return {
       commands: {
