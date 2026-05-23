@@ -222,7 +222,7 @@ const ensureSource = async (
 
   // TODO: fix this
   if (!created) {
-    throw new Error(`Failed to create source row for adapter "${adapterKey}"`);
+    panic(`Failed to create source row for adapter "${adapterKey}"`);
   }
 
   return created;

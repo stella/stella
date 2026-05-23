@@ -239,7 +239,7 @@ export const seedId = <T extends SafeIdType = never>(
     .digest("hex");
   const raw = hash.slice(0, 32);
   if (raw.length !== 32) {
-    throw new Error(`Seed data: failed to create UUID for label "${label}"`);
+    panic(`Seed data: failed to create UUID for label "${label}"`);
   }
   const uuid = `${raw.slice(0, 12)}5${raw.slice(13, 16)}8${raw.slice(17)}`;
   return toSafeId<T>(

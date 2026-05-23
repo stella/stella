@@ -196,3 +196,24 @@ export class ExtractionWorkerError extends TaggedError(
   message: string;
   exitCode: number | null;
 }>() {}
+
+/**
+ * HTTP/network failure at an outbound or inbound boundary. Carries the URL,
+ * status, and optional response body for structured logging and retry logic.
+ */
+export class FetchBoundaryError extends TaggedError("FetchBoundaryError")<{
+  url: string;
+  status?: number;
+  statusText?: string;
+  body?: string;
+  message: string;
+  cause?: unknown;
+}>() {}
+
+/** Timeout waiting for a readiness probe, subprocess, or external resource. */
+export class TimeoutError extends TaggedError("TimeoutError")<{
+  message: string;
+  label: string;
+  timeoutMs?: number;
+  cause?: unknown;
+}>() {}

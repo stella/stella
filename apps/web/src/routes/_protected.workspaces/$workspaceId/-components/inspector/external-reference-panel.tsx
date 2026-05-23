@@ -42,7 +42,7 @@ import { useExternalSourceStore } from "@/components/chat/external-source-store"
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
 import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
-import { APIError, toAPIError } from "@/lib/errors";
+import { APIError, FetchBoundaryError, toAPIError } from "@/lib/errors";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
@@ -427,9 +427,15 @@ const useExternalPdfBuffer = ({
       });
 
       if (!response.ok) {
-        throw new Error(
-          `External PDF fetch failed: ${String(response.status)}`,
-        );
+        throw new FetchBoundaryError({
+          // SAFETY: `enabled` below guarantees `url` is defined when the
+          // queryFn runs.
+          // eslint-disable-next-line typescript/no-non-null-assertion
+          url: url!,
+          status: response.status,
+          statusText: response.statusText,
+          message: `External PDF fetch failed: ${String(response.status)}`,
+        });
       }
 
       const buffer = await response.arrayBuffer();

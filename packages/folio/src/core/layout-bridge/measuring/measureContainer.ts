@@ -92,7 +92,7 @@ export function getCanvasContext(): CanvasRenderingContext2D {
 
     canvasContext = canvas.getContext("2d");
     if (!canvasContext) {
-      throw new Error("Failed to get 2D context from canvas");
+      panic("Failed to get 2D context from canvas");
     }
   }
 

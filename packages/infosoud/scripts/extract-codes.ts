@@ -78,7 +78,7 @@ const fetchText = async (url: string): Promise<string> => {
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed for ${url}: ${response.status}`);
+    panic(`Request failed for ${url}: ${response.status}`);
   }
 
   return response.text();
@@ -150,12 +150,12 @@ const discoverCatalogBundleUrl = async (): Promise<string> => {
 const extractObjectLiteral = (scriptText: string, prefix: string): string => {
   const prefixIndex = scriptText.indexOf(prefix);
   if (prefixIndex === -1) {
-    throw new Error(`Could not find ${prefix} in bundle`);
+    panic(`Could not find ${prefix} in bundle`);
   }
 
   const startIndex = scriptText.indexOf("{", prefixIndex);
   if (startIndex === -1) {
-    throw new Error(`Could not locate object start for ${prefix}`);
+    panic(`Could not locate object start for ${prefix}`);
   }
 
   let depth = 0;
@@ -179,7 +179,7 @@ const extractObjectLiteral = (scriptText: string, prefix: string): string => {
   }
 
   if (endIndex === -1) {
-    throw new Error(`Could not locate object end for ${prefix}`);
+    panic(`Could not locate object end for ${prefix}`);
   }
 
   return scriptText.slice(startIndex, endIndex + 1);

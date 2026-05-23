@@ -25,6 +25,20 @@ export class ClientUnknownError extends TaggedError("ClientUnknownError")<{
   message: string;
 }>() {}
 
+/**
+ * HTTP/network failure at an outbound boundary (raw fetch in the browser).
+ * Carries the URL, status, and optional response body so callers can
+ * distinguish protocol failures from app-level API errors.
+ */
+export class FetchBoundaryError extends TaggedError("FetchBoundaryError")<{
+  url: string;
+  status?: number;
+  statusText?: string;
+  body?: string;
+  message: string;
+  cause?: unknown;
+}>() {}
+
 type ToAPIErrorProps = {
   status: number;
   value:

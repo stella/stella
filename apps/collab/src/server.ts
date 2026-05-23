@@ -1,9 +1,23 @@
 import { Hocuspocus } from "@hocuspocus/server";
 import type { WebSocketLike } from "@hocuspocus/server";
+import { panic, TaggedError } from "better-result";
 import type { Peer } from "crossws";
 import crossws from "crossws/adapters/bun";
 import * as v from "valibot";
 import { applyUpdate, encodeStateAsUpdate } from "yjs";
+
+/**
+ * HTTP/network failure when calling the Stella API from the collaboration
+ * server. Carries the URL, status, and statusText for structured logging.
+ */
+export class FetchBoundaryError extends TaggedError("FetchBoundaryError")<{
+  url: string;
+  status?: number;
+  statusText?: string;
+  body?: string;
+  message: string;
+  cause?: unknown;
+}>() {}
 
 type CollabAuthContext = {
   canEdit: boolean;
@@ -100,7 +114,12 @@ const postJson = async <TSchema extends v.GenericSchema>({
   });
 
   if (!response.ok) {
-    throw new Error(`Stella API request failed: ${response.status}`);
+    throw new FetchBoundaryError({
+      url: `${apiUrl}/v1${path}`,
+      status: response.status,
+      statusText: response.statusText,
+      message: `Stella API request failed: ${response.status}`,
+    });
   }
 
   return v.parse(schema, await response.json());
@@ -280,7 +299,7 @@ export const createCollabServer = async ({
       });
 
       if (authorized.roomName !== documentName) {
-        throw new Error("Collaboration token does not match the room.");
+        panic("Collaboration token does not match the room.");
       }
 
       const tokenState = upsertSessionToken({
@@ -390,7 +409,7 @@ export const createCollabServer = async ({
 
   const serverPort = server.port;
   if (serverPort === undefined) {
-    throw new Error("Collaboration server did not expose a listening port.");
+    panic("Collaboration server did not expose a listening port.");
   }
 
   await hocuspocus.hooks("onListen", {

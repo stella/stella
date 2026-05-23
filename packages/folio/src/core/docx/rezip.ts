@@ -526,7 +526,7 @@ export async function repackDocx(
 ): Promise<ArrayBuffer> {
   // Validate we have an original buffer to base on
   if (!doc.originalBuffer) {
-    throw new Error(
+    panic(
       "Cannot repack document: no original buffer for round-trip. " +
         "Use createDocx() for new documents.",
     );

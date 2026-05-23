@@ -201,7 +201,7 @@ export async function seedCaseLaw() {
       // deterministic id that does not match what's on disk.
       sourceId = inserted.at(0)?.id ?? (await findSourceId())?.id;
       if (!sourceId) {
-        throw new Error(`Could not resolve source id for ${adapterKey}`);
+        panic(`Could not resolve source id for ${adapterKey}`);
       }
     }
 

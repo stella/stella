@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import { useQueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { yCursorPlugin, ySyncPlugin, yUndoPlugin } from "y-prosemirror";
 import * as Y from "yjs";
 
@@ -10,7 +11,7 @@ import type { DocxEditorCollaboration } from "@stll/folio";
 import { env } from "@/env";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
-import { userErrorMessage } from "@/lib/errors";
+import { FetchBoundaryError, userErrorMessage } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { filesKeys } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -74,7 +75,12 @@ const fetchSeedDocumentBuffer = async (seedDownloadUrl: string) => {
     });
 
     if (!response.ok) {
-      throw new Error("Failed to download collaborative editing seed file.");
+      throw new FetchBoundaryError({
+        url: seedDownloadUrl,
+        status: response.status,
+        statusText: response.statusText,
+        message: "Failed to download collaborative editing seed file.",
+      });
     }
 
     return await response.arrayBuffer();
@@ -167,7 +173,7 @@ export const useFolioCollaborationSession = ({
         }
 
         if (response.data.seedDownloadUrl === null) {
-          throw new Error("Collaborative editing seed file is unavailable.");
+          panic("Collaborative editing seed file is unavailable.");
         }
 
         return await fetchSeedDocumentBuffer(response.data.seedDownloadUrl);

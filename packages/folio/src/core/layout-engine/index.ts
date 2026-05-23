@@ -175,7 +175,7 @@ export function layoutDocument(
 ): Layout {
   // Validate input
   if (blocks.length !== measures.length) {
-    throw new Error(
+    panic(
       `layoutDocument: expected one measure per block (blocks=${blocks.length}, measures=${measures.length})`,
     );
   }

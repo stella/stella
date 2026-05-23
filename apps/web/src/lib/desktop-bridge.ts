@@ -1,6 +1,6 @@
 import { env } from "@/env";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { FetchBoundaryError, toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 
 const DESKTOP_BRIDGE_PORT = env.VITE_DESKTOP_BRIDGE_PORT;
@@ -321,7 +321,12 @@ const openDocxViaBridge = async ({
   if (!response.ok) {
     const payload = await parseBridgeResponse(response);
     if (payload?.message) {
-      throw new Error(payload.message);
+      throw new FetchBoundaryError({
+        url: `${DESKTOP_BRIDGE_URL}/v1/open-docx`,
+        status: response.status,
+        statusText: response.statusText,
+        message: payload.message,
+      });
     }
 
     throw new DesktopBridgeUnavailableError();

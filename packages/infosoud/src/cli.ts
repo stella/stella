@@ -100,7 +100,7 @@ const resolveCourtReference = async (
 
   const resolved = await client.resolveCourtCode(trimmed);
   if (!resolved) {
-    throw new Error(`Cannot resolve court from ${JSON.stringify(value)}`);
+    panic(`Cannot resolve court from ${JSON.stringify(value)}`);
   }
 
   return resolved;

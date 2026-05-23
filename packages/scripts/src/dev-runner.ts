@@ -777,7 +777,7 @@ const waitForSharedDockerServices = async ({
     await Bun.sleep(DOCKER_SERVICES_POLL_INTERVAL_MS);
   }
 
-  throw new Error(
+  panic(
     `Timed out after ${String(DOCKER_SERVICES_READY_TIMEOUT_MS / 1000)}s waiting for shared Docker services (${SHARED_DOCKER_SERVICE_NAMES}) to become ready: ${lastFailure}.`,
   );
 };
@@ -803,7 +803,7 @@ const ensureDockerServices = async ({
           `  - host port ${String(hostPort)}: ${containerName} (project ${composeProject || "<none>"})`,
       )
       .join("\n");
-    throw new Error(
+    panic(
       `Shared Docker ports are held by containers from another Compose project:\n${detail}\nStop the conflicting stack, or use --infra-offset to shift Stella's infra ports.`,
     );
   }
@@ -825,7 +825,7 @@ const ensureDockerServices = async ({
       `==> Shared Docker services are running but setup is incomplete (${currentFailure}); reconciling Compose project...`,
     );
   } else if (!(await areSharedDockerPortsFree(infraPorts))) {
-    throw new Error(
+    panic(
       `Shared Docker ports (${sharedInfraPortList(infraPorts).join(", ")}) are already allocated, but the shared dev services did not pass health checks. Stop the conflicting stack, or use --infra-offset to shift Stella's infra ports.`,
     );
   }
@@ -886,7 +886,7 @@ export const findFirstAvailableOffset = async ({
     }
   }
 
-  throw new Error(
+  return panic(
     `Could not find a free port offset for ${mode} after ${String(PORT_SEARCH_LIMIT)} attempts.`,
   );
 };
@@ -1145,7 +1145,7 @@ const runCommandText = ({
 
   if (!result.success) {
     const stderr = decodeOutput(result.stderr);
-    throw new Error(stderr || `Command failed: ${cmd.join(" ")}`);
+    panic(stderr || `Command failed: ${cmd.join(" ")}`);
   }
 
   return decodeOutput(result.stdout);
@@ -1161,9 +1161,7 @@ const runStep = (step: Step) => {
   });
 
   if (!result.success) {
-    throw new Error(
-      `${step.label} failed with exit code ${String(result.exitCode)}.`,
-    );
+    panic(`${step.label} failed with exit code ${String(result.exitCode)}.`);
   }
 };
 
@@ -1238,7 +1236,7 @@ const waitForHttpReadiness = async ({
     await Bun.sleep(300);
   }
 
-  throw new Error(`Timed out waiting for ${label}: ${lastFailure}.`);
+  panic(`Timed out waiting for ${label}: ${lastFailure}.`);
 };
 
 const spawnPersistentStep = (step: Step): RunningStep => {

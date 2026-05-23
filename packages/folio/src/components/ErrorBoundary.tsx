@@ -16,6 +16,7 @@ import React, {
 } from "react";
 import type { ReactNode, ErrorInfo } from "react";
 
+import { panic } from "better-result";
 import {
   AlertCircleIcon,
   AlertTriangleIcon,
@@ -84,9 +85,7 @@ const ErrorContext = createContext<ErrorContextValue | null>(null);
 export function useErrorNotifications(): ErrorContextValue {
   const context = useContext(ErrorContext);
   if (!context) {
-    throw new Error(
-      "useErrorNotifications must be used within an ErrorProvider",
-    );
+    panic("useErrorNotifications must be used within an ErrorProvider");
   }
   return context;
 }

@@ -42,6 +42,7 @@ import {
   hashContent,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseSkDecisionPdf } from "@/api/handlers/case-law/ingestion/parsers/sk-courts";
+import { FetchBoundaryError } from "@/api/lib/errors/tagged-errors";
 import { isRecord } from "@/api/lib/type-guards";
 
 // ── Constants ─────────────────────────────────────────────
@@ -137,7 +138,12 @@ const getToken = async (signal?: AbortSignal): Promise<string> => {
   });
 
   if (!response.ok) {
-    throw new Error(`SK ÚS OAuth2 token failed: ${response.status}`);
+    throw new FetchBoundaryError({
+      url: TOKEN_URL,
+      status: response.status,
+      statusText: response.statusText,
+      message: `SK ÚS OAuth2 token failed: ${response.status}`,
+    });
   }
 
   const data = await response.json();
@@ -404,7 +410,12 @@ const executeSearch = async (
     if (response.status === 401 || response.status === 403) {
       invalidateToken();
     }
-    throw new Error(`SK ÚS search failed: ${response.status}`);
+    throw new FetchBoundaryError({
+      url: SEARCH_URL,
+      status: response.status,
+      statusText: response.statusText,
+      message: `SK ÚS search failed: ${response.status}`,
+    });
   }
 
   if (response.status === 204) {
