@@ -39,6 +39,7 @@ import type {
   Hyperlink,
 } from "../types/content";
 import type { Document } from "../types/document";
+import { assertValidFolioDocumentModel } from "./modelValidation";
 import { RELATIONSHIP_TYPES } from "./relsParser";
 import { serializeComments } from "./serializer/commentSerializer";
 import { serializeDocument } from "./serializer/documentSerializer";
@@ -582,6 +583,11 @@ export async function repackDocx(
   );
   await processNewHyperlinks(newHyperlinks, newZip, compressionLevel);
 
+  assertValidFolioDocumentModel(
+    exportDocument,
+    "Cannot repack invalid DOCX document model",
+  );
+
   // Serialize and update document.xml (after image/hyperlink rIds have been rewritten)
   const documentXml = serializeDocument(exportDocument);
   const originalDocumentXml = await originalZip
@@ -686,6 +692,11 @@ export async function repackDocxFromRaw(
     exportDocument.package.document.content,
   );
   await processNewHyperlinks(newHyperlinks, newZip, compressionLevel);
+
+  assertValidFolioDocumentModel(
+    exportDocument,
+    "Cannot repack invalid DOCX document model",
+  );
 
   const documentXml = serializeDocument(exportDocument);
   if (rawContent.documentXml) {

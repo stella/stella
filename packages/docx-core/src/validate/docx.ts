@@ -433,7 +433,9 @@ const validateRunContent = (
   ctx: ValidationContext,
 ): void => {
   if (content.type === "drawing") {
-    validateImage(content.image, `${path}.image`, ctx);
+    validateImage(content.image, `${path}.image`, ctx, {
+      hasPreservedRawDrawing: content.rawXml?.trim() !== "",
+    });
     return;
   }
 
@@ -507,8 +509,13 @@ const validateImage = (
   image: Image,
   path: string,
   ctx: ValidationContext,
+  options: { hasPreservedRawDrawing?: boolean } = {},
 ): void => {
-  if (!image.rId && !image.src?.startsWith("data:")) {
+  if (
+    !image.rId &&
+    !image.src?.startsWith("data:") &&
+    !options.hasPreservedRawDrawing
+  ) {
     addError(ctx, `${path}.rId`, "Image must have a relationship id.");
   }
 

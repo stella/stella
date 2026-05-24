@@ -9,6 +9,7 @@
  */
 
 import type { Document, BlockContent } from "../types/document";
+import { validateFolioDocumentModel } from "./modelValidation";
 import { RELATIONSHIP_TYPES } from "./relsParser";
 import {
   applyUpdatesToZip,
@@ -96,6 +97,9 @@ export async function attemptSelectiveSave(
   // Check for new images/hyperlinks that need relationship management
   const content = doc.package.document.content;
   if (hasNewImagesOrHyperlinks(content)) {
+    return null;
+  }
+  if (!validateFolioDocumentModel(doc).valid) {
     return null;
   }
 

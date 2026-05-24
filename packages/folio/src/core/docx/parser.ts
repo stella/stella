@@ -46,6 +46,11 @@ import {
 } from "./documentParser";
 import { parseFootnotes, parseEndnotes } from "./footnoteParser";
 import { parseHeader, parseFooter } from "./headerFooterParser";
+import {
+  DocxModelValidationError,
+  formatDocumentModelIssues,
+  validateFolioDocumentModel,
+} from "./modelValidation";
 import { parseNumbering } from "./numberingParser";
 import type { NumberingMap } from "./numberingParser";
 import { parseRelationships, RELATIONSHIP_TYPES } from "./relsParser";
@@ -317,8 +322,20 @@ export async function parseDocx(
       originalBuffer: buffer,
       ...(templateVariables !== undefined ? { templateVariables } : {}),
       ...(requiredFonts.length > 0 ? { requiredFonts } : {}),
-      ...(warnings.length > 0 ? { warnings } : {}),
     };
+
+    const validation = validateFolioDocumentModel(document);
+    const parsedCompleteModel = parseHeadersFooters && parseNotes;
+    if (!validation.valid && parsedCompleteModel) {
+      throw new DocxModelValidationError(
+        "Parsed DOCX produced an invalid document model",
+        validation.issues,
+      );
+    }
+    warnings.push(...formatDocumentModelIssues(validation.issues));
+    if (warnings.length > 0) {
+      document.warnings = warnings;
+    }
 
     onProgress("Complete", 100);
     return document;

@@ -172,6 +172,36 @@ describe("canonical DOCX document model validation", () => {
     );
   });
 
+  test("accepts opaque drawing XML placeholders without image relationships", () => {
+    const result = validateDocumentModel(
+      createDocument({
+        content: [
+          paragraph([
+            {
+              type: "run",
+              content: [
+                {
+                  type: "drawing",
+                  rawXml: "<mc:AlternateContent />",
+                  image: {
+                    type: "image",
+                    rId: "",
+                    src: "",
+                    size: { width: 9525, height: 9525 },
+                    wrap: { type: "inline" },
+                  },
+                },
+              ],
+            },
+          ]),
+        ],
+      }),
+    );
+
+    expect(result.valid).toBe(true);
+    expect(result.issues).toEqual([]);
+  });
+
   test("rejects section header references without a matching header part", () => {
     const result = validateDocumentModel(
       createDocument({

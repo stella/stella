@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
 import type { Document } from "../types/document";
+import { DocxModelValidationError } from "./modelValidation";
 import { parseDocx } from "./parser";
 import { RELATIONSHIP_TYPES } from "./relsParser";
 import { DocxPackageFidelityError, repackDocx } from "./rezip";
@@ -198,6 +199,34 @@ async function createMultiSectionFirstHeaderImageFixture(): Promise<ArrayBuffer>
 }
 
 describe("repackDocx", () => {
+  test("rejects an invalid document model before full repack", async () => {
+    const originalBuffer = await createHeaderFixture();
+    const document: Document = {
+      originalBuffer,
+      package: {
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              content: [{ type: "commentReference", id: 404 }],
+            },
+          ],
+        },
+        relationships: new Map(),
+      },
+    };
+
+    try {
+      await repackDocx(document, { updateModifiedDate: false });
+    } catch (error) {
+      expect(error).toBeInstanceOf(DocxModelValidationError);
+      expect(String(error)).toContain("Comment 404 is referenced");
+      return;
+    }
+
+    throw new Error("Expected repackDocx to reject");
+  });
+
   test("registers newly inserted header images in the header relationship part", async () => {
     const originalBuffer = await createHeaderFixture();
     const document: Document = {
