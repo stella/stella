@@ -67,8 +67,10 @@ const createMcpConnection = createSafeRootHandler(
     });
 
     const saved = yield* Result.await(
-      safeDb((tx) =>
-        tx
+      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+      safeDb(async (tx) => {
+        // audit: skip — per-user MCP connection bearer-token registration; the connector itself is SOC 2-audited at create-connector / delete-connector.
+        return await tx
           .insert(mcpUserConnections)
           .values({
             organizationId: session.activeOrganizationId,
@@ -106,8 +108,8 @@ const createMcpConnection = createSafeRootHandler(
           .returning({
             id: mcpUserConnections.id,
             status: mcpUserConnections.status,
-          }),
-      ),
+          });
+      }),
     );
 
     const connection = saved.at(0);

@@ -271,18 +271,24 @@ describe("expandThreadDataScope", () => {
       where: mock(async () => undefined),
     }));
     const updateMock = mock(() => ({ set: setMock }));
-    const tx = { update: updateMock };
+    const insertMock = mock(() => ({
+      values: mock(async () => undefined),
+    }));
+    const tx = { update: updateMock, insert: insertMock };
     const { safeDb } = createScopedDbMock(tx);
-    return { safeDb, updateMock, setMock };
+    const recordAuditEvent = mock(async () => undefined);
+    return { safeDb, updateMock, setMock, recordAuditEvent };
   };
 
   test("no new IDs → no UPDATE issued", async () => {
-    const { safeDb, updateMock } = buildTx();
+    const { safeDb, updateMock, recordAuditEvent } = buildTx();
     const result = await expandThreadDataScope({
       currentDataWorkspaceIds: [wsA],
       newWorkspaceIds: [],
+      recordAuditEvent,
       safeDb,
       threadId,
+      threadWorkspaceId: null,
     });
 
     expect(Result.isOk(result)).toBe(true);
@@ -290,12 +296,14 @@ describe("expandThreadDataScope", () => {
   });
 
   test("all new IDs already present → no UPDATE issued", async () => {
-    const { safeDb, updateMock } = buildTx();
+    const { safeDb, updateMock, recordAuditEvent } = buildTx();
     const result = await expandThreadDataScope({
       currentDataWorkspaceIds: [wsA, wsB],
       newWorkspaceIds: [wsA, wsB],
+      recordAuditEvent,
       safeDb,
       threadId,
+      threadWorkspaceId: null,
     });
 
     expect(Result.isOk(result)).toBe(true);
@@ -303,12 +311,14 @@ describe("expandThreadDataScope", () => {
   });
 
   test("regression: genuinely new workspace IDs trigger UPDATE", async () => {
-    const { safeDb, updateMock, setMock } = buildTx();
+    const { safeDb, updateMock, setMock, recordAuditEvent } = buildTx();
     const result = await expandThreadDataScope({
       currentDataWorkspaceIds: [wsA],
       newWorkspaceIds: [wsB, wsC],
+      recordAuditEvent,
       safeDb,
       threadId,
+      threadWorkspaceId: null,
     });
 
     expect(Result.isOk(result)).toBe(true);
@@ -322,12 +332,14 @@ describe("expandThreadDataScope", () => {
   });
 
   test("regression: new IDs are bound as a Postgres uuid array expression", async () => {
-    const { safeDb, setMock } = buildTx();
+    const { safeDb, setMock, recordAuditEvent } = buildTx();
     await expandThreadDataScope({
       currentDataWorkspaceIds: [wsA],
       newWorkspaceIds: [wsB],
+      recordAuditEvent,
       safeDb,
       threadId,
+      threadWorkspaceId: null,
     });
 
     const setArg = setMock.mock.calls.at(0)?.[0];
@@ -341,12 +353,14 @@ describe("expandThreadDataScope", () => {
   });
 
   test("partial overlap: only the genuinely-new IDs are appended", async () => {
-    const { safeDb, updateMock } = buildTx();
+    const { safeDb, updateMock, recordAuditEvent } = buildTx();
     const result = await expandThreadDataScope({
       currentDataWorkspaceIds: [wsA, wsB],
       newWorkspaceIds: [wsB, wsC],
+      recordAuditEvent,
       safeDb,
       threadId,
+      threadWorkspaceId: null,
     });
 
     expect(Result.isOk(result)).toBe(true);

@@ -59,6 +59,8 @@ const emptySearchSummaryFilters = () => ({
   workspaceIds: [],
 });
 
+const noopAuditRecorder = mock(async () => {});
+
 describe("search AI output schemas", () => {
   test("convert to JSON Schema for structured model output", async () => {
     const { refineSearchOutputSchema, searchSummaryOutputSchema } =
@@ -128,6 +130,7 @@ describe("search summary chat", () => {
       search: searchGlobalMock,
       scopedDb,
       userId: toSafeId<"user">("user_1"),
+      recordAuditEvent: noopAuditRecorder,
     });
 
     expect(result).toHaveProperty("threadId");
@@ -200,6 +203,7 @@ describe("search summary chat", () => {
       search: searchGlobalMock,
       scopedDb,
       userId: toSafeId<"user">("user_1"),
+      recordAuditEvent: noopAuditRecorder,
     });
 
     expect(result).toHaveProperty("threadId");
@@ -287,6 +291,7 @@ describe("search summary chat", () => {
       search: searchGlobalMock,
       scopedDb,
       userId: toSafeId<"user">("user_1"),
+      recordAuditEvent: noopAuditRecorder,
     });
 
     expect(result).toHaveProperty("threadId");
@@ -366,6 +371,7 @@ describe("search summary chat", () => {
       search: searchGlobalMock,
       scopedDb,
       userId: toSafeId<"user">("user_1"),
+      recordAuditEvent: noopAuditRecorder,
     });
 
     const inserted = insertedValues.at(0);

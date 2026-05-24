@@ -27,12 +27,14 @@ const changeWorkspaceStatus = async (
   workspaceId: SafeId<"workspace">,
   newStatus: "deleting" | "active",
 ) =>
-  await scopedDb((tx) =>
-    tx
+  await scopedDb(async (tx) => {
+    // audit: skip — internal seal/unseal toggle wrapping the workspace
+    // delete; the audited DELETE below records the user-visible event.
+    await tx
       .update(workspaces)
       .set({ status: newStatus })
-      .where(eq(workspaces.id, workspaceId)),
-  );
+      .where(eq(workspaces.id, workspaceId));
+  });
 
 type FileRef = { fileId: string; mimeType: string };
 

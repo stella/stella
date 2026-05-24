@@ -129,8 +129,10 @@ const trackSurfaceForm = async (
   const pattern = phraseToPattern(keyPhrase);
   const formJson = JSON.stringify([keyPhrase]);
 
-  await scopedDb((tx) =>
-    tx
+  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
+  await scopedDb((tx) => {
+    // audit: skip — background polarity classification pipeline; no user-facing state change
+    return tx
       .insert(caseLawPolarityRules)
       .values({
         pattern,
@@ -190,8 +192,8 @@ const trackSurfaceForm = async (
         `,
           updatedAt: new Date(),
         },
-      }),
-  );
+      });
+  });
 };
 
 /**
@@ -202,13 +204,15 @@ export const persistPolarity = async (
   result: ClassifyResult,
   scopedDb: ScopedDb,
 ) => {
-  await scopedDb((tx) =>
-    tx
+  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
+  await scopedDb((tx) => {
+    // audit: skip — background polarity classification pipeline; no user-facing state change
+    return tx
       .update(caseLawCitations)
       .set({
         polarity: result.polarity,
         polarityRuleId: result.ruleId,
       })
-      .where(eq(caseLawCitations.id, citationId)),
-  );
+      .where(eq(caseLawCitations.id, citationId));
+  });
 };

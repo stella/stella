@@ -4,6 +4,7 @@ import { t } from "elysia";
 import { organizationSettings } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { validatePattern } from "@/api/lib/matter-reference";
@@ -20,7 +21,7 @@ const config = {
 
 const updateOrganizationSettings = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, body }) {
+  async function* ({ safeDb, session, body, recordAuditEvent }) {
     const validation = validatePattern(
       body.matterNumberPattern,
       body.matterNumberPadding,
@@ -33,8 +34,8 @@ const updateOrganizationSettings = createSafeRootHandler(
     }
 
     yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        await tx
           .insert(organizationSettings)
           .values({
             id: createSafeId<"organizationSettings">(),
@@ -49,8 +50,24 @@ const updateOrganizationSettings = createSafeRootHandler(
               matterNumberPadding: body.matterNumberPadding,
               updatedAt: new Date(),
             },
-          }),
-      ),
+          });
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+          resourceId: session.activeOrganizationId,
+          changes: {
+            matterNumberPattern: {
+              old: null,
+              new: body.matterNumberPattern,
+            },
+            matterNumberPadding: {
+              old: null,
+              new: body.matterNumberPadding,
+            },
+          },
+        });
+      }),
     );
 
     return Result.ok({

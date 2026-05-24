@@ -5,6 +5,8 @@ import { t } from "elysia";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { roundToIncrement } from "@/api/handlers/time-entries/create";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -27,7 +29,7 @@ const splitEntry = createSafeHandler(
     permissions: { timeEntry: ["update"] },
     body: splitEntryBodySchema,
   },
-  async function* ({ safeDb, workspaceId, body }) {
+  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
     const totalPercentage = body.splits.reduce(
       (sum, s) => sum + s.percentage,
       0,
@@ -161,6 +163,13 @@ const splitEntry = createSafeHandler(
             ),
           );
 
+        const createdEntries: {
+          id: SafeId<"timeEntry">;
+          matterId: SafeId<"entity">;
+          durationMinutes: number;
+          billedMinutes: number;
+        }[] = [];
+
         // Create split entries
         for (let i = 0; i < body.splits.length; i++) {
           const split = body.splits[i];
@@ -199,8 +208,53 @@ const splitEntry = createSafeHandler(
 
           if (entry) {
             newEntryIds.push(entry.id);
+            createdEntries.push({
+              id: entry.id,
+              matterId: split.matterId,
+              durationMinutes,
+              billedMinutes,
+            });
           }
         }
+
+        const events: AuditEvent[] = [
+          {
+            action: AUDIT_ACTION.DELETE,
+            resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+            resourceId: body.id,
+            changes: {
+              deleted: {
+                old: {
+                  matterId: original.matterId,
+                  durationMinutes: original.durationMinutes,
+                  billedMinutes: original.billedMinutes,
+                  reason: "split",
+                  splitGroupId,
+                },
+                new: null,
+              },
+            },
+          },
+          ...createdEntries.map((row) => ({
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+            resourceId: row.id,
+            changes: {
+              created: {
+                old: null,
+                new: {
+                  matterId: row.matterId,
+                  durationMinutes: row.durationMinutes,
+                  billedMinutes: row.billedMinutes,
+                  splitGroupId,
+                  splitFrom: body.id,
+                },
+              },
+            },
+          })),
+        ];
+
+        await recordAuditEvent(tx, events);
 
         return { ok: true as const };
       }),

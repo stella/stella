@@ -9,6 +9,8 @@ import {
 } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { FieldDiffs } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
@@ -32,7 +34,15 @@ const config = {
 
 const updateShortcut = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, user, params, body, memberRole }) {
+  async function* ({
+    safeDb,
+    session,
+    user,
+    params,
+    body,
+    memberRole,
+    recordAuditEvent,
+  }) {
     const existing = yield* Result.await(
       safeDb((tx) =>
         tx
@@ -40,6 +50,10 @@ const updateShortcut = createSafeRootHandler(
             id: promptShortcuts.id,
             scope: promptShortcuts.scope,
             userId: promptShortcuts.userId,
+            name: promptShortcuts.name,
+            description: promptShortcuts.description,
+            command: promptShortcuts.command,
+            prompt: promptShortcuts.prompt,
           })
           .from(promptShortcuts)
           .where(
@@ -99,8 +113,28 @@ const updateShortcut = createSafeRootHandler(
       }
     }
 
-    const updateResult = await safeDb((tx) =>
-      tx
+    const changes: FieldDiffs = {};
+    if (body.name !== undefined && body.name !== shortcut.name) {
+      changes["name"] = { old: shortcut.name, new: body.name };
+    }
+    if (
+      body.description !== undefined &&
+      body.description !== shortcut.description
+    ) {
+      changes["description"] = {
+        old: shortcut.description,
+        new: body.description,
+      };
+    }
+    if (body.command !== undefined && body.command !== shortcut.command) {
+      changes["command"] = { old: shortcut.command, new: body.command };
+    }
+    if (body.prompt !== undefined && body.prompt !== shortcut.prompt) {
+      changes["prompt"] = { old: shortcut.prompt, new: body.prompt };
+    }
+
+    const updateResult = await safeDb(async (tx) => {
+      const rows = await tx
         .update(promptShortcuts)
         .set({
           ...(body.name !== undefined && { name: body.name }),
@@ -112,8 +146,17 @@ const updateShortcut = createSafeRootHandler(
           isDefault: false,
         })
         .where(eq(promptShortcuts.id, params.shortcutId))
-        .returning({ id: promptShortcuts.id }),
-    );
+        .returning({ id: promptShortcuts.id });
+
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.PROMPT_SHORTCUT,
+        resourceId: params.shortcutId,
+        changes,
+      });
+
+      return rows;
+    });
 
     if (Result.isError(updateResult)) {
       if (

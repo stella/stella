@@ -19,13 +19,14 @@ const config = {
 
 const updateVariant = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, params, body }) {
+  async function* ({ safeDb, session, params, body, recordAuditEvent }) {
     return yield* updateVariantHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
       clauseId: params.clauseId,
       variantId: params.variantId,
       body,
+      recordAuditEvent,
     });
   },
 );

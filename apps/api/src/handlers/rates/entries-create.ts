@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { rateEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, tUserId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -28,7 +29,14 @@ const createRateEntry = createSafeHandler(
     params: rateEntryParamsSchema,
     body: createRateEntryBodySchema,
   },
-  async function* ({ safeDb, workspaceId, session, params, body }) {
+  async function* ({
+    safeDb,
+    workspaceId,
+    session,
+    params,
+    body,
+    recordAuditEvent,
+  }) {
     if (body.userId) {
       const userId = body.userId;
       const validatedUserId = yield* Result.await(
@@ -154,6 +162,25 @@ const createRateEntry = createSafeHandler(
             message: "Failed to create rate entry",
           };
         }
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.RATE_ENTRY,
+          resourceId: entry.id,
+          changes: {
+            created: {
+              old: null,
+              new: {
+                rateTableId: params.rateTableId,
+                userId: body.userId ?? null,
+                hourlyRate: cents(body.hourlyRate),
+                effectiveFrom: body.effectiveFrom,
+                effectiveTo: body.effectiveTo ?? null,
+              },
+            },
+          },
+        });
+
         return { ok: true as const, id: entry.id };
       }),
     );

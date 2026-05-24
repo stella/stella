@@ -6,6 +6,7 @@ import { organizationSettings } from "@/api/db/schema";
 import { NATIVE_TOOL_SLUGS } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const routeParams = t.Object({
@@ -24,7 +25,7 @@ const config = {
 
 const updateNativeTool = createSafeRootHandler(
   config,
-  async function* ({ body, params, safeDb, session }) {
+  async function* ({ body, params, safeDb, session, recordAuditEvent }) {
     if (!NATIVE_TOOL_SLUGS.includes(params.slug)) {
       return Result.err(
         new HandlerError({ status: 404, message: "unknown native tool" }),
@@ -55,8 +56,8 @@ const updateNativeTool = createSafeRootHandler(
         )`;
 
     yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        await tx
           .insert(organizationSettings)
           .values({
             organizationId: session.activeOrganizationId,
@@ -71,8 +72,19 @@ const updateNativeTool = createSafeRootHandler(
               updatedAt: new Date(),
             },
           })
-          .returning({ id: organizationSettings.id }),
-      ),
+          .returning({ id: organizationSettings.id });
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+          resourceId: session.activeOrganizationId,
+          metadata: {
+            field: "nativeToolOverrides",
+            slug,
+            enabled: body.enabled,
+          },
+        });
+      }),
     );
 
     return Result.ok({ slug, enabled: body.enabled });

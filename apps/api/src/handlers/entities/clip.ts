@@ -6,6 +6,7 @@ import { entities, entityVersions, workspaces } from "@/api/db/schema";
 import type { LinkMetadata } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
@@ -32,6 +33,7 @@ export default createSafeHandler(
       safeDb,
       workspaceId,
       user,
+      recordAuditEvent,
       body: { title, url, snippet, citation, jurisdiction, sourceType },
     } = ctx;
 
@@ -90,6 +92,39 @@ export default createSafeHandler(
           .update(workspaces)
           .set({ lastActivityAt: new Date() })
           .where(eq(workspaces.id, workspaceId));
+
+        await recordAuditEvent(tx, [
+          {
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+            resourceId: entityId,
+            changes: {
+              created: {
+                old: null,
+                new: {
+                  kind: "link",
+                  name: title,
+                  metadata,
+                  currentVersionId: entityVersionId,
+                },
+              },
+            },
+          },
+          {
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
+            resourceId: entityVersionId,
+            changes: {
+              created: {
+                old: null,
+                new: {
+                  entityId,
+                  versionNumber: 1,
+                },
+              },
+            },
+          },
+        ]);
       }),
     );
 

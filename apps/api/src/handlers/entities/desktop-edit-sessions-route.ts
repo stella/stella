@@ -40,7 +40,8 @@ export const desktopEditSessionsRoute = new Elysia({
 })
   .post(
     "/desktop-edit-handoffs/redeem",
-    async ({ body }) => await redeemDesktopEditHandoffHandler({ body }),
+    async ({ body, request, server }) =>
+      await redeemDesktopEditHandoffHandler({ body, request, server }),
     {
       body: redeemDesktopEditHandoffBodySchema,
     },
@@ -84,10 +85,12 @@ export const desktopEditSessionsRoute = new Elysia({
   )
   .post(
     "/desktop-edit-sessions/:sessionId/checkpoint",
-    async ({ body, params }) =>
+    async ({ body, params, request, server }) =>
       await checkpointDesktopEditSessionHandler({
         body,
         sessionId: params.sessionId,
+        request,
+        server,
       }),
     {
       body: checkpointDesktopEditSessionBodySchema,
@@ -96,10 +99,12 @@ export const desktopEditSessionsRoute = new Elysia({
   )
   .post(
     "/desktop-edit-sessions/:sessionId/finalize",
-    async ({ body, params }) =>
+    async ({ body, params, request, server }) =>
       await finalizeDesktopEditSessionHandler({
         body,
         sessionId: params.sessionId,
+        request,
+        server,
       }),
     {
       body: finalizeDesktopEditSessionBodySchema,
@@ -108,10 +113,12 @@ export const desktopEditSessionsRoute = new Elysia({
   )
   .post(
     "/desktop-edit-sessions/:sessionId/respond-takeover",
-    async ({ body, params }) =>
+    async ({ body, params, request, server }) =>
       await respondDesktopEditTakeoverHandler({
         body,
         sessionId: params.sessionId,
+        request,
+        server,
       }),
     {
       body: respondDesktopEditTakeoverBodySchema,

@@ -18,12 +18,13 @@ const config = {
 
 const updateClauseCategory = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, params, body }) {
+  async function* ({ safeDb, session, params, body, recordAuditEvent }) {
     return yield* updateCategoryHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
       categoryId: params.categoryId,
       body,
+      recordAuditEvent,
     });
   },
 );

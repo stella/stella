@@ -322,6 +322,7 @@ export const processDecision = async (
   const languageGroupKey = result.ecli || `${sourceId}:${result.caseNumber}`;
 
   await scopedDb(async (tx) => {
+    // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
     if (existing) {
       await tx
         .update(caseLawDecisions)
@@ -626,12 +627,14 @@ export const runIngestionPipeline = async ({
   }
 
   // Persist sync cursor and timestamp
-  await scopedDb((tx) =>
-    tx
+  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
+  await scopedDb((tx) => {
+    // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
+    return tx
       .update(caseLawSources)
       .set({ syncCursor: cursor, lastSyncAt: new Date() })
-      .where(eq(caseLawSources.id, source.id)),
-  );
+      .where(eq(caseLawSources.id, source.id));
+  });
 
   return {
     inserted,
@@ -648,5 +651,10 @@ const logIngestionFailure = async (
   scopedDb: ScopedDb,
   failure: typeof caseLawIngestionFailures.$inferInsert,
 ) => {
-  await scopedDb((tx) => tx.insert(caseLawIngestionFailures).values(failure));
+  // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
+  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
+  await scopedDb((tx) => {
+    // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
+    return tx.insert(caseLawIngestionFailures).values(failure);
+  });
 };

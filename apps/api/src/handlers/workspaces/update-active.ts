@@ -13,8 +13,11 @@ const updateActiveWorkspace = createSafeHandler(
   config,
   async function* ({ safeDb, user, session, workspaceId }) {
     yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        // audit: skip — last-active workspace pointer is ephemeral UI
+        // navigation state; not SOC 2 / ISO 27001 relevant and fires
+        // frequently on every workspace switch.
+        await tx
           .update(member)
           .set({ lastActiveWorkspaceId: workspaceId })
           .where(
@@ -22,8 +25,8 @@ const updateActiveWorkspace = createSafeHandler(
               eq(member.userId, user.id),
               eq(member.organizationId, session.activeOrganizationId),
             ),
-          ),
-      ),
+          );
+      }),
     );
 
     return Result.ok(undefined);

@@ -6,6 +6,7 @@ import { workspaceViews } from "@/api/db/schema";
 import { convertLayout } from "@/api/handlers/views/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
@@ -35,6 +36,7 @@ const convertView = createSafeHandler(
     workspaceId,
     params: { viewId },
     body: { targetType },
+    recordAuditEvent,
   }) {
     if (targetType === "overview") {
       return Result.err(
@@ -75,8 +77,8 @@ const convertView = createSafeHandler(
     const newLayout = convertLayout(existingLayout, targetType);
 
     yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        await tx
           .update(workspaceViews)
           .set({ layout: newLayout })
           .where(
@@ -84,8 +86,18 @@ const convertView = createSafeHandler(
               eq(workspaceViews.id, viewId),
               eq(workspaceViews.workspaceId, workspaceId),
             ),
-          ),
-      ),
+          );
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.VIEW,
+          resourceId: viewId,
+          changes: {
+            layoutType: { old: existingLayout.type, new: targetType },
+          },
+          metadata: { reason: "convert" },
+        });
+      }),
     );
 
     const view = {

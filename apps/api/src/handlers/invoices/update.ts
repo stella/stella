@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { INVOICE_STATUS, invoices } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
@@ -25,22 +26,23 @@ const updateInvoice = createSafeHandler(
     params: invoiceParamsSchema,
     body: updateInvoiceBodySchema,
   },
-  async function* ({ safeDb, workspaceId, params, body }) {
+  async function* ({ safeDb, workspaceId, params, body, recordAuditEvent }) {
+    const changedFields = pickDefined(body, [
+      "invoiceNumber",
+      "invoiceDate",
+      "dueDate",
+      "reference",
+      "notes",
+      "currency",
+    ]);
     const set = {
-      ...pickDefined(body, [
-        "invoiceNumber",
-        "invoiceDate",
-        "dueDate",
-        "reference",
-        "notes",
-        "currency",
-      ]),
+      ...changedFields,
       updatedAt: new Date(),
     };
 
     const result = yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        const updated = await tx
           .update(invoices)
           .set(set)
           .where(
@@ -50,8 +52,24 @@ const updateInvoice = createSafeHandler(
               eq(invoices.status, INVOICE_STATUS.DRAFT),
             ),
           )
-          .returning({ id: invoices.id }),
-      ),
+          .returning({ id: invoices.id });
+
+        const row = updated.at(0);
+        if (row) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+            resourceId: row.id,
+            changes: Object.fromEntries(
+              Object.entries(changedFields).map(([key, value]) => [
+                key,
+                { old: null, new: value },
+              ]),
+            ),
+          });
+        }
+        return updated;
+      }),
     );
 
     const updated = result.at(0);

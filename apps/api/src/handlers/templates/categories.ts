@@ -4,6 +4,8 @@ import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { templateCategories } from "@/api/db/schema";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
@@ -65,12 +67,14 @@ type CreateProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   body: CreateBody;
+  recordAuditEvent: AuditRecorder;
 };
 
 export const createTemplateCategoryHandler = async ({
   scopedDb,
   organizationId,
   body,
+  recordAuditEvent,
 }: CreateProps) => {
   if (body.parentId) {
     const parent = await scopedDb((tx) =>
@@ -126,6 +130,19 @@ export const createTemplateCategoryHandler = async ({
         createdAt: templateCategories.createdAt,
       });
 
+    if (inserted) {
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.CREATE,
+        resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
+        resourceId: inserted.id,
+        metadata: {
+          kind: "template-category",
+          name: inserted.name,
+          parentId: inserted.parentId,
+        },
+      });
+    }
+
     return inserted;
   });
 };
@@ -137,6 +154,7 @@ type UpdateProps = {
   organizationId: SafeId<"organization">;
   categoryId: SafeId<"templateCategory">;
   body: UpdateBody;
+  recordAuditEvent: AuditRecorder;
 };
 
 export const updateTemplateCategoryHandler = async ({
@@ -144,6 +162,7 @@ export const updateTemplateCategoryHandler = async ({
   organizationId,
   categoryId,
   body,
+  recordAuditEvent,
 }: UpdateProps) => {
   const existing = await scopedDb((tx) =>
     tx.query.templateCategories.findFirst({
@@ -208,8 +227,8 @@ export const updateTemplateCategoryHandler = async ({
     updatedAt: new Date(),
   };
 
-  const [updated] = await scopedDb((tx) =>
-    tx
+  const [updated] = await scopedDb(async (tx) => {
+    const rows = await tx
       .update(templateCategories)
       .set(updates)
       .where(
@@ -225,8 +244,22 @@ export const updateTemplateCategoryHandler = async ({
         description: templateCategories.description,
         sortOrder: templateCategories.sortOrder,
         updatedAt: templateCategories.updatedAt,
-      }),
-  );
+      });
+
+    if (rows.length > 0) {
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
+        resourceId: categoryId,
+        metadata: {
+          kind: "template-category",
+          fields: Object.keys(updates),
+        },
+      });
+    }
+
+    return rows;
+  });
 
   return updated;
 };
@@ -237,12 +270,14 @@ type DeleteProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   categoryId: SafeId<"templateCategory">;
+  recordAuditEvent: AuditRecorder;
 };
 
 export const deleteTemplateCategoryHandler = async ({
   scopedDb,
   organizationId,
   categoryId,
+  recordAuditEvent,
 }: DeleteProps) => {
   const existing = await scopedDb((tx) =>
     tx.query.templateCategories.findFirst({
@@ -280,6 +315,16 @@ export const deleteTemplateCategoryHandler = async ({
           eq(templateCategories.organizationId, organizationId),
         ),
       );
+
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.DELETE,
+      resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
+      resourceId: categoryId,
+      metadata: {
+        kind: "template-category",
+        reparentedTo: existing.parentId ?? null,
+      },
+    });
   });
 
   return undefined;

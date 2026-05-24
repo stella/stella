@@ -12,6 +12,7 @@ import {
 } from "@/api/handlers/mcp-connectors/url-normalization";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -28,7 +29,7 @@ const config = {
 
 const createMcpConnector = createSafeRootHandler(
   config,
-  async function* ({ body: input, safeDb, session }) {
+  async function* ({ body: input, safeDb, session, recordAuditEvent }) {
     const normalizedUrl = yield* normalizeMcpConnectorUrl(input.url);
     const duplicate = yield* Result.await(
       findDuplicateConnector({
@@ -67,8 +68,8 @@ const createMcpConnector = createSafeRootHandler(
     const iconUrl = await discoverMcpIconUrl(normalizedUrl);
 
     const inserted = yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        const rows = await tx
           .insert(mcpConnectors)
           .values({
             slug,
@@ -88,8 +89,27 @@ const createMcpConnector = createSafeRootHandler(
             id: mcpConnectors.id,
             slug: mcpConnectors.slug,
             authType: mcpConnectors.authType,
-          }),
-      ),
+          });
+
+        const row = rows.at(0);
+        if (row) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+            resourceId: session.activeOrganizationId,
+            metadata: {
+              field: "mcpConnector",
+              connectorId: row.id,
+              slug: row.slug,
+              displayName,
+              url: normalizedUrl,
+              authType: row.authType,
+            },
+          });
+        }
+
+        return rows;
+      }),
     );
 
     const connector = inserted.at(0);

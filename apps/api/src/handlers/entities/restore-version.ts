@@ -5,6 +5,7 @@ import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import { buildVersionStamp } from "@/api/handlers/entities/version-utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -22,7 +23,7 @@ const config = {
 
 export default createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, params, user }) {
+  async function* ({ safeDb, workspaceId, params, user, recordAuditEvent }) {
     const userId = user.id;
 
     // Verify the version belongs to this entity in this workspace
@@ -76,7 +77,11 @@ export default createSafeHandler(
             id: { eq: params.entityId },
             workspaceId: { eq: workspaceId },
           },
-          columns: { docSequence: true, readOnly: true },
+          columns: {
+            docSequence: true,
+            readOnly: true,
+            currentVersionId: true,
+          },
         }),
       ),
     );
@@ -85,6 +90,7 @@ export default createSafeHandler(
         new HandlerError({ status: 409, message: "Entity is read-only" }),
       );
     }
+    const previousCurrentVersionId = entity?.currentVersionId ?? null;
 
     const workspace = yield* Result.await(
       safeDb((tx) =>
@@ -141,6 +147,39 @@ export default createSafeHandler(
           .update(workspaces)
           .set({ lastActivityAt: new Date() })
           .where(eq(workspaces.id, workspaceId));
+
+        await recordAuditEvent(tx, [
+          {
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
+            resourceId: nextVersionId,
+            changes: {
+              created: {
+                old: null,
+                new: {
+                  entityId: params.entityId,
+                  versionNumber: nextVersionNumber,
+                  restoredFromVersionId: params.versionId,
+                  restoredFromVersionNumber: version.versionNumber,
+                },
+              },
+            },
+            metadata: {
+              restoredFromVersionId: params.versionId,
+            },
+          },
+          {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+            resourceId: params.entityId,
+            changes: {
+              currentVersionId: {
+                old: previousCurrentVersionId,
+                new: nextVersionId,
+              },
+            },
+          },
+        ]);
       }),
     );
 

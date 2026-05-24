@@ -10,6 +10,8 @@ import type { TemplateManifest } from "@/api/handlers/docx/types";
 import { isTemplateManifest } from "@/api/handlers/docx/types";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
@@ -42,6 +44,7 @@ type UpdateTemplateProps = {
   userId: SafeId<"user">;
   templateId: SafeId<"template">;
   body: UpdateTemplateBody;
+  recordAuditEvent: AuditRecorder;
 };
 
 const parseManifest = (json: string): TemplateManifest | null => {
@@ -60,6 +63,7 @@ const updateTemplateHandler = async function* ({
   userId,
   templateId,
   body,
+  recordAuditEvent,
 }: UpdateTemplateProps) {
   const existing = yield* Result.await(
     safeDb((tx) =>
@@ -197,6 +201,21 @@ const updateTemplateHandler = async function* ({
           createdBy: userId,
         });
 
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
+          resourceId: templateId,
+          workspaceId: null,
+          changes: {
+            currentVersion: {
+              old: existing.currentVersion,
+              new: newVersion,
+            },
+            s3Key: { old: existing.s3Key, new: versionS3Key },
+            fieldCount: { old: null, new: manifest.fields.length },
+          },
+        });
+
         return { ok: true as const, row: r };
       }),
     );
@@ -213,9 +232,9 @@ const updateTemplateHandler = async function* ({
     return Result.ok(txResult.row);
   }
 
-  const [updated] = yield* Result.await(
-    safeDb((tx) =>
-      tx
+  const updated = yield* Result.await(
+    safeDb(async (tx) => {
+      const [row] = await tx
         .update(templates)
         .set(updates)
         .where(
@@ -229,8 +248,26 @@ const updateTemplateHandler = async function* ({
           name: templates.name,
           fieldCount: templates.fieldCount,
           updatedAt: templates.updatedAt,
-        }),
-    ),
+        });
+
+      const changes: Record<string, { old: unknown; new: unknown }> = {};
+      for (const [key, newValue] of Object.entries(updates)) {
+        if (key === "updatedAt") {
+          continue;
+        }
+        changes[key] = { old: null, new: newValue };
+      }
+
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
+        resourceId: templateId,
+        workspaceId: null,
+        changes,
+      });
+
+      return row;
+    }),
   );
 
   return Result.ok(updated);
@@ -244,13 +281,14 @@ const config = {
 
 const updateTemplate = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, user, params, body }) {
+  async function* ({ safeDb, session, user, params, body, recordAuditEvent }) {
     return yield* updateTemplateHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
       userId: user.id,
       templateId: params.templateId,
       body,
+      recordAuditEvent,
     });
   },
 );

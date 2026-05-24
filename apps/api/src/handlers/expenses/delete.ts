@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { BILLING_STATUS, expenses } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -19,7 +20,7 @@ const config = {
 
 const deleteExpense = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, body }) {
+  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
     const existing = yield* Result.await(
       safeDb((tx) =>
         tx.query.expenses.findFirst({
@@ -29,6 +30,11 @@ const deleteExpense = createSafeHandler(
           },
           columns: {
             status: true,
+            amount: true,
+            currency: true,
+            category: true,
+            matterId: true,
+            dateIncurred: true,
           },
         }),
       ),
@@ -42,24 +48,42 @@ const deleteExpense = createSafeHandler(
 
     if (existing.status === BILLING_STATUS.DRAFT) {
       yield* Result.await(
-        safeDb((tx) =>
-          tx
+        safeDb(async (tx) => {
+          await tx
             .delete(expenses)
             .where(
               and(
                 eq(expenses.id, body.id),
                 eq(expenses.workspaceId, workspaceId),
               ),
-            ),
-        ),
+            );
+
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.DELETE,
+            resourceType: AUDIT_RESOURCE_TYPE.EXPENSE,
+            resourceId: body.id,
+            changes: {
+              deleted: {
+                old: {
+                  amount: existing.amount,
+                  currency: existing.currency,
+                  category: existing.category,
+                  matterId: existing.matterId,
+                  dateIncurred: existing.dateIncurred,
+                },
+                new: null,
+              },
+            },
+          });
+        }),
       );
       return Result.ok({ deleted: true });
     }
 
     // Non-draft expenses get written off instead of deleted
     yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        await tx
           .update(expenses)
           .set({
             status: BILLING_STATUS.WRITTEN_OFF,
@@ -70,8 +94,20 @@ const deleteExpense = createSafeHandler(
               eq(expenses.id, body.id),
               eq(expenses.workspaceId, workspaceId),
             ),
-          ),
-      ),
+          );
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.EXPENSE,
+          resourceId: body.id,
+          changes: {
+            status: {
+              old: existing.status,
+              new: BILLING_STATUS.WRITTEN_OFF,
+            },
+          },
+        });
+      }),
     );
 
     return Result.ok({ deleted: false });

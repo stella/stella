@@ -12,6 +12,9 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditEvent } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
@@ -27,13 +30,68 @@ const addEntriesBodySchema = t.Object({
 
 const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
 
+const buildAttachEvents = (params: {
+  invoiceId: SafeId<"invoice">;
+  attachedTimeEntries: { id: SafeId<"timeEntry"> }[];
+  attachedExpenses: { id: SafeId<"expense"> }[];
+  totalAmount: number;
+}): AuditEvent[] => {
+  const events: AuditEvent[] = [
+    {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+      resourceId: params.invoiceId,
+      changes: {
+        totalAmount: { old: null, new: cents(params.totalAmount) },
+        attachedTimeEntries: {
+          old: null,
+          new: params.attachedTimeEntries.map((row) => row.id),
+        },
+        attachedExpenses: {
+          old: null,
+          new: params.attachedExpenses.map((row) => row.id),
+        },
+      },
+    },
+  ];
+  for (const row of params.attachedTimeEntries) {
+    events.push({
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+      resourceId: row.id,
+      changes: {
+        status: {
+          old: BILLING_STATUS.APPROVED,
+          new: BILLING_STATUS.BILLED,
+        },
+        invoiceId: { old: null, new: params.invoiceId },
+      },
+    });
+  }
+  for (const row of params.attachedExpenses) {
+    events.push({
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.EXPENSE,
+      resourceId: row.id,
+      changes: {
+        status: {
+          old: BILLING_STATUS.APPROVED,
+          new: BILLING_STATUS.BILLED,
+        },
+        invoiceId: { old: null, new: params.invoiceId },
+      },
+    });
+  }
+  return events;
+};
+
 const addEntries = createSafeHandler(
   {
     permissions: { invoice: ["update"] },
     params: invoiceParamsSchema,
     body: addEntriesBodySchema,
   },
-  async function* ({ safeDb, workspaceId, params, body }) {
+  async function* ({ safeDb, workspaceId, params, body, recordAuditEvent }) {
     if (
       (body.timeEntryIds?.length ?? 0) === 0 &&
       (body.expenseIds?.length ?? 0) === 0
@@ -185,8 +243,9 @@ const addEntries = createSafeHandler(
           return { ok: false as const };
         }
 
+        let attachedTimeEntries: { id: SafeId<"timeEntry"> }[] = [];
         if (timeEntryIds && timeEntryIds.length > 0) {
-          const updated = await tx
+          attachedTimeEntries = await tx
             .update(timeEntries)
             .set({
               invoiceId: params.invoiceId,
@@ -204,13 +263,14 @@ const addEntries = createSafeHandler(
             )
             .returning({ id: timeEntries.id });
 
-          if (updated.length !== timeEntryIds.length) {
+          if (attachedTimeEntries.length !== timeEntryIds.length) {
             return { ok: false as const };
           }
         }
 
+        let attachedExpenses: { id: SafeId<"expense"> }[] = [];
         if (expenseIds && expenseIds.length > 0) {
-          const updated = await tx
+          attachedExpenses = await tx
             .update(expenses)
             .set({
               invoiceId: params.invoiceId,
@@ -228,7 +288,7 @@ const addEntries = createSafeHandler(
             )
             .returning({ id: expenses.id });
 
-          if (updated.length !== expenseIds.length) {
+          if (attachedExpenses.length !== expenseIds.length) {
             return { ok: false as const };
           }
         }
@@ -282,6 +342,16 @@ const addEntries = createSafeHandler(
               eq(invoices.workspaceId, workspaceId),
             ),
           );
+
+        await recordAuditEvent(
+          tx,
+          buildAttachEvents({
+            invoiceId: params.invoiceId,
+            attachedTimeEntries,
+            attachedExpenses,
+            totalAmount,
+          }),
+        );
 
         return { ok: true as const, totalAmount };
       }),

@@ -153,11 +153,12 @@ export const computeVersionDiffStats = async ({
     }
   }
 
-  // Store on the version row
-  await scopedDb((tx) =>
-    tx
+  await scopedDb(async (tx) => {
+    // audit: skip — derived diff stats cache, not a user-facing state
+    // change; runs fire-and-forget after the audited version write
+    await tx
       .update(entityVersions)
       .set({ diffWordsAdded: wordsAdded, diffWordsRemoved: wordsRemoved })
-      .where(eq(entityVersions.id, versionId)),
-  );
+      .where(eq(entityVersions.id, versionId));
+  });
 };

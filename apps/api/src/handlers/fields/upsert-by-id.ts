@@ -8,6 +8,8 @@ import type { CellMetadata } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditAction } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLock } from "@/api/lib/cell-lock";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -110,6 +112,7 @@ const lockCellOnManualEdit = async ({
     ...(lockProvenance && { lockProvenance }),
   };
 
+  // audit: skip - caller records the manual field edit that this lock supports.
   await tx
     .insert(cellMetadata)
     .values({
@@ -132,7 +135,7 @@ const lockCellOnManualEdit = async ({
 
 const upsertField = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, body, user }) {
+  async function* ({ safeDb, workspaceId, body, user, recordAuditEvent }) {
     const property = yield* Result.await(
       safeDb((tx) =>
         tx.query.properties.findFirst({
@@ -214,6 +217,18 @@ const upsertField = createSafeHandler(
           userId: user.id,
         });
 
+        const existingFieldRows = await tx
+          .select({ content: fields.content })
+          .from(fields)
+          .where(
+            and(
+              eq(fields.propertyId, property.id),
+              eq(fields.entityVersionId, entityVersionId),
+            ),
+          )
+          .limit(1);
+        const existingField = existingFieldRows.at(0);
+
         await tx
           .delete(fields)
           .where(
@@ -236,6 +251,30 @@ const upsertField = createSafeHandler(
           .update(entities)
           .set({ updatedAt: new Date() })
           .where(eq(entities.id, body.entityId));
+
+        let action: AuditAction = AUDIT_ACTION.CREATE;
+        if (isEmpty) {
+          action = AUDIT_ACTION.DELETE;
+        } else if (existingField) {
+          action = AUDIT_ACTION.UPDATE;
+        }
+
+        await recordAuditEvent(tx, {
+          action,
+          resourceType: AUDIT_RESOURCE_TYPE.FIELD,
+          resourceId: `${entityVersionId}:${property.id}`,
+          changes: {
+            content: {
+              old: existingField?.content ?? null,
+              new: isEmpty ? null : body.content,
+            },
+          },
+          metadata: {
+            entityId: body.entityId,
+            propertyId: property.id,
+            entityVersionId,
+          },
+        });
 
         return { status: "ok" as const };
       }),

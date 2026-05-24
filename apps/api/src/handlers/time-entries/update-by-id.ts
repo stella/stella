@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { roundToIncrement } from "@/api/handlers/time-entries/create";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
@@ -36,7 +37,7 @@ const updateTimeEntryById = createSafeHandler(
     permissions: { timeEntry: ["update"] },
     body: updateTimeEntryBodySchema,
   },
-  async function* ({ safeDb, workspaceId, body }) {
+  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
     const existing = yield* Result.await(
       safeDb((tx) =>
         tx.query.timeEntries.findFirst({
@@ -46,6 +47,18 @@ const updateTimeEntryById = createSafeHandler(
           },
           columns: {
             status: true,
+            dateWorked: true,
+            durationMinutes: true,
+            billedMinutes: true,
+            narrative: true,
+            invoiceNarrative: true,
+            billable: true,
+            noCharge: true,
+            matterId: true,
+            taskCode: true,
+            activityCode: true,
+            rateAtEntry: true,
+            currency: true,
           },
         }),
       ),
@@ -116,8 +129,8 @@ const updateTimeEntryById = createSafeHandler(
     };
 
     yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        await tx
           .update(timeEntries)
           .set(updates)
           .where(
@@ -125,12 +138,33 @@ const updateTimeEntryById = createSafeHandler(
               eq(timeEntries.id, body.id),
               eq(timeEntries.workspaceId, workspaceId),
             ),
-          ),
-      ),
+          );
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+          resourceId: body.id,
+          changes: buildTimeEntryDiff(existing, updates),
+        });
+      }),
     );
 
     return Result.ok({ id: body.id });
   },
 );
+
+const buildTimeEntryDiff = (
+  before: Record<string, unknown>,
+  updates: Record<string, unknown>,
+): Record<string, { old: unknown; new: unknown }> => {
+  const diff: Record<string, { old: unknown; new: unknown }> = {};
+  for (const [key, value] of Object.entries(updates)) {
+    if (key === "updatedAt") {
+      continue;
+    }
+    diff[key] = { old: before[key] ?? null, new: value };
+  }
+  return diff;
+};
 
 export default updateTimeEntryById;

@@ -6,6 +6,7 @@ import { workspaceContacts } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -38,7 +39,7 @@ const config = {
 
 const createWorkspaceContact = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, body }) {
+  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
     const txResult = await safeDb(async (tx) => {
       const contact = await tx.query.contacts.findFirst({
         where: {
@@ -83,6 +84,24 @@ const createWorkspaceContact = createSafeHandler(
           notes: body.notes ?? null,
         })
         .returning();
+
+      if (created) {
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT,
+          resourceId: created.id,
+          changes: {
+            created: {
+              old: null,
+              new: {
+                contactId: created.contactId,
+                role: created.role,
+                isPrimary: created.isPrimary,
+              },
+            },
+          },
+        });
+      }
 
       return { ok: true as const, created };
     });

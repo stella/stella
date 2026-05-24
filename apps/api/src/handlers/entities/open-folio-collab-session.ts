@@ -13,6 +13,8 @@ import {
 } from "@/api/handlers/entities/desktop-edit-session-utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -42,6 +44,7 @@ type OpenFolioCollabSessionResponse = {
 type OpenFolioCollabSessionProps = {
   body: OpenFolioCollabSessionBody;
   organizationId: SafeId<"organization">;
+  recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
@@ -52,6 +55,7 @@ const SEED_CLAIM_STALE_MS = 30_000;
 const openFolioCollabSessionHandler = async function* ({
   body: { entityId, propertyId },
   organizationId,
+  recordAuditEvent,
   safeDb,
   userId,
   workspaceId,
@@ -149,6 +153,16 @@ const openFolioCollabSessionHandler = async function* ({
             })
             .where(eq(folioCollabSessions.id, existingSession.id));
 
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_SESSION,
+            resourceId: existingSession.id,
+            changes: {
+              seedClaimedBy: { old: null, new: userId },
+            },
+            metadata: { reason: "seed_claim_recovered" },
+          });
+
           return {
             baseVersionId: existingSession.baseVersionId,
             collabSessionId: existingSession.id,
@@ -200,6 +214,23 @@ const openFolioCollabSessionHandler = async function* ({
         seedClaimedBy: userId,
         workspaceId,
         yjsSnapshotFileId: createSafeId<"userFile">(),
+      });
+
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.CREATE,
+        resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_SESSION,
+        resourceId: collabSessionId,
+        changes: {
+          created: {
+            old: null,
+            new: {
+              entityId,
+              propertyId,
+              baseVersionId: currentTarget.baseVersionId,
+              fileName: currentTarget.fileContent.fileName,
+            },
+          },
+        },
       });
 
       return {
@@ -257,10 +288,18 @@ const config = {
 
 const openFolioCollabSession = createSafeHandler(
   config,
-  async function* ({ body, safeDb, session, user, workspaceId }) {
+  async function* ({
+    body,
+    safeDb,
+    session,
+    user,
+    workspaceId,
+    recordAuditEvent,
+  }) {
     return yield* openFolioCollabSessionHandler({
       body,
       organizationId: session.activeOrganizationId,
+      recordAuditEvent,
       safeDb,
       userId: user.id,
       workspaceId,

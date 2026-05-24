@@ -19,7 +19,7 @@ const config = {
 
 const deleteTemplateCategory = createSafeRootHandler(
   config,
-  async function* ({ scopedDb, session, params }) {
+  async function* ({ scopedDb, session, params, recordAuditEvent }) {
     const result = yield* Result.await(
       Result.tryPromise({
         try: async () =>
@@ -27,6 +27,7 @@ const deleteTemplateCategory = createSafeRootHandler(
             scopedDb,
             organizationId: session.activeOrganizationId,
             categoryId: params.categoryId,
+            recordAuditEvent,
           }),
         catch: (cause) =>
           new HandlerError({

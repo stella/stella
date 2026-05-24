@@ -6,6 +6,7 @@ import { anonymizationBlacklistEntries } from "@/api/db/schema";
 import { normalizeAnonymizationBlacklistEntries } from "@/api/lib/anonymization-blacklist";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -69,7 +70,14 @@ const createConfig = {
  */
 export const createWorkspaceAnonymizationTerms = createSafeHandler(
   createConfig,
-  async function* ({ body, safeDb, session, user, workspaceId }) {
+  async function* ({
+    body,
+    safeDb,
+    session,
+    user,
+    workspaceId,
+    recordAuditEvent,
+  }) {
     const normalized = normalizeAnonymizationBlacklistEntries(body.entries);
     if (Result.isError(normalized)) {
       return Result.err(normalized.error);
@@ -98,19 +106,38 @@ export const createWorkspaceAnonymizationTerms = createSafeHandler(
           return { inserted: 0 };
         }
 
-        await tx.insert(anonymizationBlacklistEntries).values(
-          toInsert.map((entry) => ({
-            id: createSafeId<"anonymizationBlacklistEntry">(),
-            organizationId: session.activeOrganizationId,
-            workspaceId,
-            label: entry.label,
-            canonical: entry.canonical,
-            variants: entry.variants,
-            enabled: entry.enabled,
-            createdBy: user.id,
-            updatedBy: user.id,
-          })),
-        );
+        const rows = toInsert.map((entry) => ({
+          id: createSafeId<"anonymizationBlacklistEntry">(),
+          organizationId: session.activeOrganizationId,
+          workspaceId,
+          label: entry.label,
+          canonical: entry.canonical,
+          variants: entry.variants,
+          enabled: entry.enabled,
+          createdBy: user.id,
+          updatedBy: user.id,
+        }));
+
+        await tx.insert(anonymizationBlacklistEntries).values(rows);
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+          resourceId: workspaceId,
+          changes: {
+            anonymizationTerms: {
+              old: null,
+              new: {
+                added: rows.map((r) => ({
+                  id: r.id,
+                  canonical: r.canonical,
+                  label: r.label,
+                  variantCount: r.variants.length,
+                })),
+              },
+            },
+          },
+        });
 
         return { inserted: toInsert.length };
       }),
@@ -136,18 +163,42 @@ const deleteConfig = {
  */
 export const deleteWorkspaceAnonymizationTerm = createSafeHandler(
   deleteConfig,
-  async function* ({ params: { entryId }, safeDb, workspaceId }) {
+  async function* ({
+    params: { entryId },
+    safeDb,
+    workspaceId,
+    recordAuditEvent,
+  }) {
     yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        const deleted = await tx
           .delete(anonymizationBlacklistEntries)
           .where(
             and(
               eq(anonymizationBlacklistEntries.id, entryId),
               eq(anonymizationBlacklistEntries.workspaceId, workspaceId),
             ),
-          ),
-      ),
+          )
+          .returning({
+            id: anonymizationBlacklistEntries.id,
+            canonical: anonymizationBlacklistEntries.canonical,
+            label: anonymizationBlacklistEntries.label,
+          });
+
+        if (deleted.length > 0) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+            resourceId: workspaceId,
+            changes: {
+              anonymizationTerms: {
+                old: { removed: deleted.at(0) },
+                new: null,
+              },
+            },
+          });
+        }
+      }),
     );
     return Result.ok({ success: true as const });
   },

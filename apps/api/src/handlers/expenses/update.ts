@@ -6,6 +6,7 @@ import { expenseCategorySchema } from "@/api/db/billing-validators";
 import { BILLING_STATUS, expenses } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
@@ -34,7 +35,7 @@ const config = {
 
 const updateExpense = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, body }) {
+  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
     const existing = yield* Result.await(
       safeDb((tx) =>
         tx.query.expenses.findFirst({
@@ -44,6 +45,15 @@ const updateExpense = createSafeHandler(
           },
           columns: {
             status: true,
+            dateIncurred: true,
+            amount: true,
+            currency: true,
+            category: true,
+            description: true,
+            invoiceDescription: true,
+            billable: true,
+            markup: true,
+            matterId: true,
           },
         }),
       ),
@@ -107,8 +117,8 @@ const updateExpense = createSafeHandler(
     };
 
     yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        await tx
           .update(expenses)
           .set(updates)
           .where(
@@ -116,12 +126,33 @@ const updateExpense = createSafeHandler(
               eq(expenses.id, body.id),
               eq(expenses.workspaceId, workspaceId),
             ),
-          ),
-      ),
+          );
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.EXPENSE,
+          resourceId: body.id,
+          changes: buildExpenseDiff(existing, updates),
+        });
+      }),
     );
 
     return Result.ok({ id: body.id });
   },
 );
+
+const buildExpenseDiff = (
+  before: Record<string, unknown>,
+  updates: Record<string, unknown>,
+): Record<string, { old: unknown; new: unknown }> => {
+  const diff: Record<string, { old: unknown; new: unknown }> = {};
+  for (const [key, value] of Object.entries(updates)) {
+    if (key === "updatedAt") {
+      continue;
+    }
+    diff[key] = { old: before[key] ?? null, new: value };
+  }
+  return diff;
+};
 
 export default updateExpense;

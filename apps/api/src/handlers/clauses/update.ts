@@ -8,6 +8,8 @@ import { clauses, clauseVersions } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { AuditRecorder, FieldDiffs } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
@@ -42,6 +44,7 @@ type UpdateClauseProps = {
   organizationId: SafeId<"organization">;
   clauseId: SafeId<"clause">;
   body: UpdateClauseBody;
+  recordAuditEvent: AuditRecorder;
 };
 
 const updateClauseHandler = async function* ({
@@ -49,6 +52,7 @@ const updateClauseHandler = async function* ({
   organizationId,
   clauseId,
   body,
+  recordAuditEvent,
 }: UpdateClauseProps) {
   const existing = yield* Result.await(
     safeDb((tx) =>
@@ -61,6 +65,10 @@ const updateClauseHandler = async function* ({
           id: true,
           title: true,
           description: true,
+          usageNotes: true,
+          language: true,
+          categoryId: true,
+          metadata: true,
           body: true,
           currentVersion: true,
         },
@@ -171,6 +179,24 @@ const updateClauseHandler = async function* ({
         });
       }
 
+      const changes: FieldDiffs = {};
+      for (const [key, newValue] of Object.entries(updates)) {
+        if (key === "updatedAt") {
+          continue;
+        }
+        const oldValue = (existing as Record<string, unknown>)[key];
+        if (oldValue !== newValue) {
+          changes[key] = { old: oldValue ?? null, new: newValue };
+        }
+      }
+
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.CLAUSE,
+        resourceId: clauseId,
+        changes,
+      });
+
       return row;
     }),
   );
@@ -208,12 +234,13 @@ const config = {
 
 const updateClause = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, params, body }) {
+  async function* ({ safeDb, session, params, body, recordAuditEvent }) {
     return yield* updateClauseHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
       clauseId: params.clauseId,
       body,
+      recordAuditEvent,
     });
   },
 );

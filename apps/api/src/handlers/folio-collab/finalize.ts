@@ -21,6 +21,11 @@ import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditRecorder,
+} from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -57,7 +62,12 @@ const finalizeFolioCollabSession = createSafeTokenHandler<
 >(
   config,
   // eslint-disable-next-line require-yield -- token auth + scopedDb returns plain Promises; nothing to Result.await
-  async function* ({ body: { token }, params: { sessionId } }) {
+  async function* ({
+    body: { token },
+    params: { sessionId },
+    request,
+    server,
+  }) {
     const authorizedSession = await authorizeFolioCollabSession({
       sessionId,
       token,
@@ -90,6 +100,14 @@ const finalizeFolioCollabSession = createSafeTokenHandler<
 
     const { canEdit, organizationId, scopedDb, userId, workspaceId } =
       authorizedSession.value;
+
+    const recordAuditEvent = createAuditRecorder({
+      organizationId,
+      workspaceId,
+      userId,
+      request,
+      server,
+    });
 
     if (!canEdit) {
       return Result.err(
@@ -171,6 +189,13 @@ const finalizeFolioCollabSession = createSafeTokenHandler<
           .update(folioCollabSessions)
           .set({ closedAt: new Date(), status: "cancelled" })
           .where(eq(folioCollabSessions.id, sessionId));
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_SESSION,
+          resourceId: sessionId,
+          changes: { status: { old: "open", new: "cancelled" } },
+          metadata: { reason: "no-checkpoint" },
+        });
       });
       return Result.ok({ outcome: "no_changes" as const });
     }
@@ -227,6 +252,13 @@ const finalizeFolioCollabSession = createSafeTokenHandler<
           .update(folioCollabSessions)
           .set({ closedAt: new Date(), status: "cancelled" })
           .where(eq(folioCollabSessions.id, sessionId));
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_SESSION,
+          resourceId: sessionId,
+          changes: { status: { old: "open", new: "cancelled" } },
+          metadata: { reason: "checkpoint-matches-base" },
+        });
       });
       await deleteS3Key(checkpointKey, { checkpointKey, sessionId });
       return Result.ok({ outcome: "no_changes" as const });
@@ -343,6 +375,14 @@ const finalizeFolioCollabSession = createSafeTokenHandler<
             .set({ closedAt: new Date(), status: "cancelled" })
             .where(eq(folioCollabSessions.id, sessionId));
 
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_SESSION,
+            resourceId: sessionId,
+            changes: { status: { old: "open", new: "cancelled" } },
+            metadata: { reason: "base-version-drift" },
+          });
+
           return {
             deleteCheckpoint: true,
             error: {
@@ -433,6 +473,41 @@ const finalizeFolioCollabSession = createSafeTokenHandler<
             status: "finalized",
           })
           .where(eq(folioCollabSessions.id, sessionId));
+
+        await recordAuditEvent(tx, [
+          {
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
+            resourceId: nextVersionId,
+            metadata: {
+              entityId: sessionPreview.entityId,
+              versionNumber: nextVersionNumber,
+              source: "folio-collab-finalize",
+              sessionId,
+            },
+          },
+          {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+            resourceId: sessionPreview.entityId,
+            changes: {
+              currentVersionId: {
+                old: sessionPreview.baseVersionId,
+                new: nextVersionId,
+              },
+            },
+            metadata: { source: "folio-collab-finalize", sessionId },
+          },
+          {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_SESSION,
+            resourceId: sessionId,
+            changes: {
+              status: { old: "open", new: "finalized" },
+              finalizedVersionId: { old: null, new: nextVersionId },
+            },
+          },
+        ]);
 
         return {
           entityId: sessionPreview.entityId,

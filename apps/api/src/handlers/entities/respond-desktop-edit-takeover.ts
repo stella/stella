@@ -2,6 +2,11 @@ import { and, eq } from "drizzle-orm";
 import { status, t } from "elysia";
 
 import { desktopEditSessions } from "@/api/db/schema";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditRecorder,
+} from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
@@ -12,6 +17,7 @@ import {
   DESKTOP_EDIT_SESSION_TAKEN_OVER_MESSAGE,
   hashDesktopEditSessionToken,
 } from "@/api/lib/desktop-edit-sessions";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcast } from "@/api/lib/sse";
 
 import {
@@ -31,11 +37,15 @@ export const respondDesktopEditTakeoverBodySchema = t.Object({
 type RespondDesktopEditTakeoverHandlerProps = {
   body: { sessionToken: string; approved: boolean };
   sessionId: SafeId<"desktopEditSession">;
+  request: Request;
+  server: Parameters<typeof createAuditRecorder>[0]["server"];
 };
 
 export const respondDesktopEditTakeoverHandler = async ({
   body: { sessionToken, approved },
   sessionId,
+  request,
+  server,
 }: RespondDesktopEditTakeoverHandlerProps) => {
   const authorizedSession = await authorizeDesktopEditSession({
     sessionId,
@@ -68,6 +78,14 @@ export const respondDesktopEditTakeoverHandler = async ({
       message: "Desktop edit permission was revoked.",
     });
   }
+
+  const recordAuditEvent = createAuditRecorder({
+    organizationId: authorizedSession.value.organizationId,
+    workspaceId: authorizedSession.value.workspaceId,
+    userId: brandPersistedUserId(authorizedSession.value.userId),
+    request,
+    server,
+  });
 
   const txResult = await authorizedSession.value.scopedDb(async (tx) => {
     const sessions = await tx
@@ -106,6 +124,23 @@ export const respondDesktopEditTakeoverHandler = async ({
         })
         .where(eq(desktopEditSessions.id, session.id));
 
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
+        resourceId: session.id,
+        changes: {
+          createdBy: {
+            old: authorizedSession.value.userId,
+            new: session.takeoverRequestedBy,
+          },
+          takeoverRequestedBy: {
+            old: session.takeoverRequestedBy,
+            new: null,
+          },
+        },
+        metadata: { reason: "takeover_approved" },
+      });
+
       return {
         outcome: "transferred" as const,
         sessionId: session.id,
@@ -120,6 +155,19 @@ export const respondDesktopEditTakeoverHandler = async ({
         takeoverRequestedAt: null,
       })
       .where(eq(desktopEditSessions.id, session.id));
+
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
+      resourceId: session.id,
+      changes: {
+        takeoverRequestedBy: {
+          old: session.takeoverRequestedBy,
+          new: null,
+        },
+      },
+      metadata: { reason: "takeover_denied" },
+    });
 
     return {
       outcome: "denied" as const,

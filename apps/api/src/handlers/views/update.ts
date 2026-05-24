@@ -8,6 +8,7 @@ import {
 } from "@/api/handlers/views/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
@@ -22,7 +23,13 @@ const config = {
 
 const updateView = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, params: { viewId }, body }) {
+  async function* ({
+    safeDb,
+    workspaceId,
+    params: { viewId },
+    body,
+    recordAuditEvent,
+  }) {
     const existing = yield* Result.await(
       safeDb((tx) =>
         tx.query.workspaceViews.findFirst({
@@ -84,8 +91,8 @@ const updateView = createSafeHandler(
     }
 
     yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        await tx
           .update(workspaceViews)
           .set(updates)
           .where(
@@ -93,8 +100,26 @@ const updateView = createSafeHandler(
               eq(workspaceViews.id, viewId),
               eq(workspaceViews.workspaceId, workspaceId),
             ),
-          ),
-      ),
+          );
+
+        const changes: Record<string, { old: unknown; new: unknown }> = {};
+        if (updates.name !== undefined) {
+          changes["name"] = { old: existing.name, new: updates.name };
+        }
+        if (updates.layout !== undefined) {
+          changes["layout"] = {
+            old: parseViewLayout(existing.layout),
+            new: updates.layout,
+          };
+        }
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.VIEW,
+          resourceId: viewId,
+          changes,
+        });
+      }),
     );
 
     broadcast(workspaceId, {

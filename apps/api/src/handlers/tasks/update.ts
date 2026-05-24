@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { entities } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import type { AgendaItemKind } from "@/api/lib/entity-constants";
 import {
@@ -93,7 +94,7 @@ const updateTask = createSafeHandler(
     permissions: { entity: ["update"] },
     body: updateTaskBodySchema,
   },
-  async function* ({ workspaceId, body, safeDb }) {
+  async function* ({ workspaceId, body, safeDb, recordAuditEvent }) {
     const agendaKindResult = validateAgendaKind(body.agendaKind);
     if (agendaKindResult.status === "error") {
       return Result.err(agendaKindResult.error);
@@ -122,8 +123,8 @@ const updateTask = createSafeHandler(
     }
 
     const updated = yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        const rows = await tx
           .update(entities)
           .set({
             ...(body.name !== undefined && { name: body.name }),
@@ -191,8 +192,19 @@ const updateTask = createSafeHandler(
               eq(entities.readOnly, false),
             ),
           )
-          .returning({ id: entities.id }),
-      ),
+          .returning({ id: entities.id });
+
+        if (rows.length > 0) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+            resourceId: body.taskId,
+            metadata: { kind: "task" },
+          });
+        }
+
+        return rows;
+      }),
     );
 
     if (updated.length === 0) {

@@ -111,9 +111,13 @@ export const fillHandler = async ({
   const fillStatus =
     result.unmatchedPlaceholders.length > 0 ? "partial" : "success";
 
-  // Best-effort analytics; don't block the download
-  scopedDb((tx) =>
-    tx.insert(templateFills).values({
+  // Best-effort analytics; don't block the download.
+  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
+  scopedDb((tx) => {
+    // audit: skip — anonymous template-fill analytics counter; the input
+    // DOCX is supplied directly in the request body and is not persisted
+    // as a template resource, so there is no resourceId to audit against.
+    return tx.insert(templateFills).values({
       organizationId,
       userId,
       format,
@@ -122,8 +126,8 @@ export const fillHandler = async ({
       unusedCount: result.unusedValues.length,
       structureErrors:
         result.structureErrors.length > 0 ? result.structureErrors : null,
-    }),
-  )
+    });
+  })
     // TODO: fix this
     // oxlint-disable-next-line no-empty-function
     .catch(() => {});

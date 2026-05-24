@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { rateTables } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
@@ -20,12 +21,17 @@ const updateRateTable = createSafeHandler(
     permissions: { rate: ["update"] },
     body: updateRateTableBodySchema,
   },
-  async function* ({ safeDb, workspaceId, body }) {
+  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
     const existing = yield* Result.await(
       safeDb((tx) =>
         tx.query.rateTables.findFirst({
           where: { id: { eq: body.id }, workspaceId: { eq: workspaceId } },
-          columns: { id: true },
+          columns: {
+            id: true,
+            name: true,
+            currency: true,
+            isDefault: true,
+          },
         }),
       ),
     );
@@ -36,8 +42,9 @@ const updateRateTable = createSafeHandler(
       );
     }
 
+    const changedFields = pickDefined(body, ["name", "currency", "isDefault"]);
     const updates = {
-      ...pickDefined(body, ["name", "currency", "isDefault"]),
+      ...changedFields,
       updatedAt: new Date(),
     };
 
@@ -72,17 +79,18 @@ const updateRateTable = createSafeHandler(
 
     yield* Result.await(
       safeDb(async (tx) => {
-        if (body.isDefault) {
-          await tx
-            .update(rateTables)
-            .set({ isDefault: false, updatedAt: new Date() })
-            .where(
-              and(
-                eq(rateTables.workspaceId, workspaceId),
-                eq(rateTables.isDefault, true),
-              ),
-            );
-        }
+        const previousDefaults = body.isDefault
+          ? await tx
+              .update(rateTables)
+              .set({ isDefault: false, updatedAt: new Date() })
+              .where(
+                and(
+                  eq(rateTables.workspaceId, workspaceId),
+                  eq(rateTables.isDefault, true),
+                ),
+              )
+              .returning({ id: rateTables.id })
+          : [];
 
         await tx
           .update(rateTables)
@@ -93,6 +101,33 @@ const updateRateTable = createSafeHandler(
               eq(rateTables.workspaceId, workspaceId),
             ),
           );
+
+        const changes: Record<string, { old: unknown; new: unknown }> = {};
+        for (const field of ["name", "currency", "isDefault"] as const) {
+          const next = changedFields[field];
+          if (next !== undefined) {
+            changes[field] = { old: existing[field], new: next };
+          }
+        }
+
+        await recordAuditEvent(tx, [
+          {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.RATE_TABLE,
+            resourceId: body.id,
+            changes,
+          },
+          ...previousDefaults
+            .filter((row) => row.id !== body.id)
+            .map((row) => ({
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.RATE_TABLE,
+              resourceId: row.id,
+              changes: {
+                isDefault: { old: true, new: false },
+              },
+            })),
+        ]);
       }),
     );
 

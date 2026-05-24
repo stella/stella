@@ -5,6 +5,8 @@ import { workspaceViews } from "@/api/db/schema";
 import { cleanStalePropertyIds } from "@/api/handlers/views/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { AuditEvent } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { getDefaultViews } from "@/api/lib/views";
 import { parseViewLayout } from "@/api/lib/views-schema";
@@ -33,7 +35,7 @@ const toViewResponse = (
 
 const readViews = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, request }) {
+  async function* ({ safeDb, workspaceId, request, recordAuditEvent }) {
     const views = yield* Result.await(
       safeDb((tx) =>
         tx
@@ -69,13 +71,34 @@ const readViews = createSafeHandler(
       }));
 
       const inserted = yield* Result.await(
-        safeDb((tx) =>
-          tx
+        safeDb(async (tx) => {
+          const rows = await tx
             .insert(workspaceViews)
             .values(defaults)
             .onConflictDoNothing()
-            .returning(),
-        ),
+            .returning();
+
+          const auditEvents: AuditEvent[] = rows.map((row) => ({
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.VIEW,
+            resourceId: row.id,
+            changes: {
+              created: {
+                old: null,
+                new: {
+                  name: row.name,
+                  layoutType: parseViewLayout(row.layout).type,
+                  position: row.position,
+                },
+              },
+            },
+            metadata: { reason: "default-seed" },
+          }));
+
+          await recordAuditEvent(tx, auditEvents);
+
+          return rows;
+        }),
       );
 
       // If another request won the race, fetch instead.

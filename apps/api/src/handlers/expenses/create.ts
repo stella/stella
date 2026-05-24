@@ -6,6 +6,7 @@ import { expenseCategorySchema } from "@/api/db/billing-validators";
 import { expenses } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -31,7 +32,14 @@ const config = {
 
 const createExpense = createSafeHandler(
   config,
-  async function* ({ safeDb, session, user, workspaceId, body }) {
+  async function* ({
+    safeDb,
+    session,
+    user,
+    workspaceId,
+    body,
+    recordAuditEvent,
+  }) {
     const now = new Date();
     // en-CA locale formats dates as YYYY-MM-DD (ISO 8601)
     const todayStr = new Intl.DateTimeFormat("en-CA", {
@@ -96,9 +104,9 @@ const createExpense = createSafeHandler(
       );
     }
 
-    const [entry] = yield* Result.await(
-      safeDb((tx) =>
-        tx
+    const entry = yield* Result.await(
+      safeDb(async (tx) => {
+        const inserted = await tx
           .insert(expenses)
           .values({
             organizationId: session.activeOrganizationId,
@@ -114,8 +122,32 @@ const createExpense = createSafeHandler(
             billable: body.billable ?? true,
             markup: body.markup ?? 0,
           })
-          .returning({ id: expenses.id }),
-      ),
+          .returning({ id: expenses.id });
+
+        const created = inserted.at(0);
+        if (created) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.EXPENSE,
+            resourceId: created.id,
+            changes: {
+              created: {
+                old: null,
+                new: {
+                  matterId: body.matterId,
+                  dateIncurred: body.dateIncurred,
+                  amount: cents(body.amount),
+                  currency: body.currency,
+                  category: body.category,
+                  billable: body.billable ?? true,
+                  markup: body.markup ?? 0,
+                },
+              },
+            },
+          });
+        }
+        return created;
+      }),
     );
 
     if (!entry) {

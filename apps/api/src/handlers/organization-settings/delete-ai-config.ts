@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { organizationSettings } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 
 const config = {
   permissions: { organizationSettings: ["update"] },
@@ -15,10 +16,10 @@ const config = {
  */
 const deleteAIConfig = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session }) {
+  async function* ({ safeDb, session, recordAuditEvent }) {
     yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        await tx
           .update(organizationSettings)
           .set({
             aiConfigEncrypted: null,
@@ -30,8 +31,15 @@ const deleteAIConfig = createSafeRootHandler(
               organizationSettings.organizationId,
               session.activeOrganizationId,
             ),
-          ),
-      ),
+          );
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+          resourceId: session.activeOrganizationId,
+          metadata: { field: "aiConfig", change: "cleared" },
+        });
+      }),
     );
 
     return Result.ok({ deleted: true });

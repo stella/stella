@@ -182,8 +182,10 @@ describe("chat attachment hydration", () => {
       ],
     };
 
+    const recordAuditEvent = mock(async () => undefined);
     const result = await uploadMessageFiles({
       message,
+      recordAuditEvent,
       safeDb,
       threadId: toSafeId<"chatThread">("thread_1"),
       userId: toSafeId<"user">("user_1"),

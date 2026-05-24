@@ -13,6 +13,7 @@ import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
@@ -30,7 +31,14 @@ const config = {
 
 export default createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, body, session, user }) {
+  async function* ({
+    safeDb,
+    workspaceId,
+    body,
+    session,
+    user,
+    recordAuditEvent,
+  }) {
     const organizationId = session.activeOrganizationId;
     const userId = user.id;
     const { entityId, file } = body;
@@ -213,6 +221,44 @@ export default createSafeHandler(
           .update(workspaces)
           .set({ lastActivityAt: new Date() })
           .where(eq(workspaces.id, workspaceId));
+
+        await recordAuditEvent(tx, [
+          {
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
+            resourceId: nextVersionId,
+            changes: {
+              created: {
+                old: null,
+                new: {
+                  entityId,
+                  versionNumber: nextVersionNumber,
+                  fileName: sanitizedName,
+                  mimeType: file.type,
+                  sizeBytes: file.size,
+                  sha256Hex,
+                },
+              },
+            },
+            metadata: {
+              fileName: sanitizedName,
+              mimeType: file.type,
+              sizeBytes: file.size,
+              sha256Hex,
+            },
+          },
+          {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+            resourceId: entityId,
+            changes: {
+              currentVersionId: {
+                old: currentVersionId,
+                new: nextVersionId,
+              },
+            },
+          },
+        ]);
       }),
     );
 

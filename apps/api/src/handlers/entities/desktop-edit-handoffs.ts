@@ -7,6 +7,11 @@ import { desktopEditHandoffs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditRecorder,
+} from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
@@ -118,6 +123,7 @@ export const createDesktopEditHandoff = createSafeHandler(
     safeDb,
     user,
     workspaceId,
+    recordAuditEvent,
   }) {
     const apiBaseUrl = DESKTOP_EDIT_API_BASE_URL;
     const handoffId = createSafeId<"desktopEditHandoff">();
@@ -138,6 +144,23 @@ export const createDesktopEditHandoff = createSafeHandler(
           propertyId,
           tokenHash,
           workspaceId,
+        });
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
+          resourceId: handoffId,
+          changes: {
+            created: {
+              old: null,
+              new: {
+                entityId,
+                propertyId,
+                forceTakeover: force === true,
+              },
+            },
+          },
+          metadata: { kind: "handoff" },
         });
       }),
     );
@@ -210,8 +233,12 @@ export const readDesktopEditHandoffStatus = createSafeHandler<
 
 export const redeemDesktopEditHandoffHandler = async ({
   body: { handoffToken },
+  request,
+  server,
 }: {
   body: { handoffToken: string };
+  request: Request;
+  server: Parameters<typeof createAuditRecorder>[0]["server"];
 }) => {
   const handoff = await consumeDesktopEditHandoff(handoffToken);
   if (!handoff) {
@@ -239,6 +266,14 @@ export const redeemDesktopEditHandoffHandler = async ({
     workspaceId: handoff.workspaceId,
   });
 
+  const recordAuditEvent = createAuditRecorder({
+    organizationId: access.organizationId,
+    workspaceId: handoff.workspaceId,
+    userId: brandPersistedUserId(handoff.createdBy),
+    request,
+    server,
+  });
+
   const result = await Result.gen(async function* () {
     return yield* openDesktopEditSessionHandler({
       body: {
@@ -247,6 +282,7 @@ export const redeemDesktopEditHandoffHandler = async ({
         propertyId: handoff.propertyId,
       },
       organizationId: access.organizationId,
+      recordAuditEvent,
       safeDb,
       userId: brandPersistedUserId(handoff.createdBy),
       workspaceId: handoff.workspaceId,

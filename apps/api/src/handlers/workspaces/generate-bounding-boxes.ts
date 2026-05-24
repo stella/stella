@@ -92,8 +92,10 @@ const generateBoundingBoxes = createSafeHandler(
       boxes.push(...pageBoxesResult.value);
 
       yield* Result.await(
-        safeDb((tx) =>
-          tx
+        safeDb(async (tx) => {
+          // audit: skip — background OCR pipeline persisting computed
+          // bounding boxes; derived AI output, not a user mutation.
+          await tx
             .update(justifications)
             .set({
               boundingBoxes: {
@@ -101,8 +103,8 @@ const generateBoundingBoxes = createSafeHandler(
                 boxes,
               },
             })
-            .where(eq(justifications.id, justificationId)),
-        ),
+            .where(eq(justifications.id, justificationId));
+        }),
       );
     }
 

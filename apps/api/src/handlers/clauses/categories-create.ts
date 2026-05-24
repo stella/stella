@@ -10,11 +10,12 @@ const config = {
 
 const createClauseCategory = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, body }) {
+  async function* ({ safeDb, session, body, recordAuditEvent }) {
     return yield* createCategoryHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
       body,
+      recordAuditEvent,
     });
   },
 );

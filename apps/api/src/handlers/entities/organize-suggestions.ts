@@ -938,6 +938,8 @@ const persistGeneratedSummaries = async ({
   }
 
   return await safeDb(async (tx) => {
+    // audit: skip — derived AI summary cache keyed by source text hash;
+    // recomputable from version content, never surfaces to users directly
     await tx
       .insert(entityVersionAiSummaries)
       .values(values)

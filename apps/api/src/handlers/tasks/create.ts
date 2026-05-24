@@ -10,6 +10,7 @@ import {
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
@@ -83,7 +84,7 @@ const createTask = createSafeHandler(
     permissions: { entity: ["create"] },
     body: createTaskBodySchema,
   },
-  async function* ({ workspaceId, user, body, safeDb }) {
+  async function* ({ workspaceId, user, body, safeDb, recordAuditEvent }) {
     const agendaKind = body.agendaKind ?? AGENDA_ITEM_KIND.TASK;
     const taskStatus = body.status ?? "open";
     const taskPriority = body.priority ?? "none";
@@ -228,6 +229,17 @@ const createTask = createSafeHandler(
           .update(workspaces)
           .set({ lastActivityAt: new Date() })
           .where(eq(workspaces.id, workspaceId));
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+          resourceId: entityId,
+          metadata: {
+            kind: "task",
+            agendaKind,
+            ...(body.parentId && { parentId: body.parentId }),
+          },
+        });
 
         return { ok: true as const, entityId };
       }),

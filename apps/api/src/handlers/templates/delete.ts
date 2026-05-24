@@ -7,6 +7,8 @@ import { templates } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -20,12 +22,14 @@ type DeleteTemplateProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   templateId: SafeId<"template">;
+  recordAuditEvent: AuditRecorder;
 };
 
 const deleteTemplateHandler = async function* ({
   safeDb,
   organizationId,
   templateId,
+  recordAuditEvent,
 }: DeleteTemplateProps) {
   const existing = yield* Result.await(
     safeDb((tx) =>
@@ -34,7 +38,7 @@ const deleteTemplateHandler = async function* ({
           id: { eq: templateId },
           organizationId: { eq: organizationId },
         },
-        columns: { id: true, s3Key: true },
+        columns: { id: true, name: true, s3Key: true },
         with: {
           versions: { columns: { s3Key: true } },
         },
@@ -57,16 +61,30 @@ const deleteTemplateHandler = async function* ({
   }
 
   yield* Result.await(
-    safeDb((tx) =>
-      tx
+    safeDb(async (tx) => {
+      await tx
         .delete(templates)
         .where(
           and(
             eq(templates.id, templateId),
             eq(templates.organizationId, organizationId),
           ),
-        ),
-    ),
+        );
+
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.DELETE,
+        resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
+        resourceId: templateId,
+        workspaceId: null,
+        changes: {
+          deleted: {
+            old: { name: existing.name, s3Key: existing.s3Key },
+            new: null,
+          },
+        },
+        metadata: { versionCount: existing.versions.length },
+      });
+    }),
   );
 
   // Delete S3 objects outside the transaction to keep
@@ -86,11 +104,12 @@ const config = {
 
 const deleteTemplate = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, params }) {
+  async function* ({ safeDb, session, params, recordAuditEvent }) {
     return yield* deleteTemplateHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
       templateId: params.templateId,
+      recordAuditEvent,
     });
   },
 );

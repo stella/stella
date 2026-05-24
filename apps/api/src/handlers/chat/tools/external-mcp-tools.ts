@@ -518,8 +518,10 @@ const resolveAuthorizationToken = async ({
       })
     : null;
 
-  const persistResult = await safeDb((tx) =>
-    tx
+  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
+  const persistResult = await safeDb((tx) => {
+    // audit: skip — MCP tool execution metadata; audit happens at the parent user action
+    return tx
       .update(mcpUserConnections)
       .set({
         accessTokenEncrypted: encryptedAccess.ciphertext,
@@ -531,8 +533,8 @@ const resolveAuthorizationToken = async ({
         status: "connected",
         updatedAt: new Date(),
       })
-      .where(eq(mcpUserConnections.id, row.userConnectionId)),
-  );
+      .where(eq(mcpUserConnections.id, row.userConnectionId));
+  });
 
   if (Result.isError(persistResult)) {
     captureError(persistResult.error, { source: "external-mcp-tools" });
@@ -610,12 +612,14 @@ const markNeedsReauth = async ({
   connectionId: SafeId<"mcpUserConnection">;
   safeDb: SafeDb;
 }) => {
-  const result = await safeDb((tx) =>
-    tx
+  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
+  const result = await safeDb((tx) => {
+    // audit: skip — MCP tool execution metadata; audit happens at the parent user action
+    return tx
       .update(mcpUserConnections)
       .set({ status: "needs_reauth", updatedAt: new Date() })
-      .where(eq(mcpUserConnections.id, connectionId)),
-  );
+      .where(eq(mcpUserConnections.id, connectionId));
+  });
   if (Result.isError(result)) {
     captureError(result.error, { source: "external-mcp-tools" });
   }

@@ -22,7 +22,7 @@ const config = {
 
 const linkTemplateClause = createSafeRootHandler(
   config,
-  async function* ({ scopedDb, session, params, body }) {
+  async function* ({ scopedDb, session, params, body, recordAuditEvent }) {
     const result = yield* Result.await(
       Result.tryPromise({
         try: async () =>
@@ -31,6 +31,7 @@ const linkTemplateClause = createSafeRootHandler(
             organizationId: session.activeOrganizationId,
             templateId: params.templateId,
             body,
+            recordAuditEvent,
           }),
         catch: (cause) =>
           new HandlerError({

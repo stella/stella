@@ -8,6 +8,7 @@ import {
 } from "@/api/handlers/entities/desktop-edit-session-events";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tUserId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
@@ -19,7 +20,12 @@ const config = {
 
 const removeWorkspaceMember = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, params: { userId } }) {
+  async function* ({
+    safeDb,
+    workspaceId,
+    params: { userId },
+    recordAuditEvent,
+  }) {
     // Lock + delete in one transaction to prevent TOCTOU.
     // FOR UPDATE on the row select (not aggregate) locks
     // member rows so concurrent removals serialize.
@@ -70,6 +76,21 @@ const removeWorkspaceMember = createSafeHandler(
             ),
           )
           .returning({ id: desktopEditSessions.id });
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER,
+          resourceId: deleted.id,
+          changes: {
+            deleted: {
+              old: { userId, workspaceId },
+              new: null,
+            },
+          },
+          metadata: {
+            closedDesktopEditSessions: closedSessions.length,
+          },
+        });
 
         return {
           ok: true as const,
