@@ -45,6 +45,7 @@ import {
   buildAnonymizedSystemHint,
   createChatThirdPartyBoundary,
 } from "@/api/handlers/chat/third-party-boundary";
+import { shouldRefreshEmptyThreadTitle } from "@/api/handlers/chat/thread-title";
 import {
   intersectAccessibleWorkspaceIds,
   resolveToolWorkspaceIds,
@@ -702,6 +703,7 @@ const loadThread = async ({
     // clear 400 instead of a constraint violation 500.
     type ExistingThreadRow = {
       id: SafeId<"chatThread">;
+      title: string;
       workspaceId: SafeId<"workspace"> | null;
       contextMatterIds: SafeId<"workspace">[];
       dataWorkspaceIds: SafeId<"workspace">[];
@@ -718,6 +720,7 @@ const loadThread = async ({
           },
           columns: {
             id: true,
+            title: true,
             workspaceId: true,
             contextMatterIds: true,
             dataWorkspaceIds: true,
@@ -767,7 +770,12 @@ const loadThread = async ({
       if (Result.isError(existingResult)) {
         return Result.err(existingResult.error);
       }
-      if (thread.messages.length === 0) {
+      if (
+        shouldRefreshEmptyThreadTitle({
+          messageCount: thread.messages.length,
+          title: thread.title,
+        })
+      ) {
         yield* Result.await(
           safeDb((tx) =>
             tx

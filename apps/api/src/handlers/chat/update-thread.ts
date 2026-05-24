@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { defaultDatabaseRetry } from "@/api/db";
 import { chatThreads } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
+import { CHAT_THREAD_PLACEHOLDER_TITLE } from "@/api/handlers/chat/thread-title";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -68,7 +69,7 @@ const updateThread = createSafeRootHandler(
           .values({
             id: params.threadId,
             organizationId: session.activeOrganizationId,
-            title: "New chat",
+            title: CHAT_THREAD_PLACEHOLDER_TITLE,
             userId: user.id,
             workspaceId: resolvedWorkspaceId,
             contextMatterIds: [],

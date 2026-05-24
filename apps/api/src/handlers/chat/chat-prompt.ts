@@ -26,6 +26,7 @@ import {
   getChatSkillMetadata,
   listAvailableChatSkillMetadata,
 } from "@/api/handlers/chat/skills";
+import { CHAT_THREAD_PLACEHOLDER_TITLE } from "@/api/handlers/chat/thread-title";
 import { readonlyOrgFunctionContracts } from "@/api/handlers/chat/tools/execute/org-manifest";
 import { buildReadonlyFunctionManifest } from "@/api/handlers/chat/tools/execute/readonly-manifest";
 import type { ReadonlyFunctionManifest } from "@/api/handlers/chat/tools/execute/readonly-manifest";
@@ -326,7 +327,7 @@ export const extractTitle = (parts: ChatMessage["parts"]) => {
     return `${plainText.slice(0, TITLE_MAX_LENGTH)}…`;
   }
 
-  return plainText || "New chat";
+  return plainText || CHAT_THREAD_PLACEHOLDER_TITLE;
 };
 
 type BuildGlobalPromptProps = {
