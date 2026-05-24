@@ -185,15 +185,15 @@ const enrichCellMetadata = (
   actorMap: Map<string, CellMetadataActor>,
 ): CellMetadataResult => {
   const provenanceEntries = Object.entries(metadata.flagProvenance ?? {});
+  const lockActor = metadata.lockProvenance
+    ? actorMap.get(metadata.lockProvenance.lockedBy)
+    : undefined;
   const lockProvenance = metadata.lockProvenance
-    ? (() => {
-        const actor = actorMap.get(metadata.lockProvenance.lockedBy);
-        return {
-          ...metadata.lockProvenance,
-          lockedByName: actor?.name ?? null,
-          lockedByImage: actor?.image ?? null,
-        };
-      })()
+    ? {
+        ...metadata.lockProvenance,
+        lockedByName: lockActor?.name ?? null,
+        lockedByImage: lockActor?.image ?? null,
+      }
     : undefined;
 
   return {

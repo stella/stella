@@ -195,9 +195,7 @@ export const fieldContentSchema = t.Union([
 
 export type FieldContent = Static<typeof fieldContentSchema>;
 
-export const cellLockReasonSchema = t.UnionEnum(["manual-edit", "explicit"]);
-
-export type CellLockReason = Static<typeof cellLockReasonSchema>;
+const cellLockReasonSchema = t.UnionEnum(["manual-edit", "explicit"]);
 
 export const cellMetadataSchema = t.Object({
   version: v1,
