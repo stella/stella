@@ -330,6 +330,25 @@ describe("toFlowBlocks TOC hyperlink style strip", () => {
 });
 
 describe("toFlowBlocks list numbering", () => {
+  test("normalizes Symbol-family bullet markers during flow conversion", () => {
+    const doc = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        {
+          numPr: { numId: 8, ilvl: 0 },
+          listIsBullet: true,
+          listMarker: "\u00b7",
+        },
+        [schema.text("Bullet")],
+      ),
+    ]);
+
+    const blocks = toFlowBlocks(doc);
+
+    expect(blocks.at(0)?.kind).toBe("paragraph");
+    expect(blocks.at(0)?.attrs?.listMarker).toBe("\u2022");
+  });
+
   test("formats numbered markers using the paragraph number format", () => {
     const doc = schema.node("doc", null, [
       schema.node(

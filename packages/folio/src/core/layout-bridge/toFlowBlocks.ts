@@ -7,6 +7,7 @@
 
 import type { Node as PMNode, Mark } from "prosemirror-model";
 
+import { convertBulletToUnicode } from "../docx/bulletMarkers";
 import type {
   FlowBlock,
   ParagraphBlock,
@@ -273,7 +274,7 @@ function computeListMarker(
   }
 
   if (pmAttrs.listIsBullet) {
-    return pmAttrs.listMarker || "•";
+    return convertBulletToUnicode(pmAttrs.listMarker || "");
   }
 
   const level = pmAttrs.numPr?.ilvl ?? 0;
@@ -1235,7 +1236,9 @@ function convertParagraphAttrs(
   if (resolvedMarker !== null) {
     attrs.listMarker = resolvedMarker;
   } else if (pmAttrs.listMarker) {
-    attrs.listMarker = pmAttrs.listMarker;
+    attrs.listMarker = pmAttrs.listIsBullet
+      ? convertBulletToUnicode(pmAttrs.listMarker)
+      : pmAttrs.listMarker;
   }
   if (pmAttrs.listIsBullet !== undefined) {
     attrs.listIsBullet = pmAttrs.listIsBullet;
