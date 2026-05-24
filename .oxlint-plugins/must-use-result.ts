@@ -69,8 +69,21 @@ export default {
             // If the outermost wrapper sits inside an ExpressionStatement,
             // the call result is discarded.
             let current = node;
+            let isDiscardedByNonLastSequence = false;
             while (current.parent) {
               const parent = current.parent;
+              // In `(safeDb(...), value)` / `(value, safeDb(...), other())`
+              // any non-last operand has its value definitively dropped
+              // by the comma operator, regardless of what the surrounding
+              // context does with the sequence's final value. Flag now
+              // and bail — no point walking further.
+              if (
+                parent.type === "SequenceExpression" &&
+                parent.expressions.at(-1) !== current
+              ) {
+                isDiscardedByNonLastSequence = true;
+                break;
+              }
               const isTransparentWrapper =
                 parent.type === "AwaitExpression" ||
                 parent.type === "ChainExpression" ||
@@ -107,7 +120,10 @@ export default {
               }
               current = parent;
             }
-            if (current.parent?.type !== "ExpressionStatement") {
+            if (
+              !isDiscardedByNonLastSequence &&
+              current.parent?.type !== "ExpressionStatement"
+            ) {
               return;
             }
             context.report({
