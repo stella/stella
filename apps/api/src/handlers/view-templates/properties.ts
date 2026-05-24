@@ -138,6 +138,8 @@ export const resolveTemplateProperties = async ({
   const nextPropertyIds = existingProperties.map((property) => property.id);
   const propertyIdBySourceId = new Map<string, string>();
   const createdPropertySourceIds = new Set<string>();
+  const templatePropertiesToCreate: ViewTemplateProperty[] = [];
+  let projectedPropertyCount = nextPropertyIds.length;
 
   for (const templateProperty of templateProperties) {
     const validationError = validateTemplatePropertyConfig(templateProperty);
@@ -174,7 +176,7 @@ export const resolveTemplateProperties = async ({
       };
     }
 
-    if (nextPropertyIds.length >= LIMITS.propertiesCount) {
+    if (projectedPropertyCount >= LIMITS.propertiesCount) {
       return {
         ok: false,
         status: 400,
@@ -182,6 +184,25 @@ export const resolveTemplateProperties = async ({
       };
     }
 
+    createdPropertySourceIds.add(templateProperty.sourceId);
+    templatePropertiesToCreate.push(templateProperty);
+    projectedPropertyCount += 1;
+  }
+
+  if (
+    hasTemplateDependencyCycle({
+      templateProperties,
+      createdPropertySourceIds,
+    })
+  ) {
+    return {
+      ok: false,
+      status: 422,
+      message: "Circular template dependency detected",
+    };
+  }
+
+  for (const templateProperty of templatePropertiesToCreate) {
     const [inserted] = await tx
       .insert(properties)
       .values({
@@ -202,7 +223,6 @@ export const resolveTemplateProperties = async ({
     }
 
     propertyIdBySourceId.set(templateProperty.sourceId, inserted.id);
-    createdPropertySourceIds.add(templateProperty.sourceId);
     nextPropertyIds.push(inserted.id);
 
     if (auditContext) {
@@ -226,20 +246,6 @@ export const resolveTemplateProperties = async ({
         tx,
       );
     }
-  }
-
-  if (
-    hasTemplateDependencyCycle({
-      templateProperties,
-      propertyIdBySourceId,
-      createdPropertySourceIds,
-    })
-  ) {
-    return {
-      ok: false,
-      status: 422,
-      message: "Circular template dependency detected",
-    };
   }
 
   await recreateTemplateDependencies({
@@ -315,11 +321,9 @@ const recreateTemplateDependencies = async ({
 
 const hasTemplateDependencyCycle = ({
   templateProperties,
-  propertyIdBySourceId,
   createdPropertySourceIds,
 }: {
   templateProperties: readonly ViewTemplateProperty[];
-  propertyIdBySourceId: ReadonlyMap<string, string>;
   createdPropertySourceIds: ReadonlySet<string>;
 }): boolean => {
   const graph = new Map<string, string[]>();
@@ -329,17 +333,16 @@ const hasTemplateDependencyCycle = ({
       continue;
     }
 
-    const propertyId = propertyIdBySourceId.get(templateProperty.sourceId);
-    if (!propertyId || !templateProperty.dependencies) {
+    if (!templateProperty.dependencies) {
       continue;
     }
 
     const dependencySourceIds: string[] = [];
     for (const dep of templateProperty.dependencies) {
-      const dependsOnPropertyId = propertyIdBySourceId.get(
-        dep.dependsOnSourceId,
-      );
-      if (!dependsOnPropertyId || dependsOnPropertyId === propertyId) {
+      if (
+        dep.dependsOnSourceId === templateProperty.sourceId ||
+        !createdPropertySourceIds.has(dep.dependsOnSourceId)
+      ) {
         continue;
       }
       dependencySourceIds.push(dep.dependsOnSourceId);

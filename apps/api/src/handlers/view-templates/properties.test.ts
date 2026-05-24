@@ -181,7 +181,7 @@ describe("resolveTemplateProperties", () => {
       status: 422,
       message: "Circular template dependency detected",
     });
-    expect(returningMock).toHaveBeenCalledTimes(2);
+    expect(returningMock).not.toHaveBeenCalled();
     expect(dependencyValuesMock).not.toHaveBeenCalled();
   });
 });
