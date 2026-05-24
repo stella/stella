@@ -42,7 +42,7 @@ const buildDetachEvents = (params: {
       resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
       resourceId: params.invoiceId,
       changes: {
-        totalAmount: { old: null, new: cents(params.totalAmount) },
+        totalAmount: { old: null, new: params.totalAmount },
         detachedTimeEntries: {
           old: params.detachedTimeEntries.map((row) => row.id),
           new: null,

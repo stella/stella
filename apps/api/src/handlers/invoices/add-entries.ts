@@ -42,7 +42,7 @@ const buildAttachEvents = (params: {
       resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
       resourceId: params.invoiceId,
       changes: {
-        totalAmount: { old: null, new: cents(params.totalAmount) },
+        totalAmount: { old: null, new: params.totalAmount },
         attachedTimeEntries: {
           old: null,
           new: params.attachedTimeEntries.map((row) => row.id),

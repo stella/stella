@@ -27,8 +27,8 @@
 //     state). The reason text is required so reviewers can sanity-check.
 //
 // Detected mutations: `tx.insert(...)`, `tx.update(...)`, `tx.delete(...)`,
-// where `tx` is any identifier ending in `tx`, `Tx`, `db`, or `Db`
-// (covers tx, innerTx, scopedDb, safeDb at the call site).
+// where the object is exactly `tx` / `db` or a camel-cased identifier ending
+// in `Tx` / `Db` (covers `innerTx` and `scopedDb` without matching `ctx`).
 
 import { getCalleeName, getPropertyName } from "./utils.ts";
 
@@ -42,10 +42,8 @@ const isAstNode = (node: unknown): node is AstNode =>
 
 const MUTATION_METHODS = new Set(["insert", "update", "delete"]);
 
-// The transaction parameter is conventionally one of these names.
-// Anything else (e.g. a custom alias) won't be matched — false negatives
-// are acceptable; false positives on non-DB code would be noisier.
-const TX_NAME_PATTERN = /(?:^|[a-z])(tx|Db)$/u;
+const isTransactionLikeIdentifier = (name: string): boolean =>
+  name === "tx" || name === "db" || /[a-z](?:Tx|Db)$/u.test(name);
 
 const isMutationCall = (node: unknown): boolean => {
   if (!isAstNode(node) || node.type !== "CallExpression") {
@@ -70,7 +68,7 @@ const isMutationCall = (node: unknown): boolean => {
   if (objectName === null) {
     return false;
   }
-  return TX_NAME_PATTERN.test(objectName);
+  return isTransactionLikeIdentifier(objectName);
 };
 
 // Match callees whose tail name is `recordAuditEvent`, `auditedPresignDownload`,

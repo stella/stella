@@ -137,6 +137,7 @@ export const checkpointDesktopEditSessionHandler = async ({
       .select({
         checkpointFileId: desktopEditSessions.checkpointFileId,
         checkpointSha256Hex: desktopEditSessions.checkpointSha256Hex,
+        checkpointSizeBytes: desktopEditSessions.checkpointSizeBytes,
         checkpointUpdatedAt: desktopEditSessions.checkpointUpdatedAt,
         fileName: desktopEditSessions.fileName,
         id: desktopEditSessions.id,
@@ -270,7 +271,7 @@ export const checkpointDesktopEditSessionHandler = async ({
           new: sha256Hex,
         },
         checkpointSizeBytes: {
-          old: null,
+          old: existingSession.checkpointSizeBytes,
           new: file.size,
         },
       },

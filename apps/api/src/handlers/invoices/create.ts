@@ -162,7 +162,7 @@ const createInvoice = createSafeHandler(
                   invoiceNumber: created.invoiceNumber,
                   invoiceDate: body.invoiceDate,
                   currency: body.currency,
-                  totalAmount: cents(totalAmount),
+                  totalAmount,
                   entryCount: linkedCount,
                   status: INVOICE_STATUS.DRAFT,
                 },

@@ -64,6 +64,7 @@ const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
 
 const buildVoidEvents = (params: {
   invoiceId: SafeId<"invoice">;
+  previousStatus: InvoiceStatus;
   revertedTimeEntries: { id: SafeId<"timeEntry"> }[];
   revertedExpenses: { id: SafeId<"expense"> }[];
 }): AuditEvent[] => {
@@ -73,7 +74,7 @@ const buildVoidEvents = (params: {
       resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
       resourceId: params.invoiceId,
       changes: {
-        status: { old: null, new: INVOICE_STATUS.VOID },
+        status: { old: params.previousStatus, new: INVOICE_STATUS.VOID },
       },
     },
   ];
@@ -132,6 +133,23 @@ const transitionInvoice = createSafeHandler(
     if (body.action === "void") {
       const txResult = yield* Result.await(
         safeDb(async (tx) => {
+          const existingRows = await tx
+            .select({ id: invoices.id, status: invoices.status })
+            .from(invoices)
+            .where(
+              and(
+                eq(invoices.id, params.invoiceId),
+                eq(invoices.workspaceId, workspaceId),
+                inArray(invoices.status, transition.from),
+              ),
+            )
+            .limit(1)
+            .for("update");
+          const existing = existingRows.at(0);
+          if (!existing) {
+            return { ok: false as const };
+          }
+
           const updated = await tx
             .update(invoices)
             .set(set)
@@ -183,6 +201,7 @@ const transitionInvoice = createSafeHandler(
             tx,
             buildVoidEvents({
               invoiceId: params.invoiceId,
+              previousStatus: existing.status,
               revertedTimeEntries,
               revertedExpenses,
             }),
@@ -206,6 +225,23 @@ const transitionInvoice = createSafeHandler(
 
     const result = yield* Result.await(
       safeDb(async (tx) => {
+        const existingRows = await tx
+          .select({ id: invoices.id, status: invoices.status })
+          .from(invoices)
+          .where(
+            and(
+              eq(invoices.id, params.invoiceId),
+              eq(invoices.workspaceId, workspaceId),
+              inArray(invoices.status, transition.from),
+            ),
+          )
+          .limit(1)
+          .for("update");
+        const existing = existingRows.at(0);
+        if (!existing) {
+          return [];
+        }
+
         const updated = await tx
           .update(invoices)
           .set(set)
@@ -225,7 +261,7 @@ const transitionInvoice = createSafeHandler(
             resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
             resourceId: row.id,
             changes: {
-              status: { old: null, new: transition.to },
+              status: { old: existing.status, new: transition.to },
               action: { old: null, new: body.action },
             },
           });
