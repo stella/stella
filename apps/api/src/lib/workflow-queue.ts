@@ -1173,6 +1173,7 @@ const processOneBatch = async ({
                   inArray(cellMetadata.propertyId, candidatePropertyIds),
                 ),
               )
+              .for("update")
           : [];
       const lockedAtWrite = new Set<string>(
         lockedRowsAtWrite

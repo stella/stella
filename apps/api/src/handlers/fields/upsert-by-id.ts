@@ -207,6 +207,14 @@ const upsertField = createSafeHandler(
     if (isEmpty) {
       yield* Result.await(
         safeDb(async (tx) => {
+          await lockCellOnManualEdit({
+            tx,
+            workspaceId,
+            entityVersionId,
+            propertyId: property.id,
+            userId: user.id,
+          });
+
           await tx
             .delete(fields)
             .where(
@@ -215,13 +223,6 @@ const upsertField = createSafeHandler(
                 eq(fields.entityVersionId, entityVersionId),
               ),
             );
-          await lockCellOnManualEdit({
-            tx,
-            workspaceId,
-            entityVersionId,
-            propertyId: property.id,
-            userId: user.id,
-          });
           await tx
             .update(entities)
             .set({ updatedAt: new Date() })
@@ -234,6 +235,14 @@ const upsertField = createSafeHandler(
 
     yield* Result.await(
       safeDb(async (tx) => {
+        await lockCellOnManualEdit({
+          tx,
+          workspaceId,
+          entityVersionId,
+          propertyId: property.id,
+          userId: user.id,
+        });
+
         await tx
           .delete(fields)
           .where(
@@ -248,14 +257,6 @@ const upsertField = createSafeHandler(
           propertyId: property.id,
           entityVersionId,
           content: body.content,
-        });
-
-        await lockCellOnManualEdit({
-          tx,
-          workspaceId,
-          entityVersionId,
-          propertyId: property.id,
-          userId: user.id,
         });
 
         await tx
