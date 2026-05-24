@@ -33,5 +33,13 @@ export type {
   LegalSourceParseResult,
 } from "./legal-source";
 export { serializeDocumentToDocx } from "./serialize/docx";
-export { validateDocxPackage } from "./validate/docx";
-export type { ValidateDocxPackageResult } from "./validate/docx";
+export {
+  assertValidDocumentModel,
+  validateDocxPackage,
+  validateDocumentModel,
+} from "./validate/docx";
+export type {
+  ValidateDocumentModelIssue,
+  ValidateDocumentModelResult,
+  ValidateDocxPackageResult,
+} from "./validate/docx";
