@@ -1,6 +1,7 @@
 import type { Transaction } from "@/api/db";
 import type { AuditRecorder, AuditResourceType } from "@/api/lib/audit-log";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import { getS3, presignDownloadUrl } from "@/api/lib/s3";
 
 type AuditedPresignDownloadOptions = {
@@ -21,6 +22,7 @@ type AuditedPresignDownloadOptions = {
   fileName?: string;
   /** Additional audit metadata (e.g., sizeBytes, contentType). */
   metadata?: Record<string, unknown>;
+  workspaceId?: SafeId<"workspace"> | null;
 };
 
 /**
@@ -43,11 +45,13 @@ export const auditedPresignDownload = async ({
   expiresInSeconds,
   fileName,
   metadata,
+  workspaceId,
 }: AuditedPresignDownloadOptions): Promise<string> => {
   await recordAuditEvent(tx, {
     action: AUDIT_ACTION.DOWNLOAD,
     resourceType,
     resourceId,
+    ...(workspaceId !== undefined ? { workspaceId } : {}),
     metadata: {
       s3Key,
       expiresInSeconds,

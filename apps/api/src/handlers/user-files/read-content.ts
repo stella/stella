@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { t } from "elysia";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -20,11 +20,23 @@ const readUserFileContent = createSafeRootHandler(
             id: { eq: fileId },
             userId: { eq: user.id },
           },
+          columns: {
+            s3Key: true,
+          },
+          with: {
+            thread: {
+              columns: {
+                workspaceId: true,
+              },
+            },
+          },
         });
 
         if (!file) {
           return null;
         }
+        const thread =
+          file.thread ?? panic("User file thread relation missing");
 
         const presignedUrl = await auditedPresignDownload({
           tx,
@@ -33,6 +45,7 @@ const readUserFileContent = createSafeRootHandler(
           resourceId: fileId,
           s3Key: file.s3Key,
           expiresInSeconds: 900,
+          workspaceId: thread.workspaceId,
         });
 
         return presignedUrl;

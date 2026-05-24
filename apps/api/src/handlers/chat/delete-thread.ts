@@ -87,14 +87,17 @@ const deleteThread = createSafeRootHandler(
                 ? eq(chatThreads.workspaceId, scope.workspaceId)
                 : isNull(chatThreads.workspaceId),
             ),
-          );
+          )
+          .returning({ id: chatThreads.id });
 
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.DELETE,
-          resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
-          resourceId: params.threadId,
-          workspaceId: scope.scope === "workspace" ? scope.workspaceId : null,
-        });
+        if (result.length > 0) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.DELETE,
+            resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+            resourceId: params.threadId,
+            workspaceId: scope.scope === "workspace" ? scope.workspaceId : null,
+          });
+        }
 
         return result;
       }, defaultDatabaseRetry),
