@@ -90,6 +90,7 @@ export const resolveTemplateProperties = async ({
       id: true,
       name: true,
       content: true,
+      tool: true,
     },
     orderBy: { createdAt: "asc" },
   });
@@ -109,7 +110,8 @@ export const resolveTemplateProperties = async ({
       (property) =>
         normalizePropertyName(property.name) ===
           normalizePropertyName(templateProperty.name) &&
-        property.content.type === templateProperty.content.type,
+        property.content.type === templateProperty.content.type &&
+        property.tool.type === templateProperty.tool.type,
     );
     if (existingByShape) {
       propertyIdBySourceId.set(templateProperty.sourceId, existingByShape.id);

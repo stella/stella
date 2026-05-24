@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRouteContext } from "@tanstack/react-router";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -16,6 +17,10 @@ type CreateViewTemplateVars = {
 export const useCreateViewTemplate = () => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
+  const organizationId = useRouteContext({
+    from: "/_protected",
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: CreateViewTemplateVars) => {
@@ -30,7 +35,7 @@ export const useCreateViewTemplate = () => {
     onSuccess: () => {
       // eslint-disable-next-line typescript/no-floating-promises
       queryClient.invalidateQueries({
-        queryKey: viewTemplateKeys.all(),
+        queryKey: viewTemplateKeys.all({ organizationId }),
       });
     },
     onError: (error) => {
@@ -47,6 +52,10 @@ type DeleteViewTemplateVars = {
 export const useDeleteViewTemplate = () => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
+  const organizationId = useRouteContext({
+    from: "/_protected",
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
 
   return useMutation({
     mutationFn: async ({ workspaceId, templateId }: DeleteViewTemplateVars) => {
@@ -63,7 +72,7 @@ export const useDeleteViewTemplate = () => {
     onSuccess: () => {
       // eslint-disable-next-line typescript/no-floating-promises
       queryClient.invalidateQueries({
-        queryKey: viewTemplateKeys.all(),
+        queryKey: viewTemplateKeys.all({ organizationId }),
       });
     },
     onError: (error) => {

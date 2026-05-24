@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   ViewLayout,
@@ -20,17 +21,30 @@ export type WorkspaceViewTemplate = {
   updatedAt: string;
 };
 
-export const viewTemplateKeys = {
-  all: () => ["view-templates"] as const,
+export type ViewTemplatesKey = {
+  organizationId: string;
 };
 
-export const viewTemplatesOptions = (workspaceId: string) =>
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- templates are scoped per-user-per-organization on the backend, so any workspaceId the caller has access to returns the same list. The path param only satisfies the workspace-access auth macro.
+export const viewTemplateKeys = {
+  all: ({ organizationId }: ViewTemplatesKey) =>
+    ["view-templates", organizationId] as const,
+};
+
+export type ViewTemplatesOptionsInput = QueryOptionsInput<
+  ViewTemplatesKey,
+  { workspaceId: string }
+>;
+
+export const viewTemplatesOptions = ({
+  key,
+  context,
+}: ViewTemplatesOptionsInput) =>
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- workspaceId is a path param to satisfy the workspace-access auth macro; the backend returns a per-user-per-organization list, so it must not be part of the cache identity.
   queryOptions({
-    queryKey: viewTemplateKeys.all(),
+    queryKey: viewTemplateKeys.all(key),
     queryFn: async ({ signal }): Promise<WorkspaceViewTemplate[]> => {
       const response = await api["view-templates"]({
-        workspaceId: toSafeId<"workspace">(workspaceId),
+        workspaceId: toSafeId<"workspace">(context.workspaceId),
       }).get({ fetch: { signal } });
 
       if (response.error) {
