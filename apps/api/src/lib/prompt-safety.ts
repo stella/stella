@@ -62,25 +62,35 @@ const ROLE_MARKERS: readonly RegExp[] = [
 const INVISIBLE_OVERRIDES =
   /[\u{200b}-\u{200f}\u{202a}-\u{202e}\u{2066}-\u{2069}\u{feff}]/gu;
 
-const isStrippableControl = (code: number): boolean =>
-  code <= 0x08 ||
-  code === 0x0b ||
-  code === 0x0c ||
-  (code >= 0x0e && code <= 0x1f) ||
-  code === 0x7f;
+const STRIPPABLE_CONTROL_CHARS = new RegExp(
+  "[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]",
+  "gu",
+);
 
-const stripControlChars = (input: string): string => {
-  let out = "";
-  for (const ch of input) {
-    const code = ch.codePointAt(0);
-    if (code === undefined || !isStrippableControl(code)) {
-      out += ch;
-    }
-  }
-  return out;
-};
+const stripControlChars = (input: string): string =>
+  input.replace(STRIPPABLE_CONTROL_CHARS, "");
 
 const TRUNCATION_SUFFIX = "…[truncated]";
+const HIGH_SURROGATE_START = 0xd800;
+const HIGH_SURROGATE_END = 0xdbff;
+
+const truncateAtUtf16Boundary = (input: string, maxLength: number): string => {
+  if (maxLength <= 0) {
+    return "";
+  }
+
+  const end = Math.min(maxLength, input.length);
+  const lastCodeUnit = input.charCodeAt(end - 1);
+  if (
+    end < input.length &&
+    lastCodeUnit >= HIGH_SURROGATE_START &&
+    lastCodeUnit <= HIGH_SURROGATE_END
+  ) {
+    return input.slice(0, end - 1);
+  }
+
+  return input.slice(0, end);
+};
 
 /**
  * Promote untrusted input to text safe for prompt interpolation.
@@ -102,10 +112,18 @@ export const sanitizeForPrompt = (
   for (const pattern of ROLE_MARKERS) {
     cleaned = cleaned.replace(pattern, "");
   }
-  cleaned = cleaned.split(open).join("").split(close).join("");
+  if (open.length > 0) {
+    cleaned = cleaned.replaceAll(open, " ");
+  }
+  if (close.length > 0) {
+    cleaned = cleaned.replaceAll(close, " ");
+  }
 
   if (options?.maxLength !== undefined && cleaned.length > options.maxLength) {
-    cleaned = `${cleaned.slice(0, options.maxLength)}${TRUNCATION_SUFFIX}`;
+    cleaned = `${truncateAtUtf16Boundary(
+      cleaned,
+      options.maxLength,
+    )}${TRUNCATION_SUFFIX}`;
   }
 
   // SAFETY: all known control sequences, role markers, and delimiter
