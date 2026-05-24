@@ -40,17 +40,20 @@ import {
   expectCharacterSpacingMarkAttrs,
   expectCommentMarkAttrs,
   expectEmphasisMarkAttrs,
+  expectFieldAttrs,
   expectFontFamilyMarkAttrs,
   expectFontSizeMarkAttrs,
   expectFootnoteRefMarkAttrs,
   expectHighlightMarkAttrs,
   expectHyperlinkMarkAttrs,
   expectImageAttrs,
+  expectMathAttrs,
   expectParagraphAttrs,
   expectRunFormattingOverrideMarkAttrs,
   expectTableAttrs,
   expectTableCellAttrs,
   expectTableRowAttrs,
+  expectTextBoxAttrs,
   expectTextColorMarkAttrs,
   expectTrackedChangeMarkAttrs,
   expectUnderlineMarkAttrs,
@@ -896,7 +899,8 @@ function paragraphToRuns(
       // visible text was authored as underlined (e.g. cross-references like
       // "Exhibit A" / "Section 1.3" in NVCA-style templates) render with no
       // underline. Reuse the same extractor text runs use.
-      const ft = child.attrs["fieldType"] as string;
+      const attrs = expectFieldAttrs(child);
+      const ft = attrs.fieldType;
       let mappedType: FieldRun["fieldType"] = "OTHER";
       if (ft === "PAGE") {
         mappedType = "PAGE";
@@ -918,7 +922,7 @@ function paragraphToRuns(
       const run: FieldRun = {
         kind: "field",
         fieldType: mappedType,
-        fallback: (child.attrs["displayText"] as string) || "",
+        fallback: attrs.displayText || "",
         pmStart: childPos,
         pmEnd: childPos + child.nodeSize,
         ...fieldFormatting,
@@ -926,7 +930,7 @@ function paragraphToRuns(
       runs.push(run);
     } else if (child.type.name === "math") {
       // Math node — render as plain text fallback in layout
-      const text = (child.attrs["plainText"] as string) || "[equation]";
+      const text = expectMathAttrs(child).plainText || "[equation]";
       const run: TextRun = {
         kind: "text",
         text,
@@ -1767,7 +1771,7 @@ function convertTextBoxNode(
   startPos: number,
   opts: ToFlowBlocksOptions,
 ): TextBoxBlock {
-  const attrs = node.attrs;
+  const attrs = expectTextBoxAttrs(node);
   const contentBlocks: ParagraphBlock[] = [];
 
   // Convert child paragraphs inside the text box
@@ -1782,39 +1786,31 @@ function convertTextBoxNode(
   const textBox: TextBoxBlock = {
     kind: "textBox",
     id: nextBlockId(),
-    width: (attrs["width"] as number | undefined) ?? DEFAULT_TEXTBOX_WIDTH,
+    width: attrs.width ?? DEFAULT_TEXTBOX_WIDTH,
     margins: {
-      top:
-        (attrs["marginTop"] as number | undefined) ??
-        DEFAULT_TEXTBOX_MARGINS.top,
-      bottom:
-        (attrs["marginBottom"] as number | undefined) ??
-        DEFAULT_TEXTBOX_MARGINS.bottom,
-      left:
-        (attrs["marginLeft"] as number | undefined) ??
-        DEFAULT_TEXTBOX_MARGINS.left,
-      right:
-        (attrs["marginRight"] as number | undefined) ??
-        DEFAULT_TEXTBOX_MARGINS.right,
+      top: attrs.marginTop ?? DEFAULT_TEXTBOX_MARGINS.top,
+      bottom: attrs.marginBottom ?? DEFAULT_TEXTBOX_MARGINS.bottom,
+      left: attrs.marginLeft ?? DEFAULT_TEXTBOX_MARGINS.left,
+      right: attrs.marginRight ?? DEFAULT_TEXTBOX_MARGINS.right,
     },
     content: contentBlocks,
     pmStart: startPos,
     pmEnd: startPos + node.nodeSize,
   };
-  if (attrs["height"] != null) {
-    textBox.height = attrs["height"] as number;
+  if (attrs.height !== undefined) {
+    textBox.height = attrs.height;
   }
-  if (attrs["fillColor"] != null) {
-    textBox.fillColor = attrs["fillColor"] as string;
+  if (attrs.fillColor !== undefined) {
+    textBox.fillColor = attrs.fillColor;
   }
-  if (attrs["outlineWidth"] != null) {
-    textBox.outlineWidth = attrs["outlineWidth"] as number;
+  if (attrs.outlineWidth !== undefined) {
+    textBox.outlineWidth = attrs.outlineWidth;
   }
-  if (attrs["outlineColor"] != null) {
-    textBox.outlineColor = attrs["outlineColor"] as string;
+  if (attrs.outlineColor !== undefined) {
+    textBox.outlineColor = attrs.outlineColor;
   }
-  if (attrs["outlineStyle"] != null) {
-    textBox.outlineStyle = attrs["outlineStyle"] as string;
+  if (attrs.outlineStyle !== undefined) {
+    textBox.outlineStyle = attrs.outlineStyle;
   }
   return textBox;
 }

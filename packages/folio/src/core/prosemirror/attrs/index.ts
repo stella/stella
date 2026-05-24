@@ -4,18 +4,23 @@ import type {
   CharacterSpacingAttrs,
   CommentAttrs,
   EmphasisMarkAttrs,
+  FieldAttrs,
   FontFamilyAttrs,
   FontSizeAttrs,
   FootnoteRefAttrs,
   HighlightAttrs,
   HyperlinkAttrs,
   ImageAttrs,
+  MathAttrs,
   ParagraphAttrs,
   RunFormattingOverrideAttrs,
+  SdtAttrs,
+  ShapeAttrs,
   StrikeAttrs,
   TableAttrs,
   TableCellAttrs,
   TableRowAttrs,
+  TextBoxAttrs,
   TextColorAttrs,
   TrackedChangeMarkAttrs,
   UnderlineAttrs,
@@ -194,6 +199,104 @@ const IMAGE_VERTICAL_ALIGNMENTS = [
 ] as const satisfies readonly NonNullable<
   ImageVerticalPositionAttrs["align"]
 >[];
+
+const FIELD_TYPES = [
+  "PAGE",
+  "NUMPAGES",
+  "NUMWORDS",
+  "NUMCHARS",
+  "DATE",
+  "TIME",
+  "CREATEDATE",
+  "SAVEDATE",
+  "PRINTDATE",
+  "AUTHOR",
+  "TITLE",
+  "SUBJECT",
+  "KEYWORDS",
+  "COMMENTS",
+  "FILENAME",
+  "FILESIZE",
+  "TEMPLATE",
+  "DOCPROPERTY",
+  "DOCVARIABLE",
+  "REF",
+  "PAGEREF",
+  "NOTEREF",
+  "HYPERLINK",
+  "TOC",
+  "TOA",
+  "INDEX",
+  "SEQ",
+  "STYLEREF",
+  "AUTONUM",
+  "AUTONUMLGL",
+  "AUTONUMOUT",
+  "IF",
+  "MERGEFIELD",
+  "NEXT",
+  "NEXTIF",
+  "ASK",
+  "SET",
+  "QUOTE",
+  "INCLUDETEXT",
+  "INCLUDEPICTURE",
+  "SYMBOL",
+  "ADVANCE",
+  "EDITTIME",
+  "REVNUM",
+  "SECTION",
+  "SECTIONPAGES",
+  "USERADDRESS",
+  "USERNAME",
+  "USERINITIALS",
+  "UNKNOWN",
+] as const satisfies readonly FieldAttrs["fieldType"][];
+
+const FIELD_KINDS = [
+  "simple",
+  "complex",
+] as const satisfies readonly FieldAttrs["fieldKind"][];
+
+const MATH_DISPLAYS = [
+  "inline",
+  "block",
+] as const satisfies readonly NonNullable<MathAttrs["display"]>[];
+
+const SDT_TYPES = [
+  "richText",
+  "plainText",
+  "date",
+  "dropdown",
+  "comboBox",
+  "checkbox",
+  "picture",
+  "buildingBlockGallery",
+  "group",
+  "unknown",
+] as const satisfies readonly SdtAttrs["sdtType"][];
+
+const SDT_LOCKS = [
+  "sdtLocked",
+  "contentLocked",
+  "sdtContentLocked",
+  "unlocked",
+] as const satisfies readonly NonNullable<SdtAttrs["lock"]>[];
+
+const SHAPE_FILL_TYPES = [
+  "none",
+  "solid",
+  "gradient",
+  "pattern",
+  "picture",
+] as const satisfies readonly NonNullable<ShapeAttrs["fillType"]>[];
+
+const SHAPE_GRADIENT_TYPES = [
+  "linear",
+  "radial",
+  "rectangular",
+  "path",
+] as const satisfies readonly NonNullable<ShapeAttrs["gradientType"]>[];
 
 const UNDERLINE_STYLES = [
   "none",
@@ -592,6 +695,189 @@ export const readImageAttrs = (
 
 export const expectImageAttrs = (node: PMNode): ImageAttrs =>
   expectAttrs(readImageAttrs(node), "image attrs");
+
+export const readFieldAttrs = (
+  node: PMNode,
+): ReadProseMirrorAttrsResult<FieldAttrs> => {
+  const attrs = attrsRecord(node.attrs);
+  const issues: ProseMirrorAttrIssue[] = [];
+  expectNodeType(node, "field", issues);
+
+  requiredOneOf(
+    attrs,
+    "fieldType",
+    "field.attrs.fieldType",
+    issues,
+    FIELD_TYPES,
+  );
+  requiredString(attrs, "instruction", "field.attrs.instruction", issues);
+  requiredString(attrs, "displayText", "field.attrs.displayText", issues);
+  requiredOneOf(
+    attrs,
+    "fieldKind",
+    "field.attrs.fieldKind",
+    issues,
+    FIELD_KINDS,
+  );
+  optionalBoolean(attrs, "fldLock", "field.attrs.fldLock", issues);
+  optionalBoolean(attrs, "dirty", "field.attrs.dirty", issues);
+
+  return attrsResult(attrs, issues);
+};
+
+export const expectFieldAttrs = (node: PMNode): FieldAttrs =>
+  expectAttrs(readFieldAttrs(node), "field attrs");
+
+export const readMathAttrs = (
+  node: PMNode,
+): ReadProseMirrorAttrsResult<MathAttrs> => {
+  const attrs = attrsRecord(node.attrs);
+  const issues: ProseMirrorAttrIssue[] = [];
+  expectNodeType(node, "math", issues);
+
+  optionalOneOf(attrs, "display", "math.attrs.display", issues, MATH_DISPLAYS);
+  requiredString(attrs, "ommlXml", "math.attrs.ommlXml", issues);
+  optionalString(attrs, "plainText", "math.attrs.plainText", issues);
+
+  return attrsResult(attrs, issues);
+};
+
+export const expectMathAttrs = (node: PMNode): MathAttrs =>
+  expectAttrs(readMathAttrs(node), "math attrs");
+
+export const readSdtAttrs = (
+  node: PMNode,
+): ReadProseMirrorAttrsResult<SdtAttrs> => {
+  const attrs = attrsRecord(node.attrs);
+  const issues: ProseMirrorAttrIssue[] = [];
+  expectNodeType(node, "sdt", issues);
+
+  requiredOneOf(attrs, "sdtType", "sdt.attrs.sdtType", issues, SDT_TYPES);
+  optionalString(attrs, "alias", "sdt.attrs.alias", issues);
+  optionalString(attrs, "tag", "sdt.attrs.tag", issues);
+  optionalOneOf(attrs, "lock", "sdt.attrs.lock", issues, SDT_LOCKS);
+  optionalString(attrs, "placeholder", "sdt.attrs.placeholder", issues);
+  optionalBoolean(
+    attrs,
+    "showingPlaceholder",
+    "sdt.attrs.showingPlaceholder",
+    issues,
+  );
+  optionalString(attrs, "dateFormat", "sdt.attrs.dateFormat", issues);
+  optionalSdtListItems(attrs, "listItems", "sdt.attrs.listItems", issues);
+  optionalBoolean(attrs, "checked", "sdt.attrs.checked", issues);
+
+  return attrsResult(attrs, issues);
+};
+
+export const expectSdtAttrs = (node: PMNode): SdtAttrs =>
+  expectAttrs(readSdtAttrs(node), "sdt attrs");
+
+export const readShapeAttrs = (
+  node: PMNode,
+): ReadProseMirrorAttrsResult<ShapeAttrs> => {
+  const attrs = attrsRecord(node.attrs);
+  const issues: ProseMirrorAttrIssue[] = [];
+  expectNodeType(node, "shape", issues);
+
+  optionalString(attrs, "shapeType", "shape.attrs.shapeType", issues);
+  optionalString(attrs, "shapeId", "shape.attrs.shapeId", issues);
+  optionalNumber(attrs, "width", "shape.attrs.width", issues);
+  optionalNumber(attrs, "height", "shape.attrs.height", issues);
+  optionalString(attrs, "fillColor", "shape.attrs.fillColor", issues);
+  optionalOneOf(
+    attrs,
+    "fillType",
+    "shape.attrs.fillType",
+    issues,
+    SHAPE_FILL_TYPES,
+  );
+  optionalOneOf(
+    attrs,
+    "gradientType",
+    "shape.attrs.gradientType",
+    issues,
+    SHAPE_GRADIENT_TYPES,
+  );
+  optionalNumber(attrs, "gradientAngle", "shape.attrs.gradientAngle", issues);
+  optionalGradientStops(
+    attrs,
+    "gradientStops",
+    "shape.attrs.gradientStops",
+    issues,
+  );
+  optionalNumber(attrs, "outlineWidth", "shape.attrs.outlineWidth", issues);
+  optionalString(attrs, "outlineColor", "shape.attrs.outlineColor", issues);
+  optionalString(attrs, "outlineStyle", "shape.attrs.outlineStyle", issues);
+  optionalString(attrs, "transform", "shape.attrs.transform", issues);
+  optionalOneOf(
+    attrs,
+    "displayMode",
+    "shape.attrs.displayMode",
+    issues,
+    IMAGE_DISPLAY_MODES,
+  );
+  optionalOneOf(
+    attrs,
+    "cssFloat",
+    "shape.attrs.cssFloat",
+    issues,
+    IMAGE_CSS_FLOATS,
+  );
+  optionalString(attrs, "wrapType", "shape.attrs.wrapType", issues);
+  optionalString(attrs, "shadowColor", "shape.attrs.shadowColor", issues);
+  optionalNumber(attrs, "shadowBlur", "shape.attrs.shadowBlur", issues);
+  optionalNumber(attrs, "shadowOffsetX", "shape.attrs.shadowOffsetX", issues);
+  optionalNumber(attrs, "shadowOffsetY", "shape.attrs.shadowOffsetY", issues);
+  optionalString(attrs, "glowColor", "shape.attrs.glowColor", issues);
+  optionalNumber(attrs, "glowRadius", "shape.attrs.glowRadius", issues);
+
+  return attrsResult(attrs, issues);
+};
+
+export const expectShapeAttrs = (node: PMNode): ShapeAttrs =>
+  expectAttrs(readShapeAttrs(node), "shape attrs");
+
+export const readTextBoxAttrs = (
+  node: PMNode,
+): ReadProseMirrorAttrsResult<TextBoxAttrs> => {
+  const attrs = attrsRecord(node.attrs);
+  const issues: ProseMirrorAttrIssue[] = [];
+  expectNodeType(node, "textBox", issues);
+
+  optionalNumber(attrs, "width", "textBox.attrs.width", issues);
+  optionalNumber(attrs, "height", "textBox.attrs.height", issues);
+  optionalString(attrs, "textBoxId", "textBox.attrs.textBoxId", issues);
+  optionalString(attrs, "fillColor", "textBox.attrs.fillColor", issues);
+  optionalNumber(attrs, "outlineWidth", "textBox.attrs.outlineWidth", issues);
+  optionalString(attrs, "outlineColor", "textBox.attrs.outlineColor", issues);
+  optionalString(attrs, "outlineStyle", "textBox.attrs.outlineStyle", issues);
+  optionalNumber(attrs, "marginTop", "textBox.attrs.marginTop", issues);
+  optionalNumber(attrs, "marginBottom", "textBox.attrs.marginBottom", issues);
+  optionalNumber(attrs, "marginLeft", "textBox.attrs.marginLeft", issues);
+  optionalNumber(attrs, "marginRight", "textBox.attrs.marginRight", issues);
+  optionalString(attrs, "verticalAlign", "textBox.attrs.verticalAlign", issues);
+  optionalOneOf(
+    attrs,
+    "displayMode",
+    "textBox.attrs.displayMode",
+    issues,
+    IMAGE_DISPLAY_MODES,
+  );
+  optionalOneOf(
+    attrs,
+    "cssFloat",
+    "textBox.attrs.cssFloat",
+    issues,
+    IMAGE_CSS_FLOATS,
+  );
+  optionalString(attrs, "wrapType", "textBox.attrs.wrapType", issues);
+
+  return attrsResult(attrs, issues);
+};
+
+export const expectTextBoxAttrs = (node: PMNode): TextBoxAttrs =>
+  expectAttrs(readTextBoxAttrs(node), "text box attrs");
 
 export const readUnderlineMarkAttrs = (
   mark: Mark,
@@ -993,6 +1279,117 @@ const optionalString = (
   const value = attrs[key];
   if (value !== undefined && value !== null && typeof value !== "string") {
     issues.push({ path, message: "Expected a string." });
+  }
+};
+
+const optionalSdtListItems = (
+  attrs: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: ProseMirrorAttrIssue[],
+): void => {
+  const value = attrs[key];
+  if (value === undefined || value === null) {
+    return;
+  }
+
+  if (typeof value !== "string") {
+    issues.push({ path, message: "Expected a JSON string." });
+    return;
+  }
+
+  const parsed = parseJson(value, path, issues);
+  if (!parsed.ok) {
+    return;
+  }
+
+  if (!Array.isArray(parsed.value)) {
+    issues.push({ path, message: "Expected a JSON array." });
+    return;
+  }
+
+  for (const [index, item] of parsed.value.entries()) {
+    if (!isRecord(item)) {
+      issues.push({
+        path: `${path}[${index}]`,
+        message: "Expected a list item object.",
+      });
+      continue;
+    }
+    if (typeof item["displayText"] !== "string") {
+      issues.push({
+        path: `${path}[${index}].displayText`,
+        message: "Expected a string.",
+      });
+    }
+    if (typeof item["value"] !== "string") {
+      issues.push({
+        path: `${path}[${index}].value`,
+        message: "Expected a string.",
+      });
+    }
+  }
+};
+
+const optionalGradientStops = (
+  attrs: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: ProseMirrorAttrIssue[],
+): void => {
+  const value = attrs[key];
+  if (value === undefined || value === null) {
+    return;
+  }
+
+  if (typeof value !== "string") {
+    issues.push({ path, message: "Expected a JSON string." });
+    return;
+  }
+
+  const parsed = parseJson(value, path, issues);
+  if (!parsed.ok) {
+    return;
+  }
+
+  if (!Array.isArray(parsed.value)) {
+    issues.push({ path, message: "Expected a JSON array." });
+    return;
+  }
+
+  for (const [index, item] of parsed.value.entries()) {
+    if (!isRecord(item)) {
+      issues.push({
+        path: `${path}[${index}]`,
+        message: "Expected a gradient stop object.",
+      });
+      continue;
+    }
+    if (typeof item["position"] !== "number") {
+      issues.push({
+        path: `${path}[${index}].position`,
+        message: "Expected a number.",
+      });
+    }
+    if (typeof item["color"] !== "string") {
+      issues.push({
+        path: `${path}[${index}].color`,
+        message: "Expected a string.",
+      });
+    }
+  }
+};
+
+const parseJson = (
+  value: string,
+  path: string,
+  issues: ProseMirrorAttrIssue[],
+): { ok: true; value: unknown } | { ok: false } => {
+  try {
+    return { ok: true, value: JSON.parse(value) as unknown };
+  } catch {
+    issues.push({ path, message: "Expected valid JSON." });
+    return { ok: false };
   }
 };
 

@@ -35,6 +35,41 @@ describe("toFlowBlocks paragraph formatting", () => {
     expect(() => toFlowBlocks(doc)).toThrow("fontSize.attrs.size");
   });
 
+  test("rejects malformed field and math attrs at the layout boundary", () => {
+    const fieldDoc = schema.node("doc", null, [
+      schema.node("paragraph", null, [
+        schema.node("field", {
+          fieldType: "NOT_A_FIELD",
+          instruction: " PAGE ",
+          displayText: "1",
+          fieldKind: "simple",
+        }),
+      ]),
+    ]);
+    const mathDoc = schema.node("doc", null, [
+      schema.node("paragraph", null, [
+        schema.node("math", {
+          display: "inline",
+          ommlXml: 42,
+          plainText: "x",
+        }),
+      ]),
+    ]);
+
+    expect(() => toFlowBlocks(fieldDoc)).toThrow("field.attrs.fieldType");
+    expect(() => toFlowBlocks(mathDoc)).toThrow("math.attrs.ommlXml");
+  });
+
+  test("rejects malformed text box attrs at the layout boundary", () => {
+    const doc = schema.node("doc", null, [
+      schema.node("textBox", { width: "wide" }, [
+        schema.node("paragraph", null, [schema.text("Invalid text box")]),
+      ]),
+    ]);
+
+    expect(() => toFlowBlocks(doc)).toThrow("textBox.attrs.width");
+  });
+
   test("does not convert absent paragraph spacing defaults to zero line height", () => {
     const doc = schema.node("doc", null, [
       schema.node("paragraph", null, [schema.text("First paragraph")]),
@@ -256,7 +291,7 @@ describe("toFlowBlocks TOC hyperlink style strip", () => {
         schema.node(
           "field",
           {
-            fieldType: "OTHER",
+            fieldType: "PAGEREF",
             instruction: " PAGEREF _Toc1 \\h ",
             displayText: "5",
             fieldKind: "complex",

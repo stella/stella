@@ -46,6 +46,64 @@ describe("fromProseDoc", () => {
     expect(() => fromProseDoc(pmDoc)).toThrow("insertion.attrs.revisionId");
   });
 
+  test("rejects malformed field and math attrs at the conversion boundary", () => {
+    const fieldDoc = schema.node("doc", null, [
+      schema.node("paragraph", null, [
+        schema.node("field", {
+          fieldType: "NOT_A_FIELD",
+          instruction: " PAGE ",
+          displayText: "1",
+          fieldKind: "simple",
+        }),
+      ]),
+    ]);
+    const mathDoc = schema.node("doc", null, [
+      schema.node("paragraph", null, [
+        schema.node("math", {
+          display: "inline",
+          ommlXml: 42,
+          plainText: "x",
+        }),
+      ]),
+    ]);
+
+    expect(() => fromProseDoc(fieldDoc)).toThrow("field.attrs.fieldType");
+    expect(() => fromProseDoc(mathDoc)).toThrow("math.attrs.ommlXml");
+  });
+
+  test("rejects malformed SDT attrs at the conversion boundary", () => {
+    const pmDoc = schema.node("doc", null, [
+      schema.node("paragraph", null, [
+        schema.node(
+          "sdt",
+          {
+            sdtType: "dropdown",
+            listItems: JSON.stringify([{ displayText: 7, value: "x" }]),
+          },
+          [schema.text("Choice")],
+        ),
+      ]),
+    ]);
+
+    expect(() => fromProseDoc(pmDoc)).toThrow(
+      "sdt.attrs.listItems[0].displayText",
+    );
+  });
+
+  test("rejects malformed shape and text box attrs at the conversion boundary", () => {
+    const shapeDoc = schema.node("doc", null, [
+      schema.node("paragraph", null, [schema.node("shape", { width: "wide" })]),
+    ]);
+    const textBoxDoc = schema.node("doc", null, [
+      schema.node("textBox", { width: "wide" }, [
+        schema.node("paragraph", null, [schema.text("Inside")]),
+      ]),
+    ]);
+
+    expect(() => fromProseDoc(shapeDoc)).toThrow("shape.attrs.width");
+    expect(() => fromProseDoc(textBoxDoc)).toThrow("textBox.attrs.width");
+  });
+
   test("accepts table header cell attrs at the table-cell boundary", () => {
     const pmDoc = schema.node("doc", null, [
       schema.node("table", null, [

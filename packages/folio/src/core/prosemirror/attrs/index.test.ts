@@ -1,13 +1,18 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  readFieldAttrs,
   expectParagraphAttrs,
   readCommentMarkAttrs,
   readFontSizeMarkAttrs,
   readHighlightMarkAttrs,
   readHyperlinkMarkAttrs,
   readImageAttrs,
+  readMathAttrs,
   readParagraphAttrs,
+  readSdtAttrs,
+  readShapeAttrs,
+  readTextBoxAttrs,
   readTrackedChangeMarkAttrs,
   readUnderlineMarkAttrs,
   readTableAttrs,
@@ -128,6 +133,108 @@ describe("ProseMirror attr readers", () => {
     expect(result.issues.map((issue) => issue.path)).toContain(
       "image.attrs.position.horizontal.posOffset",
     );
+  });
+
+  test("rejects malformed field and math attrs", () => {
+    const field = schema.nodes.field.create({
+      fieldType: "NOT_A_FIELD",
+      fieldKind: "nested",
+      fldLock: "true",
+    });
+    const math = schema.nodes.math.create({
+      display: "display",
+      ommlXml: 42,
+    });
+
+    const fieldResult = readFieldAttrs(field);
+    const mathResult = readMathAttrs(math);
+
+    expect(fieldResult.ok).toBe(false);
+    if (!fieldResult.ok) {
+      expect(fieldResult.issues.map((issue) => issue.path)).toContain(
+        "field.attrs.fieldType",
+      );
+      expect(fieldResult.issues.map((issue) => issue.path)).toContain(
+        "field.attrs.fieldKind",
+      );
+      expect(fieldResult.issues.map((issue) => issue.path)).toContain(
+        "field.attrs.fldLock",
+      );
+    }
+    expect(mathResult.ok).toBe(false);
+    if (!mathResult.ok) {
+      expect(mathResult.issues.map((issue) => issue.path)).toContain(
+        "math.attrs.display",
+      );
+      expect(mathResult.issues.map((issue) => issue.path)).toContain(
+        "math.attrs.ommlXml",
+      );
+    }
+  });
+
+  test("rejects malformed SDT list item attrs", () => {
+    const sdt = schema.nodes.sdt.create({
+      sdtType: "custom",
+      lock: "frozen",
+      listItems: JSON.stringify([{ displayText: 7, value: null }]),
+      checked: "true",
+    });
+
+    const result = readSdtAttrs(sdt);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("Expected SDT attrs to be rejected");
+    }
+    expect(result.issues.map((issue) => issue.path)).toContain(
+      "sdt.attrs.sdtType",
+    );
+    expect(result.issues.map((issue) => issue.path)).toContain(
+      "sdt.attrs.lock",
+    );
+    expect(result.issues.map((issue) => issue.path)).toContain(
+      "sdt.attrs.listItems[0].displayText",
+    );
+    expect(result.issues.map((issue) => issue.path)).toContain(
+      "sdt.attrs.checked",
+    );
+  });
+
+  test("rejects malformed shape and text box attrs", () => {
+    const shape = schema.nodes.shape.create({
+      fillType: "custom",
+      gradientStops: JSON.stringify([{ position: "0", color: 7 }]),
+      displayMode: "sideways",
+    });
+    const textBox = schema.nodes.textBox.create({
+      width: "wide",
+      cssFloat: "center",
+    });
+
+    const shapeResult = readShapeAttrs(shape);
+    const textBoxResult = readTextBoxAttrs(textBox);
+
+    expect(shapeResult.ok).toBe(false);
+    if (!shapeResult.ok) {
+      expect(shapeResult.issues.map((issue) => issue.path)).toContain(
+        "shape.attrs.fillType",
+      );
+      expect(shapeResult.issues.map((issue) => issue.path)).toContain(
+        "shape.attrs.gradientStops[0].position",
+      );
+      expect(shapeResult.issues.map((issue) => issue.path)).toContain(
+        "shape.attrs.displayMode",
+      );
+    }
+    expect(textBoxResult.ok).toBe(false);
+    if (!textBoxResult.ok) {
+      expect(textBoxResult.issues.map((issue) => issue.path)).toContain(
+        "textBox.attrs.width",
+      );
+      expect(textBoxResult.issues.map((issue) => issue.path)).toContain(
+        "textBox.attrs.cssFloat",
+      );
+    }
   });
 
   test("rejects malformed hyperlink mark attrs", () => {

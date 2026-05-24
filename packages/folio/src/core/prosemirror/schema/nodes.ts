@@ -11,6 +11,7 @@ import type {
   ParagraphAlignment,
   ParagraphFormatting,
   ParagraphPropertyChange,
+  FieldType,
   LineSpacingRule,
   ImagePosition,
   ImageWrap,
@@ -24,6 +25,9 @@ import type {
   TableCellFormatting,
   TableWidthType,
   SectionProperties,
+  ShapeFill,
+  SdtProperties,
+  SdtType,
 } from "../../types/document";
 import type { SpacingExplicit } from "../../types/formatting";
 
@@ -201,6 +205,146 @@ export type ImageAttrs = {
   wrapText?: NonNullable<ImageWrap["wrapText"]>;
   /** Hyperlink URL for clickable image */
   hlinkHref?: string;
+};
+
+/**
+ * Field node attributes
+ */
+export type FieldAttrs = {
+  /** Field type: PAGE, NUMPAGES, DATE, MERGEFIELD, etc. */
+  fieldType: FieldType;
+  /** Full field instruction (e.g. "PAGE \\* MERGEFORMAT") */
+  instruction: string;
+  /** Current/cached display text */
+  displayText: string;
+  /** Whether the field came from w:fldSimple or a complex fldChar range */
+  fieldKind: "simple" | "complex";
+  /** Field is locked */
+  fldLock?: boolean;
+  /** Field is dirty and should be recalculated by the host application */
+  dirty?: boolean;
+};
+
+/**
+ * Math equation node attributes
+ */
+export type MathAttrs = {
+  /** Whether this is inline OMML or a block equation paragraph */
+  display?: "inline" | "block";
+  /** Raw OMML XML for round-trip preservation */
+  ommlXml: string;
+  /** Plain text fallback used by the editor and layout engine */
+  plainText?: string;
+};
+
+/**
+ * Structured document tag node attributes
+ */
+export type SdtAttrs = {
+  /** SDT type */
+  sdtType: SdtType;
+  /** Alias (friendly name) */
+  alias?: string;
+  /** Tag (developer identifier) */
+  tag?: string;
+  /** Lock setting */
+  lock?: NonNullable<SdtProperties["lock"]>;
+  /** Placeholder text */
+  placeholder?: string;
+  /** Whether showing placeholder */
+  showingPlaceholder?: boolean;
+  /** Date format for date controls */
+  dateFormat?: string;
+  /** Dropdown/combobox list items as JSON string */
+  listItems?: string;
+  /** Checkbox checked state */
+  checked?: boolean;
+};
+
+/**
+ * Shape node attributes
+ */
+export type ShapeAttrs = {
+  /** Shape type preset */
+  shapeType?: string;
+  /** Unique identifier */
+  shapeId?: string;
+  /** Width in pixels */
+  width?: number;
+  /** Height in pixels */
+  height?: number;
+  /** Fill color as CSS color */
+  fillColor?: string;
+  /** Fill type: none, solid, gradient, pattern, picture */
+  fillType?: ShapeFill["type"];
+  /** Gradient type: linear, radial, rectangular, path */
+  gradientType?: NonNullable<ShapeFill["gradient"]>["type"];
+  /** Gradient angle in degrees (for linear) */
+  gradientAngle?: number;
+  /** Gradient stops as JSON string: [{position, color}] */
+  gradientStops?: string;
+  /** Outline width in pixels */
+  outlineWidth?: number;
+  /** Outline color as CSS color */
+  outlineColor?: string;
+  /** Outline style */
+  outlineStyle?: string;
+  /** CSS transform */
+  transform?: string;
+  /** Display mode */
+  displayMode?: "inline" | "float" | "block";
+  /** CSS float */
+  cssFloat?: "left" | "right" | "none";
+  /** Wrap type */
+  wrapType?: string;
+  /** Shadow color as CSS color */
+  shadowColor?: string;
+  /** Shadow blur radius in pixels */
+  shadowBlur?: number;
+  /** Shadow X offset in pixels */
+  shadowOffsetX?: number;
+  /** Shadow Y offset in pixels */
+  shadowOffsetY?: number;
+  /** Glow color as CSS color */
+  glowColor?: string;
+  /** Glow radius in pixels */
+  glowRadius?: number;
+};
+
+/**
+ * Text box node attributes
+ */
+export type TextBoxAttrs = {
+  /** Width in pixels */
+  width?: number;
+  /** Height in pixels */
+  height?: number;
+  /** Unique identifier */
+  textBoxId?: string;
+  /** Fill color as CSS color */
+  fillColor?: string;
+  /** Outline width in pixels */
+  outlineWidth?: number;
+  /** Outline color as CSS color */
+  outlineColor?: string;
+  /** Outline style */
+  outlineStyle?: string;
+  /** Internal margin top in pixels */
+  marginTop?: number;
+  /** Internal margin bottom in pixels */
+  marginBottom?: number;
+  /** Internal margin left in pixels */
+  marginLeft?: number;
+  /** Internal margin right in pixels */
+  marginRight?: number;
+  /** Vertical text alignment */
+  verticalAlign?: string;
+  /** Display mode */
+  displayMode?: "inline" | "float" | "block";
+  /** CSS float direction */
+  cssFloat?: "left" | "right" | "none";
+  /** Wrap type */
+  wrapType?: string;
 };
 
 /**

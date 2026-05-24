@@ -47,7 +47,6 @@ import type {
   NoteReferenceContent,
   SimpleField,
   ComplexField,
-  FieldType,
   InlineSdt,
   SdtProperties,
   TrackedChangeInfo,
@@ -60,24 +59,27 @@ import {
   expectCharacterSpacingMarkAttrs,
   expectCommentMarkAttrs,
   expectEmphasisMarkAttrs,
+  expectFieldAttrs,
   expectFontFamilyMarkAttrs,
   expectFontSizeMarkAttrs,
   expectFootnoteRefMarkAttrs,
   expectHighlightMarkAttrs,
   expectHyperlinkMarkAttrs,
   expectImageAttrs,
+  expectMathAttrs,
   expectParagraphAttrs,
   expectRunFormattingOverrideMarkAttrs,
+  expectSdtAttrs,
+  expectShapeAttrs,
   expectStrikeMarkAttrs,
   expectTableAttrs,
   expectTableCellAttrs,
   expectTableRowAttrs,
+  expectTextBoxAttrs,
   expectTextColorMarkAttrs,
   expectTrackedChangeMarkAttrs,
   expectUnderlineMarkAttrs,
 } from "../attrs";
-import type { ShapeAttrs } from "../extensions/nodes/ShapeExtension";
-import type { TextBoxAttrs } from "../extensions/nodes/TextBoxExtension";
 import type { RunFormattingOverrideAttrs } from "../schema/marks";
 import type {
   ParagraphAttrs,
@@ -787,14 +789,7 @@ function createFieldFromNode(
   node: PMNode,
   marks?: readonly Mark[],
 ): SimpleField | ComplexField {
-  const attrs = node.attrs as {
-    fieldType: string;
-    instruction: string;
-    displayText: string;
-    fieldKind: string;
-    fldLock: boolean;
-    dirty: boolean;
-  };
+  const attrs = expectFieldAttrs(node);
 
   const formatting =
     marks && marks.length > 0 ? marksToTextFormatting(marks) : undefined;
@@ -825,7 +820,7 @@ function createFieldFromNode(
     const complex: ComplexField = {
       type: "complexField",
       instruction: attrs.instruction,
-      fieldType: attrs.fieldType as FieldType,
+      fieldType: attrs.fieldType,
       fieldCode: [],
       fieldResult: [displayRun],
     };
@@ -841,7 +836,7 @@ function createFieldFromNode(
   const simple: SimpleField = {
     type: "simpleField",
     instruction: attrs.instruction,
-    fieldType: attrs.fieldType as FieldType,
+    fieldType: attrs.fieldType,
     content: [displayRun],
   };
   if (attrs.fldLock) {
@@ -857,15 +852,11 @@ function createFieldFromNode(
  * Create a MathEquation from a PM math node
  */
 function createMathFromNode(node: PMNode): MathEquation {
-  const attrs = node.attrs as {
-    display: string;
-    ommlXml: string;
-    plainText: string;
-  };
+  const attrs = expectMathAttrs(node);
 
   const math: MathEquation = {
     type: "mathEquation",
-    display: (attrs.display as "inline" | "block" | undefined) ?? "inline",
+    display: attrs.display ?? "inline",
     ommlXml: attrs.ommlXml,
   };
   if (attrs.plainText) {
@@ -878,38 +869,34 @@ function createMathFromNode(node: PMNode): MathEquation {
  * Create an InlineSdt from a PM sdt node
  */
 function createInlineSdtFromNode(node: PMNode): InlineSdt {
-  const attrs = node.attrs as Record<string, unknown>;
+  const attrs = expectSdtAttrs(node);
 
   const properties: SdtProperties = {
-    sdtType:
-      (attrs["sdtType"] as SdtProperties["sdtType"] | undefined) ?? "richText",
+    sdtType: attrs.sdtType,
   };
-  if (attrs["alias"]) {
-    properties.alias = attrs["alias"] as string;
+  if (attrs.alias) {
+    properties.alias = attrs.alias;
   }
-  if (attrs["tag"]) {
-    properties.tag = attrs["tag"] as string;
+  if (attrs.tag) {
+    properties.tag = attrs.tag;
   }
-  if (attrs["lock"]) {
-    properties.lock = attrs["lock"] as NonNullable<SdtProperties["lock"]>;
+  if (attrs.lock) {
+    properties.lock = attrs.lock;
   }
-  if (attrs["placeholder"]) {
-    properties.placeholder = attrs["placeholder"] as string;
+  if (attrs.placeholder) {
+    properties.placeholder = attrs.placeholder;
   }
-  if (
-    attrs["showingPlaceholder"] !== undefined &&
-    attrs["showingPlaceholder"] !== null
-  ) {
-    properties.showingPlaceholder = attrs["showingPlaceholder"] as boolean;
+  if (attrs.showingPlaceholder !== undefined) {
+    properties.showingPlaceholder = attrs.showingPlaceholder;
   }
-  if (attrs["dateFormat"]) {
-    properties.dateFormat = attrs["dateFormat"] as string;
+  if (attrs.dateFormat) {
+    properties.dateFormat = attrs.dateFormat;
   }
-  if (attrs["listItems"]) {
-    properties.listItems = JSON.parse(attrs["listItems"] as string);
+  if (attrs.listItems) {
+    properties.listItems = parseSdtListItems(attrs.listItems);
   }
-  if (attrs["checked"] !== null && attrs["checked"] !== undefined) {
-    properties.checked = attrs["checked"] as boolean;
+  if (attrs.checked !== undefined) {
+    properties.checked = attrs.checked;
   }
 
   // Extract content from the sdt node's children
@@ -923,6 +910,35 @@ function createInlineSdtFromNode(node: PMNode): InlineSdt {
     properties,
     content,
   };
+}
+
+function parseSdtListItems(
+  rawItems: string,
+): NonNullable<SdtProperties["listItems"]> {
+  const parsed = JSON.parse(rawItems) as unknown;
+  if (!Array.isArray(parsed)) {
+    throw new TypeError(
+      "Invalid ProseMirror sdt attrs: listItems is not an array",
+    );
+  }
+
+  return parsed.map((item): NonNullable<SdtProperties["listItems"]>[number] => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new TypeError(
+        "Invalid ProseMirror sdt attrs: listItems contains an invalid item",
+      );
+    }
+    const itemAttrs = item as { displayText?: unknown; value?: unknown };
+    if (
+      typeof itemAttrs.displayText !== "string" ||
+      typeof itemAttrs.value !== "string"
+    ) {
+      throw new TypeError(
+        "Invalid ProseMirror sdt attrs: listItems contains an invalid item",
+      );
+    }
+    return { displayText: itemAttrs.displayText, value: itemAttrs.value };
+  });
 }
 
 /**
@@ -1063,7 +1079,7 @@ function createImageRun(node: PMNode): Run {
  * Create a Run from a ProseMirror shape node
  */
 function createShapeRun(node: PMNode): Run {
-  const attrs = node.attrs as ShapeAttrs;
+  const attrs = expectShapeAttrs(node);
 
   const shape: Shape = {
     type: "shape",
@@ -1108,7 +1124,7 @@ function createShapeRun(node: PMNode): Run {
     }
   } else if (attrs.fillColor) {
     shape.fill = {
-      type: (attrs.fillType || "solid") as "solid" | "none",
+      type: attrs.fillType ?? "solid",
       color: { rgb: attrs.fillColor.replace("#", "") },
     };
   } else if (attrs.fillType === "none") {
@@ -1806,7 +1822,7 @@ function tableCellAttrsToFormatting(
  * The text box content becomes a Shape with textBody.
  */
 function convertPMTextBox(node: PMNode): Paragraph {
-  const attrs = node.attrs as TextBoxAttrs;
+  const attrs = expectTextBoxAttrs(node);
 
   // Extract child paragraphs from the text box content
   const childParagraphs: Paragraph[] = [];
