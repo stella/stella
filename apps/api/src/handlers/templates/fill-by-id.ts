@@ -155,9 +155,7 @@ const fillByIdHandler = async function* ({
             unmatchedCount: result.unmatchedPlaceholders.length,
             unusedCount: result.unusedValues.length,
             structureErrors:
-              result.structureErrors.length > 0
-                ? result.structureErrors
-                : null,
+              result.structureErrors.length > 0 ? result.structureErrors : null,
           });
 
           await recordAuditEvent(tx, {
