@@ -20,6 +20,7 @@ import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { acquireCellLocks } from "@/api/lib/cell-lock";
 import { errorTag } from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
@@ -1146,10 +1147,18 @@ const processOneBatch = async ({
     ];
 
     await scopedDb(async (tx) => {
-      // Re-check locks inside the write tx: a manual edit could have landed
-      // between prepareBatch() and now. SELECT FOR UPDATE serializes with
-      // lockCellOnManualEdit so we either see the new lock or block the
-      // manual edit until our write commits.
+      // Acquire per-cell advisory locks before re-checking lock state.
+      // `SELECT FOR UPDATE` alone cannot block a manual edit that
+      // inserts a brand-new `cell_metadata` row (READ COMMITTED takes
+      // no gap lock); `acquireCellLocks` serializes with
+      // `acquireCellLock` in lockCellOnManualEdit on a key derived
+      // from (entityVersionId, propertyId), so we either see the new
+      // lock here or the manual edit waits for our COMMIT.
+      await acquireCellLocks({
+        tx,
+        entityVersionId,
+        propertyIds: candidatePropertyIds,
+      });
       const lockedRowsAtWrite =
         candidatePropertyIds.length > 0
           ? await tx
@@ -1164,7 +1173,6 @@ const processOneBatch = async ({
                   inArray(cellMetadata.propertyId, candidatePropertyIds),
                 ),
               )
-              .for("update")
           : [];
       const lockedAtWrite = new Set<string>(
         lockedRowsAtWrite

@@ -9,6 +9,7 @@ import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { acquireCellLock } from "@/api/lib/cell-lock";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getSearchProvider } from "@/api/lib/search/provider";
@@ -75,6 +76,8 @@ const lockCellOnManualEdit = async ({
   propertyId,
   userId,
 }: LockCellArgs) => {
+  await acquireCellLock({ tx, entityVersionId, propertyId });
+
   const existingRows = await tx
     .select({ metadata: cellMetadata.metadata })
     .from(cellMetadata)
@@ -84,8 +87,7 @@ const lockCellOnManualEdit = async ({
         eq(cellMetadata.propertyId, propertyId),
       ),
     )
-    .limit(1)
-    .for("update");
+    .limit(1);
   const existing = existingRows.at(0)?.metadata;
 
   // Preserve an explicit lock so we don't overwrite its provenance/reason.
