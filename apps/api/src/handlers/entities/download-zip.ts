@@ -55,6 +55,13 @@ type FetchedFile =
   | { type: "file"; path: string; data: Uint8Array }
   | { type: "error"; path: string; fileId: string };
 
+const redactedPresignedUrl = (presignedUrl: string): string => {
+  const url = new URL(presignedUrl);
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+};
+
 /**
  * Collect every descendant of `parentId` with the fields needed to
  * rebuild the folder tree, in one recursive CTE.
@@ -223,13 +230,14 @@ const downloadZipHandler = async function* ({
     const presignedUrl = getS3().presign(key, {
       expiresIn: PRESIGN_TTL_SECONDS,
     });
+    const redactedUrl = redactedPresignedUrl(presignedUrl);
     const fetched = await Result.tryPromise(async () => {
       const response = await fetch(presignedUrl, {
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
       if (!response.ok) {
         throw new FetchBoundaryError({
-          url: presignedUrl,
+          url: redactedUrl,
           status: response.status,
           statusText: response.statusText,
           message: `storage responded ${response.status}`,
