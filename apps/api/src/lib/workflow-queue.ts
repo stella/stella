@@ -1416,16 +1416,46 @@ const setFieldsStatus = async ({
   const propertyIds = batch.properties.map((p) => p.id);
 
   await scopedDb(async (tx) => {
+    // Re-check locks under the per-cell advisory lock. The
+    // lockedPropertyIds snapshot above (line ~1007) is taken
+    // outside any lock, so a manual edit that lands between that
+    // snapshot and this write would otherwise have its field value
+    // clobbered by the `pending` placeholder before the final AI
+    // write tx gets a chance to filter it out.
+    await acquireCellLocks({ tx, entityVersionId, propertyIds });
+    const lockedRows = await tx
+      .select({
+        propertyId: cellMetadata.propertyId,
+        metadata: cellMetadata.metadata,
+      })
+      .from(cellMetadata)
+      .where(
+        and(
+          eq(cellMetadata.entityVersionId, entityVersionId),
+          inArray(cellMetadata.propertyId, propertyIds),
+        ),
+      );
+    const lockedNow = new Set<string>(
+      lockedRows
+        .filter((row) => row.metadata.locked === true)
+        .map((row) => row.propertyId),
+    );
+    const writablePropertyIds = propertyIds.filter((id) => !lockedNow.has(id));
+
+    if (writablePropertyIds.length === 0) {
+      return;
+    }
+
     await tx
       .delete(fields)
       .where(
         and(
           eq(fields.entityVersionId, entityVersionId),
-          inArray(fields.propertyId, propertyIds),
+          inArray(fields.propertyId, writablePropertyIds),
         ),
       );
 
-    const fieldValues = propertyIds.map((propertyId) => ({
+    const fieldValues = writablePropertyIds.map((propertyId) => ({
       id: createSafeId<"field">(),
       workspaceId,
       propertyId,
@@ -1433,9 +1463,7 @@ const setFieldsStatus = async ({
       content: { type: contentType, version: 1 as const },
     }));
 
-    if (fieldValues.length > 0) {
-      await tx.insert(fields).values(fieldValues);
-    }
+    await tx.insert(fields).values(fieldValues);
   });
 };
 

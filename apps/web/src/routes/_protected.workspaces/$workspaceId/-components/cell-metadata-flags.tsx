@@ -295,7 +295,7 @@ const CellLockBadge = ({ provenance }: CellLockBadgeProps) => {
       render={
         <span
           aria-label={t("workspaces.table.lock.locked")}
-          className="bg-background/55 text-foreground-ghost pointer-events-none absolute start-1 top-1 z-20 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px]"
+          className="bg-background/55 text-foreground-ghost absolute start-1 top-1 z-20 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px]"
         >
           <LockIcon className="size-2.5" strokeWidth={2.5} />
         </span>
