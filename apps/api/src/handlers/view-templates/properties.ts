@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import type { Transaction } from "@/api/db";
 import { properties, propertyDependencies } from "@/api/db/schema";
 import type { PropertyCondition } from "@/api/db/schema-validators";
+import { lockWorkspacePropertyWrites } from "@/api/handlers/properties/property-lock";
 import type { AuditContext } from "@/api/lib/audit-log";
 import {
   AUDIT_ACTION,
@@ -114,16 +115,12 @@ export const resolveTemplateProperties = async ({
     return { ok: true, layout, propertyIds };
   }
 
-  // Lock all existing property rows in this workspace before the
-  // limit check and any inserts. Without this, two concurrent
-  // template-apply requests can both pass the count guard and exceed
-  // LIMITS.propertiesCount. Matches the pattern in
-  // handlers/properties/create.ts.
-  await tx
-    .select({ id: properties.id })
-    .from(properties)
-    .where(eq(properties.workspaceId, workspaceId))
-    .for("update");
+  const validationError = validateTemplateProperties(templateProperties);
+  if (validationError) {
+    return validationError;
+  }
+
+  await lockWorkspacePropertyWrites(tx, workspaceId);
 
   const existingProperties = await tx.query.properties.findMany({
     where: { workspaceId: { eq: workspaceId } },
@@ -142,11 +139,6 @@ export const resolveTemplateProperties = async ({
   let projectedPropertyCount = nextPropertyIds.length;
 
   for (const templateProperty of templateProperties) {
-    const validationError = validateTemplatePropertyConfig(templateProperty);
-    if (validationError) {
-      return validationError;
-    }
-
     const existingById = existingProperties.find(
       (property) => property.id === templateProperty.sourceId,
     );
@@ -389,6 +381,30 @@ const readPropertyIds = async (
     .from(properties)
     .where(eq(properties.workspaceId, workspaceId));
   return rows.map((row) => row.id);
+};
+
+const validateTemplateProperties = (
+  templateProperties: readonly ViewTemplateProperty[],
+): ResolveTemplatePropertiesResult | null => {
+  const sourceIds = new Set<string>();
+
+  for (const templateProperty of templateProperties) {
+    if (sourceIds.has(templateProperty.sourceId)) {
+      return {
+        ok: false,
+        status: 422,
+        message: "Duplicate template property sourceId",
+      };
+    }
+    sourceIds.add(templateProperty.sourceId);
+
+    const validationError = validateTemplatePropertyConfig(templateProperty);
+    if (validationError) {
+      return validationError;
+    }
+  }
+
+  return null;
 };
 
 const validateTemplatePropertyConfig = (

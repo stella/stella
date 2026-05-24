@@ -23,7 +23,9 @@ const createTemplatePropertyValidationTx = () => {
   const insertMock = mock(() => {
     throw new Error("Unexpected template property insert");
   });
+  const executeMock = mock(async () => undefined);
   const tx = {
+    execute: executeMock,
     select: mock(() => ({
       from: mock(() => ({
         where: mock(() => ({
@@ -40,6 +42,7 @@ const createTemplatePropertyValidationTx = () => {
   };
 
   return {
+    executeMock,
     insertMock,
     tx: asTestRaw<Transaction>(tx),
   };
@@ -63,7 +66,9 @@ const createTemplateDependencyTx = () => {
     }
     throw new Error("Unexpected table insert");
   });
+  const executeMock = mock(async () => undefined);
   const tx = {
+    execute: executeMock,
     select: mock(() => ({
       from: mock(() => ({
         where: mock(() => ({
@@ -81,6 +86,7 @@ const createTemplateDependencyTx = () => {
 
   return {
     dependencyValuesMock,
+    executeMock,
     returningMock,
     tx: asTestRaw<Transaction>(tx),
   };
@@ -111,6 +117,35 @@ describe("resolveTemplateProperties", () => {
       status: 422,
       message: "File template columns must use manual input",
     });
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  test("rejects duplicate template source IDs before inserting", async () => {
+    const { executeMock, insertMock, tx } =
+      createTemplatePropertyValidationTx();
+    const templateProperty = {
+      version: 1,
+      sourceId: "source_duplicate",
+      name: "Duplicate",
+      content: { version: 1, type: "text" },
+      tool: { version: 1, type: "manual-input" },
+      createIfMissing: true,
+    } satisfies ViewTemplateProperty;
+
+    const result = await resolveTemplateProperties({
+      tx,
+      workspaceId,
+      layout: tableLayout(templateProperty.sourceId),
+      templateProperties: [templateProperty, templateProperty],
+      canCreateProperties: true,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      status: 422,
+      message: "Duplicate template property sourceId",
+    });
+    expect(executeMock).not.toHaveBeenCalled();
     expect(insertMock).not.toHaveBeenCalled();
   });
 
@@ -147,7 +182,7 @@ describe("resolveTemplateProperties", () => {
   });
 
   test("rejects cyclic dependencies between newly created template columns", async () => {
-    const { dependencyValuesMock, returningMock, tx } =
+    const { dependencyValuesMock, executeMock, returningMock, tx } =
       createTemplateDependencyTx();
     const propertyA = {
       version: 1,
@@ -181,6 +216,7 @@ describe("resolveTemplateProperties", () => {
       status: 422,
       message: "Circular template dependency detected",
     });
+    expect(executeMock).toHaveBeenCalledTimes(1);
     expect(returningMock).not.toHaveBeenCalled();
     expect(dependencyValuesMock).not.toHaveBeenCalled();
   });
