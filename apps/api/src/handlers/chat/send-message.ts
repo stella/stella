@@ -573,6 +573,7 @@ const messageNeedsExternalMcpValidation = (
 
 type ThreadRecord = {
   id: SafeId<"chatThread">;
+  workspaceId: SafeId<"workspace"> | null;
   contextMatterIds: SafeId<"workspace">[];
   dataWorkspaceIds: SafeId<"workspace">[];
   messages: {
@@ -671,6 +672,7 @@ const loadThread = async ({
         type: "existing",
         data: {
           id: existing.id,
+          workspaceId: existing.workspaceId,
           contextMatterIds: existing.contextMatterIds,
           dataWorkspaceIds: existing.dataWorkspaceIds,
           messages: existing.messages,
@@ -748,6 +750,7 @@ const loadThread = async ({
       type: "created",
       data: {
         id: threadId,
+        workspaceId,
         contextMatterIds: initialContextMatterIds,
         dataWorkspaceIds: initialDataWorkspaceIds,
         messages: [],
@@ -850,6 +853,7 @@ const rollbackUnpersistedChatSideEffects = async ({
       action: AUDIT_ACTION.DELETE,
       resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
       resourceId: threadId,
+      workspaceId: threadState.data.workspaceId,
       metadata: { reason: "rollback_unpersisted_chat_side_effects" },
     });
   });
