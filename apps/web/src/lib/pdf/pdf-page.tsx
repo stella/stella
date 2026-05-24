@@ -1,5 +1,5 @@
 import { Suspense, use, useDeferredValue } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { Result } from "better-result";
 import { useShallow } from "zustand/react/shallow";
@@ -57,14 +57,12 @@ export const PDFPage = ({ pageId, renderOverlay, fallback }: PDFPageProps) => {
       }}
       {...{ [PAGE_ID_ATTRIBUTE]: pageId }}
       className="relative mx-auto border-transparent"
-      style={
-        {
-          "--total-scale-factor": "var(--scale-factor)",
-          backgroundColor: "var(--document-preview-page, var(--background))",
-          width: `round(down, var(--total-scale-factor) * ${page.originalWidth}px, var(--scale-round-x))`,
-          height: `round(down, var(--total-scale-factor) * ${page.originalHeight}px, var(--scale-round-y))`,
-        } as CSSProperties
-      }
+      style={{
+        "--total-scale-factor": "var(--scale-factor)",
+        backgroundColor: "var(--document-preview-page, var(--background))",
+        width: `round(down, var(--total-scale-factor) * ${page.originalWidth}px, var(--scale-round-x))`,
+        height: `round(down, var(--total-scale-factor) * ${page.originalHeight}px, var(--scale-round-y))`,
+      }}
     >
       <PDFErrorBoundary fallback={fallback?.error ?? null}>
         <Suspense fallback={fallback?.suspense ?? <PDFPageSkeleton />}>

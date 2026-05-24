@@ -75,6 +75,7 @@ import type {
   Layout,
   FlowBlock,
   Measure,
+  ParagraphMeasure,
   ParagraphBlock,
   TableBlock,
   TableCell,
@@ -1390,8 +1391,15 @@ function measureBlocks(
 
       return measure;
     } catch {
-      // Return a minimal measure so we don't crash the entire layout
-      return { totalHeight: 20 } as Measure;
+      // Return a minimal real measure so layout doesn't crash; the original
+      // measureBlock failure is swallowed here (downstream layout treats this
+      // as a single-line paragraph of fixed height).
+      const fallback: ParagraphMeasure = {
+        kind: "paragraph",
+        lines: [],
+        totalHeight: 20,
+      };
+      return fallback;
     }
   });
 }
@@ -1973,32 +1981,50 @@ export function PagedEditor(
               )
             : undefined;
 
-          // Render pages to container
-          renderPages(newLayout.pages, pagesContainerRef.current, {
+          // Render pages to container.
+          // Built incrementally so optional fields are only present when
+          // defined (RenderPageOptions has `exactOptionalPropertyTypes`).
+          const renderOpts: RenderPageOptions & {
+            pageGap?: number;
+            footnotesByPage?: Map<number, FootnoteRenderItem[]>;
+          } = {
             pageGap,
             showShadow: true,
             blockLookup,
-            headerContent: headerContentForRender,
-            footerContent: footerContentForRender,
-            firstPageHeaderContent: firstPageHeaderForRender,
-            firstPageFooterContent: firstPageFooterForRender,
             titlePg: hasTitlePg,
-            headerDistance: sectionProperties?.headerDistance
-              ? twipsToPixels(sectionProperties.headerDistance)
-              : undefined,
-            footerDistance: sectionProperties?.footerDistance
-              ? twipsToPixels(sectionProperties.footerDistance)
-              : undefined,
-            pageBorders: sectionProperties?.pageBorders,
-            theme: _theme,
-            footnotesByPage: footnotesByPage?.size
-              ? footnotesByPage
-              : undefined,
-          } as RenderPageOptions & {
-            pageGap?: number;
-            blockLookup?: BlockLookup;
-            footnotesByPage?: Map<number, FootnoteRenderItem[]>;
-          });
+          };
+          if (headerContentForRender) {
+            renderOpts.headerContent = headerContentForRender;
+          }
+          if (footerContentForRender) {
+            renderOpts.footerContent = footerContentForRender;
+          }
+          if (firstPageHeaderForRender) {
+            renderOpts.firstPageHeaderContent = firstPageHeaderForRender;
+          }
+          if (firstPageFooterForRender) {
+            renderOpts.firstPageFooterContent = firstPageFooterForRender;
+          }
+          if (sectionProperties?.headerDistance) {
+            renderOpts.headerDistance = twipsToPixels(
+              sectionProperties.headerDistance,
+            );
+          }
+          if (sectionProperties?.footerDistance) {
+            renderOpts.footerDistance = twipsToPixels(
+              sectionProperties.footerDistance,
+            );
+          }
+          if (sectionProperties?.pageBorders) {
+            renderOpts.pageBorders = sectionProperties.pageBorders;
+          }
+          if (_theme) {
+            renderOpts.theme = _theme;
+          }
+          if (footnotesByPage?.size) {
+            renderOpts.footnotesByPage = footnotesByPage;
+          }
+          renderPages(newLayout.pages, pagesContainerRef.current, renderOpts);
         }
 
         // Compute anchor Y positions for comments sidebar (works without DOM queries).
@@ -4385,7 +4411,9 @@ export function PagedEditor(
         if (view) {
           // Route through handleTextInput so plugins (suggestion mode) can intercept
           const { from, to } = view.state.selection;
-          // oxlint-disable-next-line typescript/no-explicit-any
+          // ProseMirror's `someProp` is an internal API not exposed on
+          // EditorView's public type. The cast is the FFI boundary.
+          // oxlint-disable-next-line no-any-casts/no-any-casts, typescript/no-explicit-any
           const handled = (view as any).someProp(
             "handleTextInput",
             (

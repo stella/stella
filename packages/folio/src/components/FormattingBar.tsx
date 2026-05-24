@@ -27,7 +27,7 @@ import { ColorPicker } from "@stll/ui/components/color-picker";
 import type { ColorPreset } from "@stll/ui/components/color-picker";
 import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/components/menu";
 
-import type { ColorValue, ParagraphAlignment } from "../core/types/document";
+import type { ParagraphAlignment } from "../core/types/document";
 import { cn } from "../lib/utils";
 import {
   ToolbarButton,
@@ -152,7 +152,7 @@ export function FormattingBar(props: FormattingBarProps) {
 
   const handleTextColorClear = useCallback(() => {
     if (!disabled && onFormat) {
-      onFormat({ type: "textColor", value: { auto: true } as ColorValue });
+      onFormat({ type: "textColor", value: { auto: true } });
       requestAnimationFrame(() => onRefocusEditor?.());
     }
   }, [disabled, onFormat, onRefocusEditor]);

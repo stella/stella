@@ -26,6 +26,11 @@ export function createExtension<
   def: ExtensionDefinition<TOptions>,
 ): (options?: Partial<TOptions>) => Extension {
   return (options?: Partial<TOptions>): Extension => {
+    // SAFETY: spread of optional Partial<TOptions> + Partial<TOptions>
+    // cannot be inferred as TOptions, but the merge is sound: when
+    // a caller passes a definition with TOptions = Record<string, unknown>
+    // (the default), the result already satisfies TOptions.
+    // oxlint-disable-next-line no-dangerous-type-assertions/no-dangerous-type-assertions
     const mergedOptions = { ...def.defaultOptions, ...options } as TOptions;
 
     return {
@@ -51,6 +56,11 @@ export function createNodeExtension<
   def: NodeExtensionDefinition<TOptions>,
 ): (options?: Partial<TOptions>) => NodeExtension {
   return (options?: Partial<TOptions>): NodeExtension => {
+    // SAFETY: spread of optional Partial<TOptions> + Partial<TOptions>
+    // cannot be inferred as TOptions, but the merge is sound: when
+    // a caller passes a definition with TOptions = Record<string, unknown>
+    // (the default), the result already satisfies TOptions.
+    // oxlint-disable-next-line no-dangerous-type-assertions/no-dangerous-type-assertions
     const mergedOptions = { ...def.defaultOptions, ...options } as TOptions;
     const nodeSpec =
       typeof def.nodeSpec === "function"
@@ -82,6 +92,11 @@ export function createMarkExtension<
   def: MarkExtensionDefinition<TOptions>,
 ): (options?: Partial<TOptions>) => MarkExtension {
   return (options?: Partial<TOptions>): MarkExtension => {
+    // SAFETY: spread of optional Partial<TOptions> + Partial<TOptions>
+    // cannot be inferred as TOptions, but the merge is sound: when
+    // a caller passes a definition with TOptions = Record<string, unknown>
+    // (the default), the result already satisfies TOptions.
+    // oxlint-disable-next-line no-dangerous-type-assertions/no-dangerous-type-assertions
     const mergedOptions = { ...def.defaultOptions, ...options } as TOptions;
     const markSpec =
       typeof def.markSpec === "function"

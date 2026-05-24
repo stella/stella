@@ -827,7 +827,7 @@ export const TextContextMenu: React.FC<TextContextMenuProps> = ({
       minWidth: `${menuWidth}px`,
       top: `${y}px`,
       zIndex: 2_147_483_647,
-    } as React.CSSProperties;
+    } satisfies React.CSSProperties;
   }, [hasSelection, position, menuItems.length]);
 
   const handleItemClick = (item: TextContextMenuItem) => {

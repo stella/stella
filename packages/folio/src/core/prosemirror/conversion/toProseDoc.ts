@@ -2176,7 +2176,7 @@ function extractTextBoxesFromParagraph(paragraph: Paragraph): TextBox[] {
   for (const content of paragraph.content) {
     if (content.type === "run") {
       for (const rc of content.content) {
-        if (rc.type === "shape" && "shape" in rc) {
+        if (rc.type === "shape") {
           const shape = rc.shape as Shape;
           if (shape.textBody && shape.textBody.content.length > 0) {
             // Convert shape with text body to TextBox

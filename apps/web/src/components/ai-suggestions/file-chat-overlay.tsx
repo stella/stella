@@ -234,13 +234,18 @@ const prepareOperations = (
   return prepared;
 };
 
+// Defensive fallbacks: persisted tool calls predate the schema
+// requiring `severity`/`area`, so old stored approvals can still
+// reach this code with the fields missing. Type narrowing says
+// they're always present; the runtime check is for legacy data.
+/* oxlint-disable typescript/no-unnecessary-condition */
 const inputOperationSeverity = (
   operation: ToolInputOperation,
-): FolioAIEditSeverity | "unspecified" =>
-  "severity" in operation ? operation.severity : "unspecified";
+): FolioAIEditSeverity | "unspecified" => operation.severity ?? "unspecified";
 
 const inputOperationArea = (operation: ToolInputOperation): string =>
-  "area" in operation ? operation.area : REVIEW_UNSPECIFIED_AREA;
+  operation.area ?? REVIEW_UNSPECIFIED_AREA;
+/* oxlint-enable typescript/no-unnecessary-condition */
 
 type SnapshotBlock = {
   id: string;

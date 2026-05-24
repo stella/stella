@@ -60,6 +60,9 @@ export default defineConfig({
       },
     ],
     "no-nanoid/no-nanoid": "error",
+    "must-use-result/must-use-result": "error",
+    "no-any-casts/no-any-casts": "error",
+    "no-dangerous-type-assertions/no-dangerous-type-assertions": "error",
     "no-void": ["error", { allowAsStatement: true }],
 
     "sonarjs/array-callback-without-return": "error",
@@ -200,7 +203,13 @@ export default defineConfig({
     "typescript/return-await": ["error", "error-handling-correctness-only"],
     "typescript/non-nullable-type-assertion-style": "off",
   },
-  ignorePatterns: ["**/routeTree.gen.ts", "**/*.config.js"],
+  ignorePatterns: [
+    "**/routeTree.gen.ts",
+    "**/*.config.js",
+    // Module-augmentation files must use `interface` for declaration
+    // merging; oxlint's --fix would rewrite it to `type` and break it.
+    "types/**/*.d.ts",
+  ],
 
   jsPlugins: [
     "@tanstack/eslint-plugin-query",
@@ -229,6 +238,9 @@ export default defineConfig({
     "./.oxlint-plugins/no-secret-in-log-sink.ts",
     "./.oxlint-plugins/no-raw-api-url.ts",
     "./.oxlint-plugins/require-fetch-timeout.ts",
+    "./.oxlint-plugins/must-use-result.ts",
+    "./.oxlint-plugins/no-any-casts.ts",
+    "./.oxlint-plugins/no-dangerous-type-assertions.ts",
   ],
 
   overrides: [
@@ -972,6 +984,8 @@ export default defineConfig({
         "no-physical-properties/no-physical-properties": "off",
         "require-safe-route-handlers/require-safe-route-handlers": "off",
         "security-guards/no-raw-filename-write": "off",
+        // Fixture builders legitimately construct partial objects.
+        "no-dangerous-type-assertions/no-dangerous-type-assertions": "off",
         "security-guards/no-unsanitized-href": "off",
         "security-guards/no-unscoped-user-query": "off",
         "vitest/prefer-importing-vitest-globals": "off",

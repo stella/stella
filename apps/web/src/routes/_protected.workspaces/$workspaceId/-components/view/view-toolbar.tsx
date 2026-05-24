@@ -78,13 +78,19 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
   const folderState = useWorkspaceStore((s) => s.folderState);
   const toggleAllFolders = useWorkspaceStore((s) => s.toggleAllFolders);
 
+  // Generic helper preserves the union discriminant. A bare
+  // `{ ...layout, ...partial }` would collapse to an invalid union.
+  const mergeLayout = <L extends ViewLayout>(
+    layout: L,
+    changes: Partial<L>,
+  ): L => ({
+    ...layout,
+    ...changes,
+  });
   const handleUpdate = (changes: Partial<ViewLayout>) => {
     updateView.mutate({
       viewId: view.id,
-      // SAFETY: callers pass subsets matching the current layout
-      // discriminant; TS can't verify spread preserves a union.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
-      layout: { ...view.layout, ...changes } as ViewLayout,
+      layout: mergeLayout(view.layout, changes),
     });
   };
 
