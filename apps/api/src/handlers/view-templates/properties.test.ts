@@ -92,6 +92,45 @@ const createTemplateDependencyTx = () => {
   };
 };
 
+const createTemplateReuseTx = () => {
+  const existingProperty = {
+    id: "existing_property",
+    name: "Status",
+    content: { version: 1, type: "text" },
+    tool: { version: 1, type: "manual-input" },
+  };
+  const returningMock = mock(async () => [{ id: "created_property" }]);
+  const propertyValuesMock = mock(() => ({
+    returning: returningMock,
+  }));
+  const dependencyValuesMock = mock(() => ({
+    onConflictDoNothing: mock(async () => undefined),
+  }));
+  const insertMock = mock((table: unknown) => {
+    if (table === properties) {
+      return { values: propertyValuesMock };
+    }
+    if (table === propertyDependencies) {
+      return { values: dependencyValuesMock };
+    }
+    throw new Error("Unexpected table insert");
+  });
+  const tx = {
+    execute: mock(async () => undefined),
+    query: {
+      properties: {
+        findMany: mock(async () => [existingProperty]),
+      },
+    },
+    insert: insertMock,
+  };
+
+  return {
+    returningMock,
+    tx: asTestRaw<Transaction>(tx),
+  };
+};
+
 describe("resolveTemplateProperties", () => {
   test("rejects file template columns with AI tools before inserting", async () => {
     const { insertMock, tx } = createTemplatePropertyValidationTx();
@@ -219,5 +258,48 @@ describe("resolveTemplateProperties", () => {
     expect(executeMock).toHaveBeenCalledTimes(1);
     expect(returningMock).not.toHaveBeenCalled();
     expect(dependencyValuesMock).not.toHaveBeenCalled();
+  });
+
+  test("reuses existing shape matches only once", async () => {
+    const { returningMock, tx } = createTemplateReuseTx();
+    const firstProperty = {
+      version: 1,
+      sourceId: "source_a",
+      name: "Status",
+      content: { version: 1, type: "text" },
+      tool: { version: 1, type: "manual-input" },
+      createIfMissing: true,
+    } satisfies ViewTemplateProperty;
+    const secondProperty = {
+      ...firstProperty,
+      sourceId: "source_b",
+    } satisfies ViewTemplateProperty;
+    const layout: ViewLayout = {
+      version: 1,
+      type: "table",
+      filters: [],
+      sorts: [],
+      hiddenProperties: [],
+      columnOrder: [firstProperty.sourceId, secondProperty.sourceId],
+      columnPinning: [],
+    };
+
+    const result = await resolveTemplateProperties({
+      tx,
+      workspaceId,
+      layout,
+      templateProperties: [firstProperty, secondProperty],
+      canCreateProperties: true,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      layout: {
+        ...layout,
+        columnOrder: ["existing_property", "created_property"],
+      },
+      propertyIds: ["existing_property", "created_property"],
+    });
+    expect(returningMock).toHaveBeenCalledTimes(1);
   });
 });

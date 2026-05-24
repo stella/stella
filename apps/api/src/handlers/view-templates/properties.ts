@@ -135,6 +135,7 @@ export const resolveTemplateProperties = async ({
   const nextPropertyIds = existingProperties.map((property) => property.id);
   const propertyIdBySourceId = new Map<string, string>();
   const createdPropertySourceIds = new Set<string>();
+  const consumedExistingPropertyIds = new Set<string>();
   const templatePropertiesToCreate: ViewTemplateProperty[] = [];
   let projectedPropertyCount = nextPropertyIds.length;
 
@@ -144,15 +145,18 @@ export const resolveTemplateProperties = async ({
     );
     if (existingById) {
       propertyIdBySourceId.set(templateProperty.sourceId, existingById.id);
+      consumedExistingPropertyIds.add(existingById.id);
       continue;
     }
 
     const existingByShape = findUniquePropertyByShape(
       existingProperties,
       templateProperty,
+      consumedExistingPropertyIds,
     );
     if (existingByShape) {
       propertyIdBySourceId.set(templateProperty.sourceId, existingByShape.id);
+      consumedExistingPropertyIds.add(existingByShape.id);
       continue;
     }
 
@@ -466,9 +470,11 @@ const findUniquePropertyByShape = (
     tool: { type: string };
   }[],
   templateProperty: ViewTemplateProperty,
+  consumedExistingPropertyIds: ReadonlySet<string>,
 ) => {
   const matches = existingProperties.filter(
     (property) =>
+      !consumedExistingPropertyIds.has(property.id) &&
       normalizePropertyName(property.name) ===
         normalizePropertyName(templateProperty.name) &&
       property.content.type === templateProperty.content.type &&
