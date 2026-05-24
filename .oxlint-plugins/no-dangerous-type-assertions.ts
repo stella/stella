@@ -24,7 +24,12 @@ export default {
       },
       create(context) {
         function check(node) {
-          if (node.expression?.type !== "ObjectExpression") {
+          let expression = node.expression;
+          while (expression?.type === "ParenthesizedExpression") {
+            expression = expression.expression;
+          }
+
+          if (expression?.type !== "ObjectExpression") {
             return;
           }
           const ann = node.typeAnnotation;
