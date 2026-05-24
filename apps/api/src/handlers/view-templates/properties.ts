@@ -43,7 +43,7 @@ type ResolveTemplatePropertiesOptions = {
 
 type ResolveTemplatePropertiesResult =
   | { ok: true; layout: ViewLayout; propertyIds: string[] }
-  | { ok: false; status: 400 | 403; message: string };
+  | { ok: false; status: 400 | 403 | 422; message: string };
 
 export const collectTemplateProperties = ({
   layout,
@@ -140,6 +140,11 @@ export const resolveTemplateProperties = async ({
   const createdPropertySourceIds = new Set<string>();
 
   for (const templateProperty of templateProperties) {
+    const validationError = validateTemplatePropertyConfig(templateProperty);
+    if (validationError) {
+      return validationError;
+    }
+
     const existingById = existingProperties.find(
       (property) => property.id === templateProperty.sourceId,
     );
@@ -303,6 +308,54 @@ const readPropertyIds = async (
     .from(properties)
     .where(eq(properties.workspaceId, workspaceId));
   return rows.map((row) => row.id);
+};
+
+const validateTemplatePropertyConfig = (
+  templateProperty: ViewTemplateProperty,
+): ResolveTemplatePropertiesResult | null => {
+  if (
+    templateProperty.content.type === "file" &&
+    templateProperty.tool.type !== "manual-input"
+  ) {
+    return {
+      ok: false,
+      status: 422,
+      message: "File template columns must use manual input",
+    };
+  }
+
+  if (
+    templateProperty.tool.type !== "ai-model" &&
+    templateProperty.dependencies &&
+    templateProperty.dependencies.length > 0
+  ) {
+    return {
+      ok: false,
+      status: 422,
+      message: "Only AI template columns can declare dependencies",
+    };
+  }
+
+  if (
+    templateProperty.content.type === "single-select" ||
+    templateProperty.content.type === "multi-select"
+  ) {
+    const fallback = templateProperty.content.fallback;
+    if (
+      fallback !== null &&
+      !templateProperty.content.options.some(
+        (option) => option.value === fallback,
+      )
+    ) {
+      return {
+        ok: false,
+        status: 400,
+        message: "Fallback must match one of the supplied options",
+      };
+    }
+  }
+
+  return null;
 };
 
 const normalizePropertyName = (name: string): string =>
