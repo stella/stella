@@ -449,10 +449,10 @@ Project: desktop-tauri
 - tao-macros 0.1.3 — Apache-2.0 OR MIT
 - tar 0.4.45 — Apache-2.0 OR MIT
 - target-lexicon 0.12.16 — Apache-2.0 WITH LLVM-exception
-- tauri 2.11.1 — Apache-2.0 OR MIT
-- tauri-build 2.6.1 — Apache-2.0 OR MIT
-- tauri-codegen 2.6.1 — Apache-2.0 OR MIT
-- tauri-macros 2.6.1 — Apache-2.0 OR MIT
+- tauri 2.11.2 — Apache-2.0 OR MIT
+- tauri-build 2.6.2 — Apache-2.0 OR MIT
+- tauri-codegen 2.6.2 — Apache-2.0 OR MIT
+- tauri-macros 2.6.2 — Apache-2.0 OR MIT
 - tauri-plugin 2.6.1 — Apache-2.0 OR MIT
 - tauri-plugin-autostart 2.5.1 — Apache-2.0 OR MIT
 - tauri-plugin-clipboard-manager 2.3.2 — Apache-2.0 OR MIT
@@ -462,9 +462,9 @@ Project: desktop-tauri
 - tauri-plugin-process 2.3.1 — Apache-2.0 OR MIT
 - tauri-plugin-single-instance 2.4.2 — Apache-2.0 OR MIT
 - tauri-plugin-updater 2.10.1 — Apache-2.0 OR MIT
-- tauri-runtime 2.11.1 — Apache-2.0 OR MIT
-- tauri-runtime-wry 2.11.1 — Apache-2.0 OR MIT
-- tauri-utils 2.9.1 — Apache-2.0 OR MIT
+- tauri-runtime 2.11.2 — Apache-2.0 OR MIT
+- tauri-runtime-wry 2.11.2 — Apache-2.0 OR MIT
+- tauri-utils 2.9.2 — Apache-2.0 OR MIT
 - tauri-winres 0.3.6 — MIT
 - tauri-winrt-notification 0.7.2 — Apache-2.0 OR MIT
 - tempfile 3.27.0 — Apache-2.0 OR MIT

@@ -20561,7 +20561,7 @@
       "version": "0.12.16"
     },
     {
-      "bom-ref": "pkg:cargo/tauri@2.11.1",
+      "bom-ref": "pkg:cargo/tauri@2.11.2",
       "evidence": {
         "identity": [
           {
@@ -20582,7 +20582,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "b93bd86d231f0a8138f11a02a584769fe4b703dc36ae133d783228dbc4801405"
+          "content": "437404997acf375d85f1177afa7e11bb971f274ed6a7b83a2a3e339015f4cc28"
         }
       ],
       "licenses": [
@@ -20604,12 +20604,12 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tauri@2.11.1",
+      "purl": "pkg:cargo/tauri@2.11.2",
       "type": "library",
-      "version": "2.11.1"
+      "version": "2.11.2"
     },
     {
-      "bom-ref": "pkg:cargo/tauri-build@2.6.1",
+      "bom-ref": "pkg:cargo/tauri-build@2.6.2",
       "evidence": {
         "identity": [
           {
@@ -20630,7 +20630,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "3a318b234cc2dea65f575467bafcfb76286bce228ebc3778e337d61d03213007"
+          "content": "4aa1f9055fc23919a54e4e125052bed16ed04aef0487086e758fe01a67b451c7"
         }
       ],
       "licenses": [
@@ -20652,12 +20652,12 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tauri-build@2.6.1",
+      "purl": "pkg:cargo/tauri-build@2.6.2",
       "type": "library",
-      "version": "2.6.1"
+      "version": "2.6.2"
     },
     {
-      "bom-ref": "pkg:cargo/tauri-codegen@2.6.1",
+      "bom-ref": "pkg:cargo/tauri-codegen@2.6.2",
       "evidence": {
         "identity": [
           {
@@ -20678,7 +20678,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "6bd11644962add2549a60b7e7c6800f17d7020156e02f516021d8103e80cc528"
+          "content": "e4a0319528a025a38c4078e7dae2c446f4e63620ddb0659a643ede1cb38f90e9"
         }
       ],
       "licenses": [
@@ -20700,12 +20700,12 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tauri-codegen@2.6.1",
+      "purl": "pkg:cargo/tauri-codegen@2.6.2",
       "type": "library",
-      "version": "2.6.1"
+      "version": "2.6.2"
     },
     {
-      "bom-ref": "pkg:cargo/tauri-macros@2.6.1",
+      "bom-ref": "pkg:cargo/tauri-macros@2.6.2",
       "evidence": {
         "identity": [
           {
@@ -20726,7 +20726,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "fed9d3742a37a355d2e47c9af924e9fbc112abb76f9835d35d4780e318419502"
+          "content": "ae6cb4e3896c21d2f6da5b31251d2faea0153bba56ed0e970f918115dbee4924"
         }
       ],
       "licenses": [
@@ -20748,9 +20748,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tauri-macros@2.6.1",
+      "purl": "pkg:cargo/tauri-macros@2.6.2",
       "type": "library",
-      "version": "2.6.1"
+      "version": "2.6.2"
     },
     {
       "bom-ref": "pkg:cargo/tauri-plugin@2.6.1",
@@ -21185,7 +21185,7 @@
       "version": "2.10.1"
     },
     {
-      "bom-ref": "pkg:cargo/tauri-runtime@2.11.1",
+      "bom-ref": "pkg:cargo/tauri-runtime@2.11.2",
       "evidence": {
         "identity": [
           {
@@ -21206,7 +21206,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "8fef478ba1d2ac21c2d528740b24d0cb315e1e8b1111aae53fafac34804371fc"
+          "content": "48222d7116c8807eaa6fe2f372e023fae125084e61e6eca6d70b7961cdf129ef"
         }
       ],
       "licenses": [
@@ -21228,12 +21228,12 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tauri-runtime@2.11.1",
+      "purl": "pkg:cargo/tauri-runtime@2.11.2",
       "type": "library",
-      "version": "2.11.1"
+      "version": "2.11.2"
     },
     {
-      "bom-ref": "pkg:cargo/tauri-runtime-wry@2.11.1",
+      "bom-ref": "pkg:cargo/tauri-runtime-wry@2.11.2",
       "evidence": {
         "identity": [
           {
@@ -21254,7 +21254,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "a3989df2ae1c476404fe0a2e8ffc4cfbde97e51efd613c2bb5355fbc9ab52cf0"
+          "content": "b83849ee63ecb27a8e8d0fe51915ca215076914aca43f96db1179f0f415f6cd9"
         }
       ],
       "licenses": [
@@ -21276,12 +21276,12 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tauri-runtime-wry@2.11.1",
+      "purl": "pkg:cargo/tauri-runtime-wry@2.11.2",
       "type": "library",
-      "version": "2.11.1"
+      "version": "2.11.2"
     },
     {
-      "bom-ref": "pkg:cargo/tauri-utils@2.9.1",
+      "bom-ref": "pkg:cargo/tauri-utils@2.9.2",
       "evidence": {
         "identity": [
           {
@@ -21302,7 +21302,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "d57200389a2f82b4b0a40ae29ca19b6978116e8f4d4e974c3234ce40c0ffbdec"
+          "content": "092379df9a707631978e6c56b1bc2401d387f01e2d4a3c123360d167bbb9aa95"
         }
       ],
       "licenses": [
@@ -21324,9 +21324,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tauri-utils@2.9.1",
+      "purl": "pkg:cargo/tauri-utils@2.9.2",
       "type": "library",
-      "version": "2.9.1"
+      "version": "2.9.2"
     },
     {
       "bom-ref": "pkg:cargo/tauri-winres@0.3.6",
@@ -33111,7 +33111,7 @@
         "pkg:cargo/serde_json@1.0.149",
         "pkg:cargo/sha2@0.11.0",
         "pkg:cargo/sys-locale@0.3.2",
-        "pkg:cargo/tauri-build@2.6.1",
+        "pkg:cargo/tauri-build@2.6.2",
         "pkg:cargo/tauri-plugin-autostart@2.5.1",
         "pkg:cargo/tauri-plugin-clipboard-manager@2.3.2",
         "pkg:cargo/tauri-plugin-deep-link@2.4.9",
@@ -33120,7 +33120,7 @@
         "pkg:cargo/tauri-plugin-process@2.3.1",
         "pkg:cargo/tauri-plugin-single-instance@2.4.2",
         "pkg:cargo/tauri-plugin-updater@2.10.1",
-        "pkg:cargo/tauri@2.11.1",
+        "pkg:cargo/tauri@2.11.2",
         "pkg:cargo/tokio@1.52.3",
         "pkg:cargo/tower-http@0.6.10",
         "pkg:cargo/tower@0.5.3",
@@ -33309,11 +33309,11 @@
         "pkg:cargo/serde_repr@0.1.20",
         "pkg:cargo/serialize-to-javascript@0.1.2",
         "pkg:cargo/swift-rs@1.0.7",
-        "pkg:cargo/tauri-build@2.6.1",
-        "pkg:cargo/tauri-macros@2.6.1",
-        "pkg:cargo/tauri-runtime-wry@2.11.1",
-        "pkg:cargo/tauri-runtime@2.11.1",
-        "pkg:cargo/tauri-utils@2.9.1",
+        "pkg:cargo/tauri-build@2.6.2",
+        "pkg:cargo/tauri-macros@2.6.2",
+        "pkg:cargo/tauri-runtime-wry@2.11.2",
+        "pkg:cargo/tauri-runtime@2.11.2",
+        "pkg:cargo/tauri-utils@2.9.2",
         "pkg:cargo/thiserror@2.0.18",
         "pkg:cargo/tokio@1.52.3",
         "pkg:cargo/tray-icon@0.23.1",
@@ -33323,7 +33323,7 @@
         "pkg:cargo/window-vibrancy@0.6.0",
         "pkg:cargo/windows@0.61.3"
       ],
-      "ref": "pkg:cargo/tauri@2.11.1"
+      "ref": "pkg:cargo/tauri@2.11.2"
     },
     {
       "dependsOn": [
@@ -33337,11 +33337,11 @@
         "pkg:cargo/semver@1.0.28",
         "pkg:cargo/serde@1.0.228",
         "pkg:cargo/serde_json@1.0.149",
-        "pkg:cargo/tauri-utils@2.9.1",
+        "pkg:cargo/tauri-utils@2.9.2",
         "pkg:cargo/tauri-winres@0.3.6",
         "pkg:cargo/walkdir@2.5.0"
       ],
-      "ref": "pkg:cargo/tauri-build@2.6.1"
+      "ref": "pkg:cargo/tauri-build@2.6.2"
     },
     {
       "dependsOn": [
@@ -33358,14 +33358,14 @@
         "pkg:cargo/serde_json@1.0.149",
         "pkg:cargo/sha2@0.10.9",
         "pkg:cargo/syn@2.0.117",
-        "pkg:cargo/tauri-utils@2.9.1",
+        "pkg:cargo/tauri-utils@2.9.2",
         "pkg:cargo/thiserror@2.0.18",
         "pkg:cargo/time@0.3.47",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/uuid@1.23.1",
         "pkg:cargo/walkdir@2.5.0"
       ],
-      "ref": "pkg:cargo/tauri-codegen@2.6.1"
+      "ref": "pkg:cargo/tauri-codegen@2.6.2"
     },
     {
       "dependsOn": [
@@ -33373,10 +33373,10 @@
         "pkg:cargo/proc-macro2@1.0.106",
         "pkg:cargo/quote@1.0.45",
         "pkg:cargo/syn@2.0.117",
-        "pkg:cargo/tauri-codegen@2.6.1",
-        "pkg:cargo/tauri-utils@2.9.1"
+        "pkg:cargo/tauri-codegen@2.6.2",
+        "pkg:cargo/tauri-utils@2.9.2"
       ],
-      "ref": "pkg:cargo/tauri-macros@2.6.1"
+      "ref": "pkg:cargo/tauri-macros@2.6.2"
     },
     {
       "dependsOn": [
@@ -33386,7 +33386,7 @@
         "pkg:cargo/schemars@0.8.22",
         "pkg:cargo/serde@1.0.228",
         "pkg:cargo/serde_json@1.0.149",
-        "pkg:cargo/tauri-utils@2.9.1",
+        "pkg:cargo/tauri-utils@2.9.2",
         "pkg:cargo/walkdir@2.5.0"
       ],
       "ref": "pkg:cargo/tauri-plugin@2.6.1"
@@ -33397,7 +33397,7 @@
         "pkg:cargo/serde@1.0.228",
         "pkg:cargo/serde_json@1.0.149",
         "pkg:cargo/tauri-plugin@2.6.1",
-        "pkg:cargo/tauri@2.11.1",
+        "pkg:cargo/tauri@2.11.2",
         "pkg:cargo/thiserror@2.0.18"
       ],
       "ref": "pkg:cargo/tauri-plugin-autostart@2.5.1"
@@ -33409,7 +33409,7 @@
         "pkg:cargo/serde@1.0.228",
         "pkg:cargo/serde_json@1.0.149",
         "pkg:cargo/tauri-plugin@2.6.1",
-        "pkg:cargo/tauri@2.11.1",
+        "pkg:cargo/tauri@2.11.2",
         "pkg:cargo/thiserror@2.0.18"
       ],
       "ref": "pkg:cargo/tauri-plugin-clipboard-manager@2.3.2"
@@ -33422,8 +33422,8 @@
         "pkg:cargo/serde@1.0.228",
         "pkg:cargo/serde_json@1.0.149",
         "pkg:cargo/tauri-plugin@2.6.1",
-        "pkg:cargo/tauri-utils@2.9.1",
-        "pkg:cargo/tauri@2.11.1",
+        "pkg:cargo/tauri-utils@2.9.2",
+        "pkg:cargo/tauri@2.11.2",
         "pkg:cargo/thiserror@2.0.18",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/url@2.5.8",
@@ -33441,7 +33441,7 @@
         "pkg:cargo/serde_json@1.0.149",
         "pkg:cargo/serde_repr@0.1.20",
         "pkg:cargo/tauri-plugin@2.6.1",
-        "pkg:cargo/tauri@2.11.1",
+        "pkg:cargo/tauri@2.11.2",
         "pkg:cargo/thiserror@2.0.18",
         "pkg:cargo/time@0.3.47",
         "pkg:cargo/url@2.5.8"
@@ -33459,7 +33459,7 @@
         "pkg:cargo/serde@1.0.228",
         "pkg:cargo/serde_json@1.0.149",
         "pkg:cargo/tauri-plugin@2.6.1",
-        "pkg:cargo/tauri@2.11.1",
+        "pkg:cargo/tauri@2.11.2",
         "pkg:cargo/thiserror@2.0.18",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/windows@0.61.3",
@@ -33470,7 +33470,7 @@
     {
       "dependsOn": [
         "pkg:cargo/tauri-plugin@2.6.1",
-        "pkg:cargo/tauri@2.11.1"
+        "pkg:cargo/tauri@2.11.2"
       ],
       "ref": "pkg:cargo/tauri-plugin-process@2.3.1"
     },
@@ -33479,7 +33479,7 @@
         "pkg:cargo/serde@1.0.228",
         "pkg:cargo/serde_json@1.0.149",
         "pkg:cargo/tauri-plugin-deep-link@2.4.9",
-        "pkg:cargo/tauri@2.11.1",
+        "pkg:cargo/tauri@2.11.2",
         "pkg:cargo/thiserror@2.0.18",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/windows-sys@0.60.2",
@@ -33506,7 +33506,7 @@
         "pkg:cargo/serde_json@1.0.149",
         "pkg:cargo/tar@0.4.45",
         "pkg:cargo/tauri-plugin@2.6.1",
-        "pkg:cargo/tauri@2.11.1",
+        "pkg:cargo/tauri@2.11.2",
         "pkg:cargo/tempfile@3.27.0",
         "pkg:cargo/thiserror@2.0.18",
         "pkg:cargo/time@0.3.47",
@@ -33530,14 +33530,14 @@
         "pkg:cargo/raw-window-handle@0.6.2",
         "pkg:cargo/serde@1.0.228",
         "pkg:cargo/serde_json@1.0.149",
-        "pkg:cargo/tauri-utils@2.9.1",
+        "pkg:cargo/tauri-utils@2.9.2",
         "pkg:cargo/thiserror@2.0.18",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/webkit2gtk@2.0.2",
         "pkg:cargo/webview2-com@0.38.2",
         "pkg:cargo/windows@0.61.3"
       ],
-      "ref": "pkg:cargo/tauri-runtime@2.11.1"
+      "ref": "pkg:cargo/tauri-runtime@2.11.2"
     },
     {
       "dependsOn": [
@@ -33552,15 +33552,15 @@
         "pkg:cargo/raw-window-handle@0.6.2",
         "pkg:cargo/softbuffer@0.4.8",
         "pkg:cargo/tao@0.35.2",
-        "pkg:cargo/tauri-runtime@2.11.1",
-        "pkg:cargo/tauri-utils@2.9.1",
+        "pkg:cargo/tauri-runtime@2.11.2",
+        "pkg:cargo/tauri-utils@2.9.2",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/webkit2gtk@2.0.2",
         "pkg:cargo/webview2-com@0.38.2",
         "pkg:cargo/windows@0.61.3",
         "pkg:cargo/wry@0.55.1"
       ],
-      "ref": "pkg:cargo/tauri-runtime-wry@2.11.1"
+      "ref": "pkg:cargo/tauri-runtime-wry@2.11.2"
     },
     {
       "dependsOn": [
@@ -33595,7 +33595,7 @@
         "pkg:cargo/uuid@1.23.1",
         "pkg:cargo/walkdir@2.5.0"
       ],
-      "ref": "pkg:cargo/tauri-utils@2.9.1"
+      "ref": "pkg:cargo/tauri-utils@2.9.2"
     },
     {
       "dependsOn": [
