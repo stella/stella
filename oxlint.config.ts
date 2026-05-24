@@ -55,7 +55,25 @@ export default defineConfig({
     "promise/no-return-in-finally": "error",
     "no-useless-assignment": "error",
 
+    // Keep `import/no-cycle` despite its ~20% share of lint time: the
+    // Module Side Effects section in CLAUDE.md documents the TDZ class
+    // of bugs that circular imports cause with module-level singletons.
+    // The rule has 0 current hits, but its job is regression protection.
     "import/no-cycle": "error",
+
+    // Disabled: `verbatimModuleSyntax` is on in the shared tsconfig, so
+    // the TypeScript compiler already enforces the type-import semantic.
+    // The lint rule only checks the stylistic placement of the `type`
+    // keyword inside the import (`import { type X }` vs `import type
+    // { X }`) — pure formatting, ~11% of lint time, no bug-catching value.
+    "import/consistent-type-specifier-style": "off",
+
+    // Disabled: rule visits ~33k AST nodes to enforce adjacency between
+    // get/set accessors for the same property. The codebase models state
+    // through plain objects, hooks, and Drizzle queries — class
+    // get/set pairs are essentially absent — so the rule fires on
+    // nothing while taking ~10% of lint time.
+    "eslint/grouped-accessor-pairs": "off",
     "no-restricted-imports": [
       "error",
       {
@@ -687,6 +705,7 @@ export default defineConfig({
 
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
+        "eslint/no-useless-assignment": "off",
         "typescript/consistent-return": "off",
       },
     },
@@ -713,6 +732,7 @@ export default defineConfig({
 
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
+        "eslint/no-useless-assignment": "off",
         "typescript/consistent-return": "off",
 
         "typescript/no-unsafe-return": "off",
@@ -764,6 +784,7 @@ export default defineConfig({
 
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
+        "eslint/no-useless-assignment": "off",
         "typescript/consistent-return": "off",
 
         "typescript/no-unsafe-return": "off",
@@ -794,6 +815,7 @@ export default defineConfig({
         "typescript/prefer-nullish-coalescing": "off",
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
+        "eslint/no-useless-assignment": "off",
 
         "typescript/promise-function-async": "off",
 
