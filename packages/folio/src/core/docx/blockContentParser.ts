@@ -63,15 +63,25 @@ const toRoman = (numParam: number): string => {
   return result;
 };
 
+const toRepeatedLetter = (value: number, firstCodePoint: number): string => {
+  if (value <= 0) {
+    return "0";
+  }
+
+  const char = String.fromCodePoint(firstCodePoint + ((value - 1) % 26));
+  const count = Math.floor((value - 1) / 26) + 1;
+  return char.repeat(count);
+};
+
 const formatNumber = (value: number, numFmt: string): string => {
   switch (numFmt) {
     case "decimal":
     case "decimalZero":
       return String(value);
     case "lowerLetter":
-      return String.fromCodePoint(96 + ((value - 1) % 26) + 1);
+      return toRepeatedLetter(value, 97);
     case "upperLetter":
-      return String.fromCodePoint(64 + ((value - 1) % 26) + 1);
+      return toRepeatedLetter(value, 65);
     case "lowerRoman":
       return toRoman(value).toLowerCase();
     case "upperRoman":
@@ -152,7 +162,7 @@ const computeListMarker = (
         value,
         useLegalNumbering ? "decimal" : levelInfo?.numFmt || "decimal",
       );
-      computedMarker = computedMarker.replace(placeholder, formatted);
+      computedMarker = computedMarker.replaceAll(placeholder, formatted);
     }
   }
 
