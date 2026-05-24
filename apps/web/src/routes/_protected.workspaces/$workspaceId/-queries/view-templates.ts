@@ -21,12 +21,13 @@ export type WorkspaceViewTemplate = {
 };
 
 export const viewTemplateKeys = {
-  all: (workspaceId: string) => ["view-templates", workspaceId] as const,
+  all: () => ["view-templates"] as const,
 };
 
 export const viewTemplatesOptions = (workspaceId: string) =>
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- templates are scoped per-user-per-organization on the backend, so any workspaceId the caller has access to returns the same list. The path param only satisfies the workspace-access auth macro.
   queryOptions({
-    queryKey: viewTemplateKeys.all(workspaceId),
+    queryKey: viewTemplateKeys.all(),
     queryFn: async ({ signal }): Promise<WorkspaceViewTemplate[]> => {
       const response = await api["view-templates"]({
         workspaceId: toSafeId<"workspace">(workspaceId),

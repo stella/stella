@@ -91,6 +91,7 @@ export const resolveTemplateProperties = async ({
       name: true,
       content: true,
     },
+    orderBy: { createdAt: "asc" },
   });
   const nextPropertyIds = existingProperties.map((property) => property.id);
   const propertyIdBySourceId = new Map<string, string>();

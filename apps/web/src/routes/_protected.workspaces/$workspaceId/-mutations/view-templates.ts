@@ -27,10 +27,10 @@ export const useCreateViewTemplate = () => {
       }
       return { data: response.data, workspaceId };
     },
-    onSuccess: ({ workspaceId }) => {
+    onSuccess: () => {
       // eslint-disable-next-line typescript/no-floating-promises
       queryClient.invalidateQueries({
-        queryKey: viewTemplateKeys.all(workspaceId),
+        queryKey: viewTemplateKeys.all(),
       });
     },
     onError: (error) => {
@@ -60,10 +60,10 @@ export const useDeleteViewTemplate = () => {
       }
       return { data: response.data, workspaceId };
     },
-    onSuccess: ({ workspaceId }) => {
+    onSuccess: () => {
       // eslint-disable-next-line typescript/no-floating-promises
       queryClient.invalidateQueries({
-        queryKey: viewTemplateKeys.all(workspaceId),
+        queryKey: viewTemplateKeys.all(),
       });
     },
     onError: (error) => {
