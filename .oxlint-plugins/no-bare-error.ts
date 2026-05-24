@@ -9,6 +9,7 @@
 // Flagged:
 //   throw new Error("Something went wrong");
 //   throw new Error(`HTTP ${response.status}`);
+//   throw Error("no new keyword");
 //
 // Allowed:
 //   throw new FetchBoundaryError({ url, status, message });
@@ -32,7 +33,13 @@ export default {
         return {
           ThrowStatement(node) {
             const argument = node.argument;
-            if (!argument || argument.type !== "NewExpression") {
+            // `Error(...)` without `new` produces the same object;
+            // both forms must be flagged.
+            if (
+              !argument ||
+              (argument.type !== "NewExpression" &&
+                argument.type !== "CallExpression")
+            ) {
               return;
             }
 
