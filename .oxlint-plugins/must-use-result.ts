@@ -93,6 +93,15 @@ export default {
                 parent.type === "TSTypeAssertion" ||
                 parent.type === "TSSatisfiesExpression" ||
                 parent.type === "SequenceExpression" ||
+                // Container literals propagate the Result outward. They
+                // stop being transparent the moment their parent
+                // consumes the container (passed to a call, returned,
+                // assigned, etc.); only a statement-level discard
+                // reaches the final ExpressionStatement check below.
+                parent.type === "ArrayExpression" ||
+                parent.type === "ObjectExpression" ||
+                parent.type === "Property" ||
+                parent.type === "TemplateLiteral" ||
                 (parent.type === "UnaryExpression" &&
                   parent.operator === "void");
               // Chain methods (`safeDb(...).map(...)`): the Result flows
