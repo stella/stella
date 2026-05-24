@@ -10,13 +10,8 @@ import { deleteS3Objects } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import {
-  AUDIT_ACTION,
-  AUDIT_RESOURCE_TYPE,
-  createAuditContext,
-  writeAuditLog,
-} from "@/api/lib/audit-log";
-import type { AuditContext } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -33,7 +28,7 @@ type DeleteEntitiesHandlerProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
-  auditContext: AuditContext;
+  recordAuditEvent: AuditRecorder;
   body: DeleteEntitiesBodySchema;
 };
 
@@ -60,7 +55,7 @@ const deleteEntitiesHandler = async function* ({
   safeDb,
   organizationId,
   workspaceId,
-  auditContext,
+  recordAuditEvent,
   body,
 }: DeleteEntitiesHandlerProps) {
   const readOnlyEntities = yield* Result.await(
@@ -138,9 +133,9 @@ const deleteEntitiesHandler = async function* ({
         .set({ lastActivityAt: new Date() })
         .where(eq(workspaces.id, workspaceId));
 
-      await writeAuditLog(
+      await recordAuditEvent(
+        tx,
         deleted.map((entity) => ({
-          ...auditContext,
           action: AUDIT_ACTION.DELETE,
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
           resourceId: entity.id,
@@ -155,7 +150,6 @@ const deleteEntitiesHandler = async function* ({
             },
           },
         })),
-        tx,
       );
 
       return deleted;
@@ -178,26 +172,12 @@ const config = {
 
 const deleteEntities = createSafeHandler(
   config,
-  async function* ({
-    safeDb,
-    session,
-    workspaceId,
-    user,
-    request,
-    server,
-    body,
-  }) {
+  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
     return yield* deleteEntitiesHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
       workspaceId,
-      auditContext: createAuditContext({
-        organizationId: session.activeOrganizationId,
-        workspaceId,
-        userId: user.id,
-        request,
-        server,
-      }),
+      recordAuditEvent,
       body,
     });
   },

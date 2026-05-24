@@ -8,6 +8,7 @@ import {
   fields,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
+import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -92,18 +93,29 @@ const createContext = ({
   safeDb,
 }: {
   safeDb: Parameters<typeof duplicateEntity.handler>[0]["safeDb"];
-}): Parameters<typeof duplicateEntity.handler>[0] =>
+}): Parameters<typeof duplicateEntity.handler>[0] => {
+  const recorderBindings = {
+    organizationId,
+    workspaceId,
+    userId,
+    request: new Request("https://example.test/v1/entities/duplicate"),
+    server: null,
+  };
+
   // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields touched by the handler
-  ({
+  return {
     workspaceId,
     user: { id: userId },
     session: { activeOrganizationId: organizationId },
     memberRole: { role: "owner" },
     body: { entityId: rootFolderId },
-    request: new Request("https://example.test/v1/entities/duplicate"),
+    request: recorderBindings.request,
     route: "/v1/entities/:workspaceId/duplicate",
     safeDb,
-  }) as Parameters<typeof duplicateEntity.handler>[0];
+    recordAuditEvent: createAuditRecorder(recorderBindings),
+    createAuditRecorder: () => createAuditRecorder(recorderBindings),
+  } as Parameters<typeof duplicateEntity.handler>[0];
+};
 
 describe("duplicate entity", () => {
   test("duplicates folder trees instead of rejecting folders", async () => {

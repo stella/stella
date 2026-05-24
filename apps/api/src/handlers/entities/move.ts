@@ -8,13 +8,8 @@ import { entities, workspaces } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import {
-  AUDIT_ACTION,
-  AUDIT_RESOURCE_TYPE,
-  createAuditContext,
-  writeAuditLog,
-} from "@/api/lib/audit-log";
-import type { AuditContext } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -30,14 +25,14 @@ type MoveEntityBodySchema = Static<typeof moveEntityBodySchema>;
 type MoveEntityHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
-  auditContext: AuditContext;
+  recordAuditEvent: AuditRecorder;
   body: MoveEntityBodySchema;
 };
 
 const moveEntityHandler = async function* ({
   safeDb,
   workspaceId,
-  auditContext,
+  recordAuditEvent,
   body,
 }: MoveEntityHandlerProps) {
   const txResult = yield* Result.await(
@@ -85,21 +80,17 @@ const moveEntityHandler = async function* ({
           .update(workspaces)
           .set({ lastActivityAt: new Date() })
           .where(eq(workspaces.id, workspaceId));
-        await writeAuditLog(
-          {
-            ...auditContext,
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-            resourceId: body.entityId,
-            changes: {
-              parentId: {
-                old: oldParentId,
-                new: null,
-              },
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+          resourceId: body.entityId,
+          changes: {
+            parentId: {
+              old: oldParentId,
+              new: null,
             },
           },
-          tx,
-        );
+        });
         return { ok: true as const };
       }
 
@@ -173,21 +164,17 @@ const moveEntityHandler = async function* ({
         .set({ lastActivityAt: new Date() })
         .where(eq(workspaces.id, workspaceId));
 
-      await writeAuditLog(
-        {
-          ...auditContext,
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-          resourceId: body.entityId,
-          changes: {
-            parentId: {
-              old: oldParentId,
-              new: body.parentId,
-            },
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+        resourceId: body.entityId,
+        changes: {
+          parentId: {
+            old: oldParentId,
+            new: body.parentId,
           },
         },
-        tx,
-      );
+      });
 
       return { ok: true as const };
     }),
@@ -247,25 +234,11 @@ const config = {
 
 const moveEntity = createSafeHandler(
   config,
-  async function* ({
-    safeDb,
-    session,
-    workspaceId,
-    user,
-    request,
-    server,
-    body,
-  }) {
+  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
     return yield* moveEntityHandler({
       safeDb,
       workspaceId,
-      auditContext: createAuditContext({
-        organizationId: session.activeOrganizationId,
-        workspaceId,
-        userId: user.id,
-        request,
-        server,
-      }),
+      recordAuditEvent,
       body,
     });
   },

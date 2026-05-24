@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { auditLogs, workspaceMembers } from "@/api/db/schema";
+import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -17,20 +18,31 @@ const createContext = ({
   body: AddMemberCtx["body"];
   safeDb: AddMemberCtx["safeDb"];
   scopedDb: AddMemberCtx["scopedDb"];
-}): AddMemberCtx =>
-  asTestRaw<AddMemberCtx>({
+}): AddMemberCtx => {
+  const recorderBindings = {
+    organizationId: toSafeId<"organization">("org_test123"),
+    workspaceId: toSafeId<"workspace">("ws_test123"),
+    userId: toSafeId<"user">("user_test123"),
+    request: new Request("http://localhost/v1/workspaces/ws_test123/members"),
+    server: null,
+  };
+
+  return asTestRaw<AddMemberCtx>({
     body,
     safeDb,
     scopedDb,
     memberRole: { role: "owner" },
     orgAIConfig: null,
-    request: new Request("http://localhost/v1/workspaces/ws_test123/members"),
+    request: recorderBindings.request,
     session: {
-      activeOrganizationId: toSafeId<"organization">("org_test123"),
+      activeOrganizationId: recorderBindings.organizationId,
     },
-    user: { id: toSafeId<"user">("user_test123") },
-    workspaceId: toSafeId<"workspace">("ws_test123"),
+    user: { id: recorderBindings.userId },
+    workspaceId: recorderBindings.workspaceId,
+    recordAuditEvent: createAuditRecorder(recorderBindings),
+    createAuditRecorder: () => createAuditRecorder(recorderBindings),
   });
+};
 
 const selectRowsInOrder = (rowsByCall: unknown[][]) => {
   let callIndex = 0;

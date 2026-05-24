@@ -3,12 +3,8 @@ import { and, eq, isNull, like } from "drizzle-orm";
 import type { Transaction } from "@/api/db";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
-import {
-  AUDIT_ACTION,
-  AUDIT_RESOURCE_TYPE,
-  writeAuditLog,
-} from "@/api/lib/audit-log";
-import type { AuditContext } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
@@ -190,7 +186,14 @@ type CopyEntitiesProps = {
   targetWorkspaceId: SafeId<"workspace">;
   targetParentId: SafeId<"entity"> | null;
   userId: SafeId<"user">;
-  auditContext: AuditContext;
+  /**
+   * Recorder for the target workspace audit rows. Caller is
+   * responsible for binding it to `targetWorkspaceId` (via
+   * `ctx.createAuditRecorder({ workspaceId: targetWorkspaceId })`
+   * for cross-workspace copies, or just `ctx.recordAuditEvent`
+   * when target equals the handler's workspace).
+   */
+  recordAuditEvent: AuditRecorder;
   sourceEntityId: SafeId<"entity">;
   sourceEntities: EntitySnapshot[];
   /** Source workspace ID for audit log (cross-workspace only). */
@@ -206,7 +209,7 @@ export const copyEntities = async ({
   targetWorkspaceId,
   targetParentId,
   userId,
-  auditContext,
+  recordAuditEvent,
   sourceEntityId,
   sourceEntities,
   sourceWorkspaceId,
@@ -367,12 +370,9 @@ export const copyEntities = async ({
     .set({ lastActivityAt: new Date() })
     .where(eq(workspaces.id, targetWorkspaceId));
 
-  await writeAuditLog(
+  await recordAuditEvent(
+    tx,
     copiedEntities.map((entity) => ({
-      organizationId: auditContext.organizationId,
-      workspaceId: targetWorkspaceId,
-      userId: auditContext.userId,
-      metadata: auditContext.metadata,
       action: AUDIT_ACTION.CREATE,
       resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
       resourceId: entity.entityId,
@@ -390,7 +390,6 @@ export const copyEntities = async ({
         },
       },
     })),
-    tx,
   );
 
   const rootEntityId = idMap.get(sourceEntityId);

@@ -10,8 +10,7 @@ import {
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createAuditContext } from "@/api/lib/audit-log";
-import type { AuditContext } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -26,7 +25,7 @@ type DuplicateEntityHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
-  auditContext: AuditContext;
+  recordAuditEvent: AuditRecorder;
   body: Static<typeof duplicateEntityBodySchema>;
 };
 
@@ -34,7 +33,7 @@ const duplicateEntityHandler = async function* ({
   safeDb,
   workspaceId,
   userId,
-  auditContext,
+  recordAuditEvent,
   body: { entityId: sourceEntityId },
 }: DuplicateEntityHandlerProps) {
   const source = yield* Result.await(
@@ -78,7 +77,7 @@ const duplicateEntityHandler = async function* ({
           targetWorkspaceId: workspaceId,
           targetParentId: source.parentId,
           userId,
-          auditContext,
+          recordAuditEvent,
           sourceEntityId,
           sourceEntities: [source],
         });
@@ -122,7 +121,7 @@ const duplicateEntityHandler = async function* ({
         targetWorkspaceId: workspaceId,
         targetParentId: source.parentId,
         userId,
-        auditContext,
+        recordAuditEvent,
         sourceEntityId,
         sourceEntities: subtree,
       });
@@ -149,26 +148,12 @@ const config = {
 
 const duplicateEntity = createSafeHandler(
   config,
-  async function* ({
-    safeDb,
-    session,
-    workspaceId,
-    user,
-    request,
-    server,
-    body,
-  }) {
+  async function* ({ safeDb, workspaceId, user, body, recordAuditEvent }) {
     return yield* duplicateEntityHandler({
       safeDb,
       workspaceId,
       userId: user.id,
-      auditContext: createAuditContext({
-        organizationId: session.activeOrganizationId,
-        workspaceId,
-        userId: user.id,
-        request,
-        server,
-      }),
+      recordAuditEvent,
       body,
     });
   },

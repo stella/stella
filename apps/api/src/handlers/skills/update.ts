@@ -5,12 +5,7 @@ import { t } from "elysia";
 import { agentSkills } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import {
-  AUDIT_ACTION,
-  AUDIT_RESOURCE_TYPE,
-  createAuditContext,
-  writeAuditLog,
-} from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -34,9 +29,8 @@ const updateSkill = createSafeRootHandler(
     body,
     memberRole,
     params,
-    request,
+    recordAuditEvent,
     safeDb,
-    server,
     session,
     user,
   }) {
@@ -93,27 +87,18 @@ const updateSkill = createSafeRootHandler(
               .set({ enabled: body.enabled })
               .where(eq(agentSkills.id, params.skillId));
 
-            await writeAuditLog(
-              {
-                ...createAuditContext({
-                  organizationId: session.activeOrganizationId,
-                  userId: user.id,
-                  request,
-                  server,
-                }),
-                action: AUDIT_ACTION.UPDATE,
-                resourceType: AUDIT_RESOURCE_TYPE.AGENT_SKILL,
-                resourceId: params.skillId,
-                changes: {
-                  enabled: {
-                    old: existing.enabled,
-                    new: body.enabled,
-                  },
-                  slug: existing.slug,
+            await recordAuditEvent(innerTx, {
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.AGENT_SKILL,
+              resourceId: params.skillId,
+              changes: {
+                enabled: {
+                  old: existing.enabled,
+                  new: body.enabled,
                 },
               },
-              innerTx,
-            );
+              metadata: { slug: existing.slug },
+            });
           }),
       ),
     );

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { auditLogs, documentCounters, entities, fields } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
+import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -139,9 +140,17 @@ const createContext = ({
   entityId: SafeId<"entity">;
   targetParentId?: SafeId<"entity"> | null;
   deleteSource?: boolean;
-}): Parameters<typeof copyToWorkspace.handler>[0] =>
+}): Parameters<typeof copyToWorkspace.handler>[0] => {
+  const sourceRecorderBindings = {
+    organizationId,
+    workspaceId: sourceWorkspaceId,
+    userId,
+    request: new Request("https://example.test/v1/entities/copy-to-workspace"),
+    server: null,
+  };
+
   // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture
-  ({
+  return {
     workspaceId: sourceWorkspaceId,
     user: { id: userId },
     session: { activeOrganizationId: organizationId },
@@ -152,14 +161,24 @@ const createContext = ({
       targetParentId,
       deleteSource,
     },
-    request: new Request("https://example.test/v1/entities/copy-to-workspace"),
+    request: sourceRecorderBindings.request,
     route: "/v1/workspaces/:workspaceId/entities/copy-to-workspace",
     accessibleWorkspaces: [
       { id: sourceWorkspaceId, status: "active" },
       { id: targetWorkspaceId, status: "active" },
     ],
     safeDb,
-  }) as Parameters<typeof copyToWorkspace.handler>[0];
+    recordAuditEvent: createAuditRecorder(sourceRecorderBindings),
+    createAuditRecorder: (opts) =>
+      createAuditRecorder({
+        ...sourceRecorderBindings,
+        workspaceId:
+          opts && "workspaceId" in opts
+            ? (opts.workspaceId ?? null)
+            : sourceWorkspaceId,
+      }),
+  } as Parameters<typeof copyToWorkspace.handler>[0];
+};
 
 describe("copy-to-workspace", () => {
   test("copies document with matching property, skips non-matching property", async () => {

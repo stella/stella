@@ -25,6 +25,7 @@ import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics";
+import { createAuditRecorder } from "@/api/lib/audit-log";
 import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -672,7 +673,7 @@ export const resolveAccessibleWorkspaces = async (
 
 export const authMacro = new Elysia({ name: "authMacro" }).macro({
   validateAuth: {
-    async resolve({ status, request }) {
+    async resolve({ status, request, server }) {
       const { sessionResult, memberRoleResult } = await getSessionAndMemberRole(
         request.headers,
       );
@@ -731,6 +732,14 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
         .filter((w) => w.status !== "deleting")
         .map((w) => w.id);
 
+      const recorderBindings = {
+        organizationId: activeOrganizationId,
+        workspaceId: null,
+        userId,
+        request,
+        server,
+      };
+
       return {
         user: {
           id: toSafeId<"user">(user.id),
@@ -755,6 +764,29 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
         safeDb,
         memberRole,
         orgAIConfig,
+        /**
+         * Records audit rows in the supplied tx. Identity fields
+         * (org/user/IP/UA) are bound from the request context;
+         * workspaceId defaults to null for root handlers and is
+         * overridden by workspaceAccessMacro to the validated
+         * workspaceId for workspace handlers. Individual events
+         * can still override workspaceId for cross-workspace ops.
+         */
+        recordAuditEvent: createAuditRecorder(recorderBindings),
+        /**
+         * Builds a recorder with an overridden default workspaceId.
+         * Use when threading audit recording through helpers that
+         * don't receive the handler ctx (cross-workspace operations,
+         * shared copy/move utilities).
+         */
+        createAuditRecorder: (opts?: {
+          workspaceId?: SafeId<"workspace"> | null;
+        }) =>
+          createAuditRecorder({
+            ...recorderBindings,
+            workspaceId:
+              opts && "workspaceId" in opts ? (opts.workspaceId ?? null) : null,
+          }),
       };
     },
   },
@@ -782,6 +814,38 @@ export const permissionMacro = new Elysia({ name: "permissionMacro" }).macro({
   }),
 });
 
+const bindWorkspaceRecorder = (
+  ctx: {
+    session: { activeOrganizationId: SafeId<"organization"> };
+    user: { id: SafeId<"user"> };
+    request: Request;
+    server: Parameters<typeof createAuditRecorder>[0]["server"];
+  },
+  workspaceId: SafeId<"workspace">,
+) => {
+  const recorderBindings = {
+    organizationId: ctx.session.activeOrganizationId,
+    workspaceId,
+    userId: ctx.user.id,
+    request: ctx.request,
+    server: ctx.server,
+  };
+
+  return {
+    recordAuditEvent: createAuditRecorder(recorderBindings),
+    createAuditRecorder: (opts?: {
+      workspaceId?: SafeId<"workspace"> | null;
+    }) =>
+      createAuditRecorder({
+        ...recorderBindings,
+        workspaceId:
+          opts && "workspaceId" in opts
+            ? (opts.workspaceId ?? null)
+            : workspaceId,
+      }),
+  };
+};
+
 export const workspaceAccessMacro = new Elysia({
   name: "workspaceAccessMacro",
 })
@@ -801,8 +865,11 @@ export const workspaceAccessMacro = new Elysia({
         return ctx.status(404);
       }
 
+      const workspaceId = toSafeId<"workspace">(ctx.params.workspaceId);
+
       return {
-        workspaceId: toSafeId<"workspace">(ctx.params.workspaceId),
+        workspaceId,
+        ...bindWorkspaceRecorder(ctx, workspaceId),
       };
     },
   })
@@ -819,8 +886,11 @@ export const workspaceAccessMacro = new Elysia({
         return ctx.status(404);
       }
 
+      const workspaceId = toSafeId<"workspace">(ctx.params.workspaceId);
+
       return {
-        workspaceId: toSafeId<"workspace">(ctx.params.workspaceId),
+        workspaceId,
+        ...bindWorkspaceRecorder(ctx, workspaceId),
       };
     },
   });

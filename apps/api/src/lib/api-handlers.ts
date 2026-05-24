@@ -14,6 +14,7 @@ import { roles } from "@stll/permissions";
 import type { SafeDb, ScopedDb } from "@/api/db";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { captureRequestError } from "@/api/lib/analytics";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -71,6 +72,22 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
       role: keyof typeof roles;
     };
     orgAIConfig: OrgAIConfig | null;
+    /**
+     * Records an audit row in the supplied transaction. Identity
+     * fields (org/user/IP/UA) are bound from the request context;
+     * workspaceId defaults to ctx.workspaceId on workspace handlers
+     * or null on root handlers, and can be overridden per event.
+     */
+    recordAuditEvent: AuditRecorder;
+    /**
+     * Builds a recorder with an overridden default workspaceId.
+     * Use when threading audit recording through helpers that
+     * don't receive the handler ctx (cross-workspace operations,
+     * shared copy/move utilities).
+     */
+    createAuditRecorder: (opts?: {
+      workspaceId?: SafeId<"workspace"> | null;
+    }) => AuditRecorder;
   };
 
 type RootHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =

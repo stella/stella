@@ -15,13 +15,8 @@ import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { AuditContext } from "@/api/lib/audit-log";
-import {
-  AUDIT_ACTION,
-  AUDIT_RESOURCE_TYPE,
-  createAuditContext,
-  writeAuditLog,
-} from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -55,8 +50,10 @@ type CopyToWorkspaceHandlerProps = {
   sourceWorkspaceId: SafeId<"workspace">;
   targetWorkspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
-  sourceAuditContext: AuditContext;
-  targetAuditContext: AuditContext;
+  /** Recorder bound to sourceWorkspaceId — for delete events on move. */
+  recordSourceAuditEvent: AuditRecorder;
+  /** Recorder bound to targetWorkspaceId — for create events on copy. */
+  recordTargetAuditEvent: AuditRecorder;
   body: CopyToWorkspaceBody;
 };
 
@@ -231,20 +228,10 @@ const copyToWorkspaceHandler = async function* ({
   sourceWorkspaceId,
   targetWorkspaceId,
   userId,
-  sourceAuditContext,
-  targetAuditContext,
+  recordSourceAuditEvent,
+  recordTargetAuditEvent,
   body: { entityId: sourceEntityId, targetParentId, deleteSource },
 }: CopyToWorkspaceHandlerProps) {
-  // Prevent copy to same workspace
-  if (sourceWorkspaceId === targetWorkspaceId) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Cannot copy to the same workspace; use duplicate instead",
-      }),
-    );
-  }
-
   // Fetch source entity
   const source = yield* Result.await(
     safeDb((tx) =>
@@ -438,7 +425,7 @@ const copyToWorkspaceHandler = async function* ({
         targetWorkspaceId,
         targetParentId,
         userId,
-        auditContext: targetAuditContext,
+        recordAuditEvent: recordTargetAuditEvent,
         sourceEntityId,
         sourceEntities: remappedEntities,
         sourceWorkspaceId,
@@ -461,12 +448,9 @@ const copyToWorkspaceHandler = async function* ({
           .set({ lastActivityAt: new Date() })
           .where(eq(workspaces.id, sourceWorkspaceId));
 
-        await writeAuditLog(
+        await recordSourceAuditEvent(
+          tx,
           copyResult.copiedEntities.map((entity) => ({
-            organizationId: sourceAuditContext.organizationId,
-            workspaceId: sourceWorkspaceId,
-            userId: sourceAuditContext.userId,
-            metadata: sourceAuditContext.metadata,
             action: AUDIT_ACTION.DELETE,
             resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
             resourceId: entity.sourceId,
@@ -477,7 +461,6 @@ const copyToWorkspaceHandler = async function* ({
               },
             },
           })),
-          tx,
         );
       }
 
@@ -553,13 +536,22 @@ const copyToWorkspace = createSafeHandler(
     safeDb,
     session,
     user,
-    request,
-    server,
     body,
     workspaceId: sourceWorkspaceId,
     accessibleWorkspaces,
+    recordAuditEvent,
+    createAuditRecorder,
   }) {
     const { targetWorkspaceId } = body;
+
+    if (sourceWorkspaceId === targetWorkspaceId) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Cannot copy to the same workspace; use duplicate instead",
+        }),
+      );
+    }
 
     // Validate access to target workspace
     const targetWorkspace = accessibleWorkspaces.find(
@@ -574,27 +566,17 @@ const copyToWorkspace = createSafeHandler(
       );
     }
 
-    const organizationId = session.activeOrganizationId;
-
     return yield* copyToWorkspaceHandler({
       safeDb,
-      organizationId,
+      organizationId: session.activeOrganizationId,
       sourceWorkspaceId,
       targetWorkspaceId,
       userId: user.id,
-      sourceAuditContext: createAuditContext({
-        organizationId,
-        workspaceId: sourceWorkspaceId,
-        userId: user.id,
-        request,
-        server,
-      }),
-      targetAuditContext: createAuditContext({
-        organizationId,
+      // ctx.workspaceId === sourceWorkspaceId (validated path param),
+      // so the default-bound recorder writes to the source workspace.
+      recordSourceAuditEvent: recordAuditEvent,
+      recordTargetAuditEvent: createAuditRecorder({
         workspaceId: targetWorkspaceId,
-        userId: user.id,
-        request,
-        server,
       }),
       body,
     });
