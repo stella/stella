@@ -49,6 +49,11 @@ export default {
             // - ChainExpression: `safeDb(...)?.foo` produces a Chain wrapper
             // - ParenthesizedExpression: `(safeDb(...))`
             // - TSNonNullExpression: `safeDb(...)!`
+            // - UnaryExpression(void): `void safeDb(...)` — the project
+            //   sets `no-void: { allowAsStatement: true }`, so without
+            //   this `void` becomes a one-token bypass of the rule
+            // - TSAsExpression / TSTypeAssertion: `safeDb(...) as unknown`
+            //   launders the Result type away but still drops the value
             // If the outermost wrapper sits inside an ExpressionStatement,
             // the call result is discarded.
             let current = node;
@@ -57,7 +62,11 @@ export default {
               (current.parent.type === "AwaitExpression" ||
                 current.parent.type === "ChainExpression" ||
                 current.parent.type === "ParenthesizedExpression" ||
-                current.parent.type === "TSNonNullExpression")
+                current.parent.type === "TSNonNullExpression" ||
+                current.parent.type === "TSAsExpression" ||
+                current.parent.type === "TSTypeAssertion" ||
+                (current.parent.type === "UnaryExpression" &&
+                  current.parent.operator === "void"))
             ) {
               current = current.parent;
             }
