@@ -63,6 +63,7 @@ import type {
   ImageAttrs,
   ParagraphAttrs as PMParagraphAttrs,
 } from "../prosemirror/schema/nodes";
+import { assertValidProseMirrorDocument } from "../prosemirror/validation";
 import type {
   ColorValue,
   Theme,
@@ -1825,6 +1826,11 @@ export function toFlowBlocks(
   doc: PMNode,
   options: ToFlowBlocksOptions = {},
 ): FlowBlock[] {
+  assertValidProseMirrorDocument(
+    doc,
+    "Cannot layout invalid ProseMirror document",
+  );
+
   resetBlockIdCounter();
 
   const opts: ToFlowBlocksOptions = {

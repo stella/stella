@@ -499,6 +499,39 @@ describe("toProseDoc", () => {
     expect(field?.attrs.fieldKind).toBe("simple");
   });
 
+  test("converts inline content controls without synthetic marks", () => {
+    const document: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  type: "inlineSdt",
+                  properties: { sdtType: "plainText" },
+                  content: [
+                    {
+                      type: "run",
+                      content: [{ type: "text", text: "Controlled" }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const doc = toProseDoc(document);
+    const sdt = doc.firstChild?.firstChild;
+
+    expect(sdt?.type.name).toBe("sdt");
+    expect(sdt?.marks).toEqual([]);
+    expect(sdt?.firstChild?.text).toBe("Controlled");
+  });
+
   test("anchors point comments to nearby text for display", () => {
     const document: Document = {
       package: {
@@ -564,7 +597,7 @@ describe("toProseDoc", () => {
                 },
                 {
                   type: "insertion",
-                  info: { id: "rev-1", author: "User" },
+                  info: { id: 1, author: "User" },
                   content: [
                     {
                       type: "run",

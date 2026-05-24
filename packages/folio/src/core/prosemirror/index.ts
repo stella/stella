@@ -31,6 +31,17 @@ export {
 } from "./conversion";
 export type { ToProseDocOptions } from "./conversion";
 
+// Validation
+export {
+  assertValidProseMirrorDocument,
+  formatProseMirrorDocumentIssues,
+  validateProseMirrorDocument,
+} from "./validation";
+export type {
+  ProseMirrorDocumentValidationIssue,
+  ValidateProseMirrorDocumentResult,
+} from "./validation";
+
 // Styles
 export { StyleResolver, createStyleResolver } from "./styles";
 export type { ResolvedParagraphStyle } from "./styles";

@@ -87,11 +87,17 @@ import type {
   TableRowAttrs,
   TableCellAttrs,
 } from "../schema/nodes";
+import { assertValidProseMirrorDocument } from "../validation";
 
 /**
  * Convert a ProseMirror document to our Document type
  */
 export function fromProseDoc(pmDoc: PMNode, baseDocument?: Document): Document {
+  assertValidProseMirrorDocument(
+    pmDoc,
+    "Cannot convert invalid ProseMirror document to DOCX model",
+  );
+
   const blocks = extractBlocks(pmDoc);
 
   // Preserve section properties (margins, headers, footers) from base document

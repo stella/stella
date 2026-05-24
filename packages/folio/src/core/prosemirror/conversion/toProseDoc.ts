@@ -54,6 +54,7 @@ import type {
 } from "../schema/nodes";
 import { createStyleResolver } from "../styles";
 import type { StyleResolver } from "../styles";
+import { assertValidProseMirrorDocument } from "../validation";
 
 /**
  * Options for document conversion
@@ -110,7 +111,12 @@ export function toProseDoc(
     nodes.push(schema.node("paragraph", {}, []));
   }
 
-  return schema.node("doc", null, nodes);
+  const pmDoc = schema.node("doc", null, nodes);
+  assertValidProseMirrorDocument(
+    pmDoc,
+    "Document conversion produced an invalid ProseMirror document",
+  );
+  return pmDoc;
 }
 
 /**
@@ -2319,7 +2325,12 @@ export function headerFooterToProseDoc(
     nodes.push(schema.node("paragraph", {}, []));
   }
 
-  return schema.node("doc", null, nodes);
+  const pmDoc = schema.node("doc", null, nodes);
+  assertValidProseMirrorDocument(
+    pmDoc,
+    "Header/footer conversion produced an invalid ProseMirror document",
+  );
+  return pmDoc;
 }
 
 export function footnoteToProseDoc(

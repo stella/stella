@@ -60,14 +60,18 @@ describe("toFlowBlocks paragraph formatting", () => {
     expect(() => toFlowBlocks(mathDoc)).toThrow("math.attrs.ommlXml");
   });
 
-  test("rejects malformed text box attrs at the layout boundary", () => {
-    const doc = schema.node("doc", null, [
+  test("rejects malformed shape and text box attrs at the layout boundary", () => {
+    const shapeDoc = schema.node("doc", null, [
+      schema.node("paragraph", null, [schema.node("shape", { width: "wide" })]),
+    ]);
+    const textBoxDoc = schema.node("doc", null, [
       schema.node("textBox", { width: "wide" }, [
         schema.node("paragraph", null, [schema.text("Invalid text box")]),
       ]),
     ]);
 
-    expect(() => toFlowBlocks(doc)).toThrow("textBox.attrs.width");
+    expect(() => toFlowBlocks(shapeDoc)).toThrow("shape.attrs.width");
+    expect(() => toFlowBlocks(textBoxDoc)).toThrow("textBox.attrs.width");
   });
 
   test("does not convert absent paragraph spacing defaults to zero line height", () => {
