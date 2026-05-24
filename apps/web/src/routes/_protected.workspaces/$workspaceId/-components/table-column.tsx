@@ -152,7 +152,15 @@ const PropertyCell = ({
             propertyId={property.id}
             workspaceId={property.workspaceId}
           />
-          <CellResult field={field} property={property} />
+          <EditableField
+            content={fieldContent}
+            entityId={entity.entityId}
+            entityKind={entity.kind}
+            property={property}
+            propertyId={property.id}
+            showDateIcon={false}
+            workspaceId={property.workspaceId}
+          />
         </WithOpenEntityButton>
       );
     }
@@ -166,7 +174,15 @@ const PropertyCell = ({
         propertyId={property.id}
         workspaceId={property.workspaceId}
       />
-      <CellResult field={field} property={property} />
+      <EditableField
+        content={fieldContent}
+        entityId={entity.entityId}
+        entityKind={entity.kind}
+        property={property}
+        propertyId={property.id}
+        showDateIcon={false}
+        workspaceId={property.workspaceId}
+      />
     </>
   );
 };

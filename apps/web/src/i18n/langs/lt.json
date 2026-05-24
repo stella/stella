@@ -2213,6 +2213,10 @@
         "verified": "Patvirtinta",
         "verifiedDescription": "Patvirtinta rankiniu būdu."
       },
+      "lock": {
+        "locked": "Užrakinta",
+        "unlock": "Atrakinti langelį"
+      },
       "reorderReadOnly": "Lentelės eilutės laikosi dabartinio rūšiavimo",
       "tightContent": "Kompaktiškai",
       "wrapContent": "Laužyti tekstą"

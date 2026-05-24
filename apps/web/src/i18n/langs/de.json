@@ -2213,6 +2213,10 @@
         "verified": "Verifiziert",
         "verifiedDescription": "Manuell bestätigt."
       },
+      "lock": {
+        "locked": "Gesperrt",
+        "unlock": "Zelle entsperren"
+      },
       "reorderReadOnly": "Tabellenzeilen folgen der aktuellen Sortierung",
       "tightContent": "Kompakt",
       "wrapContent": "Text umbrechen"

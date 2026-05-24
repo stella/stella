@@ -6,6 +6,7 @@ import { cellMetadata, entities, properties } from "@/api/db/schema";
 import type { CellMetadata } from "@/api/db/schema-validators";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { acquireCellLock } from "@/api/lib/cell-lock";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -22,6 +23,7 @@ const config = {
     entityId: tSafeId("entity"),
     baseManualFlags: t.Optional(manualFlagsSchema),
     manualFlags: manualFlagsSchema,
+    locked: t.Optional(t.Boolean()),
   }),
 } satisfies HandlerConfig;
 
@@ -55,6 +57,34 @@ const mergeManualFlags = ({
     ...currentManualFlags.filter((flag) => !removedFlagSet.has(flag)),
     ...addedFlags,
   ]);
+};
+
+type ResolveLockProvenanceArgs = {
+  nextLocked: boolean;
+  wasLocked: boolean;
+  existingMetadata: CellMetadata | undefined;
+  userId: string;
+  addedAt: string;
+};
+
+const resolveLockProvenance = ({
+  nextLocked,
+  wasLocked,
+  existingMetadata,
+  userId,
+  addedAt,
+}: ResolveLockProvenanceArgs): CellMetadata["lockProvenance"] => {
+  if (!nextLocked) {
+    return undefined;
+  }
+  if (wasLocked) {
+    return existingMetadata?.lockProvenance;
+  }
+  return {
+    lockedBy: userId,
+    lockedAt: addedAt,
+    reason: "explicit",
+  };
 };
 
 const updateCellMetadata = createSafeHandler(
@@ -102,6 +132,12 @@ const updateCellMetadata = createSafeHandler(
         }
 
         const entityVersionId = entity.currentVersionId;
+        await acquireCellLock({
+          tx,
+          entityVersionId,
+          propertyId: property.id,
+        });
+
         const existingMetadataRows = await tx
           .select({ metadata: cellMetadata.metadata })
           .from(cellMetadata)
@@ -128,7 +164,10 @@ const updateCellMetadata = createSafeHandler(
           requestedManualFlags,
         });
 
-        if (manualFlags.length === 0) {
+        const wasLocked = existingMetadata?.locked === true;
+        const nextLocked = body.locked ?? wasLocked;
+
+        if (manualFlags.length === 0 && !nextLocked) {
           await tx
             .delete(cellMetadata)
             .where(
@@ -141,7 +180,15 @@ const updateCellMetadata = createSafeHandler(
         }
 
         const existingProvenance = existingMetadata?.flagProvenance ?? {};
-        const addedAt = new Date().toISOString();
+        const now = new Date();
+        const addedAt = now.toISOString();
+        const lockProvenance = resolveLockProvenance({
+          nextLocked,
+          wasLocked,
+          existingMetadata,
+          userId: user.id,
+          addedAt,
+        });
         const metadata: CellMetadata = {
           version: 1,
           manualFlags,
@@ -154,6 +201,8 @@ const updateCellMetadata = createSafeHandler(
               },
             ]),
           ),
+          ...(nextLocked && { locked: true }),
+          ...(lockProvenance && { lockProvenance }),
         };
 
         await tx

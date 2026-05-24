@@ -2213,6 +2213,10 @@
         "verified": "Vérifié",
         "verifiedDescription": "Confirmé manuellement."
       },
+      "lock": {
+        "locked": "Verrouillée",
+        "unlock": "Déverrouiller la cellule"
+      },
       "reorderReadOnly": "Les lignes du tableau suivent le tri actuel",
       "tightContent": "Compact",
       "wrapContent": "Retour à la ligne"

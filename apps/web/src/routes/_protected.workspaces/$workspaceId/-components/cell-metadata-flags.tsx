@@ -6,6 +6,8 @@ import {
   CheckIcon,
   CheckCircle2Icon,
   HelpCircleIcon,
+  LockIcon,
+  LockOpenIcon,
   MessageSquareWarningIcon,
   ShieldAlertIcon,
   StarIcon,
@@ -101,6 +103,8 @@ type FlagProvenance = NonNullable<
   WorkspaceCellMetadata["flagProvenance"]
 >[string];
 
+type LockProvenance = NonNullable<WorkspaceCellMetadata["lockProvenance"]>;
+
 const useFlagLabel = () => {
   const t = useTranslations();
   return (flagId: CellFlagId) => t(FLAG_LABEL_KEYS[flagId]);
@@ -115,6 +119,7 @@ const haveSameFlags = (a: string[], b: string[]) =>
 type UpdateCellMetadataVariables = {
   baseManualFlags: string[];
   manualFlags: string[];
+  locked?: boolean;
 };
 
 type CellMetadataFlagsProps = {
@@ -131,19 +136,24 @@ export const CellMetadataFlags = ({
   metadata,
 }: CellMetadataFlagsProps) => {
   const getFlagLabel = useFlagLabel();
-  const { decorativeFlags, hasVerifiedFlag, toggleFlag } = useCellMetadataFlags(
-    {
-      entityId,
-      metadata,
-      propertyId,
-      workspaceId,
-    },
-  );
+  const {
+    decorativeFlags,
+    hasVerifiedFlag,
+    isLocked,
+    lockProvenance,
+    toggleFlag,
+  } = useCellMetadataFlags({
+    entityId,
+    metadata,
+    propertyId,
+    workspaceId,
+  });
   const cornerFlag = decorativeFlags.at(0);
   const verifiedProvenance = metadata?.flagProvenance?.[VERIFIED_FLAG_ID];
 
   return (
     <>
+      {isLocked && <CellLockBadge provenance={lockProvenance} />}
       {cornerFlag ? (
         <CellCornerFlag
           flags={decorativeFlags}
@@ -246,6 +256,59 @@ const CellCornerFlag = ({ flags, metadata, onDrop }: CellCornerFlagProps) => {
   );
 };
 
+type CellLockBadgeProps = {
+  provenance: LockProvenance | undefined;
+};
+
+const CellLockBadge = ({ provenance }: CellLockBadgeProps) => {
+  const t = useTranslations();
+  const locale = useLocale();
+  const displayName = provenance?.lockedByName ?? null;
+  const relativeTime = provenance
+    ? formatRelativeTime(provenance.lockedAt, locale)
+    : null;
+
+  const tooltipContent = provenance ? (
+    <span className="flex min-w-0 items-center gap-2">
+      <UserAvatar
+        className="size-5 shrink-0 text-[8px]"
+        image={provenance.lockedByImage}
+        name={displayName}
+      />
+      <span className="min-w-0">
+        <span className="block truncate font-medium">
+          {t("workspaces.table.lock.locked")}
+        </span>
+        <span className="text-muted-foreground block truncate text-xs">
+          {displayName ? `${displayName} · ${relativeTime}` : relativeTime}
+        </span>
+      </span>
+    </span>
+  ) : (
+    <span>{t("workspaces.table.lock.locked")}</span>
+  );
+
+  return (
+    <Tooltip
+      className="max-w-72 text-wrap"
+      content={tooltipContent}
+      render={
+        <button
+          aria-label={t("workspaces.table.lock.locked")}
+          className="bg-background/55 text-foreground-ghost focus-visible:ring-ring absolute start-1 top-1 z-20 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px] outline-none focus-visible:ring-1"
+          data-row-expansion-ignore
+          onClick={(event) => {
+            event.stopPropagation();
+          }}
+          type="button"
+        >
+          <LockIcon className="size-2.5" strokeWidth={2.5} />
+        </button>
+      }
+    />
+  );
+};
+
 type FlagProvenanceTooltipProps = {
   flag: CellFlagDefinition;
   metadata: FlagProvenance | undefined;
@@ -291,12 +354,13 @@ export const CellMetadataMenuSection = ({
   metadata,
 }: CellMetadataFlagsProps) => {
   const t = useTranslations();
-  const { activeFlags, clearFlags, toggleFlag } = useCellMetadataFlags({
-    entityId,
-    metadata,
-    propertyId,
-    workspaceId,
-  });
+  const { activeFlags, clearFlags, isLocked, setLocked, toggleFlag } =
+    useCellMetadataFlags({
+      entityId,
+      metadata,
+      propertyId,
+      workspaceId,
+    });
 
   return (
     <>
@@ -326,6 +390,20 @@ export const CellMetadataMenuSection = ({
           );
         })}
       </MenuGroup>
+      {isLocked && (
+        <>
+          <MenuSeparator />
+          <MenuItem
+            className="min-h-7 py-0.5 text-sm"
+            onClick={() => setLocked(false)}
+          >
+            <LockOpenIcon className="size-3.5 shrink-0 opacity-75" />
+            <span className="min-w-0 flex-1 truncate">
+              {t("workspaces.table.lock.unlock")}
+            </span>
+          </MenuItem>
+        </>
+      )}
       {activeFlags.length > 0 && (
         <>
           <MenuSeparator />
@@ -391,6 +469,7 @@ const useCellMetadataFlags = ({
     mutationFn: async ({
       baseManualFlags,
       manualFlags,
+      locked,
     }: UpdateCellMetadataVariables) => {
       const response = await api
         .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
@@ -400,6 +479,7 @@ const useCellMetadataFlags = ({
           propertyId: toSafeId<"property">(propertyId),
           baseManualFlags,
           manualFlags,
+          ...(locked !== undefined && { locked }),
         });
 
       if (response.error) {
@@ -445,11 +525,26 @@ const useCellMetadataFlags = ({
     updateMetadata.mutate({ baseManualFlags: current, manualFlags: [] });
   };
 
+  const setLocked = (locked: boolean) => {
+    const current = pendingManualFlagsRef.current ?? metadataManualFlags;
+    updateMetadata.mutate({
+      baseManualFlags: current,
+      manualFlags: current,
+      locked,
+    });
+  };
+
+  const isLocked = metadata?.locked === true;
+  const lockProvenance = metadata?.lockProvenance;
+
   return {
     activeFlags,
     clearFlags,
     decorativeFlags,
     hasVerifiedFlag,
+    isLocked,
+    lockProvenance,
+    setLocked,
     toggleFlag,
   };
 };

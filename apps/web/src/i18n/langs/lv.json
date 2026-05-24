@@ -2213,6 +2213,10 @@
         "verified": "Pārbaudīts",
         "verifiedDescription": "Manuāli apstiprināts."
       },
+      "lock": {
+        "locked": "Bloķēta",
+        "unlock": "Atbloķēt šūnu"
+      },
       "reorderReadOnly": "Tabulas rindas seko pašreizējai kārtošanai",
       "tightContent": "Kompakti",
       "wrapContent": "Aplauzt tekstu"

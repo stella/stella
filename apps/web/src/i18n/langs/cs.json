@@ -2213,6 +2213,10 @@
         "verified": "Ověřeno",
         "verifiedDescription": "Ručně potvrzeno."
       },
+      "lock": {
+        "locked": "Zamčeno",
+        "unlock": "Odemknout buňku"
+      },
       "reorderReadOnly": "Řádky tabulky se řídí aktuálním řazením",
       "tightContent": "Těsně",
       "wrapContent": "Obtékat text"

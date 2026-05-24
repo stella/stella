@@ -2213,6 +2213,10 @@
         "verified": "Verificado",
         "verifiedDescription": "Confirmado manualmente."
       },
+      "lock": {
+        "locked": "Bloqueada",
+        "unlock": "Desbloquear celda"
+      },
       "reorderReadOnly": "Las filas de la tabla siguen el orden actual",
       "tightContent": "Compacto",
       "wrapContent": "Ajustar texto"

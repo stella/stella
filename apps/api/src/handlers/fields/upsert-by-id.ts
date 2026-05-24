@@ -2,10 +2,14 @@ import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { entities, fields } from "@/api/db/schema";
+import type { Transaction } from "@/api/db";
+import { cellMetadata, entities, fields } from "@/api/db/schema";
+import type { CellMetadata } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
+import { acquireCellLock } from "@/api/lib/cell-lock";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getSearchProvider } from "@/api/lib/search/provider";
@@ -44,13 +48,91 @@ const config = {
         value: t.Integer(),
         currency: t.Nullable(t.String({ minLength: 3, maxLength: 3 })),
       }),
+      t.Object({
+        version: t.Literal(1),
+        type: t.Literal("clip"),
+        url: t.String({ maxLength: 2048 }),
+        snippet: t.Optional(t.String({ maxLength: 10_000 })),
+        citation: t.Optional(t.String({ maxLength: 1000 })),
+        jurisdiction: t.Optional(t.String({ maxLength: 128 })),
+        sourceType: t.Optional(t.String({ maxLength: 64 })),
+      }),
     ]),
   }),
 } satisfies HandlerConfig;
 
+type LockCellArgs = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  entityVersionId: SafeId<"entityVersion">;
+  propertyId: SafeId<"property">;
+  userId: string;
+};
+
+const lockCellOnManualEdit = async ({
+  tx,
+  workspaceId,
+  entityVersionId,
+  propertyId,
+  userId,
+}: LockCellArgs) => {
+  await acquireCellLock({ tx, entityVersionId, propertyId });
+
+  const existingRows = await tx
+    .select({ metadata: cellMetadata.metadata })
+    .from(cellMetadata)
+    .where(
+      and(
+        eq(cellMetadata.entityVersionId, entityVersionId),
+        eq(cellMetadata.propertyId, propertyId),
+      ),
+    )
+    .limit(1);
+  const existing = existingRows.at(0)?.metadata;
+
+  // Preserve an explicit lock so we don't overwrite its provenance/reason.
+  const lockProvenance =
+    existing?.locked === true
+      ? existing.lockProvenance
+      : {
+          lockedBy: userId,
+          lockedAt: new Date().toISOString(),
+          reason: "manual-edit" as const,
+        };
+
+  const metadata: CellMetadata = {
+    version: 1,
+    manualFlags: existing?.manualFlags ?? [],
+    ...(existing?.flagProvenance && {
+      flagProvenance: existing.flagProvenance,
+    }),
+    locked: true,
+    ...(lockProvenance && { lockProvenance }),
+  };
+
+  await tx
+    .insert(cellMetadata)
+    .values({
+      workspaceId,
+      entityVersionId,
+      propertyId,
+      metadata,
+      createdBy: userId,
+      updatedBy: userId,
+    })
+    .onConflictDoUpdate({
+      target: [cellMetadata.entityVersionId, cellMetadata.propertyId],
+      set: {
+        metadata,
+        updatedBy: userId,
+        updatedAt: new Date(),
+      },
+    });
+};
+
 const upsertField = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, body }) {
+  async function* ({ safeDb, workspaceId, body, user }) {
     const property = yield* Result.await(
       safeDb((tx) =>
         tx.query.properties.findFirst({
@@ -81,38 +163,6 @@ const upsertField = createSafeHandler(
       );
     }
 
-    const entity = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.entities.findFirst({
-          columns: { id: true, currentVersionId: true, readOnly: true },
-          where: {
-            id: { eq: body.entityId },
-            workspaceId: { eq: workspaceId },
-          },
-        }),
-      ),
-    );
-
-    if (!entity) {
-      return Result.err(
-        new HandlerError({
-          status: 404,
-          message: "Entity not found in workspace",
-        }),
-      );
-    }
-    if (entity.readOnly) {
-      return Result.err(
-        new HandlerError({ status: 409, message: "Entity is read-only" }),
-      );
-    }
-
-    if (!entity.currentVersionId) {
-      panic("Entity has no current version");
-    }
-
-    const entityVersionId = entity.currentVersionId;
-
     const isEmpty =
       body.content.value === null ||
       body.content.value === "" ||
@@ -122,29 +172,48 @@ const upsertField = createSafeHandler(
       getSearchProvider().indexEntity(body.entityId).catch(captureError);
     };
 
-    if (isEmpty) {
-      yield* Result.await(
-        safeDb(async (tx) => {
-          await tx
-            .delete(fields)
-            .where(
-              and(
-                eq(fields.propertyId, property.id),
-                eq(fields.entityVersionId, entityVersionId),
-              ),
-            );
-          await tx
-            .update(entities)
-            .set({ updatedAt: new Date() })
-            .where(eq(entities.id, body.entityId));
-        }),
-      );
-      reindex();
-      return Result.ok(undefined);
-    }
-
-    yield* Result.await(
+    const writeResult = yield* Result.await(
       safeDb(async (tx) => {
+        // Lock acquisition order (entity row → advisory cell lock)
+        // must match update-cell-metadata.ts. Reversing here would
+        // deadlock against a concurrent manual-flag update on the
+        // same cell.
+        const entityRows = await tx
+          .select({
+            id: entities.id,
+            currentVersionId: entities.currentVersionId,
+            readOnly: entities.readOnly,
+          })
+          .from(entities)
+          .where(
+            and(
+              eq(entities.id, body.entityId),
+              eq(entities.workspaceId, workspaceId),
+            ),
+          )
+          .for("update");
+        const entity = entityRows.at(0);
+
+        if (!entity) {
+          return { status: "entity-not-found" as const };
+        }
+        if (entity.readOnly) {
+          return { status: "entity-read-only" as const };
+        }
+        if (!entity.currentVersionId) {
+          panic("Entity has no current version");
+        }
+
+        const entityVersionId = entity.currentVersionId;
+
+        await lockCellOnManualEdit({
+          tx,
+          workspaceId,
+          entityVersionId,
+          propertyId: property.id,
+          userId: user.id,
+        });
+
         await tx
           .delete(fields)
           .where(
@@ -154,19 +223,38 @@ const upsertField = createSafeHandler(
             ),
           );
 
-        await tx.insert(fields).values({
-          workspaceId,
-          propertyId: property.id,
-          entityVersionId,
-          content: body.content,
-        });
+        if (!isEmpty) {
+          await tx.insert(fields).values({
+            workspaceId,
+            propertyId: property.id,
+            entityVersionId,
+            content: body.content,
+          });
+        }
 
         await tx
           .update(entities)
           .set({ updatedAt: new Date() })
           .where(eq(entities.id, body.entityId));
+
+        return { status: "ok" as const };
       }),
     );
+
+    if (writeResult.status === "entity-not-found") {
+      return Result.err(
+        new HandlerError({
+          status: 404,
+          message: "Entity not found in workspace",
+        }),
+      );
+    }
+    if (writeResult.status === "entity-read-only") {
+      return Result.err(
+        new HandlerError({ status: 409, message: "Entity is read-only" }),
+      );
+    }
+
     reindex();
     return Result.ok(undefined);
   },
