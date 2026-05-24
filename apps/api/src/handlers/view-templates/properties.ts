@@ -147,12 +147,9 @@ export const resolveTemplateProperties = async ({
       continue;
     }
 
-    const existingByShape = existingProperties.find(
-      (property) =>
-        normalizePropertyName(property.name) ===
-          normalizePropertyName(templateProperty.name) &&
-        property.content.type === templateProperty.content.type &&
-        property.tool.type === templateProperty.tool.type,
+    const existingByShape = findUniquePropertyByShape(
+      existingProperties,
+      templateProperty,
     );
     if (existingByShape) {
       propertyIdBySourceId.set(templateProperty.sourceId, existingByShape.id);
@@ -301,6 +298,26 @@ const readPropertyIds = async (
 
 const normalizePropertyName = (name: string): string =>
   name.trim().toLocaleLowerCase();
+
+const findUniquePropertyByShape = (
+  existingProperties: readonly {
+    id: string;
+    name: string;
+    content: { type: string };
+    tool: { type: string };
+  }[],
+  templateProperty: ViewTemplateProperty,
+) => {
+  const matches = existingProperties.filter(
+    (property) =>
+      normalizePropertyName(property.name) ===
+        normalizePropertyName(templateProperty.name) &&
+      property.content.type === templateProperty.content.type &&
+      property.tool.type === templateProperty.tool.type,
+  );
+
+  return matches.length === 1 ? matches[0] : undefined;
+};
 
 const collectVisibleTemplatePropertyIds = ({
   layout,
