@@ -39,7 +39,10 @@ import type {
 import { cn } from "@stll/ui/lib/utils";
 
 import { PromptBar } from "@/components/ai-suggestions/host";
-import { useReviewStore } from "@/components/ai-suggestions/review-store";
+import {
+  REVIEW_UNSPECIFIED_AREA,
+  useReviewStore,
+} from "@/components/ai-suggestions/review-store";
 import type {
   ReviewSuggestion,
   ReviewSuggestionPreview,
@@ -231,12 +234,18 @@ const prepareOperations = (
   return prepared;
 };
 
+// Defensive fallbacks: persisted tool calls predate the schema
+// requiring `severity`/`area`, so old stored approvals can still
+// reach this code with the fields missing. Type narrowing says
+// they're always present; the runtime check is for legacy data.
+/* oxlint-disable typescript/no-unnecessary-condition */
 const inputOperationSeverity = (
   operation: ToolInputOperation,
-): FolioAIEditSeverity | "unspecified" => operation.severity;
+): FolioAIEditSeverity | "unspecified" => operation.severity ?? "unspecified";
 
 const inputOperationArea = (operation: ToolInputOperation): string =>
-  operation.area;
+  operation.area ?? REVIEW_UNSPECIFIED_AREA;
+/* oxlint-enable typescript/no-unnecessary-condition */
 
 type SnapshotBlock = {
   id: string;

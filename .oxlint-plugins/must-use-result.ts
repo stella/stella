@@ -44,7 +44,24 @@ export default {
             if (name === null || !RESULT_FUNCTIONS.has(name)) {
               return;
             }
-            if (node.parent?.type !== "ExpressionStatement") {
+            // Walk up through wrappers that don't consume the Result:
+            // - AwaitExpression: `await safeDb(...)` still drops the Result
+            // - ChainExpression: `safeDb(...)?.foo` produces a Chain wrapper
+            // - ParenthesizedExpression: `(safeDb(...))`
+            // - TSNonNullExpression: `safeDb(...)!`
+            // If the outermost wrapper sits inside an ExpressionStatement,
+            // the call result is discarded.
+            let current = node;
+            while (
+              current.parent &&
+              (current.parent.type === "AwaitExpression" ||
+                current.parent.type === "ChainExpression" ||
+                current.parent.type === "ParenthesizedExpression" ||
+                current.parent.type === "TSNonNullExpression")
+            ) {
+              current = current.parent;
+            }
+            if (current.parent?.type !== "ExpressionStatement") {
               return;
             }
             context.report({
