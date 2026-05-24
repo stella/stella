@@ -28,6 +28,13 @@ void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: processExtractionMock,
 }));
 
+const broadcastQueryInvalidationToTargetWorkspaceMock = mock(() => undefined);
+void mock.module("@/api/lib/invalidate-query-macro", () => ({
+  broadcastQueryInvalidationToOrganization: mock(() => undefined),
+  broadcastQueryInvalidationToTargetWorkspace:
+    broadcastQueryInvalidationToTargetWorkspaceMock,
+}));
+
 const syncWorkspaceSearchActivityMock = mock(async () => {});
 void mock.module("@/api/lib/search/index-global", () => ({
   rebuildSupplementalSearchIndex: mock(async () => undefined),
