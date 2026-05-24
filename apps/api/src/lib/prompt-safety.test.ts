@@ -109,7 +109,7 @@ describe("sanitizeForPrompt", () => {
       "<<<UNTRUSTED>>>\n".length,
       out.length - "\n<<<END_UNTRUSTED>>>".length,
     );
-    expect(inner).toBe(`a${"…[truncated]"}`);
+    expect(inner).toBe("a…[truncated]");
     expect(inner).not.toContain("\ud83d");
   });
 

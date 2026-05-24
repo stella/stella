@@ -62,17 +62,39 @@ const ROLE_MARKERS: readonly RegExp[] = [
 const INVISIBLE_OVERRIDES =
   /[\u{200b}-\u{200f}\u{202a}-\u{202e}\u{2066}-\u{2069}\u{feff}]/gu;
 
-const STRIPPABLE_CONTROL_CHARS = new RegExp(
-  "[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]",
-  "gu",
-);
+const isStrippableControlCodePoint = (codePoint: number): boolean =>
+  codePoint <= 8 ||
+  codePoint === 11 ||
+  codePoint === 12 ||
+  (codePoint >= 14 && codePoint <= 31) ||
+  codePoint === 127;
 
-const stripControlChars = (input: string): string =>
-  input.replace(STRIPPABLE_CONTROL_CHARS, "");
+const stripControlChars = (input: string): string => {
+  const chunks: string[] = [];
+  let chunkStart = 0;
+
+  for (let index = 0; index < input.length; index += 1) {
+    const codePoint = input.codePointAt(index);
+    if (codePoint === undefined || !isStrippableControlCodePoint(codePoint)) {
+      continue;
+    }
+
+    if (chunkStart < index) {
+      chunks.push(input.slice(chunkStart, index));
+    }
+    chunkStart = index + 1;
+  }
+
+  if (chunks.length === 0) {
+    return input;
+  }
+  if (chunkStart < input.length) {
+    chunks.push(input.slice(chunkStart));
+  }
+  return chunks.join("");
+};
 
 const TRUNCATION_SUFFIX = "…[truncated]";
-const HIGH_SURROGATE_START = 0xd800;
-const HIGH_SURROGATE_END = 0xdbff;
 
 const truncateAtUtf16Boundary = (input: string, maxLength: number): string => {
   if (maxLength <= 0) {
@@ -80,11 +102,11 @@ const truncateAtUtf16Boundary = (input: string, maxLength: number): string => {
   }
 
   const end = Math.min(maxLength, input.length);
-  const lastCodeUnit = input.charCodeAt(end - 1);
+  const lastCodeUnit = input.slice(end - 1, end);
   if (
     end < input.length &&
-    lastCodeUnit >= HIGH_SURROGATE_START &&
-    lastCodeUnit <= HIGH_SURROGATE_END
+    lastCodeUnit >= "\ud800" &&
+    lastCodeUnit <= "\udbff"
   ) {
     return input.slice(0, end - 1);
   }
