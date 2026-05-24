@@ -34,6 +34,7 @@ const buildAttachEvents = (params: {
   invoiceId: SafeId<"invoice">;
   attachedTimeEntries: { id: SafeId<"timeEntry"> }[];
   attachedExpenses: { id: SafeId<"expense"> }[];
+  oldTotalAmount: number;
   totalAmount: number;
 }): AuditEvent[] => {
   const events: AuditEvent[] = [
@@ -42,7 +43,7 @@ const buildAttachEvents = (params: {
       resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
       resourceId: params.invoiceId,
       changes: {
-        totalAmount: { old: null, new: params.totalAmount },
+        totalAmount: { old: params.oldTotalAmount, new: params.totalAmount },
         attachedTimeEntries: {
           old: null,
           new: params.attachedTimeEntries.map((row) => row.id),
@@ -237,7 +238,7 @@ const addEntries = createSafeHandler(
             workspaceId: { eq: workspaceId },
             status: { eq: INVOICE_STATUS.DRAFT },
           },
-          columns: { id: true },
+          columns: { id: true, totalAmount: true },
         });
         if (!invoiceCheck) {
           return { ok: false as const };
@@ -349,6 +350,7 @@ const addEntries = createSafeHandler(
             invoiceId: params.invoiceId,
             attachedTimeEntries,
             attachedExpenses,
+            oldTotalAmount: invoiceCheck.totalAmount,
             totalAmount,
           }),
         );

@@ -34,6 +34,7 @@ const buildDetachEvents = (params: {
   invoiceId: SafeId<"invoice">;
   detachedTimeEntries: { id: SafeId<"timeEntry"> }[];
   detachedExpenses: { id: SafeId<"expense"> }[];
+  oldTotalAmount: number;
   totalAmount: number;
 }): AuditEvent[] => {
   const events: AuditEvent[] = [
@@ -42,7 +43,7 @@ const buildDetachEvents = (params: {
       resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
       resourceId: params.invoiceId,
       changes: {
-        totalAmount: { old: null, new: params.totalAmount },
+        totalAmount: { old: params.oldTotalAmount, new: params.totalAmount },
         detachedTimeEntries: {
           old: params.detachedTimeEntries.map((row) => row.id),
           new: null,
@@ -141,7 +142,7 @@ const removeEntries = createSafeHandler(
             workspaceId: { eq: workspaceId },
             status: { eq: INVOICE_STATUS.DRAFT },
           },
-          columns: { id: true },
+          columns: { id: true, totalAmount: true },
         });
         if (!invoiceCheck) {
           return { ok: false as const };
@@ -243,6 +244,7 @@ const removeEntries = createSafeHandler(
             invoiceId: params.invoiceId,
             detachedTimeEntries,
             detachedExpenses,
+            oldTotalAmount: invoiceCheck.totalAmount,
             totalAmount,
           }),
         );
