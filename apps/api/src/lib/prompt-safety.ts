@@ -17,6 +17,8 @@
  * named `sanitizeForPrompt`, visible in code review.
  */
 
+import { panic } from "better-result";
+
 declare const __promptBrand: unique symbol;
 
 export type UntrustedText = string & {
@@ -72,6 +74,7 @@ const isStrippableControlCodePoint = (codePoint: number): boolean =>
 const stripControlChars = (input: string): string => {
   const chunks: string[] = [];
   let chunkStart = 0;
+  let foundControlChar = false;
 
   for (let index = 0; index < input.length; index += 1) {
     const codePoint = input.codePointAt(index);
@@ -79,13 +82,14 @@ const stripControlChars = (input: string): string => {
       continue;
     }
 
+    foundControlChar = true;
     if (chunkStart < index) {
       chunks.push(input.slice(chunkStart, index));
     }
     chunkStart = index + 1;
   }
 
-  if (chunks.length === 0) {
+  if (!foundControlChar) {
     return input;
   }
   if (chunkStart < input.length) {
@@ -114,6 +118,18 @@ const truncateAtUtf16Boundary = (input: string, maxLength: number): string => {
   return input.slice(0, end);
 };
 
+const promptDelimiter = (
+  value: string | undefined,
+  fallback: string,
+  name: "open" | "close",
+): string => {
+  const delimiter = value ?? fallback;
+  if (delimiter.trim().length === 0) {
+    return panic(`sanitizeForPrompt ${name} delimiter must not be empty`);
+  }
+  return delimiter;
+};
+
 /**
  * Promote untrusted input to text safe for prompt interpolation.
  *
@@ -126,8 +142,8 @@ export const sanitizeForPrompt = (
   text: UntrustedText,
   options?: SanitizeForPromptOptions,
 ): PromptSafeText => {
-  const open = options?.open ?? DEFAULT_OPEN;
-  const close = options?.close ?? DEFAULT_CLOSE;
+  const open = promptDelimiter(options?.open, DEFAULT_OPEN, "open");
+  const close = promptDelimiter(options?.close, DEFAULT_CLOSE, "close");
 
   let cleaned: string = stripControlChars(text);
   cleaned = cleaned.replace(INVISIBLE_OVERRIDES, "");
