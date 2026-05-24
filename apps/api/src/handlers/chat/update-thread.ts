@@ -45,6 +45,7 @@ const updateThread = createSafeRootHandler(
           .where(
             and(
               eq(chatThreads.id, params.threadId),
+              eq(chatThreads.organizationId, session.activeOrganizationId),
               eq(chatThreads.userId, user.id),
               scope.scope === "workspace"
                 ? eq(chatThreads.workspaceId, scope.workspaceId)
@@ -87,6 +88,7 @@ const updateThread = createSafeRootHandler(
           .where(
             and(
               eq(chatThreads.id, params.threadId),
+              eq(chatThreads.organizationId, session.activeOrganizationId),
               eq(chatThreads.userId, user.id),
               scope.scope === "workspace"
                 ? eq(chatThreads.workspaceId, scope.workspaceId)

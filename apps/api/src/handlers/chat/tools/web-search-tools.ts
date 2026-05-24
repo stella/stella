@@ -101,6 +101,15 @@ const composeSignal = (
   return AbortSignal.any([abortSignal, timeoutSignal]);
 };
 
+const escapeSourceFenceContent = (content: string): string =>
+  content
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+
+const escapeSourceFenceAttribute = (value: string): string =>
+  escapeSourceFenceContent(value).replaceAll('"', "&quot;");
+
 const fenceUntrustedContent = ({
   content,
   fetchedAt,
@@ -110,7 +119,11 @@ const fenceUntrustedContent = ({
   fetchedAt: string;
   url: string;
 }): string =>
-  `<untrusted_source url="${url}" fetched_at="${fetchedAt}">\n${content}\n</untrusted_source>`;
+  `<untrusted_source url="${escapeSourceFenceAttribute(
+    url,
+  )}" fetched_at="${escapeSourceFenceAttribute(
+    fetchedAt,
+  )}">\n${escapeSourceFenceContent(content)}\n</untrusted_source>`;
 
 const createWebSearchTool = () =>
   tool({
