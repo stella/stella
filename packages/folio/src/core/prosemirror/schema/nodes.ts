@@ -12,6 +12,8 @@ import type {
   ParagraphFormatting,
   ParagraphPropertyChange,
   LineSpacingRule,
+  ImagePosition,
+  ImageWrap,
   BorderSpec,
   ShadingProperties,
   TabStop,
@@ -20,6 +22,7 @@ import type {
   TableFormatting,
   TableRowFormatting,
   TableCellFormatting,
+  TableWidthType,
   SectionProperties,
 } from "../../types/document";
 import type { SpacingExplicit } from "../../types/formatting";
@@ -147,14 +150,14 @@ export type ParagraphAttrs = {
  */
 export type ImagePositionAttrs = {
   horizontal?: {
-    relativeTo?: string;
+    relativeTo?: NonNullable<ImagePosition["horizontal"]["relativeTo"]>;
     posOffset?: number; // In EMU
-    align?: string;
+    align?: NonNullable<ImagePosition["horizontal"]["alignment"]>;
   };
   vertical?: {
-    relativeTo?: string;
+    relativeTo?: NonNullable<ImagePosition["vertical"]["relativeTo"]>;
     posOffset?: number; // In EMU
-    align?: string;
+    align?: NonNullable<ImagePosition["vertical"]["alignment"]>;
   };
 };
 
@@ -171,14 +174,7 @@ export type ImageAttrs = {
   height?: number;
   rId?: string;
   /** Wrap type from DOCX: inline, square, tight, through, topAndBottom, behind, inFront */
-  wrapType?:
-    | "inline"
-    | "square"
-    | "tight"
-    | "through"
-    | "topAndBottom"
-    | "behind"
-    | "inFront";
+  wrapType?: ImageWrap["type"];
   /** Display mode for CSS: inline (flows with text), float (left/right float), block (centered) */
   displayMode?: "inline" | "float" | "block";
   /** CSS float direction for floating images */
@@ -202,7 +198,7 @@ export type ImageAttrs = {
   /** Border style (CSS border-style value) */
   borderStyle?: string;
   /** Wrap text setting from DOCX (left, right, bothSides, largest) for round-trip */
-  wrapText?: string;
+  wrapText?: NonNullable<ImageWrap["wrapText"]>;
   /** Hyperlink URL for clickable image */
   hlinkHref?: string;
 };
@@ -216,7 +212,7 @@ export type TableAttrs = {
   /** Table width (in twips) */
   width?: number;
   /** Table width type ('auto', 'pct', 'dxa') */
-  widthType?: string;
+  widthType?: TableWidthType;
   /** Table justification/alignment */
   justification?: "left" | "center" | "right";
   /** Column widths (in twips) from w:tblGrid */
@@ -243,7 +239,7 @@ export type TableRowAttrs = {
   /** Row height (in twips) */
   height?: number;
   /** Height rule ('auto', 'exact', 'atLeast') */
-  heightRule?: string;
+  heightRule?: NonNullable<TableRowFormatting["heightRule"]>;
   /** Is header row */
   isHeader?: boolean;
   /** Original row formatting from DOCX for lossless round-trip serialization */
@@ -263,13 +259,13 @@ export type TableCellAttrs = {
   /** Cell width (in twips) */
   width?: number;
   /** Cell width type */
-  widthType?: string;
+  widthType?: TableWidthType;
   /** Vertical alignment */
   verticalAlign?: "top" | "center" | "bottom";
   /** Background color (RGB hex) */
   backgroundColor?: string;
   /** OOXML text direction (e.g. 'tbRl', 'btLr') */
-  textDirection?: string;
+  textDirection?: NonNullable<TableCellFormatting["textDirection"]>;
   /** No text wrapping in cell */
   noWrap?: boolean;
   /** Cell borders — full BorderSpec per side (style, color, size) */

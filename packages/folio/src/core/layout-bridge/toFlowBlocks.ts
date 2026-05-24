@@ -36,13 +36,23 @@ import {
   DEFAULT_TEXTBOX_MARGINS,
   DEFAULT_TEXTBOX_WIDTH,
 } from "../layout-engine/types";
+import {
+  expectImageAttrs,
+  expectParagraphAttrs,
+  expectTableAttrs,
+  expectTableCellAttrs,
+  expectTableRowAttrs,
+} from "../prosemirror/attrs";
 import type {
   TextColorAttrs,
   UnderlineAttrs,
   FontSizeAttrs,
   FontFamilyAttrs,
 } from "../prosemirror/schema/marks";
-import type { ParagraphAttrs as PMParagraphAttrs } from "../prosemirror/schema/nodes";
+import type {
+  ImageAttrs,
+  ParagraphAttrs as PMParagraphAttrs,
+} from "../prosemirror/schema/nodes";
 import type {
   ColorValue,
   Theme,
@@ -732,48 +742,48 @@ function paragraphRunDefaults(
  * to satisfy exactOptionalPropertyTypes.
  */
 function buildImageRun(
-  attrs: Record<string, unknown>,
+  attrs: ImageAttrs,
   constrained: { width: number; height: number },
   pmStart: number,
   pmEnd: number,
 ): ImageRun {
   const run: ImageRun = {
     kind: "image",
-    src: attrs["src"] as string,
+    src: attrs.src,
     width: constrained.width,
     height: constrained.height,
     pmStart,
     pmEnd,
   };
-  if (attrs["alt"] !== undefined && attrs["alt"] !== null) {
-    run.alt = attrs["alt"] as string;
+  if (attrs.alt !== undefined) {
+    run.alt = attrs.alt;
   }
-  if (attrs["transform"] !== undefined && attrs["transform"] !== null) {
-    run.transform = attrs["transform"] as string;
+  if (attrs.transform !== undefined) {
+    run.transform = attrs.transform;
   }
-  if (attrs["wrapType"] !== undefined && attrs["wrapType"] !== null) {
-    run.wrapType = attrs["wrapType"] as string;
+  if (attrs.wrapType !== undefined) {
+    run.wrapType = attrs.wrapType;
   }
-  if (attrs["displayMode"] !== undefined && attrs["displayMode"] !== null) {
-    run.displayMode = attrs["displayMode"] as "inline" | "block" | "float";
+  if (attrs.displayMode !== undefined) {
+    run.displayMode = attrs.displayMode;
   }
-  if (attrs["cssFloat"] !== undefined && attrs["cssFloat"] !== null) {
-    run.cssFloat = attrs["cssFloat"] as "left" | "right" | "none";
+  if (attrs.cssFloat !== undefined) {
+    run.cssFloat = attrs.cssFloat;
   }
-  if (attrs["distTop"] !== undefined && attrs["distTop"] !== null) {
-    run.distTop = attrs["distTop"] as number;
+  if (attrs.distTop !== undefined) {
+    run.distTop = attrs.distTop;
   }
-  if (attrs["distBottom"] !== undefined && attrs["distBottom"] !== null) {
-    run.distBottom = attrs["distBottom"] as number;
+  if (attrs.distBottom !== undefined) {
+    run.distBottom = attrs.distBottom;
   }
-  if (attrs["distLeft"] !== undefined && attrs["distLeft"] !== null) {
-    run.distLeft = attrs["distLeft"] as number;
+  if (attrs.distLeft !== undefined) {
+    run.distLeft = attrs.distLeft;
   }
-  if (attrs["distRight"] !== undefined && attrs["distRight"] !== null) {
-    run.distRight = attrs["distRight"] as number;
+  if (attrs.distRight !== undefined) {
+    run.distRight = attrs.distRight;
   }
-  if (attrs["position"] !== undefined && attrs["position"] !== null) {
-    run.position = attrs["position"] as NonNullable<ImageRun["position"]>;
+  if (attrs.position !== undefined) {
+    run.position = attrs.position;
   }
   return run;
 }
@@ -814,11 +824,9 @@ function paragraphToRuns(
   const runs: Run[] = [];
   const offset = startPos + 1; // +1 for opening tag
   const theme = _options.theme;
-  const paraDefaults = paragraphRunDefaults(
-    node.attrs as PMParagraphAttrs,
-    theme,
-  );
-  const paragraphStyleId = (node.attrs as PMParagraphAttrs).styleId;
+  const pmAttrs = expectParagraphAttrs(node);
+  const paraDefaults = paragraphRunDefaults(pmAttrs, theme);
+  const paragraphStyleId = pmAttrs.styleId;
   const inTocParagraph =
     typeof paragraphStyleId === "string" && TOC_STYLE_ID.test(paragraphStyleId);
 
@@ -860,10 +868,10 @@ function paragraphToRuns(
       runs.push(run);
     } else if (child.type.name === "image") {
       // Image within paragraph
-      const attrs = child.attrs;
+      const attrs = expectImageAttrs(child);
       const constrained = constrainImageToPage(
-        (attrs["width"] as number) || 100,
-        (attrs["height"] as number) || 100,
+        attrs.width || 100,
+        attrs.height || 100,
         _options.pageContentHeight,
       );
       const run = buildImageRun(
@@ -956,10 +964,10 @@ function paragraphToRuns(
           };
           runs.push(run);
         } else if (sdtChild.type.name === "image") {
-          const attrs = sdtChild.attrs;
+          const attrs = expectImageAttrs(sdtChild);
           const sdtConstrained = constrainImageToPage(
-            (attrs["width"] as number) || 100,
-            (attrs["height"] as number) || 100,
+            attrs.width || 100,
+            attrs.height || 100,
             _options.pageContentHeight,
           );
           const run = buildImageRun(
@@ -1303,7 +1311,7 @@ function convertParagraph(
   startPos: number,
   options: ToFlowBlocksOptions,
 ): ParagraphBlock {
-  const pmAttrs = node.attrs as PMParagraphAttrs;
+  const pmAttrs = expectParagraphAttrs(node);
   const runs = paragraphToRuns(node, startPos, options);
   const attrs = convertParagraphAttrs(
     pmAttrs,
@@ -1391,23 +1399,24 @@ export function convertBorderSpecToLayout(
  * Borders are full BorderSpec objects with style/size/color.
  */
 function extractCellBorders(
-  attrs: Record<string, unknown>,
+  borders:
+    | Record<
+        string,
+        {
+          style?: string;
+          size?: number;
+          color?: {
+            rgb?: string;
+            themeColor?: string;
+            themeTint?: string;
+            themeShade?: string;
+          };
+        }
+      >
+    | null
+    | undefined,
   theme?: Theme | null,
 ): CellBorders | undefined {
-  const borders = attrs["borders"] as Record<
-    string,
-    {
-      style?: string;
-      size?: number;
-      color?: {
-        rgb?: string;
-        themeColor?: string;
-        themeTint?: string;
-        themeShade?: string;
-      };
-    }
-  > | null;
-
   if (!borders) {
     return undefined;
   }
@@ -1454,13 +1463,11 @@ function convertTableCell(
     offset += child.nodeSize;
   });
 
-  const attrs = node.attrs;
+  const attrs = expectTableCellAttrs(node);
 
   // Convert cell margins (twips) to pixel padding
   // OOXML TableNormal defaults: top=0, bottom=0, left=108 twips (~7px), right=108 twips (~7px)
-  const margins = attrs["margins"] as
-    | { top?: number; bottom?: number; left?: number; right?: number }
-    | undefined;
+  const margins = attrs.margins;
   const resolvePaddingSide = (
     side: TablePaddingSide,
     cellTwips: number | undefined,
@@ -1491,23 +1498,20 @@ function convertTableCell(
   const cell: TableCell = {
     id: nextBlockId(),
     blocks,
-    colSpan: attrs["colspan"] as number,
-    rowSpan: attrs["rowspan"] as number,
+    colSpan: attrs.colspan,
+    rowSpan: attrs.rowspan,
     padding,
   };
-  if (attrs["width"]) {
-    cell.width = twipsToPixels(attrs["width"] as number);
+  if (attrs.width) {
+    cell.width = twipsToPixels(attrs.width);
   }
-  if (attrs["verticalAlign"]) {
-    cell.verticalAlign = attrs["verticalAlign"] as "top" | "center" | "bottom";
+  if (attrs.verticalAlign) {
+    cell.verticalAlign = attrs.verticalAlign;
   }
-  if (attrs["backgroundColor"]) {
-    cell.background = `#${attrs["backgroundColor"]}`;
+  if (attrs.backgroundColor) {
+    cell.background = `#${attrs.backgroundColor}`;
   }
-  const cellBorders = extractCellBorders(
-    attrs as Record<string, unknown>,
-    options.theme,
-  );
+  const cellBorders = extractCellBorders(attrs.borders, options.theme);
   if (cellBorders) {
     cell.borders = cellBorders;
   }
@@ -1539,19 +1543,19 @@ function convertTableRow(
     offset += child.nodeSize;
   });
 
-  const attrs = node.attrs;
+  const attrs = expectTableRowAttrs(node);
   const row: TableRow = {
     id: nextBlockId(),
     cells,
   };
-  if (attrs["height"]) {
-    row.height = twipsToPixels(attrs["height"] as number);
+  if (attrs.height) {
+    row.height = twipsToPixels(attrs.height);
   }
-  if (attrs["heightRule"]) {
-    row.heightRule = attrs["heightRule"] as "auto" | "atLeast" | "exact";
+  if (attrs.heightRule) {
+    row.heightRule = attrs.heightRule;
   }
-  if (attrs["isHeader"]) {
-    row.isHeader = attrs["isHeader"] as boolean;
+  if (attrs.isHeader) {
+    row.isHeader = attrs.isHeader;
   }
   return row;
 }
@@ -1566,9 +1570,8 @@ function convertTable(
 ): TableBlock {
   const rows: TableRow[] = [];
   let offset = startPos + 1; // +1 for opening tag
-  const tableCellMargins = node.attrs["cellMargins"] as
-    | { top?: number; bottom?: number; left?: number; right?: number }
-    | undefined;
+  const attrs = expectTableAttrs(node);
+  const tableCellMargins = attrs.cellMargins;
 
   // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
   node.forEach((child) => {
@@ -1579,11 +1582,11 @@ function convertTable(
   });
 
   // Extract columnWidths from node attributes and convert from twips to pixels
-  const columnWidthsTwips = node.attrs["columnWidths"] as number[] | undefined;
+  const columnWidthsTwips = attrs.columnWidths;
   let columnWidths = columnWidthsTwips?.map(twipsToPixels);
 
-  const width = node.attrs["width"] as number | undefined;
-  const widthType = node.attrs["widthType"] as string | undefined;
+  const width = attrs.width;
+  const widthType = attrs.widthType;
 
   // Fallback: compute column widths from first row cell widths if table attr is missing
   if (!columnWidths && rows.length > 0) {
@@ -1597,14 +1600,10 @@ function convertTable(
   }
 
   // Extract justification
-  const justification = node.attrs["justification"] as
-    | "left"
-    | "center"
-    | "right"
-    | undefined;
+  const justification = attrs.justification;
 
   // Extract table indent from _originalFormatting (w:tblInd)
-  const originalFormatting = node.attrs["_originalFormatting"] as
+  const originalFormatting = attrs._originalFormatting as
     | { indent?: { value: number; type: string } }
     | undefined;
   const indentPx =
@@ -1613,7 +1612,7 @@ function convertTable(
       ? twipsToPixels(originalFormatting.indent.value)
       : undefined;
 
-  const floating = node.attrs["floating"] as
+  const floating = attrs.floating as
     | {
         horzAnchor?: "margin" | "page" | "text";
         vertAnchor?: "margin" | "page" | "text";
@@ -1706,8 +1705,8 @@ function convertImage(
   startPos: number,
   pageContentHeight?: number,
 ): ImageBlock {
-  const attrs = node.attrs;
-  const wrapType = attrs["wrapType"] as string | undefined;
+  const attrs = expectImageAttrs(node);
+  const wrapType = attrs.wrapType;
 
   // Only anchor images with 'behind' or 'inFront' wrap types
   // Other wrap types (square, tight, through, topAndBottom) need text wrapping
@@ -1715,41 +1714,41 @@ function convertImage(
   const shouldAnchor = wrapType === "behind" || wrapType === "inFront";
 
   const constrained = constrainImageToPage(
-    (attrs["width"] as number) || 100,
-    (attrs["height"] as number) || 100,
+    attrs.width || 100,
+    attrs.height || 100,
     pageContentHeight,
   );
 
   const imgBlock: ImageBlock = {
     kind: "image",
     id: nextBlockId(),
-    src: attrs["src"] as string,
+    src: attrs.src,
     width: constrained.width,
     height: constrained.height,
     pmStart: startPos,
     pmEnd: startPos + node.nodeSize,
   };
-  if (attrs["alt"]) {
-    imgBlock.alt = attrs["alt"] as string;
+  if (attrs.alt) {
+    imgBlock.alt = attrs.alt;
   }
-  if (attrs["transform"]) {
-    imgBlock.transform = attrs["transform"] as string;
+  if (attrs.transform) {
+    imgBlock.transform = attrs.transform;
   }
   if (shouldAnchor) {
     const anchor: NonNullable<ImageBlock["anchor"]> = {
       isAnchored: true,
       behindDoc: wrapType === "behind",
     };
-    if (attrs["distLeft"] !== undefined && attrs["distLeft"] !== null) {
-      anchor.offsetH = attrs["distLeft"] as number;
+    if (attrs.distLeft !== undefined) {
+      anchor.offsetH = attrs.distLeft;
     }
-    if (attrs["distTop"] !== undefined && attrs["distTop"] !== null) {
-      anchor.offsetV = attrs["distTop"] as number;
+    if (attrs.distTop !== undefined) {
+      anchor.offsetV = attrs.distTop;
     }
     imgBlock.anchor = anchor;
   }
-  if (attrs["hlinkHref"]) {
-    imgBlock.hlinkHref = attrs["hlinkHref"] as string;
+  if (attrs.hlinkHref) {
+    imgBlock.hlinkHref = attrs.hlinkHref;
   }
   return imgBlock;
 }
@@ -1852,7 +1851,7 @@ export function toFlowBlocks(
     switch (node.type.name) {
       case "paragraph": {
         const block = convertParagraph(node, pos, opts);
-        const pmAttrs = node.attrs as PMParagraphAttrs;
+        const pmAttrs = expectParagraphAttrs(node);
 
         blocks.push(block);
 

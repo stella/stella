@@ -16,6 +16,16 @@ describe("toFlowBlocks paragraph formatting", () => {
     expect(second).toEqual(first);
   });
 
+  test("rejects malformed paragraph attrs at the layout boundary", () => {
+    const doc = schema.node("doc", null, [
+      schema.node("paragraph", { lineSpacing: "240" }, [
+        schema.text("Invalid paragraph"),
+      ]),
+    ]);
+
+    expect(() => toFlowBlocks(doc)).toThrow("paragraph.attrs.lineSpacing");
+  });
+
   test("does not convert absent paragraph spacing defaults to zero line height", () => {
     const doc = schema.node("doc", null, [
       schema.node("paragraph", null, [schema.text("First paragraph")]),

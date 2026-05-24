@@ -18,6 +18,151 @@ export type ReadProseMirrorAttrsResult<T> =
   | { ok: true; value: T }
   | { ok: false; issues: ProseMirrorAttrIssue[] };
 
+type ImageHorizontalPositionAttrs = NonNullable<
+  NonNullable<ImageAttrs["position"]>["horizontal"]
+>;
+
+type ImageVerticalPositionAttrs = NonNullable<
+  NonNullable<ImageAttrs["position"]>["vertical"]
+>;
+
+const PARAGRAPH_ALIGNMENTS = [
+  "left",
+  "center",
+  "right",
+  "both",
+  "distribute",
+  "mediumKashida",
+  "highKashida",
+  "lowKashida",
+  "thaiDistribute",
+] as const satisfies readonly NonNullable<ParagraphAttrs["alignment"]>[];
+
+const LINE_SPACING_RULES = [
+  "auto",
+  "exact",
+  "atLeast",
+] as const satisfies readonly NonNullable<ParagraphAttrs["lineSpacingRule"]>[];
+
+const SECTION_BREAK_TYPES = [
+  "nextPage",
+  "continuous",
+  "oddPage",
+  "evenPage",
+] as const satisfies readonly NonNullable<ParagraphAttrs["sectionBreakType"]>[];
+
+const TABLE_WIDTH_TYPES = [
+  "auto",
+  "dxa",
+  "nil",
+  "pct",
+] as const satisfies readonly NonNullable<TableAttrs["widthType"]>[];
+
+const TABLE_JUSTIFICATIONS = [
+  "left",
+  "center",
+  "right",
+] as const satisfies readonly NonNullable<TableAttrs["justification"]>[];
+
+const TABLE_ROW_HEIGHT_RULES = [
+  "auto",
+  "atLeast",
+  "exact",
+] as const satisfies readonly NonNullable<TableRowAttrs["heightRule"]>[];
+
+const TABLE_CELL_VERTICAL_ALIGNMENTS = [
+  "top",
+  "center",
+  "bottom",
+] as const satisfies readonly NonNullable<TableCellAttrs["verticalAlign"]>[];
+
+const TABLE_CELL_TEXT_DIRECTIONS = [
+  "lr",
+  "lrV",
+  "rl",
+  "rlV",
+  "tb",
+  "tbV",
+  "tbRl",
+  "tbRlV",
+  "btLr",
+] as const satisfies readonly NonNullable<TableCellAttrs["textDirection"]>[];
+
+const IMAGE_WRAP_TYPES = [
+  "inline",
+  "square",
+  "tight",
+  "through",
+  "topAndBottom",
+  "behind",
+  "inFront",
+] as const satisfies readonly NonNullable<ImageAttrs["wrapType"]>[];
+
+const IMAGE_DISPLAY_MODES = [
+  "inline",
+  "float",
+  "block",
+] as const satisfies readonly NonNullable<ImageAttrs["displayMode"]>[];
+
+const IMAGE_CSS_FLOATS = [
+  "left",
+  "right",
+  "none",
+] as const satisfies readonly NonNullable<ImageAttrs["cssFloat"]>[];
+
+const IMAGE_WRAP_TEXTS = [
+  "bothSides",
+  "left",
+  "right",
+  "largest",
+] as const satisfies readonly NonNullable<ImageAttrs["wrapText"]>[];
+
+const IMAGE_HORIZONTAL_RELATIVE_TO = [
+  "character",
+  "column",
+  "insideMargin",
+  "leftMargin",
+  "margin",
+  "outsideMargin",
+  "page",
+  "rightMargin",
+] as const satisfies readonly NonNullable<
+  ImageHorizontalPositionAttrs["relativeTo"]
+>[];
+
+const IMAGE_HORIZONTAL_ALIGNMENTS = [
+  "left",
+  "right",
+  "center",
+  "inside",
+  "outside",
+] as const satisfies readonly NonNullable<
+  ImageHorizontalPositionAttrs["align"]
+>[];
+
+const IMAGE_VERTICAL_RELATIVE_TO = [
+  "insideMargin",
+  "line",
+  "margin",
+  "outsideMargin",
+  "page",
+  "paragraph",
+  "topMargin",
+  "bottomMargin",
+] as const satisfies readonly NonNullable<
+  ImageVerticalPositionAttrs["relativeTo"]
+>[];
+
+const IMAGE_VERTICAL_ALIGNMENTS = [
+  "top",
+  "bottom",
+  "center",
+  "inside",
+  "outside",
+] as const satisfies readonly NonNullable<
+  ImageVerticalPositionAttrs["align"]
+>[];
+
 export const readParagraphAttrs = (
   node: PMNode,
 ): ReadProseMirrorAttrsResult<ParagraphAttrs> => {
@@ -27,11 +172,60 @@ export const readParagraphAttrs = (
 
   optionalString(attrs, "paraId", "paragraph.attrs.paraId", issues);
   optionalString(attrs, "textId", "paragraph.attrs.textId", issues);
+  optionalOneOf(
+    attrs,
+    "alignment",
+    "paragraph.attrs.alignment",
+    issues,
+    PARAGRAPH_ALIGNMENTS,
+  );
   optionalString(attrs, "styleId", "paragraph.attrs.styleId", issues);
   optionalNumber(attrs, "spaceBefore", "paragraph.attrs.spaceBefore", issues);
   optionalNumber(attrs, "spaceAfter", "paragraph.attrs.spaceAfter", issues);
   optionalNumber(attrs, "lineSpacing", "paragraph.attrs.lineSpacing", issues);
+  optionalOneOf(
+    attrs,
+    "lineSpacingRule",
+    "paragraph.attrs.lineSpacingRule",
+    issues,
+    LINE_SPACING_RULES,
+  );
+  optionalNumber(attrs, "indentLeft", "paragraph.attrs.indentLeft", issues);
+  optionalNumber(attrs, "indentRight", "paragraph.attrs.indentRight", issues);
+  optionalNumber(
+    attrs,
+    "indentFirstLine",
+    "paragraph.attrs.indentFirstLine",
+    issues,
+  );
+  optionalBoolean(
+    attrs,
+    "hangingIndent",
+    "paragraph.attrs.hangingIndent",
+    issues,
+  );
   optionalNumber(attrs, "outlineLevel", "paragraph.attrs.outlineLevel", issues);
+  optionalString(attrs, "listNumFmt", "paragraph.attrs.listNumFmt", issues);
+  optionalBoolean(
+    attrs,
+    "listIsBullet",
+    "paragraph.attrs.listIsBullet",
+    issues,
+  );
+  optionalBoolean(attrs, "listIsLegal", "paragraph.attrs.listIsLegal", issues);
+  optionalString(attrs, "listMarker", "paragraph.attrs.listMarker", issues);
+  optionalBoolean(
+    attrs,
+    "listMarkerHidden",
+    "paragraph.attrs.listMarkerHidden",
+    issues,
+  );
+  optionalString(
+    attrs,
+    "listMarkerFontFamily",
+    "paragraph.attrs.listMarkerFontFamily",
+    issues,
+  );
   optionalNumber(
     attrs,
     "listMarkerFontSize",
@@ -46,6 +240,12 @@ export const readParagraphAttrs = (
   );
   optionalBoolean(
     attrs,
+    "pageBreakBefore",
+    "paragraph.attrs.pageBreakBefore",
+    issues,
+  );
+  optionalBoolean(
+    attrs,
     "renderedPageBreakBefore",
     "paragraph.attrs.renderedPageBreakBefore",
     issues,
@@ -56,10 +256,47 @@ export const readParagraphAttrs = (
     "paragraph.attrs.runInWithNext",
     issues,
   );
+  optionalBoolean(attrs, "keepNext", "paragraph.attrs.keepNext", issues);
+  optionalBoolean(attrs, "keepLines", "paragraph.attrs.keepLines", issues);
+  optionalBoolean(
+    attrs,
+    "contextualSpacing",
+    "paragraph.attrs.contextualSpacing",
+    issues,
+  );
+  optionalBoolean(attrs, "bidi", "paragraph.attrs.bidi", issues);
+  optionalOneOf(
+    attrs,
+    "sectionBreakType",
+    "paragraph.attrs.sectionBreakType",
+    issues,
+    SECTION_BREAK_TYPES,
+  );
   optionalStringArray(
     attrs,
     "listLevelNumFmts",
     "paragraph.attrs.listLevelNumFmts",
+    issues,
+  );
+  optionalNumber(
+    attrs,
+    "listAbstractNumId",
+    "paragraph.attrs.listAbstractNumId",
+    issues,
+  );
+  optionalRecord(attrs, "borders", "paragraph.attrs.borders", issues);
+  optionalRecord(attrs, "shading", "paragraph.attrs.shading", issues);
+  optionalArray(attrs, "tabs", "paragraph.attrs.tabs", issues);
+  optionalRecord(
+    attrs,
+    "spacingExplicit",
+    "paragraph.attrs.spacingExplicit",
+    issues,
+  );
+  optionalRecord(
+    attrs,
+    "defaultTextFormatting",
+    "paragraph.attrs.defaultTextFormatting",
     issues,
   );
   optionalRecord(attrs, "numPr", "paragraph.attrs.numPr", issues);
@@ -93,7 +330,20 @@ export const readTableAttrs = (
 
   optionalString(attrs, "styleId", "table.attrs.styleId", issues);
   optionalNumber(attrs, "width", "table.attrs.width", issues);
-  optionalString(attrs, "widthType", "table.attrs.widthType", issues);
+  optionalOneOf(
+    attrs,
+    "widthType",
+    "table.attrs.widthType",
+    issues,
+    TABLE_WIDTH_TYPES,
+  );
+  optionalOneOf(
+    attrs,
+    "justification",
+    "table.attrs.justification",
+    issues,
+    TABLE_JUSTIFICATIONS,
+  );
   optionalNumberArray(
     attrs,
     "columnWidths",
@@ -124,7 +374,13 @@ export const readTableRowAttrs = (
   expectNodeType(node, "tableRow", issues);
 
   optionalNumber(attrs, "height", "tableRow.attrs.height", issues);
-  optionalString(attrs, "heightRule", "tableRow.attrs.heightRule", issues);
+  optionalOneOf(
+    attrs,
+    "heightRule",
+    "tableRow.attrs.heightRule",
+    issues,
+    TABLE_ROW_HEIGHT_RULES,
+  );
   optionalBoolean(attrs, "isHeader", "tableRow.attrs.isHeader", issues);
   optionalRecord(
     attrs,
@@ -144,7 +400,7 @@ export const readTableCellAttrs = (
 ): ReadProseMirrorAttrsResult<TableCellAttrs> => {
   const attrs = attrsRecord(node.attrs);
   const issues: ProseMirrorAttrIssue[] = [];
-  expectNodeType(node, "tableCell", issues);
+  expectNodeTypeOneOf(node, ["tableCell", "tableHeader"], issues);
 
   requiredNumber(attrs, "colspan", "tableCell.attrs.colspan", issues);
   requiredNumber(attrs, "rowspan", "tableCell.attrs.rowspan", issues);
@@ -152,12 +408,19 @@ export const readTableCellAttrs = (
     allowNull: true,
   });
   optionalNumber(attrs, "width", "tableCell.attrs.width", issues);
-  optionalString(attrs, "widthType", "tableCell.attrs.widthType", issues);
-  optionalString(
+  optionalOneOf(
+    attrs,
+    "widthType",
+    "tableCell.attrs.widthType",
+    issues,
+    TABLE_WIDTH_TYPES,
+  );
+  optionalOneOf(
     attrs,
     "verticalAlign",
     "tableCell.attrs.verticalAlign",
     issues,
+    TABLE_CELL_VERTICAL_ALIGNMENTS,
   );
   optionalString(
     attrs,
@@ -165,11 +428,12 @@ export const readTableCellAttrs = (
     "tableCell.attrs.backgroundColor",
     issues,
   );
-  optionalString(
+  optionalOneOf(
     attrs,
     "textDirection",
     "tableCell.attrs.textDirection",
     issues,
+    TABLE_CELL_TEXT_DIRECTIONS,
   );
   optionalBoolean(attrs, "noWrap", "tableCell.attrs.noWrap", issues);
   optionalRecord(attrs, "borders", "tableCell.attrs.borders", issues);
@@ -200,10 +464,44 @@ export const readImageAttrs = (
   optionalString(attrs, "rId", "image.attrs.rId", issues);
   optionalNumber(attrs, "width", "image.attrs.width", issues);
   optionalNumber(attrs, "height", "image.attrs.height", issues);
-  optionalString(attrs, "wrapType", "image.attrs.wrapType", issues);
-  optionalString(attrs, "displayMode", "image.attrs.displayMode", issues);
-  optionalString(attrs, "cssFloat", "image.attrs.cssFloat", issues);
-  optionalRecord(attrs, "position", "image.attrs.position", issues);
+  optionalOneOf(
+    attrs,
+    "wrapType",
+    "image.attrs.wrapType",
+    issues,
+    IMAGE_WRAP_TYPES,
+  );
+  optionalOneOf(
+    attrs,
+    "displayMode",
+    "image.attrs.displayMode",
+    issues,
+    IMAGE_DISPLAY_MODES,
+  );
+  optionalOneOf(
+    attrs,
+    "cssFloat",
+    "image.attrs.cssFloat",
+    issues,
+    IMAGE_CSS_FLOATS,
+  );
+  optionalString(attrs, "transform", "image.attrs.transform", issues);
+  optionalNumber(attrs, "distTop", "image.attrs.distTop", issues);
+  optionalNumber(attrs, "distBottom", "image.attrs.distBottom", issues);
+  optionalNumber(attrs, "distLeft", "image.attrs.distLeft", issues);
+  optionalNumber(attrs, "distRight", "image.attrs.distRight", issues);
+  optionalImagePosition(attrs, "position", "image.attrs.position", issues);
+  optionalNumber(attrs, "borderWidth", "image.attrs.borderWidth", issues);
+  optionalString(attrs, "borderColor", "image.attrs.borderColor", issues);
+  optionalString(attrs, "borderStyle", "image.attrs.borderStyle", issues);
+  optionalOneOf(
+    attrs,
+    "wrapText",
+    "image.attrs.wrapText",
+    issues,
+    IMAGE_WRAP_TEXTS,
+  );
+  optionalString(attrs, "hlinkHref", "image.attrs.hlinkHref", issues);
 
   return attrsResult(attrs, issues);
 };
@@ -229,12 +527,15 @@ export const expectHyperlinkMarkAttrs = (mark: Mark): HyperlinkAttrs =>
   expectAttrs(readHyperlinkMarkAttrs(mark), "hyperlink attrs");
 
 const attrsRecord = (attrs: unknown): Record<string, unknown> => {
-  if (attrs && typeof attrs === "object" && !Array.isArray(attrs)) {
-    return attrs as Record<string, unknown>;
+  if (isRecord(attrs)) {
+    return attrs;
   }
 
   return {};
 };
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
 
 const attrsResult = <T>(
   attrs: Record<string, unknown>,
@@ -244,9 +545,17 @@ const attrsResult = <T>(
     return { ok: false, issues };
   }
 
+  const normalizedAttrs: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(attrs)) {
+    if (value !== null) {
+      normalizedAttrs[key] = value;
+    }
+  }
+
   // SAFETY: this module is the ProseMirror FFI boundary. The checks above
-  // validate the attrs this code relies on before exposing the typed shape.
-  return { ok: true, value: attrs as T };
+  // validate the attrs this code relies on before exposing the typed shape,
+  // and null ProseMirror defaults are normalized to absent optional fields.
+  return { ok: true, value: normalizedAttrs as T };
 };
 
 const expectAttrs = <T>(
@@ -272,6 +581,19 @@ const expectNodeType = (
     issues.push({
       path: "node.type.name",
       message: `Expected ${expected}, got ${node.type.name}.`,
+    });
+  }
+};
+
+const expectNodeTypeOneOf = (
+  node: PMNode,
+  expected: readonly string[],
+  issues: ProseMirrorAttrIssue[],
+): void => {
+  if (!expected.includes(node.type.name)) {
+    issues.push({
+      path: "node.type.name",
+      message: `Expected one of ${expected.join(", ")}, got ${node.type.name}.`,
     });
   }
 };
@@ -309,6 +631,31 @@ const optionalString = (
   const value = attrs[key];
   if (value !== undefined && value !== null && typeof value !== "string") {
     issues.push({ path, message: "Expected a string." });
+  }
+};
+
+const optionalOneOf = (
+  attrs: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: ProseMirrorAttrIssue[],
+  allowed: readonly string[],
+): void => {
+  const value = attrs[key];
+  if (value === undefined || value === null) {
+    return;
+  }
+
+  if (typeof value !== "string") {
+    issues.push({ path, message: "Expected a string." });
+    return;
+  }
+
+  if (!allowed.includes(value)) {
+    issues.push({
+      path,
+      message: `Expected one of ${allowed.join(", ")}.`,
+    });
   }
 };
 
@@ -354,13 +701,75 @@ const optionalRecord = (
   issues: ProseMirrorAttrIssue[],
 ): void => {
   const value = attrs[key];
-  if (
-    value !== undefined &&
-    value !== null &&
-    (typeof value !== "object" || Array.isArray(value))
-  ) {
+  if (value !== undefined && value !== null && !isRecord(value)) {
     issues.push({ path, message: "Expected an object." });
   }
+};
+
+const optionalImagePosition = (
+  attrs: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: ProseMirrorAttrIssue[],
+): void => {
+  const value = attrs[key];
+  if (value === undefined || value === null) {
+    return;
+  }
+
+  if (!isRecord(value)) {
+    issues.push({ path, message: "Expected an object." });
+    return;
+  }
+
+  validateImagePositionAxis(value, {
+    key: "horizontal",
+    path,
+    relativeTo: IMAGE_HORIZONTAL_RELATIVE_TO,
+    align: IMAGE_HORIZONTAL_ALIGNMENTS,
+    issues,
+  });
+  validateImagePositionAxis(value, {
+    key: "vertical",
+    path,
+    relativeTo: IMAGE_VERTICAL_RELATIVE_TO,
+    align: IMAGE_VERTICAL_ALIGNMENTS,
+    issues,
+  });
+};
+
+type ImagePositionAxisValidation = {
+  key: "horizontal" | "vertical";
+  path: string;
+  relativeTo: readonly string[];
+  align: readonly string[];
+  issues: ProseMirrorAttrIssue[];
+};
+
+const validateImagePositionAxis = (
+  attrs: Record<string, unknown>,
+  options: ImagePositionAxisValidation,
+): void => {
+  const value = attrs[options.key];
+  if (value === undefined || value === null) {
+    return;
+  }
+
+  const path = `${options.path}.${options.key}`;
+  if (!isRecord(value)) {
+    options.issues.push({ path, message: "Expected an object." });
+    return;
+  }
+
+  optionalOneOf(
+    value,
+    "relativeTo",
+    `${path}.relativeTo`,
+    options.issues,
+    options.relativeTo,
+  );
+  optionalNumber(value, "posOffset", `${path}.posOffset`, options.issues);
+  optionalOneOf(value, "align", `${path}.align`, options.issues, options.align);
 };
 
 const optionalArray = (

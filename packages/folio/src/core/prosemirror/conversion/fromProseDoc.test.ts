@@ -6,6 +6,44 @@ import { fromProseDoc } from "./fromProseDoc";
 import { toProseDoc } from "./toProseDoc";
 
 describe("fromProseDoc", () => {
+  test("rejects malformed paragraph attrs at the conversion boundary", () => {
+    const pmDoc = schema.node("doc", null, [
+      schema.node("paragraph", { paraId: 12 }, [schema.text("invalid")]),
+    ]);
+
+    expect(() => fromProseDoc(pmDoc)).toThrow("paragraph.attrs.paraId");
+  });
+
+  test("rejects malformed hyperlink attrs at the conversion boundary", () => {
+    const hyperlinkMark = schema.mark("hyperlink", { href: 123 });
+    const pmDoc = schema.node("doc", null, [
+      schema.node("paragraph", null, [schema.text("linked", [hyperlinkMark])]),
+    ]);
+
+    expect(() => fromProseDoc(pmDoc)).toThrow("hyperlink.attrs.href");
+  });
+
+  test("accepts table header cell attrs at the table-cell boundary", () => {
+    const pmDoc = schema.node("doc", null, [
+      schema.node("table", null, [
+        schema.node("tableRow", null, [
+          schema.node("tableHeader", null, [
+            schema.node("paragraph", null, [schema.text("Header")]),
+          ]),
+        ]),
+      ]),
+    ]);
+
+    const document = fromProseDoc(pmDoc);
+    const table = document.package.document.content[0];
+
+    expect(table?.type).toBe("table");
+    if (table?.type !== "table") {
+      return;
+    }
+    expect(table.rows[0]?.cells[0]?.content[0]?.type).toBe("paragraph");
+  });
+
   test("preserves comment ranges added to selected text", () => {
     const commentMark = schema.mark("comment", { commentId: 123 });
     const pmDoc = schema.node("doc", null, [

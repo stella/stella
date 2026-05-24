@@ -3,9 +3,11 @@ import { describe, expect, test } from "bun:test";
 import {
   expectParagraphAttrs,
   readHyperlinkMarkAttrs,
+  readImageAttrs,
   readParagraphAttrs,
   readTableAttrs,
   readTableCellAttrs,
+  readTableRowAttrs,
 } from ".";
 import { schema } from "../schema";
 
@@ -69,6 +71,22 @@ describe("ProseMirror attr readers", () => {
     );
   });
 
+  test("rejects invalid table row finite attrs", () => {
+    const node = schema.nodes.tableRow.create({
+      heightRule: "sometimes",
+    });
+
+    const result = readTableRowAttrs(node);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("Expected table row attrs to be rejected");
+    }
+    expect(result.issues.map((issue) => issue.path)).toContain(
+      "tableRow.attrs.heightRule",
+    );
+  });
+
   test("accepts nullable ProseMirror table cell colwidth", () => {
     const node = schema.nodes.tableCell.create({
       colspan: 1,
@@ -79,6 +97,32 @@ describe("ProseMirror attr readers", () => {
     const result = readTableCellAttrs(node);
 
     expect(result.ok).toBe(true);
+  });
+
+  test("rejects invalid image finite and nested position attrs", () => {
+    const node = schema.nodes.image.create({
+      src: "media/image.png",
+      wrapText: "diagonal",
+      position: {
+        horizontal: { relativeTo: "viewport", posOffset: "bad" },
+      },
+    });
+
+    const result = readImageAttrs(node);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("Expected image attrs to be rejected");
+    }
+    expect(result.issues.map((issue) => issue.path)).toContain(
+      "image.attrs.wrapText",
+    );
+    expect(result.issues.map((issue) => issue.path)).toContain(
+      "image.attrs.position.horizontal.relativeTo",
+    );
+    expect(result.issues.map((issue) => issue.path)).toContain(
+      "image.attrs.position.horizontal.posOffset",
+    );
   });
 
   test("rejects malformed hyperlink mark attrs", () => {
