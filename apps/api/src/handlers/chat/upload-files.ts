@@ -51,6 +51,7 @@ type UploadMessageFilesProps = {
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
 };
 
 type UploadMessageFilesReturn = Result<
@@ -74,6 +75,7 @@ export const uploadMessageFiles = async ({
   safeDb,
   threadId,
   userId,
+  workspaceId,
 }: UploadMessageFilesProps): Promise<UploadMessageFilesReturn> => {
   if (message.role !== "user") {
     return Result.ok({ message, uploadedFiles: [] });
@@ -94,6 +96,7 @@ export const uploadMessageFiles = async ({
       safeDb,
       threadId,
       userId,
+      workspaceId,
     });
 
     if (Result.isOk(rollbackResult)) {
@@ -121,6 +124,7 @@ export const uploadMessageFiles = async ({
       safeDb,
       threadId,
       userId,
+      workspaceId,
     });
     if (Result.isError(uploadedFile)) {
       return await fail(uploadedFile.error);
@@ -153,12 +157,14 @@ export const deleteUploadedChatFiles = async ({
   safeDb,
   threadId,
   userId,
+  workspaceId,
 }: {
   files: readonly UploadedChatFile[];
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
 }): Promise<Result<void, HandlerError<500> | SafeDbError>> => {
   if (files.length === 0) {
     return Result.ok();
@@ -193,6 +199,7 @@ export const deleteUploadedChatFiles = async ({
         action: AUDIT_ACTION.DELETE,
         resourceType: AUDIT_RESOURCE_TYPE.CHAT_FILE,
         resourceId: file.id,
+        workspaceId,
         metadata: { threadId, s3Key: file.s3Key },
       })),
     );
@@ -358,6 +365,7 @@ type UploadUserFileInput = {
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
 };
 
 export const uploadUserFile = async ({
@@ -366,6 +374,7 @@ export const uploadUserFile = async ({
   safeDb,
   threadId,
   userId,
+  workspaceId,
 }: UploadUserFileInput) =>
   await Result.gen(async function* () {
     const sanitizedFileName = sanitizeFilename(file.fileName);
@@ -436,6 +445,7 @@ export const uploadUserFile = async ({
         action: AUDIT_ACTION.CREATE,
         resourceType: AUDIT_RESOURCE_TYPE.CHAT_FILE,
         resourceId: id,
+        workspaceId,
         metadata: {
           threadId,
           fileName: sanitizedFileName,

@@ -789,6 +789,7 @@ const uploadMessageFilesWithRollback = async ({
     safeDb,
     threadId,
     userId,
+    workspaceId: threadState.data.workspaceId,
   });
 
   if (Result.isOk(uploadResult)) {
@@ -837,6 +838,7 @@ const rollbackUnpersistedChatSideEffects = async ({
     safeDb,
     threadId,
     userId,
+    workspaceId: threadState.data.workspaceId,
   });
   if (Result.isError(fileRollbackResult)) {
     return fileRollbackResult;

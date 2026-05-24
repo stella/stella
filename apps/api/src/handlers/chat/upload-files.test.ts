@@ -25,6 +25,7 @@ const arrayBufferMock = mock(async () =>
 const fileMock = mock(() => ({ arrayBuffer: arrayBufferMock }));
 const writeMock = mock(async () => undefined);
 const s3DeleteMock = mock(async () => undefined);
+const workspaceId = toSafeId<"workspace">("workspace_1");
 
 void mock.module("@/api/lib/s3", () => ({
   getS3: () => ({ delete: s3DeleteMock, file: fileMock, write: writeMock }),
@@ -189,11 +190,20 @@ describe("chat attachment hydration", () => {
       safeDb,
       threadId: toSafeId<"chatThread">("thread_1"),
       userId: toSafeId<"user">("user_1"),
+      workspaceId,
     });
 
     expect(Result.isError(result)).toBe(true);
     expect(writeMock).toHaveBeenCalledTimes(1);
     expect(s3DeleteMock).toHaveBeenCalledTimes(1);
     expect(whereMock).toHaveBeenCalledTimes(1);
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      testTx,
+      expect.objectContaining({ workspaceId }),
+    );
+    expect(recordAuditEvent).toHaveBeenCalledWith(
+      testTx,
+      expect.arrayContaining([expect.objectContaining({ workspaceId })]),
+    );
   });
 });
