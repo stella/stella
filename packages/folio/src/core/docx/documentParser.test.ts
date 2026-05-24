@@ -40,7 +40,7 @@ const repeatedPlaceholderNumberingXml = `${XML_DECLARATION}
   <w:abstractNum w:abstractNumId="2">
     <w:lvl w:ilvl="0">
       <w:start w:val="1"/>
-      <w:numFmt w:val="decimal"/>
+      <w:numFmt w:val="lowerLetter"/>
       <w:lvlText w:val="%1.%1"/>
     </w:lvl>
   </w:abstractNum>
@@ -147,13 +147,16 @@ describe("parseDocumentBody list numbering", () => {
     expect(listParagraphs.at(-1)?.listRendering?.marker).toBe("7.5.1");
   });
 
-  test("renders repeated OOXML letter markers after z", () => {
-    const numbering = parseNumbering(numberingXml);
-    const paragraphs: string[] = [];
-
-    for (let index = 1; index <= 27; index += 1) {
-      paragraphs.push(numberedParagraphXml(`L${index}`, 0, `Level ${index}`));
-    }
+  test("renders repeated placeholders and repeated-letter counters after z", () => {
+    const numbering = parseNumbering(repeatedPlaceholderNumberingXml);
+    const paragraphs = Array.from({ length: 28 }, (_unused, index) =>
+      numberedParagraphXml(
+        `R${String(index + 1).padStart(2, "0")}`,
+        0,
+        `Item ${index + 1}`,
+        11,
+      ),
+    );
 
     const body = parseDocumentBody(
       `${XML_DECLARATION}
@@ -168,28 +171,10 @@ describe("parseDocumentBody list numbering", () => {
       (block): block is Paragraph => block.type === "paragraph",
     );
 
-    expect(listParagraphs.at(-1)?.listRendering?.marker).toBe("aa");
-  });
-
-  test("replaces repeated list marker placeholders", () => {
-    const numbering = parseNumbering(repeatedPlaceholderNumberingXml);
-    const body = parseDocumentBody(
-      `${XML_DECLARATION}
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml">
-  <w:body>${numberedParagraphXml("R01", 0, "Repeated", 11)}</w:body>
-</w:document>`,
-      null,
-      null,
-      numbering,
-    );
-    const paragraph = body.content.at(0);
-
-    expect(paragraph?.type).toBe("paragraph");
-    if (!paragraph || paragraph.type !== "paragraph") {
-      return;
-    }
-
-    expect(paragraph.listRendering?.marker).toBe("1.1");
+    expect(listParagraphs.at(0)?.listRendering?.marker).toBe("a.a");
+    expect(listParagraphs.at(25)?.listRendering?.marker).toBe("z.z");
+    expect(listParagraphs.at(26)?.listRendering?.marker).toBe("aa.aa");
+    expect(listParagraphs.at(27)?.listRendering?.marker).toBe("bb.bb");
   });
 });
 

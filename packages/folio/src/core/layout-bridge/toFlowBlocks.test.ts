@@ -379,6 +379,28 @@ describe("toFlowBlocks list numbering", () => {
     expect(blocks.at(1)?.attrs?.listMarker).toBe("II.");
   });
 
+  test("renders repeated placeholders and repeated-letter counters after z", () => {
+    const paragraphs = Array.from({ length: 28 }, (_unused, index) =>
+      schema.node(
+        "paragraph",
+        {
+          numPr: { numId: 9, ilvl: 0 },
+          listMarker: "%1.%1",
+          listNumFmt: "lowerLetter",
+          listLevelNumFmts: ["lowerLetter"],
+        },
+        [schema.text(`Item ${index + 1}`)],
+      ),
+    );
+
+    const blocks = toFlowBlocks(schema.node("doc", null, paragraphs));
+
+    expect(blocks.at(0)?.attrs?.listMarker).toBe("a.a");
+    expect(blocks.at(25)?.attrs?.listMarker).toBe("z.z");
+    expect(blocks.at(26)?.attrs?.listMarker).toBe("aa.aa");
+    expect(blocks.at(27)?.attrs?.listMarker).toBe("bb.bb");
+  });
+
   test("drops unresolved child placeholders with their following punctuation", () => {
     const doc = schema.node("doc", null, [
       schema.node(

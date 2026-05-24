@@ -63,14 +63,13 @@ const toRoman = (numParam: number): string => {
   return result;
 };
 
-const toRepeatedLetter = (value: number, firstCodePoint: number): string => {
+const toRepeatedLetter = (value: number, baseCodePoint: number): string => {
   if (value <= 0) {
     return "0";
   }
-
-  const char = String.fromCodePoint(firstCodePoint + ((value - 1) % 26));
-  const count = Math.floor((value - 1) / 26) + 1;
-  return char.repeat(count);
+  const zeroBased = value - 1;
+  const letter = String.fromCodePoint(baseCodePoint + (zeroBased % 26));
+  return letter.repeat(Math.floor(zeroBased / 26) + 1);
 };
 
 const formatNumber = (value: number, numFmt: string): string => {
