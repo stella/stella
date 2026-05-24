@@ -1,5 +1,5 @@
-import { panic, Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { Result } from "better-result";
+import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { workspaceViewTemplates } from "@/api/db/schema";
@@ -12,9 +12,8 @@ import {
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
-import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { PG_ERROR } from "@/api/lib/pg-error";
 import { parseViewLayout, tViewLayoutSchema } from "@/api/lib/views-schema";
 
 const createViewTemplateBodySchema = t.Object(
@@ -47,9 +46,13 @@ const createViewTemplate = createSafeHandler(
       );
     }
 
-    const existingCount = yield* Result.await(
-      safeDb((tx) =>
-        tx.$count(
+    const insertResult = yield* Result.await(
+      safeDb(async (tx) => {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${session.activeOrganizationId}), hashtext(${user.id}))`,
+        );
+
+        const existingCount = await tx.$count(
           workspaceViewTemplates,
           and(
             eq(
@@ -58,22 +61,17 @@ const createViewTemplate = createSafeHandler(
             ),
             eq(workspaceViewTemplates.userId, user.id),
           ),
-        ),
-      ),
-    );
+        );
 
-    if (existingCount >= LIMITS.viewTemplatesPerUser) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "View template limit reached",
-        }),
-      );
-    }
+        if (existingCount >= LIMITS.viewTemplatesPerUser) {
+          return {
+            ok: false as const,
+            status: 400 as const,
+            message: "View template limit reached",
+          };
+        }
 
-    const workspaceProperties = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.properties.findMany({
+        const workspaceProperties = await tx.query.properties.findMany({
           where: { workspaceId: { eq: workspaceId } },
           columns: {
             id: true,
@@ -82,67 +80,69 @@ const createViewTemplate = createSafeHandler(
             tool: true,
             system: true,
           },
-        }),
-      ),
-    );
-    const workspaceDependencies = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.propertyDependencies.findMany({
-          where: { workspaceId: { eq: workspaceId } },
-          columns: {
-            propertyId: true,
-            dependsOnPropertyId: true,
-            condition: true,
-          },
-        }),
-      ),
-    );
-    cleanStalePropertyIds(
-      layout,
-      workspaceProperties.map((property) => property.id),
-    );
-    const templateProperties = collectTemplateProperties({
-      layout,
-      properties: workspaceProperties,
-      dependencies: workspaceDependencies,
-    });
-
-    const insertResult = await safeDb((tx) =>
-      tx
-        .insert(workspaceViewTemplates)
-        .values({
-          organizationId: session.activeOrganizationId,
-          userId: user.id,
-          name: body.name,
+        });
+        const workspaceDependencies =
+          await tx.query.propertyDependencies.findMany({
+            where: { workspaceId: { eq: workspaceId } },
+            columns: {
+              propertyId: true,
+              dependsOnPropertyId: true,
+              condition: true,
+            },
+          });
+        cleanStalePropertyIds(
           layout,
-          templateProperties,
-        })
-        .returning({
-          id: workspaceViewTemplates.id,
-        }),
+          workspaceProperties.map((property) => property.id),
+        );
+        const templateProperties = collectTemplateProperties({
+          layout,
+          properties: workspaceProperties,
+          dependencies: workspaceDependencies,
+        });
+
+        const rows = await tx
+          .insert(workspaceViewTemplates)
+          .values({
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+            name: body.name,
+            layout,
+            templateProperties,
+          })
+          .onConflictDoNothing({
+            target: [
+              workspaceViewTemplates.organizationId,
+              workspaceViewTemplates.userId,
+              workspaceViewTemplates.name,
+            ],
+          })
+          .returning({
+            id: workspaceViewTemplates.id,
+          });
+
+        const row = rows.at(0);
+        if (!row) {
+          return {
+            ok: false as const,
+            status: 409 as const,
+            message: "A view template with this name already exists",
+          };
+        }
+
+        return { ok: true as const, id: row.id };
+      }),
     );
 
-    if (Result.isError(insertResult)) {
-      if (
-        DatabaseError.is(insertResult.error) &&
-        insertResult.error.code === PG_ERROR.UNIQUE_VIOLATION
-      ) {
-        return Result.err(
-          new HandlerError({
-            status: 409,
-            message: "A view template with this name already exists",
-          }),
-        );
-      }
-      return Result.err(insertResult.error);
+    if (!insertResult.ok) {
+      return Result.err(
+        new HandlerError({
+          status: insertResult.status,
+          message: insertResult.message,
+        }),
+      );
     }
 
-    const row = insertResult.value.at(0);
-    if (!row) {
-      panic("Failed to create view template");
-    }
-
-    return Result.ok({ id: row.id });
+    return Result.ok({ id: insertResult.id });
   },
 );
 
