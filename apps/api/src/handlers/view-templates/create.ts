@@ -85,6 +85,18 @@ const createViewTemplate = createSafeHandler(
         }),
       ),
     );
+    const workspaceDependencies = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.propertyDependencies.findMany({
+          where: { workspaceId: { eq: workspaceId } },
+          columns: {
+            propertyId: true,
+            dependsOnPropertyId: true,
+            condition: true,
+          },
+        }),
+      ),
+    );
     cleanStalePropertyIds(
       layout,
       workspaceProperties.map((property) => property.id),
@@ -92,6 +104,7 @@ const createViewTemplate = createSafeHandler(
     const templateProperties = collectTemplateProperties({
       layout,
       properties: workspaceProperties,
+      dependencies: workspaceDependencies,
     });
 
     const insertResult = await safeDb((tx) =>

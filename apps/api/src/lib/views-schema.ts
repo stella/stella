@@ -3,6 +3,7 @@ import { t } from "elysia";
 import * as v from "valibot";
 
 import {
+  propertyConditionSchema,
   propertyContentSchema,
   propertyToolSchema,
 } from "@/api/db/schema-validators";
@@ -290,6 +291,17 @@ export const tViewTemplatePropertySchema = t.Object(
     content: propertyContentSchema,
     tool: propertyToolSchema,
     createIfMissing: t.Boolean(),
+    dependencies: t.Optional(
+      t.Array(
+        t.Object(
+          {
+            dependsOnSourceId: t.String({ minLength: 1 }),
+            condition: t.Union([propertyConditionSchema, t.Null()]),
+          },
+          strictObjectOptions,
+        ),
+      ),
+    ),
   },
   strictObjectOptions,
 );

@@ -1,7 +1,8 @@
 import { eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db";
-import { properties } from "@/api/db/schema";
+import { properties, propertyDependencies } from "@/api/db/schema";
+import type { PropertyCondition } from "@/api/db/schema-validators";
 import type { AuditContext } from "@/api/lib/audit-log";
 import {
   AUDIT_ACTION,
@@ -10,6 +11,7 @@ import {
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { brandPersistedPropertyId } from "@/api/lib/safe-id-boundaries";
 import type {
   ViewFilterCondition,
   ViewLayout,
@@ -22,6 +24,12 @@ type WorkspacePropertyTemplateSource = {
   content: typeof properties.$inferSelect.content;
   tool: typeof properties.$inferSelect.tool;
   system: boolean;
+};
+
+type WorkspacePropertyDependencySource = {
+  propertyId: string;
+  dependsOnPropertyId: string;
+  condition: PropertyCondition | null;
 };
 
 type ResolveTemplatePropertiesOptions = {
@@ -40,9 +48,11 @@ type ResolveTemplatePropertiesResult =
 export const collectTemplateProperties = ({
   layout,
   properties: workspaceProperties,
+  dependencies,
 }: {
   layout: ViewLayout;
   properties: readonly WorkspacePropertyTemplateSource[];
+  dependencies: readonly WorkspacePropertyDependencySource[];
 }): ViewTemplateProperty[] => {
   const referencedPropertyIds = collectLayoutPropertyIds(layout);
   const visiblePropertyIds = collectVisibleTemplatePropertyIds({
@@ -54,6 +64,19 @@ export const collectTemplateProperties = ({
     ...visiblePropertyIds,
   ]);
 
+  const dependenciesByPropertyId = new Map<
+    string,
+    { dependsOnSourceId: string; condition: PropertyCondition | null }[]
+  >();
+  for (const dep of dependencies) {
+    const list = dependenciesByPropertyId.get(dep.propertyId) ?? [];
+    list.push({
+      dependsOnSourceId: dep.dependsOnPropertyId,
+      condition: dep.condition,
+    });
+    dependenciesByPropertyId.set(dep.propertyId, list);
+  }
+
   return workspaceProperties
     .filter((property) => !property.system)
     .filter(
@@ -61,14 +84,21 @@ export const collectTemplateProperties = ({
         creatablePropertyIds.has(property.id) ||
         layout.hiddenProperties.includes(property.id),
     )
-    .map((property) => ({
-      version: 1,
-      sourceId: property.id,
-      name: property.name,
-      content: property.content,
-      tool: property.tool,
-      createIfMissing: creatablePropertyIds.has(property.id),
-    }));
+    .map((property): ViewTemplateProperty => {
+      const propertyDeps = dependenciesByPropertyId.get(property.id);
+      const result: ViewTemplateProperty = {
+        version: 1,
+        sourceId: property.id,
+        name: property.name,
+        content: property.content,
+        tool: property.tool,
+        createIfMissing: creatablePropertyIds.has(property.id),
+      };
+      if (propertyDeps && propertyDeps.length > 0) {
+        result.dependencies = propertyDeps;
+      }
+      return result;
+    });
 };
 
 export const resolveTemplateProperties = async ({
@@ -83,6 +113,17 @@ export const resolveTemplateProperties = async ({
     const propertyIds = await readPropertyIds(tx, workspaceId);
     return { ok: true, layout, propertyIds };
   }
+
+  // Lock all existing property rows in this workspace before the
+  // limit check and any inserts. Without this, two concurrent
+  // template-apply requests can both pass the count guard and exceed
+  // LIMITS.propertiesCount. Matches the pattern in
+  // handlers/properties/create.ts.
+  await tx
+    .select({ id: properties.id })
+    .from(properties)
+    .where(eq(properties.workspaceId, workspaceId))
+    .for("update");
 
   const existingProperties = await tx.query.properties.findMany({
     where: { workspaceId: { eq: workspaceId } },
@@ -183,8 +224,68 @@ export const resolveTemplateProperties = async ({
     }
   }
 
+  await recreateTemplateDependencies({
+    tx,
+    workspaceId,
+    templateProperties,
+    propertyIdBySourceId,
+  });
+
   remapLayoutPropertyIds(layout, propertyIdBySourceId);
   return { ok: true, layout, propertyIds: nextPropertyIds };
+};
+
+const recreateTemplateDependencies = async ({
+  tx,
+  workspaceId,
+  templateProperties,
+  propertyIdBySourceId,
+}: {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  templateProperties: readonly ViewTemplateProperty[];
+  propertyIdBySourceId: ReadonlyMap<string, string>;
+}): Promise<void> => {
+  const rows = templateProperties.flatMap((templateProperty) => {
+    const propertyId = propertyIdBySourceId.get(templateProperty.sourceId);
+    if (!propertyId || !templateProperty.dependencies) {
+      return [];
+    }
+    return templateProperty.dependencies.flatMap((dep) => {
+      const dependsOnPropertyId = propertyIdBySourceId.get(
+        dep.dependsOnSourceId,
+      );
+      // Drop edges where either endpoint failed to remap; the
+      // missing-property branch above already declined to create
+      // them, so the workflow planner will treat the property as
+      // having no inputs rather than crashing.
+      if (!dependsOnPropertyId || dependsOnPropertyId === propertyId) {
+        return [];
+      }
+      return [
+        {
+          workspaceId,
+          propertyId: brandPersistedPropertyId(propertyId),
+          dependsOnPropertyId: brandPersistedPropertyId(dependsOnPropertyId),
+          condition: dep.condition,
+        },
+      ];
+    });
+  });
+
+  if (rows.length === 0) {
+    return;
+  }
+
+  await tx
+    .insert(propertyDependencies)
+    .values(rows)
+    .onConflictDoNothing({
+      target: [
+        propertyDependencies.propertyId,
+        propertyDependencies.dependsOnPropertyId,
+      ],
+    });
 };
 
 const readPropertyIds = async (
