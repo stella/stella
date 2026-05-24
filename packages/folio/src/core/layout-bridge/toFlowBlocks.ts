@@ -7,6 +7,7 @@
 
 import type { Node as PMNode, Mark } from "prosemirror-model";
 
+import { convertBulletToUnicode } from "../docx/bulletMarkers";
 import type {
   FlowBlock,
   ParagraphBlock,
@@ -182,14 +183,10 @@ function toLetter(value: number, upper: boolean): string {
   if (value <= 0) {
     return "";
   }
-  let remaining = value;
-  let output = "";
-  while (remaining > 0) {
-    const remainder = (remaining - 1) % 26;
-    output = String.fromCodePoint(65 + remainder) + output;
-    remaining = Math.floor((remaining - 1) / 26);
-  }
-  return upper ? output : output.toLowerCase();
+  const zeroBased = value - 1;
+  const baseCodePoint = upper ? 65 : 97;
+  const letter = String.fromCodePoint(baseCodePoint + (zeroBased % 26));
+  return letter.repeat(Math.floor(zeroBased / 26) + 1);
 }
 
 function formatCounter(
@@ -273,7 +270,7 @@ function computeListMarker(
   }
 
   if (pmAttrs.listIsBullet) {
-    return pmAttrs.listMarker || "•";
+    return convertBulletToUnicode(pmAttrs.listMarker || "");
   }
 
   const level = pmAttrs.numPr?.ilvl ?? 0;
@@ -1235,7 +1232,9 @@ function convertParagraphAttrs(
   if (resolvedMarker !== null) {
     attrs.listMarker = resolvedMarker;
   } else if (pmAttrs.listMarker) {
-    attrs.listMarker = pmAttrs.listMarker;
+    attrs.listMarker = pmAttrs.listIsBullet
+      ? convertBulletToUnicode(pmAttrs.listMarker)
+      : pmAttrs.listMarker;
   }
   if (pmAttrs.listIsBullet !== undefined) {
     attrs.listIsBullet = pmAttrs.listIsBullet;

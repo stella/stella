@@ -805,24 +805,14 @@ function toRoman(num: number): string {
   return result;
 }
 
-/**
- * Convert number to letter (a, b, c, ... z, aa, ab, ...)
- */
 function toLetter(num: number): string {
   if (num <= 0) {
     return "";
   }
 
-  let result = "";
-  let remaining = num;
-
-  while (remaining > 0) {
-    remaining--;
-    result = String.fromCodePoint(97 + (remaining % 26)) + result;
-    remaining = Math.floor(remaining / 26);
-  }
-
-  return result;
+  const zeroBased = num - 1;
+  const letter = String.fromCodePoint(97 + (zeroBased % 26));
+  return letter.repeat(Math.floor(zeroBased / 26) + 1);
 }
 
 /**
@@ -857,7 +847,7 @@ export function renderListMarker(
       const counter = counters[counterIndex] ?? 1;
       const format = formats[counterIndex] ?? "decimal";
       const formatted = formatNumber(counter, format);
-      result = result.replace(placeholder, formatted);
+      result = result.replaceAll(placeholder, formatted);
     }
   }
 
