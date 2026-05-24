@@ -52,8 +52,12 @@ export default {
             // - UnaryExpression(void): `void safeDb(...)` — the project
             //   sets `no-void: { allowAsStatement: true }`, so without
             //   this `void` becomes a one-token bypass of the rule
-            // - TSAsExpression / TSTypeAssertion: `safeDb(...) as unknown`
-            //   launders the Result type away but still drops the value
+            // - TSAsExpression / TSTypeAssertion / TSSatisfiesExpression:
+            //   `safeDb(...) as unknown` / `safeDb(...) satisfies …` —
+            //   the type-only wrapper drops the value at runtime
+            // - SequenceExpression: `safeDb(...), other()` discards the
+            //   Result whether our call is the last operand (statement
+            //   discards the sequence's value) or earlier (comma drops it)
             // - MemberExpression as the object: `safeDb(...).map(...)`
             //   continues the Result through a chained method
             // - CallExpression as the callee: the chained method call
@@ -74,6 +78,8 @@ export default {
                 parent.type === "TSNonNullExpression" ||
                 parent.type === "TSAsExpression" ||
                 parent.type === "TSTypeAssertion" ||
+                parent.type === "TSSatisfiesExpression" ||
+                parent.type === "SequenceExpression" ||
                 (parent.type === "UnaryExpression" &&
                   parent.operator === "void");
               // Chain methods (`safeDb(...).map(...)`): the Result flows

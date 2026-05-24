@@ -29,7 +29,8 @@ export default {
             current?.type === "ParenthesizedExpression" ||
             current?.type === "TSAsExpression" ||
             current?.type === "TSTypeAssertion" ||
-            current?.type === "TSNonNullExpression"
+            current?.type === "TSNonNullExpression" ||
+            current?.type === "TSSatisfiesExpression"
           ) {
             current = current.expression;
           }
