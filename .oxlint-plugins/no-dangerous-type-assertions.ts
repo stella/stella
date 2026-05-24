@@ -23,12 +23,21 @@ export default {
         },
       },
       create(context) {
-        function check(node) {
-          let expression = node.expression;
-          while (expression?.type === "ParenthesizedExpression") {
-            expression = expression.expression;
+        function unwrapExpression(expression) {
+          let current = expression;
+          while (
+            current?.type === "ParenthesizedExpression" ||
+            current?.type === "TSAsExpression" ||
+            current?.type === "TSTypeAssertion" ||
+            current?.type === "TSNonNullExpression"
+          ) {
+            current = current.expression;
           }
+          return current;
+        }
 
+        function check(node) {
+          const expression = unwrapExpression(node.expression);
           if (expression?.type !== "ObjectExpression") {
             return;
           }

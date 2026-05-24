@@ -59,6 +59,9 @@ export default {
             // - CallExpression as the callee: the chained method call
             //   `safeDb(...).map(...)` still produces a Result the
             //   caller must consume
+            // - Logical/conditional branches: `condition && safeDb(...)`
+            //   and `condition ? safeDb(...) : other()` still discard
+            //   the Result when the whole expression is a statement
             // If the outermost wrapper sits inside an ExpressionStatement,
             // the call result is discarded.
             let current = node;
@@ -83,7 +86,17 @@ export default {
                 (parent.type === "MemberExpression" &&
                   parent.object === current) ||
                 (parent.type === "CallExpression" && parent.callee === current);
-              if (!isTransparentWrapper && !isChainStep) {
+              const isDiscardedExpressionBranch =
+                (parent.type === "LogicalExpression" &&
+                  (parent.left === current || parent.right === current)) ||
+                (parent.type === "ConditionalExpression" &&
+                  (parent.consequent === current ||
+                    parent.alternate === current));
+              if (
+                !isTransparentWrapper &&
+                !isChainStep &&
+                !isDiscardedExpressionBranch
+              ) {
                 break;
               }
               current = parent;
