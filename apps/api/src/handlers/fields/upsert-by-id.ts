@@ -163,38 +163,6 @@ const upsertField = createSafeHandler(
       );
     }
 
-    const entity = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.entities.findFirst({
-          columns: { id: true, currentVersionId: true, readOnly: true },
-          where: {
-            id: { eq: body.entityId },
-            workspaceId: { eq: workspaceId },
-          },
-        }),
-      ),
-    );
-
-    if (!entity) {
-      return Result.err(
-        new HandlerError({
-          status: 404,
-          message: "Entity not found in workspace",
-        }),
-      );
-    }
-    if (entity.readOnly) {
-      return Result.err(
-        new HandlerError({ status: 409, message: "Entity is read-only" }),
-      );
-    }
-
-    if (!entity.currentVersionId) {
-      panic("Entity has no current version");
-    }
-
-    const entityVersionId = entity.currentVersionId;
-
     const isEmpty =
       body.content.value === null ||
       body.content.value === "" ||
@@ -204,37 +172,40 @@ const upsertField = createSafeHandler(
       getSearchProvider().indexEntity(body.entityId).catch(captureError);
     };
 
-    if (isEmpty) {
-      yield* Result.await(
-        safeDb(async (tx) => {
-          await lockCellOnManualEdit({
-            tx,
-            workspaceId,
-            entityVersionId,
-            propertyId: property.id,
-            userId: user.id,
-          });
-
-          await tx
-            .delete(fields)
-            .where(
-              and(
-                eq(fields.propertyId, property.id),
-                eq(fields.entityVersionId, entityVersionId),
-              ),
-            );
-          await tx
-            .update(entities)
-            .set({ updatedAt: new Date() })
-            .where(eq(entities.id, body.entityId));
-        }),
-      );
-      reindex();
-      return Result.ok(undefined);
-    }
-
-    yield* Result.await(
+    const writeResult = yield* Result.await(
       safeDb(async (tx) => {
+        // Lock acquisition order (entity row → advisory cell lock)
+        // must match update-cell-metadata.ts. Reversing here would
+        // deadlock against a concurrent manual-flag update on the
+        // same cell.
+        const entityRows = await tx
+          .select({
+            id: entities.id,
+            currentVersionId: entities.currentVersionId,
+            readOnly: entities.readOnly,
+          })
+          .from(entities)
+          .where(
+            and(
+              eq(entities.id, body.entityId),
+              eq(entities.workspaceId, workspaceId),
+            ),
+          )
+          .for("update");
+        const entity = entityRows.at(0);
+
+        if (!entity) {
+          return { status: "entity-not-found" as const };
+        }
+        if (entity.readOnly) {
+          return { status: "entity-read-only" as const };
+        }
+        if (!entity.currentVersionId) {
+          panic("Entity has no current version");
+        }
+
+        const entityVersionId = entity.currentVersionId;
+
         await lockCellOnManualEdit({
           tx,
           workspaceId,
@@ -252,19 +223,38 @@ const upsertField = createSafeHandler(
             ),
           );
 
-        await tx.insert(fields).values({
-          workspaceId,
-          propertyId: property.id,
-          entityVersionId,
-          content: body.content,
-        });
+        if (!isEmpty) {
+          await tx.insert(fields).values({
+            workspaceId,
+            propertyId: property.id,
+            entityVersionId,
+            content: body.content,
+          });
+        }
 
         await tx
           .update(entities)
           .set({ updatedAt: new Date() })
           .where(eq(entities.id, body.entityId));
+
+        return { status: "ok" as const };
       }),
     );
+
+    if (writeResult.status === "entity-not-found") {
+      return Result.err(
+        new HandlerError({
+          status: 404,
+          message: "Entity not found in workspace",
+        }),
+      );
+    }
+    if (writeResult.status === "entity-read-only") {
+      return Result.err(
+        new HandlerError({ status: 409, message: "Entity is read-only" }),
+      );
+    }
+
     reindex();
     return Result.ok(undefined);
   },

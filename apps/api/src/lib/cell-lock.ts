@@ -14,6 +14,14 @@ import type { SafeId } from "@/api/lib/branded-types";
 // Callers must hold the locks for the full extent of any
 // `cell_metadata` read-then-write sequence; `pg_advisory_xact_lock`
 // auto-releases at COMMIT/ROLLBACK.
+//
+// **Lock ordering invariant**: if the transaction also takes an
+// entity row lock (`SELECT entities ... FOR UPDATE` or any
+// `UPDATE entities` that implicitly takes one), acquire that entity
+// lock FIRST and the cell advisory lock SECOND. Reversing the order
+// in any one caller produces a classic AB/BA deadlock against the
+// other handlers, since `update-cell-metadata` and `upsert-by-id`
+// both touch the same (entity, cell) pair.
 
 export const acquireCellLock = async ({
   tx,
