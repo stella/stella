@@ -118,6 +118,22 @@ const ReadOnlyDisplay = ({
     );
   }
 
+  if (content.type === "unsupported") {
+    return (
+      <span className="text-muted-foreground block truncate text-sm italic">
+        {t("workspaces.fields.formatNotSupported")}
+      </span>
+    );
+  }
+
+  if (content.type === "clip") {
+    return (
+      <span className="text-muted-foreground block truncate text-sm">
+        {content.url}
+      </span>
+    );
+  }
+
   return <span className="text-muted-foreground text-sm">—</span>;
 };
 
