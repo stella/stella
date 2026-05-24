@@ -97,6 +97,7 @@ describe("chat tool schemas", () => {
         accessibleWorkspaceIds: [workspaceId],
       }),
       hasActiveFileChat: false,
+      webSearchEnabled: false,
     });
 
     expect(tools).toHaveProperty("ask-user");
@@ -120,6 +121,7 @@ describe("chat tool schemas", () => {
         accessibleWorkspaceIds: [workspaceId],
       }),
       hasActiveFileChat: false,
+      webSearchEnabled: false,
     });
 
     const aresLookup = tools["ares_lookup_company"];

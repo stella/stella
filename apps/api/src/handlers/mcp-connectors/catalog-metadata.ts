@@ -43,6 +43,16 @@ const NATIVE_TOOL_CATALOG = [
     iconUrl: null,
     recommendedJurisdictions: [...BOE_RECOMMENDED_JURISDICTIONS],
   },
+  {
+    slug: "web-search",
+    displayName: "Web Search",
+    description:
+      "Search the public web and read individual pages. Queries hit primary sources first (courts, legislation portals) when a jurisdiction is set; falls back to the open web otherwise. Per-thread opt-in.",
+    url: "https://tavily.com",
+    documentationUrl: null,
+    iconUrl: null,
+    recommendedJurisdictions: [],
+  },
 ] satisfies NativeToolCatalogItem[];
 
 /** Authoritative slug list — independent of jurisdiction filtering. */

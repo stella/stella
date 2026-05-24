@@ -477,6 +477,7 @@
       "docxReplaceBlockSummary": "Replace {blockId}",
       "docxReplaceSummary": "Replace “{find}” with “{replace}”",
       "execute-typescript": "Odczytywanie danych sprawy",
+      "fetch_url": "Reading page",
       "load-skill": "Odczytywanie wskazówek",
       "read-contact": "Odczyt kontaktu",
       "read-content-across-matters": "Odczyt treści w różnych sprawach",
@@ -484,7 +485,8 @@
       "run-stella-query": "Odczytywanie danych sprawy",
       "search-across-matters": "Wyszukiwanie w różnych sprawach",
       "unknown": "Używanie narzędzia",
-      "update-entity-fields": "Aktualizacja metadanych"
+      "update-entity-fields": "Aktualizacja metadanych",
+      "web_search": "Searching the web"
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# znak} few {# znaki} many {# znaków} other {# znaku}}",
@@ -496,7 +498,16 @@
       "toggleDetails": "Przełącz szczegóły"
     },
     "unsupportedFileType": "Nieobsługiwany typ pliku",
-    "uploadFailed": "Przetwarzanie pliku nie powiodło się"
+    "uploadFailed": "Przetwarzanie pliku nie powiodło się",
+    "webSearch": {
+      "fetchedFrom": "from {source}",
+      "openSource": "Open {source} in a new tab",
+      "sources": "Sources",
+      "toggleDescription": "Let the model search the public web and read pages for this conversation.",
+      "toggleLabel": "Web search",
+      "toggleOff": "Turn off web search",
+      "toggleOn": "Turn on web search"
+    }
   },
   "clauses": {
     "addVariant": "Dodaj wariant",

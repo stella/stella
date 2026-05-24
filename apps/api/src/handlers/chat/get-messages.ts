@@ -39,7 +39,11 @@ const getMessages = createSafeRootHandler(
             id: { eq: threadId },
             userId: { eq: user.id },
           },
-          columns: { workspaceId: true, contextMatterIds: true },
+          columns: {
+            workspaceId: true,
+            contextMatterIds: true,
+            webSearchEnabled: true,
+          },
           with: {
             messages: {
               columns: {
@@ -56,7 +60,11 @@ const getMessages = createSafeRootHandler(
 
     if (!thread) {
       if (allowMissingThread) {
-        return Result.ok({ messages: [], contextMatterIds: [] });
+        return Result.ok({
+          messages: [],
+          contextMatterIds: [],
+          webSearchEnabled: false,
+        });
       }
 
       return Result.err(
@@ -90,6 +98,7 @@ const getMessages = createSafeRootHandler(
         parts: normalizeLegacyToolInputs(row.content.data),
       })),
       contextMatterIds: thread.contextMatterIds,
+      webSearchEnabled: thread.webSearchEnabled,
     });
   },
 );

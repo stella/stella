@@ -477,6 +477,7 @@
       "docxReplaceBlockSummary": "Replace {blockId}",
       "docxReplaceSummary": "Replace “{find}” with “{replace}”",
       "execute-typescript": "Skaitomi bylos duomenys",
+      "fetch_url": "Reading page",
       "load-skill": "Skaitomos gairės",
       "read-contact": "Skaitomas kontaktas",
       "read-content-across-matters": "Skaitomas turinys keliose bylose",
@@ -484,7 +485,8 @@
       "run-stella-query": "Skaitomi bylos duomenys",
       "search-across-matters": "Ieškoma keliose bylose",
       "unknown": "Naudojamas įrankis",
-      "update-entity-fields": "Atnaujinami metaduomenys"
+      "update-entity-fields": "Atnaujinami metaduomenys",
+      "web_search": "Searching the web"
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# simbolis} few {# simboliai} many {# simbolių} other {# simbolio}}",
@@ -496,7 +498,16 @@
       "toggleDetails": "Perjungti detales"
     },
     "unsupportedFileType": "Nepalaikomas failo tipas",
-    "uploadFailed": "Nepavyko apdoroti failo"
+    "uploadFailed": "Nepavyko apdoroti failo",
+    "webSearch": {
+      "fetchedFrom": "from {source}",
+      "openSource": "Open {source} in a new tab",
+      "sources": "Sources",
+      "toggleDescription": "Let the model search the public web and read pages for this conversation.",
+      "toggleLabel": "Web search",
+      "toggleOff": "Turn off web search",
+      "toggleOn": "Turn on web search"
+    }
   },
   "clauses": {
     "addVariant": "Pridėti variantą",

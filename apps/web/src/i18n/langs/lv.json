@@ -477,6 +477,7 @@
       "docxReplaceBlockSummary": "Replace {blockId}",
       "docxReplaceSummary": "Replace “{find}” with “{replace}”",
       "execute-typescript": "Lietas datu lasīšana",
+      "fetch_url": "Reading page",
       "load-skill": "Norādījumu lasīšana",
       "read-contact": "Kontaktpersonas lasīšana",
       "read-content-across-matters": "Satura lasīšana vairākās lietās",
@@ -484,7 +485,8 @@
       "run-stella-query": "Lietas datu lasīšana",
       "search-across-matters": "Meklēšana vairākās lietās",
       "unknown": "Rīka izmantošana",
-      "update-entity-fields": "Metadatu atjaunināšana"
+      "update-entity-fields": "Metadatu atjaunināšana",
+      "web_search": "Searching the web"
     },
     "toolCall": {
       "characterCount": "{count, plural, zero {# rakstzīmju} one {# rakstzīme} other {# rakstzīmes}}",
@@ -496,7 +498,16 @@
       "toggleDetails": "Pārslēgt detaļas"
     },
     "unsupportedFileType": "Neatbalstīts faila tips",
-    "uploadFailed": "Neizdevās apstrādāt failu"
+    "uploadFailed": "Neizdevās apstrādāt failu",
+    "webSearch": {
+      "fetchedFrom": "from {source}",
+      "openSource": "Open {source} in a new tab",
+      "sources": "Sources",
+      "toggleDescription": "Let the model search the public web and read pages for this conversation.",
+      "toggleLabel": "Web search",
+      "toggleOff": "Turn off web search",
+      "toggleOn": "Turn on web search"
+    }
   },
   "clauses": {
     "addVariant": "Pievienot variantu",

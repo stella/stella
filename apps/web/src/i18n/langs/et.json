@@ -477,6 +477,7 @@
       "docxReplaceBlockSummary": "Replace {blockId}",
       "docxReplaceSummary": "Replace “{find}” with “{replace}”",
       "execute-typescript": "Asja andmete lugemine",
+      "fetch_url": "Reading page",
       "load-skill": "Juhiste lugemine",
       "read-contact": "Kontakti lugemine",
       "read-content-across-matters": "Sisu lugemine kõigist asjadest",
@@ -484,7 +485,8 @@
       "run-stella-query": "Asja andmete lugemine",
       "search-across-matters": "Otsing kõigis asjades",
       "unknown": "Tööriista kasutamine",
-      "update-entity-fields": "Metaandmete uuendamine"
+      "update-entity-fields": "Metaandmete uuendamine",
+      "web_search": "Searching the web"
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# märk} other {# märki}}",
@@ -496,7 +498,16 @@
       "toggleDetails": "Üksikasjade lülitamine"
     },
     "unsupportedFileType": "Toetamata failitüüp",
-    "uploadFailed": "Faili töötlemine ebaõnnestus"
+    "uploadFailed": "Faili töötlemine ebaõnnestus",
+    "webSearch": {
+      "fetchedFrom": "from {source}",
+      "openSource": "Open {source} in a new tab",
+      "sources": "Sources",
+      "toggleDescription": "Let the model search the public web and read pages for this conversation.",
+      "toggleLabel": "Web search",
+      "toggleOff": "Turn off web search",
+      "toggleOn": "Turn on web search"
+    }
   },
   "clauses": {
     "addVariant": "Lisa variant",

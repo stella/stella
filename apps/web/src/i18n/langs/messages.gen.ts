@@ -480,6 +480,7 @@ type Messages = {
       "docxReplaceBlockSummary": "Replace {blockId}";
       "docxReplaceSummary": "Replace “{find}” with “{replace}”";
       "execute-typescript": "Reading workspace data";
+      "fetch_url": "Reading page";
       "load-skill": "Reading guidance";
       "read-contact": "Reading contact";
       "read-content-across-matters": "Reading content across matters";
@@ -488,6 +489,7 @@ type Messages = {
       "search-across-matters": "Searching across matters";
       "unknown": "Using tool";
       "update-entity-fields": "Updating metadata";
+      "web_search": "Searching the web";
     };
     "toolCall": {
       "characterCount": "{count, plural, one {# character} other {# characters}}";
@@ -500,6 +502,15 @@ type Messages = {
     };
     "unsupportedFileType": "Unsupported file type";
     "uploadFailed": "Failed to process file";
+    "webSearch": {
+      "fetchedFrom": "from {source}";
+      "openSource": "Open {source} in a new tab";
+      "sources": "Sources";
+      "toggleDescription": "Let the model search the public web and read pages for this conversation.";
+      "toggleLabel": "Web search";
+      "toggleOff": "Turn off web search";
+      "toggleOn": "Turn on web search";
+    };
   };
   "clauses": {
     "addVariant": "Add variant";

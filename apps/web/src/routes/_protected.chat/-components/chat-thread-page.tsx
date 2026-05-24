@@ -34,6 +34,7 @@ import { useDevStore } from "@/lib/dev-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
+import { ChatWebSearchToggle } from "@/routes/_protected.chat/-components/chat-web-search-toggle";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
@@ -241,6 +242,10 @@ export const ChatThreadPage = ({
               )}
             </div>
             <div className="flex items-center gap-1">
+              <ChatWebSearchToggle
+                enabled={data.webSearchEnabled}
+                threadRef={threadRef}
+              />
               <ChatAnonymizedToggle
                 enabled={anonymized}
                 onChange={setAnonymized}

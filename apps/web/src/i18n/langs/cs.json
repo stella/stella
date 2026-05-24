@@ -476,7 +476,8 @@
       "docxInsertBeforeSummary": "Vložit text před {blockId}",
       "docxReplaceBlockSummary": "Nahradit {blockId}",
       "docxReplaceSummary": "Nahradit „{find}“ za „{replace}“",
-      "execute-typescript": "Čtu data spisu",
+      "execute-typescript": "Čtu data věci",
+      "fetch_url": "Reading page",
       "load-skill": "Čtu pokyny",
       "read-contact": "Čtení kontaktu",
       "read-content-across-matters": "Čtení obsahu napříč věcmi",
@@ -484,7 +485,8 @@
       "run-stella-query": "Čtu data spisu",
       "search-across-matters": "Vyhledávání napříč věcmi",
       "unknown": "Použití nástroje",
-      "update-entity-fields": "Aktualizace metadat"
+      "update-entity-fields": "Aktualizace metadat",
+      "web_search": "Searching the web"
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# znak} few {# znaky} other {# znaků}}",
@@ -496,7 +498,16 @@
       "toggleDetails": "Přepnout detaily"
     },
     "unsupportedFileType": "Nepodporovaný typ souboru",
-    "uploadFailed": "Zpracování souboru selhalo"
+    "uploadFailed": "Zpracování souboru selhalo",
+    "webSearch": {
+      "fetchedFrom": "from {source}",
+      "openSource": "Open {source} in a new tab",
+      "sources": "Sources",
+      "toggleDescription": "Let the model search the public web and read pages for this conversation.",
+      "toggleLabel": "Web search",
+      "toggleOff": "Turn off web search",
+      "toggleOn": "Turn on web search"
+    }
   },
   "clauses": {
     "addVariant": "Přidat variantu",

@@ -41,6 +41,7 @@ import { SourceChips } from "@/components/chat/source-chips";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
+import { WebSearchSources } from "@/components/chat/web-search-sources";
 import type { TranslationKey } from "@/i18n/types";
 import { getUserFileContentUrl } from "@/lib/user-files";
 import type { QueuedChatMessage } from "@/routes/_protected.chat/-hooks/use-chat-session";
@@ -758,6 +759,7 @@ const AssistantMessageParts = ({
 
         return null;
       })}
+      <WebSearchSources parts={message.parts} />
     </>
   );
 };

@@ -76,10 +76,12 @@ const CHAT_TOOL_TITLE_KEYS = {
   borme_get_summary: "chat.tool.borme_get_summary",
   "create-document": "chat.tool.create-document",
   "describe-stella-api": "chat.tool.describe-stella-api",
+  fetch_url: "chat.tool.fetch_url",
   "run-stella-query": "chat.tool.run-stella-query",
   "load-skill": "chat.tool.load-skill",
   "read-skill-resource": "chat.tool.read-skill-resource",
   "update-entity-fields": "chat.tool.update-entity-fields",
+  web_search: "chat.tool.web_search",
 } as const satisfies Record<keyof ChatUITools, TranslationKey>;
 
 const LEGACY_CHAT_TOOL_TITLE_KEYS = {

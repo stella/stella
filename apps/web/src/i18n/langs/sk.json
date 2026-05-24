@@ -477,6 +477,7 @@
       "docxReplaceBlockSummary": "Nahradiť {blockId}",
       "docxReplaceSummary": "Nahradiť „{find}“ za „{replace}“",
       "execute-typescript": "Čítam dáta veci",
+      "fetch_url": "Reading page",
       "load-skill": "Čítam pokyny",
       "read-contact": "Čítanie kontaktu",
       "read-content-across-matters": "Čítanie obsahu naprieč vecami",
@@ -484,7 +485,8 @@
       "run-stella-query": "Čítam dáta veci",
       "search-across-matters": "Vyhľadávanie naprieč vecami",
       "unknown": "Používanie nástroja",
-      "update-entity-fields": "Aktualizácia metadát"
+      "update-entity-fields": "Aktualizácia metadát",
+      "web_search": "Searching the web"
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# znak} few {# znaky} other {# znakov}}",
@@ -496,7 +498,16 @@
       "toggleDetails": "Prepnúť podrobnosti"
     },
     "unsupportedFileType": "Nepodporovaný typ súboru",
-    "uploadFailed": "Spracovanie súboru zlyhalo"
+    "uploadFailed": "Spracovanie súboru zlyhalo",
+    "webSearch": {
+      "fetchedFrom": "from {source}",
+      "openSource": "Open {source} in a new tab",
+      "sources": "Sources",
+      "toggleDescription": "Let the model search the public web and read pages for this conversation.",
+      "toggleLabel": "Web search",
+      "toggleOff": "Turn off web search",
+      "toggleOn": "Turn on web search"
+    }
   },
   "clauses": {
     "addVariant": "Pridať variant",

@@ -180,6 +180,11 @@ const sendMessage = createSafeRootHandler(
         accessibleWorkspaceIds,
       }),
       hasActiveFileChat: true,
+      // Validation tools must include every tool that could have been
+      // called in this thread's history. Web search is per-thread
+      // opt-in for live execution, but past tool messages from a
+      // previously-toggled-on session must still pass schema validation.
+      webSearchEnabled: true,
       externalTools: validationExternalMcpTools?.tools,
     });
 
@@ -393,6 +398,7 @@ const sendMessage = createSafeRootHandler(
         accessibleWorkspaceIds,
       }),
       hasActiveFileChat: body.activeFile?.supportsDocxEdits === true,
+      webSearchEnabled: thread.data.webSearchEnabled,
       externalTools: externalMcpTools.tools,
       disabledNativeToolSlugs,
       skillMetadata: chatContext.skillMetadata,
@@ -591,6 +597,7 @@ type ThreadRecord = {
   workspaceId: SafeId<"workspace"> | null;
   contextMatterIds: SafeId<"workspace">[];
   dataWorkspaceIds: SafeId<"workspace">[];
+  webSearchEnabled: boolean;
   messages: {
     id: SafeId<"chatMessage">;
     role: ChatMessage["role"];
@@ -642,6 +649,7 @@ const loadThread = async ({
       workspaceId: SafeId<"workspace"> | null;
       contextMatterIds: SafeId<"workspace">[];
       dataWorkspaceIds: SafeId<"workspace">[];
+      webSearchEnabled: boolean;
       messages: ThreadRecord["messages"];
     };
 
@@ -657,6 +665,7 @@ const loadThread = async ({
             workspaceId: true,
             contextMatterIds: true,
             dataWorkspaceIds: true,
+            webSearchEnabled: true,
           },
           with: {
             messages: {
@@ -690,6 +699,7 @@ const loadThread = async ({
           workspaceId: existing.workspaceId,
           contextMatterIds: existing.contextMatterIds,
           dataWorkspaceIds: existing.dataWorkspaceIds,
+          webSearchEnabled: existing.webSearchEnabled,
           messages: existing.messages,
         },
       });
@@ -768,6 +778,7 @@ const loadThread = async ({
         workspaceId,
         contextMatterIds: initialContextMatterIds,
         dataWorkspaceIds: initialDataWorkspaceIds,
+        webSearchEnabled: false,
         messages: [],
       },
     });
