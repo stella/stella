@@ -1147,7 +1147,9 @@ const processOneBatch = async ({
 
     await scopedDb(async (tx) => {
       // Re-check locks inside the write tx: a manual edit could have landed
-      // between prepareBatch() and now, and we must not clobber it.
+      // between prepareBatch() and now. SELECT FOR UPDATE serializes with
+      // lockCellOnManualEdit so we either see the new lock or block the
+      // manual edit until our write commits.
       const lockedRowsAtWrite =
         candidatePropertyIds.length > 0
           ? await tx
@@ -1162,6 +1164,7 @@ const processOneBatch = async ({
                   inArray(cellMetadata.propertyId, candidatePropertyIds),
                 ),
               )
+              .for("update")
           : [];
       const lockedAtWrite = new Set<string>(
         lockedRowsAtWrite
