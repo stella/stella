@@ -425,6 +425,7 @@ export default function App() {
       }
     }).then((unlisten) => {
       cleanup = unlisten;
+      return;
     });
 
     return () => {
@@ -453,6 +454,7 @@ export default function App() {
       });
     }).then((unlisten) => {
       cleanup = unlisten;
+      return;
     });
 
     const syncState = async () => {

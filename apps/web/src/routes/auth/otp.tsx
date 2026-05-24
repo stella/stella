@@ -132,6 +132,7 @@ function OTP() {
           if (timezones.includes(browserTz)) {
             await authClient.updateUser({ timezoneId: browserTz });
           }
+          return;
         })
         .catch((error: unknown) => {
           analytics.captureError(error);

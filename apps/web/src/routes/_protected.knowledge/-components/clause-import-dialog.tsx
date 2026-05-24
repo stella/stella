@@ -67,6 +67,7 @@ export const ClauseImportDialog = ({
           }
           const { clauses } = parsed;
           setPreviewCount(Array.isArray(clauses) ? clauses.length : 0);
+          return;
         })
         .catch(() => {
           setPreviewCount(null);

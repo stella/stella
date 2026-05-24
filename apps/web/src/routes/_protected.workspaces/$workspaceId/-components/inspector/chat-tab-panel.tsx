@@ -374,6 +374,7 @@ export const ChatTabPanel = ({
                 // backend already parses `<entity-mention>` tags out
                 // of the `text` field, so we forward unchanged.
                 void sendMessage({ text: prompt });
+                return;
               });
             }}
             onTogglePanel={() => {

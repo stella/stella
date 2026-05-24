@@ -46,6 +46,14 @@ export default defineConfig({
     "logical-assignment-operators": "off",
 
     "react/rules-of-hooks": "error",
+    "react/style-prop-object": "error",
+    "react/jsx-no-comment-textnodes": "error",
+    "react/iframe-missing-sandbox": "error",
+    "react/jsx-no-script-url": "error",
+    "react/button-has-type": "error",
+    "promise/always-return": "error",
+    "promise/no-return-in-finally": "error",
+    "no-useless-assignment": "error",
 
     "import/no-cycle": "error",
     "no-restricted-imports": [

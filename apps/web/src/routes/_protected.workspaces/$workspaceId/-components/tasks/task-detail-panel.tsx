@@ -140,6 +140,7 @@ export const TaskDetailPanel = ({
                   queryKey: workspacesKeys.overview(workspaceId),
                 }),
               ]);
+              return;
             })
             .catch(() => {
               /* non-critical */

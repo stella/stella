@@ -326,6 +326,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
           }
           setDetectedAnonymizationTerms([...byCanonical.values()]);
           markRan();
+          return;
         })
         .catch(() => {
           inFlightUntil = 0;

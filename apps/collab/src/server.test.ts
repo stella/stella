@@ -353,6 +353,9 @@ describe("collaboration server", () => {
     });
     const ydoc = new Doc();
     let authenticationFailed = false;
+    // `null` init is load-bearing: if the constructor below throws, the
+    // finally block still needs to null-check before calling destroy().
+    // oxlint-disable-next-line eslint/no-useless-assignment
     let provider: HocuspocusProvider | null = null;
 
     try {

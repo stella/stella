@@ -67,8 +67,8 @@ async function insertImageFiles(
       continue;
     }
 
-    let naturalWidth = 1;
-    let naturalHeight = 1;
+    let naturalWidth: number;
+    let naturalHeight: number;
     try {
       ({ width: naturalWidth, height: naturalHeight } =
         await loadImageSize(dataUrl));

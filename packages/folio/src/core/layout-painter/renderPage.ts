@@ -698,7 +698,7 @@ function extractFloatingImagesFromParagraph(
     }
 
     // Determine vertical position
-    let y = 0;
+    let y: number;
 
     if (position?.vertical) {
       const v = position.vertical;

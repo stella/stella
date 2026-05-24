@@ -102,6 +102,7 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
           if (response.error) {
             onPrefetchError(toAPIError(response.error));
           }
+          return;
         })
         .catch(onPrefetchError);
     }

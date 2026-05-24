@@ -193,6 +193,7 @@ const importHandler = async function* ({
           if (Result.isError(searchVectorResult)) {
             captureError(searchVectorResult.error, { clauseId: c.id });
           }
+          return;
         })
         .catch((error: unknown) => {
           captureError(error, { clauseId: c.id });

@@ -300,21 +300,6 @@ const isCentered = (el: cheerio.Cheerio<AnyNode>): boolean => {
 export const extractRawChunks = ($: cheerio.CheerioAPI): RawChunk[] => {
   const chunks: RawChunk[] = [];
 
-  const metaTable = $("#box-table-a");
-  let siblings = metaTable.nextAll();
-
-  if (siblings.length === 0) {
-    const body = $("body");
-    let foundTable = false;
-    siblings = body.children().filter((_, el) => {
-      if ($(el).is("#box-table-a")) {
-        foundTable = true;
-        return false;
-      }
-      return foundTable;
-    });
-  }
-
   const trimLineBreaks = (inlines: Inline[]): Inline[] => {
     while (inlines.length > 0 && inlines[0]?.type === "line-break") {
       inlines.shift();

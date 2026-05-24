@@ -508,6 +508,7 @@ export function selectionToRects(
             }
 
             // Check each paragraph in the cell
+            let blockY = 0;
             for (let blockIdx = 0; blockIdx < cell.blocks.length; blockIdx++) {
               const cellBlock = cell.blocks[blockIdx];
               const cellBlockMeasure = cellMeasure.blocks[blockIdx];
@@ -530,7 +531,6 @@ export function selectionToRects(
                 selTo,
               );
 
-              let blockY = 0;
               for (const { line, index } of intersectingLines) {
                 const range = computeLinePmRange(paragraphBlock, line);
                 if (range.pmStart === undefined || range.pmEnd === undefined) {

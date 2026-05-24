@@ -240,6 +240,7 @@ export function useSelectionOverlay(
           setSelectionRects(rects);
           setCaretPosition(null);
         }
+        return;
       },
     );
   }, [pmSelection, layout, blocks, measures]);

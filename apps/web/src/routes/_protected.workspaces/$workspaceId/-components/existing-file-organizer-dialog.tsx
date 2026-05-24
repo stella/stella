@@ -554,6 +554,7 @@ export const ExistingFileOrganizerDialog = ({
           title: t("workspaces.importOrganizer.organized"),
           timeout: undefined,
         });
+        return;
       })
       .catch((error: unknown) => {
         analytics.captureError(error);

@@ -1078,11 +1078,11 @@ export function renderLine(
 
   // Calculate justify spacing if needed
   const isJustify = alignment === "justify";
-  let shouldJustify = false;
 
   if (isJustify && options) {
     // Justify all lines except the last line (unless it ends with line break)
-    shouldJustify = !options.isLastLine || options.paragraphEndsWithLineBreak;
+    const shouldJustify =
+      !options.isLastLine || options.paragraphEndsWithLineBreak;
 
     if (shouldJustify) {
       // Use CSS text-align: justify with text-align-last: justify
@@ -1135,7 +1135,7 @@ export function renderLine(
   // Track current X position for tab calculations
   // Tab stops are measured from the content area left edge (page text area)
   // We need to track where on that coordinate system our text is
-  let currentX = 0;
+  let currentX: number;
   const leftIndentPx = options?.leftIndentPx ?? 0;
 
   if (options?.isFirstLine) {

@@ -1708,7 +1708,7 @@ function convertImage(image: Image): PMNode {
   //   even though they don't carve a text-wrap exclusion zone)
   // - square / tight / through with cssFloat → float
   // - everything else (centered etc.) → block
-  let displayMode: "inline" | "block" | "float" = "inline";
+  let displayMode: "inline" | "block" | "float";
   if (wrapType === "inline") {
     displayMode = "inline";
   } else if (wrapType === "topAndBottom") {
