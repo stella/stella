@@ -144,6 +144,12 @@ function SelectValue({
   );
 }
 
+const DEFAULT_COLLISION_AVOIDANCE = {
+  align: "shift",
+  fallbackAxisSide: "none",
+  side: "none",
+} as const;
+
 function SelectPopup({
   className,
   children,
@@ -152,11 +158,7 @@ function SelectPopup({
   align = "start",
   alignOffset = 0,
   alignItemWithTrigger = true,
-  collisionAvoidance = {
-    align: "shift",
-    fallbackAxisSide: "none",
-    side: "none",
-  },
+  collisionAvoidance = DEFAULT_COLLISION_AVOIDANCE,
   ...props
 }: SelectPrimitive.Popup.Props & {
   side?: SelectPrimitive.Positioner.Props["side"];

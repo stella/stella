@@ -51,6 +51,7 @@ export default defineConfig({
     "react/iframe-missing-sandbox": "error",
     "react/jsx-no-script-url": "error",
     "react/button-has-type": "error",
+    "react/no-object-type-as-default-prop": "error",
     "promise/always-return": "error",
     "promise/no-return-in-finally": "error",
     "no-useless-assignment": "error",
