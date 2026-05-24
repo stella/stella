@@ -705,7 +705,7 @@ export default defineConfig({
 
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
-        "eslint/no-useless-assignment": "off",
+        "no-useless-assignment": "off",
         "typescript/consistent-return": "off",
       },
     },
@@ -732,7 +732,7 @@ export default defineConfig({
 
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
-        "eslint/no-useless-assignment": "off",
+        "no-useless-assignment": "off",
         "typescript/consistent-return": "off",
 
         "typescript/no-unsafe-return": "off",
@@ -784,7 +784,7 @@ export default defineConfig({
 
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
-        "eslint/no-useless-assignment": "off",
+        "no-useless-assignment": "off",
         "typescript/consistent-return": "off",
 
         "typescript/no-unsafe-return": "off",
@@ -815,7 +815,7 @@ export default defineConfig({
         "typescript/prefer-nullish-coalescing": "off",
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
-        "eslint/no-useless-assignment": "off",
+        "no-useless-assignment": "off",
 
         "typescript/promise-function-async": "off",
 

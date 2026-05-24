@@ -352,14 +352,8 @@ describe("collaboration server", () => {
       port: 0,
     });
     const ydoc = new Doc();
-    // `no-useless-assignment` flags both initial values because its flow
-    // analysis stops at the first try-block assignment. In practice the
-    // initial `false` is read by `waitFor`, and the initial `null` is
-    // read by `provider?.destroy()` in `finally` on the throw path.
-    // oxlint-disable-next-line eslint/no-useless-assignment
     let authenticationFailed = false;
-    // oxlint-disable-next-line eslint/no-useless-assignment
-    let provider: HocuspocusProvider | null = null;
+    let provider: HocuspocusProvider | undefined;
 
     try {
       provider = new HocuspocusProvider({
