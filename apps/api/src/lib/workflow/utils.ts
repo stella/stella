@@ -7,8 +7,13 @@ import type { PropertyBatch } from "@/api/lib/workflow/get-execution-plan";
 export const prepareBatch = (
   rawBatch: PropertyBatch,
   fieldContentMap: Map<string, FieldContent["type"]>,
+  lockedPropertyIds: ReadonlySet<string> = new Set(),
 ): PropertyBatch => {
   const propertiesToProcess = rawBatch.properties.filter((prop) => {
+    if (lockedPropertyIds.has(prop.id)) {
+      return false;
+    }
+
     const fieldContentType = fieldContentMap.get(prop.id);
 
     return (

@@ -2213,6 +2213,10 @@
         "verified": "Ellenőrizve",
         "verifiedDescription": "Kézzel megerősítve."
       },
+      "lock": {
+        "locked": "Zárolva",
+        "unlock": "Cella feloldása"
+      },
       "reorderReadOnly": "A táblázatsorok az aktuális rendezést követik",
       "tightContent": "Kompakt",
       "wrapContent": "Szöveg tördelése"

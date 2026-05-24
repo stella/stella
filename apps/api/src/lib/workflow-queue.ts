@@ -7,7 +7,13 @@ import Redis from "ioredis";
 import { isMockAI } from "@/api/consts";
 import type { ScopedDb } from "@/api/db";
 import { jsonField } from "@/api/db/json-utils";
-import { entities, fields, justifications, properties } from "@/api/db/schema";
+import {
+  cellMetadata,
+  entities,
+  fields,
+  justifications,
+  properties,
+} from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
@@ -997,7 +1003,27 @@ const processOneBatch = async ({
     batchFields.map((f) => [f.propertyId, f.contentType]),
   );
 
-  const batch = prepareBatch(rawBatch, fieldContentMap);
+  const lockedCellRows = await scopedDb((tx) =>
+    tx
+      .select({
+        propertyId: cellMetadata.propertyId,
+        metadata: cellMetadata.metadata,
+      })
+      .from(cellMetadata)
+      .where(
+        and(
+          eq(cellMetadata.entityVersionId, entityVersionId),
+          inArray(cellMetadata.propertyId, propertyIds),
+        ),
+      ),
+  );
+  const lockedPropertyIds = new Set<string>(
+    lockedCellRows
+      .filter((row) => row.metadata.locked === true)
+      .map((row) => row.propertyId),
+  );
+
+  const batch = prepareBatch(rawBatch, fieldContentMap, lockedPropertyIds);
 
   if (batch.properties.length === 0) {
     return;
@@ -1113,13 +1139,39 @@ const processOneBatch = async ({
     }
 
     // Write AI results to DB
-    const allPropertyIds = [
+    const candidatePropertyIds = [
       ...processedFields.aiResults.map((r) => r.propertyId),
       ...processedFields.unsupportedPropertyIds,
       ...processedFields.skippedPropertyIds,
     ];
 
     await scopedDb(async (tx) => {
+      // Re-check locks inside the write tx: a manual edit could have landed
+      // between prepareBatch() and now, and we must not clobber it.
+      const lockedRowsAtWrite =
+        candidatePropertyIds.length > 0
+          ? await tx
+              .select({
+                propertyId: cellMetadata.propertyId,
+                metadata: cellMetadata.metadata,
+              })
+              .from(cellMetadata)
+              .where(
+                and(
+                  eq(cellMetadata.entityVersionId, entityVersionId),
+                  inArray(cellMetadata.propertyId, candidatePropertyIds),
+                ),
+              )
+          : [];
+      const lockedAtWrite = new Set<string>(
+        lockedRowsAtWrite
+          .filter((row) => row.metadata.locked === true)
+          .map((row) => row.propertyId),
+      );
+      const allPropertyIds = candidatePropertyIds.filter(
+        (id) => !lockedAtWrite.has(id),
+      );
+
       if (allPropertyIds.length > 0) {
         await tx
           .delete(fields)
@@ -1132,22 +1184,24 @@ const processOneBatch = async ({
       }
 
       const fieldValues = [
-        ...processedFields.aiResults.map(
-          ({ fieldId, propertyId, content }) => ({
+        ...processedFields.aiResults
+          .filter(({ propertyId }) => !lockedAtWrite.has(propertyId))
+          .map(({ fieldId, propertyId, content }) => ({
             id: fieldId,
             workspaceId,
             propertyId,
             entityVersionId,
             content,
-          }),
-        ),
-        ...processedFields.unsupportedPropertyIds.map((propertyId) => ({
-          id: createSafeId<"field">(),
-          workspaceId,
-          propertyId,
-          entityVersionId,
-          content: { type: "unsupported" as const, version: 1 as const },
-        })),
+          })),
+        ...processedFields.unsupportedPropertyIds
+          .filter((propertyId) => !lockedAtWrite.has(propertyId))
+          .map((propertyId) => ({
+            id: createSafeId<"field">(),
+            workspaceId,
+            propertyId,
+            entityVersionId,
+            content: { type: "unsupported" as const, version: 1 as const },
+          })),
       ];
 
       if (fieldValues.length > 0) {
@@ -1155,15 +1209,25 @@ const processOneBatch = async ({
       }
 
       if (processedFields.aiJustifications.length > 0) {
-        await tx.insert(justifications).values(
-          processedFields.aiJustifications.map((j) => ({
-            id: j.justificationId,
-            workspaceId,
-            fieldId: j.fieldId,
-            content: j.content,
-            fileFieldIds: j.fileFieldIds,
-          })),
+        const aiResultFieldIdsForLockedProps = new Set(
+          processedFields.aiResults
+            .filter(({ propertyId }) => lockedAtWrite.has(propertyId))
+            .map(({ fieldId }) => fieldId),
         );
+        const liveJustifications = processedFields.aiJustifications.filter(
+          (j) => !aiResultFieldIdsForLockedProps.has(j.fieldId),
+        );
+        if (liveJustifications.length > 0) {
+          await tx.insert(justifications).values(
+            liveJustifications.map((j) => ({
+              id: j.justificationId,
+              workspaceId,
+              fieldId: j.fieldId,
+              content: j.content,
+              fileFieldIds: j.fileFieldIds,
+            })),
+          );
+        }
       }
     });
 

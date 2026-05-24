@@ -116,7 +116,10 @@ type EditFieldDialogProps = {
   entityKind: EntityKind;
   options: WorkspacePropertyOption[];
   fieldContent: EditableFieldContent;
-  className: string;
+  className?: string;
+  /** When provided, the dialog is fully controlled and no built-in trigger renders. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 export const EditFieldDialog = ({
@@ -127,9 +130,19 @@ export const EditFieldDialog = ({
   options,
   fieldContent,
   className,
+  open: controlledOpen,
+  onOpenChange,
 }: EditFieldDialogProps) => {
+  const isControlled = controlledOpen !== undefined;
   const t = useTranslations();
-  const [isOpen, setIsOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const isOpen = isControlled ? controlledOpen : uncontrolledOpen;
+  const setIsOpen = (next: boolean) => {
+    if (!isControlled) {
+      setUncontrolledOpen(next);
+    }
+    onOpenChange?.(next);
+  };
   const isWorkflowRunning = useIsWorkflowRunning(workspaceId);
   const upsertField = useUpsertField();
   const startWorkflow = useStartWorkflow(workspaceId);
@@ -184,9 +197,11 @@ export const EditFieldDialog = ({
       }}
       open={isOpen}
     >
-      <DialogTrigger className={className} render={<Button size="xs" />}>
-        {t("common.edit")}
-      </DialogTrigger>
+      {!isControlled && (
+        <DialogTrigger className={className} render={<Button size="xs" />}>
+          {t("common.edit")}
+        </DialogTrigger>
+      )}
       <DialogPopup className="sm:max-w-sm">
         <form.Subscribe selector={(s) => toFormErrors(s.fieldMeta)}>
           {(errors) => (

@@ -22,6 +22,7 @@ const config = {
     entityId: tSafeId("entity"),
     baseManualFlags: t.Optional(manualFlagsSchema),
     manualFlags: manualFlagsSchema,
+    locked: t.Optional(t.Boolean()),
   }),
 } satisfies HandlerConfig;
 
@@ -55,6 +56,34 @@ const mergeManualFlags = ({
     ...currentManualFlags.filter((flag) => !removedFlagSet.has(flag)),
     ...addedFlags,
   ]);
+};
+
+type ResolveLockProvenanceArgs = {
+  nextLocked: boolean;
+  wasLocked: boolean;
+  existingMetadata: CellMetadata | undefined;
+  userId: string;
+  addedAt: string;
+};
+
+const resolveLockProvenance = ({
+  nextLocked,
+  wasLocked,
+  existingMetadata,
+  userId,
+  addedAt,
+}: ResolveLockProvenanceArgs): CellMetadata["lockProvenance"] => {
+  if (!nextLocked) {
+    return undefined;
+  }
+  if (wasLocked) {
+    return existingMetadata?.lockProvenance;
+  }
+  return {
+    lockedBy: userId,
+    lockedAt: addedAt,
+    reason: "explicit",
+  };
 };
 
 const updateCellMetadata = createSafeHandler(
@@ -128,7 +157,10 @@ const updateCellMetadata = createSafeHandler(
           requestedManualFlags,
         });
 
-        if (manualFlags.length === 0) {
+        const wasLocked = existingMetadata?.locked === true;
+        const nextLocked = body.locked ?? wasLocked;
+
+        if (manualFlags.length === 0 && !nextLocked) {
           await tx
             .delete(cellMetadata)
             .where(
@@ -141,7 +173,15 @@ const updateCellMetadata = createSafeHandler(
         }
 
         const existingProvenance = existingMetadata?.flagProvenance ?? {};
-        const addedAt = new Date().toISOString();
+        const now = new Date();
+        const addedAt = now.toISOString();
+        const lockProvenance = resolveLockProvenance({
+          nextLocked,
+          wasLocked,
+          existingMetadata,
+          userId: user.id,
+          addedAt,
+        });
         const metadata: CellMetadata = {
           version: 1,
           manualFlags,
@@ -154,6 +194,8 @@ const updateCellMetadata = createSafeHandler(
               },
             ]),
           ),
+          ...(nextLocked && { locked: true }),
+          ...(lockProvenance && { lockProvenance }),
         };
 
         await tx

@@ -2216,6 +2216,10 @@ type Messages = {
         "verified": "Verified";
         "verifiedDescription": "Manually confirmed.";
       };
+      "lock": {
+        "locked": "Locked";
+        "unlock": "Unlock cell";
+      };
       "reorderReadOnly": "Table rows follow the current sort";
       "tightContent": "Tight";
       "wrapContent": "Wrap content";

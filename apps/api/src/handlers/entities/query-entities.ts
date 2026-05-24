@@ -49,8 +49,17 @@ type CellMetadataFlagProvenanceResult = {
   addedByImage: string | null;
 };
 
-type CellMetadataResult = Omit<CellMetadata, "flagProvenance"> & {
+type CellLockProvenanceResult = NonNullable<CellMetadata["lockProvenance"]> & {
+  lockedByName: string | null;
+  lockedByImage: string | null;
+};
+
+type CellMetadataResult = Omit<
+  CellMetadata,
+  "flagProvenance" | "lockProvenance"
+> & {
   flagProvenance?: Record<string, CellMetadataFlagProvenanceResult>;
+  lockProvenance?: CellLockProvenanceResult;
 };
 
 export type QueryEntityResult = {
@@ -158,6 +167,9 @@ const getCellMetadataActorIds = (
     for (const provenance of Object.values(row.metadata.flagProvenance ?? {})) {
       userIds.add(provenance.addedBy);
     }
+    if (row.metadata.lockProvenance) {
+      userIds.add(row.metadata.lockProvenance.lockedBy);
+    }
   }
   return [...userIds];
 };
@@ -173,28 +185,37 @@ const enrichCellMetadata = (
   actorMap: Map<string, CellMetadataActor>,
 ): CellMetadataResult => {
   const provenanceEntries = Object.entries(metadata.flagProvenance ?? {});
-  if (provenanceEntries.length === 0) {
-    return {
-      manualFlags: metadata.manualFlags,
-      version: metadata.version,
-    };
-  }
+  const lockProvenance = metadata.lockProvenance
+    ? (() => {
+        const actor = actorMap.get(metadata.lockProvenance.lockedBy);
+        return {
+          ...metadata.lockProvenance,
+          lockedByName: actor?.name ?? null,
+          lockedByImage: actor?.image ?? null,
+        };
+      })()
+    : undefined;
 
   return {
-    ...metadata,
-    flagProvenance: Object.fromEntries(
-      provenanceEntries.map(([flag, provenance]) => {
-        const actor = actorMap.get(provenance.addedBy);
-        return [
-          flag,
-          {
-            ...provenance,
-            addedByName: actor?.name ?? null,
-            addedByImage: actor?.image ?? null,
-          },
-        ];
-      }),
-    ),
+    version: metadata.version,
+    manualFlags: metadata.manualFlags,
+    ...(provenanceEntries.length > 0 && {
+      flagProvenance: Object.fromEntries(
+        provenanceEntries.map(([flag, provenance]) => {
+          const actor = actorMap.get(provenance.addedBy);
+          return [
+            flag,
+            {
+              ...provenance,
+              addedByName: actor?.name ?? null,
+              addedByImage: actor?.image ?? null,
+            },
+          ];
+        }),
+      ),
+    }),
+    ...(metadata.locked === true && { locked: true }),
+    ...(lockProvenance && { lockProvenance }),
   };
 };
 

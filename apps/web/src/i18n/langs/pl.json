@@ -2213,6 +2213,10 @@
         "verified": "Zweryfikowane",
         "verifiedDescription": "Potwierdzone ręcznie."
       },
+      "lock": {
+        "locked": "Zablokowana",
+        "unlock": "Odblokuj komórkę"
+      },
       "reorderReadOnly": "Wiersze tabeli są zgodne z bieżącym sortowaniem",
       "tightContent": "Kompaktowo",
       "wrapContent": "Zawijaj tekst"

@@ -184,6 +184,14 @@ export type WorkspaceCellMetadata = {
       addedByImage: string | null;
     }
   >;
+  locked?: boolean;
+  lockProvenance?: {
+    lockedBy: string;
+    lockedAt: string;
+    lockedByName: string | null;
+    lockedByImage: string | null;
+    reason: "manual-edit" | "explicit";
+  };
 };
 
 export type EntityField = {

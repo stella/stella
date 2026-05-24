@@ -2213,6 +2213,10 @@
         "verified": "Kinnitatud",
         "verifiedDescription": "Käsitsi kinnitatud."
       },
+      "lock": {
+        "locked": "Lukus",
+        "unlock": "Vabasta lahter"
+      },
       "reorderReadOnly": "Tabeliread järgivad praegust sortimist",
       "tightContent": "Kompaktne",
       "wrapContent": "Murra tekst"

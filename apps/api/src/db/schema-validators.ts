@@ -195,6 +195,10 @@ export const fieldContentSchema = t.Union([
 
 export type FieldContent = Static<typeof fieldContentSchema>;
 
+export const cellLockReasonSchema = t.UnionEnum(["manual-edit", "explicit"]);
+
+export type CellLockReason = Static<typeof cellLockReasonSchema>;
+
 export const cellMetadataSchema = t.Object({
   version: v1,
   manualFlags: t.Array(t.String({ minLength: 1, maxLength: 64 }), {
@@ -208,6 +212,14 @@ export const cellMetadataSchema = t.Object({
         addedAt: t.String({ format: "date-time" }),
       }),
     ),
+  ),
+  locked: t.Optional(t.Boolean()),
+  lockProvenance: t.Optional(
+    t.Object({
+      lockedBy: t.String({ minLength: 1 }),
+      lockedAt: t.String({ format: "date-time" }),
+      reason: cellLockReasonSchema,
+    }),
   ),
 });
 

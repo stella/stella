@@ -318,4 +318,31 @@ describe("prepareBatch", () => {
     expect(result.id).toBe("empty-batch");
     expect(result.inputs).toEqual([propertyId("dep")]);
   });
+
+  test("excludes locked properties even when status is stale", () => {
+    const rawBatch = createRawBatch([
+      createBatchProperty("p1", { status: "stale" }),
+      createBatchProperty("p2", { status: "stale" }),
+    ]);
+    const fieldContentMap = new Map<string, FieldContent["type"]>();
+    const locked = new Set<string>([propertyId("p1")]);
+
+    const result = prepareBatch(rawBatch, fieldContentMap, locked);
+
+    expect(result.properties.map((p) => p.id)).toEqual([propertyId("p2")]);
+  });
+
+  test("excludes locked properties even when content type would normally trigger re-extraction", () => {
+    const rawBatch = createRawBatch([
+      createBatchProperty("p1", { status: "fresh" }),
+    ]);
+    const fieldContentMap = new Map<string, FieldContent["type"]>([
+      ["p1", "error"],
+    ]);
+    const locked = new Set<string>([propertyId("p1")]);
+
+    const result = prepareBatch(rawBatch, fieldContentMap, locked);
+
+    expect(result.properties).toHaveLength(0);
+  });
 });
