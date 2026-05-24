@@ -173,7 +173,7 @@
       "version": "0.0.18"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/google-vertex@4.0.129",
+      "bom-ref": "pkg:npm/@ai-sdk/google-vertex@4.0.130",
       "evidence": {
         "identity": [
           {
@@ -221,16 +221,16 @@
           "value": "node_modules/@ai-sdk/google-vertex/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/google-vertex@4.0.129",
+      "purl": "pkg:npm/%40ai-sdk/google-vertex@4.0.130",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "4.0.129"
+      "version": "4.0.130"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/google@3.0.74",
+      "bom-ref": "pkg:npm/@ai-sdk/google@3.0.75",
       "evidence": {
         "identity": [
           {
@@ -290,13 +290,13 @@
           "value": "node_modules/@ai-sdk/google/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/google@3.0.74",
+      "purl": "pkg:npm/%40ai-sdk/google@3.0.75",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.74"
+      "version": "3.0.75"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/mcp@1.0.42",
@@ -531,7 +531,7 @@
       "version": "4.0.27"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/react@3.0.185",
+      "bom-ref": "pkg:npm/@ai-sdk/react@3.0.186",
       "evidence": {
         "identity": [
           {
@@ -618,10 +618,10 @@
             "location": "apps/web/src/lib/sse.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#7"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#9"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-global-chat-mention-registration.ts#1"
@@ -1764,13 +1764,13 @@
           "value": "node_modules/@ai-sdk/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/react@3.0.185",
+      "purl": "pkg:npm/%40ai-sdk/react@3.0.186",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.185"
+      "version": "3.0.186"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/valibot@2.0.28",
@@ -1944,7 +1944,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx#20"
           },
           {
-            "location": "apps/web/src/routes/auth/index.tsx#6"
+            "location": "apps/web/src/routes/auth/index.tsx#7"
           },
           {
             "location": "apps/web/src/routes/auth/organization.tsx#7"
@@ -2094,10 +2094,10 @@
             "location": "apps/web/src/lib/sse.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#7"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#9"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-global-chat-mention-registration.ts#1"
@@ -4392,10 +4392,10 @@
             "location": "apps/web/src/lib/sse.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#7"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#9"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-global-chat-mention-registration.ts#1"
@@ -6445,10 +6445,10 @@
             "location": "apps/web/src/lib/sse.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#7"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#9"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-global-chat-mention-registration.ts#1"
@@ -8022,7 +8022,7 @@
             "location": "apps/web/src/lib/chat-anonymized-store.ts#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#16"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#18"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-queries.ts#12"
@@ -8037,7 +8037,7 @@
             "location": "apps/web/src/workers/anonymize-chat-worker.ts#4"
           },
           {
-            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#10"
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#17"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#8"
@@ -9351,7 +9351,7 @@
             "location": "apps/web/src/components/breadcrumbs/workspace-breadcrumb.tsx#20"
           },
           {
-            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#12"
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#19"
           },
           {
             "location": "apps/web/src/components/dev-sidebar-group.tsx#27"
@@ -9603,7 +9603,7 @@
             "location": "apps/web/src/routes/auth/accept-invitation.$invitationId.tsx#20"
           },
           {
-            "location": "apps/web/src/routes/auth/index.tsx#12"
+            "location": "apps/web/src/routes/auth/index.tsx#13"
           },
           {
             "location": "apps/web/src/routes/auth/organization.tsx#22"
@@ -9681,7 +9681,7 @@
             "location": "apps/web/src/components/chat/chat-draft-attachment-chips.tsx#3"
           },
           {
-            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#11"
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#18"
           },
           {
             "location": "apps/web/src/components/chat/needs-matter-card.tsx#15"
@@ -10038,7 +10038,7 @@
             "location": "apps/web/src/routes/auth/accept-invitation.$invitationId.tsx#12"
           },
           {
-            "location": "apps/web/src/routes/auth/index.tsx#8"
+            "location": "apps/web/src/routes/auth/index.tsx#9"
           },
           {
             "location": "apps/web/src/routes/auth/organization.tsx#10"
@@ -10368,7 +10368,7 @@
             "location": "apps/web/src/components/chat/chat-draft-attachment-chips.tsx#4"
           },
           {
-            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#13"
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#20"
           },
           {
             "location": "apps/web/src/components/chat/entity-link.tsx#4"
@@ -10677,7 +10677,7 @@
             "location": "apps/web/src/routes/auth/accept-invitation.$invitationId.tsx#21"
           },
           {
-            "location": "apps/web/src/routes/auth/index.tsx#13"
+            "location": "apps/web/src/routes/auth/index.tsx#14"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/onboarding-progress.tsx#3"
@@ -10836,7 +10836,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/-components/create-matter-dialog.tsx#34"
           },
           {
-            "location": "apps/web/src/routes/auth/index.tsx#9"
+            "location": "apps/web/src/routes/auth/index.tsx#10"
           },
           {
             "location": "apps/web/src/routes/auth/organization.tsx#11"
@@ -11001,7 +11001,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/-components/matters-toolbar.tsx#16"
           },
           {
-            "location": "apps/web/src/routes/auth/index.tsx#11"
+            "location": "apps/web/src/routes/auth/index.tsx#12"
           },
           {
             "location": "apps/web/src/routes/auth/organization.tsx#20"
@@ -11634,7 +11634,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx#36"
           },
           {
-            "location": "apps/web/src/routes/auth/index.tsx#10"
+            "location": "apps/web/src/routes/auth/index.tsx#11"
           },
           {
             "location": "apps/web/src/routes/auth/organization.tsx#12"
@@ -12387,7 +12387,7 @@
             "location": "apps/web/src/routes/_protected.account/-queries.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#12"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#13"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration.ts#3"
@@ -13079,7 +13079,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.0",
+      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.4",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -13110,7 +13110,7 @@
             "location": "apps/web/src/lib/prompts/use-saved-prompts.ts#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#13"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#14"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-user-context.ts#1"
@@ -13509,10 +13509,10 @@
           "value": "node_modules/@tanstack/react-router/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-router@1.170.0",
+      "purl": "pkg:npm/%40tanstack/react-router@1.170.4",
       "scope": "required",
       "type": "library",
-      "version": "1.170.0"
+      "version": "1.170.4"
     },
     {
       "authors": [
@@ -14621,10 +14621,10 @@
             "location": "apps/web/src/lib/sse.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#7"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#9"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-global-chat-mention-registration.ts#1"
@@ -15915,7 +15915,7 @@
       "version": "1.7.0"
     },
     {
-      "bom-ref": "pkg:npm/ai@6.0.183",
+      "bom-ref": "pkg:npm/ai@6.0.184",
       "description": "AI SDK by Vercel - build apps like ChatGPT, Claude, Gemini, and more with a single interface for any model using the Vercel AI Gateway or go direct to OpenAI, Anthropic, Google, or any other model provider.",
       "evidence": {
         "identity": [
@@ -16045,7 +16045,7 @@
             "location": "apps/api/src/mcp/tool-utils.ts#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#14"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#15"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-lib/build-chat-request-message.ts#1"
@@ -16105,13 +16105,13 @@
           "value": "node_modules/ai/package.json"
         }
       ],
-      "purl": "pkg:npm/ai@6.0.183",
+      "purl": "pkg:npm/ai@6.0.184",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "6.0.183"
+      "version": "6.0.184"
     },
     {
       "authors": [
@@ -17270,6 +17270,9 @@
             "location": "apps/web/src/routes/_protected.chat/-queries.ts#9"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-download-service.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/email/index.tsx#2"
           },
           {
@@ -17307,6 +17310,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/-components/create-matter-dialog.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/auth/index.tsx#5"
           }
         ]
       },
@@ -17347,7 +17353,7 @@
           "name": "Taskforce.sh Inc."
         }
       ],
-      "bom-ref": "pkg:npm/bullmq@5.76.8",
+      "bom-ref": "pkg:npm/bullmq@5.76.10",
       "description": "Queue for messages and jobs based on Redis",
       "evidence": {
         "identity": [
@@ -17402,10 +17408,10 @@
           "value": "node_modules/bullmq/package.json"
         }
       ],
-      "purl": "pkg:npm/bullmq@5.76.8",
+      "purl": "pkg:npm/bullmq@5.76.10",
       "scope": "required",
       "type": "library",
-      "version": "5.76.8"
+      "version": "5.76.10"
     },
     {
       "authors": [
@@ -20243,6 +20249,9 @@
             "location": "apps/api/src/lib/file-derivative-queue.ts#4"
           },
           {
+            "location": "apps/api/src/lib/rate-limit/auth-storage.ts#13"
+          },
+          {
             "location": "apps/api/src/lib/redis-options.ts#14"
           },
           {
@@ -20575,7 +20584,7 @@
             "location": "apps/web/src/components/chat/chat-matter-picker.tsx#5"
           },
           {
-            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#6"
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#13"
           },
           {
             "location": "apps/web/src/components/chat/entity-link.tsx#2"
@@ -22736,10 +22745,10 @@
             "location": "apps/web/src/lib/sse.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#7"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#9"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-global-chat-mention-registration.ts#1"
@@ -24205,7 +24214,7 @@
             "location": "apps/web/src/components/chat/ask-user-card.tsx#12"
           },
           {
-            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#7"
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#14"
           }
         ]
       },
@@ -24435,7 +24444,7 @@
             "location": "apps/web/src/components/chat/chat-matter-picker.tsx#6"
           },
           {
-            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#8"
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#15"
           },
           {
             "location": "apps/web/src/components/chat/needs-matter-card.tsx#13"
@@ -24975,7 +24984,7 @@
             "location": "apps/web/src/routes/auth/accept-invitation.$invitationId.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/auth/index.tsx#5"
+            "location": "apps/web/src/routes/auth/index.tsx#6"
           },
           {
             "location": "apps/web/src/routes/auth/organization.tsx#6"
@@ -25161,6 +25170,9 @@
             "location": "apps/web/src/lib/chat-thread-ref.ts#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#16"
+          },
+          {
             "location": "apps/web/src/routes/_protected.chat/-queries.ts#10"
           },
           {
@@ -25219,6 +25231,9 @@
         "occurrences": [
           {
             "location": "apps/web/src/lib/chat-thread-ref.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#16"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-queries.ts#10"
@@ -25436,7 +25451,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx#20"
           },
           {
-            "location": "apps/web/src/routes/auth/index.tsx#6"
+            "location": "apps/web/src/routes/auth/index.tsx#7"
           },
           {
             "location": "apps/web/src/routes/auth/organization.tsx#7"
