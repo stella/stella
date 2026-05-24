@@ -228,6 +228,20 @@ export const resolveTemplateProperties = async ({
     }
   }
 
+  if (
+    hasTemplateDependencyCycle({
+      templateProperties,
+      propertyIdBySourceId,
+      createdPropertySourceIds,
+    })
+  ) {
+    return {
+      ok: false,
+      status: 422,
+      message: "Circular template dependency detected",
+    };
+  }
+
   await recreateTemplateDependencies({
     tx,
     workspaceId,
@@ -297,6 +311,70 @@ const recreateTemplateDependencies = async ({
         propertyDependencies.dependsOnPropertyId,
       ],
     });
+};
+
+const hasTemplateDependencyCycle = ({
+  templateProperties,
+  propertyIdBySourceId,
+  createdPropertySourceIds,
+}: {
+  templateProperties: readonly ViewTemplateProperty[];
+  propertyIdBySourceId: ReadonlyMap<string, string>;
+  createdPropertySourceIds: ReadonlySet<string>;
+}): boolean => {
+  const graph = new Map<string, string[]>();
+
+  for (const templateProperty of templateProperties) {
+    if (!createdPropertySourceIds.has(templateProperty.sourceId)) {
+      continue;
+    }
+
+    const propertyId = propertyIdBySourceId.get(templateProperty.sourceId);
+    if (!propertyId || !templateProperty.dependencies) {
+      continue;
+    }
+
+    const dependencySourceIds: string[] = [];
+    for (const dep of templateProperty.dependencies) {
+      const dependsOnPropertyId = propertyIdBySourceId.get(
+        dep.dependsOnSourceId,
+      );
+      if (!dependsOnPropertyId || dependsOnPropertyId === propertyId) {
+        continue;
+      }
+      dependencySourceIds.push(dep.dependsOnSourceId);
+    }
+    graph.set(templateProperty.sourceId, dependencySourceIds);
+  }
+
+  const visited = new Set<string>();
+  const visiting = new Set<string>();
+  const visit = (sourceId: string): boolean => {
+    if (visiting.has(sourceId)) {
+      return true;
+    }
+    if (visited.has(sourceId)) {
+      return false;
+    }
+
+    visiting.add(sourceId);
+    for (const dependencySourceId of graph.get(sourceId) ?? []) {
+      if (visit(dependencySourceId)) {
+        return true;
+      }
+    }
+    visiting.delete(sourceId);
+    visited.add(sourceId);
+    return false;
+  };
+
+  for (const sourceId of graph.keys()) {
+    if (visit(sourceId)) {
+      return true;
+    }
+  }
+
+  return false;
 };
 
 const readPropertyIds = async (
