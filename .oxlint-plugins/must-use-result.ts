@@ -54,21 +54,39 @@ export default {
             //   this `void` becomes a one-token bypass of the rule
             // - TSAsExpression / TSTypeAssertion: `safeDb(...) as unknown`
             //   launders the Result type away but still drops the value
+            // - MemberExpression as the object: `safeDb(...).map(...)`
+            //   continues the Result through a chained method
+            // - CallExpression as the callee: the chained method call
+            //   `safeDb(...).map(...)` still produces a Result the
+            //   caller must consume
             // If the outermost wrapper sits inside an ExpressionStatement,
             // the call result is discarded.
             let current = node;
-            while (
-              current.parent &&
-              (current.parent.type === "AwaitExpression" ||
-                current.parent.type === "ChainExpression" ||
-                current.parent.type === "ParenthesizedExpression" ||
-                current.parent.type === "TSNonNullExpression" ||
-                current.parent.type === "TSAsExpression" ||
-                current.parent.type === "TSTypeAssertion" ||
-                (current.parent.type === "UnaryExpression" &&
-                  current.parent.operator === "void"))
-            ) {
-              current = current.parent;
+            while (current.parent) {
+              const parent = current.parent;
+              const isTransparentWrapper =
+                parent.type === "AwaitExpression" ||
+                parent.type === "ChainExpression" ||
+                parent.type === "ParenthesizedExpression" ||
+                parent.type === "TSNonNullExpression" ||
+                parent.type === "TSAsExpression" ||
+                parent.type === "TSTypeAssertion" ||
+                (parent.type === "UnaryExpression" &&
+                  parent.operator === "void");
+              // Chain methods (`safeDb(...).map(...)`): the Result flows
+              // through `.map` as the object of a MemberExpression and
+              // then becomes the callee of the chained CallExpression.
+              // Only treat as transparent when we sit in those exact
+              // positions; passing the Result as an argument elsewhere
+              // counts as consumption.
+              const isChainStep =
+                (parent.type === "MemberExpression" &&
+                  parent.object === current) ||
+                (parent.type === "CallExpression" && parent.callee === current);
+              if (!isTransparentWrapper && !isChainStep) {
+                break;
+              }
+              current = parent;
             }
             if (current.parent?.type !== "ExpressionStatement") {
               return;
