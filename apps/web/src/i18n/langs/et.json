@@ -477,7 +477,7 @@
       "docxReplaceBlockSummary": "Replace {blockId}",
       "docxReplaceSummary": "Replace “{find}” with “{replace}”",
       "execute-typescript": "Asja andmete lugemine",
-      "fetch_url": "Reading page",
+      "fetch_url": "Lehe lugemine",
       "load-skill": "Juhiste lugemine",
       "read-contact": "Kontakti lugemine",
       "read-content-across-matters": "Sisu lugemine kõigist asjadest",
@@ -486,7 +486,7 @@
       "search-across-matters": "Otsing kõigis asjades",
       "unknown": "Tööriista kasutamine",
       "update-entity-fields": "Metaandmete uuendamine",
-      "web_search": "Searching the web"
+      "web_search": "Veebist otsimine"
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# märk} other {# märki}}",
@@ -500,13 +500,13 @@
     "unsupportedFileType": "Toetamata failitüüp",
     "uploadFailed": "Faili töötlemine ebaõnnestus",
     "webSearch": {
-      "fetchedFrom": "from {source}",
-      "openSource": "Open {source} in a new tab",
-      "sources": "Sources",
-      "toggleDescription": "Let the model search the public web and read pages for this conversation.",
-      "toggleLabel": "Web search",
-      "toggleOff": "Turn off web search",
-      "toggleOn": "Turn on web search"
+      "fetchedFrom": "allikast {source}",
+      "openSource": "Ava {source} uuel vahekaardil",
+      "sources": "Allikad",
+      "toggleDescription": "Luba mudelil selles vestluses avalikust veebist otsida ja lehti lugeda.",
+      "toggleLabel": "Veebiotsing",
+      "toggleOff": "Lülita veebiotsing välja",
+      "toggleOn": "Lülita veebiotsing sisse"
     }
   },
   "clauses": {

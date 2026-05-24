@@ -11,7 +11,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
-  permissions: { chat: ["create"] },
+  permissions: { chat: ["update"] },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({
     workspaceId: t.Optional(tSafeId("workspace")),
@@ -29,6 +29,7 @@ const updateThread = createSafeRootHandler(
     query: { workspaceId },
     params,
     safeDb,
+    session,
     user,
   }) {
     const scope = yield* resolveChatScope({
@@ -37,23 +38,63 @@ const updateThread = createSafeRootHandler(
     });
 
     const result = yield* Result.await(
-      safeDb(
-        (tx) =>
-          tx
-            .update(chatThreads)
-            .set({ webSearchEnabled: body.webSearchEnabled })
-            .where(
-              and(
-                eq(chatThreads.id, params.threadId),
-                eq(chatThreads.userId, user.id),
-                scope.scope === "workspace"
-                  ? eq(chatThreads.workspaceId, scope.workspaceId)
-                  : isNull(chatThreads.workspaceId),
-              ),
-            )
-            .returning({ id: chatThreads.id }),
-        defaultDatabaseRetry,
-      ),
+      safeDb(async (tx) => {
+        const updated = await tx
+          .update(chatThreads)
+          .set({ webSearchEnabled: body.webSearchEnabled })
+          .where(
+            and(
+              eq(chatThreads.id, params.threadId),
+              eq(chatThreads.userId, user.id),
+              scope.scope === "workspace"
+                ? eq(chatThreads.workspaceId, scope.workspaceId)
+                : isNull(chatThreads.workspaceId),
+            ),
+          )
+          .returning({ id: chatThreads.id });
+
+        if (updated.length > 0) {
+          return updated;
+        }
+
+        const resolvedWorkspaceId =
+          scope.scope === "workspace" ? scope.workspaceId : null;
+        const dataWorkspaceIds =
+          scope.scope === "workspace" ? [scope.workspaceId] : [];
+
+        const inserted = await tx
+          .insert(chatThreads)
+          .values({
+            id: params.threadId,
+            organizationId: session.activeOrganizationId,
+            title: "New chat",
+            userId: user.id,
+            workspaceId: resolvedWorkspaceId,
+            contextMatterIds: [],
+            dataWorkspaceIds,
+            webSearchEnabled: body.webSearchEnabled,
+          })
+          .onConflictDoNothing()
+          .returning({ id: chatThreads.id });
+
+        if (inserted.length > 0) {
+          return inserted;
+        }
+
+        return await tx
+          .update(chatThreads)
+          .set({ webSearchEnabled: body.webSearchEnabled })
+          .where(
+            and(
+              eq(chatThreads.id, params.threadId),
+              eq(chatThreads.userId, user.id),
+              scope.scope === "workspace"
+                ? eq(chatThreads.workspaceId, scope.workspaceId)
+                : isNull(chatThreads.workspaceId),
+            ),
+          )
+          .returning({ id: chatThreads.id });
+      }, defaultDatabaseRetry),
     );
 
     if (result.length === 0) {

@@ -477,7 +477,7 @@
       "docxReplaceBlockSummary": "Substitua {blockId}",
       "docxReplaceSummary": "Substitua “{find}” por “{replace}”",
       "execute-typescript": "Lendo dados do caso",
-      "fetch_url": "Reading page",
+      "fetch_url": "Lendo página",
       "load-skill": "Lendo orientações",
       "read-contact": "Lendo contato",
       "read-content-across-matters": "Lendo conteúdo em casos",
@@ -486,7 +486,7 @@
       "search-across-matters": "Pesquisando casos",
       "unknown": "Usando ferramenta",
       "update-entity-fields": "Atualizando metadados",
-      "web_search": "Searching the web"
+      "web_search": "Pesquisando na web"
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# caractere} many {# caracteres} other {# caracteres}}",
@@ -500,13 +500,13 @@
     "unsupportedFileType": "Tipo de arquivo não suportado",
     "uploadFailed": "Falha ao processar o arquivo",
     "webSearch": {
-      "fetchedFrom": "from {source}",
-      "openSource": "Open {source} in a new tab",
-      "sources": "Sources",
-      "toggleDescription": "Let the model search the public web and read pages for this conversation.",
-      "toggleLabel": "Web search",
-      "toggleOff": "Turn off web search",
-      "toggleOn": "Turn on web search"
+      "fetchedFrom": "de {source}",
+      "openSource": "Abrir {source} em uma nova aba",
+      "sources": "Fontes",
+      "toggleDescription": "Permitir que o modelo pesquise na web pública e leia páginas nesta conversa.",
+      "toggleLabel": "Busca na web",
+      "toggleOff": "Desativar busca na web",
+      "toggleOn": "Ativar busca na web"
     }
   },
   "clauses": {

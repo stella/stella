@@ -477,7 +477,7 @@
       "docxReplaceBlockSummary": "Replace {blockId}",
       "docxReplaceSummary": "Replace “{find}” with “{replace}”",
       "execute-typescript": "Leyendo datos del asunto",
-      "fetch_url": "Reading page",
+      "fetch_url": "Leyendo página",
       "load-skill": "Leyendo instrucciones",
       "read-contact": "Leyendo contacto",
       "read-content-across-matters": "Leyendo contenido entre asuntos",
@@ -486,7 +486,7 @@
       "search-across-matters": "Buscando entre asuntos",
       "unknown": "Usando herramienta",
       "update-entity-fields": "Actualizando metadatos",
-      "web_search": "Searching the web"
+      "web_search": "Buscando en la web"
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# carácter} many {# caracteres} other {# caracteres}}",
@@ -500,13 +500,13 @@
     "unsupportedFileType": "Tipo de archivo no compatible",
     "uploadFailed": "Error al procesar el archivo",
     "webSearch": {
-      "fetchedFrom": "from {source}",
-      "openSource": "Open {source} in a new tab",
-      "sources": "Sources",
-      "toggleDescription": "Let the model search the public web and read pages for this conversation.",
-      "toggleLabel": "Web search",
-      "toggleOff": "Turn off web search",
-      "toggleOn": "Turn on web search"
+      "fetchedFrom": "de {source}",
+      "openSource": "Abrir {source} en una pestaña nueva",
+      "sources": "Fuentes",
+      "toggleDescription": "Permitir que el modelo busque en la web pública y lea páginas para esta conversación.",
+      "toggleLabel": "Búsqueda web",
+      "toggleOff": "Desactivar búsqueda web",
+      "toggleOn": "Activar búsqueda web"
     }
   },
   "clauses": {

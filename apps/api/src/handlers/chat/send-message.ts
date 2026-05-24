@@ -707,7 +707,21 @@ const loadThread = async ({
 
     const thread = yield* Result.await(lookup());
     if (thread) {
-      return buildExisting(thread);
+      const existingResult = buildExisting(thread);
+      if (Result.isError(existingResult)) {
+        return Result.err(existingResult.error);
+      }
+      if (thread.messages.length === 0) {
+        yield* Result.await(
+          safeDb((tx) =>
+            tx
+              .update(chatThreads)
+              .set({ title })
+              .where(eq(chatThreads.id, threadId)),
+          ),
+        );
+      }
+      return Result.ok(existingResult.value);
     }
 
     const initialDataWorkspaceIds: SafeId<"workspace">[] = workspaceId

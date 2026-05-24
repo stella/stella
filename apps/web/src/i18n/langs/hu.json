@@ -477,7 +477,7 @@
       "docxReplaceBlockSummary": "Replace {blockId}",
       "docxReplaceSummary": "Replace “{find}” with “{replace}”",
       "execute-typescript": "Ügyadatok olvasása",
-      "fetch_url": "Reading page",
+      "fetch_url": "Oldal olvasása",
       "load-skill": "Útmutató olvasása",
       "read-contact": "Kapcsolat olvasása",
       "read-content-across-matters": "Tartalom olvasása az ügyek között",
@@ -486,7 +486,7 @@
       "search-across-matters": "Keresés az ügyek között",
       "unknown": "Eszköz használata",
       "update-entity-fields": "Metaadatok frissítése",
-      "web_search": "Searching the web"
+      "web_search": "Keresés az interneten"
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# karakter} other {# karakter}}",
@@ -500,13 +500,13 @@
     "unsupportedFileType": "Nem támogatott fájltípus",
     "uploadFailed": "A fájl feldolgozása sikertelen",
     "webSearch": {
-      "fetchedFrom": "from {source}",
-      "openSource": "Open {source} in a new tab",
-      "sources": "Sources",
-      "toggleDescription": "Let the model search the public web and read pages for this conversation.",
-      "toggleLabel": "Web search",
-      "toggleOff": "Turn off web search",
-      "toggleOn": "Turn on web search"
+      "fetchedFrom": "{source} forrásból",
+      "openSource": "{source} megnyitása új lapon",
+      "sources": "Források",
+      "toggleDescription": "Engedélyezi a modellnek, hogy ebben a beszélgetésben a nyilvános weben keressen és oldalakat olvasson.",
+      "toggleLabel": "Webes keresés",
+      "toggleOff": "Webes keresés kikapcsolása",
+      "toggleOn": "Webes keresés bekapcsolása"
     }
   },
   "clauses": {

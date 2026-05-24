@@ -477,7 +477,7 @@
       "docxReplaceBlockSummary": "Replace {blockId}",
       "docxReplaceSummary": "Replace “{find}” with “{replace}”",
       "execute-typescript": "Lietas datu lasīšana",
-      "fetch_url": "Reading page",
+      "fetch_url": "Lapas lasīšana",
       "load-skill": "Norādījumu lasīšana",
       "read-contact": "Kontaktpersonas lasīšana",
       "read-content-across-matters": "Satura lasīšana vairākās lietās",
@@ -486,7 +486,7 @@
       "search-across-matters": "Meklēšana vairākās lietās",
       "unknown": "Rīka izmantošana",
       "update-entity-fields": "Metadatu atjaunināšana",
-      "web_search": "Searching the web"
+      "web_search": "Meklēšana tīmeklī"
     },
     "toolCall": {
       "characterCount": "{count, plural, zero {# rakstzīmju} one {# rakstzīme} other {# rakstzīmes}}",
@@ -500,13 +500,13 @@
     "unsupportedFileType": "Neatbalstīts faila tips",
     "uploadFailed": "Neizdevās apstrādāt failu",
     "webSearch": {
-      "fetchedFrom": "from {source}",
-      "openSource": "Open {source} in a new tab",
-      "sources": "Sources",
-      "toggleDescription": "Let the model search the public web and read pages for this conversation.",
-      "toggleLabel": "Web search",
-      "toggleOff": "Turn off web search",
-      "toggleOn": "Turn on web search"
+      "fetchedFrom": "no {source}",
+      "openSource": "Atvērt {source} jaunā cilnē",
+      "sources": "Avoti",
+      "toggleDescription": "Atļaut modelim šajā sarunā meklēt publiskajā tīmeklī un lasīt lapas.",
+      "toggleLabel": "Meklēšana tīmeklī",
+      "toggleOff": "Izslēgt meklēšanu tīmeklī",
+      "toggleOn": "Ieslēgt meklēšanu tīmeklī"
     }
   },
   "clauses": {

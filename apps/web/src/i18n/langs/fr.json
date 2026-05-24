@@ -477,7 +477,7 @@
       "docxReplaceBlockSummary": "Replace {blockId}",
       "docxReplaceSummary": "Replace “{find}” with “{replace}”",
       "execute-typescript": "Lecture des données du dossier",
-      "fetch_url": "Reading page",
+      "fetch_url": "Lecture de la page",
       "load-skill": "Lecture des consignes",
       "read-contact": "Lecture du contact",
       "read-content-across-matters": "Lecture du contenu dans tous les dossiers",
@@ -486,7 +486,7 @@
       "search-across-matters": "Recherche dans tous les dossiers",
       "unknown": "Utilisation d’un outil",
       "update-entity-fields": "Mise à jour des métadonnées",
-      "web_search": "Searching the web"
+      "web_search": "Recherche web"
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# caractère} many {# caractères} other {# caractères}}",
@@ -500,13 +500,13 @@
     "unsupportedFileType": "Type de fichier non pris en charge",
     "uploadFailed": "Échec du traitement du fichier",
     "webSearch": {
-      "fetchedFrom": "from {source}",
-      "openSource": "Open {source} in a new tab",
+      "fetchedFrom": "depuis {source}",
+      "openSource": "Ouvrir {source} dans un nouvel onglet",
       "sources": "Sources",
-      "toggleDescription": "Let the model search the public web and read pages for this conversation.",
-      "toggleLabel": "Web search",
-      "toggleOff": "Turn off web search",
-      "toggleOn": "Turn on web search"
+      "toggleDescription": "Autoriser le modèle à rechercher sur le web public et à lire des pages pour cette conversation.",
+      "toggleLabel": "Recherche web",
+      "toggleOff": "Désactiver la recherche web",
+      "toggleOn": "Activer la recherche web"
     }
   },
   "clauses": {

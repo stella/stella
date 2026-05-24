@@ -477,7 +477,7 @@
       "docxReplaceBlockSummary": "Replace {blockId}",
       "docxReplaceSummary": "Replace “{find}” with “{replace}”",
       "execute-typescript": "Skaitomi bylos duomenys",
-      "fetch_url": "Reading page",
+      "fetch_url": "Skaitomas puslapis",
       "load-skill": "Skaitomos gairės",
       "read-contact": "Skaitomas kontaktas",
       "read-content-across-matters": "Skaitomas turinys keliose bylose",
@@ -486,7 +486,7 @@
       "search-across-matters": "Ieškoma keliose bylose",
       "unknown": "Naudojamas įrankis",
       "update-entity-fields": "Atnaujinami metaduomenys",
-      "web_search": "Searching the web"
+      "web_search": "Ieškoma internete"
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# simbolis} few {# simboliai} many {# simbolių} other {# simbolio}}",
@@ -500,13 +500,13 @@
     "unsupportedFileType": "Nepalaikomas failo tipas",
     "uploadFailed": "Nepavyko apdoroti failo",
     "webSearch": {
-      "fetchedFrom": "from {source}",
-      "openSource": "Open {source} in a new tab",
-      "sources": "Sources",
-      "toggleDescription": "Let the model search the public web and read pages for this conversation.",
-      "toggleLabel": "Web search",
-      "toggleOff": "Turn off web search",
-      "toggleOn": "Turn on web search"
+      "fetchedFrom": "iš {source}",
+      "openSource": "Atidaryti {source} naujame skirtuke",
+      "sources": "Šaltiniai",
+      "toggleDescription": "Leisti modeliui šiame pokalbyje ieškoti viešajame internete ir skaityti puslapius.",
+      "toggleLabel": "Paieška internete",
+      "toggleOff": "Išjungti paiešką internete",
+      "toggleOn": "Įjungti paiešką internete"
     }
   },
   "clauses": {

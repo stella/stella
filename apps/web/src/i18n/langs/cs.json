@@ -477,7 +477,7 @@
       "docxReplaceBlockSummary": "Nahradit {blockId}",
       "docxReplaceSummary": "Nahradit „{find}“ za „{replace}“",
       "execute-typescript": "Čtu data věci",
-      "fetch_url": "Reading page",
+      "fetch_url": "Čtení stránky",
       "load-skill": "Čtu pokyny",
       "read-contact": "Čtení kontaktu",
       "read-content-across-matters": "Čtení obsahu napříč věcmi",
@@ -486,7 +486,7 @@
       "search-across-matters": "Vyhledávání napříč věcmi",
       "unknown": "Použití nástroje",
       "update-entity-fields": "Aktualizace metadat",
-      "web_search": "Searching the web"
+      "web_search": "Vyhledávání na webu"
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# znak} few {# znaky} other {# znaků}}",
@@ -500,13 +500,13 @@
     "unsupportedFileType": "Nepodporovaný typ souboru",
     "uploadFailed": "Zpracování souboru selhalo",
     "webSearch": {
-      "fetchedFrom": "from {source}",
-      "openSource": "Open {source} in a new tab",
-      "sources": "Sources",
-      "toggleDescription": "Let the model search the public web and read pages for this conversation.",
-      "toggleLabel": "Web search",
-      "toggleOff": "Turn off web search",
-      "toggleOn": "Turn on web search"
+      "fetchedFrom": "z {source}",
+      "openSource": "Otevřít {source} na nové kartě",
+      "sources": "Zdroje",
+      "toggleDescription": "Umožnit modelu v této konverzaci vyhledávat na veřejném webu a číst stránky.",
+      "toggleLabel": "Vyhledávání na webu",
+      "toggleOff": "Vypnout vyhledávání na webu",
+      "toggleOn": "Zapnout vyhledávání na webu"
     }
   },
   "clauses": {
