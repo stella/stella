@@ -315,10 +315,7 @@ export class LayoutPainter {
     element.style.left = `${fragment.x}px`;
     element.style.top = `${fragment.y}px`;
     element.style.width = `${fragment.width}px`;
-
-    if ("height" in fragment) {
-      element.style.height = `${fragment.height}px`;
-    }
+    element.style.height = `${fragment.height}px`;
   }
 
   /**

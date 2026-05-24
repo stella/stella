@@ -224,7 +224,8 @@ const inlinesToPlainText = (inlines: readonly Inline[]): string => {
       text += node.text;
     } else if (node.type === "line-break") {
       text += "\n";
-    } else if ("children" in node) {
+    } else {
+      // bold | italic | link — all carry children
       text += inlinesToPlainText(node.children);
     }
   }
@@ -529,19 +530,17 @@ const stripInlinePrefix = (
       continue;
     }
 
-    // Bold/italic/link: recurse into children
-    if ("children" in node) {
-      const nodeTextLen = inlinesToPlainText(node.children).length;
-      if (nodeTextLen <= remaining) {
-        // Entire node consumed by prefix
-        remaining -= nodeTextLen;
-      } else {
-        // Partial strip inside the node
-        const stripped = stripInlinePrefix(node.children, remaining);
-        remaining = 0;
-        if (stripped.length > 0) {
-          result.push({ ...node, children: stripped });
-        }
+    // Remaining variants (bold | italic | link) all carry children.
+    const nodeTextLen = inlinesToPlainText(node.children).length;
+    if (nodeTextLen <= remaining) {
+      // Entire node consumed by prefix
+      remaining -= nodeTextLen;
+    } else {
+      // Partial strip inside the node
+      const stripped = stripInlinePrefix(node.children, remaining);
+      remaining = 0;
+      if (stripped.length > 0) {
+        result.push({ ...node, children: stripped });
       }
     }
   }

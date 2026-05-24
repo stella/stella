@@ -101,7 +101,8 @@ const inlineTextLength = (inlines: readonly Inline[]): number => {
       len += node.text.length;
     } else if (node.type === "line-break") {
       len += 1;
-    } else if ("children" in node) {
+    } else {
+      // bold | italic | link — all carry children
       len += inlineTextLength(node.children);
     }
   }
@@ -229,7 +230,9 @@ export const validateAst = (
   const typeCounts: Record<string, number> = {};
   for (const b of blocks) {
     const key =
-      b.type === "paragraph" && "role" in b ? `paragraph-${b.role}` : b.type;
+      b.type === "paragraph" && b.role !== undefined
+        ? `paragraph-${b.role}`
+        : b.type;
     typeCounts[key] = (typeCounts[key] ?? 0) + 1;
   }
 
@@ -271,7 +274,7 @@ export const validateAst = (
 
     // ── 4. Inline-plainText consistency ─────────────────
 
-    if ("inlines" in block) {
+    if (block.type === "heading" || block.type === "paragraph") {
       const inlineLen = inlineTextLength(block.inlines);
       const plainLen = block.plainText.length;
       // Allow some tolerance for whitespace differences

@@ -406,7 +406,7 @@ export const czUsAdapter: SourceAdapter = {
               rateLimited = true;
               break;
             }
-            if (probe.status === "miss" || !("html" in probe)) {
+            if (probe.status !== "ok") {
               consecutiveMisses++;
               continue;
             }

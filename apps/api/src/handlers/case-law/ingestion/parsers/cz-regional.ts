@@ -311,7 +311,8 @@ const inlinePlainLength = (nodes: readonly Inline[]): number => {
   for (const n of nodes) {
     if (n.type === "text") {
       len += n.text.length;
-    } else if ("children" in n) {
+    } else if (n.type !== "line-break") {
+      // bold | italic | link — all carry children
       len += inlinePlainLength(n.children);
     }
   }
@@ -347,7 +348,11 @@ const stripPrefix = (
         result.push(sliced);
         remaining = 0;
       }
-    } else if ("children" in node) {
+    } else if (
+      node.type === "bold" ||
+      node.type === "italic" ||
+      node.type === "link"
+    ) {
       const len = inlinePlainLength(node.children);
       if (len <= remaining) {
         remaining -= len;

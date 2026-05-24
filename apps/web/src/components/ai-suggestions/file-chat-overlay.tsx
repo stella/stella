@@ -39,10 +39,7 @@ import type {
 import { cn } from "@stll/ui/lib/utils";
 
 import { PromptBar } from "@/components/ai-suggestions/host";
-import {
-  REVIEW_UNSPECIFIED_AREA,
-  useReviewStore,
-} from "@/components/ai-suggestions/review-store";
+import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import type {
   ReviewSuggestion,
   ReviewSuggestionPreview,
@@ -236,11 +233,10 @@ const prepareOperations = (
 
 const inputOperationSeverity = (
   operation: ToolInputOperation,
-): FolioAIEditSeverity | "unspecified" =>
-  "severity" in operation ? operation.severity : "unspecified";
+): FolioAIEditSeverity | "unspecified" => operation.severity;
 
 const inputOperationArea = (operation: ToolInputOperation): string =>
-  "area" in operation ? operation.area : REVIEW_UNSPECIFIED_AREA;
+  operation.area;
 
 type SnapshotBlock = {
   id: string;
