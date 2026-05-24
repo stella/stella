@@ -142,35 +142,44 @@ const fillByIdHandler = async function* ({
   const fillStatus =
     result.unmatchedPlaceholders.length > 0 ? "partial" : "success";
 
-  // Best-effort analytics; don't block the download.
-  void scopedDb(async (tx) => {
-    await tx.insert(templateFills).values({
-      organizationId,
-      templateId,
-      userId,
-      format,
-      status: fillStatus,
-      unmatchedCount: result.unmatchedPlaceholders.length,
-      unusedCount: result.unusedValues.length,
-      structureErrors:
-        result.structureErrors.length > 0 ? result.structureErrors : null,
-    });
+  yield* Result.await(
+    Result.tryPromise({
+      try: async () =>
+        await scopedDb(async (tx) => {
+          await tx.insert(templateFills).values({
+            organizationId,
+            templateId,
+            userId,
+            format,
+            status: fillStatus,
+            unmatchedCount: result.unmatchedPlaceholders.length,
+            unusedCount: result.unusedValues.length,
+            structureErrors:
+              result.structureErrors.length > 0
+                ? result.structureErrors
+                : null,
+          });
 
-    await recordAuditEvent(tx, {
-      action: AUDIT_ACTION.DOWNLOAD,
-      resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
-      resourceId: templateId,
-      workspaceId: null,
-      metadata: {
-        format,
-        status: fillStatus,
-        unmatchedCount: result.unmatchedPlaceholders.length,
-      },
-    });
-  })
-    // TODO: fix this
-    // oxlint-disable-next-line no-empty-function
-    .catch(() => {});
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.DOWNLOAD,
+            resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
+            resourceId: templateId,
+            workspaceId: null,
+            metadata: {
+              format,
+              status: fillStatus,
+              unmatchedCount: result.unmatchedPlaceholders.length,
+            },
+          });
+        }),
+      catch: (cause) =>
+        new HandlerError({
+          status: 500,
+          message: "Template fill audit failed",
+          cause,
+        }),
+    }),
+  );
 
   const baseName = template.fileName;
 

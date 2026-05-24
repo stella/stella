@@ -97,6 +97,7 @@ type FunctionScope = {
   hasAuditCall: boolean;
   hasSkipDirective: boolean;
   bodyRange: Range | null;
+  childBodyRanges: Range[];
 };
 
 const asRange = (value: unknown): Range | null => {
@@ -133,11 +134,16 @@ export default {
         const pushScope = (node: unknown) => {
           const body = isAstNode(node) && "body" in node ? node.body : null;
           const range = isAstNode(body) ? asRange(body.range) : null;
+          const parentScope = currentScope();
+          if (parentScope && range !== null) {
+            parentScope.childBodyRanges.push(range);
+          }
           scopes.push({
             mutationNodes: [],
             hasAuditCall: false,
             hasSkipDirective: false,
             bodyRange: range,
+            childBodyRanges: [],
           });
         };
 
@@ -173,10 +179,10 @@ export default {
           }
         };
 
-        // Comment-based skip directive. Oxlint plugins receive the full
-        // source via context.sourceCode; comments are exposed on the
-        // root program. We collect all `audit: skip` comments once and
-        // mark any function whose body range encloses one.
+        // Comment-based skip directive. Comments are exposed on the root
+        // program. We collect justified `audit: skip — reason` comments
+        // once and mark only the innermost function whose own body contains
+        // the directive.
         const skipDirectiveRanges: Range[] = [];
 
         return {
@@ -192,7 +198,7 @@ export default {
                 !isAstNode(comment) ||
                 !("value" in comment) ||
                 typeof comment.value !== "string" ||
-                !/audit:\s*skip/iu.test(comment.value)
+                !/audit:\s*skip\s*(?:[-–—:]\s*)\S/iu.test(comment.value)
               ) {
                 continue;
               }
@@ -236,6 +242,14 @@ export default {
           const [start, end] = scope.bodyRange;
           for (const [commentStart] of skipDirectiveRanges) {
             if (commentStart >= start && commentStart <= end) {
+              if (
+                scope.childBodyRanges.some(
+                  ([childStart, childEnd]) =>
+                    commentStart >= childStart && commentStart <= childEnd,
+                )
+              ) {
+                continue;
+              }
               scope.hasSkipDirective = true;
               return;
             }
