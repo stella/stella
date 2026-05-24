@@ -963,6 +963,7 @@ export function useTextContextMenu(
             .readText()
             .then((text) => {
               document.execCommand("insertText", false, text);
+              return;
             })
             .catch(() => {
               // Fallback - just try regular paste

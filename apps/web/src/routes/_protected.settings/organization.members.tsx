@@ -110,7 +110,7 @@ function Members() {
       : data.members;
 
     const sorted = [...filtered].sort((a, b) => {
-      let cmp = 0;
+      let cmp: number;
       if (sort.key === "name") {
         cmp = a.user.name.localeCompare(b.user.name);
       } else if (sort.key === "role") {

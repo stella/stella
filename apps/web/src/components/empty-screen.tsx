@@ -462,6 +462,7 @@ const EmptyScreenVideoOverlay = ({
               className="aspect-video w-full"
               loading="lazy"
               referrerPolicy="strict-origin-when-cross-origin"
+              sandbox="allow-scripts allow-presentation allow-popups"
               src={playableVideo.src}
               title={playableVideo.title}
             />

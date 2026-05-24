@@ -396,7 +396,7 @@ export function calculateHeaderFooterVisualBounds(
       // participate in the cursorY flow — they're positioned absolutely by
       // the renderer and can overlap surrounding HF content (Word
       // semantics for unwrapped floating tables).
-      let blockHeight = 0;
+      let blockHeight: number;
       let advancesCursor = true;
       if (block.kind === "table" && measure.kind === "table") {
         blockHeight = measure.totalHeight;
@@ -495,7 +495,7 @@ export function calculateHeaderFooterMarginPushBounds(
       // anchored images don't participate in HF flow either.
       continue;
     } else {
-      let blockHeight = 0;
+      let blockHeight: number;
       let advancesCursor = true;
       if (block.kind === "table" && measure.kind === "table") {
         blockHeight = measure.totalHeight;

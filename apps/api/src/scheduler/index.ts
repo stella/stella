@@ -18,6 +18,7 @@ await new Promise<void>((resolve) => {
         "scheduler.runner_id": loop.runnerId,
       });
       resolve();
+      return;
     });
   };
 

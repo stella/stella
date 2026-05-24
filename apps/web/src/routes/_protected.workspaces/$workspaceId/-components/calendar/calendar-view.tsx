@@ -401,6 +401,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
         })
         .then(() => {
           void invalidateCalendarTasks();
+          return;
         })
         .catch(() => {
           // non-critical
@@ -416,6 +417,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
         })
         .then(() => {
           void invalidateCalendarTasks();
+          return;
         })
         .catch(() => {
           // non-critical

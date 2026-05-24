@@ -102,5 +102,6 @@ scope.addEventListener("message", (event: MessageEvent<AnonRequest>) => {
     // window.postMessage); the lint rule is window-specific.
     // eslint-disable-next-line unicorn/require-post-message-target-origin
     scope.postMessage(response);
+    return;
   });
 });

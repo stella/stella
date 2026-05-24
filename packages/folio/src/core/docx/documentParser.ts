@@ -553,7 +553,6 @@ function scanRunForTextBoxDrawings(xmlRun: XmlElement): TextBoxRunScan {
       const fallback = branches.find(
         (b) => getLocalName(b.name ?? "") === "Fallback",
       );
-      let foundInBranch = false;
       const tryBranch = (branch: XmlElement | undefined): boolean => {
         if (!branch) {
           return false;
@@ -567,7 +566,7 @@ function scanRunForTextBoxDrawings(xmlRun: XmlElement): TextBoxRunScan {
         }
         return found;
       };
-      foundInBranch = tryBranch(choice);
+      let foundInBranch = tryBranch(choice);
       if (!foundInBranch) {
         foundInBranch = tryBranch(fallback);
       }

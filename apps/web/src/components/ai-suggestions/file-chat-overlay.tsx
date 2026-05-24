@@ -1033,6 +1033,7 @@ const FileChatOverlayInner = ({
               // and want to see the response stream in.
               setPanelOpen(true);
               void sendMessage({ text: prompt });
+              return;
             });
           }}
           onTogglePanel={() => setPanelOpen((v) => !v)}

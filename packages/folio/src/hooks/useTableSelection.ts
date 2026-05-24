@@ -146,7 +146,7 @@ export function useTableSelection({
       }
 
       let newTable: Table | null = null;
-      let newDoc: Document | null = null;
+      let newDoc: Document;
       let newRowIndex = state.rowIndex;
       let newColumnIndex = state.columnIndex;
 
