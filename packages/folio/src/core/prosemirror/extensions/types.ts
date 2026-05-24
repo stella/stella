@@ -94,14 +94,14 @@ export type AnyExtension = Extension | NodeExtension | MarkExtension;
 export type ExtensionDefinition<TOptions = Record<string, unknown>> = {
   name: string;
   priority?: ExtensionPriority;
-  defaultOptions: TOptions;
+  defaultOptions?: TOptions;
   onSchemaReady(ctx: ExtensionContext, options: TOptions): ExtensionRuntime;
 };
 
 export type NodeExtensionDefinition<TOptions = Record<string, unknown>> = {
   name: string;
   priority?: ExtensionPriority;
-  defaultOptions: TOptions;
+  defaultOptions?: TOptions;
   schemaNodeName: string;
   nodeSpec: NodeSpec | ((options: TOptions) => NodeSpec);
   onSchemaReady?(ctx: ExtensionContext, options: TOptions): ExtensionRuntime;
@@ -110,7 +110,7 @@ export type NodeExtensionDefinition<TOptions = Record<string, unknown>> = {
 export type MarkExtensionDefinition<TOptions = Record<string, unknown>> = {
   name: string;
   priority?: ExtensionPriority;
-  defaultOptions: TOptions;
+  defaultOptions?: TOptions;
   schemaMarkName: string;
   markSpec: MarkSpec | ((options: TOptions) => MarkSpec);
   onSchemaReady?(ctx: ExtensionContext, options: TOptions): ExtensionRuntime;
