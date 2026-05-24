@@ -3,12 +3,13 @@ import { GlobeIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError, userErrorFromThrown } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { invalidateChatThread } from "@/routes/_protected.chat/-queries";
 
@@ -46,6 +47,12 @@ export const ChatWebSearchToggle = ({
     },
     onSuccess: () => {
       void invalidateChatThread({ queryClient, threadRef });
+    },
+    onError: (error) => {
+      stellaToast.add({
+        title: userErrorFromThrown(error, t("errors.actionFailed")),
+        type: "error",
+      });
     },
   });
 
