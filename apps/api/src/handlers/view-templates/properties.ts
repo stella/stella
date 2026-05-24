@@ -55,7 +55,7 @@ export const collectTemplateProperties = ({
   ]);
 
   return workspaceProperties
-    .filter((property) => property.content.type !== "file" && !property.system)
+    .filter((property) => !property.system)
     .filter(
       (property) =>
         creatablePropertyIds.has(property.id) ||
@@ -206,10 +206,6 @@ const collectVisibleTemplatePropertyIds = ({
   properties: readonly WorkspacePropertyTemplateSource[];
 }): Set<string> => {
   const ids = new Set<string>();
-
-  if (layout.type !== "table") {
-    return ids;
-  }
 
   for (const property of workspaceProperties) {
     if (!layout.hiddenProperties.includes(property.id)) {
