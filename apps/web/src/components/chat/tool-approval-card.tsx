@@ -96,6 +96,16 @@ const getApprovalId = (part: ApprovalToolPart): string | null => {
   }
 };
 
+const getApprovalPartInput = (part: ApprovalToolPart): unknown => {
+  if (!("input" in part)) {
+    return undefined;
+  }
+
+  // SAFETY: external MCP tool inputs are intentionally schema-less on the
+  // frontend. Treat the payload as unknown before rendering a read-only summary.
+  return (part as { input?: unknown }).input;
+};
+
 // -- Select badge (colored chip matching table UX) --
 
 type SelectBadgeProps = {
@@ -329,6 +339,10 @@ export const ToolApprovalCard = ({
   const externalMcpProviderName = getExternalMcpProviderName(name);
   const label = externalMcpProviderName ?? t(getChatToolTitleKey(name));
   const externalMcpConnectorSlug = getExternalMcpConnectorSlug(name);
+  const externalMcpInput =
+    isExternalMcpApproval && part.state !== "input-streaming"
+      ? getApprovalPartInput(part)
+      : undefined;
   const { data: mcpConnectorsData } = useQuery({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: externalMcpConnectorSlug !== null,
@@ -490,10 +504,9 @@ export const ToolApprovalCard = ({
         )}
       {isExternalMcpApproval &&
         part.state !== "input-streaming" &&
-        "input" in part &&
-        part.input !== undefined && (
+        externalMcpInput !== undefined && (
           <ExternalMcpInputSummary
-            input={part.input}
+            input={externalMcpInput}
             isAwaitingDecision={
               isApprovalRequested &&
               !isProcessing &&
