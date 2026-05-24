@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@hocuspocus/server": "^4.0.0",
+    "@stll/errors": "workspace:*",
     "@t3-oss/env-core": "catalog:",
     "better-result": "catalog:",
     "crossws": "^0.4.5",

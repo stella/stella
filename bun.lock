@@ -67,6 +67,7 @@
         "@stll/case-law": "workspace:*",
         "@stll/docx-core": "workspace:*",
         "@stll/docx-utils": "workspace:*",
+        "@stll/errors": "workspace:*",
         "@stll/folio": "workspace:*",
         "@stll/infosoud": "workspace:*",
         "@stll/money": "workspace:*",
@@ -113,6 +114,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@hocuspocus/server": "^4.0.0",
+        "@stll/errors": "workspace:*",
         "@t3-oss/env-core": "catalog:",
         "better-result": "catalog:",
         "crossws": "^0.4.5",
@@ -222,6 +224,7 @@
         "@stll/anonymize-wasm": "catalog:",
         "@stll/api": "workspace:*",
         "@stll/case-law": "workspace:*",
+        "@stll/errors": "workspace:*",
         "@stll/folio": "workspace:*",
         "@stll/money": "workspace:*",
         "@stll/permissions": "workspace:*",
@@ -362,6 +365,18 @@
       "version": "0.1.0",
       "dependencies": {
         "jszip": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/errors": {
+      "name": "@stll/errors",
+      "version": "0.0.0",
+      "dependencies": {
+        "better-result": "catalog:",
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
@@ -1575,6 +1590,8 @@
     "@stll/docx-core": ["@stll/docx-core@workspace:packages/docx-core"],
 
     "@stll/docx-utils": ["@stll/docx-utils@workspace:packages/docx-utils"],
+
+    "@stll/errors": ["@stll/errors@workspace:packages/errors"],
 
     "@stll/folio": ["@stll/folio@workspace:packages/folio"],
 

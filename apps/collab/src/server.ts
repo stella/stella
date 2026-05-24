@@ -1,23 +1,12 @@
 import { Hocuspocus } from "@hocuspocus/server";
 import type { WebSocketLike } from "@hocuspocus/server";
-import { panic, TaggedError } from "better-result";
+import { panic } from "better-result";
 import type { Peer } from "crossws";
 import crossws from "crossws/adapters/bun";
 import * as v from "valibot";
 import { applyUpdate, encodeStateAsUpdate } from "yjs";
 
-/**
- * HTTP/network failure when calling the Stella API from the collaboration
- * server. Carries the URL, status, and statusText for structured logging.
- */
-export class FetchBoundaryError extends TaggedError("FetchBoundaryError")<{
-  url: string;
-  status?: number;
-  statusText?: string;
-  body?: string;
-  message: string;
-  cause?: unknown;
-}>() {}
+import { FetchBoundaryError } from "@stll/errors";
 
 type CollabAuthContext = {
   canEdit: boolean;

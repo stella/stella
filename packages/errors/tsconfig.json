@@ -1,13 +1,10 @@
 {
   "extends": "@stll/typescript-config/base.json",
   "compilerOptions": {
-    "target": "ES2024",
     "lib": ["ESNext"],
     "module": "ESNext",
-    "paths": {
-      "@stll/errors": ["../../packages/errors/src/index.ts"]
-    },
     "types": ["bun"]
   },
-  "include": ["src"]
+  "include": ["."],
+  "exclude": ["node_modules"]
 }
