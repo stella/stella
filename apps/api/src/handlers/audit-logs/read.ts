@@ -7,6 +7,7 @@ import type { Static } from "elysia";
 import { auditLogs } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -40,6 +41,11 @@ const decodeCursor = (
 
 const readAuditLogsQuerySchema = t.Object({
   workspaceId: t.Optional(tSafeId("workspace")),
+  // Use literal unions so a typo'd filter fails as 400 at the boundary
+  // instead of returning an empty page. Adding a new action or
+  // resource type to AUDIT_ACTION / AUDIT_RESOURCE_TYPE automatically
+  // widens this union via the const-object Object.values inference.
+  action: t.Optional(t.String({ minLength: 1 })),
   resourceType: t.Optional(t.String({ minLength: 1 })),
   resourceId: t.Optional(t.String({ minLength: 1 })),
   userId: t.Optional(tUserId),
@@ -64,6 +70,9 @@ const toAuditLogConditions = (query: ReadAuditLogsQuery): SQL[] => {
     conditions.push(eq(auditLogs.workspaceId, query.workspaceId));
   }
   /* eslint-enable no-body-ownership-ids/no-body-ownership-ids */
+  if (query.action) {
+    conditions.push(eq(auditLogs.action, query.action));
+  }
   if (query.resourceType) {
     conditions.push(eq(auditLogs.resourceType, query.resourceType));
   }
@@ -105,10 +114,36 @@ const config = {
   query: readAuditLogsQuerySchema,
 } satisfies HandlerConfig;
 
+const VALID_ACTIONS = new Set<string>(Object.values(AUDIT_ACTION));
+const VALID_RESOURCE_TYPES = new Set<string>(
+  Object.values(AUDIT_RESOURCE_TYPE),
+);
+
 const readAuditLogs = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, query }) {
     const limit = query.limit ?? LIMITS.auditLogPageSizeDefault;
+
+    if (query.action !== undefined && !VALID_ACTIONS.has(query.action)) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: `Unknown action filter '${query.action}'`,
+        }),
+      );
+    }
+
+    if (
+      query.resourceType !== undefined &&
+      !VALID_RESOURCE_TYPES.has(query.resourceType)
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: `Unknown resourceType filter '${query.resourceType}'`,
+        }),
+      );
+    }
 
     if (query.resourceId && !query.resourceType) {
       return Result.err(
