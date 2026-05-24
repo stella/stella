@@ -44,6 +44,12 @@ void mock.module("@/api/lib/search/index-global", () => ({
   upsertWorkspaceSearchDocuments: mock(async () => undefined),
 }));
 
+const broadcastQueryInvalidationToTargetWorkspaceMock = mock(() => {});
+void mock.module("@/api/lib/invalidate-query-macro", () => ({
+  broadcastQueryInvalidationToTargetWorkspace:
+    broadcastQueryInvalidationToTargetWorkspaceMock,
+}));
+
 const { default: copyToWorkspace } = await import("./copy-to-workspace");
 
 const sourceWorkspaceId = toSafeId<"workspace">("source_workspace");
@@ -120,6 +126,7 @@ beforeEach(() => {
   s3DeleteMock.mockClear();
   processExtractionMock.mockClear();
   syncWorkspaceSearchActivityMock.mockClear();
+  broadcastQueryInvalidationToTargetWorkspaceMock.mockClear();
 });
 
 const createContext = ({
