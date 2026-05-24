@@ -22,8 +22,16 @@ export type {
 export type {
   TextColorAttrs,
   UnderlineAttrs,
+  StrikeAttrs,
   FontSizeAttrs,
   FontFamilyAttrs,
+  HighlightAttrs,
+  CharacterSpacingAttrs,
+  EmphasisMarkAttrs,
+  FootnoteRefAttrs,
+  CommentAttrs,
+  TrackedChangeMarkAttrs,
+  RunFormattingOverrideAttrs,
   HyperlinkAttrs,
 } from "./marks";
 

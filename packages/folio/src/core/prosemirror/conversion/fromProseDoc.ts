@@ -57,21 +57,28 @@ import type {
 } from "../../types/document";
 import { pixelsToEmu } from "../../utils/units";
 import {
+  expectCharacterSpacingMarkAttrs,
+  expectCommentMarkAttrs,
+  expectEmphasisMarkAttrs,
+  expectFontFamilyMarkAttrs,
+  expectFontSizeMarkAttrs,
+  expectFootnoteRefMarkAttrs,
+  expectHighlightMarkAttrs,
   expectHyperlinkMarkAttrs,
   expectImageAttrs,
   expectParagraphAttrs,
+  expectRunFormattingOverrideMarkAttrs,
+  expectStrikeMarkAttrs,
   expectTableAttrs,
   expectTableCellAttrs,
   expectTableRowAttrs,
+  expectTextColorMarkAttrs,
+  expectTrackedChangeMarkAttrs,
+  expectUnderlineMarkAttrs,
 } from "../attrs";
-import { applyRunFormattingOverrideMark } from "../extensions/marks/RunFormattingOverrideExtension";
 import type { ShapeAttrs } from "../extensions/nodes/ShapeExtension";
 import type { TextBoxAttrs } from "../extensions/nodes/TextBoxExtension";
-import type {
-  TextColorAttrs,
-  UnderlineAttrs,
-  FontFamilyAttrs,
-} from "../schema/marks";
+import type { RunFormattingOverrideAttrs } from "../schema/marks";
 import type {
   ParagraphAttrs,
   TableAttrs,
@@ -454,13 +461,16 @@ function extractParagraphContent(
     if (noteRefMark) {
       // Finish any current content
       flushCurrentInline();
+      const noteAttrs = expectFootnoteRefMarkAttrs(noteRefMark);
       const noteType =
-        noteRefMark.attrs["noteType"] === "endnote"
-          ? "endnoteRef"
-          : "footnoteRef";
+        noteAttrs.noteType === "endnote" ? "endnoteRef" : "footnoteRef";
+      const noteId =
+        typeof noteAttrs.id === "string"
+          ? Number.parseInt(noteAttrs.id, 10) || 0
+          : noteAttrs.id;
       const noteRef: NoteReferenceContent = {
         type: noteType,
-        id: Number.parseInt(noteRefMark.attrs["id"], 10) || 0,
+        id: noteId,
       };
       content.push({
         type: "run",
@@ -480,6 +490,7 @@ function extractParagraphContent(
       if (!changeMark) {
         return;
       }
+      const changeAttrs = expectTrackedChangeMarkAttrs(changeMark);
       // Filter out the tracked change mark for text formatting extraction
       const otherMarks = node.marks.filter(
         (m) => m.type.name !== "insertion" && m.type.name !== "deletion",
@@ -493,12 +504,11 @@ function extractParagraphContent(
       };
 
       const info: TrackedChangeInfo = {
-        id: changeMark.attrs["revisionId"] as number,
-        author: (changeMark.attrs["author"] as string) || "Unknown",
+        id: changeAttrs.revisionId,
+        author: changeAttrs.author || "Unknown",
       };
-      const dateStr = changeMark.attrs["date"] as string;
-      if (dateStr) {
-        info.date = dateStr;
+      if (changeAttrs.date) {
+        info.date = changeAttrs.date;
       }
       // The mark itself records whether it originated as a
       // `w:moveTo` / `w:moveFrom`. The previous "is there both an
@@ -508,14 +518,13 @@ function extractParagraphContent(
       // typically don't), and unrelated `w:ins w:id="5"` /
       // `w:del w:id="5"` from different reviewers would coincidentally
       // fuse into a phantom move pair.
-      const moveKind = changeMark.attrs["moveKind"];
       if (insertionMark) {
-        if (moveKind === "moveTo") {
+        if (changeAttrs.moveKind === "moveTo") {
           content.push({ type: "moveTo", info, content: [run] });
         } else {
           content.push({ type: "insertion", info, content: [run] });
         }
-      } else if (moveKind === "moveFrom") {
+      } else if (changeAttrs.moveKind === "moveFrom") {
         content.push({ type: "moveFrom", info, content: [run] });
       } else {
         content.push({ type: "deletion", info, content: [run] });
@@ -611,7 +620,7 @@ function getCommentMarkIds(marks: readonly Mark[]): Set<number> {
   const commentIds = new Set<number>();
   for (const mark of marks) {
     if (mark.type.name === "comment") {
-      commentIds.add(mark.attrs["commentId"] as number);
+      commentIds.add(expectCommentMarkAttrs(mark).commentId);
     }
   }
   return commentIds;
@@ -636,16 +645,12 @@ function buildDocumentTrackedChangeCounts(pmDoc: PMNode): TrackedChangeCounts {
     const deletionMark = node.marks.find((m) => m.type.name === "deletion");
 
     if (insertionMark) {
-      const revisionId = Number(insertionMark.attrs["revisionId"]);
-      if (Number.isFinite(revisionId)) {
-        insertionById.set(revisionId, (insertionById.get(revisionId) ?? 0) + 1);
-      }
+      const { revisionId } = expectTrackedChangeMarkAttrs(insertionMark);
+      insertionById.set(revisionId, (insertionById.get(revisionId) ?? 0) + 1);
     }
     if (deletionMark) {
-      const revisionId = Number(deletionMark.attrs["revisionId"]);
-      if (Number.isFinite(revisionId)) {
-        deletionById.set(revisionId, (deletionById.get(revisionId) ?? 0) + 1);
-      }
+      const { revisionId } = expectTrackedChangeMarkAttrs(deletionMark);
+      deletionById.set(revisionId, (deletionById.get(revisionId) ?? 0) + 1);
     }
   });
 
@@ -1156,7 +1161,7 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
         break;
 
       case "underline": {
-        const attrs = mark.attrs as UnderlineAttrs;
+        const attrs = expectUnderlineMarkAttrs(mark);
         const uline: NonNullable<TextFormatting["underline"]> = {
           style: attrs.style || "single",
         };
@@ -1168,7 +1173,7 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
       }
 
       case "strike":
-        if (mark.attrs["double"]) {
+        if (expectStrikeMarkAttrs(mark).double) {
           formatting.doubleStrike = true;
         } else {
           formatting.strike = true;
@@ -1176,7 +1181,7 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
         break;
 
       case "textColor": {
-        const attrs = mark.attrs as TextColorAttrs;
+        const attrs = expectTextColorMarkAttrs(mark);
         const colorVal: ColorValue = {};
         if (attrs.rgb) {
           colorVal.rgb = attrs.rgb;
@@ -1195,16 +1200,18 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
       }
 
       case "highlight":
-        formatting.highlight = mark.attrs["color"];
+        formatting.highlight = expectHighlightMarkAttrs(mark).color;
         break;
 
-      case "fontSize":
-        formatting.fontSize = mark.attrs["size"];
-        formatting.fontSizeCs = mark.attrs["size"];
+      case "fontSize": {
+        const attrs = expectFontSizeMarkAttrs(mark);
+        formatting.fontSize = attrs.size;
+        formatting.fontSizeCs = attrs.size;
         break;
+      }
 
       case "fontFamily": {
-        const attrs = mark.attrs as FontFamilyAttrs;
+        const attrs = expectFontFamilyMarkAttrs(mark);
         const ff: NonNullable<TextFormatting["fontFamily"]> = {};
         if (attrs.ascii) {
           ff.ascii = attrs.ascii;
@@ -1256,17 +1263,18 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
         break;
 
       case "characterSpacing": {
-        if (mark.attrs["spacing"] !== null) {
-          formatting.spacing = mark.attrs["spacing"];
+        const attrs = expectCharacterSpacingMarkAttrs(mark);
+        if (attrs.spacing !== undefined) {
+          formatting.spacing = attrs.spacing;
         }
-        if (mark.attrs["position"] !== null) {
-          formatting.position = mark.attrs["position"];
+        if (attrs.position !== undefined) {
+          formatting.position = attrs.position;
         }
-        if (mark.attrs["scale"] !== null) {
-          formatting.scale = mark.attrs["scale"];
+        if (attrs.scale !== undefined) {
+          formatting.scale = attrs.scale;
         }
-        if (mark.attrs["kerning"] !== null) {
-          formatting.kerning = mark.attrs["kerning"];
+        if (attrs.kerning !== undefined) {
+          formatting.kerning = attrs.kerning;
         }
         break;
       }
@@ -1284,7 +1292,7 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
         break;
 
       case "emphasisMark":
-        formatting.emphasisMark = mark.attrs["type"] || "dot";
+        formatting.emphasisMark = expectEmphasisMarkAttrs(mark).type || "dot";
         break;
 
       case "textOutline":
@@ -1292,7 +1300,10 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
         break;
 
       case "runFormattingOverride":
-        applyRunFormattingOverrideMark(formatting, mark);
+        applyRunFormattingOverrideAttrs(
+          formatting,
+          expectRunFormattingOverrideMarkAttrs(mark),
+        );
         break;
 
       // hyperlink is handled separately
@@ -1302,6 +1313,48 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
   }
 
   return formatting;
+}
+
+function applyRunFormattingOverrideAttrs(
+  formatting: TextFormatting,
+  attrs: RunFormattingOverrideAttrs,
+): void {
+  if (attrs.bold === false) {
+    formatting.bold = false;
+  }
+  if (attrs.italic === false) {
+    formatting.italic = false;
+  }
+  if (attrs.underline === "none") {
+    formatting.underline = { style: "none" };
+  }
+  if (attrs.strike === false) {
+    formatting.strike = false;
+  }
+  if (attrs.doubleStrike === false) {
+    formatting.doubleStrike = false;
+  }
+  if (attrs.allCaps === false) {
+    formatting.allCaps = false;
+  }
+  if (attrs.smallCaps === false) {
+    formatting.smallCaps = false;
+  }
+  if (attrs.hidden === false) {
+    formatting.hidden = false;
+  }
+  if (attrs.emboss === false) {
+    formatting.emboss = false;
+  }
+  if (attrs.imprint === false) {
+    formatting.imprint = false;
+  }
+  if (attrs.shadow === false) {
+    formatting.shadow = false;
+  }
+  if (attrs.outline === false) {
+    formatting.outline = false;
+  }
 }
 
 // ============================================================================

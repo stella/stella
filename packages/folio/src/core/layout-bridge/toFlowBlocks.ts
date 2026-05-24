@@ -37,18 +37,25 @@ import {
   DEFAULT_TEXTBOX_WIDTH,
 } from "../layout-engine/types";
 import {
+  expectCharacterSpacingMarkAttrs,
+  expectCommentMarkAttrs,
+  expectEmphasisMarkAttrs,
+  expectFontFamilyMarkAttrs,
+  expectFontSizeMarkAttrs,
+  expectFootnoteRefMarkAttrs,
+  expectHighlightMarkAttrs,
+  expectHyperlinkMarkAttrs,
   expectImageAttrs,
   expectParagraphAttrs,
+  expectRunFormattingOverrideMarkAttrs,
   expectTableAttrs,
   expectTableCellAttrs,
   expectTableRowAttrs,
+  expectTextColorMarkAttrs,
+  expectTrackedChangeMarkAttrs,
+  expectUnderlineMarkAttrs,
 } from "../prosemirror/attrs";
-import type {
-  TextColorAttrs,
-  UnderlineAttrs,
-  FontSizeAttrs,
-  FontFamilyAttrs,
-} from "../prosemirror/schema/marks";
+import type { RunFormattingOverrideAttrs } from "../prosemirror/schema/marks";
 import type {
   ImageAttrs,
   ParagraphAttrs as PMParagraphAttrs,
@@ -360,7 +367,7 @@ function extractRunFormatting(
         break;
 
       case "underline": {
-        const attrs = mark.attrs as UnderlineAttrs;
+        const attrs = expectUnderlineMarkAttrs(mark);
         if (attrs.style || attrs.color) {
           const underlineObj: { style?: string; color?: string } = {};
           if (attrs.style) {
@@ -381,7 +388,7 @@ function extractRunFormatting(
         break;
 
       case "textColor": {
-        const attrs = mark.attrs as TextColorAttrs;
+        const attrs = expectTextColorMarkAttrs(mark);
         if (attrs.themeColor || attrs.rgb) {
           const colorArg: ColorValue = {};
           if (attrs.rgb) {
@@ -406,19 +413,19 @@ function extractRunFormatting(
 
       case "highlight":
         formatting.highlight = resolveHighlightToCss(
-          mark.attrs["color"] as string,
+          expectHighlightMarkAttrs(mark).color,
         );
         break;
 
       case "fontSize": {
-        const attrs = mark.attrs as FontSizeAttrs;
+        const attrs = expectFontSizeMarkAttrs(mark);
         // Convert half-points to points
         formatting.fontSize = attrs.size / 2;
         break;
       }
 
       case "fontFamily": {
-        const attrs = mark.attrs as FontFamilyAttrs;
+        const attrs = expectFontFamilyMarkAttrs(mark);
         const font = attrs.ascii || attrs.hAnsi;
         if (font) {
           formatting.fontFamily = font;
@@ -427,22 +434,17 @@ function extractRunFormatting(
       }
 
       case "characterSpacing": {
-        const attrs = mark.attrs as {
-          spacing: number | null;
-          position: number | null;
-          scale: number | null;
-          kerning: number | null;
-        };
-        if (attrs.spacing != null && attrs.spacing !== 0) {
+        const attrs = expectCharacterSpacingMarkAttrs(mark);
+        if (attrs.spacing !== undefined && attrs.spacing !== 0) {
           formatting.letterSpacing = twipsToPixels(attrs.spacing);
         }
-        if (attrs.position != null && attrs.position !== 0) {
+        if (attrs.position !== undefined && attrs.position !== 0) {
           formatting.positionPx = halfPointsToPixels(attrs.position);
         }
-        if (attrs.scale != null && attrs.scale !== 100) {
+        if (attrs.scale !== undefined && attrs.scale !== 100) {
           formatting.horizontalScale = attrs.scale;
         }
-        if (attrs.kerning != null && attrs.kerning > 0) {
+        if (attrs.kerning !== undefined && attrs.kerning > 0) {
           formatting.kerningMinPt = halfPointsToPoints(attrs.kerning);
         }
         break;
@@ -473,18 +475,14 @@ function extractRunFormatting(
         break;
 
       case "runFormattingOverride":
-        applyRunFormattingOverrides(formatting, mark);
+        applyRunFormattingOverrides(
+          formatting,
+          expectRunFormattingOverrideMarkAttrs(mark),
+        );
         break;
 
       case "emphasisMark": {
-        const type = mark.attrs["type"] as string | undefined;
-        formatting.emphasisMark =
-          type === "dot" ||
-          type === "comma" ||
-          type === "circle" ||
-          type === "underDot"
-            ? type
-            : "dot";
+        formatting.emphasisMark = expectEmphasisMarkAttrs(mark).type ?? "dot";
         break;
       }
 
@@ -497,7 +495,7 @@ function extractRunFormatting(
         break;
 
       case "hyperlink": {
-        const attrs = mark.attrs as { href: string; tooltip?: string };
+        const attrs = expectHyperlinkMarkAttrs(mark);
         const link: RunFormatting["hyperlink"] & object = {
           href: attrs.href,
         };
@@ -509,7 +507,7 @@ function extractRunFormatting(
       }
 
       case "footnoteRef": {
-        const attrs = mark.attrs as { id: string | number; noteType?: string };
+        const attrs = expectFootnoteRefMarkAttrs(mark);
         const id =
           typeof attrs.id === "string"
             ? Number.parseInt(attrs.id, 10)
@@ -523,7 +521,7 @@ function extractRunFormatting(
       }
 
       case "comment": {
-        const commentId = mark.attrs["commentId"] as number;
+        const commentId = expectCommentMarkAttrs(mark).commentId;
         if (commentId) {
           if (!formatting.commentIds) {
             formatting.commentIds = [];
@@ -533,19 +531,27 @@ function extractRunFormatting(
         break;
       }
 
-      case "insertion":
+      case "insertion": {
+        const attrs = expectTrackedChangeMarkAttrs(mark);
         formatting.isInsertion = true;
-        formatting.changeAuthor = mark.attrs["author"] as string;
-        formatting.changeDate = mark.attrs["date"] as string;
-        formatting.changeRevisionId = mark.attrs["revisionId"] as number;
+        formatting.changeAuthor = attrs.author;
+        if (attrs.date !== undefined) {
+          formatting.changeDate = attrs.date;
+        }
+        formatting.changeRevisionId = attrs.revisionId;
         break;
+      }
 
-      case "deletion":
+      case "deletion": {
+        const attrs = expectTrackedChangeMarkAttrs(mark);
         formatting.isDeletion = true;
-        formatting.changeAuthor = mark.attrs["author"] as string;
-        formatting.changeDate = mark.attrs["date"] as string;
-        formatting.changeRevisionId = mark.attrs["revisionId"] as number;
+        formatting.changeAuthor = attrs.author;
+        if (attrs.date !== undefined) {
+          formatting.changeDate = attrs.date;
+        }
+        formatting.changeRevisionId = attrs.revisionId;
         break;
+      }
       default:
         break;
     }
@@ -591,36 +597,36 @@ function mergeRunFormatting(
 
 function applyRunFormattingOverrides(
   formatting: RunFormatting,
-  mark: Mark,
+  attrs: RunFormattingOverrideAttrs,
 ): void {
-  if (mark.attrs["bold"] === false) {
+  if (attrs.bold === false) {
     formatting.bold = false;
   }
-  if (mark.attrs["italic"] === false) {
+  if (attrs.italic === false) {
     formatting.italic = false;
   }
-  if (mark.attrs["underline"] === "none") {
+  if (attrs.underline === "none") {
     formatting.underline = false;
   }
-  if (mark.attrs["strike"] === false) {
+  if (attrs.strike === false) {
     formatting.strike = false;
   }
-  if (mark.attrs["allCaps"] === false) {
+  if (attrs.allCaps === false) {
     formatting.allCaps = false;
   }
-  if (mark.attrs["smallCaps"] === false) {
+  if (attrs.smallCaps === false) {
     formatting.smallCaps = false;
   }
-  if (mark.attrs["emboss"] === false) {
+  if (attrs.emboss === false) {
     formatting.emboss = false;
   }
-  if (mark.attrs["imprint"] === false) {
+  if (attrs.imprint === false) {
     formatting.imprint = false;
   }
-  if (mark.attrs["shadow"] === false) {
+  if (attrs.shadow === false) {
     formatting.textShadow = false;
   }
-  if (mark.attrs["outline"] === false) {
+  if (attrs.outline === false) {
     formatting.textOutline = false;
   }
 }

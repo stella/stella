@@ -23,6 +23,29 @@ describe("fromProseDoc", () => {
     expect(() => fromProseDoc(pmDoc)).toThrow("hyperlink.attrs.href");
   });
 
+  test("rejects malformed comment attrs at the conversion boundary", () => {
+    const commentMark = schema.mark("comment", { commentId: "123" });
+    const pmDoc = schema.node("doc", null, [
+      schema.node("paragraph", null, [schema.text("commented", [commentMark])]),
+    ]);
+
+    expect(() => fromProseDoc(pmDoc)).toThrow("comment.attrs.commentId");
+  });
+
+  test("rejects malformed tracked-change attrs at the conversion boundary", () => {
+    const insertionMark = schema.mark("insertion", {
+      revisionId: "bad",
+      author: "Reviewer",
+    });
+    const pmDoc = schema.node("doc", null, [
+      schema.node("paragraph", null, [
+        schema.text("inserted", [insertionMark]),
+      ]),
+    ]);
+
+    expect(() => fromProseDoc(pmDoc)).toThrow("insertion.attrs.revisionId");
+  });
+
   test("accepts table header cell attrs at the table-cell boundary", () => {
     const pmDoc = schema.node("doc", null, [
       schema.node("table", null, [

@@ -2,9 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 import {
   expectParagraphAttrs,
+  readCommentMarkAttrs,
+  readFontSizeMarkAttrs,
+  readHighlightMarkAttrs,
   readHyperlinkMarkAttrs,
   readImageAttrs,
   readParagraphAttrs,
+  readTrackedChangeMarkAttrs,
+  readUnderlineMarkAttrs,
   readTableAttrs,
   readTableCellAttrs,
   readTableRowAttrs,
@@ -138,5 +143,73 @@ describe("ProseMirror attr readers", () => {
       path: "hyperlink.attrs.href",
       message: "Expected a string.",
     });
+  });
+
+  test("rejects malformed text formatting mark attrs", () => {
+    const underline = schema.marks.underline.create({
+      style: "diagonal",
+      color: { rgb: 123 },
+    });
+    const fontSize = schema.marks.fontSize.create({ size: "24" });
+    const highlight = schema.marks.highlight.create({ color: "customYellow" });
+
+    const underlineResult = readUnderlineMarkAttrs(underline);
+    const fontSizeResult = readFontSizeMarkAttrs(fontSize);
+    const highlightResult = readHighlightMarkAttrs(highlight);
+
+    expect(underlineResult.ok).toBe(false);
+    if (!underlineResult.ok) {
+      expect(underlineResult.issues.map((issue) => issue.path)).toContain(
+        "underline.attrs.style",
+      );
+      expect(underlineResult.issues.map((issue) => issue.path)).toContain(
+        "underline.attrs.color.rgb",
+      );
+    }
+    expect(fontSizeResult.ok).toBe(false);
+    if (!fontSizeResult.ok) {
+      expect(fontSizeResult.issues).toContainEqual({
+        path: "fontSize.attrs.size",
+        message: "Expected a number.",
+      });
+    }
+    expect(highlightResult.ok).toBe(false);
+    if (!highlightResult.ok) {
+      expect(highlightResult.issues.map((issue) => issue.path)).toContain(
+        "highlight.attrs.color",
+      );
+    }
+  });
+
+  test("rejects malformed comment and tracked-change mark attrs", () => {
+    const comment = schema.marks.comment.create({ commentId: "7" });
+    const insertion = schema.marks.insertion.create({
+      revisionId: "42",
+      author: 12,
+      moveKind: "moveAround",
+    });
+
+    const commentResult = readCommentMarkAttrs(comment);
+    const insertionResult = readTrackedChangeMarkAttrs(insertion);
+
+    expect(commentResult.ok).toBe(false);
+    if (!commentResult.ok) {
+      expect(commentResult.issues).toContainEqual({
+        path: "comment.attrs.commentId",
+        message: "Expected a number.",
+      });
+    }
+    expect(insertionResult.ok).toBe(false);
+    if (!insertionResult.ok) {
+      expect(insertionResult.issues.map((issue) => issue.path)).toContain(
+        "insertion.attrs.revisionId",
+      );
+      expect(insertionResult.issues.map((issue) => issue.path)).toContain(
+        "insertion.attrs.author",
+      );
+      expect(insertionResult.issues.map((issue) => issue.path)).toContain(
+        "insertion.attrs.moveKind",
+      );
+    }
   });
 });

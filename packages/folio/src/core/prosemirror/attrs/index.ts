@@ -1,12 +1,24 @@
 import type { Mark, Node as PMNode } from "prosemirror-model";
 
 import type {
+  CharacterSpacingAttrs,
+  CommentAttrs,
+  EmphasisMarkAttrs,
+  FontFamilyAttrs,
+  FontSizeAttrs,
+  FootnoteRefAttrs,
+  HighlightAttrs,
   HyperlinkAttrs,
   ImageAttrs,
   ParagraphAttrs,
+  RunFormattingOverrideAttrs,
+  StrikeAttrs,
   TableAttrs,
   TableCellAttrs,
   TableRowAttrs,
+  TextColorAttrs,
+  TrackedChangeMarkAttrs,
+  UnderlineAttrs,
 } from "../schema";
 
 export type ProseMirrorAttrIssue = {
@@ -88,6 +100,26 @@ const TABLE_CELL_TEXT_DIRECTIONS = [
   "btLr",
 ] as const satisfies readonly NonNullable<TableCellAttrs["textDirection"]>[];
 
+const HIGHLIGHT_COLORS = [
+  "black",
+  "blue",
+  "cyan",
+  "darkBlue",
+  "darkCyan",
+  "darkGray",
+  "darkGreen",
+  "darkMagenta",
+  "darkRed",
+  "darkYellow",
+  "green",
+  "lightGray",
+  "magenta",
+  "none",
+  "red",
+  "white",
+  "yellow",
+] as const satisfies readonly HighlightAttrs["color"][];
+
 const IMAGE_WRAP_TYPES = [
   "inline",
   "square",
@@ -162,6 +194,58 @@ const IMAGE_VERTICAL_ALIGNMENTS = [
 ] as const satisfies readonly NonNullable<
   ImageVerticalPositionAttrs["align"]
 >[];
+
+const UNDERLINE_STYLES = [
+  "none",
+  "single",
+  "words",
+  "double",
+  "thick",
+  "dotted",
+  "dottedHeavy",
+  "dash",
+  "dashedHeavy",
+  "dashLong",
+  "dashLongHeavy",
+  "dotDash",
+  "dashDotHeavy",
+  "dotDotDash",
+  "dashDotDotHeavy",
+  "wave",
+  "wavyHeavy",
+  "wavyDouble",
+] as const satisfies readonly NonNullable<UnderlineAttrs["style"]>[];
+
+const EMPHASIS_MARK_TYPES = [
+  "dot",
+  "comma",
+  "circle",
+  "underDot",
+] as const satisfies readonly NonNullable<EmphasisMarkAttrs["type"]>[];
+
+const NOTE_TYPES = [
+  "footnote",
+  "endnote",
+] as const satisfies readonly NonNullable<FootnoteRefAttrs["noteType"]>[];
+
+const TRACKED_CHANGE_MOVE_KINDS = [
+  "moveTo",
+  "moveFrom",
+] as const satisfies readonly NonNullable<TrackedChangeMarkAttrs["moveKind"]>[];
+
+const RUN_FORMATTING_OVERRIDE_FALSE_KEYS = [
+  "bold",
+  "italic",
+  "strike",
+  "doubleStrike",
+  "allCaps",
+  "smallCaps",
+  "hidden",
+  "emboss",
+  "imprint",
+  "shadow",
+  "outline",
+] as const satisfies readonly (keyof RunFormattingOverrideAttrs)[];
 
 export const readParagraphAttrs = (
   node: PMNode,
@@ -509,6 +593,259 @@ export const readImageAttrs = (
 export const expectImageAttrs = (node: PMNode): ImageAttrs =>
   expectAttrs(readImageAttrs(node), "image attrs");
 
+export const readUnderlineMarkAttrs = (
+  mark: Mark,
+): ReadProseMirrorAttrsResult<UnderlineAttrs> => {
+  const attrs = attrsRecord(mark.attrs);
+  const issues: ProseMirrorAttrIssue[] = [];
+  expectMarkType(mark, "underline", issues);
+
+  optionalOneOf(
+    attrs,
+    "style",
+    "underline.attrs.style",
+    issues,
+    UNDERLINE_STYLES,
+  );
+  optionalTextColor(attrs, "color", "underline.attrs.color", issues);
+
+  return attrsResult(attrs, issues);
+};
+
+export const expectUnderlineMarkAttrs = (mark: Mark): UnderlineAttrs =>
+  expectAttrs(readUnderlineMarkAttrs(mark), "underline attrs");
+
+export const readStrikeMarkAttrs = (
+  mark: Mark,
+): ReadProseMirrorAttrsResult<StrikeAttrs> => {
+  const attrs = attrsRecord(mark.attrs);
+  const issues: ProseMirrorAttrIssue[] = [];
+  expectMarkType(mark, "strike", issues);
+
+  optionalBoolean(attrs, "double", "strike.attrs.double", issues);
+
+  return attrsResult(attrs, issues);
+};
+
+export const expectStrikeMarkAttrs = (mark: Mark): StrikeAttrs =>
+  expectAttrs(readStrikeMarkAttrs(mark), "strike attrs");
+
+export const readTextColorMarkAttrs = (
+  mark: Mark,
+): ReadProseMirrorAttrsResult<TextColorAttrs> => {
+  const attrs = attrsRecord(mark.attrs);
+  const issues: ProseMirrorAttrIssue[] = [];
+  expectMarkType(mark, "textColor", issues);
+
+  optionalTextColorFields(attrs, "textColor.attrs", issues);
+
+  return attrsResult(attrs, issues);
+};
+
+export const expectTextColorMarkAttrs = (mark: Mark): TextColorAttrs =>
+  expectAttrs(readTextColorMarkAttrs(mark), "text color attrs");
+
+export const readHighlightMarkAttrs = (
+  mark: Mark,
+): ReadProseMirrorAttrsResult<HighlightAttrs> => {
+  const attrs = attrsRecord(mark.attrs);
+  const issues: ProseMirrorAttrIssue[] = [];
+  expectMarkType(mark, "highlight", issues);
+
+  requiredOneOf(
+    attrs,
+    "color",
+    "highlight.attrs.color",
+    issues,
+    HIGHLIGHT_COLORS,
+  );
+
+  return attrsResult(attrs, issues);
+};
+
+export const expectHighlightMarkAttrs = (mark: Mark): HighlightAttrs =>
+  expectAttrs(readHighlightMarkAttrs(mark), "highlight attrs");
+
+export const readFontSizeMarkAttrs = (
+  mark: Mark,
+): ReadProseMirrorAttrsResult<FontSizeAttrs> => {
+  const attrs = attrsRecord(mark.attrs);
+  const issues: ProseMirrorAttrIssue[] = [];
+  expectMarkType(mark, "fontSize", issues);
+
+  requiredNumber(attrs, "size", "fontSize.attrs.size", issues);
+
+  return attrsResult(attrs, issues);
+};
+
+export const expectFontSizeMarkAttrs = (mark: Mark): FontSizeAttrs =>
+  expectAttrs(readFontSizeMarkAttrs(mark), "font size attrs");
+
+export const readFontFamilyMarkAttrs = (
+  mark: Mark,
+): ReadProseMirrorAttrsResult<FontFamilyAttrs> => {
+  const attrs = attrsRecord(mark.attrs);
+  const issues: ProseMirrorAttrIssue[] = [];
+  expectMarkType(mark, "fontFamily", issues);
+
+  optionalString(attrs, "ascii", "fontFamily.attrs.ascii", issues);
+  optionalString(attrs, "hAnsi", "fontFamily.attrs.hAnsi", issues);
+  optionalString(attrs, "eastAsia", "fontFamily.attrs.eastAsia", issues);
+  optionalString(attrs, "cs", "fontFamily.attrs.cs", issues);
+  optionalString(attrs, "asciiTheme", "fontFamily.attrs.asciiTheme", issues);
+  optionalString(attrs, "hAnsiTheme", "fontFamily.attrs.hAnsiTheme", issues);
+  optionalString(
+    attrs,
+    "eastAsiaTheme",
+    "fontFamily.attrs.eastAsiaTheme",
+    issues,
+  );
+  optionalString(attrs, "csTheme", "fontFamily.attrs.csTheme", issues);
+
+  return attrsResult(attrs, issues);
+};
+
+export const expectFontFamilyMarkAttrs = (mark: Mark): FontFamilyAttrs =>
+  expectAttrs(readFontFamilyMarkAttrs(mark), "font family attrs");
+
+export const readCharacterSpacingMarkAttrs = (
+  mark: Mark,
+): ReadProseMirrorAttrsResult<CharacterSpacingAttrs> => {
+  const attrs = attrsRecord(mark.attrs);
+  const issues: ProseMirrorAttrIssue[] = [];
+  expectMarkType(mark, "characterSpacing", issues);
+
+  optionalNumber(attrs, "spacing", "characterSpacing.attrs.spacing", issues);
+  optionalNumber(attrs, "position", "characterSpacing.attrs.position", issues);
+  optionalNumber(attrs, "scale", "characterSpacing.attrs.scale", issues);
+  optionalNumber(attrs, "kerning", "characterSpacing.attrs.kerning", issues);
+
+  return attrsResult(attrs, issues);
+};
+
+export const expectCharacterSpacingMarkAttrs = (
+  mark: Mark,
+): CharacterSpacingAttrs =>
+  expectAttrs(readCharacterSpacingMarkAttrs(mark), "character spacing attrs");
+
+export const readEmphasisMarkAttrs = (
+  mark: Mark,
+): ReadProseMirrorAttrsResult<EmphasisMarkAttrs> => {
+  const attrs = attrsRecord(mark.attrs);
+  const issues: ProseMirrorAttrIssue[] = [];
+  expectMarkType(mark, "emphasisMark", issues);
+
+  optionalOneOf(
+    attrs,
+    "type",
+    "emphasisMark.attrs.type",
+    issues,
+    EMPHASIS_MARK_TYPES,
+  );
+
+  return attrsResult(attrs, issues);
+};
+
+export const expectEmphasisMarkAttrs = (mark: Mark): EmphasisMarkAttrs =>
+  expectAttrs(readEmphasisMarkAttrs(mark), "emphasis mark attrs");
+
+export const readFootnoteRefMarkAttrs = (
+  mark: Mark,
+): ReadProseMirrorAttrsResult<FootnoteRefAttrs> => {
+  const attrs = attrsRecord(mark.attrs);
+  const issues: ProseMirrorAttrIssue[] = [];
+  expectMarkType(mark, "footnoteRef", issues);
+
+  requiredStringOrNumber(attrs, "id", "footnoteRef.attrs.id", issues);
+  optionalOneOf(
+    attrs,
+    "noteType",
+    "footnoteRef.attrs.noteType",
+    issues,
+    NOTE_TYPES,
+  );
+
+  return attrsResult(attrs, issues);
+};
+
+export const expectFootnoteRefMarkAttrs = (mark: Mark): FootnoteRefAttrs =>
+  expectAttrs(readFootnoteRefMarkAttrs(mark), "footnote reference attrs");
+
+export const readCommentMarkAttrs = (
+  mark: Mark,
+): ReadProseMirrorAttrsResult<CommentAttrs> => {
+  const attrs = attrsRecord(mark.attrs);
+  const issues: ProseMirrorAttrIssue[] = [];
+  expectMarkType(mark, "comment", issues);
+
+  requiredNumber(attrs, "commentId", "comment.attrs.commentId", issues);
+
+  return attrsResult(attrs, issues);
+};
+
+export const expectCommentMarkAttrs = (mark: Mark): CommentAttrs =>
+  expectAttrs(readCommentMarkAttrs(mark), "comment attrs");
+
+export const readTrackedChangeMarkAttrs = (
+  mark: Mark,
+): ReadProseMirrorAttrsResult<TrackedChangeMarkAttrs> => {
+  const attrs = attrsRecord(mark.attrs);
+  const issues: ProseMirrorAttrIssue[] = [];
+  expectMarkTypeOneOf(mark, ["insertion", "deletion"], issues);
+
+  requiredNumber(
+    attrs,
+    "revisionId",
+    `${mark.type.name}.attrs.revisionId`,
+    issues,
+  );
+  requiredString(attrs, "author", `${mark.type.name}.attrs.author`, issues);
+  optionalString(attrs, "date", `${mark.type.name}.attrs.date`, issues);
+  optionalOneOf(
+    attrs,
+    "moveKind",
+    `${mark.type.name}.attrs.moveKind`,
+    issues,
+    TRACKED_CHANGE_MOVE_KINDS,
+  );
+
+  return attrsResult(attrs, issues);
+};
+
+export const expectTrackedChangeMarkAttrs = (
+  mark: Mark,
+): TrackedChangeMarkAttrs =>
+  expectAttrs(readTrackedChangeMarkAttrs(mark), "tracked change attrs");
+
+export const readRunFormattingOverrideMarkAttrs = (
+  mark: Mark,
+): ReadProseMirrorAttrsResult<RunFormattingOverrideAttrs> => {
+  const attrs = attrsRecord(mark.attrs);
+  const issues: ProseMirrorAttrIssue[] = [];
+  expectMarkType(mark, "runFormattingOverride", issues);
+
+  for (const key of RUN_FORMATTING_OVERRIDE_FALSE_KEYS) {
+    optionalFalse(attrs, key, `runFormattingOverride.attrs.${key}`, issues);
+  }
+  optionalOneOf(
+    attrs,
+    "underline",
+    "runFormattingOverride.attrs.underline",
+    issues,
+    ["none"],
+  );
+
+  return attrsResult(attrs, issues);
+};
+
+export const expectRunFormattingOverrideMarkAttrs = (
+  mark: Mark,
+): RunFormattingOverrideAttrs =>
+  expectAttrs(
+    readRunFormattingOverrideMarkAttrs(mark),
+    "run formatting override attrs",
+  );
+
 export const readHyperlinkMarkAttrs = (
   mark: Mark,
 ): ReadProseMirrorAttrsResult<HyperlinkAttrs> => {
@@ -611,6 +948,19 @@ const expectMarkType = (
   }
 };
 
+const expectMarkTypeOneOf = (
+  mark: Mark,
+  expected: readonly string[],
+  issues: ProseMirrorAttrIssue[],
+): void => {
+  if (!expected.includes(mark.type.name)) {
+    issues.push({
+      path: "mark.type.name",
+      message: `Expected one of ${expected.join(", ")}, got ${mark.type.name}.`,
+    });
+  }
+};
+
 const requiredString = (
   attrs: Record<string, unknown>,
   key: string,
@@ -619,6 +969,18 @@ const requiredString = (
 ): void => {
   if (typeof attrs[key] !== "string") {
     issues.push({ path, message: "Expected a string." });
+  }
+};
+
+const requiredStringOrNumber = (
+  attrs: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: ProseMirrorAttrIssue[],
+): void => {
+  const value = attrs[key];
+  if (typeof value !== "string" && typeof value !== "number") {
+    issues.push({ path, message: "Expected a string or number." });
   }
 };
 
@@ -631,6 +993,18 @@ const optionalString = (
   const value = attrs[key];
   if (value !== undefined && value !== null && typeof value !== "string") {
     issues.push({ path, message: "Expected a string." });
+  }
+};
+
+const optionalFalse = (
+  attrs: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: ProseMirrorAttrIssue[],
+): void => {
+  const value = attrs[key];
+  if (value !== undefined && value !== null && value !== false) {
+    issues.push({ path, message: "Expected false." });
   }
 };
 
@@ -657,6 +1031,57 @@ const optionalOneOf = (
       message: `Expected one of ${allowed.join(", ")}.`,
     });
   }
+};
+
+const requiredOneOf = (
+  attrs: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: ProseMirrorAttrIssue[],
+  allowed: readonly string[],
+): void => {
+  const value = attrs[key];
+  if (typeof value !== "string") {
+    issues.push({ path, message: "Expected a string." });
+    return;
+  }
+
+  if (!allowed.includes(value)) {
+    issues.push({
+      path,
+      message: `Expected one of ${allowed.join(", ")}.`,
+    });
+  }
+};
+
+const optionalTextColor = (
+  attrs: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: ProseMirrorAttrIssue[],
+): void => {
+  const value = attrs[key];
+  if (value === undefined || value === null) {
+    return;
+  }
+
+  if (!isRecord(value)) {
+    issues.push({ path, message: "Expected an object." });
+    return;
+  }
+
+  optionalTextColorFields(value, path, issues);
+};
+
+const optionalTextColorFields = (
+  attrs: Record<string, unknown>,
+  path: string,
+  issues: ProseMirrorAttrIssue[],
+): void => {
+  optionalString(attrs, "rgb", `${path}.rgb`, issues);
+  optionalString(attrs, "themeColor", `${path}.themeColor`, issues);
+  optionalString(attrs, "themeTint", `${path}.themeTint`, issues);
+  optionalString(attrs, "themeShade", `${path}.themeShade`, issues);
 };
 
 const requiredNumber = (

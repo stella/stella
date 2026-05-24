@@ -26,6 +26,15 @@ describe("toFlowBlocks paragraph formatting", () => {
     expect(() => toFlowBlocks(doc)).toThrow("paragraph.attrs.lineSpacing");
   });
 
+  test("rejects malformed mark attrs at the layout boundary", () => {
+    const fontSize = schema.mark("fontSize", { size: "large" });
+    const doc = schema.node("doc", null, [
+      schema.node("paragraph", null, [schema.text("Invalid mark", [fontSize])]),
+    ]);
+
+    expect(() => toFlowBlocks(doc)).toThrow("fontSize.attrs.size");
+  });
+
   test("does not convert absent paragraph spacing defaults to zero line height", () => {
     const doc = schema.node("doc", null, [
       schema.node("paragraph", null, [schema.text("First paragraph")]),

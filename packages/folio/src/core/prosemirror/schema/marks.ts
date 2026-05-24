@@ -6,7 +6,12 @@
  * to the extension system (extensions/marks/).
  */
 
-import type { UnderlineStyle, ThemeColorSlot } from "../../types/document";
+import type {
+  EmphasisMark,
+  TextFormatting,
+  ThemeColorSlot,
+  UnderlineStyle,
+} from "../../types/document";
 
 /**
  * Text color mark attributes
@@ -24,6 +29,10 @@ export type TextColorAttrs = {
 export type UnderlineAttrs = {
   style?: UnderlineStyle;
   color?: TextColorAttrs;
+};
+
+export type StrikeAttrs = {
+  double?: boolean;
 };
 
 /**
@@ -45,6 +54,56 @@ export type FontFamilyAttrs = {
   hAnsiTheme?: string;
   eastAsiaTheme?: string;
   csTheme?: string;
+};
+
+export type HighlightAttrs = {
+  color: NonNullable<TextFormatting["highlight"]>;
+};
+
+export type CharacterSpacingAttrs = {
+  spacing?: number;
+  position?: number;
+  scale?: number;
+  kerning?: number;
+};
+
+export type EmphasisMarkAttrs = {
+  type?: Exclude<EmphasisMark, "none">;
+};
+
+export type FootnoteRefAttrs = {
+  id: string | number;
+  noteType?: "footnote" | "endnote";
+};
+
+export type CommentAttrs = {
+  commentId: number;
+};
+
+export type TrackedChangeMarkAttrs = {
+  revisionId: number;
+  author: string;
+  date?: string;
+  moveKind?: "moveTo" | "moveFrom";
+};
+
+export type RunFormattingOverrideAttrs = {
+  [K in keyof Pick<
+    TextFormatting,
+    | "bold"
+    | "italic"
+    | "strike"
+    | "doubleStrike"
+    | "allCaps"
+    | "smallCaps"
+    | "hidden"
+    | "emboss"
+    | "imprint"
+    | "shadow"
+    | "outline"
+  >]?: false;
+} & {
+  underline?: "none";
 };
 
 /**
