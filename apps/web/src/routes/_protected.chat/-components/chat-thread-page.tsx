@@ -242,10 +242,12 @@ export const ChatThreadPage = ({
               )}
             </div>
             <div className="flex items-center gap-1">
-              <ChatWebSearchToggle
-                enabled={data.webSearchEnabled}
-                threadRef={threadRef}
-              />
+              {data.webSearchAvailable && (
+                <ChatWebSearchToggle
+                  enabled={data.webSearchEnabled}
+                  threadRef={threadRef}
+                />
+              )}
               <ChatAnonymizedToggle
                 enabled={anonymized}
                 onChange={setAnonymized}

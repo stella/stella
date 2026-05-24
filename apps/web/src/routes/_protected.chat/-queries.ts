@@ -190,6 +190,7 @@ type ChatThreadOptionsInput = QueryOptionsInput<
 type ThreadFetch = {
   messages: PersistedChatMessage[];
   contextMatterIds: string[];
+  webSearchAvailable: boolean;
   webSearchEnabled: boolean;
 };
 
@@ -216,7 +217,12 @@ const fetchThreadMessages = async (
     const error = toAPIError(response.error);
 
     if (allowMissingThread && APIError.is(error) && error.status === 404) {
-      return { messages: [], contextMatterIds: [], webSearchEnabled: false };
+      return {
+        messages: [],
+        contextMatterIds: [],
+        webSearchAvailable: false,
+        webSearchEnabled: false,
+      };
     }
 
     throw error;
@@ -225,6 +231,7 @@ const fetchThreadMessages = async (
   return {
     messages: response.data.messages,
     contextMatterIds: response.data.contextMatterIds,
+    webSearchAvailable: response.data.webSearchAvailable,
     webSearchEnabled: response.data.webSearchEnabled,
   };
 };
@@ -587,6 +594,7 @@ export type ChatThreadFetched = {
    * the transport, not through this read.
    */
   contextMatterIds: string[];
+  webSearchAvailable: boolean;
   /**
    * Per-thread web-search opt-in. Mutated via PATCH /chat/threads/:id
    * with optimistic cache update; the next send-message reads the
@@ -630,10 +638,14 @@ export const chatThreadOptions = ({
       contextKind: getChatRuntimeContextKind(context),
     }),
     queryFn: async ({ client: queryClient }): Promise<ChatThreadFetched> => {
-      const { messages, contextMatterIds, webSearchEnabled } =
-        await fetchThreadMessages(key, {
-          allowMissingThread: context.allowMissingThread,
-        });
+      const {
+        messages,
+        contextMatterIds,
+        webSearchAvailable,
+        webSearchEnabled,
+      } = await fetchThreadMessages(key, {
+        allowMissingThread: context.allowMissingThread,
+      });
 
       const chat = new Chat<PersistedChatMessage>({
         generateId: uuidv7,
@@ -669,7 +681,7 @@ export const chatThreadOptions = ({
         sendAutomaticallyWhen: createSendAutomaticallyPredicate(),
       });
 
-      return { chat, contextMatterIds, webSearchEnabled };
+      return { chat, contextMatterIds, webSearchAvailable, webSearchEnabled };
     },
   });
 

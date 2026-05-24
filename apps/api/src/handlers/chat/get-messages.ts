@@ -3,6 +3,8 @@ import { t } from "elysia";
 
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import { normalizeLegacyToolInputs } from "@/api/handlers/chat/legacy-tool-compat";
+import { isWebSearchAvailable } from "@/api/handlers/chat/tools/chat-tools";
+import { getDisabledNativeToolSlugs } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -24,6 +26,7 @@ const getMessages = createSafeRootHandler(
     params: { threadId },
     query: { allowMissingThread, workspaceId },
     safeDb,
+    session,
     user,
   }) {
     const accessibleWorkspaceIds = activeWorkspaceIds;
@@ -57,12 +60,31 @@ const getMessages = createSafeRootHandler(
         }),
       ),
     );
+    const orgSettingsForChat = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.organizationSettings.findFirst({
+          where: {
+            organizationId: { eq: session.activeOrganizationId },
+          },
+          columns: {
+            practiceJurisdictions: true,
+            nativeToolOverrides: true,
+          },
+        }),
+      ),
+    );
+    const disabledNativeToolSlugs = getDisabledNativeToolSlugs({
+      practiceJurisdictions: orgSettingsForChat?.practiceJurisdictions ?? [],
+      nativeToolOverrides: orgSettingsForChat?.nativeToolOverrides ?? {},
+    });
+    const webSearchAvailable = isWebSearchAvailable(disabledNativeToolSlugs);
 
     if (!thread) {
       if (allowMissingThread) {
         return Result.ok({
           messages: [],
           contextMatterIds: [],
+          webSearchAvailable,
           webSearchEnabled: false,
         });
       }
@@ -98,6 +120,7 @@ const getMessages = createSafeRootHandler(
         parts: normalizeLegacyToolInputs(row.content.data),
       })),
       contextMatterIds: thread.contextMatterIds,
+      webSearchAvailable,
       webSearchEnabled: thread.webSearchEnabled,
     });
   },

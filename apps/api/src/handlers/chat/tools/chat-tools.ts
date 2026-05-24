@@ -35,6 +35,18 @@ import { getWebSearchProvider } from "@/api/lib/web-search/select-provider";
 
 export const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";
 
+export const isWebSearchAvailable = (
+  disabledNativeToolSlugs?: readonly string[],
+): boolean => {
+  const webSearchOrgDisabled =
+    disabledNativeToolSlugs?.includes(WEB_SEARCH_NATIVE_TOOL_SLUG) ?? false;
+  return (
+    env.FEATURE_WEB_SEARCH &&
+    !webSearchOrgDisabled &&
+    getWebSearchProvider() !== null
+  );
+};
+
 type WorkspaceTools = ReturnType<typeof createWorkspaceTools>;
 type OrgTools = ReturnType<typeof createOrgTools>;
 type ChatExecutionTools = ReturnType<typeof createChatExecutionTools>;
@@ -162,13 +174,8 @@ export const getChatTools = ({
   const aresTools = aresDisabled ? {} : createAresTools();
   const boeDisabled = disabledNativeToolSlugs?.includes("boe") ?? false;
   const boeTools = boeDisabled ? {} : createBoeTools();
-  const webSearchOrgDisabled =
-    disabledNativeToolSlugs?.includes(WEB_SEARCH_NATIVE_TOOL_SLUG) ?? false;
   const webSearchTools =
-    env.FEATURE_WEB_SEARCH &&
-    webSearchEnabled &&
-    !webSearchOrgDisabled &&
-    getWebSearchProvider() !== null
+    webSearchEnabled && isWebSearchAvailable(disabledNativeToolSlugs)
       ? createWebSearchTools()
       : {};
   const activeDocxEditTools = hasActiveFileChat
