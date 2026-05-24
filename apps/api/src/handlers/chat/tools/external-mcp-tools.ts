@@ -518,7 +518,7 @@ const resolveAuthorizationToken = async ({
       })
     : null;
 
-  await safeDb((tx) =>
+  const persistResult = await safeDb((tx) =>
     tx
       .update(mcpUserConnections)
       .set({
@@ -533,6 +533,11 @@ const resolveAuthorizationToken = async ({
       })
       .where(eq(mcpUserConnections.id, row.userConnectionId)),
   );
+
+  if (Result.isError(persistResult)) {
+    captureError(persistResult.error, { source: "external-mcp-tools" });
+    return { type: "skip" };
+  }
 
   return { type: "ok", value: refreshed.value.access_token };
 };
@@ -605,10 +610,13 @@ const markNeedsReauth = async ({
   connectionId: SafeId<"mcpUserConnection">;
   safeDb: SafeDb;
 }) => {
-  await safeDb((tx) =>
+  const result = await safeDb((tx) =>
     tx
       .update(mcpUserConnections)
       .set({ status: "needs_reauth", updatedAt: new Date() })
       .where(eq(mcpUserConnections.id, connectionId)),
   );
+  if (Result.isError(result)) {
+    captureError(result.error, { source: "external-mcp-tools" });
+  }
 };
