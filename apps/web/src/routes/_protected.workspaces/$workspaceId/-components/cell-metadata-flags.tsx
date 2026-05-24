@@ -293,12 +293,17 @@ const CellLockBadge = ({ provenance }: CellLockBadgeProps) => {
       className="max-w-72 text-wrap"
       content={tooltipContent}
       render={
-        <span
+        <button
           aria-label={t("workspaces.table.lock.locked")}
-          className="bg-background/55 text-foreground-ghost absolute start-1 top-1 z-20 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px]"
+          className="bg-background/55 text-foreground-ghost focus-visible:ring-ring absolute start-1 top-1 z-20 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px] outline-none focus-visible:ring-1"
+          data-row-expansion-ignore
+          onClick={(event) => {
+            event.stopPropagation();
+          }}
+          type="button"
         >
           <LockIcon className="size-2.5" strokeWidth={2.5} />
-        </span>
+        </button>
       }
     />
   );
