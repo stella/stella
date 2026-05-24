@@ -127,6 +127,23 @@ const sendMessage = createSafeRootHandler(
     /* eslint-enable no-body-ownership-ids/no-body-ownership-ids */
 
     const workspaceId = scope.scope === "workspace" ? scope.workspaceId : null;
+    const orgSettingsForChat = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.organizationSettings.findFirst({
+          where: {
+            organizationId: { eq: session.activeOrganizationId },
+          },
+          columns: {
+            practiceJurisdictions: true,
+            nativeToolOverrides: true,
+          },
+        }),
+      ),
+    );
+    const disabledNativeToolSlugs = getDisabledNativeToolSlugs({
+      practiceJurisdictions: orgSettingsForChat?.practiceJurisdictions ?? [],
+      nativeToolOverrides: orgSettingsForChat?.nativeToolOverrides ?? {},
+    });
 
     // The body's contextMatterIds is the AI's "draw-from" set —
     // distinct from the chat's own scope (workspaceId/global). It
@@ -147,6 +164,14 @@ const sendMessage = createSafeRootHandler(
     }
 
     const refRegistry = createChatRefRegistry();
+    const validationThreadState = yield* Result.await(
+      readThreadValidationState({
+        safeDb,
+        threadId: body.threadId,
+        userId: user.id,
+        workspaceId,
+      }),
+    );
     const validationExternalMcpTools = messageNeedsExternalMcpValidation(
       body.message,
     )
@@ -163,10 +188,9 @@ const sendMessage = createSafeRootHandler(
     // then rebuild the tools with the narrowed `effective` set
     // before streaming. This lets the picker's scope actually
     // govern tool authorization rather than just being persisted.
-    // Validation tools must include every tool that COULD have
-    // been called in this thread's history, otherwise valibot
-    // rejects past tool messages. Use the broadest set (always
-    // include the active-DOCX-edit tool).
+    // Validation tools include the broadest workspace surface, but
+    // still honor thread/org gates for tools whose presence is an
+    // explicit user or administrator opt-in.
     const validationTools = getChatTools({
       organizationId: session.activeOrganizationId,
       refRegistry,
@@ -180,12 +204,9 @@ const sendMessage = createSafeRootHandler(
         accessibleWorkspaceIds,
       }),
       hasActiveFileChat: true,
-      // Validation tools must include every tool that could have been
-      // called in this thread's history. Web search is per-thread
-      // opt-in for live execution, but past tool messages from a
-      // previously-toggled-on session must still pass schema validation.
-      webSearchEnabled: true,
+      webSearchEnabled: validationThreadState.webSearchEnabled,
       externalTools: validationExternalMcpTools?.tools,
+      disabledNativeToolSlugs,
     });
 
     const validatedMessageResult = await validateMessage({
@@ -363,23 +384,6 @@ const sendMessage = createSafeRootHandler(
       organizationId: session.activeOrganizationId,
       safeDb,
       userId: user.id,
-    });
-    const orgSettingsForChat = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.organizationSettings.findFirst({
-          where: {
-            organizationId: { eq: session.activeOrganizationId },
-          },
-          columns: {
-            practiceJurisdictions: true,
-            nativeToolOverrides: true,
-          },
-        }),
-      ),
-    );
-    const disabledNativeToolSlugs = getDisabledNativeToolSlugs({
-      practiceJurisdictions: orgSettingsForChat?.practiceJurisdictions ?? [],
-      nativeToolOverrides: orgSettingsForChat?.nativeToolOverrides ?? {},
     });
     // Streaming tools mirror the surface the user is on: only the
     // DOCX file-overlay client knows how to satisfy
@@ -591,6 +595,58 @@ const messageNeedsExternalMcpValidation = (
   const parts: unknown[] = Array.isArray(message.parts) ? message.parts : [];
   return parts.some(isExternalMcpToolPart);
 };
+
+type ReadThreadValidationStateProps = {
+  safeDb: SafeDb;
+  threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
+};
+
+type ThreadValidationState = {
+  webSearchEnabled: boolean;
+};
+
+const readThreadValidationState = async ({
+  safeDb,
+  threadId,
+  userId,
+  workspaceId,
+}: ReadThreadValidationStateProps): Promise<
+  Result<ThreadValidationState, HandlerError<400> | SafeDbError>
+> =>
+  await Result.gen(async function* () {
+    const thread = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.chatThreads.findFirst({
+          where: {
+            id: { eq: threadId },
+            userId: { eq: userId },
+          },
+          columns: {
+            workspaceId: true,
+            webSearchEnabled: true,
+          },
+        }),
+      ),
+    );
+
+    if (!thread) {
+      return Result.ok({ webSearchEnabled: false });
+    }
+
+    const persistedWorkspaceId = thread.workspaceId ?? null;
+    if (persistedWorkspaceId !== workspaceId) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Chat thread scope does not match request",
+        }),
+      );
+    }
+
+    return Result.ok({ webSearchEnabled: thread.webSearchEnabled });
+  });
 
 type ThreadRecord = {
   id: SafeId<"chatThread">;
