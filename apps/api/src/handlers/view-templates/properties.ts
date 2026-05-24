@@ -137,6 +137,7 @@ export const resolveTemplateProperties = async ({
   });
   const nextPropertyIds = existingProperties.map((property) => property.id);
   const propertyIdBySourceId = new Map<string, string>();
+  const createdPropertySourceIds = new Set<string>();
 
   for (const templateProperty of templateProperties) {
     const existingById = existingProperties.find(
@@ -196,6 +197,7 @@ export const resolveTemplateProperties = async ({
     }
 
     propertyIdBySourceId.set(templateProperty.sourceId, inserted.id);
+    createdPropertySourceIds.add(templateProperty.sourceId);
     nextPropertyIds.push(inserted.id);
 
     if (auditContext) {
@@ -226,6 +228,7 @@ export const resolveTemplateProperties = async ({
     workspaceId,
     templateProperties,
     propertyIdBySourceId,
+    createdPropertySourceIds,
   });
 
   remapLayoutPropertyIds(layout, propertyIdBySourceId);
@@ -237,13 +240,19 @@ const recreateTemplateDependencies = async ({
   workspaceId,
   templateProperties,
   propertyIdBySourceId,
+  createdPropertySourceIds,
 }: {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
   templateProperties: readonly ViewTemplateProperty[];
   propertyIdBySourceId: ReadonlyMap<string, string>;
+  createdPropertySourceIds: ReadonlySet<string>;
 }): Promise<void> => {
   const rows = templateProperties.flatMap((templateProperty) => {
+    if (!createdPropertySourceIds.has(templateProperty.sourceId)) {
+      return [];
+    }
+
     const propertyId = propertyIdBySourceId.get(templateProperty.sourceId);
     if (!propertyId || !templateProperty.dependencies) {
       return [];
