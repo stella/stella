@@ -55,6 +55,7 @@ import {
 } from "./modelValidation";
 import { parseNumbering } from "./numberingParser";
 import type { NumberingMap } from "./numberingParser";
+import { normalizeNumberingReferences } from "./numberingReferenceNormalization";
 import {
   parseRelationships,
   RELATIONSHIP_TYPES,
@@ -307,6 +308,19 @@ export async function parseDocx(
     ) {
       warnings.push(
         `Removed ${headerFooterReferenceNormalization.removedDanglingFooterReferences} dangling footer reference(s) whose footer parts are missing.`,
+      );
+    }
+    const numberingReferenceNormalization = normalizeNumberingReferences({
+      documentBody,
+      numbering,
+      ...(headers !== undefined ? { headers } : {}),
+      ...(footers !== undefined ? { footers } : {}),
+      ...(footnotes !== undefined ? { footnotes } : {}),
+      ...(endnotes !== undefined ? { endnotes } : {}),
+    });
+    if (numberingReferenceNormalization.removedMissingNumberingReferences > 0) {
+      warnings.push(
+        `Removed ${numberingReferenceNormalization.removedMissingNumberingReferences} numbering reference(s) whose numbering definitions are missing.`,
       );
     }
 
