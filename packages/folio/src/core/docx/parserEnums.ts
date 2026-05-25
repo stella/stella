@@ -22,33 +22,40 @@
 
 import * as v from "valibot";
 
-import type {
-  EmphasisMark,
-  FieldType,
-  FloatingTableProperties,
-  ImagePosition,
-  ImageWrap,
-  LevelSuffix,
-  LineSpacingRule,
-  NumberFormat,
-  ParagraphAlignment,
-  ParagraphFormatting,
-  SdtProperties,
-  ShadingProperties,
-  ShapeOutline,
-  Style,
-  StyleType,
-  TableCellFormatting,
-  TableRowFormatting,
-  TableWidthType,
-  TabLeader,
-  TabStopAlignment,
-  TextEffect,
-  TextFormatting,
-  ThemeColorSlot,
-  UnderlineStyle,
-  KnownBorderStyle,
-} from "../types/document";
+import {
+  BORDER_STYLE_VALUES,
+  CONDITIONAL_STYLE_TYPE_VALUES,
+  EMPHASIS_MARK_VALUES,
+  FIELD_TYPE_VALUES,
+  FLOATING_TABLE_X_SPEC_VALUES,
+  FLOATING_TABLE_Y_SPEC_VALUES,
+  FONT_THEME_VALUES,
+  FRAME_WRAP_VALUES,
+  FRAME_X_ALIGN_VALUES,
+  FRAME_Y_ALIGN_VALUES,
+  HIGHLIGHT_COLOR_VALUES,
+  IMAGE_HORIZONTAL_ALIGNMENT_VALUES,
+  IMAGE_HORIZONTAL_RELATIVE_TO_VALUES,
+  IMAGE_VERTICAL_ALIGNMENT_VALUES,
+  IMAGE_VERTICAL_RELATIVE_TO_VALUES,
+  IMAGE_WRAP_TEXT_VALUES,
+  LEVEL_SUFFIX_VALUES,
+  LINE_SPACING_RULE_VALUES,
+  NUMBER_FORMAT_VALUES,
+  PARAGRAPH_ALIGNMENT_VALUES,
+  SDT_LOCK_VALUES,
+  SHADING_PATTERN_VALUES,
+  SHAPE_OUTLINE_STYLE_VALUES,
+  STYLE_TYPE_VALUES,
+  TABLE_CELL_TEXT_DIRECTION_VALUES,
+  TABLE_ROW_HEIGHT_RULE_VALUES,
+  TABLE_WIDTH_TYPE_VALUES,
+  TAB_LEADER_VALUES,
+  TAB_STOP_ALIGNMENT_VALUES,
+  TEXT_EFFECT_VALUES,
+  THEME_COLOR_SLOT_VALUES,
+  UNDERLINE_STYLE_VALUES,
+} from "../types/documentEnumValues";
 
 /**
  * Narrow a raw attribute string to a picklist member, or `undefined`
@@ -71,535 +78,128 @@ export const narrowEnum = <T extends string>(
 // Theme & shading enums
 // ---------------------------------------------------------------------------
 
-export const ThemeColorSlotSchema = v.picklist([
-  "dk1",
-  "lt1",
-  "dk2",
-  "lt2",
-  "accent1",
-  "accent2",
-  "accent3",
-  "accent4",
-  "accent5",
-  "accent6",
-  "hlink",
-  "folHlink",
-  "background1",
-  "text1",
-  "background2",
-  "text2",
-] as const satisfies readonly ThemeColorSlot[]);
+export const ThemeColorSlotSchema = v.picklist(THEME_COLOR_SLOT_VALUES);
 
-export const BorderStyleSchema = v.picklist([
-  "none",
-  "single",
-  "double",
-  "dotted",
-  "dashed",
-  "thick",
-  "triple",
-  "thinThickSmallGap",
-  "thickThinSmallGap",
-  "thinThickMediumGap",
-  "thickThinMediumGap",
-  "thinThickLargeGap",
-  "thickThinLargeGap",
-  "wave",
-  "doubleWave",
-  "dashSmallGap",
-  "dashDotStroked",
-  "threeDEmboss",
-  "threeDEngrave",
-  "outset",
-  "inset",
-  "nil",
-] as const satisfies readonly KnownBorderStyle[]);
+export const BorderStyleSchema = v.picklist(BORDER_STYLE_VALUES);
 
 // ---------------------------------------------------------------------------
 // Run formatting enums
 // ---------------------------------------------------------------------------
 
-export const UnderlineStyleSchema = v.picklist([
-  "none",
-  "single",
-  "words",
-  "double",
-  "thick",
-  "dotted",
-  "dottedHeavy",
-  "dash",
-  "dashedHeavy",
-  "dashLong",
-  "dashLongHeavy",
-  "dotDash",
-  "dashDotHeavy",
-  "dotDotDash",
-  "dashDotDotHeavy",
-  "wave",
-  "wavyHeavy",
-  "wavyDouble",
-] as const satisfies readonly UnderlineStyle[]);
+export const UnderlineStyleSchema = v.picklist(UNDERLINE_STYLE_VALUES);
 
-export const HighlightColorSchema = v.picklist([
-  "black",
-  "blue",
-  "cyan",
-  "darkBlue",
-  "darkCyan",
-  "darkGray",
-  "darkGreen",
-  "darkMagenta",
-  "darkRed",
-  "darkYellow",
-  "green",
-  "lightGray",
-  "magenta",
-  "none",
-  "red",
-  "white",
-  "yellow",
-] as const satisfies readonly NonNullable<TextFormatting["highlight"]>[]);
+export const HighlightColorSchema = v.picklist(HIGHLIGHT_COLOR_VALUES);
 
-export const TextEffectSchema = v.picklist([
-  "none",
-  "blinkBackground",
-  "lights",
-  "antsBlack",
-  "antsRed",
-  "shimmer",
-  "sparkle",
-] as const satisfies readonly TextEffect[]);
+export const TextEffectSchema = v.picklist(TEXT_EFFECT_VALUES);
 
-export const EmphasisMarkSchema = v.picklist([
-  "none",
-  "dot",
-  "comma",
-  "circle",
-  "underDot",
-] as const satisfies readonly EmphasisMark[]);
+export const EmphasisMarkSchema = v.picklist(EMPHASIS_MARK_VALUES);
 
-type FontTheme = NonNullable<
-  NonNullable<TextFormatting["fontFamily"]>["asciiTheme"]
->;
-
-export const FontThemeSchema = v.picklist([
-  "majorAscii",
-  "majorHAnsi",
-  "majorEastAsia",
-  "majorBidi",
-  "minorAscii",
-  "minorHAnsi",
-  "minorEastAsia",
-  "minorBidi",
-] as const satisfies readonly FontTheme[]);
+export const FontThemeSchema = v.picklist(FONT_THEME_VALUES);
 
 // ---------------------------------------------------------------------------
 // Paragraph formatting enums
 // ---------------------------------------------------------------------------
 
-export const ParagraphAlignmentSchema = v.picklist([
-  "left",
-  "center",
-  "right",
-  "both",
-  "distribute",
-  "mediumKashida",
-  "highKashida",
-  "lowKashida",
-  "thaiDistribute",
-] as const satisfies readonly ParagraphAlignment[]);
+export const ParagraphAlignmentSchema = v.picklist(PARAGRAPH_ALIGNMENT_VALUES);
 
-export const LineSpacingRuleSchema = v.picklist([
-  "auto",
-  "exact",
-  "atLeast",
-] as const satisfies readonly LineSpacingRule[]);
+export const LineSpacingRuleSchema = v.picklist(LINE_SPACING_RULE_VALUES);
 
-export const TabStopAlignmentSchema = v.picklist([
-  "left",
-  "center",
-  "right",
-  "decimal",
-  "bar",
-  "clear",
-  "num",
-] as const satisfies readonly TabStopAlignment[]);
+export const TabStopAlignmentSchema = v.picklist(TAB_STOP_ALIGNMENT_VALUES);
 
-export const TabLeaderSchema = v.picklist([
-  "none",
-  "dot",
-  "hyphen",
-  "underscore",
-  "heavy",
-  "middleDot",
-] as const satisfies readonly TabLeader[]);
+export const TabLeaderSchema = v.picklist(TAB_LEADER_VALUES);
 
-type Frame = NonNullable<ParagraphFormatting["frame"]>;
+export const FrameXAlignSchema = v.picklist(FRAME_X_ALIGN_VALUES);
 
-export const FrameXAlignSchema = v.picklist([
-  "left",
-  "center",
-  "right",
-  "inside",
-  "outside",
-] as const satisfies readonly NonNullable<Frame["xAlign"]>[]);
+export const FrameYAlignSchema = v.picklist(FRAME_Y_ALIGN_VALUES);
 
-export const FrameYAlignSchema = v.picklist([
-  "top",
-  "center",
-  "bottom",
-  "inside",
-  "outside",
-  "inline",
-] as const satisfies readonly NonNullable<Frame["yAlign"]>[]);
-
-export const FrameWrapSchema = v.picklist([
-  "around",
-  "auto",
-  "none",
-  "notBeside",
-  "through",
-  "tight",
-] as const satisfies readonly NonNullable<Frame["wrap"]>[]);
+export const FrameWrapSchema = v.picklist(FRAME_WRAP_VALUES);
 
 // ---------------------------------------------------------------------------
 // Structured document tag (SDT) enums
 // ---------------------------------------------------------------------------
 
-export const SdtLockSchema = v.picklist([
-  "sdtLocked",
-  "contentLocked",
-  "sdtContentLocked",
-  "unlocked",
-] as const satisfies readonly NonNullable<SdtProperties["lock"]>[]);
+export const SdtLockSchema = v.picklist(SDT_LOCK_VALUES);
 
 // ---------------------------------------------------------------------------
 // Field types
 // ---------------------------------------------------------------------------
 
-export const FieldTypeSchema = v.picklist([
-  "PAGE",
-  "NUMPAGES",
-  "NUMWORDS",
-  "NUMCHARS",
-  "DATE",
-  "TIME",
-  "CREATEDATE",
-  "SAVEDATE",
-  "PRINTDATE",
-  "AUTHOR",
-  "TITLE",
-  "SUBJECT",
-  "KEYWORDS",
-  "COMMENTS",
-  "FILENAME",
-  "FILESIZE",
-  "TEMPLATE",
-  "DOCPROPERTY",
-  "DOCVARIABLE",
-  "REF",
-  "PAGEREF",
-  "NOTEREF",
-  "HYPERLINK",
-  "TOC",
-  "TOA",
-  "INDEX",
-  "SEQ",
-  "STYLEREF",
-  "AUTONUM",
-  "AUTONUMLGL",
-  "AUTONUMOUT",
-  "IF",
-  "MERGEFIELD",
-  "NEXT",
-  "NEXTIF",
-  "ASK",
-  "SET",
-  "QUOTE",
-  "INCLUDETEXT",
-  "INCLUDEPICTURE",
-  "SYMBOL",
-  "ADVANCE",
-  "EDITTIME",
-  "REVNUM",
-  "SECTION",
-  "SECTIONPAGES",
-  "USERADDRESS",
-  "USERNAME",
-  "USERINITIALS",
-  "UNKNOWN",
-] as const satisfies readonly FieldType[]);
+export const FieldTypeSchema = v.picklist(FIELD_TYPE_VALUES);
 
 // ---------------------------------------------------------------------------
 // Style enums
 // ---------------------------------------------------------------------------
 
-export const StyleTypeSchema = v.picklist([
-  "paragraph",
-  "character",
-  "numbering",
-  "table",
-] as const satisfies readonly StyleType[]);
+export const StyleTypeSchema = v.picklist(STYLE_TYPE_VALUES);
 
-type ConditionalStyleType = NonNullable<Style["tblStylePr"]>[number]["type"];
-
-export const ConditionalStyleTypeSchema = v.picklist([
-  "band1Horz",
-  "band1Vert",
-  "band2Horz",
-  "band2Vert",
-  "firstCol",
-  "firstRow",
-  "lastCol",
-  "lastRow",
-  "neCell",
-  "nwCell",
-  "seCell",
-  "swCell",
-  "wholeTable",
-] as const satisfies readonly ConditionalStyleType[]);
+export const ConditionalStyleTypeSchema = v.picklist(
+  CONDITIONAL_STYLE_TYPE_VALUES,
+);
 
 // ---------------------------------------------------------------------------
 // Table enums
 // ---------------------------------------------------------------------------
 
-export const TableWidthTypeSchema = v.picklist([
-  "auto",
-  "dxa",
-  "nil",
-  "pct",
-] as const satisfies readonly TableWidthType[]);
+export const TableWidthTypeSchema = v.picklist(TABLE_WIDTH_TYPE_VALUES);
 
-export const TableRowHeightRuleSchema = v.picklist([
-  "auto",
-  "atLeast",
-  "exact",
-] as const satisfies readonly NonNullable<TableRowFormatting["heightRule"]>[]);
+export const TableRowHeightRuleSchema = v.picklist(
+  TABLE_ROW_HEIGHT_RULE_VALUES,
+);
 
-export const TableCellTextDirectionSchema = v.picklist([
-  "lr",
-  "lrV",
-  "rl",
-  "rlV",
-  "tb",
-  "tbV",
-  "tbRl",
-  "tbRlV",
-  "btLr",
-] as const satisfies readonly NonNullable<
-  TableCellFormatting["textDirection"]
->[]);
+export const TableCellTextDirectionSchema = v.picklist(
+  TABLE_CELL_TEXT_DIRECTION_VALUES,
+);
 
 // ---------------------------------------------------------------------------
 // Shading enums
 // ---------------------------------------------------------------------------
 
-export const ShadingPatternSchema = v.picklist([
-  "clear",
-  "solid",
-  "horzStripe",
-  "vertStripe",
-  "reverseDiagStripe",
-  "diagStripe",
-  "horzCross",
-  "diagCross",
-  "thinHorzStripe",
-  "thinVertStripe",
-  "thinReverseDiagStripe",
-  "thinDiagStripe",
-  "thinHorzCross",
-  "thinDiagCross",
-  "pct5",
-  "pct10",
-  "pct12",
-  "pct15",
-  "pct20",
-  "pct25",
-  "pct30",
-  "pct35",
-  "pct37",
-  "pct40",
-  "pct45",
-  "pct50",
-  "pct55",
-  "pct60",
-  "pct62",
-  "pct65",
-  "pct70",
-  "pct75",
-  "pct80",
-  "pct85",
-  "pct87",
-  "pct90",
-  "pct95",
-  "nil",
-] as const satisfies readonly NonNullable<ShadingProperties["pattern"]>[]);
+export const ShadingPatternSchema = v.picklist(SHADING_PATTERN_VALUES);
 
 // ---------------------------------------------------------------------------
 // Floating table position enums
 // ---------------------------------------------------------------------------
 
-export const FloatingTableXSpecSchema = v.picklist([
-  "left",
-  "center",
-  "right",
-  "inside",
-  "outside",
-] as const satisfies readonly NonNullable<
-  FloatingTableProperties["tblpXSpec"]
->[]);
+export const FloatingTableXSpecSchema = v.picklist(
+  FLOATING_TABLE_X_SPEC_VALUES,
+);
 
-export const FloatingTableYSpecSchema = v.picklist([
-  "top",
-  "center",
-  "bottom",
-  "inside",
-  "outside",
-  "inline",
-] as const satisfies readonly NonNullable<
-  FloatingTableProperties["tblpYSpec"]
->[]);
+export const FloatingTableYSpecSchema = v.picklist(
+  FLOATING_TABLE_Y_SPEC_VALUES,
+);
 
 // ---------------------------------------------------------------------------
 // Image positioning / wrap enums
 // ---------------------------------------------------------------------------
 
-export const ImageHorizontalRelativeToSchema = v.picklist([
-  "character",
-  "column",
-  "insideMargin",
-  "leftMargin",
-  "margin",
-  "outsideMargin",
-  "page",
-  "rightMargin",
-] as const satisfies readonly ImagePosition["horizontal"]["relativeTo"][]);
+export const ImageHorizontalRelativeToSchema = v.picklist(
+  IMAGE_HORIZONTAL_RELATIVE_TO_VALUES,
+);
 
-export const ImageHorizontalAlignmentSchema = v.picklist([
-  "left",
-  "right",
-  "center",
-  "inside",
-  "outside",
-] as const satisfies readonly NonNullable<
-  ImagePosition["horizontal"]["alignment"]
->[]);
+export const ImageHorizontalAlignmentSchema = v.picklist(
+  IMAGE_HORIZONTAL_ALIGNMENT_VALUES,
+);
 
-export const ImageVerticalRelativeToSchema = v.picklist([
-  "insideMargin",
-  "line",
-  "margin",
-  "outsideMargin",
-  "page",
-  "paragraph",
-  "topMargin",
-  "bottomMargin",
-] as const satisfies readonly ImagePosition["vertical"]["relativeTo"][]);
+export const ImageVerticalRelativeToSchema = v.picklist(
+  IMAGE_VERTICAL_RELATIVE_TO_VALUES,
+);
 
-export const ImageVerticalAlignmentSchema = v.picklist([
-  "top",
-  "bottom",
-  "center",
-  "inside",
-  "outside",
-] as const satisfies readonly NonNullable<
-  ImagePosition["vertical"]["alignment"]
->[]);
+export const ImageVerticalAlignmentSchema = v.picklist(
+  IMAGE_VERTICAL_ALIGNMENT_VALUES,
+);
 
-export const ImageWrapTextSchema = v.picklist([
-  "bothSides",
-  "left",
-  "right",
-  "largest",
-] as const satisfies readonly NonNullable<ImageWrap["wrapText"]>[]);
+export const ImageWrapTextSchema = v.picklist(IMAGE_WRAP_TEXT_VALUES);
 
 // ---------------------------------------------------------------------------
 // Shape outline enums
 // ---------------------------------------------------------------------------
 
-export const ShapeOutlineStyleSchema = v.picklist([
-  "solid",
-  "dot",
-  "dash",
-  "lgDash",
-  "dashDot",
-  "lgDashDot",
-  "lgDashDotDot",
-  "sysDot",
-  "sysDash",
-  "sysDashDot",
-  "sysDashDotDot",
-] as const satisfies readonly NonNullable<ShapeOutline["style"]>[]);
+export const ShapeOutlineStyleSchema = v.picklist(SHAPE_OUTLINE_STYLE_VALUES);
 
 // ---------------------------------------------------------------------------
 // Numbering enums
 // ---------------------------------------------------------------------------
 
-export const NumberFormatSchema = v.picklist([
-  "decimal",
-  "upperRoman",
-  "lowerRoman",
-  "upperLetter",
-  "lowerLetter",
-  "ordinal",
-  "cardinalText",
-  "ordinalText",
-  "hex",
-  "chicago",
-  "ideographDigital",
-  "japaneseCounting",
-  "aiueo",
-  "iroha",
-  "decimalFullWidth",
-  "decimalHalfWidth",
-  "japaneseLegal",
-  "japaneseDigitalTenThousand",
-  "decimalEnclosedCircle",
-  "decimalFullWidth2",
-  "aiueoFullWidth",
-  "irohaFullWidth",
-  "decimalZero",
-  "bullet",
-  "ganada",
-  "chosung",
-  "decimalEnclosedFullstop",
-  "decimalEnclosedParen",
-  "decimalEnclosedCircleChinese",
-  "ideographEnclosedCircle",
-  "ideographTraditional",
-  "ideographZodiac",
-  "ideographZodiacTraditional",
-  "taiwaneseCounting",
-  "ideographLegalTraditional",
-  "taiwaneseCountingThousand",
-  "taiwaneseDigital",
-  "chineseCounting",
-  "chineseLegalSimplified",
-  "chineseCountingThousand",
-  "koreanDigital",
-  "koreanCounting",
-  "koreanLegal",
-  "koreanDigital2",
-  "vietnameseCounting",
-  "russianLower",
-  "russianUpper",
-  "none",
-  "numberInDash",
-  "hebrew1",
-  "hebrew2",
-  "arabicAlpha",
-  "arabicAbjad",
-  "hindiVowels",
-  "hindiConsonants",
-  "hindiNumbers",
-  "hindiCounting",
-  "thaiLetters",
-  "thaiNumbers",
-  "thaiCounting",
-] as const satisfies readonly NumberFormat[]);
+export const NumberFormatSchema = v.picklist(NUMBER_FORMAT_VALUES);
 
-export const LevelSuffixSchema = v.picklist([
-  "tab",
-  "space",
-  "nothing",
-] as const satisfies readonly LevelSuffix[]);
+export const LevelSuffixSchema = v.picklist(LEVEL_SUFFIX_VALUES);

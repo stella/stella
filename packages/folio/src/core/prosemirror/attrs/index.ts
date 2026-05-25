@@ -1,5 +1,25 @@
 import type { Mark, Node as PMNode } from "prosemirror-model";
 
+import {
+  FIELD_TYPE_VALUES,
+  HIGHLIGHT_COLOR_VALUES,
+  IMAGE_HORIZONTAL_ALIGNMENT_VALUES,
+  IMAGE_HORIZONTAL_RELATIVE_TO_VALUES,
+  IMAGE_VERTICAL_ALIGNMENT_VALUES,
+  IMAGE_VERTICAL_RELATIVE_TO_VALUES,
+  IMAGE_WRAP_TEXT_VALUES,
+  IMAGE_WRAP_TYPE_VALUES,
+  LINE_SPACING_RULE_VALUES,
+  PARAGRAPH_ALIGNMENT_VALUES,
+  SDT_LOCK_VALUES,
+  SDT_TYPE_VALUES,
+  TABLE_CELL_TEXT_DIRECTION_VALUES,
+  TABLE_CELL_VERTICAL_ALIGNMENT_VALUES,
+  TABLE_JUSTIFICATION_VALUES,
+  TABLE_ROW_HEIGHT_RULE_VALUES,
+  TABLE_WIDTH_TYPE_VALUES,
+  UNDERLINE_STYLE_VALUES,
+} from "../../types/documentEnumValues";
 import type {
   CharacterSpacingAttrs,
   CommentAttrs,
@@ -35,105 +55,12 @@ export type ReadProseMirrorAttrsResult<T> =
   | { ok: true; value: T }
   | { ok: false; issues: ProseMirrorAttrIssue[] };
 
-type ImageHorizontalPositionAttrs = NonNullable<
-  NonNullable<ImageAttrs["position"]>["horizontal"]
->;
-
-type ImageVerticalPositionAttrs = NonNullable<
-  NonNullable<ImageAttrs["position"]>["vertical"]
->;
-
-const PARAGRAPH_ALIGNMENTS = [
-  "left",
-  "center",
-  "right",
-  "both",
-  "distribute",
-  "mediumKashida",
-  "highKashida",
-  "lowKashida",
-  "thaiDistribute",
-] as const satisfies readonly NonNullable<ParagraphAttrs["alignment"]>[];
-
-const LINE_SPACING_RULES = [
-  "auto",
-  "exact",
-  "atLeast",
-] as const satisfies readonly NonNullable<ParagraphAttrs["lineSpacingRule"]>[];
-
 const SECTION_BREAK_TYPES = [
   "nextPage",
   "continuous",
   "oddPage",
   "evenPage",
 ] as const satisfies readonly NonNullable<ParagraphAttrs["sectionBreakType"]>[];
-
-const TABLE_WIDTH_TYPES = [
-  "auto",
-  "dxa",
-  "nil",
-  "pct",
-] as const satisfies readonly NonNullable<TableAttrs["widthType"]>[];
-
-const TABLE_JUSTIFICATIONS = [
-  "left",
-  "center",
-  "right",
-] as const satisfies readonly NonNullable<TableAttrs["justification"]>[];
-
-const TABLE_ROW_HEIGHT_RULES = [
-  "auto",
-  "atLeast",
-  "exact",
-] as const satisfies readonly NonNullable<TableRowAttrs["heightRule"]>[];
-
-const TABLE_CELL_VERTICAL_ALIGNMENTS = [
-  "top",
-  "center",
-  "bottom",
-] as const satisfies readonly NonNullable<TableCellAttrs["verticalAlign"]>[];
-
-const TABLE_CELL_TEXT_DIRECTIONS = [
-  "lr",
-  "lrV",
-  "rl",
-  "rlV",
-  "tb",
-  "tbV",
-  "tbRl",
-  "tbRlV",
-  "btLr",
-] as const satisfies readonly NonNullable<TableCellAttrs["textDirection"]>[];
-
-const HIGHLIGHT_COLORS = [
-  "black",
-  "blue",
-  "cyan",
-  "darkBlue",
-  "darkCyan",
-  "darkGray",
-  "darkGreen",
-  "darkMagenta",
-  "darkRed",
-  "darkYellow",
-  "green",
-  "lightGray",
-  "magenta",
-  "none",
-  "red",
-  "white",
-  "yellow",
-] as const satisfies readonly HighlightAttrs["color"][];
-
-const IMAGE_WRAP_TYPES = [
-  "inline",
-  "square",
-  "tight",
-  "through",
-  "topAndBottom",
-  "behind",
-  "inFront",
-] as const satisfies readonly NonNullable<ImageAttrs["wrapType"]>[];
 
 const IMAGE_DISPLAY_MODES = [
   "inline",
@@ -147,112 +74,6 @@ const IMAGE_CSS_FLOATS = [
   "none",
 ] as const satisfies readonly NonNullable<ImageAttrs["cssFloat"]>[];
 
-const IMAGE_WRAP_TEXTS = [
-  "bothSides",
-  "left",
-  "right",
-  "largest",
-] as const satisfies readonly NonNullable<ImageAttrs["wrapText"]>[];
-
-const IMAGE_HORIZONTAL_RELATIVE_TO = [
-  "character",
-  "column",
-  "insideMargin",
-  "leftMargin",
-  "margin",
-  "outsideMargin",
-  "page",
-  "rightMargin",
-] as const satisfies readonly NonNullable<
-  ImageHorizontalPositionAttrs["relativeTo"]
->[];
-
-const IMAGE_HORIZONTAL_ALIGNMENTS = [
-  "left",
-  "right",
-  "center",
-  "inside",
-  "outside",
-] as const satisfies readonly NonNullable<
-  ImageHorizontalPositionAttrs["align"]
->[];
-
-const IMAGE_VERTICAL_RELATIVE_TO = [
-  "insideMargin",
-  "line",
-  "margin",
-  "outsideMargin",
-  "page",
-  "paragraph",
-  "topMargin",
-  "bottomMargin",
-] as const satisfies readonly NonNullable<
-  ImageVerticalPositionAttrs["relativeTo"]
->[];
-
-const IMAGE_VERTICAL_ALIGNMENTS = [
-  "top",
-  "bottom",
-  "center",
-  "inside",
-  "outside",
-] as const satisfies readonly NonNullable<
-  ImageVerticalPositionAttrs["align"]
->[];
-
-const FIELD_TYPES = [
-  "PAGE",
-  "NUMPAGES",
-  "NUMWORDS",
-  "NUMCHARS",
-  "DATE",
-  "TIME",
-  "CREATEDATE",
-  "SAVEDATE",
-  "PRINTDATE",
-  "AUTHOR",
-  "TITLE",
-  "SUBJECT",
-  "KEYWORDS",
-  "COMMENTS",
-  "FILENAME",
-  "FILESIZE",
-  "TEMPLATE",
-  "DOCPROPERTY",
-  "DOCVARIABLE",
-  "REF",
-  "PAGEREF",
-  "NOTEREF",
-  "HYPERLINK",
-  "TOC",
-  "TOA",
-  "INDEX",
-  "SEQ",
-  "STYLEREF",
-  "AUTONUM",
-  "AUTONUMLGL",
-  "AUTONUMOUT",
-  "IF",
-  "MERGEFIELD",
-  "NEXT",
-  "NEXTIF",
-  "ASK",
-  "SET",
-  "QUOTE",
-  "INCLUDETEXT",
-  "INCLUDEPICTURE",
-  "SYMBOL",
-  "ADVANCE",
-  "EDITTIME",
-  "REVNUM",
-  "SECTION",
-  "SECTIONPAGES",
-  "USERADDRESS",
-  "USERNAME",
-  "USERINITIALS",
-  "UNKNOWN",
-] as const satisfies readonly FieldAttrs["fieldType"][];
-
 const FIELD_KINDS = [
   "simple",
   "complex",
@@ -262,26 +83,6 @@ const MATH_DISPLAYS = [
   "inline",
   "block",
 ] as const satisfies readonly NonNullable<MathAttrs["display"]>[];
-
-const SDT_TYPES = [
-  "richText",
-  "plainText",
-  "date",
-  "dropdown",
-  "comboBox",
-  "checkbox",
-  "picture",
-  "buildingBlockGallery",
-  "group",
-  "unknown",
-] as const satisfies readonly SdtAttrs["sdtType"][];
-
-const SDT_LOCKS = [
-  "sdtLocked",
-  "contentLocked",
-  "sdtContentLocked",
-  "unlocked",
-] as const satisfies readonly NonNullable<SdtAttrs["lock"]>[];
 
 const SHAPE_FILL_TYPES = [
   "none",
@@ -297,27 +98,6 @@ const SHAPE_GRADIENT_TYPES = [
   "rectangular",
   "path",
 ] as const satisfies readonly NonNullable<ShapeAttrs["gradientType"]>[];
-
-const UNDERLINE_STYLES = [
-  "none",
-  "single",
-  "words",
-  "double",
-  "thick",
-  "dotted",
-  "dottedHeavy",
-  "dash",
-  "dashedHeavy",
-  "dashLong",
-  "dashLongHeavy",
-  "dotDash",
-  "dashDotHeavy",
-  "dotDotDash",
-  "dashDotDotHeavy",
-  "wave",
-  "wavyHeavy",
-  "wavyDouble",
-] as const satisfies readonly NonNullable<UnderlineAttrs["style"]>[];
 
 const EMPHASIS_MARK_TYPES = [
   "dot",
@@ -364,7 +144,7 @@ export const readParagraphAttrs = (
     "alignment",
     "paragraph.attrs.alignment",
     issues,
-    PARAGRAPH_ALIGNMENTS,
+    PARAGRAPH_ALIGNMENT_VALUES,
   );
   optionalString(attrs, "styleId", "paragraph.attrs.styleId", issues);
   optionalNumber(attrs, "spaceBefore", "paragraph.attrs.spaceBefore", issues);
@@ -375,7 +155,7 @@ export const readParagraphAttrs = (
     "lineSpacingRule",
     "paragraph.attrs.lineSpacingRule",
     issues,
-    LINE_SPACING_RULES,
+    LINE_SPACING_RULE_VALUES,
   );
   optionalNumber(attrs, "indentLeft", "paragraph.attrs.indentLeft", issues);
   optionalNumber(attrs, "indentRight", "paragraph.attrs.indentRight", issues);
@@ -522,14 +302,14 @@ export const readTableAttrs = (
     "widthType",
     "table.attrs.widthType",
     issues,
-    TABLE_WIDTH_TYPES,
+    TABLE_WIDTH_TYPE_VALUES,
   );
   optionalOneOf(
     attrs,
     "justification",
     "table.attrs.justification",
     issues,
-    TABLE_JUSTIFICATIONS,
+    TABLE_JUSTIFICATION_VALUES,
   );
   optionalNumberArray(
     attrs,
@@ -566,7 +346,7 @@ export const readTableRowAttrs = (
     "heightRule",
     "tableRow.attrs.heightRule",
     issues,
-    TABLE_ROW_HEIGHT_RULES,
+    TABLE_ROW_HEIGHT_RULE_VALUES,
   );
   optionalBoolean(attrs, "isHeader", "tableRow.attrs.isHeader", issues);
   optionalRecord(
@@ -600,14 +380,14 @@ export const readTableCellAttrs = (
     "widthType",
     "tableCell.attrs.widthType",
     issues,
-    TABLE_WIDTH_TYPES,
+    TABLE_WIDTH_TYPE_VALUES,
   );
   optionalOneOf(
     attrs,
     "verticalAlign",
     "tableCell.attrs.verticalAlign",
     issues,
-    TABLE_CELL_VERTICAL_ALIGNMENTS,
+    TABLE_CELL_VERTICAL_ALIGNMENT_VALUES,
   );
   optionalString(
     attrs,
@@ -620,7 +400,7 @@ export const readTableCellAttrs = (
     "textDirection",
     "tableCell.attrs.textDirection",
     issues,
-    TABLE_CELL_TEXT_DIRECTIONS,
+    TABLE_CELL_TEXT_DIRECTION_VALUES,
   );
   optionalBoolean(attrs, "noWrap", "tableCell.attrs.noWrap", issues);
   optionalRecord(attrs, "borders", "tableCell.attrs.borders", issues);
@@ -656,7 +436,7 @@ export const readImageAttrs = (
     "wrapType",
     "image.attrs.wrapType",
     issues,
-    IMAGE_WRAP_TYPES,
+    IMAGE_WRAP_TYPE_VALUES,
   );
   optionalOneOf(
     attrs,
@@ -686,7 +466,7 @@ export const readImageAttrs = (
     "wrapText",
     "image.attrs.wrapText",
     issues,
-    IMAGE_WRAP_TEXTS,
+    IMAGE_WRAP_TEXT_VALUES,
   );
   optionalString(attrs, "hlinkHref", "image.attrs.hlinkHref", issues);
 
@@ -708,7 +488,7 @@ export const readFieldAttrs = (
     "fieldType",
     "field.attrs.fieldType",
     issues,
-    FIELD_TYPES,
+    FIELD_TYPE_VALUES,
   );
   requiredString(attrs, "instruction", "field.attrs.instruction", issues);
   requiredString(attrs, "displayText", "field.attrs.displayText", issues);
@@ -752,10 +532,10 @@ export const readSdtAttrs = (
   const issues: ProseMirrorAttrIssue[] = [];
   expectNodeType(node, "sdt", issues);
 
-  requiredOneOf(attrs, "sdtType", "sdt.attrs.sdtType", issues, SDT_TYPES);
+  requiredOneOf(attrs, "sdtType", "sdt.attrs.sdtType", issues, SDT_TYPE_VALUES);
   optionalString(attrs, "alias", "sdt.attrs.alias", issues);
   optionalString(attrs, "tag", "sdt.attrs.tag", issues);
-  optionalOneOf(attrs, "lock", "sdt.attrs.lock", issues, SDT_LOCKS);
+  optionalOneOf(attrs, "lock", "sdt.attrs.lock", issues, SDT_LOCK_VALUES);
   optionalString(attrs, "placeholder", "sdt.attrs.placeholder", issues);
   optionalBoolean(
     attrs,
@@ -891,7 +671,7 @@ export const readUnderlineMarkAttrs = (
     "style",
     "underline.attrs.style",
     issues,
-    UNDERLINE_STYLES,
+    UNDERLINE_STYLE_VALUES,
   );
   optionalTextColor(attrs, "color", "underline.attrs.color", issues);
 
@@ -943,7 +723,7 @@ export const readHighlightMarkAttrs = (
     "color",
     "highlight.attrs.color",
     issues,
-    HIGHLIGHT_COLORS,
+    HIGHLIGHT_COLOR_VALUES,
   );
 
   return attrsResult(attrs, issues);
@@ -1547,15 +1327,15 @@ const optionalImagePosition = (
   validateImagePositionAxis(value, {
     key: "horizontal",
     path,
-    relativeTo: IMAGE_HORIZONTAL_RELATIVE_TO,
-    align: IMAGE_HORIZONTAL_ALIGNMENTS,
+    relativeTo: IMAGE_HORIZONTAL_RELATIVE_TO_VALUES,
+    align: IMAGE_HORIZONTAL_ALIGNMENT_VALUES,
     issues,
   });
   validateImagePositionAxis(value, {
     key: "vertical",
     path,
-    relativeTo: IMAGE_VERTICAL_RELATIVE_TO,
-    align: IMAGE_VERTICAL_ALIGNMENTS,
+    relativeTo: IMAGE_VERTICAL_RELATIVE_TO_VALUES,
+    align: IMAGE_VERTICAL_ALIGNMENT_VALUES,
     issues,
   });
 };
