@@ -108,3 +108,48 @@ describe("table borders", () => {
     });
   });
 });
+
+describe("table bookmark placement", () => {
+  test("attaches cell-level and row-level bookmark markers to adjacent paragraphs", () => {
+    const table = parseTableXml(`<w:tbl ${NS}>
+      <w:tr>
+        <w:tc>
+          <w:bookmarkStart w:id="1" w:name="cellRange"/>
+          <w:p>
+            <w:r><w:t>First</w:t></w:r>
+            <w:bookmarkStart w:id="2" w:name="rowRange"/>
+          </w:p>
+          <w:bookmarkEnd w:id="1"/>
+        </w:tc>
+        <w:bookmarkEnd w:id="2"/>
+        <w:tc><w:p><w:r><w:t>Second</w:t></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>`);
+
+    const firstParagraph = table.rows.at(0)?.cells.at(0)?.content.at(0);
+    expect(firstParagraph?.type).toBe("paragraph");
+    if (!firstParagraph || firstParagraph.type !== "paragraph") {
+      return;
+    }
+
+    expect(firstParagraph.content.map((content) => content.type)).toEqual([
+      "bookmarkStart",
+      "run",
+      "bookmarkStart",
+      "bookmarkEnd",
+      "bookmarkEnd",
+    ]);
+    expect(firstParagraph.content.at(0)).toMatchObject({
+      type: "bookmarkStart",
+      id: 1,
+    });
+    expect(firstParagraph.content.at(-2)).toMatchObject({
+      type: "bookmarkEnd",
+      id: 1,
+    });
+    expect(firstParagraph.content.at(-1)).toMatchObject({
+      type: "bookmarkEnd",
+      id: 2,
+    });
+  });
+});

@@ -45,7 +45,17 @@ import type {
   ColorValue,
   RelationshipMap,
   MediaFile,
+  BookmarkEnd,
+  BookmarkStart,
 } from "../types/document";
+import { parseBookmarkEnd, parseBookmarkStart } from "./bookmarkParser";
+import {
+  appendBookmarkMarkerToLastParagraphInBlocks,
+  appendBookmarkMarkerToLastParagraphInCells,
+  prependBookmarkMarkersToFirstParagraphInBlocks,
+  prependBookmarkMarkersToFirstParagraphInCell,
+} from "./bookmarkPlacement";
+import type { BookmarkMarker } from "./bookmarkPlacement";
 import type { NumberingMap } from "./numberingParser";
 import { parseParagraph } from "./paragraphParser";
 import {
@@ -62,6 +72,7 @@ import {
   findChild,
   findChildren,
   getAttribute,
+  getChildElements,
   parseNumericAttribute,
   parseBooleanElement,
 } from "./xmlParser";
@@ -1203,16 +1214,17 @@ function parseCellContent(
   options?: { inHeaderFooter?: boolean },
 ): (Paragraph | Table)[] {
   const content: (Paragraph | Table)[] = [];
+  const pendingBookmarkMarkers: BookmarkMarker[] = [];
 
   // Get all child elements
-  const elements = tcElement.elements || [];
+  const elements = getChildElements(tcElement);
 
   for (const child of elements) {
     if (!child.name) {
       continue;
     }
 
-    const localName = child.name.split(":").pop();
+    const localName = getLocalName(child.name);
 
     if (localName === "p") {
       // Parse paragraph
@@ -1225,6 +1237,7 @@ function parseCellContent(
         media,
         options,
       );
+      prependPendingBookmarkMarkers(para, pendingBookmarkMarkers);
       content.push(para);
     } else if (localName === "tbl") {
       // Parse nested table (recursive)
@@ -1237,7 +1250,20 @@ function parseCellContent(
         media,
         options,
       );
+      if (
+        prependBookmarkMarkersToFirstParagraphInBlocks(
+          [table],
+          pendingBookmarkMarkers,
+        )
+      ) {
+        pendingBookmarkMarkers.length = 0;
+      }
       content.push(table);
+    } else if (localName === "bookmarkStart" || localName === "bookmarkEnd") {
+      const marker = parseBookmarkMarker(child, localName);
+      if (!appendBookmarkMarkerToLastParagraphInBlocks(content, marker)) {
+        pendingBookmarkMarkers.push(marker);
+      }
     }
     // Other content types in cells are rare but could be added
   }
@@ -1246,8 +1272,13 @@ function parseCellContent(
   if (content.length === 0) {
     content.push({
       type: "paragraph",
-      content: [],
+      content: [...pendingBookmarkMarkers],
     });
+  } else if (pendingBookmarkMarkers.length > 0) {
+    appendBookmarkMarkersToLastParagraphInBlocks(
+      content,
+      pendingBookmarkMarkers,
+    );
   }
 
   return content;
@@ -1359,21 +1390,98 @@ export function parseTableRow(
   }
 
   // Parse cells
-  const cells = findChildren(trElement, "w", "tc");
-  for (const cellElement of cells) {
-    const cell = parseTableCell(
-      cellElement,
-      styles,
-      theme,
-      numbering,
-      rels,
-      media,
-      options,
-    );
-    row.cells.push(cell);
+  const pendingBookmarkMarkers: BookmarkMarker[] = [];
+  for (const child of getChildElements(trElement)) {
+    const localName = getLocalName(child.name);
+    if (localName === "tc") {
+      const cell = parseTableCell(
+        child,
+        styles,
+        theme,
+        numbering,
+        rels,
+        media,
+        options,
+      );
+      if (pendingBookmarkMarkers.length > 0) {
+        prependBookmarkMarkersToFirstParagraphInCell(
+          cell,
+          pendingBookmarkMarkers,
+        );
+        pendingBookmarkMarkers.length = 0;
+      }
+      row.cells.push(cell);
+      continue;
+    }
+
+    if (localName !== "bookmarkStart" && localName !== "bookmarkEnd") {
+      continue;
+    }
+
+    const marker = parseBookmarkMarker(child, localName);
+    if (!appendBookmarkMarkerToLastParagraphInCells(row.cells, marker)) {
+      pendingBookmarkMarkers.push(marker);
+    }
+  }
+
+  if (pendingBookmarkMarkers.length > 0) {
+    appendBookmarkMarkersToLastCell(row, pendingBookmarkMarkers);
   }
 
   return row;
+}
+
+function getLocalName(name: string | undefined): string {
+  if (!name) {
+    return "";
+  }
+  const colonIndex = name.indexOf(":");
+  return colonIndex === -1 ? name : name.slice(colonIndex + 1);
+}
+
+function parseBookmarkMarker(
+  child: XmlElement,
+  localName: "bookmarkStart" | "bookmarkEnd",
+): BookmarkStart | BookmarkEnd {
+  if (localName === "bookmarkStart") {
+    return parseBookmarkStart(child);
+  }
+  return parseBookmarkEnd(child);
+}
+
+function prependPendingBookmarkMarkers(
+  paragraph: Paragraph,
+  pendingBookmarkMarkers: BookmarkMarker[],
+): void {
+  if (pendingBookmarkMarkers.length === 0) {
+    return;
+  }
+
+  paragraph.content.unshift(...pendingBookmarkMarkers);
+  pendingBookmarkMarkers.length = 0;
+}
+
+function appendBookmarkMarkersToLastParagraphInBlocks(
+  blocks: readonly (Paragraph | Table)[],
+  markers: readonly BookmarkMarker[],
+): void {
+  for (const marker of markers) {
+    appendBookmarkMarkerToLastParagraphInBlocks(blocks, marker);
+  }
+}
+
+function appendBookmarkMarkersToLastCell(
+  row: TableRow,
+  markers: readonly BookmarkMarker[],
+): void {
+  const lastCell = row.cells.at(-1);
+  if (!lastCell) {
+    return;
+  }
+
+  for (const marker of markers) {
+    appendBookmarkMarkerToLastParagraphInBlocks(lastCell.content, marker);
+  }
 }
 
 // ============================================================================

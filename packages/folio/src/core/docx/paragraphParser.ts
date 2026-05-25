@@ -27,12 +27,7 @@ import type {
   TabStop,
   RelationshipMap,
   MediaFile,
-  InlineSdt,
   SdtProperties,
-  Insertion,
-  Deletion,
-  MoveFrom,
-  MoveTo,
   ParagraphPropertyChange,
   TrackedChangeInfo,
   MathEquation,
@@ -894,6 +889,11 @@ function paragraphStartsWithRenderedPageBreak(node: XmlElement): boolean {
 }
 
 type TrackedChangeParseContext = "default" | "deletion";
+type TrackedChangeWrapperType =
+  | "insertion"
+  | "deletion"
+  | "moveFrom"
+  | "moveTo";
 
 function replaceLocalName(name: string | undefined, localName: string): string {
   if (!name) {
@@ -989,6 +989,115 @@ function parseParagraphPropertyChanges(
     .filter((change) => change.previousFormatting || change.currentFormatting);
 
   return changes.length > 0 ? changes : undefined;
+}
+
+function isTrackedChangeWrapperChild(
+  content: ParagraphContent,
+): content is Run | Hyperlink {
+  return content.type === "run" || content.type === "hyperlink";
+}
+
+type PushTrackedChangeWrapperParams = {
+  contents: ParagraphContent[];
+  type: TrackedChangeWrapperType;
+  info: TrackedChangeInfo;
+  content: readonly (Run | Hyperlink)[];
+};
+
+function pushTrackedChangeWrapper({
+  contents,
+  type,
+  info,
+  content,
+}: PushTrackedChangeWrapperParams): void {
+  if (content.length === 0) {
+    return;
+  }
+
+  if (type === "insertion") {
+    contents.push({ type: "insertion", info, content: [...content] });
+    return;
+  }
+
+  if (type === "deletion") {
+    contents.push({ type: "deletion", info, content: [...content] });
+    return;
+  }
+
+  if (type === "moveFrom") {
+    contents.push({ type: "moveFrom", info, content: [...content] });
+    return;
+  }
+
+  contents.push({ type: "moveTo", info, content: [...content] });
+}
+
+type PushTrackedChangeSegmentsParams = {
+  contents: ParagraphContent[];
+  type: TrackedChangeWrapperType;
+  info: TrackedChangeInfo;
+  parsedContent: readonly ParagraphContent[];
+};
+
+function pushTrackedChangeSegments({
+  contents,
+  type,
+  info,
+  parsedContent,
+}: PushTrackedChangeSegmentsParams): void {
+  const segment: (Run | Hyperlink)[] = [];
+
+  for (const content of parsedContent) {
+    if (isTrackedChangeWrapperChild(content)) {
+      segment.push(content);
+      continue;
+    }
+
+    pushTrackedChangeWrapper({ contents, type, info, content: segment });
+    segment.length = 0;
+    contents.push(content);
+  }
+
+  pushTrackedChangeWrapper({ contents, type, info, content: segment });
+}
+
+type PushInlineSdtSegmentsParams = {
+  contents: ParagraphContent[];
+  properties: SdtProperties;
+  parsedContent: readonly ParagraphContent[];
+};
+
+function pushInlineSdtSegments({
+  contents,
+  properties,
+  parsedContent,
+}: PushInlineSdtSegmentsParams): void {
+  const segment: (Run | Hyperlink)[] = [];
+
+  const pushSegment = (): void => {
+    if (segment.length === 0) {
+      return;
+    }
+
+    contents.push({
+      type: "inlineSdt",
+      properties,
+      content: [...segment],
+    });
+    segment.length = 0;
+  };
+
+  for (const content of parsedContent) {
+    if (isTrackedChangeWrapperChild(content)) {
+      segment.push(content);
+      continue;
+    }
+
+    pushSegment();
+    contents.push(content);
+  }
+
+  pushSegment();
 }
 
 /**
@@ -1250,15 +1359,11 @@ function parseParagraphContents(
             trackedContext,
           );
           const properties = parseSdtProperties(sdtPr ?? null);
-          const inlineSdt: InlineSdt = {
-            type: "inlineSdt",
+          pushInlineSdtSegments({
+            contents,
             properties,
-            content: sdtParsed.filter(
-              (c): c is Run | Hyperlink =>
-                c.type === "run" || c.type === "hyperlink",
-            ),
-          };
-          contents.push(inlineSdt);
+            parsedContent: sdtParsed,
+          });
         }
         break;
       }
@@ -1274,15 +1379,12 @@ function parseParagraphContents(
           rels,
           media,
         );
-        const insertion: Insertion = {
+        pushTrackedChangeSegments({
+          contents,
           type: "insertion",
           info: insInfo,
-          content: insContent.filter(
-            (c): c is Run | Hyperlink =>
-              c.type === "run" || c.type === "hyperlink",
-          ),
-        };
-        contents.push(insertion);
+          parsedContent: insContent,
+        });
         break;
       }
       case "del": {
@@ -1297,15 +1399,12 @@ function parseParagraphContents(
           media,
           "deletion",
         );
-        const deletion: Deletion = {
+        pushTrackedChangeSegments({
+          contents,
           type: "deletion",
           info: delInfo,
-          content: delContent.filter(
-            (c): c is Run | Hyperlink =>
-              c.type === "run" || c.type === "hyperlink",
-          ),
-        };
-        contents.push(deletion);
+          parsedContent: delContent,
+        });
         break;
       }
       case "moveFrom": {
@@ -1319,15 +1418,12 @@ function parseParagraphContents(
           media,
           "deletion",
         );
-        const moveFrom: MoveFrom = {
+        pushTrackedChangeSegments({
+          contents,
           type: "moveFrom",
           info: moveFromInfo,
-          content: moveFromContent.filter(
-            (c): c is Run | Hyperlink =>
-              c.type === "run" || c.type === "hyperlink",
-          ),
-        };
-        contents.push(moveFrom);
+          parsedContent: moveFromContent,
+        });
         break;
       }
 
@@ -1341,15 +1437,12 @@ function parseParagraphContents(
           rels,
           media,
         );
-        const moveTo: MoveTo = {
+        pushTrackedChangeSegments({
+          contents,
           type: "moveTo",
           info: moveToInfo,
-          content: moveToContent.filter(
-            (c): c is Run | Hyperlink =>
-              c.type === "run" || c.type === "hyperlink",
-          ),
-        };
-        contents.push(moveTo);
+          parsedContent: moveToContent,
+        });
         break;
       }
 

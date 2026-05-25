@@ -117,6 +117,28 @@ describe("parseParagraph tracked-change hardening", () => {
       id: 42,
     });
   });
+
+  test("lifts bookmark markers out of tracked-change wrappers", () => {
+    const paragraph = parseParagraphXml(`
+      <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:bookmarkStart w:id="5" w:name="deletedRange"/>
+        <w:del w:id="7" w:author="Reviewer">
+          <w:r><w:delText>removed</w:delText></w:r>
+          <w:bookmarkEnd w:id="5"/>
+        </w:del>
+      </w:p>
+    `);
+
+    expect(paragraph.content.map((content) => content.type)).toEqual([
+      "bookmarkStart",
+      "deletion",
+      "bookmarkEnd",
+    ]);
+    expect(paragraph.content.at(2)).toMatchObject({
+      type: "bookmarkEnd",
+      id: 5,
+    });
+  });
 });
 
 describe("parseParagraph rendered page break markers", () => {

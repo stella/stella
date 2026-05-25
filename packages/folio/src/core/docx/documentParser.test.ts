@@ -391,3 +391,47 @@ describe("parseDocumentBody text box enrichment", () => {
     expect(cardTitles).toEqual(["Card 1", "Card 2", "Card 3"]);
   });
 });
+
+describe("parseDocumentBody bookmark placement", () => {
+  test("attaches body-level bookmark markers to adjacent paragraphs", () => {
+    const body = parseDocumentBody(`${XML_DECLARATION}
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:bookmarkStart w:id="1" w:name="beforeFirst"/>
+    <w:p>
+      <w:r><w:t>First</w:t></w:r>
+      <w:bookmarkStart w:id="2" w:name="afterParagraph"/>
+    </w:p>
+    <w:bookmarkEnd w:id="2"/>
+    <w:p><w:r><w:t>Second</w:t></w:r></w:p>
+    <w:bookmarkEnd w:id="1"/>
+  </w:body>
+</w:document>`);
+
+    const firstParagraph = body.content.at(0);
+    expect(firstParagraph?.type).toBe("paragraph");
+    if (!firstParagraph || firstParagraph.type !== "paragraph") {
+      return;
+    }
+
+    expect(firstParagraph.content.at(0)).toMatchObject({
+      type: "bookmarkStart",
+      id: 1,
+    });
+    expect(firstParagraph.content.at(-1)).toMatchObject({
+      type: "bookmarkEnd",
+      id: 2,
+    });
+
+    const secondParagraph = body.content.at(1);
+    expect(secondParagraph?.type).toBe("paragraph");
+    if (!secondParagraph || secondParagraph.type !== "paragraph") {
+      return;
+    }
+
+    expect(secondParagraph.content.at(-1)).toMatchObject({
+      type: "bookmarkEnd",
+      id: 1,
+    });
+  });
+});

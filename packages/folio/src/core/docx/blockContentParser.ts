@@ -8,6 +8,8 @@
  */
 
 import type {
+  BookmarkEnd,
+  BookmarkStart,
   MediaFile,
   Paragraph,
   RelationshipMap,
@@ -17,6 +19,12 @@ import type {
   Table,
   Theme,
 } from "../types/document";
+import { parseBookmarkEnd, parseBookmarkStart } from "./bookmarkParser";
+import {
+  appendBookmarkMarkerToLastParagraphInBlocks,
+  prependBookmarkMarkersToFirstParagraphInBlocks,
+} from "./bookmarkPlacement";
+import type { BookmarkMarker } from "./bookmarkPlacement";
 import { convertBulletToUnicode } from "./bulletMarkers";
 import type { NumberingMap } from "./numberingParser";
 import { parseParagraph } from "./paragraphParser";
@@ -362,11 +370,13 @@ const parseBlockContentWithState = (
 ): (Paragraph | Table)[] => {
   const content: (Paragraph | Table)[] = [];
   const children = getChildElements(parent);
+  const pendingBookmarkMarkers: BookmarkMarker[] = [];
 
   for (const child of children) {
     const name = child.name ?? "";
+    const localName = getLocalName(name);
 
-    if (name === "w:p" || name.endsWith(":p")) {
+    if (localName === "p") {
       const paragraph = parseParagraph(
         child,
         styles,
@@ -376,6 +386,7 @@ const parseBlockContentWithState = (
         media,
         state.options,
       );
+      prependPendingBookmarkMarkers(paragraph, pendingBookmarkMarkers);
       enrichParagraphTextBoxes(
         paragraph,
         child,
@@ -395,7 +406,7 @@ const parseBlockContentWithState = (
       continue;
     }
 
-    if (name === "w:tbl" || name.endsWith(":tbl")) {
+    if (localName === "tbl") {
       const table = parseTable(
         child,
         styles,
@@ -405,31 +416,83 @@ const parseBlockContentWithState = (
         media,
         state.options,
       );
+      if (
+        prependBookmarkMarkersToFirstParagraphInBlocks(
+          [table],
+          pendingBookmarkMarkers,
+        )
+      ) {
+        pendingBookmarkMarkers.length = 0;
+      }
       content.push(table);
       continue;
     }
 
-    if (name === "w:sdt" || name.endsWith(":sdt")) {
+    if (localName === "sdt") {
       const sdtContent = (child.elements ?? []).find(
         (el: XmlElement) =>
           el.type === "element" &&
           (el.name === "w:sdtContent" || el.name?.endsWith(":sdtContent")),
       );
       if (sdtContent) {
-        content.push(
-          ...parseBlockContentWithState(
-            sdtContent,
-            styles,
-            theme,
-            numbering,
-            rels,
-            media,
-            state,
-          ),
+        const sdtBlockContent = parseBlockContentWithState(
+          sdtContent,
+          styles,
+          theme,
+          numbering,
+          rels,
+          media,
+          state,
         );
+        if (
+          prependBookmarkMarkersToFirstParagraphInBlocks(
+            sdtBlockContent,
+            pendingBookmarkMarkers,
+          )
+        ) {
+          pendingBookmarkMarkers.length = 0;
+        }
+        content.push(...sdtBlockContent);
+      }
+      continue;
+    }
+
+    if (localName === "bookmarkStart" || localName === "bookmarkEnd") {
+      const marker = parseBookmarkMarker(child, localName);
+      if (!appendBookmarkMarkerToLastParagraphInBlocks(content, marker)) {
+        pendingBookmarkMarkers.push(marker);
       }
     }
   }
 
+  if (pendingBookmarkMarkers.length > 0) {
+    content.push({
+      type: "paragraph",
+      content: [...pendingBookmarkMarkers],
+    });
+  }
+
   return content;
+};
+
+const parseBookmarkMarker = (
+  child: XmlElement,
+  localName: "bookmarkStart" | "bookmarkEnd",
+): BookmarkStart | BookmarkEnd => {
+  if (localName === "bookmarkStart") {
+    return parseBookmarkStart(child);
+  }
+  return parseBookmarkEnd(child);
+};
+
+const prependPendingBookmarkMarkers = (
+  paragraph: Paragraph,
+  pendingBookmarkMarkers: BookmarkMarker[],
+): void => {
+  if (pendingBookmarkMarkers.length === 0) {
+    return;
+  }
+
+  paragraph.content.unshift(...pendingBookmarkMarkers);
+  pendingBookmarkMarkers.length = 0;
 };
