@@ -788,6 +788,7 @@ type RowSpanInfo = {
   rowSpan: number;
   skip: boolean;
   preserveVMergeRestart?: boolean;
+  continuationCells?: TableCell[];
 };
 
 function calculateRowSpans(table: Table): Map<string, RowSpanInfo> {
@@ -808,6 +809,7 @@ function calculateRowSpans(table: Table): Map<string, RowSpanInfo> {
       const startRow =
         vMerge === "continue" ? activeMerges.get(colIndex) : undefined;
       const info = {
+        cell,
         colIndex,
         colspan,
         vMerge,
@@ -860,6 +862,8 @@ function calculateRowSpans(table: Table): Map<string, RowSpanInfo> {
         const startCell = result.get(startKey);
         if (startCell) {
           startCell.rowSpan++;
+          startCell.continuationCells ??= [];
+          startCell.continuationCells.push(cellInfo.cell);
         }
         result.set(key, { rowSpan: 1, skip: true });
       } else {
@@ -1344,6 +1348,7 @@ function convertTableRow(
         isLastCol,
         calculatedRowSpan,
         preserveVMergeRestart,
+        rowSpanInfo?.continuationCells,
         defaultCellMargins,
         theme,
       ),
@@ -1405,6 +1410,7 @@ function convertTableCell(
   isLastCol?: boolean,
   calculatedRowSpan?: number,
   preserveVMergeRestart?: boolean,
+  vMergeContinuationCells?: TableCell[],
   defaultCellMargins?: {
     top?: number;
     bottom?: number;
@@ -1522,6 +1528,9 @@ function convertTableCell(
   }
   if (preserveVMergeRestart) {
     attrs._preserveVMergeRestart = true;
+  }
+  if (vMergeContinuationCells && vMergeContinuationCells.length > 0) {
+    attrs._docxVMergeContinuationCells = vMergeContinuationCells;
   }
 
   // Convert cell content (paragraphs and nested tables)

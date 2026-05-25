@@ -498,6 +498,12 @@ export const readTableCellAttrs = (
     "tableCell.attrs._preserveVMergeRestart",
     issues,
   );
+  optionalArray(
+    attrs,
+    "_docxVMergeContinuationCells",
+    "tableCell.attrs._docxVMergeContinuationCells",
+    issues,
+  );
 
   return attrsResult(attrs, issues);
 };
@@ -1469,6 +1475,18 @@ const optionalRecord = (
   const value = attrs[key];
   if (value !== undefined && value !== null && !isRecord(value)) {
     issues.push({ path, message: "Expected an object." });
+  }
+};
+
+const optionalArray = (
+  attrs: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: ProseMirrorAttrIssue[],
+): void => {
+  const value = attrs[key];
+  if (value !== undefined && value !== null && !Array.isArray(value)) {
+    issues.push({ path, message: "Expected an array." });
   }
 };
 

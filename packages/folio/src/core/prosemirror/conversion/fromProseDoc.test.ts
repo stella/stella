@@ -480,6 +480,72 @@ describe("fromProseDoc", () => {
     );
   });
 
+  test("preserves skipped vertical-merge continuation cell content", () => {
+    const document: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "table",
+              rows: [
+                {
+                  type: "tableRow",
+                  cells: [
+                    {
+                      type: "tableCell",
+                      formatting: { vMerge: "restart" },
+                      content: [
+                        {
+                          type: "paragraph",
+                          content: [
+                            {
+                              type: "run",
+                              content: [{ type: "text", text: "Merged" }],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                    cellWithText("Top right"),
+                  ],
+                },
+                {
+                  type: "tableRow",
+                  cells: [
+                    {
+                      type: "tableCell",
+                      formatting: { vMerge: "continue" },
+                      content: [
+                        { type: "paragraph", content: [] },
+                        { type: "paragraph", content: [] },
+                      ],
+                    },
+                    cellWithText("Bottom right"),
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const pmDoc = toProseDoc(document);
+    const roundTripped = fromProseDoc(pmDoc, document);
+    const table = roundTripped.package.document.content.at(0);
+
+    expect(table?.type).toBe("table");
+    if (table?.type !== "table") {
+      return;
+    }
+    const continuationCell = table.rows.at(1)?.cells.at(0);
+    expect(continuationCell?.formatting?.vMerge).toBe("continue");
+    expect(continuationCell?.content).toHaveLength(2);
+    expect(paragraphText(table.rows.at(1)?.cells.at(1)?.content.at(0))).toBe(
+      "Bottom right",
+    );
+  });
+
   test("preserves unmatched vertical-merge continuation cells", () => {
     const document: Document = {
       package: {

@@ -527,6 +527,7 @@ const tableCellSpec: NodeSpec = {
     noWrap: { default: false },
     _originalFormatting: { default: null },
     _preserveVMergeRestart: { default: null },
+    _docxVMergeContinuationCells: { default: null },
   },
   parseDOM: [
     {
@@ -593,6 +594,8 @@ const tableHeaderSpec: NodeSpec = {
     textDirection: { default: null },
     noWrap: { default: false },
     _originalFormatting: { default: null },
+    _preserveVMergeRestart: { default: null },
+    _docxVMergeContinuationCells: { default: null },
   },
   parseDOM: [
     {

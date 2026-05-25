@@ -40,6 +40,7 @@ import {
   isTiffMimeType,
 } from "../utils/tiffConverter";
 import { parseComments } from "./commentParser";
+import { normalizeCommentReferences } from "./commentReferenceNormalization";
 import {
   parseDocumentBody,
   extractAllTemplateVariables,
@@ -265,6 +266,24 @@ export async function parseDocx(
     );
     if (comments.length > 0) {
       documentBody.comments = comments;
+    }
+    const commentReferenceNormalization = normalizeCommentReferences({
+      documentBody,
+      comments,
+      ...(headers !== undefined ? { headers } : {}),
+      ...(footers !== undefined ? { footers } : {}),
+      ...(footnotes !== undefined ? { footnotes } : {}),
+      ...(endnotes !== undefined ? { endnotes } : {}),
+    });
+    if (commentReferenceNormalization.removedDanglingReferences > 0) {
+      warnings.push(
+        `Removed ${commentReferenceNormalization.removedDanglingReferences} dangling comment reference marker(s) whose comments.xml entries are missing.`,
+      );
+    }
+    if (commentReferenceNormalization.reanchoredUnbalancedRanges > 0) {
+      warnings.push(
+        `Re-anchored ${commentReferenceNormalization.reanchoredUnbalancedRanges} unbalanced comment range marker(s) as point comments.`,
+      );
     }
 
     // ========================================================================

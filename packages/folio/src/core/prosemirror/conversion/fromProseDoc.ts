@@ -1730,6 +1730,7 @@ function convertPMTable(
 type ActiveVerticalMerge = {
   remainingRows: number;
   colspan: number;
+  continuationCells?: TableCell[];
 };
 
 function convertPMTableRows(
@@ -1913,7 +1914,11 @@ function convertPMTableRow(
 
     let activeMerge = activeVerticalMerges.get(gridColumn);
     while (activeMerge) {
-      cells.push(createVerticalMergeContinuationCell(activeMerge.colspan));
+      const preservedCell = activeMerge.continuationCells?.shift();
+      cells.push(
+        preservedCell ??
+          createVerticalMergeContinuationCell(activeMerge.colspan),
+      );
       activeMerge.remainingRows -= 1;
       if (activeMerge.remainingRows <= 0) {
         activeVerticalMerges.delete(gridColumn);
@@ -1934,9 +1939,13 @@ function convertPMTableRow(
       const colspan = Math.max(cellAttrs.colspan, 1);
       cells.push(convertPMTableCell(cellNode, documentCounts));
       if (cellAttrs.rowspan > 1) {
+        const continuationCells = cellAttrs._docxVMergeContinuationCells;
         activeVerticalMerges?.set(gridColumn, {
           remainingRows: cellAttrs.rowspan - 1,
           colspan,
+          ...(continuationCells
+            ? { continuationCells: [...continuationCells] }
+            : {}),
         });
       }
       gridColumn += colspan;
