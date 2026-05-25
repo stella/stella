@@ -28,6 +28,23 @@ describe("unzipDocx security limits", () => {
     expect(error).toBeInstanceOf(DocxSecurityError);
   });
 
+  test("repairs archives missing the end-of-central-directory tail", async () => {
+    const zip = new JSZip();
+    zip.file("[Content_Types].xml", "<Types />");
+    zip.file("word/document.xml", "<w:document />");
+
+    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+    const truncated = truncateAfterEndOfCentralDirectoryCounts(buffer);
+    const content = await unzipDocx(truncated);
+
+    expect(content.documentXml).toBe("<w:document />");
+    expect(content.originalBuffer.byteLength).toBe(buffer.byteLength);
+    expect(getFileList(content)).toEqual([
+      "[Content_Types].xml",
+      "word/document.xml",
+    ]);
+  });
+
   test("rejects unsafe archive paths", async () => {
     const zip = new JSZip();
     zip.file("/word/document.xml", "<w:document />");
@@ -100,6 +117,22 @@ describe("unzipDocx security limits", () => {
     expect(getFileList(content)).toContain("word/media/image1.emf");
   });
 });
+
+function truncateAfterEndOfCentralDirectoryCounts(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  for (let offset = bytes.byteLength - 22; offset >= 0; offset -= 1) {
+    if (
+      bytes[offset] === 0x50 &&
+      bytes[offset + 1] === 0x4b &&
+      bytes[offset + 2] === 0x05 &&
+      bytes[offset + 3] === 0x06
+    ) {
+      return bytes.slice(0, offset + 12).buffer;
+    }
+  }
+
+  throw new Error("Could not find ZIP end-of-central-directory record");
+}
 
 const getRejectedError = async (promise: Promise<unknown>) =>
   promise.then(() => null).catch((error: unknown) => error);

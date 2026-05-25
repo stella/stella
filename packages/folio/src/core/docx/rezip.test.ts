@@ -63,6 +63,22 @@ async function createHeaderFixture(): Promise<ArrayBuffer> {
   return zip.generateAsync({ type: "arraybuffer" });
 }
 
+function truncateAfterEndOfCentralDirectoryCounts(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  for (let offset = bytes.byteLength - 22; offset >= 0; offset -= 1) {
+    if (
+      bytes[offset] === 0x50 &&
+      bytes[offset + 1] === 0x4b &&
+      bytes[offset + 2] === 0x05 &&
+      bytes[offset + 3] === 0x06
+    ) {
+      return bytes.slice(0, offset + 12).buffer;
+    }
+  }
+
+  throw new Error("Could not find ZIP end-of-central-directory record");
+}
+
 async function createAlternateContentImageFixture(): Promise<ArrayBuffer> {
   const zip = new JSZip();
   zip.file(
@@ -225,6 +241,19 @@ describe("repackDocx", () => {
     }
 
     throw new Error("Expected repackDocx to reject");
+  });
+
+  test("uses parser-repaired package buffers for full repack", async () => {
+    const originalBuffer = await createHeaderFixture();
+    const truncated = truncateAfterEndOfCentralDirectoryCounts(originalBuffer);
+    const document = await parseDocx(truncated, { preloadFonts: false });
+
+    expect(document.originalBuffer?.byteLength).toBe(originalBuffer.byteLength);
+
+    const repacked = await repackDocx(document, { updateModifiedDate: false });
+    const reparsed = await parseDocx(repacked, { preloadFonts: false });
+
+    expect(reparsed.package.document.content).toHaveLength(1);
   });
 
   test("registers newly inserted header images in the header relationship part", async () => {

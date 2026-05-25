@@ -319,7 +319,7 @@ export async function parseDocx(
 
     const document: Document = {
       package: pkg,
-      originalBuffer: buffer,
+      originalBuffer: raw.originalBuffer,
       ...(templateVariables !== undefined ? { templateVariables } : {}),
       ...(requiredFonts.length > 0 ? { requiredFonts } : {}),
     };
