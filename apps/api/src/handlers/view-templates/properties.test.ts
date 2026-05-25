@@ -99,13 +99,23 @@ const createTemplateDependencyTx = () => {
   };
 };
 
-const createTemplateReuseTx = () => {
-  const existingProperty = {
-    id: "existing_property",
-    name: "Status",
-    content: { version: 1, type: "text" },
-    tool: { version: 1, type: "manual-input" },
-  };
+type ExistingTemplateReuseProperty = {
+  id: string;
+  name: string;
+  content: typeof properties.$inferSelect.content;
+  tool: typeof properties.$inferSelect.tool;
+};
+
+const defaultExistingTemplateReuseProperty = {
+  id: "existing_property",
+  name: "Status",
+  content: { version: 1, type: "text" },
+  tool: { version: 1, type: "manual-input" },
+} satisfies ExistingTemplateReuseProperty;
+
+const createTemplateReuseTx = (
+  existingProperty: ExistingTemplateReuseProperty = defaultExistingTemplateReuseProperty,
+) => {
   const returningMock = mock(async () => [{ id: "created_property" }]);
   const propertyValuesMock = mock(() => ({
     returning: returningMock,
@@ -389,6 +399,61 @@ describe("resolveTemplateProperties", () => {
       layout: {
         ...layout,
         columnOrder: ["existing_property", "created_property"],
+      },
+      propertyIds: ["existing_property", "created_property"],
+    });
+    expect(returningMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("does not reuse shape matches with different config", async () => {
+    const { returningMock, tx } = createTemplateReuseTx({
+      id: "existing_property",
+      name: "Status",
+      content: {
+        version: 1,
+        type: "single-select",
+        options: [{ color: "green", value: "Open" }],
+        fallback: "Open",
+      },
+      tool: { version: 1, type: "manual-input" },
+    });
+    const templateProperty = {
+      version: 1,
+      sourceId: "source_status",
+      name: "Status",
+      content: {
+        version: 1,
+        type: "single-select",
+        options: [{ color: "red", value: "Closed" }],
+        fallback: "Closed",
+      },
+      tool: { version: 1, type: "manual-input" },
+      createIfMissing: true,
+    } satisfies ViewTemplateProperty;
+    const layout: ViewLayout = {
+      version: 1,
+      type: "table",
+      filters: [],
+      sorts: [],
+      hiddenProperties: [],
+      columnOrder: [templateProperty.sourceId],
+      columnPinning: [],
+    };
+
+    const result = await resolveTemplateProperties({
+      tx,
+      workspaceId,
+      layout,
+      templateProperties: [templateProperty],
+      canCreateProperties: true,
+      recordAuditEvent: noopAuditRecorder,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      layout: {
+        ...layout,
+        columnOrder: ["created_property"],
       },
       propertyIds: ["existing_property", "created_property"],
     });

@@ -1,3 +1,4 @@
+import { deepEquals } from "bun";
 import { eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db";
@@ -9,6 +10,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedPropertyId } from "@/api/lib/safe-id-boundaries";
+import { sortDeep } from "@/api/lib/sort-deep";
 import type {
   ViewFilterCondition,
   ViewLayout,
@@ -500,8 +502,8 @@ const findUniquePropertyByShape = (
   existingProperties: readonly {
     id: string;
     name: string;
-    content: { type: string };
-    tool: { type: string };
+    content: typeof properties.$inferSelect.content;
+    tool: typeof properties.$inferSelect.tool;
   }[],
   templateProperty: ViewTemplateProperty,
   consumedExistingPropertyIds: ReadonlySet<string>,
@@ -512,11 +514,27 @@ const findUniquePropertyByShape = (
       normalizePropertyName(property.name) ===
         normalizePropertyName(templateProperty.name) &&
       property.content.type === templateProperty.content.type &&
-      property.tool.type === templateProperty.tool.type,
+      property.tool.type === templateProperty.tool.type &&
+      hasSamePropertyConfig(property, templateProperty),
   );
 
   return matches.length === 1 ? matches[0] : undefined;
 };
+
+const hasSamePropertyConfig = (
+  property: Pick<WorkspacePropertyTemplateSource, "content" | "tool">,
+  templateProperty: ViewTemplateProperty,
+): boolean =>
+  deepEquals(
+    sortDeep({
+      content: property.content,
+      tool: property.tool,
+    }),
+    sortDeep({
+      content: templateProperty.content,
+      tool: templateProperty.tool,
+    }),
+  );
 
 const collectVisibleTemplatePropertyIds = ({
   layout,
