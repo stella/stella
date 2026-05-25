@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import JSZip from "jszip";
 
 import type {
@@ -167,7 +168,7 @@ export const assertValidDocumentModel = (document: Document): void => {
     .filter((issue) => issue.severity === "error")
     .map((issue) => `${issue.path}: ${issue.message}`)
     .join("\n");
-  throw new Error(`Invalid DOCX document model:\n${details}`);
+  panic(`Invalid DOCX document model:\n${details}`);
 };
 
 const createValidationContext = (document: Document): ValidationContext => ({

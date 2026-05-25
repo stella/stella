@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import type { Mark, Node as PMNode } from "prosemirror-model";
 
 import {
@@ -1077,7 +1078,7 @@ const expectAttrs = <T>(
   const details = result.issues
     .map((issue) => `${issue.path}: ${issue.message}`)
     .join("\n");
-  throw new Error(`Invalid ProseMirror ${label}:\n${details}`);
+  panic(`Invalid ProseMirror ${label}:\n${details}`);
 };
 
 const expectNodeType = (

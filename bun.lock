@@ -352,6 +352,7 @@
       "name": "@stll/docx-core",
       "version": "0.1.0",
       "dependencies": {
+        "better-result": "catalog:",
         "jszip": "catalog:",
       },
       "devDependencies": {
