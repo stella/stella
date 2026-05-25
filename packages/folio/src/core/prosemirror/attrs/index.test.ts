@@ -98,7 +98,7 @@ describe("ProseMirror attr readers", () => {
 
   test("rejects malformed paragraph preservation payloads", () => {
     const node = schema.nodes.paragraph.create({
-      borders: { top: { style: "warp", size: "wide" } },
+      borders: { top: { style: 4, size: "wide" } },
       shading: { pattern: "confetti", fill: { rgb: 12 } },
       tabs: [{ position: "720", alignment: "edge", leader: "spark" }],
       defaultTextFormatting: {
@@ -186,6 +186,20 @@ describe("ProseMirror attr readers", () => {
     expect(result.ok).toBe(true);
   });
 
+  test("accepts unknown OOXML border style strings", () => {
+    const paragraph = schema.nodes.paragraph.create({
+      borders: { top: { style: "dashDotDot", size: 8 } },
+    });
+    const cell = schema.nodes.tableCell.create({
+      colspan: 1,
+      rowspan: 1,
+      borders: { bottom: { style: "0", size: 0 } },
+    });
+
+    expect(readParagraphAttrs(paragraph).ok).toBe(true);
+    expect(readTableCellAttrs(cell).ok).toBe(true);
+  });
+
   test("rejects malformed table preservation payloads", () => {
     const table = schema.nodes.table.create({
       cellMargins: { top: "tight" },
@@ -193,7 +207,7 @@ describe("ProseMirror attr readers", () => {
     const cell = schema.nodes.tableCell.create({
       colspan: 1,
       rowspan: 1,
-      borders: { left: { style: "cloud", color: { auto: "yes" } } },
+      borders: { left: { style: 4, color: { auto: "yes" } } },
       margins: { bottom: "low" },
     });
 

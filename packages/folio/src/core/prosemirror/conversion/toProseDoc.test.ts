@@ -218,6 +218,45 @@ describe("toProseDoc", () => {
     expect(tableCellBorderColor(attrs, "top")?.themeColor).toBeUndefined();
   });
 
+  test("accepts unknown table-cell border styles preserved from OOXML", () => {
+    const document: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "table",
+              rows: [
+                {
+                  cells: [
+                    {
+                      formatting: {
+                        borders: {
+                          bottom: {
+                            style: "0",
+                            size: 0,
+                            color: { rgb: "000000" },
+                          },
+                        },
+                      },
+                      content: [{ type: "paragraph", content: [] }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const attrs = firstTableCellAttrs(document);
+    const borders = attrs["borders"] as
+      | { bottom?: { style?: string } }
+      | undefined;
+
+    expect(borders?.bottom?.style).toBe("0");
+  });
+
   test("resolves themed table-cell border color with themeTint to the modified RGB", () => {
     const document: Document = {
       package: {

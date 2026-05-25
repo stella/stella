@@ -2,7 +2,6 @@ import { panic } from "better-result";
 import type { Mark, Node as PMNode } from "prosemirror-model";
 
 import {
-  BORDER_STYLE_VALUES,
   FIELD_TYPE_VALUES,
   HIGHLIGHT_COLOR_VALUES,
   IMAGE_HORIZONTAL_ALIGNMENT_VALUES,
@@ -1506,7 +1505,7 @@ const validateBorderSpec = (
     return;
   }
 
-  optionalOneOf(value, "style", `${path}.style`, issues, BORDER_STYLE_VALUES);
+  optionalString(value, "style", `${path}.style`, issues);
   optionalNumber(value, "size", `${path}.size`, issues);
   optionalNumber(value, "space", `${path}.space`, issues);
   optionalBoolean(value, "shadow", `${path}.shadow`, issues);
