@@ -9510,7 +9510,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#22"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#24"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.tsx#20"
@@ -9891,7 +9891,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-header.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#17"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.tsx#8"
@@ -10533,7 +10533,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-year-grid.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#23"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#25"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.tsx#21"
@@ -11286,7 +11286,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-day-cell.tsx#12"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#21"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#23"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#44"
@@ -17183,6 +17183,9 @@
             "location": "apps/api/src/lib/matter-reference.ts#1"
           },
           {
+            "location": "apps/api/src/lib/prompt-safety.ts#20"
+          },
+          {
             "location": "apps/api/src/lib/safe-outbound-fetch.ts#1"
           },
           {
@@ -18808,6 +18811,9 @@
           },
           {
             "location": "apps/api/src/lib/case-law/case-law-config-store.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/cell-lock.ts#1"
           },
           {
             "location": "apps/api/src/lib/db/assert-migrations-applied.ts#2"
@@ -20833,7 +20839,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#12"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#14"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-result.tsx#4"
@@ -24762,7 +24768,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-year-grid.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#13"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-result.tsx#5"
