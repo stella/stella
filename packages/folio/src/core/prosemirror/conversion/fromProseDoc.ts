@@ -911,10 +911,32 @@ function createHyperlink(linkMark: Mark): Hyperlink {
  * Add a node to a hyperlink
  */
 function addNodeToHyperlink(hyperlink: Hyperlink, node: PMNode): void {
+  const nonLinkMarks = node.marks.filter((m) => m.type.name !== "hyperlink");
   if (node.isText && node.text) {
-    const nonLinkMarks = node.marks.filter((m) => m.type.name !== "hyperlink");
     const run = createRunFromText(node.text, nonLinkMarks);
     hyperlink.children.push(run);
+    return;
+  }
+
+  if (node.type.name === "hardBreak") {
+    hyperlink.children.push(
+      createBreakRun(readHardBreakType(node), nonLinkMarks),
+    );
+    return;
+  }
+
+  if (node.type.name === "tab") {
+    hyperlink.children.push(createTabRun(nonLinkMarks));
+    return;
+  }
+
+  if (node.type.name === "image") {
+    hyperlink.children.push(createImageRun(node));
+    return;
+  }
+
+  if (node.type.name === "shape") {
+    hyperlink.children.push(createShapeRun(node));
   }
 }
 
@@ -922,17 +944,28 @@ function addNodeToHyperlink(hyperlink: Hyperlink, node: PMNode): void {
  * Create a Run from text and marks
  */
 function createRunFromText(text: string, marks: readonly Mark[]): Run {
-  const formatting = marksToTextFormatting(marks);
+  const formatting = getRunFormattingFromMarks(marks);
   const textContent: TextContent = {
     type: "text",
     text,
   };
 
   const run: Run = { type: "run", content: [textContent] };
-  if (Object.keys(formatting).length > 0) {
+  if (formatting) {
     run.formatting = formatting;
   }
   return run;
+}
+
+function getRunFormattingFromMarks(
+  marks: readonly Mark[] | undefined,
+): TextFormatting | undefined {
+  if (!marks || marks.length === 0) {
+    return undefined;
+  }
+
+  const formatting = marksToTextFormatting(marks);
+  return Object.keys(formatting).length > 0 ? formatting : undefined;
 }
 
 /**
@@ -952,16 +985,22 @@ function appendTextToRun(run: Run, text: string): void {
  */
 function createBreakRun(
   breakType: BreakContent["breakType"] = "textWrapping",
+  marks?: readonly Mark[],
 ): Run {
   const breakContent: BreakContent = {
     type: "break",
     breakType,
   };
 
-  return {
+  const run: Run = {
     type: "run",
     content: [breakContent],
   };
+  const formatting = getRunFormattingFromMarks(marks);
+  if (formatting) {
+    run.formatting = formatting;
+  }
+  return run;
 }
 
 function readHardBreakType(node: PMNode): BreakContent["breakType"] {
@@ -971,15 +1010,20 @@ function readHardBreakType(node: PMNode): BreakContent["breakType"] {
 /**
  * Create a Run containing a tab
  */
-function createTabRun(): Run {
+function createTabRun(marks?: readonly Mark[]): Run {
   const tabContent: TabContent = {
     type: "tab",
   };
 
-  return {
+  const run: Run = {
     type: "run",
     content: [tabContent],
   };
+  const formatting = getRunFormattingFromMarks(marks);
+  if (formatting) {
+    run.formatting = formatting;
+  }
+  return run;
 }
 
 /**

@@ -1661,20 +1661,25 @@ function convertRunContent(
 
     case "break":
       if (content.breakType === "textWrapping" || !content.breakType) {
-        return [schema.node("hardBreak")];
+        return [withHyperlinkBoundaryMarks(schema.node("hardBreak"), marks)];
       }
       if (content.breakType === "column") {
-        return [schema.node("hardBreak", { breakType: "column" })];
+        return [
+          withHyperlinkBoundaryMarks(
+            schema.node("hardBreak", { breakType: "column" }),
+            marks,
+          ),
+        ];
       }
       // Page breaks are represented as block separators by paragraphPageBreakPosition.
       return [];
 
     case "tab":
       // Convert to tab node for proper rendering
-      return [schema.node("tab")];
+      return [withHyperlinkBoundaryMarks(schema.node("tab"), marks)];
 
     case "drawing":
-      return [convertImage(content.image)];
+      return [withHyperlinkBoundaryMarks(convertImage(content.image), marks)];
 
     case "shape": {
       // Shapes with text body are handled as text boxes at block level
@@ -1684,7 +1689,7 @@ function convertRunContent(
         // Skip - handled by extractTextBoxesFromParagraph
         return [];
       }
-      return [convertShape(shp)];
+      return [withHyperlinkBoundaryMarks(convertShape(shp), marks)];
     }
 
     case "footnoteRef": {
@@ -1722,6 +1727,17 @@ function convertRunContent(
       // character is available; otherwise drop.
       return content.char ? [schema.text(content.char, marks)] : [];
   }
+}
+
+function withHyperlinkBoundaryMarks(
+  node: PMNode,
+  marks: ReturnType<typeof schema.mark>[],
+): PMNode {
+  if (!marks.some((mark) => mark.type.name === "hyperlink")) {
+    return node;
+  }
+
+  return node.mark(marks);
 }
 
 /**
