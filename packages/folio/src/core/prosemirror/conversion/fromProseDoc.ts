@@ -1993,7 +1993,7 @@ function tableCellAttrsToFormatting(
     }
     if (attrs.rowspan > 1) {
       result.vMerge = "restart";
-    } else if (result.vMerge === "restart") {
+    } else if (result.vMerge === "restart" && !attrs._preserveVMergeRestart) {
       delete result.vMerge;
     }
     const cellWidth = attrs.width;

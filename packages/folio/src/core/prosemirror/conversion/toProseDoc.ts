@@ -760,10 +760,14 @@ function resolveParagraphDefaultTextFormatting(
  * OOXML uses vMerge="restart" to start a vertical merge and vMerge="continue" for cells that should be merged.
  * This function converts that to rowSpan values and marks which cells should be skipped.
  */
-function calculateRowSpans(
-  table: Table,
-): Map<string, { rowSpan: number; skip: boolean }> {
-  const result = new Map<string, { rowSpan: number; skip: boolean }>();
+type RowSpanInfo = {
+  rowSpan: number;
+  skip: boolean;
+  preserveVMergeRestart?: boolean;
+};
+
+function calculateRowSpans(table: Table): Map<string, RowSpanInfo> {
+  const result = new Map<string, RowSpanInfo>();
   const numRows = table.rows.length;
 
   // Track active vertical merges per column (stores the row index where merge started)
@@ -774,31 +778,51 @@ function calculateRowSpans(
     // SAFETY: rowIndex < numRows <= table.rows.length
     const row = table.rows[rowIndex]!;
     let colIndex = 0;
-
-    for (const cellIndex_item of row.cells) {
-      const cell = cellIndex_item;
+    const rowCells = row.cells.map((cell) => {
       const colspan = cell.formatting?.gridSpan ?? 1;
       const vMerge = cell.formatting?.vMerge;
-      const key = `${rowIndex}-${colIndex}`;
+      const startRow =
+        vMerge === "continue" ? activeMerges.get(colIndex) : undefined;
+      const info = {
+        colIndex,
+        colspan,
+        vMerge,
+        startRow,
+        shouldSkip: vMerge === "continue" && startRow !== undefined,
+      };
+      colIndex += colspan;
+      return info;
+    });
+    const rowWouldBeEmpty =
+      rowCells.length > 0 && rowCells.every((cell) => cell.shouldSkip);
+
+    for (const cellInfo of rowCells) {
+      const { colIndex: cellColIndex, vMerge, startRow } = cellInfo;
+      const key = `${rowIndex}-${cellColIndex}`;
 
       if (vMerge === "restart") {
         // Start of a new vertical merge
-        activeMerges.set(colIndex, rowIndex);
+        activeMerges.set(cellColIndex, rowIndex);
         result.set(key, { rowSpan: 1, skip: false });
       } else if (vMerge === "continue") {
         // Continuation of a merge - only skip it when the parsed grid has a
         // matching restart in this exact column. Real DOCX tables can be
         // ragged, and treating an unmatched continuation as merged-away drops
         // its placeholder paragraph and cell metadata.
-        const startRow = activeMerges.get(colIndex);
-        if (startRow === undefined) {
+        if (startRow === undefined || rowWouldBeEmpty) {
           result.set(key, { rowSpan: 1, skip: false });
-          colIndex += colspan;
+          if (rowWouldBeEmpty && startRow !== undefined) {
+            const restartCell = result.get(`${startRow}-${cellColIndex}`);
+            if (restartCell) {
+              restartCell.preserveVMergeRestart = true;
+            }
+            activeMerges.delete(cellColIndex);
+          }
           continue;
         }
 
         // Increment rowSpan of the starting cell
-        const startKey = `${startRow}-${colIndex}`;
+        const startKey = `${startRow}-${cellColIndex}`;
         const startCell = result.get(startKey);
         if (startCell) {
           startCell.rowSpan++;
@@ -806,11 +830,9 @@ function calculateRowSpans(
         result.set(key, { rowSpan: 1, skip: true });
       } else {
         // No vMerge - clear any active merge for this column
-        activeMerges.delete(colIndex);
+        activeMerges.delete(cellColIndex);
         result.set(key, { rowSpan: 1, skip: false });
       }
-
-      colIndex += colspan;
     }
   }
 
@@ -1037,7 +1059,7 @@ function convertTableRow(
   rowIndex?: number,
   totalRows?: number,
   totalColumns?: number,
-  rowSpanMap?: Map<string, { rowSpan: number; skip: boolean }>,
+  rowSpanMap?: Map<string, RowSpanInfo>,
   defaultCellMargins?: {
     top?: number;
     bottom?: number;
@@ -1083,6 +1105,7 @@ function convertTableRow(
     const rowSpanInfo = rowSpanMap?.get(rowSpanKey);
     const shouldSkip = rowSpanInfo?.skip ?? false;
     const calculatedRowSpan = rowSpanInfo?.rowSpan ?? 1;
+    const preserveVMergeRestart = rowSpanInfo?.preserveVMergeRestart ?? false;
 
     // Calculate the width for this cell from columnWidths if cell doesn't have own width
     let gridWidth: number | undefined;
@@ -1252,6 +1275,7 @@ function convertTableRow(
         isFirstCol,
         isLastCol,
         calculatedRowSpan,
+        preserveVMergeRestart,
         defaultCellMargins,
         theme,
       ),
@@ -1312,6 +1336,7 @@ function convertTableCell(
   isFirstCol?: boolean,
   isLastCol?: boolean,
   calculatedRowSpan?: number,
+  preserveVMergeRestart?: boolean,
   defaultCellMargins?: {
     top?: number;
     bottom?: number;
@@ -1426,6 +1451,9 @@ function convertTableCell(
   }
   if (formatting) {
     attrs._originalFormatting = formatting;
+  }
+  if (preserveVMergeRestart) {
+    attrs._preserveVMergeRestart = true;
   }
 
   // Convert cell content (paragraphs and nested tables)

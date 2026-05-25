@@ -526,6 +526,7 @@ const tableCellSpec: NodeSpec = {
     textDirection: { default: null },
     noWrap: { default: false },
     _originalFormatting: { default: null },
+    _preserveVMergeRestart: { default: null },
   },
   parseDOM: [
     {

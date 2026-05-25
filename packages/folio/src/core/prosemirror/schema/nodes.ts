@@ -444,4 +444,6 @@ export type TableCellAttrs = {
   margins?: { top?: number; bottom?: number; left?: number; right?: number };
   /** Original cell formatting from DOCX for lossless round-trip serialization */
   _originalFormatting?: TableCellFormatting;
+  /** Preserve a DOCX vMerge restart even when PM cannot model it as a rowspan. */
+  _preserveVMergeRestart?: boolean;
 };

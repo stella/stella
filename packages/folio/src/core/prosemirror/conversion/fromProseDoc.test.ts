@@ -374,6 +374,64 @@ describe("fromProseDoc", () => {
     expect(table.rows.at(1)?.cells.at(1)?.formatting?.vMerge).toBe("continue");
   });
 
+  test("preserves fully vertically merged continuation rows", () => {
+    const document: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "table",
+              rows: [
+                {
+                  type: "tableRow",
+                  cells: [
+                    {
+                      type: "tableCell",
+                      formatting: { vMerge: "restart" },
+                      content: [
+                        {
+                          type: "paragraph",
+                          content: [
+                            {
+                              type: "run",
+                              content: [{ type: "text", text: "Merged" }],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+                {
+                  type: "tableRow",
+                  cells: [
+                    {
+                      type: "tableCell",
+                      formatting: { vMerge: "continue" },
+                      content: [{ type: "paragraph", content: [] }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const pmDoc = toProseDoc(document);
+    const roundTripped = fromProseDoc(pmDoc, document);
+    const table = roundTripped.package.document.content.at(0);
+
+    expect(table?.type).toBe("table");
+    if (table?.type !== "table") {
+      return;
+    }
+    expect(table.rows).toHaveLength(2);
+    expect(table.rows.at(0)?.cells.at(0)?.formatting?.vMerge).toBe("restart");
+    expect(table.rows.at(1)?.cells.at(0)?.formatting?.vMerge).toBe("continue");
+  });
+
   test("preserves empty hyperlinks through ProseMirror attrs", () => {
     const document: Document = {
       package: {

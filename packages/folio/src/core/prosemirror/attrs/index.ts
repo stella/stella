@@ -493,6 +493,12 @@ export const readTableCellAttrs = (
     "tableCell.attrs._originalFormatting",
     issues,
   );
+  optionalBoolean(
+    attrs,
+    "_preserveVMergeRestart",
+    "tableCell.attrs._preserveVMergeRestart",
+    issues,
+  );
 
   return attrsResult(attrs, issues);
 };
