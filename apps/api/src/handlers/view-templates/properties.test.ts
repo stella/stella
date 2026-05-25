@@ -2,7 +2,10 @@ import { describe, expect, mock, test } from "bun:test";
 
 import type { Transaction } from "@/api/db";
 import { properties, propertyDependencies } from "@/api/db/schema";
-import { resolveTemplateProperties } from "@/api/handlers/view-templates/properties";
+import {
+  collectTemplateProperties,
+  resolveTemplateProperties,
+} from "@/api/handlers/view-templates/properties";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ViewLayout, ViewTemplateProperty } from "@/api/lib/views-schema";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -130,6 +133,86 @@ const createTemplateReuseTx = () => {
     tx: asTestRaw<Transaction>(tx),
   };
 };
+
+describe("collectTemplateProperties", () => {
+  test("marks hidden dependency sources creatable without creating unrelated hidden columns", () => {
+    const aiProperty = {
+      id: "ai_summary",
+      name: "Summary",
+      content: { version: 1, type: "text" },
+      tool: { version: 1, type: "ai-model", prompt: "Summarize" },
+      system: false,
+    } as const;
+    const dependencyProperty = {
+      id: "source_notes",
+      name: "Source notes",
+      content: { version: 1, type: "text" },
+      tool: { version: 1, type: "manual-input" },
+      system: false,
+    } as const;
+    const unrelatedHiddenProperty = {
+      id: "scratchpad",
+      name: "Scratchpad",
+      content: { version: 1, type: "text" },
+      tool: { version: 1, type: "manual-input" },
+      system: false,
+    } as const;
+    const layout: ViewLayout = {
+      version: 1,
+      type: "table",
+      filters: [],
+      sorts: [],
+      hiddenProperties: [dependencyProperty.id, unrelatedHiddenProperty.id],
+      columnOrder: [aiProperty.id],
+      columnPinning: [],
+    };
+
+    const templateProperties = collectTemplateProperties({
+      layout,
+      properties: [aiProperty, dependencyProperty, unrelatedHiddenProperty],
+      dependencies: [
+        {
+          propertyId: aiProperty.id,
+          dependsOnPropertyId: dependencyProperty.id,
+          condition: null,
+        },
+      ],
+    });
+
+    expect(templateProperties).toEqual([
+      {
+        version: 1,
+        sourceId: aiProperty.id,
+        name: aiProperty.name,
+        content: aiProperty.content,
+        tool: aiProperty.tool,
+        createIfMissing: true,
+        dependencies: [
+          {
+            dependsOnSourceId: dependencyProperty.id,
+            condition: null,
+          },
+        ],
+      },
+      {
+        version: 1,
+        sourceId: dependencyProperty.id,
+        name: dependencyProperty.name,
+        content: dependencyProperty.content,
+        tool: dependencyProperty.tool,
+        createIfMissing: true,
+      },
+      {
+        version: 1,
+        sourceId: unrelatedHiddenProperty.id,
+        name: unrelatedHiddenProperty.name,
+        content: unrelatedHiddenProperty.content,
+        tool: unrelatedHiddenProperty.tool,
+        createIfMissing: false,
+      },
+    ]);
+  });
+});
 
 describe("resolveTemplateProperties", () => {
   test("rejects file template columns with AI tools before inserting", async () => {

@@ -60,11 +60,6 @@ export const collectTemplateProperties = ({
     layout,
     properties: workspaceProperties,
   });
-  const creatablePropertyIds = new Set([
-    ...referencedPropertyIds,
-    ...visiblePropertyIds,
-  ]);
-
   const dependenciesByPropertyId = new Map<
     string,
     { dependsOnSourceId: string; condition: PropertyCondition | null }[]
@@ -77,6 +72,11 @@ export const collectTemplateProperties = ({
     });
     dependenciesByPropertyId.set(dep.propertyId, list);
   }
+  const creatablePropertyIds = new Set([
+    ...referencedPropertyIds,
+    ...visiblePropertyIds,
+  ]);
+  addDependencySourceIds(creatablePropertyIds, dependenciesByPropertyId);
 
   return workspaceProperties
     .filter((property) => !property.system)
@@ -100,6 +100,29 @@ export const collectTemplateProperties = ({
       }
       return result;
     });
+};
+
+const addDependencySourceIds = (
+  creatablePropertyIds: Set<string>,
+  dependenciesByPropertyId: ReadonlyMap<
+    string,
+    readonly {
+      dependsOnSourceId: string;
+      condition: PropertyCondition | null;
+    }[]
+  >,
+): void => {
+  const queue = [...creatablePropertyIds];
+
+  for (const propertyId of queue) {
+    for (const dependency of dependenciesByPropertyId.get(propertyId) ?? []) {
+      if (creatablePropertyIds.has(dependency.dependsOnSourceId)) {
+        continue;
+      }
+      creatablePropertyIds.add(dependency.dependsOnSourceId);
+      queue.push(dependency.dependsOnSourceId);
+    }
+  }
 };
 
 export const resolveTemplateProperties = async ({
