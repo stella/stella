@@ -33,6 +33,7 @@ import {
   extractIncomingMessageWorkspaceIds,
 } from "@/api/handlers/chat/data-scope";
 import { ChatError } from "@/api/handlers/chat/errors";
+import { generateThreadTitle } from "@/api/handlers/chat/generate-thread-title";
 import { isExternalMcpToolPart } from "@/api/handlers/chat/mcp-tool-parts";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import {
@@ -499,7 +500,6 @@ const sendMessage = createSafeRootHandler(
                     });
                     return;
                   }
-
                   const persistResult = await persistMessage({
                     persistencePlan,
                     recordAuditEvent,
@@ -512,6 +512,21 @@ const sendMessage = createSafeRootHandler(
                   if (Result.isError(persistResult)) {
                     captureError(persistResult.error, {
                       threadId: body.threadId,
+                    });
+                  } else if (
+                    thread.type === "created" &&
+                    body.sendMode !== CHAT_SEND_MODE.anonymized
+                  ) {
+                    void generateThreadTitle({
+                      messages: [
+                        parsedMessage.message,
+                        resolvedResponseMessage,
+                      ],
+                      orgAIConfig,
+                      recordAuditEvent,
+                      safeDb,
+                      threadId: body.threadId,
+                      threadWorkspaceId: workspaceId,
                     });
                   }
                 } finally {
