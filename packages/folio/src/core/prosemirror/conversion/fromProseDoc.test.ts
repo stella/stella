@@ -7,7 +7,7 @@ import type {
   Table,
   TableCell,
 } from "../../types/document";
-import { expectHardBreakAttrs } from "../attrs";
+import { expectHardBreakAttrs, expectParagraphAttrs } from "../attrs";
 import { schema } from "../schema";
 import { fromProseDoc } from "./fromProseDoc";
 import { toProseDoc } from "./toProseDoc";
@@ -582,6 +582,44 @@ describe("fromProseDoc", () => {
       return;
     }
     expect(block.sectionProperties).toEqual({ sectionStart: "continuous" });
+    expect(firstShapeType(block)).toBe("textBox");
+  });
+
+  test("keeps a wrapper paragraph when text-box-only content carries boundary attrs", () => {
+    const document = documentWithTextBoxParagraph({ includeText: false });
+    const sourceBlock = document.package.document.content.at(0);
+
+    expect(sourceBlock?.type).toBe("paragraph");
+    if (sourceBlock?.type !== "paragraph") {
+      return;
+    }
+    sourceBlock.content.unshift(
+      { type: "bookmarkStart", id: 7, name: "box-boundary" },
+      { type: "hyperlink", href: "https://example.test", children: [] },
+    );
+    sourceBlock.content.push({ type: "bookmarkEnd", id: 7 });
+
+    const pmDoc = toProseDoc(document);
+    const roundTripped = fromProseDoc(pmDoc, document);
+    const block = roundTripped.package.document.content.at(0);
+
+    expect(pmDoc.childCount).toBe(2);
+    expect(pmDoc.child(0).type.name).toBe("paragraph");
+    expect(pmDoc.child(1).type.name).toBe("textBox");
+    const attrs = expectParagraphAttrs(pmDoc.child(0));
+    expect(attrs.bookmarks).toEqual([{ id: 7, name: "box-boundary" }]);
+    expect(attrs._emptyHyperlinks).toHaveLength(1);
+
+    expect(block?.type).toBe("paragraph");
+    if (block?.type !== "paragraph") {
+      return;
+    }
+    expect(
+      block.content.some((content) => content.type === "bookmarkStart"),
+    ).toBe(true);
+    expect(block.content.some((content) => content.type === "hyperlink")).toBe(
+      true,
+    );
     expect(firstShapeType(block)).toBe("textBox");
   });
 

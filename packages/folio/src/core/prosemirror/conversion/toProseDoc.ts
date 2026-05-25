@@ -2238,7 +2238,7 @@ function convertParagraphWithTextBoxes(
   const isEmptyAfterExtraction =
     textBoxes.length > 0 && pmParagraph.content.size === 0;
   const keepWrapperParagraph =
-    isEmptyAfterExtraction && hasParagraphBoundaryPayload(block);
+    isEmptyAfterExtraction && hasParagraphBoundaryPayload(block, pmParagraph);
   if (!isEmptyAfterExtraction || keepWrapperParagraph) {
     nodes.push(pmParagraph);
   }
@@ -2256,8 +2256,18 @@ function convertParagraphWithTextBoxes(
   return nodes;
 }
 
-function hasParagraphBoundaryPayload(block: Paragraph): boolean {
-  return Boolean(block.sectionProperties || block.propertyChanges?.length);
+function hasParagraphBoundaryPayload(
+  block: Paragraph,
+  pmParagraph: PMNode,
+): boolean {
+  const bookmarks = pmParagraph.attrs["bookmarks"];
+  const emptyHyperlinks = pmParagraph.attrs["_emptyHyperlinks"];
+  return Boolean(
+    block.sectionProperties ||
+    block.propertyChanges?.length ||
+    (Array.isArray(bookmarks) && bookmarks.length > 0) ||
+    (Array.isArray(emptyHyperlinks) && emptyHyperlinks.length > 0),
+  );
 }
 
 /**
