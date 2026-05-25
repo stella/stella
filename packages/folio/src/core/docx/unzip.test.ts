@@ -46,6 +46,25 @@ describe("unzipDocx security limits", () => {
     );
   });
 
+  test("accepts large header XML entries within the default limit", async () => {
+    const zip = new JSZip();
+    const largeHeader = "x".repeat(65 * 1024 * 1024);
+    zip.file("[Content_Types].xml", "<Types />");
+    zip.file("word/document.xml", "<w:document />");
+    zip.file("word/header3.xml", `<w:hdr>${largeHeader}</w:hdr>`);
+
+    const content = await unzipDocx(
+      await zip.generateAsync({
+        compression: "DEFLATE",
+        type: "arraybuffer",
+      }),
+    );
+
+    expect(content.headers.get("header3.xml")?.length).toBe(
+      "<w:hdr></w:hdr>".length + largeHeader.length,
+    );
+  });
+
   test("accepts media-heavy packages within the default file-count limit", async () => {
     const zip = new JSZip();
     zip.file("[Content_Types].xml", "<Types />");
@@ -147,6 +166,23 @@ describe("unzipDocx security limits", () => {
 
     const content = await unzipDocx(
       await zip.generateAsync({ type: "arraybuffer" }),
+    );
+
+    expect(content.media.size).toBe(0);
+    expect(getFileList(content)).toContain("word/media/image1.emf");
+  });
+
+  test("preserves large vector image entries without extracting them", async () => {
+    const zip = new JSZip();
+    zip.file("[Content_Types].xml", "<Types />");
+    zip.file("word/document.xml", "<w:document />");
+    zip.file("word/media/image1.emf", new Uint8Array(26 * 1024 * 1024));
+
+    const content = await unzipDocx(
+      await zip.generateAsync({
+        compression: "DEFLATE",
+        type: "arraybuffer",
+      }),
     );
 
     expect(content.media.size).toBe(0);

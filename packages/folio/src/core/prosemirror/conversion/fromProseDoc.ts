@@ -592,27 +592,14 @@ function extractParagraphContent(
 
   const processInlineNode = (node: PMNode): void => {
     syncCommentRanges(node);
+    const linkMark = node.marks.find((m) => m.type.name === "hyperlink");
 
     // Check for footnote/endnote reference mark
     const noteRefMark = node.marks.find((m) => m.type.name === "footnoteRef");
-    if (noteRefMark) {
+    if (noteRefMark && !linkMark) {
       // Finish any current content
       flushCurrentInline();
-      const noteAttrs = expectFootnoteRefMarkAttrs(noteRefMark);
-      const noteType =
-        noteAttrs.noteType === "endnote" ? "endnoteRef" : "footnoteRef";
-      const noteId =
-        typeof noteAttrs.id === "string"
-          ? Number.parseInt(noteAttrs.id, 10) || 0
-          : noteAttrs.id;
-      const noteRef: NoteReferenceContent = {
-        type: noteType,
-        id: noteId,
-      };
-      content.push({
-        type: "run",
-        content: [noteRef],
-      });
+      content.push(createNoteReferenceRun(noteRefMark));
       return;
     }
 
@@ -668,9 +655,6 @@ function extractParagraphContent(
       }
       return;
     }
-
-    // Check for hyperlink mark
-    const linkMark = node.marks.find((m) => m.type.name === "hyperlink");
 
     if (linkMark) {
       // Start or continue hyperlink
@@ -911,6 +895,12 @@ function createHyperlink(linkMark: Mark): Hyperlink {
  * Add a node to a hyperlink
  */
 function addNodeToHyperlink(hyperlink: Hyperlink, node: PMNode): void {
+  const noteRefMark = node.marks.find((m) => m.type.name === "footnoteRef");
+  if (noteRefMark) {
+    hyperlink.children.push(createNoteReferenceRun(noteRefMark));
+    return;
+  }
+
   const nonLinkMarks = node.marks.filter((m) => m.type.name !== "hyperlink");
   if (node.isText && node.text) {
     const run = createRunFromText(node.text, nonLinkMarks);
@@ -938,6 +928,24 @@ function addNodeToHyperlink(hyperlink: Hyperlink, node: PMNode): void {
   if (node.type.name === "shape") {
     hyperlink.children.push(createShapeRun(node));
   }
+}
+
+function createNoteReferenceRun(noteRefMark: Mark): Run {
+  const noteAttrs = expectFootnoteRefMarkAttrs(noteRefMark);
+  const noteType =
+    noteAttrs.noteType === "endnote" ? "endnoteRef" : "footnoteRef";
+  const noteId =
+    typeof noteAttrs.id === "string"
+      ? Number.parseInt(noteAttrs.id, 10) || 0
+      : noteAttrs.id;
+  const noteRef: NoteReferenceContent = {
+    type: noteType,
+    id: noteId,
+  };
+  return {
+    type: "run",
+    content: [noteRef],
+  };
 }
 
 /**

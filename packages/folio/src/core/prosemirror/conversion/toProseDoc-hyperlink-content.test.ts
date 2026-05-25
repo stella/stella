@@ -193,4 +193,45 @@ describe("convertHyperlink preserves non-text run content", () => {
       ),
     ).toEqual(["text", "break", "text"]);
   });
+
+  test("round-trips a footnote reference inside one hyperlink wrapper", () => {
+    const document = docWithHyperlink({
+      type: "hyperlink",
+      anchor: "bookmark0",
+      children: [
+        {
+          type: "run",
+          content: [{ type: "text", text: "y" }],
+        },
+        {
+          type: "run",
+          content: [{ type: "footnoteRef", id: 1 }],
+        },
+        {
+          type: "run",
+          content: [{ type: "text", text: ";" }],
+        },
+      ],
+    });
+
+    const roundTripped = fromProseDoc(toProseDoc(document), document);
+    const paragraph = roundTripped.package.document.content.at(0);
+    expect(paragraph?.type).toBe("paragraph");
+    if (paragraph?.type !== "paragraph") {
+      return;
+    }
+
+    expect(paragraph.content).toHaveLength(1);
+    const hyperlink = paragraph.content.at(0);
+    expect(hyperlink?.type).toBe("hyperlink");
+    if (hyperlink?.type !== "hyperlink") {
+      return;
+    }
+
+    expect(
+      hyperlink.children.map((child) =>
+        child.type === "run" ? child.content.at(0)?.type : child.type,
+      ),
+    ).toEqual(["text", "footnoteRef", "text"]);
+  });
 });

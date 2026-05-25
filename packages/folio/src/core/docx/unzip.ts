@@ -64,7 +64,7 @@ const MEBIBYTE = 1024 * 1024;
 const DEFAULT_UNZIP_LIMITS: DocxUnzipLimits = {
   maxInputBytes: 50 * MEBIBYTE,
   maxFiles: 5000,
-  maxXmlBytes: 64 * MEBIBYTE,
+  maxXmlBytes: 128 * MEBIBYTE,
   maxMediaBytes: 25 * MEBIBYTE,
   maxFontBytes: 10 * MEBIBYTE,
   maxTotalUncompressedBytes: 250 * MEBIBYTE,
@@ -295,10 +295,10 @@ export async function unzipDocx(
     } else if (lowerPath.startsWith("word/media/")) {
       // Media files (images, etc.)
       const mimeType = getMediaMimeType(path);
-      assertEntrySize(path, declaredSize, limits.maxMediaBytes);
       if (!limits.allowedMediaMimeTypes.has(mimeType)) {
         continue;
       }
+      assertEntrySize(path, declaredSize, limits.maxMediaBytes);
       const binaryContent = await file.async("arraybuffer");
       assertExtractedSize(path, binaryContent.byteLength, limits.maxMediaBytes);
       if (!isMediaContentAllowed(binaryContent, mimeType)) {
