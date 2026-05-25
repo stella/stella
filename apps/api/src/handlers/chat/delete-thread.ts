@@ -8,6 +8,7 @@ import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import { deleteS3Keys } from "@/api/handlers/files/utils";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -25,6 +26,7 @@ const deleteThread = createSafeRootHandler(
     activeWorkspaceIds,
     query: { workspaceId },
     params,
+    recordAuditEvent,
     safeDb,
     user,
   }) {
@@ -75,7 +77,7 @@ const deleteThread = createSafeRootHandler(
           );
         }
 
-        return await tx
+        const result = await tx
           .delete(chatThreads)
           .where(
             and(
@@ -85,7 +87,19 @@ const deleteThread = createSafeRootHandler(
                 ? eq(chatThreads.workspaceId, scope.workspaceId)
                 : isNull(chatThreads.workspaceId),
             ),
-          );
+          )
+          .returning({ id: chatThreads.id });
+
+        if (result.length > 0) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.DELETE,
+            resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+            resourceId: params.threadId,
+            workspaceId: scope.scope === "workspace" ? scope.workspaceId : null,
+          });
+        }
+
+        return result;
       }, defaultDatabaseRetry),
     );
 

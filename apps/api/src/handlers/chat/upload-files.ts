@@ -21,6 +21,8 @@ import { ChatError } from "@/api/handlers/chat/errors";
 import { createUserFileKey, deleteS3Keys } from "@/api/handlers/files/utils";
 import { isUserFileUrl, toUserFileUrl } from "@/api/handlers/user-files/types";
 import { captureError } from "@/api/lib/analytics";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -45,9 +47,11 @@ export type UserFileThreadAccess = {
 
 type UploadMessageFilesProps = {
   message: ChatMessage;
+  recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
 };
 
 type UploadMessageFilesReturn = Result<
@@ -67,9 +71,11 @@ type UploadedChatMessage = {
 
 export const uploadMessageFiles = async ({
   message,
+  recordAuditEvent,
   safeDb,
   threadId,
   userId,
+  workspaceId,
 }: UploadMessageFilesProps): Promise<UploadMessageFilesReturn> => {
   if (message.role !== "user") {
     return Result.ok({ message, uploadedFiles: [] });
@@ -86,9 +92,11 @@ export const uploadMessageFiles = async ({
 
     const rollbackResult = await deleteUploadedChatFiles({
       files: uploadedFiles,
+      recordAuditEvent,
       safeDb,
       threadId,
       userId,
+      workspaceId,
     });
 
     if (Result.isOk(rollbackResult)) {
@@ -112,9 +120,11 @@ export const uploadMessageFiles = async ({
 
     const uploadedFile = await uploadUserFile({
       file: parsedPart.value,
+      recordAuditEvent,
       safeDb,
       threadId,
       userId,
+      workspaceId,
     });
     if (Result.isError(uploadedFile)) {
       return await fail(uploadedFile.error);
@@ -143,14 +153,18 @@ export const uploadMessageFiles = async ({
 
 export const deleteUploadedChatFiles = async ({
   files,
+  recordAuditEvent,
   safeDb,
   threadId,
   userId,
+  workspaceId,
 }: {
   files: readonly UploadedChatFile[];
+  recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
 }): Promise<Result<void, HandlerError<500> | SafeDbError>> => {
   if (files.length === 0) {
     return Result.ok();
@@ -167,8 +181,8 @@ export const deleteUploadedChatFiles = async ({
     );
   }
 
-  const deleteDbResult = await safeDb((tx) =>
-    tx.delete(userFiles).where(
+  const deleteDbResult = await safeDb(async (tx) => {
+    await tx.delete(userFiles).where(
       and(
         eq(userFiles.threadId, threadId),
         eq(userFiles.userId, userId),
@@ -177,8 +191,19 @@ export const deleteUploadedChatFiles = async ({
           files.map((file) => file.id),
         ),
       ),
-    ),
-  );
+    );
+
+    await recordAuditEvent(
+      tx,
+      files.map((file) => ({
+        action: AUDIT_ACTION.DELETE,
+        resourceType: AUDIT_RESOURCE_TYPE.CHAT_FILE,
+        resourceId: file.id,
+        workspaceId,
+        metadata: { threadId, s3Key: file.s3Key },
+      })),
+    );
+  });
 
   return deleteDbResult.andThen(() => Result.ok());
 };
@@ -336,16 +361,20 @@ type UploadUserFileInput = {
     fileName: string;
     mimeType: string;
   };
+  recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
 };
 
 export const uploadUserFile = async ({
   file,
+  recordAuditEvent,
   safeDb,
   threadId,
   userId,
+  workspaceId,
 }: UploadUserFileInput) =>
   await Result.gen(async function* () {
     const sanitizedFileName = sanitizeFilename(file.fileName);
@@ -399,8 +428,8 @@ export const uploadUserFile = async ({
       }),
     );
 
-    const saveResult = await safeDb((tx) =>
-      tx.insert(userFiles).values({
+    const saveResult = await safeDb(async (tx) => {
+      await tx.insert(userFiles).values({
         id,
         userId,
         fileName: sanitizedFileName,
@@ -410,8 +439,22 @@ export const uploadUserFile = async ({
         sha256Hex,
         sizeBytes: file.bytes.byteLength,
         threadId,
-      }),
-    );
+      });
+
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.CREATE,
+        resourceType: AUDIT_RESOURCE_TYPE.CHAT_FILE,
+        resourceId: id,
+        workspaceId,
+        metadata: {
+          threadId,
+          fileName: sanitizedFileName,
+          mimeType: file.mimeType,
+          sizeBytes: file.bytes.byteLength,
+          s3Key,
+        },
+      });
+    });
 
     if (Result.isOk(saveResult)) {
       return Result.ok({

@@ -73,6 +73,8 @@ import {
 import { captureError } from "@/api/lib/analytics";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES, FILE_SIZE_LIMITS } from "@/api/lib/limits";
@@ -94,6 +96,7 @@ const sendMessage = createSafeRootHandler(
     activeWorkspaceIds,
     body,
     orgAIConfig,
+    recordAuditEvent,
     request,
     safeDb,
     scopedDb,
@@ -196,6 +199,7 @@ const sendMessage = createSafeRootHandler(
       loadThread({
         initialContextMatterIds: requestedContextMatterIds,
         organizationId: session.activeOrganizationId,
+        recordAuditEvent,
         safeDb,
         threadId: body.threadId,
         title: extractTitle(validatedMessage.message.parts),
@@ -226,12 +230,25 @@ const sendMessage = createSafeRootHandler(
       )
     ) {
       yield* Result.await(
-        safeDb((tx) =>
-          tx
+        safeDb(async (tx) => {
+          await tx
             .update(chatThreads)
             .set({ contextMatterIds: effectiveContextMatterIds })
-            .where(eq(chatThreads.id, body.threadId)),
-        ),
+            .where(eq(chatThreads.id, body.threadId));
+
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+            resourceId: body.threadId,
+            workspaceId,
+            changes: {
+              contextMatterIds: {
+                old: [...thread.data.contextMatterIds],
+                new: [...effectiveContextMatterIds],
+              },
+            },
+          });
+        }),
       );
     }
 
@@ -246,6 +263,7 @@ const sendMessage = createSafeRootHandler(
     const uploadResult = yield* Result.await(
       uploadMessageFilesWithRollback({
         message: validatedMessage.message,
+        recordAuditEvent,
         safeDb,
         threadId: thread.data.id,
         threadState: thread,
@@ -280,6 +298,7 @@ const sendMessage = createSafeRootHandler(
     });
     if (Result.isError(chatContextResult)) {
       const rollbackResult = await rollbackUnpersistedChatSideEffects({
+        recordAuditEvent,
         safeDb,
         threadId: body.threadId,
         threadState: thread,
@@ -316,13 +335,16 @@ const sendMessage = createSafeRootHandler(
       expandThreadDataScope({
         currentDataWorkspaceIds: thread.data.dataWorkspaceIds,
         newWorkspaceIds: incomingMessageWorkspaceIds,
+        recordAuditEvent,
         safeDb,
         threadId: body.threadId,
+        threadWorkspaceId: workspaceId,
       }),
     );
 
     yield* Result.await(
       persistMessage({
+        recordAuditEvent,
         safeDb,
         threadId: body.threadId,
         userId: user.id,
@@ -466,8 +488,10 @@ const sendMessage = createSafeRootHandler(
                   const expandResult = await expandThreadDataScope({
                     currentDataWorkspaceIds: dataScopeAfterIncomingMessage,
                     newWorkspaceIds: assistantWorkspaceIds,
+                    recordAuditEvent,
                     safeDb,
                     threadId: body.threadId,
+                    threadWorkspaceId: workspaceId,
                   });
                   if (Result.isError(expandResult)) {
                     captureError(expandResult.error, {
@@ -478,6 +502,7 @@ const sendMessage = createSafeRootHandler(
 
                   const persistResult = await persistMessage({
                     persistencePlan,
+                    recordAuditEvent,
                     safeDb,
                     threadId: body.threadId,
                     userId: user.id,
@@ -548,6 +573,7 @@ const messageNeedsExternalMcpValidation = (
 
 type ThreadRecord = {
   id: SafeId<"chatThread">;
+  workspaceId: SafeId<"workspace"> | null;
   contextMatterIds: SafeId<"workspace">[];
   dataWorkspaceIds: SafeId<"workspace">[];
   messages: {
@@ -560,6 +586,7 @@ type ThreadRecord = {
 type LoadThreadProps = {
   initialContextMatterIds: SafeId<"workspace">[];
   organizationId: SafeId<"organization">;
+  recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   title: string;
@@ -580,6 +607,7 @@ type LoadThreadResult =
 const loadThread = async ({
   initialContextMatterIds,
   organizationId,
+  recordAuditEvent,
   safeDb,
   threadId,
   title,
@@ -644,6 +672,7 @@ const loadThread = async ({
         type: "existing",
         data: {
           id: existing.id,
+          workspaceId: existing.workspaceId,
           contextMatterIds: existing.contextMatterIds,
           dataWorkspaceIds: existing.dataWorkspaceIds,
           messages: existing.messages,
@@ -660,8 +689,8 @@ const loadThread = async ({
       ? [workspaceId]
       : [];
 
-    const insertResult = await safeDb((tx) =>
-      tx.insert(chatThreads).values({
+    const insertResult = await safeDb(async (tx) => {
+      await tx.insert(chatThreads).values({
         id: threadId,
         organizationId,
         title,
@@ -674,8 +703,16 @@ const loadThread = async ({
         // this set via expandThreadDataScope when they reference
         // workspace assets (mentions, source-document parts).
         dataWorkspaceIds: initialDataWorkspaceIds,
-      }),
-    );
+      });
+
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.CREATE,
+        resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+        resourceId: threadId,
+        workspaceId,
+        metadata: { title },
+      });
+    });
     if (Result.isError(insertResult)) {
       if (
         !DatabaseError.is(insertResult.error) ||
@@ -713,6 +750,7 @@ const loadThread = async ({
       type: "created",
       data: {
         id: threadId,
+        workspaceId,
         contextMatterIds: initialContextMatterIds,
         dataWorkspaceIds: initialDataWorkspaceIds,
         messages: [],
@@ -722,6 +760,7 @@ const loadThread = async ({
 
 type UploadMessageFilesWithRollbackProps = {
   message: ChatMessage;
+  recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   threadState: LoadThreadResult;
@@ -738,6 +777,7 @@ type UploadMessageFilesWithRollbackResult = Result<
 
 const uploadMessageFilesWithRollback = async ({
   message,
+  recordAuditEvent,
   safeDb,
   threadId,
   threadState,
@@ -745,9 +785,11 @@ const uploadMessageFilesWithRollback = async ({
 }: UploadMessageFilesWithRollbackProps): Promise<UploadMessageFilesWithRollbackResult> => {
   const uploadResult = await uploadMessageFiles({
     message,
+    recordAuditEvent,
     safeDb,
     threadId,
     userId,
+    workspaceId: threadState.data.workspaceId,
   });
 
   if (Result.isOk(uploadResult)) {
@@ -759,6 +801,7 @@ const uploadMessageFilesWithRollback = async ({
   }
 
   const rollbackResult = await rollbackUnpersistedChatSideEffects({
+    recordAuditEvent,
     safeDb,
     threadId,
     threadState,
@@ -775,12 +818,14 @@ const uploadMessageFilesWithRollback = async ({
 };
 
 const rollbackUnpersistedChatSideEffects = async ({
+  recordAuditEvent,
   safeDb,
   threadId,
   threadState,
   uploadedFiles,
   userId,
 }: {
+  recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   threadState: LoadThreadResult;
@@ -789,9 +834,11 @@ const rollbackUnpersistedChatSideEffects = async ({
 }): Promise<Result<void, HandlerError<500> | SafeDbError>> => {
   const fileRollbackResult = await deleteUploadedChatFiles({
     files: uploadedFiles,
+    recordAuditEvent,
     safeDb,
     threadId,
     userId,
+    workspaceId: threadState.data.workspaceId,
   });
   if (Result.isError(fileRollbackResult)) {
     return fileRollbackResult;
@@ -801,9 +848,17 @@ const rollbackUnpersistedChatSideEffects = async ({
     return Result.ok();
   }
 
-  const threadRollbackResult = await safeDb((tx) =>
-    tx.delete(chatThreads).where(eq(chatThreads.id, threadId)),
-  );
+  const threadRollbackResult = await safeDb(async (tx) => {
+    await tx.delete(chatThreads).where(eq(chatThreads.id, threadId));
+
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.DELETE,
+      resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+      resourceId: threadId,
+      workspaceId: threadState.data.workspaceId,
+      metadata: { reason: "rollback_unpersisted_chat_side_effects" },
+    });
+  });
 
   return threadRollbackResult.andThen(() => Result.ok());
 };
@@ -1132,6 +1187,7 @@ const getPdfFileRefForModel = (
 
 type InsertMessagesProps = {
   messages: ChatMessage[];
+  recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
@@ -1196,6 +1252,7 @@ const hydrateAssistantMessageRefs = ({
 
 const insertMessages = async ({
   messages,
+  recordAuditEvent,
   safeDb,
   threadId,
   userId,
@@ -1223,12 +1280,24 @@ const insertMessages = async ({
       .update(chatThreads)
       .set({ updatedAt: new Date() })
       .where(eq(chatThreads.id, threadId));
+
+    await recordAuditEvent(
+      tx,
+      messages.map((persistedMessage) => ({
+        action: AUDIT_ACTION.CREATE,
+        resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
+        resourceId: brandPersistedChatMessageId(persistedMessage.id),
+        workspaceId,
+        metadata: { threadId, role: persistedMessage.role },
+      })),
+    );
   });
 
   return insertResult.andThen(() => Result.ok());
 };
 
 type PersistMessageProps = {
+  recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
@@ -1237,6 +1306,7 @@ type PersistMessageProps = {
 };
 
 const persistMessage = async ({
+  recordAuditEvent,
   safeDb,
   threadId,
   userId,
@@ -1246,6 +1316,7 @@ const persistMessage = async ({
   if (persistencePlan.type === "insert") {
     return await insertMessages({
       messages: [persistencePlan.message],
+      recordAuditEvent,
       safeDb,
       threadId,
       userId,
@@ -1255,6 +1326,9 @@ const persistMessage = async ({
 
   if (persistencePlan.type === "update") {
     const updateResult = await safeDb(async (tx) => {
+      const updatedMessageId = brandPersistedChatMessageId(
+        persistencePlan.messageId,
+      );
       await tx
         .update(chatMessages)
         .set({
@@ -1264,16 +1338,19 @@ const persistMessage = async ({
             data: persistencePlan.message.parts,
           },
         })
-        .where(
-          eq(
-            chatMessages.id,
-            brandPersistedChatMessageId(persistencePlan.messageId),
-          ),
-        );
+        .where(eq(chatMessages.id, updatedMessageId));
       await tx
         .update(chatThreads)
         .set({ updatedAt: new Date() })
         .where(eq(chatThreads.id, threadId));
+
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
+        resourceId: updatedMessageId,
+        workspaceId,
+        metadata: { threadId, role: persistencePlan.message.role },
+      });
     });
 
     return updateResult.andThen(() => Result.ok());
@@ -1284,24 +1361,29 @@ const persistMessage = async ({
   }
 
   return await Result.gen(async function* () {
+    const deletedMessageId = brandPersistedChatMessageId(
+      persistencePlan.deleteMessageId,
+    );
     yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        await tx
           .delete(chatMessages)
-          .where(
-            and(
-              eq(
-                chatMessages.id,
-                brandPersistedChatMessageId(persistencePlan.deleteMessageId),
-              ),
-            ),
-          ),
-      ),
+          .where(and(eq(chatMessages.id, deletedMessageId)));
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
+          resourceId: deletedMessageId,
+          workspaceId,
+          metadata: { threadId, reason: "delete_and_reinsert" },
+        });
+      }),
     );
 
     yield* Result.await(
       insertMessages({
         messages: [persistencePlan.insertMessage],
+        recordAuditEvent,
         safeDb,
         threadId,
         userId,

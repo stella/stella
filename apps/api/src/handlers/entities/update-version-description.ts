@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { entityVersions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -25,10 +26,26 @@ const config = {
 
 export default createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, params, body }) {
+  async function* ({ safeDb, workspaceId, params, body, recordAuditEvent }) {
     const result = yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        const existing = await tx
+          .select({ description: entityVersions.description })
+          .from(entityVersions)
+          .where(
+            and(
+              eq(entityVersions.id, params.versionId),
+              eq(entityVersions.entityId, params.entityId),
+              eq(entityVersions.workspaceId, workspaceId),
+            ),
+          )
+          .limit(1);
+        const previous = existing.at(0);
+        if (!previous) {
+          return [] as { id: typeof params.versionId }[];
+        }
+
+        const updated = await tx
           .update(entityVersions)
           .set({ description: body.description })
           .where(
@@ -38,8 +55,24 @@ export default createSafeHandler(
               eq(entityVersions.workspaceId, workspaceId),
             ),
           )
-          .returning({ id: entityVersions.id }),
-      ),
+          .returning({ id: entityVersions.id });
+
+        if (updated.length > 0) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
+            resourceId: params.versionId,
+            changes: {
+              description: {
+                old: previous.description,
+                new: body.description,
+              },
+            },
+          });
+        }
+
+        return updated;
+      }),
     );
 
     if (result.length === 0) {

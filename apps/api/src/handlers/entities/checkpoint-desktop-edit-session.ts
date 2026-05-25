@@ -5,6 +5,11 @@ import type { Static } from "elysia";
 
 import { desktopEditSessions } from "@/api/db/schema";
 import { createFileKey } from "@/api/handlers/files/utils";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditRecorder,
+} from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
@@ -18,6 +23,7 @@ import {
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcast } from "@/api/lib/sse";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -35,11 +41,15 @@ export const checkpointDesktopEditSessionBodySchema = t.Object({
 type CheckpointDesktopEditSessionHandlerProps = {
   body: Static<typeof checkpointDesktopEditSessionBodySchema>;
   sessionId: SafeId<"desktopEditSession">;
+  request: Request;
+  server: Parameters<typeof createAuditRecorder>[0]["server"];
 };
 
 export const checkpointDesktopEditSessionHandler = async ({
   body: { file, sessionToken },
   sessionId,
+  request,
+  server,
 }: CheckpointDesktopEditSessionHandlerProps) => {
   if (file.type !== DOCX_MIME_TYPE) {
     return status(400, {
@@ -114,11 +124,20 @@ export const checkpointDesktopEditSessionHandler = async ({
           .map((finding) => finding.message)
       : null;
 
+  const recordAuditEvent = createAuditRecorder({
+    organizationId: authorizedSession.value.organizationId,
+    workspaceId: authorizedSession.value.workspaceId,
+    userId: brandPersistedUserId(authorizedSession.value.userId),
+    request,
+    server,
+  });
+
   const result = await authorizedSession.value.scopedDb(async (tx) => {
     const existingSessions = await tx
       .select({
         checkpointFileId: desktopEditSessions.checkpointFileId,
         checkpointSha256Hex: desktopEditSessions.checkpointSha256Hex,
+        checkpointSizeBytes: desktopEditSessions.checkpointSizeBytes,
         checkpointUpdatedAt: desktopEditSessions.checkpointUpdatedAt,
         fileName: desktopEditSessions.fileName,
         id: desktopEditSessions.id,
@@ -156,7 +175,8 @@ export const checkpointDesktopEditSessionHandler = async ({
     }
 
     if (existingSession.checkpointSha256Hex === sha256Hex) {
-      // Extend expiry even on noop to keep the session alive
+      // Extend expiry even on noop to keep the session alive.
+      // Pure session token TTL extension; no user-facing content change.
       const nextTokenExpiresAt = computeTokenExpiresAt();
       await tx
         .update(desktopEditSessions)
@@ -240,6 +260,27 @@ export const checkpointDesktopEditSessionHandler = async ({
         message: "Desktop edit session is already closed.",
       });
     }
+
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
+      resourceId: existingSession.id,
+      changes: {
+        checkpointSha256Hex: {
+          old: existingSession.checkpointSha256Hex,
+          new: sha256Hex,
+        },
+        checkpointSizeBytes: {
+          old: existingSession.checkpointSizeBytes,
+          new: file.size,
+        },
+      },
+      metadata: {
+        fileName: existingSession.fileName,
+        sizeBytes: file.size,
+        sha256Hex,
+      },
+    });
 
     return {
       checkpointedAt: checkpointedAt.toISOString(),

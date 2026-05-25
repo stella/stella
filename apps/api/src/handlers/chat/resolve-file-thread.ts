@@ -6,6 +6,8 @@ import type { Transaction } from "@/api/db";
 import { chatThreads, fileChatThreads } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -98,9 +100,11 @@ const insertFileChatThread = async (
     workspaceId,
   }: FileThreadLookupInput,
   chatThreadId: SafeId<"chatThread">,
-) =>
+  recordAuditEvent: AuditRecorder,
+) => {
+  const fileChatThreadId = createSafeId<"fileChatThread">();
   await tx.insert(fileChatThreads).values({
-    id: createSafeId<"fileChatThread">(),
+    id: fileChatThreadId,
     organizationId,
     workspaceId,
     userId,
@@ -108,6 +112,14 @@ const insertFileChatThread = async (
     fieldId,
     chatThreadId,
   });
+  await recordAuditEvent(tx, {
+    action: AUDIT_ACTION.UPDATE,
+    resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+    resourceId: chatThreadId,
+    workspaceId,
+    metadata: { entityId, fieldId, fileChatThreadId },
+  });
+};
 
 const createFileChatThread = async (
   tx: Transaction,
@@ -118,6 +130,7 @@ const createFileChatThread = async (
     userId,
     workspaceId,
   }: FileThreadLookupInput,
+  recordAuditEvent: AuditRecorder,
 ): Promise<ResolveFileThreadTxResult> => {
   const entity = await tx.query.entities.findFirst({
     where: {
@@ -174,6 +187,7 @@ const createFileChatThread = async (
         workspaceId,
       },
       fieldKeyedThread.id,
+      recordAuditEvent,
     );
 
     return {
@@ -194,6 +208,14 @@ const createFileChatThread = async (
     dataWorkspaceIds: [workspaceId],
   });
 
+  await recordAuditEvent(tx, {
+    action: AUDIT_ACTION.CREATE,
+    resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+    resourceId: chatThreadId,
+    workspaceId,
+    metadata: { entityId, fieldId, source: "resolve-file-thread" },
+  });
+
   await insertFileChatThread(
     tx,
     {
@@ -204,6 +226,7 @@ const createFileChatThread = async (
       workspaceId,
     },
     chatThreadId,
+    recordAuditEvent,
   );
 
   return {
@@ -214,7 +237,14 @@ const createFileChatThread = async (
 
 const resolveFileThread = createSafeHandler(
   config,
-  async function* ({ body, safeDb, session, user, workspaceId }) {
+  async function* ({
+    body,
+    recordAuditEvent,
+    safeDb,
+    session,
+    user,
+    workspaceId,
+  }) {
     const input: FileThreadLookupInput = {
       entityId: body.entityId,
       fieldId: body.fieldId,
@@ -233,7 +263,7 @@ const resolveFileThread = createSafeHandler(
         };
       }
 
-      return await createFileChatThread(tx, input);
+      return await createFileChatThread(tx, input, recordAuditEvent);
     });
 
     if (Result.isError(txResult)) {

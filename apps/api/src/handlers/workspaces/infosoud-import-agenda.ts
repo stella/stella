@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { infoSoudTrackedCases } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   buildInfoSoudAgendaItems,
@@ -23,7 +24,14 @@ const config = {
 
 const infosoudImportAgenda = createSafeHandler(
   config,
-  async function* ({ body, request, safeDb, user, workspaceId }) {
+  async function* ({
+    body,
+    request,
+    safeDb,
+    user,
+    workspaceId,
+    recordAuditEvent,
+  }) {
     const courtCode = body.courtCode.trim();
     const spisZn = body.spisZn.trim();
     const lookupResult = yield* Result.await(
@@ -92,6 +100,29 @@ const infosoudImportAgenda = createSafeHandler(
               lastSyncedAt: new Date(),
             },
           });
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+          resourceId: workspaceId,
+          changes: {
+            infoSoudAgendaImport: {
+              old: null,
+              new: {
+                courtCode,
+                spisZn,
+                created: importResult.created,
+                skipped: importResult.skipped,
+                total: importResult.total,
+              },
+            },
+          },
+          metadata: {
+            source: "infosoud",
+            courtCode,
+            spisZn,
+          },
+        });
 
         return importResult;
       }),

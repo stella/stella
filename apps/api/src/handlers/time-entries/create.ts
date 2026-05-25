@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { TIME_ENTRY_SOURCE, timeEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -27,7 +28,14 @@ const createTimeEntry = createSafeHandler(
     permissions: { timeEntry: ["create"] },
     body: createTimeEntryBodySchema,
   },
-  async function* ({ safeDb, session, workspaceId, user, body }) {
+  async function* ({
+    safeDb,
+    session,
+    workspaceId,
+    user,
+    body,
+    recordAuditEvent,
+  }) {
     const now = new Date();
     const todayStr = new Intl.DateTimeFormat("en-CA", {
       timeZone: body.timezoneId,
@@ -124,6 +132,28 @@ const createTimeEntry = createSafeHandler(
             message: "Failed to create time entry",
           };
         }
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+          resourceId: entry.id,
+          changes: {
+            created: {
+              old: null,
+              new: {
+                matterId: body.matterId,
+                dateWorked: body.dateWorked,
+                durationMinutes: body.durationMinutes,
+                billedMinutes,
+                rateAtEntry: cents(body.rateAtEntry),
+                currency: body.currency,
+                billable: body.billable ?? true,
+                source: TIME_ENTRY_SOURCE.MANUAL,
+              },
+            },
+          },
+        });
+
         return { ok: true as const, id: entry.id };
       }),
     );

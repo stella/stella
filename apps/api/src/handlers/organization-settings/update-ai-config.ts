@@ -25,6 +25,7 @@ import type { ProviderProbeResult } from "@/api/lib/ai-provider-probe";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { normalizeAzureFoundryBaseURL } from "@/api/lib/azure-foundry";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -75,7 +76,7 @@ const config = {
  */
 const updateAIConfig = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, body }) {
+  async function* ({ safeDb, session, body, recordAuditEvent }) {
     let existingConfig: OrgAIConfig | undefined;
     const row = yield* Result.await(
       safeDb((tx) =>
@@ -183,8 +184,8 @@ const updateAIConfig = createSafeRootHandler(
     );
 
     yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        await tx
           .insert(organizationSettings)
           .values({
             id: createSafeId<"organizationSettings">(),
@@ -199,8 +200,20 @@ const updateAIConfig = createSafeRootHandler(
               aiConfigIv: newIv,
               updatedAt: new Date(),
             },
-          }),
-      ),
+          });
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+          resourceId: session.activeOrganizationId,
+          metadata: {
+            field: "aiConfig",
+            providers: orgConfig.providers.map(
+              (providerConfig) => providerConfig.provider,
+            ),
+          },
+        });
+      }),
     );
 
     return Result.ok({

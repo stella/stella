@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { rateTables } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -19,7 +20,7 @@ const createRateTable = createSafeHandler(
     permissions: { rate: ["create"] },
     body: createRateTableBodySchema,
   },
-  async function* ({ safeDb, session, workspaceId, body }) {
+  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
         // Lock rows then count to serialize concurrent adds.
@@ -38,17 +39,18 @@ const createRateTable = createSafeHandler(
           };
         }
 
-        if (body.isDefault) {
-          await tx
-            .update(rateTables)
-            .set({ isDefault: false, updatedAt: new Date() })
-            .where(
-              and(
-                eq(rateTables.workspaceId, workspaceId),
-                eq(rateTables.isDefault, true),
-              ),
-            );
-        }
+        const previousDefaults = body.isDefault
+          ? await tx
+              .update(rateTables)
+              .set({ isDefault: false, updatedAt: new Date() })
+              .where(
+                and(
+                  eq(rateTables.workspaceId, workspaceId),
+                  eq(rateTables.isDefault, true),
+                ),
+              )
+              .returning({ id: rateTables.id })
+          : [];
 
         const [table] = await tx
           .insert(rateTables)
@@ -68,6 +70,33 @@ const createRateTable = createSafeHandler(
             message: "Failed to create rate table",
           };
         }
+
+        await recordAuditEvent(tx, [
+          {
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.RATE_TABLE,
+            resourceId: table.id,
+            changes: {
+              created: {
+                old: null,
+                new: {
+                  name: body.name,
+                  currency: body.currency,
+                  isDefault: body.isDefault ?? false,
+                },
+              },
+            },
+          },
+          ...previousDefaults.map((row) => ({
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.RATE_TABLE,
+            resourceId: row.id,
+            changes: {
+              isDefault: { old: true, new: false },
+            },
+          })),
+        ]);
+
         return { ok: true as const, id: table.id };
       }),
     );

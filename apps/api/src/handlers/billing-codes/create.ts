@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { billingCodes } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
@@ -24,7 +25,7 @@ const config = {
 
 const createBillingCode = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, body }) {
+  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
     const totalCodes = yield* Result.await(
       safeDb((tx) =>
         tx.$count(billingCodes, eq(billingCodes.workspaceId, workspaceId)),
@@ -40,8 +41,8 @@ const createBillingCode = createSafeHandler(
       );
     }
 
-    const insertResult = await safeDb((tx) =>
-      tx
+    const insertResult = await safeDb(async (tx) => {
+      const inserted = await tx
         .insert(billingCodes)
         .values({
           organizationId: session.activeOrganizationId,
@@ -52,8 +53,31 @@ const createBillingCode = createSafeHandler(
           active: body.active ?? true,
           sortOrder: body.sortOrder ?? 0,
         })
-        .returning({ id: billingCodes.id }),
-    );
+        .returning({ id: billingCodes.id });
+
+      const created = inserted[0];
+      if (created) {
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.BILLING_CODE,
+          resourceId: created.id,
+          changes: {
+            created: {
+              old: null,
+              new: {
+                type: body.type,
+                code: body.code,
+                label: body.label,
+                active: body.active ?? true,
+                sortOrder: body.sortOrder ?? 0,
+              },
+            },
+          },
+        });
+      }
+
+      return inserted;
+    });
 
     if (Result.isError(insertResult)) {
       if (

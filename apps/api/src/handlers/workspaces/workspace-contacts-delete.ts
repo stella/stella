@@ -5,6 +5,7 @@ import { workspaceContacts } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { upsertWorkspaceSearchDocument } from "@/api/lib/search/index-global";
@@ -16,10 +17,15 @@ const config = {
 
 const deleteWorkspaceContact = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, params: { workspaceContactId } }) {
+  async function* ({
+    safeDb,
+    workspaceId,
+    params: { workspaceContactId },
+    recordAuditEvent,
+  }) {
     const deletedRows = yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        const rows = await tx
           .delete(workspaceContacts)
           .where(
             and(
@@ -27,8 +33,32 @@ const deleteWorkspaceContact = createSafeHandler(
               eq(workspaceContacts.workspaceId, workspaceId),
             ),
           )
-          .returning({ id: workspaceContacts.id }),
-      ),
+          .returning({
+            id: workspaceContacts.id,
+            contactId: workspaceContacts.contactId,
+            role: workspaceContacts.role,
+          });
+
+        const deletedRow = rows.at(0);
+        if (deletedRow) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.DELETE,
+            resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT,
+            resourceId: workspaceContactId,
+            changes: {
+              deleted: {
+                old: {
+                  contactId: deletedRow.contactId,
+                  role: deletedRow.role,
+                },
+                new: null,
+              },
+            },
+          });
+        }
+
+        return rows;
+      }),
     );
     const deleted = deletedRows.at(0);
 

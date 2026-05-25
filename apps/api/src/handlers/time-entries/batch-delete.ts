@@ -4,18 +4,55 @@ import { t } from "elysia";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditEvent } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 
 const batchDeleteBodySchema = t.Object({
   ids: t.Array(tSafeId("timeEntry"), { minItems: 1, maxItems: 200 }),
 });
 
+const buildBatchDeleteEvents = (params: {
+  deleted: { id: SafeId<"timeEntry"> }[];
+  writtenOff: { id: SafeId<"timeEntry"> }[];
+}): AuditEvent[] => {
+  const events: AuditEvent[] = [];
+  for (const row of params.deleted) {
+    events.push({
+      action: AUDIT_ACTION.DELETE,
+      resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+      resourceId: row.id,
+      changes: {
+        deleted: {
+          old: { reason: "batch_delete_draft" },
+          new: null,
+        },
+      },
+    });
+  }
+  for (const row of params.writtenOff) {
+    events.push({
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+      resourceId: row.id,
+      changes: {
+        status: {
+          old: null,
+          new: BILLING_STATUS.WRITTEN_OFF,
+        },
+      },
+    });
+  }
+  return events;
+};
+
 const batchDelete = createSafeHandler(
   {
     permissions: { timeEntry: ["delete"] },
     body: batchDeleteBodySchema,
   },
-  async function* ({ safeDb, workspaceId, body }) {
+  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
     const { ids } = body;
 
     // Draft entries: hard delete. Non-draft: write off.
@@ -48,6 +85,11 @@ const batchDelete = createSafeHandler(
             ),
           )
           .returning({ id: timeEntries.id });
+
+        await recordAuditEvent(
+          tx,
+          buildBatchDeleteEvents({ deleted, writtenOff }),
+        );
 
         return deleted.length + writtenOff.length;
       }),

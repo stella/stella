@@ -122,7 +122,7 @@ const createMatterLink = createSafeHandler(
     permissions: { entity: ["create"] },
     body: createMatterLinkBodySchema,
   } satisfies HandlerConfig,
-  async function* ({ body, scopedDb, user, workspaceId }) {
+  async function* ({ body, recordAuditEvent, scopedDb, user, workspaceId }) {
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
@@ -131,6 +131,7 @@ const createMatterLink = createSafeHandler(
             userId: user.id,
             body,
             scopedDb,
+            recordAuditEvent,
           }),
       ),
     );
@@ -147,7 +148,12 @@ const deleteMatterLink = createSafeHandler(
       linkId: tSafeId("caseLawMatterLink"),
     }),
   } satisfies HandlerConfig,
-  async function* ({ params: { linkId }, scopedDb, workspaceId }) {
+  async function* ({
+    params: { linkId },
+    recordAuditEvent,
+    scopedDb,
+    workspaceId,
+  }) {
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
@@ -155,6 +161,7 @@ const deleteMatterLink = createSafeHandler(
             workspaceId,
             linkId,
             scopedDb,
+            recordAuditEvent,
           }),
       ),
     );

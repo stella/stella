@@ -6,6 +6,8 @@ import { cellMetadata, entities, properties } from "@/api/db/schema";
 import type { CellMetadata } from "@/api/db/schema-validators";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { FieldDiffs } from "@/api/lib/audit-log";
 import { acquireCellLock } from "@/api/lib/cell-lock";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -89,7 +91,7 @@ const resolveLockProvenance = ({
 
 const updateCellMetadata = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, body, user }) {
+  async function* ({ safeDb, workspaceId, body, user, recordAuditEvent }) {
     const txResult = yield* Result.await(
       safeDb(async (tx): Promise<UpdateCellMetadataResult> => {
         const entityRows = await tx
@@ -166,6 +168,12 @@ const updateCellMetadata = createSafeHandler(
 
         const wasLocked = existingMetadata?.locked === true;
         const nextLocked = body.locked ?? wasLocked;
+        const changes: FieldDiffs = {
+          manualFlags: { old: currentManualFlags, new: manualFlags },
+        };
+        if (wasLocked !== nextLocked) {
+          changes["locked"] = { old: wasLocked, new: nextLocked };
+        }
 
         if (manualFlags.length === 0 && !nextLocked) {
           await tx
@@ -176,6 +184,17 @@ const updateCellMetadata = createSafeHandler(
                 eq(cellMetadata.propertyId, property.id),
               ),
             );
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.FIELD,
+            resourceId: `${entityVersionId}:${property.id}`,
+            changes,
+            metadata: {
+              entityId: body.entityId,
+              entityVersionId,
+              propertyId: property.id,
+            },
+          });
           return { status: "ok" };
         }
 
@@ -223,6 +242,18 @@ const updateCellMetadata = createSafeHandler(
               updatedAt: new Date(),
             },
           });
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.FIELD,
+          resourceId: `${entityVersionId}:${property.id}`,
+          changes,
+          metadata: {
+            entityId: body.entityId,
+            entityVersionId,
+            propertyId: property.id,
+          },
+        });
 
         return { status: "ok" };
       }),

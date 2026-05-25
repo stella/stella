@@ -7,6 +7,8 @@ import { clauses, clauseVersions } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
@@ -41,6 +43,7 @@ type CreateClauseProps = {
     usageNotes?: string;
     metadata?: Record<string, unknown>;
   };
+  recordAuditEvent: AuditRecorder;
 };
 
 const createClauseHandler = async function* ({
@@ -48,6 +51,7 @@ const createClauseHandler = async function* ({
   organizationId,
   userId,
   body,
+  recordAuditEvent,
 }: CreateClauseProps) {
   const existingCount = yield* Result.await(
     safeDb((tx) =>
@@ -117,6 +121,23 @@ const createClauseHandler = async function* ({
         body: body.body,
       });
 
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.CREATE,
+        resourceType: AUDIT_RESOURCE_TYPE.CLAUSE,
+        resourceId: clauseId,
+        changes: {
+          created: {
+            old: null,
+            new: {
+              title: body.title,
+              categoryId: body.categoryId ?? null,
+              language: body.language ?? null,
+              currentVersion: 1,
+            },
+          },
+        },
+      });
+
       return row;
     }),
   );
@@ -145,12 +166,13 @@ const config = {
 
 const createClause = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, user, body }) {
+  async function* ({ safeDb, session, user, body, recordAuditEvent }) {
     return yield* createClauseHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
       userId: user.id,
       body,
+      recordAuditEvent,
     });
   },
 );

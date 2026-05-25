@@ -18,12 +18,13 @@ const config = {
 
 const deleteVariant = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, params }) {
+  async function* ({ safeDb, session, params, recordAuditEvent }) {
     return yield* deleteVariantHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
       clauseId: params.clauseId,
       variantId: params.variantId,
+      recordAuditEvent,
     });
   },
 );

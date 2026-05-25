@@ -9,6 +9,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
@@ -28,7 +29,14 @@ const config = {
 
 const createShortcut = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, user, body, memberRole }) {
+  async function* ({
+    safeDb,
+    session,
+    user,
+    body,
+    memberRole,
+    recordAuditEvent,
+  }) {
     const userCount = yield* Result.await(
       safeDb((tx) =>
         tx.$count(
@@ -83,8 +91,8 @@ const createShortcut = createSafeRootHandler(
       );
     }
 
-    const insertResult = await safeDb((tx) =>
-      tx
+    const insertResult = await safeDb(async (tx) => {
+      const rows = await tx
         .insert(promptShortcuts)
         .values({
           organizationId: session.activeOrganizationId,
@@ -96,8 +104,29 @@ const createShortcut = createSafeRootHandler(
           prompt: body.prompt,
           isDefault: false,
         })
-        .returning({ id: promptShortcuts.id }),
-    );
+        .returning({ id: promptShortcuts.id });
+
+      const row = rows.at(0);
+      if (row) {
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.PROMPT_SHORTCUT,
+          resourceId: row.id,
+          changes: {
+            created: {
+              old: null,
+              new: {
+                scope: body.scope,
+                name: body.name,
+                command: body.command,
+              },
+            },
+          },
+        });
+      }
+
+      return rows;
+    });
 
     if (Result.isError(insertResult)) {
       if (

@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { entityLinks } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -16,7 +17,7 @@ const deleteEntityLink = createSafeHandler(
     permissions: { entity: ["update"] },
     body: deleteEntityLinkBodySchema,
   },
-  async function* ({ workspaceId, body, safeDb }) {
+  async function* ({ workspaceId, body, safeDb, recordAuditEvent }) {
     const link = yield* Result.await(
       safeDb((tx) =>
         tx.query.entityLinks.findFirst({
@@ -57,16 +58,30 @@ const deleteEntityLink = createSafeHandler(
     }
 
     yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        await tx
           .delete(entityLinks)
           .where(
             and(
               eq(entityLinks.id, body.linkId),
               eq(entityLinks.workspaceId, workspaceId),
             ),
-          ),
-      ),
+          );
+
+        const taskEntityId =
+          link.sourceEntity?.kind === "task"
+            ? link.sourceEntityId
+            : link.targetEntityId;
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+          resourceId: taskEntityId,
+          metadata: {
+            change: "entity-link-removed",
+            linkId: body.linkId,
+          },
+        });
+      }),
     );
 
     return Result.ok({ success: true });

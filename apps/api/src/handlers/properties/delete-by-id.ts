@@ -4,12 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { properties } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import {
-  AUDIT_ACTION,
-  AUDIT_RESOURCE_TYPE,
-  createAuditContext,
-  writeAuditLog,
-} from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
@@ -24,11 +19,8 @@ const deleteProperty = createSafeHandler(
   // eslint-disable-next-line require-yield -- manual Result.isError checks preserve foreign-key error mapping
   async function* ({
     safeDb,
-    session,
     workspaceId,
-    user,
-    request,
-    server,
+    recordAuditEvent,
     params: { propertyId },
   }) {
     const deleteResult = await safeDb(async (tx) => {
@@ -84,31 +76,21 @@ const deleteProperty = createSafeHandler(
           ),
         );
 
-      await writeAuditLog(
-        {
-          ...createAuditContext({
-            organizationId: session.activeOrganizationId,
-            workspaceId,
-            userId: user.id,
-            request,
-            server,
-          }),
-          action: AUDIT_ACTION.DELETE,
-          resourceType: AUDIT_RESOURCE_TYPE.PROPERTY,
-          resourceId: propertyId,
-          changes: {
-            deleted: {
-              old: {
-                name: property.name,
-                content: property.content,
-                tool: property.tool,
-              },
-              new: null,
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.DELETE,
+        resourceType: AUDIT_RESOURCE_TYPE.PROPERTY,
+        resourceId: propertyId,
+        changes: {
+          deleted: {
+            old: {
+              name: property.name,
+              content: property.content,
+              tool: property.tool,
             },
+            new: null,
           },
         },
-        tx,
-      );
+      });
 
       return { ok: true as const };
     });

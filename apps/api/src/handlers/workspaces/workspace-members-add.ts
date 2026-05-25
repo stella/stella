@@ -5,12 +5,7 @@ import { t } from "elysia";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import {
-  AUDIT_ACTION,
-  AUDIT_RESOURCE_TYPE,
-  createAuditContext,
-  writeAuditLog,
-} from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tUserId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -27,15 +22,7 @@ const config = {
 
 const addWorkspaceMember = createSafeHandler(
   config,
-  async function* ({
-    safeDb,
-    session,
-    workspaceId,
-    user,
-    request,
-    server,
-    body,
-  }) {
+  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
     // Verify user is a member of the organization.
     // `member` is an org-level auth table (no RLS policy);
     // safeDb works for querying it.
@@ -99,27 +86,17 @@ const addWorkspaceMember = createSafeHandler(
           createdAt: workspaceMembers.createdAt,
         });
 
-      await writeAuditLog(
-        {
-          ...createAuditContext({
-            organizationId: session.activeOrganizationId,
-            workspaceId,
-            userId: user.id,
-            request,
-            server,
-          }),
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
-          resourceId: workspaceId,
-          changes: {
-            membersAdded: {
-              old: null,
-              new: [body.userId],
-            },
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+        resourceId: workspaceId,
+        changes: {
+          membersAdded: {
+            old: null,
+            new: [body.userId],
           },
         },
-        tx,
-      );
+      });
 
       return { ok: true as const, rows };
     });

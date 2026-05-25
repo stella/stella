@@ -11,6 +11,7 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -34,7 +35,7 @@ const createInvoice = createSafeHandler(
     permissions: { invoice: ["create"] },
     body: createInvoiceBodySchema,
   },
-  async function* ({ safeDb, session, workspaceId, body }) {
+  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
     const totalInvoices = yield* Result.await(
       safeDb((tx) =>
         tx.$count(invoices, eq(invoices.workspaceId, workspaceId)),
@@ -148,6 +149,39 @@ const createInvoice = createSafeHandler(
         if (linkedCount !== expectedCount) {
           return { ok: false as const };
         }
+
+        await recordAuditEvent(tx, [
+          {
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+            resourceId: created.id,
+            changes: {
+              created: {
+                old: null,
+                new: {
+                  invoiceNumber: created.invoiceNumber,
+                  invoiceDate: body.invoiceDate,
+                  currency: body.currency,
+                  totalAmount,
+                  entryCount: linkedCount,
+                  status: INVOICE_STATUS.DRAFT,
+                },
+              },
+            },
+          },
+          ...updated.map((entry) => ({
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+            resourceId: entry.id,
+            changes: {
+              status: {
+                old: BILLING_STATUS.APPROVED,
+                new: BILLING_STATUS.BILLED,
+              },
+              invoiceId: { old: null, new: created.id },
+            },
+          })),
+        ]);
 
         return {
           ok: true as const,

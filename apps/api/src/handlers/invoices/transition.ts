@@ -11,6 +11,9 @@ import {
 } from "@/api/db/schema";
 import type { InvoiceStatus } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditEvent } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -59,13 +62,60 @@ const transitionInvoiceBodySchema = t.Object({
 
 const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
 
+const buildVoidEvents = (params: {
+  invoiceId: SafeId<"invoice">;
+  previousStatus: InvoiceStatus;
+  revertedTimeEntries: { id: SafeId<"timeEntry"> }[];
+  revertedExpenses: { id: SafeId<"expense"> }[];
+}): AuditEvent[] => {
+  const events: AuditEvent[] = [
+    {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+      resourceId: params.invoiceId,
+      changes: {
+        status: { old: params.previousStatus, new: INVOICE_STATUS.VOID },
+      },
+    },
+  ];
+  for (const row of params.revertedTimeEntries) {
+    events.push({
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+      resourceId: row.id,
+      changes: {
+        status: {
+          old: BILLING_STATUS.BILLED,
+          new: BILLING_STATUS.APPROVED,
+        },
+        invoiceId: { old: params.invoiceId, new: null },
+      },
+    });
+  }
+  for (const row of params.revertedExpenses) {
+    events.push({
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.EXPENSE,
+      resourceId: row.id,
+      changes: {
+        status: {
+          old: BILLING_STATUS.BILLED,
+          new: BILLING_STATUS.APPROVED,
+        },
+        invoiceId: { old: params.invoiceId, new: null },
+      },
+    });
+  }
+  return events;
+};
+
 const transitionInvoice = createSafeHandler(
   {
     permissions: { invoice: ["update"] },
     params: invoiceParamsSchema,
     body: transitionInvoiceBodySchema,
   },
-  async function* ({ safeDb, workspaceId, params, body }) {
+  async function* ({ safeDb, workspaceId, params, body, recordAuditEvent }) {
     const transition = TRANSITIONS[body.action];
     const now = new Date();
 
@@ -83,6 +133,23 @@ const transitionInvoice = createSafeHandler(
     if (body.action === "void") {
       const txResult = yield* Result.await(
         safeDb(async (tx) => {
+          const existingRows = await tx
+            .select({ id: invoices.id, status: invoices.status })
+            .from(invoices)
+            .where(
+              and(
+                eq(invoices.id, params.invoiceId),
+                eq(invoices.workspaceId, workspaceId),
+                inArray(invoices.status, transition.from),
+              ),
+            )
+            .limit(1)
+            .for("update");
+          const existing = existingRows.at(0);
+          if (!existing) {
+            return { ok: false as const };
+          }
+
           const updated = await tx
             .update(invoices)
             .set(set)
@@ -100,7 +167,7 @@ const transitionInvoice = createSafeHandler(
             return { ok: false as const };
           }
 
-          await tx
+          const revertedTimeEntries = await tx
             .update(timeEntries)
             .set({
               status: BILLING_STATUS.APPROVED,
@@ -112,9 +179,10 @@ const transitionInvoice = createSafeHandler(
                 eq(timeEntries.invoiceId, params.invoiceId),
                 eq(timeEntries.workspaceId, workspaceId),
               ),
-            );
+            )
+            .returning({ id: timeEntries.id });
 
-          await tx
+          const revertedExpenses = await tx
             .update(expenses)
             .set({
               status: BILLING_STATUS.APPROVED,
@@ -126,7 +194,18 @@ const transitionInvoice = createSafeHandler(
                 eq(expenses.invoiceId, params.invoiceId),
                 eq(expenses.workspaceId, workspaceId),
               ),
-            );
+            )
+            .returning({ id: expenses.id });
+
+          await recordAuditEvent(
+            tx,
+            buildVoidEvents({
+              invoiceId: params.invoiceId,
+              previousStatus: existing.status,
+              revertedTimeEntries,
+              revertedExpenses,
+            }),
+          );
 
           return { ok: true as const, id: voidedInvoice.id };
         }),
@@ -145,8 +224,25 @@ const transitionInvoice = createSafeHandler(
     }
 
     const result = yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        const existingRows = await tx
+          .select({ id: invoices.id, status: invoices.status })
+          .from(invoices)
+          .where(
+            and(
+              eq(invoices.id, params.invoiceId),
+              eq(invoices.workspaceId, workspaceId),
+              inArray(invoices.status, transition.from),
+            ),
+          )
+          .limit(1)
+          .for("update");
+        const existing = existingRows.at(0);
+        if (!existing) {
+          return [];
+        }
+
+        const updated = await tx
           .update(invoices)
           .set(set)
           .where(
@@ -156,8 +252,22 @@ const transitionInvoice = createSafeHandler(
               inArray(invoices.status, transition.from),
             ),
           )
-          .returning({ id: invoices.id }),
-      ),
+          .returning({ id: invoices.id });
+
+        const row = updated.at(0);
+        if (row) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+            resourceId: row.id,
+            changes: {
+              status: { old: existing.status, new: transition.to },
+              action: { old: null, new: body.action },
+            },
+          });
+        }
+        return updated;
+      }),
     );
 
     const transitioned = result.at(0);

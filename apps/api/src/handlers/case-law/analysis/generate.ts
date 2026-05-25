@@ -98,6 +98,7 @@ const runGeneration = async (
   },
   orgAIConfig: OrgAIConfig | null,
 ) => {
+  // audit: skip — background AI analysis output
   const systemPrompt = getSystemPrompt(decision.language);
   const decisionText = formatDecisionForPrompt(ast.blocks);
 
@@ -140,6 +141,7 @@ ${decisionText}`;
     const headings: AnalysisHeading[] = [];
 
     const persistPartial = async () => {
+      // audit: skip — background AI analysis output
       const partial: AnalysisInProgress = {
         version: 1,
         generatedAt: new Date().toISOString(),
@@ -204,6 +206,7 @@ export const generateAnalysis = async (
   analysis?: PersistedDecisionAnalysis;
   error?: string;
 }> => {
+  // audit: skip — background AI analysis output
   const decision = await scopedDb((tx) =>
     tx.query.caseLawDecisions.findFirst({
       where: { id: { eq: decisionId } },

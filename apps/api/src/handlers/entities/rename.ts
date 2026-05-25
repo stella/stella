@@ -8,13 +8,8 @@ import { entities, fields } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import {
-  AUDIT_ACTION,
-  AUDIT_RESOURCE_TYPE,
-  createAuditContext,
-  writeAuditLog,
-} from "@/api/lib/audit-log";
-import type { AuditContext } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -35,14 +30,14 @@ type RenameEntityBodySchema = Static<typeof renameEntityBodySchema>;
 type RenameEntityHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
-  auditContext: AuditContext;
+  recordAuditEvent: AuditRecorder;
   body: RenameEntityBodySchema;
 };
 
 const renameEntityHandler = async function* ({
   safeDb,
   workspaceId,
-  auditContext,
+  recordAuditEvent,
   body,
 }: RenameEntityHandlerProps) {
   const txResult = yield* Result.await(
@@ -117,21 +112,17 @@ const renameEntityHandler = async function* ({
           .where(eq(fields.id, fileField.id));
       }
 
-      await writeAuditLog(
-        {
-          ...auditContext,
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-          resourceId: body.entityId,
-          changes: {
-            name: {
-              old: entity.name,
-              new: body.name,
-            },
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+        resourceId: body.entityId,
+        changes: {
+          name: {
+            old: entity.name,
+            new: body.name,
           },
         },
-        tx,
-      );
+      });
 
       return { ok: true as const };
     }),
@@ -155,25 +146,11 @@ const config = {
 
 const renameEntity = createSafeHandler(
   config,
-  async function* ({
-    safeDb,
-    session,
-    workspaceId,
-    user,
-    request,
-    server,
-    body,
-  }) {
+  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
     return yield* renameEntityHandler({
       safeDb,
       workspaceId,
-      auditContext: createAuditContext({
-        organizationId: session.activeOrganizationId,
-        workspaceId,
-        userId: user.id,
-        request,
-        server,
-      }),
+      recordAuditEvent,
       body,
     });
   },

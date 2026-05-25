@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { mcpConnectors } from "@/api/db/schema";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const routeParams = t.Object({
@@ -18,10 +19,15 @@ const config = {
 
 const deleteMcpConnector = createSafeRootHandler(
   config,
-  async function* ({ params: requestParams, safeDb, session }) {
+  async function* ({
+    params: requestParams,
+    safeDb,
+    session,
+    recordAuditEvent,
+  }) {
     const deleted = yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        const rows = await tx
           .delete(mcpConnectors)
           .where(
             and(
@@ -29,8 +35,23 @@ const deleteMcpConnector = createSafeRootHandler(
               eq(mcpConnectors.organizationId, session.activeOrganizationId),
             ),
           )
-          .returning({ slug: mcpConnectors.slug }),
-      ),
+          .returning({ slug: mcpConnectors.slug });
+
+        const row = rows.at(0);
+        if (row) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.DELETE,
+            resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+            resourceId: session.activeOrganizationId,
+            metadata: {
+              field: "mcpConnector",
+              slug: row.slug,
+            },
+          });
+        }
+
+        return rows;
+      }),
     );
 
     const connector = deleted.at(0);

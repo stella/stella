@@ -26,6 +26,8 @@ import {
 } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
@@ -170,6 +172,7 @@ type SearchSummaryChatContext = {
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   userId: SafeId<"user">;
+  recordAuditEvent: AuditRecorder;
 };
 
 const SEARCH_REFINE_SYSTEM = `You rewrite a legal workspace search request into Stella's boolean search syntax.
@@ -520,6 +523,7 @@ export const createSearchSummaryChatThread = async ({
   scopedDb,
   search = searchGlobal,
   userId,
+  recordAuditEvent,
 }: SearchSummaryChatContext & {
   body: SearchSummaryChatBody;
   search?: typeof searchGlobal;
@@ -628,6 +632,33 @@ export const createSearchSummaryChatThread = async ({
           ],
         },
         createdAt: new Date(now.getTime() + 1),
+      },
+    ]);
+
+    await recordAuditEvent(tx, [
+      {
+        action: AUDIT_ACTION.CREATE,
+        resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+        resourceId: threadId,
+        workspaceId: null,
+        metadata: {
+          source: "search-summary",
+          dataWorkspaceIds,
+        },
+      },
+      {
+        action: AUDIT_ACTION.CREATE,
+        resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
+        resourceId: userMessageId,
+        workspaceId: null,
+        metadata: { threadId, role: "user" },
+      },
+      {
+        action: AUDIT_ACTION.CREATE,
+        resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
+        resourceId: assistantMessageId,
+        workspaceId: null,
+        metadata: { threadId, role: "assistant" },
       },
     ]);
   });

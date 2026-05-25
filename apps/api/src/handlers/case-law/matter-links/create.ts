@@ -4,6 +4,8 @@ import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { caseLawMatterLinks } from "@/api/db/schema";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -20,6 +22,7 @@ type CreateMatterLinkProps = {
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
   body: CreateMatterLinkBody;
+  recordAuditEvent: AuditRecorder;
 };
 
 export const createMatterLinkHandler = async ({
@@ -27,6 +30,7 @@ export const createMatterLinkHandler = async ({
   workspaceId,
   userId,
   body,
+  recordAuditEvent,
 }: CreateMatterLinkProps) => {
   const decision = await scopedDb((tx) =>
     tx.query.caseLawDecisions.findFirst({
@@ -54,8 +58,8 @@ export const createMatterLinkHandler = async ({
     });
   }
 
-  const links = await scopedDb((tx) =>
-    tx
+  const links = await scopedDb(async (tx) => {
+    const inserted = await tx
       .insert(caseLawMatterLinks)
       .values({
         decisionId: body.decisionId,
@@ -66,8 +70,24 @@ export const createMatterLinkHandler = async ({
       .onConflictDoNothing({
         target: [caseLawMatterLinks.decisionId, caseLawMatterLinks.workspaceId],
       })
-      .returning(),
-  );
+      .returning();
+
+    const insertedLink = inserted.at(0);
+    if (insertedLink) {
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.CREATE,
+        resourceType: AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK,
+        resourceId: insertedLink.id,
+        workspaceId,
+        metadata: {
+          decisionId: body.decisionId,
+          hasNote: (body.note ?? null) !== null,
+        },
+      });
+    }
+
+    return inserted;
+  });
   const link = links.at(0);
 
   if (!link) {

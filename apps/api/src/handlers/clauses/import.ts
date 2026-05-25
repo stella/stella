@@ -7,6 +7,8 @@ import { clauseCategories, clauses, clauseVersions } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -25,6 +27,7 @@ type ImportProps = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   body: { file: File };
+  recordAuditEvent: AuditRecorder;
 };
 
 const importHandler = async function* ({
@@ -32,6 +35,7 @@ const importHandler = async function* ({
   organizationId,
   userId,
   body: { file },
+  recordAuditEvent,
 }: ImportProps) {
   const text = await file.text();
 
@@ -115,6 +119,19 @@ const importHandler = async function* ({
       name,
     });
 
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.CREATE,
+      resourceType: AUDIT_RESOURCE_TYPE.CLAUSE_CATEGORY,
+      resourceId: id,
+      changes: {
+        created: {
+          old: null,
+          new: { name, parentId: null },
+        },
+      },
+      metadata: { source: "import" },
+    });
+
     categoryByName.set(key, {
       id,
       name,
@@ -132,6 +149,7 @@ const importHandler = async function* ({
   const result = yield* Result.await(
     safeDb(async (tx) => {
       const insertedIds: SafeId<"clause">[] = [];
+      const auditEvents: AuditEvent[] = [];
 
       for (const item of toProcess) {
         const clauseId = createSafeId<"clause">();
@@ -165,7 +183,26 @@ const importHandler = async function* ({
         });
 
         insertedIds.push(clauseId);
+        auditEvents.push({
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.CLAUSE,
+          resourceId: clauseId,
+          changes: {
+            created: {
+              old: null,
+              new: {
+                title: item.title,
+                categoryId,
+                language: item.language ?? null,
+                currentVersion: 1,
+              },
+            },
+          },
+          metadata: { source: "import" },
+        });
       }
+
+      await recordAuditEvent(tx, auditEvents);
 
       return { count: insertedIds.length, insertedIds };
     }),
@@ -211,12 +248,13 @@ const config = {
 
 const importClauses = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, user, body }) {
+  async function* ({ safeDb, session, user, body, recordAuditEvent }) {
     return yield* importHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
       userId: user.id,
       body,
+      recordAuditEvent,
     });
   },
 );

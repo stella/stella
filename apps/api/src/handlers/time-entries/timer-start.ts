@@ -8,6 +8,7 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -26,7 +27,14 @@ const timerStart = createSafeHandler(
     permissions: { timeEntry: ["create"] },
     body: timerStartBodySchema,
   },
-  async function* ({ safeDb, session, workspaceId, user, body }) {
+  async function* ({
+    safeDb,
+    session,
+    workspaceId,
+    user,
+    body,
+    recordAuditEvent,
+  }) {
     // Check active timer limit
     const activeTimerCount = yield* Result.await(
       safeDb((tx) =>
@@ -117,6 +125,28 @@ const timerStart = createSafeHandler(
             id: timeEntries.id,
             timerStartedAt: timeEntries.timerStartedAt,
           });
+
+        if (entry) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+            resourceId: entry.id,
+            changes: {
+              created: {
+                old: null,
+                new: {
+                  matterId: body.matterId,
+                  dateWorked: todayStr,
+                  source: TIME_ENTRY_SOURCE.TIMER,
+                  status: BILLING_STATUS.DRAFT,
+                  timerStartedAt: now.toISOString(),
+                  rateAtEntry: cents(body.rateAtEntry),
+                  currency: body.currency,
+                },
+              },
+            },
+          });
+        }
 
         return entry;
       }),

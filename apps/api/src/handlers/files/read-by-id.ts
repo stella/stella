@@ -12,10 +12,13 @@ import {
 } from "@/api/handlers/files/gotenberg";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { auditedPresignDownload } from "@/api/lib/audited-download";
 import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { injectStamp, isStampableDocx } from "@/api/lib/docx-stamp";
-import { getS3, presignDownloadUrl } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 type FilePurpose = "download" | "display" | "native-display";
@@ -26,6 +29,7 @@ type ReadFileHandlerProps = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   purpose: FilePurpose;
+  recordAuditEvent: AuditRecorder;
 };
 
 const BASE_URL = env.PUBLIC_URL ?? env.BETTER_AUTH_URL;
@@ -39,6 +43,7 @@ const fileFieldQuery = async (
     tx
       .select({
         content: fields.content,
+        entityId: entities.id,
         versionStamp: entityVersions.stamp,
         verificationCode: entityVersions.verificationCode,
       })
@@ -61,6 +66,7 @@ export const readFileHandler = async ({
   organizationId,
   workspaceId,
   purpose,
+  recordAuditEvent,
 }: ReadFileHandlerProps) => {
   const rows = await fileFieldQuery(scopedDb, fieldId, workspaceId);
   const row = rows.at(0);
@@ -82,16 +88,31 @@ export const readFileHandler = async ({
   });
 
   if (purpose === "download") {
+    const presignedUrl = await scopedDb(
+      async (tx) =>
+        await auditedPresignDownload({
+          tx,
+          recordAuditEvent,
+          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+          resourceId: row.entityId,
+          s3Key: fileKey,
+          expiresInSeconds: 900,
+          fileName: content.fileName,
+          metadata: {
+            fieldId,
+            mimeType: content.mimeType,
+            sizeBytes: content.sizeBytes,
+          },
+        }),
+    );
+
     return {
       fileId: content.id,
       mimeType: content.mimeType,
       originalMimeType: content.mimeType,
       fileName: content.fileName,
       encrypted: content.encrypted,
-      presignedUrl: presignDownloadUrl(fileKey, {
-        expiresIn: 900,
-        fileName: content.fileName,
-      }),
+      presignedUrl,
       stampable:
         !!row.versionStamp &&
         !!row.verificationCode &&

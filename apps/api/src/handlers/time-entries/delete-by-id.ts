@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -16,7 +17,7 @@ const deleteTimeEntryById = createSafeHandler(
     permissions: { timeEntry: ["delete"] },
     body: deleteTimeEntryBodySchema,
   },
-  async function* ({ safeDb, workspaceId, body }) {
+  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
     const existing = yield* Result.await(
       safeDb((tx) =>
         tx.query.timeEntries.findFirst({
@@ -26,6 +27,13 @@ const deleteTimeEntryById = createSafeHandler(
           },
           columns: {
             status: true,
+            matterId: true,
+            dateWorked: true,
+            durationMinutes: true,
+            billedMinutes: true,
+            rateAtEntry: true,
+            currency: true,
+            billable: true,
           },
         }),
       ),
@@ -39,24 +47,44 @@ const deleteTimeEntryById = createSafeHandler(
 
     if (existing.status === BILLING_STATUS.DRAFT) {
       yield* Result.await(
-        safeDb((tx) =>
-          tx
+        safeDb(async (tx) => {
+          await tx
             .delete(timeEntries)
             .where(
               and(
                 eq(timeEntries.id, body.id),
                 eq(timeEntries.workspaceId, workspaceId),
               ),
-            ),
-        ),
+            );
+
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.DELETE,
+            resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+            resourceId: body.id,
+            changes: {
+              deleted: {
+                old: {
+                  matterId: existing.matterId,
+                  dateWorked: existing.dateWorked,
+                  durationMinutes: existing.durationMinutes,
+                  billedMinutes: existing.billedMinutes,
+                  rateAtEntry: existing.rateAtEntry,
+                  currency: existing.currency,
+                  billable: existing.billable,
+                },
+                new: null,
+              },
+            },
+          });
+        }),
       );
       return Result.ok({ deleted: true });
     }
 
     // Non-draft entries get written off instead of deleted
     yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        await tx
           .update(timeEntries)
           .set({
             status: BILLING_STATUS.WRITTEN_OFF,
@@ -67,8 +95,20 @@ const deleteTimeEntryById = createSafeHandler(
               eq(timeEntries.id, body.id),
               eq(timeEntries.workspaceId, workspaceId),
             ),
-          ),
-      ),
+          );
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+          resourceId: body.id,
+          changes: {
+            status: {
+              old: existing.status,
+              new: BILLING_STATUS.WRITTEN_OFF,
+            },
+          },
+        });
+      }),
     );
 
     return Result.ok({ deleted: false });

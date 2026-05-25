@@ -4,12 +4,8 @@ import { and, eq } from "drizzle-orm";
 import type { SafeDb } from "@/api/db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import type { AgentSkillOrigin, AgentSkillScope } from "@/api/db/schema";
-import {
-  AUDIT_ACTION,
-  AUDIT_RESOURCE_TYPE,
-  createAuditContext,
-  writeAuditLog,
-} from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -21,12 +17,9 @@ type InstallSkillProps = {
   memberRole: { role: string };
   origin: AgentSkillOrigin;
   parsed: ParsedSkillPackage;
-  request: Request;
+  recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   scope: AgentSkillScope;
-  server: {
-    requestIP: (request: Request) => { address: string } | null;
-  } | null;
   session: { activeOrganizationId: SafeId<"organization"> };
   user: { id: SafeId<"user"> };
 };
@@ -40,10 +33,9 @@ export const installSkill = async ({
   memberRole,
   origin,
   parsed,
-  request,
+  recordAuditEvent,
   safeDb,
   scope,
-  server,
   session,
   user,
 }: InstallSkillProps) => {
@@ -106,32 +98,23 @@ export const installSkill = async ({
             );
           }
 
-          await writeAuditLog(
-            {
-              ...createAuditContext({
-                organizationId: session.activeOrganizationId,
-                userId: user.id,
-                request,
-                server,
-              }),
-              action: AUDIT_ACTION.CREATE,
-              resourceType: AUDIT_RESOURCE_TYPE.AGENT_SKILL,
-              resourceId: row.id,
-              changes: {
-                created: {
-                  old: null,
-                  new: {
-                    contentHash: parsed.contentHash,
-                    origin,
-                    resourceCount: parsed.resources.length,
-                    scope,
-                    slug: parsed.name,
-                  },
+          await recordAuditEvent(innerTx, {
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.AGENT_SKILL,
+            resourceId: row.id,
+            changes: {
+              created: {
+                old: null,
+                new: {
+                  contentHash: parsed.contentHash,
+                  origin,
+                  resourceCount: parsed.resources.length,
+                  scope,
+                  slug: parsed.name,
                 },
               },
             },
-            innerTx,
-          );
+          });
 
           return { id: row.id, type: "installed" };
         },

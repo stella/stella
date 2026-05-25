@@ -87,6 +87,7 @@ export const devRoute = new Elysia({ prefix: "/dev" })
     const orgId = ctx.session.activeOrganizationId;
 
     await ctx.scopedDb(async (tx) => {
+      // audit: skip — dev-only org-nuke endpoint; not deployed to prod
       // Delete in dependency order.
       // 1. Time entries and workspace contacts (org-scoped)
       await tx.delete(timeEntries).where(eq(timeEntries.organizationId, orgId));

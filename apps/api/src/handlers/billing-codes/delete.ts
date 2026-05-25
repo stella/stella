@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { billingCodes } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -19,7 +20,7 @@ const config = {
 
 const deleteBillingCode = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, body }) {
+  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
     const existing = yield* Result.await(
       safeDb((tx) =>
         tx.query.billingCodes.findFirst({
@@ -27,7 +28,12 @@ const deleteBillingCode = createSafeHandler(
             id: { eq: body.id },
             workspaceId: { eq: workspaceId },
           },
-          columns: { id: true },
+          columns: {
+            id: true,
+            type: true,
+            code: true,
+            label: true,
+          },
         }),
       ),
     );
@@ -39,16 +45,32 @@ const deleteBillingCode = createSafeHandler(
     }
 
     yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        await tx
           .delete(billingCodes)
           .where(
             and(
               eq(billingCodes.id, body.id),
               eq(billingCodes.workspaceId, workspaceId),
             ),
-          ),
-      ),
+          );
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.BILLING_CODE,
+          resourceId: body.id,
+          changes: {
+            deleted: {
+              old: {
+                type: existing.type,
+                code: existing.code,
+                label: existing.label,
+              },
+              new: null,
+            },
+          },
+        });
+      }),
     );
 
     return Result.ok({ deleted: true });

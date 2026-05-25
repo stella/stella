@@ -6,6 +6,8 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { deleteS3Objects } from "@/api/handlers/files/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditEvent } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
@@ -36,7 +38,7 @@ const extractFileRefs = (content: FieldContent): FileRef[] => {
 
 export default createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, params, session }) {
+  async function* ({ safeDb, workspaceId, params, session, recordAuditEvent }) {
     const organizationId = session.activeOrganizationId;
 
     // Verify the version belongs to this entity in this workspace
@@ -136,6 +138,7 @@ export default createSafeHandler(
       safeDb(async (tx) => {
         // If deleting the current version, promote the next latest FIRST
         // (FK constraint on entities.currentVersionId is RESTRICT)
+        let promotedVersionId: typeof params.versionId | null = null;
         if (isDeletingCurrent) {
           const nextLatest = await tx
             .select({ id: entityVersions.id })
@@ -159,6 +162,7 @@ export default createSafeHandler(
                 updatedAt: new Date(),
               })
               .where(eq(entities.id, params.entityId));
+            promotedVersionId = next.id;
           }
         }
 
@@ -171,6 +175,37 @@ export default createSafeHandler(
               eq(entityVersions.workspaceId, workspaceId),
             ),
           );
+
+        const events: AuditEvent[] = [
+          {
+            action: AUDIT_ACTION.DELETE,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
+            resourceId: params.versionId,
+            changes: {
+              deleted: {
+                old: {
+                  entityId: params.entityId,
+                  versionNumber: version.versionNumber,
+                },
+                new: null,
+              },
+            },
+          },
+        ];
+        if (promotedVersionId) {
+          events.push({
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+            resourceId: params.entityId,
+            changes: {
+              currentVersionId: {
+                old: params.versionId,
+                new: promotedVersionId,
+              },
+            },
+          });
+        }
+        await recordAuditEvent(tx, events);
       }),
     );
 

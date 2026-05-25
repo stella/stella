@@ -7,6 +7,11 @@ import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditRecorder,
+} from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanFile } from "@/api/lib/file-scan/scan";
@@ -31,7 +36,12 @@ const config = {
 const checkpointFolioCollabSession = createSafeTokenHandler(
   config,
   // eslint-disable-next-line require-yield -- token auth + scopedDb returns plain Promises; nothing to Result.await
-  async function* ({ body: { file, token }, params: { sessionId } }) {
+  async function* ({
+    body: { file, token },
+    params: { sessionId },
+    request,
+    server,
+  }) {
     if (file.type !== DOCX_MIME_TYPE) {
       return Result.err(
         new HandlerError({
@@ -72,7 +82,7 @@ const checkpointFolioCollabSession = createSafeTokenHandler(
       );
     }
 
-    const { canEdit, fileName, organizationId, scopedDb, workspaceId } =
+    const { canEdit, fileName, organizationId, scopedDb, userId, workspaceId } =
       authorizedSession.value;
 
     if (!canEdit) {
@@ -123,6 +133,14 @@ const checkpointFolioCollabSession = createSafeTokenHandler(
             .filter((finding) => finding.severity === "warn")
             .map((finding) => finding.message)
         : null;
+
+    const recordAuditEvent = createAuditRecorder({
+      organizationId,
+      workspaceId,
+      userId,
+      request,
+      server,
+    });
 
     const result = await scopedDb(async (tx) => {
       const existingSessions = await tx
@@ -198,6 +216,23 @@ const checkpointFolioCollabSession = createSafeTokenHandler(
           fileName,
         })
         .where(eq(folioCollabSessions.id, existingSession.id));
+
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_SESSION,
+        resourceId: existingSession.id,
+        changes: {
+          docxCheckpointSha256Hex: {
+            old: existingSession.docxCheckpointSha256Hex,
+            new: sha256Hex,
+          },
+        },
+        metadata: {
+          fileName,
+          sizeBytes: file.size,
+          sha256Hex,
+        },
+      });
 
       return {
         checkpointedAt: checkpointedAt.toISOString(),

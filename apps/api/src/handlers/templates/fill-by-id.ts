@@ -10,6 +10,8 @@ import { isTemplateData } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -43,6 +45,7 @@ type FillByIdProps = {
   templateId: SafeId<"template">;
   body: { values: string };
   query: { format?: "docx" | "pdf" };
+  recordAuditEvent: AuditRecorder;
 };
 
 const fillByIdHandler = async function* ({
@@ -53,6 +56,7 @@ const fillByIdHandler = async function* ({
   templateId,
   body: { values: valuesJson },
   query: { format = "docx" },
+  recordAuditEvent,
 }: FillByIdProps) {
   const template = yield* Result.await(
     safeDb((tx) =>
@@ -138,23 +142,42 @@ const fillByIdHandler = async function* ({
   const fillStatus =
     result.unmatchedPlaceholders.length > 0 ? "partial" : "success";
 
-  // Best-effort analytics; don't block the download
-  void scopedDb((tx) =>
-    tx.insert(templateFills).values({
-      organizationId,
-      templateId,
-      userId,
-      format,
-      status: fillStatus,
-      unmatchedCount: result.unmatchedPlaceholders.length,
-      unusedCount: result.unusedValues.length,
-      structureErrors:
-        result.structureErrors.length > 0 ? result.structureErrors : null,
+  yield* Result.await(
+    Result.tryPromise({
+      try: async () =>
+        await scopedDb(async (tx) => {
+          await tx.insert(templateFills).values({
+            organizationId,
+            templateId,
+            userId,
+            format,
+            status: fillStatus,
+            unmatchedCount: result.unmatchedPlaceholders.length,
+            unusedCount: result.unusedValues.length,
+            structureErrors:
+              result.structureErrors.length > 0 ? result.structureErrors : null,
+          });
+
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.DOWNLOAD,
+            resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
+            resourceId: templateId,
+            workspaceId: null,
+            metadata: {
+              format,
+              status: fillStatus,
+              unmatchedCount: result.unmatchedPlaceholders.length,
+            },
+          });
+        }),
+      catch: (cause) =>
+        new HandlerError({
+          status: 500,
+          message: "Template fill audit failed",
+          cause,
+        }),
     }),
-  )
-    // TODO: fix this
-    // oxlint-disable-next-line no-empty-function
-    .catch(() => {});
+  );
 
   const baseName = template.fileName;
 
@@ -227,7 +250,16 @@ const config = {
 
 const fillTemplateById = createSafeRootHandler(
   config,
-  async function* ({ safeDb, scopedDb, session, user, params, body, query }) {
+  async function* ({
+    safeDb,
+    scopedDb,
+    session,
+    user,
+    params,
+    body,
+    query,
+    recordAuditEvent,
+  }) {
     return yield* fillByIdHandler({
       safeDb,
       scopedDb,
@@ -236,6 +268,7 @@ const fillTemplateById = createSafeRootHandler(
       templateId: params.templateId,
       body,
       query,
+      recordAuditEvent,
     });
   },
 );

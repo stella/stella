@@ -17,12 +17,7 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { deleteS3Keys, deleteS3Objects } from "@/api/handlers/files/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import {
-  AUDIT_ACTION,
-  AUDIT_RESOURCE_TYPE,
-  createAuditContext,
-  writeAuditLog,
-} from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -32,12 +27,14 @@ const changeWorkspaceStatus = async (
   workspaceId: SafeId<"workspace">,
   newStatus: "deleting" | "active",
 ) =>
-  await scopedDb((tx) =>
-    tx
+  await scopedDb(async (tx) => {
+    // audit: skip — internal seal/unseal toggle wrapping the workspace
+    // delete; the audited DELETE below records the user-visible event.
+    await tx
       .update(workspaces)
       .set({ status: newStatus })
-      .where(eq(workspaces.id, workspaceId)),
-  );
+      .where(eq(workspaces.id, workspaceId));
+  });
 
 type FileRef = { fileId: string; mimeType: string };
 
@@ -71,9 +68,7 @@ const deleteWorkspace = createSafeHandler(
     safeDb,
     workspaceId,
     session,
-    user,
-    request,
-    server,
+    recordAuditEvent,
   }) {
     const organizationId = session.activeOrganizationId;
 
@@ -229,27 +224,17 @@ const deleteWorkspace = createSafeHandler(
       // propertyDependencies. Entities already gone.
       await tx.delete(workspaces).where(eq(workspaces.id, workspaceId));
 
-      await writeAuditLog(
-        {
-          ...createAuditContext({
-            organizationId,
-            workspaceId,
-            userId: user.id,
-            request,
-            server,
-          }),
-          action: AUDIT_ACTION.DELETE,
-          resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
-          resourceId: workspaceId,
-          changes: {
-            deleted: {
-              old: workspace,
-              new: null,
-            },
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.DELETE,
+        resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+        resourceId: workspaceId,
+        changes: {
+          deleted: {
+            old: workspace,
+            new: null,
           },
         },
-        tx,
-      );
+      });
     });
 
     if (Result.isError(deleteResult)) {

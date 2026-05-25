@@ -14,6 +14,7 @@ import {
 import { normalizeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -55,7 +56,7 @@ const createContact = createSafeRootHandler(
     permissions: { contact: ["create"] },
     body: createContactBodySchema,
   },
-  async function* ({ safeDb, session, user, body }) {
+  async function* ({ safeDb, session, user, body, recordAuditEvent }) {
     const [totalRow] = yield* Result.await(
       safeDb((tx) =>
         tx
@@ -109,9 +110,9 @@ const createContact = createSafeRootHandler(
       }
     }
 
-    const [contact] = yield* Result.await(
-      safeDb((tx) =>
-        tx
+    const contact = yield* Result.await(
+      safeDb(async (tx) => {
+        const [row] = await tx
           .insert(contacts)
           .values({
             id: body.id,
@@ -145,8 +146,28 @@ const createContact = createSafeRootHandler(
             responsibleAttorneyId: body.responsibleAttorneyId,
             createdBy: user.id,
           })
-          .returning(),
-      ),
+          .returning();
+
+        if (row) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
+            resourceId: row.id,
+            workspaceId: null,
+            changes: {
+              created: {
+                old: null,
+                new: {
+                  type: row.type,
+                  displayName: row.displayName,
+                },
+              },
+            },
+          });
+        }
+
+        return row;
+      }),
     );
 
     const created = contact ?? panic("Contact insert returned no row");

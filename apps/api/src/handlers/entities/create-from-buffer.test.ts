@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import {
-  auditLogs,
   documentCounters,
   entities,
   entityVersions,
@@ -42,14 +41,8 @@ const workspaceId = toSafeId<"workspace">(
 const userId = toSafeId<"user">("00000000-0000-0000-0000-000000000003");
 const propertyId = toSafeId<"property">("00000000-0000-0000-0000-000000000004");
 
-const isArrayWithLength = (
-  value: unknown,
-  length: number,
-): value is unknown[] => Array.isArray(value) && value.length === length;
-
 describe("createEntityFromBuffer", () => {
   test("writes an entity create audit log with the DB insert", async () => {
-    const insertedAuditLogs: unknown[] = [];
     let nextDocumentSequence = 0;
     const tx = {
       query: {
@@ -67,7 +60,7 @@ describe("createEntityFromBuffer", () => {
       },
       $count: async () => 0,
       insert: (table: unknown) => ({
-        values: (value: unknown) => {
+        values: () => {
           if (table === documentCounters) {
             return {
               onConflictDoUpdate: () => ({
@@ -87,10 +80,6 @@ describe("createEntityFromBuffer", () => {
             return undefined;
           }
 
-          if (table === auditLogs) {
-            insertedAuditLogs.push(value);
-          }
-
           return undefined;
         },
       }),
@@ -102,20 +91,14 @@ describe("createEntityFromBuffer", () => {
     };
     const { scopedDb } = createScopedDbMock(tx);
 
+    const recordedAuditEvents: unknown[] = [];
     const result = await createEntityFromBuffer({
       scopedDb,
       organizationId,
       workspaceId,
       userId,
-      auditContext: {
-        organizationId,
-        workspaceId,
-        userId,
-        metadata: {
-          forwardedFor: null,
-          ipAddress: null,
-          userAgent: null,
-        },
+      recordAuditEvent: async (_tx, event) => {
+        recordedAuditEvents.push(event);
       },
       buffer: new TextEncoder().encode("docx bytes"),
       fileName: "Generated Agreement.docx",
@@ -124,13 +107,8 @@ describe("createEntityFromBuffer", () => {
     });
 
     expect(Result.isOk(result)).toBe(true);
-    expect(insertedAuditLogs).toHaveLength(1);
-    const auditBatch = insertedAuditLogs.at(0);
-    expect(isArrayWithLength(auditBatch, 1)).toBe(true);
-    if (!isArrayWithLength(auditBatch, 1)) {
-      throw new Error("Expected one audit log insert");
-    }
-    expect(auditBatch.at(0)).toEqual({
+    expect(recordedAuditEvents).toHaveLength(1);
+    expect(recordedAuditEvents.at(0)).toEqual({
       action: "create",
       changes: {
         created: {
@@ -145,16 +123,8 @@ describe("createEntityFromBuffer", () => {
           },
         },
       },
-      metadata: {
-        forwardedFor: null,
-        ipAddress: null,
-        userAgent: null,
-      },
-      organizationId,
       resourceId: expect.any(String),
       resourceType: "entity",
-      userId,
-      workspaceId,
     });
   });
 });

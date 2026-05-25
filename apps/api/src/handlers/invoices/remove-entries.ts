@@ -12,6 +12,9 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditEvent } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
@@ -27,13 +30,69 @@ const removeEntriesBodySchema = t.Object({
 
 const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
 
+const buildDetachEvents = (params: {
+  invoiceId: SafeId<"invoice">;
+  detachedTimeEntries: { id: SafeId<"timeEntry"> }[];
+  detachedExpenses: { id: SafeId<"expense"> }[];
+  oldTotalAmount: number;
+  totalAmount: number;
+}): AuditEvent[] => {
+  const events: AuditEvent[] = [
+    {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+      resourceId: params.invoiceId,
+      changes: {
+        totalAmount: { old: params.oldTotalAmount, new: params.totalAmount },
+        detachedTimeEntries: {
+          old: params.detachedTimeEntries.map((row) => row.id),
+          new: null,
+        },
+        detachedExpenses: {
+          old: params.detachedExpenses.map((row) => row.id),
+          new: null,
+        },
+      },
+    },
+  ];
+  for (const row of params.detachedTimeEntries) {
+    events.push({
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+      resourceId: row.id,
+      changes: {
+        status: {
+          old: BILLING_STATUS.BILLED,
+          new: BILLING_STATUS.APPROVED,
+        },
+        invoiceId: { old: params.invoiceId, new: null },
+      },
+    });
+  }
+  for (const row of params.detachedExpenses) {
+    events.push({
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.EXPENSE,
+      resourceId: row.id,
+      changes: {
+        status: {
+          old: BILLING_STATUS.BILLED,
+          new: BILLING_STATUS.APPROVED,
+        },
+        invoiceId: { old: params.invoiceId, new: null },
+      },
+    });
+  }
+  return events;
+};
+
 const removeEntries = createSafeHandler(
   {
     permissions: { invoice: ["update"] },
     params: invoiceParamsSchema,
     body: removeEntriesBodySchema,
   },
-  async function* ({ safeDb, workspaceId, params, body }) {
+  async function* ({ safeDb, workspaceId, params, body, recordAuditEvent }) {
     if (
       (body.timeEntryIds?.length ?? 0) === 0 &&
       (body.expenseIds?.length ?? 0) === 0
@@ -83,15 +142,16 @@ const removeEntries = createSafeHandler(
             workspaceId: { eq: workspaceId },
             status: { eq: INVOICE_STATUS.DRAFT },
           },
-          columns: { id: true },
+          columns: { id: true, totalAmount: true },
         });
         if (!invoiceCheck) {
           return { ok: false as const };
         }
 
         const timeEntryIds = body.timeEntryIds;
+        let detachedTimeEntries: { id: SafeId<"timeEntry"> }[] = [];
         if (timeEntryIds && timeEntryIds.length > 0) {
-          await tx
+          detachedTimeEntries = await tx
             .update(timeEntries)
             .set({
               invoiceId: null,
@@ -104,12 +164,14 @@ const removeEntries = createSafeHandler(
                 eq(timeEntries.workspaceId, workspaceId),
                 inArray(timeEntries.id, timeEntryIds),
               ),
-            );
+            )
+            .returning({ id: timeEntries.id });
         }
 
         const expenseIds = body.expenseIds;
+        let detachedExpenses: { id: SafeId<"expense"> }[] = [];
         if (expenseIds && expenseIds.length > 0) {
-          await tx
+          detachedExpenses = await tx
             .update(expenses)
             .set({
               invoiceId: null,
@@ -122,7 +184,8 @@ const removeEntries = createSafeHandler(
                 eq(expenses.workspaceId, workspaceId),
                 inArray(expenses.id, expenseIds),
               ),
-            );
+            )
+            .returning({ id: expenses.id });
         }
 
         const remainingTimeEntries = await tx
@@ -174,6 +237,17 @@ const removeEntries = createSafeHandler(
               eq(invoices.workspaceId, workspaceId),
             ),
           );
+
+        await recordAuditEvent(
+          tx,
+          buildDetachEvents({
+            invoiceId: params.invoiceId,
+            detachedTimeEntries,
+            detachedExpenses,
+            oldTotalAmount: invoiceCheck.totalAmount,
+            totalAmount,
+          }),
+        );
 
         return { ok: true as const };
       }),

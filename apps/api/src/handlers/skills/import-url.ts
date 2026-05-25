@@ -23,9 +23,8 @@ const importSkillFromUrl = createSafeRootHandler(
   async function* ({
     body,
     memberRole,
-    request,
+    recordAuditEvent,
     safeDb,
-    server,
     session,
     user,
   }) {
@@ -43,10 +42,9 @@ const importSkillFromUrl = createSafeRootHandler(
       memberRole,
       origin: "url",
       parsed,
-      request,
+      recordAuditEvent,
       safeDb,
       scope: body.scope,
-      server,
       session,
       user,
     });

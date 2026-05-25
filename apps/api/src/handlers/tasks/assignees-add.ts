@@ -3,6 +3,7 @@ import { t } from "elysia";
 
 import { taskAssignees } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { TASK_ASSIGNEE_ROLES } from "@/api/lib/entity-constants";
 import type { TaskAssigneeRole } from "@/api/lib/entity-constants";
@@ -23,7 +24,7 @@ const addAssignee = createSafeHandler(
     permissions: { entity: ["update"] },
     body: addAssigneeBodySchema,
   },
-  async function* ({ workspaceId, body, safeDb }) {
+  async function* ({ workspaceId, body, safeDb, recordAuditEvent }) {
     const role = body.role ?? "assignee";
     if (!isTaskAssigneeRole(role)) {
       return Result.err(
@@ -74,8 +75,8 @@ const addAssignee = createSafeHandler(
     }
 
     yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        await tx
           .insert(taskAssignees)
           .values({
             entityId: body.taskId,
@@ -86,8 +87,19 @@ const addAssignee = createSafeHandler(
           .onConflictDoUpdate({
             target: [taskAssignees.entityId, taskAssignees.userId],
             set: { role },
-          }),
-      ),
+          });
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+          resourceId: body.taskId,
+          metadata: {
+            change: "assignee-added",
+            assigneeUserId: body.userId,
+            role,
+          },
+        });
+      }),
     );
 
     return Result.ok({ success: true });

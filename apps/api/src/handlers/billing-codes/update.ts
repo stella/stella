@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { billingCodes } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
@@ -25,7 +26,7 @@ const config = {
 
 const updateBillingCode = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, body }) {
+  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
     const existing = yield* Result.await(
       safeDb((tx) =>
         tx.query.billingCodes.findFirst({
@@ -33,7 +34,13 @@ const updateBillingCode = createSafeHandler(
             id: { eq: body.id },
             workspaceId: { eq: workspaceId },
           },
-          columns: { id: true },
+          columns: {
+            id: true,
+            code: true,
+            label: true,
+            active: true,
+            sortOrder: true,
+          },
         }),
       ),
     );
@@ -50,8 +57,8 @@ const updateBillingCode = createSafeHandler(
       return Result.ok({ id: body.id });
     }
 
-    const updateResult = await safeDb((tx) =>
-      tx
+    const updateResult = await safeDb(async (tx) => {
+      await tx
         .update(billingCodes)
         .set(updates)
         .where(
@@ -59,8 +66,23 @@ const updateBillingCode = createSafeHandler(
             eq(billingCodes.id, body.id),
             eq(billingCodes.workspaceId, workspaceId),
           ),
-        ),
-    );
+        );
+
+      const changes: Record<string, { old: unknown; new: unknown }> = {};
+      for (const field of ["code", "label", "active", "sortOrder"] as const) {
+        const next = updates[field];
+        if (next !== undefined) {
+          changes[field] = { old: existing[field], new: next };
+        }
+      }
+
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.BILLING_CODE,
+        resourceId: body.id,
+        changes,
+      });
+    });
 
     if (Result.isError(updateResult)) {
       if (

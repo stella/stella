@@ -8,13 +8,14 @@ import {
 } from "@/api/db/schema";
 import { roundToIncrement } from "@/api/handlers/time-entries/create";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const timerStop = createSafeHandler(
   {
     permissions: { timeEntry: ["update"] },
   },
-  async function* ({ safeDb, user }) {
+  async function* ({ safeDb, user, recordAuditEvent }) {
     const [activeEntry] = yield* Result.await(
       safeDb((tx) =>
         tx
@@ -46,13 +47,14 @@ const timerStop = createSafeHandler(
     }
 
     const now = new Date();
-    const elapsedMs = now.getTime() - activeEntry.timerStartedAt.getTime();
+    const startedAt = activeEntry.timerStartedAt;
+    const elapsedMs = now.getTime() - startedAt.getTime();
     const rawMinutes = Math.max(1, Math.round(elapsedMs / 60_000));
     const billedMinutes = roundToIncrement(rawMinutes);
 
     yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        await tx
           .update(timeEntries)
           .set({
             durationMinutes: rawMinutes,
@@ -66,8 +68,24 @@ const timerStop = createSafeHandler(
               eq(timeEntries.id, activeEntry.id),
               eq(timeEntries.workspaceId, activeEntry.workspaceId),
             ),
-          ),
-      ),
+          );
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+          resourceId: activeEntry.id,
+          workspaceId: activeEntry.workspaceId,
+          changes: {
+            timerStartedAt: {
+              old: startedAt.toISOString(),
+              new: null,
+            },
+            timerStoppedAt: { old: null, new: now.toISOString() },
+            durationMinutes: { old: 0, new: rawMinutes },
+            billedMinutes: { old: 0, new: billedMinutes },
+          },
+        });
+      }),
     );
 
     return Result.ok({

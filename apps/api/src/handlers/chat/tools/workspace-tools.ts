@@ -345,6 +345,7 @@ export const createWorkspaceTools = ({
           (Array.isArray(value) && value.length === 0);
 
         await scopedDb(async (tx) => {
+          // audit: skip — MCP tool execution metadata; audit happens at the parent user action
           await tx
             .delete(fields)
             .where(

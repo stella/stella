@@ -267,6 +267,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-api-url.ts",
     "./.oxlint-plugins/require-fetch-timeout.ts",
     "./.oxlint-plugins/no-bare-error.ts",
+    "./.oxlint-plugins/require-audit-on-mutation.ts",
     "./.oxlint-plugins/must-use-result.ts",
     "./.oxlint-plugins/no-any-casts.ts",
     "./.oxlint-plugins/no-dangerous-type-assertions.ts",
@@ -612,6 +613,18 @@ export default defineConfig({
         "**/*.config.{ts,tsx}",
       ],
       rules: { "require-fetch-timeout/require-fetch-timeout": "off" },
+    },
+    {
+      // Every workspace mutation must leave an audit trail (SOC 2 /
+      // ISO 27001). Scope to handler files — DB writes elsewhere
+      // (auth lifecycle hooks, job framework internals, RLS session
+      // setup) have different audit semantics and would generate
+      // false positives.
+      files: ["apps/api/src/handlers/**/*.ts"],
+      excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
+      rules: {
+        "require-audit-on-mutation/require-audit-on-mutation": "error",
+      },
     },
     {
       files: ["apps/api/src/**/*.{ts,tsx}", "apps/api/scripts/**/*.ts"],

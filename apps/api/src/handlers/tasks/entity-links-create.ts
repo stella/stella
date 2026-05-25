@@ -3,6 +3,7 @@ import { t } from "elysia";
 
 import { entityLinks } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { ENTITY_LINK_TYPES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -19,7 +20,7 @@ const createEntityLink = createSafeHandler(
     permissions: { entity: ["update"] },
     body: createEntityLinkBodySchema,
   },
-  async function* ({ workspaceId, body, safeDb }) {
+  async function* ({ workspaceId, body, safeDb, recordAuditEvent }) {
     const linkType = body.linkType ?? "related";
     if (!includes(ENTITY_LINK_TYPES, linkType)) {
       return Result.err(
@@ -106,8 +107,8 @@ const createEntityLink = createSafeHandler(
     }
 
     const inserted = yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        const rows = await tx
           .insert(entityLinks)
           .values({
             workspaceId,
@@ -116,8 +117,28 @@ const createEntityLink = createSafeHandler(
             linkType,
           })
           .onConflictDoNothing()
-          .returning({ id: entityLinks.id }),
-      ),
+          .returning({ id: entityLinks.id });
+
+        if (rows.length > 0) {
+          const taskEntityId =
+            sourceEntity.kind === "task"
+              ? body.sourceEntityId
+              : body.targetEntityId;
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+            resourceId: taskEntityId,
+            metadata: {
+              change: "entity-link-added",
+              linkType,
+              sourceEntityId: body.sourceEntityId,
+              targetEntityId: body.targetEntityId,
+            },
+          });
+        }
+
+        return rows;
+      }),
     );
 
     if (inserted.length === 0) {

@@ -12,12 +12,7 @@ import {
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import {
-  AUDIT_ACTION,
-  AUDIT_RESOURCE_TYPE,
-  createAuditContext,
-  writeAuditLog,
-} from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -100,15 +95,7 @@ const createDefaultTool = ({
 
 const createProperty = createSafeHandler(
   config,
-  async function* ({
-    safeDb,
-    session,
-    workspaceId,
-    user,
-    request,
-    server,
-    body,
-  }) {
+  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
     let content: PropertyContent | null = null;
     let tool: PropertyTool | null = null;
     const defaultTool = () =>
@@ -256,31 +243,21 @@ const createProperty = createSafeHandler(
           );
         }
 
-        await writeAuditLog(
-          {
-            ...createAuditContext({
-              organizationId: session.activeOrganizationId,
-              workspaceId,
-              userId: user.id,
-              request,
-              server,
-            }),
-            action: AUDIT_ACTION.CREATE,
-            resourceType: AUDIT_RESOURCE_TYPE.PROPERTY,
-            resourceId: inserted.id,
-            changes: {
-              created: {
-                old: null,
-                new: {
-                  name: body.name,
-                  contentType: content.type,
-                  toolType: tool.type,
-                },
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.PROPERTY,
+          resourceId: inserted.id,
+          changes: {
+            created: {
+              old: null,
+              new: {
+                name: body.name,
+                contentType: content.type,
+                toolType: tool.type,
               },
             },
           },
-          tx,
-        );
+        });
 
         return { ok: true as const, id: inserted.id };
       }),

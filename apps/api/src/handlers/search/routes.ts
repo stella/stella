@@ -125,6 +125,7 @@ const searchSummaryChatEndpoint = createSafeRootHandler(
     scopedDb,
     session,
     user,
+    recordAuditEvent,
   }) {
     const response = yield* Result.await(
       Result.tryPromise(
@@ -136,6 +137,7 @@ const searchSummaryChatEndpoint = createSafeRootHandler(
             safeDb,
             scopedDb,
             userId: user.id,
+            recordAuditEvent,
           }),
       ),
     );

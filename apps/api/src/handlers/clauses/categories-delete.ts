@@ -17,11 +17,12 @@ const config = {
 
 const deleteClauseCategory = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, params }) {
+  async function* ({ safeDb, session, params, recordAuditEvent }) {
     return yield* deleteCategoryHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
       categoryId: params.categoryId,
+      recordAuditEvent,
     });
   },
 );

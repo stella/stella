@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { promptShortcuts } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 
 const DEFAULT_SHORTCUTS = [
@@ -43,7 +44,7 @@ const config = {
 
 const seedShortcuts = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, user }) {
+  async function* ({ safeDb, session, user, recordAuditEvent }) {
     // Private shortcuts are user-global (the unique index is
     // `(userId, command) WHERE scope = 'private'`), so the existence
     // check must scope by user + private — not by active org. Filtering
@@ -67,26 +68,47 @@ const seedShortcuts = createSafeRootHandler(
     }
 
     yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        const seedRows = DEFAULT_SHORTCUTS.map((s) => ({
+          id: createSafeId<"promptShortcut">(),
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+          scope: "private" as const,
+          name: s.name,
+          description: s.description,
+          command: s.command,
+          prompt: s.prompt,
+          isDefault: true,
+        }));
+
+        await tx
           .insert(promptShortcuts)
-          .values(
-            DEFAULT_SHORTCUTS.map((s) => ({
-              id: createSafeId<"promptShortcut">(),
-              organizationId: session.activeOrganizationId,
-              userId: user.id,
-              scope: "private" as const,
-              name: s.name,
-              description: s.description,
-              command: s.command,
-              prompt: s.prompt,
-              isDefault: true,
-            })),
-          )
+          .values(seedRows)
           // Defensive in case two clients race the seed; the existence
           // check above is the primary gate.
-          .onConflictDoNothing(),
-      ),
+          .onConflictDoNothing();
+
+        await recordAuditEvent(
+          tx,
+          seedRows.map((row) => ({
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.PROMPT_SHORTCUT,
+            resourceId: row.id,
+            changes: {
+              created: {
+                old: null,
+                new: {
+                  scope: row.scope,
+                  name: row.name,
+                  command: row.command,
+                  isDefault: row.isDefault,
+                },
+              },
+            },
+            metadata: { seeded: true },
+          })),
+        );
+      }),
     );
 
     return Result.ok({ seeded: true });

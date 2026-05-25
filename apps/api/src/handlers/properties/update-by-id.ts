@@ -13,12 +13,7 @@ import type { PropertyTool } from "@/api/db/schema-validators";
 import { comparePropertiesForStale } from "@/api/handlers/properties/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import {
-  AUDIT_ACTION,
-  AUDIT_RESOURCE_TYPE,
-  createAuditContext,
-  writeAuditLog,
-} from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tDefaultVarchar,
@@ -159,13 +154,10 @@ const updateProperty = createSafeHandler(
   config,
   async function* ({
     safeDb,
-    session,
     workspaceId,
-    user,
-    request,
-    server,
     params: { propertyId },
     body,
+    recordAuditEvent,
   }) {
     const { name, content } = body;
     const tool =
@@ -318,31 +310,21 @@ const updateProperty = createSafeHandler(
           );
         }
 
-        await writeAuditLog(
-          {
-            ...createAuditContext({
-              organizationId: session.activeOrganizationId,
-              workspaceId,
-              userId: user.id,
-              request,
-              server,
-            }),
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.PROPERTY,
-            resourceId: propertyId,
-            changes: {
-              name: { old: oldProperty.name, new: name },
-              content: { old: oldProperty.content, new: content },
-              tool: { old: oldProperty.tool, new: dbTool },
-              dependencies: { old: oldDependencies, new: dependencies },
-              status: {
-                old: oldProperty.status,
-                new: isStale ? "stale" : "fresh",
-              },
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.PROPERTY,
+          resourceId: propertyId,
+          changes: {
+            name: { old: oldProperty.name, new: name },
+            content: { old: oldProperty.content, new: content },
+            tool: { old: oldProperty.tool, new: dbTool },
+            dependencies: { old: oldDependencies, new: dependencies },
+            status: {
+              old: oldProperty.status,
+              new: isStale ? "stale" : "fresh",
             },
           },
-          tx,
-        );
+        });
 
         return { ok: true as const };
       }),

@@ -7,6 +7,11 @@ import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditRecorder,
+} from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -35,7 +40,12 @@ const config = {
 const cancelFolioCollabSession = createSafeTokenHandler(
   config,
   // eslint-disable-next-line require-yield -- token auth + scopedDb returns plain Promises; nothing to Result.await
-  async function* ({ body: { token }, params: { sessionId } }) {
+  async function* ({
+    body: { token },
+    params: { sessionId },
+    request,
+    server,
+  }) {
     const authorizedSession = await authorizeFolioCollabSession({
       sessionId,
       token,
@@ -66,7 +76,7 @@ const cancelFolioCollabSession = createSafeTokenHandler(
       );
     }
 
-    const { canEdit, organizationId, scopedDb, workspaceId } =
+    const { canEdit, organizationId, scopedDb, userId, workspaceId } =
       authorizedSession.value;
 
     if (!canEdit) {
@@ -77,6 +87,14 @@ const cancelFolioCollabSession = createSafeTokenHandler(
         }),
       );
     }
+
+    const recordAuditEvent = createAuditRecorder({
+      organizationId,
+      workspaceId,
+      userId,
+      request,
+      server,
+    });
 
     const storedFiles: StoredSessionFile[] = [];
     const cancelled = await scopedDb(async (tx) => {
@@ -137,6 +155,15 @@ const cancelFolioCollabSession = createSafeTokenHandler(
         .update(folioCollabSessions)
         .set({ closedAt, status: "cancelled" })
         .where(eq(folioCollabSessions.id, session.id));
+
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_SESSION,
+        resourceId: session.id,
+        changes: {
+          status: { old: session.status, new: "cancelled" },
+        },
+      });
 
       return { cancelledAt: closedAt } as const;
     });

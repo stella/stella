@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
@@ -19,10 +20,10 @@ const deleteContactById = createSafeRootHandler(
     permissions: { contact: ["delete"] },
     params: deleteContactParamsSchema,
   },
-  async function* ({ safeDb, session, params }) {
+  async function* ({ safeDb, session, params, recordAuditEvent }) {
     const txResult = await safeDb(async (tx) => {
       const contact = await tx
-        .select({ id: contacts.id })
+        .select({ id: contacts.id, displayName: contacts.displayName })
         .from(contacts)
         .where(
           and(
@@ -78,6 +79,19 @@ const deleteContactById = createSafeRootHandler(
             eq(contacts.organizationId, session.activeOrganizationId),
           ),
         );
+
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.DELETE,
+        resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
+        resourceId: params.contactId,
+        workspaceId: null,
+        changes: {
+          deleted: {
+            old: { displayName: contact.displayName },
+            new: null,
+          },
+        },
+      });
 
       return {
         ok: true as const,

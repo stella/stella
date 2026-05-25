@@ -24,9 +24,8 @@ const uploadSkill = createSafeRootHandler(
   async function* ({
     body,
     memberRole,
-    request,
+    recordAuditEvent,
     safeDb,
-    server,
     session,
     user,
   }) {
@@ -44,10 +43,9 @@ const uploadSkill = createSafeRootHandler(
       memberRole,
       origin: "upload",
       parsed,
-      request,
+      recordAuditEvent,
       safeDb,
       scope: body.scope,
-      server,
       session,
       user,
     });

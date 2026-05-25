@@ -15,6 +15,8 @@ import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -42,6 +44,7 @@ type DownloadZipHandlerProps = {
   entityId: SafeId<"entity">;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
+  recordAuditEvent: AuditRecorder;
 };
 
 // A document descendant with an uploaded file, placed at `path`.
@@ -93,19 +96,35 @@ const downloadZipHandler = async function* ({
   entityId,
   organizationId,
   workspaceId,
+  recordAuditEvent,
 }: DownloadZipHandlerProps) {
-  const folderRows = yield* Result.await(
-    safeDb((tx) =>
-      tx
+  const folder = yield* Result.await(
+    safeDb(async (tx) => {
+      const folderRows = await tx
         .select({ id: entities.id, kind: entities.kind, name: entities.name })
         .from(entities)
         .where(
           and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
         )
-        .limit(1),
-    ),
+        .limit(1);
+      const f = folderRows.at(0);
+      if (!f || f.kind !== "folder") {
+        return f ?? null;
+      }
+      // Audit the download grant in the same tx as the lookup so the
+      // record exists whether or not streaming later succeeds.
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.DOWNLOAD,
+        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+        resourceId: entityId,
+        metadata: {
+          archiveType: "zip",
+          rootFolderName: f.name,
+        },
+      });
+      return f;
+    }),
   );
-  const folder = folderRows.at(0);
 
   if (!folder) {
     return Result.err(
@@ -303,12 +322,13 @@ const config = {
 
 const downloadZip = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, params }) {
+  async function* ({ safeDb, session, workspaceId, params, recordAuditEvent }) {
     return yield* downloadZipHandler({
       safeDb,
       entityId: params.entityId,
       organizationId: session.activeOrganizationId,
       workspaceId,
+      recordAuditEvent,
     });
   },
 );

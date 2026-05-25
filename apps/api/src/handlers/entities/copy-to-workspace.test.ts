@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { auditLogs, documentCounters, entities, fields } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
+import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 // S3 mocks
@@ -27,6 +29,13 @@ void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: processExtractionMock,
 }));
 
+const broadcastQueryInvalidationToTargetWorkspaceMock = mock(() => undefined);
+void mock.module("@/api/lib/invalidate-query-macro", () => ({
+  broadcastQueryInvalidationToOrganization: mock(() => undefined),
+  broadcastQueryInvalidationToTargetWorkspace:
+    broadcastQueryInvalidationToTargetWorkspaceMock,
+}));
+
 const syncWorkspaceSearchActivityMock = mock(async () => {});
 void mock.module("@/api/lib/search/index-global", () => ({
   rebuildSupplementalSearchIndex: mock(async () => undefined),
@@ -42,12 +51,6 @@ void mock.module("@/api/lib/search/index-global", () => ({
   upsertContactSearchDocument: mock(async () => undefined),
   upsertWorkspaceSearchDocument: mock(async () => undefined),
   upsertWorkspaceSearchDocuments: mock(async () => undefined),
-}));
-
-const broadcastQueryInvalidationToTargetWorkspaceMock = mock(() => {});
-void mock.module("@/api/lib/invalidate-query-macro", () => ({
-  broadcastQueryInvalidationToTargetWorkspace:
-    broadcastQueryInvalidationToTargetWorkspaceMock,
 }));
 
 const { default: copyToWorkspace } = await import("./copy-to-workspace");
@@ -104,6 +107,8 @@ type InsertedField = {
   content: FieldContent;
 };
 
+type CopyToWorkspaceContext = Parameters<typeof copyToWorkspace.handler>[0];
+
 const isInsertedEntity = (value: unknown): value is InsertedEntity =>
   typeof value === "object" &&
   value !== null &&
@@ -132,34 +137,59 @@ beforeEach(() => {
 const createContext = ({
   safeDb,
   entityId,
+  targetWorkspaceId: targetWorkspaceIdArg = targetWorkspaceId,
   targetParentId = null,
   deleteSource = false,
+  accessibleWorkspaces,
 }: {
-  safeDb: Parameters<typeof copyToWorkspace.handler>[0]["safeDb"];
+  safeDb: CopyToWorkspaceContext["safeDb"];
   entityId: SafeId<"entity">;
+  targetWorkspaceId?: SafeId<"workspace">;
   targetParentId?: SafeId<"entity"> | null;
   deleteSource?: boolean;
-}): Parameters<typeof copyToWorkspace.handler>[0] =>
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture
-  ({
+  accessibleWorkspaces?: CopyToWorkspaceContext["accessibleWorkspaces"];
+}): CopyToWorkspaceContext => {
+  const sourceRecorderBindings = {
+    organizationId,
+    workspaceId: sourceWorkspaceId,
+    userId,
+    request: new Request("https://example.test/v1/entities/copy-to-workspace"),
+    server: null,
+  };
+  const createBoundAuditRecorder: CopyToWorkspaceContext["createAuditRecorder"] =
+    (opts) =>
+      createAuditRecorder({
+        ...sourceRecorderBindings,
+        workspaceId:
+          opts && "workspaceId" in opts
+            ? (opts.workspaceId ?? null)
+            : sourceWorkspaceId,
+      });
+
+  const context = asTestRaw<CopyToWorkspaceContext>({
     workspaceId: sourceWorkspaceId,
     user: { id: userId },
     session: { activeOrganizationId: organizationId },
     memberRole: { role: "owner" },
     body: {
       entityId,
-      targetWorkspaceId,
+      targetWorkspaceId: targetWorkspaceIdArg,
       targetParentId,
       deleteSource,
     },
-    request: new Request("https://example.test/v1/entities/copy-to-workspace"),
+    request: sourceRecorderBindings.request,
     route: "/v1/workspaces/:workspaceId/entities/copy-to-workspace",
-    accessibleWorkspaces: [
+    accessibleWorkspaces: accessibleWorkspaces ?? [
       { id: sourceWorkspaceId, status: "active" },
-      { id: targetWorkspaceId, status: "active" },
+      { id: targetWorkspaceIdArg, status: "active" },
     ],
     safeDb,
-  }) as Parameters<typeof copyToWorkspace.handler>[0];
+    recordAuditEvent: createAuditRecorder(sourceRecorderBindings),
+    createAuditRecorder: createBoundAuditRecorder,
+  });
+
+  return context;
+};
 
 describe("copy-to-workspace", () => {
   test("copies document with matching property, skips non-matching property", async () => {
@@ -616,26 +646,12 @@ describe("copy-to-workspace", () => {
 
     const { safeDb } = createScopedDbMock(tx);
 
-    // Create context where source and target are the same
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture
-    const context = {
-      workspaceId: sourceWorkspaceId,
-      user: { id: userId },
-      session: { activeOrganizationId: organizationId },
-      memberRole: { role: "owner" },
-      body: {
-        entityId: documentId,
-        targetWorkspaceId: sourceWorkspaceId, // Same as source
-        targetParentId: null,
-        deleteSource: false,
-      },
-      request: new Request(
-        "https://example.test/v1/entities/copy-to-workspace",
-      ),
-      route: "/v1/workspaces/:workspaceId/entities/copy-to-workspace",
-      accessibleWorkspaces: [{ id: sourceWorkspaceId, status: "active" }],
+    const context = createContext({
       safeDb,
-    } as Parameters<typeof copyToWorkspace.handler>[0];
+      entityId: documentId,
+      targetWorkspaceId: sourceWorkspaceId,
+      accessibleWorkspaces: [{ id: sourceWorkspaceId, status: "active" }],
+    });
 
     const result = await copyToWorkspace.handler(context);
 

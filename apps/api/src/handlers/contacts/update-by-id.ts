@@ -14,6 +14,7 @@ import {
 import { mergeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
@@ -68,7 +69,7 @@ const updateContactById = createSafeRootHandler(
     params: updateContactParamsSchema,
     body: updateContactBodySchema,
   },
-  async function* ({ safeDb, session, params, body }) {
+  async function* ({ safeDb, session, params, body, recordAuditEvent }) {
     const attorneyIds: string[] = [];
     if (body.originatingAttorneyId) {
       attorneyIds.push(body.originatingAttorneyId);
@@ -200,8 +201,8 @@ const updateContactById = createSafeRootHandler(
     }
 
     const updatedRows = yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        const rows = await tx
           .update(contacts)
           .set(updates)
           .where(
@@ -210,8 +211,20 @@ const updateContactById = createSafeRootHandler(
               eq(contacts.organizationId, session.activeOrganizationId),
             ),
           )
-          .returning({ id: contacts.id }),
-      ),
+          .returning({ id: contacts.id });
+
+        if (rows.length > 0) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
+            resourceId: params.contactId,
+            workspaceId: null,
+            changes: { fields: { old: null, new: Object.keys(updates) } },
+          });
+        }
+
+        return rows;
+      }),
     );
     const updated = updatedRows.at(0);
 

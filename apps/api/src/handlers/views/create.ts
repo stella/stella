@@ -8,6 +8,7 @@ import {
 } from "@/api/handlers/views/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { broadcast } from "@/api/lib/sse";
@@ -23,7 +24,7 @@ const config = {
 
 const createView = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, body }) {
+  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
     const layout = parseViewLayout(body.layout);
 
     if (hasDuplicateSorts(layout.sorts)) {
@@ -93,6 +94,22 @@ const createView = createSafeHandler(
             message: "Failed to create view",
           };
         }
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.VIEW,
+          resourceId: inserted.id,
+          changes: {
+            created: {
+              old: null,
+              new: {
+                name: inserted.name,
+                layoutType: layout.type,
+                position: inserted.position,
+              },
+            },
+          },
+        });
 
         return {
           ok: true as const,

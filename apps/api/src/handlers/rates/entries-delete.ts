@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { rateEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -21,7 +22,7 @@ const deleteRateEntry = createSafeHandler(
     params: rateEntryParamsSchema,
     body: deleteRateEntryBodySchema,
   },
-  async function* ({ safeDb, workspaceId, params, body }) {
+  async function* ({ safeDb, workspaceId, params, body, recordAuditEvent }) {
     const table = yield* Result.await(
       safeDb((tx) =>
         tx.query.rateTables.findFirst({
@@ -47,7 +48,13 @@ const deleteRateEntry = createSafeHandler(
             id: { eq: body.id },
             rateTableId: { eq: params.rateTableId },
           },
-          columns: { id: true },
+          columns: {
+            id: true,
+            userId: true,
+            hourlyRate: true,
+            effectiveFrom: true,
+            effectiveTo: true,
+          },
         }),
       ),
     );
@@ -59,16 +66,33 @@ const deleteRateEntry = createSafeHandler(
     }
 
     yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        await tx
           .delete(rateEntries)
           .where(
             and(
               eq(rateEntries.id, body.id),
               eq(rateEntries.rateTableId, params.rateTableId),
             ),
-          ),
-      ),
+          );
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.RATE_ENTRY,
+          resourceId: body.id,
+          changes: {
+            deleted: {
+              old: {
+                userId: existing.userId,
+                hourlyRate: existing.hourlyRate,
+                effectiveFrom: existing.effectiveFrom,
+                effectiveTo: existing.effectiveTo,
+              },
+              new: null,
+            },
+          },
+        });
+      }),
     );
 
     return Result.ok({ deleted: true });

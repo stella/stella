@@ -6,6 +6,7 @@ import { anonymizationBlacklistEntries } from "@/api/db/schema";
 import { normalizeAnonymizationBlacklistEntries } from "@/api/lib/anonymization-blacklist";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -33,7 +34,7 @@ const config = {
 
 const updateAnonymizationBlacklist = createSafeRootHandler(
   config,
-  async function* ({ body, safeDb, session, user }) {
+  async function* ({ body, safeDb, session, user, recordAuditEvent }) {
     const entries = normalizeAnonymizationBlacklistEntries(body.entries);
     if (Result.isError(entries)) {
       return Result.err(entries.error);
@@ -136,6 +137,17 @@ const updateAnonymizationBlacklist = createSafeRootHandler(
             updatedBy: user.id,
           });
         }
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+          resourceId: session.activeOrganizationId,
+          metadata: {
+            field: "anonymizationBlacklist",
+            entryCount: entries.value.length,
+            deletedCount: idsToDelete.length,
+          },
+        });
       }),
     );
 

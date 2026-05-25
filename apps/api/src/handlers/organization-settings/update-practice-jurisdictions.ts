@@ -5,12 +5,7 @@ import { organizationSettings } from "@/api/db/schema";
 import type { PracticeJurisdiction } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import {
-  AUDIT_ACTION,
-  AUDIT_RESOURCE_TYPE,
-  createAuditContext,
-  writeAuditLog,
-} from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -68,7 +63,7 @@ const normalizePracticeJurisdictions = (
 
 const updatePracticeJurisdictions = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, user, request, server, body }) {
+  async function* ({ safeDb, session, body, recordAuditEvent }) {
     const primaryCount = body.practiceJurisdictions.filter(
       (jurisdiction) => jurisdiction.isPrimary,
     ).length;
@@ -108,26 +103,17 @@ const updatePracticeJurisdictions = createSafeRootHandler(
             },
           });
 
-        await writeAuditLog(
-          {
-            ...createAuditContext({
-              organizationId: session.activeOrganizationId,
-              userId: user.id,
-              request,
-              server,
-            }),
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
-            resourceId: session.activeOrganizationId,
-            changes: {
-              practiceJurisdictions: {
-                old: previous?.practiceJurisdictions ?? [],
-                new: practiceJurisdictions,
-              },
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+          resourceId: session.activeOrganizationId,
+          changes: {
+            practiceJurisdictions: {
+              old: previous?.practiceJurisdictions ?? [],
+              new: practiceJurisdictions,
             },
           },
-          tx,
-        );
+        });
       }),
     );
 

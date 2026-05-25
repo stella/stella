@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { rateEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
@@ -26,7 +27,7 @@ const updateRateEntry = createSafeHandler(
     params: rateEntryParamsSchema,
     body: updateRateEntryBodySchema,
   },
-  async function* ({ safeDb, workspaceId, params, body }) {
+  async function* ({ safeDb, workspaceId, params, body, recordAuditEvent }) {
     const table = yield* Result.await(
       safeDb((tx) =>
         tx.query.rateTables.findFirst({
@@ -55,6 +56,7 @@ const updateRateEntry = createSafeHandler(
           columns: {
             id: true,
             userId: true,
+            hourlyRate: true,
             effectiveFrom: true,
             effectiveTo: true,
           },
@@ -172,6 +174,25 @@ const updateRateEntry = createSafeHandler(
               eq(rateEntries.rateTableId, params.rateTableId),
             ),
           );
+
+        const changes: Record<string, { old: unknown; new: unknown }> = {};
+        for (const field of [
+          "effectiveFrom",
+          "effectiveTo",
+          "hourlyRate",
+        ] as const) {
+          const next = updates[field];
+          if (next !== undefined) {
+            changes[field] = { old: existing[field] ?? null, new: next };
+          }
+        }
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.RATE_ENTRY,
+          resourceId: body.id,
+          changes,
+        });
 
         return { ok: true as const };
       }),

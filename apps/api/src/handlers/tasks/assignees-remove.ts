@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { taskAssignees } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -17,7 +18,7 @@ const removeAssignee = createSafeHandler(
     permissions: { entity: ["update"] },
     body: removeAssigneeBodySchema,
   },
-  async function* ({ workspaceId, body, safeDb }) {
+  async function* ({ workspaceId, body, safeDb, recordAuditEvent }) {
     const task = yield* Result.await(
       safeDb((tx) =>
         tx.query.entities.findFirst({
@@ -42,8 +43,8 @@ const removeAssignee = createSafeHandler(
     }
 
     yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        await tx
           .delete(taskAssignees)
           .where(
             and(
@@ -51,8 +52,18 @@ const removeAssignee = createSafeHandler(
               eq(taskAssignees.userId, body.userId),
               eq(taskAssignees.workspaceId, workspaceId),
             ),
-          ),
-      ),
+          );
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+          resourceId: body.taskId,
+          metadata: {
+            change: "assignee-removed",
+            assigneeUserId: body.userId,
+          },
+        });
+      }),
     );
 
     return Result.ok({ success: true });

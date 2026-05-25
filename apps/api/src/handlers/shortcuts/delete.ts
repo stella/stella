@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { promptShortcuts } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -19,7 +20,14 @@ const config = {
 
 const deleteShortcut = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, user, params, memberRole }) {
+  async function* ({
+    safeDb,
+    session,
+    user,
+    params,
+    memberRole,
+    recordAuditEvent,
+  }) {
     const existing = yield* Result.await(
       safeDb((tx) =>
         tx
@@ -27,6 +35,8 @@ const deleteShortcut = createSafeRootHandler(
             id: promptShortcuts.id,
             scope: promptShortcuts.scope,
             userId: promptShortcuts.userId,
+            name: promptShortcuts.name,
+            command: promptShortcuts.command,
           })
           .from(promptShortcuts)
           .where(
@@ -65,11 +75,27 @@ const deleteShortcut = createSafeRootHandler(
     }
 
     yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        await tx
           .delete(promptShortcuts)
-          .where(eq(promptShortcuts.id, params.shortcutId)),
-      ),
+          .where(eq(promptShortcuts.id, params.shortcutId));
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.PROMPT_SHORTCUT,
+          resourceId: params.shortcutId,
+          changes: {
+            deleted: {
+              old: {
+                scope: shortcut.scope,
+                name: shortcut.name,
+                command: shortcut.command,
+              },
+              new: null,
+            },
+          },
+        });
+      }),
     );
 
     return Result.ok({ id: params.shortcutId });

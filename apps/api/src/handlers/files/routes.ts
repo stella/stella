@@ -25,6 +25,7 @@ const readFileEndpoint = createSafeHandler(
     scopedDb,
     session,
     workspaceId,
+    recordAuditEvent,
   }) {
     const response = yield* Result.await(
       Result.tryPromise(
@@ -35,6 +36,7 @@ const readFileEndpoint = createSafeHandler(
             workspaceId,
             purpose,
             scopedDb,
+            recordAuditEvent,
           }),
       ),
     );

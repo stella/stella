@@ -31,8 +31,10 @@ export const updateSearchVector = async (
   const updateResult = await Result.tryPromise(async () => {
     const bodyText = bodyToPlainText(body);
 
-    return await safeDb((tx) =>
-      tx
+    // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
+    return await safeDb((tx) => {
+      // audit: skip — search index maintenance; rebuilds derived state
+      return tx
         .update(clauses)
         .set({
           searchVector: sql`to_tsvector(
@@ -42,8 +44,8 @@ export const updateSearchVector = async (
         ${bodyText}
       )`,
         })
-        .where(sql`${clauses.id} = ${clauseId}`),
-    );
+        .where(sql`${clauses.id} = ${clauseId}`);
+    });
   });
 
   return Result.flatten(updateResult);

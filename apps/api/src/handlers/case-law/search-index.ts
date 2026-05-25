@@ -201,9 +201,11 @@ export const removeDecisionFromIndex = async (
   decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
 ): Promise<void> => {
-  await scopedDb((tx) =>
-    tx
+  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
+  await scopedDb((tx) => {
+    // audit: skip — search index maintenance; rebuilds derived state
+    return tx
       .delete(caseLawSearchDocuments)
-      .where(eq(caseLawSearchDocuments.decisionId, decisionId)),
-  );
+      .where(eq(caseLawSearchDocuments.decisionId, decisionId));
+  });
 };
