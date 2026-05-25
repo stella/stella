@@ -524,6 +524,7 @@ function extractParagraphContent(
   let currentRun: Run | null = null;
   let currentMarksKey: string | null = null;
   let currentHyperlink: Hyperlink | null = null;
+  let currentHyperlinkKey: string | null = null;
   const openedComments = new Set<number>();
 
   const flushCurrentInline = () => {
@@ -535,6 +536,7 @@ function extractParagraphContent(
     if (currentHyperlink) {
       content.push(currentHyperlink);
       currentHyperlink = null;
+      currentHyperlinkKey = null;
     }
   };
 
@@ -674,10 +676,7 @@ function extractParagraphContent(
       // Start or continue hyperlink
       const linkKey = getLinkKey(linkMark);
 
-      const currentKey = currentHyperlink
-        ? getHyperlinkKey(currentHyperlink)
-        : "";
-      if (currentHyperlink && currentKey === linkKey) {
+      if (currentHyperlink && currentHyperlinkKey === linkKey) {
         // Continue current hyperlink
         addNodeToHyperlink(currentHyperlink, node);
       } else {
@@ -686,6 +685,7 @@ function extractParagraphContent(
 
         // Start new hyperlink
         currentHyperlink = createHyperlink(linkMark);
+        currentHyperlinkKey = linkKey;
         addNodeToHyperlink(currentHyperlink, node);
       }
       return;
@@ -852,13 +852,12 @@ function buildDocumentTrackedChangeCounts(pmDoc: PMNode): TrackedChangeCounts {
  */
 function getLinkKey(mark: Mark): string {
   const attrs = expectHyperlinkMarkAttrs(mark);
-  return [attrs.href, attrs.rId ?? "", attrs.tooltip ?? ""].join("\u0000");
-}
-
-function getHyperlinkKey(hyperlink: Hyperlink): string {
-  const href =
-    hyperlink.href || (hyperlink.anchor ? `#${hyperlink.anchor}` : "");
-  return [href, hyperlink.rId ?? "", hyperlink.tooltip ?? ""].join("\u0000");
+  return [
+    attrs.href,
+    attrs.rId ?? "",
+    attrs.tooltip ?? "",
+    attrs._docxHyperlinkIndex ?? "",
+  ].join("\u0000");
 }
 
 /**

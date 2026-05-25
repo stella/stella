@@ -884,6 +884,54 @@ describe("fromProseDoc", () => {
     );
   });
 
+  test("keeps adjacent imported same-target hyperlinks separate", () => {
+    const document: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  type: "hyperlink",
+                  anchor: "br6",
+                  children: [
+                    { type: "run", content: [{ type: "text", text: "IV.1" }] },
+                  ],
+                },
+                {
+                  type: "hyperlink",
+                  anchor: "br6",
+                  children: [
+                    { type: "run", content: [{ type: "text", text: " " }] },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const pmDoc = toProseDoc(document);
+    const roundTripped = fromProseDoc(pmDoc, document);
+    const block = roundTripped.package.document.content.at(0);
+
+    expect(block?.type).toBe("paragraph");
+    if (block?.type !== "paragraph") {
+      return;
+    }
+
+    const hyperlinks = block.content.filter(
+      (content) => content.type === "hyperlink",
+    );
+    expect(hyperlinks).toHaveLength(2);
+    expect(hyperlinks.map((hyperlink) => hyperlink.anchor)).toEqual([
+      "br6",
+      "br6",
+    ]);
+  });
+
   test("preserves ProseMirror addMark comments spanning block boundaries", () => {
     const commentId = 999;
     const commentMark = schema.mark("comment", { commentId });

@@ -1018,6 +1018,11 @@ export const readHyperlinkMarkAttrs = (
   requiredString(attrs, "href", "hyperlink.attrs.href", issues);
   optionalString(attrs, "tooltip", "hyperlink.attrs.tooltip", issues);
   optionalString(attrs, "rId", "hyperlink.attrs.rId", issues);
+  validateNonNegativeInteger(
+    attrs["_docxHyperlinkIndex"],
+    "hyperlink.attrs._docxHyperlinkIndex",
+    issues,
+  );
 
   return attrsResult(attrs, issues);
 };

@@ -113,4 +113,5 @@ export type HyperlinkAttrs = {
   href: string;
   tooltip?: string;
   rId?: string;
+  _docxHyperlinkIndex?: number;
 };

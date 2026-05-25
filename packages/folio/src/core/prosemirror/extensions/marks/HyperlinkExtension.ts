@@ -79,6 +79,7 @@ export const HyperlinkExtension = createMarkExtension({
       href: {},
       tooltip: { default: null },
       rId: { default: null },
+      _docxHyperlinkIndex: { default: null },
     },
     inclusive: false,
     parseDOM: [

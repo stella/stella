@@ -146,6 +146,7 @@ function convertParagraph(
   let emptyHyperlinks:
     | NonNullable<ParagraphAttrs["_emptyHyperlinks"]>
     | undefined;
+  let hyperlinkIndex = 0;
 
   // Track active comment ranges for this paragraph
   const commentIds = activeCommentIds ?? new Set<number>();
@@ -224,10 +225,13 @@ function convertParagraph(
         ),
       );
     } else if (content.type === "hyperlink") {
+      const currentHyperlinkIndex = hyperlinkIndex;
+      hyperlinkIndex += 1;
       const linkNodes = convertHyperlink(
         content,
         getInheritedRunFormatting,
         styleResolver,
+        currentHyperlinkIndex,
       );
       if (linkNodes.length === 0) {
         emptyHyperlinks ??= [];
@@ -336,6 +340,7 @@ function convertTrackedChange(
   moveKind: "moveFrom" | "moveTo" | null = null,
 ): PMNode[] {
   const nodes: PMNode[] = [];
+  let hyperlinkIndex = 0;
   for (const item of change.content) {
     if (item.type === "run") {
       nodes.push(
@@ -346,8 +351,15 @@ function convertTrackedChange(
         ),
       );
     } else {
+      const currentHyperlinkIndex = hyperlinkIndex;
+      hyperlinkIndex += 1;
       nodes.push(
-        ...convertHyperlink(item, getInheritedRunFormatting, styleResolver),
+        ...convertHyperlink(
+          item,
+          getInheritedRunFormatting,
+          styleResolver,
+          currentHyperlinkIndex,
+        ),
       );
     }
   }
@@ -1556,6 +1568,7 @@ function convertInlineSdt(
 ): PMNode | null {
   const props = sdt.properties;
   const inlineNodes: PMNode[] = [];
+  let hyperlinkIndex = 0;
 
   for (const content of sdt.content) {
     if (content.type === "run") {
@@ -1566,10 +1579,13 @@ function convertInlineSdt(
       );
       inlineNodes.push(...runNodes);
     } else {
+      const currentHyperlinkIndex = hyperlinkIndex;
+      hyperlinkIndex += 1;
       const linkNodes = convertHyperlink(
         content,
         getInheritedRunFormatting,
         styleResolver,
+        currentHyperlinkIndex,
       );
       inlineNodes.push(...linkNodes);
     }
@@ -1931,6 +1947,7 @@ function convertHyperlink(
   hyperlink: Hyperlink,
   getInheritedRunFormatting: RunFormattingResolver,
   styleResolver?: StyleResolver | null,
+  hyperlinkIndex?: number,
 ): PMNode[] {
   const nodes: PMNode[] = [];
 
@@ -1941,6 +1958,7 @@ function convertHyperlink(
     href,
     tooltip: hyperlink.tooltip,
     rId: hyperlink.rId,
+    _docxHyperlinkIndex: hyperlinkIndex,
   });
 
   for (const child of hyperlink.children) {
