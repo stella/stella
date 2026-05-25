@@ -182,6 +182,9 @@ describe("shape EMU attributes are integer-only (issue #417)", () => {
     expect(xml).toContain('tIns="45720"');
     expect(xml).toContain('rIns="91441"');
     expect(xml).toContain('bIns="45720"');
+    expect(xml.match(/<wps:wsp>/gu)).toHaveLength(1);
+    expect(xml).toContain('<wps:cNvSpPr txBox="1"/>');
+    expect(xml).toContain("<wps:txbx><w:txbxContent>");
   });
 });
 

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { EditorState } from "prosemirror-state";
 
+import type { Document, Paragraph, Table } from "../../types/document";
 import { schema } from "../schema";
 import { fromProseDoc } from "./fromProseDoc";
 import { toProseDoc } from "./toProseDoc";
@@ -123,6 +124,216 @@ describe("fromProseDoc", () => {
       return;
     }
     expect(table.rows[0]?.cells[0]?.content[0]?.type).toBe("paragraph");
+  });
+
+  test("coalesces page break blocks into the following paragraph for DOCX output", () => {
+    const pmDoc = schema.node("doc", null, [
+      schema.node("paragraph", null, [schema.text("Before")]),
+      schema.node("pageBreak"),
+      schema.node("paragraph", null, [schema.text("After")]),
+    ]);
+
+    const document = fromProseDoc(pmDoc);
+    const firstBlock = document.package.document.content.at(0);
+    const secondBlock = document.package.document.content.at(1);
+
+    expect(document.package.document.content).toHaveLength(2);
+    expect(firstBlock?.type).toBe("paragraph");
+    expect(secondBlock?.type).toBe("paragraph");
+    if (secondBlock?.type !== "paragraph") {
+      return;
+    }
+
+    expect(paragraphStartsWithPageBreak(secondBlock)).toBe(true);
+  });
+
+  test("round-trips imported leading page breaks without inventing paragraphs", () => {
+    const document: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  type: "run",
+                  content: [{ type: "text", text: "Before" }],
+                },
+              ],
+            },
+            {
+              type: "paragraph",
+              content: [
+                {
+                  type: "run",
+                  content: [
+                    { type: "break", breakType: "page" },
+                    { type: "text", text: "After" },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const pmDoc = toProseDoc(document);
+    const roundTripped = fromProseDoc(pmDoc, document);
+    const secondBlock = roundTripped.package.document.content.at(1);
+
+    expect(roundTripped.package.document.content).toHaveLength(2);
+    expect(secondBlock?.type).toBe("paragraph");
+    if (secondBlock?.type !== "paragraph") {
+      return;
+    }
+    expect(paragraphStartsWithPageBreak(secondBlock)).toBe(true);
+  });
+
+  test("serializes table rowspans as vertical merge continuation cells", () => {
+    const pmDoc = schema.node("doc", null, [
+      schema.node("table", null, [
+        schema.node("tableRow", null, [
+          schema.node("tableCell", { rowspan: 2 }, [
+            schema.node("paragraph", null, [schema.text("Merged")]),
+          ]),
+          schema.node("tableCell", null, [
+            schema.node("paragraph", null, [schema.text("Top")]),
+          ]),
+        ]),
+        schema.node("tableRow", null, [
+          schema.node("tableCell", null, [
+            schema.node("paragraph", null, [schema.text("Bottom")]),
+          ]),
+        ]),
+      ]),
+    ]);
+
+    const document = fromProseDoc(pmDoc);
+    const table = document.package.document.content.at(0);
+
+    expect(table?.type).toBe("table");
+    if (table?.type !== "table") {
+      return;
+    }
+
+    expect(table.rows.at(0)?.cells.at(0)?.formatting?.vMerge).toBe("restart");
+    expect(table.rows.at(1)?.cells).toHaveLength(2);
+    expect(table.rows.at(1)?.cells.at(0)?.formatting?.vMerge).toBe("continue");
+    expect(table.rows.at(1)?.cells.at(0)?.content).toHaveLength(1);
+    expect(paragraphText(table.rows.at(1)?.cells.at(1)?.content.at(0))).toBe(
+      "Bottom",
+    );
+  });
+
+  test("converts textBox nodes back to DOCX text box shapes", () => {
+    const pmDoc = schema.node("doc", null, [
+      schema.node("textBox", { width: 120, height: 60 }, [
+        schema.node("paragraph", null, [schema.text("Inside")]),
+      ]),
+    ]);
+
+    const document = fromProseDoc(pmDoc);
+    const block = document.package.document.content.at(0);
+
+    expect(block?.type).toBe("paragraph");
+    if (block?.type !== "paragraph") {
+      return;
+    }
+
+    const firstRun = block.content.at(0);
+    const firstRunContent =
+      firstRun?.type === "run" ? firstRun.content.at(0) : undefined;
+
+    expect(firstRunContent?.type).toBe("shape");
+    if (firstRunContent?.type !== "shape") {
+      return;
+    }
+    expect(firstRunContent.shape.shapeType).toBe("textBox");
+    expect(firstRunContent.shape.textBody?.content).toHaveLength(1);
+  });
+
+  test("reattaches imported mixed-paragraph text boxes to their source paragraph", () => {
+    const document = documentWithTextBoxParagraph({ includeText: true });
+    const pmDoc = toProseDoc(document);
+
+    const roundTripped = fromProseDoc(pmDoc, document);
+    const block = roundTripped.package.document.content.at(0);
+
+    expect(pmDoc.childCount).toBe(2);
+    expect(roundTripped.package.document.content).toHaveLength(1);
+    expect(block?.type).toBe("paragraph");
+    if (block?.type !== "paragraph") {
+      return;
+    }
+    expect(block.content).toHaveLength(2);
+    expect(firstShapeType(block)).toBe("textBox");
+  });
+
+  test("keeps imported text-box-only paragraphs as standalone wrappers", () => {
+    const document = documentWithTextBoxParagraph({ includeText: false });
+    const pmDoc = toProseDoc(document);
+
+    const roundTripped = fromProseDoc(pmDoc, document);
+    const block = roundTripped.package.document.content.at(0);
+
+    expect(pmDoc.childCount).toBe(1);
+    expect(pmDoc.firstChild?.type.name).toBe("textBox");
+    expect(roundTripped.package.document.content).toHaveLength(1);
+    expect(block?.type).toBe("paragraph");
+    if (block?.type !== "paragraph") {
+      return;
+    }
+    expect(firstShapeType(block)).toBe("textBox");
+  });
+
+  test("keeps imported page-break text-box-only paragraphs as one wrapper", () => {
+    const document = documentWithTextBoxParagraph({
+      includeText: false,
+      includePageBreak: true,
+      textBoxCount: 2,
+    });
+    const pmDoc = toProseDoc(document);
+
+    const roundTripped = fromProseDoc(pmDoc, document);
+    const block = roundTripped.package.document.content.at(0);
+
+    expect(pmDoc.childCount).toBe(3);
+    expect(pmDoc.child(0).type.name).toBe("pageBreak");
+    expect(pmDoc.child(1).type.name).toBe("textBox");
+    expect(pmDoc.child(2).type.name).toBe("textBox");
+    expect(roundTripped.package.document.content).toHaveLength(1);
+    expect(block?.type).toBe("paragraph");
+    if (block?.type !== "paragraph") {
+      return;
+    }
+    expect(paragraphStartsWithPageBreak(block)).toBe(true);
+    expect(countShapes(block)).toBe(2);
+  });
+
+  test("does not merge adjacent standalone text boxes from different source paragraphs", () => {
+    const pmDoc = schema.node("doc", null, [
+      schema.node(
+        "textBox",
+        { _docxPlacement: "standalone", _docxGroupId: "a" },
+        [schema.node("paragraph", null, [schema.text("A")])],
+      ),
+      schema.node(
+        "textBox",
+        { _docxPlacement: "standalone", _docxGroupId: "b" },
+        [schema.node("paragraph", null, [schema.text("B")])],
+      ),
+    ]);
+
+    const document = fromProseDoc(pmDoc);
+
+    expect(document.package.document.content).toHaveLength(2);
+    for (const block of document.package.document.content) {
+      expect(block.type).toBe("paragraph");
+      if (block.type === "paragraph") {
+        expect(countShapes(block)).toBe(1);
+      }
+    }
   });
 
   test("preserves comment ranges added to selected text", () => {
@@ -259,6 +470,42 @@ describe("fromProseDoc", () => {
     expect(hyperlink?.attrs.href).toBe("https://stella.law");
   });
 
+  test("keeps adjacent same-target hyperlinks with distinct relationship ids separate", () => {
+    const firstLink = schema.mark("hyperlink", {
+      href: "mailto:reviewer@example.test",
+      rId: "rId1",
+    });
+    const secondLink = schema.mark("hyperlink", {
+      href: "mailto:reviewer@example.test",
+      rId: "rId2",
+    });
+    const pmDoc = schema.node("doc", null, [
+      schema.node("paragraph", null, [
+        schema.text("mailto:", [firstLink]),
+        schema.text("reviewer@example.test", [secondLink]),
+      ]),
+    ]);
+
+    const document = fromProseDoc(pmDoc);
+    const block = document.package.document.content.at(0);
+
+    expect(block?.type).toBe("paragraph");
+    if (block?.type !== "paragraph") {
+      return;
+    }
+
+    const hyperlinks = block.content.filter(
+      (content) => content.type === "hyperlink",
+    );
+    expect(hyperlinks).toHaveLength(2);
+    expect(hyperlinks.at(0)?.type === "hyperlink" && hyperlinks.at(0).rId).toBe(
+      "rId1",
+    );
+    expect(hyperlinks.at(1)?.type === "hyperlink" && hyperlinks.at(1).rId).toBe(
+      "rId2",
+    );
+  });
+
   test("preserves ProseMirror addMark comments spanning block boundaries", () => {
     const commentId = 999;
     const commentMark = schema.mark("comment", { commentId });
@@ -302,3 +549,116 @@ describe("fromProseDoc", () => {
     expect(markedTexts).toEqual(["before", "cell one", "cell two", "after"]);
   });
 });
+
+function paragraphStartsWithPageBreak(paragraph: Paragraph): boolean {
+  const firstContent = paragraph.content.at(0);
+  const firstRunContent =
+    firstContent?.type === "run" ? firstContent.content.at(0) : undefined;
+  return (
+    firstRunContent?.type === "break" && firstRunContent.breakType === "page"
+  );
+}
+
+function paragraphText(block: Paragraph | Table | undefined): string {
+  if (!block || block.type !== "paragraph") {
+    return "";
+  }
+  return block.content
+    .flatMap((content) =>
+      content.type === "run"
+        ? content.content.flatMap((runContent) =>
+            runContent.type === "text" ? [runContent.text] : [],
+          )
+        : [],
+    )
+    .join("");
+}
+
+function documentWithTextBoxParagraph({
+  includeText,
+  includePageBreak = false,
+  textBoxCount = 1,
+}: {
+  includeText: boolean;
+  includePageBreak?: boolean;
+  textBoxCount?: number;
+}): Document {
+  const content: Paragraph["content"] = [];
+  if (includePageBreak) {
+    content.push({
+      type: "run",
+      content: [{ type: "break", breakType: "page" }],
+    });
+  }
+  if (includeText) {
+    content.push({
+      type: "run",
+      content: [{ type: "text", text: "Before" }],
+    });
+  }
+  for (let index = 0; index < textBoxCount; index += 1) {
+    content.push({
+      type: "run",
+      content: [
+        {
+          type: "shape",
+          shape: {
+            type: "shape",
+            shapeType: "textBox",
+            size: { width: 914_400, height: 457_200 },
+            textBody: {
+              content: [
+                {
+                  type: "paragraph",
+                  content: [
+                    {
+                      type: "run",
+                      content: [{ type: "text", text: `Inside ${index}` }],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      ],
+    });
+  }
+
+  return {
+    package: {
+      document: {
+        content: [{ type: "paragraph", content }],
+      },
+    },
+  };
+}
+
+function firstShapeType(paragraph: Paragraph): string | undefined {
+  for (const content of paragraph.content) {
+    if (content.type !== "run") {
+      continue;
+    }
+    for (const runContent of content.content) {
+      if (runContent.type === "shape") {
+        return runContent.shape.shapeType;
+      }
+    }
+  }
+  return undefined;
+}
+
+function countShapes(paragraph: Paragraph): number {
+  let count = 0;
+  for (const content of paragraph.content) {
+    if (content.type !== "run") {
+      continue;
+    }
+    for (const runContent of content.content) {
+      if (runContent.type === "shape") {
+        count += 1;
+      }
+    }
+  }
+  return count;
+}

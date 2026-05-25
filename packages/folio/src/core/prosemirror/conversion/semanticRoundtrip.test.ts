@@ -260,7 +260,7 @@ describe("semantic ProseMirror round-trip fixture", () => {
     const textBoxShape = firstShapeContent(paragraphAt(roundtripped, 1)).shape;
     expect(textBoxShape).toMatchObject({
       type: "shape",
-      shapeType: "rect",
+      shapeType: "textBox",
       id: "text-box-1",
       textBody: {
         content: [

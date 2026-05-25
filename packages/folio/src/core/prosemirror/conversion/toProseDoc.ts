@@ -85,6 +85,7 @@ export function toProseDoc(
 
   const styleResolver = createStyleResolver(options?.styles);
   const theme = options?.theme ?? document.package.theme ?? null;
+  let textBoxGroupIndex = 0;
 
   for (const block of paragraphs) {
     if (block.type === "paragraph") {
@@ -96,7 +97,14 @@ export function toProseDoc(
       if (pbPos === "before") {
         nodes.push(schema.node("pageBreak"));
       }
-      nodes.push(...convertParagraphWithTextBoxes(block, styleResolver));
+      nodes.push(
+        ...convertParagraphWithTextBoxes(
+          block,
+          styleResolver,
+          String(textBoxGroupIndex),
+        ),
+      );
+      textBoxGroupIndex += 1;
       if (pbPos === "after") {
         nodes.push(schema.node("pageBreak"));
       }
@@ -2157,6 +2165,7 @@ function convertShape(shape: Shape): PMNode {
 function convertParagraphWithTextBoxes(
   block: Paragraph,
   styleResolver: StyleResolver | null,
+  textBoxGroupId: string,
 ): PMNode[] {
   const textBoxes = extractTextBoxesFromParagraph(block);
   const pmParagraph = convertParagraph(block, styleResolver);
@@ -2167,7 +2176,12 @@ function convertParagraphWithTextBoxes(
     nodes.push(pmParagraph);
   }
   for (const tb of textBoxes) {
-    nodes.push(convertTextBox(tb, styleResolver));
+    nodes.push(
+      convertTextBox(tb, styleResolver, {
+        placement: isEmptyAfterExtraction ? "standalone" : "inlineWithPrevious",
+        groupId: textBoxGroupId,
+      }),
+    );
   }
   return nodes;
 }
@@ -2224,6 +2238,10 @@ function extractTextBoxesFromParagraph(paragraph: Paragraph): TextBox[] {
 function convertTextBox(
   textBox: TextBox,
   styleResolver: StyleResolver | null,
+  options: {
+    placement?: "standalone" | "inlineWithPrevious";
+    groupId?: string;
+  } = {},
 ): PMNode {
   const textBoxData: { size?: Partial<TextBox["size"]> } = textBox;
   const textBoxSize = textBoxData.size;
@@ -2290,6 +2308,8 @@ function convertTextBox(
       marginBottom,
       marginLeft,
       marginRight,
+      _docxPlacement: options.placement,
+      _docxGroupId: options.groupId,
     },
     contentNodes,
   );
@@ -2312,10 +2332,18 @@ export function headerFooterToProseDoc(
     ? createStyleResolver(options.styles)
     : null;
   const theme = options?.theme ?? null;
+  let textBoxGroupIndex = 0;
 
   for (const block of content) {
     if (block.type === "paragraph") {
-      nodes.push(...convertParagraphWithTextBoxes(block, styleResolver));
+      nodes.push(
+        ...convertParagraphWithTextBoxes(
+          block,
+          styleResolver,
+          String(textBoxGroupIndex),
+        ),
+      );
+      textBoxGroupIndex += 1;
     } else {
       nodes.push(convertTable(block, styleResolver, theme));
     }

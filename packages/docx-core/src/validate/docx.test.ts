@@ -113,6 +113,26 @@ describe("canonical DOCX document model validation", () => {
     );
   });
 
+  test("warns but accepts unbalanced bookmarks from real-world DOCX files", () => {
+    const result = validateDocumentModel(
+      createDocument({
+        content: [
+          paragraph([
+            { type: "bookmarkStart", id: 1, name: "orphaned" },
+            textRun(),
+          ]),
+        ],
+      }),
+    );
+
+    expect(result.valid).toBe(true);
+    expect(result.issues).toContainEqual({
+      path: "package.document",
+      message: "Unbalanced bookmark 1: bookmarkStart=1, bookmarkEnd=0.",
+      severity: "warning",
+    });
+  });
+
   test("rejects invalid table shape", () => {
     const result = validateDocumentModel(
       createDocument({
@@ -153,6 +173,48 @@ describe("canonical DOCX document model validation", () => {
     expect(result.issues.map((issue) => issue.message)).toContain(
       "Numbering definition 9 is missing.",
     );
+  });
+
+  test("warns but accepts numbering levels beyond Word's standard range", () => {
+    const result = validateDocumentModel(
+      createDocument({
+        content: [
+          {
+            type: "paragraph",
+            formatting: { numPr: { ilvl: 9 } },
+            content: [textRun()],
+          },
+        ],
+      }),
+    );
+
+    expect(result.valid).toBe(true);
+    expect(result.issues).toContainEqual({
+      path: "package.document.content[0].formatting.numPr.ilvl",
+      message: "List level is outside Word's standard 0-8 range.",
+      severity: "warning",
+    });
+  });
+
+  test("rejects negative numbering levels", () => {
+    const result = validateDocumentModel(
+      createDocument({
+        content: [
+          {
+            type: "paragraph",
+            formatting: { numPr: { ilvl: -1 } },
+            content: [textRun()],
+          },
+        ],
+      }),
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.issues).toContainEqual({
+      path: "package.document.content[0].formatting.numPr.ilvl",
+      message: "List level must be zero or greater.",
+      severity: "error",
+    });
   });
 
   test("rejects missing footnote packages", () => {
@@ -200,6 +262,39 @@ describe("canonical DOCX document model validation", () => {
 
     expect(result.valid).toBe(true);
     expect(result.issues).toEqual([]);
+  });
+
+  test("warns but accepts zero-size drawings from real-world DOCX files", () => {
+    const result = validateDocumentModel(
+      createDocument({
+        content: [
+          paragraph([
+            {
+              type: "run",
+              content: [
+                {
+                  type: "drawing",
+                  image: {
+                    type: "image",
+                    rId: "",
+                    src: "data:image/png;base64,",
+                    size: { width: 9525, height: 0 },
+                    wrap: { type: "inline" },
+                  },
+                },
+              ],
+            },
+          ]),
+        ],
+      }),
+    );
+
+    expect(result.valid).toBe(true);
+    expect(result.issues).toContainEqual({
+      path: "package.document.content[0].content[0].content[0].image.size.height",
+      message: "Size is zero; the drawing may be invisible.",
+      severity: "warning",
+    });
   });
 
   test("rejects section header references without a matching header part", () => {

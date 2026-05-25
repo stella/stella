@@ -116,6 +116,11 @@ const NOTE_TYPES = [
   "endnote",
 ] as const satisfies readonly NonNullable<FootnoteRefAttrs["noteType"]>[];
 
+const TEXT_BOX_DOCX_PLACEMENTS = [
+  "standalone",
+  "inlineWithPrevious",
+] as const satisfies readonly NonNullable<TextBoxAttrs["_docxPlacement"]>[];
+
 const TRACKED_CHANGE_MOVE_KINDS = [
   "moveTo",
   "moveFrom",
@@ -701,6 +706,14 @@ export const readTextBoxAttrs = (
     IMAGE_CSS_FLOATS,
   );
   optionalString(attrs, "wrapType", "textBox.attrs.wrapType", issues);
+  optionalOneOf(
+    attrs,
+    "_docxPlacement",
+    "textBox.attrs._docxPlacement",
+    issues,
+    TEXT_BOX_DOCX_PLACEMENTS,
+  );
+  optionalString(attrs, "_docxGroupId", "textBox.attrs._docxGroupId", issues);
 
   return attrsResult(attrs, issues);
 };

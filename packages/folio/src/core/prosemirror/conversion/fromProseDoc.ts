@@ -138,23 +138,97 @@ export function fromProseDoc(pmDoc: PMNode, baseDocument?: Document): Document {
 function extractBlocks(pmDoc: PMNode): (Paragraph | Table)[] {
   const blocks: (Paragraph | Table)[] = [];
   const documentCounts = buildDocumentTrackedChangeCounts(pmDoc);
+  let pendingPageBreaks = 0;
+  let previousStandaloneTextBox: PreviousStandaloneTextBox | null = null;
+
+  const flushPendingPageBreaks = (): void => {
+    for (let index = 0; index < pendingPageBreaks; index += 1) {
+      blocks.push(createPageBreakParagraph());
+    }
+    pendingPageBreaks = 0;
+  };
 
   // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
   pmDoc.forEach((node) => {
+    if (node.type.name === "pageBreak") {
+      pendingPageBreaks += 1;
+      previousStandaloneTextBox = null;
+      return;
+    }
+
     if (node.type.name === "paragraph") {
-      blocks.push(convertPMParagraph(node, documentCounts));
+      const paragraph = convertPMParagraph(node, documentCounts);
+      prependPageBreaks(paragraph, pendingPageBreaks);
+      pendingPageBreaks = 0;
+      blocks.push(paragraph);
+      previousStandaloneTextBox = null;
     } else if (node.type.name === "table") {
+      flushPendingPageBreaks();
       blocks.push(convertPMTable(node, documentCounts));
+      previousStandaloneTextBox = null;
     } else if (node.type.name === "textBox") {
-      // Convert text box back to a paragraph containing a shape with text body
-      blocks.push(convertPMTextBox(node));
-    } else if (node.type.name === "pageBreak") {
-      // Convert page break node to a paragraph with a page break run
-      blocks.push(createPageBreakParagraph());
+      previousStandaloneTextBox = appendTextBoxBlock(blocks, node, {
+        pendingPageBreaks,
+        previousStandaloneTextBox,
+      });
+      pendingPageBreaks = 0;
     }
   });
 
+  if (pendingPageBreaks > 0) {
+    const previousBlock = blocks.at(-1);
+    if (previousBlock?.type === "paragraph") {
+      appendPageBreaks(previousBlock, pendingPageBreaks);
+    } else {
+      flushPendingPageBreaks();
+    }
+  }
+
   return blocks;
+}
+
+type AppendTextBoxBlockOptions = {
+  pendingPageBreaks: number;
+  previousStandaloneTextBox: PreviousStandaloneTextBox | null;
+};
+
+type PreviousStandaloneTextBox = {
+  paragraph: Paragraph;
+  groupId: string;
+};
+
+function appendTextBoxBlock(
+  blocks: (Paragraph | Table)[],
+  node: PMNode,
+  options: AppendTextBoxBlockOptions,
+): PreviousStandaloneTextBox | null {
+  const attrs = expectTextBoxAttrs(node);
+  const paragraph = convertPMTextBox(node);
+  const previousBlock = blocks.at(-1);
+  if (
+    attrs._docxPlacement === "inlineWithPrevious" &&
+    previousBlock?.type === "paragraph"
+  ) {
+    previousBlock.content.push(...paragraph.content);
+    return null;
+  }
+
+  if (
+    attrs._docxPlacement === "standalone" &&
+    attrs._docxGroupId &&
+    options.previousStandaloneTextBox?.groupId === attrs._docxGroupId
+  ) {
+    options.previousStandaloneTextBox.paragraph.content.push(
+      ...paragraph.content,
+    );
+    return options.previousStandaloneTextBox;
+  }
+
+  prependPageBreaks(paragraph, options.pendingPageBreaks);
+  blocks.push(paragraph);
+  return attrs._docxPlacement === "standalone" && attrs._docxGroupId
+    ? { paragraph, groupId: attrs._docxGroupId }
+    : null;
 }
 
 /**
@@ -167,6 +241,25 @@ function createPageBreakParagraph(): Paragraph {
     type: "paragraph",
     content: [run],
   };
+}
+
+function createPageBreakRun(): Run {
+  return {
+    type: "run",
+    content: [{ type: "break", breakType: "page" }],
+  };
+}
+
+function prependPageBreaks(paragraph: Paragraph, count: number): void {
+  for (let index = 0; index < count; index += 1) {
+    paragraph.content.unshift(createPageBreakRun());
+  }
+}
+
+function appendPageBreaks(paragraph: Paragraph, count: number): void {
+  for (let index = 0; index < count; index += 1) {
+    paragraph.content.push(createPageBreakRun());
+  }
 }
 
 /**
@@ -547,9 +640,9 @@ function extractParagraphContent(
       // Start or continue hyperlink
       const linkKey = getLinkKey(linkMark);
 
-      const currentKey =
-        currentHyperlink?.href ||
-        (currentHyperlink?.anchor ? `#${currentHyperlink.anchor}` : "");
+      const currentKey = currentHyperlink
+        ? getHyperlinkKey(currentHyperlink)
+        : "";
       if (currentHyperlink && currentKey === linkKey) {
         // Continue current hyperlink
         addNodeToHyperlink(currentHyperlink, node);
@@ -669,7 +762,14 @@ function buildDocumentTrackedChangeCounts(pmDoc: PMNode): TrackedChangeCounts {
  * Create a unique key for a link mark
  */
 function getLinkKey(mark: Mark): string {
-  return expectHyperlinkMarkAttrs(mark).href;
+  const attrs = expectHyperlinkMarkAttrs(mark);
+  return [attrs.href, attrs.rId ?? "", attrs.tooltip ?? ""].join("\u0000");
+}
+
+function getHyperlinkKey(hyperlink: Hyperlink): string {
+  const href =
+    hyperlink.href || (hyperlink.anchor ? `#${hyperlink.anchor}` : "");
+  return [href, hyperlink.rId ?? "", hyperlink.tooltip ?? ""].join("\u0000");
 }
 
 /**
@@ -1420,14 +1520,7 @@ function convertPMTable(
   documentCounts?: TrackedChangeCounts,
 ): Table {
   const attrs = expectTableAttrs(node);
-  const rows: TableRow[] = [];
-
-  // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
-  node.forEach((rowNode) => {
-    if (rowNode.type.name === "tableRow") {
-      rows.push(convertPMTableRow(rowNode, documentCounts));
-    }
-  });
+  const rows = convertPMTableRows(node, documentCounts);
 
   const formatting = tableAttrsToFormatting(attrs) || undefined;
   if (!formatting?.borders) {
@@ -1459,6 +1552,30 @@ function convertPMTable(
     table.formatting = formatting;
   }
   return table;
+}
+
+type ActiveVerticalMerge = {
+  remainingRows: number;
+  colspan: number;
+};
+
+function convertPMTableRows(
+  node: PMNode,
+  documentCounts?: TrackedChangeCounts,
+): TableRow[] {
+  const rows: TableRow[] = [];
+  const activeVerticalMerges = new Map<number, ActiveVerticalMerge>();
+
+  // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
+  node.forEach((rowNode) => {
+    if (rowNode.type.name === "tableRow") {
+      rows.push(
+        convertPMTableRow(rowNode, documentCounts, activeVerticalMerges),
+      );
+    }
+  });
+
+  return rows;
 }
 
 /**
@@ -1610,19 +1727,49 @@ function tableAttrsToFormatting(
 function convertPMTableRow(
   node: PMNode,
   documentCounts?: TrackedChangeCounts,
+  activeVerticalMerges?: Map<number, ActiveVerticalMerge>,
 ): TableRow {
   const attrs = expectTableRowAttrs(node);
   const cells: TableCell[] = [];
+  let gridColumn = 0;
+
+  const appendActiveVerticalMerges = (): void => {
+    if (!activeVerticalMerges) {
+      return;
+    }
+
+    let activeMerge = activeVerticalMerges.get(gridColumn);
+    while (activeMerge) {
+      cells.push(createVerticalMergeContinuationCell(activeMerge.colspan));
+      activeMerge.remainingRows -= 1;
+      if (activeMerge.remainingRows <= 0) {
+        activeVerticalMerges.delete(gridColumn);
+      }
+      gridColumn += activeMerge.colspan;
+      activeMerge = activeVerticalMerges.get(gridColumn);
+    }
+  };
 
   // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
   node.forEach((cellNode) => {
+    appendActiveVerticalMerges();
     if (
       cellNode.type.name === "tableCell" ||
       cellNode.type.name === "tableHeader"
     ) {
+      const cellAttrs = expectTableCellAttrs(cellNode);
+      const colspan = Math.max(cellAttrs.colspan, 1);
       cells.push(convertPMTableCell(cellNode, documentCounts));
+      if (cellAttrs.rowspan > 1) {
+        activeVerticalMerges?.set(gridColumn, {
+          remainingRows: cellAttrs.rowspan - 1,
+          colspan,
+        });
+      }
+      gridColumn += colspan;
     }
   });
+  appendActiveVerticalMerges();
 
   const row: TableRow = { type: "tableRow", cells };
   const rowFormatting = tableRowAttrsToFormatting(attrs);
@@ -1630,6 +1777,18 @@ function convertPMTableRow(
     row.formatting = rowFormatting;
   }
   return row;
+}
+
+function createVerticalMergeContinuationCell(colspan: number): TableCell {
+  const formatting: TableCellFormatting = { vMerge: "continue" };
+  if (colspan > 1) {
+    formatting.gridSpan = colspan;
+  }
+  return {
+    type: "tableCell",
+    content: [{ type: "paragraph", content: [] }],
+    formatting,
+  };
 }
 
 /**
@@ -1737,6 +1896,11 @@ function tableCellAttrsToFormatting(
     if (attrs.colspan > 1) {
       result.gridSpan = attrs.colspan;
     }
+    if (attrs.rowspan > 1) {
+      result.vMerge = "restart";
+    } else if (result.vMerge === "restart") {
+      delete result.vMerge;
+    }
     const cellWidth = attrs.width;
     // Width: keep null absent while preserving explicit width=0 values.
     if (cellWidth !== undefined) {
@@ -1795,6 +1959,9 @@ function tableCellAttrsToFormatting(
   if (attrs.colspan > 1) {
     f.gridSpan = attrs.colspan;
   }
+  if (attrs.rowspan > 1) {
+    f.vMerge = "restart";
+  }
   if (cellWidth !== undefined) {
     f.width = {
       value: cellWidth,
@@ -1843,7 +2010,7 @@ function convertPMTextBox(node: PMNode): Paragraph {
   // Build shape with text body
   const shape: Shape = {
     type: "shape",
-    shapeType: "rect",
+    shapeType: "textBox",
     size: {
       width: attrs.width ? pixelsToEmu(attrs.width) : 0,
       height: attrs.height ? pixelsToEmu(attrs.height) : 0,

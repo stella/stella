@@ -345,6 +345,10 @@ export type TextBoxAttrs = {
   cssFloat?: "left" | "right" | "none";
   /** Wrap type */
   wrapType?: string;
+  /** Original DOCX placement hint for save-path reconstruction. */
+  _docxPlacement?: "standalone" | "inlineWithPrevious";
+  /** Original DOCX paragraph group for standalone text-box reconstruction. */
+  _docxGroupId?: string;
 };
 
 /**

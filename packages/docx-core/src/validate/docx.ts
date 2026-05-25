@@ -137,6 +137,7 @@ export const validateDocumentModel = (
     startName: "bookmarkStart",
     endName: "bookmarkEnd",
     ctx,
+    severity: "warning",
   });
   validateCounterPairs(ctx.moveFromStarts, ctx.moveFromEnds, {
     label: "move-from range",
@@ -520,8 +521,8 @@ const validateImage = (
     addError(ctx, `${path}.rId`, "Image must have a relationship id.");
   }
 
-  validatePositiveSize(image.size.width, `${path}.size.width`, ctx);
-  validatePositiveSize(image.size.height, `${path}.size.height`, ctx);
+  validateNonNegativeSize(image.size.width, `${path}.size.width`, ctx);
+  validateNonNegativeSize(image.size.height, `${path}.size.height`, ctx);
 };
 
 const validateShape = (
@@ -529,21 +530,26 @@ const validateShape = (
   path: string,
   ctx: ValidationContext,
 ): void => {
-  validatePositiveSize(shape.size.width, `${path}.size.width`, ctx);
-  validatePositiveSize(shape.size.height, `${path}.size.height`, ctx);
+  validateNonNegativeSize(shape.size.width, `${path}.size.width`, ctx);
+  validateNonNegativeSize(shape.size.height, `${path}.size.height`, ctx);
 
   if (shape.textBody) {
     validateParagraphs(shape.textBody.content, `${path}.textBody.content`, ctx);
   }
 };
 
-const validatePositiveSize = (
+const validateNonNegativeSize = (
   value: number,
   path: string,
   ctx: ValidationContext,
 ): void => {
-  if (value <= 0) {
-    addError(ctx, path, "Size must be greater than zero.");
+  if (value < 0) {
+    addError(ctx, path, "Size must be zero or greater.");
+    return;
+  }
+
+  if (value === 0) {
+    addWarning(ctx, path, "Size is zero; the drawing may be invisible.");
   }
 };
 
@@ -611,8 +617,18 @@ const validateNumbering = (
   }
 
   const ilvl = numPr.ilvl ?? 0;
-  if (ilvl < 0 || ilvl > 8) {
-    addError(ctx, `${path}.formatting.numPr.ilvl`, "List level must be 0-8.");
+  if (ilvl < 0) {
+    addError(
+      ctx,
+      `${path}.formatting.numPr.ilvl`,
+      "List level must be zero or greater.",
+    );
+  } else if (ilvl > 8) {
+    addWarning(
+      ctx,
+      `${path}.formatting.numPr.ilvl`,
+      "List level is outside Word's standard 0-8 range.",
+    );
   }
 
   if (numPr.numId === undefined || numPr.numId === 0) {
@@ -803,12 +819,19 @@ type ValidateCounterPairsOptions = {
   startName: string;
   endName: string;
   ctx: ValidationContext;
+  severity?: ValidateDocumentModelIssue["severity"];
 };
 
 const validateCounterPairs = (
   starts: CounterMap,
   ends: CounterMap,
-  { label, startName, endName, ctx }: ValidateCounterPairsOptions,
+  {
+    label,
+    startName,
+    endName,
+    ctx,
+    severity = "error",
+  }: ValidateCounterPairsOptions,
 ): void => {
   const ids = new Set([...starts.keys(), ...ends.keys()]);
   for (const id of ids) {
@@ -818,10 +841,11 @@ const validateCounterPairs = (
       continue;
     }
 
-    addError(
-      ctx,
-      "package.document",
-      `Unbalanced ${label} ${id}: ${startName}=${startCount}, ${endName}=${endCount}.`,
-    );
+    const message = `Unbalanced ${label} ${id}: ${startName}=${startCount}, ${endName}=${endCount}.`;
+    if (severity === "warning") {
+      addWarning(ctx, "package.document", message);
+      continue;
+    }
+    addError(ctx, "package.document", message);
   }
 };

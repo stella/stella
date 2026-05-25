@@ -40,6 +40,10 @@ export type TextBoxAttrs = {
   cssFloat?: "left" | "right" | "none";
   /** Wrap type */
   wrapType?: string;
+  /** Original DOCX placement hint for save-path reconstruction. */
+  _docxPlacement?: "standalone" | "inlineWithPrevious";
+  /** Original DOCX paragraph group for standalone text-box reconstruction. */
+  _docxGroupId?: string;
 };
 
 export const TextBoxExtension = createNodeExtension({
@@ -66,6 +70,8 @@ export const TextBoxExtension = createNodeExtension({
       displayMode: { default: "inline" },
       cssFloat: { default: null },
       wrapType: { default: "inline" },
+      _docxPlacement: { default: null },
+      _docxGroupId: { default: null },
     },
     parseDOM: [
       {
