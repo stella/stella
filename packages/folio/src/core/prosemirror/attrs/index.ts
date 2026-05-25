@@ -35,6 +35,7 @@ import type {
   FootnoteRefAttrs,
   HighlightAttrs,
   HyperlinkAttrs,
+  HardBreakAttrs,
   ImageAttrs,
   MathAttrs,
   ParagraphAttrs,
@@ -125,6 +126,10 @@ const TRACKED_CHANGE_MOVE_KINDS = [
   "moveTo",
   "moveFrom",
 ] as const satisfies readonly NonNullable<TrackedChangeMarkAttrs["moveKind"]>[];
+
+const HARD_BREAK_TYPES = ["column"] as const satisfies readonly NonNullable<
+  HardBreakAttrs["breakType"]
+>[];
 
 const RUN_FORMATTING_OVERRIDE_FALSE_KEYS = [
   "bold",
@@ -336,6 +341,27 @@ export const readParagraphAttrs = (
 
 export const expectParagraphAttrs = (node: PMNode): ParagraphAttrs =>
   expectAttrs(readParagraphAttrs(node), "paragraph attrs");
+
+export const readHardBreakAttrs = (
+  node: PMNode,
+): ReadProseMirrorAttrsResult<HardBreakAttrs> => {
+  const attrs = attrsRecord(node.attrs);
+  const issues: ProseMirrorAttrIssue[] = [];
+  expectNodeType(node, "hardBreak", issues);
+
+  optionalOneOf(
+    attrs,
+    "breakType",
+    "hardBreak.attrs.breakType",
+    issues,
+    HARD_BREAK_TYPES,
+  );
+
+  return attrsResult(attrs, issues);
+};
+
+export const expectHardBreakAttrs = (node: PMNode): HardBreakAttrs =>
+  expectAttrs(readHardBreakAttrs(node), "hard break attrs");
 
 export const readTableAttrs = (
   node: PMNode,

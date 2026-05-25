@@ -9,6 +9,7 @@ import {
   readFontFamilyMarkAttrs,
   readFontSizeMarkAttrs,
   readFootnoteRefMarkAttrs,
+  readHardBreakAttrs,
   readHighlightMarkAttrs,
   readHyperlinkMarkAttrs,
   readImageAttrs,
@@ -108,10 +109,13 @@ const validateNodeAttrs = (
   switch (node.type.name) {
     case "doc":
     case "text":
-    case "hardBreak":
     case "horizontalRule":
     case "pageBreak":
     case "tab":
+      return;
+
+    case "hardBreak":
+      appendAttrIssues(path, readHardBreakAttrs(node), issues);
       return;
 
     case "paragraph":

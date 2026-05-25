@@ -31,6 +31,10 @@ import type {
 } from "../../types/document";
 import type { SpacingExplicit } from "../../types/formatting";
 
+export type HardBreakAttrs = {
+  breakType?: "column";
+};
+
 /**
  * Paragraph node attributes - maps to ParagraphFormatting
  */

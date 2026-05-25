@@ -63,6 +63,7 @@ import {
   expectFontFamilyMarkAttrs,
   expectFontSizeMarkAttrs,
   expectFootnoteRefMarkAttrs,
+  expectHardBreakAttrs,
   expectHighlightMarkAttrs,
   expectHyperlinkMarkAttrs,
   expectImageAttrs,
@@ -147,6 +148,15 @@ function extractBlocks(pmDoc: PMNode): (Paragraph | Table)[] {
     }
     pendingPageBreaks = 0;
   };
+  const appendPendingPageBreaksToPreviousParagraph = (): boolean => {
+    const previousBlock = blocks.at(-1);
+    if (previousBlock?.type !== "paragraph") {
+      return false;
+    }
+    appendPageBreaks(previousBlock, pendingPageBreaks);
+    pendingPageBreaks = 0;
+    return true;
+  };
 
   // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
   pmDoc.forEach((node) => {
@@ -163,7 +173,12 @@ function extractBlocks(pmDoc: PMNode): (Paragraph | Table)[] {
       blocks.push(paragraph);
       previousStandaloneTextBox = null;
     } else if (node.type.name === "table") {
-      flushPendingPageBreaks();
+      if (
+        pendingPageBreaks > 0 &&
+        !appendPendingPageBreaksToPreviousParagraph()
+      ) {
+        flushPendingPageBreaks();
+      }
       blocks.push(convertPMTable(node, documentCounts));
       previousStandaloneTextBox = null;
     } else if (node.type.name === "textBox") {
@@ -175,13 +190,8 @@ function extractBlocks(pmDoc: PMNode): (Paragraph | Table)[] {
     }
   });
 
-  if (pendingPageBreaks > 0) {
-    const previousBlock = blocks.at(-1);
-    if (previousBlock?.type === "paragraph") {
-      appendPageBreaks(previousBlock, pendingPageBreaks);
-    } else {
-      flushPendingPageBreaks();
-    }
+  if (pendingPageBreaks > 0 && !appendPendingPageBreaksToPreviousParagraph()) {
+    flushPendingPageBreaks();
   }
 
   return blocks;
@@ -680,7 +690,7 @@ function extractParagraphContent(
     } else if (node.type.name === "hardBreak") {
       // Hard break ends current run
       flushCurrentInline();
-      content.push(createBreakRun());
+      content.push(createBreakRun(readHardBreakType(node)));
     } else if (node.type.name === "image") {
       // Image ends current run
       flushCurrentInline();
@@ -862,16 +872,22 @@ function appendTextToRun(run: Run, text: string): void {
 /**
  * Create a Run containing a line break
  */
-function createBreakRun(): Run {
+function createBreakRun(
+  breakType: BreakContent["breakType"] = "textWrapping",
+): Run {
   const breakContent: BreakContent = {
     type: "break",
-    breakType: "textWrapping",
+    breakType,
   };
 
   return {
     type: "run",
     content: [breakContent],
   };
+}
+
+function readHardBreakType(node: PMNode): BreakContent["breakType"] {
+  return expectHardBreakAttrs(node).breakType ?? "textWrapping";
 }
 
 /**

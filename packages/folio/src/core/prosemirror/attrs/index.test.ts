@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   readFieldAttrs,
   expectParagraphAttrs,
+  readHardBreakAttrs,
   readCommentMarkAttrs,
   readFontSizeMarkAttrs,
   readHighlightMarkAttrs,
@@ -248,6 +249,22 @@ describe("ProseMirror attr readers", () => {
         "math.attrs.ommlXml",
       );
     }
+  });
+
+  test("rejects malformed hard break attrs", () => {
+    const node = schema.nodes.hardBreak.create({
+      breakType: "page",
+    });
+
+    const result = readHardBreakAttrs(node);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("Expected hard break attrs to be rejected");
+    }
+    expect(result.issues.map((issue) => issue.path)).toContain(
+      "hardBreak.attrs.breakType",
+    );
   });
 
   test("rejects malformed SDT list item attrs", () => {

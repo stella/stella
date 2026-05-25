@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { EditorState } from "prosemirror-state";
 
 import type { Document, Paragraph, Table } from "../../types/document";
+import { expectHardBreakAttrs } from "../attrs";
 import { schema } from "../schema";
 import { fromProseDoc } from "./fromProseDoc";
 import { toProseDoc } from "./toProseDoc";
@@ -190,6 +191,93 @@ describe("fromProseDoc", () => {
     expect(paragraphStartsWithPageBreak(secondBlock)).toBe(true);
   });
 
+  test("keeps page breaks before tables on the previous paragraph", () => {
+    const pmDoc = schema.node("doc", null, [
+      schema.node("paragraph", null, [schema.text("Before")]),
+      schema.node("pageBreak"),
+      schema.node("table", null, [
+        schema.node("tableRow", null, [
+          schema.node("tableCell", null, [
+            schema.node("paragraph", null, [schema.text("Cell")]),
+          ]),
+        ]),
+      ]),
+    ]);
+
+    const document = fromProseDoc(pmDoc);
+    const firstBlock = document.package.document.content.at(0);
+    const secondBlock = document.package.document.content.at(1);
+
+    expect(document.package.document.content).toHaveLength(2);
+    expect(firstBlock?.type).toBe("paragraph");
+    expect(secondBlock?.type).toBe("table");
+    if (firstBlock?.type !== "paragraph") {
+      return;
+    }
+    expect(paragraphEndsWithPageBreak(firstBlock)).toBe(true);
+  });
+
+  test("round-trips imported trailing page breaks before tables without inventing paragraphs", () => {
+    const document: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  type: "run",
+                  content: [
+                    { type: "text", text: "Before" },
+                    { type: "break", breakType: "page" },
+                  ],
+                },
+              ],
+            },
+            {
+              type: "table",
+              rows: [
+                {
+                  type: "tableRow",
+                  cells: [
+                    {
+                      type: "tableCell",
+                      content: [
+                        {
+                          type: "paragraph",
+                          content: [
+                            {
+                              type: "run",
+                              content: [{ type: "text", text: "Cell" }],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const pmDoc = toProseDoc(document);
+    const roundTripped = fromProseDoc(pmDoc, document);
+    const firstBlock = roundTripped.package.document.content.at(0);
+    const secondBlock = roundTripped.package.document.content.at(1);
+
+    expect(pmDoc.child(1).type.name).toBe("pageBreak");
+    expect(roundTripped.package.document.content).toHaveLength(2);
+    expect(firstBlock?.type).toBe("paragraph");
+    expect(secondBlock?.type).toBe("table");
+    if (firstBlock?.type !== "paragraph") {
+      return;
+    }
+    expect(paragraphEndsWithPageBreak(firstBlock)).toBe(true);
+  });
+
   test("serializes table rowspans as vertical merge continuation cells", () => {
     const pmDoc = schema.node("doc", null, [
       schema.node("table", null, [
@@ -285,6 +373,70 @@ describe("fromProseDoc", () => {
       return;
     }
     expect(firstShapeType(block)).toBe("textBox");
+  });
+
+  test("keeps a wrapper paragraph when text-box-only content ends a section", () => {
+    const document = documentWithTextBoxParagraph({
+      includeText: false,
+      sectionProperties: { sectionStart: "continuous" },
+    });
+    const pmDoc = toProseDoc(document);
+
+    const roundTripped = fromProseDoc(pmDoc, document);
+    const block = roundTripped.package.document.content.at(0);
+
+    expect(pmDoc.childCount).toBe(2);
+    expect(pmDoc.child(0).type.name).toBe("paragraph");
+    expect(pmDoc.child(1).type.name).toBe("textBox");
+    expect(roundTripped.package.document.content).toHaveLength(1);
+    expect(block?.type).toBe("paragraph");
+    if (block?.type !== "paragraph") {
+      return;
+    }
+    expect(block.sectionProperties).toEqual({ sectionStart: "continuous" });
+    expect(firstShapeType(block)).toBe("textBox");
+  });
+
+  test("preserves imported column breaks", () => {
+    const document: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  type: "run",
+                  content: [
+                    { type: "text", text: "Left column" },
+                    { type: "break", breakType: "column" },
+                    { type: "text", text: "Right column" },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const pmDoc = toProseDoc(document);
+    const hardBreak = pmDoc.firstChild?.child(1);
+    const roundTripped = fromProseDoc(pmDoc, document);
+    const block = roundTripped.package.document.content.at(0);
+
+    expect(hardBreak?.type.name).toBe("hardBreak");
+    expect(
+      hardBreak ? expectHardBreakAttrs(hardBreak).breakType : undefined,
+    ).toBe("column");
+    expect(block?.type).toBe("paragraph");
+    if (block?.type !== "paragraph") {
+      return;
+    }
+    const runContents = block.content.flatMap((content) =>
+      content.type === "run" ? content.content : [],
+    );
+    expect(runContents).toContainEqual({ type: "break", breakType: "column" });
   });
 
   test("keeps imported page-break text-box-only paragraphs as one wrapper", () => {
@@ -559,6 +711,15 @@ function paragraphStartsWithPageBreak(paragraph: Paragraph): boolean {
   );
 }
 
+function paragraphEndsWithPageBreak(paragraph: Paragraph): boolean {
+  const lastContent = paragraph.content.at(-1);
+  const lastRunContent =
+    lastContent?.type === "run" ? lastContent.content.at(-1) : undefined;
+  return (
+    lastRunContent?.type === "break" && lastRunContent.breakType === "page"
+  );
+}
+
 function paragraphText(block: Paragraph | Table | undefined): string {
   if (!block || block.type !== "paragraph") {
     return "";
@@ -578,10 +739,12 @@ function documentWithTextBoxParagraph({
   includeText,
   includePageBreak = false,
   textBoxCount = 1,
+  sectionProperties,
 }: {
   includeText: boolean;
   includePageBreak?: boolean;
   textBoxCount?: number;
+  sectionProperties?: Paragraph["sectionProperties"];
 }): Document {
   const content: Paragraph["content"] = [];
   if (includePageBreak) {
@@ -628,7 +791,7 @@ function documentWithTextBoxParagraph({
   return {
     package: {
       document: {
-        content: [{ type: "paragraph", content }],
+        content: [{ type: "paragraph", content, sectionProperties }],
       },
     },
   };

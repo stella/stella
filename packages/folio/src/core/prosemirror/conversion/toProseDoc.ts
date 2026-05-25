@@ -1585,7 +1585,10 @@ function convertRunContent(
       if (content.breakType === "textWrapping" || !content.breakType) {
         return [schema.node("hardBreak")];
       }
-      // Page breaks not supported in inline content
+      if (content.breakType === "column") {
+        return [schema.node("hardBreak", { breakType: "column" })];
+      }
+      // Page breaks are represented as block separators by paragraphPageBreakPosition.
       return [];
 
     case "tab":
@@ -2172,18 +2175,27 @@ function convertParagraphWithTextBoxes(
   const nodes: PMNode[] = [];
   const isEmptyAfterExtraction =
     textBoxes.length > 0 && pmParagraph.content.size === 0;
-  if (!isEmptyAfterExtraction) {
+  const keepWrapperParagraph =
+    isEmptyAfterExtraction && hasParagraphBoundaryPayload(block);
+  if (!isEmptyAfterExtraction || keepWrapperParagraph) {
     nodes.push(pmParagraph);
   }
   for (const tb of textBoxes) {
     nodes.push(
       convertTextBox(tb, styleResolver, {
-        placement: isEmptyAfterExtraction ? "standalone" : "inlineWithPrevious",
+        placement:
+          isEmptyAfterExtraction && !keepWrapperParagraph
+            ? "standalone"
+            : "inlineWithPrevious",
         groupId: textBoxGroupId,
       }),
     );
   }
   return nodes;
+}
+
+function hasParagraphBoundaryPayload(block: Paragraph): boolean {
+  return Boolean(block.sectionProperties || block.propertyChanges?.length);
 }
 
 /**
