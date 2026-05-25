@@ -104,7 +104,7 @@
     "fast-check": "^4.8.0",
     "jszip": "3.10.1",
     "lucide-react": "1.16.0",
-    "oxfmt": "0.50.0",
+    "oxfmt": "0.51.0",
     "oxlint": "1.66.0",
     "sherif": "1.11.1",
     "tailwindcss": "4.3.0",
