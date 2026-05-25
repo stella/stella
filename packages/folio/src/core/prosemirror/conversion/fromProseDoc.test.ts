@@ -689,6 +689,36 @@ describe("fromProseDoc", () => {
     expect(countShapes(block)).toBe(2);
   });
 
+  test("keeps page breaks before grouped standalone text boxes", () => {
+    const pmDoc = schema.node("doc", null, [
+      schema.node(
+        "textBox",
+        { _docxPlacement: "standalone", _docxGroupId: "a" },
+        [schema.node("paragraph", null, [schema.text("A")])],
+      ),
+      schema.node("pageBreak"),
+      schema.node(
+        "textBox",
+        { _docxPlacement: "standalone", _docxGroupId: "a" },
+        [schema.node("paragraph", null, [schema.text("B")])],
+      ),
+    ]);
+
+    const document = fromProseDoc(pmDoc);
+    const firstBlock = document.package.document.content.at(0);
+    const secondBlock = document.package.document.content.at(1);
+
+    expect(document.package.document.content).toHaveLength(2);
+    expect(firstBlock?.type).toBe("paragraph");
+    expect(secondBlock?.type).toBe("paragraph");
+    if (firstBlock?.type !== "paragraph" || secondBlock?.type !== "paragraph") {
+      return;
+    }
+    expect(countShapes(firstBlock)).toBe(1);
+    expect(paragraphHasPageBreakBeforeFirstShape(secondBlock)).toBe(true);
+    expect(countShapes(secondBlock)).toBe(1);
+  });
+
   test("does not merge adjacent standalone text boxes from different source paragraphs", () => {
     const pmDoc = schema.node("doc", null, [
       schema.node(
