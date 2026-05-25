@@ -59,6 +59,7 @@ const serializedSectionPropertyChildNames = new Set([
   "headerReference",
   "footerReference",
   "footnotePr",
+  "footnoteColumns",
   "endnotePr",
   "type",
   "pgSz",
@@ -671,6 +672,14 @@ export function parseSectionProperties(
     const fnProps = parseFootnoteProperties(footnotePr);
     if (Object.keys(fnProps).length > 0) {
       props.footnotePr = fnProps;
+    }
+  }
+
+  const footnoteColumns = findChild(sectPr, "w15", "footnoteColumns");
+  if (footnoteColumns) {
+    const columns = parseNumericAttribute(footnoteColumns, "w", "val");
+    if (columns !== undefined) {
+      props.footnoteColumns = columns;
     }
   }
 

@@ -1452,6 +1452,8 @@ export type SectionProperties = {
   // Footnote/Endnote properties
   /** Footnote properties for this section */
   footnotePr?: FootnoteProperties;
+  /** Number of footnote columns in this section (`w15:footnoteColumns`) */
+  footnoteColumns?: number;
   /** Endnote properties for this section */
   endnotePr?: EndnoteProperties;
 

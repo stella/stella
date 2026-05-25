@@ -83,6 +83,12 @@ function serializeFootnoteProperties(
     : "";
 }
 
+function serializeFootnoteColumns(props: SectionProperties): string {
+  return props.footnoteColumns !== undefined
+    ? `<w15:footnoteColumns w:val="${intAttr(props.footnoteColumns)}"/>`
+    : "";
+}
+
 function serializeEndnoteProperties(
   props: EndnoteProperties | undefined,
 ): string {
@@ -359,6 +365,11 @@ export function serializeSectionProperties(
   const footnotePrXml = serializeFootnoteProperties(props.footnotePr);
   if (footnotePrXml) {
     parts.push(footnotePrXml);
+  }
+
+  const footnoteColumnsXml = serializeFootnoteColumns(props);
+  if (footnoteColumnsXml) {
+    parts.push(footnoteColumnsXml);
   }
 
   const endnotePrXml = serializeEndnoteProperties(props.endnotePr);

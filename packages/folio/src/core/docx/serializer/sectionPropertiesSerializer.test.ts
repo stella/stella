@@ -157,4 +157,20 @@ describe("serializeSectionProperties", () => {
       '<w:sectPr><w:pgNumType w:fmt="decimal" w:start="3" w:chapStyle="2" w:chapSep="hyphen"/><w:formProt/><w:noEndnote w:val="0"/><w:rtlGutter/><w:printerSettings r:id="rIdPrinter"/></w:sectPr>',
     );
   });
+
+  test("round-trips section footnote columns", () => {
+    const section = parseSectPr(`
+      <w:sectPr
+        xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+        xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml"
+      >
+        <w15:footnoteColumns w:val="2"/>
+      </w:sectPr>
+    `);
+
+    expect(section.footnoteColumns).toBe(2);
+    expect(serializeSectionProperties(section)).toBe(
+      '<w:sectPr><w15:footnoteColumns w:val="2"/></w:sectPr>',
+    );
+  });
 });
