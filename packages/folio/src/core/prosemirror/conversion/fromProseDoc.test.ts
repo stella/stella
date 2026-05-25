@@ -375,6 +375,27 @@ describe("fromProseDoc", () => {
     expect(firstShapeType(block)).toBe("textBox");
   });
 
+  test("keeps page breaks before inline text boxes on the source paragraph", () => {
+    const pmDoc = schema.node("doc", null, [
+      schema.node("paragraph", null, [schema.text("Before")]),
+      schema.node("pageBreak"),
+      schema.node("textBox", { _docxPlacement: "inlineWithPrevious" }, [
+        schema.node("paragraph", null, [schema.text("Inside")]),
+      ]),
+    ]);
+
+    const document = fromProseDoc(pmDoc);
+    const block = document.package.document.content.at(0);
+
+    expect(document.package.document.content).toHaveLength(1);
+    expect(block?.type).toBe("paragraph");
+    if (block?.type !== "paragraph") {
+      return;
+    }
+    expect(paragraphHasPageBreakBeforeFirstShape(block)).toBe(true);
+    expect(firstShapeType(block)).toBe("textBox");
+  });
+
   test("keeps a wrapper paragraph when text-box-only content ends a section", () => {
     const document = documentWithTextBoxParagraph({
       includeText: false,
@@ -718,6 +739,24 @@ function paragraphEndsWithPageBreak(paragraph: Paragraph): boolean {
   return (
     lastRunContent?.type === "break" && lastRunContent.breakType === "page"
   );
+}
+
+function paragraphHasPageBreakBeforeFirstShape(paragraph: Paragraph): boolean {
+  let sawPageBreak = false;
+  for (const content of paragraph.content) {
+    if (content.type !== "run") {
+      continue;
+    }
+    for (const runContent of content.content) {
+      if (runContent.type === "break" && runContent.breakType === "page") {
+        sawPageBreak = true;
+      }
+      if (runContent.type === "shape") {
+        return sawPageBreak;
+      }
+    }
+  }
+  return false;
 }
 
 function paragraphText(block: Paragraph | Table | undefined): string {

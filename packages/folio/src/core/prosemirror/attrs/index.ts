@@ -23,6 +23,7 @@ import {
   TABLE_WIDTH_TYPE_VALUES,
   TAB_LEADER_VALUES,
   TAB_STOP_ALIGNMENT_VALUES,
+  THEME_COLOR_SLOT_VALUES,
   UNDERLINE_STYLE_VALUES,
 } from "../../types/documentEnumValues";
 import type {
@@ -1401,7 +1402,13 @@ const optionalTextColorFields = (
   issues: ProseMirrorAttrIssue[],
 ): void => {
   optionalString(attrs, "rgb", `${path}.rgb`, issues);
-  optionalString(attrs, "themeColor", `${path}.themeColor`, issues);
+  optionalOneOf(
+    attrs,
+    "themeColor",
+    `${path}.themeColor`,
+    issues,
+    THEME_COLOR_SLOT_VALUES,
+  );
   optionalString(attrs, "themeTint", `${path}.themeTint`, issues);
   optionalString(attrs, "themeShade", `${path}.themeShade`, issues);
 };
@@ -1512,7 +1519,13 @@ const optionalColorValue = (
 
   optionalString(value, "rgb", `${path}.rgb`, issues);
   optionalBoolean(value, "auto", `${path}.auto`, issues);
-  optionalString(value, "themeColor", `${path}.themeColor`, issues);
+  optionalOneOf(
+    value,
+    "themeColor",
+    `${path}.themeColor`,
+    issues,
+    THEME_COLOR_SLOT_VALUES,
+  );
   optionalString(value, "themeTint", `${path}.themeTint`, issues);
   optionalString(value, "themeShade", `${path}.themeShade`, issues);
 };
@@ -1902,27 +1915,39 @@ const validateNumPr = (
   value: unknown,
   issues: ProseMirrorAttrIssue[],
 ): void => {
-  if (value === undefined || value === null || Array.isArray(value)) {
+  if (value === undefined || value === null || !isRecord(value)) {
     return;
   }
 
-  if (typeof value !== "object") {
+  validateNonNegativeInteger(
+    value["numId"],
+    "paragraph.attrs.numPr.numId",
+    issues,
+  );
+  // Some real DOCX files use ilvl > 8; docx-core warns but preserves them.
+  validateNonNegativeInteger(
+    value["ilvl"],
+    "paragraph.attrs.numPr.ilvl",
+    issues,
+  );
+};
+
+const validateNonNegativeInteger = (
+  value: unknown,
+  path: string,
+  issues: ProseMirrorAttrIssue[],
+): void => {
+  if (value === undefined || value === null) {
     return;
   }
 
-  const numPr = value as Record<string, unknown>;
-  if (numPr["numId"] !== undefined && typeof numPr["numId"] !== "number") {
-    issues.push({
-      path: "paragraph.attrs.numPr.numId",
-      message: "Expected a number.",
-    });
+  if (typeof value !== "number") {
+    issues.push({ path, message: "Expected a number." });
+    return;
   }
 
-  if (numPr["ilvl"] !== undefined && typeof numPr["ilvl"] !== "number") {
-    issues.push({
-      path: "paragraph.attrs.numPr.ilvl",
-      message: "Expected a number.",
-    });
+  if (!Number.isInteger(value) || value < 0) {
+    issues.push({ path, message: "Expected a non-negative integer." });
   }
 };
 

@@ -219,6 +219,7 @@ function appendTextBoxBlock(
     attrs._docxPlacement === "inlineWithPrevious" &&
     previousBlock?.type === "paragraph"
   ) {
+    appendPageBreaks(previousBlock, options.pendingPageBreaks);
     previousBlock.content.push(...paragraph.content);
     return null;
   }

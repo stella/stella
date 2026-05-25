@@ -1002,6 +1002,7 @@ type PushTrackedChangeWrapperParams = {
   type: TrackedChangeWrapperType;
   info: TrackedChangeInfo;
   content: readonly (Run | Hyperlink)[];
+  preserveEmpty?: boolean;
 };
 
 function pushTrackedChangeWrapper({
@@ -1009,8 +1010,9 @@ function pushTrackedChangeWrapper({
   type,
   info,
   content,
+  preserveEmpty = false,
 }: PushTrackedChangeWrapperParams): void {
-  if (content.length === 0) {
+  if (content.length === 0 && !preserveEmpty) {
     return;
   }
 
@@ -1045,6 +1047,18 @@ function pushTrackedChangeSegments({
   info,
   parsedContent,
 }: PushTrackedChangeSegmentsParams): void {
+  if (!parsedContent.some(isTrackedChangeWrapperChild)) {
+    pushTrackedChangeWrapper({
+      contents,
+      type,
+      info,
+      content: [],
+      preserveEmpty: true,
+    });
+    contents.push(...parsedContent);
+    return;
+  }
+
   const segment: (Run | Hyperlink)[] = [];
 
   for (const content of parsedContent) {
@@ -1072,6 +1086,16 @@ function pushInlineSdtSegments({
   properties,
   parsedContent,
 }: PushInlineSdtSegmentsParams): void {
+  if (!parsedContent.some(isTrackedChangeWrapperChild)) {
+    contents.push({
+      type: "inlineSdt",
+      properties,
+      content: [],
+    });
+    contents.push(...parsedContent);
+    return;
+  }
+
   const segment: (Run | Hyperlink)[] = [];
 
   const pushSegment = (): void => {

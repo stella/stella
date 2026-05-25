@@ -14,6 +14,7 @@ import {
   readSdtAttrs,
   readShapeAttrs,
   readTextBoxAttrs,
+  readTextColorMarkAttrs,
   readTrackedChangeMarkAttrs,
   readUnderlineMarkAttrs,
   readTableAttrs,
@@ -64,6 +65,27 @@ describe("ProseMirror attr readers", () => {
     expect(() => expectParagraphAttrs(node)).toThrow(
       "Invalid ProseMirror paragraph attrs",
     );
+  });
+
+  test("rejects non-integer paragraph numbering attrs", () => {
+    const node = schema.nodes.paragraph.create({
+      numPr: { numId: 1.5, ilvl: -1 },
+    });
+
+    const result = readParagraphAttrs(node);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("Expected paragraph attrs to be rejected");
+    }
+    expect(result.issues).toContainEqual({
+      path: "paragraph.attrs.numPr.numId",
+      message: "Expected a non-negative integer.",
+    });
+    expect(result.issues).toContainEqual({
+      path: "paragraph.attrs.numPr.ilvl",
+      message: "Expected a non-negative integer.",
+    });
   });
 
   test("rejects malformed paragraph preservation payloads", () => {
@@ -350,12 +372,16 @@ describe("ProseMirror attr readers", () => {
   test("rejects malformed text formatting mark attrs", () => {
     const underline = schema.marks.underline.create({
       style: "diagonal",
-      color: { rgb: 123 },
+      color: { rgb: 123, themeColor: "brandAccent" },
+    });
+    const textColor = schema.marks.textColor.create({
+      themeColor: "brandAccent",
     });
     const fontSize = schema.marks.fontSize.create({ size: "24" });
     const highlight = schema.marks.highlight.create({ color: "customYellow" });
 
     const underlineResult = readUnderlineMarkAttrs(underline);
+    const textColorResult = readTextColorMarkAttrs(textColor);
     const fontSizeResult = readFontSizeMarkAttrs(fontSize);
     const highlightResult = readHighlightMarkAttrs(highlight);
 
@@ -366,6 +392,15 @@ describe("ProseMirror attr readers", () => {
       );
       expect(underlineResult.issues.map((issue) => issue.path)).toContain(
         "underline.attrs.color.rgb",
+      );
+      expect(underlineResult.issues.map((issue) => issue.path)).toContain(
+        "underline.attrs.color.themeColor",
+      );
+    }
+    expect(textColorResult.ok).toBe(false);
+    if (!textColorResult.ok) {
+      expect(textColorResult.issues.map((issue) => issue.path)).toContain(
+        "textColor.attrs.themeColor",
       );
     }
     expect(fontSizeResult.ok).toBe(false);
