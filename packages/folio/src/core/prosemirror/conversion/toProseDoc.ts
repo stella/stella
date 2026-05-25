@@ -1755,7 +1755,7 @@ function convertRunContent(
       // Shapes with text body are handled as text boxes at block level
       // Other shapes render as inline SVG
       const shp = content.shape;
-      if (shp.textBody && shp.textBody.content.length > 0) {
+      if (shp.textBody) {
         // Skip - handled by extractTextBoxesFromParagraph
         return [];
       }
@@ -2387,7 +2387,7 @@ function extractTextBoxesFromParagraph(paragraph: Paragraph): TextBox[] {
       for (const rc of content.content) {
         if (rc.type === "shape") {
           const shape = rc.shape as Shape;
-          if (shape.textBody && shape.textBody.content.length > 0) {
+          if (shape.textBody) {
             // Convert shape with text body to TextBox
             const textBox: TextBox = {
               type: "textBox",

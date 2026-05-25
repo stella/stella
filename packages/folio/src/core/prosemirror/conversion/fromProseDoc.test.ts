@@ -769,6 +769,26 @@ describe("fromProseDoc", () => {
     expect(firstShapeType(block)).toBe("textBox");
   });
 
+  test("keeps empty imported text boxes as text boxes", () => {
+    const document = documentWithTextBoxParagraph({
+      includeText: false,
+      emptyTextBoxContent: true,
+    });
+    const pmDoc = toProseDoc(document);
+
+    const roundTripped = fromProseDoc(pmDoc, document);
+    const block = roundTripped.package.document.content.at(0);
+
+    expect(pmDoc.childCount).toBe(1);
+    expect(pmDoc.firstChild?.type.name).toBe("textBox");
+    expect(block?.type).toBe("paragraph");
+    if (block?.type !== "paragraph") {
+      return;
+    }
+    expect(firstShapeType(block)).toBe("textBox");
+    expect(firstShapeTextBody(block)?.content).toHaveLength(1);
+  });
+
   test("keeps page breaks before inline text boxes on the source paragraph", () => {
     const pmDoc = schema.node("doc", null, [
       schema.node("paragraph", null, [schema.text("Before")]),
@@ -1288,11 +1308,13 @@ function documentWithTextBoxParagraph({
   includeText,
   includePageBreak = false,
   textBoxCount = 1,
+  emptyTextBoxContent = false,
   sectionProperties,
 }: {
   includeText: boolean;
   includePageBreak?: boolean;
   textBoxCount?: number;
+  emptyTextBoxContent?: boolean;
   sectionProperties?: Paragraph["sectionProperties"];
 }): Document {
   const content: Paragraph["content"] = [];
@@ -1319,17 +1341,19 @@ function documentWithTextBoxParagraph({
             shapeType: "textBox",
             size: { width: 914_400, height: 457_200 },
             textBody: {
-              content: [
-                {
-                  type: "paragraph",
-                  content: [
+              content: emptyTextBoxContent
+                ? []
+                : [
                     {
-                      type: "run",
-                      content: [{ type: "text", text: `Inside ${index}` }],
+                      type: "paragraph",
+                      content: [
+                        {
+                          type: "run",
+                          content: [{ type: "text", text: `Inside ${index}` }],
+                        },
+                      ],
                     },
                   ],
-                },
-              ],
             },
           },
         },
@@ -1359,13 +1383,21 @@ function cellWithText(text: string): TableCell {
 }
 
 function firstShapeType(paragraph: Paragraph): string | undefined {
+  return firstShapeContent(paragraph)?.shape.shapeType;
+}
+
+function firstShapeTextBody(paragraph: Paragraph) {
+  return firstShapeContent(paragraph)?.shape.textBody;
+}
+
+function firstShapeContent(paragraph: Paragraph) {
   for (const content of paragraph.content) {
     if (content.type !== "run") {
       continue;
     }
     for (const runContent of content.content) {
       if (runContent.type === "shape") {
-        return runContent.shape.shapeType;
+        return runContent;
       }
     }
   }
