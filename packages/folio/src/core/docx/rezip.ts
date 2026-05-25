@@ -74,7 +74,7 @@ const countDocumentSections = (xml: string): number =>
   Array.from(xml.matchAll(/<w:sectPr\b/gu)).length;
 
 type HeaderFooterReference = {
-  element: string;
+  element: "headerReference" | "footerReference";
   type: string;
   rId: string;
 };
@@ -89,7 +89,10 @@ const extractHeaderFooterReferences = (
     const type = /\bw:type="([^"]+)"/u.exec(tag)?.at(1) ?? "default";
     const rId = /\br:id="([^"]+)"/u.exec(tag)?.at(1);
     const element = match[1];
-    if (!rId || !element) {
+    if (
+      !rId ||
+      (element !== "headerReference" && element !== "footerReference")
+    ) {
       continue;
     }
     references.push({ element, type, rId });
@@ -97,9 +100,21 @@ const extractHeaderFooterReferences = (
   return references;
 };
 
+const hasParsedHeaderFooterPart = (
+  doc: Document,
+  ref: HeaderFooterReference,
+): boolean => {
+  const map =
+    ref.element === "headerReference"
+      ? doc.package.headers
+      : doc.package.footers;
+  return map?.has(ref.rId) ?? false;
+};
+
 function assertDocumentPackageFidelity(
   originalDocumentXml: string,
   serializedDocumentXml: string,
+  doc: Document,
 ): void {
   const originalSectionCount = countDocumentSections(originalDocumentXml);
   const serializedSectionCount = countDocumentSections(serializedDocumentXml);
@@ -115,7 +130,9 @@ function assertDocumentPackageFidelity(
     ),
   );
   const missingRefs = extractHeaderFooterReferences(originalDocumentXml).filter(
-    (ref) => !serializedRefs.has(`${ref.element}:${ref.type}:${ref.rId}`),
+    (ref) =>
+      hasParsedHeaderFooterPart(doc, ref) &&
+      !serializedRefs.has(`${ref.element}:${ref.type}:${ref.rId}`),
   );
   if (missingRefs.length > 0) {
     throw new DocxPackageFidelityError(
@@ -594,7 +611,11 @@ export async function repackDocx(
     .file("word/document.xml")
     ?.async("text");
   if (originalDocumentXml) {
-    assertDocumentPackageFidelity(originalDocumentXml, documentXml);
+    assertDocumentPackageFidelity(
+      originalDocumentXml,
+      documentXml,
+      exportDocument,
+    );
   }
   newZip.file("word/document.xml", documentXml, {
     compression: "DEFLATE",
@@ -700,7 +721,11 @@ export async function repackDocxFromRaw(
 
   const documentXml = serializeDocument(exportDocument);
   if (rawContent.documentXml) {
-    assertDocumentPackageFidelity(rawContent.documentXml, documentXml);
+    assertDocumentPackageFidelity(
+      rawContent.documentXml,
+      documentXml,
+      exportDocument,
+    );
   }
   newZip.file("word/document.xml", documentXml, {
     compression: "DEFLATE",

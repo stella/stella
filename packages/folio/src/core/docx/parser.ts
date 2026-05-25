@@ -47,6 +47,7 @@ import {
 } from "./documentParser";
 import { parseFootnotes, parseEndnotes } from "./footnoteParser";
 import { parseHeader, parseFooter } from "./headerFooterParser";
+import { normalizeHeaderFooterReferences } from "./headerFooterReferenceNormalization";
 import {
   DocxModelValidationError,
   formatDocumentModelIssues,
@@ -283,6 +284,25 @@ export async function parseDocx(
     if (commentReferenceNormalization.reanchoredUnbalancedRanges > 0) {
       warnings.push(
         `Re-anchored ${commentReferenceNormalization.reanchoredUnbalancedRanges} unbalanced comment range marker(s) as point comments.`,
+      );
+    }
+    const headerFooterReferenceNormalization = normalizeHeaderFooterReferences({
+      documentBody,
+      ...(headers !== undefined ? { headers } : {}),
+      ...(footers !== undefined ? { footers } : {}),
+    });
+    if (
+      headerFooterReferenceNormalization.removedDanglingHeaderReferences > 0
+    ) {
+      warnings.push(
+        `Removed ${headerFooterReferenceNormalization.removedDanglingHeaderReferences} dangling header reference(s) whose header parts are missing.`,
+      );
+    }
+    if (
+      headerFooterReferenceNormalization.removedDanglingFooterReferences > 0
+    ) {
+      warnings.push(
+        `Removed ${headerFooterReferenceNormalization.removedDanglingFooterReferences} dangling footer reference(s) whose footer parts are missing.`,
       );
     }
 
