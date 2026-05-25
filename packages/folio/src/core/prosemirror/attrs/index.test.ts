@@ -10,6 +10,7 @@ import {
   readHyperlinkMarkAttrs,
   readImageAttrs,
   readMathAttrs,
+  mergeImageAttrs,
   readParagraphAttrs,
   readSdtAttrs,
   readShapeAttrs,
@@ -241,6 +242,39 @@ describe("ProseMirror attr readers", () => {
     expect(result.issues.map((issue) => issue.path)).toContain(
       "image.attrs.position.horizontal.posOffset",
     );
+  });
+
+  test("clears image attrs with explicit undefined patches", () => {
+    const node = schema.nodes.image.create({
+      src: "media/image.png",
+      transform: "rotate(90deg)",
+      alt: "Existing alt text",
+      borderWidth: 2,
+      borderColor: "currentColor",
+      borderStyle: "solid",
+    });
+
+    const retainedNode = schema.nodes.image.create(
+      mergeImageAttrs(node, { width: 120 }),
+    );
+    expect(retainedNode.attrs["transform"]).toBe("rotate(90deg)");
+    expect(retainedNode.attrs["alt"]).toBe("Existing alt text");
+
+    const clearedNode = schema.nodes.image.create(
+      mergeImageAttrs(node, {
+        transform: undefined,
+        alt: undefined,
+        borderWidth: undefined,
+        borderColor: undefined,
+        borderStyle: undefined,
+      }),
+    );
+
+    expect(clearedNode.attrs["transform"]).toBeNull();
+    expect(clearedNode.attrs["alt"]).toBeNull();
+    expect(clearedNode.attrs["borderWidth"]).toBeNull();
+    expect(clearedNode.attrs["borderColor"]).toBeNull();
+    expect(clearedNode.attrs["borderStyle"]).toBeNull();
   });
 
   test("rejects malformed field and math attrs", () => {
