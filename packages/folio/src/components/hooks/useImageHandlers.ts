@@ -2,6 +2,20 @@ import { useCallback, useState } from "react";
 
 import type { EditorView } from "prosemirror-view";
 
+import {
+  expectImageAttrs,
+  mergeImageAttrs,
+} from "../../core/prosemirror/attrs";
+import type {
+  ImageAttrs,
+  ImagePositionAttrs,
+} from "../../core/prosemirror/schema/nodes";
+import {
+  IMAGE_HORIZONTAL_ALIGNMENT_VALUES,
+  IMAGE_HORIZONTAL_RELATIVE_TO_VALUES,
+  IMAGE_VERTICAL_ALIGNMENT_VALUES,
+  IMAGE_VERTICAL_RELATIVE_TO_VALUES,
+} from "../../core/types/documentEnumValues";
 import { isSafeImageFile } from "../../core/utils/imageValidation";
 import type { ImagePositionData } from "../dialogs/ImagePositionDialog";
 import type { ImagePropertiesData } from "../dialogs/ImagePropertiesDialog";
@@ -107,28 +121,29 @@ export const useImageHandlers = ({
         return;
       }
 
-      // Map wrap type to image display mode + cssFloat
-      let imgDisplayMode = "inline";
-      let cssFloat: string | null = null;
-      let resolvedWrapType = wrapType;
+      let imgDisplayMode: ImageAttrs["displayMode"] = "inline";
+      let cssFloat: ImageAttrs["cssFloat"];
+      let resolvedWrapType: ImageAttrs["wrapType"];
 
       switch (wrapType) {
         case "inline":
+          resolvedWrapType = "inline";
           imgDisplayMode = "inline";
-          cssFloat = null;
           break;
         case "square":
         case "tight":
         case "through":
+          resolvedWrapType = wrapType;
           imgDisplayMode = "float";
           cssFloat = "left";
           break;
         case "topAndBottom":
+          resolvedWrapType = "topAndBottom";
           imgDisplayMode = "block";
-          cssFloat = null;
           break;
         case "behind":
         case "inFront":
+          resolvedWrapType = wrapType;
           imgDisplayMode = "float";
           cssFloat = "none";
           break;
@@ -143,15 +158,18 @@ export const useImageHandlers = ({
           resolvedWrapType = "square";
           break;
         default:
-          break;
+          return;
       }
 
-      const tr = view.state.tr.setNodeMarkup(pos, undefined, {
-        ...node.attrs,
-        wrapType: resolvedWrapType,
-        displayMode: imgDisplayMode,
-        cssFloat,
-      });
+      const tr = view.state.tr.setNodeMarkup(
+        pos,
+        undefined,
+        mergeImageAttrs(node, {
+          wrapType: resolvedWrapType,
+          displayMode: imgDisplayMode,
+          cssFloat,
+        }),
+      );
       view.dispatch(tr.scrollIntoView());
       focusActiveEditor();
     },
@@ -172,7 +190,7 @@ export const useImageHandlers = ({
         return;
       }
 
-      const currentTransform = (node.attrs["transform"] as string) || "";
+      const currentTransform = expectImageAttrs(node).transform ?? "";
 
       // Parse current rotation and flip state
       const rotateMatch = /rotate\((-?\d+(?:\.\d+)?)deg\)/u.exec(
@@ -211,12 +229,13 @@ export const useImageHandlers = ({
       if (hasFlipV) {
         parts.push("scaleY(-1)");
       }
-      const newTransform = parts.length > 0 ? parts.join(" ") : null;
+      const newTransform = parts.length > 0 ? parts.join(" ") : undefined;
 
-      const tr = view.state.tr.setNodeMarkup(pos, undefined, {
-        ...node.attrs,
-        transform: newTransform,
-      });
+      const tr = view.state.tr.setNodeMarkup(
+        pos,
+        undefined,
+        mergeImageAttrs(node, { transform: newTransform }),
+      );
       view.dispatch(tr.scrollIntoView());
       focusActiveEditor();
     },
@@ -237,17 +256,26 @@ export const useImageHandlers = ({
         return;
       }
 
-      const tr = view.state.tr.setNodeMarkup(pos, undefined, {
-        ...node.attrs,
-        position: {
-          horizontal: data.horizontal,
-          vertical: data.vertical,
-        },
-        distTop: data.distTop ?? node.attrs["distTop"],
-        distBottom: data.distBottom ?? node.attrs["distBottom"],
-        distLeft: data.distLeft ?? node.attrs["distLeft"],
-        distRight: data.distRight ?? node.attrs["distRight"],
-      });
+      const attrs = expectImageAttrs(node);
+      const horizontal = normalizeHorizontalPosition(data.horizontal);
+      const vertical = normalizeVerticalPosition(data.vertical);
+      const tr = view.state.tr.setNodeMarkup(
+        pos,
+        undefined,
+        mergeImageAttrs(node, {
+          position:
+            horizontal || vertical
+              ? {
+                  ...(horizontal ? { horizontal } : {}),
+                  ...(vertical ? { vertical } : {}),
+                }
+              : undefined,
+          distTop: data.distTop ?? attrs.distTop,
+          distBottom: data.distBottom ?? attrs.distBottom,
+          distLeft: data.distLeft ?? attrs.distLeft,
+          distRight: data.distRight ?? attrs.distRight,
+        }),
+      );
       view.dispatch(tr.scrollIntoView());
       focusActiveEditor();
     },
@@ -273,13 +301,16 @@ export const useImageHandlers = ({
         return;
       }
 
-      const tr = view.state.tr.setNodeMarkup(pos, undefined, {
-        ...node.attrs,
-        alt: data.alt ?? null,
-        borderWidth: data.borderWidth ?? null,
-        borderColor: data.borderColor ?? null,
-        borderStyle: data.borderStyle ?? null,
-      });
+      const tr = view.state.tr.setNodeMarkup(
+        pos,
+        undefined,
+        mergeImageAttrs(node, {
+          alt: data.alt,
+          borderWidth: data.borderWidth,
+          borderColor: data.borderColor,
+          borderStyle: data.borderStyle,
+        }),
+      );
       view.dispatch(tr.scrollIntoView());
       focusActiveEditor();
     },
@@ -299,6 +330,56 @@ export const useImageHandlers = ({
     handleApplyImageProperties,
   };
 };
+
+const normalizeHorizontalPosition = (
+  data: ImagePositionData["horizontal"],
+): ImagePositionAttrs["horizontal"] | undefined => {
+  if (!data) {
+    return undefined;
+  }
+  if (!isOneOf(data.relativeTo, IMAGE_HORIZONTAL_RELATIVE_TO_VALUES)) {
+    return undefined;
+  }
+
+  const align = isOneOf(data.align, IMAGE_HORIZONTAL_ALIGNMENT_VALUES)
+    ? data.align
+    : undefined;
+  return {
+    relativeTo: data.relativeTo,
+    ...(typeof data.posOffset === "number"
+      ? { posOffset: data.posOffset }
+      : {}),
+    ...(align ? { align } : {}),
+  };
+};
+
+const normalizeVerticalPosition = (
+  data: ImagePositionData["vertical"],
+): ImagePositionAttrs["vertical"] | undefined => {
+  if (!data) {
+    return undefined;
+  }
+  if (!isOneOf(data.relativeTo, IMAGE_VERTICAL_RELATIVE_TO_VALUES)) {
+    return undefined;
+  }
+
+  const align = isOneOf(data.align, IMAGE_VERTICAL_ALIGNMENT_VALUES)
+    ? data.align
+    : undefined;
+  return {
+    relativeTo: data.relativeTo,
+    ...(typeof data.posOffset === "number"
+      ? { posOffset: data.posOffset }
+      : {}),
+    ...(align ? { align } : {}),
+  };
+};
+
+const isOneOf = <T extends string>(
+  value: string | undefined,
+  values: readonly T[],
+): value is T =>
+  value !== undefined && values.some((allowed) => allowed === value);
 
 async function insertSelectedImage(
   file: File,

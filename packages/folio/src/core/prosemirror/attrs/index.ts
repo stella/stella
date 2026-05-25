@@ -929,6 +929,63 @@ export const readHyperlinkMarkAttrs = (
 export const expectHyperlinkMarkAttrs = (mark: Mark): HyperlinkAttrs =>
   expectAttrs(readHyperlinkMarkAttrs(mark), "hyperlink attrs");
 
+type NodeAttrReader<T extends object> = (
+  node: PMNode,
+) => ReadProseMirrorAttrsResult<T>;
+
+type NodeAttrPatch<T extends object> = {
+  [K in keyof T]?: T[K] | undefined;
+};
+
+const mergeNodeAttrs = <T extends object>(
+  node: PMNode,
+  readAttrs: NodeAttrReader<T>,
+  label: string,
+  patch: NodeAttrPatch<T>,
+): T => {
+  const currentAttrs = expectAttrs(readAttrs(node), label);
+  const mergedAttrs: Record<string, unknown> = { ...currentAttrs, ...patch };
+  const nextAttrs: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(mergedAttrs)) {
+    if (value !== undefined) {
+      nextAttrs[key] = value;
+    }
+  }
+
+  // SAFETY: `currentAttrs` has been validated by the node-specific reader, and
+  // `patch` is typed against the same attr shape. Undefined patch values are
+  // treated as deletions so ProseMirror can restore schema defaults.
+  return nextAttrs as T;
+};
+
+export const mergeImageAttrs = (
+  node: PMNode,
+  patch: NodeAttrPatch<ImageAttrs>,
+): ImageAttrs => mergeNodeAttrs(node, readImageAttrs, "image attrs", patch);
+
+export const mergeParagraphAttrs = (
+  node: PMNode,
+  patch: NodeAttrPatch<ParagraphAttrs>,
+): ParagraphAttrs =>
+  mergeNodeAttrs(node, readParagraphAttrs, "paragraph attrs", patch);
+
+export const mergeTableAttrs = (
+  node: PMNode,
+  patch: NodeAttrPatch<TableAttrs>,
+): TableAttrs => mergeNodeAttrs(node, readTableAttrs, "table attrs", patch);
+
+export const mergeTableRowAttrs = (
+  node: PMNode,
+  patch: NodeAttrPatch<TableRowAttrs>,
+): TableRowAttrs =>
+  mergeNodeAttrs(node, readTableRowAttrs, "table row attrs", patch);
+
+export const mergeTableCellAttrs = (
+  node: PMNode,
+  patch: NodeAttrPatch<TableCellAttrs>,
+): TableCellAttrs =>
+  mergeNodeAttrs(node, readTableCellAttrs, "table cell attrs", patch);
+
 const attrsRecord = (attrs: unknown): Record<string, unknown> => {
   if (isRecord(attrs)) {
     return attrs;
