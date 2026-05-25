@@ -1,5 +1,5 @@
 # Pin to digest for supply-chain integrity (oven/bun:1.3.13-slim)
-FROM oven/bun:1.3.13-slim@sha256:7e8ed3961db1cdedf17d516dda87948cfedbd294f53bf16462e5b57ed3fff0f1 AS base
+FROM oven/bun:1.3.14-slim@sha256:d56a2534ffd262e92c12fd3249d3924d296d97086da773f821d7d0477435ea04 AS base
 WORKDIR /app
 
 # Prune the monorepo for the API
