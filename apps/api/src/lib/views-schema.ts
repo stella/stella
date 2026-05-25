@@ -3,9 +3,9 @@ import { t } from "elysia";
 import * as v from "valibot";
 
 import {
+  manualInputToolSchema,
   propertyConditionSchema,
   propertyContentSchema,
-  propertyToolSchema,
 } from "@/api/db/schema-validators";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 
@@ -283,13 +283,22 @@ export const tViewLayoutSchema = Type.Unsafe<ViewLayout>({
   ...tViewLayoutDefinition,
 });
 
+const tViewTemplatePropertyToolSchema = t.Union([
+  t.Object({
+    version: t.Literal(1),
+    type: t.Literal("ai-model"),
+    prompt: t.String({ maxLength: 1000 }),
+  }),
+  manualInputToolSchema,
+]);
+
 export const tViewTemplatePropertySchema = t.Object(
   {
     version: t.Literal(1),
     sourceId: t.String({ minLength: 1 }),
     name: tDefaultVarchar,
     content: propertyContentSchema,
-    tool: propertyToolSchema,
+    tool: tViewTemplatePropertyToolSchema,
     createIfMissing: t.Boolean(),
     dependencies: t.Optional(
       t.Array(

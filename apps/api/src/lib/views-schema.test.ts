@@ -1,6 +1,10 @@
+import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 
-import { parseViewLayout } from "@/api/lib/views-schema";
+import {
+  parseViewLayout,
+  tViewTemplatePropertySchema,
+} from "@/api/lib/views-schema";
 import type { ViewLayout } from "@/api/lib/views-schema";
 
 describe("parseViewLayout", () => {
@@ -29,5 +33,20 @@ describe("parseViewLayout", () => {
     };
 
     expect(() => parseViewLayout(layout)).toThrow();
+  });
+});
+
+describe("view template property validation", () => {
+  test("accepts saved AI properties with empty prompts", () => {
+    expect(
+      Value.Check(tViewTemplatePropertySchema, {
+        version: 1,
+        sourceId: "source_summary",
+        name: "Summary",
+        content: { version: 1, type: "text" },
+        tool: { version: 1, type: "ai-model", prompt: "" },
+        createIfMissing: true,
+      }),
+    ).toBe(true);
   });
 });
