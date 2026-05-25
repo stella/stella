@@ -141,23 +141,39 @@ const reanchorUnbalancedCommentRanges = (
 
   let reanchoredCount = 0;
   for (const markers of byId.values()) {
-    const starts = markers.filter(
-      (marker) => marker.type === "commentRangeStart",
-    );
-    const ends = markers.filter((marker) => marker.type === "commentRangeEnd");
-    const unbalanced =
-      starts.length > ends.length
-        ? starts.slice(ends.length)
-        : ends.slice(starts.length);
-    for (const marker of unbalanced) {
-      marker.content[marker.index] = {
-        type: "commentReference",
-        id: marker.id,
-      };
+    let openStart: CommentRangeMarkerRef | null = null;
+    for (const marker of markers) {
+      if (marker.type === "commentRangeStart") {
+        if (openStart) {
+          reanchorCommentRangeMarker(marker);
+          reanchoredCount += 1;
+          continue;
+        }
+        openStart = marker;
+        continue;
+      }
+
+      if (!openStart) {
+        reanchorCommentRangeMarker(marker);
+        reanchoredCount += 1;
+        continue;
+      }
+      openStart = null;
+    }
+
+    if (openStart) {
+      reanchorCommentRangeMarker(openStart);
       reanchoredCount += 1;
     }
   }
   return reanchoredCount;
+};
+
+const reanchorCommentRangeMarker = (marker: CommentRangeMarkerRef): void => {
+  marker.content[marker.index] = {
+    type: "commentReference",
+    id: marker.id,
+  };
 };
 
 const isCommentMarker = (

@@ -126,4 +126,49 @@ describe("comment reference normalization", () => {
       id: 0,
     });
   });
+
+  test("re-anchors out-of-order valid range markers as point comments", () => {
+    const documentBody: DocumentBody = {
+      comments: [
+        {
+          id: 0,
+          author: "Reviewer",
+          content: [{ type: "paragraph", content: [] }],
+        },
+      ],
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "commentRangeEnd", id: 0 },
+            {
+              type: "run",
+              content: [{ type: "text", text: "Text" }],
+            },
+            { type: "commentRangeStart", id: 0 },
+          ],
+        },
+      ],
+    };
+
+    const result = normalizeCommentReferences({
+      documentBody,
+      comments: documentBody.comments ?? [],
+    });
+
+    expect(result).toEqual({
+      removedDanglingReferences: 0,
+      reanchoredUnbalancedRanges: 2,
+    });
+    const paragraph = documentBody.content.at(0);
+    expect(paragraph?.type).toBe("paragraph");
+    if (paragraph?.type !== "paragraph") {
+      return;
+    }
+    expect(paragraph.content.map((content) => content.type)).toEqual([
+      "commentReference",
+      "run",
+      "commentReference",
+    ]);
+  });
 });
