@@ -281,7 +281,11 @@ function convertPMParagraph(
   documentCounts?: TrackedChangeCounts,
 ): Paragraph {
   const attrs = expectParagraphAttrs(node);
-  let content = extractParagraphContent(node, documentCounts);
+  let content = extractParagraphContent(
+    node,
+    documentCounts,
+    attrs._emptyHyperlinks ?? undefined,
+  );
 
   // Emit BookmarkStart/End from bookmarks attr (for TOC anchors, cross-references)
   const bookmarks = attrs.bookmarks as
@@ -505,8 +509,16 @@ function extractParagraphContent(
   // — `moveFrom`/`moveTo` round-trip is now driven by the explicit
   // `moveKind` mark attribute set by `toProseDoc`.
   _documentCounts?: TrackedChangeCounts,
+  emptyHyperlinks?: NonNullable<ParagraphAttrs["_emptyHyperlinks"]>,
 ): ParagraphContent[] {
   const content: ParagraphContent[] = [];
+  const sortedEmptyHyperlinks = (emptyHyperlinks ?? [])
+    .map((attrs, order) => ({ attrs, order }))
+    .toSorted(
+      (left, right) =>
+        left.attrs.offset - right.attrs.offset || left.order - right.order,
+    );
+  let nextEmptyHyperlink = 0;
 
   // Track current run being built
   let currentRun: Run | null = null;
@@ -564,8 +576,19 @@ function extractParagraphContent(
     }
   };
 
-  // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
-  paragraph.forEach((node) => {
+  const flushEmptyHyperlinksThroughOffset = (offset: number): void => {
+    while (nextEmptyHyperlink < sortedEmptyHyperlinks.length) {
+      const item = sortedEmptyHyperlinks[nextEmptyHyperlink];
+      if (!item || item.attrs.offset > offset) {
+        break;
+      }
+      nextEmptyHyperlink += 1;
+      flushCurrentInline();
+      content.push(createEmptyHyperlink(item.attrs));
+    }
+  };
+
+  const processInlineNode = (node: PMNode): void => {
     syncCommentRanges(node);
 
     // Check for footnote/endnote reference mark
@@ -717,7 +740,43 @@ function extractParagraphContent(
       flushCurrentInline();
       content.push(createMathFromNode(node));
     }
+  };
+
+  // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
+  paragraph.forEach((node, offset) => {
+    flushEmptyHyperlinksThroughOffset(offset);
+
+    if (node.isText && node.text) {
+      let consumed = 0;
+      const textEndOffset = offset + node.nodeSize;
+      while (nextEmptyHyperlink < sortedEmptyHyperlinks.length) {
+        const item = sortedEmptyHyperlinks[nextEmptyHyperlink];
+        if (!item || item.attrs.offset >= textEndOffset) {
+          break;
+        }
+
+        const splitOffset = Math.max(item.attrs.offset - offset, consumed);
+        const segment = node.text.slice(consumed, splitOffset);
+        if (segment) {
+          processInlineNode(node.type.schema.text(segment, node.marks));
+        }
+        flushCurrentInline();
+        content.push(createEmptyHyperlink(item.attrs));
+        nextEmptyHyperlink += 1;
+        consumed = splitOffset;
+      }
+
+      const remainder = node.text.slice(consumed);
+      if (remainder) {
+        processInlineNode(node.type.schema.text(remainder, node.marks));
+      }
+      return;
+    }
+
+    processInlineNode(node);
   });
+
+  flushEmptyHyperlinksThroughOffset(Number.POSITIVE_INFINITY);
 
   // Don't forget the last run/hyperlink
   flushCurrentInline();
@@ -726,6 +785,25 @@ function extractParagraphContent(
   }
 
   return content;
+}
+
+function createEmptyHyperlink(
+  attrs: NonNullable<ParagraphAttrs["_emptyHyperlinks"]>[number],
+): Hyperlink {
+  const hyperlink: Hyperlink = { type: "hyperlink", children: [] };
+  if (attrs.href !== undefined) {
+    hyperlink.href = attrs.href;
+  }
+  if (attrs.anchor !== undefined) {
+    hyperlink.anchor = attrs.anchor;
+  }
+  if (attrs.tooltip !== undefined) {
+    hyperlink.tooltip = attrs.tooltip;
+  }
+  if (attrs.rId !== undefined) {
+    hyperlink.rId = attrs.rId;
+  }
+  return hyperlink;
 }
 
 function getCommentMarkIds(marks: readonly Mark[]): Set<number> {

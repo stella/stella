@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { EditorState } from "prosemirror-state";
 
-import type { Document, Paragraph, Table } from "../../types/document";
+import type {
+  Document,
+  Paragraph,
+  Table,
+  TableCell,
+} from "../../types/document";
 import { expectHardBreakAttrs } from "../attrs";
 import { schema } from "../schema";
 import { fromProseDoc } from "./fromProseDoc";
@@ -312,6 +317,110 @@ describe("fromProseDoc", () => {
     expect(paragraphText(table.rows.at(1)?.cells.at(1)?.content.at(0))).toBe(
       "Bottom",
     );
+  });
+
+  test("preserves unmatched vertical-merge continuation cells", () => {
+    const document: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "table",
+              rows: [
+                {
+                  type: "tableRow",
+                  cells: [cellWithText("Top left"), cellWithText("Top right")],
+                },
+                {
+                  type: "tableRow",
+                  cells: [
+                    cellWithText("Bottom left"),
+                    {
+                      type: "tableCell",
+                      formatting: { vMerge: "continue" },
+                      content: [
+                        {
+                          type: "paragraph",
+                          content: [
+                            {
+                              type: "run",
+                              content: [{ type: "text", text: "Metadata" }],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const pmDoc = toProseDoc(document);
+    const roundTripped = fromProseDoc(pmDoc, document);
+    const table = roundTripped.package.document.content.at(0);
+
+    expect(table?.type).toBe("table");
+    if (table?.type !== "table") {
+      return;
+    }
+    expect(table.rows.at(1)?.cells).toHaveLength(2);
+    expect(paragraphText(table.rows.at(1)?.cells.at(1)?.content.at(0))).toBe(
+      "Metadata",
+    );
+    expect(table.rows.at(1)?.cells.at(1)?.formatting?.vMerge).toBe("continue");
+  });
+
+  test("preserves empty hyperlinks through ProseMirror attrs", () => {
+    const document: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                { type: "run", content: [{ type: "text", text: "Before" }] },
+                {
+                  type: "hyperlink",
+                  href: "https://example.test",
+                  rId: "rId9",
+                  children: [],
+                },
+                { type: "run", content: [{ type: "text", text: "After" }] },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const pmDoc = toProseDoc(document);
+    const roundTripped = fromProseDoc(pmDoc, document);
+    const paragraph = roundTripped.package.document.content.at(0);
+
+    expect(paragraph?.type).toBe("paragraph");
+    if (paragraph?.type !== "paragraph") {
+      return;
+    }
+    expect(paragraph.content.map((content) => content.type)).toEqual([
+      "run",
+      "hyperlink",
+      "run",
+    ]);
+    expect(paragraphText(paragraph)).toBe("BeforeAfter");
+    const hyperlink = paragraph.content.find(
+      (content) => content.type === "hyperlink",
+    );
+    expect(hyperlink?.type).toBe("hyperlink");
+    if (hyperlink?.type !== "hyperlink") {
+      return;
+    }
+    expect(hyperlink.href).toBe("https://example.test");
+    expect(hyperlink.rId).toBe("rId9");
+    expect(hyperlink.children).toHaveLength(0);
   });
 
   test("converts textBox nodes back to DOCX text box shapes", () => {
@@ -833,6 +942,18 @@ function documentWithTextBoxParagraph({
         content: [{ type: "paragraph", content, sectionProperties }],
       },
     },
+  };
+}
+
+function cellWithText(text: string): TableCell {
+  return {
+    type: "tableCell",
+    content: [
+      {
+        type: "paragraph",
+        content: [{ type: "run", content: [{ type: "text", text }] }],
+      },
+    ],
   };
 }
 

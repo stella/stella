@@ -359,6 +359,7 @@ const paragraphNodeSpec: NodeSpec = {
     bidi: { default: null },
     outlineLevel: { default: null },
     bookmarks: { default: null },
+    _emptyHyperlinks: { default: null },
     _originalFormatting: { default: null },
     _sectionProperties: { default: null },
     _propertyChanges: { default: null },

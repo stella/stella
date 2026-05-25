@@ -12,6 +12,7 @@ import type {
   ParagraphFormatting,
   ParagraphPropertyChange,
   FieldType,
+  Hyperlink,
   LineSpacingRule,
   ImagePosition,
   ImageWrap,
@@ -128,6 +129,18 @@ export type ParagraphAttrs = {
 
   // Bookmarks on this paragraph (for TOC anchors, cross-references)
   bookmarks?: { id: number; name: string }[];
+
+  /** Empty `w:hyperlink` elements cannot be represented as text marks.
+   *  Preserve their relationship metadata at the paragraph boundary so a
+   *  no-edit DOCX round-trip does not silently drop hyperlink elements. */
+  _emptyHyperlinks?: {
+    /** ProseMirror inline offset where the zero-width hyperlink appeared. */
+    offset: number;
+    href?: Hyperlink["href"];
+    anchor?: Hyperlink["anchor"];
+    tooltip?: Hyperlink["tooltip"];
+    rId?: Hyperlink["rId"];
+  }[];
 
   /**
    * Run-in heading flag: this paragraph's mark carries

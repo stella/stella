@@ -323,6 +323,7 @@ export const readParagraphAttrs = (
   optionalRecord(attrs, "numPr", "paragraph.attrs.numPr", issues);
   validateNumPr(attrs["numPr"], issues);
   optionalBookmarkArray(attrs["bookmarks"], issues);
+  optionalEmptyHyperlinkArray(attrs["_emptyHyperlinks"], issues);
   optionalSectionProperties(
     attrs,
     "_sectionProperties",
@@ -1989,5 +1990,35 @@ const optionalBookmarkArray = (
         message: "Expected a string.",
       });
     }
+  }
+};
+
+const optionalEmptyHyperlinkArray = (
+  value: unknown,
+  issues: ProseMirrorAttrIssue[],
+): void => {
+  if (value === undefined || value === null) {
+    return;
+  }
+
+  if (!Array.isArray(value)) {
+    issues.push({
+      path: "paragraph.attrs._emptyHyperlinks",
+      message: "Expected an array of empty hyperlinks.",
+    });
+    return;
+  }
+
+  for (const [index, item] of value.entries()) {
+    const itemPath = `paragraph.attrs._emptyHyperlinks[${index}]`;
+    if (!isRecord(item)) {
+      issues.push({ path: itemPath, message: "Expected an object." });
+      continue;
+    }
+    validateNonNegativeInteger(item["offset"], `${itemPath}.offset`, issues);
+    optionalString(item, "href", `${itemPath}.href`, issues);
+    optionalString(item, "anchor", `${itemPath}.anchor`, issues);
+    optionalString(item, "tooltip", `${itemPath}.tooltip`, issues);
+    optionalString(item, "rId", `${itemPath}.rId`, issues);
   }
 };

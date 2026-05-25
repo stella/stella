@@ -141,7 +141,11 @@ function convertParagraph(
 ): PMNode {
   const attrs = paragraphFormattingToAttrs(paragraph, styleResolver);
   const inlineNodes: PMNode[] = [];
+  let inlineOffset = 0;
   let bookmarksArr: { id: number; name: string }[] | undefined;
+  let emptyHyperlinks:
+    | NonNullable<ParagraphAttrs["_emptyHyperlinks"]>
+    | undefined;
 
   // Track active comment ranges for this paragraph
   const commentIds = activeCommentIds ?? new Set<number>();
@@ -149,7 +153,11 @@ function convertParagraph(
     if (nodes.length === 0) {
       return;
     }
-    inlineNodes.push(...applyCommentMarks(nodes, commentIds));
+    const markedNodes = applyCommentMarks(nodes, commentIds);
+    inlineNodes.push(...markedNodes);
+    for (const node of markedNodes) {
+      inlineOffset += node.nodeSize;
+    }
   };
   const emitInlineNode = (node: PMNode | null): void => {
     if (!node) {
@@ -216,9 +224,25 @@ function convertParagraph(
         ),
       );
     } else if (content.type === "hyperlink") {
-      emitInlineNodes(
-        convertHyperlink(content, getInheritedRunFormatting, styleResolver),
+      const linkNodes = convertHyperlink(
+        content,
+        getInheritedRunFormatting,
+        styleResolver,
       );
+      if (linkNodes.length === 0) {
+        emptyHyperlinks ??= [];
+        emptyHyperlinks.push({
+          offset: inlineOffset,
+          ...(content.href !== undefined ? { href: content.href } : {}),
+          ...(content.anchor !== undefined ? { anchor: content.anchor } : {}),
+          ...(content.tooltip !== undefined
+            ? { tooltip: content.tooltip }
+            : {}),
+          ...(content.rId !== undefined ? { rId: content.rId } : {}),
+        });
+        continue;
+      }
+      emitInlineNodes(linkNodes);
     } else if (
       content.type === "simpleField" ||
       content.type === "complexField"
@@ -254,6 +278,9 @@ function convertParagraph(
 
   if (bookmarksArr) {
     attrs.bookmarks = bookmarksArr;
+  }
+  if (emptyHyperlinks) {
+    attrs._emptyHyperlinks = emptyHyperlinks;
   }
 
   return schema.node("paragraph", attrs, inlineNodes);
@@ -759,15 +786,22 @@ function calculateRowSpans(
         activeMerges.set(colIndex, rowIndex);
         result.set(key, { rowSpan: 1, skip: false });
       } else if (vMerge === "continue") {
-        // Continuation of a merge - this cell should be skipped
+        // Continuation of a merge - only skip it when the parsed grid has a
+        // matching restart in this exact column. Real DOCX tables can be
+        // ragged, and treating an unmatched continuation as merged-away drops
+        // its placeholder paragraph and cell metadata.
         const startRow = activeMerges.get(colIndex);
-        if (startRow !== undefined) {
-          // Increment rowSpan of the starting cell
-          const startKey = `${startRow}-${colIndex}`;
-          const startCell = result.get(startKey);
-          if (startCell) {
-            startCell.rowSpan++;
-          }
+        if (startRow === undefined) {
+          result.set(key, { rowSpan: 1, skip: false });
+          colIndex += colspan;
+          continue;
+        }
+
+        // Increment rowSpan of the starting cell
+        const startKey = `${startRow}-${colIndex}`;
+        const startCell = result.get(startKey);
+        if (startCell) {
+          startCell.rowSpan++;
         }
         result.set(key, { rowSpan: 1, skip: true });
       } else {

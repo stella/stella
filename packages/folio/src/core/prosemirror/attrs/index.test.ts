@@ -56,12 +56,19 @@ describe("ProseMirror attr readers", () => {
     const node = schema.nodes.paragraph.create({
       numPr: { numId: "bad" },
       bookmarks: [{ id: "bad", name: 7 }],
+      _emptyHyperlinks: [{ offset: -1, href: 42 }],
     });
 
     const result = readParagraphAttrs(node);
 
     expect(result.ok).toBe(false);
     expect(issueMessages(result)).toContain("Expected a number.");
+    expect(result.ok ? [] : result.issues.map((issue) => issue.path)).toEqual(
+      expect.arrayContaining([
+        "paragraph.attrs._emptyHyperlinks[0].offset",
+        "paragraph.attrs._emptyHyperlinks[0].href",
+      ]),
+    );
     expect(() => expectParagraphAttrs(node)).toThrow(
       "Invalid ProseMirror paragraph attrs",
     );
