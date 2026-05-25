@@ -306,10 +306,15 @@ export async function unzipDocx(
       }
       content.media.set(path, binaryContent);
     } else if (lowerPath.startsWith("word/fonts/")) {
-      // Embedded fonts
-      assertEntrySize(path, declaredSize, limits.maxFontBytes);
+      // Embedded fonts are optional for editing and original ZIP preservation.
+      // Skip oversized fonts instead of rejecting otherwise readable documents.
+      if (isEntryTooLarge(declaredSize, limits.maxFontBytes)) {
+        continue;
+      }
       const binaryContent = await file.async("arraybuffer");
-      assertExtractedSize(path, binaryContent.byteLength, limits.maxFontBytes);
+      if (binaryContent.byteLength > limits.maxFontBytes) {
+        continue;
+      }
       content.fonts.set(path, binaryContent);
     }
   }
@@ -553,9 +558,16 @@ function assertEntrySize(
   declaredSize: number | null,
   maxBytes: number,
 ): void {
-  if (declaredSize !== null && declaredSize > maxBytes) {
+  if (isEntryTooLarge(declaredSize, maxBytes)) {
     throw new DocxSecurityError(`DOCX entry exceeds maximum size: ${path}`);
   }
+}
+
+function isEntryTooLarge(
+  declaredSize: number | null,
+  maxBytes: number,
+): boolean {
+  return declaredSize !== null && declaredSize > maxBytes;
 }
 
 function assertExtractedSize(

@@ -188,6 +188,21 @@ describe("unzipDocx security limits", () => {
     expect(content.media.size).toBe(0);
     expect(getFileList(content)).toContain("word/media/image1.emf");
   });
+
+  test("skips oversized embedded fonts without rejecting the document", async () => {
+    const zip = new JSZip();
+    zip.file("[Content_Types].xml", "<Types />");
+    zip.file("word/document.xml", "<w:document />");
+    zip.file("word/fonts/font1.odttf", new Uint8Array([1, 2, 3, 4]));
+
+    const content = await unzipDocx(
+      await zip.generateAsync({ type: "arraybuffer" }),
+      { maxFontBytes: 3 },
+    );
+
+    expect(content.fonts.size).toBe(0);
+    expect(getFileList(content)).toContain("word/fonts/font1.odttf");
+  });
 });
 
 function truncateAfterEndOfCentralDirectoryCounts(buffer: ArrayBuffer) {
