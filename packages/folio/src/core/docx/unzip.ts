@@ -59,13 +59,15 @@ const PRESERVABLE_MEDIA_MIME_TYPES = new Set([
   "image/x-emf",
 ]);
 
+const MEBIBYTE = 1024 * 1024;
+
 const DEFAULT_UNZIP_LIMITS: DocxUnzipLimits = {
-  maxInputBytes: 50 * 1024 * 1024,
-  maxFiles: 2000,
-  maxXmlBytes: 25 * 1024 * 1024,
-  maxMediaBytes: 25 * 1024 * 1024,
-  maxFontBytes: 10 * 1024 * 1024,
-  maxTotalUncompressedBytes: 250 * 1024 * 1024,
+  maxInputBytes: 50 * MEBIBYTE,
+  maxFiles: 5000,
+  maxXmlBytes: 64 * MEBIBYTE,
+  maxMediaBytes: 25 * MEBIBYTE,
+  maxFontBytes: 10 * MEBIBYTE,
+  maxTotalUncompressedBytes: 250 * MEBIBYTE,
   allowedMediaMimeTypes: DEFAULT_ALLOWED_MEDIA_MIME_TYPES,
 };
 

@@ -28,6 +28,42 @@ describe("unzipDocx security limits", () => {
     expect(error).toBeInstanceOf(DocxSecurityError);
   });
 
+  test("accepts large document XML entries within the default limit", async () => {
+    const zip = new JSZip();
+    const largeBody = "x".repeat(26 * 1024 * 1024);
+    zip.file("[Content_Types].xml", "<Types />");
+    zip.file("word/document.xml", `<w:document>${largeBody}</w:document>`);
+
+    const content = await unzipDocx(
+      await zip.generateAsync({
+        compression: "DEFLATE",
+        type: "arraybuffer",
+      }),
+    );
+
+    expect(content.documentXml?.length).toBe(
+      "<w:document></w:document>".length + largeBody.length,
+    );
+  });
+
+  test("accepts media-heavy packages within the default file-count limit", async () => {
+    const zip = new JSZip();
+    zip.file("[Content_Types].xml", "<Types />");
+    zip.file("word/document.xml", "<w:document />");
+    for (let index = 0; index < 3800; index += 1) {
+      zip.file(
+        `word/media/image${index}.png`,
+        new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00]),
+      );
+    }
+
+    const content = await unzipDocx(
+      await zip.generateAsync({ type: "arraybuffer" }),
+    );
+
+    expect(content.media.size).toBe(3800);
+  });
+
   test("repairs archives missing the end-of-central-directory tail", async () => {
     const zip = new JSZip();
     zip.file("[Content_Types].xml", "<Types />");
