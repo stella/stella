@@ -2634,6 +2634,11 @@ export const chatThreads = p.pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     title: p.varchar({ length: 255 }).notNull(),
+    titleSource: p
+      .varchar("title_source", { length: 4 })
+      .$type<"ai" | "user">()
+      .notNull()
+      .default("user"),
     /**
      * Matters the chat draws context from. Empty array (the
      * default) means "no specific matters pinned" — the AI
