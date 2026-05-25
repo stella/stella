@@ -54,24 +54,33 @@ describe("serializeSectionProperties", () => {
         `),
       ),
     ).toBe("");
-    expect(
-      serializeSectionProperties(
-        parseSectPr(`
-          <w:sectPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-            <w:sectPrChange/>
+  });
+
+  test("round-trips tracked section property changes", () => {
+    const section = parseSectPr(`
+      <w:sectPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:pgSz w:w="11906" w:h="16838"/>
+        <w:pgMar w:top="1276" w:right="991" w:bottom="1417" w:left="851"/>
+        <w:sectPrChange w:id="86" w:author="szp@applet.cz" w:date="2023-01-12T10:39:00Z">
+          <w:sectPr>
+            <w:pgMar w:top="1276" w:right="1417" w:bottom="1417" w:left="1417"/>
           </w:sectPr>
-        `),
-      ),
-    ).toBe("");
-    expect(
-      serializeSectionProperties({
-        ...parseSectPr(`
-          <w:sectPr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-            <w:sectPrChange/>
-          </w:sectPr>
-        `),
-      }),
-    ).toBe("");
+        </w:sectPrChange>
+      </w:sectPr>
+    `);
+
+    expect(section.propertyChanges?.at(0)?.info).toEqual({
+      id: 86,
+      author: "szp@applet.cz",
+      date: "2023-01-12T10:39:00Z",
+    });
+
+    const xml = serializeSectionProperties(section);
+
+    expect(xml).toContain("<w:sectPrChange");
+    expect(xml).toContain('w:id="86"');
+    expect(xml).toContain('w:author="szp@applet.cz"');
+    expect(xml).toContain('w:right="1417"');
   });
 
   test("preserves unknown page border styles for fallback rendering", () => {

@@ -1624,7 +1624,7 @@ export function parseParagraph(
     // Check for section properties within paragraph (marks end of a section)
     const sectPr = findChild(pPr, "w", "sectPr");
     if (sectPr) {
-      paragraph.sectionProperties = parseSectionProperties(sectPr, rels);
+      paragraph.sectionProperties = parseSectionProperties(sectPr);
     }
   }
 

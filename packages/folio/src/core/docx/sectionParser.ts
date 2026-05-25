@@ -22,6 +22,7 @@
 
 import type {
   SectionProperties,
+  SectionPropertyChange,
   PageOrientation,
   SectionStart,
   VerticalAlign,
@@ -29,7 +30,6 @@ import type {
   Column,
   BorderSpec,
   ColorValue,
-  RelationshipMap,
 } from "../types/document";
 import {
   parseHeaderReference,
@@ -79,6 +79,7 @@ const serializedSectionPropertyChildNames = new Set([
   "rtlGutter",
   "docGrid",
   "printerSettings",
+  "sectPrChange",
 ]);
 
 const unserializedSectionPropertyChildNames = Symbol(
@@ -132,6 +133,28 @@ function parseColorValue(
   }
 
   return Object.keys(color).length > 0 ? color : undefined;
+}
+
+function parsePropertyChangeInfo(
+  node: XmlElement,
+): SectionPropertyChange["info"] {
+  const rawId = getAttribute(node, "w", "id");
+  const parsedId = rawId ? Number.parseInt(rawId, 10) : 0;
+  const author = (getAttribute(node, "w", "author") ?? "").trim();
+  const date = (getAttribute(node, "w", "date") ?? "").trim();
+  const rsid = (getAttribute(node, "w", "rsid") ?? "").trim();
+
+  const info: SectionPropertyChange["info"] = {
+    id: Number.isInteger(parsedId) && parsedId >= 0 ? parsedId : 0,
+    author: author.length > 0 ? author : "Unknown",
+  };
+  if (date.length > 0) {
+    info.date = date;
+  }
+  if (rsid.length > 0) {
+    info.rsid = rsid;
+  }
+  return info;
 }
 
 /**
@@ -284,12 +307,10 @@ function parseLineNumberRestart(
  * Parse section properties (w:sectPr)
  *
  * @param sectPr - The w:sectPr element
- * @param rels - Optional relationships for resolving header/footer references
  * @returns SectionProperties object
  */
 export function parseSectionProperties(
   sectPr: XmlElement | null,
-  _rels?: RelationshipMap | null,
 ): SectionProperties {
   const props: SectionProperties = {};
 
@@ -765,6 +786,23 @@ export function parseSectionProperties(
     if (relationshipId) {
       props.printerSettingsRelationshipId = relationshipId;
     }
+  }
+
+  const propertyChanges = findChildren(sectPr, "w", "sectPrChange").map(
+    (changeElement): SectionPropertyChange => {
+      const previousSectPr = findChild(changeElement, "w", "sectPr");
+      const change: SectionPropertyChange = {
+        type: "sectionPropertyChange",
+        info: parsePropertyChangeInfo(changeElement),
+      };
+      if (previousSectPr) {
+        change.previousProperties = parseSectionProperties(previousSectPr);
+      }
+      return change;
+    },
+  );
+  if (propertyChanges.length > 0) {
+    props.propertyChanges = propertyChanges;
   }
 
   Object.defineProperty(props, unserializedSectionPropertyChildNames, {

@@ -125,6 +125,7 @@ export type {
   TablePropertyChange,
   TableRowPropertyChange,
   TableCellPropertyChange,
+  SectionPropertyChange,
   TableStructuralChangeInfo,
   SdtType,
   SdtProperties,
