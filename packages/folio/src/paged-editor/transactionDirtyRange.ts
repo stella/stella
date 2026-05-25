@@ -1,4 +1,5 @@
 import type { Transaction } from "prosemirror-state";
+import { AddMarkStep, RemoveMarkStep } from "prosemirror-transform";
 
 import type { DirtyRange } from "./incrementalMeasure";
 
@@ -41,12 +42,7 @@ function includeStepDirtyRange(
   }
 
   const followingMaps = transaction.mapping.slice(stepIndex + 1);
-  const includeChangedRange = (
-    _oldStart: number,
-    _oldEnd: number,
-    newStart: number,
-    newEnd: number,
-  ) => {
+  const extend = (newStart: number, newEnd: number) => {
     // oxlint-disable-next-line unicorn/no-array-method-this-argument -- ProseMirror Mapping.map(pos, assoc) API
     const finalStart = followingMaps.map(newStart, -1);
     // oxlint-disable-next-line unicorn/no-array-method-this-argument -- ProseMirror Mapping.map(pos, assoc) API
@@ -56,5 +52,16 @@ function includeStepDirtyRange(
   };
 
   // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror StepMap API
-  map.forEach(includeChangedRange);
+  map.forEach((_oldStart, _oldEnd, newStart, newEnd) =>
+    extend(newStart, newEnd),
+  );
+
+  // AddMarkStep / RemoveMarkStep produce an empty StepMap (mark changes don't
+  // move positions), so the loop above misses them and the incremental
+  // measure path falls back to a full re-measure. Read the affected range
+  // directly off the step so mark-only edits stay incremental.
+  const step = transaction.steps[stepIndex];
+  if (step instanceof AddMarkStep || step instanceof RemoveMarkStep) {
+    extend(step.from, step.to);
+  }
 }

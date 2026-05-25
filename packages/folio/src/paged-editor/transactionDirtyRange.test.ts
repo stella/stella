@@ -25,4 +25,38 @@ describe("getTransactionDirtyRange", () => {
       to: firstEditPosition + prefixInsertion.length + 1,
     });
   });
+
+  test("reports the mark range for AddMarkStep transactions", () => {
+    const doc = schema.node("doc", null, [
+      schema.node("paragraph", null, [schema.text("hello world")]),
+    ]);
+    const state = EditorState.create({ doc });
+    const bold = schema.marks["bold"];
+    if (!bold) {
+      throw new Error("bold mark missing from schema");
+    }
+    const transaction = state.tr.addMark(2, 7, bold.create());
+
+    const dirtyRange = getTransactionDirtyRange(transaction);
+
+    expect(dirtyRange).toEqual({ from: 2, to: 7 });
+  });
+
+  test("reports the mark range for RemoveMarkStep transactions", () => {
+    const bold = schema.marks["bold"];
+    if (!bold) {
+      throw new Error("bold mark missing from schema");
+    }
+    const doc = schema.node("doc", null, [
+      schema.node("paragraph", null, [
+        schema.text("hello world", [bold.create()]),
+      ]),
+    ]);
+    const state = EditorState.create({ doc });
+    const transaction = state.tr.removeMark(2, 7, bold);
+
+    const dirtyRange = getTransactionDirtyRange(transaction);
+
+    expect(dirtyRange).toEqual({ from: 2, to: 7 });
+  });
 });
