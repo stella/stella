@@ -5,6 +5,7 @@
  * Supports fill color, outline, transforms, and selection.
  */
 
+import { expectShapeAttrs } from "../../attrs";
 import { createNodeExtension } from "../create";
 
 export type ShapeAttrs = {
@@ -404,7 +405,7 @@ export const ShapeExtension = createNodeExtension({
       },
     ],
     toDOM(node) {
-      const attrs = node.attrs as ShapeAttrs;
+      const attrs = expectShapeAttrs(node);
       const w = sanitizeShapeDimension(attrs.width, 100);
       const h = sanitizeShapeDimension(attrs.height, 80);
 

@@ -8,6 +8,7 @@
  */
 
 import { twipsToPixels, formatPx } from "../../../utils/units";
+import { expectCharacterSpacingMarkAttrs } from "../../attrs";
 import { createMarkExtension } from "../create";
 
 function halfPointsToPixels(halfPoints: number): number {
@@ -42,45 +43,32 @@ export const CharacterSpacingExtension = createMarkExtension({
       },
     ],
     toDOM(mark) {
-      // SAFETY: CharacterSpacing attrs always match this shape per schema
-      const spacing =
-        typeof mark.attrs["spacing"] === "number"
-          ? mark.attrs["spacing"]
-          : null;
-      const position =
-        typeof mark.attrs["position"] === "number"
-          ? mark.attrs["position"]
-          : null;
-      const scale =
-        typeof mark.attrs["scale"] === "number" ? mark.attrs["scale"] : null;
-      const kerning =
-        typeof mark.attrs["kerning"] === "number"
-          ? mark.attrs["kerning"]
-          : null;
+      const { spacing, position, scale, kerning } =
+        expectCharacterSpacingMarkAttrs(mark);
 
       const styles: string[] = [];
       const dataAttrs: Record<string, string> = {
         class: "docx-char-spacing",
       };
 
-      if (spacing !== null && spacing !== 0) {
+      if (spacing !== undefined && spacing !== 0) {
         styles.push(`letter-spacing: ${formatPx(twipsToPixels(spacing))}`);
         dataAttrs["data-spacing"] = String(spacing);
       }
 
-      if (position !== null && position !== 0) {
+      if (position !== undefined && position !== 0) {
         const px = halfPointsToPixels(position);
         styles.push(`vertical-align: ${formatPx(px)}`);
         dataAttrs["data-position"] = String(position);
       }
 
-      if (scale !== null && scale !== 100) {
+      if (scale !== undefined && scale !== 100) {
         styles.push(`transform: scaleX(${scale / 100})`);
         styles.push("display: inline-block");
         dataAttrs["data-scale"] = String(scale);
       }
 
-      if (kerning !== null) {
+      if (kerning !== undefined) {
         dataAttrs["data-kerning"] = String(kerning);
       }
 

@@ -32,11 +32,7 @@ import {
   mergeTableCellAttrs,
   mergeTableRowAttrs,
 } from "../../attrs";
-import type {
-  TableAttrs,
-  TableRowAttrs,
-  TableCellAttrs,
-} from "../../schema/nodes";
+import type { TableAttrs, TableCellAttrs } from "../../schema/nodes";
 import { createNodeExtension, createExtension } from "../create";
 import type {
   ExtensionContext,
@@ -323,7 +319,7 @@ const tableSpec: NodeSpec = {
     },
   ],
   toDOM(node) {
-    const attrs = node.attrs as TableAttrs;
+    const attrs = expectTableAttrs(node);
     const domAttrs: Record<string, string> = { class: "docx-table" };
 
     if (attrs.styleId) {
@@ -367,7 +363,7 @@ const tableRowSpec: NodeSpec = {
   },
   parseDOM: [{ tag: "tr" }],
   toDOM(node) {
-    const attrs = node.attrs as TableRowAttrs;
+    const attrs = expectTableRowAttrs(node);
     const domAttrs: Record<string, string> = {};
 
     if (typeof attrs.height === "number") {
@@ -538,7 +534,7 @@ const tableCellSpec: NodeSpec = {
     },
   ],
   toDOM(node) {
-    const attrs = node.attrs as TableCellAttrs;
+    const attrs = expectTableCellAttrs(node);
     const domAttrs: Record<string, string> = { class: "docx-table-cell" };
 
     if (attrs.colspan > 1) {
@@ -604,7 +600,7 @@ const tableHeaderSpec: NodeSpec = {
     },
   ],
   toDOM(node) {
-    const attrs = node.attrs as TableCellAttrs;
+    const attrs = expectTableCellAttrs(node);
     const domAttrs: Record<string, string> = { class: "docx-table-header" };
 
     if (attrs.colspan > 1) {

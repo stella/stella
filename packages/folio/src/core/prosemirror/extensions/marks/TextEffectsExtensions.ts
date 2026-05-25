@@ -5,6 +5,7 @@
  * Emphasis Marks (w:em), Text Outline (w:outline)
  */
 
+import { expectEmphasisMarkAttrs } from "../../attrs";
 import { createMarkExtension } from "../create";
 
 /**
@@ -90,8 +91,7 @@ export const EmphasisMarkExtension = createMarkExtension({
       },
     ],
     toDOM(mark) {
-      // SAFETY: EmphasisMark attrs.type is always a string per schema
-      const emType = String(mark.attrs["type"]);
+      const emType = expectEmphasisMarkAttrs(mark).type ?? "dot";
       // CSS text-emphasis for emphasis marks
       let emStyle = "filled dot";
       switch (emType) {

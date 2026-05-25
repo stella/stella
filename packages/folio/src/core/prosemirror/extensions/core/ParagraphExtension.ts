@@ -22,6 +22,7 @@ import type {
 } from "../../../types/document";
 import { paragraphToStyle } from "../../../utils/formatToStyle";
 import { collectHeadings } from "../../../utils/headingCollector";
+import { expectParagraphAttrs } from "../../attrs";
 import type { ParagraphAttrs } from "../../schema/nodes";
 import { createNodeExtension } from "../create";
 import type { ExtensionContext, ExtensionRuntime } from "../types";
@@ -420,7 +421,7 @@ const paragraphNodeSpec: NodeSpec = {
     })),
   ],
   toDOM(node) {
-    const attrs = node.attrs as ParagraphAttrs;
+    const attrs = expectParagraphAttrs(node);
     const style = paragraphAttrsToDOMStyle(attrs);
     const listClass = getListClass(
       attrs.numPr,

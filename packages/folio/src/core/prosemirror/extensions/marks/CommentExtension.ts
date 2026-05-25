@@ -5,6 +5,7 @@
  * The comment ID links to the Comment object in the document model.
  */
 
+import { expectCommentMarkAttrs } from "../../attrs";
 import { createMarkExtension } from "../create";
 
 export const CommentExtension = createMarkExtension({
@@ -27,11 +28,12 @@ export const CommentExtension = createMarkExtension({
       },
     ],
     toDOM(mark) {
+      const { commentId } = expectCommentMarkAttrs(mark);
       return [
         "span",
         {
           class: "docx-comment",
-          "data-comment-id": String(mark.attrs["commentId"]),
+          "data-comment-id": String(commentId),
           style:
             "background-color: var(--doc-comment-bg, rgba(255, 212, 0, 0.08)); border-bottom: 1px solid var(--doc-comment-border, rgba(180, 130, 0, 0.24));",
         },

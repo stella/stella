@@ -4,6 +4,7 @@
 
 import { panic } from "better-result";
 
+import { expectFontFamilyMarkAttrs } from "../../attrs";
 import { createMarkExtension } from "../create";
 import type { ExtensionContext, ExtensionRuntime } from "../types";
 import { setMark, removeMark } from "./markUtils";
@@ -38,15 +39,7 @@ export const FontFamilyExtension = createMarkExtension({
       },
     ],
     toDOM(mark) {
-      // SAFETY: fontFamily mark attrs always have ascii/hAnsi per schema
-      const ascii =
-        typeof mark.attrs["ascii"] === "string"
-          ? mark.attrs["ascii"]
-          : undefined;
-      const hAnsi =
-        typeof mark.attrs["hAnsi"] === "string"
-          ? mark.attrs["hAnsi"]
-          : undefined;
+      const { ascii, hAnsi } = expectFontFamilyMarkAttrs(mark);
       const fontName = ascii ?? hAnsi;
       if (!fontName) {
         return ["span", 0];

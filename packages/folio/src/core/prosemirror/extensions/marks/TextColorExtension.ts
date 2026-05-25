@@ -4,8 +4,8 @@
 
 import { panic } from "better-result";
 
-import type { ThemeColorSlot } from "../../../types/document";
 import { textToStyle } from "../../../utils/formatToStyle";
+import { expectTextColorMarkAttrs } from "../../attrs";
 import type { TextColorAttrs } from "../../schema/marks";
 import { createMarkExtension } from "../create";
 import type { ExtensionContext, ExtensionRuntime } from "../types";
@@ -35,28 +35,7 @@ export const TextColorExtension = createMarkExtension({
       },
     ],
     toDOM(mark) {
-      // SAFETY: textColor mark attrs always match TextColorAttrs shape per schema;
-      // themeColor is a valid ThemeColorSlot string when present
-      const rgb =
-        typeof mark.attrs["rgb"] === "string" ? mark.attrs["rgb"] : undefined;
-      const themeColor =
-        typeof mark.attrs["themeColor"] === "string"
-          ? (mark.attrs["themeColor"] as ThemeColorSlot)
-          : undefined;
-      const themeTint =
-        typeof mark.attrs["themeTint"] === "string"
-          ? mark.attrs["themeTint"]
-          : undefined;
-      const themeShade =
-        typeof mark.attrs["themeShade"] === "string"
-          ? mark.attrs["themeShade"]
-          : undefined;
-      const colorAttrs: TextColorAttrs = {
-        ...(rgb !== undefined ? { rgb } : {}),
-        ...(themeColor !== undefined ? { themeColor } : {}),
-        ...(themeTint !== undefined ? { themeTint } : {}),
-        ...(themeShade !== undefined ? { themeShade } : {}),
-      };
+      const colorAttrs = expectTextColorMarkAttrs(mark);
       const style = textToStyle({ color: colorAttrs });
       const cssColor: unknown = style.color;
       const cssString =

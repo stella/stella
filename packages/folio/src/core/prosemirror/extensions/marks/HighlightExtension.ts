@@ -5,6 +5,7 @@
 import { panic } from "better-result";
 
 import { resolveHighlightToCss } from "../../../utils/colorResolver";
+import { expectHighlightMarkAttrs } from "../../attrs";
 import { createMarkExtension } from "../create";
 import type { ExtensionContext, ExtensionRuntime } from "../types";
 import { setMark, removeMark } from "./markUtils";
@@ -31,8 +32,7 @@ export const HighlightExtension = createMarkExtension({
       },
     ],
     toDOM(mark) {
-      // SAFETY: mark.attrs.color is always a string per the attrs spec above
-      const color = String(mark.attrs["color"]);
+      const { color } = expectHighlightMarkAttrs(mark);
       // Resolve OOXML named highlight color (e.g., 'yellow' → '#FFFF00')
       const cssColor = resolveHighlightToCss(color);
       return ["mark", { style: `background-color: ${cssColor}` }, 0];

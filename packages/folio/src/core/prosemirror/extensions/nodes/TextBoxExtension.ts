@@ -6,6 +6,7 @@
  * Supports inline and floating positioning.
  */
 
+import { expectTextBoxAttrs } from "../../attrs";
 import { createNodeExtension } from "../create";
 
 export type TextBoxAttrs = {
@@ -116,7 +117,7 @@ export const TextBoxExtension = createNodeExtension({
       },
     ],
     toDOM(node) {
-      const attrs = node.attrs as TextBoxAttrs;
+      const attrs = expectTextBoxAttrs(node);
       const domAttrs: Record<string, string> = {
         class: "docx-textbox",
       };

@@ -5,6 +5,7 @@
 import { panic } from "better-result";
 import type { Command, EditorState } from "prosemirror-state";
 
+import { expectHyperlinkMarkAttrs } from "../../attrs";
 import { createMarkExtension } from "../create";
 import type { ExtensionContext, ExtensionRuntime } from "../types";
 import { isMarkActive } from "./markUtils";
@@ -35,12 +36,7 @@ export function getHyperlinkAttrs(
     const marks = state.storedMarks ?? $from.marks();
     for (const mark of marks) {
       if (mark.type === hlType) {
-        // SAFETY: HyperlinkAttrs always has href/tooltip per schema
-        const href = String(mark.attrs["href"]);
-        const tooltip =
-          mark.attrs["tooltip"] !== null
-            ? String(mark.attrs["tooltip"])
-            : undefined;
+        const { href, tooltip } = expectHyperlinkMarkAttrs(mark);
         return { href, ...(tooltip !== undefined ? { tooltip } : {}) };
       }
     }
@@ -52,12 +48,7 @@ export function getHyperlinkAttrs(
     if (node.isText && attrs === null) {
       const mark = hlType.isInSet(node.marks);
       if (mark) {
-        // SAFETY: HyperlinkAttrs always has href/tooltip per schema
-        const href = String(mark.attrs["href"]);
-        const tooltip =
-          mark.attrs["tooltip"] !== null
-            ? String(mark.attrs["tooltip"])
-            : undefined;
+        const { href, tooltip } = expectHyperlinkMarkAttrs(mark);
         attrs = { href, ...(tooltip !== undefined ? { tooltip } : {}) };
         return false;
       }
@@ -101,10 +92,7 @@ export const HyperlinkExtension = createMarkExtension({
       },
     ],
     toDOM(mark) {
-      // SAFETY: HyperlinkAttrs always has href/tooltip per schema
-      const href = String(mark.attrs["href"]);
-      const tooltip =
-        mark.attrs["tooltip"] !== null ? String(mark.attrs["tooltip"]) : null;
+      const { href, tooltip } = expectHyperlinkMarkAttrs(mark);
       const domAttrs: Record<string, string> = {
         href,
         target: "_blank",
