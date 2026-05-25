@@ -222,6 +222,8 @@ export type ImageAttrs = {
   wrapText?: NonNullable<ImageWrap["wrapText"]>;
   /** Hyperlink URL for clickable image */
   hlinkHref?: string;
+  /** Original OOXML for opaque/unsupported DOCX drawings. */
+  _docxRawXml?: string;
 };
 
 /**

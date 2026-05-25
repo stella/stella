@@ -619,13 +619,10 @@ function extractParagraphContent(
       const otherMarks = node.marks.filter(
         (m) => m.type.name !== "insertion" && m.type.name !== "deletion",
       );
-      const formatting = marksToTextFormatting(otherMarks);
-      const run: Run = {
-        type: "run",
-        content:
-          node.isText && node.text ? [{ type: "text", text: node.text }] : [],
-        ...(Object.keys(formatting).length > 0 ? { formatting } : {}),
-      };
+      const run = createTrackedChangeRun(node, otherMarks);
+      if (!run) {
+        return;
+      }
 
       const info: TrackedChangeInfo = {
         id: changeAttrs.revisionId,
@@ -769,6 +766,33 @@ function extractParagraphContent(
   }
 
   return content;
+}
+
+function createTrackedChangeRun(
+  node: PMNode,
+  marks: readonly Mark[],
+): Run | null {
+  if (node.isText) {
+    const formatting = marksToTextFormatting(marks);
+    return {
+      type: "run",
+      content: node.text ? [{ type: "text", text: node.text }] : [],
+      ...(Object.keys(formatting).length > 0 ? { formatting } : {}),
+    };
+  }
+  if (node.type.name === "hardBreak") {
+    return createBreakRun(readHardBreakType(node));
+  }
+  if (node.type.name === "image") {
+    return createImageRun(node);
+  }
+  if (node.type.name === "shape") {
+    return createShapeRun(node);
+  }
+  if (node.type.name === "tab") {
+    return createTabRun();
+  }
+  return null;
 }
 
 function createEmptyHyperlink(
@@ -1320,6 +1344,9 @@ function createImageRun(node: PMNode): Run {
     type: "drawing",
     image,
   };
+  if (attrs._docxRawXml) {
+    drawingContent.rawXml = attrs._docxRawXml;
+  }
 
   return {
     type: "run",

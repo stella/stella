@@ -12,7 +12,7 @@
  * - Inline properties (highest priority)
  */
 
-import type { Node as PMNode } from "prosemirror-model";
+import type { MarkType, Node as PMNode } from "prosemirror-model";
 
 import type {
   Document,
@@ -373,11 +373,23 @@ function convertTrackedChange(
   });
 
   return nodes.map((node) => {
-    if (node.isText) {
+    if (canCarryTrackedRunMark(node, mark.type)) {
       return node.mark(mark.addToSet(node.marks));
     }
     return node;
   });
+}
+
+function canCarryTrackedRunMark(node: PMNode, markType: MarkType): boolean {
+  return (
+    node.isText ||
+    (node.isInline &&
+      node.type.allowsMarkType(markType) &&
+      (node.type.name === "image" ||
+        node.type.name === "shape" ||
+        node.type.name === "hardBreak" ||
+        node.type.name === "tab"))
+  );
 }
 
 /**
@@ -800,6 +812,7 @@ function calculateRowSpans(table: Table): Map<string, RowSpanInfo> {
         colspan,
         vMerge,
         startRow,
+        hasMeaningfulContent: tableCellHasMeaningfulContent(cell),
         shouldSkip: vMerge === "continue" && startRow !== undefined,
       };
       colIndex += colspan;
@@ -809,7 +822,12 @@ function calculateRowSpans(table: Table): Map<string, RowSpanInfo> {
       rowCells.length > 0 && rowCells.every((cell) => cell.shouldSkip);
 
     for (const cellInfo of rowCells) {
-      const { colIndex: cellColIndex, vMerge, startRow } = cellInfo;
+      const {
+        colIndex: cellColIndex,
+        vMerge,
+        startRow,
+        hasMeaningfulContent,
+      } = cellInfo;
       const key = `${rowIndex}-${cellColIndex}`;
 
       if (vMerge === "restart") {
@@ -818,12 +836,16 @@ function calculateRowSpans(table: Table): Map<string, RowSpanInfo> {
         result.set(key, { rowSpan: 1, skip: false });
       } else if (vMerge === "continue") {
         // Continuation of a merge - only skip it when the parsed grid has a
-        // matching restart in this exact column. Real DOCX tables can be
-        // ragged, and treating an unmatched continuation as merged-away drops
-        // its placeholder paragraph and cell metadata.
-        if (startRow === undefined || rowWouldBeEmpty) {
+        // matching restart in this exact column and the continuation is only a
+        // structural placeholder. Real DOCX tables can be ragged, and some
+        // continuation cells contain drawings or other payload that must not be
+        // merged away.
+        if (startRow === undefined || rowWouldBeEmpty || hasMeaningfulContent) {
           result.set(key, { rowSpan: 1, skip: false });
-          if (rowWouldBeEmpty && startRow !== undefined) {
+          if (
+            (rowWouldBeEmpty || hasMeaningfulContent) &&
+            startRow !== undefined
+          ) {
             const restartCell = result.get(`${startRow}-${cellColIndex}`);
             if (restartCell) {
               restartCell.preserveVMergeRestart = true;
@@ -849,6 +871,40 @@ function calculateRowSpans(table: Table): Map<string, RowSpanInfo> {
   }
 
   return result;
+}
+
+function tableCellHasMeaningfulContent(cell: TableCell): boolean {
+  return cell.content.some(blockHasMeaningfulContent);
+}
+
+function blockHasMeaningfulContent(block: Paragraph | Table): boolean {
+  if (block.type === "table") {
+    return block.rows.some((row) =>
+      row.cells.some((cell) => tableCellHasMeaningfulContent(cell)),
+    );
+  }
+
+  return block.content.some(paragraphContentHasMeaningfulContent);
+}
+
+function paragraphContentHasMeaningfulContent(
+  content: Paragraph["content"][number],
+): boolean {
+  if (content.type === "run") {
+    return content.content.length > 0;
+  }
+  if (content.type === "hyperlink") {
+    return content.children.some(paragraphContentHasMeaningfulContent);
+  }
+  if (
+    content.type === "insertion" ||
+    content.type === "deletion" ||
+    content.type === "moveFrom" ||
+    content.type === "moveTo"
+  ) {
+    return content.content.some(paragraphContentHasMeaningfulContent);
+  }
+  return true;
 }
 
 function convertTable(
@@ -1679,7 +1735,12 @@ function convertRunContent(
       return [withHyperlinkBoundaryMarks(schema.node("tab"), marks)];
 
     case "drawing":
-      return [withHyperlinkBoundaryMarks(convertImage(content.image), marks)];
+      return [
+        withHyperlinkBoundaryMarks(
+          convertImage(content.image, content.rawXml),
+          marks,
+        ),
+      ];
 
     case "shape": {
       // Shapes with text body are handled as text boxes at block level
@@ -1760,7 +1821,7 @@ function withHyperlinkBoundaryMarks(
 type PartialImagePosition = Partial<NonNullable<Image["position"]>>;
 type PartialImageSize = Partial<Image["size"]>;
 
-function convertImage(image: Image): PMNode {
+function convertImage(image: Image, rawXml?: string): PMNode {
   // Convert EMU to pixels for proper sizing
   const imageData: { size?: PartialImageSize } = image;
   const imageSize = imageData.size;
@@ -1950,6 +2011,7 @@ function convertImage(image: Image): PMNode {
     borderStyle,
     wrapText,
     hlinkHref: image.hlinkHref,
+    _docxRawXml: rawXml,
   });
 }
 

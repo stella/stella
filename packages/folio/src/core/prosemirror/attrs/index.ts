@@ -556,6 +556,7 @@ export const readImageAttrs = (
     IMAGE_WRAP_TEXT_VALUES,
   );
   optionalString(attrs, "hlinkHref", "image.attrs.hlinkHref", issues);
+  optionalString(attrs, "_docxRawXml", "image.attrs._docxRawXml", issues);
 
   return attrsResult(attrs, issues);
 };

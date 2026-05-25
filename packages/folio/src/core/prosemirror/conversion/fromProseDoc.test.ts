@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { Node as PMNode } from "prosemirror-model";
 import { EditorState } from "prosemirror-state";
 
 import type {
@@ -95,6 +96,166 @@ describe("fromProseDoc", () => {
     expect(() => fromProseDoc(pmDoc)).toThrow(
       "sdt.attrs.listItems[0].displayText",
     );
+  });
+
+  test("round-trips tracked-change image atoms", () => {
+    const document: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  type: "deletion",
+                  info: {
+                    id: 7,
+                    author: "Reviewer",
+                    date: "2022-02-07T10:00:00Z",
+                  },
+                  content: [
+                    {
+                      type: "run",
+                      content: [
+                        {
+                          type: "drawing",
+                          image: {
+                            type: "image",
+                            rId: "rIdImage",
+                            src: "data:image/png;base64,AA==",
+                            size: { width: 914_400, height: 457_200 },
+                            wrap: { type: "inFront" },
+                          },
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const pmDoc = toProseDoc(document);
+    const image = firstDescendant(pmDoc, "image");
+    expect(image?.marks.some((mark) => mark.type.name === "deletion")).toBe(
+      true,
+    );
+
+    const roundTripped = fromProseDoc(pmDoc, document);
+    const paragraph = roundTripped.package.document.content.at(0);
+    expect(paragraph?.type).toBe("paragraph");
+    if (paragraph?.type !== "paragraph") {
+      return;
+    }
+    const deletion = paragraph.content.at(0);
+    expect(deletion?.type).toBe("deletion");
+    if (deletion?.type !== "deletion") {
+      return;
+    }
+    expect(deletion.info).toEqual({
+      id: 7,
+      author: "Reviewer",
+      date: "2022-02-07T10:00:00Z",
+    });
+    const run = deletion.content.at(0);
+    expect(run?.type).toBe("run");
+    if (run?.type !== "run") {
+      return;
+    }
+    expect(run.content.at(0)?.type).toBe("drawing");
+  });
+
+  test("preserves drawing content in vMerge continuation cells", () => {
+    const rawXml = "<w:drawing><wp:anchor/></w:drawing>";
+    const document: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "table",
+              rows: [
+                {
+                  cells: [
+                    {
+                      type: "tableCell",
+                      formatting: { vMerge: "restart" },
+                      content: [{ type: "paragraph", content: [] }],
+                    },
+                  ],
+                },
+                {
+                  cells: [
+                    {
+                      type: "tableCell",
+                      formatting: { vMerge: "continue" },
+                      content: [
+                        {
+                          type: "paragraph",
+                          content: [
+                            {
+                              type: "run",
+                              content: [
+                                {
+                                  type: "drawing",
+                                  rawXml,
+                                  image: {
+                                    type: "image",
+                                    rId: "",
+                                    src: "",
+                                    size: {
+                                      width: 12_191,
+                                      height: 9_177_528,
+                                    },
+                                    wrap: { type: "behind" },
+                                  },
+                                },
+                              ],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const pmDoc = toProseDoc(document);
+    expect(countDescendants(pmDoc, "image")).toBe(1);
+
+    const roundTripped = fromProseDoc(pmDoc, document);
+    const table = roundTripped.package.document.content.at(0);
+    expect(table?.type).toBe("table");
+    if (table?.type !== "table") {
+      return;
+    }
+    const restartCell = table.rows.at(0)?.cells.at(0);
+    const continuationCell = table.rows.at(1)?.cells.at(0);
+    expect(restartCell?.formatting?.vMerge).toBe("restart");
+    expect(continuationCell?.formatting?.vMerge).toBe("continue");
+    const continuationParagraph = continuationCell?.content.at(0);
+    expect(continuationParagraph?.type).toBe("paragraph");
+    if (continuationParagraph?.type !== "paragraph") {
+      return;
+    }
+    const run = continuationParagraph.content.at(0);
+    expect(run?.type).toBe("run");
+    if (run?.type !== "run") {
+      return;
+    }
+    const drawing = run.content.at(0);
+    expect(drawing?.type).toBe("drawing");
+    if (drawing?.type !== "drawing") {
+      return;
+    }
+    expect(drawing.rawXml).toBe(rawXml);
   });
 
   test("rejects malformed shape and text box attrs at the conversion boundary", () => {
@@ -1157,5 +1318,27 @@ function countShapes(paragraph: Paragraph): number {
       }
     }
   }
+  return count;
+}
+
+function firstDescendant(node: PMNode, typeName: string): PMNode | undefined {
+  let found: PMNode | undefined;
+  node.descendants((child) => {
+    if (child.type.name !== typeName) {
+      return true;
+    }
+    found = child;
+    return false;
+  });
+  return found;
+}
+
+function countDescendants(node: PMNode, typeName: string): number {
+  let count = 0;
+  node.descendants((child) => {
+    if (child.type.name === typeName) {
+      count += 1;
+    }
+  });
   return count;
 }
