@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en" data-framework="typescript">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stella Outlook</title>
+    <script type="text/javascript">
+      window.__STELLA_HISTORY__ = {
+        replaceState: window.history.replaceState,
+        pushState: window.history.pushState,
+      };
+    </script>
+    <script
+      type="text/javascript"
+      src="https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js"
+    ></script>
+    <script type="text/javascript">
+      window.history.replaceState = window.__STELLA_HISTORY__.replaceState;
+      window.history.pushState = window.__STELLA_HISTORY__.pushState;
+    </script>
+    <link rel="stylesheet" href="/assets/main.css" />
+    <script type="module" src="/assets/main.js"></script>
+  </head>
+  <body>
+    <main id="root"></main>
+  </body>
+</html>
