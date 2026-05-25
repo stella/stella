@@ -55,7 +55,11 @@ import {
 } from "./modelValidation";
 import { parseNumbering } from "./numberingParser";
 import type { NumberingMap } from "./numberingParser";
-import { parseRelationships, RELATIONSHIP_TYPES } from "./relsParser";
+import {
+  parseRelationships,
+  RELATIONSHIP_TYPES,
+  resolveRelativePath,
+} from "./relsParser";
 import { parseStyles, parseStyleDefinitions } from "./styleParser";
 import type { StyleMap } from "./styleParser";
 import { parseTheme } from "./themeParser";
@@ -491,6 +495,31 @@ function getMapCaseInsensitive<T>(
   return undefined;
 }
 
+const DOCUMENT_RELATIONSHIPS_PATH = "word/_rels/document.xml.rels";
+
+function getRelationshipPartPath(target: string): string {
+  return resolveRelativePath(DOCUMENT_RELATIONSHIPS_PATH, target);
+}
+
+function getRelationshipsPathForPart(partPath: string): string {
+  const lastSlash = partPath.lastIndexOf("/");
+  const directory = lastSlash === -1 ? "" : partPath.slice(0, lastSlash);
+  const filename = lastSlash === -1 ? partPath : partPath.slice(lastSlash + 1);
+  return `${directory ? `${directory}/` : ""}_rels/${filename}.rels`;
+}
+
+function getHeaderFooterXml(
+  raw: RawDocxContent,
+  partPath: string,
+  indexedParts: Map<string, string>,
+): string | undefined {
+  const filename = partPath.split("/").pop() ?? partPath;
+  return (
+    getMapCaseInsensitive(indexedParts, filename) ??
+    getMapCaseInsensitive(raw.allXml, partPath)
+  );
+}
+
 function parseHeadersAndFooters(
   raw: RawDocxContent,
   styles: StyleMap | null,
@@ -510,12 +539,12 @@ function parseHeadersAndFooters(
     if (rel.type === RELATIONSHIP_TYPES.header && rel.target) {
       // Get the header XML for this relationship
       // Use case-insensitive lookup since ZIP files may have inconsistent casing
-      const filename = rel.target.split("/").pop() || rel.target;
-      const headerXml = getMapCaseInsensitive(raw.headers, filename);
+      const partPath = getRelationshipPartPath(rel.target);
+      const headerXml = getHeaderFooterXml(raw, partPath, raw.headers);
 
       if (headerXml) {
         // Get header-specific relationships (e.g., word/_rels/header1.xml.rels)
-        const headerRelsPath = `word/_rels/${filename}.rels`;
+        const headerRelsPath = getRelationshipsPathForPart(partPath);
         const headerRelsXml = getMapCaseInsensitive(raw.allXml, headerRelsPath);
         const headerRels = headerRelsXml
           ? parseRelationships(headerRelsXml)
@@ -534,12 +563,12 @@ function parseHeadersAndFooters(
       }
     } else if (rel.type === RELATIONSHIP_TYPES.footer && rel.target) {
       // Use case-insensitive lookup since ZIP files may have inconsistent casing
-      const filename = rel.target.split("/").pop() || rel.target;
-      const footerXml = getMapCaseInsensitive(raw.footers, filename);
+      const partPath = getRelationshipPartPath(rel.target);
+      const footerXml = getHeaderFooterXml(raw, partPath, raw.footers);
 
       if (footerXml) {
         // Get footer-specific relationships (e.g., word/_rels/footer1.xml.rels)
-        const footerRelsPath = `word/_rels/${filename}.rels`;
+        const footerRelsPath = getRelationshipsPathForPart(partPath);
         const footerRelsXml = getMapCaseInsensitive(raw.allXml, footerRelsPath);
         const footerRels = footerRelsXml
           ? parseRelationships(footerRelsXml)

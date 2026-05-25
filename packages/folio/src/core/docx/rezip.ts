@@ -40,7 +40,7 @@ import type {
 } from "../types/content";
 import type { Document } from "../types/document";
 import { assertValidFolioDocumentModel } from "./modelValidation";
-import { RELATIONSHIP_TYPES } from "./relsParser";
+import { RELATIONSHIP_TYPES, resolveRelativePath } from "./relsParser";
 import { serializeComments } from "./serializer/commentSerializer";
 import { serializeDocument } from "./serializer/documentSerializer";
 import { serializeHeaderFooter } from "./serializer/headerFooterSerializer";
@@ -1085,6 +1085,7 @@ export function collectHeaderFooterUpdates(doc: Document): Map<string, string> {
     return updates;
   }
 
+  const documentRelsPath = "word/_rels/document.xml.rels";
   const parts: {
     map: Map<string, HeaderFooter> | undefined;
     type: string;
@@ -1100,9 +1101,7 @@ export function collectHeaderFooterUpdates(doc: Document): Map<string, string> {
     for (const [rId, headerFooter] of map.entries()) {
       const rel = rels.get(rId);
       if (rel && rel.type === type && rel.target) {
-        const filename = rel.target.startsWith("/")
-          ? rel.target.slice(1)
-          : `word/${rel.target}`;
+        const filename = resolveRelativePath(documentRelsPath, rel.target);
         updates.set(filename, serializeHeaderFooter(headerFooter));
       }
     }

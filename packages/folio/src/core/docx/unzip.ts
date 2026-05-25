@@ -285,10 +285,10 @@ export async function unzipDocx(
         content.appPropsXml = xmlContent;
       } else if (lowerPath === "docprops/custom.xml") {
         content.customPropsXml = xmlContent;
-      } else if (/^word\/header\d+\.xml$/u.test(lowerPath)) {
+      } else if (/^word\/header[^/]*\.xml$/u.test(lowerPath)) {
         const filename = path.split("/").pop() || path;
         content.headers.set(filename, xmlContent);
-      } else if (/^word\/footer\d+\.xml$/u.test(lowerPath)) {
+      } else if (/^word\/footer[^/]*\.xml$/u.test(lowerPath)) {
         const filename = path.split("/").pop() || path;
         content.footers.set(filename, xmlContent);
       }
