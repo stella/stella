@@ -1,3 +1,4 @@
+import { TaggedError } from "better-result";
 import * as v from "valibot";
 
 export const WEB_SEARCH_JURISDICTIONS = [
@@ -82,3 +83,11 @@ export type UrlFetcher = {
   readonly name: UrlFetcherName;
   fetch(args: UrlFetcherArgs): Promise<FetchUrlOutput>;
 };
+
+export class WebSearchProviderError extends TaggedError(
+  "WebSearchProviderError",
+)<{
+  message: string;
+  provider: WebSearchProviderName | UrlFetcherName;
+  status: number;
+}>() {}

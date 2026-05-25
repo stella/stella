@@ -6,6 +6,7 @@ import type {
   WebSearchProviderArgs,
   WebSearchResult,
 } from "@/api/lib/web-search/types";
+import { WebSearchProviderError } from "@/api/lib/web-search/types";
 
 const TAVILY_ENDPOINT = "https://api.tavily.com/search";
 
@@ -80,9 +81,11 @@ export const createTavilyProvider = ({
     });
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(
-        `Tavily search failed (${response.status}): ${body.slice(0, 200)}`,
-      );
+      throw new WebSearchProviderError({
+        provider: "tavily",
+        status: response.status,
+        message: `Tavily search failed (${response.status}): ${body.slice(0, 200)}`,
+      });
     }
     const json = v.parse(tavilyResponseSchema, await response.json());
     const results: WebSearchResult[] = [];

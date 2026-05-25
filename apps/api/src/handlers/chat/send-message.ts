@@ -777,12 +777,22 @@ const loadThread = async ({
         })
       ) {
         yield* Result.await(
-          safeDb((tx) =>
-            tx
+          safeDb(async (tx) => {
+            await tx
               .update(chatThreads)
               .set({ title })
-              .where(eq(chatThreads.id, threadId)),
-          ),
+              .where(eq(chatThreads.id, threadId));
+
+            await recordAuditEvent(tx, {
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+              resourceId: threadId,
+              workspaceId,
+              changes: {
+                title: { old: thread.title, new: title },
+              },
+            });
+          }),
         );
       }
       return Result.ok(existingResult.value);

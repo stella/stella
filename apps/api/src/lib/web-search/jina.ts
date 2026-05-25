@@ -3,6 +3,7 @@ import type {
   UrlFetcher,
   UrlFetcherArgs,
 } from "@/api/lib/web-search/types";
+import { WebSearchProviderError } from "@/api/lib/web-search/types";
 
 const JINA_READER_BASE = "https://r.jina.ai";
 
@@ -41,9 +42,11 @@ export const createJinaFetcher = ({
       signal,
     });
     if (!response.ok) {
-      throw new Error(
-        `Jina Reader failed (${response.status}) for ${url.slice(0, 200)}`,
-      );
+      throw new WebSearchProviderError({
+        provider: "jina",
+        status: response.status,
+        message: `Jina Reader failed (${response.status}) for ${url.slice(0, 200)}`,
+      });
     }
     const body = await response.text();
     const truncated = body.length > maxChars;
