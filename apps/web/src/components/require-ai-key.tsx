@@ -284,7 +284,10 @@ export function AIKeyRequiredDialog({
         roleModels,
       });
       if (!overrideModels) {
-        throw new Error(tOrganization("aiConfig.selectModelForEachRole"));
+        // The Configure button is disabled when `canSave` is false, which
+        // checks the same `serializeOverrideModels(...) !== null` invariant.
+        // The inline message at the field below renders the translated text.
+        panic("ai-config save fired with no valid override models");
       }
 
       const response = await api["organization-settings"]["ai-config"].post({

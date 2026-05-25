@@ -11,6 +11,8 @@ import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 
 export const MAX_SELECTED_JURISDICTIONS = 12;
 
+const NO_SUGGESTED_COUNTRY_CODES: readonly string[] = [];
+
 type JurisdictionPickerProps = {
   selected: readonly PracticeJurisdiction[];
   suggestedCountryCodes?: readonly string[];
@@ -19,7 +21,7 @@ type JurisdictionPickerProps = {
 
 export const JurisdictionPicker = ({
   selected,
-  suggestedCountryCodes = [],
+  suggestedCountryCodes = NO_SUGGESTED_COUNTRY_CODES,
   onChange,
 }: JurisdictionPickerProps) => {
   const t = useTranslations();

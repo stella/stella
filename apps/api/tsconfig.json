@@ -8,6 +8,7 @@
       "@stll/ares": ["../../packages/ares/src/index.ts"],
       "@stll/boe": ["../../packages/boe/src/index.ts"],
       "@stll/docx-core": ["../../packages/docx-core/src/index.ts"],
+      "@stll/errors": ["../../packages/errors/src/index.ts"],
       "@stll/infosoud": ["../../packages/infosoud/src/index.ts"],
       "@stll/money": ["../../packages/money/src/index.ts"],
       "@stll/permissions": ["../../packages/permissions/src/index.ts"],

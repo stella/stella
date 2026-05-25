@@ -33,6 +33,7 @@
     "@stll/docx-core": "workspace:*",
     "@stll/docx-utils": "workspace:*",
     "@stll/ui": "workspace:*",
+    "better-result": "catalog:",
     "fast-xml-parser": "^5.8.0",
     "jszip": "catalog:",
     "lucide-react": "catalog:",

@@ -2,6 +2,8 @@ import { TaggedError } from "better-result";
 
 import type { ChatTransportErrorCode } from "@stll/anonymize-chat";
 
+export { FetchBoundaryError } from "@stll/errors";
+
 export type HandlerErrorStatusCode =
   | 400
   | 401
@@ -195,4 +197,12 @@ export class ExtractionWorkerError extends TaggedError(
 )<{
   message: string;
   exitCode: number | null;
+}>() {}
+
+/** Timeout waiting for a readiness probe, subprocess, or external resource. */
+export class TimeoutError extends TaggedError("TimeoutError")<{
+  message: string;
+  label: string;
+  timeoutMs?: number;
+  cause?: unknown;
 }>() {}

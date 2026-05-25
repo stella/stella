@@ -4,6 +4,8 @@
  * Converts blocks + measures into positioned fragments on pages.
  */
 
+import { panic } from "better-result";
+
 import {
   computeKeepNextChains,
   calculateChainHeight,
@@ -173,7 +175,7 @@ export function layoutDocument(
 ): Layout {
   // Validate input
   if (blocks.length !== measures.length) {
-    throw new Error(
+    panic(
       `layoutDocument: expected one measure per block (blocks=${blocks.length}, measures=${measures.length})`,
     );
   }
@@ -204,9 +206,7 @@ export function layoutDocument(
   // Calculate content width
   const contentWidth = pageSize.w - margins.left - margins.right;
   if (contentWidth <= 0) {
-    throw new Error(
-      "layoutDocument: page size and margins yield no content area",
-    );
+    panic("layoutDocument: page size and margins yield no content area");
   }
 
   const bodyConfig: SectionLayoutConfig = {

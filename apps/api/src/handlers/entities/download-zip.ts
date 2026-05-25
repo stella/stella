@@ -18,7 +18,10 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  FetchBoundaryError,
+  HandlerError,
+} from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -51,6 +54,13 @@ type ArchiveFile = {
 type FetchedFile =
   | { type: "file"; path: string; data: Uint8Array }
   | { type: "error"; path: string; fileId: string };
+
+const redactedPresignedUrl = (presignedUrl: string): string => {
+  const url = new URL(presignedUrl);
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+};
 
 /**
  * Collect every descendant of `parentId` with the fields needed to
@@ -220,12 +230,18 @@ const downloadZipHandler = async function* ({
     const presignedUrl = getS3().presign(key, {
       expiresIn: PRESIGN_TTL_SECONDS,
     });
+    const redactedUrl = redactedPresignedUrl(presignedUrl);
     const fetched = await Result.tryPromise(async () => {
       const response = await fetch(presignedUrl, {
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
       if (!response.ok) {
-        throw new Error(`storage responded ${response.status}`);
+        throw new FetchBoundaryError({
+          url: redactedUrl,
+          status: response.status,
+          statusText: response.statusText,
+          message: `storage responded ${response.status}`,
+        });
       }
       return new Uint8Array(await response.arrayBuffer());
     });

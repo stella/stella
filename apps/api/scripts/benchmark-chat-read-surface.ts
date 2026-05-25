@@ -12,6 +12,7 @@
 import { valibotSchema } from "@ai-sdk/valibot";
 import { generateText, stepCountIs, tool } from "ai";
 import type { LanguageModel, LanguageModelUsage } from "ai";
+import { panic } from "better-result";
 import * as v from "valibot";
 
 const surfaces = ["old-mixed", "new-describe", "new-inline"] as const;
@@ -242,7 +243,7 @@ const parseSurface = (value: string | undefined): Surface | "all" => {
     }
   }
 
-  throw new Error(
+  return panic(
     `Unknown surface "${value}". Use one of: all, ${surfaces.join(", ")}.`,
   );
 };

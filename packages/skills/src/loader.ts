@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { GENERATED_SKILLS } from "./skills.gen";
 
 export type SkillMetadata = {
@@ -88,14 +90,14 @@ export const readSkillResource = ({
   const normalizedPath = normalizeResourcePath(resourcePath);
   const skill = getSkill(skillId);
   if (!isAllowedResourcePath(normalizedPath)) {
-    throw new Error("Skill resource path is not a whitelisted resource");
+    panic("Skill resource path is not a whitelisted resource");
   }
 
   const resource = skill.resources.find(
     (candidate) => candidate.path === normalizedPath,
   );
   if (!resource) {
-    throw new Error("Skill resource not found");
+    panic("Skill resource not found");
   }
 
   return resource.source;
@@ -106,12 +108,12 @@ const readSkillMetadata = (skillId: string): SkillMetadata =>
 
 const getSkill = (skillId: string) => {
   if (!/^[a-z0-9][a-z0-9-]*$/u.test(skillId)) {
-    throw new Error("Invalid skill id");
+    panic("Invalid skill id");
   }
 
   const skill = skillsById.get(skillId);
   if (!skill) {
-    throw new Error(`Unknown skill: ${skillId}`);
+    panic(`Unknown skill: ${skillId}`);
   }
 
   return skill;
@@ -128,17 +130,17 @@ export const parseSkillFile = (
     .replaceAll("\r", "\n");
 
   if (!normalizedSource.startsWith("---\n")) {
-    throw new Error("Skill file missing frontmatter");
+    panic("Skill file missing frontmatter");
   }
 
   const end = normalizedSource.indexOf("\n---", 4);
   if (end === -1) {
-    throw new Error("Skill file missing frontmatter terminator");
+    panic("Skill file missing frontmatter terminator");
   }
 
   const frontmatter = parseSimpleFrontmatter(normalizedSource.slice(4, end));
   if (!frontmatter.name || !frontmatter.description) {
-    throw new Error("Skill file frontmatter must include name and description");
+    panic("Skill file frontmatter must include name and description");
   }
 
   return {
@@ -255,7 +257,7 @@ const stripYamlString = (value: string): string => {
 
 export const normalizeResourcePath = (resourcePath: string): string => {
   if (resourcePath.startsWith("/")) {
-    throw new Error("Skill resource path must be relative");
+    panic("Skill resource path must be relative");
   }
 
   const normalized = normalizePosixPath(resourcePath.replaceAll("\\", "/"));
@@ -265,7 +267,7 @@ export const normalizeResourcePath = (resourcePath: string): string => {
     normalized.startsWith("../") ||
     normalized.includes("/../")
   ) {
-    throw new Error("Skill resource path escapes the skill directory");
+    panic("Skill resource path escapes the skill directory");
   }
 
   return normalized;

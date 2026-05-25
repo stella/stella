@@ -2,6 +2,7 @@
  * Italic Mark Extension
  */
 
+import { panic } from "better-result";
 import { toggleMark } from "prosemirror-commands";
 
 import { createMarkExtension } from "../create";
@@ -26,7 +27,7 @@ export const ItalicExtension = createMarkExtension({
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
     const italicType = ctx.schema.marks["italic"];
     if (!italicType) {
-      throw new Error("Missing mark type: italic");
+      panic("Missing mark type: italic");
     }
     return {
       commands: {

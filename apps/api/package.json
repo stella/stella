@@ -57,6 +57,7 @@
     "@stll/case-law": "workspace:*",
     "@stll/docx-core": "workspace:*",
     "@stll/docx-utils": "workspace:*",
+    "@stll/errors": "workspace:*",
     "@stll/folio": "workspace:*",
     "@stll/infosoud": "workspace:*",
     "@stll/money": "workspace:*",

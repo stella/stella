@@ -5,6 +5,8 @@
  * Provides reconciliation for efficient incremental updates.
  */
 
+import { panic } from "better-result";
+
 import type {
   Layout,
   Page,
@@ -163,7 +165,7 @@ export class LayoutPainter {
    */
   paint(layout: Layout): void {
     if (!this.container) {
-      throw new Error("LayoutPainter: not mounted");
+      panic("LayoutPainter: not mounted");
     }
 
     const { pages } = layout;

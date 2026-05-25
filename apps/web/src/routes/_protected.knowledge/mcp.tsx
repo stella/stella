@@ -207,18 +207,20 @@ function McpPage() {
   );
 }
 
+const NO_NATIVE_TOOLS: readonly NativeToolCatalogItem[] = [];
+
 function ConnectorSection({
   addServerCard,
   connections,
   connectors,
-  nativeTools = [],
+  nativeTools = NO_NATIVE_TOOLS,
   onChanged,
   userCanManageCustomConnectors,
 }: {
   addServerCard?: ReactNode;
   connections: McpConnection[];
   connectors: McpConnector[];
-  nativeTools?: NativeToolCatalogItem[] | undefined;
+  nativeTools?: readonly NativeToolCatalogItem[] | undefined;
   onChanged: () => void;
   userCanManageCustomConnectors: boolean;
 }) {

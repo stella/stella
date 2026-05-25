@@ -51,11 +51,30 @@ export default defineConfig({
     "react/iframe-missing-sandbox": "error",
     "react/jsx-no-script-url": "error",
     "react/button-has-type": "error",
+    "react/no-object-type-as-default-prop": "error",
     "promise/always-return": "error",
     "promise/no-return-in-finally": "error",
     "no-useless-assignment": "error",
 
+    // Keep `import/no-cycle` despite its ~20% share of lint time: the
+    // Module Side Effects section in CLAUDE.md documents the TDZ class
+    // of bugs that circular imports cause with module-level singletons.
+    // The rule has 0 current hits, but its job is regression protection.
     "import/no-cycle": "error",
+
+    // Disabled: `verbatimModuleSyntax` is on in the shared tsconfig, so
+    // the TypeScript compiler already enforces the type-import semantic.
+    // The lint rule only checks the stylistic placement of the `type`
+    // keyword inside the import (`import { type X }` vs `import type
+    // { X }`) — pure formatting, ~11% of lint time, no bug-catching value.
+    "import/consistent-type-specifier-style": "off",
+
+    // Disabled: rule visits ~33k AST nodes to enforce adjacency between
+    // get/set accessors for the same property. The codebase models state
+    // through plain objects, hooks, and Drizzle queries — class
+    // get/set pairs are essentially absent — so the rule fires on
+    // nothing while taking ~10% of lint time.
+    "eslint/grouped-accessor-pairs": "off",
     "no-restricted-imports": [
       "error",
       {
@@ -67,6 +86,7 @@ export default defineConfig({
         ],
       },
     ],
+    "no-bare-error/no-bare-error": "error",
     "no-nanoid/no-nanoid": "error",
     "must-use-result/must-use-result": "error",
     "no-any-casts/no-any-casts": "error",
@@ -246,6 +266,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-secret-in-log-sink.ts",
     "./.oxlint-plugins/no-raw-api-url.ts",
     "./.oxlint-plugins/require-fetch-timeout.ts",
+    "./.oxlint-plugins/no-bare-error.ts",
     "./.oxlint-plugins/must-use-result.ts",
     "./.oxlint-plugins/no-any-casts.ts",
     "./.oxlint-plugins/no-dangerous-type-assertions.ts",
@@ -305,6 +326,21 @@ export default defineConfig({
       // already covered by the **/scripts/** override above.)
       files: ["apps/api/src/tests/load/**/*.ts"],
       rules: { "no-console": "off" },
+    },
+    {
+      // `.claude/mcp/**` is local Claude tooling, not shipped product
+      // code. It uses standard Node-style `throw new Error(...)` because
+      // it doesn't depend on better-result.
+      files: [".claude/mcp/**/*.ts"],
+      rules: { "no-bare-error/no-bare-error": "off" },
+    },
+    {
+      // Test-only adapter helper consumed exclusively from
+      // `**/*.test.ts`. Not part of any production code path.
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
+      ],
+      rules: { "no-bare-error/no-bare-error": "off" },
     },
     {
       // Legacy DOCX/editor code has parser and layout state machines that need
@@ -670,6 +706,7 @@ export default defineConfig({
 
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
+        "no-useless-assignment": "off",
         "typescript/consistent-return": "off",
       },
     },
@@ -696,6 +733,7 @@ export default defineConfig({
 
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
+        "no-useless-assignment": "off",
         "typescript/consistent-return": "off",
 
         "typescript/no-unsafe-return": "off",
@@ -747,6 +785,7 @@ export default defineConfig({
 
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
+        "no-useless-assignment": "off",
         "typescript/consistent-return": "off",
 
         "typescript/no-unsafe-return": "off",
@@ -777,6 +816,7 @@ export default defineConfig({
         "typescript/prefer-nullish-coalescing": "off",
         "eslint/no-eq-null": "off",
         "eslint/eqeqeq": "off",
+        "no-useless-assignment": "off",
 
         "typescript/promise-function-async": "off",
 
@@ -983,6 +1023,7 @@ export default defineConfig({
         "require-await": "off",
         "require-yield": "off",
         "typescript/unbound-method": "off",
+        "no-bare-error/no-bare-error": "off",
         "no-body-ownership-ids/no-body-ownership-ids": "off",
         "no-raw-user-id-schema/no-raw-user-id-schema": "off",
         "no-untyped-updates/no-untyped-updates": "off",

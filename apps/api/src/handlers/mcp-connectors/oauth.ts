@@ -9,7 +9,10 @@ import {
   authorizationServerMetadataUrls,
   mcpWellKnownProtectedResourceUrls,
 } from "@/api/handlers/mcp-connectors/url-safety";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  FetchBoundaryError,
+  HandlerError,
+} from "@/api/lib/errors/tagged-errors";
 import {
   safeOutboundFetchBytes,
   validateOutboundFetchTarget,
@@ -122,11 +125,15 @@ const fetchJson = async <T>({
 
       if (!response.value.ok) {
         const body = new TextDecoder().decode(response.value.body);
-        throw new Error(
-          body.length > 0
-            ? `HTTP ${response.value.status}: ${body.slice(0, 500)}`
-            : `HTTP ${response.value.status}`,
-        );
+        throw new FetchBoundaryError({
+          url: url.toString(),
+          status: response.value.status,
+          ...(body.length > 0 ? { body: body.slice(0, 500) } : {}),
+          message:
+            body.length > 0
+              ? `HTTP ${response.value.status}: ${body.slice(0, 500)}`
+              : `HTTP ${response.value.status}`,
+        });
       }
 
       return v.parse(

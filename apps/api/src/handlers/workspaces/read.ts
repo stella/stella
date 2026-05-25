@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import {
   and,
   count,
@@ -195,9 +195,7 @@ const readWorkspaces = createSafeRootHandler(
       if (workspace.clientId !== null && !client) {
         // Should be impossible: a non-null clientId is an FK that
         // resolves via the eager-loaded `client` relation.
-        throw new Error(
-          `workspace ${workspace.id} has clientId set but no client row`,
-        );
+        panic(`workspace ${workspace.id} has clientId set but no client row`);
       }
       return {
         id: workspace.id,

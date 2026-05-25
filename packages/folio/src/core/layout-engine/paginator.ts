@@ -5,6 +5,8 @@
  * Creates new pages when content doesn't fit.
  */
 
+import { panic } from "better-result";
+
 import type { Page, PageMargins, Fragment, ColumnLayout } from "./types";
 
 /**
@@ -136,7 +138,7 @@ export function createPaginator(options: PaginatorOptions) {
   }
 
   if (getContentHeight() <= 0) {
-    throw new Error("Paginator: page size and margins yield no content area");
+    panic("Paginator: page size and margins yield no content area");
   }
 
   // Calculate column width
@@ -479,9 +481,7 @@ export function createPaginator(options: PaginatorOptions) {
       margins = { ...newMargins };
     }
     if (getContentHeight() <= 0) {
-      throw new Error(
-        "Paginator: section page size and margins yield no content area",
-      );
+      panic("Paginator: section page size and margins yield no content area");
     }
     columnWidth = calculateColumnWidth(
       pageSize.w,

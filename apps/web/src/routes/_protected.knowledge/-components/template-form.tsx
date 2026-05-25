@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 
+import { panic } from "better-result";
 import { AlertTriangleIcon, EyeIcon, PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -833,7 +834,7 @@ export const TemplateForm = ({
             .fill.post({ values: valuesJson }, { query: { format } });
         }
         if (!file) {
-          throw new Error(
+          panic(
             "TemplateForm: transient fill requires a file when templateId is absent",
           );
         }

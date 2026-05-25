@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, asc, eq, isNull, lt, or, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db";
@@ -116,7 +117,7 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
   });
 
   if (signal.aborted) {
-    throw new Error("SchedulerAborted");
+    panic("SchedulerAborted");
   }
 };
 

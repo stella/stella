@@ -2,6 +2,7 @@
  * Hyperlink Mark Extension
  */
 
+import { panic } from "better-result";
 import type { Command, EditorState } from "prosemirror-state";
 
 import { createMarkExtension } from "../create";
@@ -118,7 +119,7 @@ export const HyperlinkExtension = createMarkExtension({
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
     const hlType = ctx.schema.marks["hyperlink"];
     if (!hlType) {
-      throw new Error("Missing mark type: hyperlink");
+      panic("Missing mark type: hyperlink");
     }
 
     const setHyperlink =

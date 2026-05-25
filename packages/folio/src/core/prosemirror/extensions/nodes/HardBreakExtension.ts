@@ -2,6 +2,8 @@
  * Hard Break Extension — Shift+Enter line break
  */
 
+import { panic } from "better-result";
+
 import { createNodeExtension } from "../create";
 import type { ExtensionContext, ExtensionRuntime } from "../types";
 
@@ -20,7 +22,7 @@ export const HardBreakExtension = createNodeExtension({
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
     const hardBreakType = ctx.schema.nodes["hardBreak"];
     if (!hardBreakType) {
-      throw new Error("Missing node type: hardBreak");
+      panic("Missing node type: hardBreak");
     }
 
     return {

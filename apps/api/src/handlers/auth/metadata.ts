@@ -1,4 +1,5 @@
 import { oauthProviderAuthServerMetadata } from "@better-auth/oauth-provider";
+import { panic } from "better-result";
 
 import { getAuth } from "@/api/lib/auth";
 
@@ -58,7 +59,7 @@ export const handleOAuthAuthorizationServerMetadataRequest = async (
 ): Promise<Response> => {
   const auth = getAuth();
   if (!hasOAuthServerConfig(auth)) {
-    throw new Error("OAuth provider metadata endpoint is unavailable");
+    panic("OAuth provider metadata endpoint is unavailable");
   }
 
   return withAuthMetadataHeaders(

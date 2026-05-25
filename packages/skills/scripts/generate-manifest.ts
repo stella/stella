@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -60,7 +61,7 @@ ${skillEntries.map(formatSkillEntry).join(",\n")}
 if (process.argv.includes("--check")) {
   const currentOutput = readFileSync(outputPath, "utf-8");
   if (currentOutput !== output) {
-    throw new Error("Generated skills manifest is out of date");
+    panic("Generated skills manifest is out of date");
   }
 } else {
   writeFileSync(outputPath, output);

@@ -2,6 +2,8 @@
  * Text Color Mark Extension
  */
 
+import { panic } from "better-result";
+
 import type { ThemeColorSlot } from "../../../types/document";
 import { textToStyle } from "../../../utils/formatToStyle";
 import type { TextColorAttrs } from "../../schema/marks";
@@ -65,7 +67,7 @@ export const TextColorExtension = createMarkExtension({
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
     const textColorType = ctx.schema.marks["textColor"];
     if (!textColorType) {
-      throw new Error("Missing mark type: textColor");
+      panic("Missing mark type: textColor");
     }
     return {
       commands: {

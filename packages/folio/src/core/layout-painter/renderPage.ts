@@ -5,6 +5,8 @@
  * Each page contains positioned fragments within a content area.
  */
 
+import { panic } from "better-result";
+
 import {
   clampFloatingWrapMargins,
   measureParagraph,
@@ -1212,7 +1214,7 @@ function renderFootnoteContent(
 ): HTMLElement {
   const content = footnote.content;
   if (!content) {
-    throw new Error("Missing structured footnote content");
+    panic("Missing structured footnote content");
   }
 
   const wrapper = doc.createElement("div");

@@ -2,6 +2,7 @@
  * Subscript Mark Extension
  */
 
+import { panic } from "better-result";
 import { toggleMark } from "prosemirror-commands";
 
 import { createMarkExtension } from "../create";
@@ -20,7 +21,7 @@ export const SubscriptExtension = createMarkExtension({
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
     const subscriptType = ctx.schema.marks["subscript"];
     if (!subscriptType) {
-      throw new Error("Missing mark type: subscript");
+      panic("Missing mark type: subscript");
     }
     return {
       commands: {

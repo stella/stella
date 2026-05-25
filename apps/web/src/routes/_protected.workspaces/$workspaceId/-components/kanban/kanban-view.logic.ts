@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
 import { resolveKanbanGroupBy } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
@@ -25,7 +27,7 @@ const isBuiltInKanbanPropertyId = (
   propertyId === KIND_GROUP_ID || propertyId === CREATED_BY_GROUP_ID;
 
 const unreachableGrouping = (grouping: never): never => {
-  throw new Error(`Unhandled kanban grouping: ${JSON.stringify(grouping)}`);
+  panic(`Unhandled kanban grouping: ${JSON.stringify(grouping)}`);
 };
 
 export const resolveKanbanGrouping = (

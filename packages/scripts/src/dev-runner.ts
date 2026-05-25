@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { panic } from "better-result";
 import {
   copyFileSync,
   existsSync,
@@ -184,7 +185,7 @@ const resolveMaybeRelativePath = (cwd: string, value: string) =>
 
 const validateOffset = (offset: number, source: string) => {
   if (!Number.isInteger(offset) || offset < 0 || offset > MAX_PORT_OFFSET) {
-    throw new Error(
+    panic(
       `${source} must be an integer between 0 and ${String(MAX_PORT_OFFSET)}`,
     );
   }
@@ -234,7 +235,7 @@ export const parseArgs = (args: readonly string[]): ParsedArgs => {
     if (arg === "--port-offset") {
       const value = args[i + 1];
       if (!value) {
-        throw new Error("--port-offset requires a value");
+        panic("--port-offset requires a value");
       }
       portOffset = Number.parseInt(value, 10);
       i++;
@@ -244,7 +245,7 @@ export const parseArgs = (args: readonly string[]): ParsedArgs => {
     if (arg === "--dev-instance") {
       const value = args[i + 1];
       if (!value) {
-        throw new Error("--dev-instance requires a value");
+        panic("--dev-instance requires a value");
       }
       devInstance = value;
       i++;
@@ -254,14 +255,14 @@ export const parseArgs = (args: readonly string[]): ParsedArgs => {
     if (arg === "--infra-offset") {
       const value = args[i + 1];
       if (!value) {
-        throw new Error("--infra-offset requires a value");
+        panic("--infra-offset requires a value");
       }
       infraOffset = Number.parseInt(value, 10);
       i++;
       continue;
     }
 
-    throw new Error(`Unknown argument: ${arg}`);
+    panic(`Unknown argument: ${arg}`);
   }
 
   return {
@@ -776,7 +777,7 @@ const waitForSharedDockerServices = async ({
     await Bun.sleep(DOCKER_SERVICES_POLL_INTERVAL_MS);
   }
 
-  throw new Error(
+  panic(
     `Timed out after ${String(DOCKER_SERVICES_READY_TIMEOUT_MS / 1000)}s waiting for shared Docker services (${SHARED_DOCKER_SERVICE_NAMES}) to become ready: ${lastFailure}.`,
   );
 };
@@ -802,7 +803,7 @@ const ensureDockerServices = async ({
           `  - host port ${String(hostPort)}: ${containerName} (project ${composeProject || "<none>"})`,
       )
       .join("\n");
-    throw new Error(
+    panic(
       `Shared Docker ports are held by containers from another Compose project:\n${detail}\nStop the conflicting stack, or use --infra-offset to shift Stella's infra ports.`,
     );
   }
@@ -824,7 +825,7 @@ const ensureDockerServices = async ({
       `==> Shared Docker services are running but setup is incomplete (${currentFailure}); reconciling Compose project...`,
     );
   } else if (!(await areSharedDockerPortsFree(infraPorts))) {
-    throw new Error(
+    panic(
       `Shared Docker ports (${sharedInfraPortList(infraPorts).join(", ")}) are already allocated, but the shared dev services did not pass health checks. Stop the conflicting stack, or use --infra-offset to shift Stella's infra ports.`,
     );
   }
@@ -885,7 +886,7 @@ export const findFirstAvailableOffset = async ({
     }
   }
 
-  throw new Error(
+  return panic(
     `Could not find a free port offset for ${mode} after ${String(PORT_SEARCH_LIMIT)} attempts.`,
   );
 };
@@ -1144,7 +1145,7 @@ const runCommandText = ({
 
   if (!result.success) {
     const stderr = decodeOutput(result.stderr);
-    throw new Error(stderr || `Command failed: ${cmd.join(" ")}`);
+    panic(stderr || `Command failed: ${cmd.join(" ")}`);
   }
 
   return decodeOutput(result.stdout);
@@ -1160,9 +1161,7 @@ const runStep = (step: Step) => {
   });
 
   if (!result.success) {
-    throw new Error(
-      `${step.label} failed with exit code ${String(result.exitCode)}.`,
-    );
+    panic(`${step.label} failed with exit code ${String(result.exitCode)}.`);
   }
 };
 
@@ -1237,7 +1236,7 @@ const waitForHttpReadiness = async ({
     await Bun.sleep(300);
   }
 
-  throw new Error(`Timed out waiting for ${label}: ${lastFailure}.`);
+  panic(`Timed out waiting for ${label}: ${lastFailure}.`);
 };
 
 const spawnPersistentStep = (step: Step): RunningStep => {
@@ -1655,7 +1654,7 @@ const main = async () => {
     infraOffset < 0 ||
     infraOffset > MAX_INFRA_OFFSET
   ) {
-    throw new Error(
+    panic(
       `STELLA_INFRA_OFFSET must be an integer between 0 and ${String(MAX_INFRA_OFFSET)}`,
     );
   }

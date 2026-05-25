@@ -22,7 +22,7 @@
  * to the current year on first use.
  */
 
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 
 import {
   ADAPTER_KEYS,
@@ -42,6 +42,7 @@ import {
   hashContent,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseSkDecisionPdf } from "@/api/handlers/case-law/ingestion/parsers/sk-courts";
+import { FetchBoundaryError } from "@/api/lib/errors/tagged-errors";
 import { isRecord } from "@/api/lib/type-guards";
 
 // ── Constants ─────────────────────────────────────────────
@@ -137,12 +138,17 @@ const getToken = async (signal?: AbortSignal): Promise<string> => {
   });
 
   if (!response.ok) {
-    throw new Error(`SK ÚS OAuth2 token failed: ${response.status}`);
+    throw new FetchBoundaryError({
+      url: TOKEN_URL,
+      status: response.status,
+      statusText: response.statusText,
+      message: `SK ÚS OAuth2 token failed: ${response.status}`,
+    });
   }
 
   const data = await response.json();
   if (!isTokenResponse(data)) {
-    throw new Error("SK ÚS OAuth2 token returned an invalid payload");
+    panic("SK ÚS OAuth2 token returned an invalid payload");
   }
 
   // Cache with 30s safety margin
@@ -404,7 +410,12 @@ const executeSearch = async (
     if (response.status === 401 || response.status === 403) {
       invalidateToken();
     }
-    throw new Error(`SK ÚS search failed: ${response.status}`);
+    throw new FetchBoundaryError({
+      url: SEARCH_URL,
+      status: response.status,
+      statusText: response.statusText,
+      message: `SK ÚS search failed: ${response.status}`,
+    });
   }
 
   if (response.status === 204) {
@@ -415,7 +426,7 @@ const executeSearch = async (
   if (!isSearchResponse(data)) {
     invalidateToken();
     const preview = JSON.stringify(data).slice(0, 200);
-    throw new Error(`SK ÚS search returned an invalid payload: ${preview}`);
+    panic(`SK ÚS search returned an invalid payload: ${preview}`);
   }
 
   return data;

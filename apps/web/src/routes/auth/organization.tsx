@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { useForm, useStore } from "@tanstack/react-form";
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -142,7 +143,7 @@ const completeOrganizationFlow = async ({
 
   const redirectUrl = getOauthRedirectUrl(result.data);
   if (!redirectUrl) {
-    throw new Error("Missing OAuth continuation redirect URL");
+    panic("Missing OAuth continuation redirect URL");
   }
 
   window.location.href = redirectUrl;

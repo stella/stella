@@ -1,5 +1,7 @@
 import { TaggedError } from "better-result";
 
+export { FetchBoundaryError } from "@stll/errors";
+
 export class APIError extends TaggedError("ApiError")<{
   status: number;
   message: string;

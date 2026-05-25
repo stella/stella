@@ -21,6 +21,7 @@
  *   - Test user seeded (bun run db:seed-test-user)
  */
 
+import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
@@ -3768,7 +3769,7 @@ export async function seed(organizationId?: string, userId?: string) {
   const seedUserRates = buildSeedUserRates(seedUserIds);
 
   if (process.env.NODE_ENV === "production") {
-    throw new Error("Refusing to run in production.");
+    panic("Refusing to run in production.");
   }
 
   // Ensure referenced users exist in the target org before

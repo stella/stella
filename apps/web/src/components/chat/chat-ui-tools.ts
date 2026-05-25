@@ -3,6 +3,8 @@
  * source of truth) and provides frontend-only helpers.
  */
 
+import { panic } from "better-result";
+
 import type { ChatMessage, ChatPart, ChatUITools } from "@stll/api/types";
 
 import type { TranslationKey } from "@/i18n/types";
@@ -218,7 +220,7 @@ export const getApprovalToolName = (
     return toolName;
   }
 
-  throw new Error("Unsupported approval tool");
+  return panic("Unsupported approval tool");
 };
 
 /** Check if a tool part has an approval field (approval flow). */

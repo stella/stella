@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -77,7 +78,7 @@ const fetchText = async (url: string): Promise<string> => {
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed for ${url}: ${response.status}`);
+    panic(`Request failed for ${url}: ${response.status}`);
   }
 
   return response.text();
@@ -141,7 +142,7 @@ const discoverCatalogBundleUrl = async (): Promise<string> => {
     }
   }
 
-  throw new Error(
+  return panic(
     `Could not discover the InfoSoud code catalog bundle from ${ROOT_URL}`,
   );
 };
@@ -149,12 +150,12 @@ const discoverCatalogBundleUrl = async (): Promise<string> => {
 const extractObjectLiteral = (scriptText: string, prefix: string): string => {
   const prefixIndex = scriptText.indexOf(prefix);
   if (prefixIndex === -1) {
-    throw new Error(`Could not find ${prefix} in bundle`);
+    panic(`Could not find ${prefix} in bundle`);
   }
 
   const startIndex = scriptText.indexOf("{", prefixIndex);
   if (startIndex === -1) {
-    throw new Error(`Could not locate object start for ${prefix}`);
+    panic(`Could not locate object start for ${prefix}`);
   }
 
   let depth = 0;
@@ -178,7 +179,7 @@ const extractObjectLiteral = (scriptText: string, prefix: string): string => {
   }
 
   if (endIndex === -1) {
-    throw new Error(`Could not locate object end for ${prefix}`);
+    panic(`Could not locate object end for ${prefix}`);
   }
 
   return scriptText.slice(startIndex, endIndex + 1);
@@ -205,13 +206,13 @@ const normalizeJavaScriptStrings = (literal: string): string => {
     if (character === "\\") {
       const next = literal[index + 1];
       if (!next) {
-        throw new Error("Unexpected trailing escape in bundle object literal");
+        panic("Unexpected trailing escape in bundle object literal");
       }
 
       if (next === "x") {
         const hex = literal.slice(index + 2, index + 4);
         if (hex.length !== 2) {
-          throw new Error("Invalid hex escape in bundle object literal");
+          panic("Invalid hex escape in bundle object literal");
         }
 
         result += `\\u00${hex}`;
@@ -222,7 +223,7 @@ const normalizeJavaScriptStrings = (literal: string): string => {
       if (next === "u") {
         const unicode = literal.slice(index + 2, index + 6);
         if (unicode.length !== 4) {
-          throw new Error("Invalid unicode escape in bundle object literal");
+          panic("Invalid unicode escape in bundle object literal");
         }
 
         result += `\\u${unicode}`;
@@ -268,7 +269,7 @@ const normalizeJavaScriptStrings = (literal: string): string => {
   }
 
   if (quote !== null) {
-    throw new Error("Unterminated string in bundle object literal");
+    panic("Unterminated string in bundle object literal");
   }
 
   return result;
@@ -465,7 +466,7 @@ const main = async (): Promise<void> => {
   if (options.check) {
     const currentContents = await readFile(OUTPUT_PATH, "utf-8");
     if (currentContents !== nextContents) {
-      throw new Error(
+      panic(
         `Code catalog is stale. Refresh it with: bun scripts/extract-codes.ts`,
       );
     }

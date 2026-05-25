@@ -2,6 +2,8 @@
  * Font Size Mark Extension
  */
 
+import { panic } from "better-result";
+
 import { createMarkExtension } from "../create";
 import type { ExtensionContext, ExtensionRuntime } from "../types";
 import { setMark, removeMark } from "./markUtils";
@@ -50,7 +52,7 @@ export const FontSizeExtension = createMarkExtension({
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
     const fontSizeType = ctx.schema.marks["fontSize"];
     if (!fontSizeType) {
-      throw new Error("Missing mark type: fontSize");
+      panic("Missing mark type: fontSize");
     }
     return {
       commands: {

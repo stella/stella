@@ -4,6 +4,7 @@
  * Provides footnoteRef mark + insert/delete commands for footnotes and endnotes.
  */
 
+import { panic } from "better-result";
 import type { Command } from "prosemirror-state";
 
 import { createMarkExtension } from "../create";
@@ -55,7 +56,7 @@ export const FootnoteRefExtension = createMarkExtension({
 
           const footnoteRefType = schema.marks["footnoteRef"];
           if (!footnoteRefType) {
-            throw new Error("Missing mark type: footnoteRef");
+            panic("Missing mark type: footnoteRef");
           }
           const mark = footnoteRefType.create({
             id: String(id),

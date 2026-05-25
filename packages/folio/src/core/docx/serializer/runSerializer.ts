@@ -10,6 +10,8 @@
  * - Text content: w:t
  */
 
+import { panic } from "better-result";
+
 import type {
   Run,
   RunContent,
@@ -964,7 +966,7 @@ function serializeShapeContent(content: ShapeContent): string {
     ? serializePosition(shape.position)
     : '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>';
   if (!shape.wrap) {
-    throw new Error("Floating shape must have a wrap property");
+    panic("Floating shape must have a wrap property");
   }
   const wrap = serializeWrap(shape.wrap);
 

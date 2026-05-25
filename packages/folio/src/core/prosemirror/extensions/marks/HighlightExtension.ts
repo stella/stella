@@ -2,6 +2,8 @@
  * Highlight/Background Color Mark Extension
  */
 
+import { panic } from "better-result";
+
 import { resolveHighlightToCss } from "../../../utils/colorResolver";
 import { createMarkExtension } from "../create";
 import type { ExtensionContext, ExtensionRuntime } from "../types";
@@ -39,7 +41,7 @@ export const HighlightExtension = createMarkExtension({
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
     const highlightType = ctx.schema.marks["highlight"];
     if (!highlightType) {
-      throw new Error("Missing mark type: highlight");
+      panic("Missing mark type: highlight");
     }
     return {
       commands: {

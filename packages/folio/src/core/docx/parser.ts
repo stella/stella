@@ -18,6 +18,8 @@
  * 11. Assemble final Document
  */
 
+import { TaggedError } from "better-result";
+
 import type {
   Document,
   DocxPackage,
@@ -322,9 +324,19 @@ export async function parseDocx(
     return document;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to parse DOCX: ${message}`, { cause: error });
+    throw new DocxParseError({
+      message: `Failed to parse DOCX: ${message}`,
+      cause: error,
+    });
   }
 }
+
+/** DOCX parsing failure: malformed package, unsupported feature, or
+ *  upstream parser exception. Wraps the original cause for diagnostics. */
+export class DocxParseError extends TaggedError("DocxParseError")<{
+  message: string;
+  cause?: unknown;
+}>() {}
 
 // ============================================================================
 // HELPER FUNCTIONS

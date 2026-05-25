@@ -17,6 +17,8 @@
  * With an adapter key, runs only that source once and exits.
  */
 
+import { panic } from "better-result";
+
 import { createIngestionDb } from "@/api/db";
 import { rootDb, rlsDb } from "@/api/db/root";
 import { caseLawIngestionEvents, caseLawSources } from "@/api/db/schema";
@@ -220,7 +222,7 @@ const ensureSource = async (
 
   // TODO: fix this
   if (!created) {
-    throw new Error(`Failed to create source row for adapter "${adapterKey}"`);
+    panic(`Failed to create source row for adapter "${adapterKey}"`);
   }
 
   return created;
@@ -230,7 +232,7 @@ const daysAgoCursor = (n: number): string => {
   const d = new Date(Date.now() - n * 24 * 60 * 60 * 1000);
   const date = d.toISOString().split("T")[0];
   if (!date) {
-    throw new Error("Invalid date format");
+    panic("Invalid date format");
   }
   return date;
 };

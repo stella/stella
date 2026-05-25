@@ -2,6 +2,7 @@
  * Underline Mark Extension
  */
 
+import { panic } from "better-result";
 import { toggleMark } from "prosemirror-commands";
 
 import type { TextColorAttrs } from "../../schema/marks";
@@ -61,7 +62,7 @@ export const UnderlineExtension = createMarkExtension({
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {
     const underlineType = ctx.schema.marks["underline"];
     if (!underlineType) {
-      throw new Error("Missing mark type: underline");
+      panic("Missing mark type: underline");
     }
     return {
       commands: {

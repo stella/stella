@@ -19,6 +19,7 @@
   "dependencies": {
     "@stll/ui": "workspace:*",
     "@tauri-apps/api": "^2.11.0",
+    "better-result": "catalog:",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "use-intl": "catalog:"
