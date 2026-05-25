@@ -37,6 +37,7 @@ import {
 import type { ToolbarProps, FormattingAction } from "./toolbarPrimitives";
 import { AlignmentButtons } from "./ui/AlignmentButtons";
 import { FontPicker } from "./ui/FontPicker";
+import { FontSizePicker } from "./ui/FontSizePicker";
 import { ListButtons, createDefaultListState } from "./ui/ListButtons";
 import { StylePicker } from "./ui/StylePicker";
 
@@ -92,6 +93,7 @@ export function FormattingBar(props: FormattingBarProps) {
     children,
     showStylePicker = true,
     showFontPicker = true,
+    showFontSizePicker = true,
     showTextColorPicker = true,
     showAlignmentButtons = true,
     showListButtons = true,
@@ -134,6 +136,16 @@ export function FormattingBar(props: FormattingBarProps) {
     (fontFamily: string) => {
       if (!disabled && onFormat) {
         onFormat({ type: "fontFamily", value: fontFamily });
+        requestAnimationFrame(() => onRefocusEditor?.());
+      }
+    },
+    [disabled, onFormat, onRefocusEditor],
+  );
+
+  const handleFontSizeChange = useCallback(
+    (sizePt: number) => {
+      if (!disabled && onFormat) {
+        onFormat({ type: "fontSize", value: sizePt });
         requestAnimationFrame(() => onRefocusEditor?.());
       }
     },
@@ -369,6 +381,18 @@ export function FormattingBar(props: FormattingBarProps) {
             disabled={disabled}
             width={108}
             placeholder="Arial"
+          />
+        )}
+        {showFontSizePicker && (
+          <FontSizePicker
+            value={
+              currentFormatting.fontSize !== undefined
+                ? currentFormatting.fontSize / 2
+                : undefined
+            }
+            onChange={handleFontSizeChange}
+            disabled={disabled}
+            placeholder={t("fontSize")}
           />
         )}
         {showTextColorPicker && (

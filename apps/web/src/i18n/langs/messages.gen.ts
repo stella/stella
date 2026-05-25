@@ -1072,6 +1072,7 @@ type Messages = {
     "finishEditing": "Finish editing";
     "fontColor": "Font color";
     "fontGroup": "Font";
+    "fontSize": "Font size";
     "formattingToolbar": "Formatting toolbar";
     "hideDetails": "Hide details";
     "historyGroup": "History";
