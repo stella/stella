@@ -44,6 +44,7 @@ export const AUDIT_RESOURCE_TYPE = {
   TIME_ENTRY: "time_entry",
   USER_FILE: "user_file",
   VIEW: "view",
+  VIEW_TEMPLATE: "view_template",
   WORKSPACE: "workspace",
   WORKSPACE_CONTACT: "workspace_contact",
   WORKSPACE_MEMBER: "workspace_member",

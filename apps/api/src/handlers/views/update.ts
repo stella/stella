@@ -12,11 +12,7 @@ import {
 } from "@/api/handlers/views/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import {
-  AUDIT_ACTION,
-  AUDIT_RESOURCE_TYPE,
-  createAuditContext,
-} from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
@@ -35,10 +31,6 @@ const updateView = createSafeHandler(
     safeDb,
     workspaceId,
     memberRole,
-    session,
-    user,
-    request,
-    server,
     params: { viewId },
     body,
     recordAuditEvent,
@@ -114,13 +106,7 @@ const updateView = createSafeHandler(
             canCreateProperties: roles[memberRole.role].authorize({
               property: ["create"],
             }).success,
-            auditContext: createAuditContext({
-              organizationId: session.activeOrganizationId,
-              workspaceId,
-              userId: user.id,
-              request,
-              server,
-            }),
+            recordAuditEvent,
           });
 
           if (!resolvedTemplateProperties.ok) {

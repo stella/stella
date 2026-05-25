@@ -11,6 +11,7 @@ import {
 } from "@/api/handlers/views/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -31,7 +32,14 @@ const config = {
 
 const createViewTemplate = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, session, user, body }) {
+  async function* ({
+    safeDb,
+    workspaceId,
+    session,
+    user,
+    body,
+    recordAuditEvent,
+  }) {
     const layout = parseViewLayout(body.layout);
 
     if (hasDuplicateSorts(layout.sorts)) {
@@ -128,6 +136,22 @@ const createViewTemplate = createSafeHandler(
             message: "A view template with this name already exists",
           };
         }
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.VIEW_TEMPLATE,
+          resourceId: row.id,
+          changes: {
+            created: {
+              old: null,
+              new: {
+                name: body.name,
+                layoutType: layout.type,
+                templatePropertyCount: templateProperties.length,
+              },
+            },
+          },
+        });
 
         return { ok: true as const, id: row.id };
       }),

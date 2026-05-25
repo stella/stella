@@ -6,11 +6,15 @@ import {
   collectTemplateProperties,
   resolveTemplateProperties,
 } from "@/api/handlers/view-templates/properties";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ViewLayout, ViewTemplateProperty } from "@/api/lib/views-schema";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const workspaceId = toSafeId<"workspace">("workspace_1");
+const noopAuditRecorder: AuditRecorder = async () => {
+  await Promise.resolve();
+};
 
 const tableLayout = (propertyId: string): ViewLayout => ({
   version: 1,
@@ -232,6 +236,7 @@ describe("resolveTemplateProperties", () => {
       layout: tableLayout(templateProperty.sourceId),
       templateProperties: [templateProperty],
       canCreateProperties: true,
+      recordAuditEvent: noopAuditRecorder,
     });
 
     expect(result).toEqual({
@@ -260,6 +265,7 @@ describe("resolveTemplateProperties", () => {
       layout: tableLayout(templateProperty.sourceId),
       templateProperties: [templateProperty, templateProperty],
       canCreateProperties: true,
+      recordAuditEvent: noopAuditRecorder,
     });
 
     expect(result).toEqual({
@@ -293,6 +299,7 @@ describe("resolveTemplateProperties", () => {
       layout: tableLayout(templateProperty.sourceId),
       templateProperties: [templateProperty],
       canCreateProperties: true,
+      recordAuditEvent: noopAuditRecorder,
     });
 
     expect(result).toEqual({
@@ -331,6 +338,7 @@ describe("resolveTemplateProperties", () => {
       layout: tableLayout(propertyA.sourceId),
       templateProperties: [propertyA, propertyB],
       canCreateProperties: true,
+      recordAuditEvent: noopAuditRecorder,
     });
 
     expect(result).toEqual({
@@ -373,6 +381,7 @@ describe("resolveTemplateProperties", () => {
       layout,
       templateProperties: [firstProperty, secondProperty],
       canCreateProperties: true,
+      recordAuditEvent: noopAuditRecorder,
     });
 
     expect(result).toEqual({

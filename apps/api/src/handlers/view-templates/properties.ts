@@ -4,12 +4,8 @@ import type { Transaction } from "@/api/db";
 import { properties, propertyDependencies } from "@/api/db/schema";
 import type { PropertyCondition } from "@/api/db/schema-validators";
 import { lockWorkspacePropertyWrites } from "@/api/handlers/properties/property-lock";
-import type { AuditContext } from "@/api/lib/audit-log";
-import {
-  AUDIT_ACTION,
-  AUDIT_RESOURCE_TYPE,
-  writeAuditLog,
-} from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedPropertyId } from "@/api/lib/safe-id-boundaries";
@@ -39,7 +35,7 @@ type ResolveTemplatePropertiesOptions = {
   layout: ViewLayout;
   templateProperties: readonly ViewTemplateProperty[] | undefined;
   canCreateProperties: boolean;
-  auditContext?: AuditContext;
+  recordAuditEvent: AuditRecorder;
 };
 
 type ResolveTemplatePropertiesResult =
@@ -131,7 +127,7 @@ export const resolveTemplateProperties = async ({
   layout,
   templateProperties,
   canCreateProperties,
-  auditContext,
+  recordAuditEvent,
 }: ResolveTemplatePropertiesOptions): Promise<ResolveTemplatePropertiesResult> => {
   if (!templateProperties || templateProperties.length === 0) {
     const propertyIds = await readPropertyIds(tx, workspaceId);
@@ -244,27 +240,21 @@ export const resolveTemplateProperties = async ({
     propertyIdBySourceId.set(templateProperty.sourceId, inserted.id);
     nextPropertyIds.push(inserted.id);
 
-    if (auditContext) {
-      await writeAuditLog(
-        {
-          ...auditContext,
-          action: AUDIT_ACTION.CREATE,
-          resourceType: AUDIT_RESOURCE_TYPE.PROPERTY,
-          resourceId: inserted.id,
-          changes: {
-            createdFromViewTemplate: {
-              old: null,
-              new: {
-                name: templateProperty.name,
-                contentType: templateProperty.content.type,
-                toolType: templateProperty.tool.type,
-              },
-            },
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.CREATE,
+      resourceType: AUDIT_RESOURCE_TYPE.PROPERTY,
+      resourceId: inserted.id,
+      changes: {
+        createdFromViewTemplate: {
+          old: null,
+          new: {
+            name: templateProperty.name,
+            contentType: templateProperty.content.type,
+            toolType: templateProperty.tool.type,
           },
         },
-        tx,
-      );
-    }
+      },
+    });
   }
 
   await recreateTemplateDependencies({
@@ -273,6 +263,7 @@ export const resolveTemplateProperties = async ({
     templateProperties,
     propertyIdBySourceId,
     createdPropertySourceIds,
+    recordAuditEvent,
   });
 
   remapLayoutPropertyIds(layout, propertyIdBySourceId);
@@ -285,12 +276,14 @@ const recreateTemplateDependencies = async ({
   templateProperties,
   propertyIdBySourceId,
   createdPropertySourceIds,
+  recordAuditEvent,
 }: {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
   templateProperties: readonly ViewTemplateProperty[];
   propertyIdBySourceId: ReadonlyMap<string, string>;
   createdPropertySourceIds: ReadonlySet<string>;
+  recordAuditEvent: AuditRecorder;
 }): Promise<void> => {
   const rows = templateProperties.flatMap((templateProperty) => {
     if (!createdPropertySourceIds.has(templateProperty.sourceId)) {
@@ -336,6 +329,24 @@ const recreateTemplateDependencies = async ({
         propertyDependencies.dependsOnPropertyId,
       ],
     });
+
+  await recordAuditEvent(
+    tx,
+    rows.map((row) => ({
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.PROPERTY,
+      resourceId: row.propertyId,
+      changes: {
+        dependencyCreatedFromViewTemplate: {
+          old: null,
+          new: {
+            dependsOnPropertyId: row.dependsOnPropertyId,
+            condition: row.condition,
+          },
+        },
+      },
+    })),
+  );
 };
 
 const hasTemplateDependencyCycle = ({
