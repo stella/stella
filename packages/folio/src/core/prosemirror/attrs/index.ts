@@ -1,6 +1,7 @@
 import type { Mark, Node as PMNode } from "prosemirror-model";
 
 import {
+  BORDER_STYLE_VALUES,
   FIELD_TYPE_VALUES,
   HIGHLIGHT_COLOR_VALUES,
   IMAGE_HORIZONTAL_ALIGNMENT_VALUES,
@@ -13,11 +14,14 @@ import {
   PARAGRAPH_ALIGNMENT_VALUES,
   SDT_LOCK_VALUES,
   SDT_TYPE_VALUES,
+  SHADING_PATTERN_VALUES,
   TABLE_CELL_TEXT_DIRECTION_VALUES,
   TABLE_CELL_VERTICAL_ALIGNMENT_VALUES,
   TABLE_JUSTIFICATION_VALUES,
   TABLE_ROW_HEIGHT_RULE_VALUES,
   TABLE_WIDTH_TYPE_VALUES,
+  TAB_LEADER_VALUES,
+  TAB_STOP_ALIGNMENT_VALUES,
   UNDERLINE_STYLE_VALUES,
 } from "../../types/documentEnumValues";
 import type {
@@ -129,6 +133,37 @@ const RUN_FORMATTING_OVERRIDE_FALSE_KEYS = [
   "shadow",
   "outline",
 ] as const satisfies readonly (keyof RunFormattingOverrideAttrs)[];
+
+const TEXT_FORMATTING_BOOLEAN_KEYS = [
+  "bold",
+  "boldCs",
+  "italic",
+  "italicCs",
+  "strike",
+  "doubleStrike",
+  "smallCaps",
+  "allCaps",
+  "hidden",
+  "emboss",
+  "imprint",
+  "shadow",
+  "outline",
+] as const;
+
+const SECTION_ORIENTATIONS = ["portrait", "landscape"] as const;
+const SECTION_START_TYPES = [
+  "continuous",
+  "nextPage",
+  "oddPage",
+  "evenPage",
+  "nextColumn",
+] as const;
+const SECTION_VERTICAL_ALIGNMENTS = [
+  "top",
+  "center",
+  "both",
+  "bottom",
+] as const;
 
 export const readParagraphAttrs = (
   node: PMNode,
@@ -251,16 +286,23 @@ export const readParagraphAttrs = (
     "paragraph.attrs.listAbstractNumId",
     issues,
   );
-  optionalRecord(attrs, "borders", "paragraph.attrs.borders", issues);
-  optionalRecord(attrs, "shading", "paragraph.attrs.shading", issues);
-  optionalArray(attrs, "tabs", "paragraph.attrs.tabs", issues);
+  optionalBorderMap(attrs, "borders", "paragraph.attrs.borders", issues, [
+    "top",
+    "bottom",
+    "left",
+    "right",
+    "between",
+    "bar",
+  ]);
+  optionalShading(attrs, "shading", "paragraph.attrs.shading", issues);
+  optionalTabStops(attrs, "tabs", "paragraph.attrs.tabs", issues);
   optionalRecord(
     attrs,
     "spacingExplicit",
     "paragraph.attrs.spacingExplicit",
     issues,
   );
-  optionalRecord(
+  optionalTextFormatting(
     attrs,
     "defaultTextFormatting",
     "paragraph.attrs.defaultTextFormatting",
@@ -269,17 +311,18 @@ export const readParagraphAttrs = (
   optionalRecord(attrs, "numPr", "paragraph.attrs.numPr", issues);
   validateNumPr(attrs["numPr"], issues);
   optionalBookmarkArray(attrs["bookmarks"], issues);
-  optionalRecord(
+  optionalSectionProperties(
     attrs,
     "_sectionProperties",
     "paragraph.attrs._sectionProperties",
     issues,
   );
-  optionalArray(
+  optionalPropertyChanges(
     attrs,
     "_propertyChanges",
     "paragraph.attrs._propertyChanges",
     issues,
+    ["paragraphPropertyChange"],
   );
 
   return attrsResult(attrs, issues);
@@ -318,7 +361,7 @@ export const readTableAttrs = (
     issues,
   );
   optionalRecord(attrs, "floating", "table.attrs.floating", issues);
-  optionalRecord(attrs, "cellMargins", "table.attrs.cellMargins", issues);
+  optionalInsetMap(attrs, "cellMargins", "table.attrs.cellMargins", issues);
   optionalRecord(attrs, "look", "table.attrs.look", issues);
   optionalRecord(
     attrs,
@@ -403,8 +446,13 @@ export const readTableCellAttrs = (
     TABLE_CELL_TEXT_DIRECTION_VALUES,
   );
   optionalBoolean(attrs, "noWrap", "tableCell.attrs.noWrap", issues);
-  optionalRecord(attrs, "borders", "tableCell.attrs.borders", issues);
-  optionalRecord(attrs, "margins", "tableCell.attrs.margins", issues);
+  optionalBorderMap(attrs, "borders", "tableCell.attrs.borders", issues, [
+    "top",
+    "bottom",
+    "left",
+    "right",
+  ]);
+  optionalInsetMap(attrs, "margins", "tableCell.attrs.margins", issues);
   optionalRecord(
     attrs,
     "_originalFormatting",
@@ -1365,6 +1413,324 @@ const optionalRecord = (
   }
 };
 
+const optionalBorderMap = (
+  attrs: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: ProseMirrorAttrIssue[],
+  sides: readonly string[],
+): void => {
+  const value = attrs[key];
+  if (value === undefined || value === null) {
+    return;
+  }
+  if (!isRecord(value)) {
+    issues.push({ path, message: "Expected an object." });
+    return;
+  }
+
+  for (const side of sides) {
+    validateBorderSpec(value[side], `${path}.${side}`, issues);
+  }
+};
+
+const validateBorderSpec = (
+  value: unknown,
+  path: string,
+  issues: ProseMirrorAttrIssue[],
+): void => {
+  if (value === undefined || value === null) {
+    return;
+  }
+  if (!isRecord(value)) {
+    issues.push({ path, message: "Expected an object." });
+    return;
+  }
+
+  optionalOneOf(value, "style", `${path}.style`, issues, BORDER_STYLE_VALUES);
+  optionalNumber(value, "size", `${path}.size`, issues);
+  optionalNumber(value, "space", `${path}.space`, issues);
+  optionalBoolean(value, "shadow", `${path}.shadow`, issues);
+  optionalBoolean(value, "frame", `${path}.frame`, issues);
+  optionalColorValue(value, "color", `${path}.color`, issues);
+};
+
+const optionalColorValue = (
+  attrs: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: ProseMirrorAttrIssue[],
+): void => {
+  const value = attrs[key];
+  if (value === undefined || value === null) {
+    return;
+  }
+  if (!isRecord(value)) {
+    issues.push({ path, message: "Expected an object." });
+    return;
+  }
+
+  optionalString(value, "rgb", `${path}.rgb`, issues);
+  optionalBoolean(value, "auto", `${path}.auto`, issues);
+  optionalString(value, "themeColor", `${path}.themeColor`, issues);
+  optionalString(value, "themeTint", `${path}.themeTint`, issues);
+  optionalString(value, "themeShade", `${path}.themeShade`, issues);
+};
+
+const optionalShading = (
+  attrs: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: ProseMirrorAttrIssue[],
+): void => {
+  const value = attrs[key];
+  if (value === undefined || value === null) {
+    return;
+  }
+  if (!isRecord(value)) {
+    issues.push({ path, message: "Expected an object." });
+    return;
+  }
+
+  optionalColorValue(value, "color", `${path}.color`, issues);
+  optionalColorValue(value, "fill", `${path}.fill`, issues);
+  optionalOneOf(
+    value,
+    "pattern",
+    `${path}.pattern`,
+    issues,
+    SHADING_PATTERN_VALUES,
+  );
+};
+
+const optionalTabStops = (
+  attrs: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: ProseMirrorAttrIssue[],
+): void => {
+  const value = attrs[key];
+  if (value === undefined || value === null) {
+    return;
+  }
+  if (!Array.isArray(value)) {
+    issues.push({ path, message: "Expected an array." });
+    return;
+  }
+
+  for (const [index, item] of value.entries()) {
+    const itemPath = `${path}[${index}]`;
+    if (!isRecord(item)) {
+      issues.push({ path: itemPath, message: "Expected an object." });
+      continue;
+    }
+    requiredNumber(item, "position", `${itemPath}.position`, issues);
+    requiredOneOf(
+      item,
+      "alignment",
+      `${itemPath}.alignment`,
+      issues,
+      TAB_STOP_ALIGNMENT_VALUES,
+    );
+    optionalOneOf(
+      item,
+      "leader",
+      `${itemPath}.leader`,
+      issues,
+      TAB_LEADER_VALUES,
+    );
+  }
+};
+
+const optionalTextFormatting = (
+  attrs: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: ProseMirrorAttrIssue[],
+): void => {
+  const value = attrs[key];
+  if (value === undefined || value === null) {
+    return;
+  }
+  if (!isRecord(value)) {
+    issues.push({ path, message: "Expected an object." });
+    return;
+  }
+
+  for (const booleanKey of TEXT_FORMATTING_BOOLEAN_KEYS) {
+    optionalBoolean(value, booleanKey, `${path}.${booleanKey}`, issues);
+  }
+  optionalNumber(value, "fontSize", `${path}.fontSize`, issues);
+  optionalNumber(value, "fontSizeCs", `${path}.fontSizeCs`, issues);
+  optionalOneOf(
+    value,
+    "highlight",
+    `${path}.highlight`,
+    issues,
+    HIGHLIGHT_COLOR_VALUES,
+  );
+  optionalColorValue(value, "color", `${path}.color`, issues);
+  optionalShading(value, "shading", `${path}.shading`, issues);
+
+  const underline = value["underline"];
+  if (underline !== undefined && underline !== null) {
+    if (!isRecord(underline)) {
+      issues.push({
+        path: `${path}.underline`,
+        message: "Expected an object.",
+      });
+    } else {
+      requiredOneOf(
+        underline,
+        "style",
+        `${path}.underline.style`,
+        issues,
+        UNDERLINE_STYLE_VALUES,
+      );
+      optionalColorValue(underline, "color", `${path}.underline.color`, issues);
+    }
+  }
+};
+
+const optionalInsetMap = (
+  attrs: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: ProseMirrorAttrIssue[],
+): void => {
+  const value = attrs[key];
+  if (value === undefined || value === null) {
+    return;
+  }
+  if (!isRecord(value)) {
+    issues.push({ path, message: "Expected an object." });
+    return;
+  }
+
+  optionalNumber(value, "top", `${path}.top`, issues);
+  optionalNumber(value, "bottom", `${path}.bottom`, issues);
+  optionalNumber(value, "left", `${path}.left`, issues);
+  optionalNumber(value, "right", `${path}.right`, issues);
+};
+
+const optionalSectionProperties = (
+  attrs: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: ProseMirrorAttrIssue[],
+): void => {
+  const value = attrs[key];
+  if (value === undefined || value === null) {
+    return;
+  }
+  if (!isRecord(value)) {
+    issues.push({ path, message: "Expected an object." });
+    return;
+  }
+
+  for (const numberKey of [
+    "pageWidth",
+    "pageHeight",
+    "marginTop",
+    "marginBottom",
+    "marginLeft",
+    "marginRight",
+    "headerDistance",
+    "footerDistance",
+    "gutter",
+    "columnCount",
+    "columnSpace",
+  ]) {
+    optionalNumber(value, numberKey, `${path}.${numberKey}`, issues);
+  }
+  optionalOneOf(
+    value,
+    "orientation",
+    `${path}.orientation`,
+    issues,
+    SECTION_ORIENTATIONS,
+  );
+  optionalOneOf(
+    value,
+    "sectionStart",
+    `${path}.sectionStart`,
+    issues,
+    SECTION_START_TYPES,
+  );
+  optionalOneOf(
+    value,
+    "verticalAlign",
+    `${path}.verticalAlign`,
+    issues,
+    SECTION_VERTICAL_ALIGNMENTS,
+  );
+  optionalBoolean(value, "equalWidth", `${path}.equalWidth`, issues);
+  optionalBoolean(value, "separator", `${path}.separator`, issues);
+  optionalBoolean(value, "bidi", `${path}.bidi`, issues);
+  optionalBoolean(value, "titlePg", `${path}.titlePg`, issues);
+  optionalBoolean(
+    value,
+    "evenAndOddHeaders",
+    `${path}.evenAndOddHeaders`,
+    issues,
+  );
+};
+
+const optionalPropertyChanges = (
+  attrs: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: ProseMirrorAttrIssue[],
+  allowedTypes: readonly string[],
+): void => {
+  const value = attrs[key];
+  if (value === undefined || value === null) {
+    return;
+  }
+  if (!Array.isArray(value)) {
+    issues.push({ path, message: "Expected an array." });
+    return;
+  }
+
+  for (const [index, item] of value.entries()) {
+    const itemPath = `${path}[${index}]`;
+    if (!isRecord(item)) {
+      issues.push({ path: itemPath, message: "Expected an object." });
+      continue;
+    }
+    requiredOneOf(item, "type", `${itemPath}.type`, issues, allowedTypes);
+    validatePropertyChangeInfo(item["info"], `${itemPath}.info`, issues);
+    optionalRecord(
+      item,
+      "previousFormatting",
+      `${itemPath}.previousFormatting`,
+      issues,
+    );
+    optionalRecord(
+      item,
+      "currentFormatting",
+      `${itemPath}.currentFormatting`,
+      issues,
+    );
+  }
+};
+
+const validatePropertyChangeInfo = (
+  value: unknown,
+  path: string,
+  issues: ProseMirrorAttrIssue[],
+): void => {
+  if (!isRecord(value)) {
+    issues.push({ path, message: "Expected an object." });
+    return;
+  }
+
+  requiredNumber(value, "id", `${path}.id`, issues);
+  requiredString(value, "author", `${path}.author`, issues);
+  optionalString(value, "date", `${path}.date`, issues);
+  optionalString(value, "rsid", `${path}.rsid`, issues);
+};
+
 const optionalImagePosition = (
   attrs: Record<string, unknown>,
   key: string,
@@ -1429,18 +1795,6 @@ const validateImagePositionAxis = (
   );
   optionalNumber(value, "posOffset", `${path}.posOffset`, options.issues);
   optionalOneOf(value, "align", `${path}.align`, options.issues, options.align);
-};
-
-const optionalArray = (
-  attrs: Record<string, unknown>,
-  key: string,
-  path: string,
-  issues: ProseMirrorAttrIssue[],
-): void => {
-  const value = attrs[key];
-  if (value !== undefined && value !== null && !Array.isArray(value)) {
-    issues.push({ path, message: "Expected an array." });
-  }
 };
 
 type OptionalNumberArrayOptions = {

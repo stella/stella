@@ -65,6 +65,52 @@ describe("ProseMirror attr readers", () => {
     );
   });
 
+  test("rejects malformed paragraph preservation payloads", () => {
+    const node = schema.nodes.paragraph.create({
+      borders: { top: { style: "warp", size: "wide" } },
+      shading: { pattern: "confetti", fill: { rgb: 12 } },
+      tabs: [{ position: "720", alignment: "edge", leader: "spark" }],
+      defaultTextFormatting: {
+        bold: "yes",
+        highlight: "neon",
+        underline: { style: "zigzag" },
+      },
+      _sectionProperties: { pageWidth: "wide", orientation: "diagonal" },
+      _propertyChanges: [
+        {
+          type: "runPropertyChange",
+          info: { id: "1", author: 7 },
+        },
+      ],
+    });
+
+    const result = readParagraphAttrs(node);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("Expected paragraph attrs to be rejected");
+    }
+    expect(result.issues.map((issue) => issue.path)).toEqual(
+      expect.arrayContaining([
+        "paragraph.attrs.borders.top.style",
+        "paragraph.attrs.borders.top.size",
+        "paragraph.attrs.shading.pattern",
+        "paragraph.attrs.shading.fill.rgb",
+        "paragraph.attrs.tabs[0].position",
+        "paragraph.attrs.tabs[0].alignment",
+        "paragraph.attrs.tabs[0].leader",
+        "paragraph.attrs.defaultTextFormatting.bold",
+        "paragraph.attrs.defaultTextFormatting.highlight",
+        "paragraph.attrs.defaultTextFormatting.underline.style",
+        "paragraph.attrs._sectionProperties.pageWidth",
+        "paragraph.attrs._sectionProperties.orientation",
+        "paragraph.attrs._propertyChanges[0].type",
+        "paragraph.attrs._propertyChanges[0].info.id",
+        "paragraph.attrs._propertyChanges[0].info.author",
+      ]),
+    );
+  });
+
   test("rejects malformed table column widths", () => {
     const node = schema.nodes.table.create({
       columnWidths: [1200, "bad"],
@@ -107,6 +153,38 @@ describe("ProseMirror attr readers", () => {
     const result = readTableCellAttrs(node);
 
     expect(result.ok).toBe(true);
+  });
+
+  test("rejects malformed table preservation payloads", () => {
+    const table = schema.nodes.table.create({
+      cellMargins: { top: "tight" },
+    });
+    const cell = schema.nodes.tableCell.create({
+      colspan: 1,
+      rowspan: 1,
+      borders: { left: { style: "cloud", color: { auto: "yes" } } },
+      margins: { bottom: "low" },
+    });
+
+    const tableResult = readTableAttrs(table);
+    const cellResult = readTableCellAttrs(cell);
+
+    expect(tableResult.ok).toBe(false);
+    if (!tableResult.ok) {
+      expect(tableResult.issues.map((issue) => issue.path)).toContain(
+        "table.attrs.cellMargins.top",
+      );
+    }
+    expect(cellResult.ok).toBe(false);
+    if (!cellResult.ok) {
+      expect(cellResult.issues.map((issue) => issue.path)).toEqual(
+        expect.arrayContaining([
+          "tableCell.attrs.borders.left.style",
+          "tableCell.attrs.borders.left.color.auto",
+          "tableCell.attrs.margins.bottom",
+        ]),
+      );
+    }
   });
 
   test("rejects invalid image finite and nested position attrs", () => {
