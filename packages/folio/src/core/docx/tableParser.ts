@@ -70,6 +70,7 @@ import {
 import type { StyleMap } from "./styleParser";
 import {
   findChild,
+  findChildByLocalName,
   findChildren,
   getAttribute,
   getChildElements,
@@ -1391,7 +1392,7 @@ export function parseTableRow(
 
   // Parse cells
   const pendingBookmarkMarkers: BookmarkMarker[] = [];
-  for (const child of getChildElements(trElement)) {
+  const parseRowChild = (child: XmlElement): void => {
     const localName = getLocalName(child.name);
     if (localName === "tc") {
       const cell = parseTableCell(
@@ -1411,17 +1412,32 @@ export function parseTableRow(
         pendingBookmarkMarkers.length = 0;
       }
       row.cells.push(cell);
-      continue;
+      return;
+    }
+
+    if (localName === "sdt") {
+      const sdtContent = findChildByLocalName(child, "sdtContent");
+      if (!sdtContent) {
+        return;
+      }
+      for (const sdtChild of getChildElements(sdtContent)) {
+        parseRowChild(sdtChild);
+      }
+      return;
     }
 
     if (localName !== "bookmarkStart" && localName !== "bookmarkEnd") {
-      continue;
+      return;
     }
 
     const marker = parseBookmarkMarker(child, localName);
     if (!appendBookmarkMarkerToLastParagraphInCells(row.cells, marker)) {
       pendingBookmarkMarkers.push(marker);
     }
+  };
+
+  for (const child of getChildElements(trElement)) {
+    parseRowChild(child);
   }
 
   if (pendingBookmarkMarkers.length > 0) {
@@ -1653,22 +1669,42 @@ export function parseTable(
   }
 
   // Parse rows
-  const rows = findChildren(tblElement, "w", "tr");
   const rowsWithGridOffsets = new Set<number>();
-  for (const [rowIndex, rowElement] of rows.entries()) {
-    const row = parseTableRow(
-      rowElement,
-      styles,
-      theme,
-      numbering,
-      rels,
-      media,
-      options,
-    );
-    table.rows.push(row);
-    if (hasRowGridOffsets(rowElement)) {
-      rowsWithGridOffsets.add(rowIndex);
+  const parseTableChild = (child: XmlElement): void => {
+    const localName = getLocalName(child.name);
+    if (localName === "tr") {
+      const rowIndex = table.rows.length;
+      const row = parseTableRow(
+        child,
+        styles,
+        theme,
+        numbering,
+        rels,
+        media,
+        options,
+      );
+      table.rows.push(row);
+      if (hasRowGridOffsets(child)) {
+        rowsWithGridOffsets.add(rowIndex);
+      }
+      return;
     }
+
+    if (localName !== "sdt") {
+      return;
+    }
+
+    const sdtContent = findChildByLocalName(child, "sdtContent");
+    if (!sdtContent) {
+      return;
+    }
+    for (const sdtChild of getChildElements(sdtContent)) {
+      parseTableChild(sdtChild);
+    }
+  };
+
+  for (const child of getChildElements(tblElement)) {
+    parseTableChild(child);
   }
 
   inferImplicitSingleCellRowSpans(table, rowsWithGridOffsets);
