@@ -56,6 +56,9 @@ export function FontSizePicker({
     <Select
       value={selectedLabel}
       onValueChange={(label) => {
+        if (typeof label !== "string") {
+          return;
+        }
         const parsed = Number.parseFloat(label);
         if (!Number.isFinite(parsed) || parsed <= 0) {
           return;
