@@ -149,6 +149,38 @@ describe("render page fingerprint", () => {
       computePageFingerprint(page, lookup(blockWithComment(123))),
     );
   });
+
+  test("changes when a text run gains a bold mark without layout geometry changing", () => {
+    const plain: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [{ kind: "text", text: "hello", pmStart: 1, pmEnd: 6 }],
+    };
+    const bolded: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [{ kind: "text", text: "hello", pmStart: 1, pmEnd: 6, bold: true }],
+    };
+    expect(computePageFingerprint(page, lookup(plain))).not.toBe(
+      computePageFingerprint(page, lookup(bolded)),
+    );
+  });
+
+  test("changes when run text content changes without layout geometry changing", () => {
+    const before: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [{ kind: "text", text: "hello", pmStart: 1, pmEnd: 6 }],
+    };
+    const after: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [{ kind: "text", text: "world", pmStart: 1, pmEnd: 6 }],
+    };
+    expect(computePageFingerprint(page, lookup(before))).not.toBe(
+      computePageFingerprint(page, lookup(after)),
+    );
+  });
 });
 
 describe("page font fallback", () => {

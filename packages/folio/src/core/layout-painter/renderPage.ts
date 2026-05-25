@@ -2085,6 +2085,10 @@ export function computePageFingerprint(
       if (annotationFingerprint) {
         fp += `,ann:${annotationFingerprint}`;
       }
+      const contentFingerprint = block ? computeContentFingerprint(block) : "";
+      if (contentFingerprint) {
+        fp += `,c:${contentFingerprint}`;
+      }
     }
 
     parts.push(fp);
@@ -2096,6 +2100,20 @@ export function computePageFingerprint(
 function computeAnnotationFingerprint(block: FlowBlock): string {
   const parts: string[] = [];
   collectAnnotationFingerprint(block, parts);
+  return parts.join(";");
+}
+
+/**
+ * Fingerprint of run-level content + formatting that the painter applies via
+ * `applyRunStyles`. Geometry alone is insufficient: a mark-only edit (toggle
+ * bold/italic/color/etc.) can leave fragment width/height/line counts
+ * identical, in which case the geometry fingerprint matches and the
+ * incremental render path would skip repopulating the page, leaving the new
+ * formatting unpainted.
+ */
+function computeContentFingerprint(block: FlowBlock): string {
+  const parts: string[] = [];
+  collectContentFingerprint(block, parts);
   return parts.join(";");
 }
 
@@ -2144,6 +2162,137 @@ function collectAnnotationFingerprint(block: FlowBlock, parts: string[]): void {
       collectAnnotationFingerprint(child, parts);
     }
   }
+}
+
+function collectContentFingerprint(block: FlowBlock, parts: string[]): void {
+  if (block.kind === "paragraph") {
+    if (block.attrs?.styleId) {
+      parts.push(`p:st:${block.attrs.styleId}`);
+    }
+    if (block.attrs?.alignment) {
+      parts.push(`p:al:${block.attrs.alignment}`);
+    }
+    for (let index = 0; index < block.runs.length; index++) {
+      const run = block.runs[index];
+      if (!run) {
+        continue;
+      }
+      parts.push(`${index}:${runContentKey(run)}`);
+    }
+    return;
+  }
+
+  if (block.kind === "table") {
+    for (const row of block.rows) {
+      for (const cell of row.cells) {
+        for (const child of cell.blocks) {
+          collectContentFingerprint(child, parts);
+        }
+      }
+    }
+    return;
+  }
+
+  if (block.kind === "textBox") {
+    for (const child of block.content) {
+      collectContentFingerprint(child, parts);
+    }
+  }
+}
+
+function runContentKey(run: Run): string {
+  if (run.kind === "lineBreak") {
+    return "lb";
+  }
+  if (run.kind === "image") {
+    return `img:${run.src}|${run.width}x${run.height}${run.transform ? `|tr:${run.transform}` : ""}`;
+  }
+
+  // Remaining kinds (text, tab, field) all carry RunFormatting.
+  const parts: string[] = [run.kind];
+  if (run.kind === "text") {
+    parts.push(`t:${run.text}`);
+  } else if (run.kind === "tab") {
+    if (run.width !== undefined) {
+      parts.push(`w:${run.width}`);
+    }
+  } else {
+    parts.push(`ft:${run.fieldType}`);
+    if (run.fallback !== undefined) {
+      parts.push(`fb:${run.fallback}`);
+    }
+  }
+
+  // Marks/format attrs the painter consumes via applyRunStyles. Keep in sync
+  // with renderParagraph.ts so toggling any of these triggers a re-paint.
+  if (run.bold) {
+    parts.push("b");
+  }
+  if (run.italic) {
+    parts.push("i");
+  }
+  if (run.underline) {
+    parts.push(
+      typeof run.underline === "boolean"
+        ? "u"
+        : `u:${run.underline.style ?? ""}:${run.underline.color ?? ""}`,
+    );
+  }
+  if (run.strike) {
+    parts.push("s");
+  }
+  if (run.color) {
+    parts.push(`c:${run.color}`);
+  }
+  if (run.highlight) {
+    parts.push(`hi:${run.highlight}`);
+  }
+  if (run.fontFamily) {
+    parts.push(`ff:${run.fontFamily}`);
+  }
+  if (run.fontSize !== undefined) {
+    parts.push(`fs:${run.fontSize}`);
+  }
+  if (run.letterSpacing !== undefined) {
+    parts.push(`ls:${run.letterSpacing}`);
+  }
+  if (run.superscript) {
+    parts.push("sup");
+  }
+  if (run.subscript) {
+    parts.push("sub");
+  }
+  if (run.allCaps) {
+    parts.push("ac");
+  }
+  if (run.smallCaps) {
+    parts.push("sc");
+  }
+  if (run.positionPx !== undefined) {
+    parts.push(`pp:${run.positionPx}`);
+  }
+  if (run.horizontalScale !== undefined && run.horizontalScale !== 100) {
+    parts.push(`hs:${run.horizontalScale}`);
+  }
+  if (run.imprint) {
+    parts.push("imp");
+  }
+  if (run.emboss) {
+    parts.push("emb");
+  }
+  if (run.textShadow) {
+    parts.push("sh");
+  }
+  if (run.textOutline) {
+    parts.push("ol");
+  }
+  if (run.emphasisMark) {
+    parts.push(`emk:${run.emphasisMark}`);
+  }
+  if (run.hyperlink) {
+    parts.push(`hl:${run.hyperlink.href}`);
+  }
+  return parts.join("|");
 }
 
 /**
