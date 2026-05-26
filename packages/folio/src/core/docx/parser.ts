@@ -529,8 +529,8 @@ function getHeaderFooterXml(
 ): string | undefined {
   const filename = partPath.split("/").pop() ?? partPath;
   return (
-    getMapCaseInsensitive(indexedParts, filename) ??
-    getMapCaseInsensitive(raw.allXml, partPath)
+    getMapCaseInsensitive(raw.allXml, partPath) ??
+    getMapCaseInsensitive(indexedParts, filename)
   );
 }
 

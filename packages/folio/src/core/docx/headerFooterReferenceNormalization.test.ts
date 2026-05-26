@@ -7,6 +7,7 @@ import type {
   SectionProperties,
 } from "../types/document";
 import { normalizeHeaderFooterReferences } from "./headerFooterReferenceNormalization";
+import { getParagraphText } from "./paragraphParser";
 import { parseDocx } from "./parser";
 import { RELATIONSHIP_TYPES } from "./relsParser";
 import { repackDocx } from "./rezip";
@@ -125,6 +126,30 @@ describe("normalizeHeaderFooterReferences", () => {
     expect(reparsedBlock.sectionProperties?.footerReferences).toEqual([
       { type: "default", rId: "rId2" },
     ]);
+  });
+
+  test("prefers the exact relationship target path over matching basenames", async () => {
+    const buffer = await createCollidingHeaderBasenameFixture();
+    const doc = await parseDocx(buffer, { preloadFonts: false });
+    const header = doc.package.headers?.get("rId1");
+    const headerBlock = header?.content.at(0);
+
+    expect(headerBlock?.type).toBe("paragraph");
+    if (headerBlock?.type !== "paragraph") {
+      throw new Error("Expected first header block to be a paragraph");
+    }
+    expect(getParagraphText(headerBlock)).toBe("Custom header");
+
+    const repacked = await repackDocx(doc, { updateModifiedDate: false });
+    const reparsed = await parseDocx(repacked, { preloadFonts: false });
+    const reparsedHeader = reparsed.package.headers?.get("rId1");
+    const reparsedHeaderBlock = reparsedHeader?.content.at(0);
+
+    expect(reparsedHeaderBlock?.type).toBe("paragraph");
+    if (reparsedHeaderBlock?.type !== "paragraph") {
+      throw new Error("Expected first reparsed header block to be a paragraph");
+    }
+    expect(getParagraphText(reparsedHeaderBlock)).toBe("Custom header");
   });
 });
 
@@ -249,3 +274,63 @@ const createNonNumberedHeaderFooterReferenceFixture =
     );
     return zip.generateAsync({ type: "arraybuffer" });
   };
+
+const createCollidingHeaderBasenameFixture = async (): Promise<ArrayBuffer> => {
+  const zip = new JSZip();
+  zip.file(
+    "[Content_Types].xml",
+    `${XML_DECLARATION}
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
+  <Override PartName="/word/custom/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
+</Types>`,
+  );
+  zip.file(
+    "_rels/.rels",
+    `${XML_DECLARATION}
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="${RELATIONSHIP_TYPES.officeDocument}" Target="word/document.xml"/>
+</Relationships>`,
+  );
+  zip.file(
+    "word/_rels/document.xml.rels",
+    `${XML_DECLARATION}
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="${RELATIONSHIP_TYPES.header}" Target="custom/header1.xml"/>
+</Relationships>`,
+  );
+  zip.file(
+    "word/document.xml",
+    `${XML_DECLARATION}
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    <w:p>
+      <w:pPr>
+        <w:sectPr>
+          <w:headerReference w:type="default" r:id="rId1"/>
+        </w:sectPr>
+      </w:pPr>
+      <w:r><w:t>Body</w:t></w:r>
+    </w:p>
+  </w:body>
+</w:document>`,
+  );
+  zip.file(
+    "word/header1.xml",
+    `${XML_DECLARATION}
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p><w:r><w:t>Top-level header</w:t></w:r></w:p>
+</w:hdr>`,
+  );
+  zip.file(
+    "word/custom/header1.xml",
+    `${XML_DECLARATION}
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p><w:r><w:t>Custom header</w:t></w:r></w:p>
+</w:hdr>`,
+  );
+  return zip.generateAsync({ type: "arraybuffer" });
+};
