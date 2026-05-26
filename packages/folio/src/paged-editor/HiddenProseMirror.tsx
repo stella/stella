@@ -516,6 +516,8 @@ export function HiddenProseMirror(
 
   const [collaborationModules, setCollaborationModules] =
     useState<CollaborationModules | null>(null);
+  const [collaborationModulesError, setCollaborationModulesError] =
+    useState<unknown>(null);
   const hasCollaboration = collaboration !== undefined;
 
   // Refs
@@ -561,20 +563,24 @@ export function HiddenProseMirror(
   useEffect(() => {
     if (!hasCollaboration) {
       setCollaborationModules(null);
+      setCollaborationModulesError(null);
       return undefined;
     }
 
     let cancelled = false;
+    setCollaborationModulesError(null);
     void loadCollaborationModules().then(
       (modules) => {
         if (!cancelled) {
           setCollaborationModules(modules);
+          setCollaborationModulesError(null);
         }
         return undefined;
       },
-      () => {
+      (error: unknown) => {
         if (!cancelled) {
           setCollaborationModules(null);
+          setCollaborationModulesError(error);
         }
         return undefined;
       },
@@ -1000,6 +1006,18 @@ export function HiddenProseMirror(
     }),
     [],
   );
+
+  if (hasCollaboration && collaborationModulesError) {
+    let detail = "unknown error";
+    if (collaborationModulesError instanceof Error) {
+      detail = collaborationModulesError.message;
+    } else if (typeof collaborationModulesError === "string") {
+      detail = collaborationModulesError;
+    }
+    panic(
+      `Failed to load collaboration editor modules. Reload the document to retry. Cause: ${detail}`,
+    );
+  }
 
   // ========================================================================
   // Render
