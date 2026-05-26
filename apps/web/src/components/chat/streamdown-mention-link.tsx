@@ -647,22 +647,34 @@ const FaviconCitationChip = ({
       text: source?.text,
     });
   };
+  const pillLabel = source?.title ?? (inlineLabel || hostname);
   return (
     <button
       aria-label={tooltipDetail}
       className={cn(
         "border-border bg-muted/30 hover:bg-muted/60",
         "focus-visible:ring-ring/50",
-        "mx-0.5 inline-flex size-[1em] cursor-pointer items-center",
-        "justify-center overflow-hidden rounded-full border",
+        "mx-0.5 inline-flex h-[1em] max-w-[1em] cursor-pointer items-center",
+        "overflow-hidden rounded-full border",
         "align-[-0.2em]",
+        "transition-[max-width] duration-200 ease-out",
+        "hover:max-w-[20em] focus-visible:max-w-[20em]",
         "focus-visible:ring-2 focus-visible:outline-none",
       )}
       onClick={handleClick}
-      title={tooltipDetail}
       type="button"
     >
-      <FaviconImage hostname={hostname} />
+      <span className="grid size-[1em] shrink-0 place-items-center">
+        <FaviconImage hostname={hostname} />
+      </span>
+      <span
+        className={cn(
+          "min-w-0 ps-0.5 pe-1.5 whitespace-nowrap",
+          "text-[0.78em] leading-none",
+        )}
+      >
+        {pillLabel}
+      </span>
     </button>
   );
 };
