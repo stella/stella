@@ -188,6 +188,55 @@ describe("getListMarkerInlineWidth", () => {
     });
   });
 
+  // Regression for bot review #460: when the marker overflows the hanging
+  // slot, Word advances body text to the next tab stop instead of letting
+  // body collide with the marker. Previously folio returned `hanging`
+  // unconditionally, which produced overlap for long markers like
+  // "1.1.1.1." inside a 36 px hanging slot.
+  test("hanging-indent marker that overflows the slot advances to next tab stop", () => {
+    withFakeTextMeasure(() => {
+      const width = getListMarkerInlineWidth(
+        listBlock({
+          listMarker: "1.1.1.1.",
+          indent: { left: 60, hanging: 36 },
+        }),
+      );
+      // Natural width = 8 chars * 10 = 80. markerStart = 60-36 = 24.
+      // minBodyStart = 24+80 = 104. Hanging is consumed → search past
+      // indentLeft=60. Next default-grid stop past max(104,60)=104 is
+      // ceil(104/48)*48 = 144. marker = 144 - 24 = 120.
+      const expectedBodyStart =
+        Math.ceil(104 / DEFAULT_TAB_STOP_PX) * DEFAULT_TAB_STOP_PX;
+      expect(width).toBeCloseTo(expectedBodyStart - 24, 5);
+    });
+  });
+
+  // Regression for bot review #460 (codex): when `minBodyStart` lands
+  // exactly on a default-grid stop, the old `Math.floor(...)+1` rolled
+  // forward by a full tab interval. The surrounding comment already
+  // states equality must be preserved (§17.9.27); fix the default-grid
+  // arithmetic to match.
+  test("default-grid stop landing exactly on minBodyStart is used as-is", () => {
+    withFakeTextMeasure(() => {
+      // Marker "12345" with default font: 5 chars * 10 = 50 px — exceeds
+      // 48 px so it doesn't land exactly. Use a 24 px firstLine to push
+      // markerStart to 24, so minBodyStart = 24 + 24 (natural for "12.")
+      // = 48 EXACTLY on the default grid.
+      const width = getListMarkerInlineWidth(
+        listBlock({
+          listMarker: "12.",
+          // 480 twips = 32 px; markerStart shifts by 16 px (~ish). Use
+          // a clean firstLine = 18 px in twips (270) → markerStart=18,
+          // natural=30, minBodyStart=48 EXACTLY.
+          indent: { left: 0, firstLine: 18 },
+        }),
+      );
+      // minBodyStart = 18 + 30 = 48 = default-grid stop exactly.
+      // bodyStart MUST be 48, not 96. marker = 48 - 18 = 30.
+      expect(width).toBeCloseTo(DEFAULT_TAB_STOP_PX - 18, 5);
+    });
+  });
+
   test("first-line indent shifts marker start: bodyStart adjusts", () => {
     withFakeTextMeasure(() => {
       const width = getListMarkerInlineWidth(

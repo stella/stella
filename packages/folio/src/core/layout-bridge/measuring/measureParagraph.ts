@@ -475,27 +475,35 @@ export function measureParagraph(
   // Subtracting gives correct width in both cases
   let baseFirstLineWidth = Math.max(1, bodyContentWidth - firstLineOffset);
 
-  // List marker on first-line-indent (no hanging) paragraphs: the marker
-  // renders inline at the start of the first line and takes its own width.
-  // Word's measurement includes the marker in the first line's content;
-  // folio renders the marker as a separately-prepended span that's *not* in
-  // the run list, so we must subtract its width here. Without this, the
-  // line breaker thinks the first line has full `bodyWidth - firstLine` of
-  // text room, the painter pushes some text past the right margin, and a
-  // trailing run wraps to the next line.
+  // List marker on the first line: the marker renders inline as an
+  // inline-block span that is *not* in the run list, so the run-based
+  // line breaker doesn't see it. Word's measurement includes the marker
+  // in the first line's content, so we subtract the same footprint the
+  // painter applies as `min-width` (see `renderListMarker` +
+  // `getListMarkerInlineWidth`). Otherwise long markers ("1.1.1.")
+  // overflow the right edge or the line-breaker wraps a trailing run
+  // prematurely.
   //
-  // The marker's inline width is the same value the painter applies as
-  // `min-width` (see `renderListMarker` + `getListMarkerInlineWidth`) —
-  // honours `w:suff` and the next tab stop past the marker so long markers
-  // like "1.1.1." align body text at the next tab grid column instead of a
-  // fixed gap.
+  // Two indent shapes need different subtractions:
   //
-  // Hanging-indent lists already reserve the marker slot through
-  // `firstLineOffset` (= firstLine − hanging widens baseFirstLineWidth),
-  // so we skip the subtraction there.
-  if ((indent?.hanging ?? 0) === 0) {
-    const markerInlineWidth = getListMarkerInlineWidth(block);
-    if (markerInlineWidth > 0) {
+  // - Hanging indent: `firstLineOffset` already widens
+  //   `baseFirstLineWidth` by `hanging` (since firstLineOffset =
+  //   firstLine − hanging is negative). When the marker fits inside
+  //   the hanging slot, that widening exactly accounts for it — no
+  //   further subtraction. When the marker OVERFLOWS the hanging slot
+  //   (`getListMarkerInlineWidth` returns a value > `hanging` because
+  //   Word advances body to the next tab stop), subtract the excess.
+  //
+  // - First-line indent (no hanging): subtract the full marker width.
+  const markerInlineWidth = getListMarkerInlineWidth(block);
+  if (markerInlineWidth > 0) {
+    const hangingPx = indent?.hanging ?? 0;
+    if (hangingPx > 0) {
+      const excessWidth = markerInlineWidth - hangingPx;
+      if (excessWidth > 0) {
+        baseFirstLineWidth = Math.max(1, baseFirstLineWidth - excessWidth);
+      }
+    } else {
       baseFirstLineWidth = Math.max(1, baseFirstLineWidth - markerInlineWidth);
     }
   }

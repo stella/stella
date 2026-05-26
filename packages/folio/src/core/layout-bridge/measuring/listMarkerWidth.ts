@@ -78,12 +78,6 @@ export function getListMarkerInlineWidth(block: ParagraphBlock): number {
     return 0;
   }
 
-  const indent = attrs.indent;
-  const hanging = indent?.hanging ?? 0;
-  if (hanging > 0) {
-    return hanging;
-  }
-
   const { fontFamily, fontSize } = resolveListMarkerFont(block);
   const style: FontStyle = { fontFamily, fontSize };
   const naturalWidth = measureTextWidth(attrs.listMarker, style);
@@ -99,17 +93,35 @@ export function getListMarkerInlineWidth(block: ParagraphBlock): number {
 
   // Default suffix is `tab`. Body text aligns at the next stop past
   // `markerStart + naturalWidth`. `>=` (not `>`) is intentional: a tab
-  // landing exactly at the marker's right edge IS valid — Word renders the
-  // body at that column with zero residual gap. §17.9.27.
+  // landing exactly at the marker's right edge IS valid — Word renders
+  // the body at that column with zero residual gap. §17.9.27.
+  const indent = attrs.indent;
   const indentLeft = indent?.left ?? 0;
   const firstLine = indent?.firstLine ?? 0;
-  const markerStartPx = indentLeft + firstLine;
+  const hanging = indent?.hanging ?? 0;
+  const markerStartPx =
+    hanging > 0 ? indentLeft - hanging : indentLeft + firstLine;
   const minBodyStart = markerStartPx + naturalWidth;
 
-  const firstCustomPast = (attrs.tabs ?? [])
+  // Build tab-stop candidates. For hanging lists, the right edge of the
+  // hanging slot (= indentLeft) is the implicit first tab stop after the
+  // marker — body wraps there. Add it explicitly so a fitting marker
+  // snaps to indentLeft rather than to a default-grid stop that happens
+  // to land inside the hanging slot.
+  const customTabs = (attrs.tabs ?? [])
     .filter((t) => t.val !== "clear" && t.val !== "bar")
-    .map((t) => t.pos * TWIPS_TO_PX)
-    .filter((px) => px >= minBodyStart)
+    .map((t) => t.pos * TWIPS_TO_PX);
+  if (hanging > 0) {
+    customTabs.push(indentLeft);
+  }
+
+  // For hanging lists, body must never land inside the hanging slot; clamp
+  // the search past indentLeft so the default grid can't fire there.
+  const searchStart =
+    hanging > 0 ? Math.max(minBodyStart, indentLeft) : minBodyStart;
+
+  const firstCustomPast = customTabs
+    .filter((px) => px >= searchStart)
     .sort((a, b) => a - b)[0];
 
   // Honor the document's `w:defaultTabStop` (§17.6.13) when stamped onto
@@ -117,9 +129,12 @@ export function getListMarkerInlineWidth(block: ParagraphBlock): number {
   const defaultTabStopTwips =
     attrs.defaultTabStopTwips ?? DEFAULT_TAB_STOP_TWIPS;
   const defaultTabStopPx = defaultTabStopTwips * TWIPS_TO_PX;
+  // `Math.ceil` preserves equality (§17.9.27): a tab landing exactly on
+  // `searchStart` IS valid; only advance to the next interval when
+  // `searchStart` is strictly between two stops.
   const firstGridPast =
     defaultTabStopPx > 0
-      ? (Math.floor(minBodyStart / defaultTabStopPx) + 1) * defaultTabStopPx
+      ? Math.ceil(searchStart / defaultTabStopPx) * defaultTabStopPx
       : undefined;
 
   // Closest wins — Word doesn't let a far custom tab override a closer
