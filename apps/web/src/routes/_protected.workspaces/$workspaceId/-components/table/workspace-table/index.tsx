@@ -96,6 +96,11 @@ export const WorkspaceTable = ({
     useState<ExpandedTableCell | null>(null);
   const [wrapperWidth, setWrapperWidth] = useState(0);
   const [verticalScrollbarWidth, setVerticalScrollbarWidth] = useState(0);
+  const [bottomRowFlashSeq, setBottomRowFlashSeq] = useState(0);
+
+  const flashBottomRow = useCallback(() => {
+    setBottomRowFlashSeq((seq) => seq + 1);
+  }, []);
 
   useEffect(() => {
     if (!expandedTableCell) {
@@ -546,9 +551,11 @@ export const WorkspaceTable = ({
             )}
             <TableEndFiller
               addPropertyColumn={addPropertyColumn}
+              onRequestUpload={flashBottomRow}
               renderColumns={renderColumns}
             />
             <BottomRow
+              flashSeq={bottomRowFlashSeq}
               table={table}
               onFolderCreated={setEditingEntityId}
               workspaceId={workspaceId}
