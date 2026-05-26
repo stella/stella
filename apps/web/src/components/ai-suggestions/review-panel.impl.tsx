@@ -330,13 +330,11 @@ export const ReviewPanelImpl = ({
     // Optimistic state — the card shows "Applying…" the instant the
     // user clicks. Without this the click feels dead because the
     // editor apply is synchronous and React hasn't painted between
-    // state mutations. Yield a frame before the actual apply so the
-    // "applying" status definitely renders even on fast machines.
+    // state mutations. Yield to the macrotask queue before the
+    // actual apply so the "applying" status can paint first.
     updateSuggestion(entityId, item.id, { status: "applying" });
     await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => {
-        resolve();
-      });
+      setTimeout(resolve, 0);
     });
     const outcome = applyPending(item);
     // Keep `pendingOperation` even after a successful accept so a

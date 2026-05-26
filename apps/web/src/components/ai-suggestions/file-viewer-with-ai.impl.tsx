@@ -17,7 +17,6 @@ import type { ReactNode, RefObject } from "react";
 import { useState } from "react";
 
 import type { DocxEditorRef } from "@stll/folio";
-import { cn } from "@stll/ui/lib/utils";
 
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
@@ -74,51 +73,12 @@ export type FileViewerWithAIProps = {
   children: ReactNode;
 };
 
-export function FileViewerWithAIImpl({
-  workspaceId,
-  chatThreadId,
-  activeFile,
-  activeExternal,
-  className,
-  docxEditable,
-  docxEditorRef,
-  requestDocxEditMode,
-  children,
-}: FileViewerWithAIProps) {
-  const overlayKey = [
-    chatThreadId ?? "mapped-file-chat",
-    workspaceId ?? "",
-    activeFile?.entityId ?? "",
-    activeFile?.fileFieldId ?? "",
-    activeExternal?.url ?? "",
-  ].join(":");
-
-  return (
-    <div
-      className={cn("relative h-full w-full", className)}
-      data-file-viewer-ai="true"
-    >
-      {children}
-      <FileChatOverlayHost
-        activeExternal={activeExternal}
-        activeFile={activeFile}
-        chatThreadId={chatThreadId}
-        docxEditable={docxEditable}
-        docxEditorRef={docxEditorRef}
-        key={overlayKey}
-        requestDocxEditMode={requestDocxEditMode}
-        workspaceId={workspaceId}
-      />
-    </div>
-  );
-}
-
 type FileChatOverlayHostProps = Omit<
   FileViewerWithAIProps,
   "children" | "className"
 >;
 
-const FileChatOverlayHost = ({
+export const FileChatOverlayHost = ({
   workspaceId,
   chatThreadId: initialChatThreadId,
   activeFile,

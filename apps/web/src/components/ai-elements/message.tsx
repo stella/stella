@@ -65,8 +65,17 @@ const LazyMessageResponse = lazy(async () => {
   return { default: m.MessageResponseImpl };
 });
 
+const MessageResponseFallback = ({
+  children,
+  className,
+}: MessageResponseProps) => (
+  <div className={cn("size-full whitespace-pre-wrap", className)}>
+    {children}
+  </div>
+);
+
 export const MessageResponse = (props: MessageResponseProps) => (
-  <Suspense fallback={null}>
+  <Suspense fallback={<MessageResponseFallback {...props} />}>
     <LazyMessageResponse {...props} />
   </Suspense>
 );

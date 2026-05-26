@@ -68,19 +68,30 @@ export const MessageResponseImpl = memo(
 
 const rehypePluginIds = new WeakMap<object, number>();
 let nextRehypePluginId = 0;
+
+const isPluginIdentity = (value: unknown): value is object =>
+  value !== null && (typeof value === "object" || typeof value === "function");
+
 const rehypePluginsKey = (
   rehypePlugins: MessageResponseProps["rehypePlugins"],
 ): string => {
-  if (!rehypePlugins) {
+  if (!rehypePlugins || rehypePlugins.length === 0) {
     return "no-rehype";
   }
-  let id = rehypePluginIds.get(rehypePlugins);
-  if (id === undefined) {
-    nextRehypePluginId += 1;
-    id = nextRehypePluginId;
-    rehypePluginIds.set(rehypePlugins, id);
-  }
-  return `rehype-${id}`;
+  const ids = rehypePlugins.map((plugin) => {
+    const target: unknown = Array.isArray(plugin) ? plugin.at(0) : plugin;
+    if (!isPluginIdentity(target)) {
+      return "unknown";
+    }
+    let id = rehypePluginIds.get(target);
+    if (id === undefined) {
+      nextRehypePluginId += 1;
+      id = nextRehypePluginId;
+      rehypePluginIds.set(target, id);
+    }
+    return id;
+  });
+  return `rehype-${ids.join("-")}`;
 };
 
 MessageResponseImpl.displayName = "MessageResponseImpl";
