@@ -48,6 +48,9 @@ export class ProseMirrorDocumentValidationError extends Error {
   }
 }
 
+const validDocumentCache = new WeakSet<PMNode>();
+const validNodeCache = new WeakSet<PMNode>();
+
 export const validateProseMirrorDocument = (
   doc: PMNode,
 ): ValidateProseMirrorDocumentResult => {
@@ -72,8 +75,13 @@ export const assertValidProseMirrorDocument = (
   doc: PMNode,
   context: string,
 ): void => {
+  if (validDocumentCache.has(doc)) {
+    return;
+  }
+
   const validation = validateProseMirrorDocument(doc);
   if (validation.valid) {
+    validDocumentCache.add(doc);
     return;
   }
 
@@ -92,6 +100,12 @@ const validateNode = (
   path: string,
   issues: ProseMirrorDocumentValidationIssue[],
 ): void => {
+  if (validNodeCache.has(node)) {
+    return;
+  }
+
+  const issueCountBeforeNode = issues.length;
+
   validateNodeAttrs(node, path, issues);
   validateMarks(node.marks, path, issues);
 
@@ -99,6 +113,10 @@ const validateNode = (
   node.forEach((child, _offset, index) => {
     validateNode(child, `${path}.content[${index}]`, issues);
   });
+
+  if (issues.length === issueCountBeforeNode) {
+    validNodeCache.add(node);
+  }
 };
 
 const validateNodeAttrs = (

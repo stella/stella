@@ -176,6 +176,35 @@ const SECTION_VERTICAL_ALIGNMENTS = [
   "bottom",
 ] as const;
 
+const paragraphAttrsCache = new WeakMap<PMNode, ParagraphAttrs>();
+const hardBreakAttrsCache = new WeakMap<PMNode, HardBreakAttrs>();
+const tableAttrsCache = new WeakMap<PMNode, TableAttrs>();
+const tableRowAttrsCache = new WeakMap<PMNode, TableRowAttrs>();
+const tableCellAttrsCache = new WeakMap<PMNode, TableCellAttrs>();
+const imageAttrsCache = new WeakMap<PMNode, ImageAttrs>();
+const fieldAttrsCache = new WeakMap<PMNode, FieldAttrs>();
+const mathAttrsCache = new WeakMap<PMNode, MathAttrs>();
+const sdtAttrsCache = new WeakMap<PMNode, SdtAttrs>();
+const shapeAttrsCache = new WeakMap<PMNode, ShapeAttrs>();
+const textBoxAttrsCache = new WeakMap<PMNode, TextBoxAttrs>();
+
+const underlineAttrsCache = new WeakMap<Mark, UnderlineAttrs>();
+const strikeAttrsCache = new WeakMap<Mark, StrikeAttrs>();
+const textColorAttrsCache = new WeakMap<Mark, TextColorAttrs>();
+const highlightAttrsCache = new WeakMap<Mark, HighlightAttrs>();
+const fontSizeAttrsCache = new WeakMap<Mark, FontSizeAttrs>();
+const fontFamilyAttrsCache = new WeakMap<Mark, FontFamilyAttrs>();
+const characterSpacingAttrsCache = new WeakMap<Mark, CharacterSpacingAttrs>();
+const emphasisMarkAttrsCache = new WeakMap<Mark, EmphasisMarkAttrs>();
+const footnoteRefAttrsCache = new WeakMap<Mark, FootnoteRefAttrs>();
+const commentAttrsCache = new WeakMap<Mark, CommentAttrs>();
+const trackedChangeAttrsCache = new WeakMap<Mark, TrackedChangeMarkAttrs>();
+const runFormattingOverrideAttrsCache = new WeakMap<
+  Mark,
+  RunFormattingOverrideAttrs
+>();
+const hyperlinkAttrsCache = new WeakMap<Mark, HyperlinkAttrs>();
+
 export const readParagraphAttrs = (
   node: PMNode,
 ): ReadProseMirrorAttrsResult<ParagraphAttrs> => {
@@ -347,7 +376,12 @@ export const readParagraphAttrs = (
 };
 
 export const expectParagraphAttrs = (node: PMNode): ParagraphAttrs =>
-  expectAttrs(readParagraphAttrs(node), "paragraph attrs");
+  expectCachedNodeAttrs(
+    node,
+    paragraphAttrsCache,
+    readParagraphAttrs,
+    "paragraph attrs",
+  );
 
 export const readHardBreakAttrs = (
   node: PMNode,
@@ -368,7 +402,12 @@ export const readHardBreakAttrs = (
 };
 
 export const expectHardBreakAttrs = (node: PMNode): HardBreakAttrs =>
-  expectAttrs(readHardBreakAttrs(node), "hard break attrs");
+  expectCachedNodeAttrs(
+    node,
+    hardBreakAttrsCache,
+    readHardBreakAttrs,
+    "hard break attrs",
+  );
 
 export const readTableAttrs = (
   node: PMNode,
@@ -413,7 +452,7 @@ export const readTableAttrs = (
 };
 
 export const expectTableAttrs = (node: PMNode): TableAttrs =>
-  expectAttrs(readTableAttrs(node), "table attrs");
+  expectCachedNodeAttrs(node, tableAttrsCache, readTableAttrs, "table attrs");
 
 export const readTableRowAttrs = (
   node: PMNode,
@@ -442,7 +481,12 @@ export const readTableRowAttrs = (
 };
 
 export const expectTableRowAttrs = (node: PMNode): TableRowAttrs =>
-  expectAttrs(readTableRowAttrs(node), "table row attrs");
+  expectCachedNodeAttrs(
+    node,
+    tableRowAttrsCache,
+    readTableRowAttrs,
+    "table row attrs",
+  );
 
 export const readTableCellAttrs = (
   node: PMNode,
@@ -515,7 +559,12 @@ export const readTableCellAttrs = (
 };
 
 export const expectTableCellAttrs = (node: PMNode): TableCellAttrs =>
-  expectAttrs(readTableCellAttrs(node), "table cell attrs");
+  expectCachedNodeAttrs(
+    node,
+    tableCellAttrsCache,
+    readTableCellAttrs,
+    "table cell attrs",
+  );
 
 export const readImageAttrs = (
   node: PMNode,
@@ -574,7 +623,7 @@ export const readImageAttrs = (
 };
 
 export const expectImageAttrs = (node: PMNode): ImageAttrs =>
-  expectAttrs(readImageAttrs(node), "image attrs");
+  expectCachedNodeAttrs(node, imageAttrsCache, readImageAttrs, "image attrs");
 
 export const readFieldAttrs = (
   node: PMNode,
@@ -606,7 +655,7 @@ export const readFieldAttrs = (
 };
 
 export const expectFieldAttrs = (node: PMNode): FieldAttrs =>
-  expectAttrs(readFieldAttrs(node), "field attrs");
+  expectCachedNodeAttrs(node, fieldAttrsCache, readFieldAttrs, "field attrs");
 
 export const readMathAttrs = (
   node: PMNode,
@@ -623,7 +672,7 @@ export const readMathAttrs = (
 };
 
 export const expectMathAttrs = (node: PMNode): MathAttrs =>
-  expectAttrs(readMathAttrs(node), "math attrs");
+  expectCachedNodeAttrs(node, mathAttrsCache, readMathAttrs, "math attrs");
 
 export const readSdtAttrs = (
   node: PMNode,
@@ -651,7 +700,7 @@ export const readSdtAttrs = (
 };
 
 export const expectSdtAttrs = (node: PMNode): SdtAttrs =>
-  expectAttrs(readSdtAttrs(node), "sdt attrs");
+  expectCachedNodeAttrs(node, sdtAttrsCache, readSdtAttrs, "sdt attrs");
 
 export const readShapeAttrs = (
   node: PMNode,
@@ -716,7 +765,7 @@ export const readShapeAttrs = (
 };
 
 export const expectShapeAttrs = (node: PMNode): ShapeAttrs =>
-  expectAttrs(readShapeAttrs(node), "shape attrs");
+  expectCachedNodeAttrs(node, shapeAttrsCache, readShapeAttrs, "shape attrs");
 
 export const readTextBoxAttrs = (
   node: PMNode,
@@ -765,7 +814,12 @@ export const readTextBoxAttrs = (
 };
 
 export const expectTextBoxAttrs = (node: PMNode): TextBoxAttrs =>
-  expectAttrs(readTextBoxAttrs(node), "text box attrs");
+  expectCachedNodeAttrs(
+    node,
+    textBoxAttrsCache,
+    readTextBoxAttrs,
+    "text box attrs",
+  );
 
 export const readUnderlineMarkAttrs = (
   mark: Mark,
@@ -787,7 +841,12 @@ export const readUnderlineMarkAttrs = (
 };
 
 export const expectUnderlineMarkAttrs = (mark: Mark): UnderlineAttrs =>
-  expectAttrs(readUnderlineMarkAttrs(mark), "underline attrs");
+  expectCachedMarkAttrs(
+    mark,
+    underlineAttrsCache,
+    readUnderlineMarkAttrs,
+    "underline attrs",
+  );
 
 export const readStrikeMarkAttrs = (
   mark: Mark,
@@ -802,7 +861,12 @@ export const readStrikeMarkAttrs = (
 };
 
 export const expectStrikeMarkAttrs = (mark: Mark): StrikeAttrs =>
-  expectAttrs(readStrikeMarkAttrs(mark), "strike attrs");
+  expectCachedMarkAttrs(
+    mark,
+    strikeAttrsCache,
+    readStrikeMarkAttrs,
+    "strike attrs",
+  );
 
 export const readTextColorMarkAttrs = (
   mark: Mark,
@@ -817,7 +881,12 @@ export const readTextColorMarkAttrs = (
 };
 
 export const expectTextColorMarkAttrs = (mark: Mark): TextColorAttrs =>
-  expectAttrs(readTextColorMarkAttrs(mark), "text color attrs");
+  expectCachedMarkAttrs(
+    mark,
+    textColorAttrsCache,
+    readTextColorMarkAttrs,
+    "text color attrs",
+  );
 
 export const readHighlightMarkAttrs = (
   mark: Mark,
@@ -838,7 +907,12 @@ export const readHighlightMarkAttrs = (
 };
 
 export const expectHighlightMarkAttrs = (mark: Mark): HighlightAttrs =>
-  expectAttrs(readHighlightMarkAttrs(mark), "highlight attrs");
+  expectCachedMarkAttrs(
+    mark,
+    highlightAttrsCache,
+    readHighlightMarkAttrs,
+    "highlight attrs",
+  );
 
 export const readFontSizeMarkAttrs = (
   mark: Mark,
@@ -853,7 +927,12 @@ export const readFontSizeMarkAttrs = (
 };
 
 export const expectFontSizeMarkAttrs = (mark: Mark): FontSizeAttrs =>
-  expectAttrs(readFontSizeMarkAttrs(mark), "font size attrs");
+  expectCachedMarkAttrs(
+    mark,
+    fontSizeAttrsCache,
+    readFontSizeMarkAttrs,
+    "font size attrs",
+  );
 
 export const readFontFamilyMarkAttrs = (
   mark: Mark,
@@ -880,7 +959,12 @@ export const readFontFamilyMarkAttrs = (
 };
 
 export const expectFontFamilyMarkAttrs = (mark: Mark): FontFamilyAttrs =>
-  expectAttrs(readFontFamilyMarkAttrs(mark), "font family attrs");
+  expectCachedMarkAttrs(
+    mark,
+    fontFamilyAttrsCache,
+    readFontFamilyMarkAttrs,
+    "font family attrs",
+  );
 
 export const readCharacterSpacingMarkAttrs = (
   mark: Mark,
@@ -900,7 +984,12 @@ export const readCharacterSpacingMarkAttrs = (
 export const expectCharacterSpacingMarkAttrs = (
   mark: Mark,
 ): CharacterSpacingAttrs =>
-  expectAttrs(readCharacterSpacingMarkAttrs(mark), "character spacing attrs");
+  expectCachedMarkAttrs(
+    mark,
+    characterSpacingAttrsCache,
+    readCharacterSpacingMarkAttrs,
+    "character spacing attrs",
+  );
 
 export const readEmphasisMarkAttrs = (
   mark: Mark,
@@ -921,7 +1010,12 @@ export const readEmphasisMarkAttrs = (
 };
 
 export const expectEmphasisMarkAttrs = (mark: Mark): EmphasisMarkAttrs =>
-  expectAttrs(readEmphasisMarkAttrs(mark), "emphasis mark attrs");
+  expectCachedMarkAttrs(
+    mark,
+    emphasisMarkAttrsCache,
+    readEmphasisMarkAttrs,
+    "emphasis mark attrs",
+  );
 
 export const readFootnoteRefMarkAttrs = (
   mark: Mark,
@@ -943,7 +1037,12 @@ export const readFootnoteRefMarkAttrs = (
 };
 
 export const expectFootnoteRefMarkAttrs = (mark: Mark): FootnoteRefAttrs =>
-  expectAttrs(readFootnoteRefMarkAttrs(mark), "footnote reference attrs");
+  expectCachedMarkAttrs(
+    mark,
+    footnoteRefAttrsCache,
+    readFootnoteRefMarkAttrs,
+    "footnote reference attrs",
+  );
 
 export const readCommentMarkAttrs = (
   mark: Mark,
@@ -958,7 +1057,12 @@ export const readCommentMarkAttrs = (
 };
 
 export const expectCommentMarkAttrs = (mark: Mark): CommentAttrs =>
-  expectAttrs(readCommentMarkAttrs(mark), "comment attrs");
+  expectCachedMarkAttrs(
+    mark,
+    commentAttrsCache,
+    readCommentMarkAttrs,
+    "comment attrs",
+  );
 
 export const readTrackedChangeMarkAttrs = (
   mark: Mark,
@@ -989,7 +1093,12 @@ export const readTrackedChangeMarkAttrs = (
 export const expectTrackedChangeMarkAttrs = (
   mark: Mark,
 ): TrackedChangeMarkAttrs =>
-  expectAttrs(readTrackedChangeMarkAttrs(mark), "tracked change attrs");
+  expectCachedMarkAttrs(
+    mark,
+    trackedChangeAttrsCache,
+    readTrackedChangeMarkAttrs,
+    "tracked change attrs",
+  );
 
 export const readRunFormattingOverrideMarkAttrs = (
   mark: Mark,
@@ -1015,8 +1124,10 @@ export const readRunFormattingOverrideMarkAttrs = (
 export const expectRunFormattingOverrideMarkAttrs = (
   mark: Mark,
 ): RunFormattingOverrideAttrs =>
-  expectAttrs(
-    readRunFormattingOverrideMarkAttrs(mark),
+  expectCachedMarkAttrs(
+    mark,
+    runFormattingOverrideAttrsCache,
+    readRunFormattingOverrideMarkAttrs,
     "run formatting override attrs",
   );
 
@@ -1040,7 +1151,12 @@ export const readHyperlinkMarkAttrs = (
 };
 
 export const expectHyperlinkMarkAttrs = (mark: Mark): HyperlinkAttrs =>
-  expectAttrs(readHyperlinkMarkAttrs(mark), "hyperlink attrs");
+  expectCachedMarkAttrs(
+    mark,
+    hyperlinkAttrsCache,
+    readHyperlinkMarkAttrs,
+    "hyperlink attrs",
+  );
 
 type NodeAttrReader<T extends object> = (
   node: PMNode,
@@ -1144,6 +1260,38 @@ const expectAttrs = <T>(
     .join("\n");
   panic(`Invalid ProseMirror ${label}:\n${details}`);
 };
+
+function expectCachedNodeAttrs<T extends object>(
+  node: PMNode,
+  cache: WeakMap<PMNode, T>,
+  reader: (node: PMNode) => ReadProseMirrorAttrsResult<T>,
+  label: string,
+): T {
+  const cached = cache.get(node);
+  if (cached) {
+    return cached;
+  }
+
+  const value = expectAttrs(reader(node), label);
+  cache.set(node, value);
+  return value;
+}
+
+function expectCachedMarkAttrs<T extends object>(
+  mark: Mark,
+  cache: WeakMap<Mark, T>,
+  reader: (mark: Mark) => ReadProseMirrorAttrsResult<T>,
+  label: string,
+): T {
+  const cached = cache.get(mark);
+  if (cached) {
+    return cached;
+  }
+
+  const value = expectAttrs(reader(mark), label);
+  cache.set(mark, value);
+  return value;
+}
 
 const expectNodeType = (
   node: PMNode,
