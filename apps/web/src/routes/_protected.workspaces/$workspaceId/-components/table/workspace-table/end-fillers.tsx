@@ -20,69 +20,53 @@ import type { EndFillerInput } from "@/routes/_protected.workspaces/$workspaceId
 type TableEndFillerProps = {
   renderColumns: Column<TableTreeNode>[];
   addPropertyColumn: Column<TableTreeNode> | null;
-  onRequestUpload?: (() => void) | undefined;
 };
 
 export const TableEndFiller = ({
   renderColumns,
   addPropertyColumn,
-  onRequestUpload,
-}: TableEndFillerProps) => {
-  const handleRequestUpload = (event: React.SyntheticEvent) => {
-    if (!onRequestUpload) {
-      return;
-    }
-    event.preventDefault();
-    onRequestUpload();
-  };
-
-  return (
-    <WorkspaceGridRow
-      className="min-h-0 flex-1"
-      onContextMenu={handleRequestUpload}
-      onDoubleClick={handleRequestUpload}
-    >
-      {renderColumns.map((column, index) => (
-        <WorkspaceGridCell
-          className={cn(
-            "border-b-0",
-            isPinnedBoundaryColumn(column) && "border-e-0",
-          )}
-          key={column.id}
-          role="presentation"
-          style={{
-            gridColumn: index + 1,
-            ...getGridPinningStyles(column),
-            ...tableEndFillerCellStyle,
-          }}
-        >
-          <PinnedBoundary column={column} />
-        </WorkspaceGridCell>
-      ))}
+}: TableEndFillerProps) => (
+  <WorkspaceGridRow className="pointer-events-none min-h-0 flex-1">
+    {renderColumns.map((column, index) => (
       <WorkspaceGridCell
-        className={cn("border-b-0 p-0", addPropertyColumn && "border-e-0")}
+        className={cn(
+          "border-b-0",
+          isPinnedBoundaryColumn(column) && "border-e-0",
+        )}
+        key={column.id}
         role="presentation"
         style={{
-          gridColumn: getEndFillerGridColumn({
-            renderColumns,
-            addPropertyColumn,
-          }),
+          gridColumn: index + 1,
+          ...getGridPinningStyles(column),
+          ...tableEndFillerCellStyle,
+        }}
+      >
+        <PinnedBoundary column={column} />
+      </WorkspaceGridCell>
+    ))}
+    <WorkspaceGridCell
+      className={cn("border-b-0 p-0", addPropertyColumn && "border-e-0")}
+      role="presentation"
+      style={{
+        gridColumn: getEndFillerGridColumn({
+          renderColumns,
+          addPropertyColumn,
+        }),
+        ...tableEndFillerCellStyle,
+      }}
+    />
+    {addPropertyColumn && (
+      <WorkspaceGridCell
+        className="border-s-2 border-e-2 border-b-0 p-0"
+        data-add-property-surface
+        style={{
+          ...getGridPinningStyles(addPropertyColumn),
           ...tableEndFillerCellStyle,
         }}
       />
-      {addPropertyColumn && (
-        <WorkspaceGridCell
-          className="border-s-2 border-e-2 border-b-0 p-0"
-          data-add-property-surface
-          style={{
-            ...getGridPinningStyles(addPropertyColumn),
-            ...tableEndFillerCellStyle,
-          }}
-        />
-      )}
-    </WorkspaceGridRow>
-  );
-};
+    )}
+  </WorkspaceGridRow>
+);
 
 type RowEndFillerCellProps = EndFillerInput & {
   selected: boolean;
