@@ -90,9 +90,46 @@ describe("measureParagraph reserves the marker's tab-stop footprint", () => {
     });
   });
 
-  // Regression: hanging-indent lists must NOT subtract the marker width a
-  // second time — the hanging slot already widens baseFirstLineWidth via
-  // firstLineOffset (= firstLine − hanging is negative when hanging > 0).
+  // Regression for bot review #460 (codex P1): on a hanging-indent list
+  // with `w:suff="space"` or `w:suff="nothing"`, the painter applies the
+  // marker's natural width (< hanging) as `min-width`, so body text starts
+  // BEFORE indentLeft. The measurer must subtract the same value from the
+  // first-line budget. The previous "subtract only the excess past hanging"
+  // logic did nothing here and overestimated by `markerInlineWidth`,
+  // delaying line wrap and producing right-edge overflow.
+  test("hanging-indent + non-tab suffix subtracts the marker's actual footprint", () => {
+    withFakeTextMeasure(() => {
+      const block: ParagraphBlock = {
+        kind: "paragraph",
+        id: "p",
+        runs: [
+          // 19 'a' chars × 10 px = 190 px of body text.
+          { kind: "text", text: "aaaaaaaaaaaaaaaaaaa" },
+        ],
+        attrs: {
+          defaultFontSize: 11,
+          defaultFontFamily: "Calibri",
+          listMarker: "1.",
+          listMarkerSuffix: "nothing",
+          // Hanging slot = 100 px; first-line content area = 200 px.
+          indent: { left: 100, hanging: 100 },
+        },
+      };
+
+      // maxWidth = 200. First line content area = bodyContentWidth + hanging
+      //                                         = 100 + 100 = 200.
+      // Marker footprint (suff=nothing) = naturalWidth("1.") = 20 px.
+      // Correct first-line text budget = 200 − 20 = 180 px.
+      // 19 'a's = 190 px > 180 → must wrap to ≥ 2 lines.
+      const measure = measureParagraph(block, 200);
+      expect(measure.lines.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  // Regression: hanging-indent + suff=tab (the common case) — the marker
+  // exactly fills the hanging slot, so subtracting `markerInlineWidth`
+  // must cancel the `+ hanging` widening from `firstLineOffset`. Net text
+  // budget = bodyContentWidth, same as subsequent lines.
   test("hanging-indent list does not double-subtract the marker", () => {
     withFakeTextMeasure(() => {
       const block: ParagraphBlock = {
