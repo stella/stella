@@ -5,7 +5,6 @@ import {
   useInfiniteQuery,
   useQuery,
   useQueryClient,
-  useSuspenseQuery,
 } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -46,7 +45,6 @@ import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
-import { ChatWebSearchToggle } from "@/routes/_protected.chat/-components/chat-web-search-toggle";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
@@ -98,22 +96,6 @@ function ChatIndex() {
   const anonymized = useChatAnonymized(threadRef);
   const setAnonymized = useSetChatAnonymized(threadRef);
   const getSendMode = useEffectEvent(() => getChatSendMode(threadRef));
-  // Same shape as the per-thread page — the draft thread is not in
-  // the DB yet so allowMissingThread is required. The endpoint
-  // returns `webSearchAvailable` from env/org gates so we can hide
-  // the toggle in deployments where web search is off.
-  const { data: chatThreadData } = useSuspenseQuery(
-    chatThreadOptions({
-      activeOrganizationId,
-      key: threadRef,
-      context: {
-        allowMissingThread: true,
-        getUserContext,
-        getContextMatterIds: () => contextMatterIds,
-        getSendMode,
-      },
-    }),
-  );
   const openInspectorChat = useInspectorStore((s) => s.openChat);
   const [contextMatterIds, setContextMatterIds] = useState<string[]>([]);
   const getContextMatterIds = useEffectEvent(() => contextMatterIds);
@@ -215,12 +197,6 @@ function ChatIndex() {
           onChange={setContextMatterIds}
         />
         <div className="flex items-center gap-1">
-          {chatThreadData.webSearchAvailable && (
-            <ChatWebSearchToggle
-              enabled={chatThreadData.webSearchEnabled}
-              threadRef={threadRef}
-            />
-          )}
           <ChatAnonymizedToggle enabled={anonymized} onChange={setAnonymized} />
           <Tooltip
             content={t("chat.moveToSide")}
