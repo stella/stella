@@ -492,33 +492,7 @@ export const StreamdownMentionLink = ({
 
   const httpUrl = getHttpUrl(href);
   if (httpUrl) {
-    return (
-      <button
-        className={cn(
-          "text-foreground decoration-border underline",
-          "underline-offset-2 transition-colors",
-          "hover:decoration-foreground cursor-pointer",
-        )}
-        onClick={() => {
-          const source = useExternalSourceStore
-            .getState()
-            .getSource(httpUrl.toString());
-          useInspectorStore.getState().openExternal({
-            url: httpUrl.toString(),
-            connectorSlug: source?.connectorSlug,
-            iconHref: source?.iconHref,
-            label: getPlainText(children) ?? source?.title ?? httpUrl.hostname,
-            provider: source?.provider,
-            snippet: source?.snippet,
-            sourceToolName: source?.sourceToolName,
-            text: source?.text,
-          });
-        }}
-        type="button"
-      >
-        {children}
-      </button>
-    );
+    return <FaviconCitationChip children={children} url={httpUrl} />;
   }
 
   return (
@@ -639,4 +613,65 @@ const pickActiveDocxTabId = (
     (tab) => tab.type === "pdf" && tab.mimeType === DOCX_MIME,
   );
   return fallback ? fallback.id : null;
+};
+
+const FaviconCitationChip = ({
+  children,
+  url,
+}: {
+  children: React.ReactNode;
+  url: URL;
+}) => {
+  const hostname = url.hostname.replace(/^www\./u, "");
+  const label = getPlainText(children) ?? hostname;
+  const handleClick = () => {
+    const source = useExternalSourceStore.getState().getSource(url.toString());
+    useInspectorStore.getState().openExternal({
+      url: url.toString(),
+      connectorSlug: source?.connectorSlug,
+      iconHref: source?.iconHref,
+      label: source?.title ?? label,
+      provider: source?.provider,
+      snippet: source?.snippet,
+      sourceToolName: source?.sourceToolName,
+      text: source?.text,
+    });
+  };
+  return (
+    <button
+      aria-label={`${label} (${hostname})`}
+      className={cn(
+        "border-border bg-muted/30 hover:bg-muted/60",
+        "focus-visible:ring-ring/50 align-baseline",
+        "ms-0.5 inline-flex size-4 cursor-pointer items-center",
+        "justify-center overflow-hidden rounded-full border",
+        "focus-visible:ring-2 focus-visible:outline-none",
+        "translate-y-[-1px] [vertical-align:middle]",
+      )}
+      onClick={handleClick}
+      title={label}
+      type="button"
+    >
+      <FaviconImage hostname={hostname} />
+    </button>
+  );
+};
+
+const FaviconImage = ({ hostname }: { hostname: string }) => {
+  // Google's public favicon endpoint resolves the actual page icon
+  // (handles redirects, missing /favicon.ico, etc.) and serves
+  // browser-cached PNGs. Falling back to the source domain's own
+  // /favicon.ico would 404 on a lot of legal sites.
+  const src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=32`;
+  return (
+    <img
+      alt=""
+      aria-hidden="true"
+      className="size-3 object-contain"
+      height={12}
+      loading="lazy"
+      src={src}
+      width={12}
+    />
+  );
 };

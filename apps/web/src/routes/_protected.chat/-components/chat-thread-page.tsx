@@ -332,7 +332,7 @@ export const ChatThreadPage = ({
                 />
               )}
             </ConversationContent>
-            {messages.length > 0 && <ConversationScrollButton />}
+            <ConversationScrollButton />
           </Conversation>
 
           <ChatAnonymizationLayer

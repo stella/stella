@@ -9,6 +9,7 @@ type StickToBottomContext = {
   scrollRef: RefObject<HTMLDivElement | null>;
   contentRef: RefObject<HTMLDivElement | null>;
   isAtBottom: boolean;
+  isScrollable: boolean;
   scrollToBottom: () => void;
 };
 
@@ -61,6 +62,8 @@ export const useStickToBottom = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
+  /** Whether the scroll container has more content than fits the viewport. */
+  const [isScrollable, setIsScrollable] = useState(false);
   /** Tracks whether the user intentionally scrolled up. */
   const userScrolledUp = useRef(false);
   /**
@@ -158,14 +161,15 @@ export const useStickToBottom = () => {
       // can force a synchronous layout. Matching the
       // original library's synchronization approach.
       requestAnimationFrame(() => {
+        const el = scrollRef.current;
+        if (!el) {
+          return;
+        }
+        setIsScrollable(el.scrollHeight > el.clientHeight);
         if (userScrolledUp.current) {
           return;
         }
         if (isSelectingInside(scrollRef.current)) {
-          return;
-        }
-        const el = scrollRef.current;
-        if (!el) {
           return;
         }
         el.scrollTo({
@@ -180,5 +184,5 @@ export const useStickToBottom = () => {
     return () => observer.disconnect();
   }, []);
 
-  return { scrollRef, contentRef, isAtBottom, scrollToBottom };
+  return { scrollRef, contentRef, isAtBottom, isScrollable, scrollToBottom };
 };
