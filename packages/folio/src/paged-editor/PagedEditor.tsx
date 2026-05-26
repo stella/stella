@@ -382,6 +382,7 @@ const DEFERRED_KEYDOWN_REPLAY_KEYS = new Set([
   "Home",
   "PageDown",
   "PageUp",
+  "Tab",
 ]);
 
 const isPlainTextInputEvent = (event: React.KeyboardEvent): boolean =>
@@ -391,8 +392,17 @@ const isPlainTextInputEvent = (event: React.KeyboardEvent): boolean =>
   !event.metaKey &&
   !event.nativeEvent.isComposing;
 
-const isReplayableDeferredKeyDown = (event: React.KeyboardEvent): boolean =>
-  !event.nativeEvent.isComposing && DEFERRED_KEYDOWN_REPLAY_KEYS.has(event.key);
+const isDeferredEditorKeyDown = (event: React.KeyboardEvent): boolean => {
+  if (event.nativeEvent.isComposing) {
+    return true;
+  }
+
+  if (DEFERRED_KEYDOWN_REPLAY_KEYS.has(event.key)) {
+    return true;
+  }
+
+  return isReadOnlyEditKey(event);
+};
 
 const toDeferredKeyboardEventInit = (
   event: React.KeyboardEvent,
@@ -403,6 +413,7 @@ const toDeferredKeyboardEventInit = (
   code: event.code,
   composed: true,
   ctrlKey: event.ctrlKey,
+  isComposing: event.nativeEvent.isComposing,
   key: event.key,
   location: event.location,
   metaKey: event.metaKey,
@@ -5259,7 +5270,7 @@ export function PagedEditor(
             return;
           }
 
-          if (isReplayableDeferredKeyDown(e)) {
+          if (isDeferredEditorKeyDown(e)) {
             e.preventDefault();
             replayDeferredKeyDown(view, toDeferredKeyboardEventInit(e));
             return;
@@ -5272,7 +5283,7 @@ export function PagedEditor(
           return;
         }
 
-        if (isReplayableDeferredKeyDown(e)) {
+        if (isDeferredEditorKeyDown(e)) {
           queueHiddenEditorKeyDown(e);
           e.preventDefault();
         }
