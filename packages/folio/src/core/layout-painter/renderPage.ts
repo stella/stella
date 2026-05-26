@@ -2016,7 +2016,8 @@ function buildPageRenderArgs(
  */
 type PageShellState = {
   element: HTMLElement;
-  fingerprint: string;
+  fingerprint: string | null;
+  renderFingerprint: string | null;
 };
 
 /**
@@ -2050,6 +2051,25 @@ export function computePageFingerprint(
   page: Page,
   blockLookup?: BlockLookup,
 ): string {
+  return computePageFingerprintInternal(page, blockLookup, {
+    includePmPositions: true,
+  });
+}
+
+function computePageRenderFingerprint(
+  page: Page,
+  blockLookup?: BlockLookup,
+): string {
+  return computePageFingerprintInternal(page, blockLookup, {
+    includePmPositions: false,
+  });
+}
+
+function computePageFingerprintInternal(
+  page: Page,
+  blockLookup: BlockLookup | undefined,
+  options: { includePmPositions: boolean },
+): string {
   const parts: string[] = [];
 
   // Page-level properties
@@ -2065,10 +2085,10 @@ export function computePageFingerprint(
   // Each fragment's stable properties
   for (const frag of page.fragments) {
     let fp = `${frag.kind}:${frag.blockId},${frag.x},${frag.y},${frag.width},${frag.height}`;
-    if (frag.pmStart !== undefined) {
+    if (options.includePmPositions && frag.pmStart !== undefined) {
       fp += `,ps:${frag.pmStart}`;
     }
-    if (frag.pmEnd !== undefined) {
+    if (options.includePmPositions && frag.pmEnd !== undefined) {
       fp += `,pe:${frag.pmEnd}`;
     }
 
@@ -2080,7 +2100,7 @@ export function computePageFingerprint(
     if (blockLookup) {
       const block = blockLookup.get(String(frag.blockId))?.block;
       const annotationFingerprint = block
-        ? computeAnnotationFingerprint(block)
+        ? computeAnnotationFingerprint(block, options.includePmPositions)
         : "";
       if (annotationFingerprint) {
         fp += `,ann:${annotationFingerprint}`;
@@ -2097,9 +2117,12 @@ export function computePageFingerprint(
   return parts.join("|");
 }
 
-function computeAnnotationFingerprint(block: FlowBlock): string {
+function computeAnnotationFingerprint(
+  block: FlowBlock,
+  includePmPositions: boolean,
+): string {
   const parts: string[] = [];
-  collectAnnotationFingerprint(block, parts);
+  collectAnnotationFingerprint(block, parts, includePmPositions);
   return parts.join(";");
 }
 
@@ -2117,7 +2140,11 @@ function computeContentFingerprint(block: FlowBlock): string {
   return parts.join(";");
 }
 
-function collectAnnotationFingerprint(block: FlowBlock, parts: string[]): void {
+function collectAnnotationFingerprint(
+  block: FlowBlock,
+  parts: string[],
+  includePmPositions: boolean,
+): void {
   if (block.kind === "paragraph") {
     for (let index = 0; index < block.runs.length; index++) {
       const run = block.runs[index];
@@ -2139,7 +2166,9 @@ function collectAnnotationFingerprint(block: FlowBlock, parts: string[]): void {
       }
       if (runParts.length > 0) {
         parts.push(
-          `${index}:${run.pmStart ?? ""}-${run.pmEnd ?? ""}:${runParts.join("|")}`,
+          includePmPositions
+            ? `${index}:${run.pmStart ?? ""}-${run.pmEnd ?? ""}:${runParts.join("|")}`
+            : `${index}:${runParts.join("|")}`,
         );
       }
     }
@@ -2150,7 +2179,7 @@ function collectAnnotationFingerprint(block: FlowBlock, parts: string[]): void {
     for (const row of block.rows) {
       for (const cell of row.cells) {
         for (const child of cell.blocks) {
-          collectAnnotationFingerprint(child, parts);
+          collectAnnotationFingerprint(child, parts, includePmPositions);
         }
       }
     }
@@ -2159,7 +2188,7 @@ function collectAnnotationFingerprint(block: FlowBlock, parts: string[]): void {
 
   if (block.kind === "textBox") {
     for (const child of block.content) {
-      collectAnnotationFingerprint(child, parts);
+      collectAnnotationFingerprint(child, parts, includePmPositions);
     }
   }
 }
@@ -2369,7 +2398,9 @@ function applyContainerStyles(container: HTMLElement, pageGap: number): void {
  * Number of pages to render above and below the visible area.
  * Keeps nearby pages ready for smooth scrolling.
  */
-const VIRTUALIZATION_BUFFER = 2;
+const VIRTUALIZATION_BUFFER = 1;
+const VIRTUALIZATION_ROOT_MARGIN_PX = 1000;
+const INITIAL_EAGER_RENDER_PAGES = 3;
 
 /**
  * Minimum page count before virtualization kicks in.
@@ -2415,12 +2446,6 @@ export function renderPages(
     const prevDataMap = prevState.pageDataMap;
     const observer = pc.__pageObserver;
 
-    // Compute new fingerprints
-    const newFingerprints: string[] = [];
-    for (const page of pages) {
-      newFingerprints.push(computePageFingerprint(page, options.blockLookup));
-    }
-
     // If total page count changed, NUMPAGES fields in headers/footers are stale.
     // Force re-render of all currently-rendered pages.
     const totalPagesChanged = prevState.totalPages !== totalPages;
@@ -2429,37 +2454,58 @@ export function renderPages(
     const commonCount = Math.min(prevShells.length, pages.length);
     for (let i = 0; i < commonCount; i++) {
       const prev = prevShells[i]!; // SAFETY: i < commonCount <= prevShells.length
-      const newFp = newFingerprints[i]!; // SAFETY: i < commonCount <= pages.length
+      const page = pages[i]!; // SAFETY: i < commonCount <= pages.length
+      const data = prevDataMap.get(prev.element);
+      if (!data) {
+        continue;
+      }
+
+      const oldPage = data.page;
+      data.page = page;
+
+      if (!data.rendered) {
+        prev.fingerprint = null;
+        prev.renderFingerprint = null;
+        applyPageStyles(prev.element, page.size.w, page.size.h, options);
+        syncPageBorderOverlay(
+          prev.element,
+          page,
+          options,
+          options.document ?? document,
+        );
+        prev.element.dataset["pageNumber"] = String(page.number);
+        continue;
+      }
+
+      const newFp = computePageFingerprint(page, options.blockLookup);
 
       if (prev.fingerprint === newFp && !totalPagesChanged) {
-        // Page unchanged — update data map with new page data (references may differ)
-        const data = prevDataMap.get(prev.element);
-        if (data) {
-          data.page = pages[i]!; // SAFETY: i < commonCount <= pages.length
-        }
+        // Page unchanged — data map already points at the fresh page object.
         continue;
       }
 
       // Page changed — update the shell
       const shell = prev.element;
-      const data = prevDataMap.get(shell);
+      const newRenderFp = computePageRenderFingerprint(
+        page,
+        options.blockLookup,
+      );
 
-      // Update data map entry
-      if (data) {
-        data.page = pages[i]!; // SAFETY: i < commonCount <= pages.length
+      const renderChanged =
+        totalPagesChanged || prev.renderFingerprint !== newRenderFp;
+      const positionsSynced =
+        !renderChanged && syncRenderedPmPositionData(shell, oldPage, data.page);
 
-        if (data.rendered) {
-          // Surgically replace only the content area, preserving header/footer
-          repopulatePageContent(shell, prevDataMap, totalPages, options);
-        }
-        // If not rendered, it will be populated when it scrolls into view
+      if (!positionsSynced) {
+        // Surgically replace only the content area, preserving header/footer
+        repopulatePageContent(shell, prevDataMap, totalPages, options);
       }
 
       // Update fingerprint
       prev.fingerprint = newFp;
+      prev.renderFingerprint = newRenderFp;
 
       // Update page styles in case size changed
-      const page = pages[i]!; // SAFETY: i < commonCount <= pages.length
       applyPageStyles(shell, page.size.w, page.size.h, options);
       syncPageBorderOverlay(shell, page, options, options.document ?? document);
       shell.dataset["pageNumber"] = String(page.number);
@@ -2478,7 +2524,11 @@ export function renderPages(
         syncPageBorderOverlay(pageEl, page, options, doc);
         container.append(pageEl);
 
-        prevShells.push({ element: pageEl, fingerprint: newFingerprints[i]! }); // SAFETY: i < pages.length
+        prevShells.push({
+          element: pageEl,
+          fingerprint: null,
+          renderFingerprint: null,
+        });
         prevDataMap.set(pageEl, { page, index: i, rendered: false });
 
         if (observer) {
@@ -2532,11 +2582,9 @@ export function renderPages(
 
   // Build all page shells
   const pageShells: HTMLElement[] = [];
-  const fingerprints: string[] = [];
 
   for (let i = 0; i < pages.length; i++) {
     const page = pages[i]!; // SAFETY: i < pages.length
-    fingerprints.push(computePageFingerprint(page, options.blockLookup));
 
     if (!useVirtualization) {
       // Small document: render all pages eagerly
@@ -2672,7 +2720,7 @@ export function renderPages(
     },
     {
       root: null,
-      rootMargin: "1500px 0px 1500px 0px",
+      rootMargin: `${VIRTUALIZATION_ROOT_MARGIN_PX}px 0px ${VIRTUALIZATION_ROOT_MARGIN_PX}px 0px`,
     },
   );
 
@@ -2685,9 +2733,10 @@ export function renderPages(
   // so the populatePageShell calls below can find state if needed.
   pc.__pageObserver = observer;
   pc.__pageRenderState = {
-    pageStates: pageShells.map((el, i) => ({
+    pageStates: pageShells.map((el) => ({
       element: el,
-      fingerprint: fingerprints[i]!, // SAFETY: fingerprints built with same indices as pageShells
+      fingerprint: null,
+      renderFingerprint: null,
     })),
     totalPages,
     optionsHash: currentOptionsHash,
@@ -2696,7 +2745,7 @@ export function renderPages(
   };
 
   // Eagerly render the first few pages so the initial view isn't blank
-  const initialRenderCount = Math.min(pages.length, VIRTUALIZATION_BUFFER + 3);
+  const initialRenderCount = Math.min(pages.length, INITIAL_EAGER_RENDER_PAGES);
   for (let i = 0; i < initialRenderCount; i++) {
     populatePageShell(pageShells[i]!, pageDataMap, totalPages, options); // SAFETY: i < initialRenderCount <= pages.length
   }
@@ -2740,6 +2789,7 @@ function populatePageShell(
   }
 
   data.rendered = true;
+  syncPageShellFingerprints(shell, data, options);
 }
 
 /**
@@ -2782,6 +2832,126 @@ function repopulatePageContent(
     data.rendered = false;
     populatePageShell(shell, pageDataMap, totalPages, options);
   }
+}
+
+function syncRenderedPmPositionData(
+  shell: HTMLElement,
+  oldPage: Page,
+  newPage: Page,
+): boolean {
+  const delta = getUniformPagePositionDelta(oldPage, newPage);
+  if (delta === null) {
+    return false;
+  }
+  if (delta === 0) {
+    return true;
+  }
+
+  for (const element of shell.querySelectorAll<HTMLElement>(
+    "[data-pm-start], [data-pm-end], [data-table-pm-start]",
+  )) {
+    shiftNumericDatasetValue(element, "pmStart", delta);
+    shiftNumericDatasetValue(element, "pmEnd", delta);
+    shiftNumericDatasetValue(element, "tablePmStart", delta);
+  }
+  return true;
+}
+
+function getUniformPagePositionDelta(
+  oldPage: Page,
+  newPage: Page,
+): number | null {
+  if (oldPage.fragments.length !== newPage.fragments.length) {
+    return null;
+  }
+
+  let delta: number | null = null;
+  for (let i = 0; i < oldPage.fragments.length; i++) {
+    const oldFragment = oldPage.fragments[i];
+    const newFragment = newPage.fragments[i];
+    if (!oldFragment || !newFragment) {
+      return null;
+    }
+    if (
+      oldFragment.kind !== newFragment.kind ||
+      oldFragment.blockId !== newFragment.blockId
+    ) {
+      return null;
+    }
+
+    const startDelta = readPositionDelta(
+      oldFragment.pmStart,
+      newFragment.pmStart,
+    );
+    if (startDelta !== null) {
+      if (delta !== null && delta !== startDelta) {
+        return null;
+      }
+      delta = startDelta;
+    }
+
+    const endDelta = readPositionDelta(oldFragment.pmEnd, newFragment.pmEnd);
+    if (endDelta !== null) {
+      if (delta !== null && delta !== endDelta) {
+        return null;
+      }
+      delta = endDelta;
+    }
+  }
+
+  return delta;
+}
+
+function readPositionDelta(
+  previous: number | undefined,
+  next: number | undefined,
+): number | null {
+  if (previous === undefined && next === undefined) {
+    return null;
+  }
+  if (previous === undefined || next === undefined) {
+    return null;
+  }
+  return next - previous;
+}
+
+function shiftNumericDatasetValue(
+  element: HTMLElement,
+  key: "pmEnd" | "pmStart" | "tablePmStart",
+  delta: number,
+): void {
+  const value = element.dataset[key];
+  if (value === undefined) {
+    return;
+  }
+
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return;
+  }
+
+  element.dataset[key] = String(numeric + delta);
+}
+
+function syncPageShellFingerprints(
+  shell: HTMLElement,
+  data: { page: Page; index: number },
+  options: FullPageOptions,
+): void {
+  const container = shell.parentElement as PageContainer | null;
+  const pageState = container?.__pageRenderState?.pageStates[data.index];
+  if (!pageState || pageState.element !== shell) {
+    return;
+  }
+
+  pageState.fingerprint = computePageFingerprint(
+    data.page,
+    options.blockLookup,
+  );
+  pageState.renderFingerprint = computePageRenderFingerprint(
+    data.page,
+    options.blockLookup,
+  );
 }
 
 /**
@@ -2851,4 +3021,11 @@ function depopulatePageShell(
 
   shell.innerHTML = "";
   data.rendered = false;
+
+  const container = shell.parentElement as PageContainer | null;
+  const pageState = container?.__pageRenderState?.pageStates[data.index];
+  if (pageState?.element === shell) {
+    pageState.fingerprint = null;
+    pageState.renderFingerprint = null;
+  }
 }

@@ -103,6 +103,7 @@ import type {
 // Table commands (for quick-action insert buttons)
 import { addRowBelow, addColumnRight } from "../core/prosemirror";
 import {
+  expectFontFamilyMarkAttrs,
   expectImageAttrs,
   expectTableAttrs,
   expectTableCellAttrs,
@@ -151,8 +152,11 @@ import {
 import type { DirtyRange } from "./incrementalMeasure";
 import {
   recordLayoutComplete,
+  recordLayoutError,
+  recordLayoutPhase,
   recordMeasureBlock,
 } from "./layoutInstrumentation";
+import type { LayoutPhase, LayoutRunReason } from "./layoutInstrumentation";
 // Selection sync
 import { LayoutSelectionGate } from "./LayoutSelectionGate";
 import { isReadOnlyEditKey } from "./readOnlyEditAttempt";
@@ -339,6 +343,10 @@ const TABLE_INSERT_EDGE_PROXIMITY = 30;
 const TABLE_INSERT_HIDE_DELAY = 200;
 /** Delay before converting PM state back to the Folio document model. */
 const DOCUMENT_CHANGE_NOTIFY_DELAY = 250;
+/** Short window for coalescing rapid typing transactions into one visual layout. */
+const TRANSACTION_LAYOUT_DEBOUNCE_MS = 32;
+/** Upper bound for how long visible layout can trail the hidden editor. */
+const TRANSACTION_LAYOUT_MAX_DELAY_MS = 96;
 /** Keep the visual caret hidden briefly while typed content relayouts. */
 const SELECTION_REVEAL_AFTER_INPUT_DELAY = 120;
 
@@ -403,6 +411,30 @@ type RemoteSelectionOverlayProps = {
   zoom: number;
 };
 
+type LayoutInputSignatureOptions = {
+  columns: ColumnLayout | undefined;
+  contentWidth: number;
+  defaultTabStop: number | undefined;
+  firstPageFooterContent: HeaderFooter | null | undefined;
+  firstPageHeaderContent: HeaderFooter | null | undefined;
+  footerContent: HeaderFooter | null | undefined;
+  headerContent: HeaderFooter | null | undefined;
+  margins: PageMargins;
+  pageGap: number;
+  pageSize: { h: number; w: number };
+  sectionProperties: SectionProperties | null | undefined;
+  styles: StyleDefinitions | null | undefined;
+  theme: Theme | null | undefined;
+};
+
+type PendingLayoutRequest = {
+  dirtyRange: DirtyRange | null;
+  firstScheduledAt: number;
+  rafId: number | null;
+  state: EditorState;
+  timerId: number | null;
+};
+
 const getPageOverlayOffset = (pagesContainer: HTMLDivElement, zoom: number) => {
   const overlay = pagesContainer.parentElement?.querySelector(
     '[data-testid="selection-overlay"]',
@@ -419,6 +451,206 @@ const getPageOverlayOffset = (pagesContainer: HTMLDivElement, zoom: number) => {
     y: (pageRect.top - overlayRect.top) / zoom,
   };
 };
+
+function buildLayoutInputSignature(
+  options: LayoutInputSignatureOptions,
+): string {
+  return stableJsonStringify(options);
+}
+
+function stableJsonStringify(value: unknown): string {
+  return JSON.stringify(value, (_key, nestedValue: unknown) => {
+    if (nestedValue instanceof Map) {
+      return Array.from(nestedValue.entries());
+    }
+    return nestedValue;
+  });
+}
+
+function getDocumentFontSet(): FontFaceSet | null {
+  if (typeof document === "undefined" || !("fonts" in document)) {
+    return null;
+  }
+  return document.fonts;
+}
+
+function documentFontsAreLoaded(): boolean {
+  const fontSet = getDocumentFontSet();
+  return !fontSet || fontSet.status === "loaded";
+}
+
+const INITIAL_LAYOUT_FONT_TIMEOUT_MS = 2000;
+const INITIAL_FONT_READY_SUPPRESSION_MS = 250;
+const DEFAULT_LAYOUT_FONT_FAMILY = "Calibri";
+const OFFICE_FONT_FAMILY_MAP: Record<string, string> = {
+  Arial: "Arimo",
+  Calibri: "Carlito",
+  Cambria: "Caladea",
+  "Times New Roman": "Tinos",
+  "Courier New": "Cousine",
+};
+const CSS_GENERIC_FONT_FAMILIES = new Set([
+  "serif",
+  "sans-serif",
+  "monospace",
+  "cursive",
+  "fantasy",
+  "system-ui",
+]);
+const LAYOUT_FONT_DESCRIPTORS = [
+  { style: "normal", weight: 400 },
+  { style: "italic", weight: 400 },
+  { style: "normal", weight: 700 },
+  { style: "italic", weight: 700 },
+] as const;
+
+function waitForInitialLayoutFonts(
+  documentModel: Document | null,
+  pmDoc: EditorState["doc"],
+): Promise<boolean> {
+  const fontSet = getDocumentFontSet();
+  if (!fontSet) {
+    return Promise.resolve(true);
+  }
+
+  const families = collectInitialLayoutFontFamilies(documentModel, pmDoc);
+  const loadChecks: string[] = [];
+  for (const family of families) {
+    for (const descriptor of LAYOUT_FONT_DESCRIPTORS) {
+      loadChecks.push(
+        `${descriptor.style} ${descriptor.weight} 16px "${escapeCssFontFamily(family)}"`,
+      );
+    }
+  }
+
+  const loadFonts = Promise.allSettled(
+    loadChecks.map((check) => fontSet.load(check)),
+  )
+    .then(() => fontSet.ready)
+    .then(() => true);
+  return Promise.race([
+    loadFonts,
+    new Promise<boolean>((resolve) => {
+      window.setTimeout(() => resolve(false), INITIAL_LAYOUT_FONT_TIMEOUT_MS);
+    }),
+  ]);
+}
+
+export function collectInitialLayoutFontFamilies(
+  documentModel: Document | null,
+  pmDoc: EditorState["doc"],
+): Set<string> {
+  const families = new Set<string>();
+  addLayoutFontFamily(families, DEFAULT_LAYOUT_FONT_FAMILY);
+
+  for (const family of documentModel?.requiredFonts ?? []) {
+    addLayoutFontFamily(families, family);
+  }
+
+  addLayoutFontFamily(
+    families,
+    documentModel?.package.theme?.fontScheme?.majorFont?.latin,
+  );
+  addLayoutFontFamily(
+    families,
+    documentModel?.package.theme?.fontScheme?.minorFont?.latin,
+  );
+  addLayoutFontFamily(
+    families,
+    documentModel?.package.styles?.docDefaults?.rPr?.fontFamily,
+  );
+  for (const style of documentModel?.package.styles?.styles ?? []) {
+    addLayoutFontFamily(families, style.rPr?.fontFamily);
+  }
+
+  pmDoc.descendants((node) => {
+    addLayoutFontFamily(families, node.attrs["listMarkerFontFamily"]);
+    for (const mark of node.marks) {
+      if (mark.type.name === "fontFamily") {
+        addLayoutFontFamily(families, expectFontFamilyMarkAttrs(mark));
+      }
+    }
+    return true;
+  });
+
+  return families;
+}
+
+function addLayoutFontFamily(families: Set<string>, value: unknown): void {
+  if (typeof value === "string") {
+    addLayoutFontFamilyName(families, value);
+    return;
+  }
+
+  if (!value || typeof value !== "object") {
+    return;
+  }
+
+  const fontFamily = value as { ascii?: unknown; hAnsi?: unknown };
+  addLayoutFontFamily(families, fontFamily.ascii);
+  addLayoutFontFamily(families, fontFamily.hAnsi);
+}
+
+function addLayoutFontFamilyName(families: Set<string>, family: string): void {
+  const normalized = family.trim();
+  if (!normalized || CSS_GENERIC_FONT_FAMILIES.has(normalized)) {
+    return;
+  }
+
+  families.add(normalized);
+  const mappedFamily = OFFICE_FONT_FAMILY_MAP[normalized];
+  if (mappedFamily) {
+    families.add(mappedFamily);
+  }
+}
+
+function escapeCssFontFamily(family: string): string {
+  return family.replace(/\\/gu, "\\\\").replace(/"/gu, '\\"');
+}
+
+function describeInvalidHighlightMarks(doc: EditorState["doc"]): string {
+  const invalidHighlights: string[] = [];
+  const validHighlightColors = new Set([
+    "black",
+    "blue",
+    "cyan",
+    "darkBlue",
+    "darkCyan",
+    "darkGray",
+    "darkGreen",
+    "darkMagenta",
+    "darkRed",
+    "darkYellow",
+    "green",
+    "lightGray",
+    "magenta",
+    "none",
+    "red",
+    "white",
+    "yellow",
+  ]);
+
+  const visit = (node: EditorState["doc"], path: string): void => {
+    for (const [index, mark] of node.marks.entries()) {
+      if (
+        mark.type.name === "highlight" &&
+        !validHighlightColors.has(String(mark.attrs["color"]))
+      ) {
+        invalidHighlights.push(
+          `${path}.marks[${index}]=${JSON.stringify(mark.attrs)}`,
+        );
+      }
+    }
+
+    // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
+    node.forEach((child, _offset, index) => {
+      visit(child, `${path}.content[${index}]`);
+    });
+  };
+
+  visit(doc, "doc");
+  return invalidHighlights.join("; ");
+}
 
 const RemoteSelectionOverlay = ({
   blocks,
@@ -1578,6 +1810,10 @@ export function PagedEditor(
     blockWidths: number[];
     measures: Measure[];
   } | null>(null);
+  const lastLaidOutPmDocRef = useRef<EditorState["doc"] | null>(null);
+  const lastLayoutUsedLoadedFontsRef = useRef(false);
+  const pendingInitialFontReadyLayoutRef = useRef(false);
+  const suppressFontReadyUntilRef = useRef(0);
   const [isFocused, setIsFocused] = useState(false);
   const [selectionRects, setSelectionRects] = useState<SelectionRect[]>([]);
   const [caretPosition, setCaretPosition] = useState<CaretPosition | null>(
@@ -1708,6 +1944,40 @@ export function PagedEditor(
     [sectionProperties],
   );
   const contentWidth = pageSize.w - margins.left - margins.right;
+  const defaultTabStop = document?.package.settings?.defaultTabStop;
+  const layoutInputSignature = useMemo(
+    () =>
+      buildLayoutInputSignature({
+        columns,
+        contentWidth,
+        defaultTabStop,
+        firstPageFooterContent,
+        firstPageHeaderContent,
+        footerContent,
+        headerContent,
+        margins,
+        pageGap,
+        pageSize,
+        sectionProperties,
+        styles,
+        theme: _theme,
+      }),
+    [
+      columns,
+      contentWidth,
+      defaultTabStop,
+      firstPageFooterContent,
+      firstPageHeaderContent,
+      footerContent,
+      headerContent,
+      margins,
+      pageGap,
+      pageSize,
+      sectionProperties,
+      styles,
+      _theme,
+    ],
+  );
 
   // Initialize painter using useMemo to ensure it's ready before first render callbacks
   const painter = useMemo(
@@ -1736,8 +2006,20 @@ export function PagedEditor(
   const runLayoutPipeline = useCallback(
     (
       state: EditorState,
-      options: { dirtyRange?: DirtyRange; forceFull?: boolean } = {},
+      options: {
+        dirtyRange?: DirtyRange;
+        forceFull?: boolean;
+        reason?: LayoutRunReason;
+      } = {},
     ) => {
+      const reason = options.reason ?? "manual";
+      const recordPhaseDuration = (
+        phase: LayoutPhase,
+        startedAt: number,
+      ): void => {
+        recordLayoutPhase(reason, phase, performance.now() - startedAt);
+      };
+
       // Capture current state sequence for this layout run
       const currentEpoch = syncCoordinator.getStateSeq();
 
@@ -1746,6 +2028,7 @@ export function PagedEditor(
 
       try {
         // Step 1: Convert PM doc to flow blocks
+        let phaseStartedAt = performance.now();
         const pageContentHeight = pageSize.h - margins.top - margins.bottom;
         const flowOpts: ToFlowBlocksOptions = {
           pageContentHeight,
@@ -1757,14 +2040,15 @@ export function PagedEditor(
         // list-marker tab-stop math (renderParagraph + measureParagraph)
         // uses the right grid. Absent settings.xml falls back to the
         // OOXML default inside `getListMarkerInlineWidth`.
-        const defaultTabStop = document?.package.settings?.defaultTabStop;
         if (defaultTabStop !== undefined) {
           flowOpts.defaultTabStopTwips = defaultTabStop;
         }
         const newBlocks = toFlowBlocks(state.doc, flowOpts);
         setBlocks(newBlocks);
+        recordPhaseDuration("flow-blocks", phaseStartedAt);
 
         // Compute per-block widths accounting for section breaks with different column configs
+        phaseStartedAt = performance.now();
         const bodyLayoutConfig: SectionLayoutConfig = {
           pageSize,
           margins,
@@ -1797,8 +2081,10 @@ export function PagedEditor(
           measures: newMeasures,
         };
         setMeasures(newMeasures);
+        recordPhaseDuration("measure-blocks", phaseStartedAt);
 
         // Step 2.5: Collect footnote references from blocks
+        phaseStartedAt = performance.now();
         const footnoteRefs = collectFootnoteRefs(newBlocks);
         const hasFootnotes =
           footnoteRefs.length > 0 && document?.package.footnotes;
@@ -1890,8 +2176,10 @@ export function PagedEditor(
             sb.margins = extendForHfOverflow(sb.margins);
           }
         }
+        recordPhaseDuration("header-footer", phaseStartedAt);
 
         // Step 3: Layout blocks onto pages (two-pass if footnotes exist)
+        phaseStartedAt = performance.now();
         let newLayout: Layout;
         let pageFootnoteMap = new Map<number, number[]>();
         let footnoteContentMap = new Map<number, FootnoteContent>();
@@ -1981,10 +2269,14 @@ export function PagedEditor(
         }
 
         setLayout(newLayout);
-        recordLayoutComplete();
+        lastLaidOutPmDocRef.current = state.doc;
+        lastLayoutUsedLoadedFontsRef.current = documentFontsAreLoaded();
+        recordLayoutComplete(reason);
+        recordPhaseDuration("layout-document", phaseStartedAt);
 
         // Step 4: Paint to DOM
         if (pagesContainerRef.current && painterRef.current) {
+          phaseStartedAt = performance.now();
           // Build block lookup
           const blockLookup: BlockLookup = new Map();
           for (let i = 0; i < newBlocks.length; i++) {
@@ -2049,32 +2341,19 @@ export function PagedEditor(
             renderOpts.footnotesByPage = footnotesByPage;
           }
           renderPages(newLayout.pages, pagesContainerRef.current, renderOpts);
+          recordPhaseDuration("render-pages", phaseStartedAt);
         }
-
-        // Compute anchor Y positions for comments sidebar (works without DOM queries).
-        // Runs on every layout pass, including incremental typing passes — gating on
-        // forceFull/dirtyRange left cards stuck at stale Y positions until the 200ms
-        // idle reconcile, so they drifted away from their anchor text while editing.
-        // The descendants walk visits every node, but the per-node work is gated by
-        // `isText` plus a comment/insertion/deletion mark check, so it stays cheap
-        // even on long documents; the layout pipeline is RAF-throttled on top of that.
-        // We pass the `state` arg (not the live view) so anchor positions are computed
-        // against the exact same doc snapshot used for `newLayout` / `newMeasures`.
-        if (onAnchorPositionsChange) {
-          const positions = computeAnchorPositions(
-            state,
-            newLayout,
-            newBlocks,
-            newMeasures,
-            pageGap,
-            {
-              includeRevisions: anchorPositionMode === "comments-and-revisions",
-            },
-          );
-          onAnchorPositionsChange(positions);
-        }
-      } catch {
-        // Keep the previous anchor positions if layout measurement fails.
+      } catch (error) {
+        const invalidHighlights = describeInvalidHighlightMarks(state.doc);
+        recordLayoutError(
+          reason,
+          invalidHighlights
+            ? new Error(
+                `${String(error)} Invalid highlights: ${invalidHighlights}`,
+              )
+            : error,
+        );
+        // Keep the previous visible layout if measurement or painting fails.
       }
 
       // Signal layout is complete for this sequence
@@ -2095,9 +2374,9 @@ export function PagedEditor(
       firstPageFooterContent,
       _theme,
       sectionProperties,
-      onAnchorPositionsChange,
-      anchorPositionMode,
       document,
+      defaultTabStop,
+      styles,
     ],
   );
   const runLayoutPipelineRef = useRef(runLayoutPipeline);
@@ -2108,16 +2387,11 @@ export function PagedEditor(
   // =========================================================================
 
   /**
-   * Ref holding a pending requestAnimationFrame ID and the latest state.
-   * Multiple rapid transactions (e.g. typing "hello") within the same frame
-   * are coalesced so only the final state triggers an interactive layout pass.
+   * Ref holding the latest pending transaction layout request. Rapid typing
+   * updates this request in place so only the final state in the short
+   * coalescing window triggers an interactive layout pass.
    */
-  const pendingLayoutRef = useRef<{
-    dirtyRange: DirtyRange | null;
-    rafId: number;
-    state: EditorState;
-  } | null>(null);
-  const idleLayoutTimerRef = useRef<number | null>(null);
+  const pendingLayoutRef = useRef<PendingLayoutRequest | null>(null);
   const documentChangeNotifyTimerRef = useRef<number | null>(null);
 
   const flushDocumentChangeNotification = useCallback(() => {
@@ -2143,71 +2417,95 @@ export function PagedEditor(
     }, DOCUMENT_CHANGE_NOTIFY_DELAY);
   }, [flushDocumentChangeNotification]);
 
-  const scheduleIdleFullLayout = useCallback(
-    (state: EditorState) => {
-      if (idleLayoutTimerRef.current !== null) {
-        window.clearTimeout(idleLayoutTimerRef.current);
+  const flushPendingLayout = useCallback(() => {
+    const pending = pendingLayoutRef.current;
+    if (!pending || pending.rafId !== null) {
+      return;
+    }
+
+    pending.timerId = null;
+    pending.rafId = requestAnimationFrame(() => {
+      const latest = pendingLayoutRef.current;
+      pendingLayoutRef.current = null;
+      if (!latest) {
+        return;
       }
-      idleLayoutTimerRef.current = window.setTimeout(() => {
-        idleLayoutTimerRef.current = null;
-        runLayoutPipeline(state, { forceFull: true });
-      }, 200);
+
+      const layoutOptions: {
+        dirtyRange?: DirtyRange;
+        forceFull?: boolean;
+        reason: LayoutRunReason;
+      } = { reason: "transaction" };
+      if (latest.dirtyRange) {
+        layoutOptions.dirtyRange = latest.dirtyRange;
+      }
+      runLayoutPipeline(latest.state, layoutOptions);
+    });
+  }, [runLayoutPipeline]);
+
+  const armPendingLayoutTimer = useCallback(
+    (pending: PendingLayoutRequest) => {
+      if (pending.rafId !== null) {
+        return;
+      }
+      if (pending.timerId !== null) {
+        window.clearTimeout(pending.timerId);
+      }
+
+      const elapsedMs = performance.now() - pending.firstScheduledAt;
+      const delayMs =
+        elapsedMs >= TRANSACTION_LAYOUT_MAX_DELAY_MS
+          ? 0
+          : Math.min(
+              TRANSACTION_LAYOUT_DEBOUNCE_MS,
+              TRANSACTION_LAYOUT_MAX_DELAY_MS - elapsedMs,
+            );
+
+      pending.timerId = window.setTimeout(flushPendingLayout, delayMs);
     },
-    [runLayoutPipeline],
+    [flushPendingLayout],
   );
 
   /**
-   * Schedule a layout pipeline run for the next animation frame.
-   * If a run is already scheduled, the pending state is replaced so only
-   * the most recent document state gets laid out. A full source-of-truth
-   * reconcile is scheduled after the interactive pass has been idle.
+   * Schedule a layout pipeline run after a short coalescing window.
+   * If more transactions arrive before the timer fires, the pending state
+   * is replaced so rapid typing paints once for the burst while still
+   * enforcing a max latency from the first edit.
    */
   const scheduleLayout = useCallback(
     (state: EditorState, dirtyRange: DirtyRange | null) => {
-      if (idleLayoutTimerRef.current !== null) {
-        window.clearTimeout(idleLayoutTimerRef.current);
-        idleLayoutTimerRef.current = null;
-      }
-
-      if (pendingLayoutRef.current) {
-        // Already scheduled — just update the state to the latest
-        pendingLayoutRef.current.state = state;
-        pendingLayoutRef.current.dirtyRange = mergeDirtyRanges(
-          pendingLayoutRef.current.dirtyRange,
-          dirtyRange,
-        );
+      const pending = pendingLayoutRef.current;
+      if (pending) {
+        pending.state = state;
+        pending.dirtyRange = mergeDirtyRanges(pending.dirtyRange, dirtyRange);
+        armPendingLayoutTimer(pending);
         return;
       }
-      const rafId = requestAnimationFrame(() => {
-        const pending = pendingLayoutRef.current;
-        pendingLayoutRef.current = null;
-        if (pending) {
-          const layoutOptions: {
-            dirtyRange?: DirtyRange;
-            forceFull?: boolean;
-          } = {};
-          if (pending.dirtyRange) {
-            layoutOptions.dirtyRange = pending.dirtyRange;
-          }
-          runLayoutPipeline(pending.state, layoutOptions);
-          scheduleIdleFullLayout(pending.state);
-        }
-      });
-      pendingLayoutRef.current = { dirtyRange, rafId, state };
+
+      const nextPending: PendingLayoutRequest = {
+        dirtyRange,
+        firstScheduledAt: performance.now(),
+        rafId: null,
+        state,
+        timerId: null,
+      };
+      pendingLayoutRef.current = nextPending;
+      armPendingLayoutTimer(nextPending);
     },
-    [runLayoutPipeline, scheduleIdleFullLayout],
+    [armPendingLayoutTimer],
   );
 
   // Clean up pending rAF on unmount
   useEffect(
     () => () => {
       if (pendingLayoutRef.current) {
-        cancelAnimationFrame(pendingLayoutRef.current.rafId);
+        if (pendingLayoutRef.current.timerId !== null) {
+          window.clearTimeout(pendingLayoutRef.current.timerId);
+        }
+        if (pendingLayoutRef.current.rafId !== null) {
+          cancelAnimationFrame(pendingLayoutRef.current.rafId);
+        }
         pendingLayoutRef.current = null;
-      }
-      if (idleLayoutTimerRef.current !== null) {
-        window.clearTimeout(idleLayoutTimerRef.current);
-        idleLayoutTimerRef.current = null;
       }
       if (documentChangeNotifyTimerRef.current !== null) {
         window.clearTimeout(documentChangeNotifyTimerRef.current);
@@ -2564,6 +2862,8 @@ export function PagedEditor(
     [layout, blocks, measures, getCaretFromDom, zoom],
     // NOTE: onSelectionChange removed from dependencies - accessed via ref to prevent infinite loops
   );
+  const updateSelectionOverlayRef = useRef(updateSelectionOverlay);
+  updateSelectionOverlayRef.current = updateSelectionOverlay;
 
   // Project anonymization match ranges onto container-space
   // rectangles. Mirrors the SelectionOverlay flow: prefer real
@@ -4538,11 +4838,41 @@ export function PagedEditor(
    */
   const handleEditorViewReady = useCallback(
     (view: EditorView) => {
-      runLayoutPipeline(view.state);
-      updateSelectionOverlay(view.state);
       anonymizationMatchesRef.current =
         anonymizationDecorationsKey.getState(view.state)?.matches ?? [];
-      updateAnonymizationOverlay();
+
+      const runInitialLayout = (currentView: EditorView) => {
+        runLayoutPipeline(currentView.state, { reason: "initial" });
+        updateSelectionOverlay(currentView.state);
+        updateAnonymizationOverlay();
+      };
+
+      pendingInitialFontReadyLayoutRef.current = true;
+      const fontWaitStartedAt = performance.now();
+      const runAfterFontWait = (fontsLoaded: boolean) => {
+        pendingInitialFontReadyLayoutRef.current = false;
+        const currentView = hiddenPMRef.current?.getView();
+        if (currentView !== view) {
+          return;
+        }
+        recordLayoutPhase(
+          "initial",
+          "initial-fonts",
+          performance.now() - fontWaitStartedAt,
+        );
+        resetCanvasContext();
+        clearAllCaches();
+        runInitialLayout(currentView);
+        if (fontsLoaded) {
+          lastLayoutUsedLoadedFontsRef.current = true;
+          suppressFontReadyUntilRef.current =
+            performance.now() + INITIAL_FONT_READY_SUPPRESSION_MS;
+        }
+      };
+      void waitForInitialLayoutFonts(document, view.state.doc).then(
+        runAfterFontWait,
+        () => runAfterFontWait(false),
+      );
 
       // Auto-focus the editor so the user can start typing immediately
       if (!readOnly) {
@@ -4557,6 +4887,7 @@ export function PagedEditor(
       runLayoutPipeline,
       updateSelectionOverlay,
       updateAnonymizationOverlay,
+      document,
       readOnly,
     ],
   );
@@ -4568,63 +4899,111 @@ export function PagedEditor(
     updateAnonymizationOverlay();
   }, [updateAnonymizationOverlay]);
 
+  // Compute anchor Y positions for comments/revisions sidebar from the current
+  // layout artifacts. Opening the sidebar or switching anchor modes does not
+  // change page geometry, so this intentionally avoids a full layout pass.
+  useEffect(() => {
+    if (!onAnchorPositionsChange || !layout) {
+      return;
+    }
+
+    try {
+      const positions = computeAnchorPositions(
+        hiddenPMRef.current?.getState() ?? null,
+        layout,
+        blocks,
+        measures,
+        pageGap,
+        {
+          includeRevisions: anchorPositionMode === "comments-and-revisions",
+        },
+      );
+      onAnchorPositionsChange(positions);
+    } catch {
+      // Keep the previous anchor positions if layout measurement fails.
+    }
+  }, [
+    anchorPositionMode,
+    blocks,
+    layout,
+    measures,
+    onAnchorPositionsChange,
+    pageGap,
+  ]);
+
   // Re-layout when web fonts finish loading to fix measurements that were
   // computed against fallback fonts during initial render.
   // Uses FontFaceSet.onloadingdone to detect when new fonts complete loading.
   useEffect(() => {
+    const fontSet = getDocumentFontSet();
+    if (!fontSet) {
+      return undefined;
+    }
+
+    const handleFontsLoading = () => {
+      if (performance.now() < suppressFontReadyUntilRef.current) {
+        return;
+      }
+      lastLayoutUsedLoadedFontsRef.current = false;
+    };
+
     const handleFontsLoaded = () => {
+      if (
+        pendingInitialFontReadyLayoutRef.current ||
+        performance.now() < suppressFontReadyUntilRef.current ||
+        lastLayoutUsedLoadedFontsRef.current
+      ) {
+        return;
+      }
+
       const view = hiddenPMRef.current?.getView();
       if (view) {
         // Clear all cached measurements — font metrics have changed
         resetCanvasContext();
         clearAllCaches();
-        runLayoutPipeline(view.state);
-        updateSelectionOverlay(view.state);
+        runLayoutPipelineRef.current(view.state, { reason: "font-ready" });
+        updateSelectionOverlayRef.current(view.state);
       }
     };
 
     // Listen for font loading completion events
-    window.document.fonts.addEventListener("loadingdone", handleFontsLoaded);
+    fontSet.addEventListener("loading", handleFontsLoading);
+    fontSet.addEventListener("loadingdone", handleFontsLoaded);
+    fontSet.addEventListener("loadingerror", handleFontsLoaded);
     return () => {
-      window.document.fonts.removeEventListener(
-        "loadingdone",
-        handleFontsLoaded,
-      );
+      fontSet.removeEventListener("loading", handleFontsLoading);
+      fontSet.removeEventListener("loadingdone", handleFontsLoaded);
+      fontSet.removeEventListener("loadingerror", handleFontsLoaded);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-layout when non-document layout inputs change (e.g., after HF editor save,
-  // parent-driven page setup/theme updates, or comment anchor mapping being wired
-  // when the sidebar opens after hidden edits).
+  // Re-layout when non-document layout inputs change (e.g., after HF editor save
+  // or parent-driven page setup/theme updates).
   // runLayoutPipeline includes these values in its deps, but it
   // only runs when explicitly called — this effect triggers it.
   const layoutInputEpochRef = useRef(0);
+  const lastLayoutInputSignatureRef = useRef<string | null>(null);
   useEffect(() => {
     // Skip the initial render — handleEditorViewReady already does the first layout
     if (layoutInputEpochRef.current === 0) {
       layoutInputEpochRef.current = 1;
+      lastLayoutInputSignatureRef.current = layoutInputSignature;
       return;
     }
     const view = hiddenPMRef.current?.getView();
     if (view) {
-      runLayoutPipelineRef.current(view.state);
+      const layoutInputsChanged =
+        lastLayoutInputSignatureRef.current !== layoutInputSignature;
+      lastLayoutInputSignatureRef.current = layoutInputSignature;
+      if (
+        !layoutInputsChanged &&
+        view.state.doc === lastLaidOutPmDocRef.current
+      ) {
+        return;
+      }
+      runLayoutPipelineRef.current(view.state, { reason: "layout-input" });
     }
-  }, [
-    headerContent,
-    footerContent,
-    firstPageHeaderContent,
-    firstPageFooterContent,
-    contentWidth,
-    columns,
-    pageSize,
-    margins,
-    pageGap,
-    sectionProperties,
-    _theme,
-    onAnchorPositionsChange,
-    anchorPositionMode,
-  ]);
+  }, [document, layoutInputSignature]);
 
   // Re-compute selection overlay when the container resizes.
   // Page elements shift during window resize (centering, scrollbar changes),
@@ -4697,7 +5076,7 @@ export function PagedEditor(
       relayout() {
         const state = hiddenPMRef.current?.getState();
         if (state) {
-          runLayoutPipeline(state);
+          runLayoutPipeline(state, { reason: "manual" });
         }
       },
       scrollToPosition: scrollToPositionImpl,

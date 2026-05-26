@@ -66,6 +66,48 @@ describe("incremental paragraph measurement", () => {
     );
   });
 
+  test("matches full measurement after a localized paragraph edit shifts later positions", () => {
+    fc.assert(
+      fc.property(
+        fc.array(paragraphSpec, { minLength: 2, maxLength: 200 }),
+        fc.integer({ min: 0, max: 20_000 }),
+        fc.string({ minLength: 0, maxLength: 160 }),
+        (paragraphs, dirtyIndexSeed, replacementText) => {
+          const previousBlocks = makeParagraphBlocks(paragraphs);
+          const dirtyIndex = dirtyIndexSeed % paragraphs.length;
+          const nextParagraphs = paragraphs.map((paragraph, index) =>
+            index === dirtyIndex ? { text: replacementText } : paragraph,
+          );
+          const nextBlocks = makeParagraphBlocks(nextParagraphs);
+          const previousMeasures = previousBlocks.map(fakeMeasureBlock);
+          const fullNextMeasures = nextBlocks.map(fakeMeasureBlock);
+          const widths = Array.from({ length: nextBlocks.length }, () => 624);
+          const dirtyBlock = nextBlocks[dirtyIndex];
+          if (!dirtyBlock) {
+            return;
+          }
+
+          const result = tryBuildIncrementalMeasures({
+            previousBlocks,
+            previousMeasures,
+            previousBlockWidths: widths,
+            nextBlocks,
+            nextBlockWidths: widths,
+            dirtyRange: {
+              from: dirtyBlock.pmStart,
+              to: dirtyBlock.pmEnd,
+            },
+            measureBlock: fakeMeasureBlock,
+          });
+
+          expect(result?.measuredBlockIndexes).toEqual([dirtyIndex]);
+          expect(result?.measures).toEqual(fullNextMeasures);
+        },
+      ),
+      { numRuns: 1000 },
+    );
+  });
+
   test("coalesces arbitrary edit ranges without shrinking invalidation", () => {
     fc.assert(
       fc.property(
