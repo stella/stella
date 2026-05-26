@@ -136,7 +136,10 @@ import {
   computeFirstPageHeaderFooterMarginExtender,
   computeHeaderFooterMarginExtender,
 } from "./headerFooterMargins";
-import { HiddenProseMirror } from "./HiddenProseMirror";
+import {
+  createHiddenEditorState,
+  HiddenProseMirror,
+} from "./HiddenProseMirror";
 import type {
   HiddenProseMirrorCollaboration,
   HiddenProseMirrorRemoteSelection,
@@ -316,6 +319,10 @@ export type PagedEditorRef = {
   scrollToPage(pageNumber: number): void;
 };
 
+type PendingHiddenEditorSelection =
+  | { type: "node"; pos: number }
+  | { type: "text"; anchor: number; head?: number };
+
 // =============================================================================
 // CONSTANTS
 // =============================================================================
@@ -348,9 +355,18 @@ const TRANSACTION_LAYOUT_DEBOUNCE_MS = 32;
 const TRANSACTION_LAYOUT_MAX_DELAY_MS = 96;
 /** Keep the visual caret hidden briefly while typed content relayouts. */
 const SELECTION_REVEAL_AFTER_INPUT_DELAY = 120;
+/** Defer the hidden EditorView until the first visible layout has painted. */
+const HIDDEN_EDITOR_VIEW_DEFER_MS = 275;
 
 // Stable empty array to avoid re-creating on each render
 const EMPTY_PLUGINS: Plugin[] = [];
+
+const isPlainTextInputEvent = (event: React.KeyboardEvent): boolean =>
+  event.key.length === 1 &&
+  !event.altKey &&
+  !event.ctrlKey &&
+  !event.metaKey &&
+  !event.nativeEvent.isComposing;
 
 /**
  * Get the zero-based page index for a node by climbing to its
@@ -2000,11 +2016,21 @@ export function PagedEditor(
   const [layout, setLayout] = useState<Layout | null>(null);
   const [blocks, setBlocks] = useState<FlowBlock[]>([]);
   const [measures, setMeasures] = useState<Measure[]>([]);
+  const [shouldCreateHiddenEditorView, setShouldCreateHiddenEditorView] =
+    useState(() => collaboration !== undefined);
+  const [precomputedInitialState, setPrecomputedInitialState] =
+    useState<EditorState | null>(null);
   const layoutArtifactsRef = useRef<{
     blocks: FlowBlock[];
     blockWidths: number[];
     measures: Measure[];
   } | null>(null);
+  const precomputedInitialStateRef = useRef<EditorState | null>(null);
+  const preHiddenInitialLayoutDoneRef = useRef(false);
+  const hiddenEditorViewTimerRef = useRef<number | null>(null);
+  const pendingHiddenEditorSelectionRef =
+    useRef<PendingHiddenEditorSelection | null>(null);
+  const queuedTextBeforeHiddenEditorRef = useRef("");
   const lastLayoutEditorStateRef = useRef<EditorState | null>(null);
   const lastLaidOutPmDocRef = useRef<EditorState["doc"] | null>(null);
   const lastLayoutUsedLoadedFontsRef = useRef(false);
@@ -2029,6 +2055,8 @@ export function PagedEditor(
   const suppressSelectionOverlayRef = useRef(false);
   const revealSelectionOverlayTimerRef = useRef<number | null>(null);
   const selectionOverlayRequestSeqRef = useRef(0);
+
+  precomputedInitialStateRef.current = precomputedInitialState;
 
   // Image selection state
   const [selectedImageInfo, setSelectedImageInfo] =
@@ -2057,6 +2085,95 @@ export function PagedEditor(
   // Drag selection state
   const isDraggingRef = useRef(false);
   const dragAnchorRef = useRef<number | null>(null);
+
+  const clearHiddenEditorViewTimer = useCallback(() => {
+    if (hiddenEditorViewTimerRef.current === null) {
+      return;
+    }
+    window.clearTimeout(hiddenEditorViewTimerRef.current);
+    hiddenEditorViewTimerRef.current = null;
+  }, []);
+
+  const ensureHiddenEditorView = useCallback(() => {
+    clearHiddenEditorViewTimer();
+    setShouldCreateHiddenEditorView(true);
+  }, [clearHiddenEditorViewTimer]);
+
+  const scheduleHiddenEditorViewCreation = useCallback(() => {
+    if (
+      shouldCreateHiddenEditorView ||
+      hiddenEditorViewTimerRef.current !== null
+    ) {
+      return;
+    }
+
+    hiddenEditorViewTimerRef.current = window.setTimeout(() => {
+      hiddenEditorViewTimerRef.current = null;
+      setShouldCreateHiddenEditorView(true);
+    }, HIDDEN_EDITOR_VIEW_DEFER_MS);
+  }, [shouldCreateHiddenEditorView]);
+
+  const queueHiddenEditorSelection = useCallback(
+    (selection: PendingHiddenEditorSelection) => {
+      pendingHiddenEditorSelectionRef.current = selection;
+      ensureHiddenEditorView();
+    },
+    [ensureHiddenEditorView],
+  );
+
+  const applyPendingHiddenEditorInput = useCallback((view: EditorView) => {
+    const pendingSelection = pendingHiddenEditorSelectionRef.current;
+    pendingHiddenEditorSelectionRef.current = null;
+
+    if (pendingSelection?.type === "node") {
+      try {
+        view.dispatch(
+          view.state.tr.setSelection(
+            NodeSelection.create(view.state.doc, pendingSelection.pos),
+          ),
+        );
+      } catch {
+        // Fall through to queued text insertion at the current selection.
+      }
+    }
+
+    if (pendingSelection?.type === "text") {
+      const docEnd = view.state.doc.content.size;
+      const anchor = Math.max(0, Math.min(pendingSelection.anchor, docEnd));
+      const head =
+        pendingSelection.head === undefined
+          ? anchor
+          : Math.max(0, Math.min(pendingSelection.head, docEnd));
+      try {
+        const selection = TextSelection.between(
+          view.state.doc.resolve(anchor),
+          view.state.doc.resolve(head),
+        );
+        view.dispatch(view.state.tr.setSelection(selection));
+      } catch {
+        // Keep the default selection if the cached visual position went stale.
+      }
+    }
+
+    const queuedText = queuedTextBeforeHiddenEditorRef.current;
+    if (!queuedText) {
+      return;
+    }
+
+    queuedTextBeforeHiddenEditorRef.current = "";
+    view.dispatch(view.state.tr.insertText(queuedText));
+  }, []);
+
+  useEffect(
+    () => () => clearHiddenEditorViewTimer(),
+    [clearHiddenEditorViewTimer],
+  );
+
+  useEffect(() => {
+    if (collaboration !== undefined) {
+      ensureHiddenEditorView();
+    }
+  }, [collaboration, ensureHiddenEditorView]);
 
   // Column resize state
   const isResizingColumnRef = useRef(false);
@@ -3673,9 +3790,12 @@ export function PagedEditor(
       return;
     }
 
+    if (!hiddenPMRef.current?.getView()) {
+      ensureHiddenEditorView();
+    }
     hiddenPMRef.current?.focus();
     setIsFocused(true);
-  }, [readOnly]);
+  }, [ensureHiddenEditorView, readOnly]);
 
   const startPointerTextSelection = useCallback(
     (clientX: number, clientY: number) => {
@@ -3690,7 +3810,11 @@ export function PagedEditor(
 
         isDraggingRef.current = true;
         dragAnchorRef.current = pmPos;
-        hiddenPMRef.current?.setSelection(pmPos);
+        if (hiddenPMRef.current?.getView()) {
+          hiddenPMRef.current.setSelection(pmPos);
+        } else {
+          queueHiddenEditorSelection({ type: "text", anchor: pmPos });
+        }
       } else {
         cellDragAnchorPosRef.current = null;
         isCellDraggingRef.current = false;
@@ -3700,12 +3824,25 @@ export function PagedEditor(
           hiddenPMRef.current?.setSelection(endPos);
           dragAnchorRef.current = endPos;
           isDraggingRef.current = true;
+        } else {
+          const docEnd = Math.max(
+            0,
+            (precomputedInitialStateRef.current?.doc.content.size ?? 1) - 1,
+          );
+          queueHiddenEditorSelection({ type: "text", anchor: docEnd });
+          dragAnchorRef.current = docEnd;
+          isDraggingRef.current = true;
         }
       }
 
       focusHiddenEditor();
     },
-    [findCellPosFromPmPos, focusHiddenEditor, getPositionFromMouse],
+    [
+      findCellPosFromPmPos,
+      focusHiddenEditor,
+      getPositionFromMouse,
+      queueHiddenEditorSelection,
+    ],
   );
 
   const copySelectionText = useCallback(() => {
@@ -3959,7 +4096,11 @@ export function PagedEditor(
         const pmStart = imageEl.dataset["pmStart"];
         if (pmStart !== undefined) {
           const pos = Number.parseInt(pmStart, 10);
-          hiddenPMRef.current.setNodeSelection(pos);
+          if (hiddenPMRef.current.getView()) {
+            hiddenPMRef.current.setNodeSelection(pos);
+          } else {
+            queueHiddenEditorSelection({ type: "node", pos });
+          }
           setSelectedImageInfo(buildImageSelectionInfo(imageEl, pos));
           setSelectionRects([]);
           setCaretPosition(null);
@@ -3988,6 +4129,7 @@ export function PagedEditor(
       clearTableInsertTimer,
       focusHiddenEditor,
       startPointerTextSelection,
+      queueHiddenEditorSelection,
     ],
   );
 
@@ -5013,6 +5155,16 @@ export function PagedEditor(
         return;
       }
 
+      const view = hiddenPMRef.current?.getView();
+      if (!view) {
+        ensureHiddenEditorView();
+        if (isPlainTextInputEvent(e)) {
+          queuedTextBeforeHiddenEditorRef.current += e.key;
+          e.preventDefault();
+        }
+        return;
+      }
+
       // Ensure hidden PM is focused if user types
       if (!hiddenPMRef.current?.isFocused()) {
         focusHiddenEditor();
@@ -5028,27 +5180,19 @@ export function PagedEditor(
         !e.nativeEvent.isComposing
       ) {
         e.preventDefault();
-        const view = hiddenPMRef.current?.getView();
-        if (view) {
-          // Route through handleTextInput so plugins (suggestion mode) can intercept
-          const { from, to } = view.state.selection;
-          // ProseMirror's `someProp` is an internal API not exposed on
-          // EditorView's public type. The cast is the FFI boundary.
-          // oxlint-disable-next-line no-any-casts/no-any-casts, typescript/no-explicit-any
-          const handled = (view as any).someProp(
-            "handleTextInput",
-            (
-              f: (
-                v: EditorView,
-                fr: number,
-                t: number,
-                text: string,
-              ) => boolean,
-            ) => f(view, from, to, " "),
-          );
-          if (!handled) {
-            view.dispatch(view.state.tr.insertText(" "));
-          }
+        // Route through handleTextInput so plugins (suggestion mode) can intercept
+        const { from, to } = view.state.selection;
+        // ProseMirror's `someProp` is an internal API not exposed on
+        // EditorView's public type. The cast is the FFI boundary.
+        // oxlint-disable-next-line no-any-casts/no-any-casts, typescript/no-explicit-any
+        const handled = (view as any).someProp(
+          "handleTextInput",
+          (
+            f: (v: EditorView, fr: number, t: number, text: string) => boolean,
+          ) => f(view, from, to, " "),
+        );
+        if (!handled) {
+          view.dispatch(view.state.tr.insertText(" "));
         }
         return;
       }
@@ -5077,6 +5221,7 @@ export function PagedEditor(
     },
     [
       copySelectionText,
+      ensureHiddenEditorView,
       focusHiddenEditor,
       getScrollContainer,
       onReadOnlyEditAttempt,
@@ -5108,6 +5253,84 @@ export function PagedEditor(
   // Initial Layout
   // =========================================================================
 
+  useEffect(() => {
+    if (
+      shouldCreateHiddenEditorView ||
+      collaboration !== undefined ||
+      preHiddenInitialLayoutDoneRef.current
+    ) {
+      return undefined;
+    }
+
+    if (!document) {
+      ensureHiddenEditorView();
+      return undefined;
+    }
+
+    const initialState = createHiddenEditorState(
+      document,
+      styles,
+      extensionManager,
+      externalPlugins,
+      undefined,
+      null,
+      "mount",
+    );
+    setPrecomputedInitialState(initialState);
+    anonymizationMatchesRef.current =
+      anonymizationDecorationsKey.getState(initialState)?.matches ?? [];
+
+    let cancelled = false;
+    pendingInitialFontReadyLayoutRef.current = true;
+    const fontWaitStartedAt = performance.now();
+    const runAfterFontWait = (fontsLoaded: boolean) => {
+      if (cancelled) {
+        return;
+      }
+
+      pendingInitialFontReadyLayoutRef.current = false;
+      preHiddenInitialLayoutDoneRef.current = true;
+      recordLayoutPhase(
+        "initial",
+        "initial-fonts",
+        performance.now() - fontWaitStartedAt,
+      );
+      resetCanvasContext();
+      clearAllCaches();
+      runLayoutPipeline(initialState, { reason: "initial" });
+      updateSelectionOverlay(initialState);
+      updateAnonymizationOverlay();
+      if (fontsLoaded) {
+        lastLayoutUsedLoadedFontsRef.current = true;
+        suppressFontReadyUntilRef.current =
+          performance.now() + INITIAL_FONT_READY_SUPPRESSION_MS;
+      }
+      scheduleHiddenEditorViewCreation();
+    };
+
+    void waitForInitialLayoutFonts(document, initialState.doc).then(
+      runAfterFontWait,
+      () => runAfterFontWait(false),
+    );
+
+    return () => {
+      cancelled = true;
+      pendingInitialFontReadyLayoutRef.current = false;
+    };
+  }, [
+    collaboration,
+    document,
+    ensureHiddenEditorView,
+    extensionManager,
+    externalPlugins,
+    runLayoutPipeline,
+    scheduleHiddenEditorViewCreation,
+    shouldCreateHiddenEditorView,
+    styles,
+    updateAnonymizationOverlay,
+    updateSelectionOverlay,
+  ]);
+
   /**
    * Run initial layout when document or view changes.
    */
@@ -5115,6 +5338,23 @@ export function PagedEditor(
     (view: EditorView) => {
       anonymizationMatchesRef.current =
         anonymizationDecorationsKey.getState(view.state)?.matches ?? [];
+
+      const focusReadyView = () => {
+        if (!readOnly) {
+          requestAnimationFrame(() => {
+            applyPendingHiddenEditorInput(view);
+            view.focus();
+            setIsFocused(true);
+          });
+        }
+      };
+
+      if (lastLaidOutPmDocRef.current?.eq(view.state.doc)) {
+        updateSelectionOverlay(view.state);
+        updateAnonymizationOverlay();
+        focusReadyView();
+        return;
+      }
 
       const runInitialLayout = (currentView: EditorView) => {
         runLayoutPipeline(currentView.state, { reason: "initial" });
@@ -5150,15 +5390,10 @@ export function PagedEditor(
       );
 
       // Auto-focus the editor so the user can start typing immediately
-      if (!readOnly) {
-        // Use requestAnimationFrame to ensure DOM is ready
-        requestAnimationFrame(() => {
-          view.focus();
-          setIsFocused(true);
-        });
-      }
+      focusReadyView();
     },
     [
+      applyPendingHiddenEditorInput,
       runLayoutPipeline,
       updateSelectionOverlay,
       updateAnonymizationOverlay,
@@ -5460,6 +5695,8 @@ export function PagedEditor(
         ref={hiddenPMRef}
         document={document}
         widthPx={contentWidth}
+        deferViewCreation={!shouldCreateHiddenEditorView}
+        precomputedInitialState={precomputedInitialState}
         readOnly={readOnly}
         onTransaction={handleTransaction}
         onSelectionChange={handleSelectionChange}

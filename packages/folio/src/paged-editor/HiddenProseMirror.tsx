@@ -95,6 +95,8 @@ export type HiddenProseMirrorProps = {
   theme?: Theme | null;
   /** Width in pixels (should match document content width) */
   widthPx?: number;
+  /** Delay EditorView creation while the visible editor performs first layout. */
+  deferViewCreation?: boolean;
   /** Whether the editor is read-only */
   readOnly?: boolean;
   /** Callback when document changes via transaction */
@@ -112,6 +114,8 @@ export type HiddenProseMirrorProps = {
   extensionManager?: ExtensionManager;
   /** Callback when EditorView is ready */
   onEditorViewReady?: (view: EditorView) => void;
+  /** Initial state already built by the parent for pre-view layout. */
+  precomputedInitialState?: EditorState | null;
   /** Callback when EditorView is destroyed */
   onEditorViewDestroy?: () => void;
   /** Intercept key events before ProseMirror processes them. Return true to prevent PM handling. */
@@ -359,7 +363,7 @@ const HIDDEN_EDITOR_ATTRIBUTES = {
  * When an ExtensionManager is provided, it supplies the schema and plugins.
  * Otherwise falls back to the default singleton schema with no extension plugins.
  */
-function createInitialState(
+export function createHiddenEditorState(
   document: Document | null,
   styles: StyleDefinitions | null | undefined,
   manager?: ExtensionManager,
@@ -495,6 +499,7 @@ export function HiddenProseMirror(
     styles,
     theme: _theme,
     widthPx = 612, // Default Letter width at 72dpi
+    deferViewCreation = false,
     readOnly = false,
     onTransaction,
     onSelectionChange,
@@ -506,6 +511,7 @@ export function HiddenProseMirror(
     onKeyDown,
     onReadOnlyEditAttempt,
     onRemoteSelectionsChange,
+    precomputedInitialState,
   } = props;
 
   const [collaborationModules, setCollaborationModules] =
@@ -588,6 +594,9 @@ export function HiddenProseMirror(
    * Uses refs for callbacks to avoid infinite re-render loops
    */
   const createView = useCallback(() => {
+    if (deferViewCreation) {
+      return;
+    }
     if (!hostRef.current || isDestroyingRef.current) {
       return;
     }
@@ -595,15 +604,18 @@ export function HiddenProseMirror(
       return;
     }
 
-    const initialState = createInitialState(
-      document,
-      styles,
-      extensionManager,
-      externalPlugins,
-      collaboration,
-      collaborationModules,
-      "mount",
-    );
+    const initialState =
+      precomputedInitialState && !collaboration
+        ? precomputedInitialState
+        : createHiddenEditorState(
+            document,
+            styles,
+            extensionManager,
+            externalPlugins,
+            collaboration,
+            collaborationModules,
+            "mount",
+          );
 
     const editorProps: DirectEditorProps = {
       state: initialState,
@@ -705,6 +717,8 @@ export function HiddenProseMirror(
     collaboration,
     collaborationModules,
     extensionManager,
+    deferViewCreation,
+    precomputedInitialState,
     // Callbacks removed from dependencies - accessed via refs
   ]);
 
@@ -754,6 +768,9 @@ export function HiddenProseMirror(
   }, []);
 
   useEffect(() => {
+    if (deferViewCreation) {
+      return;
+    }
     if (viewRef.current || isDestroyingRef.current) {
       return;
     }
@@ -761,7 +778,7 @@ export function HiddenProseMirror(
       return;
     }
     createView();
-  }, [collaboration, collaborationModules, createView]);
+  }, [collaboration, collaborationModules, createView, deferViewCreation]);
 
   useEffect(() => () => destroyView(), [destroyView]);
 
@@ -804,7 +821,7 @@ export function HiddenProseMirror(
     lastCollaborationFragmentRef.current = currentCollaborationFragment;
 
     // Create new state from document
-    const newState = createInitialState(
+    const newState = createHiddenEditorState(
       document,
       styles,
       extensionManager,
