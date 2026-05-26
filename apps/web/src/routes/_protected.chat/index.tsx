@@ -32,6 +32,7 @@ import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
+import { api } from "@/lib/api";
 import {
   getChatSendMode,
   useChatAnonymized,
@@ -39,12 +40,15 @@ import {
 } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
+import { toAPIError } from "@/lib/errors";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { formatRelativeTime } from "@/lib/relative-time";
+import { toSafeId } from "@/lib/safe-id";
 import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
+import { ChatWebSearchToggle } from "@/routes/_protected.chat/-components/chat-web-search-toggle";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
@@ -99,6 +103,28 @@ function ChatIndex() {
   const openInspectorChat = useInspectorStore((s) => s.openChat);
   const [contextMatterIds, setContextMatterIds] = useState<string[]>([]);
   const getContextMatterIds = useEffectEvent(() => contextMatterIds);
+  // Standalone, non-suspense fetch of the draft thread metadata.
+  // We deliberately don't reuse `chatThreadOptions` here because that
+  // helper instantiates a stateful `Chat<>` inside its queryFn on
+  // every miss; doing so on the chat-home render path froze the
+  // tab. We only need `webSearchAvailable` + `webSearchEnabled`,
+  // so a plain GET against the messages endpoint is enough.
+  const { data: chatDraftMeta } = useQuery({
+    queryKey: ["chat", "draftMeta", threadIdRef.current] as const,
+    staleTime: Number.POSITIVE_INFINITY,
+    queryFn: async () => {
+      const response = await api.chat
+        .threads({ threadId: toSafeId<"chatThread">(threadIdRef.current) })
+        .messages.get({ query: { allowMissingThread: true } });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return {
+        webSearchAvailable: response.data.webSearchAvailable,
+        webSearchEnabled: response.data.webSearchEnabled,
+      };
+    },
+  });
 
   const pinnedMatters = useMemo(() => {
     const workspaceById = new Map<string, PinnedMatter>();
@@ -197,6 +223,12 @@ function ChatIndex() {
           onChange={setContextMatterIds}
         />
         <div className="flex items-center gap-1">
+          {chatDraftMeta?.webSearchAvailable && (
+            <ChatWebSearchToggle
+              enabled={chatDraftMeta.webSearchEnabled}
+              threadRef={threadRef}
+            />
+          )}
           <ChatAnonymizedToggle enabled={anonymized} onChange={setAnonymized} />
           <Tooltip
             content={t("chat.moveToSide")}
