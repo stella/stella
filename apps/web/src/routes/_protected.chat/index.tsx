@@ -109,8 +109,20 @@ function ChatIndex() {
   // every miss; doing so on the chat-home render path froze the
   // tab. We only need `webSearchAvailable` + `webSearchEnabled`,
   // so a plain GET against the messages endpoint is enough.
+  // Key shape mirrors `chatKeys.thread` up to position 4 so
+  // `invalidateChatThread({ queryClient, threadRef })` (fired by
+  // <ChatWebSearchToggle> on every PATCH) refetches us. Without
+  // that match the toggle would flip server-side but the local
+  // `webSearchEnabled` shown by this query would stay stale.
   const { data: chatDraftMeta } = useQuery({
-    queryKey: ["chat", "draftMeta", threadIdRef.current] as const,
+    queryKey: [
+      "chat",
+      activeOrganizationId,
+      "thread",
+      "global",
+      threadIdRef.current,
+      "draftMeta",
+    ] as const,
     staleTime: Number.POSITIVE_INFINITY,
     queryFn: async () => {
       const response = await api.chat
