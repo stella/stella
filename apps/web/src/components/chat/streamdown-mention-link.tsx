@@ -651,7 +651,7 @@ const FaviconCitationChip = ({
   return (
     <span
       className={cn(
-        "group relative mx-0.5 inline-block size-[1em] align-[-0.2em]",
+        "group/citation relative mx-0.5 inline-block size-[1em] align-[-0.2em]",
       )}
     >
       <button
@@ -679,7 +679,7 @@ const FaviconCitationChip = ({
           "z-10 max-w-[20em] -translate-y-1/2 truncate whitespace-nowrap",
           "rounded-md border px-1.5 py-0.5 text-[0.78em] leading-none shadow-sm",
           "opacity-0 transition-opacity duration-150",
-          "group-focus-within:opacity-100 group-hover:opacity-100",
+          "group-focus-within/citation:opacity-100 group-hover/citation:opacity-100",
         )}
         role="tooltip"
       >

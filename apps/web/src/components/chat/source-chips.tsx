@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
@@ -249,7 +249,7 @@ const ExternalSourceChip = ({ source }: { source: ExternalSourceEntry }) => {
       onClick={handleClick}
       type="button"
     >
-      <ExternalSourceIcon iconHref={source.iconHref} />
+      <ExternalSourceIcon iconHref={source.iconHref} url={source.url} />
       <span className="max-w-[20ch] truncate">{source.title}</span>
     </button>
   );
@@ -257,8 +257,10 @@ const ExternalSourceChip = ({ source }: { source: ExternalSourceEntry }) => {
 
 const ExternalSourceIcon = ({
   iconHref,
+  url,
 }: {
   iconHref?: string | undefined;
+  url?: string | undefined;
 }) => {
   if (iconHref) {
     return (
@@ -274,7 +276,34 @@ const ExternalSourceIcon = ({
     );
   }
 
-  return <ExternalLinkIcon className={cn(cls, "text-muted-foreground")} />;
+  return <SourceFavicon url={url} />;
+};
+
+const SourceFavicon = ({ url }: { url: string | undefined }) => {
+  const [errored, setErrored] = useState(false);
+  const hostname = (() => {
+    if (!url) {
+      return null;
+    }
+    try {
+      return new URL(url).hostname.replace(/^www\./u, "");
+    } catch {
+      return null;
+    }
+  })();
+  if (!hostname || errored) {
+    return <ExternalLinkIcon className={cn(cls, "text-muted-foreground")} />;
+  }
+  return (
+    <img
+      alt=""
+      aria-hidden="true"
+      className="border-border size-3 shrink-0 rounded-full border object-contain"
+      loading="lazy"
+      onError={() => setErrored(true)}
+      src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=32`}
+    />
+  );
 };
 
 const SourceChip = ({
