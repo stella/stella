@@ -10,6 +10,8 @@
  */
 
 import {
+  Suspense,
+  lazy,
   useRef,
   useCallback,
   useState,
@@ -178,7 +180,6 @@ import {
   pruneOrphanedComments,
   removePendingCommentMarkRange,
 } from "./commentsHelpers";
-import { CommentsSidebar } from "./CommentsSidebar";
 import type { TrackedChangeEntry } from "./CommentsSidebar";
 // Dialog hooks and utilities (static imports — lightweight, no UI)
 import type { FindMatch } from "./dialogs/findReplaceUtils";
@@ -233,6 +234,12 @@ import { getBuiltinTableStyle } from "./ui/table-styles";
 import type { TableStylePreset } from "./ui/table-styles";
 import type { TableAction } from "./ui/table-types";
 import { Tooltip } from "./ui/Tooltip";
+
+const CommentsSidebar = lazy(() =>
+  import("./CommentsSidebar").then((m) => ({
+    default: m.CommentsSidebar,
+  })),
+);
 
 // Toast stub — host app provides the real toast system.
 // Uses a temporary DOM banner so the user sees feedback even without
@@ -3159,136 +3166,145 @@ export function DocxEditor({
                       sidebarOverlay={(() => {
                         if (showCommentsSidebar) {
                           return (
-                            <CommentsSidebar
-                              activeCommentId={activeCommentId}
-                              comments={visibleComments}
-                              anchorPositions={anchorPositions}
-                              pageWidth={(() => {
-                                const sp =
-                                  history.state.package.document
-                                    .finalSectionProperties;
-                                return sp?.pageWidth
-                                  ? Math.round(sp.pageWidth / 15)
-                                  : 816;
-                              })()}
-                              editorContainerRef={scrollContainerRef}
-                              onCommentClick={(id) => {
-                                setActiveCommentId(id);
-                              }}
-                              onCommentResolve={(id) => {
-                                updateComments((prev) =>
-                                  prev.map((c) =>
-                                    c.id === id
-                                      ? {
-                                          ...c,
-                                          done: true,
-                                        }
-                                      : c,
-                                  ),
-                                );
-                              }}
-                              onCommentDelete={(id) => {
-                                updateComments((prev) =>
-                                  prev.filter(
-                                    (c) => c.id !== id && c.parentId !== id,
-                                  ),
-                                );
-                                if (activeCommentId === id) {
-                                  setActiveCommentId(null);
-                                }
-                              }}
-                              onCommentReply={(id, text) => {
-                                updateComments((prev) => [
-                                  ...prev,
-                                  createComment(text, author, id),
-                                ]);
-                              }}
-                              onAddComment={(addText) => {
-                                const comment = createComment(addText, author);
-                                // Replace pending comment mark with the real comment ID
-                                const view = pagedEditorRef.current?.getView();
-                                if (!view || !commentSelectionRange) {
-                                  return false;
-                                }
-                                const marked = applyCommentMarkRange(
-                                  view,
-                                  commentSelectionRange,
-                                  comment.id,
-                                  {
-                                    replacePending: true,
-                                  },
-                                );
-                                if (!marked) {
-                                  return false;
-                                }
-                                const commentAuthor = getCommentAuthorKey(
-                                  comment.author,
-                                );
-                                setVisibleCommentAuthors((current) => {
-                                  if (current === null) {
-                                    return null;
-                                  }
-                                  const next = new Set(current);
-                                  next.add(commentAuthor);
-                                  return next;
-                                });
-                                setActiveCommentId(comment.id);
-                                updateComments((prev) => [...prev, comment]);
-                                pagedEditorRef.current?.relayout();
-                                requestAnimationFrame(() => {
-                                  syncCommentHighlightStyles();
-                                  requestAnimationFrame(
-                                    syncCommentHighlightStyles,
+                            <Suspense fallback={null}>
+                              <CommentsSidebar
+                                activeCommentId={activeCommentId}
+                                comments={visibleComments}
+                                anchorPositions={anchorPositions}
+                                pageWidth={(() => {
+                                  const sp =
+                                    history.state.package.document
+                                      .finalSectionProperties;
+                                  return sp?.pageWidth
+                                    ? Math.round(sp.pageWidth / 15)
+                                    : 816;
+                                })()}
+                                editorContainerRef={scrollContainerRef}
+                                onCommentClick={(id) => {
+                                  setActiveCommentId(id);
+                                }}
+                                onCommentResolve={(id) => {
+                                  updateComments((prev) =>
+                                    prev.map((c) =>
+                                      c.id === id
+                                        ? {
+                                            ...c,
+                                            done: true,
+                                          }
+                                        : c,
+                                    ),
                                   );
-                                });
-                                setIsAddingComment(false);
-                                setCommentSelectionRange(null);
-                                setAddCommentYPosition(null);
-                                return true;
-                              }}
-                              onTrackedChangeReply={(revisionId, text) => {
-                                updateComments((prev) => [
-                                  ...prev,
-                                  createComment(text, author, revisionId),
-                                ]);
-                              }}
-                              onCancelAddComment={() => {
-                                // Remove pending comment highlight
-                                const view = pagedEditorRef.current?.getView();
-                                if (view && commentSelectionRange) {
-                                  removePendingCommentMarkRange(
+                                }}
+                                onCommentDelete={(id) => {
+                                  updateComments((prev) =>
+                                    prev.filter(
+                                      (c) => c.id !== id && c.parentId !== id,
+                                    ),
+                                  );
+                                  if (activeCommentId === id) {
+                                    setActiveCommentId(null);
+                                  }
+                                }}
+                                onCommentReply={(id, text) => {
+                                  updateComments((prev) => [
+                                    ...prev,
+                                    createComment(text, author, id),
+                                  ]);
+                                }}
+                                onAddComment={(addText) => {
+                                  const comment = createComment(
+                                    addText,
+                                    author,
+                                  );
+                                  // Replace pending comment mark with the real comment ID
+                                  const view =
+                                    pagedEditorRef.current?.getView();
+                                  if (!view || !commentSelectionRange) {
+                                    return false;
+                                  }
+                                  const marked = applyCommentMarkRange(
                                     view,
                                     commentSelectionRange,
+                                    comment.id,
+                                    {
+                                      replacePending: true,
+                                    },
                                   );
-                                }
-                                setIsAddingComment(false);
-                                setCommentSelectionRange(null);
-                                setAddCommentYPosition(null);
-                              }}
-                              onAcceptChange={(from, to) => {
-                                const view = pagedEditorRef.current?.getView();
-                                if (view) {
-                                  acceptChange(from, to)(
-                                    view.state,
-                                    view.dispatch,
+                                  if (!marked) {
+                                    return false;
+                                  }
+                                  const commentAuthor = getCommentAuthorKey(
+                                    comment.author,
                                   );
-                                  extractTrackedChanges();
-                                }
-                              }}
-                              onRejectChange={(from, to) => {
-                                const view = pagedEditorRef.current?.getView();
-                                if (view) {
-                                  rejectChange(from, to)(
-                                    view.state,
-                                    view.dispatch,
-                                  );
-                                  extractTrackedChanges();
-                                }
-                              }}
-                              isAddingComment={isAddingComment}
-                              addCommentYPosition={addCommentYPosition}
-                              topOffset={0}
-                            />
+                                  setVisibleCommentAuthors((current) => {
+                                    if (current === null) {
+                                      return null;
+                                    }
+                                    const next = new Set(current);
+                                    next.add(commentAuthor);
+                                    return next;
+                                  });
+                                  setActiveCommentId(comment.id);
+                                  updateComments((prev) => [...prev, comment]);
+                                  pagedEditorRef.current?.relayout();
+                                  requestAnimationFrame(() => {
+                                    syncCommentHighlightStyles();
+                                    requestAnimationFrame(
+                                      syncCommentHighlightStyles,
+                                    );
+                                  });
+                                  setIsAddingComment(false);
+                                  setCommentSelectionRange(null);
+                                  setAddCommentYPosition(null);
+                                  return true;
+                                }}
+                                onTrackedChangeReply={(revisionId, text) => {
+                                  updateComments((prev) => [
+                                    ...prev,
+                                    createComment(text, author, revisionId),
+                                  ]);
+                                }}
+                                onCancelAddComment={() => {
+                                  // Remove pending comment highlight
+                                  const view =
+                                    pagedEditorRef.current?.getView();
+                                  if (view && commentSelectionRange) {
+                                    removePendingCommentMarkRange(
+                                      view,
+                                      commentSelectionRange,
+                                    );
+                                  }
+                                  setIsAddingComment(false);
+                                  setCommentSelectionRange(null);
+                                  setAddCommentYPosition(null);
+                                }}
+                                onAcceptChange={(from, to) => {
+                                  const view =
+                                    pagedEditorRef.current?.getView();
+                                  if (view) {
+                                    acceptChange(from, to)(
+                                      view.state,
+                                      view.dispatch,
+                                    );
+                                    extractTrackedChanges();
+                                  }
+                                }}
+                                onRejectChange={(from, to) => {
+                                  const view =
+                                    pagedEditorRef.current?.getView();
+                                  if (view) {
+                                    rejectChange(from, to)(
+                                      view.state,
+                                      view.dispatch,
+                                    );
+                                    extractTrackedChanges();
+                                  }
+                                }}
+                                isAddingComment={isAddingComment}
+                                addCommentYPosition={addCommentYPosition}
+                                topOffset={0}
+                              />
+                            </Suspense>
                           );
                         }
                         return undefined;
