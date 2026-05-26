@@ -78,11 +78,16 @@ const loadCollaborationRuntimeModules =
       import("@hocuspocus/provider"),
       import("y-prosemirror"),
       import("yjs"),
-    ]).then(([hocuspocus, yProseMirror, yjs]) => ({
-      hocuspocus,
-      yProseMirror,
-      yjs,
-    }));
+    ])
+      .then(([hocuspocus, yProseMirror, yjs]) => ({
+        hocuspocus,
+        yProseMirror,
+        yjs,
+      }))
+      .catch((error: unknown) => {
+        collaborationRuntimeModulesPromise = null;
+        throw error;
+      });
 
     return await collaborationRuntimeModulesPromise;
   };

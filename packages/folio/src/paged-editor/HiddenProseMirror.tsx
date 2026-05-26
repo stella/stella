@@ -72,7 +72,12 @@ const loadCollaborationModules = (): Promise<CollaborationModules> => {
   collaborationModulesPromise ??= Promise.all([
     import("y-prosemirror"),
     import("yjs"),
-  ]).then(([yProseMirror, yjs]) => ({ yProseMirror, yjs }));
+  ])
+    .then(([yProseMirror, yjs]) => ({ yProseMirror, yjs }))
+    .catch((error: unknown) => {
+      collaborationModulesPromise = null;
+      throw error;
+    });
 
   return collaborationModulesPromise;
 };
@@ -554,12 +559,20 @@ export function HiddenProseMirror(
     }
 
     let cancelled = false;
-    void loadCollaborationModules().then((modules) => {
-      if (!cancelled) {
-        setCollaborationModules(modules);
-      }
-      return undefined;
-    });
+    void loadCollaborationModules().then(
+      (modules) => {
+        if (!cancelled) {
+          setCollaborationModules(modules);
+        }
+        return undefined;
+      },
+      () => {
+        if (!cancelled) {
+          setCollaborationModules(null);
+        }
+        return undefined;
+      },
+    );
 
     return () => {
       cancelled = true;

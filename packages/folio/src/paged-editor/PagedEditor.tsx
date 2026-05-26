@@ -1945,6 +1945,7 @@ export function PagedEditor(
     blockWidths: number[];
     measures: Measure[];
   } | null>(null);
+  const lastLayoutEditorStateRef = useRef<EditorState | null>(null);
   const lastLaidOutPmDocRef = useRef<EditorState["doc"] | null>(null);
   const lastLayoutUsedLoadedFontsRef = useRef(false);
   const pendingInitialFontReadyLayoutRef = useRef(false);
@@ -2404,6 +2405,7 @@ export function PagedEditor(
         }
 
         setLayout(newLayout);
+        lastLayoutEditorStateRef.current = state;
         lastLaidOutPmDocRef.current = state.doc;
         lastLayoutUsedLoadedFontsRef.current = documentFontsAreLoaded();
         recordLayoutComplete(reason);
@@ -5044,7 +5046,7 @@ export function PagedEditor(
 
     try {
       const positions = computeAnchorPositions(
-        hiddenPMRef.current?.getState() ?? null,
+        lastLayoutEditorStateRef.current,
         layout,
         blocks,
         measures,

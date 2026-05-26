@@ -1,9 +1,9 @@
-import { cloneElement } from "react";
-import type { ReactElement, ReactNode } from "react";
+import { cloneElement, isValidElement } from "react";
+import type { ReactNode } from "react";
 
 type TooltipProps = {
   content: ReactNode;
-  children: ReactElement<TooltipChildProps>;
+  children: ReactNode;
   side?: "top" | "bottom" | "left" | "right";
   delayMs?: number;
 };
@@ -15,7 +15,7 @@ type TooltipChildProps = {
 
 export function Tooltip({ content, children }: TooltipProps) {
   const label = getTooltipLabel(content);
-  if (!label) {
+  if (!label || !isValidElement<TooltipChildProps>(children)) {
     return children;
   }
 

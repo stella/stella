@@ -2,6 +2,7 @@ import { chromium, type BrowserContext, type Page } from "@playwright/test";
 import { TaggedError } from "better-result";
 import { spawn } from "node:child_process";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 
 import type {
   HiddenEditorPhase,
@@ -124,7 +125,11 @@ async function main() {
 }
 
 function rootDir(): string {
-  return new URL("../../..", import.meta.url).pathname.replace(/\/$/u, "");
+  let dir = fileURLToPath(new URL("../../..", import.meta.url));
+  while (dir.endsWith("/") || dir.endsWith("\\")) {
+    dir = dir.slice(0, -1);
+  }
+  return dir;
 }
 
 async function runCommand(
