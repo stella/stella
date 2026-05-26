@@ -263,6 +263,8 @@ export default defineConfig({
     "./.oxlint-plugins/mcp-security.ts",
     "./.oxlint-plugins/auth-lifecycle.ts",
     "./.oxlint-plugins/stella-toast.ts",
+    "./.oxlint-plugins/no-untranslated-jsx-literal.ts",
+    "./.oxlint-plugins/forbid-process-env-outside-env-ts.ts",
     "./.oxlint-plugins/no-secret-in-log-sink.ts",
     "./.oxlint-plugins/no-raw-api-url.ts",
     "./.oxlint-plugins/require-fetch-timeout.ts",
@@ -480,6 +482,13 @@ export default defineConfig({
           },
         ],
         "no-raw-api-url/no-raw-api-url": "error",
+        // Initial i18n ratchet: catch new raw JSX copy in files that
+        // already participate in use-intl. Remove `requireTranslationUsage`
+        // once legacy product UI literals have been migrated.
+        "no-untranslated-jsx-literal/no-untranslated-jsx-literal": [
+          "error",
+          { requireTranslationUsage: true },
+        ],
         "require-router-select/require-router-select": "error",
         "security-guards/no-unsanitized-href": "error",
         "sonarjs/jsx-no-leaked-render": "error",
@@ -598,6 +607,29 @@ export default defineConfig({
         "sonarjs/no-ignored-return": "error",
         "sonarjs/no-use-of-empty-return-value": "error",
         "require-fetch-timeout/require-fetch-timeout": "error",
+      },
+    },
+    {
+      files: ["apps/**/*.{ts,tsx}", "packages/**/*.{ts,tsx}"],
+      rules: {
+        "forbid-process-env-outside-env-ts/forbid-process-env-outside-env-ts": [
+          "error",
+          {
+            allowedFiles: [
+              "apps/api/src/db-url.ts",
+              "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts",
+              "apps/api/src/handlers/case-law/ingestion/adapters/utils.ts",
+              "apps/api/src/handlers/health/routes.ts",
+              "apps/api/src/index.ts",
+              "apps/api/src/lib/analytics/posthog.ts",
+              "apps/api/src/lib/db/assert-migrations-applied.ts",
+              "apps/api/src/lib/runtime-worker-path.ts",
+              "apps/api/src/lib/s3.ts",
+              "apps/api/src/lib/scheduler/runner.ts",
+              "apps/api/src/lib/subprocess.ts",
+            ],
+          },
+        ],
       },
     },
     {
