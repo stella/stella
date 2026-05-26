@@ -1131,8 +1131,16 @@ export function DocxEditor({
   const handleDocumentChange = useCallback(
     (newDocument: Document) => {
       const currentComments = commentsRef.current;
-      const documentWithComments = structuredClone(newDocument);
-      documentWithComments.package.document.comments = currentComments;
+      const documentWithComments = {
+        ...newDocument,
+        package: {
+          ...newDocument.package,
+          document: {
+            ...newDocument.package.document,
+            comments: currentComments,
+          },
+        },
+      };
       pushDocument(documentWithComments);
       onChange?.(documentWithComments);
       // Update outline headings if sidebar is open
