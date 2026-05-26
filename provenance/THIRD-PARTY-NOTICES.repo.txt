@@ -24,21 +24,21 @@ Project: root
 - @atlaskit/pragmatic-drag-and-drop-auto-scroll 2.1.5 — Apache-2.0
 - @atlaskit/pragmatic-drag-and-drop-hitbox 1.1.0 — Apache-2.0
 - @aws-sdk/client-sesv2 3.1048.0 — Apache-2.0
-- @base-ui/react 1.4.1 — MIT
+- @base-ui/react 1.5.0 — MIT
 - @better-auth/oauth-provider 1.6.11 — MIT
 - @elysiajs/cors 1.4.2 — MIT
 - @elysiajs/eden 1.4.9 — MIT
 - @floating-ui/react-dom 2.1.8 — MIT
 - @hocuspocus/provider 4.0.0 — MIT
 - @hocuspocus/server 4.0.0 — MIT
-- @libpdf/core 0.3.4 — MIT
+- @libpdf/core 0.3.6 — MIT
 - @litko/yara-x 0.5.2 — MIT
 - @modelcontextprotocol/sdk 1.29.0 — MIT
 - @openrouter/ai-sdk-provider 2.9.0 — Apache-2.0
 - @opentelemetry/api-logs 0.208.0 — Apache-2.0
 - @opentelemetry/api-logs 0.218.0 — Apache-2.0
 - @posthog/react 1.9.0 — MIT
-- @pydantic/genai-prices 0.0.60 — MIT
+- @pydantic/genai-prices 0.0.61 — MIT
 - @react-email/components 1.0.12 — MIT
 - @react-email/render 2.0.6 — MIT
 - @react-email/render 2.0.8 — MIT
@@ -53,6 +53,7 @@ Project: root
 - @stll/case-law 0.0.0 — Apache-2.0
 - @stll/docx-core 0.1.0 — Apache-2.0
 - @stll/docx-utils 0.1.0 — Apache-2.0
+- @stll/errors 0.0.0 — Apache-2.0
 - @stll/folio 0.1.0 — Apache-2.0
 - @stll/infosoud 0.1.0 — Apache-2.0
 - @stll/money 0.0.0 — Apache-2.0
@@ -126,7 +127,7 @@ Project: root
 - marked 15.0.12 — MIT
 - marked 16.4.2 — MIT
 - marked 17.0.5 — MIT
-- marked 18.0.3 — MIT
+- marked 18.0.4 — MIT
 - nodemailer 8.0.7 — MIT-0
 - pdfjs-dist 5.7.284 — Apache-2.0
 - posthog-js 1.373.5 — SEE LICENSE IN LICENSE
@@ -135,7 +136,7 @@ Project: root
 - prosemirror-dropcursor 1.8.2 — MIT
 - prosemirror-history 1.5.0 — MIT
 - prosemirror-keymap 1.2.3 — MIT
-- prosemirror-model 1.25.6 — MIT
+- prosemirror-model 1.25.7 — MIT
 - prosemirror-state 1.4.4 — MIT
 - prosemirror-tables 1.8.5 — MIT
 - prosemirror-transform 1.12.0 — MIT
