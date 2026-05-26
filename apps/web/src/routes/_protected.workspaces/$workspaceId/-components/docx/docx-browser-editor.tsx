@@ -4,8 +4,6 @@
  */
 
 import {
-  lazy,
-  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -27,7 +25,11 @@ import {
 import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 
-import { FormattingBar, setAnonymizationTermsMeta } from "@stll/folio";
+import {
+  DocxEditor,
+  FormattingBar,
+  setAnonymizationTermsMeta,
+} from "@stll/folio";
 import type {
   AnonymizationTerm,
   DocxCompatibility,
@@ -79,11 +81,6 @@ import {
 import type { OptimisticPreviewFile } from "./docx-browser-editor.logic";
 import type { EditSessionErrorReason } from "./use-edit-session";
 import { useEditSession } from "./use-edit-session";
-
-const DocxEditor = lazy(async () => {
-  const m = await import("@stll/folio");
-  return { default: m.DocxEditor };
-});
 
 const CHANGE_CHECKPOINT_DELAY = 2000;
 const COLLABORATOR_COLOR_SPACE = 16_777_215;
@@ -1402,10 +1399,48 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
           requestDocxEditMode={requestEditMode}
           workspaceId={workspaceId}
         >
-          <Suspense
-            fallback={
+          <DocxEditor
+            key={`docx-${previewIdentity}-${collaborationIdentity}`}
+            ref={editorRef}
+            autoOpenReviewSidebar={false}
+            className="folio-docx-preview folio-peek h-full"
+            documentBuffer={editorBuffer}
+            initialZoom={targetZoom}
+            mode={isUnlocked ? editorMode : "viewing"}
+            onModeChange={(mode) => {
+              if (mode !== "viewing") {
+                setEditorMode(mode);
+              }
+            }}
+            onCompatibilityChange={(nextCompatibility) => {
+              if (previewFileQuery.isPlaceholderData) {
+                return;
+              }
+
+              setCompatibilityState({
+                targetKey: editTargetKey,
+                value: nextCompatibility,
+              });
+              onCompatibilityChange?.(nextCompatibility);
+            }}
+            onAnonymizationMatchesChange={handleAnonymizationMatchesChange}
+            onSelectionTextChange={handleSelectionTextChange}
+            onAnonymizationTermClick={handleAnonymizationTermClick}
+            selectedAnonymizationCanonical={sidebarSelectedCanonical}
+            anonymizationSelectionSeq={sidebarSelectionSeq}
+            onEditorViewReady={setEditorViewForAnonymization}
+            showToolbar={showActionBar ? true : isUnlocked}
+            toolbarExtra={toolbarExtra}
+            {...(activeCollaboration !== undefined
+              ? { collaboration: activeCollaboration }
+              : {})}
+            {...(isUnlocked ? { onChange: handleChange } : {})}
+            onReadonlyEditAttempt={handleLockedEditAttempt}
+            {...(initialScrollTop !== undefined ? { initialScrollTop } : {})}
+            {...(onScrollTopChange !== undefined ? { onScrollTopChange } : {})}
+            loadingIndicator={
               <DocxEditorLoadingFallback
-                label={t("folio.loadingEditor")}
+                label={t("folio.loadingDocument")}
                 scaleOffset={scaleOffset}
                 showActionBar={showActionBar}
                 stylePickerLabel={lastStyleLabelRef.current}
@@ -1414,62 +1449,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
                 zoom={targetZoom}
               />
             }
-          >
-            <DocxEditor
-              key={`docx-${previewIdentity}-${collaborationIdentity}`}
-              ref={editorRef}
-              autoOpenReviewSidebar={false}
-              className="folio-docx-preview folio-peek h-full"
-              documentBuffer={editorBuffer}
-              initialZoom={targetZoom}
-              mode={isUnlocked ? editorMode : "viewing"}
-              onModeChange={(mode) => {
-                if (mode !== "viewing") {
-                  setEditorMode(mode);
-                }
-              }}
-              onCompatibilityChange={(nextCompatibility) => {
-                if (previewFileQuery.isPlaceholderData) {
-                  return;
-                }
-
-                setCompatibilityState({
-                  targetKey: editTargetKey,
-                  value: nextCompatibility,
-                });
-                onCompatibilityChange?.(nextCompatibility);
-              }}
-              onAnonymizationMatchesChange={handleAnonymizationMatchesChange}
-              onSelectionTextChange={handleSelectionTextChange}
-              onAnonymizationTermClick={handleAnonymizationTermClick}
-              selectedAnonymizationCanonical={sidebarSelectedCanonical}
-              anonymizationSelectionSeq={sidebarSelectionSeq}
-              onEditorViewReady={setEditorViewForAnonymization}
-              showToolbar={showActionBar ? true : isUnlocked}
-              toolbarExtra={toolbarExtra}
-              {...(activeCollaboration !== undefined
-                ? { collaboration: activeCollaboration }
-                : {})}
-              {...(isUnlocked ? { onChange: handleChange } : {})}
-              onReadonlyEditAttempt={handleLockedEditAttempt}
-              {...(initialScrollTop !== undefined ? { initialScrollTop } : {})}
-              {...(onScrollTopChange !== undefined
-                ? { onScrollTopChange }
-                : {})}
-              loadingIndicator={
-                <DocxEditorLoadingFallback
-                  label={t("folio.loadingDocument")}
-                  scaleOffset={scaleOffset}
-                  showActionBar={showActionBar}
-                  stylePickerLabel={lastStyleLabelRef.current}
-                  stylePickerLabelStyle={lastStyleLabelStyleRef.current}
-                  toolbarExtra={toolbarExtra}
-                  zoom={targetZoom}
-                />
-              }
-              preserveDocumentWhileLoading
-            />
-          </Suspense>
+            preserveDocumentWhileLoading
+          />
         </FileViewerWithAI>
       </div>
     </div>
