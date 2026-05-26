@@ -44,6 +44,10 @@ import type { ExtensionManager } from "../core/prosemirror/extensions/ExtensionM
 import { schema } from "../core/prosemirror/schema";
 import type { Document, Theme, StyleDefinitions } from "../core/types/document";
 import { suppressHiddenEditorScrollToSelection } from "./hiddenEditorScroll";
+import {
+  recordHiddenEditorStateCreate,
+  type HiddenEditorStateReason,
+} from "./layoutInstrumentation";
 import { isReadOnlyEditKey } from "./readOnlyEditAttempt";
 // Import ProseMirror CSS
 import "prosemirror-view/style/prosemirror.css";
@@ -269,23 +273,48 @@ const collectRemoteSelections = (
 // ============================================================================
 
 /**
- * Hidden host styles - visually hidden but focusable
+ * Hidden wrapper styles - visually hidden, focus-safe scroll isolation.
+ *
+ * The focused ProseMirror contenteditable can ask the browser to reveal its
+ * caret. Keeping it inside a tiny overflow-hidden fixed wrapper confines that
+ * native scroll work to the wrapper instead of the visible document viewport.
  */
-const HIDDEN_HOST_STYLES: CSSProperties = {
-  // Position off-screen but in document flow for accessibility
+const HIDDEN_WRAPPER_STYLES: CSSProperties = {
   position: "fixed",
   left: "-9999px",
   top: "0",
-  // Hide visually but keep focusable (NOT visibility:hidden!)
+  width: "1px",
+  height: "1px",
+  overflow: "hidden",
   opacity: 0,
   zIndex: -1,
-  // Prevent interaction with visual layer
   pointerEvents: "none",
-  // Prevent text selection in hidden area
-  userSelect: "none",
-  // Prevent scroll anchoring issues
+  contain: "layout paint",
   overflowAnchor: "none",
-  // Don't set aria-hidden - editor must remain accessible to screen readers
+  // Don't set aria-hidden - the inner editor remains the accessible document.
+};
+
+/**
+ * Hidden host styles - full document-width PM mount inside the isolated wrapper.
+ */
+const HIDDEN_HOST_STYLES: CSSProperties = {
+  position: "absolute",
+  left: "0",
+  top: "0",
+  userSelect: "none",
+  overflowAnchor: "none",
+  // Don't use visibility:hidden - the editor must remain focusable.
+};
+
+const HIDDEN_EDITOR_ATTRIBUTES = {
+  "aria-label": "Document content",
+  "aria-multiline": "true",
+  autocapitalize: "off",
+  autocomplete: "off",
+  autocorrect: "off",
+  role: "textbox",
+  spellcheck: "false",
+  translate: "no",
 };
 
 // ============================================================================
@@ -304,7 +333,10 @@ function createInitialState(
   manager?: ExtensionManager,
   externalPlugins: Plugin[] = [],
   collaboration?: HiddenProseMirrorCollaboration,
+  reason: HiddenEditorStateReason = "mount",
 ): EditorState {
+  recordHiddenEditorStateCreate(reason);
+
   const activeSchema = manager?.getSchema() ?? schema;
   let localDoc = createEmptyDoc();
   if (document) {
@@ -359,6 +391,30 @@ function stateToDocument(
 
   // fromProseDoc preserves the base document structure when provided
   return fromProseDoc(state.doc, originalDoc);
+}
+
+function getDocumentIdentity(doc: Document | null): string {
+  if (!doc) {
+    return "empty";
+  }
+  // Use the document's package id or a hash of its structure.
+  // For simplicity, compare based on whether it has different metadata.
+  const meta = doc.package.properties;
+  const created = meta?.created ? String(meta.created) : "";
+  const modified = meta?.modified ? String(meta.modified) : "";
+  const title = meta?.title ?? "";
+  return `${created}-${modified}-${title}`;
+}
+
+function syncHiddenEditorAccessibility(
+  view: EditorView,
+  readOnly: boolean,
+): void {
+  const { dom } = view;
+  if (!dom.hasAttribute("tabindex")) {
+    dom.tabIndex = 0;
+  }
+  dom.setAttribute("aria-readonly", readOnly ? "true" : "false");
 }
 
 // ============================================================================
@@ -445,10 +501,12 @@ export function HiddenProseMirror(
       extensionManager,
       externalPlugins,
       collaboration,
+      "mount",
     );
 
     const editorProps: DirectEditorProps = {
       state: initialState,
+      attributes: HIDDEN_EDITOR_ATTRIBUTES,
       editable: () => !readOnlyRef.current,
       dispatchTransaction: (transaction: Transaction) => {
         if (!viewRef.current || isDestroyingRef.current) {
@@ -520,6 +578,10 @@ export function HiddenProseMirror(
     };
 
     viewRef.current = new EditorView(hostRef.current, editorProps);
+    syncHiddenEditorAccessibility(viewRef.current, readOnlyRef.current);
+    isInitializedRef.current = true;
+    lastDocumentIdRef.current = getDocumentIdentity(document);
+    lastCollaborationFragmentRef.current = collaboration?.yXmlFragment ?? null;
 
     // Notify that view is ready (use ref to avoid dependency issues)
     onEditorViewReadyRef.current?.(viewRef.current);
@@ -588,23 +650,7 @@ export function HiddenProseMirror(
       return;
     }
 
-    // Generate a simple document identity based on its structure
-    // This helps detect truly different documents vs the same doc passed back after editing
-    const getDocumentId = (doc: Document | null): string => {
-      if (!doc) {
-        return "empty";
-      }
-      // Use the document's package id or a hash of its structure
-      // For simplicity, we compare based on whether it's a different document object
-      // and whether it has different metadata
-      const meta = doc.package.properties;
-      const created = meta?.created ? String(meta.created) : "";
-      const modified = meta?.modified ? String(meta.modified) : "";
-      const title = meta?.title ?? "";
-      return `${created}-${modified}-${title}`;
-    };
-
-    const currentDocId = getDocumentId(document);
+    const currentDocId = getDocumentIdentity(document);
     const currentCollaborationFragment = collaboration?.yXmlFragment ?? null;
     const collaborationSourceChanged =
       currentCollaborationFragment !== lastCollaborationFragmentRef.current;
@@ -638,8 +684,10 @@ export function HiddenProseMirror(
       extensionManager,
       externalPlugins,
       collaboration,
+      "external-document",
     );
     viewRef.current.updateState(newState);
+    syncHiddenEditorAccessibility(viewRef.current, readOnlyRef.current);
 
     // Use ref to avoid infinite loop when callback is unstable
     onSelectionChangeRef.current?.(newState);
@@ -651,7 +699,8 @@ export function HiddenProseMirror(
     if (!viewRef.current) {
       return;
     }
-    // EditorView will call editable() on each check, so we don't need to update
+    // EditorView calls editable() dynamically; ARIA state needs explicit sync.
+    syncHiddenEditorAccessibility(viewRef.current, readOnly);
   }, [readOnly]);
 
   // ========================================================================
@@ -801,13 +850,18 @@ export function HiddenProseMirror(
 
   return (
     <div
-      ref={hostRef}
-      className="paged-editor__hidden-pm"
-      style={{
-        ...HIDDEN_HOST_STYLES,
-        width: widthPx > 0 ? `${widthPx}px` : undefined,
-      }}
-      // DO NOT set aria-hidden - this editor provides semantic structure
-    />
+      className="paged-editor__hidden-pm-wrapper"
+      style={HIDDEN_WRAPPER_STYLES}
+    >
+      <div
+        ref={hostRef}
+        className="paged-editor__hidden-pm"
+        style={{
+          ...HIDDEN_HOST_STYLES,
+          width: widthPx > 0 ? `${widthPx}px` : undefined,
+        }}
+        // DO NOT set aria-hidden - this editor provides semantic structure
+      />
+    </div>
   );
 }

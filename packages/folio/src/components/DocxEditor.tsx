@@ -802,7 +802,7 @@ export function DocxEditor({
     }
 
     const nodes = root.querySelectorAll<HTMLElement>(
-      ".layout-run-text[data-comment-id], .docx-comment[data-comment-id]",
+      ".layout-run-text[data-comment-id]",
     );
     for (const node of nodes) {
       const commentId = Number.parseInt(node.dataset["commentId"] ?? "", 10);
