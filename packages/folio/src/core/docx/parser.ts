@@ -62,7 +62,7 @@ import {
   resolveRelativePath,
 } from "./relsParser";
 import { parseSettings } from "./settingsParser";
-import { parseStyles, parseStyleDefinitions } from "./styleParser";
+import { parseStylesPackage } from "./styleParser";
 import type { StyleMap } from "./styleParser";
 import { parseTheme } from "./themeParser";
 import { normalizeTrackedMoveRanges } from "./trackedMoveRangeNormalization";
@@ -178,8 +178,9 @@ export async function parseDocx(
 
     timeStage("styles", () => {
       if (raw.stylesXml) {
-        styles = parseStyles(raw.stylesXml, theme);
-        styleDefinitions = parseStyleDefinitions(raw.stylesXml, theme, styles);
+        const parsedStyles = parseStylesPackage(raw.stylesXml, theme);
+        styles = parsedStyles.styles;
+        styleDefinitions = parsedStyles.styleDefinitions;
       }
     });
     onProgress("Parsed styles", 30);

@@ -72,6 +72,11 @@ import type { XmlElement } from "./xmlParser";
  */
 export type StyleMap = Map<string, Style>;
 
+export type ParsedStylesPackage = {
+  styleDefinitions: StyleDefinitions;
+  styles: StyleMap;
+};
+
 /**
  * Parse text formatting properties (w:rPr)
  */
@@ -1606,14 +1611,21 @@ function resolveStyleInheritance(
  * @returns StyleMap with resolved inheritance
  */
 export function parseStyles(stylesXml: string, theme: Theme | null): StyleMap {
+  const doc = parseXmlDocument(stylesXml);
+  if (!doc) {
+    return new Map();
+  }
+
+  return parseStylesFromDocument(doc, theme);
+}
+
+function parseStylesFromDocument(
+  doc: XmlElement,
+  theme: Theme | null,
+): StyleMap {
   const styleMap: StyleMap = new Map();
 
   try {
-    const doc = parseXmlDocument(stylesXml);
-    if (!doc) {
-      return styleMap;
-    }
-
     // First pass: parse all styles without inheritance resolution
     const styleElements = findChildren(doc, "w", "style");
     for (const styleEl of styleElements) {
@@ -1647,16 +1659,24 @@ export function parseStyleDefinitions(
   theme: Theme | null,
   resolvedStyles?: StyleMap,
 ): StyleDefinitions {
+  const doc = parseXmlDocument(stylesXml);
+  if (!doc) {
+    return { styles: [] };
+  }
+
+  return parseStyleDefinitionsFromDocument(doc, theme, resolvedStyles);
+}
+
+function parseStyleDefinitionsFromDocument(
+  doc: XmlElement,
+  theme: Theme | null,
+  resolvedStyles?: StyleMap,
+): StyleDefinitions {
   const result: StyleDefinitions = {
     styles: [],
   };
 
   try {
-    const doc = parseXmlDocument(stylesXml);
-    if (!doc) {
-      return result;
-    }
-
     // Parse document defaults
     const docDefaultsEl = findChild(doc, "w", "docDefaults");
     const parsedDocDefaults = parseDocDefaults(docDefaultsEl, theme);
@@ -1692,13 +1712,32 @@ export function parseStyleDefinitions(
     }
 
     // Parse styles with full inheritance resolution
-    const styleMap = resolvedStyles ?? parseStyles(stylesXml, theme);
+    const styleMap = resolvedStyles ?? parseStylesFromDocument(doc, theme);
     result.styles = Array.from(styleMap.values());
   } catch {
     // Malformed styles return the partial definitions parsed so far.
   }
 
   return result;
+}
+
+export function parseStylesPackage(
+  stylesXml: string,
+  theme: Theme | null,
+): ParsedStylesPackage {
+  const doc = parseXmlDocument(stylesXml);
+  if (!doc) {
+    return {
+      styleDefinitions: { styles: [] },
+      styles: new Map(),
+    };
+  }
+
+  const styles = parseStylesFromDocument(doc, theme);
+  return {
+    styleDefinitions: parseStyleDefinitionsFromDocument(doc, theme, styles),
+    styles,
+  };
 }
 
 /**
