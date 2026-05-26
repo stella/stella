@@ -64,6 +64,7 @@ import {
 import { parseStyles, parseStyleDefinitions } from "./styleParser";
 import type { StyleMap } from "./styleParser";
 import { parseTheme } from "./themeParser";
+import { normalizeTrackedMoveRanges } from "./trackedMoveRangeNormalization";
 import { unzipDocx, getMediaMimeType, mediaToDataUrl } from "./unzip";
 import type { DocxUnzipLimits, RawDocxContent } from "./unzip";
 
@@ -321,6 +322,18 @@ export async function parseDocx(
     if (numberingReferenceNormalization.removedMissingNumberingReferences > 0) {
       warnings.push(
         `Removed ${numberingReferenceNormalization.removedMissingNumberingReferences} numbering reference(s) whose numbering definitions are missing.`,
+      );
+    }
+    const trackedMoveRangeNormalization = normalizeTrackedMoveRanges({
+      documentBody,
+      ...(headers !== undefined ? { headers } : {}),
+      ...(footers !== undefined ? { footers } : {}),
+      ...(footnotes !== undefined ? { footnotes } : {}),
+      ...(endnotes !== undefined ? { endnotes } : {}),
+    });
+    if (trackedMoveRangeNormalization.removedUnbalancedMoveRangeMarkers > 0) {
+      warnings.push(
+        `Removed ${trackedMoveRangeNormalization.removedUnbalancedMoveRangeMarkers} unbalanced tracked move range marker(s).`,
       );
     }
 
