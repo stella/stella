@@ -1,6 +1,10 @@
-import { useEffectEvent, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { Maximize2Icon, PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -23,17 +27,23 @@ import { getUserMessageHtmlHistory } from "@/components/chat/chat-ui-tools";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
+import { api } from "@/lib/api";
 import {
   getChatSendMode,
   useChatAnonymized,
   useSetChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { useDevStore } from "@/lib/dev-store";
+import { toAPIError } from "@/lib/errors";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
+import { toSafeId } from "@/lib/safe-id";
 import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
+import { ChatWebSearchToggle } from "@/routes/_protected.chat/-components/chat-web-search-toggle";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
@@ -139,6 +149,57 @@ export const ChatThreadPage = ({
     () => getUserMessageHtmlHistory(messages),
     [messages],
   );
+
+  // Seed brand-new (empty) threads from the persisted web-search
+  // preference so the user doesn't have to flip the toggle every time
+  // they start a chat. We only fire on the first render where the
+  // thread is empty and the prior preference is on; thereafter the
+  // per-thread DB row is the source of truth.
+  const enabledPreference = useChatWebSearchPreferenceStore(
+    (state) => state.enabledPreference,
+  );
+  // Only mark a thread as seeded once the PATCH actually succeeded.
+  // The previous version flipped the ref before mutate() resolved,
+  // so any transient PATCH failure (network blip, 5xx) permanently
+  // suppressed retries for the rest of the session. `inFlight`
+  // suppresses duplicate fires while one PATCH is pending.
+  const seededWebSearchForThreadId = useRef<string | null>(null);
+  const seedingWebSearchForThreadId = useRef<string | null>(null);
+  const seedWebSearch = useChatWebSearchSeed({
+    threadRef,
+    onSettled: (threadId, succeeded) => {
+      if (seedingWebSearchForThreadId.current === threadId) {
+        seedingWebSearchForThreadId.current = null;
+      }
+      if (succeeded) {
+        seededWebSearchForThreadId.current = threadId;
+      }
+    },
+  });
+  useEffect(() => {
+    if (seededWebSearchForThreadId.current === threadRef.threadId) {
+      return;
+    }
+    if (seedingWebSearchForThreadId.current === threadRef.threadId) {
+      return;
+    }
+    if (
+      messages.length === 0 &&
+      data.webSearchAvailable &&
+      !data.webSearchEnabled &&
+      enabledPreference
+    ) {
+      seedingWebSearchForThreadId.current = threadRef.threadId;
+      seedWebSearch();
+    }
+  }, [
+    threadRef.threadId,
+    messages.length,
+    data.webSearchAvailable,
+    data.webSearchEnabled,
+    enabledPreference,
+    seedWebSearch,
+  ]);
   const controller = useChatEditor({
     sentMessageHistoryHtml,
     threadRef,
@@ -209,30 +270,10 @@ export const ChatThreadPage = ({
         <div className="flex w-full max-w-5xl flex-1 flex-col overflow-hidden">
           <div className="flex items-center justify-between gap-2 px-4 py-2">
             <div className="flex min-w-0 items-center gap-2">
-              {threadRef.scope === "workspace" ? (
-                <Link
-                  className={buttonVariants({
-                    variant: "ghost",
-                    size: "sm",
-                  })}
-                  params={{ workspaceId: threadRef.workspaceId }}
-                  to="/chat/workspaces/$workspaceId/new"
-                >
-                  <PlusIcon />
-                  {t("chat.newChat")}
-                </Link>
-              ) : (
-                <Link
-                  className={buttonVariants({
-                    variant: "ghost",
-                    size: "sm",
-                  })}
-                  to="/chat/new"
-                >
-                  <PlusIcon />
-                  {t("chat.newChat")}
-                </Link>
-              )}
+              <NewChatButton
+                hasMessages={messages.length > 0}
+                threadRef={threadRef}
+              />
               {contextMatterIds !== null && (
                 <ChatMatterPicker
                   matterIds={contextMatterIds}
@@ -241,6 +282,12 @@ export const ChatThreadPage = ({
               )}
             </div>
             <div className="flex items-center gap-1">
+              {data.webSearchAvailable && (
+                <ChatWebSearchToggle
+                  enabled={data.webSearchEnabled}
+                  threadRef={threadRef}
+                />
+              )}
               <ChatAnonymizedToggle
                 enabled={anonymized}
                 onChange={setAnonymized}
@@ -314,5 +361,100 @@ export const ChatThreadPage = ({
         </div>
       </ChatApprovalContext>
     </ChatMattersContext>
+  );
+};
+
+type ChatWebSearchSeedProps = {
+  threadRef: ChatThreadRef;
+  /**
+   * Invoked after the PATCH settles regardless of outcome. Lets the
+   * caller advance its bookkeeping refs (mark thread seeded only on
+   * `succeeded === true`; clear the in-flight ref either way). The
+   * threadId is echoed so callers can guard against stale settlements
+   * after the user navigated to a different thread.
+   */
+  onSettled: (threadId: string, succeeded: boolean) => void;
+};
+
+const useChatWebSearchSeed = ({
+  threadRef,
+  onSettled,
+}: ChatWebSearchSeedProps) => {
+  const queryClient = useQueryClient();
+  const analytics = useAnalytics();
+  const { mutate } = useMutation({
+    mutationFn: async () => {
+      const response = await api.chat
+        .threads({ threadId: toSafeId<"chatThread">(threadRef.threadId) })
+        .patch(
+          { webSearchEnabled: true },
+          {
+            query:
+              threadRef.scope === "workspace"
+                ? { workspaceId: toSafeId<"workspace">(threadRef.workspaceId) }
+                : {},
+          },
+        );
+      // Eden returns `{ error }` on non-2xx responses; without this
+      // throw onSuccess fires and the thread is marked seeded for
+      // the session, leaving web search silently off.
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      void invalidateChatThreadAcrossScopes({
+        queryClient,
+        threadId: toSafeId<"chatThread">(threadRef.threadId),
+      });
+      onSettled(threadRef.threadId, true);
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+      onSettled(threadRef.threadId, false);
+    },
+  });
+  return mutate;
+};
+
+const NewChatButton = ({
+  hasMessages,
+  threadRef,
+}: {
+  hasMessages: boolean;
+  threadRef: ChatThreadRef;
+}) => {
+  const t = useTranslations();
+  // Empty draft? Stay put. Otherwise spawn a fresh thread via the
+  // /chat/new (or workspace-scoped) redirect helper.
+  if (!hasMessages) {
+    return (
+      <Button disabled size="sm" variant="ghost">
+        <PlusIcon />
+        {t("chat.newChat")}
+      </Button>
+    );
+  }
+  if (threadRef.scope === "workspace") {
+    return (
+      <Link
+        className={buttonVariants({ variant: "ghost", size: "sm" })}
+        params={{ workspaceId: threadRef.workspaceId }}
+        to="/chat/workspaces/$workspaceId/new"
+      >
+        <PlusIcon />
+        {t("chat.newChat")}
+      </Link>
+    );
+  }
+  return (
+    <Link
+      className={buttonVariants({ variant: "ghost", size: "sm" })}
+      to="/chat/new"
+    >
+      <PlusIcon />
+      {t("chat.newChat")}
+    </Link>
   );
 };

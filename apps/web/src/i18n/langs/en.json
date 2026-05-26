@@ -330,7 +330,7 @@
       "denied": "Denied",
       "deny": "Deny",
       "externalMcpDescription": "Only the information needed for this tool call will be sent.",
-      "externalMcpQuestion": "Can Stella send this request to {provider}?"
+      "externalMcpQuestion": "Can stella send this request to {provider}?"
     },
     "askAnything": "Ask anything",
     "askUser": {
@@ -434,7 +434,7 @@
     "resizeThread": "Resize conversation",
     "send": "Send message",
     "sendError": "There was an issue sending your message. Contact support if the error persists.",
-    "sendErrorAnonymizationBlocked": "Stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.",
+    "sendErrorAnonymizationBlocked": "stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.",
     "sendErrorInsufficientCredits": "The AI provider needs more credits. Contact your workspace admin to top up the account.",
     "sendErrorProviderUnavailable": "The AI provider is temporarily unavailable. Please try again in a moment.",
     "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin to upgrade the plan.",
@@ -477,6 +477,7 @@
       "docxReplaceBlockSummary": "Replace {blockId}",
       "docxReplaceSummary": "Replace “{find}” with “{replace}”",
       "execute-typescript": "Reading workspace data",
+      "fetch_url": "Reading page",
       "load-skill": "Reading guidance",
       "read-contact": "Reading contact",
       "read-content-across-matters": "Reading content across matters",
@@ -484,7 +485,8 @@
       "run-stella-query": "Reading workspace data",
       "search-across-matters": "Searching across matters",
       "unknown": "Using tool",
-      "update-entity-fields": "Updating metadata"
+      "update-entity-fields": "Updating metadata",
+      "web_search": "Searching the web"
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# character} other {# characters}}",
@@ -496,7 +498,18 @@
       "toggleDetails": "Toggle details"
     },
     "unsupportedFileType": "Unsupported file type",
-    "uploadFailed": "Failed to process file"
+    "uploadFailed": "Failed to process file",
+    "webSearch": {
+      "answer": "Web search summary",
+      "answerDisclaimer": "Synthesized from public web results below. Verify against the linked sources.",
+      "fetchedFrom": "from {source}",
+      "openSource": "Open {source} in a new tab",
+      "sources": "Sources",
+      "toggleDescription": "Let the model search the public web and read pages for this conversation.",
+      "toggleLabel": "Web search",
+      "toggleOff": "Turn off web search",
+      "toggleOn": "Turn on web search"
+    }
   },
   "clauses": {
     "addVariant": "Add variant",
@@ -1007,7 +1020,7 @@
     "bold": "Bold",
     "boldShortcut": "Bold (Ctrl+B)",
     "bulletList": "Bullet List",
-    "checkingDocxEditDescription": "Stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.",
+    "checkingDocxEditDescription": "stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.",
     "checkingDocxEditTitle": "Checking document",
     "comment": "Comment",
     "comments": {
@@ -1397,7 +1410,7 @@
     "jurisdictionSaveFailed": "Couldn't save your jurisdictions. You can finish this from settings.",
     "jurisdictionSearchLabel": "Search countries",
     "jurisdictionSearchPlaceholder": "Search countries",
-    "jurisdictionSubtitle": "Choose the countries you commonly work with. Stella will use this to customize your experience.",
+    "jurisdictionSubtitle": "Choose the countries you commonly work with. stella will use this to customize your experience.",
     "jurisdictionSuggested": "Suggested",
     "jurisdictionTitle": "Pick your practice jurisdictions",
     "orgNameLabel": "Team name",
@@ -1429,7 +1442,7 @@
       "configure": "Configure",
       "credentialsPanel": "Key",
       "customModelBadge": "Custom · {provider}",
-      "customModelDescription": "This model ID is not in Stella’s catalog. It will be passed to the selected provider as typed.",
+      "customModelDescription": "This model ID is not in stella’s catalog. It will be passed to the selected provider as typed.",
       "customModelHint": "No catalog match. Type any model ID; custom IDs are saved as typed.",
       "dataRegion": "Data region",
       "dataRegionDescription": "Routes AI calls through the selected region for data sovereignty.",
@@ -1440,7 +1453,7 @@
       "description": "Bring your own API key or configure data sovereignty region.",
       "editProviders": "Edit providers",
       "endpoint": "Endpoint",
-      "endpointDescription": "Use the Azure OpenAI or Azure Foundry /openai/v1 endpoint. Stella stores the normalized endpoint.",
+      "endpointDescription": "Use the Azure OpenAI or Azure Foundry /openai/v1 endpoint. stella stores the normalized endpoint.",
       "keepSavedKey": "Keep saved key",
       "modelForRole": "{role} model",
       "modelIdPlaceholder": "Search models",
@@ -1469,7 +1482,7 @@
       "providerForRole": "{role} provider",
       "providerKeyInvalid": "{provider} rejected the key. Double-check it before saving.",
       "providerKeyInvalidShort": "Invalid",
-      "providersDescription": "Add the provider credentials you want Stella to use.",
+      "providersDescription": "Add the provider credentials you want stella to use.",
       "providersPanel": "Providers",
       "regions": {
         "ch": "Switzerland (europe-west6)",
@@ -1595,7 +1608,7 @@
   },
   "selfhost": {
     "dismissUpdate": "Dismiss update notice",
-    "updateAvailable": "Stella v{latest} is available. You're running v{installed}.",
+    "updateAvailable": "stella v{latest} is available. You're running v{installed}.",
     "viewReleaseNotes": "View release notes"
   },
   "settings": {
@@ -1906,7 +1919,7 @@
         "takeoverWaiting": "Waiting for response",
         "takeoverWaitingDescription": "Asking {name} to release the lock...",
         "unavailableDescription": "Start stella desktop and keep it running before using desktop editing.",
-        "unavailableTitle": "Stella desktop is not available.",
+        "unavailableTitle": "stella desktop is not available.",
         "updateRequiredDescription": "stella desktop needs an update. It will update automatically when active desktop edits are finished; try again after it restarts.",
         "updateRequiredTitle": "Update stella desktop"
       },

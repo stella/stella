@@ -5,6 +5,7 @@ import { panic } from "better-result";
 import {
   ArrowRightIcon,
   CheckIcon,
+  GlobeIcon,
   LoaderIcon,
   PencilIcon,
   XIcon,
@@ -94,6 +95,16 @@ const getApprovalId = (part: ApprovalToolPart): string | null => {
     default:
       return null;
   }
+};
+
+const getApprovalPartInput = (part: ApprovalToolPart): unknown => {
+  if (!("input" in part)) {
+    return undefined;
+  }
+
+  // SAFETY: external MCP tool inputs are intentionally schema-less on the
+  // frontend. Treat the payload as unknown before rendering a read-only summary.
+  return (part as { input?: unknown }).input;
 };
 
 // -- Select badge (colored chip matching table UX) --
@@ -329,6 +340,10 @@ export const ToolApprovalCard = ({
   const externalMcpProviderName = getExternalMcpProviderName(name);
   const label = externalMcpProviderName ?? t(getChatToolTitleKey(name));
   const externalMcpConnectorSlug = getExternalMcpConnectorSlug(name);
+  const externalMcpInput =
+    isExternalMcpApproval && part.state !== "input-streaming"
+      ? getApprovalPartInput(part)
+      : undefined;
   const { data: mcpConnectorsData } = useQuery({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: externalMcpConnectorSlug !== null,
@@ -464,7 +479,7 @@ export const ToolApprovalCard = ({
     >
       {/* Header: icon + label + status */}
       <div className="flex items-center gap-2 px-3 py-2">
-        <ToolApprovalLeadingIcon iconHref={mcpIconHref} />
+        <ToolApprovalLeadingIcon iconHref={mcpIconHref} toolName={name} />
         <span className="font-medium">{label}</span>
         {isProcessing && (
           <LoaderIcon className="text-muted-foreground ms-auto size-3.5 shrink-0 animate-spin" />
@@ -490,10 +505,9 @@ export const ToolApprovalCard = ({
         )}
       {isExternalMcpApproval &&
         part.state !== "input-streaming" &&
-        "input" in part &&
-        part.input !== undefined && (
+        externalMcpInput !== undefined && (
           <ExternalMcpInputSummary
-            input={part.input}
+            input={externalMcpInput}
             isAwaitingDecision={
               isApprovalRequested &&
               !isProcessing &&
@@ -639,8 +653,10 @@ const getExternalMcpConnectorSlug = (
 
 function ToolApprovalLeadingIcon({
   iconHref,
+  toolName,
 }: {
   iconHref?: string | undefined;
+  toolName?: ApprovalToolName | undefined;
 }) {
   if (iconHref) {
     return (
@@ -654,6 +670,10 @@ function ToolApprovalLeadingIcon({
         />
       </span>
     );
+  }
+
+  if (toolName === "web_search" || toolName === "fetch_url") {
+    return <GlobeIcon className="text-muted-foreground size-4 shrink-0" />;
   }
 
   return <PencilIcon className="text-muted-foreground size-4 shrink-0" />;

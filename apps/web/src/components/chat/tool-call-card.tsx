@@ -106,6 +106,17 @@ const getToolSubtitle = ({
 
       return `${skillName}: ${resourcePath}`;
     }
+    case "fetch_url": {
+      const url = getStringInputValue({ key: "url", part });
+      if (!url) {
+        return null;
+      }
+      try {
+        return new URL(url).hostname.replace(/^www\./u, "");
+      } catch {
+        return url;
+      }
+    }
     default:
       return (
         getStringInputValue({ key: "query", part }) ??

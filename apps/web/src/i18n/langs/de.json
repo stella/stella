@@ -330,7 +330,7 @@
       "denied": "Abgelehnt",
       "deny": "Ablehnen",
       "externalMcpDescription": "Only the information needed for this tool call will be sent.",
-      "externalMcpQuestion": "Can Stella send this request to {provider}?"
+      "externalMcpQuestion": "Can stella send this request to {provider}?"
     },
     "askAnything": "Beliebige Frage stellen",
     "askUser": {
@@ -434,7 +434,7 @@
     "resizeThread": "Konversation vergrößern oder verkleinern",
     "send": "Nachricht senden",
     "sendError": "Beim Senden deiner Nachricht ist ein Problem aufgetreten. Wende dich an den Support, wenn der Fehler weiterhin auftritt.",
-    "sendErrorAnonymizationBlocked": "Stella konnte einen Anhang nicht anonymisieren, daher wurde nichts gesendet. Entferne die Datei oder sende diese Nachricht ohne Anonymisierung.",
+    "sendErrorAnonymizationBlocked": "stella konnte einen Anhang nicht anonymisieren, daher wurde nichts gesendet. Entferne die Datei oder sende diese Nachricht ohne Anonymisierung.",
     "sendErrorInsufficientCredits": "Der KI-Provider benötigt mehr Guthaben. Bitte deinen Workspace-Admin, das Konto aufzuladen.",
     "sendErrorProviderUnavailable": "Der KI-Provider ist vorübergehend nicht verfügbar. Bitte versuche es gleich noch einmal.",
     "sendErrorQuotaExhausted": "Das Kontingent des KI-Providers ist aufgebraucht. Versuche es gleich noch einmal oder bitte deinen Workspace-Admin, das Paket zu erweitern.",
@@ -477,6 +477,7 @@
       "docxReplaceBlockSummary": "Replace {blockId}",
       "docxReplaceSummary": "Replace “{find}” with “{replace}”",
       "execute-typescript": "Mandatsdaten lesen",
+      "fetch_url": "Seite lesen",
       "load-skill": "Hinweise lesen",
       "read-contact": "Kontakt lesen",
       "read-content-across-matters": "Inhalte in allen Mandaten lesen",
@@ -484,7 +485,8 @@
       "run-stella-query": "Mandatsdaten lesen",
       "search-across-matters": "In allen Mandaten suchen",
       "unknown": "Werkzeug verwenden",
-      "update-entity-fields": "Metadaten aktualisieren"
+      "update-entity-fields": "Metadaten aktualisieren",
+      "web_search": "Web wird durchsucht"
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# Zeichen} other {# Zeichen}}",
@@ -496,7 +498,18 @@
       "toggleDetails": "Details ein-/ausblenden"
     },
     "unsupportedFileType": "Nicht unterstützter Dateityp",
-    "uploadFailed": "Datei konnte nicht verarbeitet werden"
+    "uploadFailed": "Datei konnte nicht verarbeitet werden",
+    "webSearch": {
+      "answer": "Summary from sources",
+      "answerDisclaimer": "Synthesized from public web results below. Verify against the linked sources.",
+      "fetchedFrom": "von {source}",
+      "openSource": "{source} in neuem Tab öffnen",
+      "sources": "Quellen",
+      "toggleDescription": "Dem Modell erlauben, in dieser Unterhaltung im öffentlichen Web zu suchen und Seiten zu lesen.",
+      "toggleLabel": "Websuche",
+      "toggleOff": "Websuche ausschalten",
+      "toggleOn": "Websuche einschalten"
+    }
   },
   "clauses": {
     "addVariant": "Variante hinzufügen",
@@ -1007,7 +1020,7 @@
     "bold": "Bold",
     "boldShortcut": "Bold (Ctrl+B)",
     "bulletList": "Bullet List",
-    "checkingDocxEditDescription": "Stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.",
+    "checkingDocxEditDescription": "stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.",
     "checkingDocxEditTitle": "Checking document",
     "comment": "Comment",
     "comments": {
@@ -1397,7 +1410,7 @@
     "jurisdictionSaveFailed": "Ihre Jurisdiktionen konnten nicht gespeichert werden. Sie können dies in den Einstellungen abschließen.",
     "jurisdictionSearchLabel": "Länder suchen",
     "jurisdictionSearchPlaceholder": "Länder suchen",
-    "jurisdictionSubtitle": "Wählen Sie die Länder aus, mit denen Sie regelmäßig arbeiten. Stella passt damit Ihre Erfahrung an.",
+    "jurisdictionSubtitle": "Wählen Sie die Länder aus, mit denen Sie regelmäßig arbeiten. stella passt damit Ihre Erfahrung an.",
     "jurisdictionSuggested": "Vorgeschlagen",
     "jurisdictionTitle": "Wählen Sie Ihre Praxisjurisdiktionen",
     "orgNameLabel": "Teamname",
@@ -1429,7 +1442,7 @@
       "configure": "Configure",
       "credentialsPanel": "Schlüssel",
       "customModelBadge": "Benutzerdefiniert · {provider}",
-      "customModelDescription": "Diese Modell-ID ist nicht im Stella-Katalog. Sie wird unverändert an den gewählten Provider gesendet.",
+      "customModelDescription": "Diese Modell-ID ist nicht im stella-Katalog. Sie wird unverändert an den gewählten Provider gesendet.",
       "customModelHint": "Kein Katalogtreffer. Gib eine beliebige Modell-ID ein; benutzerdefinierte IDs werden unverändert gespeichert.",
       "dataRegion": "Data region",
       "dataRegionDescription": "Routes AI calls through the selected region for data sovereignty.",
@@ -1440,7 +1453,7 @@
       "description": "Bring your own API key or configure data sovereignty region.",
       "editProviders": "Anbieter bearbeiten",
       "endpoint": "Endpunkt",
-      "endpointDescription": "Verwenden Sie den Azure OpenAI- oder Azure Foundry-Endpunkt /openai/v1. Stella speichert den normalisierten Endpunkt.",
+      "endpointDescription": "Verwenden Sie den Azure OpenAI- oder Azure Foundry-Endpunkt /openai/v1. stella speichert den normalisierten Endpunkt.",
       "keepSavedKey": "Gespeicherten Schlüssel behalten",
       "modelForRole": "Modell für {role}",
       "modelIdPlaceholder": "Modelle suchen",
@@ -1469,7 +1482,7 @@
       "providerForRole": "Provider für {role}",
       "providerKeyInvalid": "{provider} hat den Schlüssel abgelehnt. Bitte überprüfen Sie ihn.",
       "providerKeyInvalidShort": "Ungültig",
-      "providersDescription": "Füge die Provider-Zugangsdaten hinzu, die Stella verwenden soll.",
+      "providersDescription": "Füge die Provider-Zugangsdaten hinzu, die stella verwenden soll.",
       "providersPanel": "Provider",
       "regions": {
         "ch": "Switzerland (europe-west6)",
@@ -1595,7 +1608,7 @@
   },
   "selfhost": {
     "dismissUpdate": "Dismiss update notice",
-    "updateAvailable": "Stella v{latest} is available. You're running v{installed}.",
+    "updateAvailable": "stella v{latest} is available. You're running v{installed}.",
     "viewReleaseNotes": "View release notes"
   },
   "settings": {
@@ -1906,7 +1919,7 @@
         "takeoverWaiting": "Warte auf Antwort",
         "takeoverWaitingDescription": "{name} wird gebeten, die Sperre freizugeben...",
         "unavailableDescription": "Starten Sie stella desktop und lassen Sie die App geöffnet, bevor Sie die Desktop-Bearbeitung verwenden.",
-        "unavailableTitle": "Stella desktop ist nicht verfügbar.",
+        "unavailableTitle": "stella desktop ist nicht verfügbar.",
         "updateRequiredDescription": "stella desktop muss aktualisiert werden. Die Aktualisierung erfolgt automatisch, sobald aktive Desktop-Bearbeitungen abgeschlossen sind; versuchen Sie es nach dem Neustart erneut.",
         "updateRequiredTitle": "stella desktop aktualisieren"
       },

@@ -330,7 +330,7 @@
       "denied": "Zamietnuté",
       "deny": "Zamietnuť",
       "externalMcpDescription": "Odošlú sa iba informácie potrebné pre tento dotaz.",
-      "externalMcpQuestion": "Môže Stella odoslať tento dotaz do {provider}?"
+      "externalMcpQuestion": "Môže stella odoslať tento dotaz do {provider}?"
     },
     "askAnything": "Opýtajte sa na čokoľvek",
     "askUser": {
@@ -434,7 +434,7 @@
     "resizeThread": "Zmeniť veľkosť konverzácie",
     "send": "Odoslať správu",
     "sendError": "Pri odosielaní správy nastal problém. Ak chyba pretrváva, kontaktujte podporu.",
-    "sendErrorAnonymizationBlocked": "Stella nedokázala anonymizovať jednu prílohu, takže sa nič neodoslalo. Odstráňte súbor alebo odošlite správu bez anonymizácie.",
+    "sendErrorAnonymizationBlocked": "stella nedokázala anonymizovať jednu prílohu, takže sa nič neodoslalo. Odstráňte súbor alebo odošlite správu bez anonymizácie.",
     "sendErrorInsufficientCredits": "AI poskytovateľ potrebuje doplniť kredity. Požiadajte správcu pracovného priestoru o navýšenie zostatku.",
     "sendErrorProviderUnavailable": "AI poskytovateľ je dočasne nedostupný. Skúste to prosím o chvíľu znova.",
     "sendErrorQuotaExhausted": "Kvóta AI poskytovateľa je vyčerpaná. Skúste to o chvíľu znova alebo požiadajte správcu pracovného priestoru o navýšenie plánu.",
@@ -477,6 +477,7 @@
       "docxReplaceBlockSummary": "Nahradiť {blockId}",
       "docxReplaceSummary": "Nahradiť „{find}“ za „{replace}“",
       "execute-typescript": "Čítam dáta veci",
+      "fetch_url": "Čítanie stránky",
       "load-skill": "Čítam pokyny",
       "read-contact": "Čítanie kontaktu",
       "read-content-across-matters": "Čítanie obsahu naprieč vecami",
@@ -484,7 +485,8 @@
       "run-stella-query": "Čítam dáta veci",
       "search-across-matters": "Vyhľadávanie naprieč vecami",
       "unknown": "Používanie nástroja",
-      "update-entity-fields": "Aktualizácia metadát"
+      "update-entity-fields": "Aktualizácia metadát",
+      "web_search": "Vyhľadávanie na webe"
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# znak} few {# znaky} other {# znakov}}",
@@ -496,7 +498,18 @@
       "toggleDetails": "Prepnúť podrobnosti"
     },
     "unsupportedFileType": "Nepodporovaný typ súboru",
-    "uploadFailed": "Spracovanie súboru zlyhalo"
+    "uploadFailed": "Spracovanie súboru zlyhalo",
+    "webSearch": {
+      "answer": "Summary from sources",
+      "answerDisclaimer": "Synthesized from public web results below. Verify against the linked sources.",
+      "fetchedFrom": "z {source}",
+      "openSource": "Otvoriť {source} na novej karte",
+      "sources": "Zdroje",
+      "toggleDescription": "Umožniť modelu v tejto konverzácii vyhľadávať na verejnom webe a čítať stránky.",
+      "toggleLabel": "Vyhľadávanie na webe",
+      "toggleOff": "Vypnúť vyhľadávanie na webe",
+      "toggleOn": "Zapnúť vyhľadávanie na webe"
+    }
   },
   "clauses": {
     "addVariant": "Pridať variant",
@@ -1007,7 +1020,7 @@
     "bold": "Tučné",
     "boldShortcut": "Tučné (Ctrl+B)",
     "bulletList": "Odrážkový zoznam",
-    "checkingDocxEditDescription": "Stella ešte kontroluje, či možno tento DOCX bezpečne upravovať. Skúste to znova, keď sa dokument načíta.",
+    "checkingDocxEditDescription": "stella ešte kontroluje, či možno tento DOCX bezpečne upravovať. Skúste to znova, keď sa dokument načíta.",
     "checkingDocxEditTitle": "Kontrola dokumentu",
     "comment": "Komentár",
     "comments": {
@@ -1397,7 +1410,7 @@
     "jurisdictionSaveFailed": "Jurisdikcie sa nepodarilo uložiť. Môžete ich doplniť v nastaveniach.",
     "jurisdictionSearchLabel": "Hľadať krajiny",
     "jurisdictionSearchPlaceholder": "Hľadať krajiny",
-    "jurisdictionSubtitle": "Vyberte krajiny, s ktorými bežne pracujete. Stella podľa toho prispôsobí vaše prostredie.",
+    "jurisdictionSubtitle": "Vyberte krajiny, s ktorými bežne pracujete. stella podľa toho prispôsobí vaše prostredie.",
     "jurisdictionSuggested": "Odporúčané",
     "jurisdictionTitle": "Vyberte jurisdikcie svojej praxe",
     "orgNameLabel": "Názov tímu",
@@ -1429,7 +1442,7 @@
       "configure": "Nakonfigurovať",
       "credentialsPanel": "Kľúč",
       "customModelBadge": "Vlastný · {provider}",
-      "customModelDescription": "Toto ID modelu nie je v katalógu Stella. Vybranému poskytovateľovi sa odošle presne tak, ako je zadané.",
+      "customModelDescription": "Toto ID modelu nie je v katalógu stella. Vybranému poskytovateľovi sa odošle presne tak, ako je zadané.",
       "customModelHint": "Žiadna zhoda v katalógu. Zadajte ľubovoľné ID modelu; vlastné ID sa uloží presne tak, ako je napísané.",
       "dataRegion": "Dátový región",
       "dataRegionDescription": "Smeruje AI volania cez vybraný región kvôli dátovej suverenite.",
@@ -1440,7 +1453,7 @@
       "description": "Použite vlastný API kľúč alebo zvoľte región pre suverenitu dát.",
       "editProviders": "Upraviť poskytovateľov",
       "endpoint": "Endpoint",
-      "endpointDescription": "Použite Azure OpenAI alebo Azure Foundry endpoint /openai/v1. Stella uloží normalizovaný endpoint.",
+      "endpointDescription": "Použite Azure OpenAI alebo Azure Foundry endpoint /openai/v1. stella uloží normalizovaný endpoint.",
       "keepSavedKey": "Ponechať uložený kľúč",
       "modelForRole": "Model pre rolu {role}",
       "modelIdPlaceholder": "Hľadať modely",
@@ -1469,7 +1482,7 @@
       "providerForRole": "Poskytovateľ pre {role}",
       "providerKeyInvalid": "{provider} odmietol kľúč. Skontrolujte ho pred uložením.",
       "providerKeyInvalidShort": "Neplatný",
-      "providersDescription": "Pridajte prihlasovacie údaje poskytovateľov, ktoré má Stella používať.",
+      "providersDescription": "Pridajte prihlasovacie údaje poskytovateľov, ktoré má stella používať.",
       "providersPanel": "Poskytovatelia",
       "regions": {
         "ch": "Švajčiarsko (europe-west6)",
@@ -1595,7 +1608,7 @@
   },
   "selfhost": {
     "dismissUpdate": "Zatvoriť oznámenie o aktualizácii",
-    "updateAvailable": "Stella v{latest} je dostupná. Používate v{installed}.",
+    "updateAvailable": "stella v{latest} je dostupná. Používate v{installed}.",
     "viewReleaseNotes": "Zobraziť poznámky k vydaniu"
   },
   "settings": {
@@ -1906,7 +1919,7 @@
         "takeoverWaiting": "Čakanie na odpoveď",
         "takeoverWaitingDescription": "Žiadame {name} o uvoľnenie zámku...",
         "unavailableDescription": "Pred použitím úprav v desktopovej aplikácii spustite stella desktop a nechajte ho bežať.",
-        "unavailableTitle": "Stella desktop nie je k dispozícii.",
+        "unavailableTitle": "stella desktop nie je k dispozícii.",
         "updateRequiredDescription": "stella desktop vyžaduje aktualizáciu. Prebehne automaticky po dokončení aktívnych desktopových úprav; skúste to znova po reštarte.",
         "updateRequiredTitle": "Aktualizujte stella desktop"
       },

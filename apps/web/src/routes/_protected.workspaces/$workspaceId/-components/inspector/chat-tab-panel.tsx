@@ -59,6 +59,7 @@ import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { toSafeId } from "@/lib/safe-id";
 import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
+import { ChatWebSearchToggle } from "@/routes/_protected.chat/-components/chat-web-search-toggle";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import { chatThreadOptions } from "@/routes/_protected.chat/-queries";
@@ -295,6 +296,9 @@ export const ChatTabPanel = ({
           onLabelContextMenu={onLabelContextMenu}
           onMoveToMain={moveToMain}
           anonymized={anonymized}
+          threadRef={threadRef}
+          webSearchAvailable={data.webSearchAvailable}
+          webSearchEnabled={data.webSearchEnabled}
           onNewThread={() =>
             openChat({
               workspaceId: tabWorkspaceId,
@@ -453,6 +457,9 @@ type ChatTabPanelChromeProps = {
   onSetAnonymized: (enabled: boolean) => void;
   onSetContext: (matterIds: string[]) => void;
   matterColor?: string | null | undefined;
+  threadRef: ChatThreadRef;
+  webSearchAvailable: boolean;
+  webSearchEnabled: boolean;
   children: React.ReactNode;
 };
 
@@ -478,6 +485,9 @@ const ChatTabPanelChrome = ({
   onSetAnonymized,
   onSetContext,
   matterColor,
+  threadRef,
+  webSearchAvailable,
+  webSearchEnabled,
   children,
 }: ChatTabPanelChromeProps) => {
   const t = useTranslations();
@@ -491,6 +501,13 @@ const ChatTabPanelChrome = ({
               <SquarePenIcon className="size-3.5" />
             </Button>
           }
+        />
+      )}
+      {webSearchAvailable && (
+        <ChatWebSearchToggle
+          enabled={webSearchEnabled}
+          size="icon-xs"
+          threadRef={threadRef}
         />
       )}
       <ChatAnonymizedToggle
@@ -609,6 +626,9 @@ export const ChatTabPanelShell = ({
         onCancel: noop,
       }}
       tab={tab}
+      threadRef={{ scope: "global", threadId: tab.id }}
+      webSearchAvailable={false}
+      webSearchEnabled={false}
     >
       <Conversation className="min-h-0 flex-1">
         <ConversationContent className="gap-3">

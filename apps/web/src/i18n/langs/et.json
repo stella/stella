@@ -330,7 +330,7 @@
       "denied": "Keelatud",
       "deny": "Keela",
       "externalMcpDescription": "Only the information needed for this tool call will be sent.",
-      "externalMcpQuestion": "Can Stella send this request to {provider}?"
+      "externalMcpQuestion": "Can stella send this request to {provider}?"
     },
     "askAnything": "Küsi mida tahes",
     "askUser": {
@@ -434,7 +434,7 @@
     "resizeThread": "Muuda vestluse suurust",
     "send": "Saada sõnum",
     "sendError": "Sõnumi saatmisel tekkis probleem. Kui viga püsib, võta ühendust toega.",
-    "sendErrorAnonymizationBlocked": "Stella ei saanud üht manust anonüümida, seega midagi ei saadetud. Eemalda fail või saada see sõnum anonüümimiseta.",
+    "sendErrorAnonymizationBlocked": "stella ei saanud üht manust anonüümida, seega midagi ei saadetud. Eemalda fail või saada see sõnum anonüümimiseta.",
     "sendErrorInsufficientCredits": "AI-teenusepakkujal on vaja rohkem krediiti. Palu töökoha administraatoril kontot täiendada.",
     "sendErrorProviderUnavailable": "AI-teenusepakkuja pole hetkel saadaval. Proovi hetke pärast uuesti.",
     "sendErrorQuotaExhausted": "AI-teenusepakkuja kvoot on otsas. Proovi minuti pärast uuesti või palu töökoha administraatoril paketti uuendada.",
@@ -477,6 +477,7 @@
       "docxReplaceBlockSummary": "Replace {blockId}",
       "docxReplaceSummary": "Replace “{find}” with “{replace}”",
       "execute-typescript": "Asja andmete lugemine",
+      "fetch_url": "Lehe lugemine",
       "load-skill": "Juhiste lugemine",
       "read-contact": "Kontakti lugemine",
       "read-content-across-matters": "Sisu lugemine kõigist asjadest",
@@ -484,7 +485,8 @@
       "run-stella-query": "Asja andmete lugemine",
       "search-across-matters": "Otsing kõigis asjades",
       "unknown": "Tööriista kasutamine",
-      "update-entity-fields": "Metaandmete uuendamine"
+      "update-entity-fields": "Metaandmete uuendamine",
+      "web_search": "Veebist otsimine"
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# märk} other {# märki}}",
@@ -496,7 +498,18 @@
       "toggleDetails": "Üksikasjade lülitamine"
     },
     "unsupportedFileType": "Toetamata failitüüp",
-    "uploadFailed": "Faili töötlemine ebaõnnestus"
+    "uploadFailed": "Faili töötlemine ebaõnnestus",
+    "webSearch": {
+      "answer": "Summary from sources",
+      "answerDisclaimer": "Synthesized from public web results below. Verify against the linked sources.",
+      "fetchedFrom": "allikast {source}",
+      "openSource": "Ava {source} uuel vahekaardil",
+      "sources": "Allikad",
+      "toggleDescription": "Luba mudelil selles vestluses avalikust veebist otsida ja lehti lugeda.",
+      "toggleLabel": "Veebiotsing",
+      "toggleOff": "Lülita veebiotsing välja",
+      "toggleOn": "Lülita veebiotsing sisse"
+    }
   },
   "clauses": {
     "addVariant": "Lisa variant",
@@ -1007,7 +1020,7 @@
     "bold": "Bold",
     "boldShortcut": "Bold (Ctrl+B)",
     "bulletList": "Bullet List",
-    "checkingDocxEditDescription": "Stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.",
+    "checkingDocxEditDescription": "stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.",
     "checkingDocxEditTitle": "Checking document",
     "comment": "Comment",
     "comments": {
@@ -1397,7 +1410,7 @@
     "jurisdictionSaveFailed": "Jurisdiktsioonide salvestamine ebaõnnestus. Saate selle lõpetada seadetes.",
     "jurisdictionSearchLabel": "Otsi riike",
     "jurisdictionSearchPlaceholder": "Otsi riike",
-    "jurisdictionSubtitle": "Valige riigid, millega regulaarselt töötate. Stella kasutab seda teie kogemuse kohandamiseks.",
+    "jurisdictionSubtitle": "Valige riigid, millega regulaarselt töötate. stella kasutab seda teie kogemuse kohandamiseks.",
     "jurisdictionSuggested": "Soovitatud",
     "jurisdictionTitle": "Valige oma praktika jurisdiktsioonid",
     "orgNameLabel": "Meeskonna nimi",
@@ -1429,7 +1442,7 @@
       "configure": "Configure",
       "credentialsPanel": "Võti",
       "customModelBadge": "Kohandatud · {provider}",
-      "customModelDescription": "Seda mudeli ID-d Stella kataloogis ei ole. See saadetakse valitud teenusepakkujale sisestatud kujul.",
+      "customModelDescription": "Seda mudeli ID-d stella kataloogis ei ole. See saadetakse valitud teenusepakkujale sisestatud kujul.",
       "customModelHint": "Kataloogis vastet pole. Sisesta ükskõik milline mudeli ID; kohandatud ID salvestatakse sisestatud kujul.",
       "dataRegion": "Data region",
       "dataRegionDescription": "Routes AI calls through the selected region for data sovereignty.",
@@ -1440,7 +1453,7 @@
       "description": "Bring your own API key or configure data sovereignty region.",
       "editProviders": "Muuda teenusepakkujaid",
       "endpoint": "Endpoint",
-      "endpointDescription": "Kasuta Azure OpenAI või Azure Foundry /openai/v1 endpointi. Stella salvestab normaliseeritud endpointi.",
+      "endpointDescription": "Kasuta Azure OpenAI või Azure Foundry /openai/v1 endpointi. stella salvestab normaliseeritud endpointi.",
       "keepSavedKey": "Hoia salvestatud võti alles",
       "modelForRole": "Rolli {role} mudel",
       "modelIdPlaceholder": "Otsi mudeleid",
@@ -1469,7 +1482,7 @@
       "providerForRole": "{role} teenusepakkuja",
       "providerKeyInvalid": "{provider} keeldus võtmest. Kontrollige seda enne salvestamist.",
       "providerKeyInvalidShort": "Vigane",
-      "providersDescription": "Lisa nende teenusepakkujate mandaadid, mida Stella peaks kasutama.",
+      "providersDescription": "Lisa nende teenusepakkujate mandaadid, mida stella peaks kasutama.",
       "providersPanel": "Teenusepakkujad",
       "regions": {
         "ch": "Switzerland (europe-west6)",
@@ -1595,7 +1608,7 @@
   },
   "selfhost": {
     "dismissUpdate": "Dismiss update notice",
-    "updateAvailable": "Stella v{latest} is available. You're running v{installed}.",
+    "updateAvailable": "stella v{latest} is available. You're running v{installed}.",
     "viewReleaseNotes": "View release notes"
   },
   "settings": {
@@ -1906,7 +1919,7 @@
         "takeoverWaiting": "Ootan vastust",
         "takeoverWaitingDescription": "Palume {name} lukku vabastada...",
         "unavailableDescription": "Käivita stella desktop ja hoia see töös enne töölaual redigeerimise kasutamist.",
-        "unavailableTitle": "Stella desktop pole saadaval.",
+        "unavailableTitle": "stella desktop pole saadaval.",
         "updateRequiredDescription": "stella desktop vajab värskendust. See värskendub automaatselt, kui aktiivsed töölauamuudatused on lõpetatud; proovige pärast taaskäivitumist uuesti.",
         "updateRequiredTitle": "Värskendage stella desktop"
       },

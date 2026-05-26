@@ -61,12 +61,14 @@ describe("chat prompt builders", () => {
 
     for (const prompt of [workspacePrompt, globalPrompt]) {
       expect(prompt).toContain("ASK-USER BOUNDARY");
-      expect(prompt).toContain("Never use `ask-user` to ask for permission");
-      expect(prompt).toContain("For Stella data reads, use the Stella API");
+      expect(prompt).toContain(
+        "Never use it to request tool-call permission or consent",
+      );
+      expect(prompt).toContain("For stella data reads, use the stella API");
       expect(prompt).toContain("describe-stella-api");
       expect(prompt).toContain("run-stella-query");
       expect(prompt).toContain("result.items");
-      expect(prompt).toContain("Available Stella read functions");
+      expect(prompt).toContain("Available stella read functions");
       expect(prompt).toContain("read.listContacts({");
       expect(prompt).toContain("read.getMatterEntityContents({");
       expect(prompt).toContain("DOCX REVIEW TAGS");

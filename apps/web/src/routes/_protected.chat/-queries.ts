@@ -190,6 +190,8 @@ type ChatThreadOptionsInput = QueryOptionsInput<
 type ThreadFetch = {
   messages: PersistedChatMessage[];
   contextMatterIds: string[];
+  webSearchAvailable: boolean;
+  webSearchEnabled: boolean;
 };
 
 const fetchThreadMessages = async (
@@ -215,13 +217,23 @@ const fetchThreadMessages = async (
     const error = toAPIError(response.error);
 
     if (allowMissingThread && APIError.is(error) && error.status === 404) {
-      return { messages: [], contextMatterIds: [] };
+      return {
+        messages: [],
+        contextMatterIds: [],
+        webSearchAvailable: false,
+        webSearchEnabled: false,
+      };
     }
 
     throw error;
   }
 
-  return response.data;
+  return {
+    messages: response.data.messages,
+    contextMatterIds: response.data.contextMatterIds,
+    webSearchAvailable: response.data.webSearchAvailable,
+    webSearchEnabled: response.data.webSearchEnabled,
+  };
 };
 
 const fetchGroupedChatThreads = async ({
@@ -582,6 +594,14 @@ export type ChatThreadFetched = {
    * the transport, not through this read.
    */
   contextMatterIds: string[];
+  webSearchAvailable: boolean;
+  /**
+   * Per-thread web-search opt-in. Mutated via PATCH /chat/threads/:id
+   * with optimistic cache update; the next send-message reads the
+   * persisted value to decide whether to expose the web_search +
+   * fetch_url tools to the model.
+   */
+  webSearchEnabled: boolean;
 };
 
 type FileChatThreadOptionsArgs = {
@@ -618,7 +638,12 @@ export const chatThreadOptions = ({
       contextKind: getChatRuntimeContextKind(context),
     }),
     queryFn: async ({ client: queryClient }): Promise<ChatThreadFetched> => {
-      const { messages, contextMatterIds } = await fetchThreadMessages(key, {
+      const {
+        messages,
+        contextMatterIds,
+        webSearchAvailable,
+        webSearchEnabled,
+      } = await fetchThreadMessages(key, {
         allowMissingThread: context.allowMissingThread,
       });
 
@@ -656,7 +681,7 @@ export const chatThreadOptions = ({
         sendAutomaticallyWhen: createSendAutomaticallyPredicate(),
       });
 
-      return { chat, contextMatterIds };
+      return { chat, contextMatterIds, webSearchAvailable, webSearchEnabled };
     },
   });
 

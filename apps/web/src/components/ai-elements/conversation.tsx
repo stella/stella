@@ -103,22 +103,26 @@ export const ConversationScrollButton = ({
   className,
   ...props
 }: ConversationScrollButtonProps) => {
-  const { isAtBottom, scrollToBottom } = useStickToBottomContext();
+  const { isAtBottom, isScrollable, scrollToBottom } =
+    useStickToBottomContext();
 
   return (
+    isScrollable &&
     !isAtBottom && (
-      <div className="bg-background absolute bottom-4 left-[50%] translate-x-[-50%] rounded-full">
-        <Button
-          className={cn("rounded-full", className)}
-          onClick={() => scrollToBottom()}
-          size="icon"
-          type="button"
-          variant="outline"
-          {...props}
-        >
-          <ArrowDownIcon className="size-4" />
-        </Button>
-      </div>
+      <Button
+        className={cn(
+          "bg-background hover:bg-muted shadow-sm",
+          "absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full",
+          className,
+        )}
+        onClick={() => scrollToBottom()}
+        size="icon"
+        type="button"
+        variant="outline"
+        {...props}
+      >
+        <ArrowDownIcon className="size-4" />
+      </Button>
     )
   );
 };

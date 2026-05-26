@@ -229,7 +229,7 @@ describe("chat thread messages", () => {
       />,
     );
 
-    expect(html).toContain("Stella could not anonymize one attachment");
+    expect(html).toContain("stella could not anonymize one attachment");
     expect(html).toContain("Send without anonymization");
     expect(html).not.toContain("Cannot send this attachment");
   });

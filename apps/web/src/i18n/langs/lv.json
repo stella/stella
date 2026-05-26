@@ -330,7 +330,7 @@
       "denied": "Noraidīts",
       "deny": "Noraidīt",
       "externalMcpDescription": "Only the information needed for this tool call will be sent.",
-      "externalMcpQuestion": "Can Stella send this request to {provider}?"
+      "externalMcpQuestion": "Can stella send this request to {provider}?"
     },
     "askAnything": "Jautājiet jebko",
     "askUser": {
@@ -434,7 +434,7 @@
     "resizeThread": "Mainīt sarunas izmēru",
     "send": "Nosūtīt ziņu",
     "sendError": "Nosūtot ziņu, radās problēma. Ja kļūda nepazūd, sazinieties ar atbalsta dienestu.",
-    "sendErrorAnonymizationBlocked": "Stella nevarēja anonimizēt vienu pielikumu, tāpēc nekas netika nosūtīts. Noņemiet failu vai nosūtiet šo ziņu bez anonimizācijas.",
+    "sendErrorAnonymizationBlocked": "stella nevarēja anonimizēt vienu pielikumu, tāpēc nekas netika nosūtīts. Noņemiet failu vai nosūtiet šo ziņu bez anonimizācijas.",
     "sendErrorInsufficientCredits": "AI pakalpojumu sniedzējam ir vajadzīgi papildu kredīti. Sazinieties ar darba telpas administratoru, lai papildinātu kontu.",
     "sendErrorProviderUnavailable": "AI pakalpojumu sniedzējs uz laiku nav pieejams. Mēģiniet vēlreiz pēc brīža.",
     "sendErrorQuotaExhausted": "AI pakalpojumu sniedzēja kvota ir izsmelta. Mēģiniet vēlreiz pēc minūtes vai sazinieties ar darba telpas administratoru, lai uzlabotu plānu.",
@@ -477,6 +477,7 @@
       "docxReplaceBlockSummary": "Replace {blockId}",
       "docxReplaceSummary": "Replace “{find}” with “{replace}”",
       "execute-typescript": "Lietas datu lasīšana",
+      "fetch_url": "Lapas lasīšana",
       "load-skill": "Norādījumu lasīšana",
       "read-contact": "Kontaktpersonas lasīšana",
       "read-content-across-matters": "Satura lasīšana vairākās lietās",
@@ -484,7 +485,8 @@
       "run-stella-query": "Lietas datu lasīšana",
       "search-across-matters": "Meklēšana vairākās lietās",
       "unknown": "Rīka izmantošana",
-      "update-entity-fields": "Metadatu atjaunināšana"
+      "update-entity-fields": "Metadatu atjaunināšana",
+      "web_search": "Meklēšana tīmeklī"
     },
     "toolCall": {
       "characterCount": "{count, plural, zero {# rakstzīmju} one {# rakstzīme} other {# rakstzīmes}}",
@@ -496,7 +498,18 @@
       "toggleDetails": "Pārslēgt detaļas"
     },
     "unsupportedFileType": "Neatbalstīts faila tips",
-    "uploadFailed": "Neizdevās apstrādāt failu"
+    "uploadFailed": "Neizdevās apstrādāt failu",
+    "webSearch": {
+      "answer": "Summary from sources",
+      "answerDisclaimer": "Synthesized from public web results below. Verify against the linked sources.",
+      "fetchedFrom": "no {source}",
+      "openSource": "Atvērt {source} jaunā cilnē",
+      "sources": "Avoti",
+      "toggleDescription": "Atļaut modelim šajā sarunā meklēt publiskajā tīmeklī un lasīt lapas.",
+      "toggleLabel": "Meklēšana tīmeklī",
+      "toggleOff": "Izslēgt meklēšanu tīmeklī",
+      "toggleOn": "Ieslēgt meklēšanu tīmeklī"
+    }
   },
   "clauses": {
     "addVariant": "Pievienot variantu",
@@ -1007,7 +1020,7 @@
     "bold": "Bold",
     "boldShortcut": "Bold (Ctrl+B)",
     "bulletList": "Bullet List",
-    "checkingDocxEditDescription": "Stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.",
+    "checkingDocxEditDescription": "stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.",
     "checkingDocxEditTitle": "Checking document",
     "comment": "Comment",
     "comments": {
@@ -1397,7 +1410,7 @@
     "jurisdictionSaveFailed": "Neizdevās saglabāt jurisdikcijas. Varat to pabeigt iestatījumos.",
     "jurisdictionSearchLabel": "Meklēt valstis",
     "jurisdictionSearchPlaceholder": "Meklēt valstis",
-    "jurisdictionSubtitle": "Izvēlieties valstis, ar kurām regulāri strādājat. Stella to izmantos, lai pielāgotu jūsu pieredzi.",
+    "jurisdictionSubtitle": "Izvēlieties valstis, ar kurām regulāri strādājat. stella to izmantos, lai pielāgotu jūsu pieredzi.",
     "jurisdictionSuggested": "Ieteikts",
     "jurisdictionTitle": "Izvēlieties savas prakses jurisdikcijas",
     "orgNameLabel": "Komandas nosaukums",
@@ -1429,7 +1442,7 @@
       "configure": "Configure",
       "credentialsPanel": "Atslēga",
       "customModelBadge": "Pielāgots · {provider}",
-      "customModelDescription": "Šis modeļa ID nav Stella katalogā. Tas tiks nosūtīts izvēlētajam pakalpojumu sniedzējam tieši tā, kā ievadīts.",
+      "customModelDescription": "Šis modeļa ID nav stella katalogā. Tas tiks nosūtīts izvēlētajam pakalpojumu sniedzējam tieši tā, kā ievadīts.",
       "customModelHint": "Katalogā nav atbilstības. Ievadiet jebkuru modeļa ID; pielāgotie ID tiek saglabāti tieši tā, kā ievadīti.",
       "dataRegion": "Data region",
       "dataRegionDescription": "Routes AI calls through the selected region for data sovereignty.",
@@ -1440,7 +1453,7 @@
       "description": "Bring your own API key or configure data sovereignty region.",
       "editProviders": "Rediģēt pakalpojumu sniedzējus",
       "endpoint": "Galamērķis",
-      "endpointDescription": "Izmantojiet Azure OpenAI vai Azure Foundry /openai/v1 galamērķi. Stella saglabā normalizēto galamērķi.",
+      "endpointDescription": "Izmantojiet Azure OpenAI vai Azure Foundry /openai/v1 galamērķi. stella saglabā normalizēto galamērķi.",
       "keepSavedKey": "Paturēt saglabāto atslēgu",
       "modelForRole": "{role} modelis",
       "modelIdPlaceholder": "Meklēt modeļus",
@@ -1469,7 +1482,7 @@
       "providerForRole": "{role} pakalpojumu sniedzējs",
       "providerKeyInvalid": "{provider} atteica atslēgu. Pārbaudiet to pirms saglabāšanas.",
       "providerKeyInvalidShort": "Nederīgs",
-      "providersDescription": "Pievienojiet to pakalpojumu sniedzēju akreditācijas datus, kurus Stella izmantos.",
+      "providersDescription": "Pievienojiet to pakalpojumu sniedzēju akreditācijas datus, kurus stella izmantos.",
       "providersPanel": "Pakalpojumu sniedzēji",
       "regions": {
         "ch": "Switzerland (europe-west6)",
@@ -1595,7 +1608,7 @@
   },
   "selfhost": {
     "dismissUpdate": "Dismiss update notice",
-    "updateAvailable": "Stella v{latest} is available. You're running v{installed}.",
+    "updateAvailable": "stella v{latest} is available. You're running v{installed}.",
     "viewReleaseNotes": "View release notes"
   },
   "settings": {
@@ -1906,7 +1919,7 @@
         "takeoverWaiting": "Gaida atbildi",
         "takeoverWaitingDescription": "Lūdzam {name} atbrīvot bloķēšanu...",
         "unavailableDescription": "Pirms rediģēšanas datora lietotnē palaidiet stella desktop un atstājiet to ieslēgtu.",
-        "unavailableTitle": "Stella desktop nav pieejams.",
+        "unavailableTitle": "stella desktop nav pieejams.",
         "updateRequiredDescription": "stella desktop ir jāatjaunina. Tas atjaunināsies automātiski, kad aktīvie darbvirsmas labojumi būs pabeigti; mēģiniet vēlreiz pēc restartēšanas.",
         "updateRequiredTitle": "Atjauniniet stella desktop"
       },

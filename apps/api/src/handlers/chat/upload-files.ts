@@ -235,7 +235,7 @@ const DIRECT_TEXT_MIME_TYPES: ReadonlySet<string> = new Set([
   TEXT_PLAIN_MIME_TYPE,
 ]);
 const THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE =
-  "Cannot send this attachment to the AI in anonymized mode because Stella cannot extract and anonymize it safely.";
+  "Cannot send this attachment to the AI in anonymized mode because stella cannot extract and anonymize it safely.";
 
 export const canHydrateFilePartAsPlainText = (mimeType: string): boolean =>
   DIRECT_TEXT_MIME_TYPES.has(mimeType) || mimeType === DOCX_MIME_TYPE;

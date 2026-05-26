@@ -2664,6 +2664,18 @@ export const chatThreads = p.pgTable(
       .array()
       .notNull()
       .default([]),
+    /**
+     * Per-thread opt-in for the chat web-search tools. Combined with
+     * the FEATURE_WEB_SEARCH deploy gate and the org's
+     * disabled-native-tools list, all three must hold for web_search /
+     * fetch_url to be exposed to the model on a turn. Defaults to
+     * false so existing threads see no behaviour change after this
+     * column lands.
+     */
+    webSearchEnabled: p
+      .boolean("web_search_enabled")
+      .notNull()
+      .default(false),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p
       .timestamp("updated_at")

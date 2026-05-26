@@ -330,7 +330,7 @@
       "denied": "Refusé",
       "deny": "Refuser",
       "externalMcpDescription": "Only the information needed for this tool call will be sent.",
-      "externalMcpQuestion": "Can Stella send this request to {provider}?"
+      "externalMcpQuestion": "Can stella send this request to {provider}?"
     },
     "askAnything": "Posez n’importe quelle question",
     "askUser": {
@@ -434,7 +434,7 @@
     "resizeThread": "Redimensionner la conversation",
     "send": "Envoyer le message",
     "sendError": "Un problème est survenu lors de l’envoi de ton message. Contacte le support si l’erreur persiste.",
-    "sendErrorAnonymizationBlocked": "Stella n’a pas pu anonymiser une pièce jointe, donc rien n’a été envoyé. Retire le fichier ou envoie ce message sans anonymisation.",
+    "sendErrorAnonymizationBlocked": "stella n’a pas pu anonymiser une pièce jointe, donc rien n’a été envoyé. Retire le fichier ou envoie ce message sans anonymisation.",
     "sendErrorInsufficientCredits": "Le fournisseur d’IA a besoin de crédits supplémentaires. Demande à l’administrateur de l’espace de travail de recharger le compte.",
     "sendErrorProviderUnavailable": "Le fournisseur d’IA est temporairement indisponible. Réessaie dans un instant.",
     "sendErrorQuotaExhausted": "Le quota du fournisseur d’IA est épuisé. Réessaie dans une minute, ou demande à l’administrateur de l’espace de travail de passer à un plan supérieur.",
@@ -477,6 +477,7 @@
       "docxReplaceBlockSummary": "Replace {blockId}",
       "docxReplaceSummary": "Replace “{find}” with “{replace}”",
       "execute-typescript": "Lecture des données du dossier",
+      "fetch_url": "Lecture de la page",
       "load-skill": "Lecture des consignes",
       "read-contact": "Lecture du contact",
       "read-content-across-matters": "Lecture du contenu dans tous les dossiers",
@@ -484,7 +485,8 @@
       "run-stella-query": "Lecture des données du dossier",
       "search-across-matters": "Recherche dans tous les dossiers",
       "unknown": "Utilisation d’un outil",
-      "update-entity-fields": "Mise à jour des métadonnées"
+      "update-entity-fields": "Mise à jour des métadonnées",
+      "web_search": "Recherche web"
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# caractère} many {# caractères} other {# caractères}}",
@@ -496,7 +498,18 @@
       "toggleDetails": "Afficher les détails"
     },
     "unsupportedFileType": "Type de fichier non pris en charge",
-    "uploadFailed": "Échec du traitement du fichier"
+    "uploadFailed": "Échec du traitement du fichier",
+    "webSearch": {
+      "answer": "Summary from sources",
+      "answerDisclaimer": "Synthesized from public web results below. Verify against the linked sources.",
+      "fetchedFrom": "depuis {source}",
+      "openSource": "Ouvrir {source} dans un nouvel onglet",
+      "sources": "Sources",
+      "toggleDescription": "Autoriser le modèle à rechercher sur le web public et à lire des pages pour cette conversation.",
+      "toggleLabel": "Recherche web",
+      "toggleOff": "Désactiver la recherche web",
+      "toggleOn": "Activer la recherche web"
+    }
   },
   "clauses": {
     "addVariant": "Ajouter une variante",
@@ -1007,7 +1020,7 @@
     "bold": "Bold",
     "boldShortcut": "Bold (Ctrl+B)",
     "bulletList": "Bullet List",
-    "checkingDocxEditDescription": "Stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.",
+    "checkingDocxEditDescription": "stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.",
     "checkingDocxEditTitle": "Checking document",
     "comment": "Comment",
     "comments": {
@@ -1397,7 +1410,7 @@
     "jurisdictionSaveFailed": "Impossible d’enregistrer vos juridictions. Vous pourrez terminer depuis les paramètres.",
     "jurisdictionSearchLabel": "Rechercher des pays",
     "jurisdictionSearchPlaceholder": "Rechercher des pays",
-    "jurisdictionSubtitle": "Choisissez les pays avec lesquels vous travaillez habituellement. Stella s’en servira pour personnaliser votre expérience.",
+    "jurisdictionSubtitle": "Choisissez les pays avec lesquels vous travaillez habituellement. stella s’en servira pour personnaliser votre expérience.",
     "jurisdictionSuggested": "Suggéré",
     "jurisdictionTitle": "Choisissez vos juridictions de pratique",
     "orgNameLabel": "Nom de l'équipe",
@@ -1429,7 +1442,7 @@
       "configure": "Configure",
       "credentialsPanel": "Clé",
       "customModelBadge": "Personnalisé · {provider}",
-      "customModelDescription": "Cet ID de modèle n’est pas dans le catalogue Stella. Il sera transmis tel quel au fournisseur sélectionné.",
+      "customModelDescription": "Cet ID de modèle n’est pas dans le catalogue stella. Il sera transmis tel quel au fournisseur sélectionné.",
       "customModelHint": "Aucune correspondance dans le catalogue. Saisissez n’importe quel ID de modèle; les IDs personnalisés sont enregistrés tels quels.",
       "dataRegion": "Data region",
       "dataRegionDescription": "Routes AI calls through the selected region for data sovereignty.",
@@ -1440,7 +1453,7 @@
       "description": "Bring your own API key or configure data sovereignty region.",
       "editProviders": "Modifier les fournisseurs",
       "endpoint": "Point de terminaison",
-      "endpointDescription": "Utilisez le point de terminaison Azure OpenAI ou Azure Foundry /openai/v1. Stella enregistre le point de terminaison normalisé.",
+      "endpointDescription": "Utilisez le point de terminaison Azure OpenAI ou Azure Foundry /openai/v1. stella enregistre le point de terminaison normalisé.",
       "keepSavedKey": "Conserver la clé enregistrée",
       "modelForRole": "Modèle pour {role}",
       "modelIdPlaceholder": "Rechercher des modèles",
@@ -1469,7 +1482,7 @@
       "providerForRole": "Fournisseur pour {role}",
       "providerKeyInvalid": "{provider} a rejeté la clé. Vérifiez-la avant d'enregistrer.",
       "providerKeyInvalidShort": "Invalide",
-      "providersDescription": "Ajoutez les identifiants des fournisseurs que Stella doit utiliser.",
+      "providersDescription": "Ajoutez les identifiants des fournisseurs que stella doit utiliser.",
       "providersPanel": "Fournisseurs",
       "regions": {
         "ch": "Switzerland (europe-west6)",
@@ -1595,7 +1608,7 @@
   },
   "selfhost": {
     "dismissUpdate": "Dismiss update notice",
-    "updateAvailable": "Stella v{latest} is available. You're running v{installed}.",
+    "updateAvailable": "stella v{latest} is available. You're running v{installed}.",
     "viewReleaseNotes": "View release notes"
   },
   "settings": {
@@ -1906,7 +1919,7 @@
         "takeoverWaiting": "En attente de réponse",
         "takeoverWaitingDescription": "Demande à {name} de libérer le verrou...",
         "unavailableDescription": "Lancez stella desktop et laissez-le ouvert avant d’utiliser l’édition sur le bureau.",
-        "unavailableTitle": "Stella desktop n’est pas disponible.",
+        "unavailableTitle": "stella desktop n’est pas disponible.",
         "updateRequiredDescription": "stella desktop doit être mis à jour. La mise à jour se lancera automatiquement lorsque les modifications desktop actives seront terminées; réessayez après son redémarrage.",
         "updateRequiredTitle": "Mettre à jour stella desktop"
       },

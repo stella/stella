@@ -3,6 +3,7 @@ import type { ToolSet } from "ai";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, ScopedDb } from "@/api/db";
+import { env } from "@/api/env";
 import { getChatSkillMetadata } from "@/api/handlers/chat/skills";
 import {
   APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME,
@@ -23,8 +24,28 @@ import {
   applyChatToolPolicies,
   CHAT_TOOL_POLICY_KIND,
 } from "@/api/handlers/chat/tools/tool-policy";
+import {
+  createWebSearchTools,
+  FETCH_URL_TOOL_NAME,
+  WEB_SEARCH_TOOL_NAME,
+} from "@/api/handlers/chat/tools/web-search-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
 import type { SafeId } from "@/api/lib/branded-types";
+import { getWebSearchProvider } from "@/api/lib/web-search/select-provider";
+
+export const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";
+
+export const isWebSearchAvailable = (
+  disabledNativeToolSlugs?: readonly string[],
+): boolean => {
+  const webSearchOrgDisabled =
+    disabledNativeToolSlugs?.includes(WEB_SEARCH_NATIVE_TOOL_SLUG) ?? false;
+  return (
+    env.FEATURE_WEB_SEARCH &&
+    !webSearchOrgDisabled &&
+    getWebSearchProvider() !== null
+  );
+};
 
 type WorkspaceTools = ReturnType<typeof createWorkspaceTools>;
 type OrgTools = ReturnType<typeof createOrgTools>;
@@ -34,6 +55,7 @@ type AresTools = ReturnType<typeof createAresTools>;
 type BoeTools = ReturnType<typeof createBoeTools>;
 type ActiveDocxEditTools = ReturnType<typeof createActiveDocxEditTools>;
 type CreateDocumentTools = ReturnType<typeof createCreateDocumentTools>;
+type WebSearchTools = ReturnType<typeof createWebSearchTools>;
 
 type BuiltInChatTools = OrgTools &
   ChatExecutionTools &
@@ -42,7 +64,8 @@ type BuiltInChatTools = OrgTools &
   BoeTools &
   WorkspaceTools &
   ActiveDocxEditTools &
-  CreateDocumentTools;
+  CreateDocumentTools &
+  WebSearchTools;
 
 export type ChatTools = BuiltInChatTools;
 
@@ -65,6 +88,14 @@ type GetChatToolsProps = {
    * client never calls `addToolOutput`, and the call would hang.
    */
   hasActiveFileChat: boolean;
+  /**
+   * Per-thread opt-in for the web_search + fetch_url tools. Combined
+   * with FEATURE_WEB_SEARCH (deploy gate), the org's
+   * disabledNativeToolSlugs ("web-search" disabled), and the presence
+   * of a configured WEB_SEARCH_PROVIDER — all four must hold for the
+   * tools to be registered on a turn.
+   */
+  webSearchEnabled: boolean;
   externalTools?: ToolSet | undefined;
   /**
    * Native tool slugs (e.g. "ares") the org has disabled in chat.
@@ -97,10 +128,17 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   borme_get_summary: CHAT_TOOL_POLICY_KIND.publicOfficial,
   "create-document": CHAT_TOOL_POLICY_KIND.internal,
   "describe-stella-api": CHAT_TOOL_POLICY_KIND.internal,
+  // Per-thread `webSearchEnabled` already gates the tools; an
+  // additional per-call approval would double-gate and block
+  // streaming until the user clicks Allow. Classify alongside the
+  // official-registry lookups so the model executes immediately
+  // once the toggle is on.
+  [FETCH_URL_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
   "load-skill": CHAT_TOOL_POLICY_KIND.internal,
   "read-skill-resource": CHAT_TOOL_POLICY_KIND.internal,
   "run-stella-query": CHAT_TOOL_POLICY_KIND.internal,
   "update-entity-fields": CHAT_TOOL_POLICY_KIND.mutation,
+  [WEB_SEARCH_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
 } as const satisfies Record<
   keyof BuiltInChatTools,
   (typeof CHAT_TOOL_POLICY_KIND)[keyof typeof CHAT_TOOL_POLICY_KIND]
@@ -114,6 +152,7 @@ export const getChatTools = ({
   toolWorkspaceIds,
   refRegistry,
   hasActiveFileChat,
+  webSearchEnabled,
   externalTools = {},
   disabledNativeToolSlugs,
   skillMetadata,
@@ -140,6 +179,10 @@ export const getChatTools = ({
   const aresTools = aresDisabled ? {} : createAresTools();
   const boeDisabled = disabledNativeToolSlugs?.includes("boe") ?? false;
   const boeTools = boeDisabled ? {} : createBoeTools();
+  const webSearchTools =
+    webSearchEnabled && isWebSearchAvailable(disabledNativeToolSlugs)
+      ? createWebSearchTools()
+      : {};
   const activeDocxEditTools = hasActiveFileChat
     ? createActiveDocxEditTools()
     : {};
@@ -174,6 +217,7 @@ export const getChatTools = ({
       ...workspaceTools,
       ...createDocumentTools,
       ...activeDocxEditTools,
+      ...webSearchTools,
       ...externalChatTools,
     },
   });

@@ -330,7 +330,7 @@
       "denied": "Negado",
       "deny": "Negar",
       "externalMcpDescription": "Só serão enviadas as informações necessárias para esta chamada de ferramenta.",
-      "externalMcpQuestion": "A Stella pode enviar esta solicitação para {provider}?"
+      "externalMcpQuestion": "A stella pode enviar esta solicitação para {provider}?"
     },
     "askAnything": "Pergunte qualquer coisa",
     "askUser": {
@@ -434,7 +434,7 @@
     "resizeThread": "Redimensionar conversa",
     "send": "Enviar mensagem",
     "sendError": "Ocorreu um problema ao enviar sua mensagem. Entre em contato com o suporte se o erro persistir.",
-    "sendErrorAnonymizationBlocked": "A Stella não conseguiu anonimizar um anexo, então nada foi enviado. Remova o arquivo ou envie esta mensagem sem anonimização.",
+    "sendErrorAnonymizationBlocked": "A stella não conseguiu anonimizar um anexo, então nada foi enviado. Remova o arquivo ou envie esta mensagem sem anonimização.",
     "sendErrorInsufficientCredits": "O provedor de IA precisa de mais créditos. Peça ao administrador do espaço de trabalho para recarregar a conta.",
     "sendErrorProviderUnavailable": "O provedor de IA está temporariamente indisponível. Tente novamente em instantes.",
     "sendErrorQuotaExhausted": "A cota do provedor de IA foi esgotada. Tente novamente em um minuto ou peça ao administrador do espaço de trabalho para atualizar o plano.",
@@ -477,6 +477,7 @@
       "docxReplaceBlockSummary": "Substitua {blockId}",
       "docxReplaceSummary": "Substitua “{find}” por “{replace}”",
       "execute-typescript": "Lendo dados do caso",
+      "fetch_url": "Lendo página",
       "load-skill": "Lendo orientações",
       "read-contact": "Lendo contato",
       "read-content-across-matters": "Lendo conteúdo em casos",
@@ -484,7 +485,8 @@
       "run-stella-query": "Lendo dados do caso",
       "search-across-matters": "Pesquisando casos",
       "unknown": "Usando ferramenta",
-      "update-entity-fields": "Atualizando metadados"
+      "update-entity-fields": "Atualizando metadados",
+      "web_search": "Pesquisando na web"
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# caractere} many {# caracteres} other {# caracteres}}",
@@ -496,7 +498,18 @@
       "toggleDetails": "Alternar detalhes"
     },
     "unsupportedFileType": "Tipo de arquivo não suportado",
-    "uploadFailed": "Falha ao processar o arquivo"
+    "uploadFailed": "Falha ao processar o arquivo",
+    "webSearch": {
+      "answer": "Summary from sources",
+      "answerDisclaimer": "Synthesized from public web results below. Verify against the linked sources.",
+      "fetchedFrom": "de {source}",
+      "openSource": "Abrir {source} em uma nova aba",
+      "sources": "Fontes",
+      "toggleDescription": "Permitir que o modelo pesquise na web pública e leia páginas nesta conversa.",
+      "toggleLabel": "Busca na web",
+      "toggleOff": "Desativar busca na web",
+      "toggleOn": "Ativar busca na web"
+    }
   },
   "clauses": {
     "addVariant": "Adicionar variante",
@@ -1440,7 +1453,7 @@
       "description": "Traga sua própria chave de API ou configure a região de soberania de dados.",
       "editProviders": "Editar provedores",
       "endpoint": "Endpoint",
-      "endpointDescription": "Use o endpoint /openai/v1 do Azure OpenAI ou Azure Foundry. Stella armazena o endpoint normalizado.",
+      "endpointDescription": "Use o endpoint /openai/v1 do Azure OpenAI ou Azure Foundry. stella armazena o endpoint normalizado.",
       "keepSavedKey": "Manter chave salva",
       "modelForRole": "Modelo {role}",
       "modelIdPlaceholder": "Pesquisar modelos",

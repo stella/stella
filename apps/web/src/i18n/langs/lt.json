@@ -330,7 +330,7 @@
       "denied": "Atmesta",
       "deny": "Atmesti",
       "externalMcpDescription": "Only the information needed for this tool call will be sent.",
-      "externalMcpQuestion": "Can Stella send this request to {provider}?"
+      "externalMcpQuestion": "Can stella send this request to {provider}?"
     },
     "askAnything": "Klauskite bet ko",
     "askUser": {
@@ -434,7 +434,7 @@
     "resizeThread": "Keisti pokalbio dydį",
     "send": "Siųsti žinutę",
     "sendError": "Siunčiant žinutę kilo problema. Jei klaida kartojasi, susisiekite su palaikymo komanda.",
-    "sendErrorAnonymizationBlocked": "Stella nepavyko anonimizuoti vieno priedo, todėl niekas nebuvo išsiųsta. Pašalinkite failą arba siųskite šią žinutę be anonimizavimo.",
+    "sendErrorAnonymizationBlocked": "stella nepavyko anonimizuoti vieno priedo, todėl niekas nebuvo išsiųsta. Pašalinkite failą arba siųskite šią žinutę be anonimizavimo.",
     "sendErrorInsufficientCredits": "AI teikėjui reikia daugiau kreditų. Paprašykite darbo srities administratoriaus papildyti sąskaitą.",
     "sendErrorProviderUnavailable": "AI teikėjas laikinai nepasiekiamas. Pabandykite po akimirkos dar kartą.",
     "sendErrorQuotaExhausted": "AI teikėjo kvota išnaudota. Pabandykite po minutės dar kartą arba paprašykite darbo srities administratoriaus atnaujinti planą.",
@@ -477,6 +477,7 @@
       "docxReplaceBlockSummary": "Replace {blockId}",
       "docxReplaceSummary": "Replace “{find}” with “{replace}”",
       "execute-typescript": "Skaitomi bylos duomenys",
+      "fetch_url": "Skaitomas puslapis",
       "load-skill": "Skaitomos gairės",
       "read-contact": "Skaitomas kontaktas",
       "read-content-across-matters": "Skaitomas turinys keliose bylose",
@@ -484,7 +485,8 @@
       "run-stella-query": "Skaitomi bylos duomenys",
       "search-across-matters": "Ieškoma keliose bylose",
       "unknown": "Naudojamas įrankis",
-      "update-entity-fields": "Atnaujinami metaduomenys"
+      "update-entity-fields": "Atnaujinami metaduomenys",
+      "web_search": "Ieškoma internete"
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# simbolis} few {# simboliai} many {# simbolių} other {# simbolio}}",
@@ -496,7 +498,18 @@
       "toggleDetails": "Perjungti detales"
     },
     "unsupportedFileType": "Nepalaikomas failo tipas",
-    "uploadFailed": "Nepavyko apdoroti failo"
+    "uploadFailed": "Nepavyko apdoroti failo",
+    "webSearch": {
+      "answer": "Summary from sources",
+      "answerDisclaimer": "Synthesized from public web results below. Verify against the linked sources.",
+      "fetchedFrom": "iš {source}",
+      "openSource": "Atidaryti {source} naujame skirtuke",
+      "sources": "Šaltiniai",
+      "toggleDescription": "Leisti modeliui šiame pokalbyje ieškoti viešajame internete ir skaityti puslapius.",
+      "toggleLabel": "Paieška internete",
+      "toggleOff": "Išjungti paiešką internete",
+      "toggleOn": "Įjungti paiešką internete"
+    }
   },
   "clauses": {
     "addVariant": "Pridėti variantą",
@@ -1007,7 +1020,7 @@
     "bold": "Bold",
     "boldShortcut": "Bold (Ctrl+B)",
     "bulletList": "Bullet List",
-    "checkingDocxEditDescription": "Stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.",
+    "checkingDocxEditDescription": "stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.",
     "checkingDocxEditTitle": "Checking document",
     "comment": "Comment",
     "comments": {
@@ -1397,7 +1410,7 @@
     "jurisdictionSaveFailed": "Nepavyko išsaugoti jurisdikcijų. Tai galėsite užbaigti nustatymuose.",
     "jurisdictionSearchLabel": "Ieškoti šalių",
     "jurisdictionSearchPlaceholder": "Ieškoti šalių",
-    "jurisdictionSubtitle": "Pasirinkite šalis, su kuriomis dažnai dirbate. Stella tuo remdamasi pritaikys jūsų patirtį.",
+    "jurisdictionSubtitle": "Pasirinkite šalis, su kuriomis dažnai dirbate. stella tuo remdamasi pritaikys jūsų patirtį.",
     "jurisdictionSuggested": "Siūloma",
     "jurisdictionTitle": "Pasirinkite savo praktikos jurisdikcijas",
     "orgNameLabel": "Komandos pavadinimas",
@@ -1429,7 +1442,7 @@
       "configure": "Configure",
       "credentialsPanel": "Raktas",
       "customModelBadge": "Pasirinktinis · {provider}",
-      "customModelDescription": "Šio modelio ID nėra Stella kataloge. Jis bus perduotas pasirinktam teikėjui taip, kaip įvestas.",
+      "customModelDescription": "Šio modelio ID nėra stella kataloge. Jis bus perduotas pasirinktam teikėjui taip, kaip įvestas.",
       "customModelHint": "Kataloge atitikmens nėra. Įveskite bet kokį modelio ID; pasirinktiniai ID išsaugomi taip, kaip įvesti.",
       "dataRegion": "Data region",
       "dataRegionDescription": "Routes AI calls through the selected region for data sovereignty.",
@@ -1440,7 +1453,7 @@
       "description": "Bring your own API key or configure data sovereignty region.",
       "editProviders": "Redaguoti tiekėjus",
       "endpoint": "Galinis taškas",
-      "endpointDescription": "Naudokite Azure OpenAI arba Azure Foundry /openai/v1 galinį tašką. Stella išsaugo normalizuotą galinį tašką.",
+      "endpointDescription": "Naudokite Azure OpenAI arba Azure Foundry /openai/v1 galinį tašką. stella išsaugo normalizuotą galinį tašką.",
       "keepSavedKey": "Palikti išsaugotą raktą",
       "modelForRole": "{role} modelis",
       "modelIdPlaceholder": "Ieškoti modelių",
@@ -1469,7 +1482,7 @@
       "providerForRole": "{role} teikėjas",
       "providerKeyInvalid": "{provider} atmetė raktą. Prieš išsaugodami patikrinkite.",
       "providerKeyInvalidShort": "Negaliojantis",
-      "providersDescription": "Pridėkite teikėjų prisijungimo duomenis, kuriuos Stella turėtų naudoti.",
+      "providersDescription": "Pridėkite teikėjų prisijungimo duomenis, kuriuos stella turėtų naudoti.",
       "providersPanel": "Teikėjai",
       "regions": {
         "ch": "Switzerland (europe-west6)",
@@ -1595,7 +1608,7 @@
   },
   "selfhost": {
     "dismissUpdate": "Dismiss update notice",
-    "updateAvailable": "Stella v{latest} is available. You're running v{installed}.",
+    "updateAvailable": "stella v{latest} is available. You're running v{installed}.",
     "viewReleaseNotes": "View release notes"
   },
   "settings": {
@@ -1906,7 +1919,7 @@
         "takeoverWaiting": "Laukiama atsakymo",
         "takeoverWaitingDescription": "Prašoma {name} atlaisvinti užraktą...",
         "unavailableDescription": "Prieš redaguodami darbalaukyje paleiskite stella desktop ir palikite ją veikti.",
-        "unavailableTitle": "Stella desktop nepasiekiama.",
+        "unavailableTitle": "stella desktop nepasiekiama.",
         "updateRequiredDescription": "stella desktop reikia atnaujinimo. Ji atsinaujins automatiškai, kai bus baigti aktyvūs darbalaukio redagavimai; bandykite dar kartą po paleidimo iš naujo.",
         "updateRequiredTitle": "Atnaujinkite stella desktop"
       },

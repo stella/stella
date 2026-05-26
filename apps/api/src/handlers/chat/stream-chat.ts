@@ -53,7 +53,38 @@ import {
 
 const MAX_TOOL_STEPS = 8;
 const THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE =
-  "Cannot send this attachment to the AI in anonymized mode because Stella cannot extract and anonymize it safely.";
+  "Cannot send this attachment to the AI in anonymized mode because stella cannot extract and anonymize it safely.";
+
+const ORPHAN_TOOL_STATES = new Set<string>([
+  "input-streaming",
+  "input-available",
+]);
+
+const isOrphanToolPart = (part: ChatMessage["parts"][number]): boolean => {
+  const isToolPart =
+    part.type === "dynamic-tool" || part.type.startsWith("tool-");
+  if (!isToolPart) {
+    return false;
+  }
+  if (!("state" in part) || typeof part.state !== "string") {
+    return false;
+  }
+  return ORPHAN_TOOL_STATES.has(part.state);
+};
+
+export const pruneOrphanedToolParts = (
+  messages: readonly ChatMessage[],
+): ChatMessage[] =>
+  messages.map((message) => {
+    if (message.role !== "assistant") {
+      return message;
+    }
+    const kept = message.parts.filter((part) => !isOrphanToolPart(part));
+    if (kept.length === message.parts.length) {
+      return message;
+    }
+    return { ...message, parts: kept };
+  });
 
 type AssistantValueRefResolver = ChatRefRegistry["resolveAssistantValueRefs"];
 
@@ -230,7 +261,7 @@ type StreamChatProps = {
 export const streamChat = async ({
   abortSignal,
   devModelId,
-  messages,
+  messages: rawMessages,
   onFinish,
   orgAIConfig,
   promptCacheKey,
@@ -243,6 +274,12 @@ export const streamChat = async ({
   threadId,
   tools,
 }: StreamChatProps) => {
+  // Strip persisted tool-call parts that never received a result
+  // (process killed mid-stream, provider threw before the result was
+  // written, etc.) — otherwise the AI SDK throws
+  // `AI_MissingToolResultsError` at prompt assembly and the whole
+  // thread becomes unsendable.
+  const messages = pruneOrphanedToolParts(rawMessages);
   // The prompt builder already split the system prompt into a safe
   // scaffold half (brand voice, skill catalog, jurisdictions) and
   // a dynamic-context half (active file body, decision text,

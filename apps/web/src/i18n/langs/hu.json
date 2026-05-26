@@ -330,7 +330,7 @@
       "denied": "Elutasítva",
       "deny": "Elutasítás",
       "externalMcpDescription": "Only the information needed for this tool call will be sent.",
-      "externalMcpQuestion": "Can Stella send this request to {provider}?"
+      "externalMcpQuestion": "Can stella send this request to {provider}?"
     },
     "askAnything": "Kérdezzen bármit",
     "askUser": {
@@ -434,7 +434,7 @@
     "resizeThread": "Beszélgetés méretezése",
     "send": "Üzenet küldése",
     "sendError": "Probléma történt az üzenet elküldésekor. Ha a hiba továbbra is fennáll, vedd fel a kapcsolatot a támogatással.",
-    "sendErrorAnonymizationBlocked": "A Stella nem tudta anonimizálni az egyik mellékletet, ezért semmi sem lett elküldve. Távolítsd el a fájlt, vagy küldd el az üzenetet anonimizálás nélkül.",
+    "sendErrorAnonymizationBlocked": "A stella nem tudta anonimizálni az egyik mellékletet, ezért semmi sem lett elküldve. Távolítsd el a fájlt, vagy küldd el az üzenetet anonimizálás nélkül.",
     "sendErrorInsufficientCredits": "Az AI-szolgáltatónak további kreditre van szüksége. Kérd a munkaterület adminisztrátorát, hogy töltse fel a fiókot.",
     "sendErrorProviderUnavailable": "Az AI-szolgáltató átmenetileg nem elérhető. Próbáld újra egy pillanat múlva.",
     "sendErrorQuotaExhausted": "Az AI-szolgáltató kvótája kimerült. Próbáld újra egy perc múlva, vagy kérd a munkaterület adminisztrátorát, hogy bővítse a csomagot.",
@@ -477,6 +477,7 @@
       "docxReplaceBlockSummary": "Replace {blockId}",
       "docxReplaceSummary": "Replace “{find}” with “{replace}”",
       "execute-typescript": "Ügyadatok olvasása",
+      "fetch_url": "Oldal olvasása",
       "load-skill": "Útmutató olvasása",
       "read-contact": "Kapcsolat olvasása",
       "read-content-across-matters": "Tartalom olvasása az ügyek között",
@@ -484,7 +485,8 @@
       "run-stella-query": "Ügyadatok olvasása",
       "search-across-matters": "Keresés az ügyek között",
       "unknown": "Eszköz használata",
-      "update-entity-fields": "Metaadatok frissítése"
+      "update-entity-fields": "Metaadatok frissítése",
+      "web_search": "Keresés az interneten"
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# karakter} other {# karakter}}",
@@ -496,7 +498,18 @@
       "toggleDetails": "Részletek megjelenítése"
     },
     "unsupportedFileType": "Nem támogatott fájltípus",
-    "uploadFailed": "A fájl feldolgozása sikertelen"
+    "uploadFailed": "A fájl feldolgozása sikertelen",
+    "webSearch": {
+      "answer": "Summary from sources",
+      "answerDisclaimer": "Synthesized from public web results below. Verify against the linked sources.",
+      "fetchedFrom": "{source} forrásból",
+      "openSource": "{source} megnyitása új lapon",
+      "sources": "Források",
+      "toggleDescription": "Engedélyezi a modellnek, hogy ebben a beszélgetésben a nyilvános weben keressen és oldalakat olvasson.",
+      "toggleLabel": "Webes keresés",
+      "toggleOff": "Webes keresés kikapcsolása",
+      "toggleOn": "Webes keresés bekapcsolása"
+    }
   },
   "clauses": {
     "addVariant": "Változat hozzáadása",
@@ -1007,7 +1020,7 @@
     "bold": "Bold",
     "boldShortcut": "Bold (Ctrl+B)",
     "bulletList": "Bullet List",
-    "checkingDocxEditDescription": "Stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.",
+    "checkingDocxEditDescription": "stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.",
     "checkingDocxEditTitle": "Checking document",
     "comment": "Comment",
     "comments": {
@@ -1397,7 +1410,7 @@
     "jurisdictionSaveFailed": "Nem sikerült menteni a joghatóságokat. Ezt a beállításokban fejezheti be.",
     "jurisdictionSearchLabel": "Országok keresése",
     "jurisdictionSearchPlaceholder": "Országok keresése",
-    "jurisdictionSubtitle": "Válassza ki azokat az országokat, amelyekkel rendszeresen dolgozik. A Stella ennek alapján szabja személyre az élményét.",
+    "jurisdictionSubtitle": "Válassza ki azokat az országokat, amelyekkel rendszeresen dolgozik. A stella ennek alapján szabja személyre az élményét.",
     "jurisdictionSuggested": "Javasolt",
     "jurisdictionTitle": "Válassza ki gyakorlati joghatóságait",
     "orgNameLabel": "Csapat neve",
@@ -1429,7 +1442,7 @@
       "configure": "Configure",
       "credentialsPanel": "Kulcs",
       "customModelBadge": "Egyedi · {provider}",
-      "customModelDescription": "Ez a modellazonosító nincs a Stella katalógusában. A kiválasztott szolgáltatónak pontosan így lesz továbbítva.",
+      "customModelDescription": "Ez a modellazonosító nincs a stella katalógusában. A kiválasztott szolgáltatónak pontosan így lesz továbbítva.",
       "customModelHint": "Nincs katalógustalálat. Írj be bármilyen modellazonosítót; az egyedi azonosítók változatlanul mentésre kerülnek.",
       "dataRegion": "Data region",
       "dataRegionDescription": "Routes AI calls through the selected region for data sovereignty.",
@@ -1440,7 +1453,7 @@
       "description": "Bring your own API key or configure data sovereignty region.",
       "editProviders": "Szolgáltatók szerkesztése",
       "endpoint": "Végpont",
-      "endpointDescription": "Használd az Azure OpenAI vagy Azure Foundry /openai/v1 végpontot. A Stella a normalizált végpontot menti.",
+      "endpointDescription": "Használd az Azure OpenAI vagy Azure Foundry /openai/v1 végpontot. A stella a normalizált végpontot menti.",
       "keepSavedKey": "Mentett kulcs megtartása",
       "modelForRole": "{role} modellje",
       "modelIdPlaceholder": "Modellek keresése",
@@ -1469,7 +1482,7 @@
       "providerForRole": "{role} szolgáltatója",
       "providerKeyInvalid": "A {provider} elutasította a kulcsot. Kérjük, ellenőrizze.",
       "providerKeyInvalidShort": "Érvénytelen",
-      "providersDescription": "Add meg azoknak a szolgáltatóknak a hitelesítő adatait, amelyeket Stella használjon.",
+      "providersDescription": "Add meg azoknak a szolgáltatóknak a hitelesítő adatait, amelyeket stella használjon.",
       "providersPanel": "Szolgáltatók",
       "regions": {
         "ch": "Switzerland (europe-west6)",
@@ -1595,7 +1608,7 @@
   },
   "selfhost": {
     "dismissUpdate": "Dismiss update notice",
-    "updateAvailable": "Stella v{latest} is available. You're running v{installed}.",
+    "updateAvailable": "stella v{latest} is available. You're running v{installed}.",
     "viewReleaseNotes": "View release notes"
   },
   "settings": {
