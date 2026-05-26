@@ -150,6 +150,144 @@ function parseShadingProperties(
   return Object.keys(props).length > 0 ? props : undefined;
 }
 
+type RunPropertyChildren = {
+  b?: XmlElement;
+  bCs?: XmlElement;
+  caps?: XmlElement;
+  color?: XmlElement;
+  cs?: XmlElement;
+  dstrike?: XmlElement;
+  effect?: XmlElement;
+  em?: XmlElement;
+  emboss?: XmlElement;
+  highlight?: XmlElement;
+  i?: XmlElement;
+  iCs?: XmlElement;
+  imprint?: XmlElement;
+  kern?: XmlElement;
+  outline?: XmlElement;
+  position?: XmlElement;
+  rFonts?: XmlElement;
+  rtl?: XmlElement;
+  rStyle?: XmlElement;
+  shadow?: XmlElement;
+  shd?: XmlElement;
+  smallCaps?: XmlElement;
+  spacing?: XmlElement;
+  strike?: XmlElement;
+  sz?: XmlElement;
+  szCs?: XmlElement;
+  u?: XmlElement;
+  vanish?: XmlElement;
+  vertAlign?: XmlElement;
+  w?: XmlElement;
+};
+
+function collectFirstRunPropertyChildren(rPr: XmlElement): RunPropertyChildren {
+  const children: RunPropertyChildren = {};
+
+  for (const child of rPr.elements ?? []) {
+    if (child.type !== "element") {
+      continue;
+    }
+    const localName = getLocalName(child.name);
+    switch (localName) {
+      case "b":
+        children.b ??= child;
+        break;
+      case "bCs":
+        children.bCs ??= child;
+        break;
+      case "caps":
+        children.caps ??= child;
+        break;
+      case "color":
+        children.color ??= child;
+        break;
+      case "cs":
+        children.cs ??= child;
+        break;
+      case "dstrike":
+        children.dstrike ??= child;
+        break;
+      case "effect":
+        children.effect ??= child;
+        break;
+      case "em":
+        children.em ??= child;
+        break;
+      case "emboss":
+        children.emboss ??= child;
+        break;
+      case "highlight":
+        children.highlight ??= child;
+        break;
+      case "i":
+        children.i ??= child;
+        break;
+      case "iCs":
+        children.iCs ??= child;
+        break;
+      case "imprint":
+        children.imprint ??= child;
+        break;
+      case "kern":
+        children.kern ??= child;
+        break;
+      case "outline":
+        children.outline ??= child;
+        break;
+      case "position":
+        children.position ??= child;
+        break;
+      case "rFonts":
+        children.rFonts ??= child;
+        break;
+      case "rtl":
+        children.rtl ??= child;
+        break;
+      case "rStyle":
+        children.rStyle ??= child;
+        break;
+      case "shadow":
+        children.shadow ??= child;
+        break;
+      case "shd":
+        children.shd ??= child;
+        break;
+      case "smallCaps":
+        children.smallCaps ??= child;
+        break;
+      case "spacing":
+        children.spacing ??= child;
+        break;
+      case "strike":
+        children.strike ??= child;
+        break;
+      case "sz":
+        children.sz ??= child;
+        break;
+      case "szCs":
+        children.szCs ??= child;
+        break;
+      case "u":
+        children.u ??= child;
+        break;
+      case "vanish":
+        children.vanish ??= child;
+        break;
+      case "vertAlign":
+        children.vertAlign ??= child;
+        break;
+      case "w":
+        children.w ??= child;
+        break;
+    }
+  }
+
+  return children;
+}
+
 /**
  * Parse run formatting properties (w:rPr)
  *
@@ -177,31 +315,32 @@ export function parseRunProperties(
   }
 
   const formatting: TextFormatting = {};
+  const propertyChildren = collectFirstRunPropertyChildren(rPr);
 
   // Bold (w:b)
-  const b = findChild(rPr, "w", "b");
+  const b = propertyChildren.b;
   if (b) {
     formatting.bold = parseBooleanElement(b);
   }
 
-  const bCs = findChild(rPr, "w", "bCs");
+  const bCs = propertyChildren.bCs;
   if (bCs) {
     formatting.boldCs = parseBooleanElement(bCs);
   }
 
   // Italic (w:i)
-  const i = findChild(rPr, "w", "i");
+  const i = propertyChildren.i;
   if (i) {
     formatting.italic = parseBooleanElement(i);
   }
 
-  const iCs = findChild(rPr, "w", "iCs");
+  const iCs = propertyChildren.iCs;
   if (iCs) {
     formatting.italicCs = parseBooleanElement(iCs);
   }
 
   // Underline (w:u)
-  const u = findChild(rPr, "w", "u");
+  const u = propertyChildren.u;
   if (u) {
     const style = narrowEnum(getAttribute(u, "w", "val"), UnderlineStyleSchema);
     if (style) {
@@ -220,19 +359,19 @@ export function parseRunProperties(
   }
 
   // Strikethrough (w:strike)
-  const strike = findChild(rPr, "w", "strike");
+  const strike = propertyChildren.strike;
   if (strike) {
     formatting.strike = parseBooleanElement(strike);
   }
 
   // Double strikethrough (w:dstrike)
-  const dstrike = findChild(rPr, "w", "dstrike");
+  const dstrike = propertyChildren.dstrike;
   if (dstrike) {
     formatting.doubleStrike = parseBooleanElement(dstrike);
   }
 
   // Vertical alignment - superscript/subscript (w:vertAlign)
-  const vertAlign = findChild(rPr, "w", "vertAlign");
+  const vertAlign = propertyChildren.vertAlign;
   if (vertAlign) {
     const val = getAttribute(vertAlign, "w", "val");
     if (val === "superscript" || val === "subscript" || val === "baseline") {
@@ -241,25 +380,25 @@ export function parseRunProperties(
   }
 
   // Small caps (w:smallCaps)
-  const smallCaps = findChild(rPr, "w", "smallCaps");
+  const smallCaps = propertyChildren.smallCaps;
   if (smallCaps) {
     formatting.smallCaps = parseBooleanElement(smallCaps);
   }
 
   // All caps (w:caps)
-  const caps = findChild(rPr, "w", "caps");
+  const caps = propertyChildren.caps;
   if (caps) {
     formatting.allCaps = parseBooleanElement(caps);
   }
 
   // Hidden text (w:vanish)
-  const vanish = findChild(rPr, "w", "vanish");
+  const vanish = propertyChildren.vanish;
   if (vanish) {
     formatting.hidden = parseBooleanElement(vanish);
   }
 
   // Text color (w:color)
-  const color = findChild(rPr, "w", "color");
+  const color = propertyChildren.color;
   if (color) {
     formatting.color = parseColorValue(
       getAttribute(color, "w", "val"),
@@ -270,7 +409,7 @@ export function parseRunProperties(
   }
 
   // Highlight color (w:highlight)
-  const highlight = findChild(rPr, "w", "highlight");
+  const highlight = propertyChildren.highlight;
   if (highlight) {
     const val = narrowEnum(
       getAttribute(highlight, "w", "val"),
@@ -282,7 +421,7 @@ export function parseRunProperties(
   }
 
   // Character shading (w:shd)
-  const shd = findChild(rPr, "w", "shd");
+  const shd = propertyChildren.shd;
   if (shd) {
     const shadingResult = parseShadingProperties(shd);
     if (shadingResult) {
@@ -291,7 +430,7 @@ export function parseRunProperties(
   }
 
   // Font size in half-points (w:sz)
-  const sz = findChild(rPr, "w", "sz");
+  const sz = propertyChildren.sz;
   if (sz) {
     const val = parseNumericAttribute(sz, "w", "val");
     if (val !== undefined) {
@@ -300,7 +439,7 @@ export function parseRunProperties(
   }
 
   // Font size complex script (w:szCs)
-  const szCs = findChild(rPr, "w", "szCs");
+  const szCs = propertyChildren.szCs;
   if (szCs) {
     const val = parseNumericAttribute(szCs, "w", "val");
     if (val !== undefined) {
@@ -309,7 +448,7 @@ export function parseRunProperties(
   }
 
   // Font family (w:rFonts)
-  const rFonts = findChild(rPr, "w", "rFonts");
+  const rFonts = propertyChildren.rFonts;
   if (rFonts) {
     const fontFamily: NonNullable<TextFormatting["fontFamily"]> = {};
     const ascii = getAttribute(rFonts, "w", "ascii");
@@ -380,7 +519,7 @@ export function parseRunProperties(
   }
 
   // Character spacing in twips (w:spacing)
-  const spacing = findChild(rPr, "w", "spacing");
+  const spacing = propertyChildren.spacing;
   if (spacing) {
     const val = parseNumericAttribute(spacing, "w", "val");
     if (val !== undefined) {
@@ -389,7 +528,7 @@ export function parseRunProperties(
   }
 
   // Position - raised/lowered in half-points (w:position)
-  const position = findChild(rPr, "w", "position");
+  const position = propertyChildren.position;
   if (position) {
     const val = parseNumericAttribute(position, "w", "val");
     if (val !== undefined) {
@@ -398,7 +537,7 @@ export function parseRunProperties(
   }
 
   // Horizontal text scale percentage (w:w)
-  const w = findChild(rPr, "w", "w");
+  const w = propertyChildren.w;
   if (w) {
     const val = parseNumericAttribute(w, "w", "val");
     if (val !== undefined) {
@@ -407,7 +546,7 @@ export function parseRunProperties(
   }
 
   // Kerning threshold in half-points (w:kern)
-  const kern = findChild(rPr, "w", "kern");
+  const kern = propertyChildren.kern;
   if (kern) {
     const val = parseNumericAttribute(kern, "w", "val");
     if (val !== undefined) {
@@ -416,7 +555,7 @@ export function parseRunProperties(
   }
 
   // Text effect animation (w:effect)
-  const effect = findChild(rPr, "w", "effect");
+  const effect = propertyChildren.effect;
   if (effect) {
     const val = narrowEnum(getAttribute(effect, "w", "val"), TextEffectSchema);
     if (val) {
@@ -425,7 +564,7 @@ export function parseRunProperties(
   }
 
   // Emphasis mark (w:em)
-  const em = findChild(rPr, "w", "em");
+  const em = propertyChildren.em;
   if (em) {
     const val = narrowEnum(getAttribute(em, "w", "val"), EmphasisMarkSchema);
     if (val) {
@@ -434,43 +573,43 @@ export function parseRunProperties(
   }
 
   // Emboss effect (w:emboss)
-  const emboss = findChild(rPr, "w", "emboss");
+  const emboss = propertyChildren.emboss;
   if (emboss) {
     formatting.emboss = parseBooleanElement(emboss);
   }
 
   // Imprint/engrave effect (w:imprint)
-  const imprint = findChild(rPr, "w", "imprint");
+  const imprint = propertyChildren.imprint;
   if (imprint) {
     formatting.imprint = parseBooleanElement(imprint);
   }
 
   // Outline effect (w:outline)
-  const outline = findChild(rPr, "w", "outline");
+  const outline = propertyChildren.outline;
   if (outline) {
     formatting.outline = parseBooleanElement(outline);
   }
 
   // Shadow effect (w:shadow)
-  const shadow = findChild(rPr, "w", "shadow");
+  const shadow = propertyChildren.shadow;
   if (shadow) {
     formatting.shadow = parseBooleanElement(shadow);
   }
 
   // Right-to-left text (w:rtl)
-  const rtl = findChild(rPr, "w", "rtl");
+  const rtl = propertyChildren.rtl;
   if (rtl) {
     formatting.rtl = parseBooleanElement(rtl);
   }
 
   // Complex script formatting (w:cs)
-  const cs = findChild(rPr, "w", "cs");
+  const cs = propertyChildren.cs;
   if (cs) {
     formatting.cs = parseBooleanElement(cs);
   }
 
   // Character style reference (w:rStyle)
-  const rStyle = findChild(rPr, "w", "rStyle");
+  const rStyle = propertyChildren.rStyle;
   if (rStyle) {
     const val = getAttribute(rStyle, "w", "val");
     if (val) {
