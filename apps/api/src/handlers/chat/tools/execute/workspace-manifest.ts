@@ -27,17 +27,17 @@ const propertyStatusSchema = v.picklist(PROPERTY_STATUSES);
 const matterRefSchema = v.pipe(
   v.string(),
   v.regex(/^mat_\d+$/),
-  v.description("Short matter ref returned by Stella tools"),
+  v.description("Short matter ref returned by stella tools"),
 );
 const entityRefSchema = v.pipe(
   v.string(),
   v.regex(/^ent_\d+$/),
-  v.description("Short entity ref returned by Stella tools"),
+  v.description("Short entity ref returned by stella tools"),
 );
 const propertyRefSchema = v.pipe(
   v.string(),
   v.regex(/^prop_\d+$/),
-  v.description("Short property ref returned by Stella tools"),
+  v.description("Short property ref returned by stella tools"),
 );
 /* eslint-enable require-unicode-regexp */
 const storedFileIdSchema = v.pipe(

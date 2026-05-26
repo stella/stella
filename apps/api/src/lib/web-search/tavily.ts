@@ -4,6 +4,7 @@ import { JURISDICTION_ALLOWLIST_DOMAINS } from "@/api/lib/web-search/allowlists"
 import type {
   WebSearchProvider,
   WebSearchProviderArgs,
+  WebSearchProviderResponse,
   WebSearchResult,
 } from "@/api/lib/web-search/types";
 import { WebSearchProviderError } from "@/api/lib/web-search/types";
@@ -12,6 +13,7 @@ const TAVILY_ENDPOINT = "https://api.tavily.com/search";
 
 const tavilyResponseSchema = v.object({
   query: v.optional(v.string()),
+  answer: v.optional(v.nullable(v.string())),
   results: v.array(
     v.object({
       url: v.pipe(v.string(), v.url()),
@@ -56,7 +58,7 @@ export const createTavilyProvider = ({
     freshness,
     maxResults,
     signal,
-  }): Promise<WebSearchResult[]> => {
+  }): Promise<WebSearchProviderResponse> => {
     const includeDomains = JURISDICTION_ALLOWLIST_DOMAINS[jurisdiction];
     const timeRange = TAVILY_TIME_RANGE_BY_FRESHNESS[freshness];
     const response = await fetch(TAVILY_ENDPOINT, {
@@ -69,8 +71,13 @@ export const createTavilyProvider = ({
         query,
         topic: "general",
         max_results: maxResults,
-        search_depth: "basic",
-        include_answer: false,
+        // "advanced" returns substantially longer per-result content
+        // and Tavily also synthesizes a direct answer string. Without
+        // these, the model only sees ~1-line snippets and routinely
+        // hallucinates from partial fragments (e.g. "we won 6:0" with
+        // no team attribution).
+        search_depth: "advanced",
+        include_answer: "advanced",
         include_raw_content: false,
         ...(includeDomains.length > 0
           ? { include_domains: [...includeDomains] }
@@ -105,6 +112,10 @@ export const createTavilyProvider = ({
       }
       results.push(entry);
     }
-    return results;
+    const out: WebSearchProviderResponse = { results };
+    if (json.answer) {
+      out.answer = json.answer;
+    }
+    return out;
   },
 });

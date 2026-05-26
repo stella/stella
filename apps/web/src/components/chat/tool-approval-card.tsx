@@ -5,6 +5,7 @@ import { panic } from "better-result";
 import {
   ArrowRightIcon,
   CheckIcon,
+  GlobeIcon,
   LoaderIcon,
   PencilIcon,
   XIcon,
@@ -478,7 +479,7 @@ export const ToolApprovalCard = ({
     >
       {/* Header: icon + label + status */}
       <div className="flex items-center gap-2 px-3 py-2">
-        <ToolApprovalLeadingIcon iconHref={mcpIconHref} />
+        <ToolApprovalLeadingIcon iconHref={mcpIconHref} toolName={name} />
         <span className="font-medium">{label}</span>
         {isProcessing && (
           <LoaderIcon className="text-muted-foreground ms-auto size-3.5 shrink-0 animate-spin" />
@@ -652,8 +653,10 @@ const getExternalMcpConnectorSlug = (
 
 function ToolApprovalLeadingIcon({
   iconHref,
+  toolName,
 }: {
   iconHref?: string | undefined;
+  toolName?: ApprovalToolName | undefined;
 }) {
   if (iconHref) {
     return (
@@ -667,6 +670,10 @@ function ToolApprovalLeadingIcon({
         />
       </span>
     );
+  }
+
+  if (toolName === "web_search" || toolName === "fetch_url") {
+    return <GlobeIcon className="text-muted-foreground size-4 shrink-0" />;
   }
 
   return <PencilIcon className="text-muted-foreground size-4 shrink-0" />;

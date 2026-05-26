@@ -736,6 +736,18 @@ const AssistantMessageParts = ({
           );
         }
 
+        if (
+          (part.type === "tool-web_search" || part.type === "tool-fetch_url") &&
+          "state" in part &&
+          part.state === "output-available"
+        ) {
+          // Completed searches are rendered as a single dedup'd row by
+          // <WebSearchSources> below; skipping here avoids the duplicate.
+          // Other states (approval-requested, input-*) still need to fall
+          // through to the approval/tool-call cards.
+          return null;
+        }
+
         if (isApprovalPart(part)) {
           return (
             <ToolApprovalCard

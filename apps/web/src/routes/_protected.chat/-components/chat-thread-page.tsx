@@ -1,6 +1,10 @@
-import { useEffectEvent, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { Maximize2Icon, PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -24,15 +28,18 @@ import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
+import { api } from "@/lib/api";
 import {
   getChatSendMode,
   useChatAnonymized,
   useSetChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { useDevStore } from "@/lib/dev-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
+import { toSafeId } from "@/lib/safe-id";
 import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
 import { ChatWebSearchToggle } from "@/routes/_protected.chat/-components/chat-web-search-toggle";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
@@ -140,6 +147,38 @@ export const ChatThreadPage = ({
     () => getUserMessageHtmlHistory(messages),
     [messages],
   );
+
+  // Seed brand-new (empty) threads from the persisted web-search
+  // preference so the user doesn't have to flip the toggle every time
+  // they start a chat. We only fire on the first render where the
+  // thread is empty and the prior preference is on; thereafter the
+  // per-thread DB row is the source of truth.
+  const enabledPreference = useChatWebSearchPreferenceStore(
+    (state) => state.enabledPreference,
+  );
+  const seedWebSearch = useChatWebSearchSeed({ threadRef });
+  const seededWebSearchForThreadId = useRef<string | null>(null);
+  useEffect(() => {
+    if (seededWebSearchForThreadId.current === threadRef.threadId) {
+      return;
+    }
+    if (
+      messages.length === 0 &&
+      data.webSearchAvailable &&
+      !data.webSearchEnabled &&
+      enabledPreference
+    ) {
+      seededWebSearchForThreadId.current = threadRef.threadId;
+      seedWebSearch();
+    }
+  }, [
+    threadRef.threadId,
+    messages.length,
+    data.webSearchAvailable,
+    data.webSearchEnabled,
+    enabledPreference,
+    seedWebSearch,
+  ]);
   const controller = useChatEditor({
     sentMessageHistoryHtml,
     threadRef,
@@ -293,7 +332,7 @@ export const ChatThreadPage = ({
                 />
               )}
             </ConversationContent>
-            <ConversationScrollButton />
+            {messages.length > 0 && <ConversationScrollButton />}
           </Conversation>
 
           <ChatAnonymizationLayer
@@ -322,4 +361,31 @@ export const ChatThreadPage = ({
       </ChatApprovalContext>
     </ChatMattersContext>
   );
+};
+
+const useChatWebSearchSeed = ({ threadRef }: { threadRef: ChatThreadRef }) => {
+  const queryClient = useQueryClient();
+  const { mutate } = useMutation({
+    mutationFn: async () => {
+      const response = await api.chat
+        .threads({ threadId: toSafeId<"chatThread">(threadRef.threadId) })
+        .patch(
+          { webSearchEnabled: true },
+          {
+            query:
+              threadRef.scope === "workspace"
+                ? { workspaceId: toSafeId<"workspace">(threadRef.workspaceId) }
+                : {},
+          },
+        );
+      return response.data;
+    },
+    onSuccess: () => {
+      void invalidateChatThreadAcrossScopes({
+        queryClient,
+        threadId: toSafeId<"chatThread">(threadRef.threadId),
+      });
+    },
+  });
+  return mutate;
 };

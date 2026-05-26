@@ -330,7 +330,7 @@
       "denied": "Odrzucono",
       "deny": "Odmów",
       "externalMcpDescription": "Only the information needed for this tool call will be sent.",
-      "externalMcpQuestion": "Can Stella send this request to {provider}?"
+      "externalMcpQuestion": "Can stella send this request to {provider}?"
     },
     "askAnything": "Zapytaj o cokolwiek",
     "askUser": {
@@ -434,7 +434,7 @@
     "resizeThread": "Zmień rozmiar konwersacji",
     "send": "Wyślij wiadomość",
     "sendError": "Wystąpił problem podczas wysyłania wiadomości. Jeśli błąd będzie się powtarzał, skontaktuj się z pomocą techniczną.",
-    "sendErrorAnonymizationBlocked": "Stella nie mogła zanonimizować jednego załącznika, więc nic nie wysłano. Usuń plik albo wyślij tę wiadomość bez anonimizacji.",
+    "sendErrorAnonymizationBlocked": "stella nie mogła zanonimizować jednego załącznika, więc nic nie wysłano. Usuń plik albo wyślij tę wiadomość bez anonimizacji.",
     "sendErrorInsufficientCredits": "Dostawca AI potrzebuje więcej środków. Poproś administratora obszaru roboczego o doładowanie konta.",
     "sendErrorProviderUnavailable": "Dostawca AI jest tymczasowo niedostępny. Spróbuj ponownie za chwilę.",
     "sendErrorQuotaExhausted": "Limit dostawcy AI został wyczerpany. Spróbuj za chwilę ponownie lub poproś administratora obszaru roboczego o ulepszenie planu.",
@@ -500,6 +500,8 @@
     "unsupportedFileType": "Nieobsługiwany typ pliku",
     "uploadFailed": "Przetwarzanie pliku nie powiodło się",
     "webSearch": {
+      "answer": "Summary from sources",
+      "answerDisclaimer": "Synthesized from public web results below. Verify against the linked sources.",
       "fetchedFrom": "z {source}",
       "openSource": "Otwórz {source} w nowej karcie",
       "sources": "Źródła",
@@ -1018,7 +1020,7 @@
     "bold": "Pogrubienie",
     "boldShortcut": "Pogrubienie (Ctrl+B)",
     "bulletList": "Lista punktowana",
-    "checkingDocxEditDescription": "Stella nadal sprawdza, czy ten DOCX można bezpiecznie edytować. Spróbuj ponownie, gdy dokument się załaduje.",
+    "checkingDocxEditDescription": "stella nadal sprawdza, czy ten DOCX można bezpiecznie edytować. Spróbuj ponownie, gdy dokument się załaduje.",
     "checkingDocxEditTitle": "Sprawdzanie dokumentu",
     "comment": "Komentarz",
     "comments": {
@@ -1408,7 +1410,7 @@
     "jurisdictionSaveFailed": "Nie udało się zapisać jurysdykcji. Możesz dokończyć to w ustawieniach.",
     "jurisdictionSearchLabel": "Szukaj krajów",
     "jurisdictionSearchPlaceholder": "Szukaj krajów",
-    "jurisdictionSubtitle": "Wybierz kraje, z którymi regularnie współpracujesz. Stella użyje tego do dostosowania Twojego środowiska.",
+    "jurisdictionSubtitle": "Wybierz kraje, z którymi regularnie współpracujesz. stella użyje tego do dostosowania Twojego środowiska.",
     "jurisdictionSuggested": "Sugerowane",
     "jurisdictionTitle": "Wybierz jurysdykcje swojej praktyki",
     "orgNameLabel": "Nazwa zespołu",
@@ -1440,7 +1442,7 @@
       "configure": "Skonfiguruj",
       "credentialsPanel": "Klucz",
       "customModelBadge": "Niestandardowy · {provider}",
-      "customModelDescription": "Tego identyfikatora modelu nie ma w katalogu Stella. Zostanie przekazany do wybranego dostawcy dokładnie tak, jak wpisano.",
+      "customModelDescription": "Tego identyfikatora modelu nie ma w katalogu stella. Zostanie przekazany do wybranego dostawcy dokładnie tak, jak wpisano.",
       "customModelHint": "Brak dopasowania w katalogu. Wpisz dowolny identyfikator modelu; niestandardowe ID są zapisywane bez zmian.",
       "dataRegion": "Region danych",
       "dataRegionDescription": "Kieruje żądania AI przez wybrany region dla zachowania suwerenności danych.",
@@ -1451,7 +1453,7 @@
       "description": "Użyj własnego klucza API lub skonfiguruj region suwerenności danych.",
       "editProviders": "Edytuj dostawców",
       "endpoint": "Endpoint",
-      "endpointDescription": "Użyj endpointu Azure OpenAI lub Azure Foundry /openai/v1. Stella zapisze znormalizowany endpoint.",
+      "endpointDescription": "Użyj endpointu Azure OpenAI lub Azure Foundry /openai/v1. stella zapisze znormalizowany endpoint.",
       "keepSavedKey": "Zachowaj zapisany klucz",
       "modelForRole": "Model dla roli {role}",
       "modelIdPlaceholder": "Szukaj modeli",
@@ -1480,7 +1482,7 @@
       "providerForRole": "Dostawca dla {role}",
       "providerKeyInvalid": "{provider} odrzucił klucz. Sprawdź go przed zapisaniem.",
       "providerKeyInvalidShort": "Nieprawidłowy",
-      "providersDescription": "Dodaj dane uwierzytelniające dostawców, których Stella ma używać.",
+      "providersDescription": "Dodaj dane uwierzytelniające dostawców, których stella ma używać.",
       "providersPanel": "Dostawcy",
       "regions": {
         "ch": "Switzerland (europe-west6)",
@@ -1606,7 +1608,7 @@
   },
   "selfhost": {
     "dismissUpdate": "Dismiss update notice",
-    "updateAvailable": "Stella v{latest} is available. You're running v{installed}.",
+    "updateAvailable": "stella v{latest} is available. You're running v{installed}.",
     "viewReleaseNotes": "View release notes"
   },
   "settings": {
@@ -1917,7 +1919,7 @@
         "takeoverWaiting": "Oczekiwanie na odpowiedź",
         "takeoverWaitingDescription": "Proszenie {name} o zwolnienie blokady...",
         "unavailableDescription": "Przed użyciem edycji na komputerze uruchom stella desktop i pozostaw go włączonego.",
-        "unavailableTitle": "Stella desktop jest niedostępny.",
+        "unavailableTitle": "stella desktop jest niedostępny.",
         "updateRequiredDescription": "stella desktop wymaga aktualizacji. Zostanie zaktualizowany automatycznie po zakończeniu aktywnych edycji desktopowych; spróbuj ponownie po restarcie.",
         "updateRequiredTitle": "Zaktualizuj stella desktop"
       },

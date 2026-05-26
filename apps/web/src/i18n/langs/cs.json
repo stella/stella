@@ -330,7 +330,7 @@
       "denied": "Zamítnuto",
       "deny": "Zamítnout",
       "externalMcpDescription": "Odešlou se jen informace potřebné pro tento dotaz.",
-      "externalMcpQuestion": "Může Stella odeslat tento dotaz do {provider}?"
+      "externalMcpQuestion": "Může stella odeslat tento dotaz do {provider}?"
     },
     "askAnything": "Zeptejte se na cokoli",
     "askUser": {
@@ -434,7 +434,7 @@
     "resizeThread": "Změnit velikost konverzace",
     "send": "Odeslat zprávu",
     "sendError": "Při odesílání zprávy došlo k problému. Pokud chyba přetrvává, kontaktujte podporu.",
-    "sendErrorAnonymizationBlocked": "Stella nedokázala anonymizovat jednu přílohu, takže se nic neodeslalo. Odeberte soubor, nebo odešlete zprávu bez anonymizace.",
+    "sendErrorAnonymizationBlocked": "stella nedokázala anonymizovat jednu přílohu, takže se nic neodeslalo. Odeberte soubor, nebo odešlete zprávu bez anonymizace.",
     "sendErrorInsufficientCredits": "AI poskytovatel potřebuje doplnit kredity. Požádejte správce pracovního prostoru o navýšení zůstatku.",
     "sendErrorProviderUnavailable": "AI poskytovatel je dočasně nedostupný. Zkuste to prosím za chvíli znovu.",
     "sendErrorQuotaExhausted": "Kvóta AI poskytovatele je vyčerpaná. Zkuste to za chvíli znovu nebo požádejte správce pracovního prostoru o navýšení plánu.",
@@ -500,6 +500,8 @@
     "unsupportedFileType": "Nepodporovaný typ souboru",
     "uploadFailed": "Zpracování souboru selhalo",
     "webSearch": {
+      "answer": "Shrnutí ze zdrojů",
+      "answerDisclaimer": "Sestaveno z výsledků veřejného webu níže. Ověřte si je proti uvedeným zdrojům.",
       "fetchedFrom": "z {source}",
       "openSource": "Otevřít {source} na nové kartě",
       "sources": "Zdroje",
@@ -1018,7 +1020,7 @@
     "bold": "Tučné",
     "boldShortcut": "Tučné (Ctrl+B)",
     "bulletList": "Odrážkový seznam",
-    "checkingDocxEditDescription": "Stella ještě ověřuje, jestli lze tento DOCX bezpečně upravovat. Zkuste to znovu, až se dokument načte.",
+    "checkingDocxEditDescription": "stella ještě ověřuje, jestli lze tento DOCX bezpečně upravovat. Zkuste to znovu, až se dokument načte.",
     "checkingDocxEditTitle": "Kontrola dokumentu",
     "comment": "Komentář",
     "comments": {
@@ -1408,7 +1410,7 @@
     "jurisdictionSaveFailed": "Jurisdikce se nepodařilo uložit. Můžete je doplnit v nastavení.",
     "jurisdictionSearchLabel": "Hledat země",
     "jurisdictionSearchPlaceholder": "Hledat země",
-    "jurisdictionSubtitle": "Vyberte země, se kterými běžně pracujete. Stella podle toho přizpůsobí vaše prostředí.",
+    "jurisdictionSubtitle": "Vyberte země, se kterými běžně pracujete. stella podle toho přizpůsobí vaše prostředí.",
     "jurisdictionSuggested": "Doporučeno",
     "jurisdictionTitle": "Vyberte jurisdikce své praxe",
     "orgNameLabel": "Název týmu",
@@ -1440,7 +1442,7 @@
       "configure": "Konfigurovat",
       "credentialsPanel": "Klíč",
       "customModelBadge": "Vlastní · {provider}",
-      "customModelDescription": "Toto ID modelu není v katalogu Stella. Vybranému poskytovateli se předá přesně tak, jak je zadané.",
+      "customModelDescription": "Toto ID modelu není v katalogu stella. Vybranému poskytovateli se předá přesně tak, jak je zadané.",
       "customModelHint": "Žádná shoda v katalogu. Zadejte libovolné ID modelu; vlastní ID se uloží přesně tak, jak je napsané.",
       "dataRegion": "Region dat",
       "dataRegionDescription": "Volání AI poteče přes vybraný region kvůli suverenitě dat.",
@@ -1451,7 +1453,7 @@
       "description": "Připojte vlastní API klíč nebo zvolte region pro suverenitu dat.",
       "editProviders": "Upravit poskytovatele",
       "endpoint": "Endpoint",
-      "endpointDescription": "Použijte Azure OpenAI nebo Azure Foundry endpoint /openai/v1. Stella uloží normalizovaný endpoint.",
+      "endpointDescription": "Použijte Azure OpenAI nebo Azure Foundry endpoint /openai/v1. stella uloží normalizovaný endpoint.",
       "keepSavedKey": "Ponechat uložený klíč",
       "modelForRole": "Model pro roli {role}",
       "modelIdPlaceholder": "Hledat modely",
@@ -1480,7 +1482,7 @@
       "providerForRole": "Poskytovatel pro {role}",
       "providerKeyInvalid": "{provider} odmítl klíč. Zkontrolujte ho před uložením.",
       "providerKeyInvalidShort": "Neplatný",
-      "providersDescription": "Přidejte přihlašovací údaje poskytovatelů, které má Stella používat.",
+      "providersDescription": "Přidejte přihlašovací údaje poskytovatelů, které má stella používat.",
       "providersPanel": "Poskytovatelé",
       "regions": {
         "ch": "Švýcarsko (europe-west6)",
@@ -1606,7 +1608,7 @@
   },
   "selfhost": {
     "dismissUpdate": "Dismiss update notice",
-    "updateAvailable": "Stella v{latest} is available. You're running v{installed}.",
+    "updateAvailable": "stella v{latest} is available. You're running v{installed}.",
     "viewReleaseNotes": "View release notes"
   },
   "settings": {
@@ -1917,7 +1919,7 @@
         "takeoverWaiting": "Čekání na odpověď",
         "takeoverWaitingDescription": "Žádáme {name} o uvolnění zámku...",
         "unavailableDescription": "Před použitím desktopových úprav spusťte stella desktop a nechte ho běžet.",
-        "unavailableTitle": "Stella desktop není k dispozici.",
+        "unavailableTitle": "stella desktop není k dispozici.",
         "updateRequiredDescription": "stella desktop vyžaduje aktualizaci. Proběhne automaticky po dokončení aktivních desktopových úprav; zkuste to znovu po restartu.",
         "updateRequiredTitle": "Aktualizujte stella desktop"
       },

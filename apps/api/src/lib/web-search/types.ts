@@ -45,6 +45,7 @@ export const webSearchOutputSchema = v.strictObject({
   jurisdiction: v.picklist(WEB_SEARCH_JURISDICTIONS),
   results: v.array(webSearchResultSchema),
   provider: v.picklist(WEB_SEARCH_PROVIDER_NAMES),
+  answer: v.optional(v.string()),
 });
 
 export type WebSearchOutput = v.InferOutput<typeof webSearchOutputSchema>;
@@ -68,9 +69,14 @@ export type WebSearchProviderArgs = {
   signal: AbortSignal;
 };
 
+export type WebSearchProviderResponse = {
+  results: WebSearchResult[];
+  answer?: string;
+};
+
 export type WebSearchProvider = {
   readonly name: WebSearchProviderName;
-  search(args: WebSearchProviderArgs): Promise<WebSearchResult[]>;
+  search(args: WebSearchProviderArgs): Promise<WebSearchProviderResponse>;
 };
 
 export type UrlFetcherArgs = {
