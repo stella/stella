@@ -8,8 +8,6 @@
  * fine for headless round-trips.
  */
 
-import * as UTIF from "utif2";
-
 /**
  * Hard cap on the pixel count we'll attempt to decode. Each pixel costs 4 B
  * for the intermediate RGBA buffer plus another canvas-managed bitmap, so
@@ -29,11 +27,11 @@ export type ConvertedTiff = {
   data: ArrayBuffer;
 };
 
-export function convertTiffToPngDataUrl(
+export async function convertTiffToPngDataUrl(
   tiffData: ArrayBuffer,
-): ConvertedTiff | null {
+): Promise<ConvertedTiff | null> {
   // Bail out before any decode if Canvas isn't available — without it we
-  // can't produce a PNG anyway, and `UTIF.decodeImage` + `toRGBA8` would
+  // can't produce a PNG anyway, and TIFF decoding + RGBA conversion would
   // allocate hundreds of MB and burn CPU for nothing in headless parses.
   if (
     typeof document === "undefined" ||
@@ -43,6 +41,7 @@ export function convertTiffToPngDataUrl(
   }
 
   try {
+    const UTIF = await import("utif2");
     const ifds = UTIF.decode(tiffData);
     const firstImage = ifds[0];
     if (!firstImage) {

@@ -204,7 +204,7 @@ export async function parseDocx(
     // STAGE 6: Build media file map (35-40%)
     // ========================================================================
     onProgress("Processing media files...", 35);
-    const media = timeStage("media", () => buildMediaMap(raw, rels));
+    const media = await timeStageAsync("media", () => buildMediaMap(raw, rels));
     onProgress("Processed media", 40);
 
     // ========================================================================
@@ -442,10 +442,10 @@ export class DocxParseError extends TaggedError("DocxParseError")<{
 /**
  * Build media file map from raw content and relationships
  */
-function buildMediaMap(
+async function buildMediaMap(
   raw: RawDocxContent,
   _rels: RelationshipMap,
-): Map<string, MediaFile> {
+): Promise<Map<string, MediaFile>> {
   const media = new Map<string, MediaFile>();
 
   // Process each media file
@@ -461,7 +461,7 @@ function buildMediaMap(
     // with the original TIFF data — the round-trip survives even if the
     // in-browser preview is broken.
     if (isTiffMimeType(mimeType)) {
-      const converted = convertTiffToPngDataUrl(data);
+      const converted = await convertTiffToPngDataUrl(data);
       if (converted) {
         const mediaFile: MediaFile = {
           path,
