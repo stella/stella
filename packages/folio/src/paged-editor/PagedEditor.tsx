@@ -2026,6 +2026,7 @@ export function PagedEditor(
     measures: Measure[];
   } | null>(null);
   const precomputedInitialStateRef = useRef<EditorState | null>(null);
+  const precomputedInitialDocumentRef = useRef<Document | null>(null);
   const preHiddenInitialLayoutDoneRef = useRef(false);
   const hiddenEditorViewTimerRef = useRef<number | null>(null);
   const pendingHiddenEditorSelectionRef =
@@ -2056,7 +2057,11 @@ export function PagedEditor(
   const revealSelectionOverlayTimerRef = useRef<number | null>(null);
   const selectionOverlayRequestSeqRef = useRef(0);
 
-  precomputedInitialStateRef.current = precomputedInitialState;
+  const validPrecomputedInitialState =
+    precomputedInitialDocumentRef.current === document
+      ? precomputedInitialState
+      : null;
+  precomputedInitialStateRef.current = validPrecomputedInitialState;
 
   // Image selection state
   const [selectedImageInfo, setSelectedImageInfo] =
@@ -5255,6 +5260,16 @@ export function PagedEditor(
 
   useEffect(() => {
     if (
+      !shouldCreateHiddenEditorView &&
+      preHiddenInitialLayoutDoneRef.current &&
+      precomputedInitialDocumentRef.current !== document
+    ) {
+      preHiddenInitialLayoutDoneRef.current = false;
+      precomputedInitialDocumentRef.current = null;
+      setPrecomputedInitialState(null);
+    }
+
+    if (
       shouldCreateHiddenEditorView ||
       collaboration !== undefined ||
       preHiddenInitialLayoutDoneRef.current
@@ -5276,6 +5291,7 @@ export function PagedEditor(
       null,
       "mount",
     );
+    precomputedInitialDocumentRef.current = document;
     setPrecomputedInitialState(initialState);
     anonymizationMatchesRef.current =
       anonymizationDecorationsKey.getState(initialState)?.matches ?? [];
@@ -5696,7 +5712,7 @@ export function PagedEditor(
         document={document}
         widthPx={contentWidth}
         deferViewCreation={!shouldCreateHiddenEditorView}
-        precomputedInitialState={precomputedInitialState}
+        precomputedInitialState={validPrecomputedInitialState}
         readOnly={readOnly}
         onTransaction={handleTransaction}
         onSelectionChange={handleSelectionChange}
