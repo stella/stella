@@ -189,6 +189,32 @@ export const FileTabPanel = ({
       />
     ) : null;
 
+  const downloadButton = (
+    <Tooltip
+      content={t("common.download")}
+      render={
+        <Button
+          aria-label={t("common.download")}
+          onClick={() => {
+            void downloadTabOriginalFile({
+              fieldId: tab.id,
+              fileName: tab.label,
+              workspaceId: tab.workspaceId,
+              onError: (message) => {
+                stellaToast.add({ title: message, type: "error" });
+              },
+            });
+          }}
+          size="xs"
+          variant="ghost"
+        >
+          <DownloadIcon className="size-3.5" />
+        </Button>
+      }
+      side="bottom"
+    />
+  );
+
   // "Expanded" persona: the route already renders the file in
   // its main content (full folio), so the inspector tab drops
   // the file chrome (zoom, file viewer) and
@@ -212,6 +238,7 @@ export const FileTabPanel = ({
         <InspectorTabHeader
           actions={
             <>
+              {downloadButton}
               {desktopOpenButton}
               <Tooltip
                 content={t("workspaces.pdf.backToPeek")}
@@ -427,32 +454,6 @@ export const FileTabPanel = ({
       <Maximize2Icon className="size-3.5" />
       {t("workspaces.pdf.fullView")}
     </Button>
-  );
-
-  const downloadButton = (
-    <Tooltip
-      content={t("common.download")}
-      render={
-        <Button
-          aria-label={t("common.download")}
-          onClick={() => {
-            void downloadTabOriginalFile({
-              fieldId: tab.id,
-              fileName: tab.label,
-              workspaceId: tab.workspaceId,
-              onError: (message) => {
-                stellaToast.add({ title: message, type: "error" });
-              },
-            });
-          }}
-          size="xs"
-          variant="ghost"
-        >
-          <DownloadIcon className="size-3.5" />
-        </Button>
-      }
-      side="bottom"
-    />
   );
 
   const fileActions = (
@@ -672,132 +673,144 @@ export const FileTabPanel = ({
   // facets render the same content as the fullscreen branch
   // so the inspector tab is one consistent workbench
   // regardless of mode.
-  const sidepeekBody = (() => {
-    if (sidepeekFacet === "preview") {
-      return viewerContent;
-    }
-    return (
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {sidepeekFacet === "metadata" && (
-          <Suspense fallback={<MetadataPanelSkeleton />}>
-            <EntityMetadataPanel
-              activeJustificationFieldId={pdfRouteJustification}
-              currentFilePropertyId={tab.propertyId ?? null}
+  //
+  // The viewer stays mounted across facet switches and is
+  // visually hidden when off-Preview, so the DOCX/PDF doesn't
+  // re-parse every time the user pops out to Metadata and back.
+  const isPreviewVisible = sidepeekFacet === "preview";
+  const sidepeekBody = (
+    <>
+      <div
+        className={cn(
+          "min-h-0 min-w-0 flex-1",
+          isPreviewVisible ? "flex" : "hidden",
+        )}
+      >
+        {viewerContent}
+      </div>
+      {!isPreviewVisible && (
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          {sidepeekFacet === "metadata" && (
+            <Suspense fallback={<MetadataPanelSkeleton />}>
+              <EntityMetadataPanel
+                activeJustificationFieldId={pdfRouteJustification}
+                currentFilePropertyId={tab.propertyId ?? null}
+                entityId={tab.entityId}
+                fileFieldId={tab.id}
+                onAiFieldClick={({ fieldId, propertyId }) => {
+                  openFile({
+                    ...tab,
+                    justificationFieldId: fieldId,
+                    propertyId,
+                  });
+                  void navigate({
+                    to: "/workspaces/$workspaceId/$viewId/document",
+                    params: {
+                      workspaceId: tab.workspaceId,
+                      viewId: peekPdfViewId,
+                    },
+                    replace: true,
+                    search: (prev) => ({
+                      ...prev,
+                      entity: tab.entityId,
+                      field: tab.id,
+                      justification: fieldId,
+                      justificationPage: 1,
+                    }),
+                  });
+                }}
+                workspaceId={tab.workspaceId}
+              />
+            </Suspense>
+          )}
+          {sidepeekFacet === "versions" && (
+            <VersionsFacet
+              currentFieldId={tab.id}
               entityId={tab.entityId}
-              fileFieldId={tab.id}
-              onAiFieldClick={({ fieldId, propertyId }) => {
-                openFile({
-                  ...tab,
-                  justificationFieldId: fieldId,
-                  propertyId,
-                });
-                void navigate({
-                  to: "/workspaces/$workspaceId/$viewId/document",
-                  params: {
-                    workspaceId: tab.workspaceId,
-                    viewId: peekPdfViewId,
-                  },
-                  replace: true,
-                  search: (prev) => ({
-                    ...prev,
-                    entity: tab.entityId,
-                    field: tab.id,
-                    justification: fieldId,
-                    justificationPage: 1,
-                  }),
+              workspaceId={tab.workspaceId}
+            />
+          )}
+          {sidepeekFacet === "suggestions" && (
+            <SuggestionsFacet
+              entityId={tab.entityId}
+              // Quick fix: sidepeek's DOCX editor unmounts when
+              // the user switches off Preview, so Accept on a
+              // suggestion has no live editor to apply against.
+              // Route to the DOCX main view, where the editor is
+              // mounted by default and the same `<SuggestionsFacet>`
+              // (rendered by the fullscreen branch above) reuses
+              // the registration.
+              // TODO: replace with an in-app approval flow that
+              // doesn't need the full editor mounted.
+              //
+              // Only the *active* tab is allowed to redirect.
+              // Non-active PDF tabs stay mounted (CSS-hidden) so
+              // their facet panels still run effects; without
+              // this gate a background tab whose facet happens
+              // to be "suggestions" would hijack the route to
+              // its own document view. Per Codex review on
+              // PR #80.
+              {...(isActive
+                ? {
+                    onMissingEditor: () => {
+                      // Pre-select the suggestions facet on
+                      // the inspector store so the document
+                      // route's inspector lands directly on
+                      // this panel instead of the default
+                      // Preview.
+                      setFileFacet(tab.id, "suggestions");
+                      // Replace the current history entry
+                      // rather than pushing a new one. This is
+                      // an automatic, user-didn't-click-anything
+                      // redirect: pushing creates a back-button
+                      // trap (Back returns to the previous
+                      // sidepeek state, which immediately
+                      // remounts SuggestionsFacet without an
+                      // editor and pushes again — bouncing).
+                      // With `replace` the same Back gesture
+                      // takes the user out of the suggestions
+                      // flow entirely. Per Codex review on
+                      // PR #80.
+                      void navigate({
+                        to: "/workspaces/$workspaceId/$viewId/document",
+                        params: {
+                          workspaceId: tab.workspaceId,
+                          viewId: peekPdfViewId,
+                        },
+                        replace: true,
+                        search: (prev) => ({
+                          ...prev,
+                          entity: tab.entityId,
+                          field: tab.id,
+                        }),
+                      });
+                    },
+                  }
+                : {})}
+            />
+          )}
+          {sidepeekFacet === "anonymization" && (
+            // Sidepeek shows the file as a thumbnail-sized preview
+            // without an interactive Folio editor underneath, so
+            // there's no per-document match data to display. Pass
+            // `activeFieldId={null}` so the facet renders the
+            // "open full view first" hint instead of a zero count
+            // that the user can't act on from here.
+            <AnonymizationFacet
+              activeFieldId={null}
+              entityId={tab.entityId}
+              onOpenFullView={() => {
+                handleOpenFullView().catch(() => {
+                  /* fire-and-forget */
                 });
               }}
               workspaceId={tab.workspaceId}
             />
-          </Suspense>
-        )}
-        {sidepeekFacet === "versions" && (
-          <VersionsFacet
-            currentFieldId={tab.id}
-            entityId={tab.entityId}
-            workspaceId={tab.workspaceId}
-          />
-        )}
-        {sidepeekFacet === "suggestions" && (
-          <SuggestionsFacet
-            entityId={tab.entityId}
-            // Quick fix: sidepeek's DOCX editor unmounts when
-            // the user switches off Preview, so Accept on a
-            // suggestion has no live editor to apply against.
-            // Route to the DOCX main view, where the editor is
-            // mounted by default and the same `<SuggestionsFacet>`
-            // (rendered by the fullscreen branch above) reuses
-            // the registration.
-            // TODO: replace with an in-app approval flow that
-            // doesn't need the full editor mounted.
-            //
-            // Only the *active* tab is allowed to redirect.
-            // Non-active PDF tabs stay mounted (CSS-hidden) so
-            // their facet panels still run effects; without
-            // this gate a background tab whose facet happens
-            // to be "suggestions" would hijack the route to
-            // its own document view. Per Codex review on
-            // PR #80.
-            {...(isActive
-              ? {
-                  onMissingEditor: () => {
-                    // Pre-select the suggestions facet on
-                    // the inspector store so the document
-                    // route's inspector lands directly on
-                    // this panel instead of the default
-                    // Preview.
-                    setFileFacet(tab.id, "suggestions");
-                    // Replace the current history entry
-                    // rather than pushing a new one. This is
-                    // an automatic, user-didn't-click-anything
-                    // redirect: pushing creates a back-button
-                    // trap (Back returns to the previous
-                    // sidepeek state, which immediately
-                    // remounts SuggestionsFacet without an
-                    // editor and pushes again — bouncing).
-                    // With `replace` the same Back gesture
-                    // takes the user out of the suggestions
-                    // flow entirely. Per Codex review on
-                    // PR #80.
-                    void navigate({
-                      to: "/workspaces/$workspaceId/$viewId/document",
-                      params: {
-                        workspaceId: tab.workspaceId,
-                        viewId: peekPdfViewId,
-                      },
-                      replace: true,
-                      search: (prev) => ({
-                        ...prev,
-                        entity: tab.entityId,
-                        field: tab.id,
-                      }),
-                    });
-                  },
-                }
-              : {})}
-          />
-        )}
-        {sidepeekFacet === "anonymization" && (
-          // Sidepeek shows the file as a thumbnail-sized preview
-          // without an interactive Folio editor underneath, so
-          // there's no per-document match data to display. Pass
-          // `activeFieldId={null}` so the facet renders the
-          // "open full view first" hint instead of a zero count
-          // that the user can't act on from here.
-          <AnonymizationFacet
-            activeFieldId={null}
-            entityId={tab.entityId}
-            onOpenFullView={() => {
-              handleOpenFullView().catch(() => {
-                /* fire-and-forget */
-              });
-            }}
-            workspaceId={tab.workspaceId}
-          />
-        )}
-      </div>
-    );
-  })();
+          )}
+        </div>
+      )}
+    </>
+  );
 
   return (
     <div

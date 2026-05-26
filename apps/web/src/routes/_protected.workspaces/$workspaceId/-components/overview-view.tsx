@@ -885,6 +885,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
             icon: UploadIcon,
             onClick: () => fileInputRef.current?.click(),
           }}
+          showHelpBar={false}
           title={tWorkspaces("emptyDocuments.title")}
           video={{
             ...EMPTY_SCREEN_MATTERS_VIDEO,

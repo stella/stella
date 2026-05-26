@@ -4,8 +4,6 @@
  */
 
 import {
-  lazy,
-  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -20,7 +18,6 @@ import { useRouteContext } from "@tanstack/react-router";
 import {
   CheckCircle2Icon,
   EyeIcon,
-  LockIcon,
   LockOpenIcon,
   PenLineIcon,
   RefreshCwIcon,
@@ -28,7 +25,11 @@ import {
 import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 
-import { FormattingBar, setAnonymizationTermsMeta } from "@stll/folio";
+import {
+  DocxEditor,
+  FormattingBar,
+  setAnonymizationTermsMeta,
+} from "@stll/folio";
 import type {
   AnonymizationTerm,
   DocxCompatibility,
@@ -45,7 +46,6 @@ import {
   SelectValue as StSelectValue,
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
 import "@stll/folio/editor.css";
 
 import { useActiveDocxStore } from "@/components/ai-suggestions/active-docx-store";
@@ -81,11 +81,6 @@ import {
 import type { OptimisticPreviewFile } from "./docx-browser-editor.logic";
 import type { EditSessionErrorReason } from "./use-edit-session";
 import { useEditSession } from "./use-edit-session";
-
-const DocxEditor = lazy(async () => {
-  const m = await import("@stll/folio");
-  return { default: m.DocxEditor };
-});
 
 const CHANGE_CHECKPOINT_DELAY = 2000;
 const COLLABORATOR_COLOR_SPACE = 16_777_215;
@@ -526,9 +521,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   const errorToastShownRef = useRef(false);
   const lastStyleLabelRef = useRef("Normal");
   const lastStyleLabelStyleRef = useRef<CSSProperties | undefined>(undefined);
-  const lockedEditPromptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
   const optimisticPreviewRef = useRef<OptimisticPreviewFile | null>(null);
   const finalizedBufferRef = useRef<ArrayBuffer | null>(null);
   const lastEditingBufferRef = useRef<ArrayBuffer | null>(null);
@@ -551,7 +543,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     compatibilityState.targetKey === editTargetKey
       ? compatibilityState.value
       : null;
-  const [isPromptingUnlock, setIsPromptingUnlock] = useState(false);
   const [autosaveStatus, setAutosaveStatus] =
     useState<AutosaveStatus>("synced");
   const targetZoom = useDocxFitZoom(containerRef, scaleOffset, 0.85);
@@ -682,11 +673,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     lastEditingBufferRef.current = null;
     hasSessionChangesRef.current = false;
     preservedLoadedBufferRef.current = null;
-    setIsPromptingUnlock(false);
-    if (lockedEditPromptTimerRef.current !== null) {
-      clearTimeout(lockedEditPromptTimerRef.current);
-      lockedEditPromptTimerRef.current = null;
-    }
     setCompatibilityState({ targetKey: editTargetKey, value: null });
   }, [editTargetKey, fieldId]);
 
@@ -967,9 +953,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   useEffect(
     () => () => {
       clearQueuedChangeCheckpoint();
-      if (lockedEditPromptTimerRef.current !== null) {
-        clearTimeout(lockedEditPromptTimerRef.current);
-      }
     },
     [clearQueuedChangeCheckpoint],
   );
@@ -1136,20 +1119,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     await cancelActiveSession();
   }, [cancelActiveSession, clearQueuedChangeCheckpoint]);
 
-  const flashUnlockControl = useCallback(() => {
-    setIsPromptingUnlock(true);
-    if (lockedEditPromptTimerRef.current !== null) {
-      clearTimeout(lockedEditPromptTimerRef.current);
-    }
-    lockedEditPromptTimerRef.current = setTimeout(() => {
-      lockedEditPromptTimerRef.current = null;
-      setIsPromptingUnlock(false);
-    }, 1400);
-  }, []);
-
   const handleUnlock = useCallback(() => {
     if (!canUnlock) {
-      flashUnlockControl();
       onBlockedUnlock?.();
       return;
     }
@@ -1183,7 +1154,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     canUnlock,
     compatibility?.canSafelyEdit,
     collaborationEnabled,
-    flashUnlockControl,
     onBlockedUnlock,
     open,
     previewFile,
@@ -1197,9 +1167,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     if (isUnlocked) {
       return;
     }
-    flashUnlockControl();
     onReadonlyEditAttempt?.();
-  }, [flashUnlockControl, isUnlocked, onReadonlyEditAttempt]);
+    handleUnlock();
+  }, [handleUnlock, isUnlocked, onReadonlyEditAttempt]);
 
   const handleToggleLock = useCallback(() => {
     if (!isUnlocked) {
@@ -1281,44 +1251,36 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     preservedLoadedBufferRef.current = null;
   }
 
-  const showLockLabel = isUnlocked || isPromptingUnlock;
-  const lockActionLabel = isUnlocked
-    ? t("folio.finishEditing")
-    : t("folio.editFile");
+  const finishEditingLabel = t("folio.finishEditing");
 
   const toolbarExtra = (() => {
     if (showActionBar || actionBarControls !== undefined) {
       return (
         <>
           {actionBarControls}
-          {showActionBar && (
+          {showActionBar && isUnlocked && (
             <>
               <Tooltip
-                content={lockActionLabel}
+                content={finishEditingLabel}
                 render={
                   <Button
-                    aria-label={lockActionLabel}
-                    className={cn(
-                      "transition-all",
-                      showLockLabel ? "px-2" : "",
-                      isPromptingUnlock &&
-                        "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
-                    )}
+                    aria-label={finishEditingLabel}
+                    className="px-2"
                     disabled={
                       state.status === "opening" ||
                       state.status === "saving" ||
                       collaborationState.status === "opening"
                     }
                     onClick={handleToggleLock}
-                    size={showLockLabel ? "sm" : "icon-sm"}
+                    size="sm"
                     variant="ghost"
                   >
-                    {isUnlocked ? <LockOpenIcon /> : <LockIcon />}
-                    {showLockLabel && <span>{lockActionLabel}</span>}
+                    <LockOpenIcon />
+                    <span>{finishEditingLabel}</span>
                   </Button>
                 }
               />
-              {isUnlocked && <AutosaveIndicator status={autosaveStatus} />}
+              <AutosaveIndicator status={autosaveStatus} />
             </>
           )}
         </>
@@ -1422,7 +1384,15 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       {/* Folio editor with AI overlay */}
       <div
         className="min-w-0 flex-1 overflow-hidden"
-        onDoubleClickCapture={isUnlocked ? undefined : handleLockedEditAttempt}
+        // Auto-unlock on first click into the doc body — but only when we
+        // can actually unlock. For locked older versions (canUnlock=false)
+        // every click would otherwise pop the "latest version required"
+        // dialog and the doc becomes unselectable; fall through to the
+        // typing-based onReadonlyEditAttempt path instead, which only
+        // fires on real edit attempts (not text-selection clicks).
+        onMouseDownCapture={
+          isUnlocked || !canUnlock ? undefined : handleLockedEditAttempt
+        }
       >
         <FileViewerWithAI
           key={`ai-${previewIdentity}`}
@@ -1437,10 +1407,48 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
           requestDocxEditMode={requestEditMode}
           workspaceId={workspaceId}
         >
-          <Suspense
-            fallback={
+          <DocxEditor
+            key={`docx-${previewIdentity}-${collaborationIdentity}`}
+            ref={editorRef}
+            autoOpenReviewSidebar={false}
+            className="folio-docx-preview folio-peek h-full"
+            documentBuffer={editorBuffer}
+            initialZoom={targetZoom}
+            mode={isUnlocked ? editorMode : "viewing"}
+            onModeChange={(mode) => {
+              if (mode !== "viewing") {
+                setEditorMode(mode);
+              }
+            }}
+            onCompatibilityChange={(nextCompatibility) => {
+              if (previewFileQuery.isPlaceholderData) {
+                return;
+              }
+
+              setCompatibilityState({
+                targetKey: editTargetKey,
+                value: nextCompatibility,
+              });
+              onCompatibilityChange?.(nextCompatibility);
+            }}
+            onAnonymizationMatchesChange={handleAnonymizationMatchesChange}
+            onSelectionTextChange={handleSelectionTextChange}
+            onAnonymizationTermClick={handleAnonymizationTermClick}
+            selectedAnonymizationCanonical={sidebarSelectedCanonical}
+            anonymizationSelectionSeq={sidebarSelectionSeq}
+            onEditorViewReady={setEditorViewForAnonymization}
+            showToolbar={showActionBar ? true : isUnlocked}
+            toolbarExtra={toolbarExtra}
+            {...(activeCollaboration !== undefined
+              ? { collaboration: activeCollaboration }
+              : {})}
+            {...(isUnlocked ? { onChange: handleChange } : {})}
+            onReadonlyEditAttempt={handleLockedEditAttempt}
+            {...(initialScrollTop !== undefined ? { initialScrollTop } : {})}
+            {...(onScrollTopChange !== undefined ? { onScrollTopChange } : {})}
+            loadingIndicator={
               <DocxEditorLoadingFallback
-                label={t("folio.loadingEditor")}
+                label={t("folio.loadingDocument")}
                 scaleOffset={scaleOffset}
                 showActionBar={showActionBar}
                 stylePickerLabel={lastStyleLabelRef.current}
@@ -1449,62 +1457,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
                 zoom={targetZoom}
               />
             }
-          >
-            <DocxEditor
-              key={`docx-${previewIdentity}-${collaborationIdentity}`}
-              ref={editorRef}
-              autoOpenReviewSidebar={false}
-              className="folio-docx-preview folio-peek h-full"
-              documentBuffer={editorBuffer}
-              initialZoom={targetZoom}
-              mode={isUnlocked ? editorMode : "viewing"}
-              onModeChange={(mode) => {
-                if (mode !== "viewing") {
-                  setEditorMode(mode);
-                }
-              }}
-              onCompatibilityChange={(nextCompatibility) => {
-                if (previewFileQuery.isPlaceholderData) {
-                  return;
-                }
-
-                setCompatibilityState({
-                  targetKey: editTargetKey,
-                  value: nextCompatibility,
-                });
-                onCompatibilityChange?.(nextCompatibility);
-              }}
-              onAnonymizationMatchesChange={handleAnonymizationMatchesChange}
-              onSelectionTextChange={handleSelectionTextChange}
-              onAnonymizationTermClick={handleAnonymizationTermClick}
-              selectedAnonymizationCanonical={sidebarSelectedCanonical}
-              anonymizationSelectionSeq={sidebarSelectionSeq}
-              onEditorViewReady={setEditorViewForAnonymization}
-              showToolbar={showActionBar ? true : isUnlocked}
-              toolbarExtra={toolbarExtra}
-              {...(activeCollaboration !== undefined
-                ? { collaboration: activeCollaboration }
-                : {})}
-              {...(isUnlocked ? { onChange: handleChange } : {})}
-              onReadonlyEditAttempt={handleLockedEditAttempt}
-              {...(initialScrollTop !== undefined ? { initialScrollTop } : {})}
-              {...(onScrollTopChange !== undefined
-                ? { onScrollTopChange }
-                : {})}
-              loadingIndicator={
-                <DocxEditorLoadingFallback
-                  label={t("folio.loadingDocument")}
-                  scaleOffset={scaleOffset}
-                  showActionBar={showActionBar}
-                  stylePickerLabel={lastStyleLabelRef.current}
-                  stylePickerLabelStyle={lastStyleLabelStyleRef.current}
-                  toolbarExtra={toolbarExtra}
-                  zoom={targetZoom}
-                />
-              }
-              preserveDocumentWhileLoading
-            />
-          </Suspense>
+            preserveDocumentWhileLoading
+          />
         </FileViewerWithAI>
       </div>
     </div>
@@ -1626,27 +1580,9 @@ const DocxBrowserEditorPendingFallback = ({
   showActionBar = true,
 }: DocxBrowserEditorProps) => {
   const t = useTranslations();
-  const lockActionLabel = t("folio.editFile");
   const toolbarExtra =
     showActionBar || actionBarControls !== undefined ? (
-      <>
-        {actionBarControls}
-        {showActionBar && (
-          <Tooltip
-            content={lockActionLabel}
-            render={
-              <Button
-                aria-label={lockActionLabel}
-                disabled
-                size="icon-sm"
-                variant="ghost"
-              >
-                <LockIcon />
-              </Button>
-            }
-          />
-        )}
-      </>
+      <>{actionBarControls}</>
     ) : undefined;
 
   return (

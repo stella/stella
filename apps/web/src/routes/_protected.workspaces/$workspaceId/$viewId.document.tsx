@@ -222,7 +222,7 @@ function RouteComponentInner({
   // `editing=true` in the URL means the user landed here from a
   // sidepeek that was already unlocked for editing. Honoring it
   // drops them straight back into the edit session instead of
-  // making them click Edit again on the now-fullscreen view.
+  // making them click into the doc again.
   const initialEditing = Route.useSearch({
     select: (s) => s.editing ?? false,
   });
@@ -452,7 +452,6 @@ function RouteComponentInner({
                         <PdfViewerControls
                           currentPage={pageNumber}
                           fieldId={fieldId}
-                          showFileActions={false}
                           variant="inline"
                           workspaceId={workspaceId}
                         />

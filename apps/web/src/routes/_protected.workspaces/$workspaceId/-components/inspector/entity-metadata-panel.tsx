@@ -8,17 +8,23 @@ import {
   useTransition,
 } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/lib/utils";
 
+import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type { EntityField, EntityKind, WorkspaceProperty } from "@/lib/types";
 import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
 import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
+import { MetadataPanelSkeleton } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/file-facets";
 import { Justification } from "@/routes/_protected.workspaces/$workspaceId/-components/justification";
 import {
   entitiesKeys,
@@ -71,7 +77,22 @@ type FieldInfoRow = {
 
 const EMPTY_PROPERTIES: WorkspaceProperty[] = [];
 
-export const EntityMetadataPanel = ({
+export const EntityMetadataPanel = (props: EntityMetadataPanelProps) => (
+  // Self-contained boundary — the inner content suspends on
+  // useSuspenseQuery while the entity loads, and we don't want a
+  // transient API failure here to blank the whole inspector by
+  // bubbling up to a higher error boundary.
+  <QuerySuspenseBoundary
+    area="entity-metadata-panel"
+    errorFallback={MetadataPanelErrorFallback}
+    resetKeys={[props.workspaceId, props.entityId]}
+    suspenseFallback={<MetadataPanelSkeleton />}
+  >
+    <EntityMetadataPanelSuspenseInner {...props} />
+  </QuerySuspenseBoundary>
+);
+
+const EntityMetadataPanelSuspenseInner = ({
   workspaceId,
   entityId,
   currentFilePropertyId = null,
@@ -79,22 +100,38 @@ export const EntityMetadataPanel = ({
   activeJustificationFieldId = null,
   onAiFieldClick,
 }: EntityMetadataPanelProps) => {
-  const entityQuery = useQuery(entityOptions(workspaceId, entityId));
-
-  if (entityQuery.isError || !entityQuery.data) {
-    return null;
-  }
+  const { data: entity } = useSuspenseQuery(
+    entityOptions(workspaceId, entityId),
+  );
 
   return (
     <EntityMetadataContent
       activeJustificationFieldId={activeJustificationFieldId}
       currentFilePropertyId={currentFilePropertyId}
-      entity={entityQuery.data}
+      entity={entity}
       entityId={entityId}
       fileFieldId={fileFieldId}
       onAiFieldClick={onAiFieldClick}
       workspaceId={workspaceId}
     />
+  );
+};
+
+const MetadataPanelErrorFallback = ({ reset }: { reset: () => void }) => {
+  const t = useTranslations();
+  return (
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 py-8 text-center">
+      <span className="text-muted-foreground text-sm">
+        {t("common.somethingWentWrong")}
+      </span>
+      <button
+        className="text-primary text-sm hover:underline"
+        onClick={reset}
+        type="button"
+      >
+        {t("common.tryAgain")}
+      </button>
+    </div>
   );
 };
 

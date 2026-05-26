@@ -20,6 +20,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   ChevronDown,
   ChevronRight,
+  ExternalLinkIcon,
   EyeOff,
   RotateCcw,
   Trash2,
@@ -703,18 +704,20 @@ export const AnonymizationFacet = ({
             if (onOpenFullView) {
               return (
                 <Button
-                  className="border-muted-foreground/30 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground h-auto w-full justify-start rounded-md border border-dashed px-3 py-2 text-start text-xs whitespace-normal"
+                  className="text-muted-foreground hover:bg-muted/50 hover:text-foreground h-auto w-full justify-start gap-2.5 rounded-md px-3 py-2.5 text-start text-sm leading-relaxed whitespace-normal"
                   onClick={onOpenFullView}
                   type="button"
                   variant="ghost"
                 >
-                  {t("inspector.anonymization.openFullViewHint")}
+                  <ExternalLinkIcon className="size-4 shrink-0" />
+                  <span>{t("inspector.anonymization.openFullViewHint")}</span>
                 </Button>
               );
             }
             return (
-              <div className="border-muted-foreground/30 bg-muted/40 text-muted-foreground rounded-md border border-dashed px-3 py-2 text-xs">
-                {t("inspector.anonymization.openFullViewHint")}
+              <div className="text-muted-foreground flex items-start gap-2.5 rounded-md px-3 py-2.5 text-sm leading-relaxed">
+                <ExternalLinkIcon className="mt-0.5 size-4 shrink-0" />
+                <span>{t("inspector.anonymization.openFullViewHint")}</span>
               </div>
             );
           })();
