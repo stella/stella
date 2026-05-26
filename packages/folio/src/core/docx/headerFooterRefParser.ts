@@ -28,10 +28,7 @@ function parseHeaderFooterType(typeAttr: string | null): HeaderFooterType {
   }
 }
 
-/**
- * Parse a header reference from sectPr (w:headerReference)
- */
-export function parseHeaderReference(element: XmlElement): HeaderReference {
+function parseHeaderFooterReference(element: XmlElement) {
   const typeAttr = getAttribute(element, "w", "type");
   const rId = getAttribute(element, "r", "id") ?? "";
 
@@ -42,16 +39,17 @@ export function parseHeaderReference(element: XmlElement): HeaderReference {
 }
 
 /**
+ * Parse a header reference from sectPr (w:headerReference)
+ */
+export function parseHeaderReference(element: XmlElement): HeaderReference {
+  return parseHeaderFooterReference(element);
+}
+
+/**
  * Parse a footer reference from sectPr (w:footerReference)
  */
 export function parseFooterReference(element: XmlElement): FooterReference {
-  const typeAttr = getAttribute(element, "w", "type");
-  const rId = getAttribute(element, "r", "id") ?? "";
-
-  return {
-    type: parseHeaderFooterType(typeAttr),
-    rId,
-  };
+  return parseHeaderFooterReference(element);
 }
 
 /**

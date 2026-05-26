@@ -704,6 +704,31 @@ const TASK_DATE_OPTIONS = [
   { id: "_start-date", labelKey: "workspaces.views.timeline.startDate" },
 ] as const satisfies readonly { id: string; labelKey: TranslationKey }[];
 
+type ResolveDatePropertyLabelArgs = {
+  dateProperties: WorkspaceProperty[];
+  id: string;
+  t: (key: TranslationKey) => string;
+};
+
+const resolveDatePropertyLabel = ({
+  dateProperties,
+  id,
+  t,
+}: ResolveDatePropertyLabelArgs) => {
+  const internal = INTERNAL_DATE_OPTIONS.find((o) => o.id === id);
+  if (internal) {
+    return t(internal.labelKey);
+  }
+  const taskDate = TASK_DATE_OPTIONS.find((o) => o.id === id);
+  if (taskDate) {
+    return t(taskDate.labelKey);
+  }
+  return (
+    dateProperties.find((p) => p.id === id)?.name ??
+    t("workspaces.views.selectProperty")
+  );
+};
+
 type CalendarDatePropertyControlProps = {
   properties: WorkspaceProperty[];
   datePropertyId: string;
@@ -719,21 +744,11 @@ const CalendarDatePropertyControl = ({
 }: CalendarDatePropertyControlProps) => {
   const t = useTranslations();
   const dateProperties = properties.filter((p) => p.content.type === "date");
-
-  const resolveLabel = (id: string) => {
-    const internal = INTERNAL_DATE_OPTIONS.find((o) => o.id === id);
-    if (internal) {
-      return t(internal.labelKey);
-    }
-    const taskDate = TASK_DATE_OPTIONS.find((o) => o.id === id);
-    if (taskDate) {
-      return t(taskDate.labelKey);
-    }
-    return (
-      dateProperties.find((p) => p.id === id)?.name ??
-      t("workspaces.views.selectProperty")
-    );
-  };
+  const datePropertyLabel = resolveDatePropertyLabel({
+    dateProperties,
+    id: datePropertyId,
+    t,
+  });
 
   return (
     <span className="flex items-center gap-1 text-xs">
@@ -749,8 +764,8 @@ const CalendarDatePropertyControl = ({
         value={datePropertyId}
       >
         <SelectTrigger className="h-6 min-h-0 min-w-24 text-xs" size="sm">
-          <SelectValue placeholder={resolveLabel(datePropertyId)}>
-            {resolveLabel(datePropertyId)}
+          <SelectValue placeholder={datePropertyLabel}>
+            {datePropertyLabel}
           </SelectValue>
         </SelectTrigger>
         <SelectPopup>
@@ -905,21 +920,16 @@ const TimelineDatePropertyControl = ({
 }: TimelineDatePropertyControlProps) => {
   const t = useTranslations();
   const dateProperties = properties.filter((p) => p.content.type === "date");
-
-  const resolveLabel = (id: string) => {
-    const internal = INTERNAL_DATE_OPTIONS.find((o) => o.id === id);
-    if (internal) {
-      return t(internal.labelKey);
-    }
-    const taskDate = TASK_DATE_OPTIONS.find((o) => o.id === id);
-    if (taskDate) {
-      return t(taskDate.labelKey);
-    }
-    return (
-      dateProperties.find((p) => p.id === id)?.name ??
-      t("workspaces.views.selectProperty")
-    );
-  };
+  const startDatePropertyLabel = resolveDatePropertyLabel({
+    dateProperties,
+    id: startDatePropertyId,
+    t,
+  });
+  const endDatePropertyLabel = resolveDatePropertyLabel({
+    dateProperties,
+    id: endDatePropertyId,
+    t,
+  });
 
   const dateOptions = (
     <>
@@ -952,8 +962,8 @@ const TimelineDatePropertyControl = ({
         value={startDatePropertyId}
       >
         <SelectTrigger className="h-6 min-h-0 min-w-24 text-xs" size="sm">
-          <SelectValue placeholder={resolveLabel(startDatePropertyId)}>
-            {resolveLabel(startDatePropertyId)}
+          <SelectValue placeholder={startDatePropertyLabel}>
+            {startDatePropertyLabel}
           </SelectValue>
         </SelectTrigger>
         <SelectPopup>{dateOptions}</SelectPopup>
@@ -970,8 +980,8 @@ const TimelineDatePropertyControl = ({
         value={endDatePropertyId}
       >
         <SelectTrigger className="h-6 min-h-0 min-w-24 text-xs" size="sm">
-          <SelectValue placeholder={resolveLabel(endDatePropertyId)}>
-            {resolveLabel(endDatePropertyId)}
+          <SelectValue placeholder={endDatePropertyLabel}>
+            {endDatePropertyLabel}
           </SelectValue>
         </SelectTrigger>
         <SelectPopup>{dateOptions}</SelectPopup>

@@ -43,7 +43,6 @@ import type {
   HearingsSearchResult,
   InfoSoudCacheOptions,
   InfoSoudClientOptions,
-  RelatedCase,
   SearchCaseInput,
   SearchCaseWithDetailsInput,
   SearchCaseWithHearingsInput,
@@ -158,18 +157,7 @@ const readNullableString = (
   return value;
 };
 
-const parseCaseMarkId = (value: unknown, context: string): CaseMarkId => {
-  const record = assertRecord(value, context);
-  return {
-    bcVec: readNumber(record, "bcVec", context),
-    cisloSenatu: readNumber(record, "cisloSenatu", context),
-    druhVeci: readString(record, "druhVeci", context),
-    organizace: readString(record, "organizace", context),
-    rocnik: readNumber(record, "rocnik", context),
-  };
-};
-
-const parseRelatedCase = (value: unknown, context: string): RelatedCase => {
+const parseCaseReference = (value: unknown, context: string): CaseMarkId => {
   const record = assertRecord(value, context);
   return {
     bcVec: readNumber(record, "bcVec", context),
@@ -188,7 +176,7 @@ const parseCaseEvent = (value: unknown, context: string): CaseEvent => {
     poradi: readNumber(record, "poradi", context),
     udalost: readString(record, "udalost", context),
     udalostId: readNullableNumber(record, "udalostId", context),
-    znackaId: parseCaseMarkId(record["znackaId"], `${context}.znackaId`),
+    znackaId: parseCaseReference(record["znackaId"], `${context}.znackaId`),
     zruseno: (() => {
       const zruseno = record["zruseno"];
       if (typeof zruseno !== "boolean") {
@@ -258,7 +246,7 @@ const parseCaseSearchResult = (value: unknown): CaseSearchResult => {
       record["navazneVeci"] ?? [],
       "CaseSearchResult.navazneVeci",
     ).map((item, index) =>
-      parseRelatedCase(item, `CaseSearchResult.navazneVeci[${index}]`),
+      parseCaseReference(item, `CaseSearchResult.navazneVeci[${index}]`),
     ),
     organizace: readString(record, "organizace", "CaseSearchResult"),
     platneK: readNullableString(record, "platneK", "CaseSearchResult"),
@@ -328,7 +316,7 @@ const parseEventDetailResult = (value: unknown): EventDetailResult => {
       record["navazneVeci"] ?? [],
       "EventDetailResult.navazneVeci",
     ).map((item, index) =>
-      parseRelatedCase(item, `EventDetailResult.navazneVeci[${index}]`),
+      parseCaseReference(item, `EventDetailResult.navazneVeci[${index}]`),
     ),
     organizace: readString(record, "organizace", "EventDetailResult"),
     platneK: readNullableString(record, "platneK", "EventDetailResult"),

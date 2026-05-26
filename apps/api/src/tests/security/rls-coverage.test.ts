@@ -23,6 +23,20 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 let testDb: TestDatabase;
 
+type TablePrivilege = {
+  table_name: string;
+  privilege: string;
+};
+
+const privilegesForTable = (
+  tablePrivileges: readonly TablePrivilege[],
+  table: string,
+) =>
+  tablePrivileges
+    .filter((p) => p.table_name === table)
+    .map((p) => p.privilege)
+    .sort();
+
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
@@ -234,13 +248,8 @@ describe("policy coverage", () => {
     const tablePrivileges = await fetchStellaTablePrivileges(testDb);
     const userColumnPrivileges =
       await fetchStellaUserSelectColumnPrivileges(testDb);
-    const privilegesFor = (table: string) =>
-      tablePrivileges
-        .filter((p) => p.table_name === table)
-        .map((p) => p.privilege)
-        .sort();
 
-    expect(privilegesFor("user")).toEqual([]);
+    expect(privilegesForTable(tablePrivileges, "user")).toEqual([]);
     expect(
       userColumnPrivileges
         .filter((p) => p.table_name === "user" && p.privilege === "SELECT")
@@ -256,7 +265,7 @@ describe("policy coverage", () => {
       expect(globalPolicy?.command).toBe("r");
       expect(globalPolicy?.using_expr).toBe("true");
       expect(globalPolicy?.check_expr).toBeNull();
-      expect(privilegesFor(table)).toEqual(["SELECT"]);
+      expect(privilegesForTable(tablePrivileges, table)).toEqual(["SELECT"]);
     }
   });
 
@@ -264,11 +273,6 @@ describe("policy coverage", () => {
     const policies = await fetchStellaIngestionPolicies(testDb);
     const tablePrivileges = await fetchStellaIngestionTablePrivileges(testDb);
     const columnPrivileges = await fetchStellaIngestionColumnPrivileges(testDb);
-    const privilegesFor = (table: string) =>
-      tablePrivileges
-        .filter((p) => p.table_name === table)
-        .map((p) => p.privilege)
-        .sort();
 
     for (const table of GLOBAL_CASE_LAW_TABLES) {
       const ingestionPolicy = policies.find(
@@ -282,7 +286,7 @@ describe("policy coverage", () => {
     }
 
     for (const table of INGESTION_MUTABLE_CASE_LAW_TABLES) {
-      expect(privilegesFor(table)).toEqual([
+      expect(privilegesForTable(tablePrivileges, table)).toEqual([
         "DELETE",
         "INSERT",
         "SELECT",
@@ -290,7 +294,9 @@ describe("policy coverage", () => {
       ]);
     }
 
-    expect(privilegesFor("case_law_sources")).toEqual(["SELECT"]);
+    expect(privilegesForTable(tablePrivileges, "case_law_sources")).toEqual([
+      "SELECT",
+    ]);
     expect(
       columnPrivileges
         .filter((p) => p.table_name === "case_law_sources")

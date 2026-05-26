@@ -28,6 +28,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { McpIcon } from "@/components/mcp-icon";
+import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { toAPIError, userErrorFromThrown } from "@/lib/errors";
 import { subscribeToMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
@@ -44,6 +45,17 @@ export const Route = createFileRoute("/_protected/knowledge/mcp")({
 });
 
 const protectedRouteApi = getRouteApi("/_protected");
+
+const showMcpApiError = (
+  error: unknown,
+  t: (key: TranslationKey) => string,
+) => {
+  showApiError({
+    error,
+    fallback: t("knowledge.mcp.errorDescription"),
+    title: t("knowledge.mcp.errorTitle"),
+  });
+};
 
 type McpConnector = {
   id: string;
@@ -278,11 +290,7 @@ function ConnectorCard({
   );
 
   const handleApiError = (error: unknown) => {
-    showApiError({
-      error,
-      fallback: t("knowledge.mcp.errorDescription"),
-      title: t("knowledge.mcp.errorTitle"),
-    });
+    showMcpApiError(error, t);
   };
 
   const connectMutation = useMutation({
@@ -702,11 +710,7 @@ function AddServerCard({ onChanged }: { onChanged: () => void }) {
   const [wizard, setWizard] = useState<WizardState>(WIZARD_IDLE);
 
   const handleApiError = (error: unknown) => {
-    showApiError({
-      error,
-      fallback: t("knowledge.mcp.errorDescription"),
-      title: t("knowledge.mcp.errorTitle"),
-    });
+    showMcpApiError(error, t);
   };
 
   const reset = () => {

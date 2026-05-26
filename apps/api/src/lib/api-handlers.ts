@@ -265,6 +265,19 @@ const createSafeScopedHandler = <
   },
 });
 
+const createSafeDirectHandler = <
+  TConfig extends InputSchema,
+  TContext extends SafeHandlerLogContext,
+  TResult,
+>(
+  config: TConfig,
+  handler: SafeHandlerFn<TContext, TResult>,
+): SafeHandlerDefinition<TConfig, TContext, TResult> => ({
+  config,
+  handler: async (ctx): Promise<SafeHandlerResult<TResult>> =>
+    await runSafeHandler(ctx, handler),
+});
+
 const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
   ...(error.code ? { code: error.code } : {}),
   message: error.message,
@@ -288,11 +301,8 @@ export const createSafeSessionHandler = <
 >(
   config: TConfig,
   handler: SafeHandlerFn<SessionHandlerContext<TConfig>, TResult>,
-): SafeHandlerDefinition<TConfig, SessionHandlerContext<TConfig>, TResult> => ({
-  config,
-  handler: async (ctx): Promise<SafeHandlerResult<TResult>> =>
-    await runSafeHandler(ctx, handler),
-});
+): SafeHandlerDefinition<TConfig, SessionHandlerContext<TConfig>, TResult> =>
+  createSafeDirectHandler(config, handler);
 
 export type TokenHandlerConfig = InputSchema;
 
@@ -314,11 +324,8 @@ export const createSafeTokenHandler = <
 >(
   config: TConfig,
   handler: SafeHandlerFn<TokenHandlerContext<TConfig>, TResult>,
-): SafeHandlerDefinition<TConfig, TokenHandlerContext<TConfig>, TResult> => ({
-  config,
-  handler: async (ctx): Promise<SafeHandlerResult<TResult>> =>
-    await runSafeHandler(ctx, handler),
-});
+): SafeHandlerDefinition<TConfig, TokenHandlerContext<TConfig>, TResult> =>
+  createSafeDirectHandler(config, handler);
 
 type LogAndCaptureSafeErrorProps = {
   request: Request;

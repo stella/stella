@@ -107,6 +107,8 @@ export default defineConfig({
     "sonarjs/no-empty-collection": "error",
     "sonarjs/no-exclusive-tests": "error",
     "sonarjs/no-identical-conditions": "error",
+    "sonarjs/no-identical-functions": "error",
+    "sonarjs/no-inverted-boolean-check": "error",
     "sonarjs/no-unthrown-error": "error",
     "sonarjs/no-useless-increment": "error",
     "sonarjs/non-existent-operator": "error",
