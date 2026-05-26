@@ -89,6 +89,7 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: stella-infra
           permission-actions: write
+          permission-contents: read
 
       - name: Dispatch and watch staging promote
         env:
