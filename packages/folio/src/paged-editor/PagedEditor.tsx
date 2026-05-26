@@ -332,6 +332,23 @@ type EnsureHiddenEditorViewOptions = {
   sync?: boolean;
 };
 
+type TextInputHandler<TView> = (
+  view: TView,
+  from: number,
+  to: number,
+  text: string,
+  defaultTransaction: () => Transaction,
+) => unknown;
+
+type TextInputDispatchTarget<TView> = {
+  dispatch(tr: Transaction): void;
+  someProp(
+    propName: "handleTextInput",
+    f: (handler: TextInputHandler<TView>) => unknown,
+  ): unknown;
+  state: EditorState;
+};
+
 // =============================================================================
 // CONSTANTS
 // =============================================================================
@@ -450,6 +467,23 @@ const replayDeferredKeyDown = (
   eventInit: KeyboardEventInit,
 ) => {
   view.dom.dispatchEvent(new KeyboardEvent("keydown", eventInit));
+};
+
+export const dispatchEditorTextInput = <
+  TView extends TextInputDispatchTarget<TView>,
+>(
+  view: TView,
+  text: string,
+) => {
+  const { from, to } = view.state.selection;
+  const defaultTransaction = () => view.state.tr.insertText(text, from, to);
+  const handled = view.someProp("handleTextInput", (handler) =>
+    handler(view, from, to, text, defaultTransaction),
+  );
+
+  if (!handled) {
+    view.dispatch(defaultTransaction());
+  }
 };
 
 /**
@@ -2199,14 +2233,7 @@ export function PagedEditor(
   );
 
   const queueHiddenEditorTextInput = useCallback((text: string) => {
-    const queuedInput = queuedInputBeforeHiddenEditorRef.current;
-    const lastInput = queuedInput.at(-1);
-    if (lastInput?.type === "text") {
-      lastInput.text += text;
-      return;
-    }
-
-    queuedInput.push({ type: "text", text });
+    queuedInputBeforeHiddenEditorRef.current.push({ type: "text", text });
   }, []);
 
   const queueHiddenEditorKeyDown = useCallback((event: React.KeyboardEvent) => {
@@ -2258,7 +2285,7 @@ export function PagedEditor(
     queuedInputBeforeHiddenEditorRef.current = [];
     for (const input of queuedInput) {
       if (input.type === "text") {
-        view.dispatch(view.state.tr.insertText(input.text));
+        dispatchEditorTextInput(view, input.text);
         continue;
       }
 
@@ -5261,7 +5288,7 @@ export function PagedEditor(
           applyPendingHiddenEditorInput(view);
           if (isPlainTextInputEvent(e)) {
             e.preventDefault();
-            view.dispatch(view.state.tr.insertText(e.key));
+            dispatchEditorTextInput(view, e.key);
             return;
           }
 
@@ -5307,20 +5334,7 @@ export function PagedEditor(
         !e.nativeEvent.isComposing
       ) {
         e.preventDefault();
-        // Route through handleTextInput so plugins (suggestion mode) can intercept
-        const { from, to } = view.state.selection;
-        // ProseMirror's `someProp` is an internal API not exposed on
-        // EditorView's public type. The cast is the FFI boundary.
-        // oxlint-disable-next-line no-any-casts/no-any-casts, typescript/no-explicit-any
-        const handled = (view as any).someProp(
-          "handleTextInput",
-          (
-            f: (v: EditorView, fr: number, t: number, text: string) => boolean,
-          ) => f(view, from, to, " "),
-        );
-        if (!handled) {
-          view.dispatch(view.state.tr.insertText(" "));
-        }
+        dispatchEditorTextInput(view, " ");
         return;
       }
 
