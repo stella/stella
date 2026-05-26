@@ -128,12 +128,17 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   borme_get_summary: CHAT_TOOL_POLICY_KIND.publicOfficial,
   "create-document": CHAT_TOOL_POLICY_KIND.internal,
   "describe-stella-api": CHAT_TOOL_POLICY_KIND.internal,
-  [FETCH_URL_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicUnofficial,
+  // Per-thread `webSearchEnabled` already gates the tools; an
+  // additional per-call approval would double-gate and block
+  // streaming until the user clicks Allow. Classify alongside the
+  // official-registry lookups so the model executes immediately
+  // once the toggle is on.
+  [FETCH_URL_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
   "load-skill": CHAT_TOOL_POLICY_KIND.internal,
   "read-skill-resource": CHAT_TOOL_POLICY_KIND.internal,
   "run-stella-query": CHAT_TOOL_POLICY_KIND.internal,
   "update-entity-fields": CHAT_TOOL_POLICY_KIND.mutation,
-  [WEB_SEARCH_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicUnofficial,
+  [WEB_SEARCH_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
 } as const satisfies Record<
   keyof BuiltInChatTools,
   (typeof CHAT_TOOL_POLICY_KIND)[keyof typeof CHAT_TOOL_POLICY_KIND]
