@@ -37,6 +37,7 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: private-workflows
           permission-actions: write
+          permission-contents: read
 
       - name: Dispatch and watch deploy-landing.yml
         env:

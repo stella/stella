@@ -1,0 +1,89 @@
+name: Probe deploy token scopes
+
+# Throwaway probe for the cross-repo dispatch token used by
+# deploy-landing.yml and deploy-staging.yml. Mints the App token
+# with the same `permission-*` inputs and exercises the scopes
+# that `gh workflow run` needs (actions:read+write, contents:read).
+# Delete this file once the deploy workflows are confirmed green.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe-private-workflows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Mint App token for private-workflows
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: private-workflows
+          permission-actions: write
+          permission-contents: read
+
+      - name: Probe actions:read (list workflows)
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          gh api "repos/${OWNER}/private-workflows/actions/workflows" --jq '.total_count'
+
+      - name: Probe contents:read (read workflow file)
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          gh api "repos/${OWNER}/private-workflows/contents/.github/workflows/deploy-landing.yml" --jq '.name'
+
+      - name: Probe actions:write (resolve workflow by filename)
+        # GET on the per-workflow endpoint is the same path `gh workflow run`
+        # uses to resolve a filename before dispatching. If the token can't
+        # read this, the dispatch silently fails the way the deploy did.
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          gh api "repos/${OWNER}/private-workflows/actions/workflows/deploy-landing.yml" --jq '.state'
+
+  probe-infra:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Mint App token for stella-infra
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: stella-infra
+          permission-actions: write
+          permission-contents: read
+
+      - name: Probe actions:read (list workflows)
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          gh api "repos/${OWNER}/stella-infra/actions/workflows" --jq '.total_count'
+
+      - name: Probe contents:read (read workflow file)
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          gh api "repos/${OWNER}/stella-infra/contents/.github/workflows/promote-release.yml" --jq '.name'
+
+      - name: Probe actions:write (resolve workflow by filename)
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          gh api "repos/${OWNER}/stella-infra/actions/workflows/promote-release.yml" --jq '.state'
