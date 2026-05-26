@@ -918,6 +918,7 @@
     "failedToDeleteContact": "Falha ao excluir cliente",
     "failedToDeleteEntities": "Falha ao excluir entidades",
     "failedToDeleteProperty": "Falha ao excluir propriedade",
+    "failedToDeleteTemplate": "Failed to delete template",
     "failedToDeleteView": "Falha ao excluir visualização",
     "failedToDeleteWorkspace": "Falha ao excluir caso",
     "failedToDuplicateView": "Falha ao duplicar a visualização",
@@ -931,6 +932,7 @@
     "failedToRenameWorkspace": "Falha ao renomear caso",
     "failedToReorderViews": "Falha ao reordenar as visualizações",
     "failedToResendInvitation": "Falha ao reenviar o convite",
+    "failedToSaveTemplate": "Failed to save template",
     "failedToSelectOrganization": "Falha ao selecionar a organização",
     "failedToSendInvitation": "Falha ao enviar convite",
     "failedToSendVerificationCode": "Falha ao enviar o código de verificação",
@@ -2282,7 +2284,21 @@
         "timeline": "Linha do tempo"
       },
       "newView": "Novo {layout}",
+      "saveAsTemplate": "Save as template…",
       "selectProperty": "Selecione a propriedade",
+      "templates": {
+        "created": "Template saved",
+        "delete": "Delete template",
+        "deleteConfirmDescription": "Delete template “{name}”? This cannot be undone.",
+        "deleted": "Template deleted",
+        "description": "Save the current view’s layout as a template you can reuse.",
+        "empty": "No templates yet. Save the current view to create one.",
+        "nameLabel": "Template name",
+        "namePlaceholder": "e.g. Active matters",
+        "save": "Save template",
+        "title": "View templates",
+        "use": "Use template"
+      },
       "timeline": {
         "day": "Dia",
         "endDate": "Data de término",
@@ -2292,7 +2308,8 @@
         "showTable": "Mostrar tabela",
         "startDate": "Data de início",
         "week": "Semana"
-      }
+      },
+      "useTemplate": "Use template…"
     },
     "workflow": {
       "allManualInputsDescription": "Adicione pelo menos uma propriedade de IA para iniciar o fluxo de trabalho",

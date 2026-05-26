@@ -918,6 +918,7 @@
     "failedToDeleteContact": "Impossible de supprimer le client",
     "failedToDeleteEntities": "Impossible de supprimer les entités",
     "failedToDeleteProperty": "Impossible de supprimer la propriété",
+    "failedToDeleteTemplate": "Failed to delete template",
     "failedToDeleteView": "Impossible de supprimer la vue",
     "failedToDeleteWorkspace": "Impossible de supprimer le dossier",
     "failedToDuplicateView": "Impossible de dupliquer la vue",
@@ -931,6 +932,7 @@
     "failedToRenameWorkspace": "Impossible de renommer le dossier",
     "failedToReorderViews": "Impossible de réorganiser les vues",
     "failedToResendInvitation": "Impossible de renvoyer l'invitation",
+    "failedToSaveTemplate": "Failed to save template",
     "failedToSelectOrganization": "Impossible de sélectionner l'organisation",
     "failedToSendInvitation": "Impossible d'envoyer l'invitation",
     "failedToSendVerificationCode": "Impossible d'envoyer le code de vérification",
@@ -2282,7 +2284,21 @@
         "timeline": "Chronologie"
       },
       "newView": "Nouvelle {layout}",
+      "saveAsTemplate": "Save as template…",
       "selectProperty": "Sélectionner une propriété",
+      "templates": {
+        "created": "Template saved",
+        "delete": "Delete template",
+        "deleteConfirmDescription": "Delete template “{name}”? This cannot be undone.",
+        "deleted": "Template deleted",
+        "description": "Save the current view’s layout as a template you can reuse.",
+        "empty": "No templates yet. Save the current view to create one.",
+        "nameLabel": "Template name",
+        "namePlaceholder": "e.g. Active matters",
+        "save": "Save template",
+        "title": "View templates",
+        "use": "Use template"
+      },
       "timeline": {
         "day": "Jour",
         "endDate": "Date de fin",
@@ -2292,7 +2308,8 @@
         "showTable": "Afficher le tableau",
         "startDate": "Date de début",
         "week": "Semaine"
-      }
+      },
+      "useTemplate": "Use template…"
     },
     "workflow": {
       "allManualInputsDescription": "Veuillez ajouter au moins une propriété IA pour démarrer le flux de travail",

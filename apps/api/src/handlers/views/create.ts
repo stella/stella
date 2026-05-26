@@ -1,8 +1,12 @@
 import { Result } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
+import { roles } from "@stll/permissions";
+
 import { workspaceViews } from "@/api/db/schema";
+import { resolveTemplateProperties } from "@/api/handlers/view-templates/properties";
 import {
+  cleanStalePropertyIds,
   hasDuplicateSorts,
   hasMultipleKindFilters,
 } from "@/api/handlers/views/utils";
@@ -24,7 +28,13 @@ const config = {
 
 const createView = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    workspaceId,
+    memberRole,
+    body,
+    recordAuditEvent,
+  }) {
     const layout = parseViewLayout(body.layout);
 
     if (hasDuplicateSorts(layout.sorts)) {
@@ -66,6 +76,26 @@ const createView = createSafeHandler(
             message: "Views limit reached",
           };
         }
+
+        const resolvedTemplateProperties = await resolveTemplateProperties({
+          tx,
+          workspaceId,
+          layout,
+          templateProperties: body.templateProperties,
+          canCreateProperties: roles[memberRole.role].authorize({
+            property: ["create"],
+          }).success,
+          recordAuditEvent,
+        });
+
+        if (!resolvedTemplateProperties.ok) {
+          return {
+            ok: false as const,
+            status: resolvedTemplateProperties.status,
+            message: resolvedTemplateProperties.message,
+          };
+        }
+        cleanStalePropertyIds(layout, resolvedTemplateProperties.propertyIds);
 
         const [maxRow] = await tx
           .select({

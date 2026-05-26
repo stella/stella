@@ -918,6 +918,7 @@
     "failedToDeleteContact": "Nepavyko ištrinti kliento",
     "failedToDeleteEntities": "Nepavyko ištrinti įrašų",
     "failedToDeleteProperty": "Nepavyko ištrinti savybės",
+    "failedToDeleteTemplate": "Failed to delete template",
     "failedToDeleteView": "Nepavyko ištrinti rodinio",
     "failedToDeleteWorkspace": "Nepavyko ištrinti bylos",
     "failedToDuplicateView": "Nepavyko dublikuoti rodinio",
@@ -931,6 +932,7 @@
     "failedToRenameWorkspace": "Nepavyko pervadinti bylos",
     "failedToReorderViews": "Nepavyko pertvarkyti rodinių",
     "failedToResendInvitation": "Nepavyko pakartotinai išsiųsti kvietimo",
+    "failedToSaveTemplate": "Failed to save template",
     "failedToSelectOrganization": "Nepavyko pasirinkti organizacijos",
     "failedToSendInvitation": "Nepavyko išsiųsti kvietimo",
     "failedToSendVerificationCode": "Nepavyko išsiųsti patvirtinimo kodo",
@@ -2282,7 +2284,21 @@
         "timeline": "Laiko juosta"
       },
       "newView": "Naujas {layout}",
+      "saveAsTemplate": "Save as template…",
       "selectProperty": "Pasirinkti savybę",
+      "templates": {
+        "created": "Template saved",
+        "delete": "Delete template",
+        "deleteConfirmDescription": "Delete template “{name}”? This cannot be undone.",
+        "deleted": "Template deleted",
+        "description": "Save the current view’s layout as a template you can reuse.",
+        "empty": "No templates yet. Save the current view to create one.",
+        "nameLabel": "Template name",
+        "namePlaceholder": "e.g. Active matters",
+        "save": "Save template",
+        "title": "View templates",
+        "use": "Use template"
+      },
       "timeline": {
         "day": "Diena",
         "endDate": "Pabaigos data",
@@ -2292,7 +2308,8 @@
         "showTable": "Rodyti lentelę",
         "startDate": "Pradžios data",
         "week": "Savaitė"
-      }
+      },
+      "useTemplate": "Use template…"
     },
     "workflow": {
       "allManualInputsDescription": "Norėdami paleisti darbo eigą, pridėkite bent vieną AI savybę",

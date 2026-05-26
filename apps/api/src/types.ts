@@ -49,6 +49,7 @@ export type {
 export type ViewLayout = ViewSchemas.ViewLayout;
 export type ViewLayoutType = ViewSchemas.ViewLayoutType;
 export type ViewFilterCondition = ViewSchemas.ViewFilterCondition;
+export type ViewTemplateProperty = ViewSchemas.ViewTemplateProperty;
 export type { ChatMentionsData } from "@/api/handlers/chat/types";
 export type { ChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
 export type { UserFileUrl } from "@/api/handlers/user-files/types";

@@ -918,6 +918,7 @@
     "failedToDeleteContact": "Nem sikerült törölni az ügyfelet",
     "failedToDeleteEntities": "Nem sikerült törölni az entitásokat",
     "failedToDeleteProperty": "Nem sikerült törölni a tulajdonságot",
+    "failedToDeleteTemplate": "Failed to delete template",
     "failedToDeleteView": "A nézet törlése nem sikerült",
     "failedToDeleteWorkspace": "Nem sikerült törölni az ügyet",
     "failedToDuplicateView": "A nézet duplikálása nem sikerült",
@@ -931,6 +932,7 @@
     "failedToRenameWorkspace": "Nem sikerült átnevezni az ügyet",
     "failedToReorderViews": "A nézetek átrendezése nem sikerült",
     "failedToResendInvitation": "Nem sikerült újraküldeni a meghívót",
+    "failedToSaveTemplate": "Failed to save template",
     "failedToSelectOrganization": "Nem sikerült kiválasztani a szervezetet",
     "failedToSendInvitation": "Nem sikerült elküldeni a meghívót",
     "failedToSendVerificationCode": "Nem sikerült elküldeni az ellenőrző kódot",
@@ -2282,7 +2284,21 @@
         "timeline": "Idővonal"
       },
       "newView": "Új {layout}",
+      "saveAsTemplate": "Save as template…",
       "selectProperty": "Tulajdonság kiválasztása",
+      "templates": {
+        "created": "Template saved",
+        "delete": "Delete template",
+        "deleteConfirmDescription": "Delete template “{name}”? This cannot be undone.",
+        "deleted": "Template deleted",
+        "description": "Save the current view’s layout as a template you can reuse.",
+        "empty": "No templates yet. Save the current view to create one.",
+        "nameLabel": "Template name",
+        "namePlaceholder": "e.g. Active matters",
+        "save": "Save template",
+        "title": "View templates",
+        "use": "Use template"
+      },
       "timeline": {
         "day": "Nap",
         "endDate": "Befejező dátum",
@@ -2292,7 +2308,8 @@
         "showTable": "Táblázat megjelenítése",
         "startDate": "Kezdő dátum",
         "week": "Hét"
-      }
+      },
+      "useTemplate": "Use template…"
     },
     "workflow": {
       "allManualInputsDescription": "A munkafolyamat indításához adjon hozzá legalább egy AI tulajdonságot",

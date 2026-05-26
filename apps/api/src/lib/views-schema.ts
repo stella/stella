@@ -2,6 +2,11 @@ import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
 import * as v from "valibot";
 
+import {
+  manualInputToolSchema,
+  propertyConditionSchema,
+  propertyContentSchema,
+} from "@/api/db/schema-validators";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 
 const v1 = v.literal(1);
@@ -278,11 +283,46 @@ export const tViewLayoutSchema = Type.Unsafe<ViewLayout>({
   ...tViewLayoutDefinition,
 });
 
+const tViewTemplatePropertyToolSchema = t.Union([
+  t.Object({
+    version: t.Literal(1),
+    type: t.Literal("ai-model"),
+    prompt: t.String({ maxLength: 1000 }),
+  }),
+  manualInputToolSchema,
+]);
+
+export const tViewTemplatePropertySchema = t.Object(
+  {
+    version: t.Literal(1),
+    sourceId: t.String({ minLength: 1 }),
+    name: tDefaultVarchar,
+    content: propertyContentSchema,
+    tool: tViewTemplatePropertyToolSchema,
+    createIfMissing: t.Boolean(),
+    dependencies: t.Optional(
+      t.Array(
+        t.Object(
+          {
+            dependsOnSourceId: t.String({ minLength: 1 }),
+            condition: t.Union([propertyConditionSchema, t.Null()]),
+          },
+          strictObjectOptions,
+        ),
+      ),
+    ),
+  },
+  strictObjectOptions,
+);
+
+export type ViewTemplateProperty = typeof tViewTemplatePropertySchema.static;
+
 export const tCreateViewInputSchema = t.Object(
   {
     id: tSafeId("workspaceView"),
     name: tDefaultVarchar,
     layout: tViewLayoutSchema,
+    templateProperties: t.Optional(t.Array(tViewTemplatePropertySchema)),
   },
   strictObjectOptions,
 );
@@ -291,6 +331,7 @@ export const tUpdateViewBodySchema = t.Object(
   {
     name: t.Optional(tDefaultVarchar),
     layout: t.Optional(tViewLayoutSchema),
+    templateProperties: t.Optional(t.Array(tViewTemplatePropertySchema)),
   },
   strictObjectOptions,
 );

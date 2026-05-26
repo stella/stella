@@ -10,6 +10,7 @@ import {
   propertyConditionSchema,
 } from "@/api/db/schema-validators";
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
+import { lockWorkspacePropertyWrites } from "@/api/handlers/properties/property-lock";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -166,15 +167,13 @@ const createProperty = createSafeHandler(
 
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
-        // Lock rows then count to serialize concurrent adds.
-        // PG rejects FOR UPDATE with aggregate functions.
-        const lockedRows = await tx
+        await lockWorkspacePropertyWrites(tx, workspaceId);
+        const existingRows = await tx
           .select({ id: properties.id })
           .from(properties)
-          .where(eq(properties.workspaceId, workspaceId))
-          .for("update");
+          .where(eq(properties.workspaceId, workspaceId));
 
-        if (lockedRows.length >= LIMITS.propertiesCount) {
+        if (existingRows.length >= LIMITS.propertiesCount) {
           return {
             ok: false as const,
             status: 400 as const,

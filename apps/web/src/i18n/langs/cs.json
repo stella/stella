@@ -918,6 +918,7 @@
     "failedToDeleteContact": "Nepodařilo se smazat klienta",
     "failedToDeleteEntities": "Nepodařilo se smazat entity",
     "failedToDeleteProperty": "Nepodařilo se smazat vlastnost",
+    "failedToDeleteTemplate": "Nepodařilo se smazat šablonu",
     "failedToDeleteView": "Smazání zobrazení se nezdařilo",
     "failedToDeleteWorkspace": "Nepodařilo se smazat spis",
     "failedToDuplicateView": "Duplikování zobrazení se nezdařilo",
@@ -931,6 +932,7 @@
     "failedToRenameWorkspace": "Nepodařilo se přejmenovat spis",
     "failedToReorderViews": "Změna pořadí zobrazení se nezdařila",
     "failedToResendInvitation": "Nepodařilo se znovu odeslat pozvánku",
+    "failedToSaveTemplate": "Nepodařilo se uložit šablonu",
     "failedToSelectOrganization": "Nepodařilo se vybrat organizaci",
     "failedToSendInvitation": "Nepodařilo se odeslat pozvánku",
     "failedToSendVerificationCode": "Nepodařilo se odeslat ověřovací kód",
@@ -2282,7 +2284,21 @@
         "timeline": "Časová osa"
       },
       "newView": "Nový {layout}",
+      "saveAsTemplate": "Uložit jako šablonu…",
       "selectProperty": "Vybrat vlastnost",
+      "templates": {
+        "created": "Šablona uložena",
+        "delete": "Smazat šablonu",
+        "deleteConfirmDescription": "Smazat šablonu „{name}“? Tuto akci nelze vrátit zpět.",
+        "deleted": "Šablona smazána",
+        "description": "Uložte si rozložení aktuálního pohledu jako šablonu pro opakované použití.",
+        "empty": "Žádné šablony. Uložte aktuální pohled jako první šablonu.",
+        "nameLabel": "Název šablony",
+        "namePlaceholder": "např. Aktivní spisy",
+        "save": "Uložit šablonu",
+        "title": "Šablony pohledů",
+        "use": "Použít šablonu"
+      },
       "timeline": {
         "day": "Den",
         "endDate": "Datum ukončení",
@@ -2292,7 +2308,8 @@
         "showTable": "Zobrazit tabulku",
         "startDate": "Datum zahájení",
         "week": "Týden"
-      }
+      },
+      "useTemplate": "Použít šablonu…"
     },
     "workflow": {
       "allManualInputsDescription": "Pro spuštění pracovního postupu přidejte alespoň jednu AI vlastnost",

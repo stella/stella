@@ -66,6 +66,7 @@ export type SafeIdType =
   | "workspaceContact"
   | "workspaceMember"
   | "workspaceView"
+  | "workspaceViewTemplate"
   | "entityLink";
 
 export type SafeId<T extends SafeIdType> = string & {

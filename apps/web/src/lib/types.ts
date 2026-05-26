@@ -20,6 +20,7 @@ export type {
   AgendaItemSource,
   ViewLayout,
   ViewLayoutType,
+  ViewTemplateProperty,
 } from "@stll/api/types";
 
 export type RouterToPath = FileRouteTypes["to"];

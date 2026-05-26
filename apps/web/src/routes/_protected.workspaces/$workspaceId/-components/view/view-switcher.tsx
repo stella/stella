@@ -7,6 +7,8 @@ import {
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import {
+  BookmarkIcon,
+  BookmarkPlusIcon,
   CalendarIcon,
   CopyIcon,
   EllipsisVerticalIcon,
@@ -51,6 +53,8 @@ import { usePermissions } from "@/hooks/use-permissions";
 import type { TranslationKey } from "@/i18n/types";
 import type { WorkspaceView } from "@/lib/types";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
+import { SaveAsTemplateDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog";
+import { TemplatePickerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog";
 import {
   useConvertView,
   useCreateView,
@@ -160,10 +164,14 @@ export const ViewSwitcher = ({
   const { data: views } = useSuspenseQuery(viewsOptions(workspaceId));
   const createView = useCreateView(workspaceId);
   const reorderViews = useReorderViews(workspaceId);
+  const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false);
   const hasOverviewView = views.some((view) => view.layout.type === "overview");
   const createLayoutOptions = hasOverviewView
     ? LAYOUT_OPTIONS.filter((layoutType) => layoutType !== "overview")
     : LAYOUT_OPTIONS;
+  const disallowedTemplateLayouts = new Set<ViewLayoutType>(
+    hasOverviewView ? ["overview"] : [],
+  );
 
   const handleReorder = (draggedId: string, targetId: string) => {
     const ids = views.map((v) => v.id);
@@ -262,8 +270,22 @@ export const ViewSwitcher = ({
                 </MenuItem>
               );
             })}
+            <MenuSeparator />
+            <MenuItem onClick={() => setIsTemplatePickerOpen(true)}>
+              <BookmarkIcon />
+              {t("workspaces.views.useTemplate")}
+            </MenuItem>
           </MenuPopup>
         </Menu>
+      )}
+      {canCreateView && (
+        <TemplatePickerDialog
+          disallowedLayoutTypes={disallowedTemplateLayouts}
+          onCreated={onViewChange}
+          onOpenChange={setIsTemplatePickerOpen}
+          open={isTemplatePickerOpen}
+          workspaceId={workspaceId}
+        />
       )}
     </div>
   );
@@ -440,6 +462,7 @@ const ViewTabMenu = ({
   const createView = useCreateView(workspaceId);
   const convertView = useConvertView(workspaceId);
   const deleteView = useDeleteView(workspaceId);
+  const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
 
   const Icon = layoutIcons[layout.type];
 
@@ -479,102 +502,123 @@ const ViewTabMenu = ({
   };
 
   return (
-    <Menu>
-      <MenuTrigger
-        render={<Button className={className} size="icon-xs" variant="ghost" />}
-      >
-        <EllipsisVerticalIcon />
-      </MenuTrigger>
-      <MenuPopup>
-        {canUpdateView && (
-          <MenuItem onClick={onRename}>
-            <PencilIcon />
-            {t("common.rename")}
-          </MenuItem>
-        )}
-        {canCreateView && layout.type !== "overview" && (
-          <MenuItem onClick={handleDuplicate}>
-            <CopyIcon />
-            {t("common.duplicate")}
-          </MenuItem>
-        )}
-        {canUpdateView && (
-          <MenuSub>
-            <MenuSubTrigger>
-              <Icon />
-              {t("common.convertTo")}
-            </MenuSubTrigger>
-            <MenuSubPopup>
-              {LAYOUT_OPTIONS.filter(
-                (l) => l !== layout.type && l !== "overview",
-              ).map((l) => {
-                const LayoutIcon = layoutIcons[l];
-                return (
-                  <MenuItem
-                    key={l}
-                    onClick={() => {
-                      convertView.mutate(
-                        {
-                          viewId: id,
-                          targetType: l,
-                        },
-                        {
-                          onError: () => {
-                            stellaToast.add({
-                              title: t("errors.failedToChangeViewType"),
-                              type: "error",
-                            });
+    <>
+      {canCreateView && (
+        <SaveAsTemplateDialog
+          defaultName={name}
+          layout={layout}
+          onOpenChange={setIsSaveTemplateOpen}
+          open={isSaveTemplateOpen}
+          workspaceId={workspaceId}
+        />
+      )}
+      <Menu>
+        <MenuTrigger
+          render={
+            <Button className={className} size="icon-xs" variant="ghost" />
+          }
+        >
+          <EllipsisVerticalIcon />
+        </MenuTrigger>
+        <MenuPopup>
+          {canUpdateView && (
+            <MenuItem onClick={onRename}>
+              <PencilIcon />
+              {t("common.rename")}
+            </MenuItem>
+          )}
+          {canCreateView && layout.type !== "overview" && (
+            <MenuItem onClick={handleDuplicate}>
+              <CopyIcon />
+              {t("common.duplicate")}
+            </MenuItem>
+          )}
+          {canCreateView && (
+            <MenuItem onClick={() => setIsSaveTemplateOpen(true)}>
+              <BookmarkPlusIcon />
+              {t("workspaces.views.saveAsTemplate")}
+            </MenuItem>
+          )}
+          {canUpdateView && (
+            <MenuSub>
+              <MenuSubTrigger>
+                <Icon />
+                {t("common.convertTo")}
+              </MenuSubTrigger>
+              <MenuSubPopup>
+                {LAYOUT_OPTIONS.filter(
+                  (l) => l !== layout.type && l !== "overview",
+                ).map((l) => {
+                  const LayoutIcon = layoutIcons[l];
+                  return (
+                    <MenuItem
+                      key={l}
+                      onClick={() => {
+                        convertView.mutate(
+                          {
+                            viewId: id,
+                            targetType: l,
                           },
-                        },
-                      );
-                    }}
+                          {
+                            onError: () => {
+                              stellaToast.add({
+                                title: t("errors.failedToChangeViewType"),
+                                type: "error",
+                              });
+                            },
+                          },
+                        );
+                      }}
+                    >
+                      <LayoutIcon />
+                      {t(LAYOUT_LABEL_KEYS[l])}
+                    </MenuItem>
+                  );
+                })}
+              </MenuSubPopup>
+            </MenuSub>
+          )}
+          {(canUpdateView || canCreateView) && canDeleteView && (
+            <MenuSeparator />
+          )}
+          {canDeleteView && (
+            <AlertDialog>
+              <AlertDialogTrigger
+                disabled={!canDelete}
+                nativeButton={false}
+                render={<MenuItem closeOnClick={false} variant="destructive" />}
+              >
+                <Trash2Icon />
+                {t("common.delete")}
+              </AlertDialogTrigger>
+              <AlertDialogPopup>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    {t("workspaces.views.deleteView")}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {t("common.deleteConfirmDescription", {
+                      name,
+                    })}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogClose render={<Button variant="ghost" />}>
+                    {t("common.cancel")}
+                  </AlertDialogClose>
+                  <AlertDialogClose
+                    render={
+                      <Button onClick={handleDelete} variant="destructive" />
+                    }
                   >
-                    <LayoutIcon />
-                    {t(LAYOUT_LABEL_KEYS[l])}
-                  </MenuItem>
-                );
-              })}
-            </MenuSubPopup>
-          </MenuSub>
-        )}
-        {(canUpdateView || canCreateView) && canDeleteView && <MenuSeparator />}
-        {canDeleteView && (
-          <AlertDialog>
-            <AlertDialogTrigger
-              disabled={!canDelete}
-              nativeButton={false}
-              render={<MenuItem closeOnClick={false} variant="destructive" />}
-            >
-              <Trash2Icon />
-              {t("common.delete")}
-            </AlertDialogTrigger>
-            <AlertDialogPopup>
-              <AlertDialogHeader>
-                <AlertDialogTitle>
-                  {t("workspaces.views.deleteView")}
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                  {t("common.deleteConfirmDescription", {
-                    name,
-                  })}
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogClose render={<Button variant="ghost" />}>
-                  {t("common.cancel")}
-                </AlertDialogClose>
-                <AlertDialogClose
-                  render={
-                    <Button onClick={handleDelete} variant="destructive" />
-                  }
-                >
-                  {t("common.delete")}
-                </AlertDialogClose>
-              </AlertDialogFooter>
-            </AlertDialogPopup>
-          </AlertDialog>
-        )}
-      </MenuPopup>
-    </Menu>
+                    {t("common.delete")}
+                  </AlertDialogClose>
+                </AlertDialogFooter>
+              </AlertDialogPopup>
+            </AlertDialog>
+          )}
+        </MenuPopup>
+      </Menu>
+    </>
   );
 };
