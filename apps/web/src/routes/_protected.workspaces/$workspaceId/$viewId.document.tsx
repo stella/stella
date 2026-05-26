@@ -50,7 +50,6 @@ import {
   usePDFStore,
 } from "@/lib/pdf/pdf-context";
 import { toSafeId } from "@/lib/safe-id";
-import { DocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import { shouldUseDocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
 import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
 import {
@@ -75,6 +74,17 @@ import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.c
 const ReadOnlyDocxViewer = lazy(async () => {
   const m = await import("@stll/folio");
   return { default: m.DocxEditor };
+});
+
+// Lazy-load DocxBrowserEditor so the @stll/folio editor graph
+// (DocxEditor, FormattingBar, prosemirror-tables, yjs, utif2, …)
+// stays out of the eager preload list. Without this the static
+// import below pulled the whole vendor-folio chunk (~490 KB gz)
+// into every page load via the route tree.
+const DocxBrowserEditor = lazy(async () => {
+  const m =
+    await import("@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor");
+  return { default: m.DocxBrowserEditor };
 });
 
 export const Route = createFileRoute(
@@ -447,49 +457,53 @@ function RouteComponentInner({
                     entityId={entityId}
                     workspaceId={workspaceId}
                   >
-                    <DocxBrowserEditor
-                      actionBarControls={
-                        <PdfViewerControls
-                          currentPage={pageNumber}
-                          fieldId={fieldId}
-                          variant="inline"
-                          workspaceId={workspaceId}
-                        />
-                      }
-                      canUnlock={useDocxBrowserEditor}
-                      entityId={entityId}
-                      fieldId={fieldId}
-                      isEditing={initialEditing}
-                      onBlockedUnlock={() => {
-                        setDocxLatestVersionDialogOpen(true);
-                      }}
-                      onClose={() => {
-                        setDocxUnlocked(false);
-                        void navigate({
-                          search: (prev) => ({
-                            ...prev,
-                            editing: undefined,
-                          }),
-                        });
-                      }}
-                      onSaved={(savedFieldId) => {
-                        setDocxUnlocked(false);
-                        setActiveFieldId(savedFieldId);
-                        void navigate({
-                          replace: true,
-                          search: (prev) => ({
-                            ...prev,
-                            editing: undefined,
-                            field: savedFieldId,
-                            pdfPage: undefined,
-                          }),
-                        });
-                      }}
-                      onUnlockedChange={setDocxUnlocked}
-                      propertyId={filePropertyId}
-                      scaleOffset={scaleOffset}
-                      workspaceId={workspaceId}
-                    />
+                    <Suspense
+                      fallback={<DocxLoadingShell scaleOffset={scaleOffset} />}
+                    >
+                      <DocxBrowserEditor
+                        actionBarControls={
+                          <PdfViewerControls
+                            currentPage={pageNumber}
+                            fieldId={fieldId}
+                            variant="inline"
+                            workspaceId={workspaceId}
+                          />
+                        }
+                        canUnlock={useDocxBrowserEditor}
+                        entityId={entityId}
+                        fieldId={fieldId}
+                        isEditing={initialEditing}
+                        onBlockedUnlock={() => {
+                          setDocxLatestVersionDialogOpen(true);
+                        }}
+                        onClose={() => {
+                          setDocxUnlocked(false);
+                          void navigate({
+                            search: (prev) => ({
+                              ...prev,
+                              editing: undefined,
+                            }),
+                          });
+                        }}
+                        onSaved={(savedFieldId) => {
+                          setDocxUnlocked(false);
+                          setActiveFieldId(savedFieldId);
+                          void navigate({
+                            replace: true,
+                            search: (prev) => ({
+                              ...prev,
+                              editing: undefined,
+                              field: savedFieldId,
+                              pdfPage: undefined,
+                            }),
+                          });
+                        }}
+                        onUnlockedChange={setDocxUnlocked}
+                        propertyId={filePropertyId}
+                        scaleOffset={scaleOffset}
+                        workspaceId={workspaceId}
+                      />
+                    </Suspense>
                   </VersionDropZone>
                 );
               }
