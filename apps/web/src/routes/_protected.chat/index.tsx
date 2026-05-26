@@ -1,8 +1,9 @@
-import { useEffectEvent, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import {
   useInfiniteQuery,
+  useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
@@ -31,6 +32,7 @@ import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import { useI18nStore } from "@/i18n/i18n-store";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { api } from "@/lib/api";
 import {
@@ -40,6 +42,7 @@ import {
 } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
+import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { toAPIError } from "@/lib/errors";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
@@ -137,6 +140,77 @@ function ChatIndex() {
       };
     },
   });
+
+  // Mirror the per-thread seeding from ChatThreadPage: if the user
+  // previously enabled web search and the draft thread doesn't have
+  // it on, PATCH it on. Marks seeded only on success so a transient
+  // failure can retry on the next render.
+  const enabledPreference = useChatWebSearchPreferenceStore(
+    (state) => state.enabledPreference,
+  );
+  const analytics = useAnalytics();
+  const { mutate: seedDraftWebSearch } = useMutation({
+    mutationFn: async () => {
+      const response = await api.chat
+        .threads({ threadId: toSafeId<"chatThread">(threadIdRef.current) })
+        .patch({ webSearchEnabled: true }, { query: {} });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
+  const seededDraftRef = useRef<string | null>(null);
+  const seedingDraftRef = useRef<string | null>(null);
+  useEffect(() => {
+    const threadId = threadIdRef.current;
+    if (
+      seededDraftRef.current === threadId ||
+      seedingDraftRef.current === threadId
+    ) {
+      return;
+    }
+    if (
+      enabledPreference &&
+      chatDraftMeta?.webSearchAvailable &&
+      !chatDraftMeta.webSearchEnabled
+    ) {
+      seedingDraftRef.current = threadId;
+      seedDraftWebSearch(undefined, {
+        onSuccess: () => {
+          if (seedingDraftRef.current === threadId) {
+            seedingDraftRef.current = null;
+          }
+          seededDraftRef.current = threadId;
+          void queryClient.invalidateQueries({
+            queryKey: [
+              "chat",
+              activeOrganizationId,
+              "thread",
+              "global",
+              threadId,
+              "draftMeta",
+            ] as const,
+          });
+        },
+        onError: () => {
+          if (seedingDraftRef.current === threadId) {
+            seedingDraftRef.current = null;
+          }
+        },
+      });
+    }
+  }, [
+    activeOrganizationId,
+    chatDraftMeta?.webSearchAvailable,
+    chatDraftMeta?.webSearchEnabled,
+    enabledPreference,
+    queryClient,
+    seedDraftWebSearch,
+  ]);
 
   const pinnedMatters = useMemo(() => {
     const workspaceById = new Map<string, PinnedMatter>();

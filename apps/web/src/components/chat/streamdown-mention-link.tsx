@@ -699,12 +699,18 @@ const FaviconChip = ({
   tooltipTitle: string;
 }) => {
   const Wrapper = onClick ? "button" : "span";
+  // Defer the favicon GET until the user reveals intent on this
+  // specific chip — see <FaviconImage> above for the rationale.
+  const [faviconRequested, setFaviconRequested] = useState(false);
+  const revealFavicon = () => setFaviconRequested(true);
   return (
     <span
       className={cn(
         "group/citation relative inline-block size-[1em]",
         inline ? "" : "mx-0.5 align-[-0.2em]",
       )}
+      onFocus={revealFavicon}
+      onMouseEnter={revealFavicon}
     >
       <Wrapper
         aria-label={onClick ? tooltipTitle : undefined}
@@ -719,7 +725,7 @@ const FaviconChip = ({
         onClick={onClick}
         type={onClick ? "button" : undefined}
       >
-        <FaviconImage hostname={hostname} />
+        <FaviconImage hostname={hostname} loaded={faviconRequested} />
       </Wrapper>
       <span
         className={cn(
@@ -738,16 +744,29 @@ const FaviconChip = ({
   );
 };
 
-const FaviconImage = ({ hostname }: { hostname: string }) => {
+/**
+ * Renders the cited domain's favicon ONLY after the parent chip
+ * reveals user intent (the `loaded` flag is flipped by the chip
+ * wrapper's hover/focus handler). Default render is the bundled
+ * GlobeIcon so merely scrolling past a chat message never sends a
+ * GET to the cited domain — that passive disclosure is the lever
+ * the Codex review flagged.
+ */
+const FaviconImage = ({
+  hostname,
+  loaded,
+}: {
+  hostname: string;
+  loaded: boolean;
+}) => {
   const [errored, setErrored] = useState(false);
-  // Fetching favicons from the cited domain itself (rather than a
-  // third-party endpoint such as `google.com/s2/favicons`) keeps
-  // privileged research targets out of Google's logs. The browser
-  // already contacts the domain on click → Inspector, so loading its
-  // public /favicon.ico introduces no new disclosure. Domains
-  // without /favicon.ico fall back to the GlobeIcon.
-  if (errored) {
-    return <GlobeIcon className="text-muted-foreground size-[0.85em]" />;
+  if (!loaded || errored) {
+    return (
+      <GlobeIcon
+        aria-hidden="true"
+        className="text-muted-foreground size-[0.85em]"
+      />
+    );
   }
   return (
     <img

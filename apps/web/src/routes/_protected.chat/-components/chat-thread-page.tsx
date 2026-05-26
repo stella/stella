@@ -158,10 +158,29 @@ export const ChatThreadPage = ({
   const enabledPreference = useChatWebSearchPreferenceStore(
     (state) => state.enabledPreference,
   );
-  const seedWebSearch = useChatWebSearchSeed({ threadRef });
+  // Only mark a thread as seeded once the PATCH actually succeeded.
+  // The previous version flipped the ref before mutate() resolved,
+  // so any transient PATCH failure (network blip, 5xx) permanently
+  // suppressed retries for the rest of the session. `inFlight`
+  // suppresses duplicate fires while one PATCH is pending.
   const seededWebSearchForThreadId = useRef<string | null>(null);
+  const seedingWebSearchForThreadId = useRef<string | null>(null);
+  const seedWebSearch = useChatWebSearchSeed({
+    threadRef,
+    onSettled: (threadId, succeeded) => {
+      if (seedingWebSearchForThreadId.current === threadId) {
+        seedingWebSearchForThreadId.current = null;
+      }
+      if (succeeded) {
+        seededWebSearchForThreadId.current = threadId;
+      }
+    },
+  });
   useEffect(() => {
     if (seededWebSearchForThreadId.current === threadRef.threadId) {
+      return;
+    }
+    if (seedingWebSearchForThreadId.current === threadRef.threadId) {
       return;
     }
     if (
@@ -170,7 +189,7 @@ export const ChatThreadPage = ({
       !data.webSearchEnabled &&
       enabledPreference
     ) {
-      seededWebSearchForThreadId.current = threadRef.threadId;
+      seedingWebSearchForThreadId.current = threadRef.threadId;
       seedWebSearch();
     }
   }, [
@@ -345,7 +364,22 @@ export const ChatThreadPage = ({
   );
 };
 
-const useChatWebSearchSeed = ({ threadRef }: { threadRef: ChatThreadRef }) => {
+type ChatWebSearchSeedProps = {
+  threadRef: ChatThreadRef;
+  /**
+   * Invoked after the PATCH settles regardless of outcome. Lets the
+   * caller advance its bookkeeping refs (mark thread seeded only on
+   * `succeeded === true`; clear the in-flight ref either way). The
+   * threadId is echoed so callers can guard against stale settlements
+   * after the user navigated to a different thread.
+   */
+  onSettled: (threadId: string, succeeded: boolean) => void;
+};
+
+const useChatWebSearchSeed = ({
+  threadRef,
+  onSettled,
+}: ChatWebSearchSeedProps) => {
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
   const { mutate } = useMutation({
@@ -374,9 +408,11 @@ const useChatWebSearchSeed = ({ threadRef }: { threadRef: ChatThreadRef }) => {
         queryClient,
         threadId: toSafeId<"chatThread">(threadRef.threadId),
       });
+      onSettled(threadRef.threadId, true);
     },
     onError: (error) => {
       analytics.captureError(error);
+      onSettled(threadRef.threadId, false);
     },
   });
   return mutate;

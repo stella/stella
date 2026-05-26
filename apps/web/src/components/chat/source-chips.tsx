@@ -226,6 +226,11 @@ const SourceIcon = ({
 };
 
 const ExternalSourceChip = ({ source }: { source: ExternalSourceEntry }) => {
+  // Defer the favicon GET until the user actively hovers/focuses
+  // this chip — passive renders of a chat message must not fan out
+  // requests to every cited host.
+  const [faviconRequested, setFaviconRequested] = useState(false);
+  const revealFavicon = () => setFaviconRequested(true);
   const handleClick = () => {
     useInspectorStore.getState().openExternal({
       connectorSlug: source.connectorSlug,
@@ -247,9 +252,15 @@ const ExternalSourceChip = ({ source }: { source: ExternalSourceEntry }) => {
         "hover:bg-muted cursor-pointer",
       )}
       onClick={handleClick}
+      onFocus={revealFavicon}
+      onMouseEnter={revealFavicon}
       type="button"
     >
-      <ExternalSourceIcon iconHref={source.iconHref} url={source.url} />
+      <ExternalSourceIcon
+        iconHref={source.iconHref}
+        loaded={faviconRequested}
+        url={source.url}
+      />
       <span className="max-w-[20ch] truncate">{source.title}</span>
     </button>
   );
@@ -257,9 +268,11 @@ const ExternalSourceChip = ({ source }: { source: ExternalSourceEntry }) => {
 
 const ExternalSourceIcon = ({
   iconHref,
+  loaded,
   url,
 }: {
   iconHref?: string | undefined;
+  loaded: boolean;
   url?: string | undefined;
 }) => {
   if (iconHref) {
@@ -276,10 +289,21 @@ const ExternalSourceIcon = ({
     );
   }
 
-  return <SourceFavicon url={url} />;
+  return <SourceFavicon loaded={loaded} url={url} />;
 };
 
-const SourceFavicon = ({ url }: { url: string | undefined }) => {
+type SourceFaviconProps = {
+  url: string | undefined;
+  /**
+   * The favicon image only mounts when this flag flips to `true`;
+   * the parent chip owns the flag and flips it on hover/focus so
+   * passively viewing a message does not GET every cited host. See
+   * the per-message rationale in `streamdown-mention-link.tsx`.
+   */
+  loaded: boolean;
+};
+
+const SourceFavicon = ({ url, loaded }: SourceFaviconProps) => {
   const [errored, setErrored] = useState(false);
   const hostname = (() => {
     if (!url) {
@@ -291,13 +315,9 @@ const SourceFavicon = ({ url }: { url: string | undefined }) => {
       return null;
     }
   })();
-  if (!hostname || errored) {
+  if (!hostname || errored || !loaded) {
     return <ExternalLinkIcon className={cn(cls, "text-muted-foreground")} />;
   }
-  // Direct /favicon.ico on the cited host; avoids leaking the
-  // cited domain to a third-party favicon service. Click handler on
-  // the chip already loads content from the same host via Inspector,
-  // so this introduces no additional outbound contact target.
   return (
     <img
       alt=""
