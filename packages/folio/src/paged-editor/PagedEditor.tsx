@@ -58,14 +58,11 @@ import {
   setCachedParagraphMeasure,
 } from "../core/layout-bridge/measuring";
 import type { FloatingImageZone } from "../core/layout-bridge/measuring";
-import {
-  selectionToRects,
-  getCaretPosition,
-} from "../core/layout-bridge/selectionRects";
 import type {
   SelectionRect,
   CaretPosition,
 } from "../core/layout-bridge/selectionRects";
+import type * as SelectionGeometry from "../core/layout-bridge/selectionRects";
 // Layout bridge
 import { toFlowBlocks } from "../core/layout-bridge/toFlowBlocks";
 import type { ToFlowBlocksOptions } from "../core/layout-bridge/toFlowBlocks";
@@ -411,6 +408,20 @@ type RemoteSelectionOverlayProps = {
   pagesContainer: HTMLDivElement | null;
   remoteSelection: HiddenProseMirrorRemoteSelection;
   zoom: number;
+};
+
+type SelectionGeometryModule = typeof SelectionGeometry;
+
+let selectionGeometryPromise: Promise<SelectionGeometryModule> | null = null;
+
+const loadSelectionGeometry = (): Promise<SelectionGeometryModule> => {
+  selectionGeometryPromise ??=
+    import("../core/layout-bridge/selectionRects").catch((error: unknown) => {
+      selectionGeometryPromise = null;
+      throw error;
+    });
+
+  return selectionGeometryPromise;
 };
 
 type LayoutInputSignatureOptions = {
@@ -795,43 +806,91 @@ const RemoteSelectionOverlay = ({
   remoteSelection,
   zoom,
 }: RemoteSelectionOverlayProps) => {
-  if (!pagesContainer) {
-    return null;
-  }
+  const [geometry, setGeometry] = useState<{
+    caretPosition: CaretPosition | null;
+    selectionRects: SelectionRect[];
+  } | null>(null);
 
-  const offset = getPageOverlayOffset(pagesContainer, zoom);
-  if (!offset) {
-    return null;
-  }
+  useEffect(() => {
+    if (!pagesContainer) {
+      setGeometry(null);
+      return undefined;
+    }
 
-  const from = Math.min(remoteSelection.anchor, remoteSelection.head);
-  const to = Math.max(remoteSelection.anchor, remoteSelection.head);
-  const selectionRects = selectionToRects(
-    layout,
+    const offset = getPageOverlayOffset(pagesContainer, zoom);
+    if (!offset) {
+      setGeometry(null);
+      return undefined;
+    }
+
+    let cancelled = false;
+    void loadSelectionGeometry().then(
+      ({ getCaretPosition, selectionToRects }) => {
+        if (cancelled) {
+          return undefined;
+        }
+
+        const from = Math.min(remoteSelection.anchor, remoteSelection.head);
+        const to = Math.max(remoteSelection.anchor, remoteSelection.head);
+        const nextSelectionRects = selectionToRects(
+          layout,
+          blocks,
+          measures,
+          from,
+          to,
+        ).map((rect) => ({
+          height: rect.height,
+          pageIndex: rect.pageIndex,
+          width: rect.width,
+          x: rect.x + offset.x,
+          y: rect.y + offset.y,
+        }));
+        const caretBase = getCaretPosition(
+          layout,
+          blocks,
+          measures,
+          remoteSelection.head,
+        );
+        const caretPosition = caretBase
+          ? {
+              ...caretBase,
+              x: caretBase.x + offset.x,
+              y: caretBase.y + offset.y,
+            }
+          : null;
+
+        setGeometry({
+          caretPosition,
+          selectionRects: nextSelectionRects,
+        });
+        return undefined;
+      },
+      () => {
+        if (!cancelled) {
+          setGeometry(null);
+        }
+        return undefined;
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
     blocks,
-    measures,
-    from,
-    to,
-  ).map((rect) => ({
-    height: rect.height,
-    pageIndex: rect.pageIndex,
-    width: rect.width,
-    x: rect.x + offset.x,
-    y: rect.y + offset.y,
-  }));
-  const caretBase = getCaretPosition(
     layout,
-    blocks,
     measures,
+    pagesContainer,
+    remoteSelection.anchor,
     remoteSelection.head,
-  );
-  const caretPosition = caretBase
-    ? {
-        ...caretBase,
-        x: caretBase.x + offset.x,
-        y: caretBase.y + offset.y,
-      }
-    : null;
+    zoom,
+  ]);
+
+  if (!geometry) {
+    return null;
+  }
+
+  const { caretPosition, selectionRects } = geometry;
 
   return (
     <>
@@ -885,6 +944,7 @@ function computeAnchorPositions(
   measures: Measure[],
   _renderedPageGap: number,
   options: { includeRevisions: boolean },
+  getCaretPosition: SelectionGeometryModule["getCaretPosition"],
 ): Map<string, number> {
   const positions = new Map<string, number>();
   if (!state) {
@@ -1962,11 +2022,13 @@ export function PagedEditor(
   // doesn't depend on a state setter callback that would trigger
   // its own re-run.
   const anonymizationMatchesRef = useRef<readonly AnonymizationMatch[]>([]);
+  const anonymizationOverlayRequestSeqRef = useRef(0);
   const [remoteSelections, setRemoteSelections] = useState<
     HiddenProseMirrorRemoteSelection[]
   >([]);
   const suppressSelectionOverlayRef = useRef(false);
   const revealSelectionOverlayTimerRef = useRef<number | null>(null);
+  const selectionOverlayRequestSeqRef = useRef(0);
 
   // Image selection state
   const [selectedImageInfo, setSelectedImageInfo] =
@@ -2784,6 +2846,10 @@ export function PagedEditor(
   const updateSelectionOverlay = useCallback(
     (state: EditorState) => {
       const { from, to } = state.selection;
+      const requestSeq = selectionOverlayRequestSeqRef.current + 1;
+      selectionOverlayRequestSeqRef.current = requestSeq;
+      const isCurrentRequest = () =>
+        selectionOverlayRequestSeqRef.current === requestSeq;
 
       // Always notify selection change (for toolbar sync) even if layout not ready
       // Use ref to avoid infinite loops when callback is unstable
@@ -2871,17 +2937,32 @@ export function PagedEditor(
           if (overlay && firstPage) {
             const overlayRect = overlay.getBoundingClientRect();
             const pageRect = firstPage.getBoundingClientRect();
-            const caret = getCaretPosition(layout, blocks, measures, from);
+            setCaretPosition(null);
+            void loadSelectionGeometry().then(
+              ({ getCaretPosition }) => {
+                if (!isCurrentRequest()) {
+                  return undefined;
+                }
 
-            if (caret) {
-              setCaretPosition({
-                ...caret,
-                x: caret.x + (pageRect.left - overlayRect.left) / zoom,
-                y: caret.y + (pageRect.top - overlayRect.top) / zoom,
-              });
-            } else {
-              setCaretPosition(null);
-            }
+                const caret = getCaretPosition(layout, blocks, measures, from);
+                if (caret) {
+                  setCaretPosition({
+                    ...caret,
+                    x: caret.x + (pageRect.left - overlayRect.left) / zoom,
+                    y: caret.y + (pageRect.top - overlayRect.top) / zoom,
+                  });
+                } else {
+                  setCaretPosition(null);
+                }
+                return undefined;
+              },
+              () => {
+                if (isCurrentRequest()) {
+                  setCaretPosition(null);
+                }
+                return undefined;
+              },
+            );
           } else {
             setCaretPosition(null);
           }
@@ -2970,22 +3051,37 @@ export function PagedEditor(
               const pageRect = firstPage.getBoundingClientRect();
               const pageOffsetX = (pageRect.left - overlayRect.left) / zoom;
               const pageOffsetY = (pageRect.top - overlayRect.top) / zoom;
+              setSelectionRects([]);
+              void loadSelectionGeometry().then(
+                ({ selectionToRects }) => {
+                  if (!isCurrentRequest()) {
+                    return undefined;
+                  }
 
-              const rects = selectionToRects(
-                layout,
-                blocks,
-                measures,
-                from,
-                to,
+                  const rects = selectionToRects(
+                    layout,
+                    blocks,
+                    measures,
+                    from,
+                    to,
+                  );
+                  const adjustedRects = rects.map((rect) => ({
+                    height: rect.height,
+                    pageIndex: rect.pageIndex,
+                    width: rect.width,
+                    x: rect.x + pageOffsetX,
+                    y: rect.y + pageOffsetY,
+                  }));
+                  setSelectionRects(adjustedRects);
+                  return undefined;
+                },
+                () => {
+                  if (isCurrentRequest()) {
+                    setSelectionRects([]);
+                  }
+                  return undefined;
+                },
               );
-              const adjustedRects = rects.map((rect) => ({
-                height: rect.height,
-                pageIndex: rect.pageIndex,
-                width: rect.width,
-                x: rect.x + pageOffsetX,
-                y: rect.y + pageOffsetY,
-              }));
-              setSelectionRects(adjustedRects);
             } else {
               setSelectionRects([]);
             }
@@ -3011,6 +3107,10 @@ export function PagedEditor(
   // ProseMirror's spans are not used — they sit at -9999px and
   // would yield bogus coordinates.
   const updateAnonymizationOverlay = useCallback(() => {
+    const requestSeq = anonymizationOverlayRequestSeqRef.current + 1;
+    anonymizationOverlayRequestSeqRef.current = requestSeq;
+    const isCurrentRequest = () =>
+      anonymizationOverlayRequestSeqRef.current === requestSeq;
     const matches = anonymizationMatchesRef.current;
     if (matches.length === 0) {
       setAnonymizationRectGroups([]);
@@ -3034,8 +3134,10 @@ export function PagedEditor(
     const pageOffsetX = (pageRect.left - overlayRect.left) / zoom;
     const pageOffsetY = (pageRect.top - overlayRect.top) / zoom;
     const pmSpans = findBodyPmSpans(pagesContainer);
+    const layoutFallbackMatches: AnonymizationMatch[] = [];
 
     const rectsForMatch = (
+      match: AnonymizationMatch,
       from: number,
       to: number,
     ): AnonymizationRectGroup["rects"] => {
@@ -3096,20 +3198,13 @@ export function PagedEditor(
       if (!layout || blocks.length === 0) {
         return [];
       }
-      return selectionToRects(layout, blocks, measures, from, to).map(
-        (rect) => ({
-          height: rect.height,
-          pageIndex: rect.pageIndex,
-          width: rect.width,
-          x: rect.x + pageOffsetX,
-          y: rect.y + pageOffsetY,
-        }),
-      );
+      layoutFallbackMatches.push(match);
+      return [];
     };
 
     const groups: AnonymizationRectGroup[] = [];
     for (const match of matches) {
-      const rects = rectsForMatch(match.from, match.to);
+      const rects = rectsForMatch(match, match.from, match.to);
       if (rects.length > 0) {
         groups.push({
           rects,
@@ -3119,10 +3214,53 @@ export function PagedEditor(
       }
     }
     setAnonymizationRectGroups(groups);
+
+    if (layoutFallbackMatches.length === 0 || !layout || blocks.length === 0) {
+      return;
+    }
+
+    void loadSelectionGeometry().then(
+      ({ selectionToRects }) => {
+        if (!isCurrentRequest()) {
+          return undefined;
+        }
+
+        const fallbackGroups: AnonymizationRectGroup[] = [];
+        for (const match of layoutFallbackMatches) {
+          const rects = selectionToRects(
+            layout,
+            blocks,
+            measures,
+            match.from,
+            match.to,
+          ).map((rect) => ({
+            height: rect.height,
+            pageIndex: rect.pageIndex,
+            width: rect.width,
+            x: rect.x + pageOffsetX,
+            y: rect.y + pageOffsetY,
+          }));
+          if (rects.length > 0) {
+            fallbackGroups.push({
+              rects,
+              label: match.label,
+              canonical: match.canonical,
+            });
+          }
+        }
+
+        if (fallbackGroups.length > 0 && isCurrentRequest()) {
+          setAnonymizationRectGroups([...groups, ...fallbackGroups]);
+        }
+        return undefined;
+      },
+      () => undefined,
+    );
   }, [layout, blocks, measures, zoom]);
 
   const hideSelectionOverlayDuringInput = useCallback(
     (state: EditorState) => {
+      selectionOverlayRequestSeqRef.current += 1;
       suppressSelectionOverlayRef.current = true;
       setCaretPosition(null);
       setSelectionRects([]);
@@ -5041,24 +5179,40 @@ export function PagedEditor(
   // change page geometry, so this intentionally avoids a full layout pass.
   useEffect(() => {
     if (!onAnchorPositionsChange || !layout) {
-      return;
+      return undefined;
     }
 
-    try {
-      const positions = computeAnchorPositions(
-        lastLayoutEditorStateRef.current,
-        layout,
-        blocks,
-        measures,
-        pageGap,
-        {
-          includeRevisions: anchorPositionMode === "comments-and-revisions",
-        },
-      );
-      onAnchorPositionsChange(positions);
-    } catch {
-      // Keep the previous anchor positions if layout measurement fails.
-    }
+    let cancelled = false;
+    void loadSelectionGeometry().then(
+      ({ getCaretPosition }) => {
+        if (cancelled) {
+          return undefined;
+        }
+
+        try {
+          const positions = computeAnchorPositions(
+            lastLayoutEditorStateRef.current,
+            layout,
+            blocks,
+            measures,
+            pageGap,
+            {
+              includeRevisions: anchorPositionMode === "comments-and-revisions",
+            },
+            getCaretPosition,
+          );
+          onAnchorPositionsChange(positions);
+        } catch {
+          // Keep the previous anchor positions if layout measurement fails.
+        }
+        return undefined;
+      },
+      () => undefined,
+    );
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     anchorPositionMode,
     blocks,
