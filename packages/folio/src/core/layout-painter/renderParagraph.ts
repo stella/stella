@@ -5,11 +5,11 @@
  * Handles text formatting, alignment, and positioning.
  */
 
+import { getListMarkerInlineWidth } from "../layout-bridge/measuring/listMarkerWidth";
 import type {
   ParagraphBlock,
   ParagraphMeasure,
   ParagraphFragment,
-  ParagraphIndent,
   ParagraphBorders,
   BorderStyle,
   MeasuredLine,
@@ -1770,6 +1770,14 @@ export function renderParagraphFragment(
     // Update cumulative Y for next line
     _cumulativeLineY += line.lineHeight;
 
+    // Lead skip: a line bumped past obstructing floats reserves vertical
+    // space above itself via marginTop. measureParagraph adds the same
+    // amount to totalHeight so containers stay sized correctly.
+    if (line.floatSkipBefore !== undefined && line.floatSkipBefore > 0) {
+      lineEl.style.marginTop = `${line.floatSkipBefore}px`;
+      _cumulativeLineY += line.floatSkipBefore;
+    }
+
     // Apply line-level indentation
     // Indentation is applied per-line for correct text wrapping
     const hasHanging = indent?.hanging && indent.hanging > 0;
@@ -1876,7 +1884,7 @@ export function renderParagraphFragment(
 
       const marker = renderListMarker(
         block.attrs.listMarker,
-        indent,
+        getListMarkerInlineWidth(block),
         doc,
         markerFontFamily,
         markerFontSize,
@@ -1892,15 +1900,16 @@ export function renderParagraphFragment(
 }
 
 /**
- * Render a list marker element
- *
- * The marker is rendered as an inline-block with a consistent space after it.
- * For short markers, the box fills the hanging indent area.
- * For long markers (like "1.1.1"), we ensure minimum spacing after the text.
+ * Render a list marker element as an inline-block at the start of the first
+ * body line. `minWidth` (from `getListMarkerInlineWidth`) sizes the marker
+ * so the body text aligns at the next tab stop per ECMA-376 §17.9.25 —
+ * this honours `w:suff` (`tab` / `space` / `nothing`) and the document's
+ * tab grid. Long markers like "1.1.1." therefore grow to the next stop
+ * instead of butting against the body text.
  */
 function renderListMarker(
   marker: string,
-  indent: ParagraphIndent | undefined,
+  minWidth: number,
   doc: Document,
   fontFamily?: string,
   fontSize?: number,
@@ -1909,42 +1918,21 @@ function renderListMarker(
   span.className = "layout-list-marker";
   span.style.display = "inline-block";
 
-  // Apply font styling so the marker matches the paragraph text
-  // Per ECMA-376 §17.9.6, marker formatting comes from level rPr,
-  // then paragraph defaults, then document defaults.
+  // Per ECMA-376 §17.9.6, marker formatting comes from level rPr, then
+  // paragraph defaults, then document defaults.
   if (fontFamily) {
     span.style.fontFamily = resolveFontFamily(fontFamily).cssFallback;
   }
   if (fontSize) {
-    // Convert points to pixels: 1pt = 96/72 px
-    const fontSizePx = (fontSize * 96) / 72;
-    span.style.fontSize = `${fontSizePx}px`;
+    // 1pt = 96/72 px
+    span.style.fontSize = `${(fontSize * 96) / 72}px`;
   }
 
   span.textContent = marker;
   span.style.textAlign = "left";
   span.style.boxSizing = "border-box";
-
-  // ECMA-376 §17.9.30: `<w:suff>` selects what follows the marker —
-  // `tab` (default), `space`, or `nothing`. We don't currently parse
-  // `<w:suff>` and fall back to the default (tab) behaviour.
-  //
-  // Hanging-indent lists bake the tab gap into the hanging space:
-  // marker fills `[indentLeft - hanging, indentLeft]`, body text
-  // picks up at `indentLeft`. Set `min-width: hanging` so short
-  // markers don't collapse against the body text.
-  //
-  // First-line-indent lists (`firstLine > 0` and no hanging) place
-  // the marker at `indentLeft + firstLine` with body text wrapping
-  // at `indentLeft`; the marker box has no implicit gap, so we add
-  // an explicit padding-right to emulate the marker's tab-after.
-  // Without this, NVCA-style lists rendered "(i)Tranche Closing"
-  // and "4.10Voting Agreement" with the marker flush against the
-  // text.
-  if (indent?.hanging !== undefined && indent.hanging > 0) {
-    span.style.minWidth = `${indent.hanging}px`;
-  } else if (indent?.firstLine !== undefined && indent.firstLine > 0) {
-    span.style.paddingRight = "12px";
+  if (minWidth > 0) {
+    span.style.minWidth = `${minWidth}px`;
   }
 
   return span;

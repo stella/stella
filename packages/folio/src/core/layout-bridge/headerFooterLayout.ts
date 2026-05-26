@@ -543,6 +543,8 @@ export type ConvertHeaderFooterOptions = {
   styles?: StyleDefinitions | null;
   theme?: Theme | null;
   measureBlocks: MeasureBlocksFn;
+  /** Document-wide `w:defaultTabStop` in twips — forwarded to toFlowBlocks. */
+  defaultTabStopTwips?: number;
 };
 
 /**
@@ -577,9 +579,15 @@ export function convertHeaderFooterToContent(
     proseDocOptions.theme = options.theme;
   }
   const pmDoc = headerFooterToProseDoc(headerFooter.content, proseDocOptions);
-  const flowOptions: { theme?: Theme | null } = {};
+  const flowOptions: {
+    theme?: Theme | null;
+    defaultTabStopTwips?: number;
+  } = {};
   if (options.theme !== undefined) {
     flowOptions.theme = options.theme;
+  }
+  if (options.defaultTabStopTwips !== undefined) {
+    flowOptions.defaultTabStopTwips = options.defaultTabStopTwips;
   }
   const blocks = toFlowBlocks(pmDoc, flowOptions);
   if (blocks.length === 0) {

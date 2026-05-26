@@ -18,6 +18,7 @@ import type {
   ParagraphSpacing,
 } from "../../layout-engine/types";
 import { DEFAULT_SINGLE_LINE_RATIO } from "../../utils/fontResolver";
+import { getListMarkerInlineWidth } from "./listMarkerWidth";
 import {
   measureTextWidth,
   measureRun,
@@ -346,6 +347,70 @@ export function clampFloatingWrapMargins(
 }
 
 /**
+ * Minimum horizontal room a line must offer before we treat it as usable for
+ * body text. Below this threshold the line is bumped past obstructing floats
+ * via `findClearLineY` instead of being rendered into the unusable sliver.
+ * Without this guard, a near-full-width float (e.g. floating table) produces
+ * a ~2px segment that collapses every wrap line to one glyph per row.
+ */
+export const MIN_WRAP_SEGMENT_WIDTH = 24;
+
+/**
+ * Find the next vertical position at or below `startY` where the available
+ * text width is at least `minWidth`. Used to skip lines past stacked floats
+ * when there is no horizontal room for meaningful text at the current Y.
+ *
+ * Returns `startY` if the current position already has enough room, otherwise
+ * the lowest `bottomY` of any zone currently obstructing the line. The caller
+ * is expected to re-query margins at the returned Y.
+ *
+ * Coordinates are absolute (i.e., already include any paragraphYOffset).
+ */
+export function findClearLineY(
+  startY: number,
+  lineHeight: number,
+  zones: FloatingImageZone[] | undefined,
+  contentWidth: number,
+  minWidth: number,
+): number {
+  if (!zones || zones.length === 0) {
+    return startY;
+  }
+
+  let y = startY;
+  // Bounded loop — at most one step per zone the line currently overlaps,
+  // plus a safety cushion. Prevents pathological re-entry while keeping the
+  // happy path O(zones).
+  for (let i = 0; i < zones.length + 2; i++) {
+    const margins = getFloatingMargins(y, lineHeight, zones, 0);
+    const available = Math.max(
+      0,
+      contentWidth - margins.leftMargin - margins.rightMargin,
+    );
+    if (available >= minWidth) {
+      return y;
+    }
+
+    const lineBottom = y + lineHeight;
+    let nextY = Number.POSITIVE_INFINITY;
+    for (const zone of zones) {
+      // Skip zones we are already past or that lie entirely below this line.
+      if (lineBottom <= zone.topY || y >= zone.bottomY) {
+        continue;
+      }
+      if (zone.bottomY > y && zone.bottomY < nextY) {
+        nextY = zone.bottomY;
+      }
+    }
+    if (!Number.isFinite(nextY) || nextY <= y) {
+      return y;
+    }
+    y = nextY;
+  }
+  return y;
+}
+
+/**
  * Calculate width reduction for a line based on floating image zones.
  * Returns the left and right margins that need to be applied.
  */
@@ -410,47 +475,73 @@ export function measureParagraph(
   // Subtracting gives correct width in both cases
   let baseFirstLineWidth = Math.max(1, bodyContentWidth - firstLineOffset);
 
-  // List marker on first-line-indent paragraphs: the marker is rendered
-  // inline at the start of the first line and takes its own width. Word's
-  // measurement includes the marker in the first line's content; folio
-  // renders the marker as a separately-prepended span that's *not* in the
-  // run list, so we must subtract its width here. Without this, the line
-  // breaker thinks the first line has a full `bodyWidth - firstLine` of
-  // text room, the painter then pushes some text past the right margin,
-  // and a trailing run (e.g. ". The Company...") wraps to the next line.
-  // Hanging-indent lists already account for the marker via the hanging
-  // gap (see baseFirstLineWidth shrinking through firstLineOffset).
-  if (
-    attrs?.listMarker &&
-    !attrs.listMarkerHidden &&
-    !((indent?.hanging ?? 0) > 0)
-  ) {
-    const markerFontSize =
-      attrs.listMarkerFontSize ?? attrs.defaultFontSize ?? DEFAULT_FONT_SIZE;
-    const markerFontFamily =
-      attrs.listMarkerFontFamily ??
-      attrs.defaultFontFamily ??
-      DEFAULT_FONT_FAMILY;
-    const markerStyle: FontStyle = {
-      fontFamily: markerFontFamily,
-      fontSize: markerFontSize,
-    };
-    const markerTextWidth = measureTextWidth(attrs.listMarker, markerStyle);
-    // 12 px tab-after gap, matching the painter's `paddingRight: 12px`
-    // on the marker box for first-line-indent lists.
-    const markerSlotWidth = markerTextWidth + 12;
-    baseFirstLineWidth = Math.max(1, baseFirstLineWidth - markerSlotWidth);
+  // List marker on the first line: the marker renders as an inline-block
+  // span that's *not* in the run list, so the run-based line breaker
+  // doesn't see it. The first line's content area spans from the marker's
+  // start to the right margin — for a hanging list that's
+  // `bodyContentWidth + hanging` (already widened via `firstLineOffset`);
+  // for a first-line indent it's `bodyContentWidth − firstLine`. Subtract
+  // the marker's actual painted footprint (`getListMarkerInlineWidth`) so
+  // the line breaker sees the same text room the painter leaves.
+  //
+  // The subtraction is unconditional:
+  //
+  // - Hanging + `w:suff="tab"` (fitting): markerInlineWidth = hanging, so
+  //   the subtraction exactly cancels the `+ hanging` widening and the
+  //   text budget reduces to bodyContentWidth (matches body wrap).
+  // - Hanging + tab overflow: markerInlineWidth > hanging, subtracting
+  //   yields bodyContentWidth − overflow (text budget shrinks past the
+  //   body wrap column, matching Word's advance to next tab stop).
+  // - Hanging + `w:suff="space"|"nothing"`: markerInlineWidth < hanging,
+  //   so the budget is bodyContentWidth + (hanging − markerInlineWidth) —
+  //   first line is wider than subsequent lines, matching the painter
+  //   which starts body before indentLeft.
+  // - First-line indent (no hanging): subtract the full marker width.
+  const markerInlineWidth = getListMarkerInlineWidth(block);
+  if (markerInlineWidth > 0) {
+    baseFirstLineWidth = Math.max(1, baseFirstLineWidth - markerInlineWidth);
   }
 
   // Track cumulative height for floating zone calculations
   let cumulativeHeight = 0;
+  // Vertical space queued for the next line to finalize — set when we hop
+  // past a float that leaves no usable horizontal width at the current Y.
+  // Cleared each time finalizeLine attaches it to a MeasuredLine.
+  let pendingFloatSkip = 0;
+
+  /**
+   * If floats leave no usable horizontal room at `cumulativeHeight`, advance
+   * past them by mutating cumulativeHeight + pendingFloatSkip.
+   */
+  const skipObstructingFloats = (
+    lineHeight: number,
+    lineMaxWidth: number,
+  ): void => {
+    if (!floatingZones || floatingZones.length === 0) {
+      return;
+    }
+    const absoluteY = paragraphYOffset + cumulativeHeight;
+    const clearY = findClearLineY(
+      absoluteY,
+      lineHeight,
+      floatingZones,
+      lineMaxWidth,
+      MIN_WRAP_SEGMENT_WIDTH,
+    );
+    const skip = clearY - absoluteY;
+    if (skip > 0) {
+      cumulativeHeight += skip;
+      pendingFloatSkip += skip;
+    }
+  };
 
   // Calculate first line width with floating zone adjustment
   // Estimate first line height for floating margin calculation
   const estimatedFirstLineHeight =
     ptToPx(DEFAULT_FONT_SIZE) * DEFAULT_LINE_HEIGHT_MULTIPLIER;
+  skipObstructingFloats(estimatedFirstLineHeight, baseFirstLineWidth);
   const firstLineFloatingMargins = getFloatingMargins(
-    0,
+    cumulativeHeight,
     estimatedFirstLineHeight,
     floatingZones,
     paragraphYOffset,
@@ -630,6 +721,13 @@ export function measureParagraph(
       line.rightOffset = currentLine.rightOffset;
     }
 
+    // Attach any queued float-skip to this line; the painter reserves it
+    // via marginTop and totalHeight already grew by this amount above.
+    if (pendingFloatSkip > 0) {
+      line.floatSkipBefore = pendingFloatSkip;
+      pendingFloatSkip = 0;
+    }
+
     lines.push(line);
 
     // Update cumulative height for next line's floating zone calculation
@@ -646,6 +744,7 @@ export function measureParagraph(
     // Estimate the new line's height for overlap calculation
     const estimatedLineHeight =
       ptToPx(DEFAULT_FONT_SIZE) * DEFAULT_LINE_HEIGHT_MULTIPLIER;
+    skipObstructingFloats(estimatedLineHeight, bodyContentWidth);
     const floatingMargins = getFloatingMargins(
       cumulativeHeight,
       estimatedLineHeight,
@@ -946,8 +1045,12 @@ export function measureParagraph(
   // Finalize the last line
   finalizeLine();
 
-  // Calculate total height
-  const totalHeight = lines.reduce((sum, line) => sum + line.lineHeight, 0);
+  // Calculate total height — include floatSkipBefore from lines bumped past
+  // floats so containers stay sized correctly.
+  const totalHeight = lines.reduce(
+    (sum, line) => sum + line.lineHeight + (line.floatSkipBefore ?? 0),
+    0,
+  );
 
   // Add spacing before/after
   let totalWithSpacing = totalHeight;

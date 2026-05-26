@@ -80,6 +80,12 @@ export type ParagraphAttrs = {
   listMarkerFontFamily?: string;
   /** Marker font size from numbering level rPr, in points */
   listMarkerFontSize?: number;
+  /**
+   * `w:suff` (§17.9.25) — what follows the marker before body text.
+   * `tab` (default) grows the marker to the next tab stop; `space` adds one
+   * space glyph; `nothing` lets body text butt against the marker.
+   */
+  listMarkerSuffix?: "tab" | "space" | "nothing";
   /** Number format for each level used by multi-level marker templates. */
   listLevelNumFmts?: NumberFormat[];
   /** Abstract numbering ID shared by numbering instances. */

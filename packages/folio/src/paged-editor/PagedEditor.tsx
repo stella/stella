@@ -1753,6 +1753,14 @@ export function PagedEditor(
         if (_theme !== undefined) {
           flowOpts.theme = _theme;
         }
+        // Stamp the document's `w:defaultTabStop` onto every paragraph so
+        // list-marker tab-stop math (renderParagraph + measureParagraph)
+        // uses the right grid. Absent settings.xml falls back to the
+        // OOXML default inside `getListMarkerInlineWidth`.
+        const defaultTabStop = document?.package.settings?.defaultTabStop;
+        if (defaultTabStop !== undefined) {
+          flowOpts.defaultTabStopTwips = defaultTabStop;
+        }
         const newBlocks = toFlowBlocks(state.doc, flowOpts);
         setBlocks(newBlocks);
 
@@ -1811,6 +1819,9 @@ export function PagedEditor(
           ...(styles ? { styles } : {}),
           ...(_theme !== undefined ? { theme: _theme } : {}),
           measureBlocks,
+          ...(defaultTabStop !== undefined
+            ? { defaultTabStopTwips: defaultTabStop }
+            : {}),
         };
         const headerContentForRender = convertHeaderFooterToContent(
           headerContent,
@@ -1925,6 +1936,9 @@ export function PagedEditor(
               }
               if (_theme !== undefined) {
                 footnoteOptions.theme = _theme;
+              }
+              if (defaultTabStop !== undefined) {
+                footnoteOptions.defaultTabStopTwips = defaultTabStop;
               }
               return footnoteOptions;
             })(),

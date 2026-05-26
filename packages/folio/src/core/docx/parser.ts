@@ -61,6 +61,7 @@ import {
   RELATIONSHIP_TYPES,
   resolveRelativePath,
 } from "./relsParser";
+import { parseSettings } from "./settingsParser";
 import { parseStyles, parseStyleDefinitions } from "./styleParser";
 import type { StyleMap } from "./styleParser";
 import { parseTheme } from "./themeParser";
@@ -191,6 +192,13 @@ export async function parseDocx(
       parseNumbering(raw.numberingXml),
     );
     onProgress("Parsed numbering", 35);
+
+    // Settings (`word/settings.xml`) — currently only used for
+    // `w:defaultTabStop`, but staged here so future settings flow through
+    // the same point. Cheap; no separate progress band.
+    const settings = timeStage("settings", () =>
+      parseSettings(raw.settingsXml),
+    );
 
     // ========================================================================
     // STAGE 6: Build media file map (35-40%)
@@ -377,6 +385,7 @@ export async function parseDocx(
 
     const pkg: DocxPackage = {
       document: documentBody,
+      settings,
       ...(styleDefinitions !== undefined ? { styles: styleDefinitions } : {}),
       theme,
       numbering: numbering.definitions,

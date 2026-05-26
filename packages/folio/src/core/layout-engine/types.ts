@@ -292,9 +292,22 @@ export type ParagraphAttrs = {
   listMarkerHidden?: boolean; // w:vanish on numbering level rPr
   listMarkerFontFamily?: string; // from numbering level rPr (w:rFonts)
   listMarkerFontSize?: number; // from numbering level rPr, in points
+  /**
+   * `w:suff` (§17.9.25) — what follows the marker before body text.
+   * `tab` (default) grows the marker to the next tab stop; `space` adds
+   * one space glyph; `nothing` lets body text butt against the marker.
+   */
+  listMarkerSuffix?: "tab" | "space" | "nothing";
   // Default font for empty paragraphs (from style's rPr / pPr/rPr)
   defaultFontSize?: number; // in points
   defaultFontFamily?: string;
+  /**
+   * Document-wide `w:defaultTabStop` (§17.6.13) in twips. Read by the list
+   * marker tab-stop math so long markers align body text at the document's
+   * configured grid. Stamped onto every paragraph block by `toFlowBlocks`
+   * so paragraph-local helpers stay decoupled from `Document`.
+   */
+  defaultTabStopTwips?: number;
 };
 
 /**
@@ -524,6 +537,12 @@ export type MeasuredLine = {
   leftOffset?: number;
   /** Right offset from floating images (pixels from content right edge). */
   rightOffset?: number;
+  /**
+   * Vertical space inserted before this line to skip past floats that leave
+   * no usable horizontal room at the natural line Y. Painters render this
+   * as marginTop on the line element; measurement adds it to totalHeight.
+   */
+  floatSkipBefore?: number;
 };
 
 /**
