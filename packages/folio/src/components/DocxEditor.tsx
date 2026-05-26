@@ -221,7 +221,6 @@ import {
   buildSelectionFormatting,
   extractListState,
 } from "./selectionFormattingBuilder";
-import { TextContextMenu } from "./TextContextMenu";
 import type { TextContextAction, TextContextMenuItem } from "./TextContextMenu";
 import { ToolbarButton, ToolbarSeparator } from "./Toolbar";
 import type { FormattingAction } from "./Toolbar";
@@ -238,6 +237,12 @@ import { Tooltip } from "./ui/Tooltip";
 const CommentsSidebar = lazy(() =>
   import("./CommentsSidebar").then((m) => ({
     default: m.CommentsSidebar,
+  })),
+);
+
+const TextContextMenu = lazy(() =>
+  import("./TextContextMenu").then((m) => ({
+    default: m.TextContextMenu,
   })),
 );
 
@@ -3525,17 +3530,21 @@ export function DocxEditor({
           />
 
           {/* Right-click context menu */}
-          <TextContextMenu
-            isOpen={contextMenu.isOpen}
-            position={contextMenu.position}
-            hasSelection={contextMenu.hasSelection}
-            isEditable={!readOnly}
-            items={contextMenuItems}
-            onAction={(action) => {
-              void handleContextMenuAction(action);
-            }}
-            onClose={handleContextMenuClose}
-          />
+          {contextMenu.isOpen && (
+            <Suspense fallback={null}>
+              <TextContextMenu
+                isOpen={contextMenu.isOpen}
+                position={contextMenu.position}
+                hasSelection={contextMenu.hasSelection}
+                isEditable={!readOnly}
+                items={contextMenuItems}
+                onAction={(action) => {
+                  void handleContextMenuAction(action);
+                }}
+                onClose={handleContextMenuClose}
+              />
+            </Suspense>
+          )}
 
           {/* Toast notifications */}
           {/* Toast notifications provided by host app */}
