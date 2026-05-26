@@ -20,7 +20,6 @@ import { useRouteContext } from "@tanstack/react-router";
 import {
   CheckCircle2Icon,
   EyeIcon,
-  LockIcon,
   LockOpenIcon,
   PenLineIcon,
   RefreshCwIcon,
@@ -45,7 +44,6 @@ import {
   SelectValue as StSelectValue,
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
 import "@stll/folio/editor.css";
 
 import { useActiveDocxStore } from "@/components/ai-suggestions/active-docx-store";
@@ -526,9 +524,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   const errorToastShownRef = useRef(false);
   const lastStyleLabelRef = useRef("Normal");
   const lastStyleLabelStyleRef = useRef<CSSProperties | undefined>(undefined);
-  const lockedEditPromptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
   const optimisticPreviewRef = useRef<OptimisticPreviewFile | null>(null);
   const finalizedBufferRef = useRef<ArrayBuffer | null>(null);
   const lastEditingBufferRef = useRef<ArrayBuffer | null>(null);
@@ -551,7 +546,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     compatibilityState.targetKey === editTargetKey
       ? compatibilityState.value
       : null;
-  const [isPromptingUnlock, setIsPromptingUnlock] = useState(false);
   const [autosaveStatus, setAutosaveStatus] =
     useState<AutosaveStatus>("synced");
   const targetZoom = useDocxFitZoom(containerRef, scaleOffset, 0.85);
@@ -682,11 +676,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     lastEditingBufferRef.current = null;
     hasSessionChangesRef.current = false;
     preservedLoadedBufferRef.current = null;
-    setIsPromptingUnlock(false);
-    if (lockedEditPromptTimerRef.current !== null) {
-      clearTimeout(lockedEditPromptTimerRef.current);
-      lockedEditPromptTimerRef.current = null;
-    }
     setCompatibilityState({ targetKey: editTargetKey, value: null });
   }, [editTargetKey, fieldId]);
 
@@ -967,9 +956,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   useEffect(
     () => () => {
       clearQueuedChangeCheckpoint();
-      if (lockedEditPromptTimerRef.current !== null) {
-        clearTimeout(lockedEditPromptTimerRef.current);
-      }
     },
     [clearQueuedChangeCheckpoint],
   );
@@ -1136,20 +1122,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     await cancelActiveSession();
   }, [cancelActiveSession, clearQueuedChangeCheckpoint]);
 
-  const flashUnlockControl = useCallback(() => {
-    setIsPromptingUnlock(true);
-    if (lockedEditPromptTimerRef.current !== null) {
-      clearTimeout(lockedEditPromptTimerRef.current);
-    }
-    lockedEditPromptTimerRef.current = setTimeout(() => {
-      lockedEditPromptTimerRef.current = null;
-      setIsPromptingUnlock(false);
-    }, 1400);
-  }, []);
-
   const handleUnlock = useCallback(() => {
     if (!canUnlock) {
-      flashUnlockControl();
       onBlockedUnlock?.();
       return;
     }
@@ -1183,7 +1157,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     canUnlock,
     compatibility?.canSafelyEdit,
     collaborationEnabled,
-    flashUnlockControl,
     onBlockedUnlock,
     open,
     previewFile,
@@ -1197,9 +1170,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     if (isUnlocked) {
       return;
     }
-    flashUnlockControl();
     onReadonlyEditAttempt?.();
-  }, [flashUnlockControl, isUnlocked, onReadonlyEditAttempt]);
+    handleUnlock();
+  }, [handleUnlock, isUnlocked, onReadonlyEditAttempt]);
 
   const handleToggleLock = useCallback(() => {
     if (!isUnlocked) {
@@ -1281,44 +1254,36 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     preservedLoadedBufferRef.current = null;
   }
 
-  const showLockLabel = isUnlocked || isPromptingUnlock;
-  const lockActionLabel = isUnlocked
-    ? t("folio.finishEditing")
-    : t("folio.editFile");
+  const finishEditingLabel = t("folio.finishEditing");
 
   const toolbarExtra = (() => {
     if (showActionBar || actionBarControls !== undefined) {
       return (
         <>
           {actionBarControls}
-          {showActionBar && (
+          {showActionBar && isUnlocked && (
             <>
               <Tooltip
-                content={lockActionLabel}
+                content={finishEditingLabel}
                 render={
                   <Button
-                    aria-label={lockActionLabel}
-                    className={cn(
-                      "transition-all",
-                      showLockLabel ? "px-2" : "",
-                      isPromptingUnlock &&
-                        "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
-                    )}
+                    aria-label={finishEditingLabel}
+                    className="px-2"
                     disabled={
                       state.status === "opening" ||
                       state.status === "saving" ||
                       collaborationState.status === "opening"
                     }
                     onClick={handleToggleLock}
-                    size={showLockLabel ? "sm" : "icon-sm"}
+                    size="sm"
                     variant="ghost"
                   >
-                    {isUnlocked ? <LockOpenIcon /> : <LockIcon />}
-                    {showLockLabel && <span>{lockActionLabel}</span>}
+                    <LockOpenIcon />
+                    <span>{finishEditingLabel}</span>
                   </Button>
                 }
               />
-              {isUnlocked && <AutosaveIndicator status={autosaveStatus} />}
+              <AutosaveIndicator status={autosaveStatus} />
             </>
           )}
         </>
@@ -1422,7 +1387,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       {/* Folio editor with AI overlay */}
       <div
         className="min-w-0 flex-1 overflow-hidden"
-        onDoubleClickCapture={isUnlocked ? undefined : handleLockedEditAttempt}
+        onMouseDownCapture={isUnlocked ? undefined : handleLockedEditAttempt}
       >
         <FileViewerWithAI
           key={`ai-${previewIdentity}`}
@@ -1626,27 +1591,9 @@ const DocxBrowserEditorPendingFallback = ({
   showActionBar = true,
 }: DocxBrowserEditorProps) => {
   const t = useTranslations();
-  const lockActionLabel = t("folio.editFile");
   const toolbarExtra =
     showActionBar || actionBarControls !== undefined ? (
-      <>
-        {actionBarControls}
-        {showActionBar && (
-          <Tooltip
-            content={lockActionLabel}
-            render={
-              <Button
-                aria-label={lockActionLabel}
-                disabled
-                size="icon-sm"
-                variant="ghost"
-              >
-                <LockIcon />
-              </Button>
-            }
-          />
-        )}
-      </>
+      <>{actionBarControls}</>
     ) : undefined;
 
   return (
