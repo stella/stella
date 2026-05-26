@@ -23,6 +23,7 @@ import React, {
   useImperativeHandle,
 } from "react";
 import type { CSSProperties, Ref } from "react";
+import { flushSync } from "react-dom";
 
 import type { Mark, Node as PMNode } from "prosemirror-model";
 import { NodeSelection, TextSelection } from "prosemirror-state";
@@ -323,6 +324,14 @@ type PendingHiddenEditorSelection =
   | { type: "node"; pos: number }
   | { type: "text"; anchor: number; head?: number };
 
+type QueuedHiddenEditorInput =
+  | { type: "text"; text: string }
+  | { type: "keydown"; eventInit: KeyboardEventInit };
+
+type EnsureHiddenEditorViewOptions = {
+  sync?: boolean;
+};
+
 // =============================================================================
 // CONSTANTS
 // =============================================================================
@@ -361,12 +370,52 @@ const HIDDEN_EDITOR_VIEW_DEFER_MS = 275;
 // Stable empty array to avoid re-creating on each render
 const EMPTY_PLUGINS: Plugin[] = [];
 
+const DEFERRED_KEYDOWN_REPLAY_KEYS = new Set([
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "Backspace",
+  "Delete",
+  "End",
+  "Enter",
+  "Home",
+  "PageDown",
+  "PageUp",
+]);
+
 const isPlainTextInputEvent = (event: React.KeyboardEvent): boolean =>
   event.key.length === 1 &&
   !event.altKey &&
   !event.ctrlKey &&
   !event.metaKey &&
   !event.nativeEvent.isComposing;
+
+const isReplayableDeferredKeyDown = (event: React.KeyboardEvent): boolean =>
+  !event.nativeEvent.isComposing && DEFERRED_KEYDOWN_REPLAY_KEYS.has(event.key);
+
+const toDeferredKeyboardEventInit = (
+  event: React.KeyboardEvent,
+): KeyboardEventInit => ({
+  altKey: event.altKey,
+  bubbles: true,
+  cancelable: true,
+  code: event.code,
+  composed: true,
+  ctrlKey: event.ctrlKey,
+  key: event.key,
+  location: event.location,
+  metaKey: event.metaKey,
+  repeat: event.repeat,
+  shiftKey: event.shiftKey,
+});
+
+const replayDeferredKeyDown = (
+  view: EditorView,
+  eventInit: KeyboardEventInit,
+) => {
+  view.dom.dispatchEvent(new KeyboardEvent("keydown", eventInit));
+};
 
 /**
  * Get the zero-based page index for a node by climbing to its
@@ -2031,7 +2080,9 @@ export function PagedEditor(
   const hiddenEditorViewTimerRef = useRef<number | null>(null);
   const pendingHiddenEditorSelectionRef =
     useRef<PendingHiddenEditorSelection | null>(null);
-  const queuedTextBeforeHiddenEditorRef = useRef("");
+  const queuedInputBeforeHiddenEditorRef = useRef<QueuedHiddenEditorInput[]>(
+    [],
+  );
   const lastLayoutEditorStateRef = useRef<EditorState | null>(null);
   const lastLaidOutPmDocRef = useRef<EditorState["doc"] | null>(null);
   const lastLayoutUsedLoadedFontsRef = useRef(false);
@@ -2099,10 +2150,20 @@ export function PagedEditor(
     hiddenEditorViewTimerRef.current = null;
   }, []);
 
-  const ensureHiddenEditorView = useCallback(() => {
-    clearHiddenEditorViewTimer();
-    setShouldCreateHiddenEditorView(true);
-  }, [clearHiddenEditorViewTimer]);
+  const ensureHiddenEditorView = useCallback(
+    ({ sync = false }: EnsureHiddenEditorViewOptions = {}) => {
+      clearHiddenEditorViewTimer();
+      if (sync) {
+        flushSync(() => {
+          setShouldCreateHiddenEditorView(true);
+        });
+        return;
+      }
+
+      setShouldCreateHiddenEditorView(true);
+    },
+    [clearHiddenEditorViewTimer],
+  );
 
   const scheduleHiddenEditorViewCreation = useCallback(() => {
     if (
@@ -2125,6 +2186,24 @@ export function PagedEditor(
     },
     [ensureHiddenEditorView],
   );
+
+  const queueHiddenEditorTextInput = useCallback((text: string) => {
+    const queuedInput = queuedInputBeforeHiddenEditorRef.current;
+    const lastInput = queuedInput.at(-1);
+    if (lastInput?.type === "text") {
+      lastInput.text += text;
+      return;
+    }
+
+    queuedInput.push({ type: "text", text });
+  }, []);
+
+  const queueHiddenEditorKeyDown = useCallback((event: React.KeyboardEvent) => {
+    queuedInputBeforeHiddenEditorRef.current.push({
+      type: "keydown",
+      eventInit: toDeferredKeyboardEventInit(event),
+    });
+  }, []);
 
   const applyPendingHiddenEditorInput = useCallback((view: EditorView) => {
     const pendingSelection = pendingHiddenEditorSelectionRef.current;
@@ -2160,13 +2239,20 @@ export function PagedEditor(
       }
     }
 
-    const queuedText = queuedTextBeforeHiddenEditorRef.current;
-    if (!queuedText) {
+    const queuedInput = queuedInputBeforeHiddenEditorRef.current;
+    if (queuedInput.length === 0) {
       return;
     }
 
-    queuedTextBeforeHiddenEditorRef.current = "";
-    view.dispatch(view.state.tr.insertText(queuedText));
+    queuedInputBeforeHiddenEditorRef.current = [];
+    for (const input of queuedInput) {
+      if (input.type === "text") {
+        view.dispatch(view.state.tr.insertText(input.text));
+        continue;
+      }
+
+      replayDeferredKeyDown(view, input.eventInit);
+    }
   }, []);
 
   useEffect(
@@ -5160,11 +5246,34 @@ export function PagedEditor(
         return;
       }
 
-      const view = hiddenPMRef.current?.getView();
+      let view = hiddenPMRef.current?.getView();
       if (!view) {
-        ensureHiddenEditorView();
+        ensureHiddenEditorView({ sync: true });
+        view = hiddenPMRef.current?.getView();
+
+        if (view) {
+          applyPendingHiddenEditorInput(view);
+          if (isPlainTextInputEvent(e)) {
+            e.preventDefault();
+            view.dispatch(view.state.tr.insertText(e.key));
+            return;
+          }
+
+          if (isReplayableDeferredKeyDown(e)) {
+            e.preventDefault();
+            replayDeferredKeyDown(view, toDeferredKeyboardEventInit(e));
+            return;
+          }
+        }
+
         if (isPlainTextInputEvent(e)) {
-          queuedTextBeforeHiddenEditorRef.current += e.key;
+          queueHiddenEditorTextInput(e.key);
+          e.preventDefault();
+          return;
+        }
+
+        if (isReplayableDeferredKeyDown(e)) {
+          queueHiddenEditorKeyDown(e);
           e.preventDefault();
         }
         return;
@@ -5226,10 +5335,13 @@ export function PagedEditor(
     },
     [
       copySelectionText,
+      applyPendingHiddenEditorInput,
       ensureHiddenEditorView,
       focusHiddenEditor,
       getScrollContainer,
       onReadOnlyEditAttempt,
+      queueHiddenEditorKeyDown,
+      queueHiddenEditorTextInput,
       readOnly,
     ],
   );

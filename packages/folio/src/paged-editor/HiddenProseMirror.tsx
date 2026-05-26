@@ -18,6 +18,7 @@
 import {
   useRef,
   useEffect,
+  useLayoutEffect,
   useCallback,
   useImperativeHandle,
   useState,
@@ -773,7 +774,7 @@ export function HiddenProseMirror(
     }
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (deferViewCreation) {
       return;
     }
