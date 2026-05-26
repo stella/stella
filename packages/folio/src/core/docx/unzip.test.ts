@@ -139,6 +139,24 @@ describe("unzipDocx security limits", () => {
     expect(content.media.has("word/media/image1.png")).toBe(true);
   });
 
+  test("skips oversized raster media instead of rejecting the document", async () => {
+    const zip = new JSZip();
+    zip.file("[Content_Types].xml", "<Types />");
+    zip.file("word/document.xml", "<w:document />");
+    zip.file("word/media/image1.png", new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+
+    const content = await unzipDocx(
+      await zip.generateAsync({ type: "arraybuffer" }),
+      { maxMediaBytes: 3 },
+    );
+
+    expect(content.media.size).toBe(0);
+    expect(getFileList(content)).toContain("word/media/image1.png");
+    expect(content.warnings).toContain(
+      "Skipped oversized media file: word/media/image1.png; original entry preserved for round-trip.",
+    );
+  });
+
   test("does not expose active or embedded payload entries for preservation", async () => {
     const zip = new JSZip();
     zip.file("[Content_Types].xml", "<Types />");

@@ -160,6 +160,10 @@ export type RawDocxContent = {
 
   // Original buffer for round-trip
   originalBuffer: ArrayBuffer;
+
+  // Non-fatal extraction warnings. The original ZIP remains available for
+  // round-trip preservation when optional payloads are skipped.
+  warnings: string[];
 };
 
 /**
@@ -215,6 +219,7 @@ export async function unzipDocx(
     allXml: new Map(),
     originalZip: zip,
     originalBuffer: loaded.buffer,
+    warnings: [],
   };
 
   let totalUncompressedBytes = 0;
@@ -298,9 +303,19 @@ export async function unzipDocx(
       if (!limits.allowedMediaMimeTypes.has(mimeType)) {
         continue;
       }
-      assertEntrySize(path, declaredSize, limits.maxMediaBytes);
+      if (isEntryTooLarge(declaredSize, limits.maxMediaBytes)) {
+        content.warnings.push(
+          `Skipped oversized media file: ${path}; original entry preserved for round-trip.`,
+        );
+        continue;
+      }
       const binaryContent = await file.async("arraybuffer");
-      assertExtractedSize(path, binaryContent.byteLength, limits.maxMediaBytes);
+      if (binaryContent.byteLength > limits.maxMediaBytes) {
+        content.warnings.push(
+          `Skipped oversized media file: ${path}; original entry preserved for round-trip.`,
+        );
+        continue;
+      }
       if (!isMediaContentAllowed(binaryContent, mimeType)) {
         continue;
       }

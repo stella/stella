@@ -149,6 +149,7 @@ export async function parseDocx(
     const raw = await timeStageAsync("unzip", () =>
       unzipDocx(buffer, unzipLimits),
     );
+    warnings.push(...raw.warnings);
     onProgress("Extracted DOCX", 10);
 
     // ========================================================================
