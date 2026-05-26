@@ -92,7 +92,14 @@ const envNameForAccess = (node: AstNode): string => {
     isProcessEnvRoot(node.object) &&
     isAstNode(node.property)
   ) {
-    return getPropertyName(node.property) ?? "process.env[...]";
+    const propertyName = getPropertyName(node.property);
+    if (propertyName === null) {
+      return "process.env[...]";
+    }
+    if (node.computed === true) {
+      return `process.env[${JSON.stringify(propertyName)}]`;
+    }
+    return `process.env.${propertyName}`;
   }
   return "process.env";
 };

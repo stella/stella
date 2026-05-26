@@ -244,9 +244,13 @@ export default {
         const options = isRecord(context.options?.[0])
           ? context.options[0]
           : {};
+        const configuredMarkers = stringArrayOption(
+          options,
+          "translationMarkers",
+        );
         const translationMarkers =
-          stringArrayOption(options, "translationMarkers").length > 0
-            ? stringArrayOption(options, "translationMarkers")
+          configuredMarkers.length > 0
+            ? configuredMarkers
             : ["useTranslations", "getTranslations", "TranslationKey"];
 
         if (options.requireTranslationUsage === true) {
@@ -271,8 +275,7 @@ export default {
           "allowedTextPatterns",
         );
 
-        const shouldIgnoreText = (rawValue: string): boolean => {
-          const text = normalizeText(rawValue);
+        const shouldIgnoreText = (text: string): boolean => {
           if (text.length <= 1) {
             return true;
           }
