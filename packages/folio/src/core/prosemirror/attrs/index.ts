@@ -245,6 +245,12 @@ export const readParagraphAttrs = (
     "paragraph.attrs.listMarkerFontSize",
     issues,
   );
+  optionalString(
+    attrs,
+    "listMarkerSuffix",
+    "paragraph.attrs.listMarkerSuffix",
+    issues,
+  );
   optionalNumber(
     attrs,
     "listStartOverride",

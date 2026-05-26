@@ -178,11 +178,26 @@ export type {
 // ============================================================================
 
 /**
+ * Document-wide settings parsed from `word/settings.xml`.
+ * Extend as more settings.xml fields enter the layout pipeline.
+ */
+export type DocumentSettings = {
+  /**
+   * `w:defaultTabStop` (§17.6.13) — interval in twips between default
+   * tab stops applied when a paragraph has no custom `w:tabs`. Word
+   * defaults to 720 twips (½ inch) when absent.
+   */
+  defaultTabStop: number;
+};
+
+/**
  * Complete DOCX package structure
  */
 export type DocxPackage = {
   /** Document body */
   document: DocumentBody;
+  /** Document-wide settings (`word/settings.xml`). */
+  settings?: DocumentSettings;
   /** Style definitions */
   styles?: StyleDefinitions;
   /** Theme */

@@ -442,6 +442,9 @@ function paragraphFormattingToAttrs(
   if (paragraph.listRendering?.markerFontSize) {
     attrs.listMarkerFontSize = paragraph.listRendering.markerFontSize;
   }
+  if (paragraph.listRendering?.markerSuffix) {
+    attrs.listMarkerSuffix = paragraph.listRendering.markerSuffix;
+  }
   if (paragraph.listRendering?.levelNumFmts) {
     attrs.listLevelNumFmts = paragraph.listRendering.levelNumFmts;
   }

@@ -341,6 +341,7 @@ const paragraphNodeSpec: NodeSpec = {
     listMarkerHidden: { default: null },
     listMarkerFontFamily: { default: null },
     listMarkerFontSize: { default: null },
+    listMarkerSuffix: { default: null },
     listLevelNumFmts: { default: null },
     listAbstractNumId: { default: null },
     listStartOverride: { default: null },

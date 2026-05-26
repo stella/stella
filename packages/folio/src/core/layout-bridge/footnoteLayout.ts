@@ -40,6 +40,8 @@ export type ConvertFootnoteOptions = {
   styles?: StyleDefinitions | null;
   theme?: Theme | null;
   measureBlocks?: MeasureBlocksFn;
+  /** Document-wide `w:defaultTabStop` in twips — forwarded to toFlowBlocks. */
+  defaultTabStopTwips?: number;
 };
 
 // ============================================================================
@@ -49,26 +51,42 @@ export type ConvertFootnoteOptions = {
 /**
  * Scan FlowBlocks for runs with footnoteRefId set.
  * Returns a list of { footnoteId, pmPos } in document order.
+ *
+ * Recurses into table cells and text-box content so footnote references
+ * nested in tables (incl. tables-within-cells) and text boxes still reach
+ * the page-assignment step. Without this walk, inline footnote markers
+ * render inside the body but never get an entry in the per-page footnote
+ * area.
  */
 export function collectFootnoteRefs(
   blocks: FlowBlock[],
 ): { footnoteId: number; pmPos: number }[] {
   const refs: { footnoteId: number; pmPos: number }[] = [];
 
-  for (const block of blocks) {
-    if (block.kind !== "paragraph") {
-      continue;
-    }
-    for (const run of block.runs) {
-      if (run.kind === "text" && run.footnoteRefId !== undefined) {
-        refs.push({
-          footnoteId: run.footnoteRefId,
-          pmPos: run.pmStart ?? 0,
-        });
+  const walk = (containerBlocks: FlowBlock[]): void => {
+    for (const block of containerBlocks) {
+      if (block.kind === "paragraph") {
+        for (const run of block.runs) {
+          if (run.kind === "text" && run.footnoteRefId !== undefined) {
+            refs.push({
+              footnoteId: run.footnoteRefId,
+              pmPos: run.pmStart ?? 0,
+            });
+          }
+        }
+      } else if (block.kind === "table") {
+        for (const row of block.rows) {
+          for (const cell of row.cells) {
+            walk(cell.blocks);
+          }
+        }
+      } else if (block.kind === "textBox") {
+        walk(block.content);
       }
     }
-  }
+  };
 
+  walk(blocks);
   return refs;
 }
 
@@ -149,6 +167,9 @@ export function convertFootnoteToContent(
   const flowOptions: Parameters<typeof toFlowBlocks>[1] = {};
   if (options.theme !== undefined) {
     flowOptions.theme = options.theme;
+  }
+  if (options.defaultTabStopTwips !== undefined) {
+    flowOptions.defaultTabStopTwips = options.defaultTabStopTwips;
   }
   const blocks = applyFootnotePresentation(
     toFlowBlocks(pmDoc, flowOptions),

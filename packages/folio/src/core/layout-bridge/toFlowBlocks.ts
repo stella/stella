@@ -96,6 +96,13 @@ export type ToFlowBlocksOptions = {
   listAbstractCounters?: Map<number, number[]>;
   /** Shared startOverride state for nested containers. */
   listSeenNumIds?: Set<string>;
+  /**
+   * Document-wide `w:defaultTabStop` (§17.6.13) in twips. Stamped onto
+   * every paragraph block so paragraph-local layout helpers (list marker
+   * tab-stop math) can read it without taking a `Document` reference.
+   * Defaults to the OOXML 720-twip value when absent.
+   */
+  defaultTabStopTwips?: number;
 };
 
 const DEFAULT_FONT = "Calibri";
@@ -1005,6 +1012,7 @@ function convertParagraphAttrs(
   listCounters?: Map<number, number[]>,
   listAbstractCounters?: Map<number, number[]>,
   listSeenNumIds?: Set<string>,
+  defaultTabStopTwips?: number,
 ): ParagraphAttrs {
   const attrs: ParagraphAttrs = {};
 
@@ -1267,6 +1275,12 @@ function convertParagraphAttrs(
   if (pmAttrs.listMarkerFontSize) {
     attrs.listMarkerFontSize = pmAttrs.listMarkerFontSize;
   }
+  if (pmAttrs.listMarkerSuffix) {
+    attrs.listMarkerSuffix = pmAttrs.listMarkerSuffix;
+  }
+  if (defaultTabStopTwips !== undefined) {
+    attrs.defaultTabStopTwips = defaultTabStopTwips;
+  }
 
   // Default font for empty paragraph measurement (from style's rPr / pPr/rPr)
   const dtf = pmAttrs.defaultTextFormatting as
@@ -1330,6 +1344,7 @@ function convertParagraph(
     options.listCounters,
     options.listAbstractCounters,
     options.listSeenNumIds,
+    options.defaultTabStopTwips,
   );
 
   return {

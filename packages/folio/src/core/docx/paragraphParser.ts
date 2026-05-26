@@ -1702,6 +1702,9 @@ export function parseParagraph(
         if (level.rPr?.fontSize) {
           listRendering.markerFontSize = level.rPr.fontSize / 2;
         }
+        if (level.suffix) {
+          listRendering.markerSuffix = level.suffix;
+        }
         paragraph.listRendering = listRendering;
 
         // Apply level's paragraph properties (indentation) as defaults.
@@ -1716,10 +1719,19 @@ export function parseParagraph(
             directInd !== null &&
             (getAttribute(directInd, "w", "left") !== null ||
               getAttribute(directInd, "w", "start") !== null);
+          // ECMA-376 §17.3.1.12: a direct w:ind whose w:firstLine or
+          // w:hanging is "0" is a no-op and must not suppress the numbering
+          // level's hanging slot. Only treat non-zero direct values as
+          // overrides.
+          const directFirstLine = directInd
+            ? parseNumericAttribute(directInd, "w", "firstLine")
+            : undefined;
+          const directHanging = directInd
+            ? parseNumericAttribute(directInd, "w", "hanging")
+            : undefined;
           const hasDirectFirstLineOrHanging =
-            directInd !== null &&
-            (getAttribute(directInd, "w", "firstLine") !== null ||
-              getAttribute(directInd, "w", "hanging") !== null);
+            (directFirstLine !== undefined && directFirstLine !== 0) ||
+            (directHanging !== undefined && directHanging !== 0);
 
           if (!hasDirectLeft && level.pPr.indentLeft !== undefined) {
             paragraph.formatting.indentLeft = level.pPr.indentLeft;

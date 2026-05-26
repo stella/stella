@@ -168,6 +168,12 @@ export type ListRendering = {
   markerFontFamily?: string;
   /** Marker font size from numbering level rPr, in points */
   markerFontSize?: number;
+  /**
+   * `w:suff` (§17.9.25) — what follows the marker before body text.
+   * `tab` (the OOXML default) grows the marker to the next tab stop; `space`
+   * adds one space glyph; `nothing` lets body text butt against the marker.
+   */
+  markerSuffix?: LevelSuffix;
   /** Number format for each level from 0 through this paragraph's level. */
   levelNumFmts?: NumberFormat[];
   /** Abstract numbering definition shared by one or more numIds. */
