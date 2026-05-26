@@ -189,6 +189,32 @@ export const FileTabPanel = ({
       />
     ) : null;
 
+  const downloadButton = (
+    <Tooltip
+      content={t("common.download")}
+      render={
+        <Button
+          aria-label={t("common.download")}
+          onClick={() => {
+            void downloadTabOriginalFile({
+              fieldId: tab.id,
+              fileName: tab.label,
+              workspaceId: tab.workspaceId,
+              onError: (message) => {
+                stellaToast.add({ title: message, type: "error" });
+              },
+            });
+          }}
+          size="xs"
+          variant="ghost"
+        >
+          <DownloadIcon className="size-3.5" />
+        </Button>
+      }
+      side="bottom"
+    />
+  );
+
   // "Expanded" persona: the route already renders the file in
   // its main content (full folio), so the inspector tab drops
   // the file chrome (zoom, file viewer) and
@@ -212,6 +238,7 @@ export const FileTabPanel = ({
         <InspectorTabHeader
           actions={
             <>
+              {downloadButton}
               {desktopOpenButton}
               <Tooltip
                 content={t("workspaces.pdf.backToPeek")}
@@ -427,32 +454,6 @@ export const FileTabPanel = ({
       <Maximize2Icon className="size-3.5" />
       {t("workspaces.pdf.fullView")}
     </Button>
-  );
-
-  const downloadButton = (
-    <Tooltip
-      content={t("common.download")}
-      render={
-        <Button
-          aria-label={t("common.download")}
-          onClick={() => {
-            void downloadTabOriginalFile({
-              fieldId: tab.id,
-              fileName: tab.label,
-              workspaceId: tab.workspaceId,
-              onError: (message) => {
-                stellaToast.add({ title: message, type: "error" });
-              },
-            });
-          }}
-          size="xs"
-          variant="ghost"
-        >
-          <DownloadIcon className="size-3.5" />
-        </Button>
-      }
-      side="bottom"
-    />
   );
 
   const fileActions = (
