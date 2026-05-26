@@ -1187,7 +1187,7 @@
     "metadata": {
       "author": "Autor",
       "documentInfoHeading": "Informace o dokumentu",
-      "matterColumnsHeading": "Sloupce spisu",
+      "matterColumnsHeading": "Další informace",
       "updatedAt": "Aktualizováno",
       "version": "Verze",
       "versionCurrent": "v{version} (aktuální)"
