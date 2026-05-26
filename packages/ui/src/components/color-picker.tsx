@@ -1,13 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, lazy, useState } from "react";
 import type * as React from "react";
 
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 import { CheckIcon, ChevronDownIcon } from "lucide-react";
 
-import { HexColorPicker } from "@stll/ui/components/hex-color-picker";
 import { cn } from "@stll/ui/lib/utils";
+
+const HexColorPicker = lazy(async () => {
+  const m = await import("@stll/ui/components/hex-color-picker");
+  return { default: m.HexColorPicker };
+});
 
 // ---------------------------------------------------------------------------
 // Types
@@ -245,11 +249,20 @@ function ColorPickerContent({
         </button>
       ) : (
         <div className="border-border flex flex-col gap-2 border-t pt-2">
-          <HexColorPicker
-            className="ring-border/30 !h-[140px] !w-full overflow-hidden rounded-lg ring-1"
-            color={pickerHex}
-            onChange={(hex) => handlePickerChange(hex.replace("#", ""))}
-          />
+          <Suspense
+            fallback={
+              <div
+                aria-hidden
+                className="ring-border/30 h-[140px] w-full rounded-lg ring-1"
+              />
+            }
+          >
+            <HexColorPicker
+              className="ring-border/30 !h-[140px] !w-full overflow-hidden rounded-lg ring-1"
+              color={pickerHex}
+              onChange={(hex) => handlePickerChange(hex.replace("#", ""))}
+            />
+          </Suspense>
           <div className="flex items-center gap-1.5">
             <span className="text-muted-foreground text-[11px]">#</span>
             <input
