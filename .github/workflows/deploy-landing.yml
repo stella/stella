@@ -36,6 +36,7 @@ jobs:
           private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: private-workflows
+          permission-actions: write
 
       - name: Dispatch and watch deploy-landing.yml
         env:
