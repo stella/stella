@@ -2636,7 +2636,7 @@ export function PagedEditor(
         const ownerDoc = spanEl.ownerDocument;
         const startChar = Math.max(0, from - pmStart);
         const endChar = Math.min(textNode.length, to - pmStart);
-        if (!(startChar < endChar)) {
+        if (startChar >= endChar) {
           continue;
         }
         const range = ownerDoc.createRange();

@@ -5,6 +5,13 @@ import { getS3, isS3Stale, resolveS3Credentials } from "@/api/lib/s3";
 const jsonResponse = (body: unknown): Response =>
   new Response(JSON.stringify(body), { status: 200 });
 
+const ecsCredentialsResponse = (): Response =>
+  jsonResponse({
+    AccessKeyId: "ecs-access-key",
+    SecretAccessKey: "ecs-secret-key",
+    Token: "ecs-session-token",
+  });
+
 const notFoundResponse = (): Response => new Response(null, { status: 404 });
 
 const requestUrl = (input: string | URL | Request): string => {
@@ -19,6 +26,14 @@ const requestUrl = (input: string | URL | Request): string => {
   return input.url;
 };
 
+const createTrackedEcsCredentialsFetch =
+  (requestedUrls: string[]) =>
+  async (url: string | URL | Request): Promise<Response> => {
+    requestedUrls.push(requestUrl(url));
+
+    return ecsCredentialsResponse();
+  };
+
 describe("resolveS3Credentials", () => {
   test("treats a lazily built fallback client as stale", () => {
     getS3();
@@ -28,17 +43,7 @@ describe("resolveS3Credentials", () => {
 
   test("prefers ECS task credentials over static credentials for AWS S3 endpoints", async () => {
     const requestedUrls: string[] = [];
-    const fetchImpl = async (
-      url: string | URL | Request,
-    ): Promise<Response> => {
-      requestedUrls.push(requestUrl(url));
-
-      return jsonResponse({
-        AccessKeyId: "ecs-access-key",
-        SecretAccessKey: "ecs-secret-key",
-        Token: "ecs-session-token",
-      });
-    };
+    const fetchImpl = createTrackedEcsCredentialsFetch(requestedUrls);
 
     const credentials = await resolveS3Credentials({
       endpoint: "https://s3.eu-central-1.amazonaws.com",
@@ -62,17 +67,7 @@ describe("resolveS3Credentials", () => {
 
   test("prefers static credentials for S3-compatible endpoints in auto mode", async () => {
     const requestedUrls: string[] = [];
-    const fetchImpl = async (
-      url: string | URL | Request,
-    ): Promise<Response> => {
-      requestedUrls.push(requestUrl(url));
-
-      return jsonResponse({
-        AccessKeyId: "ecs-access-key",
-        SecretAccessKey: "ecs-secret-key",
-        Token: "ecs-session-token",
-      });
-    };
+    const fetchImpl = createTrackedEcsCredentialsFetch(requestedUrls);
 
     const credentials = await resolveS3Credentials({
       endpoint: "https://s3.example.com",
@@ -94,12 +89,7 @@ describe("resolveS3Credentials", () => {
   });
 
   test("supports explicit AWS runtime credentials for S3-compatible endpoints", async () => {
-    const fetchImpl = async (): Promise<Response> =>
-      jsonResponse({
-        AccessKeyId: "ecs-access-key",
-        SecretAccessKey: "ecs-secret-key",
-        Token: "ecs-session-token",
-      });
+    const fetchImpl = async (): Promise<Response> => ecsCredentialsResponse();
 
     const credentials = await resolveS3Credentials({
       endpoint: "https://s3.example.com",
