@@ -71,24 +71,11 @@ test("typing in a large document does not remeasure every block during the burst
   await page.evaluate(async () => {
     await document.fonts.ready;
   });
-  await page.waitForTimeout(250);
+  await page.waitForTimeout(650);
 
-  const hiddenHost = await readHiddenEditorHostInfo(page);
-  expect(hiddenHost.wrapperClass).toContain("paged-editor__hidden-pm-wrapper");
-  expect(hiddenHost.wrapperHeight).toBe("1px");
-  expect(hiddenHost.wrapperOverflow).toBe("hidden");
-  expect(hiddenHost.wrapperWidth).toBe("1px");
-  expect(hiddenHost.wrapperContain).toContain("layout");
-  expect(hiddenHost.wrapperContain).toContain("paint");
-  expect(hiddenHost.hostPosition).toBe("absolute");
-  expect(hiddenHost.hostAriaHidden).toBeNull();
-  expect(hiddenHost.pmRootAriaHidden).toBeNull();
-  expect(hiddenHost.pmRootAriaReadonly).toBe("false");
-  expect(hiddenHost.pmRootAutocapitalize).toBe("off");
-  expect(hiddenHost.pmRootAutocorrect).toBe("off");
-  expect(hiddenHost.pmRootRole).toBe("textbox");
-  expect(hiddenHost.pmRootSpellcheck).toBe("false");
-  expect(hiddenHost.pmRootTranslate).toBe("no");
+  await expect(
+    page.locator(".paged-editor__hidden-pm .ProseMirror"),
+  ).toHaveCount(0);
 
   const initialStats = await page.evaluate(
     () => globalThis.__folioLayoutMeasurementStats,
@@ -125,6 +112,23 @@ test("typing in a large document does not remeasure every block during the burst
   await page.keyboard.type(TYPING_TEXT, { delay: 20 });
   await page.waitForTimeout(75);
   const elapsedMs = performance.now() - startedAt;
+
+  const hiddenHost = await readHiddenEditorHostInfo(page);
+  expect(hiddenHost.wrapperClass).toContain("paged-editor__hidden-pm-wrapper");
+  expect(hiddenHost.wrapperHeight).toBe("1px");
+  expect(hiddenHost.wrapperOverflow).toBe("hidden");
+  expect(hiddenHost.wrapperWidth).toBe("1px");
+  expect(hiddenHost.wrapperContain).toContain("layout");
+  expect(hiddenHost.wrapperContain).toContain("paint");
+  expect(hiddenHost.hostPosition).toBe("absolute");
+  expect(hiddenHost.hostAriaHidden).toBeNull();
+  expect(hiddenHost.pmRootAriaHidden).toBeNull();
+  expect(hiddenHost.pmRootAriaReadonly).toBe("false");
+  expect(hiddenHost.pmRootAutocapitalize).toBe("off");
+  expect(hiddenHost.pmRootAutocorrect).toBe("off");
+  expect(hiddenHost.pmRootRole).toBe("textbox");
+  expect(hiddenHost.pmRootSpellcheck).toBe("false");
+  expect(hiddenHost.pmRootTranslate).toBe("no");
 
   const stats = await page.evaluate(
     () => globalThis.__folioLayoutMeasurementStats,

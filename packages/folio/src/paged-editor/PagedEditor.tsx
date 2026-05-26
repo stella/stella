@@ -364,8 +364,6 @@ const TRANSACTION_LAYOUT_DEBOUNCE_MS = 32;
 const TRANSACTION_LAYOUT_MAX_DELAY_MS = 96;
 /** Keep the visual caret hidden briefly while typed content relayouts. */
 const SELECTION_REVEAL_AFTER_INPUT_DELAY = 120;
-/** Defer the hidden EditorView until the first visible layout has painted. */
-const HIDDEN_EDITOR_VIEW_DEFER_MS = 275;
 
 // Stable empty array to avoid re-creating on each render
 const EMPTY_PLUGINS: Plugin[] = [];
@@ -2114,7 +2112,6 @@ export function PagedEditor(
   const precomputedInitialStateRef = useRef<EditorState | null>(null);
   const precomputedInitialDocumentRef = useRef<Document | null>(null);
   const preHiddenInitialLayoutDoneRef = useRef(false);
-  const hiddenEditorViewTimerRef = useRef<number | null>(null);
   const pendingHiddenEditorSelectionRef =
     useRef<PendingHiddenEditorSelection | null>(null);
   const queuedInputBeforeHiddenEditorRef = useRef<QueuedHiddenEditorInput[]>(
@@ -2179,17 +2176,8 @@ export function PagedEditor(
   const isDraggingRef = useRef(false);
   const dragAnchorRef = useRef<number | null>(null);
 
-  const clearHiddenEditorViewTimer = useCallback(() => {
-    if (hiddenEditorViewTimerRef.current === null) {
-      return;
-    }
-    window.clearTimeout(hiddenEditorViewTimerRef.current);
-    hiddenEditorViewTimerRef.current = null;
-  }, []);
-
   const ensureHiddenEditorView = useCallback(
     ({ sync = false }: EnsureHiddenEditorViewOptions = {}) => {
-      clearHiddenEditorViewTimer();
       if (sync) {
         flushSync(() => {
           setShouldCreateHiddenEditorView(true);
@@ -2199,22 +2187,8 @@ export function PagedEditor(
 
       setShouldCreateHiddenEditorView(true);
     },
-    [clearHiddenEditorViewTimer],
+    [],
   );
-
-  const scheduleHiddenEditorViewCreation = useCallback(() => {
-    if (
-      shouldCreateHiddenEditorView ||
-      hiddenEditorViewTimerRef.current !== null
-    ) {
-      return;
-    }
-
-    hiddenEditorViewTimerRef.current = window.setTimeout(() => {
-      hiddenEditorViewTimerRef.current = null;
-      setShouldCreateHiddenEditorView(true);
-    }, HIDDEN_EDITOR_VIEW_DEFER_MS);
-  }, [shouldCreateHiddenEditorView]);
 
   const queueHiddenEditorSelection = useCallback(
     (selection: PendingHiddenEditorSelection) => {
@@ -2291,11 +2265,6 @@ export function PagedEditor(
       replayDeferredKeyDown(view, input.eventInit);
     }
   }, []);
-
-  useEffect(
-    () => () => clearHiddenEditorViewTimer(),
-    [clearHiddenEditorViewTimer],
-  );
 
   useEffect(() => {
     if (collaboration !== undefined) {
@@ -5316,6 +5285,13 @@ export function PagedEditor(
         return;
       }
 
+      if (
+        pendingHiddenEditorSelectionRef.current ||
+        queuedInputBeforeHiddenEditorRef.current.length > 0
+      ) {
+        applyPendingHiddenEditorInput(view);
+      }
+
       // Ensure hidden PM is focused if user types
       if (!hiddenPMRef.current?.isFocused()) {
         focusHiddenEditor();
@@ -5470,7 +5446,6 @@ export function PagedEditor(
         suppressFontReadyUntilRef.current =
           performance.now() + INITIAL_FONT_READY_SUPPRESSION_MS;
       }
-      scheduleHiddenEditorViewCreation();
     };
 
     void waitForInitialLayoutFonts(document, initialState.doc).then(
@@ -5489,7 +5464,6 @@ export function PagedEditor(
     extensionManager,
     externalPlugins,
     runLayoutPipeline,
-    scheduleHiddenEditorViewCreation,
     shouldCreateHiddenEditorView,
     styles,
     updateAnonymizationOverlay,
