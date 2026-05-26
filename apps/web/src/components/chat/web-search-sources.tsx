@@ -1,8 +1,31 @@
+import { useState } from "react";
+
 import { ExternalLinkIcon, GlobeIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { cn } from "@stll/ui/lib/utils";
+
 import type { ChatMessage, ChatPart } from "@/components/chat/chat-ui-tools";
 import { sanitizeHref } from "@/lib/sanitize-href";
+
+const SourceFavicon = ({ hostname }: { hostname: string }) => {
+  const [errored, setErrored] = useState(false);
+  if (errored || !hostname) {
+    return <GlobeIcon className="text-muted-foreground size-3 shrink-0" />;
+  }
+  return (
+    <img
+      alt=""
+      aria-hidden="true"
+      className={cn(
+        "border-border size-3 shrink-0 rounded-full border object-contain",
+      )}
+      loading="lazy"
+      onError={() => setErrored(true)}
+      src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=32`}
+    />
+  );
+};
 
 const WEB_SEARCH_PART_TYPE = "tool-web_search";
 const FETCH_URL_PART_TYPE = "tool-fetch_url";
@@ -133,7 +156,7 @@ export const WebSearchSources = ({ parts }: WebSearchSourcesProps) => {
                     <span className="text-muted-foreground tabular-nums">
                       {index + 1}.
                     </span>
-                    <GlobeIcon className="text-muted-foreground size-3 shrink-0" />
+                    <SourceFavicon hostname={source.source} />
                     <span className="min-w-0 truncate">
                       <span className="font-medium">{source.title}</span>
                       <span className="text-muted-foreground ms-1.5">

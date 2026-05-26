@@ -623,14 +623,24 @@ const FaviconCitationChip = ({
   url: URL;
 }) => {
   const hostname = url.hostname.replace(/^www\./u, "");
-  const label = getPlainText(children) ?? hostname;
+  const inlineLabel = getPlainText(children) ?? hostname;
+  const source = useExternalSourceStore((state) =>
+    state.getSource(url.toString()),
+  );
+  // Tooltip prefers the registered source title (web_search result
+  // title, etc.) over the bare hostname so hover gives the human
+  // name of the page, not just the domain.
+  const tooltipDetail =
+    source?.title && source.title.toLowerCase() !== hostname
+      ? `${source.title} — ${hostname}`
+      : (inlineLabel !== hostname && `${inlineLabel} — ${hostname}`) ||
+        hostname;
   const handleClick = () => {
-    const source = useExternalSourceStore.getState().getSource(url.toString());
     useInspectorStore.getState().openExternal({
       url: url.toString(),
       connectorSlug: source?.connectorSlug,
       iconHref: source?.iconHref,
-      label: source?.title ?? label,
+      label: source?.title ?? inlineLabel,
       provider: source?.provider,
       snippet: source?.snippet,
       sourceToolName: source?.sourceToolName,
@@ -639,17 +649,17 @@ const FaviconCitationChip = ({
   };
   return (
     <button
-      aria-label={`${label} (${hostname})`}
+      aria-label={tooltipDetail}
       className={cn(
         "border-border bg-muted/30 hover:bg-muted/60",
-        "focus-visible:ring-ring/50 align-baseline",
-        "ms-0.5 inline-flex size-4 cursor-pointer items-center",
+        "focus-visible:ring-ring/50",
+        "mx-0.5 inline-flex size-[1em] cursor-pointer items-center",
         "justify-center overflow-hidden rounded-full border",
+        "align-[-0.2em]",
         "focus-visible:ring-2 focus-visible:outline-none",
-        "translate-y-[-1px] [vertical-align:middle]",
       )}
       onClick={handleClick}
-      title={label}
+      title={tooltipDetail}
       type="button"
     >
       <FaviconImage hostname={hostname} />
@@ -667,11 +677,9 @@ const FaviconImage = ({ hostname }: { hostname: string }) => {
     <img
       alt=""
       aria-hidden="true"
-      className="size-3 object-contain"
-      height={12}
+      className="size-[0.85em] object-contain"
       loading="lazy"
       src={src}
-      width={12}
     />
   );
 };
