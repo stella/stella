@@ -24,6 +24,7 @@ import React, {
 } from "react";
 import type { CSSProperties, Ref } from "react";
 
+import type { Mark, Node as PMNode } from "prosemirror-model";
 import { NodeSelection, TextSelection } from "prosemirror-state";
 import type { EditorState, Transaction, Plugin } from "prosemirror-state";
 import type { CellSelection } from "prosemirror-tables";
@@ -124,6 +125,7 @@ import type {
   StyleDefinitions,
   SectionProperties,
   HeaderFooter,
+  TextFormatting,
 } from "../core/types/document";
 import {
   closestHtmlElement,
@@ -503,6 +505,13 @@ const LAYOUT_FONT_DESCRIPTORS = [
   { style: "normal", weight: 700 },
   { style: "italic", weight: 700 },
 ] as const;
+const REGULAR_LAYOUT_FONT_DESCRIPTOR = LAYOUT_FONT_DESCRIPTORS[0];
+
+export type LayoutFontFace = {
+  family: string;
+  style: (typeof LAYOUT_FONT_DESCRIPTORS)[number]["style"];
+  weight: (typeof LAYOUT_FONT_DESCRIPTORS)[number]["weight"];
+};
 
 function waitForInitialLayoutFonts(
   documentModel: Document | null,
@@ -513,14 +522,11 @@ function waitForInitialLayoutFonts(
     return Promise.resolve(true);
   }
 
-  const families = collectInitialLayoutFontFamilies(documentModel, pmDoc);
   const loadChecks: string[] = [];
-  for (const family of families) {
-    for (const descriptor of LAYOUT_FONT_DESCRIPTORS) {
-      loadChecks.push(
-        `${descriptor.style} ${descriptor.weight} 16px "${escapeCssFontFamily(family)}"`,
-      );
-    }
+  for (const face of collectInitialLayoutFontFaces(documentModel, pmDoc)) {
+    loadChecks.push(
+      `${face.style} ${face.weight} 16px "${escapeCssFontFamily(face.family)}"`,
+    );
   }
 
   const loadFonts = Promise.allSettled(
@@ -540,45 +546,159 @@ export function collectInitialLayoutFontFamilies(
   documentModel: Document | null,
   pmDoc: EditorState["doc"],
 ): Set<string> {
-  const families = new Set<string>();
-  addLayoutFontFamily(families, DEFAULT_LAYOUT_FONT_FAMILY);
-
-  for (const family of documentModel?.requiredFonts ?? []) {
-    addLayoutFontFamily(families, family);
-  }
-
-  addLayoutFontFamily(
-    families,
-    documentModel?.package.theme?.fontScheme?.majorFont?.latin,
+  return new Set(
+    collectInitialLayoutFontFaces(documentModel, pmDoc).map(
+      ({ family }) => family,
+    ),
   );
-  addLayoutFontFamily(
-    families,
-    documentModel?.package.theme?.fontScheme?.minorFont?.latin,
-  );
-  addLayoutFontFamily(
-    families,
-    documentModel?.package.styles?.docDefaults?.rPr?.fontFamily,
-  );
-  for (const style of documentModel?.package.styles?.styles ?? []) {
-    addLayoutFontFamily(families, style.rPr?.fontFamily);
-  }
-
-  pmDoc.descendants((node) => {
-    addLayoutFontFamily(families, node.attrs["listMarkerFontFamily"]);
-    for (const mark of node.marks) {
-      if (mark.type.name === "fontFamily") {
-        addLayoutFontFamily(families, expectFontFamilyMarkAttrs(mark));
-      }
-    }
-    return true;
-  });
-
-  return families;
 }
 
-function addLayoutFontFamily(families: Set<string>, value: unknown): void {
+export function collectInitialLayoutFontFaces(
+  documentModel: Document | null,
+  pmDoc: EditorState["doc"],
+): LayoutFontFace[] {
+  const faces = new Map<string, LayoutFontFace>();
+  addLayoutFontFamilyFace(
+    faces,
+    DEFAULT_LAYOUT_FONT_FAMILY,
+    REGULAR_LAYOUT_FONT_DESCRIPTOR,
+  );
+
+  for (const family of documentModel?.requiredFonts ?? []) {
+    addLayoutFontFamilyFace(faces, family, REGULAR_LAYOUT_FONT_DESCRIPTOR);
+  }
+
+  addLayoutFontFamilyFace(
+    faces,
+    documentModel?.package.theme?.fontScheme?.majorFont?.latin,
+    REGULAR_LAYOUT_FONT_DESCRIPTOR,
+  );
+  addLayoutFontFamilyFace(
+    faces,
+    documentModel?.package.theme?.fontScheme?.minorFont?.latin,
+    REGULAR_LAYOUT_FONT_DESCRIPTOR,
+  );
+  addTextFormattingFontFaces(
+    faces,
+    documentModel?.package.styles?.docDefaults?.rPr,
+  );
+  for (const style of documentModel?.package.styles?.styles ?? []) {
+    addTextFormattingFontFaces(faces, style.rPr);
+  }
+
+  collectProseMirrorFontFaces(faces, pmDoc, undefined);
+
+  return Array.from(faces.values());
+}
+
+function addTextFormattingFontFaces(
+  faces: Map<string, LayoutFontFace>,
+  formatting: TextFormatting | undefined,
+): void {
+  addLayoutFontFamilyFace(
+    faces,
+    formatting?.fontFamily,
+    layoutDescriptorFromFormatting(formatting),
+  );
+}
+
+function collectProseMirrorFontFaces(
+  faces: Map<string, LayoutFontFace>,
+  node: PMNode,
+  inheritedTextFormatting: TextFormatting | undefined,
+): void {
+  const paragraphDefaults = readParagraphDefaultTextFormatting(node);
+  const textFormatting = paragraphDefaults ?? inheritedTextFormatting;
+  if (paragraphDefaults) {
+    addTextFormattingFontFaces(faces, paragraphDefaults);
+  }
+
+  if (node.attrs["listMarkerFontFamily"]) {
+    addLayoutFontFamilyFace(
+      faces,
+      node.attrs["listMarkerFontFamily"],
+      REGULAR_LAYOUT_FONT_DESCRIPTOR,
+    );
+  }
+
+  if (node.isText) {
+    const descriptor = layoutDescriptorFromFormattingAndMarks(
+      textFormatting,
+      node.marks,
+    );
+    const markFontFamily = readFontFamilyMarkAttrs(node.marks);
+    addLayoutFontFamilyFace(
+      faces,
+      markFontFamily ??
+        textFormatting?.fontFamily ??
+        DEFAULT_LAYOUT_FONT_FAMILY,
+      descriptor,
+    );
+  }
+
+  // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
+  node.forEach((child) => {
+    collectProseMirrorFontFaces(faces, child, textFormatting);
+  });
+}
+
+function readParagraphDefaultTextFormatting(
+  node: PMNode,
+): TextFormatting | undefined {
+  const value = node.attrs["defaultTextFormatting"];
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  return value as TextFormatting;
+}
+
+function readFontFamilyMarkAttrs(marks: readonly Mark[]): unknown {
+  for (const mark of marks) {
+    if (mark.type.name === "fontFamily") {
+      return expectFontFamilyMarkAttrs(mark);
+    }
+  }
+  return undefined;
+}
+
+function layoutDescriptorFromFormatting(
+  formatting: Pick<TextFormatting, "bold" | "italic"> | undefined,
+): Omit<LayoutFontFace, "family"> {
+  return {
+    style: formatting?.italic ? "italic" : "normal",
+    weight: formatting?.bold ? 700 : 400,
+  };
+}
+
+function layoutDescriptorFromFormattingAndMarks(
+  formatting: Pick<TextFormatting, "bold" | "italic"> | undefined,
+  marks: readonly Mark[],
+): Omit<LayoutFontFace, "family"> {
+  let bold = formatting?.bold === true;
+  let italic = formatting?.italic === true;
+
+  for (const mark of marks) {
+    if (mark.type.name === "bold") {
+      bold = true;
+    }
+    if (mark.type.name === "italic") {
+      italic = true;
+    }
+  }
+
+  return {
+    style: italic ? "italic" : "normal",
+    weight: bold ? 700 : 400,
+  };
+}
+
+function addLayoutFontFamilyFace(
+  faces: Map<string, LayoutFontFace>,
+  value: unknown,
+  descriptor: Omit<LayoutFontFace, "family">,
+): void {
   if (typeof value === "string") {
-    addLayoutFontFamilyName(families, value);
+    addLayoutFontFamilyNameFace(faces, value, descriptor);
     return;
   }
 
@@ -587,21 +707,36 @@ function addLayoutFontFamily(families: Set<string>, value: unknown): void {
   }
 
   const fontFamily = value as { ascii?: unknown; hAnsi?: unknown };
-  addLayoutFontFamily(families, fontFamily.ascii);
-  addLayoutFontFamily(families, fontFamily.hAnsi);
+  addLayoutFontFamilyFace(faces, fontFamily.ascii, descriptor);
+  addLayoutFontFamilyFace(faces, fontFamily.hAnsi, descriptor);
 }
 
-function addLayoutFontFamilyName(families: Set<string>, family: string): void {
+function addLayoutFontFamilyNameFace(
+  faces: Map<string, LayoutFontFace>,
+  family: string,
+  descriptor: Omit<LayoutFontFace, "family">,
+): void {
   const normalized = family.trim();
   if (!normalized || CSS_GENERIC_FONT_FAMILIES.has(normalized)) {
     return;
   }
 
-  families.add(normalized);
+  addLayoutFontFace(faces, normalized, descriptor);
   const mappedFamily = OFFICE_FONT_FAMILY_MAP[normalized];
   if (mappedFamily) {
-    families.add(mappedFamily);
+    addLayoutFontFace(faces, mappedFamily, descriptor);
   }
+}
+
+function addLayoutFontFace(
+  faces: Map<string, LayoutFontFace>,
+  family: string,
+  descriptor: Omit<LayoutFontFace, "family">,
+): void {
+  faces.set(`${family}|${descriptor.style}|${descriptor.weight}`, {
+    family,
+    ...descriptor,
+  });
 }
 
 function escapeCssFontFamily(family: string): string {
