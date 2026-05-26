@@ -500,7 +500,7 @@
     "unsupportedFileType": "Nepodporovaný typ souboru",
     "uploadFailed": "Zpracování souboru selhalo",
     "webSearch": {
-      "answer": "Shrnutí ze zdrojů",
+      "answer": "Shrnutí webového vyhledávání",
       "answerDisclaimer": "Sestaveno z výsledků veřejného webu níže. Ověřte si je proti uvedeným zdrojům.",
       "fetchedFrom": "z {source}",
       "openSource": "Otevřít {source} na nové kartě",

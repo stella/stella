@@ -1,4 +1,7 @@
+import { ChevronRightIcon, GlobeIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { cn } from "@stll/ui/lib/utils";
 
 import type { ChatMessage } from "@/components/chat/chat-ui-tools";
 
@@ -35,21 +38,39 @@ export const WebSearchSources = ({ parts }: WebSearchSourcesProps) => {
     return null;
   }
   return (
-    <div className="bg-muted/30 mt-3 space-y-1 rounded-md border p-2.5">
-      <div className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
-        {t("chat.webSearch.answer")}
-      </div>
-      {answers.map((answer, index) => (
-        <p
-          className="text-foreground text-sm leading-relaxed whitespace-pre-line"
-          key={`${index}-${answer.slice(0, 16)}`}
-        >
-          {answer}
+    <details className="bg-muted/30 group/web-summary mt-3 rounded-md border">
+      <summary
+        className={cn(
+          "flex cursor-pointer list-none items-center gap-1.5",
+          "px-2.5 py-1.5 text-xs",
+          "[&::-webkit-details-marker]:hidden",
+          "hover:bg-muted/40 rounded-md transition-colors",
+        )}
+      >
+        <ChevronRightIcon
+          className={cn(
+            "text-muted-foreground size-3.5 shrink-0 transition-transform",
+            "group-open/web-summary:rotate-90",
+          )}
+        />
+        <GlobeIcon className="text-muted-foreground size-3.5 shrink-0" />
+        <span className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+          {t("chat.webSearch.answer")}
+        </span>
+      </summary>
+      <div className="space-y-1 px-2.5 pb-2.5">
+        {answers.map((answer, index) => (
+          <p
+            className="text-foreground text-sm leading-relaxed whitespace-pre-line"
+            key={`${index}-${answer.slice(0, 16)}`}
+          >
+            {answer}
+          </p>
+        ))}
+        <p className="text-muted-foreground text-[11px] italic">
+          {t("chat.webSearch.answerDisclaimer")}
         </p>
-      ))}
-      <p className="text-muted-foreground text-[11px] italic">
-        {t("chat.webSearch.answerDisclaimer")}
-      </p>
-    </div>
+      </div>
+    </details>
   );
 };

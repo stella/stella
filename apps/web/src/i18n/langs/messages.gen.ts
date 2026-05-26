@@ -503,7 +503,7 @@ type Messages = {
     "unsupportedFileType": "Unsupported file type";
     "uploadFailed": "Failed to process file";
     "webSearch": {
-      "answer": "Summary from sources";
+      "answer": "Web search summary";
       "answerDisclaimer": "Synthesized from public web results below. Verify against the linked sources.";
       "fetchedFrom": "from {source}";
       "openSource": "Open {source} in a new tab";
