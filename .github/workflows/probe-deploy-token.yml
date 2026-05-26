@@ -8,6 +8,9 @@ name: Probe deploy token scopes
 
 on:
   workflow_dispatch:
+  push:
+    branches: [fix/deploy-token-contents-read]
+    paths: [.github/workflows/probe-deploy-token.yml]
 
 permissions:
   contents: read
