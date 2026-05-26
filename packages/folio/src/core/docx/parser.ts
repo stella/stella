@@ -179,7 +179,7 @@ export async function parseDocx(
     timeStage("styles", () => {
       if (raw.stylesXml) {
         styles = parseStyles(raw.stylesXml, theme);
-        styleDefinitions = parseStyleDefinitions(raw.stylesXml, theme);
+        styleDefinitions = parseStyleDefinitions(raw.stylesXml, theme, styles);
       }
     });
     onProgress("Parsed styles", 30);

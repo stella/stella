@@ -1645,6 +1645,7 @@ export function parseStyles(stylesXml: string, theme: Theme | null): StyleMap {
 export function parseStyleDefinitions(
   stylesXml: string,
   theme: Theme | null,
+  resolvedStyles?: StyleMap,
 ): StyleDefinitions {
   const result: StyleDefinitions = {
     styles: [],
@@ -1691,7 +1692,7 @@ export function parseStyleDefinitions(
     }
 
     // Parse styles with full inheritance resolution
-    const styleMap = parseStyles(stylesXml, theme);
+    const styleMap = resolvedStyles ?? parseStyles(stylesXml, theme);
     result.styles = Array.from(styleMap.values());
   } catch {
     // Malformed styles return the partial definitions parsed so far.
