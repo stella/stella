@@ -17,7 +17,18 @@ export type LayoutPhase =
 
 export type HiddenEditorStateReason = "external-document" | "mount";
 
+export type HiddenEditorPhase =
+  | "editor-state"
+  | "editor-view"
+  | "to-prose-doc"
+  | "update-state";
+
 export type LayoutInstrumentation = {
+  onHiddenEditorPhase?: (event: {
+    durationMs: number;
+    phase: HiddenEditorPhase;
+    reason: HiddenEditorStateReason;
+  }) => void;
   onHiddenEditorStateCreate?: (event: {
     reason: HiddenEditorStateReason;
   }) => void;
@@ -78,6 +89,18 @@ export function recordHiddenEditorStateCreate(
   reason: HiddenEditorStateReason,
 ): void {
   globalThis.__folioLayoutInstrumentation?.onHiddenEditorStateCreate?.({
+    reason,
+  });
+}
+
+export function recordHiddenEditorPhase(
+  reason: HiddenEditorStateReason,
+  phase: HiddenEditorPhase,
+  durationMs: number,
+): void {
+  globalThis.__folioLayoutInstrumentation?.onHiddenEditorPhase?.({
+    durationMs,
+    phase,
     reason,
   });
 }

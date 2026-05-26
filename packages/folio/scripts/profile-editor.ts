@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import process from "node:process";
 
 import type {
+  HiddenEditorPhase,
   HiddenEditorStateReason,
   LayoutInstrumentation,
   LayoutPhase,
@@ -24,6 +25,7 @@ type PerfStats = {
   measureText: CounterBucket;
   getBoundingClientRect: CounterBucket;
   createElement: CounterBucket;
+  hiddenEditorPhases: Record<HiddenEditorPhase, CounterBucket>;
   hiddenStateCreations: Record<HiddenEditorStateReason, number>;
   measureBlockCalls: number;
   layoutCompletions: number;
@@ -82,6 +84,7 @@ declare global {
         layoutPhases: Record<LayoutPhase, CounterBucket>;
         layoutReasons: Record<LayoutRunReason, number>;
         hiddenStateCreations: Record<HiddenEditorStateReason, number>;
+        hiddenEditorPhases: Record<HiddenEditorPhase, CounterBucket>;
         measureBlockCalls: number;
       }
     | undefined;
@@ -352,6 +355,12 @@ async function readStats(page: Page): Promise<PerfStats> {
         totalMs: roundInBrowser(perf.createElement.totalMs),
       },
       hiddenStateCreations: perf.hiddenStateCreations,
+      hiddenEditorPhases: {
+        "editor-state": roundBucket(perf.hiddenEditorPhases["editor-state"]),
+        "editor-view": roundBucket(perf.hiddenEditorPhases["editor-view"]),
+        "to-prose-doc": roundBucket(perf.hiddenEditorPhases["to-prose-doc"]),
+        "update-state": roundBucket(perf.hiddenEditorPhases["update-state"]),
+      },
       measureBlockCalls: perf.measureBlockCalls,
       layoutCompletions: perf.layoutCompletions,
       layoutErrors: perf.layoutErrors,
@@ -406,6 +415,15 @@ async function installCounters(context: BrowserContext): Promise<void> {
       "measure-blocks": { count: 0, totalMs: 0 },
       "render-pages": { count: 0, totalMs: 0 },
     });
+    const makeHiddenEditorPhaseCounters = (): Record<
+      HiddenEditorPhase,
+      CounterBucket
+    > => ({
+      "editor-state": { count: 0, totalMs: 0 },
+      "editor-view": { count: 0, totalMs: 0 },
+      "to-prose-doc": { count: 0, totalMs: 0 },
+      "update-state": { count: 0, totalMs: 0 },
+    });
     const makeHiddenStateCreationCounters = (): Record<
       HiddenEditorStateReason,
       number
@@ -418,6 +436,7 @@ async function installCounters(context: BrowserContext): Promise<void> {
       createElement: { count: 0, totalMs: 0 },
       elements: 0,
       getBoundingClientRect: { count: 0, totalMs: 0 },
+      hiddenEditorPhases: makeHiddenEditorPhaseCounters(),
       hiddenStateCreations: makeHiddenStateCreationCounters(),
       hiddenPmElements: 0,
       layoutCompletions: 0,
@@ -447,6 +466,7 @@ async function installCounters(context: BrowserContext): Promise<void> {
         layoutErrors: [],
         layoutPhases: makeLayoutPhaseCounters(),
         layoutReasons: makeCounters().layoutReasons,
+        hiddenEditorPhases: makeHiddenEditorPhaseCounters(),
         hiddenStateCreations: makeHiddenStateCreationCounters(),
         measureBlockCalls: 0,
       };
@@ -457,10 +477,25 @@ async function installCounters(context: BrowserContext): Promise<void> {
       layoutErrors: [],
       layoutPhases: makeLayoutPhaseCounters(),
       layoutReasons: makeCounters().layoutReasons,
+      hiddenEditorPhases: makeHiddenEditorPhaseCounters(),
       hiddenStateCreations: makeHiddenStateCreationCounters(),
       measureBlockCalls: 0,
     };
     globalThis.__folioLayoutInstrumentation = {
+      onHiddenEditorPhase(event) {
+        const stats = globalThis.__folioLayoutMeasurementStats;
+        if (stats) {
+          const bucket = stats.hiddenEditorPhases[event.phase];
+          bucket.count += 1;
+          bucket.totalMs += event.durationMs;
+        }
+        const perf = globalThis.__folioPerfCounters;
+        if (perf) {
+          const bucket = perf.hiddenEditorPhases[event.phase];
+          bucket.count += 1;
+          bucket.totalMs += event.durationMs;
+        }
+      },
       onHiddenEditorStateCreate(event) {
         const stats = globalThis.__folioLayoutMeasurementStats;
         if (stats) {
@@ -621,6 +656,7 @@ function printSummary(results: PerfResult[]): void {
       rendered: result.stats.renderedPages,
       phases: formatLayoutPhases(result.stats.layoutPhases),
       hiddenStates: JSON.stringify(result.stats.hiddenStateCreations),
+      hiddenPhases: formatBuckets(result.stats.hiddenEditorPhases),
       measureBlocks: result.stats.measureBlockCalls,
       hiddenEls: result.stats.hiddenPmElements,
       visibleEls: result.stats.visiblePageElements,
@@ -634,6 +670,12 @@ function printSummary(results: PerfResult[]): void {
 
 function formatLayoutPhases(
   phases: Record<LayoutPhase, CounterBucket>,
+): string {
+  return formatBuckets(phases);
+}
+
+function formatBuckets<TPhase extends string>(
+  phases: Record<TPhase, CounterBucket>,
 ): string {
   return JSON.stringify(
     Object.fromEntries(

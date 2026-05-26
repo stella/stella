@@ -45,6 +45,7 @@ import { schema } from "../core/prosemirror/schema";
 import type { Document, Theme, StyleDefinitions } from "../core/types/document";
 import { suppressHiddenEditorScrollToSelection } from "./hiddenEditorScroll";
 import {
+  recordHiddenEditorPhase,
   recordHiddenEditorStateCreate,
   type HiddenEditorStateReason,
 } from "./layoutInstrumentation";
@@ -340,10 +341,16 @@ function createInitialState(
   const activeSchema = manager?.getSchema() ?? schema;
   let localDoc = createEmptyDoc();
   if (document) {
+    const startedAt = performance.now();
     localDoc =
       styles === undefined || styles === null
         ? toProseDoc(document)
         : toProseDoc(document, { styles });
+    recordHiddenEditorPhase(
+      reason,
+      "to-prose-doc",
+      performance.now() - startedAt,
+    );
   }
 
   if (collaboration) {
@@ -357,11 +364,18 @@ function createInitialState(
       activeSchema,
     );
 
-    return EditorState.create({
+    const startedAt = performance.now();
+    const state = EditorState.create({
       doc,
       schema: activeSchema,
       plugins: [...externalPlugins, ...(manager?.getPlugins() ?? [])],
     });
+    recordHiddenEditorPhase(
+      reason,
+      "editor-state",
+      performance.now() - startedAt,
+    );
+    return state;
   }
 
   // External plugins go first so they can intercept before extension keymaps
@@ -371,11 +385,18 @@ function createInitialState(
     ...(manager?.getPlugins() ?? []),
   ];
 
-  return EditorState.create({
+  const startedAt = performance.now();
+  const state = EditorState.create({
     doc: localDoc,
     schema: activeSchema,
     plugins,
   });
+  recordHiddenEditorPhase(
+    reason,
+    "editor-state",
+    performance.now() - startedAt,
+  );
+  return state;
 }
 
 /**
@@ -577,7 +598,13 @@ export function HiddenProseMirror(
       },
     };
 
+    const viewStartedAt = performance.now();
     viewRef.current = new EditorView(hostRef.current, editorProps);
+    recordHiddenEditorPhase(
+      "mount",
+      "editor-view",
+      performance.now() - viewStartedAt,
+    );
     syncHiddenEditorAccessibility(viewRef.current, readOnlyRef.current);
     isInitializedRef.current = true;
     lastDocumentIdRef.current = getDocumentIdentity(document);
@@ -686,7 +713,13 @@ export function HiddenProseMirror(
       collaboration,
       "external-document",
     );
+    const updateStartedAt = performance.now();
     viewRef.current.updateState(newState);
+    recordHiddenEditorPhase(
+      "external-document",
+      "update-state",
+      performance.now() - updateStartedAt,
+    );
     syncHiddenEditorAccessibility(viewRef.current, readOnlyRef.current);
 
     // Use ref to avoid infinite loop when callback is unstable
