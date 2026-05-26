@@ -59,8 +59,6 @@ import {
   applyFolioAIEditOperations,
   createFolioAIEditSnapshot,
 } from "../core/ai-edits";
-import { repackDocx } from "../core/docx/rezip";
-import { attemptSelectiveSave } from "../core/docx/selectiveSave";
 // ProseMirror editor
 import {
   TextSelection,
@@ -245,6 +243,16 @@ const TextContextMenu = lazy(() =>
     default: m.TextContextMenu,
   })),
 );
+
+const loadAttemptSelectiveSave = async () => {
+  const { attemptSelectiveSave } = await import("../core/docx/selectiveSave");
+  return attemptSelectiveSave;
+};
+
+const loadRepackDocx = async () => {
+  const { repackDocx } = await import("../core/docx/rezip");
+  return repackDocx;
+};
 
 // Toast stub — host app provides the real toast system.
 // Uses a temporary DOM banner so the user sees feedback even without
@@ -2436,6 +2444,7 @@ export function DocxEditor({
 
         if (useSelective && view && originalBufferRef.current) {
           const editorState = view.state;
+          const attemptSelectiveSave = await loadAttemptSelectiveSave();
           buffer = await attemptSelectiveSave(doc, originalBufferRef.current, {
             changedParaIds: getChangedParagraphIds(editorState),
             structuralChange: hasStructuralChanges(editorState),
@@ -2444,6 +2453,7 @@ export function DocxEditor({
         }
 
         if (!buffer) {
+          const repackDocx = await loadRepackDocx();
           buffer = await repackDocx(doc);
         }
 
