@@ -39,11 +39,13 @@ jobs:
           private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
+          permission-contents: write
 
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: true # zizmor: ignore[artipacked] release tag push requires persisted App token
 
       - name: Read and validate VERSION
         id: version
@@ -66,7 +68,9 @@ jobs:
           echo "value=$version" >> "$GITHUB_OUTPUT"
 
       - name: Require release changelog file
-        run: bash scripts/check-release-changelog.sh --version "${{ steps.version.outputs.value }}"
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: bash scripts/check-release-changelog.sh --version "$VERSION"
 
       - name: Skip if tag already exists
         env:
@@ -77,7 +81,7 @@ jobs:
           # /git/refs/{ref} does prefix matching: a check for
           # `v0.1.0` would also match `v0.1.0-rc.1` and skip the
           # real tag push.
-          if gh api "repos/${{ github.repository }}/git/ref/tags/$TAG" >/dev/null 2>&1; then
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists; nothing to do."
             echo "skip=true" >> "$GITHUB_ENV"
           fi

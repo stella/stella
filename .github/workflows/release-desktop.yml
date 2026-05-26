@@ -12,7 +12,7 @@ name: Release Desktop App
 # Connect API key for notarization.
 
 on:
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers] release tag is revalidated before signing jobs receive secrets
     workflows: ["Release Artifacts"]
     types: [completed]
   workflow_dispatch:
@@ -73,6 +73,7 @@ jobs:
           fetch-depth: 0
           sparse-checkout: scripts
           sparse-checkout-cone-mode: false
+          persist-credentials: false
 
       - name: Resolve release ref
         id: ref
@@ -174,6 +175,7 @@ jobs:
           # `steps.ref.outputs.value` for filenames/release lookups.
           ref: ${{ steps.ref.outputs.sha }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Decide whether desktop changed since previous tag
         id: diff
@@ -267,6 +269,7 @@ jobs:
           # Pinned to the SHA resolved by the resolve job; never to
           # the bare tag name. See resolve job for rationale.
           ref: ${{ needs.resolve.outputs.release_sha }}
+          persist-credentials: false
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -358,9 +361,10 @@ jobs:
       # ships only newer Windows SDKs. trusted-signing-cli falls
       # back to a hard-coded SDK path that no longer exists on the
       # image, exiting silently before any signing happens. Resolve
-      # signtool.exe at runtime and pin SIGNTOOL_PATH for the rest
-      # of the job. Per tauri-apps/tauri#13991.
+      # signtool.exe at runtime and pass SIGNTOOL_PATH to the build.
+      # Per tauri-apps/tauri#13991.
       - name: Locate signtool.exe (Windows only)
+        id: signtool
         if: matrix.os == 'windows'
         shell: pwsh
         run: |
@@ -368,8 +372,14 @@ jobs:
                 Sort-Object Name -Descending |
                 Select-Object -First 1
           if (-not $st) { throw "signtool.exe not found under Windows Kits 10 bin" }
-          Write-Host "Using $($st.FullName)"
-          "SIGNTOOL_PATH=$($st.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+          $path = $st.FullName
+          $pattern = '^C:\\Program Files \(x86\)\\Windows Kits\\10\\bin\\10\.\d+\.\d+\.\d+\\x64\\signtool\.exe$'
+          if ($path -notmatch $pattern) { throw "Unexpected signtool.exe path: $path" }
+          if ($path.Contains("`r") -or $path.Contains("`n")) { throw "Unexpected newline in signtool.exe path" }
+
+          Write-Host "Using $path"
+          "path=$path" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       # Tauri spawns bundle.windows.signCommand directly via
       # Command::new (no shell), so %VAR%-style env interpolation
@@ -412,6 +422,7 @@ jobs:
           AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
           AZURE_CODE_SIGNING_ACCOUNT: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
           AZURE_CERT_PROFILE: ${{ secrets.AZURE_CERT_PROFILE }}
+          SIGNTOOL_PATH: ${{ steps.signtool.outputs.path }}
           # SPA origins the shipped distribution build trusts at runtime.
           # Read at compile time by config.rs via option_env!(); builds
           # without this variable default to loopback-only.
@@ -593,6 +604,7 @@ jobs:
           # Pinned to the SHA resolved by the resolve job; never to
           # the bare tag name. See resolve job for rationale.
           ref: ${{ needs.resolve.outputs.release_sha }}
+          persist-credentials: false
 
       - name: Build and upload latest.json
         env:

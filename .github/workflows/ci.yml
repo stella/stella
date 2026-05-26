@@ -43,13 +43,14 @@ jobs:
         env:
           HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           BASE_REPO: ${{ github.repository }}
+          HAS_RUN_CI_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'run-ci') }}
         run: |
           # Same-repo PRs are trusted: the author has write access
           # to push branches. Fork PRs need a maintainer to add
           # the "run-ci" label after reviewing the code.
           if [[ "$HEAD_REPO" == "$BASE_REPO" ]]; then
             echo "trusted=true" >> "$GITHUB_OUTPUT"
-          elif [[ '${{ contains(github.event.pull_request.labels.*.name, 'run-ci') }}' == 'true' ]]; then
+          elif [[ "$HAS_RUN_CI_LABEL" == "true" ]]; then
             echo "trusted=true" >> "$GITHUB_OUTPUT"
           else
             echo "trusted=false" >> "$GITHUB_OUTPUT"
@@ -71,16 +72,20 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Check changed file scope
         id: changed-files
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             echo "package_checks_required=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          base_ref="origin/${{ github.base_ref || 'main' }}"
+          base_ref="origin/$BASE_REF"
           mapfile -t changed_files < <(git diff --name-only "$base_ref"...HEAD)
 
           if (( ${#changed_files[@]} == 0 )); then
@@ -149,12 +154,15 @@ jobs:
       - name: Compute affected flag
         if: steps.changed-files.outputs.package_checks_required == 'true'
         id: affected
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             echo "flag=" >> "$GITHUB_OUTPUT"
           else
             echo "flag=--affected" >> "$GITHUB_OUTPUT"
-            echo "TURBO_SCM_BASE=origin/${{ github.base_ref || 'main' }}" >> "$GITHUB_ENV"
+            echo "TURBO_SCM_BASE=origin/$BASE_REF" >> "$GITHUB_ENV"
           fi
 
       - name: Check i18n sync
@@ -163,11 +171,18 @@ jobs:
 
       - name: Release changelog guard
         if: github.event_name == 'pull_request'
-        run: bash scripts/check-release-changelog.sh --base "origin/${{ github.base_ref || 'main' }}"
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: bash scripts/check-release-changelog.sh --base "origin/$BASE_REF"
 
       - name: Lint
         if: steps.changed-files.outputs.package_checks_required == 'true'
-        run: bun run lint -- ${{ steps.affected.outputs.flag }}
+        env:
+          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
+        run: |
+          args=()
+          [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
+          bun run lint -- "${args[@]}"
 
       - name: Format
         if: steps.changed-files.outputs.package_checks_required == 'true'
@@ -175,7 +190,12 @@ jobs:
         # contains `-- --check`, so appending `--affected` via
         # `bun run` would land it after turbo's `--` and forward it
         # to oxfmt instead of filtering packages.
-        run: bun --bun turbo run format ${{ steps.affected.outputs.flag }} -- --check
+        env:
+          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
+        run: |
+          args=()
+          [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
+          bun --bun turbo run format "${args[@]}" -- --check
 
       - name: Rust format
         if: steps.changed-files.outputs.package_checks_required == 'true'
@@ -183,11 +203,21 @@ jobs:
 
       - name: Typecheck
         if: steps.changed-files.outputs.package_checks_required == 'true'
-        run: bun run typecheck -- ${{ steps.affected.outputs.flag }}
+        env:
+          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
+        run: |
+          args=()
+          [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
+          bun run typecheck -- "${args[@]}"
 
       - name: Test
         if: steps.changed-files.outputs.package_checks_required == 'true'
-        run: bun run test -- --concurrency=2 ${{ steps.affected.outputs.flag }}
+        env:
+          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
+        run: |
+          args=()
+          [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
+          bun run test -- --concurrency=2 "${args[@]}"
 
       # Self-test the bridge-version guard so a regression in the
       # script itself is caught immediately, not on the next desktop
@@ -232,15 +262,19 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Check whether web-affecting paths changed
         id: changed
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          base_ref="origin/${{ github.base_ref || 'main' }}"
+          base_ref="origin/$BASE_REF"
           mapfile -t changed_files < <(git diff --name-only "$base_ref"...HEAD)
           run=false
           for file in "${changed_files[@]}"; do
@@ -302,15 +336,19 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Check whether landing-affecting paths changed
         id: changed
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          base_ref="origin/${{ github.base_ref || 'main' }}"
+          base_ref="origin/$BASE_REF"
           mapfile -t changed_files < <(git diff --name-only "$base_ref"...HEAD)
           run=false
           for file in "${changed_files[@]}"; do
@@ -363,14 +401,14 @@ jobs:
       contents: read
     steps:
       - name: Evaluate CI outcome
+        env:
+          CI_RESULT: ${{ needs.ci-checks.result }}
+          EVENT: ${{ github.event_name }}
+          LANDING_RESULT: ${{ needs.landing-build.result }}
+          TRUSTED: ${{ needs.trust-check.outputs.trusted }}
+          TRUST_RESULT: ${{ needs.trust-check.result }}
+          WEB_RESULT: ${{ needs.web-build.result }}
         run: |
-          TRUSTED="${{ needs.trust-check.outputs.trusted }}"
-          CI_RESULT="${{ needs.ci-checks.result }}"
-          WEB_RESULT="${{ needs.web-build.result }}"
-          LANDING_RESULT="${{ needs.landing-build.result }}"
-          TRUST_RESULT="${{ needs.trust-check.result }}"
-          EVENT="${{ github.event_name }}"
-
           # When the trust-check job was skipped (draft PR or
           # irrelevant label event), all downstream jobs are also
           # skipped. This is expected and should not block the PR.
