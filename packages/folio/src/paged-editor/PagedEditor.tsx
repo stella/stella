@@ -102,9 +102,19 @@ import type {
 } from "../core/layout-painter/renderPage";
 // Table commands (for quick-action insert buttons)
 import { addRowBelow, addColumnRight } from "../core/prosemirror";
+import {
+  expectImageAttrs,
+  expectTableAttrs,
+  expectTableCellAttrs,
+  mergeImageAttrs,
+  mergeTableAttrs,
+  mergeTableCellAttrs,
+  mergeTableRowAttrs,
+} from "../core/prosemirror/attrs";
 import type { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
 import { anonymizationDecorationsKey } from "../core/prosemirror/plugins/anonymizationDecorations";
 import type { AnonymizationMatch } from "../core/prosemirror/plugins/anonymizationDecorations";
+import type { ImagePositionAttrs } from "../core/prosemirror/schema/nodes";
 import type { Footnote } from "../core/types/content";
 // Types
 import type {
@@ -3597,15 +3607,20 @@ export function PagedEditor(
           if (node.type.name === "table") {
             const tablePos = $pos.before(d);
             const tr = view.state.tr;
-            const widths = [...(node.attrs["columnWidths"] as number[])];
+            const tableAttrs = expectTableAttrs(node);
+            if (!tableAttrs.columnWidths) {
+              break;
+            }
+            const widths = [...tableAttrs.columnWidths];
             widths[colIdx] = newLeft;
             widths[colIdx + 1] = newRight;
 
             // Update table columnWidths attr
-            tr.setNodeMarkup(tablePos, undefined, {
-              ...node.attrs,
-              columnWidths: widths,
-            });
+            tr.setNodeMarkup(
+              tablePos,
+              undefined,
+              mergeTableAttrs(node, { columnWidths: widths }),
+            );
 
             // Update cell width attrs in each row
             let rowOffset = tablePos + 1;
@@ -3615,15 +3630,19 @@ export function PagedEditor(
               let cellColIdx = 0;
               // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node API
               row.forEach((cell) => {
-                const colspan = (cell.attrs["colspan"] as number) || 1;
+                const cellAttrs = expectTableCellAttrs(cell);
+                const colspan = cellAttrs.colspan || 1;
                 if (cellColIdx === colIdx || cellColIdx === colIdx + 1) {
                   const newWidth = cellColIdx === colIdx ? newLeft : newRight;
-                  tr.setNodeMarkup(tr.mapping.map(cellOffset), undefined, {
-                    ...cell.attrs,
-                    width: newWidth,
-                    widthType: "dxa",
-                    colwidth: null,
-                  });
+                  tr.setNodeMarkup(
+                    tr.mapping.map(cellOffset),
+                    undefined,
+                    mergeTableCellAttrs(cell, {
+                      width: newWidth,
+                      widthType: "dxa",
+                      colwidth: null,
+                    }),
+                  );
                 }
                 cellOffset += cell.nodeSize;
                 cellColIdx += colspan;
@@ -3666,11 +3685,14 @@ export function PagedEditor(
             // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node API
             node.forEach((row) => {
               if (idx === rowIdx) {
-                tr.setNodeMarkup(tr.mapping.map(rowOffset), undefined, {
-                  ...row.attrs,
-                  height: newHeight,
-                  heightRule: "atLeast",
-                });
+                tr.setNodeMarkup(
+                  tr.mapping.map(rowOffset),
+                  undefined,
+                  mergeTableRowAttrs(row, {
+                    height: newHeight,
+                    heightRule: "atLeast",
+                  }),
+                );
               }
               rowOffset += row.nodeSize;
               idx++;
@@ -3706,13 +3728,18 @@ export function PagedEditor(
             const tr = view.state.tr;
 
             // Update columnWidths — only change last column
-            const widths = [...(node.attrs["columnWidths"] as number[])];
+            const tableAttrs = expectTableAttrs(node);
+            if (!tableAttrs.columnWidths) {
+              break;
+            }
+            const widths = [...tableAttrs.columnWidths];
             widths[colIdx] = newWidth;
 
-            tr.setNodeMarkup(tablePos, undefined, {
-              ...node.attrs,
-              columnWidths: widths,
-            });
+            tr.setNodeMarkup(
+              tablePos,
+              undefined,
+              mergeTableAttrs(node, { columnWidths: widths }),
+            );
 
             // Update cell width attrs in the last column of each row
             let rowOffset = tablePos + 1;
@@ -3722,14 +3749,18 @@ export function PagedEditor(
               let cellColIdx = 0;
               // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node API
               row.forEach((cell) => {
-                const colspan = (cell.attrs["colspan"] as number) || 1;
+                const cellAttrs = expectTableCellAttrs(cell);
+                const colspan = cellAttrs.colspan || 1;
                 if (cellColIdx === colIdx) {
-                  tr.setNodeMarkup(tr.mapping.map(cellOffset), undefined, {
-                    ...cell.attrs,
-                    width: newWidth,
-                    widthType: "dxa",
-                    colwidth: null,
-                  });
+                  tr.setNodeMarkup(
+                    tr.mapping.map(cellOffset),
+                    undefined,
+                    mergeTableCellAttrs(cell, {
+                      width: newWidth,
+                      widthType: "dxa",
+                      colwidth: null,
+                    }),
+                  );
                 }
                 cellOffset += cell.nodeSize;
                 cellColIdx += colspan;
@@ -4227,11 +4258,11 @@ export function PagedEditor(
           return;
         }
 
-        const tr = view.state.tr.setNodeMarkup(pmPos, undefined, {
-          ...node.attrs,
-          width: newWidth,
-          height: newHeight,
-        });
+        const tr = view.state.tr.setNodeMarkup(
+          pmPos,
+          undefined,
+          mergeImageAttrs(node, { width: newWidth, height: newHeight }),
+        );
         view.dispatch(tr);
 
         // Re-select the image after resize
@@ -4274,12 +4305,12 @@ export function PagedEditor(
           return;
         }
 
+        const attrs = expectImageAttrs(node);
         const isFloating =
-          node.attrs["displayMode"] === "float" ||
-          (node.attrs["wrapType"] &&
-            ["square", "tight", "through"].includes(
-              node.attrs["wrapType"] as string,
-            ));
+          attrs.displayMode === "float" ||
+          attrs.wrapType === "square" ||
+          attrs.wrapType === "tight" ||
+          attrs.wrapType === "through";
 
         if (isFloating) {
           // For floating images: update position attributes so the image
@@ -4319,15 +4350,16 @@ export function PagedEditor(
           const hOffsetEmu = Math.round(dropX * PIXELS_TO_EMU);
           const vOffsetEmu = Math.round(dropY * PIXELS_TO_EMU);
 
-          const newPosition = {
+          const newPosition: ImagePositionAttrs = {
             horizontal: { posOffset: hOffsetEmu, relativeTo: "margin" },
             vertical: { posOffset: vOffsetEmu, relativeTo: "margin" },
           };
 
-          const tr = view.state.tr.setNodeMarkup(pmPos, undefined, {
-            ...node.attrs,
-            position: newPosition,
-          });
+          const tr = view.state.tr.setNodeMarkup(
+            pmPos,
+            undefined,
+            mergeImageAttrs(node, { position: newPosition }),
+          );
           view.dispatch(tr);
           hiddenPMRef.current?.setNodeSelection(pmPos);
         } else {

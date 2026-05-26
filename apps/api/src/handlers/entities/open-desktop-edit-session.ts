@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import type { SafeDb, Transaction } from "@/api/db";
+import type { SafeDb, SafeDbError, Transaction } from "@/api/db";
 import {
   desktopEditSessions,
   entityVersions,
@@ -58,6 +58,9 @@ type OpenDesktopEditSessionHandlerProps = {
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
 };
+
+const isUniqueViolationSafeDbError = (error: SafeDbError): boolean =>
+  "cause" in error && isPgError(error.cause, PG_ERROR.UNIQUE_VIOLATION);
 
 type ExistingOpenDesktopEditSession = {
   baseVersionId: SafeId<"entityVersion">;
@@ -416,12 +419,10 @@ export const openDesktopEditSessionHandler = async function* ({
   // Handle unique violation: retry without insert, then with insert
   if (Result.isError(firstAttempt)) {
     const error = firstAttempt.error;
-    if ("cause" in error && isPgError(error.cause, PG_ERROR.UNIQUE_VIOLATION)) {
+    if (isUniqueViolationSafeDbError(error)) {
       const retryResult = await runOpenSession({ allowInsert: false });
       if (Result.isError(retryResult)) {
-        return Result.err(
-          new HandlerError({ status: 500, message: "Internal server error" }),
-        );
+        return Result.err(retryResult.error);
       }
       if (retryResult.value === null) {
         return Result.err(
@@ -430,9 +431,7 @@ export const openDesktopEditSessionHandler = async function* ({
       }
       firstAttempt = retryResult;
     } else {
-      return Result.err(
-        new HandlerError({ status: 500, message: "Internal server error" }),
-      );
+      return Result.err(error);
     }
   }
 

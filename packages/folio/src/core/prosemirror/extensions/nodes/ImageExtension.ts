@@ -2,6 +2,7 @@
  * Image Extension — inline/floating image node
  */
 
+import { expectImageAttrs } from "../../attrs";
 import type { ImageAttrs } from "../../schema/nodes";
 import { createNodeExtension } from "../create";
 
@@ -11,6 +12,7 @@ export const ImageExtension = createNodeExtension({
   nodeSpec: {
     inline: true,
     group: "inline",
+    marks: "_",
     draggable: true,
     attrs: {
       src: {},
@@ -33,6 +35,7 @@ export const ImageExtension = createNodeExtension({
       borderStyle: { default: null },
       wrapText: { default: null },
       hlinkHref: { default: null },
+      _docxRawXml: { default: null },
     },
     parseDOM: [
       {
@@ -74,7 +77,7 @@ export const ImageExtension = createNodeExtension({
       },
     ],
     toDOM(node) {
-      const attrs = node.attrs as ImageAttrs;
+      const attrs = expectImageAttrs(node);
       const domAttrs: Record<string, string> = {
         src: attrs.src,
         class: "docx-image",

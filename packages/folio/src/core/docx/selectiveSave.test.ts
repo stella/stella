@@ -301,6 +301,24 @@ describe("Selective XML Patch with real DOCX", () => {
 // ============================================================================
 
 describe("attemptSelectiveSave", () => {
+  test("returns null for an invalid document model", async () => {
+    const buffer = await loadFixture("example-with-image.docx");
+    const doc = await parseDocx(buffer, { preloadFonts: false });
+
+    doc.package.document.content.unshift({
+      type: "paragraph",
+      content: [{ type: "commentReference", id: 999 }],
+    });
+
+    const result = await attemptSelectiveSave(doc, buffer, {
+      changedParaIds: new Set(),
+      structuralChange: false,
+      hasUntrackedChanges: false,
+    });
+
+    expect(result).toBeNull();
+  });
+
   test("returns null when structural change occurred", async () => {
     const buffer = await loadFixture("example-with-image.docx");
     const doc = await parseDocx(buffer, { preloadFonts: false });

@@ -1055,6 +1055,19 @@ export type TableCellPropertyChange = {
 };
 
 /**
+ * Section property change (w:sectPrChange)
+ */
+export type SectionPropertyChange = {
+  type: "sectionPropertyChange";
+  /** Tracked change metadata */
+  info: PropertyChangeInfo;
+  /** Section properties before the tracked change */
+  previousProperties?: SectionProperties;
+  /** Section properties after the tracked change (editor model convenience) */
+  currentProperties?: SectionProperties;
+};
+
+/**
  * Table structural tracked change metadata (row/cell insert/delete/merge)
  */
 export type TableStructuralChangeInfo = {
@@ -1452,6 +1465,8 @@ export type SectionProperties = {
   // Footnote/Endnote properties
   /** Footnote properties for this section */
   footnotePr?: FootnoteProperties;
+  /** Number of footnote columns in this section (`w15:footnoteColumns`) */
+  footnoteColumns?: number;
   /** Endnote properties for this section */
   endnotePr?: EndnoteProperties;
 
@@ -1478,6 +1493,9 @@ export type SectionProperties = {
   rtlGutter?: boolean;
   /** Relationship id for printer settings */
   printerSettingsRelationshipId?: string;
+
+  /** Section-level tracked property changes (w:sectPrChange) */
+  propertyChanges?: SectionPropertyChange[];
 };
 
 // ============================================================================

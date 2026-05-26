@@ -218,6 +218,45 @@ describe("toProseDoc", () => {
     expect(tableCellBorderColor(attrs, "top")?.themeColor).toBeUndefined();
   });
 
+  test("accepts unknown table-cell border styles preserved from OOXML", () => {
+    const document: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "table",
+              rows: [
+                {
+                  cells: [
+                    {
+                      formatting: {
+                        borders: {
+                          bottom: {
+                            style: "0",
+                            size: 0,
+                            color: { rgb: "000000" },
+                          },
+                        },
+                      },
+                      content: [{ type: "paragraph", content: [] }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const attrs = firstTableCellAttrs(document);
+    const borders = attrs["borders"] as
+      | { bottom?: { style?: string } }
+      | undefined;
+
+    expect(borders?.bottom?.style).toBe("0");
+  });
+
   test("resolves themed table-cell border color with themeTint to the modified RGB", () => {
     const document: Document = {
       package: {
@@ -499,6 +538,39 @@ describe("toProseDoc", () => {
     expect(field?.attrs.fieldKind).toBe("simple");
   });
 
+  test("converts inline content controls without synthetic marks", () => {
+    const document: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  type: "inlineSdt",
+                  properties: { sdtType: "plainText" },
+                  content: [
+                    {
+                      type: "run",
+                      content: [{ type: "text", text: "Controlled" }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const doc = toProseDoc(document);
+    const sdt = doc.firstChild?.firstChild;
+
+    expect(sdt?.type.name).toBe("sdt");
+    expect(sdt?.marks).toEqual([]);
+    expect(sdt?.firstChild?.text).toBe("Controlled");
+  });
+
   test("anchors point comments to nearby text for display", () => {
     const document: Document = {
       package: {
@@ -564,7 +636,7 @@ describe("toProseDoc", () => {
                 },
                 {
                   type: "insertion",
-                  info: { id: "rev-1", author: "User" },
+                  info: { id: 1, author: "User" },
                   content: [
                     {
                       type: "run",

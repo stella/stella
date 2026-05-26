@@ -12,7 +12,7 @@
  * - Inline properties (highest priority)
  */
 
-import type { Node as PMNode } from "prosemirror-model";
+import type { MarkType, Node as PMNode } from "prosemirror-model";
 
 import type {
   Document,
@@ -54,6 +54,7 @@ import type {
 } from "../schema/nodes";
 import { createStyleResolver } from "../styles";
 import type { StyleResolver } from "../styles";
+import { assertValidProseMirrorDocument } from "../validation";
 
 /**
  * Options for document conversion
@@ -84,6 +85,7 @@ export function toProseDoc(
 
   const styleResolver = createStyleResolver(options?.styles);
   const theme = options?.theme ?? document.package.theme ?? null;
+  let textBoxGroupIndex = 0;
 
   for (const block of paragraphs) {
     if (block.type === "paragraph") {
@@ -95,7 +97,14 @@ export function toProseDoc(
       if (pbPos === "before") {
         nodes.push(schema.node("pageBreak"));
       }
-      nodes.push(...convertParagraphWithTextBoxes(block, styleResolver));
+      nodes.push(
+        ...convertParagraphWithTextBoxes(
+          block,
+          styleResolver,
+          String(textBoxGroupIndex),
+        ),
+      );
+      textBoxGroupIndex += 1;
       if (pbPos === "after") {
         nodes.push(schema.node("pageBreak"));
       }
@@ -110,7 +119,12 @@ export function toProseDoc(
     nodes.push(schema.node("paragraph", {}, []));
   }
 
-  return schema.node("doc", null, nodes);
+  const pmDoc = schema.node("doc", null, nodes);
+  assertValidProseMirrorDocument(
+    pmDoc,
+    "Document conversion produced an invalid ProseMirror document",
+  );
+  return pmDoc;
 }
 
 /**
@@ -127,7 +141,12 @@ function convertParagraph(
 ): PMNode {
   const attrs = paragraphFormattingToAttrs(paragraph, styleResolver);
   const inlineNodes: PMNode[] = [];
+  let inlineOffset = 0;
   let bookmarksArr: { id: number; name: string }[] | undefined;
+  let emptyHyperlinks:
+    | NonNullable<ParagraphAttrs["_emptyHyperlinks"]>
+    | undefined;
+  let hyperlinkIndex = 0;
 
   // Track active comment ranges for this paragraph
   const commentIds = activeCommentIds ?? new Set<number>();
@@ -135,7 +154,11 @@ function convertParagraph(
     if (nodes.length === 0) {
       return;
     }
-    inlineNodes.push(...applyCommentMarks(nodes, commentIds));
+    const markedNodes = applyCommentMarks(nodes, commentIds);
+    inlineNodes.push(...markedNodes);
+    for (const node of markedNodes) {
+      inlineOffset += node.nodeSize;
+    }
   };
   const emitInlineNode = (node: PMNode | null): void => {
     if (!node) {
@@ -202,9 +225,28 @@ function convertParagraph(
         ),
       );
     } else if (content.type === "hyperlink") {
-      emitInlineNodes(
-        convertHyperlink(content, getInheritedRunFormatting, styleResolver),
+      const currentHyperlinkIndex = hyperlinkIndex;
+      hyperlinkIndex += 1;
+      const linkNodes = convertHyperlink(
+        content,
+        getInheritedRunFormatting,
+        styleResolver,
+        currentHyperlinkIndex,
       );
+      if (linkNodes.length === 0) {
+        emptyHyperlinks ??= [];
+        emptyHyperlinks.push({
+          offset: inlineOffset,
+          ...(content.href !== undefined ? { href: content.href } : {}),
+          ...(content.anchor !== undefined ? { anchor: content.anchor } : {}),
+          ...(content.tooltip !== undefined
+            ? { tooltip: content.tooltip }
+            : {}),
+          ...(content.rId !== undefined ? { rId: content.rId } : {}),
+        });
+        continue;
+      }
+      emitInlineNodes(linkNodes);
     } else if (
       content.type === "simpleField" ||
       content.type === "complexField"
@@ -240,6 +282,9 @@ function convertParagraph(
 
   if (bookmarksArr) {
     attrs.bookmarks = bookmarksArr;
+  }
+  if (emptyHyperlinks) {
+    attrs._emptyHyperlinks = emptyHyperlinks;
   }
 
   return schema.node("paragraph", attrs, inlineNodes);
@@ -295,6 +340,7 @@ function convertTrackedChange(
   moveKind: "moveFrom" | "moveTo" | null = null,
 ): PMNode[] {
   const nodes: PMNode[] = [];
+  let hyperlinkIndex = 0;
   for (const item of change.content) {
     if (item.type === "run") {
       nodes.push(
@@ -305,8 +351,15 @@ function convertTrackedChange(
         ),
       );
     } else {
+      const currentHyperlinkIndex = hyperlinkIndex;
+      hyperlinkIndex += 1;
       nodes.push(
-        ...convertHyperlink(item, getInheritedRunFormatting, styleResolver),
+        ...convertHyperlink(
+          item,
+          getInheritedRunFormatting,
+          styleResolver,
+          currentHyperlinkIndex,
+        ),
       );
     }
   }
@@ -320,11 +373,23 @@ function convertTrackedChange(
   });
 
   return nodes.map((node) => {
-    if (node.isText) {
+    if (canCarryTrackedRunMark(node, mark.type)) {
       return node.mark(mark.addToSet(node.marks));
     }
     return node;
   });
+}
+
+function canCarryTrackedRunMark(node: PMNode, markType: MarkType): boolean {
+  return (
+    node.isText ||
+    (node.isInline &&
+      node.type.allowsMarkType(markType) &&
+      (node.type.name === "image" ||
+        node.type.name === "shape" ||
+        node.type.name === "hardBreak" ||
+        node.type.name === "tab"))
+  );
 }
 
 /**
@@ -719,10 +784,15 @@ function resolveParagraphDefaultTextFormatting(
  * OOXML uses vMerge="restart" to start a vertical merge and vMerge="continue" for cells that should be merged.
  * This function converts that to rowSpan values and marks which cells should be skipped.
  */
-function calculateRowSpans(
-  table: Table,
-): Map<string, { rowSpan: number; skip: boolean }> {
-  const result = new Map<string, { rowSpan: number; skip: boolean }>();
+type RowSpanInfo = {
+  rowSpan: number;
+  skip: boolean;
+  preserveVMergeRestart?: boolean;
+  continuationCells?: TableCell[];
+};
+
+function calculateRowSpans(table: Table): Map<string, RowSpanInfo> {
+  const result = new Map<string, RowSpanInfo>();
   const numRows = table.rows.length;
 
   // Track active vertical merges per column (stores the row index where merge started)
@@ -733,40 +803,112 @@ function calculateRowSpans(
     // SAFETY: rowIndex < numRows <= table.rows.length
     const row = table.rows[rowIndex]!;
     let colIndex = 0;
-
-    for (const cellIndex_item of row.cells) {
-      const cell = cellIndex_item;
+    const rowCells = row.cells.map((cell) => {
       const colspan = cell.formatting?.gridSpan ?? 1;
       const vMerge = cell.formatting?.vMerge;
-      const key = `${rowIndex}-${colIndex}`;
+      const startRow =
+        vMerge === "continue" ? activeMerges.get(colIndex) : undefined;
+      const info = {
+        cell,
+        colIndex,
+        colspan,
+        vMerge,
+        startRow,
+        hasMeaningfulContent: tableCellHasMeaningfulContent(cell),
+        shouldSkip: vMerge === "continue" && startRow !== undefined,
+      };
+      colIndex += colspan;
+      return info;
+    });
+    const rowWouldBeEmpty =
+      rowCells.length > 0 && rowCells.every((cell) => cell.shouldSkip);
+
+    for (const cellInfo of rowCells) {
+      const {
+        colIndex: cellColIndex,
+        vMerge,
+        startRow,
+        hasMeaningfulContent,
+      } = cellInfo;
+      const key = `${rowIndex}-${cellColIndex}`;
 
       if (vMerge === "restart") {
         // Start of a new vertical merge
-        activeMerges.set(colIndex, rowIndex);
+        activeMerges.set(cellColIndex, rowIndex);
         result.set(key, { rowSpan: 1, skip: false });
       } else if (vMerge === "continue") {
-        // Continuation of a merge - this cell should be skipped
-        const startRow = activeMerges.get(colIndex);
-        if (startRow !== undefined) {
-          // Increment rowSpan of the starting cell
-          const startKey = `${startRow}-${colIndex}`;
-          const startCell = result.get(startKey);
-          if (startCell) {
-            startCell.rowSpan++;
+        // Continuation of a merge - only skip it when the parsed grid has a
+        // matching restart in this exact column and the continuation is only a
+        // structural placeholder. Real DOCX tables can be ragged, and some
+        // continuation cells contain drawings or other payload that must not be
+        // merged away.
+        if (startRow === undefined || rowWouldBeEmpty || hasMeaningfulContent) {
+          result.set(key, { rowSpan: 1, skip: false });
+          if (
+            (rowWouldBeEmpty || hasMeaningfulContent) &&
+            startRow !== undefined
+          ) {
+            const restartCell = result.get(`${startRow}-${cellColIndex}`);
+            if (restartCell) {
+              restartCell.preserveVMergeRestart = true;
+            }
+            activeMerges.delete(cellColIndex);
           }
+          continue;
+        }
+
+        // Increment rowSpan of the starting cell
+        const startKey = `${startRow}-${cellColIndex}`;
+        const startCell = result.get(startKey);
+        if (startCell) {
+          startCell.rowSpan++;
+          startCell.continuationCells ??= [];
+          startCell.continuationCells.push(cellInfo.cell);
         }
         result.set(key, { rowSpan: 1, skip: true });
       } else {
         // No vMerge - clear any active merge for this column
-        activeMerges.delete(colIndex);
+        activeMerges.delete(cellColIndex);
         result.set(key, { rowSpan: 1, skip: false });
       }
-
-      colIndex += colspan;
     }
   }
 
   return result;
+}
+
+function tableCellHasMeaningfulContent(cell: TableCell): boolean {
+  return cell.content.some(blockHasMeaningfulContent);
+}
+
+function blockHasMeaningfulContent(block: Paragraph | Table): boolean {
+  if (block.type === "table") {
+    return block.rows.some((row) =>
+      row.cells.some((cell) => tableCellHasMeaningfulContent(cell)),
+    );
+  }
+
+  return block.content.some(paragraphContentHasMeaningfulContent);
+}
+
+function paragraphContentHasMeaningfulContent(
+  content: Paragraph["content"][number],
+): boolean {
+  if (content.type === "run") {
+    return content.content.length > 0;
+  }
+  if (content.type === "hyperlink") {
+    return content.children.some(paragraphContentHasMeaningfulContent);
+  }
+  if (
+    content.type === "insertion" ||
+    content.type === "deletion" ||
+    content.type === "moveFrom" ||
+    content.type === "moveTo"
+  ) {
+    return content.content.some(paragraphContentHasMeaningfulContent);
+  }
+  return true;
 }
 
 function convertTable(
@@ -989,7 +1131,7 @@ function convertTableRow(
   rowIndex?: number,
   totalRows?: number,
   totalColumns?: number,
-  rowSpanMap?: Map<string, { rowSpan: number; skip: boolean }>,
+  rowSpanMap?: Map<string, RowSpanInfo>,
   defaultCellMargins?: {
     top?: number;
     bottom?: number;
@@ -1035,6 +1177,7 @@ function convertTableRow(
     const rowSpanInfo = rowSpanMap?.get(rowSpanKey);
     const shouldSkip = rowSpanInfo?.skip ?? false;
     const calculatedRowSpan = rowSpanInfo?.rowSpan ?? 1;
+    const preserveVMergeRestart = rowSpanInfo?.preserveVMergeRestart ?? false;
 
     // Calculate the width for this cell from columnWidths if cell doesn't have own width
     let gridWidth: number | undefined;
@@ -1204,6 +1347,8 @@ function convertTableRow(
         isFirstCol,
         isLastCol,
         calculatedRowSpan,
+        preserveVMergeRestart,
+        rowSpanInfo?.continuationCells,
         defaultCellMargins,
         theme,
       ),
@@ -1264,6 +1409,8 @@ function convertTableCell(
   isFirstCol?: boolean,
   isLastCol?: boolean,
   calculatedRowSpan?: number,
+  preserveVMergeRestart?: boolean,
+  vMergeContinuationCells?: TableCell[],
   defaultCellMargins?: {
     top?: number;
     bottom?: number;
@@ -1379,6 +1526,12 @@ function convertTableCell(
   if (formatting) {
     attrs._originalFormatting = formatting;
   }
+  if (preserveVMergeRestart) {
+    attrs._preserveVMergeRestart = true;
+  }
+  if (vMergeContinuationCells && vMergeContinuationCells.length > 0) {
+    attrs._docxVMergeContinuationCells = vMergeContinuationCells;
+  }
 
   // Convert cell content (paragraphs and nested tables)
   const contentNodes: PMNode[] = [];
@@ -1480,6 +1633,7 @@ function convertInlineSdt(
 ): PMNode | null {
   const props = sdt.properties;
   const inlineNodes: PMNode[] = [];
+  let hyperlinkIndex = 0;
 
   for (const content of sdt.content) {
     if (content.type === "run") {
@@ -1490,10 +1644,13 @@ function convertInlineSdt(
       );
       inlineNodes.push(...runNodes);
     } else {
+      const currentHyperlinkIndex = hyperlinkIndex;
+      hyperlinkIndex += 1;
       const linkNodes = convertHyperlink(
         content,
         getInheritedRunFormatting,
         styleResolver,
+        currentHyperlinkIndex,
       );
       inlineNodes.push(...linkNodes);
     }
@@ -1569,27 +1726,40 @@ function convertRunContent(
 
     case "break":
       if (content.breakType === "textWrapping" || !content.breakType) {
-        return [schema.node("hardBreak")];
+        return [withHyperlinkBoundaryMarks(schema.node("hardBreak"), marks)];
       }
-      // Page breaks not supported in inline content
+      if (content.breakType === "column") {
+        return [
+          withHyperlinkBoundaryMarks(
+            schema.node("hardBreak", { breakType: "column" }),
+            marks,
+          ),
+        ];
+      }
+      // Page breaks are represented as block separators by paragraphPageBreakPosition.
       return [];
 
     case "tab":
       // Convert to tab node for proper rendering
-      return [schema.node("tab")];
+      return [withHyperlinkBoundaryMarks(schema.node("tab"), marks)];
 
     case "drawing":
-      return [convertImage(content.image)];
+      return [
+        withHyperlinkBoundaryMarks(
+          convertImage(content.image, content.rawXml),
+          marks,
+        ),
+      ];
 
     case "shape": {
       // Shapes with text body are handled as text boxes at block level
       // Other shapes render as inline SVG
       const shp = content.shape;
-      if (shp.textBody && shp.textBody.content.length > 0) {
+      if (shp.textBody) {
         // Skip - handled by extractTextBoxesFromParagraph
         return [];
       }
-      return [convertShape(shp)];
+      return [withHyperlinkBoundaryMarks(convertShape(shp), marks)];
     }
 
     case "footnoteRef": {
@@ -1629,6 +1799,17 @@ function convertRunContent(
   }
 }
 
+function withHyperlinkBoundaryMarks(
+  node: PMNode,
+  marks: ReturnType<typeof schema.mark>[],
+): PMNode {
+  if (!marks.some((mark) => mark.type.name === "hyperlink")) {
+    return node;
+  }
+
+  return node.mark(marks);
+}
+
 /**
  * Convert an Image to a ProseMirror image node
  *
@@ -1649,7 +1830,7 @@ function convertRunContent(
 type PartialImagePosition = Partial<NonNullable<Image["position"]>>;
 type PartialImageSize = Partial<Image["size"]>;
 
-function convertImage(image: Image): PMNode {
+function convertImage(image: Image, rawXml?: string): PMNode {
   // Convert EMU to pixels for proper sizing
   const imageData: { size?: PartialImageSize } = image;
   const imageSize = imageData.size;
@@ -1839,6 +2020,7 @@ function convertImage(image: Image): PMNode {
     borderStyle,
     wrapText,
     hlinkHref: image.hlinkHref,
+    _docxRawXml: rawXml,
   });
 }
 
@@ -1852,6 +2034,7 @@ function convertHyperlink(
   hyperlink: Hyperlink,
   getInheritedRunFormatting: RunFormattingResolver,
   styleResolver?: StyleResolver | null,
+  hyperlinkIndex?: number,
 ): PMNode[] {
   const nodes: PMNode[] = [];
 
@@ -1862,6 +2045,7 @@ function convertHyperlink(
     href,
     tooltip: hyperlink.tooltip,
     rId: hyperlink.rId,
+    _docxHyperlinkIndex: hyperlinkIndex,
   });
 
   for (const child of hyperlink.children) {
@@ -2151,19 +2335,44 @@ function convertShape(shape: Shape): PMNode {
 function convertParagraphWithTextBoxes(
   block: Paragraph,
   styleResolver: StyleResolver | null,
+  textBoxGroupId: string,
 ): PMNode[] {
   const textBoxes = extractTextBoxesFromParagraph(block);
   const pmParagraph = convertParagraph(block, styleResolver);
   const nodes: PMNode[] = [];
   const isEmptyAfterExtraction =
     textBoxes.length > 0 && pmParagraph.content.size === 0;
-  if (!isEmptyAfterExtraction) {
+  const keepWrapperParagraph =
+    isEmptyAfterExtraction && hasParagraphBoundaryPayload(block, pmParagraph);
+  if (!isEmptyAfterExtraction || keepWrapperParagraph) {
     nodes.push(pmParagraph);
   }
   for (const tb of textBoxes) {
-    nodes.push(convertTextBox(tb, styleResolver));
+    nodes.push(
+      convertTextBox(tb, styleResolver, {
+        placement:
+          isEmptyAfterExtraction && !keepWrapperParagraph
+            ? "standalone"
+            : "inlineWithPrevious",
+        groupId: textBoxGroupId,
+      }),
+    );
   }
   return nodes;
+}
+
+function hasParagraphBoundaryPayload(
+  block: Paragraph,
+  pmParagraph: PMNode,
+): boolean {
+  const bookmarks = pmParagraph.attrs["bookmarks"];
+  const emptyHyperlinks = pmParagraph.attrs["_emptyHyperlinks"];
+  return Boolean(
+    block.sectionProperties ||
+    block.propertyChanges?.length ||
+    (Array.isArray(bookmarks) && bookmarks.length > 0) ||
+    (Array.isArray(emptyHyperlinks) && emptyHyperlinks.length > 0),
+  );
 }
 
 /**
@@ -2178,7 +2387,7 @@ function extractTextBoxesFromParagraph(paragraph: Paragraph): TextBox[] {
       for (const rc of content.content) {
         if (rc.type === "shape") {
           const shape = rc.shape as Shape;
-          if (shape.textBody && shape.textBody.content.length > 0) {
+          if (shape.textBody) {
             // Convert shape with text body to TextBox
             const textBox: TextBox = {
               type: "textBox",
@@ -2218,6 +2427,10 @@ function extractTextBoxesFromParagraph(paragraph: Paragraph): TextBox[] {
 function convertTextBox(
   textBox: TextBox,
   styleResolver: StyleResolver | null,
+  options: {
+    placement?: "standalone" | "inlineWithPrevious";
+    groupId?: string;
+  } = {},
 ): PMNode {
   const textBoxData: { size?: Partial<TextBox["size"]> } = textBox;
   const textBoxSize = textBoxData.size;
@@ -2284,6 +2497,8 @@ function convertTextBox(
       marginBottom,
       marginLeft,
       marginRight,
+      _docxPlacement: options.placement,
+      _docxGroupId: options.groupId,
     },
     contentNodes,
   );
@@ -2306,10 +2521,18 @@ export function headerFooterToProseDoc(
     ? createStyleResolver(options.styles)
     : null;
   const theme = options?.theme ?? null;
+  let textBoxGroupIndex = 0;
 
   for (const block of content) {
     if (block.type === "paragraph") {
-      nodes.push(...convertParagraphWithTextBoxes(block, styleResolver));
+      nodes.push(
+        ...convertParagraphWithTextBoxes(
+          block,
+          styleResolver,
+          String(textBoxGroupIndex),
+        ),
+      );
+      textBoxGroupIndex += 1;
     } else {
       nodes.push(convertTable(block, styleResolver, theme));
     }
@@ -2319,7 +2542,12 @@ export function headerFooterToProseDoc(
     nodes.push(schema.node("paragraph", {}, []));
   }
 
-  return schema.node("doc", null, nodes);
+  const pmDoc = schema.node("doc", null, nodes);
+  assertValidProseMirrorDocument(
+    pmDoc,
+    "Header/footer conversion produced an invalid ProseMirror document",
+  );
+  return pmDoc;
 }
 
 export function footnoteToProseDoc(

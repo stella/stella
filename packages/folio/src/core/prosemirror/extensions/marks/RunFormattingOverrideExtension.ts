@@ -9,6 +9,7 @@
 import type { Mark } from "prosemirror-model";
 
 import type { TextFormatting } from "../../../types/document";
+import { expectRunFormattingOverrideMarkAttrs } from "../../attrs";
 import { createMarkExtension } from "../create";
 
 type RunFormattingOverrideAttrs = Record<string, false | "none">;
@@ -66,40 +67,41 @@ export function applyRunFormattingOverrideMark(
   formatting: TextFormatting,
   mark: Mark,
 ): void {
-  if (mark.attrs["bold"] === false) {
+  const attrs = expectRunFormattingOverrideMarkAttrs(mark);
+  if (attrs.bold === false) {
     formatting.bold = false;
   }
-  if (mark.attrs["italic"] === false) {
+  if (attrs.italic === false) {
     formatting.italic = false;
   }
-  if (mark.attrs["underline"] === "none") {
+  if (attrs.underline === "none") {
     formatting.underline = { style: "none" };
   }
-  if (mark.attrs["strike"] === false) {
+  if (attrs.strike === false) {
     formatting.strike = false;
   }
-  if (mark.attrs["doubleStrike"] === false) {
+  if (attrs.doubleStrike === false) {
     formatting.doubleStrike = false;
   }
-  if (mark.attrs["allCaps"] === false) {
+  if (attrs.allCaps === false) {
     formatting.allCaps = false;
   }
-  if (mark.attrs["smallCaps"] === false) {
+  if (attrs.smallCaps === false) {
     formatting.smallCaps = false;
   }
-  if (mark.attrs["hidden"] === false) {
+  if (attrs.hidden === false) {
     formatting.hidden = false;
   }
-  if (mark.attrs["emboss"] === false) {
+  if (attrs.emboss === false) {
     formatting.emboss = false;
   }
-  if (mark.attrs["imprint"] === false) {
+  if (attrs.imprint === false) {
     formatting.imprint = false;
   }
-  if (mark.attrs["shadow"] === false) {
+  if (attrs.shadow === false) {
     formatting.shadow = false;
   }
-  if (mark.attrs["outline"] === false) {
+  if (attrs.outline === false) {
     formatting.outline = false;
   }
 }
@@ -123,27 +125,25 @@ export const RunFormattingOverrideExtension = createMarkExtension({
       outline: { default: null },
     },
     toDOM(mark) {
+      const attrs = expectRunFormattingOverrideMarkAttrs(mark);
       const styles: string[] = [];
 
-      if (mark.attrs["bold"] === false) {
+      if (attrs.bold === false) {
         styles.push("font-weight: normal");
       }
-      if (mark.attrs["italic"] === false) {
+      if (attrs.italic === false) {
         styles.push("font-style: normal");
       }
-      if (
-        mark.attrs["underline"] === "none" ||
-        mark.attrs["strike"] === false
-      ) {
+      if (attrs.underline === "none" || attrs.strike === false) {
         styles.push("text-decoration: none");
       }
-      if (mark.attrs["allCaps"] === false) {
+      if (attrs.allCaps === false) {
         styles.push("text-transform: none");
       }
-      if (mark.attrs["smallCaps"] === false) {
+      if (attrs.smallCaps === false) {
         styles.push("font-variant-caps: normal");
       }
-      if (mark.attrs["hidden"] === false) {
+      if (attrs.hidden === false) {
         styles.push("visibility: visible");
       }
 

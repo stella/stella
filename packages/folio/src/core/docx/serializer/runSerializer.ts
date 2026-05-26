@@ -37,6 +37,7 @@ import type {
   Paragraph,
   RunPropertyChange,
 } from "../../types/document";
+import { HIGHLIGHT_COLOR_VALUES } from "../../types/documentEnumValues";
 // oxlint-disable-next-line import/no-cycle
 import { serializeParagraph } from "./paragraphSerializer";
 import { escapeXml, intAttr } from "./xmlUtils";
@@ -69,24 +70,9 @@ function getUniqueId(id: string | number | undefined): string {
 }
 
 /** Valid OOXML highlight color names (ECMA-376 §17.18.40) */
-const VALID_HIGHLIGHT_COLORS = new Set([
-  "black",
-  "blue",
-  "cyan",
-  "darkBlue",
-  "darkCyan",
-  "darkGray",
-  "darkGreen",
-  "darkMagenta",
-  "darkRed",
-  "darkYellow",
-  "green",
-  "lightGray",
-  "magenta",
-  "red",
-  "white",
-  "yellow",
-]);
+const VALID_HIGHLIGHT_COLORS = new Set(
+  HIGHLIGHT_COLOR_VALUES.filter((color) => color !== "none"),
+);
 
 // ============================================================================
 // COLOR SERIALIZATION

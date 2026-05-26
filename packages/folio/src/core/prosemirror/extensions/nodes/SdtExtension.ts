@@ -5,19 +5,8 @@
  * Supports: richText, plainText, date, dropdown, comboBox, checkbox.
  */
 
+import { expectSdtAttrs } from "../../attrs";
 import { createNodeExtension } from "../create";
-
-type SdtAttrs = {
-  sdtType: string;
-  alias: string | null;
-  tag: string | null;
-  lock: string | null;
-  placeholder: string | null;
-  showingPlaceholder: boolean;
-  dateFormat: string | null;
-  listItems: string | null;
-  checked: string | boolean | null;
-};
 
 export const SdtExtension = createNodeExtension({
   name: "sdt",
@@ -77,7 +66,7 @@ export const SdtExtension = createNodeExtension({
       },
     ],
     toDOM(node) {
-      const attrs = node.attrs as SdtAttrs;
+      const attrs = expectSdtAttrs(node);
       const dataAttrs: Record<string, string> = {
         class: `docx-sdt docx-sdt-${attrs.sdtType}`,
         "data-sdt-type": attrs.sdtType,
@@ -104,7 +93,7 @@ export const SdtExtension = createNodeExtension({
       if (attrs.listItems) {
         dataAttrs["data-list-items"] = attrs.listItems;
       }
-      if (attrs.checked !== null) {
+      if (attrs.checked !== undefined) {
         dataAttrs["data-checked"] = String(attrs.checked);
       }
 

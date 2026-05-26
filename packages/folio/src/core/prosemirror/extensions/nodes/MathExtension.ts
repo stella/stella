@@ -6,6 +6,7 @@
  * text fallback in the editor.
  */
 
+import { expectMathAttrs } from "../../attrs";
 import { createNodeExtension } from "../create";
 
 export const MathExtension = createNodeExtension({
@@ -37,10 +38,10 @@ export const MathExtension = createNodeExtension({
       },
     ],
     toDOM(node) {
-      // SAFETY: Math node attrs always match this shape per schema
-      const display = String(node.attrs["display"]);
-      const ommlXml = String(node.attrs["ommlXml"]);
-      const plainText = String(node.attrs["plainText"]);
+      const attrs = expectMathAttrs(node);
+      const display = attrs.display ?? "inline";
+      const ommlXml = attrs.ommlXml;
+      const plainText = attrs.plainText ?? "";
 
       const text = plainText || "[equation]";
 

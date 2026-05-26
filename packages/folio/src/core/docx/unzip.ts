@@ -59,13 +59,15 @@ const PRESERVABLE_MEDIA_MIME_TYPES = new Set([
   "image/x-emf",
 ]);
 
+const MEBIBYTE = 1024 * 1024;
+
 const DEFAULT_UNZIP_LIMITS: DocxUnzipLimits = {
-  maxInputBytes: 50 * 1024 * 1024,
-  maxFiles: 2000,
-  maxXmlBytes: 25 * 1024 * 1024,
-  maxMediaBytes: 25 * 1024 * 1024,
-  maxFontBytes: 10 * 1024 * 1024,
-  maxTotalUncompressedBytes: 250 * 1024 * 1024,
+  maxInputBytes: 50 * MEBIBYTE,
+  maxFiles: 5000,
+  maxXmlBytes: 128 * MEBIBYTE,
+  maxMediaBytes: 25 * MEBIBYTE,
+  maxFontBytes: 10 * MEBIBYTE,
+  maxTotalUncompressedBytes: 250 * MEBIBYTE,
   allowedMediaMimeTypes: DEFAULT_ALLOWED_MEDIA_MIME_TYPES,
 };
 
@@ -81,6 +83,22 @@ type ZipEntryWithMetadata = {
     compressedSize?: number;
   };
 };
+
+type LoadedZip = {
+  zip: JSZip;
+  buffer: ArrayBuffer;
+};
+
+type CentralDirectoryInfo = {
+  offset: number;
+  size: number;
+};
+
+const ZIP_END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06_05_4b_50;
+const ZIP_CENTRAL_DIRECTORY_FILE_HEADER_SIGNATURE = 0x02_01_4b_50;
+const ZIP_END_OF_CENTRAL_DIRECTORY_SIZE = 22;
+const ZIP_END_OF_CENTRAL_DIRECTORY_WITH_COUNTS_SIZE = 12;
+const ZIP_CENTRAL_DIRECTORY_FILE_HEADER_SIZE = 46;
 
 /**
  * Raw extracted content from a DOCX file
@@ -142,6 +160,10 @@ export type RawDocxContent = {
 
   // Original buffer for round-trip
   originalBuffer: ArrayBuffer;
+
+  // Non-fatal extraction warnings. The original ZIP remains available for
+  // round-trip preservation when optional payloads are skipped.
+  warnings: string[];
 };
 
 /**
@@ -159,7 +181,12 @@ export async function unzipDocx(
     throw new DocxSecurityError("DOCX file exceeds the maximum allowed size");
   }
 
-  const zip = await JSZip.loadAsync(buffer);
+  const loaded = await loadDocxZip(buffer, limits.maxFiles);
+  if (loaded.buffer.byteLength > limits.maxInputBytes) {
+    throw new DocxSecurityError("DOCX file exceeds the maximum allowed size");
+  }
+
+  const { zip } = loaded;
   const entries = Object.entries(zip.files).filter(([, file]) => !file.dir);
 
   if (entries.length > limits.maxFiles) {
@@ -191,7 +218,8 @@ export async function unzipDocx(
     fonts: new Map(),
     allXml: new Map(),
     originalZip: zip,
-    originalBuffer: buffer,
+    originalBuffer: loaded.buffer,
+    warnings: [],
   };
 
   let totalUncompressedBytes = 0;
@@ -262,36 +290,231 @@ export async function unzipDocx(
         content.appPropsXml = xmlContent;
       } else if (lowerPath === "docprops/custom.xml") {
         content.customPropsXml = xmlContent;
-      } else if (/^word\/header\d+\.xml$/u.test(lowerPath)) {
+      } else if (/^word\/header[^/]*\.xml$/u.test(lowerPath)) {
         const filename = path.split("/").pop() || path;
         content.headers.set(filename, xmlContent);
-      } else if (/^word\/footer\d+\.xml$/u.test(lowerPath)) {
+      } else if (/^word\/footer[^/]*\.xml$/u.test(lowerPath)) {
         const filename = path.split("/").pop() || path;
         content.footers.set(filename, xmlContent);
       }
     } else if (lowerPath.startsWith("word/media/")) {
       // Media files (images, etc.)
       const mimeType = getMediaMimeType(path);
-      assertEntrySize(path, declaredSize, limits.maxMediaBytes);
       if (!limits.allowedMediaMimeTypes.has(mimeType)) {
         continue;
       }
+      if (isEntryTooLarge(declaredSize, limits.maxMediaBytes)) {
+        content.warnings.push(
+          `Skipped oversized media file: ${path}; original entry preserved for round-trip.`,
+        );
+        continue;
+      }
       const binaryContent = await file.async("arraybuffer");
-      assertExtractedSize(path, binaryContent.byteLength, limits.maxMediaBytes);
+      if (binaryContent.byteLength > limits.maxMediaBytes) {
+        content.warnings.push(
+          `Skipped oversized media file: ${path}; original entry preserved for round-trip.`,
+        );
+        continue;
+      }
       if (!isMediaContentAllowed(binaryContent, mimeType)) {
         continue;
       }
       content.media.set(path, binaryContent);
     } else if (lowerPath.startsWith("word/fonts/")) {
-      // Embedded fonts
-      assertEntrySize(path, declaredSize, limits.maxFontBytes);
+      // Embedded fonts are optional for editing and original ZIP preservation.
+      // Skip oversized fonts instead of rejecting otherwise readable documents.
+      if (isEntryTooLarge(declaredSize, limits.maxFontBytes)) {
+        continue;
+      }
       const binaryContent = await file.async("arraybuffer");
-      assertExtractedSize(path, binaryContent.byteLength, limits.maxFontBytes);
+      if (binaryContent.byteLength > limits.maxFontBytes) {
+        continue;
+      }
       content.fonts.set(path, binaryContent);
     }
   }
 
   return content;
+}
+
+async function loadDocxZip(
+  buffer: ArrayBuffer,
+  maxFiles: number,
+): Promise<LoadedZip> {
+  try {
+    return { zip: await JSZip.loadAsync(buffer), buffer };
+  } catch (error) {
+    const repairedBuffer = repairTruncatedEndOfCentralDirectory(
+      buffer,
+      maxFiles,
+    );
+    if (!repairedBuffer) {
+      throw error;
+    }
+
+    try {
+      return {
+        zip: await JSZip.loadAsync(repairedBuffer),
+        buffer: repairedBuffer,
+      };
+    } catch {
+      throw error;
+    }
+  }
+}
+
+function repairTruncatedEndOfCentralDirectory(
+  buffer: ArrayBuffer,
+  maxFiles: number,
+): ArrayBuffer | null {
+  const bytes = new Uint8Array(buffer);
+  const view = new DataView(buffer);
+  const eocdOffset = findLastSignature(
+    view,
+    bytes.byteLength,
+    ZIP_END_OF_CENTRAL_DIRECTORY_SIGNATURE,
+  );
+  if (eocdOffset === -1) {
+    return null;
+  }
+
+  const eocdBytes = bytes.byteLength - eocdOffset;
+  if (
+    eocdBytes >= ZIP_END_OF_CENTRAL_DIRECTORY_SIZE ||
+    eocdBytes < ZIP_END_OF_CENTRAL_DIRECTORY_WITH_COUNTS_SIZE
+  ) {
+    return null;
+  }
+
+  const diskNumber = view.getUint16(eocdOffset + 4, true);
+  const centralDirectoryDisk = view.getUint16(eocdOffset + 6, true);
+  const diskEntryCount = view.getUint16(eocdOffset + 8, true);
+  const totalEntryCount = view.getUint16(eocdOffset + 10, true);
+
+  if (
+    diskNumber !== 0 ||
+    centralDirectoryDisk !== 0 ||
+    diskEntryCount !== totalEntryCount ||
+    totalEntryCount > maxFiles
+  ) {
+    return null;
+  }
+
+  const centralDirectory = findCentralDirectory(
+    view,
+    eocdOffset,
+    totalEntryCount,
+  );
+  if (!centralDirectory) {
+    return null;
+  }
+
+  const repaired = new Uint8Array(
+    eocdOffset + ZIP_END_OF_CENTRAL_DIRECTORY_SIZE,
+  );
+  repaired.set(bytes.subarray(0, eocdOffset));
+  const repairedView = new DataView(repaired.buffer);
+
+  repairedView.setUint32(
+    eocdOffset,
+    ZIP_END_OF_CENTRAL_DIRECTORY_SIGNATURE,
+    true,
+  );
+  repairedView.setUint16(eocdOffset + 4, 0, true);
+  repairedView.setUint16(eocdOffset + 6, 0, true);
+  repairedView.setUint16(eocdOffset + 8, totalEntryCount, true);
+  repairedView.setUint16(eocdOffset + 10, totalEntryCount, true);
+  repairedView.setUint32(eocdOffset + 12, centralDirectory.size, true);
+  repairedView.setUint32(eocdOffset + 16, centralDirectory.offset, true);
+  repairedView.setUint16(eocdOffset + 20, 0, true);
+
+  return repaired.buffer;
+}
+
+function findCentralDirectory(
+  view: DataView,
+  eocdOffset: number,
+  entryCount: number,
+): CentralDirectoryInfo | null {
+  for (
+    let offset = 0;
+    offset <= eocdOffset - ZIP_CENTRAL_DIRECTORY_FILE_HEADER_SIZE;
+    offset += 1
+  ) {
+    if (
+      view.getUint32(offset, true) !==
+      ZIP_CENTRAL_DIRECTORY_FILE_HEADER_SIGNATURE
+    ) {
+      continue;
+    }
+
+    const parsed = parseCentralDirectoryAt(
+      view,
+      offset,
+      eocdOffset,
+      entryCount,
+    );
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function parseCentralDirectoryAt(
+  view: DataView,
+  startOffset: number,
+  eocdOffset: number,
+  entryCount: number,
+): CentralDirectoryInfo | null {
+  let offset = startOffset;
+
+  for (let index = 0; index < entryCount; index += 1) {
+    if (
+      offset + ZIP_CENTRAL_DIRECTORY_FILE_HEADER_SIZE > eocdOffset ||
+      view.getUint32(offset, true) !==
+        ZIP_CENTRAL_DIRECTORY_FILE_HEADER_SIGNATURE
+    ) {
+      return null;
+    }
+
+    const filenameLength = view.getUint16(offset + 28, true);
+    const extraLength = view.getUint16(offset + 30, true);
+    const commentLength = view.getUint16(offset + 32, true);
+    offset +=
+      ZIP_CENTRAL_DIRECTORY_FILE_HEADER_SIZE +
+      filenameLength +
+      extraLength +
+      commentLength;
+  }
+
+  if (offset !== eocdOffset) {
+    return null;
+  }
+
+  return {
+    offset: startOffset,
+    size: eocdOffset - startOffset,
+  };
+}
+
+function findLastSignature(
+  view: DataView,
+  byteLength: number,
+  signature: number,
+): number {
+  for (
+    let offset = byteLength - ZIP_END_OF_CENTRAL_DIRECTORY_WITH_COUNTS_SIZE;
+    offset >= 0;
+    offset -= 1
+  ) {
+    if (view.getUint32(offset, true) === signature) {
+      return offset;
+    }
+  }
+
+  return -1;
 }
 
 function createUnzipLimits(options: PartialDocxUnzipLimits): DocxUnzipLimits {
@@ -350,9 +573,16 @@ function assertEntrySize(
   declaredSize: number | null,
   maxBytes: number,
 ): void {
-  if (declaredSize !== null && declaredSize > maxBytes) {
+  if (isEntryTooLarge(declaredSize, maxBytes)) {
     throw new DocxSecurityError(`DOCX entry exceeds maximum size: ${path}`);
   }
+}
+
+function isEntryTooLarge(
+  declaredSize: number | null,
+  maxBytes: number,
+): boolean {
+  return declaredSize !== null && declaredSize > maxBytes;
 }
 
 function assertExtractedSize(

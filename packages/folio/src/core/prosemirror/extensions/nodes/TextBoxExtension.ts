@@ -6,6 +6,7 @@
  * Supports inline and floating positioning.
  */
 
+import { expectTextBoxAttrs } from "../../attrs";
 import { createNodeExtension } from "../create";
 
 export type TextBoxAttrs = {
@@ -39,6 +40,10 @@ export type TextBoxAttrs = {
   cssFloat?: "left" | "right" | "none";
   /** Wrap type */
   wrapType?: string;
+  /** Original DOCX placement hint for save-path reconstruction. */
+  _docxPlacement?: "standalone" | "inlineWithPrevious";
+  /** Original DOCX paragraph group for standalone text-box reconstruction. */
+  _docxGroupId?: string;
 };
 
 export const TextBoxExtension = createNodeExtension({
@@ -65,6 +70,8 @@ export const TextBoxExtension = createNodeExtension({
       displayMode: { default: "inline" },
       cssFloat: { default: null },
       wrapType: { default: "inline" },
+      _docxPlacement: { default: null },
+      _docxGroupId: { default: null },
     },
     parseDOM: [
       {
@@ -116,7 +123,7 @@ export const TextBoxExtension = createNodeExtension({
       },
     ],
     toDOM(node) {
-      const attrs = node.attrs as TextBoxAttrs;
+      const attrs = expectTextBoxAttrs(node);
       const domAttrs: Record<string, string> = {
         class: "docx-textbox",
       };

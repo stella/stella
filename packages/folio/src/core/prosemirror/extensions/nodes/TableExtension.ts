@@ -19,12 +19,20 @@ import {
 import { Decoration, DecorationSet } from "prosemirror-view";
 
 import type { ColorValue, BorderSpec } from "../../../types/colors";
+import {
+  TABLE_CELL_TEXT_DIRECTION_VALUES,
+  TABLE_WIDTH_TYPE_VALUES,
+} from "../../../types/documentEnumValues";
 import { resolveColor } from "../../../utils/colorResolver";
-import type {
-  TableAttrs,
-  TableRowAttrs,
-  TableCellAttrs,
-} from "../../schema/nodes";
+import {
+  expectTableAttrs,
+  expectTableCellAttrs,
+  expectTableRowAttrs,
+  mergeTableAttrs,
+  mergeTableCellAttrs,
+  mergeTableRowAttrs,
+} from "../../attrs";
+import type { TableAttrs, TableCellAttrs } from "../../schema/nodes";
 import { createNodeExtension, createExtension } from "../create";
 import type {
   ExtensionContext,
@@ -32,9 +40,20 @@ import type {
   AnyExtension,
 } from "../types";
 
+type TableCellBorders = NonNullable<TableCellAttrs["borders"]>;
+type TableCellBorderSide = keyof TableCellBorders;
+
 // ============================================================================
 // CSS PASTE HELPERS — Extract formatting from inline styles (Google Docs, etc.)
 // ============================================================================
+
+const isOneOf = <T extends string>(
+  value: string | null | undefined,
+  values: readonly T[],
+): value is T =>
+  value !== null &&
+  value !== undefined &&
+  values.some((allowed) => allowed === value);
 
 /** Map CSS border-style to OOXML border style. */
 function cssBorderStyleToOoxml(cssStyle: string): BorderSpec["style"] {
@@ -300,7 +319,7 @@ const tableSpec: NodeSpec = {
     },
   ],
   toDOM(node) {
-    const attrs = node.attrs as TableAttrs;
+    const attrs = expectTableAttrs(node);
     const domAttrs: Record<string, string> = { class: "docx-table" };
 
     if (attrs.styleId) {
@@ -344,7 +363,7 @@ const tableRowSpec: NodeSpec = {
   },
   parseDOM: [{ tag: "tr" }],
   toDOM(node) {
-    const attrs = node.attrs as TableRowAttrs;
+    const attrs = expectTableRowAttrs(node);
     const domAttrs: Record<string, string> = {};
 
     if (typeof attrs.height === "number") {
@@ -507,6 +526,8 @@ const tableCellSpec: NodeSpec = {
     textDirection: { default: null },
     noWrap: { default: false },
     _originalFormatting: { default: null },
+    _preserveVMergeRestart: { default: null },
+    _docxVMergeContinuationCells: { default: null },
   },
   parseDOM: [
     {
@@ -515,7 +536,7 @@ const tableCellSpec: NodeSpec = {
     },
   ],
   toDOM(node) {
-    const attrs = node.attrs as TableCellAttrs;
+    const attrs = expectTableCellAttrs(node);
     const domAttrs: Record<string, string> = { class: "docx-table-cell" };
 
     if (attrs.colspan > 1) {
@@ -573,6 +594,8 @@ const tableHeaderSpec: NodeSpec = {
     textDirection: { default: null },
     noWrap: { default: false },
     _originalFormatting: { default: null },
+    _preserveVMergeRestart: { default: null },
+    _docxVMergeContinuationCells: { default: null },
   },
   parseDOM: [
     {
@@ -581,7 +604,7 @@ const tableHeaderSpec: NodeSpec = {
     },
   ],
   toDOM(node) {
-    const attrs = node.attrs as TableCellAttrs;
+    const attrs = expectTableCellAttrs(node);
     const domAttrs: Record<string, string> = { class: "docx-table-header" };
 
     if (attrs.colspan > 1) {
@@ -1322,11 +1345,14 @@ export const TablePluginExtension = createExtension({
                 cell.type.name === "tableCell" ||
                 cell.type.name === "tableHeader"
               ) {
-                tr = tr.setNodeMarkup(cellPos, undefined, {
-                  ...cell.attrs,
-                  width: newColWidthPercent,
-                  widthType: "pct",
-                });
+                tr = tr.setNodeMarkup(
+                  cellPos,
+                  undefined,
+                  mergeTableCellAttrs(cell, {
+                    width: newColWidthPercent,
+                    widthType: "pct",
+                  }),
+                );
               }
               cellPos += cell.nodeSize;
             });
@@ -1334,15 +1360,20 @@ export const TablePluginExtension = createExtension({
 
           // Update table columnWidths so full-width tables resize correctly.
           const colCount = firstRow.childCount;
-          const tableWidthTwips =
-            (updatedTable.attrs["width"] as number) || 9360;
+          const tableWidthTwips = expectTableAttrs(updatedTable).width ?? 9360;
           const colWidthTwips = Math.floor(
             tableWidthTwips / Math.max(1, colCount),
           );
-          tr = tr.setNodeMarkup(context.tablePos, undefined, {
-            ...updatedTable.attrs,
-            columnWidths: Array.from({ length: colCount }, () => colWidthTwips),
-          });
+          tr = tr.setNodeMarkup(
+            context.tablePos,
+            undefined,
+            mergeTableAttrs(updatedTable, {
+              columnWidths: Array.from(
+                { length: colCount },
+                () => colWidthTwips,
+              ),
+            }),
+          );
         }
 
         dispatch(tr.scrollIntoView());
@@ -1427,11 +1458,14 @@ export const TablePluginExtension = createExtension({
                 cell.type.name === "tableCell" ||
                 cell.type.name === "tableHeader"
               ) {
-                tr = tr.setNodeMarkup(cellPos, undefined, {
-                  ...cell.attrs,
-                  width: newColWidthPercent,
-                  widthType: "pct",
-                });
+                tr = tr.setNodeMarkup(
+                  cellPos,
+                  undefined,
+                  mergeTableCellAttrs(cell, {
+                    width: newColWidthPercent,
+                    widthType: "pct",
+                  }),
+                );
               }
               cellPos += cell.nodeSize;
             });
@@ -1439,15 +1473,20 @@ export const TablePluginExtension = createExtension({
 
           // Update table columnWidths so full-width tables resize correctly.
           const colCount = firstRow.childCount;
-          const tableWidthTwips =
-            (updatedTable.attrs["width"] as number) || 9360;
+          const tableWidthTwips = expectTableAttrs(updatedTable).width ?? 9360;
           const colWidthTwips = Math.floor(
             tableWidthTwips / Math.max(1, colCount),
           );
-          tr = tr.setNodeMarkup(context.tablePos, undefined, {
-            ...updatedTable.attrs,
-            columnWidths: Array.from({ length: colCount }, () => colWidthTwips),
-          });
+          tr = tr.setNodeMarkup(
+            context.tablePos,
+            undefined,
+            mergeTableAttrs(updatedTable, {
+              columnWidths: Array.from(
+                { length: colCount },
+                () => colWidthTwips,
+              ),
+            }),
+          );
         }
 
         dispatch(tr.scrollIntoView());
@@ -1520,11 +1559,14 @@ export const TablePluginExtension = createExtension({
                 cell.type.name === "tableCell" ||
                 cell.type.name === "tableHeader"
               ) {
-                tr = tr.setNodeMarkup(cellPos, undefined, {
-                  ...cell.attrs,
-                  width: newColWidthPercent,
-                  widthType: "pct",
-                });
+                tr = tr.setNodeMarkup(
+                  cellPos,
+                  undefined,
+                  mergeTableCellAttrs(cell, {
+                    width: newColWidthPercent,
+                    widthType: "pct",
+                  }),
+                );
               }
               cellPos += cell.nodeSize;
             });
@@ -1532,15 +1574,20 @@ export const TablePluginExtension = createExtension({
 
           // Update table columnWidths to match new column count.
           const colCount = firstRow.childCount;
-          const tableWidthTwips =
-            (updatedTable.attrs["width"] as number) || 9360;
+          const tableWidthTwips = expectTableAttrs(updatedTable).width ?? 9360;
           const colWidthTwips = Math.floor(
             tableWidthTwips / Math.max(1, colCount),
           );
-          tr = tr.setNodeMarkup(context.tablePos, undefined, {
-            ...updatedTable.attrs,
-            columnWidths: Array.from({ length: colCount }, () => colWidthTwips),
-          });
+          tr = tr.setNodeMarkup(
+            context.tablePos,
+            undefined,
+            mergeTableAttrs(updatedTable, {
+              columnWidths: Array.from(
+                { length: colCount },
+                () => colWidthTwips,
+              ),
+            }),
+          );
         }
 
         dispatch(tr.scrollIntoView());
@@ -1743,7 +1790,7 @@ export const TablePluginExtension = createExtension({
         // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
         row.forEach((cell, cellOffset) => {
           const pos = tableStart + rowOffset + cellOffset + 2;
-          const colspan = (cell.attrs["colspan"] as number) || 1;
+          const colspan = expectTableCellAttrs(cell).colspan || 1;
           cellByPos.set(pos, { rowIdx, colIdx, colspan, pos, node: cell });
           cellByRC.set(`${rowIdx},${colIdx}`, pos);
           colIdx += colspan;
@@ -1774,12 +1821,12 @@ export const TablePluginExtension = createExtension({
           const tableStart = context.tablePos;
 
           // Use provided spec or default to thin black border
-          const solidBorder = borderSpec ?? {
+          const solidBorder: BorderSpec = borderSpec ?? {
             style: "single",
             size: 4,
             color: { rgb: "000000" },
           };
-          const noBorder = { style: "none" as const };
+          const noBorder: BorderSpec = { style: "none" };
 
           const { cellByPos, cellByRC } = buildTableGrid(table, tableStart);
 
@@ -1802,10 +1849,10 @@ export const TablePluginExtension = createExtension({
           }
 
           // Track which cells we've already modified (avoid double-modify)
-          const modified = new Map<number, Record<string, unknown>>();
+          const modified = new Map<number, TableCellAttrs>();
           const getAttrs = (pos: number, node: PMNode) =>
-            modified.get(pos) ?? { ...node.attrs };
-          const setAttrs = (pos: number, attrs: Record<string, unknown>) => {
+            modified.get(pos) ?? expectTableCellAttrs(node);
+          const setAttrs = (pos: number, attrs: TableCellAttrs) => {
             modified.set(pos, attrs);
           };
 
@@ -1822,10 +1869,7 @@ export const TablePluginExtension = createExtension({
             const isRightEdge = info.colIdx + info.colspan - 1 === maxCol;
 
             // Determine which borders to set on this cell
-            let cellBorders: Record<
-              string,
-              typeof solidBorder | typeof noBorder
-            > = {};
+            let cellBorders: TableCellBorders = {};
             switch (preset) {
               case "all":
                 cellBorders = {
@@ -1865,11 +1909,7 @@ export const TablePluginExtension = createExtension({
 
             // Update target cell
             const attrs = getAttrs(pos, info.node);
-            const existingBorders =
-              (attrs["borders"] as
-                | Record<string, unknown>
-                | null
-                | undefined) ?? {};
+            const existingBorders = attrs.borders ?? {};
             setAttrs(pos, {
               ...attrs,
               borders: { ...existingBorders, ...cellBorders },
@@ -1877,7 +1917,7 @@ export const TablePluginExtension = createExtension({
 
             // Update adjacent cells' matching edges (edge-based borders like Google Docs)
             // Top edge → adjacent cell above needs matching bottom
-            if (cellBorders["top"]) {
+            if (cellBorders.top) {
               const adjPos = cellByRC.get(`${info.rowIdx - 1},${info.colIdx}`);
               if (adjPos !== undefined) {
                 const adj = cellByPos.get(adjPos);
@@ -1885,19 +1925,15 @@ export const TablePluginExtension = createExtension({
                   continue;
                 }
                 const adjAttrs = getAttrs(adjPos, adj.node);
-                const adjBorders =
-                  (adjAttrs["borders"] as
-                    | Record<string, unknown>
-                    | null
-                    | undefined) ?? {};
+                const adjBorders = adjAttrs.borders ?? {};
                 setAttrs(adjPos, {
                   ...adjAttrs,
-                  borders: { ...adjBorders, bottom: cellBorders["top"] },
+                  borders: { ...adjBorders, bottom: cellBorders.top },
                 });
               }
             }
             // Bottom edge → adjacent cell below needs matching top
-            if (cellBorders["bottom"]) {
+            if (cellBorders.bottom) {
               const adjPos = cellByRC.get(`${info.rowIdx + 1},${info.colIdx}`);
               if (adjPos !== undefined) {
                 const adj = cellByPos.get(adjPos);
@@ -1905,19 +1941,15 @@ export const TablePluginExtension = createExtension({
                   continue;
                 }
                 const adjAttrs = getAttrs(adjPos, adj.node);
-                const adjBorders =
-                  (adjAttrs["borders"] as
-                    | Record<string, unknown>
-                    | null
-                    | undefined) ?? {};
+                const adjBorders = adjAttrs.borders ?? {};
                 setAttrs(adjPos, {
                   ...adjAttrs,
-                  borders: { ...adjBorders, top: cellBorders["bottom"] },
+                  borders: { ...adjBorders, top: cellBorders.bottom },
                 });
               }
             }
             // Left edge → adjacent cell to the left needs matching right
-            if (cellBorders["left"]) {
+            if (cellBorders.left) {
               const adjPos = cellByRC.get(`${info.rowIdx},${info.colIdx - 1}`);
               if (adjPos !== undefined) {
                 const adj = cellByPos.get(adjPos);
@@ -1925,19 +1957,15 @@ export const TablePluginExtension = createExtension({
                   continue;
                 }
                 const adjAttrs = getAttrs(adjPos, adj.node);
-                const adjBorders =
-                  (adjAttrs["borders"] as
-                    | Record<string, unknown>
-                    | null
-                    | undefined) ?? {};
+                const adjBorders = adjAttrs.borders ?? {};
                 setAttrs(adjPos, {
                   ...adjAttrs,
-                  borders: { ...adjBorders, right: cellBorders["left"] },
+                  borders: { ...adjBorders, right: cellBorders.left },
                 });
               }
             }
             // Right edge → adjacent cell to the right needs matching left
-            if (cellBorders["right"]) {
+            if (cellBorders.right) {
               const adjPos = cellByRC.get(
                 `${info.rowIdx},${info.colIdx + info.colspan}`,
               );
@@ -1947,14 +1975,10 @@ export const TablePluginExtension = createExtension({
                   continue;
                 }
                 const adjAttrs = getAttrs(adjPos, adj.node);
-                const adjBorders =
-                  (adjAttrs["borders"] as
-                    | Record<string, unknown>
-                    | null
-                    | undefined) ?? {};
+                const adjBorders = adjAttrs.borders ?? {};
                 setAttrs(adjPos, {
                   ...adjAttrs,
-                  borders: { ...adjBorders, left: cellBorders["right"] },
+                  borders: { ...adjBorders, left: cellBorders.right },
                 });
               }
             }
@@ -1985,13 +2009,14 @@ export const TablePluginExtension = createExtension({
         if (dispatch) {
           const tr = state.tr;
           const cells = getTargetCellPositions(state);
-          const bgColor = color ? color.replace(/^#/u, "") : null;
+          const bgColor = color ? color.replace(/^#/u, "") : undefined;
 
           for (const { pos, node } of cells) {
-            tr.setNodeMarkup(tr.mapping.map(pos), undefined, {
-              ...node.attrs,
-              backgroundColor: bgColor,
-            });
+            tr.setNodeMarkup(
+              tr.mapping.map(pos),
+              undefined,
+              mergeTableCellAttrs(node, { backgroundColor: bgColor }),
+            );
           }
           dispatch(tr.scrollIntoView());
         }
@@ -2018,24 +2043,23 @@ export const TablePluginExtension = createExtension({
         if (dispatch) {
           const tr = state.tr;
           const cells = getTargetCellPositions(state);
-          const borderValue = spec ?? { style: "none" };
-          const noBorder = { style: "none" as const };
+          const borderValue: BorderSpec = spec ?? { style: "none" };
+          const noBorder: BorderSpec = { style: "none" };
           const allSides = ["top", "bottom", "left", "right"] as const;
           const { cellByPos, cellByRC } = buildTableGrid(
             context.table,
             context.tablePos,
           );
 
-          const modified = new Map<number, Record<string, unknown>>();
+          const modified = new Map<number, TableCellAttrs>();
           const getAttrs = (p: number, n: PMNode) =>
-            modified.get(p) ?? { ...n.attrs };
-          const setAttrs = (p: number, a: Record<string, unknown>) =>
-            modified.set(p, a);
+            modified.get(p) ?? expectTableCellAttrs(n);
+          const setAttrs = (p: number, a: TableCellAttrs) => modified.set(p, a);
 
           // Map of side → adjacent side + row/col offset
           const adjacentMap: Record<
-            string,
-            { adjSide: string; dRow: number; dCol: number }
+            TableCellBorderSide,
+            { adjSide: TableCellBorderSide; dRow: number; dCol: number }
           > = {
             top: { adjSide: "bottom", dRow: -1, dCol: 0 },
             bottom: { adjSide: "top", dRow: 1, dCol: 0 },
@@ -2046,15 +2070,12 @@ export const TablePluginExtension = createExtension({
           for (const { pos, node } of cells) {
             const info = cellByPos.get(pos);
             const attrs = getAttrs(pos, node);
-            const currentBorders =
-              (attrs["borders"] as
-                | Record<string, unknown>
-                | null
-                | undefined) ?? {};
+            const currentBorders = attrs.borders ?? {};
 
-            const sides = side === "all" ? allSides : [side];
+            const sides: readonly TableCellBorderSide[] =
+              side === "all" ? allSides : [side];
             // When clearOthers is true, start with all sides cleared (preset behavior)
-            const newBorders: Record<string, unknown> = clearOthers
+            const newBorders: TableCellBorders = clearOthers
               ? {
                   top: noBorder,
                   bottom: noBorder,
@@ -2072,9 +2093,6 @@ export const TablePluginExtension = createExtension({
               for (const s of sidesToSync) {
                 const syncValue = newBorders[s];
                 const adj = adjacentMap[s];
-                if (!adj) {
-                  continue;
-                }
                 const adjColIdx =
                   s === "right"
                     ? info.colIdx + info.colspan
@@ -2088,11 +2106,7 @@ export const TablePluginExtension = createExtension({
                     continue;
                   }
                   const adjAttrs = getAttrs(adjPos, adjInfo.node);
-                  const adjBorders =
-                    (adjAttrs["borders"] as
-                      | Record<string, unknown>
-                      | null
-                      | undefined) ?? {};
+                  const adjBorders = adjAttrs.borders ?? {};
                   setAttrs(adjPos, {
                     ...adjAttrs,
                     borders: { ...adjBorders, [adj.adjSide]: syncValue },
@@ -2128,10 +2142,11 @@ export const TablePluginExtension = createExtension({
           const tr = state.tr;
           const cells = getTargetCellPositions(state);
           for (const { pos, node } of cells) {
-            tr.setNodeMarkup(tr.mapping.map(pos), undefined, {
-              ...node.attrs,
-              verticalAlign: align,
-            });
+            tr.setNodeMarkup(
+              tr.mapping.map(pos),
+              undefined,
+              mergeTableCellAttrs(node, { verticalAlign: align }),
+            );
           }
           dispatch(tr.scrollIntoView());
         }
@@ -2160,16 +2175,13 @@ export const TablePluginExtension = createExtension({
           const tr = state.tr;
           const cells = getTargetCellPositions(state);
           for (const { pos, node } of cells) {
-            const currentMargins =
-              (node.attrs["margins"] as
-                | Record<string, unknown>
-                | null
-                | undefined) ?? {};
+            const currentMargins = expectTableCellAttrs(node).margins ?? {};
             const newMargins = { ...currentMargins, ...margins };
-            tr.setNodeMarkup(tr.mapping.map(pos), undefined, {
-              ...node.attrs,
-              margins: newMargins,
-            });
+            tr.setNodeMarkup(
+              tr.mapping.map(pos),
+              undefined,
+              mergeTableCellAttrs(node, { margins: newMargins }),
+            );
           }
           dispatch(tr.scrollIntoView());
         }
@@ -2190,13 +2202,23 @@ export const TablePluginExtension = createExtension({
         }
 
         if (dispatch) {
+          if (
+            direction !== null &&
+            !isOneOf(direction, TABLE_CELL_TEXT_DIRECTION_VALUES)
+          ) {
+            return false;
+          }
+
           const tr = state.tr;
           const cells = getTargetCellPositions(state);
           for (const { pos, node } of cells) {
-            tr.setNodeMarkup(tr.mapping.map(pos), undefined, {
-              ...node.attrs,
-              textDirection: direction,
-            });
+            tr.setNodeMarkup(
+              tr.mapping.map(pos),
+              undefined,
+              mergeTableCellAttrs(node, {
+                textDirection: direction ?? undefined,
+              }),
+            );
           }
           dispatch(tr.scrollIntoView());
         }
@@ -2220,10 +2242,12 @@ export const TablePluginExtension = createExtension({
           const tr = state.tr;
           const cells = getTargetCellPositions(state);
           for (const { pos, node } of cells) {
-            tr.setNodeMarkup(tr.mapping.map(pos), undefined, {
-              ...node.attrs,
-              noWrap: node.attrs["noWrap"] !== true,
-            });
+            const attrs = expectTableCellAttrs(node);
+            tr.setNodeMarkup(
+              tr.mapping.map(pos),
+              undefined,
+              mergeTableCellAttrs(node, { noWrap: attrs.noWrap !== true }),
+            );
           }
           dispatch(tr.scrollIntoView());
         }
@@ -2254,12 +2278,14 @@ export const TablePluginExtension = createExtension({
             const node = $from.node(d);
             if (node.type.name === "tableRow") {
               const pos = $from.before(d);
-              const newAttrs = {
-                ...node.attrs,
-                height,
-                heightRule: height !== null ? (rule ?? "atLeast") : null,
-              };
-              tr.setNodeMarkup(pos, undefined, newAttrs);
+              tr.setNodeMarkup(
+                pos,
+                undefined,
+                mergeTableRowAttrs(node, {
+                  height: height ?? undefined,
+                  heightRule: height !== null ? (rule ?? "atLeast") : undefined,
+                }),
+              );
               dispatch(tr.scrollIntoView());
               return true;
             }
@@ -2289,7 +2315,7 @@ export const TablePluginExtension = createExtension({
           const colCount = context.columnCount;
 
           // Calculate total table width from existing column widths or use default
-          const existingWidths = table.attrs["columnWidths"] as number[] | null;
+          const existingWidths = expectTableAttrs(table).columnWidths;
           const totalWidthTwips = existingWidths
             ? existingWidths.reduce((sum: number, w: number) => sum + w, 0)
             : 9360; // Default content width in twips
@@ -2307,12 +2333,15 @@ export const TablePluginExtension = createExtension({
                   cell.type.name === "tableCell" ||
                   cell.type.name === "tableHeader"
                 ) {
-                  tr = tr.setNodeMarkup(cellPos, undefined, {
-                    ...cell.attrs,
-                    width: equalWidth,
-                    widthType: "dxa",
-                    colwidth: null,
-                  });
+                  tr = tr.setNodeMarkup(
+                    cellPos,
+                    undefined,
+                    mergeTableCellAttrs(cell, {
+                      width: equalWidth,
+                      widthType: "dxa",
+                      colwidth: null,
+                    }),
+                  );
                 }
                 cellPos += cell.nodeSize;
               });
@@ -2325,10 +2354,11 @@ export const TablePluginExtension = createExtension({
             { length: colCount },
             () => equalWidth,
           );
-          tr = tr.setNodeMarkup(context.tablePos, undefined, {
-            ...table.attrs,
-            columnWidths: newColumnWidths,
-          });
+          tr = tr.setNodeMarkup(
+            context.tablePos,
+            undefined,
+            mergeTableAttrs(table, { columnWidths: newColumnWidths }),
+          );
 
           dispatch(tr.scrollIntoView());
         }
@@ -2364,12 +2394,15 @@ export const TablePluginExtension = createExtension({
                   cell.type.name === "tableCell" ||
                   cell.type.name === "tableHeader"
                 ) {
-                  tr = tr.setNodeMarkup(cellPos, undefined, {
-                    ...cell.attrs,
-                    width: null,
-                    widthType: null,
-                    colwidth: null,
-                  });
+                  tr = tr.setNodeMarkup(
+                    cellPos,
+                    undefined,
+                    mergeTableCellAttrs(cell, {
+                      width: undefined,
+                      widthType: undefined,
+                      colwidth: null,
+                    }),
+                  );
                 }
                 cellPos += cell.nodeSize;
               });
@@ -2378,12 +2411,15 @@ export const TablePluginExtension = createExtension({
           });
 
           // Remove table-level column widths and set auto width
-          tr = tr.setNodeMarkup(context.tablePos, undefined, {
-            ...table.attrs,
-            columnWidths: null,
-            width: null,
-            widthType: "auto",
-          });
+          tr = tr.setNodeMarkup(
+            context.tablePos,
+            undefined,
+            mergeTableAttrs(table, {
+              columnWidths: undefined,
+              width: undefined,
+              widthType: "auto",
+            }),
+          );
 
           dispatch(tr.scrollIntoView());
         }
@@ -2470,10 +2506,11 @@ export const TablePluginExtension = createExtension({
           const tableBorders = styleData.tableBorders;
 
           // Update table node attrs with styleId
-          tr = tr.setNodeMarkup(tablePos, undefined, {
-            ...table.attrs,
-            styleId: styleData.styleId,
-          });
+          tr = tr.setNodeMarkup(
+            tablePos,
+            undefined,
+            mergeTableAttrs(table, { styleId: styleData.styleId }),
+          );
 
           // Walk through all rows and cells to apply conditional formatting
           let dataRowIndex = 0;
@@ -2530,48 +2567,48 @@ export const TablePluginExtension = createExtension({
                 ? conditionals[cellCondType]
                 : undefined;
 
-              // Build new cell attrs
-              const newAttrs = { ...cell.attrs };
-
-              // Apply background color
-              if (cond?.backgroundColor) {
-                newAttrs["backgroundColor"] = cond.backgroundColor;
-              } else {
-                newAttrs["backgroundColor"] = null;
-              }
-
               // Apply borders: conditional borders override table borders
-              const cellBorders: Record<string, unknown> = {};
+              const cellBorders: TableCellBorders = {};
               const sides = ["top", "bottom", "left", "right"] as const;
               for (const side of sides) {
                 if (cond?.borders && cond.borders[side] !== undefined) {
-                  cellBorders[side] = cond.borders[side];
+                  const border = cond.borders[side];
+                  if (border) {
+                    cellBorders[side] = border;
+                  }
                 } else if (tableBorders) {
                   // Map table-level border to cell: insideH for top/bottom between rows, insideV for left/right between cols
+                  let border: BorderSpec | undefined;
                   if (
                     (side === "top" && rowIdx > 0) ||
                     (side === "bottom" && rowIdx < totalRows - 1)
                   ) {
-                    cellBorders[side] =
-                      tableBorders.insideH ?? tableBorders[side];
+                    border = tableBorders.insideH ?? tableBorders[side];
                   } else if (
                     (side === "left" && colIdx > 0) ||
                     (side === "right" && colIdx < totalCols - 1)
                   ) {
-                    cellBorders[side] =
-                      tableBorders.insideV ?? tableBorders[side];
+                    border = tableBorders.insideV ?? tableBorders[side];
                   } else {
-                    cellBorders[side] = tableBorders[side];
+                    border = tableBorders[side];
+                  }
+                  if (border) {
+                    cellBorders[side] = border;
                   }
                 }
               }
-              if (Object.keys(cellBorders).length > 0) {
-                newAttrs["borders"] = cellBorders;
-              } else {
-                newAttrs["borders"] = null;
-              }
 
-              tr = tr.setNodeMarkup(cellPos, undefined, newAttrs);
+              tr = tr.setNodeMarkup(
+                cellPos,
+                undefined,
+                mergeTableCellAttrs(cell, {
+                  backgroundColor: cond?.backgroundColor,
+                  borders:
+                    Object.keys(cellBorders).length > 0
+                      ? cellBorders
+                      : undefined,
+                }),
+              );
               cellOffset += cell.nodeSize;
             }
 
@@ -2591,6 +2628,14 @@ export const TablePluginExtension = createExtension({
       justification?: "left" | "center" | "right" | null;
     }): Command {
       return (state, dispatch) => {
+        if (
+          props.widthType !== undefined &&
+          props.widthType !== null &&
+          !isOneOf(props.widthType, TABLE_WIDTH_TYPE_VALUES)
+        ) {
+          return false;
+        }
+
         const context = getTableContext(state);
         if (
           !context.isInTable ||
@@ -2602,17 +2647,19 @@ export const TablePluginExtension = createExtension({
 
         if (dispatch) {
           const tr = state.tr;
-          const newAttrs = { ...context.table.attrs };
-          if ("width" in props) {
-            newAttrs["width"] = props.width;
-          }
-          if ("widthType" in props) {
-            newAttrs["widthType"] = props.widthType;
-          }
-          if ("justification" in props) {
-            newAttrs["justification"] = props.justification;
-          }
-          tr.setNodeMarkup(context.tablePos, undefined, newAttrs);
+          tr.setNodeMarkup(
+            context.tablePos,
+            undefined,
+            mergeTableAttrs(context.table, {
+              ...("width" in props ? { width: props.width ?? undefined } : {}),
+              ...("widthType" in props
+                ? { widthType: props.widthType ?? undefined }
+                : {}),
+              ...("justification" in props
+                ? { justification: props.justification ?? undefined }
+                : {}),
+            }),
+          );
           dispatch(tr.scrollIntoView());
         }
 
@@ -2639,11 +2686,12 @@ export const TablePluginExtension = createExtension({
             const node = $from.node(d);
             if (node.type.name === "tableRow") {
               const pos = $from.before(d);
-              const newAttrs = {
-                ...node.attrs,
-                isHeader: node.attrs["isHeader"] !== true,
-              };
-              tr.setNodeMarkup(pos, undefined, newAttrs);
+              const attrs = expectTableRowAttrs(node);
+              tr.setNodeMarkup(
+                pos,
+                undefined,
+                mergeTableRowAttrs(node, { isHeader: attrs.isHeader !== true }),
+              );
               dispatch(tr.scrollIntoView());
               return true;
             }
@@ -2669,21 +2717,20 @@ export const TablePluginExtension = createExtension({
           const tr = state.tr;
           const cells = getTargetCellPositions(state);
           const rgb = color.replace(/^#/u, "");
-          const defaultBorder = { style: "single", size: 4 };
+          const defaultBorder: BorderSpec = { style: "single", size: 4 };
           const { cellByPos, cellByRC } = buildTableGrid(
             context.table,
             context.tablePos,
           );
 
-          const modified = new Map<number, Record<string, unknown>>();
+          const modified = new Map<number, TableCellAttrs>();
           const getAttrs = (p: number, n: PMNode) =>
-            modified.get(p) ?? { ...n.attrs };
-          const setAttrs = (p: number, a: Record<string, unknown>) =>
-            modified.set(p, a);
+            modified.get(p) ?? expectTableCellAttrs(n);
+          const setAttrs = (p: number, a: TableCellAttrs) => modified.set(p, a);
 
           const adjacentMap: Record<
-            string,
-            { adjSide: string; dRow: number; dCol: number }
+            TableCellBorderSide,
+            { adjSide: TableCellBorderSide; dRow: number; dCol: number }
           > = {
             top: { adjSide: "bottom", dRow: -1, dCol: 0 },
             bottom: { adjSide: "top", dRow: 1, dCol: 0 },
@@ -2694,15 +2741,11 @@ export const TablePluginExtension = createExtension({
           for (const { pos, node } of cells) {
             const info = cellByPos.get(pos);
             const attrs = getAttrs(pos, node);
-            const currentBorders =
-              (attrs["borders"] as
-                | Record<string, Record<string, unknown>>
-                | null
-                | undefined) ?? {};
-            const newBorders: Record<string, unknown> = {};
+            const currentBorders = attrs.borders ?? {};
+            const newBorders: TableCellBorders = {};
 
             for (const side of ["top", "bottom", "left", "right"] as const) {
-              const borderVal = {
+              const borderVal: BorderSpec = {
                 ...defaultBorder,
                 ...currentBorders[side],
                 color: { rgb },
@@ -2712,9 +2755,6 @@ export const TablePluginExtension = createExtension({
               // Sync adjacent cell's matching edge
               if (info) {
                 const adj = adjacentMap[side];
-                if (!adj) {
-                  continue;
-                }
                 const adjColIdx =
                   side === "right"
                     ? info.colIdx + info.colspan
@@ -2728,11 +2768,7 @@ export const TablePluginExtension = createExtension({
                     continue;
                   }
                   const adjAttrs = getAttrs(adjPos, adjInfo.node);
-                  const adjBorders =
-                    (adjAttrs["borders"] as
-                      | Record<string, unknown>
-                      | null
-                      | undefined) ?? {};
+                  const adjBorders = adjAttrs.borders ?? {};
                   setAttrs(adjPos, {
                     ...adjAttrs,
                     borders: { ...adjBorders, [adj.adjSide]: borderVal },
@@ -2770,21 +2806,23 @@ export const TablePluginExtension = createExtension({
         if (dispatch) {
           const tr = state.tr;
           const cells = getTargetCellPositions(state);
-          const defaultBorder = { style: "single", color: { rgb: "000000" } };
+          const defaultBorder: BorderSpec = {
+            style: "single",
+            color: { rgb: "000000" },
+          };
           const { cellByPos, cellByRC } = buildTableGrid(
             context.table,
             context.tablePos,
           );
 
-          const modified = new Map<number, Record<string, unknown>>();
+          const modified = new Map<number, TableCellAttrs>();
           const getAttrs = (p: number, n: PMNode) =>
-            modified.get(p) ?? { ...n.attrs };
-          const setAttrs = (p: number, a: Record<string, unknown>) =>
-            modified.set(p, a);
+            modified.get(p) ?? expectTableCellAttrs(n);
+          const setAttrs = (p: number, a: TableCellAttrs) => modified.set(p, a);
 
           const adjacentMap: Record<
-            string,
-            { adjSide: string; dRow: number; dCol: number }
+            TableCellBorderSide,
+            { adjSide: TableCellBorderSide; dRow: number; dCol: number }
           > = {
             top: { adjSide: "bottom", dRow: -1, dCol: 0 },
             bottom: { adjSide: "top", dRow: 1, dCol: 0 },
@@ -2795,15 +2833,11 @@ export const TablePluginExtension = createExtension({
           for (const { pos, node } of cells) {
             const info = cellByPos.get(pos);
             const attrs = getAttrs(pos, node);
-            const currentBorders =
-              (attrs["borders"] as
-                | Record<string, Record<string, unknown>>
-                | null
-                | undefined) ?? {};
-            const newBorders: Record<string, unknown> = {};
+            const currentBorders = attrs.borders ?? {};
+            const newBorders: TableCellBorders = {};
 
             for (const side of ["top", "bottom", "left", "right"] as const) {
-              const borderVal = {
+              const borderVal: BorderSpec = {
                 ...defaultBorder,
                 ...currentBorders[side],
                 size,
@@ -2813,9 +2847,6 @@ export const TablePluginExtension = createExtension({
               // Sync adjacent cell's matching edge
               if (info) {
                 const adj = adjacentMap[side];
-                if (!adj) {
-                  continue;
-                }
                 const adjColIdx =
                   side === "right"
                     ? info.colIdx + info.colspan
@@ -2829,11 +2860,7 @@ export const TablePluginExtension = createExtension({
                     continue;
                   }
                   const adjAttrs = getAttrs(adjPos, adjInfo.node);
-                  const adjBorders =
-                    (adjAttrs["borders"] as
-                      | Record<string, unknown>
-                      | null
-                      | undefined) ?? {};
+                  const adjBorders = adjAttrs.borders ?? {};
                   setAttrs(adjPos, {
                     ...adjAttrs,
                     borders: { ...adjBorders, [adj.adjSide]: borderVal },

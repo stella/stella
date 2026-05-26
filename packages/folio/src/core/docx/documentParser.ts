@@ -243,7 +243,7 @@ export function parseDocumentBody(
   // Parse final section properties (w:body/w:sectPr)
   const finalSectPr = findChild(bodyEl, "w", "sectPr");
   if (finalSectPr) {
-    result.finalSectionProperties = parseSectionProperties(finalSectPr, rels);
+    result.finalSectionProperties = parseSectionProperties(finalSectPr);
   }
 
   // Build sections from content

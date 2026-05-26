@@ -6,6 +6,7 @@
  */
 
 import { parseFieldInstruction } from "../../../docx/fieldParser";
+import { expectFieldAttrs } from "../../attrs";
 import { createNodeExtension } from "../create";
 
 export const FieldExtension = createNodeExtension({
@@ -46,13 +47,8 @@ export const FieldExtension = createNodeExtension({
       },
     ],
     toDOM(node) {
-      // SAFETY: Field node attrs always match this shape per schema
-      const fieldType = String(node.attrs["fieldType"]);
-      const instruction = String(node.attrs["instruction"]);
-      const displayText = String(node.attrs["displayText"]);
-      const fieldKind = String(node.attrs["fieldKind"]);
-      const fldLock = Boolean(node.attrs["fldLock"]);
-      const dirty = Boolean(node.attrs["dirty"]);
+      const { fieldType, instruction, displayText, fieldKind, fldLock, dirty } =
+        expectFieldAttrs(node);
 
       // Dynamic fields show a placeholder; static fields show their display text
       let text = displayText || "";

@@ -4,10 +4,11 @@ import type {
   FooterReference,
   FootnoteProperties,
   HeaderReference,
+  SectionPropertyChange,
   SectionProperties,
 } from "../../types/document";
 import { getUnserializedSectionPropertyChildNames } from "../sectionParser";
-import { intAttr } from "./xmlUtils";
+import { escapeXml, intAttr } from "./xmlUtils";
 
 function serializeBorder(
   border: BorderSpec | undefined,
@@ -80,6 +81,12 @@ function serializeFootnoteProperties(
 
   return parts.length > 0
     ? `<w:footnotePr>${parts.join("")}</w:footnotePr>`
+    : "";
+}
+
+function serializeFootnoteColumns(props: SectionProperties): string {
+  return props.footnoteColumns !== undefined
+    ? `<w15:footnoteColumns w:val="${intAttr(props.footnoteColumns)}"/>`
     : "";
 }
 
@@ -341,6 +348,35 @@ function serializeOnOffElement(
   return value ? `<w:${name}/>` : `<w:${name} w:val="0"/>`;
 }
 
+function serializeSectionPropertyChange(change: SectionPropertyChange): string {
+  const normalizedId =
+    Number.isInteger(change.info.id) && change.info.id >= 0
+      ? change.info.id
+      : 0;
+  const authorCandidate =
+    typeof change.info.author === "string" ? change.info.author.trim() : "";
+  const normalizedAuthor =
+    authorCandidate.length > 0 ? authorCandidate : "Unknown";
+  const normalizedDate =
+    typeof change.info.date === "string" ? change.info.date.trim() : undefined;
+  const normalizedRsid =
+    typeof change.info.rsid === "string" ? change.info.rsid.trim() : undefined;
+  const attrs = [
+    `w:id="${normalizedId}"`,
+    `w:author="${escapeXml(normalizedAuthor)}"`,
+  ];
+  if (normalizedDate) {
+    attrs.push(`w:date="${escapeXml(normalizedDate)}"`);
+  }
+  if (normalizedRsid) {
+    attrs.push(`w:rsid="${escapeXml(normalizedRsid)}"`);
+  }
+
+  const previousSectPrXml =
+    serializeSectionProperties(change.previousProperties) || "<w:sectPr/>";
+  return `<w:sectPrChange ${attrs.join(" ")}>${previousSectPrXml}</w:sectPrChange>`;
+}
+
 export function serializeSectionProperties(
   props: SectionProperties | undefined,
 ): string {
@@ -359,6 +395,11 @@ export function serializeSectionProperties(
   const footnotePrXml = serializeFootnoteProperties(props.footnotePr);
   if (footnotePrXml) {
     parts.push(footnotePrXml);
+  }
+
+  const footnoteColumnsXml = serializeFootnoteColumns(props);
+  if (footnoteColumnsXml) {
+    parts.push(footnoteColumnsXml);
   }
 
   const endnotePrXml = serializeEndnoteProperties(props.endnotePr);
@@ -411,6 +452,9 @@ export function serializeSectionProperties(
     parts.push(
       `<w:printerSettings r:id="${props.printerSettingsRelationshipId}"/>`,
     );
+  }
+  for (const change of props.propertyChanges ?? []) {
+    parts.push(serializeSectionPropertyChange(change));
   }
 
   const unserializedChildNames =

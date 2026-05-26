@@ -5,6 +5,7 @@
 import { panic } from "better-result";
 import { toggleMark } from "prosemirror-commands";
 
+import { expectUnderlineMarkAttrs } from "../../attrs";
 import type { TextColorAttrs } from "../../schema/marks";
 import { createMarkExtension } from "../create";
 import type { ExtensionContext, ExtensionRuntime } from "../types";
@@ -26,17 +27,9 @@ export const UnderlineExtension = createMarkExtension({
       },
     ],
     toDOM(mark) {
-      // SAFETY: underline mark attrs always match UnderlineAttrs shape per schema
-      const style =
-        typeof mark.attrs["style"] === "string"
-          ? mark.attrs["style"]
-          : undefined;
-      // Access color.rgb via Reflect.get to avoid unsafe-type-assertion on `any`
-      const colorObj: unknown = Reflect.get(mark.attrs, "color");
-      const colorRgb: unknown =
-        typeof colorObj === "object" && colorObj !== null
-          ? Reflect.get(colorObj, "rgb")
-          : undefined;
+      const attrs = expectUnderlineMarkAttrs(mark);
+      const style = attrs.style;
+      const colorRgb = attrs.color?.rgb;
       const cssStyle: string[] = ["text-decoration: underline"];
 
       if (style && style !== "single") {
@@ -52,7 +45,7 @@ export const UnderlineExtension = createMarkExtension({
         }
       }
 
-      if (typeof colorRgb === "string" && colorRgb) {
+      if (colorRgb) {
         cssStyle.push(`text-decoration-color: #${colorRgb}`);
       }
 

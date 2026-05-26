@@ -40,18 +40,31 @@ import {
   isTiffMimeType,
 } from "../utils/tiffConverter";
 import { parseComments } from "./commentParser";
+import { normalizeCommentReferences } from "./commentReferenceNormalization";
 import {
   parseDocumentBody,
   extractAllTemplateVariables,
 } from "./documentParser";
 import { parseFootnotes, parseEndnotes } from "./footnoteParser";
 import { parseHeader, parseFooter } from "./headerFooterParser";
+import { normalizeHeaderFooterReferences } from "./headerFooterReferenceNormalization";
+import {
+  DocxModelValidationError,
+  formatDocumentModelIssues,
+  validateFolioDocumentModel,
+} from "./modelValidation";
 import { parseNumbering } from "./numberingParser";
 import type { NumberingMap } from "./numberingParser";
-import { parseRelationships, RELATIONSHIP_TYPES } from "./relsParser";
+import { normalizeNumberingReferences } from "./numberingReferenceNormalization";
+import {
+  parseRelationships,
+  RELATIONSHIP_TYPES,
+  resolveRelativePath,
+} from "./relsParser";
 import { parseStyles, parseStyleDefinitions } from "./styleParser";
 import type { StyleMap } from "./styleParser";
 import { parseTheme } from "./themeParser";
+import { normalizeTrackedMoveRanges } from "./trackedMoveRangeNormalization";
 import { unzipDocx, getMediaMimeType, mediaToDataUrl } from "./unzip";
 import type { DocxUnzipLimits, RawDocxContent } from "./unzip";
 
@@ -136,6 +149,7 @@ export async function parseDocx(
     const raw = await timeStageAsync("unzip", () =>
       unzipDocx(buffer, unzipLimits),
     );
+    warnings.push(...raw.warnings);
     onProgress("Extracted DOCX", 10);
 
     // ========================================================================
@@ -261,6 +275,68 @@ export async function parseDocx(
     if (comments.length > 0) {
       documentBody.comments = comments;
     }
+    const commentReferenceNormalization = normalizeCommentReferences({
+      documentBody,
+      comments,
+      ...(headers !== undefined ? { headers } : {}),
+      ...(footers !== undefined ? { footers } : {}),
+      ...(footnotes !== undefined ? { footnotes } : {}),
+      ...(endnotes !== undefined ? { endnotes } : {}),
+    });
+    if (commentReferenceNormalization.removedDanglingReferences > 0) {
+      warnings.push(
+        `Removed ${commentReferenceNormalization.removedDanglingReferences} dangling comment reference marker(s) whose comments.xml entries are missing.`,
+      );
+    }
+    if (commentReferenceNormalization.reanchoredUnbalancedRanges > 0) {
+      warnings.push(
+        `Re-anchored ${commentReferenceNormalization.reanchoredUnbalancedRanges} unbalanced comment range marker(s) as point comments.`,
+      );
+    }
+    const headerFooterReferenceNormalization = normalizeHeaderFooterReferences({
+      documentBody,
+      ...(headers !== undefined ? { headers } : {}),
+      ...(footers !== undefined ? { footers } : {}),
+    });
+    if (
+      headerFooterReferenceNormalization.removedDanglingHeaderReferences > 0
+    ) {
+      warnings.push(
+        `Removed ${headerFooterReferenceNormalization.removedDanglingHeaderReferences} dangling header reference(s) whose header parts are missing.`,
+      );
+    }
+    if (
+      headerFooterReferenceNormalization.removedDanglingFooterReferences > 0
+    ) {
+      warnings.push(
+        `Removed ${headerFooterReferenceNormalization.removedDanglingFooterReferences} dangling footer reference(s) whose footer parts are missing.`,
+      );
+    }
+    const numberingReferenceNormalization = normalizeNumberingReferences({
+      documentBody,
+      numbering,
+      ...(headers !== undefined ? { headers } : {}),
+      ...(footers !== undefined ? { footers } : {}),
+      ...(footnotes !== undefined ? { footnotes } : {}),
+      ...(endnotes !== undefined ? { endnotes } : {}),
+    });
+    if (numberingReferenceNormalization.removedMissingNumberingReferences > 0) {
+      warnings.push(
+        `Removed ${numberingReferenceNormalization.removedMissingNumberingReferences} numbering reference(s) whose numbering definitions are missing.`,
+      );
+    }
+    const trackedMoveRangeNormalization = normalizeTrackedMoveRanges({
+      documentBody,
+      ...(headers !== undefined ? { headers } : {}),
+      ...(footers !== undefined ? { footers } : {}),
+      ...(footnotes !== undefined ? { footnotes } : {}),
+      ...(endnotes !== undefined ? { endnotes } : {}),
+    });
+    if (trackedMoveRangeNormalization.removedUnbalancedMoveRangeMarkers > 0) {
+      warnings.push(
+        `Removed ${trackedMoveRangeNormalization.removedUnbalancedMoveRangeMarkers} unbalanced tracked move range marker(s).`,
+      );
+    }
 
     // ========================================================================
     // STAGE 10: Detect template variables (77-80%)
@@ -314,11 +390,23 @@ export async function parseDocx(
 
     const document: Document = {
       package: pkg,
-      originalBuffer: buffer,
+      originalBuffer: raw.originalBuffer,
       ...(templateVariables !== undefined ? { templateVariables } : {}),
       ...(requiredFonts.length > 0 ? { requiredFonts } : {}),
-      ...(warnings.length > 0 ? { warnings } : {}),
     };
+
+    const validation = validateFolioDocumentModel(document);
+    const parsedCompleteModel = parseHeadersFooters && parseNotes;
+    if (!validation.valid && parsedCompleteModel) {
+      throw new DocxModelValidationError(
+        "Parsed DOCX produced an invalid document model",
+        validation.issues,
+      );
+    }
+    warnings.push(...formatDocumentModelIssues(validation.issues));
+    if (warnings.length > 0) {
+      document.warnings = warnings;
+    }
 
     onProgress("Complete", 100);
     return document;
@@ -435,6 +523,31 @@ function getMapCaseInsensitive<T>(
   return undefined;
 }
 
+const DOCUMENT_RELATIONSHIPS_PATH = "word/_rels/document.xml.rels";
+
+function getRelationshipPartPath(target: string): string {
+  return resolveRelativePath(DOCUMENT_RELATIONSHIPS_PATH, target);
+}
+
+function getRelationshipsPathForPart(partPath: string): string {
+  const lastSlash = partPath.lastIndexOf("/");
+  const directory = lastSlash === -1 ? "" : partPath.slice(0, lastSlash);
+  const filename = lastSlash === -1 ? partPath : partPath.slice(lastSlash + 1);
+  return `${directory ? `${directory}/` : ""}_rels/${filename}.rels`;
+}
+
+function getHeaderFooterXml(
+  raw: RawDocxContent,
+  partPath: string,
+  indexedParts: Map<string, string>,
+): string | undefined {
+  const filename = partPath.split("/").pop() ?? partPath;
+  return (
+    getMapCaseInsensitive(raw.allXml, partPath) ??
+    getMapCaseInsensitive(indexedParts, filename)
+  );
+}
+
 function parseHeadersAndFooters(
   raw: RawDocxContent,
   styles: StyleMap | null,
@@ -454,12 +567,12 @@ function parseHeadersAndFooters(
     if (rel.type === RELATIONSHIP_TYPES.header && rel.target) {
       // Get the header XML for this relationship
       // Use case-insensitive lookup since ZIP files may have inconsistent casing
-      const filename = rel.target.split("/").pop() || rel.target;
-      const headerXml = getMapCaseInsensitive(raw.headers, filename);
+      const partPath = getRelationshipPartPath(rel.target);
+      const headerXml = getHeaderFooterXml(raw, partPath, raw.headers);
 
       if (headerXml) {
         // Get header-specific relationships (e.g., word/_rels/header1.xml.rels)
-        const headerRelsPath = `word/_rels/${filename}.rels`;
+        const headerRelsPath = getRelationshipsPathForPart(partPath);
         const headerRelsXml = getMapCaseInsensitive(raw.allXml, headerRelsPath);
         const headerRels = headerRelsXml
           ? parseRelationships(headerRelsXml)
@@ -478,12 +591,12 @@ function parseHeadersAndFooters(
       }
     } else if (rel.type === RELATIONSHIP_TYPES.footer && rel.target) {
       // Use case-insensitive lookup since ZIP files may have inconsistent casing
-      const filename = rel.target.split("/").pop() || rel.target;
-      const footerXml = getMapCaseInsensitive(raw.footers, filename);
+      const partPath = getRelationshipPartPath(rel.target);
+      const footerXml = getHeaderFooterXml(raw, partPath, raw.footers);
 
       if (footerXml) {
         // Get footer-specific relationships (e.g., word/_rels/footer1.xml.rels)
-        const footerRelsPath = `word/_rels/${filename}.rels`;
+        const footerRelsPath = getRelationshipsPathForPart(partPath);
         const footerRelsXml = getMapCaseInsensitive(raw.allXml, footerRelsPath);
         const footerRels = footerRelsXml
           ? parseRelationships(footerRelsXml)

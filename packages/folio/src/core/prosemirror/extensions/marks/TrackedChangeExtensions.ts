@@ -7,6 +7,7 @@
  */
 
 import { getAuthorColorIdx, AUTHOR_COLORS } from "../../../utils/authorColors";
+import { expectTrackedChangeMarkAttrs } from "../../attrs";
 import { createMarkExtension } from "../create";
 
 /**
@@ -54,16 +55,11 @@ export const InsertionExtension = createMarkExtension({
       },
     ],
     toDOM(mark) {
-      // SAFETY: TrackedChange attrs always match this shape per schema
-      const revisionId = Number(mark.attrs["revisionId"]);
-      const author = String(mark.attrs["author"]);
-      // SAFETY: date is null or a date string per schema default
-      const date =
-        mark.attrs["date"] !== null ? String(mark.attrs["date"]) : null;
+      const { revisionId, author, date } = expectTrackedChangeMarkAttrs(mark);
       const idx = getAuthorColorIdx(author);
       // SAFETY: getAuthorColorIdx returns modulo AUTHOR_COLORS.length
       const color = AUTHOR_COLORS[idx] ?? "#000000";
-      const datePart = date !== null ? new Date(date).toLocaleDateString() : "";
+      const datePart = date ? new Date(date).toLocaleDateString() : "";
       const titleParts = [author, datePart].filter(Boolean);
       return [
         "span",
@@ -72,7 +68,7 @@ export const InsertionExtension = createMarkExtension({
           "data-revision-id": String(revisionId),
           "data-author": author,
           "data-tc-author-idx": String(idx),
-          ...(date !== null ? { "data-date": date } : {}),
+          ...(date ? { "data-date": date } : {}),
           ...(titleParts.length > 0
             ? { title: `Inserted: ${titleParts.join(", ")}` }
             : {}),
@@ -117,16 +113,11 @@ export const DeletionExtension = createMarkExtension({
       },
     ],
     toDOM(mark) {
-      // SAFETY: TrackedChange attrs always match this shape per schema
-      const revisionId = Number(mark.attrs["revisionId"]);
-      const author = String(mark.attrs["author"]);
-      // SAFETY: date is null or a date string per schema default
-      const date =
-        mark.attrs["date"] !== null ? String(mark.attrs["date"]) : null;
+      const { revisionId, author, date } = expectTrackedChangeMarkAttrs(mark);
       const idx = getAuthorColorIdx(author);
       // SAFETY: getAuthorColorIdx returns modulo AUTHOR_COLORS.length
       const color = AUTHOR_COLORS[idx] ?? "#000000";
-      const datePart = date !== null ? new Date(date).toLocaleDateString() : "";
+      const datePart = date ? new Date(date).toLocaleDateString() : "";
       const titleParts = [author, datePart].filter(Boolean);
       return [
         "span",
@@ -135,7 +126,7 @@ export const DeletionExtension = createMarkExtension({
           "data-revision-id": String(revisionId),
           "data-author": author,
           "data-tc-author-idx": String(idx),
-          ...(date !== null ? { "data-date": date } : {}),
+          ...(date ? { "data-date": date } : {}),
           ...(titleParts.length > 0
             ? { title: `Deleted: ${titleParts.join(", ")}` }
             : {}),

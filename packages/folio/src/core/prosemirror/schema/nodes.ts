@@ -11,7 +11,11 @@ import type {
   ParagraphAlignment,
   ParagraphFormatting,
   ParagraphPropertyChange,
+  FieldType,
+  Hyperlink,
   LineSpacingRule,
+  ImagePosition,
+  ImageWrap,
   BorderSpec,
   ShadingProperties,
   TabStop,
@@ -19,10 +23,19 @@ import type {
   NumberFormat,
   TableFormatting,
   TableRowFormatting,
+  TableCell,
   TableCellFormatting,
+  TableWidthType,
   SectionProperties,
+  ShapeFill,
+  SdtProperties,
+  SdtType,
 } from "../../types/document";
 import type { SpacingExplicit } from "../../types/formatting";
+
+export type HardBreakAttrs = {
+  breakType?: "column";
+};
 
 /**
  * Paragraph node attributes - maps to ParagraphFormatting
@@ -118,6 +131,18 @@ export type ParagraphAttrs = {
   // Bookmarks on this paragraph (for TOC anchors, cross-references)
   bookmarks?: { id: number; name: string }[];
 
+  /** Empty `w:hyperlink` elements cannot be represented as text marks.
+   *  Preserve their relationship metadata at the paragraph boundary so a
+   *  no-edit DOCX round-trip does not silently drop hyperlink elements. */
+  _emptyHyperlinks?: {
+    /** ProseMirror inline offset where the zero-width hyperlink appeared. */
+    offset: number;
+    href?: Hyperlink["href"];
+    anchor?: Hyperlink["anchor"];
+    tooltip?: Hyperlink["tooltip"];
+    rId?: Hyperlink["rId"];
+  }[];
+
   /**
    * Run-in heading flag: this paragraph's mark carries
    * `<w:specVanish/>` and the next paragraph should flow inline on
@@ -147,14 +172,14 @@ export type ParagraphAttrs = {
  */
 export type ImagePositionAttrs = {
   horizontal?: {
-    relativeTo?: string;
+    relativeTo?: NonNullable<ImagePosition["horizontal"]["relativeTo"]>;
     posOffset?: number; // In EMU
-    align?: string;
+    align?: NonNullable<ImagePosition["horizontal"]["alignment"]>;
   };
   vertical?: {
-    relativeTo?: string;
+    relativeTo?: NonNullable<ImagePosition["vertical"]["relativeTo"]>;
     posOffset?: number; // In EMU
-    align?: string;
+    align?: NonNullable<ImagePosition["vertical"]["alignment"]>;
   };
 };
 
@@ -171,14 +196,7 @@ export type ImageAttrs = {
   height?: number;
   rId?: string;
   /** Wrap type from DOCX: inline, square, tight, through, topAndBottom, behind, inFront */
-  wrapType?:
-    | "inline"
-    | "square"
-    | "tight"
-    | "through"
-    | "topAndBottom"
-    | "behind"
-    | "inFront";
+  wrapType?: ImageWrap["type"];
   /** Display mode for CSS: inline (flows with text), float (left/right float), block (centered) */
   displayMode?: "inline" | "float" | "block";
   /** CSS float direction for floating images */
@@ -202,9 +220,155 @@ export type ImageAttrs = {
   /** Border style (CSS border-style value) */
   borderStyle?: string;
   /** Wrap text setting from DOCX (left, right, bothSides, largest) for round-trip */
-  wrapText?: string;
+  wrapText?: NonNullable<ImageWrap["wrapText"]>;
   /** Hyperlink URL for clickable image */
   hlinkHref?: string;
+  /** Original OOXML for opaque/unsupported DOCX drawings. */
+  _docxRawXml?: string;
+};
+
+/**
+ * Field node attributes
+ */
+export type FieldAttrs = {
+  /** Field type: PAGE, NUMPAGES, DATE, MERGEFIELD, etc. */
+  fieldType: FieldType;
+  /** Full field instruction (e.g. "PAGE \\* MERGEFORMAT") */
+  instruction: string;
+  /** Current/cached display text */
+  displayText: string;
+  /** Whether the field came from w:fldSimple or a complex fldChar range */
+  fieldKind: "simple" | "complex";
+  /** Field is locked */
+  fldLock?: boolean;
+  /** Field is dirty and should be recalculated by the host application */
+  dirty?: boolean;
+};
+
+/**
+ * Math equation node attributes
+ */
+export type MathAttrs = {
+  /** Whether this is inline OMML or a block equation paragraph */
+  display?: "inline" | "block";
+  /** Raw OMML XML for round-trip preservation */
+  ommlXml: string;
+  /** Plain text fallback used by the editor and layout engine */
+  plainText?: string;
+};
+
+/**
+ * Structured document tag node attributes
+ */
+export type SdtAttrs = {
+  /** SDT type */
+  sdtType: SdtType;
+  /** Alias (friendly name) */
+  alias?: string;
+  /** Tag (developer identifier) */
+  tag?: string;
+  /** Lock setting */
+  lock?: NonNullable<SdtProperties["lock"]>;
+  /** Placeholder text */
+  placeholder?: string;
+  /** Whether showing placeholder */
+  showingPlaceholder?: boolean;
+  /** Date format for date controls */
+  dateFormat?: string;
+  /** Dropdown/combobox list items as JSON string */
+  listItems?: string;
+  /** Checkbox checked state */
+  checked?: boolean;
+};
+
+/**
+ * Shape node attributes
+ */
+export type ShapeAttrs = {
+  /** Shape type preset */
+  shapeType?: string;
+  /** Unique identifier */
+  shapeId?: string;
+  /** Width in pixels */
+  width?: number;
+  /** Height in pixels */
+  height?: number;
+  /** Fill color as CSS color */
+  fillColor?: string;
+  /** Fill type: none, solid, gradient, pattern, picture */
+  fillType?: ShapeFill["type"];
+  /** Gradient type: linear, radial, rectangular, path */
+  gradientType?: NonNullable<ShapeFill["gradient"]>["type"];
+  /** Gradient angle in degrees (for linear) */
+  gradientAngle?: number;
+  /** Gradient stops as JSON string: [{position, color}] */
+  gradientStops?: string;
+  /** Outline width in pixels */
+  outlineWidth?: number;
+  /** Outline color as CSS color */
+  outlineColor?: string;
+  /** Outline style */
+  outlineStyle?: string;
+  /** CSS transform */
+  transform?: string;
+  /** Display mode */
+  displayMode?: "inline" | "float" | "block";
+  /** CSS float */
+  cssFloat?: "left" | "right" | "none";
+  /** Wrap type */
+  wrapType?: string;
+  /** Shadow color as CSS color */
+  shadowColor?: string;
+  /** Shadow blur radius in pixels */
+  shadowBlur?: number;
+  /** Shadow X offset in pixels */
+  shadowOffsetX?: number;
+  /** Shadow Y offset in pixels */
+  shadowOffsetY?: number;
+  /** Glow color as CSS color */
+  glowColor?: string;
+  /** Glow radius in pixels */
+  glowRadius?: number;
+};
+
+/**
+ * Text box node attributes
+ */
+export type TextBoxAttrs = {
+  /** Width in pixels */
+  width?: number;
+  /** Height in pixels */
+  height?: number;
+  /** Unique identifier */
+  textBoxId?: string;
+  /** Fill color as CSS color */
+  fillColor?: string;
+  /** Outline width in pixels */
+  outlineWidth?: number;
+  /** Outline color as CSS color */
+  outlineColor?: string;
+  /** Outline style */
+  outlineStyle?: string;
+  /** Internal margin top in pixels */
+  marginTop?: number;
+  /** Internal margin bottom in pixels */
+  marginBottom?: number;
+  /** Internal margin left in pixels */
+  marginLeft?: number;
+  /** Internal margin right in pixels */
+  marginRight?: number;
+  /** Vertical text alignment */
+  verticalAlign?: string;
+  /** Display mode */
+  displayMode?: "inline" | "float" | "block";
+  /** CSS float direction */
+  cssFloat?: "left" | "right" | "none";
+  /** Wrap type */
+  wrapType?: string;
+  /** Original DOCX placement hint for save-path reconstruction. */
+  _docxPlacement?: "standalone" | "inlineWithPrevious";
+  /** Original DOCX paragraph group for standalone text-box reconstruction. */
+  _docxGroupId?: string;
 };
 
 /**
@@ -216,7 +380,7 @@ export type TableAttrs = {
   /** Table width (in twips) */
   width?: number;
   /** Table width type ('auto', 'pct', 'dxa') */
-  widthType?: string;
+  widthType?: TableWidthType;
   /** Table justification/alignment */
   justification?: "left" | "center" | "right";
   /** Column widths (in twips) from w:tblGrid */
@@ -243,7 +407,7 @@ export type TableRowAttrs = {
   /** Row height (in twips) */
   height?: number;
   /** Height rule ('auto', 'exact', 'atLeast') */
-  heightRule?: string;
+  heightRule?: NonNullable<TableRowFormatting["heightRule"]>;
   /** Is header row */
   isHeader?: boolean;
   /** Original row formatting from DOCX for lossless round-trip serialization */
@@ -263,13 +427,13 @@ export type TableCellAttrs = {
   /** Cell width (in twips) */
   width?: number;
   /** Cell width type */
-  widthType?: string;
+  widthType?: TableWidthType;
   /** Vertical alignment */
   verticalAlign?: "top" | "center" | "bottom";
   /** Background color (RGB hex) */
   backgroundColor?: string;
   /** OOXML text direction (e.g. 'tbRl', 'btLr') */
-  textDirection?: string;
+  textDirection?: NonNullable<TableCellFormatting["textDirection"]>;
   /** No text wrapping in cell */
   noWrap?: boolean;
   /** Cell borders — full BorderSpec per side (style, color, size) */
@@ -283,4 +447,8 @@ export type TableCellAttrs = {
   margins?: { top?: number; bottom?: number; left?: number; right?: number };
   /** Original cell formatting from DOCX for lossless round-trip serialization */
   _originalFormatting?: TableCellFormatting;
+  /** Preserve a DOCX vMerge restart even when PM cannot model it as a rowspan. */
+  _preserveVMergeRestart?: boolean;
+  /** Original DOCX vMerge continuation cells skipped into this PM rowspan. */
+  _docxVMergeContinuationCells?: TableCell[];
 };

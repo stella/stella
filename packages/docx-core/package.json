@@ -16,6 +16,7 @@
     "format": "oxfmt ."
   },
   "dependencies": {
+    "better-result": "catalog:",
     "jszip": "catalog:"
   },
   "devDependencies": {

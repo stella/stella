@@ -8,6 +8,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Document, Hyperlink, Paragraph } from "../../types/document";
+import { fromProseDoc } from "./fromProseDoc";
 import { toProseDoc } from "./toProseDoc";
 
 const docWithHyperlink = (hyperlink: Hyperlink): Document => {
@@ -72,6 +73,54 @@ describe("convertHyperlink preserves non-text run content", () => {
     }
   });
 
+  test("round-trips a w:tab inside one hyperlink wrapper", () => {
+    const document = docWithHyperlink({
+      type: "hyperlink",
+      href: "https://example.test/catalog",
+      rId: "rId7",
+      children: [
+        {
+          type: "run",
+          content: [{ type: "text", text: "item" }],
+        },
+        {
+          type: "run",
+          content: [{ type: "tab" }],
+        },
+        {
+          type: "run",
+          content: [{ type: "text", text: "sku.html" }],
+        },
+      ],
+    });
+
+    const roundTripped = fromProseDoc(toProseDoc(document), document);
+    const paragraph = roundTripped.package.document.content.at(0);
+    expect(paragraph?.type).toBe("paragraph");
+    if (paragraph?.type !== "paragraph") {
+      return;
+    }
+
+    expect(paragraph.content).toHaveLength(1);
+    const hyperlink = paragraph.content.at(0);
+    expect(hyperlink?.type).toBe("hyperlink");
+    if (hyperlink?.type !== "hyperlink") {
+      return;
+    }
+
+    expect(hyperlink.rId).toBe("rId7");
+    expect(hyperlink.children.map((child) => child.type)).toEqual([
+      "run",
+      "run",
+      "run",
+    ]);
+    expect(
+      hyperlink.children.map((child) =>
+        child.type === "run" ? child.content.at(0)?.type : child.type,
+      ),
+    ).toEqual(["text", "tab", "text"]);
+  });
+
   test("preserves a w:br inside a hyperlink", () => {
     const hyperlink: Hyperlink = {
       type: "hyperlink",
@@ -102,5 +151,87 @@ describe("convertHyperlink preserves non-text run content", () => {
     }
     expect(childTypes).toContain("hardBreak");
     expect(childTypes.filter((n) => n === "text")).toHaveLength(2);
+  });
+
+  test("round-trips a w:br inside one hyperlink wrapper", () => {
+    const document = docWithHyperlink({
+      type: "hyperlink",
+      href: "https://example.test",
+      children: [
+        {
+          type: "run",
+          content: [{ type: "text", text: "Line A" }],
+        },
+        {
+          type: "run",
+          content: [{ type: "break", breakType: "textWrapping" }],
+        },
+        {
+          type: "run",
+          content: [{ type: "text", text: "Line B" }],
+        },
+      ],
+    });
+
+    const roundTripped = fromProseDoc(toProseDoc(document), document);
+    const paragraph = roundTripped.package.document.content.at(0);
+    expect(paragraph?.type).toBe("paragraph");
+    if (paragraph?.type !== "paragraph") {
+      return;
+    }
+
+    expect(paragraph.content).toHaveLength(1);
+    const hyperlink = paragraph.content.at(0);
+    expect(hyperlink?.type).toBe("hyperlink");
+    if (hyperlink?.type !== "hyperlink") {
+      return;
+    }
+
+    expect(
+      hyperlink.children.map((child) =>
+        child.type === "run" ? child.content.at(0)?.type : child.type,
+      ),
+    ).toEqual(["text", "break", "text"]);
+  });
+
+  test("round-trips a footnote reference inside one hyperlink wrapper", () => {
+    const document = docWithHyperlink({
+      type: "hyperlink",
+      anchor: "bookmark0",
+      children: [
+        {
+          type: "run",
+          content: [{ type: "text", text: "y" }],
+        },
+        {
+          type: "run",
+          content: [{ type: "footnoteRef", id: 1 }],
+        },
+        {
+          type: "run",
+          content: [{ type: "text", text: ";" }],
+        },
+      ],
+    });
+
+    const roundTripped = fromProseDoc(toProseDoc(document), document);
+    const paragraph = roundTripped.package.document.content.at(0);
+    expect(paragraph?.type).toBe("paragraph");
+    if (paragraph?.type !== "paragraph") {
+      return;
+    }
+
+    expect(paragraph.content).toHaveLength(1);
+    const hyperlink = paragraph.content.at(0);
+    expect(hyperlink?.type).toBe("hyperlink");
+    if (hyperlink?.type !== "hyperlink") {
+      return;
+    }
+
+    expect(
+      hyperlink.children.map((child) =>
+        child.type === "run" ? child.content.at(0)?.type : child.type,
+      ),
+    ).toEqual(["text", "footnoteRef", "text"]);
   });
 });

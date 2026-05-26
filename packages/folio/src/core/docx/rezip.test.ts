@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
 import type { Document } from "../types/document";
+import { DocxModelValidationError } from "./modelValidation";
 import { parseDocx } from "./parser";
 import { RELATIONSHIP_TYPES } from "./relsParser";
 import { DocxPackageFidelityError, repackDocx } from "./rezip";
@@ -60,6 +61,22 @@ async function createHeaderFixture(): Promise<ArrayBuffer> {
 <w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>`,
   );
   return zip.generateAsync({ type: "arraybuffer" });
+}
+
+function truncateAfterEndOfCentralDirectoryCounts(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  for (let offset = bytes.byteLength - 22; offset >= 0; offset -= 1) {
+    if (
+      bytes[offset] === 0x50 &&
+      bytes[offset + 1] === 0x4b &&
+      bytes[offset + 2] === 0x05 &&
+      bytes[offset + 3] === 0x06
+    ) {
+      return bytes.slice(0, offset + 12).buffer;
+    }
+  }
+
+  throw new Error("Could not find ZIP end-of-central-directory record");
 }
 
 async function createAlternateContentImageFixture(): Promise<ArrayBuffer> {
@@ -198,6 +215,47 @@ async function createMultiSectionFirstHeaderImageFixture(): Promise<ArrayBuffer>
 }
 
 describe("repackDocx", () => {
+  test("rejects an invalid document model before full repack", async () => {
+    const originalBuffer = await createHeaderFixture();
+    const document: Document = {
+      originalBuffer,
+      package: {
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              content: [{ type: "commentReference", id: 404 }],
+            },
+          ],
+        },
+        relationships: new Map(),
+      },
+    };
+
+    try {
+      await repackDocx(document, { updateModifiedDate: false });
+    } catch (error) {
+      expect(error).toBeInstanceOf(DocxModelValidationError);
+      expect(String(error)).toContain("Comment 404 is referenced");
+      return;
+    }
+
+    throw new Error("Expected repackDocx to reject");
+  });
+
+  test("uses parser-repaired package buffers for full repack", async () => {
+    const originalBuffer = await createHeaderFixture();
+    const truncated = truncateAfterEndOfCentralDirectoryCounts(originalBuffer);
+    const document = await parseDocx(truncated, { preloadFonts: false });
+
+    expect(document.originalBuffer?.byteLength).toBe(originalBuffer.byteLength);
+
+    const repacked = await repackDocx(document, { updateModifiedDate: false });
+    const reparsed = await parseDocx(repacked, { preloadFonts: false });
+
+    expect(reparsed.package.document.content).toHaveLength(1);
+  });
+
   test("registers newly inserted header images in the header relationship part", async () => {
     const originalBuffer = await createHeaderFixture();
     const document: Document = {

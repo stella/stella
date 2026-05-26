@@ -15,3 +15,12 @@ export {
   updateDocumentContent,
   proseDocToBlocks,
 } from "./fromProseDoc";
+export {
+  assertValidProseMirrorDocument,
+  formatProseMirrorDocumentIssues,
+  validateProseMirrorDocument,
+} from "../validation";
+export type {
+  ProseMirrorDocumentValidationIssue,
+  ValidateProseMirrorDocumentResult,
+} from "../validation";

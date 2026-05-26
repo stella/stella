@@ -13,9 +13,26 @@ export const HardBreakExtension = createNodeExtension({
   nodeSpec: {
     inline: true,
     group: "inline",
+    attrs: {
+      breakType: { default: null },
+    },
     selectable: false,
-    parseDOM: [{ tag: "br" }],
-    toDOM() {
+    parseDOM: [
+      {
+        tag: "br",
+        getAttrs(node) {
+          if (!(node instanceof HTMLElement)) {
+            return null;
+          }
+          const breakType = node.dataset["docxBreakType"];
+          return breakType === "column" ? { breakType } : null;
+        },
+      },
+    ],
+    toDOM(node) {
+      if (node.attrs["breakType"] === "column") {
+        return ["br", { "data-docx-break-type": "column" }];
+      }
       return ["br"];
     },
   },

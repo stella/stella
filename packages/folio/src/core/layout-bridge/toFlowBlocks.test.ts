@@ -16,6 +16,64 @@ describe("toFlowBlocks paragraph formatting", () => {
     expect(second).toEqual(first);
   });
 
+  test("rejects malformed paragraph attrs at the layout boundary", () => {
+    const doc = schema.node("doc", null, [
+      schema.node("paragraph", { lineSpacing: "240" }, [
+        schema.text("Invalid paragraph"),
+      ]),
+    ]);
+
+    expect(() => toFlowBlocks(doc)).toThrow("paragraph.attrs.lineSpacing");
+  });
+
+  test("rejects malformed mark attrs at the layout boundary", () => {
+    const fontSize = schema.mark("fontSize", { size: "large" });
+    const doc = schema.node("doc", null, [
+      schema.node("paragraph", null, [schema.text("Invalid mark", [fontSize])]),
+    ]);
+
+    expect(() => toFlowBlocks(doc)).toThrow("fontSize.attrs.size");
+  });
+
+  test("rejects malformed field and math attrs at the layout boundary", () => {
+    const fieldDoc = schema.node("doc", null, [
+      schema.node("paragraph", null, [
+        schema.node("field", {
+          fieldType: "NOT_A_FIELD",
+          instruction: " PAGE ",
+          displayText: "1",
+          fieldKind: "simple",
+        }),
+      ]),
+    ]);
+    const mathDoc = schema.node("doc", null, [
+      schema.node("paragraph", null, [
+        schema.node("math", {
+          display: "inline",
+          ommlXml: 42,
+          plainText: "x",
+        }),
+      ]),
+    ]);
+
+    expect(() => toFlowBlocks(fieldDoc)).toThrow("field.attrs.fieldType");
+    expect(() => toFlowBlocks(mathDoc)).toThrow("math.attrs.ommlXml");
+  });
+
+  test("rejects malformed shape and text box attrs at the layout boundary", () => {
+    const shapeDoc = schema.node("doc", null, [
+      schema.node("paragraph", null, [schema.node("shape", { width: "wide" })]),
+    ]);
+    const textBoxDoc = schema.node("doc", null, [
+      schema.node("textBox", { width: "wide" }, [
+        schema.node("paragraph", null, [schema.text("Invalid text box")]),
+      ]),
+    ]);
+
+    expect(() => toFlowBlocks(shapeDoc)).toThrow("shape.attrs.width");
+    expect(() => toFlowBlocks(textBoxDoc)).toThrow("textBox.attrs.width");
+  });
+
   test("does not convert absent paragraph spacing defaults to zero line height", () => {
     const doc = schema.node("doc", null, [
       schema.node("paragraph", null, [schema.text("First paragraph")]),
@@ -237,7 +295,7 @@ describe("toFlowBlocks TOC hyperlink style strip", () => {
         schema.node(
           "field",
           {
-            fieldType: "OTHER",
+            fieldType: "PAGEREF",
             instruction: " PAGEREF _Toc1 \\h ",
             displayText: "5",
             fieldKind: "complex",

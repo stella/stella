@@ -4,6 +4,7 @@
  * Extracts selection state from ProseMirror for toolbar integration.
  */
 
+import type { Mark } from "prosemirror-model";
 import type { EditorState } from "prosemirror-state";
 
 import type { TextFormatting, ParagraphFormatting } from "../types/document";
@@ -74,9 +75,16 @@ export function extractSelectionState(
     "defaultTextFormatting"
   ] as TextFormatting | undefined;
 
-  // For empty selection (cursor), use stored marks or marks at cursor position
-  // For non-empty selection, check marks at the start of selection
-  const marks = state.storedMarks || selection.$from.marks();
+  // For empty selection (cursor), use stored marks or marks at cursor position.
+  // For non-empty selections, $from.marks() is left-biased — when the selection
+  // starts at a text-node boundary it returns marks of the node before $from,
+  // not of the selected content. That makes the toolbar misreport bold/italic/
+  // etc. on selections that start at the first character of a marked run.
+  // Match toggleMark's "any inline child in range has the mark" semantics so
+  // the toolbar's active state agrees with what a toggle click will toggle.
+  const marks = empty
+    ? state.storedMarks || selection.$from.marks()
+    : collectMarksInRange(doc, from, to);
 
   // If in empty paragraph with no marks but has defaultTextFormatting, use that
   if (isEmptyParagraph && marks.length === 0 && paragraphDefaultFormatting) {
@@ -181,4 +189,30 @@ export function extractSelectionState(
     startParagraphIndex,
     endParagraphIndex,
   };
+}
+
+/**
+ * Collect the first occurrence of each mark type found on any text node within
+ * the range. Mirrors the "any inline child has this mark" semantics that
+ * prosemirror-commands' toggleMark uses to decide add-vs-remove, so the
+ * toolbar's active state stays consistent with what a toggle click will do.
+ */
+function collectMarksInRange(
+  doc: EditorState["doc"],
+  from: number,
+  to: number,
+): Mark[] {
+  const seen = new Map<string, Mark>();
+  doc.nodesBetween(from, to, (node) => {
+    if (!node.isText) {
+      return;
+    }
+    for (const mark of node.marks) {
+      const name = mark.type.name;
+      if (!seen.has(name)) {
+        seen.set(name, mark);
+      }
+    }
+  });
+  return Array.from(seen.values());
 }

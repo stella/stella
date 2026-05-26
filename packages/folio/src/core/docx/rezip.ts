@@ -39,7 +39,8 @@ import type {
   Hyperlink,
 } from "../types/content";
 import type { Document } from "../types/document";
-import { RELATIONSHIP_TYPES } from "./relsParser";
+import { assertValidFolioDocumentModel } from "./modelValidation";
+import { RELATIONSHIP_TYPES, resolveRelativePath } from "./relsParser";
 import { serializeComments } from "./serializer/commentSerializer";
 import { serializeDocument } from "./serializer/documentSerializer";
 import { serializeHeaderFooter } from "./serializer/headerFooterSerializer";
@@ -73,7 +74,7 @@ const countDocumentSections = (xml: string): number =>
   Array.from(xml.matchAll(/<w:sectPr\b/gu)).length;
 
 type HeaderFooterReference = {
-  element: string;
+  element: "headerReference" | "footerReference";
   type: string;
   rId: string;
 };
@@ -88,7 +89,10 @@ const extractHeaderFooterReferences = (
     const type = /\bw:type="([^"]+)"/u.exec(tag)?.at(1) ?? "default";
     const rId = /\br:id="([^"]+)"/u.exec(tag)?.at(1);
     const element = match[1];
-    if (!rId || !element) {
+    if (
+      !rId ||
+      (element !== "headerReference" && element !== "footerReference")
+    ) {
       continue;
     }
     references.push({ element, type, rId });
@@ -96,9 +100,21 @@ const extractHeaderFooterReferences = (
   return references;
 };
 
+const hasParsedHeaderFooterPart = (
+  doc: Document,
+  ref: HeaderFooterReference,
+): boolean => {
+  const map =
+    ref.element === "headerReference"
+      ? doc.package.headers
+      : doc.package.footers;
+  return map?.has(ref.rId) ?? false;
+};
+
 function assertDocumentPackageFidelity(
   originalDocumentXml: string,
   serializedDocumentXml: string,
+  doc: Document,
 ): void {
   const originalSectionCount = countDocumentSections(originalDocumentXml);
   const serializedSectionCount = countDocumentSections(serializedDocumentXml);
@@ -114,7 +130,9 @@ function assertDocumentPackageFidelity(
     ),
   );
   const missingRefs = extractHeaderFooterReferences(originalDocumentXml).filter(
-    (ref) => !serializedRefs.has(`${ref.element}:${ref.type}:${ref.rId}`),
+    (ref) =>
+      hasParsedHeaderFooterPart(doc, ref) &&
+      !serializedRefs.has(`${ref.element}:${ref.type}:${ref.rId}`),
   );
   if (missingRefs.length > 0) {
     throw new DocxPackageFidelityError(
@@ -582,13 +600,22 @@ export async function repackDocx(
   );
   await processNewHyperlinks(newHyperlinks, newZip, compressionLevel);
 
+  assertValidFolioDocumentModel(
+    exportDocument,
+    "Cannot repack invalid DOCX document model",
+  );
+
   // Serialize and update document.xml (after image/hyperlink rIds have been rewritten)
   const documentXml = serializeDocument(exportDocument);
   const originalDocumentXml = await originalZip
     .file("word/document.xml")
     ?.async("text");
   if (originalDocumentXml) {
-    assertDocumentPackageFidelity(originalDocumentXml, documentXml);
+    assertDocumentPackageFidelity(
+      originalDocumentXml,
+      documentXml,
+      exportDocument,
+    );
   }
   newZip.file("word/document.xml", documentXml, {
     compression: "DEFLATE",
@@ -687,9 +714,18 @@ export async function repackDocxFromRaw(
   );
   await processNewHyperlinks(newHyperlinks, newZip, compressionLevel);
 
+  assertValidFolioDocumentModel(
+    exportDocument,
+    "Cannot repack invalid DOCX document model",
+  );
+
   const documentXml = serializeDocument(exportDocument);
   if (rawContent.documentXml) {
-    assertDocumentPackageFidelity(rawContent.documentXml, documentXml);
+    assertDocumentPackageFidelity(
+      rawContent.documentXml,
+      documentXml,
+      exportDocument,
+    );
   }
   newZip.file("word/document.xml", documentXml, {
     compression: "DEFLATE",
@@ -1049,6 +1085,7 @@ export function collectHeaderFooterUpdates(doc: Document): Map<string, string> {
     return updates;
   }
 
+  const documentRelsPath = "word/_rels/document.xml.rels";
   const parts: {
     map: Map<string, HeaderFooter> | undefined;
     type: string;
@@ -1064,9 +1101,7 @@ export function collectHeaderFooterUpdates(doc: Document): Map<string, string> {
     for (const [rId, headerFooter] of map.entries()) {
       const rel = rels.get(rId);
       if (rel && rel.type === type && rel.target) {
-        const filename = rel.target.startsWith("/")
-          ? rel.target.slice(1)
-          : `word/${rel.target}`;
+        const filename = resolveRelativePath(documentRelsPath, rel.target);
         updates.set(filename, serializeHeaderFooter(headerFooter));
       }
     }

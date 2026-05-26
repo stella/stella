@@ -100,6 +100,59 @@ describe("parseParagraph tracked-change hardening", () => {
     expect(insertion.info.date).toBeUndefined();
   });
 
+  test("preserves tracked-change metadata for marker-only wrappers", () => {
+    const paragraph = parseParagraphXml(`
+      <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:ins w:id="12" w:author="Reviewer">
+          <w:bookmarkStart w:id="5" w:name="insertedMarker"/>
+        </w:ins>
+      </w:p>
+    `);
+
+    expect(paragraph.content.map((content) => content.type)).toEqual([
+      "insertion",
+      "bookmarkStart",
+    ]);
+    const insertion = paragraph.content.at(0);
+    expect(insertion?.type).toBe("insertion");
+    if (!insertion || insertion.type !== "insertion") {
+      return;
+    }
+    expect(insertion.info).toMatchObject({ id: 12, author: "Reviewer" });
+    expect(insertion.content).toHaveLength(0);
+  });
+
+  test("preserves inline SDT metadata for marker-only controls", () => {
+    const paragraph = parseParagraphXml(`
+      <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:sdt>
+          <w:sdtPr>
+            <w:alias w:val="Clause marker"/>
+            <w:tag w:val="clause-marker"/>
+          </w:sdtPr>
+          <w:sdtContent>
+            <w:bookmarkStart w:id="9" w:name="controlledMarker"/>
+          </w:sdtContent>
+        </w:sdt>
+      </w:p>
+    `);
+
+    expect(paragraph.content.map((content) => content.type)).toEqual([
+      "inlineSdt",
+      "bookmarkStart",
+    ]);
+    const sdt = paragraph.content.at(0);
+    expect(sdt?.type).toBe("inlineSdt");
+    if (!sdt || sdt.type !== "inlineSdt") {
+      return;
+    }
+    expect(sdt.properties).toMatchObject({
+      alias: "Clause marker",
+      tag: "clause-marker",
+    });
+    expect(sdt.content).toHaveLength(0);
+  });
+
   test("preserves point comment references from runs", () => {
     const paragraph = parseParagraphXml(`
       <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -115,6 +168,28 @@ describe("parseParagraph tracked-change hardening", () => {
     expect(paragraph.content.at(1)).toEqual({
       type: "commentReference",
       id: 42,
+    });
+  });
+
+  test("lifts bookmark markers out of tracked-change wrappers", () => {
+    const paragraph = parseParagraphXml(`
+      <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:bookmarkStart w:id="5" w:name="deletedRange"/>
+        <w:del w:id="7" w:author="Reviewer">
+          <w:r><w:delText>removed</w:delText></w:r>
+          <w:bookmarkEnd w:id="5"/>
+        </w:del>
+      </w:p>
+    `);
+
+    expect(paragraph.content.map((content) => content.type)).toEqual([
+      "bookmarkStart",
+      "deletion",
+      "bookmarkEnd",
+    ]);
+    expect(paragraph.content.at(2)).toMatchObject({
+      type: "bookmarkEnd",
+      id: 5,
     });
   });
 });
