@@ -119,7 +119,10 @@ export const useDocumentLoader = ({
       try {
         // Skip blocking font preload during parsing; fonts are loaded
         // asynchronously by loadParsedDocument after the first render
-        const doc = await parseDocx(buffer, { preloadFonts: false });
+        const doc = await parseDocx(buffer, {
+          detectVariables: false,
+          preloadFonts: false,
+        });
         // Discard result if a newer load was started while we were parsing
         if (loadGenerationRef.current !== generation) {
           return;
