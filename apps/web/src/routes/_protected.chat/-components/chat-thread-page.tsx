@@ -27,6 +27,7 @@ import { getUserMessageHtmlHistory } from "@/components/chat/chat-ui-tools";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { api } from "@/lib/api";
 import {
@@ -37,6 +38,7 @@ import {
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { useDevStore } from "@/lib/dev-store";
+import { toAPIError } from "@/lib/errors";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { toSafeId } from "@/lib/safe-id";
@@ -365,6 +367,7 @@ export const ChatThreadPage = ({
 
 const useChatWebSearchSeed = ({ threadRef }: { threadRef: ChatThreadRef }) => {
   const queryClient = useQueryClient();
+  const analytics = useAnalytics();
   const { mutate } = useMutation({
     mutationFn: async () => {
       const response = await api.chat
@@ -378,6 +381,12 @@ const useChatWebSearchSeed = ({ threadRef }: { threadRef: ChatThreadRef }) => {
                 : {},
           },
         );
+      // Eden returns `{ error }` on non-2xx responses; without this
+      // throw onSuccess fires and the thread is marked seeded for
+      // the session, leaving web search silently off.
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
       return response.data;
     },
     onSuccess: () => {
@@ -385,6 +394,9 @@ const useChatWebSearchSeed = ({ threadRef }: { threadRef: ChatThreadRef }) => {
         queryClient,
         threadId: toSafeId<"chatThread">(threadRef.threadId),
       });
+    },
+    onError: (error) => {
+      analytics.captureError(error);
     },
   });
   return mutate;

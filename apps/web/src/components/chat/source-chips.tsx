@@ -294,6 +294,10 @@ const SourceFavicon = ({ url }: { url: string | undefined }) => {
   if (!hostname || errored) {
     return <ExternalLinkIcon className={cn(cls, "text-muted-foreground")} />;
   }
+  // Direct /favicon.ico on the cited host; avoids leaking the
+  // cited domain to a third-party favicon service. Click handler on
+  // the chip already loads content from the same host via Inspector,
+  // so this introduces no additional outbound contact target.
   return (
     <img
       alt=""
@@ -301,7 +305,8 @@ const SourceFavicon = ({ url }: { url: string | undefined }) => {
       className="border-border size-3 shrink-0 rounded-full border object-contain"
       loading="lazy"
       onError={() => setErrored(true)}
-      src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=32`}
+      referrerPolicy="no-referrer"
+      src={`https://${hostname}/favicon.ico`}
     />
   );
 };

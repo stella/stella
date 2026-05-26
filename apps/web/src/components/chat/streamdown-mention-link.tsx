@@ -1,11 +1,12 @@
 import type React from "react";
-import { Children } from "react";
+import { Children, useState } from "react";
 
 import { skipToken, useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   FileTextIcon,
   FolderIcon,
+  GlobeIcon,
   LandmarkIcon,
   LayersIcon,
   ListTodoIcon,
@@ -615,6 +616,16 @@ const pickActiveDocxTabId = (
   return fallback ? fallback.id : null;
 };
 
+// A "footnote-style" link label is one whose visible text is short
+// and looks like a citation marker — `[1]`, `1`, `(2)`, or the bare
+// hostname. Such labels carry no information beyond the chip itself,
+// so we render the chip alone. Anything more descriptive (legal
+// citations, sentence fragments, human-named sources) is preserved as
+// underlined text with the chip appended.
+const FOOTNOTE_LABEL_RE = /^[([]?\s*\d{1,3}\s*[)\]]?$/u;
+const isFootnoteLabel = (label: string, hostname: string): boolean =>
+  FOOTNOTE_LABEL_RE.test(label) || label.toLowerCase() === hostname;
+
 const FaviconCitationChip = ({
   children,
   url,
@@ -623,18 +634,13 @@ const FaviconCitationChip = ({
   url: URL;
 }) => {
   const hostname = url.hostname.replace(/^www\./u, "");
-  const inlineLabel = getPlainText(children) ?? hostname;
+  const inlineLabel = (getPlainText(children) ?? "").trim();
   const source = useExternalSourceStore((state) =>
     state.getSource(url.toString()),
   );
-  // Tooltip prefers the registered source title (web_search result
-  // title, etc.) over the bare hostname so hover gives the human
-  // name of the page, not just the domain.
-  const tooltipDetail =
-    source?.title && source.title.toLowerCase() !== hostname
-      ? `${source.title} — ${hostname}`
-      : (inlineLabel !== hostname && `${inlineLabel} — ${hostname}`) ||
-        hostname;
+  const hoverTitle = source?.title || inlineLabel || hostname;
+  const showInlineLabel =
+    inlineLabel.length > 0 && !isFootnoteLabel(inlineLabel, hostname);
   const handleClick = () => {
     useInspectorStore.getState().openExternal({
       url: url.toString(),
@@ -647,31 +653,74 @@ const FaviconCitationChip = ({
       text: source?.text,
     });
   };
-  const pillLabel = source?.title ?? (inlineLabel || hostname);
+
+  if (showInlineLabel) {
+    return (
+      <button
+        aria-label={`${hoverTitle} (${hostname})`}
+        className={cn(
+          "text-foreground decoration-border underline",
+          "underline-offset-2 transition-colors",
+          "hover:decoration-foreground cursor-pointer",
+          "inline-flex items-center gap-1",
+        )}
+        onClick={handleClick}
+        title={
+          hoverTitle && hoverTitle !== hostname
+            ? `${hoverTitle} — ${hostname}`
+            : hostname
+        }
+        type="button"
+      >
+        <span>{children}</span>
+        <FaviconChip hostname={hostname} inline tooltipTitle={hoverTitle} />
+      </button>
+    );
+  }
+
+  return (
+    <FaviconChip
+      hostname={hostname}
+      onClick={handleClick}
+      tooltipTitle={hoverTitle}
+    />
+  );
+};
+
+const FaviconChip = ({
+  hostname,
+  onClick,
+  inline = false,
+  tooltipTitle,
+}: {
+  hostname: string;
+  onClick?: () => void;
+  inline?: boolean;
+  tooltipTitle: string;
+}) => {
+  const Wrapper = onClick ? "button" : "span";
   return (
     <span
       className={cn(
-        "group/citation relative mx-0.5 inline-block size-[1em] align-[-0.2em]",
+        "group/citation relative inline-block size-[1em]",
+        inline ? "" : "mx-0.5 align-[-0.2em]",
       )}
     >
-      <button
-        aria-label={tooltipDetail}
+      <Wrapper
+        aria-label={onClick ? tooltipTitle : undefined}
         className={cn(
-          "border-border bg-muted/30 hover:bg-muted/60",
-          "focus-visible:ring-ring/50",
-          "absolute inset-0 grid cursor-pointer place-items-center",
+          "border-border bg-muted/30",
+          "absolute inset-0 grid place-items-center",
           "overflow-hidden rounded-full border",
-          "focus-visible:ring-2 focus-visible:outline-none",
+          onClick
+            ? "hover:bg-muted/60 focus-visible:ring-ring/50 cursor-pointer focus-visible:ring-2 focus-visible:outline-none"
+            : "",
         )}
-        onClick={handleClick}
-        type="button"
+        onClick={onClick}
+        type={onClick ? "button" : undefined}
       >
         <FaviconImage hostname={hostname} />
-      </button>
-      {/* Hover label sits in its own absolute layer so the chip's
-       *  inline footprint stays 1em-wide. Otherwise an end-of-line
-       *  chip alternately wraps/unwraps as the pill grows on hover,
-       *  which reads as the chip "shaking". */}
+      </Wrapper>
       <span
         className={cn(
           "border-border bg-popover text-popover-foreground",
@@ -683,25 +732,32 @@ const FaviconCitationChip = ({
         )}
         role="tooltip"
       >
-        {pillLabel}
+        {tooltipTitle}
       </span>
     </span>
   );
 };
 
 const FaviconImage = ({ hostname }: { hostname: string }) => {
-  // Google's public favicon endpoint resolves the actual page icon
-  // (handles redirects, missing /favicon.ico, etc.) and serves
-  // browser-cached PNGs. Falling back to the source domain's own
-  // /favicon.ico would 404 on a lot of legal sites.
-  const src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=32`;
+  const [errored, setErrored] = useState(false);
+  // Fetching favicons from the cited domain itself (rather than a
+  // third-party endpoint such as `google.com/s2/favicons`) keeps
+  // privileged research targets out of Google's logs. The browser
+  // already contacts the domain on click → Inspector, so loading its
+  // public /favicon.ico introduces no new disclosure. Domains
+  // without /favicon.ico fall back to the GlobeIcon.
+  if (errored) {
+    return <GlobeIcon className="text-muted-foreground size-[0.85em]" />;
+  }
   return (
     <img
       alt=""
       aria-hidden="true"
       className="size-[0.85em] object-contain"
       loading="lazy"
-      src={src}
+      onError={() => setErrored(true)}
+      referrerPolicy="no-referrer"
+      src={`https://${hostname}/favicon.ico`}
     />
   );
 };
