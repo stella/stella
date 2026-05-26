@@ -63,7 +63,13 @@ const fxpParserOptions = {
   // use custom entities.
   processEntities: true,
   htmlEntities: true,
-  // Skip parsing large base64 blobs into memory early
+};
+
+const fxpParserOptionsWithStopNodes = {
+  ...fxpParserOptions,
+  // Skip parsing large base64 blobs into memory early. Enabled only for
+  // XML parts that actually contain legacy inline binary payloads because
+  // fast-xml-parser's stop-node matcher runs on every tag.
   stopNodes: ["*.w:binData"],
 };
 
@@ -76,6 +82,7 @@ const fxpBuilderOptions = {
 };
 
 const fxpParser = new XMLParser(fxpParserOptions);
+const fxpParserWithStopNodes = new XMLParser(fxpParserOptionsWithStopNodes);
 const fxpBuilder = new XMLBuilder(fxpBuilderOptions);
 
 // ---------------------------------------------------------------------------
@@ -180,7 +187,8 @@ export function parseXml(xml: string): XmlElement {
   // IMPORTANT: trimValues is false so whitespace-only text nodes such as
   // <w:t xml:space="preserve"> </w:t> are preserved — matching the old
   // xml-js captureSpacesBetweenElements behaviour.
-  const nodes = fxpParser.parse(xml) as Record<string, unknown>[];
+  const parser = xml.includes("binData") ? fxpParserWithStopNodes : fxpParser;
+  const nodes = parser.parse(xml) as Record<string, unknown>[];
   return fxpToRootElement(nodes);
 }
 
