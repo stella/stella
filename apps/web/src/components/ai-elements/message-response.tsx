@@ -31,9 +31,8 @@ export const MessageResponseImpl = memo(
     // Streamdown's internal memo doesn't compare `rehypePlugins`, so
     // a re-render with a new plugin set is silently skipped and the
     // unified processor is never rebuilt. Tying the key to plugin
-    // identity (defined/undefined plus a counter for distinct
-    // arrays) forces a fresh mount whenever the rehype chain
-    // actually changes — without this, the anonymization plugin
+    // identity plus tuple options forces a fresh mount whenever the
+    // rehype chain actually changes — without this, the anonymization plugin
     // wouldn't run for messages whose children text was identical
     // when first rendered with no plugins.
     <Streamdown
@@ -72,26 +71,41 @@ let nextRehypePluginId = 0;
 const isPluginIdentity = (value: unknown): value is object =>
   value !== null && (typeof value === "object" || typeof value === "function");
 
+const isPluginTuple = (value: unknown): value is readonly unknown[] =>
+  Array.isArray(value);
+
+const keyForPluginValue = (value: unknown): string => {
+  if (!isPluginIdentity(value)) {
+    return `value:${typeof value}:${String(value)}`;
+  }
+  let id = rehypePluginIds.get(value);
+  if (id === undefined) {
+    nextRehypePluginId += 1;
+    id = nextRehypePluginId;
+    rehypePluginIds.set(value, id);
+  }
+  return `ref:${id}`;
+};
+
+const keyForPluginEntry = (plugin: unknown): string => {
+  if (!isPluginTuple(plugin)) {
+    return keyForPluginValue(plugin);
+  }
+  const pluginIdentity = plugin.at(0);
+  const pluginOptions = plugin.slice(1);
+  return JSON.stringify([
+    keyForPluginValue(pluginIdentity),
+    ...pluginOptions.map(keyForPluginValue),
+  ]);
+};
+
 const rehypePluginsKey = (
   rehypePlugins: MessageResponseProps["rehypePlugins"],
 ): string => {
   if (!rehypePlugins || rehypePlugins.length === 0) {
     return "no-rehype";
   }
-  const ids = rehypePlugins.map((plugin) => {
-    const target: unknown = Array.isArray(plugin) ? plugin.at(0) : plugin;
-    if (!isPluginIdentity(target)) {
-      return "unknown";
-    }
-    let id = rehypePluginIds.get(target);
-    if (id === undefined) {
-      nextRehypePluginId += 1;
-      id = nextRehypePluginId;
-      rehypePluginIds.set(target, id);
-    }
-    return id;
-  });
-  return `rehype-${ids.join("-")}`;
+  return `rehype-${JSON.stringify(rehypePlugins.map(keyForPluginEntry))}`;
 };
 
 MessageResponseImpl.displayName = "MessageResponseImpl";
