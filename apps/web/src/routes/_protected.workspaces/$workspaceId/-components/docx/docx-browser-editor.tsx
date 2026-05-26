@@ -1384,7 +1384,15 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       {/* Folio editor with AI overlay */}
       <div
         className="min-w-0 flex-1 overflow-hidden"
-        onMouseDownCapture={isUnlocked ? undefined : handleLockedEditAttempt}
+        // Auto-unlock on first click into the doc body — but only when we
+        // can actually unlock. For locked older versions (canUnlock=false)
+        // every click would otherwise pop the "latest version required"
+        // dialog and the doc becomes unselectable; fall through to the
+        // typing-based onReadonlyEditAttempt path instead, which only
+        // fires on real edit attempts (not text-selection clicks).
+        onMouseDownCapture={
+          isUnlocked || !canUnlock ? undefined : handleLockedEditAttempt
+        }
       >
         <FileViewerWithAI
           key={`ai-${previewIdentity}`}
