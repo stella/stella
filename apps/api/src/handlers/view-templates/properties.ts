@@ -9,6 +9,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { serializeAITool } from "@/api/lib/markdown/ai-tool";
 import { brandPersistedPropertyId } from "@/api/lib/safe-id-boundaries";
 import { sortDeep } from "@/api/lib/sort-deep";
 import type {
@@ -153,6 +154,13 @@ export const resolveTemplateProperties = async ({
     },
     orderBy: { createdAt: "asc" },
   });
+  const existingDependencyEdges = await tx.query.propertyDependencies.findMany({
+    where: { workspaceId: { eq: workspaceId } },
+    columns: { propertyId: true },
+  });
+  const propertyIdsWithDependencies = new Set(
+    existingDependencyEdges.map((edge) => edge.propertyId),
+  );
   const nextPropertyIds = existingProperties.map((property) => property.id);
   const propertyIdBySourceId = new Map<string, string>();
   const createdPropertySourceIds = new Set<string>();
@@ -174,6 +182,7 @@ export const resolveTemplateProperties = async ({
       existingProperties,
       templateProperty,
       consumedExistingPropertyIds,
+      propertyIdsWithDependencies,
     );
     if (existingByShape) {
       propertyIdBySourceId.set(templateProperty.sourceId, existingByShape.id);
@@ -226,7 +235,7 @@ export const resolveTemplateProperties = async ({
         workspaceId,
         name: templateProperty.name,
         content: templateProperty.content,
-        tool: templateProperty.tool,
+        tool: sanitizeTemplatePropertyTool(templateProperty.tool),
         status: templateProperty.tool.type === "ai-model" ? "stale" : "fresh",
       })
       .returning({ id: properties.id });
@@ -270,6 +279,22 @@ export const resolveTemplateProperties = async ({
 
   remapLayoutPropertyIds(layout, propertyIdBySourceId);
   return { ok: true, layout, propertyIds: nextPropertyIds };
+};
+
+const sanitizeTemplatePropertyTool = (
+  tool: ViewTemplateProperty["tool"],
+): typeof properties.$inferSelect.tool => {
+  if (tool.type === "manual-input") {
+    return tool;
+  }
+
+  const { prompt } = serializeAITool({
+    version: 1,
+    type: "ai-model",
+    prompt: tool.prompt,
+    dependencies: [],
+  });
+  return { version: 1, type: "ai-model", prompt };
 };
 
 const recreateTemplateDependencies = async ({
@@ -507,7 +532,14 @@ const findUniquePropertyByShape = (
   }[],
   templateProperty: ViewTemplateProperty,
   consumedExistingPropertyIds: ReadonlySet<string>,
+  propertyIdsWithDependencies: ReadonlySet<string>,
 ) => {
+  // Reusing an AI column would silently inherit its existing dependency
+  // graph, so only fall back when neither side carries dependencies.
+  const templateHasDependencies =
+    templateProperty.tool.type === "ai-model" &&
+    (templateProperty.dependencies?.length ?? 0) > 0;
+
   const matches = existingProperties.filter(
     (property) =>
       !consumedExistingPropertyIds.has(property.id) &&
@@ -515,7 +547,10 @@ const findUniquePropertyByShape = (
         normalizePropertyName(templateProperty.name) &&
       property.content.type === templateProperty.content.type &&
       property.tool.type === templateProperty.tool.type &&
-      hasSamePropertyConfig(property, templateProperty),
+      hasSamePropertyConfig(property, templateProperty) &&
+      !(
+        templateHasDependencies || propertyIdsWithDependencies.has(property.id)
+      ),
   );
 
   return matches.length === 1 ? matches[0] : undefined;

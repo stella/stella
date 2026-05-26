@@ -44,6 +44,9 @@ const createTemplatePropertyValidationTx = () => {
       properties: {
         findMany: mock(async () => []),
       },
+      propertyDependencies: {
+        findMany: mock(async () => []),
+      },
     },
     insert: insertMock,
   };
@@ -87,6 +90,9 @@ const createTemplateDependencyTx = () => {
       properties: {
         findMany: mock(async () => []),
       },
+      propertyDependencies: {
+        findMany: mock(async () => []),
+      },
     },
     insert: insertMock,
   };
@@ -115,9 +121,12 @@ const defaultExistingTemplateReuseProperty = {
 
 const createTemplateReuseTx = (
   existingProperty: ExistingTemplateReuseProperty = defaultExistingTemplateReuseProperty,
+  existingDependencies: {
+    propertyId: string;
+  }[] = [],
 ) => {
   const returningMock = mock(async () => [{ id: "created_property" }]);
-  const propertyValuesMock = mock(() => ({
+  const propertyValuesMock = mock((_row: typeof properties.$inferInsert) => ({
     returning: returningMock,
   }));
   const dependencyValuesMock = mock(() => ({
@@ -138,11 +147,15 @@ const createTemplateReuseTx = (
       properties: {
         findMany: mock(async () => [existingProperty]),
       },
+      propertyDependencies: {
+        findMany: mock(async () => existingDependencies),
+      },
     },
     insert: insertMock,
   };
 
   return {
+    propertyValuesMock,
     returningMock,
     tx: asTestRaw<Transaction>(tx),
   };
@@ -403,6 +416,93 @@ describe("resolveTemplateProperties", () => {
       propertyIds: ["existing_property", "created_property"],
     });
     expect(returningMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("does not reuse AI shape matches when either side has dependencies", async () => {
+    const { returningMock, tx } = createTemplateReuseTx(
+      {
+        id: "existing_property",
+        name: "Summary",
+        content: { version: 1, type: "text" },
+        tool: { version: 1, type: "ai-model", prompt: "Summarize" },
+      },
+      [{ propertyId: "existing_property" }],
+    );
+    const templateProperty = {
+      version: 1,
+      sourceId: "source_summary",
+      name: "Summary",
+      content: { version: 1, type: "text" },
+      tool: { version: 1, type: "ai-model", prompt: "Summarize" },
+      createIfMissing: true,
+    } satisfies ViewTemplateProperty;
+    const layout: ViewLayout = {
+      version: 1,
+      type: "table",
+      filters: [],
+      sorts: [],
+      hiddenProperties: [],
+      columnOrder: [templateProperty.sourceId],
+      columnPinning: [],
+    };
+
+    const result = await resolveTemplateProperties({
+      tx,
+      workspaceId,
+      layout,
+      templateProperties: [templateProperty],
+      canCreateProperties: true,
+      recordAuditEvent: noopAuditRecorder,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      layout: {
+        ...layout,
+        columnOrder: ["created_property"],
+      },
+      propertyIds: ["existing_property", "created_property"],
+    });
+    expect(returningMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("sanitizes AI prompt markup before persisting template-created columns", async () => {
+    const { propertyValuesMock, returningMock, tx } = createTemplateReuseTx({
+      id: "existing_property",
+      name: "Other",
+      content: { version: 1, type: "text" },
+      tool: { version: 1, type: "manual-input" },
+    });
+    const templateProperty = {
+      version: 1,
+      sourceId: "source_unsafe_ai",
+      name: "Unsafe",
+      content: { version: 1, type: "text" },
+      tool: {
+        version: 1,
+        type: "ai-model",
+        prompt: '<script>alert("xss")</script><b>Bold</b>',
+      },
+      createIfMissing: true,
+    } satisfies ViewTemplateProperty;
+
+    const result = await resolveTemplateProperties({
+      tx,
+      workspaceId,
+      layout: tableLayout(templateProperty.sourceId),
+      templateProperties: [templateProperty],
+      canCreateProperties: true,
+      recordAuditEvent: noopAuditRecorder,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(returningMock).toHaveBeenCalledTimes(1);
+    const persistedTool = propertyValuesMock.mock.calls[0]?.[0].tool;
+    expect(persistedTool?.type).toBe("ai-model");
+    const prompt =
+      persistedTool?.type === "ai-model" ? persistedTool.prompt : "";
+    expect(prompt).not.toContain("<script>");
+    expect(prompt).toContain("**Bold**");
   });
 
   test("does not reuse shape matches with different config", async () => {
