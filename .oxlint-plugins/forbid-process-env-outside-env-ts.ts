@@ -17,7 +17,7 @@
 //   *.test.ts / *.spec.ts
 //   scripts, test setup, and explicitly configured boundary files
 
-import { getPropertyName, isIdentifier } from "./utils.ts";
+import { getPropertyName, isIdentifier, isStringLiteral } from "./utils.ts";
 
 type AstNode = { type: string } & Record<string, unknown>;
 
@@ -76,12 +76,18 @@ const isAstNode = (node: unknown): node is AstNode =>
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+const staticMemberPropertyName = (node: AstNode): string | null => {
+  if (node.computed === false) {
+    return getPropertyName(node.property);
+  }
+  return isStringLiteral(node.property) ? node.property.value : null;
+};
+
 const isProcessEnvRoot = (node: unknown): boolean =>
   isAstNode(node) &&
   node.type === "MemberExpression" &&
-  node.computed === false &&
   isIdentifier(node.object, "process") &&
-  isIdentifier(node.property, "env");
+  staticMemberPropertyName(node) === "env";
 
 const envNameForAccess = (node: AstNode): string => {
   if (isProcessEnvRoot(node)) {
@@ -92,7 +98,7 @@ const envNameForAccess = (node: AstNode): string => {
     isProcessEnvRoot(node.object) &&
     isAstNode(node.property)
   ) {
-    const propertyName = getPropertyName(node.property);
+    const propertyName = staticMemberPropertyName(node);
     if (propertyName === null) {
       return "process.env[...]";
     }
