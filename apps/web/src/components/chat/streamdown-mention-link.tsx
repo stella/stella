@@ -649,33 +649,43 @@ const FaviconCitationChip = ({
   };
   const pillLabel = source?.title ?? (inlineLabel || hostname);
   return (
-    <button
-      aria-label={tooltipDetail}
+    <span
       className={cn(
-        "border-border bg-muted/30 hover:bg-muted/60",
-        "focus-visible:ring-ring/50",
-        "mx-0.5 inline-flex h-[1em] max-w-[1em] cursor-pointer items-center",
-        "overflow-hidden rounded-full border",
-        "align-[-0.2em]",
-        "transition-[max-width] duration-200 ease-out",
-        "hover:max-w-[20em] focus-visible:max-w-[20em]",
-        "focus-visible:ring-2 focus-visible:outline-none",
+        "group relative mx-0.5 inline-block size-[1em] align-[-0.2em]",
       )}
-      onClick={handleClick}
-      type="button"
     >
-      <span className="grid size-[1em] shrink-0 place-items-center">
+      <button
+        aria-label={tooltipDetail}
+        className={cn(
+          "border-border bg-muted/30 hover:bg-muted/60",
+          "focus-visible:ring-ring/50",
+          "absolute inset-0 grid cursor-pointer place-items-center",
+          "overflow-hidden rounded-full border",
+          "focus-visible:ring-2 focus-visible:outline-none",
+        )}
+        onClick={handleClick}
+        type="button"
+      >
         <FaviconImage hostname={hostname} />
-      </span>
+      </button>
+      {/* Hover label sits in its own absolute layer so the chip's
+       *  inline footprint stays 1em-wide. Otherwise an end-of-line
+       *  chip alternately wraps/unwraps as the pill grows on hover,
+       *  which reads as the chip "shaking". */}
       <span
         className={cn(
-          "min-w-0 ps-0.5 pe-1.5 whitespace-nowrap",
-          "text-[0.78em] leading-none",
+          "border-border bg-popover text-popover-foreground",
+          "pointer-events-none absolute start-[calc(100%+0.25em)] top-1/2",
+          "z-10 max-w-[20em] -translate-y-1/2 truncate whitespace-nowrap",
+          "rounded-md border px-1.5 py-0.5 text-[0.78em] leading-none shadow-sm",
+          "opacity-0 transition-opacity duration-150",
+          "group-focus-within:opacity-100 group-hover:opacity-100",
         )}
+        role="tooltip"
       >
         {pillLabel}
       </span>
-    </button>
+    </span>
   );
 };
 
