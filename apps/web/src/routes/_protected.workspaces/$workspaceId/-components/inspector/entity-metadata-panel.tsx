@@ -8,7 +8,11 @@ import {
   useTransition,
 } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
 
@@ -79,17 +83,18 @@ export const EntityMetadataPanel = ({
   activeJustificationFieldId = null,
   onAiFieldClick,
 }: EntityMetadataPanelProps) => {
-  const entityQuery = useQuery(entityOptions(workspaceId, entityId));
-
-  if (entityQuery.isError || !entityQuery.data) {
-    return null;
-  }
+  // Suspend while the entity loads — the parent renders this inside a
+  // <Suspense fallback={<MetadataPanelSkeleton />}> boundary, so this
+  // gives the user a real loading state instead of an empty panel.
+  const { data: entity } = useSuspenseQuery(
+    entityOptions(workspaceId, entityId),
+  );
 
   return (
     <EntityMetadataContent
       activeJustificationFieldId={activeJustificationFieldId}
       currentFilePropertyId={currentFilePropertyId}
-      entity={entityQuery.data}
+      entity={entity}
       entityId={entityId}
       fileFieldId={fileFieldId}
       onAiFieldClick={onAiFieldClick}
