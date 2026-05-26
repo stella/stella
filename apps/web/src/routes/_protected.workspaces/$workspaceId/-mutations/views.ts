@@ -4,13 +4,20 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
-import type { ViewLayout, ViewLayoutType, WorkspaceView } from "@/lib/types";
+import type {
+  ViewLayout,
+  ViewLayoutType,
+  ViewTemplateProperty,
+  WorkspaceView,
+} from "@/lib/types";
+import { propertiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { viewsKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 
 type CreateViewVars = {
   id: string;
   name: string;
   layout: ViewLayout;
+  templateProperties?: ViewTemplateProperty[];
 };
 
 export const useCreateView = (workspaceId: string) => {
@@ -27,11 +34,24 @@ export const useCreateView = (workspaceId: string) => {
       }
       return response.data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       // eslint-disable-next-line typescript/no-floating-promises
       queryClient.invalidateQueries({
         queryKey: viewsKeys.all(workspaceId),
       });
+      // Applying a template can create properties in this matter.
+      // Without invalidating, the table renders with a stale property
+      // list and TanStack silently strips the new column IDs from the
+      // newly-created view's columnOrder on the next layout update.
+      if (
+        variables.templateProperties &&
+        variables.templateProperties.length > 0
+      ) {
+        // eslint-disable-next-line typescript/no-floating-promises
+        queryClient.invalidateQueries({
+          queryKey: propertiesKeys.all(workspaceId),
+        });
+      }
     },
     onError: (error) => {
       analytics.captureError(error);

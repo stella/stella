@@ -908,6 +908,7 @@ type Messages = {
     "failedToDeleteContact": "Failed to delete client";
     "failedToDeleteEntities": "Failed to delete entities";
     "failedToDeleteProperty": "Failed to delete property";
+    "failedToDeleteTemplate": "Failed to delete template";
     "failedToDeleteView": "Failed to delete view";
     "failedToDeleteWorkspace": "Failed to delete matter";
     "failedToDuplicateView": "Failed to duplicate view";
@@ -921,6 +922,7 @@ type Messages = {
     "failedToRenameWorkspace": "Failed to rename matter";
     "failedToReorderViews": "Failed to reorder views";
     "failedToResendInvitation": "Failed to resend invitation";
+    "failedToSaveTemplate": "Failed to save template";
     "failedToSelectOrganization": "Failed to select organization";
     "failedToSendInvitation": "Failed to send invitation";
     "failedToSendVerificationCode": "Failed to send verification code";
@@ -2271,7 +2273,21 @@ type Messages = {
         "timeline": "Timeline";
       };
       "newView": "New {layout}";
+      "saveAsTemplate": "Save as template…";
       "selectProperty": "Select property";
+      "templates": {
+        "created": "Template saved";
+        "delete": "Delete template";
+        "deleteConfirmDescription": "Delete template “{name}”? This cannot be undone.";
+        "deleted": "Template deleted";
+        "description": "Save the current view’s layout as a template you can reuse.";
+        "empty": "No templates yet. Save the current view to create one.";
+        "nameLabel": "Template name";
+        "namePlaceholder": "e.g. Active matters";
+        "save": "Save template";
+        "title": "View templates";
+        "use": "Use template";
+      };
       "timeline": {
         "day": "Day";
         "endDate": "End date";
@@ -2282,6 +2298,7 @@ type Messages = {
         "startDate": "Start date";
         "week": "Week";
       };
+      "useTemplate": "Use template…";
     };
     "workflow": {
       "allManualInputsDescription": "Please add at least one AI property to start the workflow";

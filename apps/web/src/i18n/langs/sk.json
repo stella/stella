@@ -905,6 +905,7 @@
     "failedToDeleteContact": "Nepodarilo sa vymazať klienta",
     "failedToDeleteEntities": "Nepodarilo sa vymazať entity",
     "failedToDeleteProperty": "Nepodarilo sa vymazať vlastnosť",
+    "failedToDeleteTemplate": "Failed to delete template",
     "failedToDeleteView": "Odstránenie zobrazenia sa nepodarilo",
     "failedToDeleteWorkspace": "Nepodarilo sa vymazať spis",
     "failedToDuplicateView": "Duplikovanie zobrazenia sa nepodarilo",
@@ -918,6 +919,7 @@
     "failedToRenameWorkspace": "Nepodarilo sa premenovať spis",
     "failedToReorderViews": "Zmena poradia zobrazení sa nepodarila",
     "failedToResendInvitation": "Nepodarilo sa znovu odoslať pozvánku",
+    "failedToSaveTemplate": "Failed to save template",
     "failedToSelectOrganization": "Nepodarilo sa vybrať organizáciu",
     "failedToSendInvitation": "Nepodarilo sa odoslať pozvánku",
     "failedToSendVerificationCode": "Nepodarilo sa odoslať overovací kód",
@@ -2268,7 +2270,21 @@
         "timeline": "Časová os"
       },
       "newView": "Nový {layout}",
+      "saveAsTemplate": "Save as template…",
       "selectProperty": "Vybrať vlastnosť",
+      "templates": {
+        "created": "Template saved",
+        "delete": "Delete template",
+        "deleteConfirmDescription": "Delete template “{name}”? This cannot be undone.",
+        "deleted": "Template deleted",
+        "description": "Save the current view’s layout as a template you can reuse.",
+        "empty": "No templates yet. Save the current view to create one.",
+        "nameLabel": "Template name",
+        "namePlaceholder": "e.g. Active matters",
+        "save": "Save template",
+        "title": "View templates",
+        "use": "Use template"
+      },
       "timeline": {
         "day": "Deň",
         "endDate": "Dátum ukončenia",
@@ -2278,7 +2294,8 @@
         "showTable": "Zobraziť tabuľku",
         "startDate": "Dátum začiatku",
         "week": "Týždeň"
-      }
+      },
+      "useTemplate": "Use template…"
     },
     "workflow": {
       "allManualInputsDescription": "Na spustenie pracovného postupu pridajte aspoň jednu AI vlastnosť",

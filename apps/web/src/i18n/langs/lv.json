@@ -905,6 +905,7 @@
     "failedToDeleteContact": "Neizdevās dzēst klientu",
     "failedToDeleteEntities": "Neizdevās dzēst ierakstus",
     "failedToDeleteProperty": "Neizdevās dzēst rekvizītu",
+    "failedToDeleteTemplate": "Failed to delete template",
     "failedToDeleteView": "Neizdevās dzēst skatu",
     "failedToDeleteWorkspace": "Neizdevās dzēst lietu",
     "failedToDuplicateView": "Neizdevās dublēt skatu",
@@ -918,6 +919,7 @@
     "failedToRenameWorkspace": "Neizdevās pārdēvēt lietu",
     "failedToReorderViews": "Neizdevās pārkārtot skatus",
     "failedToResendInvitation": "Neizdevās atkārtoti nosūtīt uzaicinājumu",
+    "failedToSaveTemplate": "Failed to save template",
     "failedToSelectOrganization": "Neizdevās izvēlēties organizāciju",
     "failedToSendInvitation": "Neizdevās nosūtīt uzaicinājumu",
     "failedToSendVerificationCode": "Neizdevās nosūtīt verifikācijas kodu",
@@ -2268,7 +2270,21 @@
         "timeline": "Laika skala"
       },
       "newView": "Jauns {layout}",
+      "saveAsTemplate": "Save as template…",
       "selectProperty": "Izvēlieties rekvizītu",
+      "templates": {
+        "created": "Template saved",
+        "delete": "Delete template",
+        "deleteConfirmDescription": "Delete template “{name}”? This cannot be undone.",
+        "deleted": "Template deleted",
+        "description": "Save the current view’s layout as a template you can reuse.",
+        "empty": "No templates yet. Save the current view to create one.",
+        "nameLabel": "Template name",
+        "namePlaceholder": "e.g. Active matters",
+        "save": "Save template",
+        "title": "View templates",
+        "use": "Use template"
+      },
       "timeline": {
         "day": "Diena",
         "endDate": "Beigu datums",
@@ -2278,7 +2294,8 @@
         "showTable": "Rādīt tabulu",
         "startDate": "Sākuma datums",
         "week": "Nedēļa"
-      }
+      },
+      "useTemplate": "Use template…"
     },
     "workflow": {
       "allManualInputsDescription": "Lai palaistu darbplūsmu, pievienojiet vismaz vienu AI rekvizītu",

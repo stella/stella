@@ -905,6 +905,7 @@
     "failedToDeleteContact": "No se pudo eliminar el cliente",
     "failedToDeleteEntities": "No se pudieron eliminar las entidades",
     "failedToDeleteProperty": "No se pudo eliminar la propiedad",
+    "failedToDeleteTemplate": "Failed to delete template",
     "failedToDeleteView": "Error al eliminar la vista",
     "failedToDeleteWorkspace": "No se pudo eliminar el asunto",
     "failedToDuplicateView": "Error al duplicar la vista",
@@ -918,6 +919,7 @@
     "failedToRenameWorkspace": "No se pudo renombrar el asunto",
     "failedToReorderViews": "Error al reordenar las vistas",
     "failedToResendInvitation": "No se pudo reenviar la invitación",
+    "failedToSaveTemplate": "Failed to save template",
     "failedToSelectOrganization": "No se pudo seleccionar la organización",
     "failedToSendInvitation": "No se pudo enviar la invitación",
     "failedToSendVerificationCode": "No se pudo enviar el código de verificación",
@@ -2268,7 +2270,21 @@
         "timeline": "Línea de tiempo"
       },
       "newView": "Nueva {layout}",
+      "saveAsTemplate": "Save as template…",
       "selectProperty": "Seleccionar propiedad",
+      "templates": {
+        "created": "Template saved",
+        "delete": "Delete template",
+        "deleteConfirmDescription": "Delete template “{name}”? This cannot be undone.",
+        "deleted": "Template deleted",
+        "description": "Save the current view’s layout as a template you can reuse.",
+        "empty": "No templates yet. Save the current view to create one.",
+        "nameLabel": "Template name",
+        "namePlaceholder": "e.g. Active matters",
+        "save": "Save template",
+        "title": "View templates",
+        "use": "Use template"
+      },
       "timeline": {
         "day": "Día",
         "endDate": "Fecha de fin",
@@ -2278,7 +2294,8 @@
         "showTable": "Mostrar tabla",
         "startDate": "Fecha de inicio",
         "week": "Semana"
-      }
+      },
+      "useTemplate": "Use template…"
     },
     "workflow": {
       "allManualInputsDescription": "Añada al menos una propiedad de IA para iniciar el flujo de trabajo",

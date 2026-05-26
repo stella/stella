@@ -905,6 +905,7 @@
     "failedToDeleteContact": "Nie udało się usunąć klienta",
     "failedToDeleteEntities": "Nie udało się usunąć encji",
     "failedToDeleteProperty": "Nie udało się usunąć właściwości",
+    "failedToDeleteTemplate": "Failed to delete template",
     "failedToDeleteView": "Nie udało się usunąć widoku",
     "failedToDeleteWorkspace": "Nie udało się usunąć sprawy",
     "failedToDuplicateView": "Nie udało się zduplikować widoku",
@@ -918,6 +919,7 @@
     "failedToRenameWorkspace": "Nie udało się zmienić nazwy sprawy",
     "failedToReorderViews": "Nie udało się zmienić kolejności widoków",
     "failedToResendInvitation": "Nie udało się ponownie wysłać zaproszenia",
+    "failedToSaveTemplate": "Failed to save template",
     "failedToSelectOrganization": "Nie udało się wybrać organizacji",
     "failedToSendInvitation": "Nie udało się wysłać zaproszenia",
     "failedToSendVerificationCode": "Nie udało się wysłać kodu weryfikacyjnego",
@@ -2268,7 +2270,21 @@
         "timeline": "Oś czasu"
       },
       "newView": "Nowy {layout}",
+      "saveAsTemplate": "Save as template…",
       "selectProperty": "Wybierz właściwość",
+      "templates": {
+        "created": "Template saved",
+        "delete": "Delete template",
+        "deleteConfirmDescription": "Delete template “{name}”? This cannot be undone.",
+        "deleted": "Template deleted",
+        "description": "Save the current view’s layout as a template you can reuse.",
+        "empty": "No templates yet. Save the current view to create one.",
+        "nameLabel": "Template name",
+        "namePlaceholder": "e.g. Active matters",
+        "save": "Save template",
+        "title": "View templates",
+        "use": "Use template"
+      },
       "timeline": {
         "day": "Dzień",
         "endDate": "Data zakończenia",
@@ -2278,7 +2294,8 @@
         "showTable": "Pokaż tabelę",
         "startDate": "Data rozpoczęcia",
         "week": "Tydzień"
-      }
+      },
+      "useTemplate": "Use template…"
     },
     "workflow": {
       "allManualInputsDescription": "Dodaj co najmniej jedną właściwość AI, aby uruchomić proces",
