@@ -15,6 +15,12 @@ import { panic } from "better-result";
 
 import { resolveFontFamily } from "../../utils/fontResolver";
 import { DOCX_BOLD_FONT_WEIGHT } from "../../utils/fontWeights";
+import {
+  getCachedFontMetrics,
+  getCachedTextWidth,
+  setCachedFontMetrics,
+  setCachedTextWidth,
+} from "./cache";
 
 // Constants for OOXML unit conversions
 const TWIPS_PER_INCH = 1440;
@@ -186,6 +192,27 @@ export function buildFontString(style: FontStyle): string {
 export function getFontMetrics(style: FontStyle): FontMetrics {
   const fontSize = style.fontSize ?? DEFAULT_FONT_SIZE;
   const fontFamily = style.fontFamily ?? DEFAULT_FONT_FAMILY;
+  const bold = style.bold ?? false;
+  const italic = style.italic ?? false;
+  const fontVariant = style.fontVariant;
+
+  const cached = getCachedFontMetrics(
+    fontFamily,
+    fontSize,
+    bold,
+    italic,
+    fontVariant,
+  );
+  if (cached !== undefined) {
+    return {
+      fontSize,
+      ascent: cached.ascent,
+      descent: cached.descent,
+      lineHeight: cached.lineHeight,
+      fontFamily,
+      singleLineRatio: cached.singleLineRatio,
+    };
+  }
 
   // Convert font size from points to pixels
   const fontSizePx = ptToPx(fontSize);
@@ -227,7 +254,7 @@ export function getFontMetrics(style: FontStyle): FontMetrics {
   // Look up OS/2 single-line ratio for OOXML line spacing
   const singleLineRatio = getResolvedData(fontFamily).singleLineRatio;
 
-  return {
+  const result = {
     fontSize, // Keep in points for reference
     ascent,
     descent,
@@ -235,6 +262,8 @@ export function getFontMetrics(style: FontStyle): FontMetrics {
     fontFamily,
     singleLineRatio,
   };
+  setCachedFontMetrics(fontFamily, fontSize, bold, italic, result, fontVariant);
+  return result;
 }
 
 /**
@@ -251,7 +280,16 @@ export function measureTextWidth(text: string, style: FontStyle): number {
   const measuredText = applyTextTransform(text, style);
 
   const ctx = getCanvasContext();
-  ctx.font = buildFontString(style);
+  const font = buildFontString(style);
+  const letterSpacing = style.letterSpacing ?? 0;
+  const horizontalScale = getHorizontalScaleFactor(style);
+  const fontCacheKey = `${font}|scale:${horizontalScale}`;
+  const cached = getCachedTextWidth(measuredText, fontCacheKey, letterSpacing);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  ctx.font = font;
 
   const metrics = ctx.measureText(measuredText);
 
@@ -261,11 +299,13 @@ export function measureTextWidth(text: string, style: FontStyle): number {
   let width = metrics.width;
 
   // Apply letter spacing if specified
-  if (style.letterSpacing && measuredText.length > 1) {
-    width += style.letterSpacing * (measuredText.length - 1);
+  if (letterSpacing && measuredText.length > 1) {
+    width += letterSpacing * (measuredText.length - 1);
   }
 
-  return width * getHorizontalScaleFactor(style);
+  const scaledWidth = width * horizontalScale;
+  setCachedTextWidth(measuredText, fontCacheKey, letterSpacing, scaledWidth);
+  return scaledWidth;
 }
 
 /**
