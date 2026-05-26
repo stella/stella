@@ -71,6 +71,42 @@ describe("normalizeTrackedMoveRanges", () => {
     expect(paragraph.content.map((content) => content.type)).toEqual(["run"]);
   });
 
+  test("removes unbalanced tracked move range markers from comments", () => {
+    const documentBody: DocumentBody = {
+      content: [],
+      comments: [
+        {
+          id: 1,
+          author: "Reviewer",
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                { type: "moveToRangeStart", id: 34, name: "moveA" },
+                {
+                  type: "run",
+                  content: [{ type: "text", text: "Moved" }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = normalizeTrackedMoveRanges({ documentBody });
+
+    expect(result).toEqual({
+      removedUnbalancedMoveRangeMarkers: 1,
+    });
+    expect(
+      documentBody.comments
+        ?.at(0)
+        ?.content.at(0)
+        ?.content.map((content) => content.type),
+    ).toEqual(["run"]);
+  });
+
   test("parses and saves documents with unbalanced tracked move ranges", async () => {
     const buffer = await createUnbalancedMoveRangeFixture();
     const doc = await parseDocx(buffer, { preloadFonts: false });

@@ -39,6 +39,37 @@ describe("normalizeNumberingReferences", () => {
     expect(block.formatting?.numPr).toBeUndefined();
   });
 
+  test("removes missing numbering references from comment paragraphs", () => {
+    const documentBody: DocumentBody = {
+      content: [],
+      comments: [
+        {
+          id: 1,
+          author: "Reviewer",
+          content: [
+            {
+              type: "paragraph",
+              formatting: { numPr: { numId: 2, ilvl: 0 } },
+              content: [],
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = normalizeNumberingReferences({
+      documentBody,
+      numbering: parseNumbering(null),
+    });
+
+    expect(result).toEqual({
+      removedMissingNumberingReferences: 1,
+    });
+    expect(
+      documentBody.comments?.at(0)?.content.at(0)?.formatting?.numPr,
+    ).toBeUndefined();
+  });
+
   test("parses and saves documents that reference a missing numbering part", async () => {
     const buffer = await createMissingNumberingReferenceFixture();
     const doc = await parseDocx(buffer, { preloadFonts: false });
