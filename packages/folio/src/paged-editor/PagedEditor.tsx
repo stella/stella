@@ -384,6 +384,16 @@ const DEFERRED_KEYDOWN_REPLAY_KEYS = new Set([
   "PageUp",
   "Tab",
 ]);
+const DEFERRED_MODIFIER_KEYDOWN_REPLAY_KEYS = new Set([
+  "a",
+  "b",
+  "i",
+  "u",
+  "v",
+  "x",
+  "y",
+  "z",
+]);
 
 const isPlainTextInputEvent = (event: React.KeyboardEvent): boolean =>
   event.key.length === 1 &&
@@ -392,13 +402,29 @@ const isPlainTextInputEvent = (event: React.KeyboardEvent): boolean =>
   !event.metaKey &&
   !event.nativeEvent.isComposing;
 
-const isDeferredEditorKeyDown = (event: React.KeyboardEvent): boolean => {
+type DeferredEditorKeyDownEvent = {
+  altKey: boolean;
+  ctrlKey: boolean;
+  key: string;
+  metaKey: boolean;
+  nativeEvent: {
+    isComposing: boolean;
+  };
+};
+
+export const isDeferredEditorKeyDown = (
+  event: DeferredEditorKeyDownEvent,
+): boolean => {
   if (event.nativeEvent.isComposing) {
     return true;
   }
 
   if (DEFERRED_KEYDOWN_REPLAY_KEYS.has(event.key)) {
     return true;
+  }
+
+  if (event.metaKey || event.ctrlKey) {
+    return DEFERRED_MODIFIER_KEYDOWN_REPLAY_KEYS.has(event.key.toLowerCase());
   }
 
   return isReadOnlyEditKey(event);
