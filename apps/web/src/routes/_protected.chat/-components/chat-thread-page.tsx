@@ -251,30 +251,10 @@ export const ChatThreadPage = ({
         <div className="flex w-full max-w-5xl flex-1 flex-col overflow-hidden">
           <div className="flex items-center justify-between gap-2 px-4 py-2">
             <div className="flex min-w-0 items-center gap-2">
-              {threadRef.scope === "workspace" ? (
-                <Link
-                  className={buttonVariants({
-                    variant: "ghost",
-                    size: "sm",
-                  })}
-                  params={{ workspaceId: threadRef.workspaceId }}
-                  to="/chat/workspaces/$workspaceId/new"
-                >
-                  <PlusIcon />
-                  {t("chat.newChat")}
-                </Link>
-              ) : (
-                <Link
-                  className={buttonVariants({
-                    variant: "ghost",
-                    size: "sm",
-                  })}
-                  to="/chat/new"
-                >
-                  <PlusIcon />
-                  {t("chat.newChat")}
-                </Link>
-              )}
+              <NewChatButton
+                hasMessages={messages.length > 0}
+                threadRef={threadRef}
+              />
               {contextMatterIds !== null && (
                 <ChatMatterPicker
                   matterIds={contextMatterIds}
@@ -400,4 +380,45 @@ const useChatWebSearchSeed = ({ threadRef }: { threadRef: ChatThreadRef }) => {
     },
   });
   return mutate;
+};
+
+const NewChatButton = ({
+  hasMessages,
+  threadRef,
+}: {
+  hasMessages: boolean;
+  threadRef: ChatThreadRef;
+}) => {
+  const t = useTranslations();
+  // Empty draft? Stay put. Otherwise spawn a fresh thread via the
+  // /chat/new (or workspace-scoped) redirect helper.
+  if (!hasMessages) {
+    return (
+      <Button disabled size="sm" variant="ghost">
+        <PlusIcon />
+        {t("chat.newChat")}
+      </Button>
+    );
+  }
+  if (threadRef.scope === "workspace") {
+    return (
+      <Link
+        className={buttonVariants({ variant: "ghost", size: "sm" })}
+        params={{ workspaceId: threadRef.workspaceId }}
+        to="/chat/workspaces/$workspaceId/new"
+      >
+        <PlusIcon />
+        {t("chat.newChat")}
+      </Link>
+    );
+  }
+  return (
+    <Link
+      className={buttonVariants({ variant: "ghost", size: "sm" })}
+      to="/chat/new"
+    >
+      <PlusIcon />
+      {t("chat.newChat")}
+    </Link>
+  );
 };
