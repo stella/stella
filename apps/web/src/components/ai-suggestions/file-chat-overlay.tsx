@@ -665,7 +665,8 @@ const FileChatOverlayInner = ({
     if (editorReady || !hasDocxEditSurface) {
       return undefined;
     }
-    const ensure = () => docxEditorRef.current?.ensureEditorView();
+    const ensure = () =>
+      docxEditorRef.current?.ensureEditorView({ focus: false });
     ensure();
     const probe = () => {
       if (docxEditorRef.current?.createAIEditSnapshot()) {

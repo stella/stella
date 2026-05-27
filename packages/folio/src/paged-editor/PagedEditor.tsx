@@ -298,7 +298,7 @@ export type PagedEditorRef = {
    * Use from surfaces that need a live view before any user
    * interaction (e.g. AI chat reading a snapshot of the doc).
    */
-  ensureView(): void;
+  ensureView(options?: { focus?: boolean }): void;
   /** Focus the editor. */
   focus(): void;
   /** Blur the editor. */
@@ -336,6 +336,7 @@ type QueuedHiddenEditorInput =
   | { type: "keydown"; eventInit: KeyboardEventInit };
 
 type EnsureHiddenEditorViewOptions = {
+  focus?: boolean;
   sync?: boolean;
 };
 
@@ -2143,6 +2144,7 @@ export function PagedEditor(
   const [measures, setMeasures] = useState<Measure[]>([]);
   const [shouldCreateHiddenEditorView, setShouldCreateHiddenEditorView] =
     useState(() => collaboration !== undefined);
+  const shouldFocusHiddenEditorOnReadyRef = useRef(collaboration !== undefined);
   const [precomputedInitialState, setPrecomputedInitialState] =
     useState<EditorState | null>(null);
   const layoutArtifactsRef = useRef<{
@@ -2218,7 +2220,16 @@ export function PagedEditor(
   const dragAnchorRef = useRef<number | null>(null);
 
   const ensureHiddenEditorView = useCallback(
-    ({ sync = false }: EnsureHiddenEditorViewOptions = {}) => {
+    ({ focus = true, sync = false }: EnsureHiddenEditorViewOptions = {}) => {
+      if (focus) {
+        shouldFocusHiddenEditorOnReadyRef.current = true;
+      } else if (
+        !shouldCreateHiddenEditorView &&
+        !hiddenPMRef.current?.getView()
+      ) {
+        shouldFocusHiddenEditorOnReadyRef.current = false;
+      }
+
       if (sync) {
         flushSync(() => {
           setShouldCreateHiddenEditorView(true);
@@ -2228,7 +2239,7 @@ export function PagedEditor(
 
       setShouldCreateHiddenEditorView(true);
     },
-    [],
+    [shouldCreateHiddenEditorView],
   );
 
   const queueHiddenEditorSelection = useCallback(
@@ -5519,13 +5530,19 @@ export function PagedEditor(
         anonymizationDecorationsKey.getState(view.state)?.matches ?? [];
 
       const focusReadyView = () => {
-        if (!readOnly) {
-          requestAnimationFrame(() => {
-            applyPendingHiddenEditorInput(view);
-            view.focus();
-            setIsFocused(true);
-          });
+        if (readOnly || !shouldFocusHiddenEditorOnReadyRef.current) {
+          return;
         }
+
+        requestAnimationFrame(() => {
+          if (hiddenPMRef.current?.getView() !== view) {
+            return;
+          }
+
+          applyPendingHiddenEditorInput(view);
+          view.focus();
+          setIsFocused(true);
+        });
       };
 
       if (lastLaidOutPmDocRef.current?.eq(view.state.doc)) {
@@ -5746,14 +5763,14 @@ export function PagedEditor(
       getView() {
         return hiddenPMRef.current?.getView() ?? null;
       },
-      ensureView() {
+      ensureView(options?: { focus?: boolean }) {
         // Async (no flushSync) so this is safe to call from a consumer's
         // useEffect during a concurrent render — flushSync inside a
         // commit-phase effect throws "flushSync was called from inside
         // a lifecycle method". The state setter still schedules a
         // re-render that runs createView in the next layout effect;
         // callers that need the view immediately can poll.
-        ensureHiddenEditorView();
+        ensureHiddenEditorView(options);
       },
       focus() {
         hiddenPMRef.current?.focus();

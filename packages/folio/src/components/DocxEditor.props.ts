@@ -217,10 +217,11 @@ export type DocxEditorRef = {
    * Force-create the underlying editor view if it has been deferred.
    * Surfaces that need a live view before the user interacts with the
    * document body (notably the AI chat composer, which gates "send"
-   * on snapshot availability) must call this once on mount; otherwise
-   * the perf deferral keeps the view null and they wait forever.
+   * on snapshot availability) must call this once on mount with
+   * `focus: false`; otherwise the perf deferral keeps the view null
+   * and they wait forever.
    */
-  ensureEditorView: () => void;
+  ensureEditorView: (options?: { focus?: boolean }) => void;
   /** Create the block snapshot that an external AI editor should reference. */
   createAIEditSnapshot: () => FolioAIEditSnapshot | null;
   /** Apply AI-authored operations against a previously created block snapshot. */
