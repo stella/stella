@@ -257,13 +257,11 @@ type Messages = {
     "analyzing": "Analyzing...";
     "columns": {
       "caseNumber": "Case number";
-      "country": "Country";
       "court": "Court";
     };
     "decisionNotFound": "Decision not found";
     "emptyState": "No decisions found. Configure a source and run a sync to import case law.";
     "filters": {
-      "country": "Country";
       "court": "Court";
       "dateFrom": "From";
       "dateTo": "To";
@@ -601,7 +599,6 @@ type Messages = {
       "address": "Address";
       "bankAccountNumber": "Bank account number";
       "birthNumber": "Birth number";
-      "country": "Country";
       "creditCardNumber": "Credit card number";
       "date": "Date";
       "dateOfBirth": "Date of birth";
@@ -640,6 +637,7 @@ type Messages = {
     "copied": "Copied to clipboard";
     "copy": "Copy";
     "copyLink": "Copy link";
+    "country": "Country";
     "createdAt": "Created at {date}";
     "currency": "Currency";
     "currentPage": "Current page";

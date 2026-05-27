@@ -254,13 +254,11 @@
     "analyzing": "Analizuojama...",
     "columns": {
       "caseNumber": "Bylos numeris",
-      "country": "Valstybė",
       "court": "Teismas"
     },
     "decisionNotFound": "Sprendimas nerastas",
     "emptyState": "Sprendimų nerasta. Sukonfigūruokite šaltinį ir paleiskite sinchronizavimą, kad importuotumėte teismų praktiką.",
     "filters": {
-      "country": "Valstybė",
       "court": "Teismas",
       "dateFrom": "Nuo",
       "dateTo": "Iki",
@@ -598,7 +596,6 @@
       "address": "Adresas",
       "bankAccountNumber": "Banko sąskaitos numeris",
       "birthNumber": "Gimimo numeris",
-      "country": "Valstybė",
       "creditCardNumber": "Kredito kortelės numeris",
       "date": "Data",
       "dateOfBirth": "Gimimo data",
@@ -637,6 +634,7 @@
     "copied": "Copied to clipboard",
     "copy": "Kopijuoti",
     "copyLink": "Kopijuoti nuorodą",
+    "country": "Valstybė",
     "createdAt": "Sukurta {date}",
     "currency": "Valiuta",
     "currentPage": "Dabartinis puslapis",

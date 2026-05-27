@@ -254,13 +254,11 @@
     "analyzing": "Analizando...",
     "columns": {
       "caseNumber": "Número de expediente",
-      "country": "País",
       "court": "Tribunal"
     },
     "decisionNotFound": "Resolución no encontrada",
     "emptyState": "No se encontraron resoluciones. Configure una fuente y ejecute una sincronización para importar jurisprudencia.",
     "filters": {
-      "country": "País",
       "court": "Tribunal",
       "dateFrom": "Desde",
       "dateTo": "Hasta",
@@ -598,7 +596,6 @@
       "address": "Dirección",
       "bankAccountNumber": "Número de cuenta bancaria",
       "birthNumber": "Número de nacimiento",
-      "country": "País",
       "creditCardNumber": "Número de tarjeta de crédito",
       "date": "Fecha",
       "dateOfBirth": "Fecha de nacimiento",
@@ -637,6 +634,7 @@
     "copied": "Copied to clipboard",
     "copy": "Copiar",
     "copyLink": "Copiar enlace",
+    "country": "País",
     "createdAt": "Creado el {date}",
     "currency": "Moneda",
     "currentPage": "Página actual",

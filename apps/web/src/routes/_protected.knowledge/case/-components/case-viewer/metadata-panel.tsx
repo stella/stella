@@ -193,10 +193,7 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
         )}
         <MetadataField label={t("common.date")} value={decision.decisionDate} />
         <MetadataField label="ECLI" value={decision.ecli} />
-        <MetadataField
-          label={t("caseLaw.columns.country")}
-          value={decision.country}
-        />
+        <MetadataField label={t("common.country")} value={decision.country} />
         {!MONOLINGUAL_COUNTRIES.has(decision.country) && (
           <MetadataField
             label={t("common.language")}

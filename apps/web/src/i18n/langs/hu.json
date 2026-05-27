@@ -254,13 +254,11 @@
     "analyzing": "Elemzés folyamatban...",
     "columns": {
       "caseNumber": "Ügyszám",
-      "country": "Ország",
       "court": "Bíróság"
     },
     "decisionNotFound": "A határozat nem található",
     "emptyState": "Nem található határozat. Adjon meg egy forrást, és futtasson szinkronizálást a joggyakorlat importálásához.",
     "filters": {
-      "country": "Ország",
       "court": "Bíróság",
       "dateFrom": "Dátumtól",
       "dateTo": "Dátumig",
@@ -598,7 +596,6 @@
       "address": "Cím",
       "bankAccountNumber": "Bankszámlaszám",
       "birthNumber": "Születési szám",
-      "country": "Ország",
       "creditCardNumber": "Bankkártyaszám",
       "date": "Dátum",
       "dateOfBirth": "Születési dátum",
@@ -637,6 +634,7 @@
     "copied": "Copied to clipboard",
     "copy": "Másolás",
     "copyLink": "Hivatkozás másolása",
+    "country": "Ország",
     "createdAt": "Létrehozva: {date}",
     "currency": "Pénznem",
     "currentPage": "Aktuális oldal",

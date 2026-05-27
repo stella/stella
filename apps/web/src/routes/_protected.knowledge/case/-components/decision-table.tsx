@@ -71,7 +71,7 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
         header: t("caseLaw.columns.court"),
       }),
       columnHelper.accessor("country", {
-        header: t("caseLaw.columns.country"),
+        header: t("common.country"),
         cell: (info) => (
           <span className="bg-muted rounded px-1.5 py-0.5 text-xs">
             {info.getValue()}

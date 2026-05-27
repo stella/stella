@@ -254,13 +254,11 @@
     "analyzing": "Analyse läuft...",
     "columns": {
       "caseNumber": "Aktenzeichen",
-      "country": "Land",
       "court": "Gericht"
     },
     "decisionNotFound": "Entscheidung nicht gefunden",
     "emptyState": "Keine Entscheidungen gefunden. Konfigurieren Sie eine Quelle und führen Sie eine Synchronisierung durch, um Rechtsprechung zu importieren.",
     "filters": {
-      "country": "Land",
       "court": "Gericht",
       "dateFrom": "Von",
       "dateTo": "Bis",
@@ -598,7 +596,6 @@
       "address": "Adresse",
       "bankAccountNumber": "Bankkontonummer",
       "birthNumber": "Geburtsnummer",
-      "country": "Land",
       "creditCardNumber": "Kreditkartennummer",
       "date": "Datum",
       "dateOfBirth": "Geburtsdatum",
@@ -637,6 +634,7 @@
     "copied": "Copied to clipboard",
     "copy": "Kopieren",
     "copyLink": "Link kopieren",
+    "country": "Land",
     "createdAt": "Erstellt am {date}",
     "currency": "Währung",
     "currentPage": "Aktuelle Seite",

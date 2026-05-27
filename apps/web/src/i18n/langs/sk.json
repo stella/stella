@@ -254,13 +254,11 @@
     "analyzing": "Analyzujem...",
     "columns": {
       "caseNumber": "Spisová značka",
-      "country": "Krajina",
       "court": "Súd"
     },
     "decisionNotFound": "Rozhodnutie sa nenašlo",
     "emptyState": "Žiadne rozhodnutia. Nakonfigurujte zdroj a spustite synchronizáciu na import judikatúry.",
     "filters": {
-      "country": "Krajina",
       "court": "Súd",
       "dateFrom": "Od",
       "dateTo": "Do",
@@ -598,7 +596,6 @@
       "address": "Adresa",
       "bankAccountNumber": "Číslo bankového účtu",
       "birthNumber": "Rodné číslo",
-      "country": "Krajina",
       "creditCardNumber": "Číslo platobnej karty",
       "date": "Dátum",
       "dateOfBirth": "Dátum narodenia",
@@ -637,6 +634,7 @@
     "copied": "Skopírované do schránky",
     "copy": "Kopírovať",
     "copyLink": "Kopírovať odkaz",
+    "country": "Krajina",
     "createdAt": "Vytvorené {date}",
     "currency": "Mena",
     "currentPage": "Aktuálna stránka",

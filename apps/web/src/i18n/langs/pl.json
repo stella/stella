@@ -254,13 +254,11 @@
     "analyzing": "Analizowanie...",
     "columns": {
       "caseNumber": "Sygnatura akt",
-      "country": "Kraj",
       "court": "Sąd"
     },
     "decisionNotFound": "Nie znaleziono orzeczenia",
     "emptyState": "Brak orzeczeń. Skonfiguruj źródło i uruchom synchronizację, aby zaimportować orzecznictwo.",
     "filters": {
-      "country": "Kraj",
       "court": "Sąd",
       "dateFrom": "Od",
       "dateTo": "Do",
@@ -598,7 +596,6 @@
       "address": "Adres",
       "bankAccountNumber": "Numer rachunku bankowego",
       "birthNumber": "Numer urodzenia",
-      "country": "Kraj",
       "creditCardNumber": "Numer karty kredytowej",
       "date": "Data",
       "dateOfBirth": "Data urodzenia",
@@ -637,6 +634,7 @@
     "copied": "Skopiowano do schowka",
     "copy": "Kopiuj",
     "copyLink": "Kopiuj link",
+    "country": "Kraj",
     "createdAt": "Utworzono {date}",
     "currency": "Waluta",
     "currentPage": "Bieżąca strona",
