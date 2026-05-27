@@ -81,11 +81,15 @@ const getStringInputValue = ({
   return typeof value === "string" ? value : undefined;
 };
 
+type SkillResourceOrigin = "built-in" | "upload" | "url";
+
 type SkillResourceOutput = {
   skillName: string;
   path: string;
   content: string;
   mimeType: string;
+  skillId: string | null;
+  origin: SkillResourceOrigin;
 };
 
 const getStringProperty = (source: object, key: string): string | undefined => {
@@ -94,6 +98,24 @@ const getStringProperty = (source: object, key: string): string | undefined => {
   }
   const descriptor = Object.getOwnPropertyDescriptor(source, key);
   const value: unknown = descriptor?.value;
+  return typeof value === "string" ? value : undefined;
+};
+
+const isSkillResourceOrigin = (value: unknown): value is SkillResourceOrigin =>
+  value === "built-in" || value === "upload" || value === "url";
+
+const getNullableStringProperty = (
+  source: object,
+  key: string,
+): string | null | undefined => {
+  if (!(key in source)) {
+    return undefined;
+  }
+  const descriptor = Object.getOwnPropertyDescriptor(source, key);
+  const value: unknown = descriptor?.value;
+  if (value === null) {
+    return null;
+  }
   return typeof value === "string" ? value : undefined;
 };
 
@@ -111,15 +133,19 @@ const getSkillResourceOutput = (
   const path = getStringProperty(output, "path");
   const content = getStringProperty(output, "content");
   const mimeType = getStringProperty(output, "mimeType");
+  const skillId = getNullableStringProperty(output, "skillId");
+  const originRaw = Object.getOwnPropertyDescriptor(output, "origin")?.value;
   if (
     skillName === undefined ||
     path === undefined ||
     content === undefined ||
-    mimeType === undefined
+    mimeType === undefined ||
+    skillId === undefined ||
+    !isSkillResourceOrigin(originRaw)
   ) {
     return undefined;
   }
-  return { skillName, path, content, mimeType };
+  return { skillName, path, content, mimeType, skillId, origin: originRaw };
 };
 
 const basenameOf = (path: string): string => {
@@ -344,6 +370,8 @@ export const ToolCallCard = ({
             if (skillResourceOutput) {
               useInspectorStore.getState().openSkillResourceTab({
                 skillName: skillResourceOutput.skillName,
+                skillId: skillResourceOutput.skillId,
+                origin: skillResourceOutput.origin,
                 resourcePath: skillResourceOutput.path,
                 mimeType: skillResourceOutput.mimeType,
                 content: skillResourceOutput.content,

@@ -123,17 +123,20 @@ export const createSkillTools = ({
           });
         }
 
+        const read = await readSkillResourceContent({
+          organizationId,
+          path,
+          safeDb,
+          skillName,
+          userId,
+        });
         return {
           skillName,
           path,
           mimeType: inferSkillResourceMimeType(path),
-          content: await readSkillResourceContent({
-            organizationId,
-            path,
-            safeDb,
-            skillName,
-            userId,
-          }),
+          content: read.content,
+          skillId: read.skillId,
+          origin: read.origin,
         };
       },
     }),

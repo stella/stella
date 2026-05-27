@@ -153,6 +153,14 @@ export const listAvailableChatSkillResources = async ({
   return resources;
 };
 
+export type AvailableChatSkillResourceRead = {
+  content: string;
+  /** DB row id when the skill is installed; `null` for built-in
+   *  skills that live on disk and have no row to mutate. */
+  skillId: SafeId<"agentSkill"> | null;
+  origin: "built-in" | "upload" | "url";
+};
+
 export const readAvailableChatSkillResource = async ({
   organizationId,
   path,
@@ -162,7 +170,7 @@ export const readAvailableChatSkillResource = async ({
 }: ChatSkillContext & {
   path: string;
   skillName: string;
-}): Promise<Result<string, SafeDbError>> => {
+}): Promise<Result<AvailableChatSkillResourceRead, SafeDbError>> => {
   const rowResult = await findInstalledSkill({
     organizationId,
     safeDb,
@@ -175,12 +183,14 @@ export const readAvailableChatSkillResource = async ({
 
   const row = rowResult.value;
   if (!row) {
-    return Result.ok(
-      readSkillResource({
+    return Result.ok({
+      content: readSkillResource({
         resourcePath: path,
         skillId: skillName,
       }),
-    );
+      skillId: null,
+      origin: "built-in",
+    });
   }
 
   const resources = await safeDb((tx) =>
@@ -201,7 +211,11 @@ export const readAvailableChatSkillResource = async ({
     return Result.err(resources.error);
   }
 
-  return Result.ok(resources.value.at(0)?.content ?? "");
+  return Result.ok({
+    content: resources.value.at(0)?.content ?? "",
+    skillId: row.id,
+    origin: row.origin,
+  });
 };
 
 const findInstalledSkill = async ({
@@ -224,6 +238,7 @@ const findInstalledSkill = async ({
         compatibility: agentSkills.compatibility,
         metadata: agentSkills.metadata,
         body: agentSkills.body,
+        origin: agentSkills.origin,
       })
       .from(agentSkills)
       .where(

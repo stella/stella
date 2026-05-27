@@ -4,6 +4,7 @@ import deleteSkill from "@/api/handlers/skills/delete";
 import getSkill from "@/api/handlers/skills/get";
 import importSkillFromUrl from "@/api/handlers/skills/import-url";
 import listSkills from "@/api/handlers/skills/list";
+import updateSkillResource from "@/api/handlers/skills/resources/update";
 import updateSkill from "@/api/handlers/skills/update";
 import uploadSkill from "@/api/handlers/skills/upload";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
@@ -37,6 +38,12 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
     invalidateQuery: true,
     params: updateSkill.config.params,
     permissions: updateSkill.config.permissions,
+  })
+  .patch("/:skillId/resources", updateSkillResource.handler, {
+    body: updateSkillResource.config.body,
+    invalidateQuery: true,
+    params: updateSkillResource.config.params,
+    permissions: updateSkillResource.config.permissions,
   })
   .delete("/:skillId", deleteSkill.handler, {
     invalidateQuery: true,
