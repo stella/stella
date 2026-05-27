@@ -117,6 +117,43 @@ const collectLiveBlocksByHash = (doc: PMNode) => {
 };
 
 /**
+ * Index live textblocks by their `w14:paraId`. Used by the resolver
+ * to prefer a paraId-anchored lookup when the snapshot id encodes
+ * one (`b-${paraId}` — 8-char uppercase hex). Direct lookup avoids
+ * the hash+ordinal failure mode where an earlier-in-document
+ * duplicate of the same text gets picked instead of the actual
+ * referenced paragraph.
+ */
+const collectLiveBlocksByParaId = (doc: PMNode) => {
+  const byParaId = new Map<string, LiveBlockEntry>();
+  doc.descendants((node, pos) => {
+    if (!node.isTextblock) {
+      return;
+    }
+    const paraId: unknown = node.attrs["paraId"];
+    if (typeof paraId !== "string" || paraId.length === 0) {
+      return;
+    }
+    // First-write-wins so an Enter-split duplicate (briefly co-existing
+    // before the allocator re-issues) doesn't override the original.
+    if (!byParaId.has(paraId)) {
+      byParaId.set(paraId, { from: pos, to: pos + node.nodeSize, node });
+    }
+  });
+  return byParaId;
+};
+
+/**
+ * Identify a snapshot block id as a paraId. The snapshot emits the
+ * bare `w14:paraId` (8 uppercase hex chars) for paragraphs that have
+ * one and `seq-${4-digit-ordinal}` as the pre-allocator fallback;
+ * only the former should be looked up in the live paraId index.
+ */
+const PARA_ID_BLOCK_ID = /^[0-9A-F]{8}$/u;
+const extractParaIdFromBlockId = (blockId: string): string | null =>
+  PARA_ID_BLOCK_ID.test(blockId) ? blockId : null;
+
+/**
  * The snapshot recorded an `hashOccurrenceCount` per anchor but
  * not which ordinal within that bucket the block was — recompute
  * on demand from the snapshot's anchor map. Stable iteration
@@ -168,9 +205,13 @@ export const applyFolioAIEditOperations = ({
     };
   }
 
-  // Build the live-block index once per batch so individual op
-  // resolutions don't each re-walk the doc.
+  // Build the live-block indexes once per batch so individual op
+  // resolutions don't each re-walk the doc. ParaId-anchored ids are
+  // resolved against `liveBlocksByParaId` first; the hash bucket is
+  // the fallback for ordinal-encoded snapshot ids and stale paraId
+  // refs.
   const liveBlocks = collectLiveBlocksByHash(view.state.doc);
+  const liveBlocksByParaId = collectLiveBlocksByParaId(view.state.doc);
 
   for (const [index, operation] of operations.entries()) {
     const commentText = getOperationCommentText(operation);
@@ -182,7 +223,12 @@ export const applyFolioAIEditOperations = ({
       continue;
     }
 
-    const resolution = resolveOperation(snapshot, operation, liveBlocks);
+    const resolution = resolveOperation(
+      snapshot,
+      operation,
+      liveBlocks,
+      liveBlocksByParaId,
+    );
     if (resolution.type === "skip") {
       skipped.push({ id: operation.id, reason: resolution.reason });
       continue;
@@ -587,17 +633,29 @@ const resolveOperation = (
   snapshot: FolioAIEditSnapshot,
   operation: FolioAIEditOperation,
   liveBlocks: Map<string, LiveBlockEntry[]>,
+  liveBlocksByParaId: Map<string, LiveBlockEntry>,
 ): { type: "resolved"; operation: ResolvedBase } | OperationResolutionSkip => {
   const anchor = snapshot.anchors[operation.blockId];
   if (!anchor) {
     return { type: "skip", reason: "missingBlock" };
   }
 
-  const ordinal = ordinalAmongSameHash(snapshot, operation.blockId);
-  if (ordinal < 0) {
-    return { type: "skip", reason: "missingBlock" };
+  // Prefer a paraId-anchored lookup when the snapshot id encodes one
+  // (`b-${8-char-hex}`). It survives structural edits — including
+  // an earlier-in-document duplicate of the same text appearing
+  // between snapshot and apply, which the hash+ordinal path would
+  // mis-target. Falls through to the hash bucket for fallback ids
+  // and for stale paraId refs that no longer match a live block.
+  const encodedParaId = extractParaIdFromBlockId(operation.blockId);
+  let live: LiveBlockEntry | undefined =
+    encodedParaId !== null ? liveBlocksByParaId.get(encodedParaId) : undefined;
+  if (!live) {
+    const ordinal = ordinalAmongSameHash(snapshot, operation.blockId);
+    if (ordinal < 0) {
+      return { type: "skip", reason: "missingBlock" };
+    }
+    live = liveBlocks.get(anchor.textHash)?.[ordinal];
   }
-  const live = liveBlocks.get(anchor.textHash)?.[ordinal];
   if (!live || !live.node.isTextblock) {
     return { type: "skip", reason: "changedBlock" };
   }

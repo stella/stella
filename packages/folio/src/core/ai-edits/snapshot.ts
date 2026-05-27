@@ -49,20 +49,25 @@ export const createFolioAIEditSnapshot = (doc: PMNode): FolioAIEditSnapshot => {
     const textHash = hashFolioAIBlockText(normalizedText);
     hashCounts.set(textHash, (hashCounts.get(textHash) ?? 0) + 1);
 
-    // Prefer the paragraph's Word `w14:paraId` (allocated by
+    // Use the paragraph's Word `w14:paraId` (allocated by
     // `ParaIdAllocatorExtension` if the parsed DOCX didn't have one)
-    // so block ids are STABLE across edits and across separate
-    // snapshots. Fall back to a sequential ordinal id only for the
-    // pre-allocator case (e.g. a snapshot taken before the editor's
-    // first allocation pass, or a non-paragraph textblock that the
-    // allocator skips); the prefix `b-` is preserved either way so
-    // chip parsers (`#folio:b-…`) keep working.
+    // as the canonical block id everywhere: AI prompts, chip hrefs
+    // (`#folio:<paraId>`), apply-tool blockIds, scrollToBlock. ParaIds
+    // are stable across structural edits — no more "this chip points
+    // at the wrong paragraph after an insertion-above" surprise.
+    //
+    // Pre-allocator fallback: a snapshot taken from a doc the
+    // allocator never ran on (typical in tests, possible in headless
+    // contexts) carries `paraId: null`. Fall back to a sequential
+    // ordinal prefixed with `seq-` so the apply path can tell at a
+    // glance which lookup strategy to use (paraId-direct vs.
+    // hash+ordinal).
     blockIndex++;
     const paraIdAttr: unknown = node.attrs["paraId"];
     const id =
       typeof paraIdAttr === "string" && paraIdAttr.length > 0
-        ? `b-${paraIdAttr}`
-        : `b-${String(blockIndex).padStart(4, "0")}`;
+        ? paraIdAttr
+        : `seq-${String(blockIndex).padStart(4, "0")}`;
     const kind = getBlockKind(node);
     const displayLabel = getDisplayLabel(node);
     const previewRuns = getPreviewRuns(node);
