@@ -51,6 +51,7 @@ type SearchHit = { position: number; snippet: string };
 type SearchResult = {
   hits: SearchHit[];
   totalHits: number;
+  totalHitsCapped: boolean;
   truncated: boolean;
 };
 
@@ -70,6 +71,7 @@ const findHitsInText = (
   const re = new RegExp(pattern, `${flags}u`);
   const hits: SearchHit[] = [];
   let totalHits = 0;
+  let totalHitsCapped = false;
   let match: RegExpExecArray | null;
   while ((match = re.exec(text)) !== null) {
     // Capture group 1 always exists because the pattern wraps the
@@ -89,7 +91,13 @@ const findHitsInText = (
         snippet: text.slice(snippetStart, snippetEnd),
       });
     }
+    // Scan cap fences pathological queries (single character, single
+    // space) where the regex iteration cost itself dominates. When
+    // hit, `totalHits` becomes a LOWER BOUND, not the absolute count
+    // — surfaced via `totalHitsCapped: true` so the model doesn't
+    // misreport "exactly N matches" when there could be more.
     if (totalHits >= SEARCH_MAX_HITS_SCANNED) {
+      totalHitsCapped = true;
       break;
     }
     // Guard against zero-width matches (shouldn't happen with a
@@ -101,6 +109,7 @@ const findHitsInText = (
   return {
     hits,
     totalHits,
+    totalHitsCapped,
     truncated: hits.length < totalHits,
   };
 };
@@ -629,15 +638,12 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
               const entity = row.entity;
               const fieldsForSource = entity?.currentVersion?.fields;
               const name = entity?.name ?? null;
-              const { hits, totalHits, truncated } = findHitsInText(
-                plaintext,
-                input.query,
-                {
+              const { hits, totalHits, totalHitsCapped, truncated } =
+                findHitsInText(plaintext, input.query, {
                   caseSensitive: input.caseSensitive,
                   limit: input.limit,
                   wholeWord: input.wholeWord,
-                },
-              );
+                });
 
               return {
                 charCount: row.charCount,
@@ -662,6 +668,7 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
                   workspaceId: row.workspaceId,
                 }),
                 totalHits,
+                totalHitsCapped,
                 truncated,
               };
             }),

@@ -327,13 +327,19 @@ const entitySearchResultSchema = v.strictObject({
     v.integer(),
     v.minValue(0),
     v.description(
-      "Total number of matches in the document (may exceed hits.length when capped by limit).",
+      "Number of matches counted in the document. Equal to the absolute count when `totalHitsCapped` is false; when `totalHitsCapped` is true the value is a LOWER BOUND (the scan was stopped to fence pathological queries) and the real count may be higher.",
+    ),
+  ),
+  totalHitsCapped: v.pipe(
+    v.boolean(),
+    v.description(
+      "True when the server stopped counting at a defensive cap (currently 100 matches per entity). If true, `totalHits` is a lower bound, not an exact count — narrow the query (e.g. `wholeWord: true` or a more specific phrase) to get an exact count.",
     ),
   ),
   truncated: v.pipe(
     v.boolean(),
     v.description(
-      "Whether the hits array was capped by `limit`. If true, more matches exist past those returned.",
+      "Whether the hits array was capped by `limit`. If true, more matches exist past those returned (raise `limit` to surface more).",
     ),
   ),
 });
@@ -459,7 +465,7 @@ export const searchInEntityContentContract = createReadonlyFunctionContract({
   summary:
     "Find every occurrence of a literal substring inside one or more entities' extracted text, anywhere in the document — not limited to the truncated head returned by getMatterEntityContents.",
   details:
-    "Use this instead of `getMatterEntityContents` whenever the user asks where, whether, or how a term/phrase appears in a long document (definitions, citations, references). Returns each hit's character offset and a ~200-char context window around it. `totalHits` is the absolute count, even when `hits` is capped at `limit`.",
+    "Use this instead of `getMatterEntityContents` whenever the user asks where, whether, or how a term/phrase appears in a long document (definitions, citations, references). Returns each hit's character offset and a ~200-char context window. `totalHits` is the absolute match count UNLESS `totalHitsCapped` is true — in which case the server stopped at a defensive cap (~100/entity) and `totalHits` is a lower bound. `truncated` is independent: it indicates the `hits` array was clipped by `limit`, not that the count is incomplete.",
   input: searchInEntityContentInputSchema,
   name: "searchInEntityContent",
   output: buildItemsOutputSchema(entitySearchResultSchema),
