@@ -119,7 +119,7 @@ const collectLiveBlocksByHash = (doc: PMNode) => {
 /**
  * Index live textblocks by their `w14:paraId`. Used by the resolver
  * to prefer a paraId-anchored lookup when the snapshot id encodes
- * one (`b-${paraId}` — 8-char uppercase hex). Direct lookup avoids
+ * one. Direct lookup avoids
  * the hash+ordinal failure mode where an earlier-in-document
  * duplicate of the same text gets picked instead of the actual
  * referenced paragraph.
@@ -144,14 +144,13 @@ const collectLiveBlocksByParaId = (doc: PMNode) => {
 };
 
 /**
- * Identify a snapshot block id as a paraId. The snapshot emits the
- * bare `w14:paraId` (8 uppercase hex chars) for paragraphs that have
- * one and `seq-${4-digit-ordinal}` as the pre-allocator fallback;
- * only the former should be looked up in the live paraId index.
+ * Identify a snapshot block id as a paraId. The snapshot emits a
+ * bare `w14:paraId` for paragraphs that have one and
+ * `seq-${4-digit-ordinal}` as the pre-allocator fallback; only the
+ * former should be looked up in the live paraId index.
  */
-const PARA_ID_BLOCK_ID = /^[0-9A-F]{8}$/u;
 const extractParaIdFromBlockId = (blockId: string): string | null =>
-  PARA_ID_BLOCK_ID.test(blockId) ? blockId : null;
+  blockId.startsWith("seq-") ? null : blockId;
 
 /**
  * The snapshot recorded an `hashOccurrenceCount` per anchor but
@@ -640,12 +639,12 @@ const resolveOperation = (
     return { type: "skip", reason: "missingBlock" };
   }
 
-  // Prefer a paraId-anchored lookup when the snapshot id encodes one
-  // (`b-${8-char-hex}`). It survives structural edits — including
-  // an earlier-in-document duplicate of the same text appearing
-  // between snapshot and apply, which the hash+ordinal path would
-  // mis-target. Falls through to the hash bucket for fallback ids
-  // and for stale paraId refs that no longer match a live block.
+  // Prefer a paraId-anchored lookup when the snapshot id encodes one.
+  // It survives structural edits, including an earlier-in-document
+  // duplicate of the same text appearing between snapshot and apply,
+  // which the hash+ordinal path would mis-target. Falls through to
+  // the hash bucket for fallback ids and for stale paraId refs that
+  // no longer match a live block.
   const encodedParaId = extractParaIdFromBlockId(operation.blockId);
   let live: LiveBlockEntry | undefined =
     encodedParaId !== null ? liveBlocksByParaId.get(encodedParaId) : undefined;
@@ -667,6 +666,12 @@ const resolveOperation = (
   // find / replaceBlock anchors line up with what it saw.
   const cleanBlock = buildCleanBlockText(blockNode, blockFrom);
   const currentText = cleanBlock.text;
+  const currentTextHash = hashFolioAIBlockText(
+    normalizeFolioAIBlockText(currentText),
+  );
+  if (currentTextHash !== anchor.textHash) {
+    return { type: "skip", reason: "changedBlock" };
+  }
 
   if (
     operation.type === "insertAfterBlock" ||
@@ -696,10 +701,10 @@ const resolveOperation = (
       // explicitly skips blocks whose normalised text is empty,
       // so by construction the resolver only ever lands here on a
       // block that was non-empty at snapshot time and got emptied
-      // between snapshot and apply. The textHash gate above would
-      // already have rejected that case as `changedBlock`, so this
-      // branch is unreachable through the real flow; keeping the
-      // skip as a defensive guard.
+      // between snapshot and apply. The textHash gate above already
+      // rejects that case as `changedBlock`, so this branch is
+      // unreachable through the real flow; keeping the skip as a
+      // defensive guard.
       return { type: "skip", reason: "unsupportedBlock" };
     }
     // The model occasionally emits replaceBlock with text identical

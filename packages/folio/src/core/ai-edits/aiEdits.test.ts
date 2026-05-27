@@ -460,6 +460,35 @@ describe("Folio AI edit operations", () => {
     expect(view.state.doc.child(2).textContent).toBe("Charge.");
   });
 
+  test("paraId-anchored op still skips when the target block changed after snapshot", () => {
+    const originalState = makeState([{ text: "Payment.", paraId: "AAAA0001" }]);
+    const snapshot = createFolioAIEditSnapshot(originalState.doc);
+    const view = makeView(
+      makeState([{ text: "Payment changed.", paraId: "AAAA0001" }]),
+    );
+
+    const result = applyFolioAIEditOperations({
+      view,
+      snapshot,
+      operations: [
+        {
+          id: "op-1",
+          type: "replaceInBlock",
+          blockId: "AAAA0001",
+          find: "Payment",
+          replace: "Charge",
+        },
+      ],
+      mode: "direct",
+    });
+
+    expect(result).toEqual({
+      applied: [],
+      skipped: [{ id: "op-1", reason: "changedBlock" }],
+    });
+    expect(view.state.doc.child(0).textContent).toBe("Payment changed.");
+  });
+
   test("applies multiple insertAfterBlock ops at the same position in document order", () => {
     // Same-position ops must apply in a deterministic, logical
     // order. Sorting by `from` alone is non-deterministic for
@@ -524,7 +553,7 @@ describe("Folio AI edit operations", () => {
           id: "op-1",
           type: "insertAfterBlock",
           // Source paragraph carries `paraId: "para-source"`, so the
-          // snapshot keys it as `b-para-source` (paraId-anchored).
+          // snapshot keys it as `para-source` (paraId-anchored).
           blockId: "para-source",
           text: "Inherited follow-up.",
           inheritFormatting: true,
@@ -1002,7 +1031,7 @@ describe("Folio AI edit operations", () => {
     // Locks in why the panel must hand the apply engine the
     // ORIGINAL snapshot the AI saw, not a freshly recomputed one:
     //
-    //   1. Block ids are sequential (b-0001, b-0002, ...). After
+    //   1. Fallback block ids are sequential (seq-0001, seq-0002, ...). After
     //      an insertAfterBlock accept, every block below shifts +1.
     //   2. The resolver looks up blocks by `textHash` (content
     //      hash), not by id position. So as long as the target
@@ -1010,7 +1039,7 @@ describe("Folio AI edit operations", () => {
     //      its hash bucket is unchanged and the lookup succeeds —
     //      even if its absolute PM position moved.
     //   3. A fresh snapshot would re-number the target as a
-    //      different id (e.g. b-0003 → b-0004), and the queued
+    //      different id (e.g. seq-0003 → seq-0004), and the queued
     //      op's blockId="seq-0003" would either miss or hit the
     //      wrong block.
     const view = makeView(
