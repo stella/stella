@@ -457,9 +457,9 @@ export const getMatterEntityContentsContract = createReadonlyFunctionContract({
 
 export const searchInEntityContentContract = createReadonlyFunctionContract({
   summary:
-    "Find every occurrence of a literal substring inside one or more entities' extracted text, anywhere in the document — not limited to the truncated head returned by getMatterEntityContents.",
+    "Search for a literal substring inside one or more entities' extracted text, anywhere in the document — not limited to the truncated head returned by getMatterEntityContents.",
   details:
-    "Use this instead of `getMatterEntityContents` whenever the user asks where, whether, or how a term/phrase appears in a long document (definitions, citations, references). Returns each hit's character offset and a ~200-char context window. `totalHits` is the absolute match count UNLESS `totalHitsCapped` is true — in which case the server stopped at a defensive cap (~100/entity) and `totalHits` is a lower bound. `truncated` is independent: it indicates the `hits` array was clipped by `limit`, not that the count is incomplete.",
+    "Use this instead of `getMatterEntityContents` whenever the user asks where, whether, or how a term/phrase appears in a long document (definitions, citations, references). Returns matching snippets in document order with a ~200-char context window. `totalHits` is the absolute match count UNLESS `totalHitsCapped` is true — in which case the server stopped at a defensive cap (~100/entity) and `totalHits` is a lower bound. `truncated` is independent: it indicates the `hits` array was clipped by `limit`, not that the count is incomplete.",
   input: searchInEntityContentInputSchema,
   name: "searchInEntityContent",
   output: buildItemsOutputSchema(entitySearchResultSchema),
