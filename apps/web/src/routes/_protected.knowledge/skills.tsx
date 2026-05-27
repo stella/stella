@@ -1,8 +1,9 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   useInfiniteQuery,
   useMutation,
+  useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
@@ -11,6 +12,7 @@ import {
   FileUpIcon,
   GlobeIcon,
   LibraryIcon,
+  PencilIcon,
   PowerIcon,
   TrashIcon,
 } from "lucide-react";
@@ -34,6 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
+import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -46,6 +49,7 @@ import {
 import { toSafeId } from "@/lib/safe-id";
 import {
   knowledgeKeys,
+  skillDetailOptions,
   skillsOptions,
 } from "@/routes/_protected.knowledge/-queries";
 
@@ -100,6 +104,7 @@ function SkillsPage() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<InstalledSkill | null>(null);
+  const [editTarget, setEditTarget] = useState<InstalledSkill | null>(null);
   const firstPage = data?.pages.at(0);
   const canManageTeam = firstPage?.canManageTeam ?? false;
   const installed = useMemo(
@@ -206,9 +211,11 @@ function SkillsPage() {
           {teamSkills.map((skill) => (
             <InstalledSkillCard
               canDelete={canManageTeam}
+              canEdit={canManageTeam}
               canToggle={canManageTeam}
               key={skill.id}
               onDelete={setDeleteTarget}
+              onEdit={setEditTarget}
               onToggle={(target) => {
                 void toggleSkill(target);
               }}
@@ -223,9 +230,11 @@ function SkillsPage() {
           {privateSkills.map((skill) => (
             <InstalledSkillCard
               canDelete
+              canEdit
               canToggle
               key={skill.id}
               onDelete={setDeleteTarget}
+              onEdit={setEditTarget}
               onToggle={(target) => {
                 void toggleSkill(target);
               }}
@@ -281,6 +290,16 @@ function SkillsPage() {
         open={deleteTarget !== null}
         skill={deleteTarget}
       />
+      <EditSkillDialog
+        onChanged={invalidate}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditTarget(null);
+          }
+        }}
+        open={editTarget !== null}
+        skill={editTarget}
+      />
     </div>
   );
 }
@@ -303,16 +322,20 @@ function SkillSection({ children, title }: SkillSectionProps) {
 
 type InstalledSkillCardProps = {
   canDelete: boolean;
+  canEdit: boolean;
   canToggle: boolean;
   onDelete: (skill: InstalledSkill) => void;
+  onEdit: (skill: InstalledSkill) => void;
   onToggle: (skill: InstalledSkill) => void;
   skill: InstalledSkill;
 };
 
 function InstalledSkillCard({
   canDelete,
+  canEdit,
   canToggle,
   onDelete,
+  onEdit,
   onToggle,
   skill,
 }: InstalledSkillCardProps) {
@@ -335,6 +358,16 @@ function InstalledSkillCard({
         slug={skill.slug}
       />
       <div className="flex shrink-0 items-center gap-1">
+        {canEdit && (
+          <Button
+            aria-label={tSkills("editSkill")}
+            onClick={() => onEdit(skill)}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <PencilIcon className="size-4" />
+          </Button>
+        )}
         {canToggle && (
           <Button
             aria-label={
@@ -729,6 +762,219 @@ function DeleteSkillDialog({
           </DialogClose>
           <Button onClick={onConfirm} variant="destructive">
             {t("common.delete")}
+          </Button>
+        </DialogFooter>
+      </DialogPopup>
+    </Dialog>
+  );
+}
+
+type EditSkillDialogProps = {
+  onChanged: () => void;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  skill: InstalledSkill | null;
+};
+
+type EditSkillForm = {
+  name: string;
+  description: string;
+  body: string;
+  version: string;
+};
+
+function EditSkillDialog({
+  onChanged,
+  onOpenChange,
+  open,
+  skill,
+}: EditSkillDialogProps) {
+  const t = useTranslations();
+  const tSkills = useTranslations("knowledge.agentSkills");
+  const skillId = skill?.id ?? null;
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+
+  const detail = useQuery({
+    ...skillDetailOptions(activeOrganizationId, skillId ?? ""),
+    enabled: open && skillId !== null,
+  });
+
+  const [form, setForm] = useState<EditSkillForm>({
+    name: "",
+    description: "",
+    body: "",
+    version: "",
+  });
+
+  useEffect(() => {
+    if (!detail.data) {
+      return;
+    }
+    setForm({
+      name: detail.data.name,
+      description: detail.data.description,
+      body: detail.data.body,
+      version: detail.data.version ?? "",
+    });
+  }, [detail.data]);
+
+  const updateSkill = useMutation({
+    mutationFn: async (payload: {
+      skillId: string;
+      body: {
+        name: string;
+        description: string;
+        body: string;
+        version: string;
+      };
+    }) => {
+      const trimmedVersion = payload.body.version.trim();
+      const response = await api
+        .skills({ skillId: toSafeId<"agentSkill">(payload.skillId) })
+        .patch({
+          name: payload.body.name.trim(),
+          description: payload.body.description.trim(),
+          body: payload.body.body,
+          version: trimmedVersion.length > 0 ? trimmedVersion : null,
+          queryKey: ["skills"],
+        });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      onChanged();
+      onOpenChange(false);
+    },
+    onError: (error) => {
+      const fallback = t("common.unexpectedError");
+      stellaToast.add({
+        title: fallback,
+        description: userErrorFromThrown(error, fallback),
+        type: "error",
+      });
+    },
+  });
+
+  const canSubmit =
+    skillId !== null &&
+    !updateSkill.isPending &&
+    form.name.trim().length > 0 &&
+    form.description.trim().length > 0 &&
+    form.body.length > 0;
+
+  const submit = () => {
+    if (!skillId || !canSubmit) {
+      return;
+    }
+    updateSkill.mutate({ skillId, body: form });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogPopup className="sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>{tSkills("editTitle")}</DialogTitle>
+        </DialogHeader>
+        <DialogPanel className="flex flex-col gap-4">
+          {detail.isLoading && (
+            <p className="text-muted-foreground text-sm">
+              {t("common.loading")}
+            </p>
+          )}
+          {detail.error && (
+            <p className="text-destructive text-sm">
+              {userErrorFromThrown(detail.error, t("common.unexpectedError"))}
+            </p>
+          )}
+          {detail.data && (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium" htmlFor="skill-name">
+                  {tSkills("formName")}
+                </label>
+                <Input
+                  id="skill-name"
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      name: event.target.value,
+                    }))
+                  }
+                  value={form.name}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium" htmlFor="skill-version">
+                  {tSkills("formVersion")}
+                </label>
+                <Input
+                  id="skill-version"
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      version: event.target.value,
+                    }))
+                  }
+                  placeholder={tSkills("formVersionPlaceholder")}
+                  value={form.version}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label
+                  className="text-sm font-medium"
+                  htmlFor="skill-description"
+                >
+                  {tSkills("formDescription")}
+                </label>
+                <Textarea
+                  className="min-h-20 resize-y"
+                  id="skill-description"
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      description: event.target.value,
+                    }))
+                  }
+                  value={form.description}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium" htmlFor="skill-body">
+                  {tSkills("formBody")}
+                </label>
+                <Textarea
+                  className="min-h-96 resize-y font-mono"
+                  id="skill-body"
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      body: event.target.value,
+                    }))
+                  }
+                  value={form.body}
+                />
+                <p className="text-muted-foreground text-xs">
+                  {tSkills("formBodyHelp")}
+                </p>
+              </div>
+            </>
+          )}
+        </DialogPanel>
+        <DialogFooter>
+          <DialogClose render={<Button variant="ghost" />}>
+            {t("common.cancel")}
+          </DialogClose>
+          <Button
+            disabled={!canSubmit}
+            onClick={() => {
+              submit();
+            }}
+          >
+            {t("common.save")}
           </Button>
         </DialogFooter>
       </DialogPopup>

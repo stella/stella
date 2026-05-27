@@ -1,6 +1,7 @@
 import Elysia from "elysia";
 
 import deleteSkill from "@/api/handlers/skills/delete";
+import getSkill from "@/api/handlers/skills/get";
 import importSkillFromUrl from "@/api/handlers/skills/import-url";
 import listSkills from "@/api/handlers/skills/list";
 import updateSkill from "@/api/handlers/skills/update";
@@ -16,6 +17,10 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
   .get("/", listSkills.handler, {
     permissions: listSkills.config.permissions,
     query: listSkills.config.query,
+  })
+  .get("/:skillId", getSkill.handler, {
+    params: getSkill.config.params,
+    permissions: getSkill.config.permissions,
   })
   .post("/upload", uploadSkill.handler, {
     body: uploadSkill.config.body,

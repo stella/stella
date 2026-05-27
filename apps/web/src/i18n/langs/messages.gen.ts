@@ -1229,10 +1229,18 @@ type Messages = {
       "disableSkill": "Disable skill";
       "disabled": "Disabled";
       "dropFile": "Drop SKILL.md or .zip here";
+      "editSkill": "Edit skill";
+      "editTitle": "Edit skill";
       "emptyDescription": "Upload a SKILL.md file, a zipped skill folder, or import a public GitHub skill URL.";
       "emptyTitle": "Install your first skill";
       "enableSkill": "Enable skill";
       "enabled": "Enabled";
+      "formBody": "Instructions";
+      "formBodyHelp": "Markdown instructions the agent reads when the skill is invoked.";
+      "formDescription": "Description";
+      "formName": "Name";
+      "formVersion": "Version";
+      "formVersionPlaceholder": "1.0.0";
       "importHelp": "Paste a direct SKILL.md URL, a GitHub file URL, or a GitHub folder URL that contains SKILL.md.";
       "importSkill": "Import from URL";
       "importTitle": "Import skill";

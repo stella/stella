@@ -35,6 +35,11 @@ export const knowledgeKeys = {
       "list",
       { limit },
     ],
+    detail: (organizationId: string, skillId: string) => [
+      ...knowledgeKeys.skills.all(organizationId),
+      skillId,
+      "detail",
+    ],
   },
   templates: {
     all: (organizationId: string) => ["templates", organizationId],
@@ -340,6 +345,21 @@ export const skillsOptions = (organizationId: string) =>
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage) => lastPage.nextOffset ?? undefined,
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+export const skillDetailOptions = (organizationId: string, skillId: string) =>
+  queryOptions({
+    queryKey: knowledgeKeys.skills.detail(organizationId, skillId),
+    queryFn: async ({ signal }) => {
+      const response = await api
+        .skills({ skillId: toSafeId<"agentSkill">(skillId) })
+        .get({ fetch: { signal } });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 
