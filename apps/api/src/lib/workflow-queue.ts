@@ -59,6 +59,7 @@ const WORKFLOW_RUN_STATE_FIELDS = [
   "completed",
   "plan-properties",
   "request-id",
+  "scoped",
 ] as const;
 
 const EXTRACTION_PREVIEW_EVENT_TYPE = "workflow-extraction-preview";
@@ -86,6 +87,13 @@ type EntityJobData = {
   entityId: string;
   executionPlan: ExecutionLevel[];
   requestId: string;
+  /**
+   * Property IDs the caller wants processed even if their current
+   * content would normally cause `prepareBatch` to skip them (e.g. a
+   * `fresh` cell with a real value). Used by single-cell retry so a
+   * user can re-run an extraction over an already-populated cell.
+   */
+  forcePropertyIds?: string[];
 };
 
 // ── Public API ─────────────────────────────────────────
@@ -204,6 +212,13 @@ type StartWorkflowArgs = {
   scopedDb: ScopedDb;
   entityIds?: SafeId<"entity">[];
   entityIdsOrder?: SafeId<"entity">[];
+  /**
+   * Restrict the execution plan to these property IDs only. Used by
+   * single-cell retry to re-run one property for one entity without
+   * touching the rest of the entity's cells. Properties outside the
+   * filter are dropped from every level of the plan.
+   */
+  propertyIds?: SafeId<"property">[];
 };
 
 type StartWorkflowResult = {
@@ -229,6 +244,7 @@ type EnqueueEntityJobsArgs = {
   requestId: string;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
+  forcePropertyIds?: readonly SafeId<"property">[];
 };
 
 const chunkItems = <T>(items: readonly T[], size: number): T[][] => {
@@ -256,6 +272,7 @@ const enqueueEntityJobs = async ({
   requestId,
   userId,
   workspaceId,
+  forcePropertyIds,
 }: EnqueueEntityJobsArgs): Promise<void> => {
   if (entityIds.length === 0) {
     return;
@@ -276,6 +293,10 @@ const enqueueEntityJobs = async ({
           entityId,
           executionPlan,
           requestId,
+          ...(forcePropertyIds &&
+            forcePropertyIds.length > 0 && {
+              forcePropertyIds: [...forcePropertyIds],
+            }),
         } satisfies EntityJobData,
         opts: { jobId },
       };
@@ -429,6 +450,23 @@ const collectFullWorkflowTargetIds = async ({
   }
 };
 
+const filterPlanByPropertyIds = (
+  plan: ExecutionLevel[],
+  propertyIds: readonly SafeId<"property">[],
+): ExecutionLevel[] => {
+  const allowed = new Set<string>(propertyIds);
+  return plan
+    .map((level) =>
+      level
+        .map((batch) => ({
+          ...batch,
+          properties: batch.properties.filter((p) => allowed.has(p.id)),
+        }))
+        .filter((batch) => batch.properties.length > 0),
+    )
+    .filter((level) => level.length > 0);
+};
+
 /**
  * Start a workflow: build execution plan, enqueue entity jobs.
  */
@@ -439,6 +477,7 @@ export const startWorkflow = async ({
   scopedDb,
   entityIds: inputEntityIds,
   entityIdsOrder: inputOrder,
+  propertyIds: inputPropertyIds,
 }: StartWorkflowArgs): Promise<StartWorkflowResult> => {
   const redis = getRedis();
 
@@ -478,7 +517,12 @@ export const startWorkflow = async ({
           }
         : executionPlanData;
 
-    const executionPlan = getPropertyExecutionPlan(planInput);
+    const fullExecutionPlan = getPropertyExecutionPlan(planInput);
+
+    const executionPlan =
+      inputPropertyIds && inputPropertyIds.length > 0
+        ? filterPlanByPropertyIds(fullExecutionPlan, inputPropertyIds)
+        : fullExecutionPlan;
 
     const hasWork = executionPlan.some((level) =>
       level.some((batch) => batch.properties.length > 0),
@@ -550,6 +594,21 @@ export const startWorkflow = async ({
       RUNNING_LOCK_TTL_SEC,
     );
 
+    // Single-cell retries and other `propertyIds`-scoped runs only
+    // touch a subset of (entity, property) pairs. `finishWorkflow`
+    // must NOT freshen those properties workspace-wide afterwards: the
+    // other entities still hold values from the previous extraction,
+    // so the property is genuinely still stale at workspace scope. The
+    // flag lets us tell scoped runs apart from a full sweep.
+    if (inputPropertyIds && inputPropertyIds.length > 0) {
+      await redis.set(
+        workflowKey(workspaceId, "scoped"),
+        "1",
+        "EX",
+        RUNNING_LOCK_TTL_SEC,
+      );
+    }
+
     // Broadcast running status
     broadcastWorkflowStatus(workspaceId, true);
 
@@ -573,6 +632,10 @@ export const startWorkflow = async ({
           requestId,
           userId,
           workspaceId,
+          ...(inputPropertyIds &&
+            inputPropertyIds.length > 0 && {
+              forcePropertyIds: inputPropertyIds,
+            }),
         });
       }
     } catch (error: unknown) {
@@ -790,7 +853,9 @@ const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
     entityId,
     executionPlan,
     requestId,
+    forcePropertyIds,
   } = data;
+  const forcedPropertyIds: ReadonlySet<string> = new Set(forcePropertyIds);
 
   // Brand IDs at the boundary — job data stores plain strings (JSON).
   const branded = brandValidatedWorkflowActorKey({
@@ -846,6 +911,7 @@ const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
             scopedDb,
             requestId,
             signal,
+            forcedPropertyIds,
           }),
       ),
     );
@@ -876,6 +942,7 @@ type ProcessOneBatchArgs = {
   scopedDb: ScopedDb;
   requestId: string;
   signal: AbortSignal;
+  forcedPropertyIds: ReadonlySet<string>;
 };
 
 type BatchPreviewPublisherArgs = {
@@ -960,6 +1027,7 @@ const processOneBatch = async ({
   scopedDb,
   requestId,
   signal,
+  forcedPropertyIds,
 }: ProcessOneBatchArgs) => {
   signal.throwIfAborted();
   const isCurrentRequest = await isCurrentWorkflowRequest({
@@ -1024,7 +1092,12 @@ const processOneBatch = async ({
       .map((row) => row.propertyId),
   );
 
-  const batch = prepareBatch(rawBatch, fieldContentMap, lockedPropertyIds);
+  const batch = prepareBatch(
+    rawBatch,
+    fieldContentMap,
+    lockedPropertyIds,
+    forcedPropertyIds,
+  );
 
   if (batch.properties.length === 0) {
     return;
@@ -1288,6 +1361,10 @@ const onEntityCompleted = async (
       RUNNING_LOCK_TTL_SEC,
     ),
     redis.expire(workflowKey(workspaceId, "request-id"), RUNNING_LOCK_TTL_SEC),
+    // Refresh the scoped flag's TTL for the same reason: if it
+    // expires mid-run, `finishWorkflow` would mistake a long-running
+    // scoped retry for a full sweep and freshen the property globally.
+    redis.expire(workflowKey(workspaceId, "scoped"), RUNNING_LOCK_TTL_SEC),
   ]);
 };
 
@@ -1312,47 +1389,57 @@ const finishWorkflow = async (
     workspaceIds: [workspaceId],
   });
 
-  // Freshen only the properties that were part of this workflow's plan.
-  // Properties created mid-workflow are not in the snapshot — they stay
-  // stale and trigger an automatic follow-up run below.
-  let processedIds: SafeId<"property">[] = [];
-  try {
-    const planRaw = await redis.get(
-      workflowKey(workspaceId, "plan-properties"),
-    );
-    if (planRaw !== null) {
-      const parsed: unknown = JSON.parse(planRaw);
-      if (Array.isArray(parsed)) {
-        processedIds = parsed
-          .filter((value): value is string => typeof value === "string")
-          .map((value) => brandPersistedPropertyId(value));
-      }
-    }
+  // Scoped runs (single-cell retry) only touch a subset of entities
+  // for the chosen property. Workspace-wide freshness and straggler
+  // detection both reason about all entities, so they're meaningless
+  // here and would actively hide still-stale cells from the next full
+  // sweep.
+  const wasScopedRun =
+    (await redis.get(workflowKey(workspaceId, "scoped"))) === "1";
 
-    if (processedIds.length > 0) {
-      await scopedDb((tx) =>
-        tx
-          .update(properties)
-          .set({ status: "fresh" })
-          .where(
-            and(
-              eq(properties.workspaceId, workspaceId),
-              inArray(properties.id, processedIds),
+  if (!wasScopedRun) {
+    // Freshen only the properties that were part of this workflow's
+    // plan. Properties created mid-workflow are not in the snapshot —
+    // they stay stale and trigger an automatic follow-up run below.
+    let processedIds: SafeId<"property">[] = [];
+    try {
+      const planRaw = await redis.get(
+        workflowKey(workspaceId, "plan-properties"),
+      );
+      if (planRaw !== null) {
+        const parsed: unknown = JSON.parse(planRaw);
+        if (Array.isArray(parsed)) {
+          processedIds = parsed
+            .filter((value): value is string => typeof value === "string")
+            .map((value) => brandPersistedPropertyId(value));
+        }
+      }
+
+      if (processedIds.length > 0) {
+        await scopedDb((tx) =>
+          tx
+            .update(properties)
+            .set({ status: "fresh" })
+            .where(
+              and(
+                eq(properties.workspaceId, workspaceId),
+                inArray(properties.id, processedIds),
+              ),
             ),
-          ),
-      );
-    } else {
-      // Backwards-compat: pre-snapshot workflows had no plan recorded.
-      // Behave as before so they still finalize.
-      await scopedDb((tx) =>
-        tx
-          .update(properties)
-          .set({ status: "fresh" })
-          .where(eq(properties.workspaceId, workspaceId)),
-      );
+        );
+      } else {
+        // Backwards-compat: pre-snapshot workflows had no plan recorded.
+        // Behave as before so they still finalize.
+        await scopedDb((tx) =>
+          tx
+            .update(properties)
+            .set({ status: "fresh" })
+            .where(eq(properties.workspaceId, workspaceId)),
+        );
+      }
+    } catch (error: unknown) {
+      captureError(error, { workspaceId });
     }
-  } catch (error: unknown) {
-    captureError(error, { workspaceId });
   }
 
   // Clean up Redis state
@@ -1361,6 +1448,10 @@ const finishWorkflow = async (
   // Broadcast completion
   broadcastWorkflowStatus(workspaceId, false);
   broadcastInvalidation(workspaceId, ["properties", workspaceId]);
+
+  if (wasScopedRun) {
+    return;
+  }
 
   // Catch up on any AI-model properties created mid-workflow. They
   // were left stale by the partial freshen above; kick off a follow-up
