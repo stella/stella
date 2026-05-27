@@ -26,7 +26,7 @@
     "@base-ui/react": "catalog:",
     "@better-auth/oauth-provider": "catalog:",
     "@elysiajs/eden": "^1.4.9",
-    "@hocuspocus/provider": "^4.0.0",
+    "@hocuspocus/provider": "^4.1.0",
     "@libpdf/core": "catalog:",
     "@posthog/react": "^1.9.0",
     "@pydantic/genai-prices": "^0.0.61",

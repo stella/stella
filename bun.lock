@@ -113,7 +113,7 @@
       "name": "@stll/collab",
       "version": "0.0.0",
       "dependencies": {
-        "@hocuspocus/server": "^4.0.0",
+        "@hocuspocus/server": "^4.1.0",
         "@stll/errors": "workspace:*",
         "@t3-oss/env-core": "catalog:",
         "better-result": "catalog:",
@@ -122,7 +122,7 @@
         "yjs": "^13.6.30",
       },
       "devDependencies": {
-        "@hocuspocus/provider": "^4.0.0",
+        "@hocuspocus/provider": "^4.1.0",
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
         "typescript": "catalog:",
@@ -215,7 +215,7 @@
         "@base-ui/react": "catalog:",
         "@better-auth/oauth-provider": "catalog:",
         "@elysiajs/eden": "^1.4.9",
-        "@hocuspocus/provider": "^4.0.0",
+        "@hocuspocus/provider": "^4.1.0",
         "@libpdf/core": "catalog:",
         "@posthog/react": "^1.9.0",
         "@pydantic/genai-prices": "^0.0.61",
@@ -926,11 +926,11 @@
 
     "@formatjs/intl-localematcher": ["@formatjs/intl-localematcher@0.8.1", "", { "dependencies": { "@formatjs/fast-memoize": "3.1.0", "tslib": "^2.8.1" } }, "sha512-xwEuwQFdtSq1UKtQnyTZWC+eHdv7Uygoa+H2k/9uzBVQjDyp9r20LNDNKedWXll7FssT3GRHvqsdJGYSUWqYFA=="],
 
-    "@hocuspocus/common": ["@hocuspocus/common@4.0.0", "", { "dependencies": { "lib0": "^0.2.87" } }, "sha512-7BE8TsKBkdiOZO6tfm3ny6bIHPbxkIZb3hsYdVn/X5xbXI8n8w9pnE6pXgEMKQhJm6zsWsa9IDRJIp/c9u+DmA=="],
+    "@hocuspocus/common": ["@hocuspocus/common@4.1.0", "", { "dependencies": { "lib0": "^0.2.87" } }, "sha512-SOBbu0GcBMbLo7IYRDZC6gvEcoATbEFIC5KqzvLanC6dZZLkv91pYEBli+Exs/G71ELL3iUjSwnaf+gksxcjFA=="],
 
-    "@hocuspocus/provider": ["@hocuspocus/provider@4.0.0", "", { "dependencies": { "@hocuspocus/common": "^4.0.0", "@lifeomic/attempt": "^3.0.2", "lib0": "^0.2.87", "ws": "^8.17.1" }, "peerDependencies": { "y-protocols": "^1.0.6", "yjs": "^13.6.8" } }, "sha512-08gpeNZ6x2pmRD6m4XwRD52yQKnTl32a0HS9VSXZ5A1dIBVqxMz/x8Z06XbkKM2X8sp6vWEUCZCtzAGFSsofgg=="],
+    "@hocuspocus/provider": ["@hocuspocus/provider@4.1.0", "", { "dependencies": { "@hocuspocus/common": "^4.1.0", "@lifeomic/attempt": "^3.0.2", "lib0": "^0.2.87" }, "peerDependencies": { "y-protocols": "^1.0.6", "yjs": "^13.6.8" } }, "sha512-K80V2yX4AMdpqgjIkexJioyI2Oq8pu8hjdFqY0INXKSpH8TQv9NMaDzJmlrZMYmUeKyRO2t7VhGyFK9jZQPnNw=="],
 
-    "@hocuspocus/server": ["@hocuspocus/server@4.0.0", "", { "dependencies": { "@hocuspocus/common": "^4.0.0", "async-mutex": "^0.5.0", "crossws": "^0.4.4", "kleur": "^4.1.4", "lib0": "^0.2.47" }, "peerDependencies": { "y-protocols": "^1.0.6", "yjs": "^13.6.8" } }, "sha512-Pgm+kVtTrVvybIJUVot5XumSzD8rPLQglUV0QAAiN6J64dkYc2wWNdGcMwJz3q3yJPV0dO+eRU9JEck+iVdgzQ=="],
+    "@hocuspocus/server": ["@hocuspocus/server@4.1.0", "", { "dependencies": { "@hocuspocus/common": "^4.1.0", "async-mutex": "^0.5.0", "crossws": "^0.4.4", "kleur": "^4.1.4", "lib0": "^0.2.47" }, "peerDependencies": { "y-protocols": "^1.0.6", "yjs": "^13.6.8" } }, "sha512-mp0Of76kRkK/u+9pKXPLNV4NI2Cyjql/jVnudVb0z6xAd/i7mBDTK88p1I1sNoX9yvCvhY7lQlrvVx6sMcl8Xw=="],
 
     "@hono/node-server": ["@hono/node-server@1.19.11", "", { "peerDependencies": { "hono": "^4" } }, "sha512-dr8/3zEaB+p0D2n/IUrlPF1HZm586qgJNXK1a9fhg/PzdtkK7Ksd5l312tJX2yBuALqDYBlG20QEbayqPyxn+g=="],
 
