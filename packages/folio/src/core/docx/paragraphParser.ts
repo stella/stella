@@ -463,6 +463,102 @@ function parseFrameProperties(
 // PARAGRAPH PROPERTIES PARSER
 // ============================================================================
 
+type ParagraphPropertyChildren = {
+  bidi?: XmlElement;
+  contextualSpacing?: XmlElement;
+  framePr?: XmlElement;
+  ind?: XmlElement;
+  jc?: XmlElement;
+  keepLines?: XmlElement;
+  keepNext?: XmlElement;
+  numPr?: XmlElement;
+  outlineLvl?: XmlElement;
+  pageBreakBefore?: XmlElement;
+  pBdr?: XmlElement;
+  pStyle?: XmlElement;
+  rPr?: XmlElement;
+  shd?: XmlElement;
+  spacing?: XmlElement;
+  suppressAutoHyphens?: XmlElement;
+  suppressLineNumbers?: XmlElement;
+  tabs?: XmlElement;
+  widowControl?: XmlElement;
+};
+
+function collectFirstParagraphPropertyChildren(
+  pPr: XmlElement,
+): ParagraphPropertyChildren {
+  const children: ParagraphPropertyChildren = {};
+
+  for (const child of pPr.elements ?? []) {
+    if (child.type !== "element") {
+      continue;
+    }
+    const localName = getLocalName(child.name);
+    switch (localName) {
+      case "bidi":
+        children.bidi ??= child;
+        break;
+      case "contextualSpacing":
+        children.contextualSpacing ??= child;
+        break;
+      case "framePr":
+        children.framePr ??= child;
+        break;
+      case "ind":
+        children.ind ??= child;
+        break;
+      case "jc":
+        children.jc ??= child;
+        break;
+      case "keepLines":
+        children.keepLines ??= child;
+        break;
+      case "keepNext":
+        children.keepNext ??= child;
+        break;
+      case "numPr":
+        children.numPr ??= child;
+        break;
+      case "outlineLvl":
+        children.outlineLvl ??= child;
+        break;
+      case "pageBreakBefore":
+        children.pageBreakBefore ??= child;
+        break;
+      case "pBdr":
+        children.pBdr ??= child;
+        break;
+      case "pStyle":
+        children.pStyle ??= child;
+        break;
+      case "rPr":
+        children.rPr ??= child;
+        break;
+      case "shd":
+        children.shd ??= child;
+        break;
+      case "spacing":
+        children.spacing ??= child;
+        break;
+      case "suppressAutoHyphens":
+        children.suppressAutoHyphens ??= child;
+        break;
+      case "suppressLineNumbers":
+        children.suppressLineNumbers ??= child;
+        break;
+      case "tabs":
+        children.tabs ??= child;
+        break;
+      case "widowControl":
+        children.widowControl ??= child;
+        break;
+    }
+  }
+
+  return children;
+}
+
 /**
  * Parse paragraph formatting properties (w:pPr)
  *
@@ -491,9 +587,10 @@ export function parseParagraphProperties(
   }
 
   const formatting: ParagraphFormatting = {};
+  const propertyChildren = collectFirstParagraphPropertyChildren(pPr);
 
   // === Alignment ===
-  const jc = findChild(pPr, "w", "jc");
+  const jc = propertyChildren.jc;
   if (jc) {
     const val = narrowEnum(
       getAttribute(jc, "w", "val"),
@@ -505,13 +602,13 @@ export function parseParagraphProperties(
   }
 
   // === Bidi (right-to-left) ===
-  const bidi = findChild(pPr, "w", "bidi");
+  const bidi = propertyChildren.bidi;
   if (bidi) {
     formatting.bidi = parseBooleanElement(bidi);
   }
 
   // === Spacing ===
-  const spacing = findChild(pPr, "w", "spacing");
+  const spacing = propertyChildren.spacing;
   if (spacing) {
     const before = parseNumericAttribute(spacing, "w", "before");
     if (before !== undefined) {
@@ -560,7 +657,7 @@ export function parseParagraphProperties(
   }
 
   // === Indentation ===
-  const ind = findChild(pPr, "w", "ind");
+  const ind = propertyChildren.ind;
   if (ind) {
     const left = parseNumericAttribute(ind, "w", "left");
     if (left !== undefined) {
@@ -597,7 +694,7 @@ export function parseParagraphProperties(
   }
 
   // === Borders ===
-  const pBdr = findChild(pPr, "w", "pBdr");
+  const pBdr = propertyChildren.pBdr;
   if (pBdr) {
     const borders: ParagraphFormatting["borders"] = {};
 
@@ -637,7 +734,7 @@ export function parseParagraphProperties(
   }
 
   // === Shading ===
-  const shd = findChild(pPr, "w", "shd");
+  const shd = propertyChildren.shd;
   if (shd) {
     const shadingResult = parseShadingProperties(shd);
     if (shadingResult !== undefined) {
@@ -646,7 +743,7 @@ export function parseParagraphProperties(
   }
 
   // === Tab Stops ===
-  const tabs = findChild(pPr, "w", "tabs");
+  const tabs = propertyChildren.tabs;
   if (tabs) {
     const tabsResult = parseTabStops(tabs);
     if (tabsResult !== undefined) {
@@ -655,33 +752,33 @@ export function parseParagraphProperties(
   }
 
   // === Page Break Control ===
-  const keepNext = findChild(pPr, "w", "keepNext");
+  const keepNext = propertyChildren.keepNext;
   if (keepNext) {
     formatting.keepNext = parseBooleanElement(keepNext);
   }
 
-  const keepLines = findChild(pPr, "w", "keepLines");
+  const keepLines = propertyChildren.keepLines;
   if (keepLines) {
     formatting.keepLines = parseBooleanElement(keepLines);
   }
 
-  const widowControl = findChild(pPr, "w", "widowControl");
+  const widowControl = propertyChildren.widowControl;
   if (widowControl) {
     formatting.widowControl = parseBooleanElement(widowControl);
   }
 
-  const pageBreakBefore = findChild(pPr, "w", "pageBreakBefore");
+  const pageBreakBefore = propertyChildren.pageBreakBefore;
   if (pageBreakBefore) {
     formatting.pageBreakBefore = parseBooleanElement(pageBreakBefore);
   }
 
-  const contextualSpacing = findChild(pPr, "w", "contextualSpacing");
+  const contextualSpacing = propertyChildren.contextualSpacing;
   if (contextualSpacing) {
     formatting.contextualSpacing = parseBooleanElement(contextualSpacing);
   }
 
   // === Numbering Properties (List Info) ===
-  const numPr = findChild(pPr, "w", "numPr");
+  const numPr = propertyChildren.numPr;
   if (numPr) {
     const numIdEl = findChild(numPr, "w", "numId");
     const ilvlEl = findChild(numPr, "w", "ilvl");
@@ -706,7 +803,7 @@ export function parseParagraphProperties(
   }
 
   // === Outline Level ===
-  const outlineLvl = findChild(pPr, "w", "outlineLvl");
+  const outlineLvl = propertyChildren.outlineLvl;
   if (outlineLvl) {
     const val = parseNumericAttribute(outlineLvl, "w", "val");
     if (val !== undefined) {
@@ -715,7 +812,7 @@ export function parseParagraphProperties(
   }
 
   // === Style Reference ===
-  const pStyle = findChild(pPr, "w", "pStyle");
+  const pStyle = propertyChildren.pStyle;
   if (pStyle) {
     const val = getAttribute(pStyle, "w", "val");
     if (val) {
@@ -724,7 +821,7 @@ export function parseParagraphProperties(
   }
 
   // === Frame Properties ===
-  const framePr = findChild(pPr, "w", "framePr");
+  const framePr = propertyChildren.framePr;
   if (framePr) {
     const frameResult = parseFrameProperties(framePr);
     if (frameResult !== undefined) {
@@ -733,19 +830,19 @@ export function parseParagraphProperties(
   }
 
   // === Suppress Line Numbers ===
-  const suppressLineNumbers = findChild(pPr, "w", "suppressLineNumbers");
+  const suppressLineNumbers = propertyChildren.suppressLineNumbers;
   if (suppressLineNumbers) {
     formatting.suppressLineNumbers = parseBooleanElement(suppressLineNumbers);
   }
 
   // === Suppress Auto Hyphens ===
-  const suppressAutoHyphens = findChild(pPr, "w", "suppressAutoHyphens");
+  const suppressAutoHyphens = propertyChildren.suppressAutoHyphens;
   if (suppressAutoHyphens) {
     formatting.suppressAutoHyphens = parseBooleanElement(suppressAutoHyphens);
   }
 
   // === Default Run Properties ===
-  const rPr = findChild(pPr, "w", "rPr");
+  const rPr = propertyChildren.rPr;
   if (rPr) {
     const runPropsResult = parseRunProperties(rPr, theme, styles);
     if (runPropsResult !== undefined) {

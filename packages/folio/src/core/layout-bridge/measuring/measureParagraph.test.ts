@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import { hashParagraphBlock } from "./cache";
-import { buildFontString, resetCanvasContext } from "./measureContainer";
+import { clearAllCaches, hashParagraphBlock } from "./cache";
+import {
+  buildFontString,
+  getFontMetrics,
+  measureTextWidth,
+  resetCanvasContext,
+} from "./measureContainer";
 import {
   clampFloatingWrapMargins,
   getRunCharWidths,
@@ -10,8 +15,11 @@ import {
 
 const PT_TO_PX = 96 / 72;
 
-function withFakeTextMeasure(runTest: () => void): void {
+function withFakeTextMeasure(
+  runTest: (getMeasureCount: () => number) => void,
+): void {
   const originalDocument = globalThis.document;
+  let measureCount = 0;
   const fakeDocument = {
     createElement() {
       return {
@@ -19,6 +27,7 @@ function withFakeTextMeasure(runTest: () => void): void {
           return {
             font: "",
             measureText(this: { font: string }, text: string) {
+              measureCount += 1;
               let width = 0;
               const isSmallCaps = this.font.includes("small-caps");
               for (const char of text) {
@@ -48,18 +57,75 @@ function withFakeTextMeasure(runTest: () => void): void {
     configurable: true,
     value: fakeDocument,
   });
+  clearAllCaches();
   resetCanvasContext();
 
   try {
-    runTest();
+    runTest(() => measureCount);
   } finally {
     resetCanvasContext();
+    clearAllCaches();
     Object.defineProperty(globalThis, "document", {
       configurable: true,
       value: originalDocument,
     });
   }
 }
+
+describe("text measurement cache", () => {
+  test("reuses canvas text width measurements for identical text and style", () => {
+    withFakeTextMeasure((getMeasureCount) => {
+      const style = { fontFamily: "Arial", fontSize: 11 };
+
+      expect(measureTextWidth("Repeated legal text", style)).toBe(
+        measureTextWidth("Repeated legal text", style),
+      );
+      expect(getMeasureCount()).toBe(1);
+    });
+  });
+
+  test("keeps horizontal scale in the text width cache key", () => {
+    withFakeTextMeasure((getMeasureCount) => {
+      const text = "scaled";
+      const normalWidth = measureTextWidth(text, {
+        fontFamily: "Arial",
+        fontSize: 11,
+      });
+      const scaledWidth = measureTextWidth(text, {
+        fontFamily: "Arial",
+        fontSize: 11,
+        horizontalScale: 150,
+      });
+
+      expect(scaledWidth).toBe(normalWidth * 1.5);
+      expect(getMeasureCount()).toBe(2);
+    });
+  });
+});
+
+describe("font metrics cache", () => {
+  test("reuses canvas font metrics for identical font styles", () => {
+    withFakeTextMeasure((getMeasureCount) => {
+      const style = { fontFamily: "Arial", fontSize: 11 };
+
+      expect(getFontMetrics(style)).toEqual(getFontMetrics(style));
+      expect(getMeasureCount()).toBe(1);
+    });
+  });
+
+  test("keeps font variant in the metrics cache key", () => {
+    withFakeTextMeasure((getMeasureCount) => {
+      getFontMetrics({ fontFamily: "Arial", fontSize: 11 });
+      getFontMetrics({
+        fontFamily: "Arial",
+        fontSize: 11,
+        fontVariant: "small-caps",
+      });
+
+      expect(getMeasureCount()).toBe(2);
+    });
+  });
+});
 
 describe("empty paragraph line-height floor", () => {
   test("empty paragraph with line=1.0 auto is floored to 1.15 times fontSize", () => {

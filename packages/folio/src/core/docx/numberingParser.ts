@@ -27,7 +27,6 @@ import {
 } from "./parserEnums";
 import {
   parseXmlDocument,
-  findChild,
   findChildren,
   getAttribute,
   parseBooleanElement,
@@ -50,6 +49,70 @@ export type NumberingMap = {
   getInstance: (numId: number) => NumberingInstance | null;
   /** Check if numId exists */
   hasNumbering: (numId: number) => boolean;
+};
+
+const NUMBER_FORMAT_MAP: Record<string, NumberFormat> = {
+  decimal: "decimal",
+  upperRoman: "upperRoman",
+  lowerRoman: "lowerRoman",
+  upperLetter: "upperLetter",
+  lowerLetter: "lowerLetter",
+  ordinal: "ordinal",
+  cardinalText: "cardinalText",
+  ordinalText: "ordinalText",
+  hex: "hex",
+  chicago: "chicago",
+  bullet: "bullet",
+  none: "none",
+  decimalZero: "decimalZero",
+  ganada: "ganada",
+  chosung: "chosung",
+  // CJK formats
+  ideographDigital: "ideographDigital",
+  japaneseCounting: "japaneseCounting",
+  aiueo: "aiueo",
+  iroha: "iroha",
+  decimalFullWidth: "decimalFullWidth",
+  decimalHalfWidth: "decimalHalfWidth",
+  japaneseLegal: "japaneseLegal",
+  japaneseDigitalTenThousand: "japaneseDigitalTenThousand",
+  decimalEnclosedCircle: "decimalEnclosedCircle",
+  decimalFullWidth2: "decimalFullWidth2",
+  aiueoFullWidth: "aiueoFullWidth",
+  irohaFullWidth: "irohaFullWidth",
+  decimalEnclosedFullstop: "decimalEnclosedFullstop",
+  decimalEnclosedParen: "decimalEnclosedParen",
+  decimalEnclosedCircleChinese: "decimalEnclosedCircleChinese",
+  ideographEnclosedCircle: "ideographEnclosedCircle",
+  ideographTraditional: "ideographTraditional",
+  ideographZodiac: "ideographZodiac",
+  ideographZodiacTraditional: "ideographZodiacTraditional",
+  taiwaneseCounting: "taiwaneseCounting",
+  ideographLegalTraditional: "ideographLegalTraditional",
+  taiwaneseCountingThousand: "taiwaneseCountingThousand",
+  taiwaneseDigital: "taiwaneseDigital",
+  chineseCounting: "chineseCounting",
+  chineseLegalSimplified: "chineseLegalSimplified",
+  chineseCountingThousand: "chineseCountingThousand",
+  koreanDigital: "koreanDigital",
+  koreanCounting: "koreanCounting",
+  koreanLegal: "koreanLegal",
+  koreanDigital2: "koreanDigital2",
+  vietnameseCounting: "vietnameseCounting",
+  russianLower: "russianLower",
+  russianUpper: "russianUpper",
+  numberInDash: "numberInDash",
+  hebrew1: "hebrew1",
+  hebrew2: "hebrew2",
+  arabicAlpha: "arabicAlpha",
+  arabicAbjad: "arabicAbjad",
+  hindiVowels: "hindiVowels",
+  hindiConsonants: "hindiConsonants",
+  hindiNumbers: "hindiNumbers",
+  hindiCounting: "hindiCounting",
+  thaiLetters: "thaiLetters",
+  thaiNumbers: "thaiNumbers",
+  thaiCounting: "thaiCounting",
 };
 
 /**
@@ -113,8 +176,38 @@ function parseAbstractNumbering(element: XmlElement): AbstractNumbering | null {
     levels: [],
   };
 
-  // Parse optional attributes/children
-  const multiLevelTypeEl = findChild(element, "w", "multiLevelType");
+  let multiLevelTypeEl: XmlElement | undefined;
+  let nameEl: XmlElement | undefined;
+  let numStyleLinkEl: XmlElement | undefined;
+  let styleLinkEl: XmlElement | undefined;
+  const levelElements: XmlElement[] = [];
+
+  for (const child of element.elements ?? []) {
+    if (child.type !== "element") {
+      continue;
+    }
+
+    switch (child.name) {
+      case "w:multiLevelType":
+        multiLevelTypeEl ??= child;
+        break;
+      case "w:name":
+        nameEl ??= child;
+        break;
+      case "w:numStyleLink":
+        numStyleLinkEl ??= child;
+        break;
+      case "w:styleLink":
+        styleLinkEl ??= child;
+        break;
+      case "w:lvl":
+        levelElements.push(child);
+        break;
+      default:
+        break;
+    }
+  }
+
   if (multiLevelTypeEl) {
     const mlType = getAttribute(multiLevelTypeEl, "w", "val");
     if (
@@ -127,7 +220,6 @@ function parseAbstractNumbering(element: XmlElement): AbstractNumbering | null {
   }
 
   // Parse name
-  const nameEl = findChild(element, "w", "name");
   if (nameEl) {
     const nameVal = getAttribute(nameEl, "w", "val");
     if (nameVal != null) {
@@ -136,7 +228,6 @@ function parseAbstractNumbering(element: XmlElement): AbstractNumbering | null {
   }
 
   // Parse style links
-  const numStyleLinkEl = findChild(element, "w", "numStyleLink");
   if (numStyleLinkEl) {
     const numStyleLinkVal = getAttribute(numStyleLinkEl, "w", "val");
     if (numStyleLinkVal != null) {
@@ -144,7 +235,6 @@ function parseAbstractNumbering(element: XmlElement): AbstractNumbering | null {
     }
   }
 
-  const styleLinkEl = findChild(element, "w", "styleLink");
   if (styleLinkEl) {
     const styleLinkVal = getAttribute(styleLinkEl, "w", "val");
     if (styleLinkVal != null) {
@@ -153,7 +243,6 @@ function parseAbstractNumbering(element: XmlElement): AbstractNumbering | null {
   }
 
   // Parse levels (w:lvl)
-  const levelElements = findChildren(element, "w", "lvl");
   for (const lvlEl of levelElements) {
     const level = parseListLevel(lvlEl);
     if (level) {
@@ -181,8 +270,23 @@ function parseNumberingInstance(element: XmlElement): NumberingInstance | null {
     return null;
   }
 
-  // Get abstract numbering reference
-  const abstractNumIdEl = findChild(element, "w", "abstractNumId");
+  let abstractNumIdEl: XmlElement | undefined;
+  const overrideElements: XmlElement[] = [];
+  for (const child of element.elements ?? []) {
+    if (child.type !== "element") {
+      continue;
+    }
+
+    if (child.name === "w:abstractNumId") {
+      abstractNumIdEl ??= child;
+      continue;
+    }
+
+    if (child.name === "w:lvlOverride") {
+      overrideElements.push(child);
+    }
+  }
+
   if (!abstractNumIdEl) {
     return null;
   }
@@ -203,7 +307,6 @@ function parseNumberingInstance(element: XmlElement): NumberingInstance | null {
   };
 
   // Parse level overrides (w:lvlOverride)
-  const overrideElements = findChildren(element, "w", "lvlOverride");
   if (overrideElements.length > 0) {
     instance.levelOverrides = [];
 
@@ -224,8 +327,24 @@ function parseNumberingInstance(element: XmlElement): NumberingInstance | null {
         lvl?: ListLevel;
       } = { ilvl };
 
+      let startOverrideEl: XmlElement | undefined;
+      let lvlEl: XmlElement | undefined;
+      for (const child of overrideEl.elements ?? []) {
+        if (child.type !== "element") {
+          continue;
+        }
+
+        if (child.name === "w:startOverride") {
+          startOverrideEl ??= child;
+          continue;
+        }
+
+        if (child.name === "w:lvl") {
+          lvlEl ??= child;
+        }
+      }
+
       // Check for start override
-      const startOverrideEl = findChild(overrideEl, "w", "startOverride");
       if (startOverrideEl) {
         const startVal = getAttribute(startOverrideEl, "w", "val");
         if (startVal !== null) {
@@ -237,7 +356,6 @@ function parseNumberingInstance(element: XmlElement): NumberingInstance | null {
       }
 
       // Check for full level redefinition
-      const lvlEl = findChild(overrideEl, "w", "lvl");
       if (lvlEl) {
         const parsedLvl = parseListLevel(lvlEl);
         if (parsedLvl != null) {
@@ -272,8 +390,59 @@ function parseListLevel(element: XmlElement): ListLevel | null {
     lvlText: "",
   };
 
+  let startEl: XmlElement | undefined;
+  let numFmtEl: XmlElement | undefined;
+  let lvlTextEl: XmlElement | undefined;
+  let lvlJcEl: XmlElement | undefined;
+  let suffEl: XmlElement | undefined;
+  let isLglEl: XmlElement | undefined;
+  let lvlRestartEl: XmlElement | undefined;
+  let legacyEl: XmlElement | undefined;
+  let pPrEl: XmlElement | undefined;
+  let rPrEl: XmlElement | undefined;
+
+  for (const child of element.elements ?? []) {
+    if (child.type !== "element") {
+      continue;
+    }
+
+    switch (child.name) {
+      case "w:start":
+        startEl ??= child;
+        break;
+      case "w:numFmt":
+        numFmtEl ??= child;
+        break;
+      case "w:lvlText":
+        lvlTextEl ??= child;
+        break;
+      case "w:lvlJc":
+        lvlJcEl ??= child;
+        break;
+      case "w:suff":
+        suffEl ??= child;
+        break;
+      case "w:isLgl":
+        isLglEl ??= child;
+        break;
+      case "w:lvlRestart":
+        lvlRestartEl ??= child;
+        break;
+      case "w:legacy":
+        legacyEl ??= child;
+        break;
+      case "w:pPr":
+        pPrEl ??= child;
+        break;
+      case "w:rPr":
+        rPrEl ??= child;
+        break;
+      default:
+        break;
+    }
+  }
+
   // Parse start value
-  const startEl = findChild(element, "w", "start");
   if (startEl) {
     const startVal = getAttribute(startEl, "w", "val");
     if (startVal !== null) {
@@ -285,7 +454,6 @@ function parseListLevel(element: XmlElement): ListLevel | null {
   }
 
   // Parse number format
-  const numFmtEl = findChild(element, "w", "numFmt");
   if (numFmtEl) {
     const fmtVal = getAttribute(numFmtEl, "w", "val");
     if (fmtVal) {
@@ -294,13 +462,11 @@ function parseListLevel(element: XmlElement): ListLevel | null {
   }
 
   // Parse level text (the pattern like "%1." or "•")
-  const lvlTextEl = findChild(element, "w", "lvlText");
   if (lvlTextEl) {
     level.lvlText = getAttribute(lvlTextEl, "w", "val") ?? "";
   }
 
   // Parse justification
-  const lvlJcEl = findChild(element, "w", "lvlJc");
   if (lvlJcEl) {
     const jcVal = getAttribute(lvlJcEl, "w", "val");
     if (jcVal === "left" || jcVal === "center" || jcVal === "right") {
@@ -309,7 +475,6 @@ function parseListLevel(element: XmlElement): ListLevel | null {
   }
 
   // Parse suffix
-  const suffEl = findChild(element, "w", "suff");
   if (suffEl) {
     const suffix = narrowEnum(
       getAttribute(suffEl, "w", "val"),
@@ -321,13 +486,11 @@ function parseListLevel(element: XmlElement): ListLevel | null {
   }
 
   // Parse isLgl (legal numbering)
-  const isLglEl = findChild(element, "w", "isLgl");
   if (isLglEl) {
     level.isLgl = parseBooleanElement(isLglEl);
   }
 
   // Parse lvlRestart (restart numbering from a higher level)
-  const lvlRestartEl = findChild(element, "w", "lvlRestart");
   if (lvlRestartEl) {
     const restartVal = getAttribute(lvlRestartEl, "w", "val");
     if (restartVal !== null) {
@@ -339,7 +502,6 @@ function parseListLevel(element: XmlElement): ListLevel | null {
   }
 
   // Parse legacy settings
-  const legacyEl = findChild(element, "w", "legacy");
   if (legacyEl) {
     const legacySpace = parseNumericAttribute(legacyEl, "w", "legacySpace");
     const legacyIndent = parseNumericAttribute(legacyEl, "w", "legacyIndent");
@@ -351,13 +513,11 @@ function parseListLevel(element: XmlElement): ListLevel | null {
   }
 
   // Parse paragraph properties (w:pPr)
-  const pPrEl = findChild(element, "w", "pPr");
   if (pPrEl) {
     level.pPr = parseLevelParagraphProps(pPrEl);
   }
 
   // Parse run properties (w:rPr)
-  const rPrEl = findChild(element, "w", "rPr");
   if (rPrEl) {
     level.rPr = parseLevelRunProps(rPrEl);
   }
@@ -369,72 +529,7 @@ function parseListLevel(element: XmlElement): ListLevel | null {
  * Parse number format string to NumberFormat type
  */
 function parseNumberFormat(format: string): NumberFormat {
-  // Map of known formats
-  const formatMap: Record<string, NumberFormat> = {
-    decimal: "decimal",
-    upperRoman: "upperRoman",
-    lowerRoman: "lowerRoman",
-    upperLetter: "upperLetter",
-    lowerLetter: "lowerLetter",
-    ordinal: "ordinal",
-    cardinalText: "cardinalText",
-    ordinalText: "ordinalText",
-    hex: "hex",
-    chicago: "chicago",
-    bullet: "bullet",
-    none: "none",
-    decimalZero: "decimalZero",
-    ganada: "ganada",
-    chosung: "chosung",
-    // CJK formats
-    ideographDigital: "ideographDigital",
-    japaneseCounting: "japaneseCounting",
-    aiueo: "aiueo",
-    iroha: "iroha",
-    decimalFullWidth: "decimalFullWidth",
-    decimalHalfWidth: "decimalHalfWidth",
-    japaneseLegal: "japaneseLegal",
-    japaneseDigitalTenThousand: "japaneseDigitalTenThousand",
-    decimalEnclosedCircle: "decimalEnclosedCircle",
-    decimalFullWidth2: "decimalFullWidth2",
-    aiueoFullWidth: "aiueoFullWidth",
-    irohaFullWidth: "irohaFullWidth",
-    decimalEnclosedFullstop: "decimalEnclosedFullstop",
-    decimalEnclosedParen: "decimalEnclosedParen",
-    decimalEnclosedCircleChinese: "decimalEnclosedCircleChinese",
-    ideographEnclosedCircle: "ideographEnclosedCircle",
-    ideographTraditional: "ideographTraditional",
-    ideographZodiac: "ideographZodiac",
-    ideographZodiacTraditional: "ideographZodiacTraditional",
-    taiwaneseCounting: "taiwaneseCounting",
-    ideographLegalTraditional: "ideographLegalTraditional",
-    taiwaneseCountingThousand: "taiwaneseCountingThousand",
-    taiwaneseDigital: "taiwaneseDigital",
-    chineseCounting: "chineseCounting",
-    chineseLegalSimplified: "chineseLegalSimplified",
-    chineseCountingThousand: "chineseCountingThousand",
-    koreanDigital: "koreanDigital",
-    koreanCounting: "koreanCounting",
-    koreanLegal: "koreanLegal",
-    koreanDigital2: "koreanDigital2",
-    vietnameseCounting: "vietnameseCounting",
-    russianLower: "russianLower",
-    russianUpper: "russianUpper",
-    numberInDash: "numberInDash",
-    hebrew1: "hebrew1",
-    hebrew2: "hebrew2",
-    arabicAlpha: "arabicAlpha",
-    arabicAbjad: "arabicAbjad",
-    hindiVowels: "hindiVowels",
-    hindiConsonants: "hindiConsonants",
-    hindiNumbers: "hindiNumbers",
-    hindiCounting: "hindiCounting",
-    thaiLetters: "thaiLetters",
-    thaiNumbers: "thaiNumbers",
-    thaiCounting: "thaiCounting",
-  };
-
-  return formatMap[format] ?? "decimal";
+  return NUMBER_FORMAT_MAP[format] ?? "decimal";
 }
 
 /**
@@ -444,8 +539,24 @@ function parseNumberFormat(format: string): NumberFormat {
 function parseLevelParagraphProps(pPr: XmlElement): ParagraphFormatting {
   const formatting: ParagraphFormatting = {};
 
+  let indEl: XmlElement | undefined;
+  let tabsEl: XmlElement | undefined;
+  for (const child of pPr.elements ?? []) {
+    if (child.type !== "element") {
+      continue;
+    }
+
+    if (child.name === "w:ind") {
+      indEl ??= child;
+      continue;
+    }
+
+    if (child.name === "w:tabs") {
+      tabsEl ??= child;
+    }
+  }
+
   // Parse indentation (w:ind)
-  const indEl = findChild(pPr, "w", "ind");
   if (indEl) {
     const left = parseNumericAttribute(indEl, "w", "left");
     const right = parseNumericAttribute(indEl, "w", "right");
@@ -472,7 +583,6 @@ function parseLevelParagraphProps(pPr: XmlElement): ParagraphFormatting {
   }
 
   // Parse tabs (w:tabs)
-  const tabsEl = findChild(pPr, "w", "tabs");
   if (tabsEl) {
     formatting.tabs = [];
     const tabElements = findChildren(tabsEl, "w", "tab");
@@ -562,8 +672,43 @@ function parseTabLeader(
 function parseLevelRunProps(rPr: XmlElement): TextFormatting {
   const formatting: TextFormatting = {};
 
+  let rFontsEl: XmlElement | undefined;
+  let szEl: XmlElement | undefined;
+  let colorEl: XmlElement | undefined;
+  let bEl: XmlElement | undefined;
+  let iEl: XmlElement | undefined;
+  let vanishEl: XmlElement | undefined;
+
+  for (const child of rPr.elements ?? []) {
+    if (child.type !== "element") {
+      continue;
+    }
+
+    switch (child.name) {
+      case "w:rFonts":
+        rFontsEl ??= child;
+        break;
+      case "w:sz":
+        szEl ??= child;
+        break;
+      case "w:color":
+        colorEl ??= child;
+        break;
+      case "w:b":
+        bEl ??= child;
+        break;
+      case "w:i":
+        iEl ??= child;
+        break;
+      case "w:vanish":
+        vanishEl ??= child;
+        break;
+      default:
+        break;
+    }
+  }
+
   // Parse fonts (w:rFonts) - important for bullet characters
-  const rFontsEl = findChild(rPr, "w", "rFonts");
   if (rFontsEl) {
     const ascii = getAttribute(rFontsEl, "w", "ascii");
     const hAnsi = getAttribute(rFontsEl, "w", "hAnsi");
@@ -578,7 +723,6 @@ function parseLevelRunProps(rPr: XmlElement): TextFormatting {
   }
 
   // Parse font size (w:sz)
-  const szEl = findChild(rPr, "w", "sz");
   if (szEl) {
     const size = parseNumericAttribute(szEl, "w", "val");
     if (size !== undefined) {
@@ -587,7 +731,6 @@ function parseLevelRunProps(rPr: XmlElement): TextFormatting {
   }
 
   // Parse color (w:color)
-  const colorEl = findChild(rPr, "w", "color");
   if (colorEl) {
     const val = getAttribute(colorEl, "w", "val");
     const themeColor = getAttribute(colorEl, "w", "themeColor");
@@ -609,19 +752,16 @@ function parseLevelRunProps(rPr: XmlElement): TextFormatting {
   }
 
   // Parse bold (w:b)
-  const bEl = findChild(rPr, "w", "b");
   if (bEl) {
     formatting.bold = parseBooleanElement(bEl);
   }
 
   // Parse italic (w:i)
-  const iEl = findChild(rPr, "w", "i");
   if (iEl) {
     formatting.italic = parseBooleanElement(iEl);
   }
 
   // Parse vanish / hidden (w:vanish) — hides the list indicator
-  const vanishEl = findChild(rPr, "w", "vanish");
   if (vanishEl) {
     formatting.hidden = parseBooleanElement(vanishEl);
   }

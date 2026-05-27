@@ -34,8 +34,6 @@ export const CommentExtension = createMarkExtension({
         {
           class: "docx-comment",
           "data-comment-id": String(commentId),
-          style:
-            "background-color: var(--doc-comment-bg, rgba(255, 212, 0, 0.08)); border-bottom: 1px solid var(--doc-comment-border, rgba(180, 130, 0, 0.24));",
         },
         0,
       ];

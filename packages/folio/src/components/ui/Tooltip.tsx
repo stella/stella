@@ -1,40 +1,38 @@
-/**
- * Tooltip adapter
- *
- * Preserves the backward-compatible single-wrapper API (`<Tooltip content="...">child</Tooltip>`)
- * while delegating to Stella's compound tooltip under the hood.
- */
-
-import type * as React from "react";
-
-import {
-  Tooltip as TooltipRoot,
-  TooltipProvider,
-  TooltipTrigger,
-  TooltipPopup,
-} from "@stll/ui/components/tooltip";
+import { cloneElement, isValidElement } from "react";
+import type { ReactNode } from "react";
 
 type TooltipProps = {
-  content: React.ReactNode;
-  children: React.ReactElement;
+  content: ReactNode;
+  children: ReactNode;
   side?: "top" | "bottom" | "left" | "right";
   delayMs?: number;
 };
 
-export function Tooltip({
-  content,
-  children,
-  side = "bottom",
-  delayMs = 400,
-}: TooltipProps) {
-  return (
-    <TooltipProvider delay={delayMs}>
-      <TooltipRoot>
-        <TooltipTrigger render={children} />
-        <TooltipPopup side={side} className="max-w-70 text-nowrap">
-          {content}
-        </TooltipPopup>
-      </TooltipRoot>
-    </TooltipProvider>
-  );
+type TooltipChildProps = {
+  "aria-label"?: string | undefined;
+  title?: string | undefined;
+};
+
+export function Tooltip({ content, children }: TooltipProps) {
+  const label = getTooltipLabel(content);
+  if (!label || !isValidElement<TooltipChildProps>(children)) {
+    return children;
+  }
+
+  return cloneElement(children, {
+    "aria-label": children.props["aria-label"] ?? label,
+    title: children.props.title ?? label,
+  });
+}
+
+function getTooltipLabel(content: ReactNode): string | undefined {
+  if (typeof content === "string") {
+    return content;
+  }
+
+  if (typeof content === "number") {
+    return content.toString();
+  }
+
+  return undefined;
 }

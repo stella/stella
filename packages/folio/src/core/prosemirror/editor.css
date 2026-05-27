@@ -589,6 +589,13 @@
   font-variant: small-caps;
 }
 
+/* Comment marks are view-only styling. Keep this out of inline toDOM styles so
+   ProseMirror's background-color parser never reparses comments as highlights. */
+.prosemirror-editor .ProseMirror .docx-comment {
+  background-color: var(--doc-comment-bg, rgba(255, 212, 0, 0.08));
+  border-bottom: 1px solid var(--doc-comment-border, rgba(180, 130, 0, 0.24));
+}
+
 /* Section break indicator */
 .docx-section-break {
   position: relative;

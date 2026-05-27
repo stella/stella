@@ -411,20 +411,26 @@ export function useDocumentHistory<
   document: T,
   options: Omit<UseHistoryOptions<T>, "isEqual"> = {},
 ): UseHistoryReturn<T> {
-  // Compare document content, headers, and footers for detecting changes
+  // Hot path for editor typing: callers produce fresh references for real
+  // document edits, so avoid serializing the whole document to prove equality.
   const isEqual = useCallback((a: T, b: T): boolean => {
-    if (
-      a?.package?.document !== b?.package?.document &&
-      JSON.stringify(a?.package?.document) !==
-        JSON.stringify(b?.package?.document)
-    ) {
+    if (a === b) {
+      return true;
+    }
+
+    const aPackage = a?.package;
+    const bPackage = b?.package;
+    if (!aPackage || !bPackage) {
+      return aPackage === bPackage;
+    }
+
+    if (aPackage.document !== bPackage.document) {
       return false;
     }
-    // Also compare headers/footers (stored as Maps, use reference equality first)
-    if (a?.package?.headers !== b?.package?.headers) {
+    if (aPackage.headers !== bPackage.headers) {
       return false;
     }
-    if (a?.package?.footers !== b?.package?.footers) {
+    if (aPackage.footers !== bPackage.footers) {
       return false;
     }
     return true;

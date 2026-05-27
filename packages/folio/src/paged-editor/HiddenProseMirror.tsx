@@ -15,9 +15,17 @@
  * so that ProseMirror's internal measurements stay valid.
  */
 
-import { useRef, useEffect, useCallback, useImperativeHandle } from "react";
+import {
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  useImperativeHandle,
+  useState,
+} from "react";
 import type { CSSProperties, Ref } from "react";
 
+import { panic } from "better-result";
 import { undo, redo } from "prosemirror-history";
 import type { Transaction, Command, Plugin } from "prosemirror-state";
 import {
@@ -29,14 +37,9 @@ import {
 import { CellSelection } from "prosemirror-tables";
 import { EditorView } from "prosemirror-view";
 import type { DirectEditorProps } from "prosemirror-view";
-import {
-  initProseMirrorDoc,
-  prosemirrorToYXmlFragment,
-  relativePositionToAbsolutePosition,
-  ySyncPluginKey,
-} from "y-prosemirror";
-import * as Y from "yjs";
-import type { XmlFragment } from "yjs";
+import type * as YProseMirror from "y-prosemirror";
+import type { Doc as YDoc, XmlFragment } from "yjs";
+import type * as Yjs from "yjs";
 
 import { toProseDoc, createEmptyDoc } from "../core/prosemirror/conversion";
 import { fromProseDoc } from "../core/prosemirror/conversion/fromProseDoc";
@@ -44,6 +47,11 @@ import type { ExtensionManager } from "../core/prosemirror/extensions/ExtensionM
 import { schema } from "../core/prosemirror/schema";
 import type { Document, Theme, StyleDefinitions } from "../core/types/document";
 import { suppressHiddenEditorScrollToSelection } from "./hiddenEditorScroll";
+import {
+  recordHiddenEditorPhase,
+  recordHiddenEditorStateCreate,
+  type HiddenEditorStateReason,
+} from "./layoutInstrumentation";
 import { isReadOnlyEditKey } from "./readOnlyEditAttempt";
 // Import ProseMirror CSS
 import "prosemirror-view/style/prosemirror.css";
@@ -51,6 +59,29 @@ import "prosemirror-view/style/prosemirror.css";
 import "../core/prosemirror/editor.css";
 
 const EMPTY_EXTERNAL_PLUGINS: Plugin[] = [];
+
+type YProseMirrorModule = typeof YProseMirror;
+type YjsModule = typeof Yjs;
+type CollaborationModules = {
+  yProseMirror: YProseMirrorModule;
+  yjs: YjsModule;
+};
+
+let collaborationModulesPromise: Promise<CollaborationModules> | null = null;
+
+const loadCollaborationModules = (): Promise<CollaborationModules> => {
+  collaborationModulesPromise ??= Promise.all([
+    import("y-prosemirror"),
+    import("yjs"),
+  ])
+    .then(([yProseMirror, yjs]) => ({ yProseMirror, yjs }))
+    .catch((error: unknown) => {
+      collaborationModulesPromise = null;
+      throw error;
+    });
+
+  return collaborationModulesPromise;
+};
 
 // ============================================================================
 // TYPES
@@ -65,6 +96,8 @@ export type HiddenProseMirrorProps = {
   theme?: Theme | null;
   /** Width in pixels (should match document content width) */
   widthPx?: number;
+  /** Delay EditorView creation while the visible editor performs first layout. */
+  deferViewCreation?: boolean;
   /** Whether the editor is read-only */
   readOnly?: boolean;
   /** Callback when document changes via transaction */
@@ -82,6 +115,8 @@ export type HiddenProseMirrorProps = {
   extensionManager?: ExtensionManager;
   /** Callback when EditorView is ready */
   onEditorViewReady?: (view: EditorView) => void;
+  /** Initial state already built by the parent for pre-view layout. */
+  precomputedInitialState?: EditorState | null;
   /** Callback when EditorView is destroyed */
   onEditorViewDestroy?: () => void;
   /** Intercept key events before ProseMirror processes them. Return true to prevent PM handling. */
@@ -149,9 +184,11 @@ export type HiddenProseMirrorRef = {
 
 type YSyncState = {
   binding: {
-    mapping: Parameters<typeof relativePositionToAbsolutePosition>[3];
+    mapping: Parameters<
+      YProseMirrorModule["relativePositionToAbsolutePosition"]
+    >[3];
   };
-  doc: Y.Doc;
+  doc: YDoc;
   type: XmlFragment;
 };
 
@@ -168,14 +205,14 @@ type AwarenessUser = {
 const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-const isYSyncState = (value: unknown): value is YSyncState => {
+const isYSyncState = (value: unknown, yjs: YjsModule): value is YSyncState => {
   if (!isObjectRecord(value)) {
     return false;
   }
   const binding = value["binding"];
   return (
-    value["doc"] instanceof Y.Doc &&
-    value["type"] instanceof Y.XmlFragment &&
+    value["doc"] instanceof yjs.Doc &&
+    value["type"] instanceof yjs.XmlFragment &&
     isObjectRecord(binding) &&
     binding["mapping"] instanceof Map
   );
@@ -218,9 +255,11 @@ const readAwarenessUser = (state: unknown, clientId: number): AwarenessUser => {
 const collectRemoteSelections = (
   state: EditorState,
   awareness: CollaborationAwareness,
+  collaborationModules: CollaborationModules,
 ): HiddenProseMirrorRemoteSelection[] => {
-  const syncState: unknown = ySyncPluginKey.getState(state);
-  if (!isYSyncState(syncState)) {
+  const syncState: unknown =
+    collaborationModules.yProseMirror.ySyncPluginKey.getState(state);
+  if (!isYSyncState(syncState, collaborationModules.yjs)) {
     return [];
   }
 
@@ -235,18 +274,20 @@ const collectRemoteSelections = (
       continue;
     }
 
-    const anchor = relativePositionToAbsolutePosition(
-      syncState.doc,
-      syncState.type,
-      Y.createRelativePositionFromJSON(cursor.anchor),
-      syncState.binding.mapping,
-    );
-    const head = relativePositionToAbsolutePosition(
-      syncState.doc,
-      syncState.type,
-      Y.createRelativePositionFromJSON(cursor.head),
-      syncState.binding.mapping,
-    );
+    const anchor =
+      collaborationModules.yProseMirror.relativePositionToAbsolutePosition(
+        syncState.doc,
+        syncState.type,
+        collaborationModules.yjs.createRelativePositionFromJSON(cursor.anchor),
+        syncState.binding.mapping,
+      );
+    const head =
+      collaborationModules.yProseMirror.relativePositionToAbsolutePosition(
+        syncState.doc,
+        syncState.type,
+        collaborationModules.yjs.createRelativePositionFromJSON(cursor.head),
+        syncState.binding.mapping,
+      );
     if (anchor === null || head === null) {
       continue;
     }
@@ -269,23 +310,48 @@ const collectRemoteSelections = (
 // ============================================================================
 
 /**
- * Hidden host styles - visually hidden but focusable
+ * Hidden wrapper styles - visually hidden, focus-safe scroll isolation.
+ *
+ * The focused ProseMirror contenteditable can ask the browser to reveal its
+ * caret. Keeping it inside a tiny overflow-hidden fixed wrapper confines that
+ * native scroll work to the wrapper instead of the visible document viewport.
  */
-const HIDDEN_HOST_STYLES: CSSProperties = {
-  // Position off-screen but in document flow for accessibility
+const HIDDEN_WRAPPER_STYLES: CSSProperties = {
   position: "fixed",
   left: "-9999px",
   top: "0",
-  // Hide visually but keep focusable (NOT visibility:hidden!)
+  width: "1px",
+  height: "1px",
+  overflow: "hidden",
   opacity: 0,
   zIndex: -1,
-  // Prevent interaction with visual layer
   pointerEvents: "none",
-  // Prevent text selection in hidden area
-  userSelect: "none",
-  // Prevent scroll anchoring issues
+  contain: "layout paint",
   overflowAnchor: "none",
-  // Don't set aria-hidden - editor must remain accessible to screen readers
+  // Don't set aria-hidden - the inner editor remains the accessible document.
+};
+
+/**
+ * Hidden host styles - full document-width PM mount inside the isolated wrapper.
+ */
+const HIDDEN_HOST_STYLES: CSSProperties = {
+  position: "absolute",
+  left: "0",
+  top: "0",
+  userSelect: "none",
+  overflowAnchor: "none",
+  // Don't use visibility:hidden - the editor must remain focusable.
+};
+
+const HIDDEN_EDITOR_ATTRIBUTES = {
+  "aria-label": "Document content",
+  "aria-multiline": "true",
+  autocapitalize: "off",
+  autocomplete: "off",
+  autocorrect: "off",
+  role: "textbox",
+  spellcheck: "false",
+  translate: "no",
 };
 
 // ============================================================================
@@ -298,38 +364,64 @@ const HIDDEN_HOST_STYLES: CSSProperties = {
  * When an ExtensionManager is provided, it supplies the schema and plugins.
  * Otherwise falls back to the default singleton schema with no extension plugins.
  */
-function createInitialState(
+export function createHiddenEditorState(
   document: Document | null,
   styles: StyleDefinitions | null | undefined,
   manager?: ExtensionManager,
   externalPlugins: Plugin[] = [],
   collaboration?: HiddenProseMirrorCollaboration,
+  collaborationModules?: CollaborationModules | null,
+  reason: HiddenEditorStateReason = "mount",
 ): EditorState {
+  recordHiddenEditorStateCreate(reason);
+
   const activeSchema = manager?.getSchema() ?? schema;
   let localDoc = createEmptyDoc();
   if (document) {
+    const startedAt = performance.now();
     localDoc =
       styles === undefined || styles === null
         ? toProseDoc(document)
         : toProseDoc(document, { styles });
+    recordHiddenEditorPhase(
+      reason,
+      "to-prose-doc",
+      performance.now() - startedAt,
+    );
   }
 
   if (collaboration) {
+    if (!collaborationModules) {
+      panic(
+        "Collaboration modules must be loaded before creating collaborative editor state.",
+      );
+    }
+
     if (collaboration.shouldSeed && collaboration.yXmlFragment.length === 0) {
-      prosemirrorToYXmlFragment(localDoc, collaboration.yXmlFragment);
+      collaborationModules.yProseMirror.prosemirrorToYXmlFragment(
+        localDoc,
+        collaboration.yXmlFragment,
+      );
       collaboration.onSeeded?.();
     }
 
-    const { doc } = initProseMirrorDoc(
+    const { doc } = collaborationModules.yProseMirror.initProseMirrorDoc(
       collaboration.yXmlFragment,
       activeSchema,
     );
 
-    return EditorState.create({
+    const startedAt = performance.now();
+    const state = EditorState.create({
       doc,
       schema: activeSchema,
       plugins: [...externalPlugins, ...(manager?.getPlugins() ?? [])],
     });
+    recordHiddenEditorPhase(
+      reason,
+      "editor-state",
+      performance.now() - startedAt,
+    );
+    return state;
   }
 
   // External plugins go first so they can intercept before extension keymaps
@@ -339,11 +431,18 @@ function createInitialState(
     ...(manager?.getPlugins() ?? []),
   ];
 
-  return EditorState.create({
+  const startedAt = performance.now();
+  const state = EditorState.create({
     doc: localDoc,
     schema: activeSchema,
     plugins,
   });
+  recordHiddenEditorPhase(
+    reason,
+    "editor-state",
+    performance.now() - startedAt,
+  );
+  return state;
 }
 
 /**
@@ -359,6 +458,30 @@ function stateToDocument(
 
   // fromProseDoc preserves the base document structure when provided
   return fromProseDoc(state.doc, originalDoc);
+}
+
+function getDocumentIdentity(doc: Document | null): string {
+  if (!doc) {
+    return "empty";
+  }
+  // Use the document's package id or a hash of its structure.
+  // For simplicity, compare based on whether it has different metadata.
+  const meta = doc.package.properties;
+  const created = meta?.created ? String(meta.created) : "";
+  const modified = meta?.modified ? String(meta.modified) : "";
+  const title = meta?.title ?? "";
+  return `${created}-${modified}-${title}`;
+}
+
+function syncHiddenEditorAccessibility(
+  view: EditorView,
+  readOnly: boolean,
+): void {
+  const { dom } = view;
+  if (!dom.hasAttribute("tabindex")) {
+    dom.tabIndex = 0;
+  }
+  dom.setAttribute("aria-readonly", readOnly ? "true" : "false");
 }
 
 // ============================================================================
@@ -377,6 +500,7 @@ export function HiddenProseMirror(
     styles,
     theme: _theme,
     widthPx = 612, // Default Letter width at 72dpi
+    deferViewCreation = false,
     readOnly = false,
     onTransaction,
     onSelectionChange,
@@ -388,13 +512,22 @@ export function HiddenProseMirror(
     onKeyDown,
     onReadOnlyEditAttempt,
     onRemoteSelectionsChange,
+    precomputedInitialState,
   } = props;
+
+  const [collaborationModules, setCollaborationModules] =
+    useState<CollaborationModules | null>(null);
+  const [collaborationModulesError, setCollaborationModulesError] =
+    useState<unknown>(null);
+  const hasCollaboration = collaboration !== undefined;
 
   // Refs
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const readOnlyRef = useRef(readOnly);
   const documentRef = useRef(document);
+  const collaborationRef = useRef(collaboration);
+  const collaborationModulesRef = useRef(collaborationModules);
   const isDestroyingRef = useRef(false);
   // Track the document identity to detect truly external changes
   // vs changes that originated from editing (which get passed back through props)
@@ -422,9 +555,42 @@ export function HiddenProseMirror(
   onKeyDownRef.current = onKeyDown;
   onReadOnlyEditAttemptRef.current = onReadOnlyEditAttempt;
   onRemoteSelectionsChangeRef.current = onRemoteSelectionsChange;
+  collaborationRef.current = collaboration;
+  collaborationModulesRef.current = collaborationModules;
 
   // Keep document ref in sync
   documentRef.current = document;
+
+  useEffect(() => {
+    if (!hasCollaboration) {
+      setCollaborationModules(null);
+      setCollaborationModulesError(null);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setCollaborationModulesError(null);
+    void loadCollaborationModules().then(
+      (modules) => {
+        if (!cancelled) {
+          setCollaborationModules(modules);
+          setCollaborationModulesError(null);
+        }
+        return undefined;
+      },
+      (error: unknown) => {
+        if (!cancelled) {
+          setCollaborationModules(null);
+          setCollaborationModulesError(error);
+        }
+        return undefined;
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasCollaboration]);
 
   // ========================================================================
   // EditorView Lifecycle
@@ -435,20 +601,32 @@ export function HiddenProseMirror(
    * Uses refs for callbacks to avoid infinite re-render loops
    */
   const createView = useCallback(() => {
+    if (deferViewCreation) {
+      return;
+    }
     if (!hostRef.current || isDestroyingRef.current) {
       return;
     }
+    if (collaboration && !collaborationModules) {
+      return;
+    }
 
-    const initialState = createInitialState(
-      document,
-      styles,
-      extensionManager,
-      externalPlugins,
-      collaboration,
-    );
+    const initialState =
+      precomputedInitialState && !collaboration
+        ? precomputedInitialState
+        : createHiddenEditorState(
+            document,
+            styles,
+            extensionManager,
+            externalPlugins,
+            collaboration,
+            collaborationModules,
+            "mount",
+          );
 
     const editorProps: DirectEditorProps = {
       state: initialState,
+      attributes: HIDDEN_EDITOR_ATTRIBUTES,
       editable: () => !readOnlyRef.current,
       dispatchTransaction: (transaction: Transaction) => {
         if (!viewRef.current || isDestroyingRef.current) {
@@ -471,9 +649,15 @@ export function HiddenProseMirror(
           onSelectionChangeRef.current?.(newState);
         }
 
-        if (collaboration?.awareness) {
+        const currentCollaboration = collaborationRef.current;
+        const currentCollaborationModules = collaborationModulesRef.current;
+        if (currentCollaboration?.awareness && currentCollaborationModules) {
           onRemoteSelectionsChangeRef.current?.(
-            collectRemoteSelections(newState, collaboration.awareness),
+            collectRemoteSelections(
+              newState,
+              currentCollaboration.awareness,
+              currentCollaborationModules,
+            ),
           );
         }
       },
@@ -519,7 +703,17 @@ export function HiddenProseMirror(
       },
     };
 
+    const viewStartedAt = performance.now();
     viewRef.current = new EditorView(hostRef.current, editorProps);
+    recordHiddenEditorPhase(
+      "mount",
+      "editor-view",
+      performance.now() - viewStartedAt,
+    );
+    syncHiddenEditorAccessibility(viewRef.current, readOnlyRef.current);
+    isInitializedRef.current = true;
+    lastDocumentIdRef.current = getDocumentIdentity(document);
+    lastCollaborationFragmentRef.current = collaboration?.yXmlFragment ?? null;
 
     // Notify that view is ready (use ref to avoid dependency issues)
     onEditorViewReadyRef.current?.(viewRef.current);
@@ -528,13 +722,16 @@ export function HiddenProseMirror(
     styles,
     externalPlugins,
     collaboration,
+    collaborationModules,
     extensionManager,
+    deferViewCreation,
+    precomputedInitialState,
     // Callbacks removed from dependencies - accessed via refs
   ]);
 
   useEffect(() => {
     const awareness = collaboration?.awareness;
-    if (!awareness || !viewRef.current) {
+    if (!awareness || !viewRef.current || !collaborationModules) {
       onRemoteSelectionsChangeRef.current?.([]);
       return undefined;
     }
@@ -544,7 +741,11 @@ export function HiddenProseMirror(
         return;
       }
       onRemoteSelectionsChangeRef.current?.(
-        collectRemoteSelections(viewRef.current.state, awareness),
+        collectRemoteSelections(
+          viewRef.current.state,
+          awareness,
+          collaborationModules,
+        ),
       );
     };
 
@@ -555,7 +756,7 @@ export function HiddenProseMirror(
       awareness.off("change", publishRemoteSelections);
       onRemoteSelectionsChangeRef.current?.([]);
     };
-  }, [collaboration?.awareness]);
+  }, [collaboration?.awareness, collaborationModules]);
 
   /**
    * Destroy EditorView
@@ -573,12 +774,20 @@ export function HiddenProseMirror(
     }
   }, []);
 
-  // Mount/unmount
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (deferViewCreation) {
+      return;
+    }
+    if (viewRef.current || isDestroyingRef.current) {
+      return;
+    }
+    if (collaboration && !collaborationModules) {
+      return;
+    }
     createView();
-    return () => destroyView();
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only on mount/unmount
+  }, [collaboration, collaborationModules, createView, deferViewCreation]);
+
+  useEffect(() => () => destroyView(), [destroyView]);
 
   // Update state when document changes externally (e.g., loading a new file)
   // This should NOT run when the document prop changes due to internal edits
@@ -587,24 +796,11 @@ export function HiddenProseMirror(
     if (!viewRef.current || isDestroyingRef.current) {
       return;
     }
+    if (collaboration && !collaborationModules) {
+      return;
+    }
 
-    // Generate a simple document identity based on its structure
-    // This helps detect truly different documents vs the same doc passed back after editing
-    const getDocumentId = (doc: Document | null): string => {
-      if (!doc) {
-        return "empty";
-      }
-      // Use the document's package id or a hash of its structure
-      // For simplicity, we compare based on whether it's a different document object
-      // and whether it has different metadata
-      const meta = doc.package.properties;
-      const created = meta?.created ? String(meta.created) : "";
-      const modified = meta?.modified ? String(meta.modified) : "";
-      const title = meta?.title ?? "";
-      return `${created}-${modified}-${title}`;
-    };
-
-    const currentDocId = getDocumentId(document);
+    const currentDocId = getDocumentIdentity(document);
     const currentCollaborationFragment = collaboration?.yXmlFragment ?? null;
     const collaborationSourceChanged =
       currentCollaborationFragment !== lastCollaborationFragmentRef.current;
@@ -632,18 +828,34 @@ export function HiddenProseMirror(
     lastCollaborationFragmentRef.current = currentCollaborationFragment;
 
     // Create new state from document
-    const newState = createInitialState(
+    const newState = createHiddenEditorState(
       document,
       styles,
       extensionManager,
       externalPlugins,
       collaboration,
+      collaborationModules,
+      "external-document",
     );
+    const updateStartedAt = performance.now();
     viewRef.current.updateState(newState);
+    recordHiddenEditorPhase(
+      "external-document",
+      "update-state",
+      performance.now() - updateStartedAt,
+    );
+    syncHiddenEditorAccessibility(viewRef.current, readOnlyRef.current);
 
     // Use ref to avoid infinite loop when callback is unstable
     onSelectionChangeRef.current?.(newState);
-  }, [document, styles, extensionManager, externalPlugins, collaboration]);
+  }, [
+    document,
+    styles,
+    extensionManager,
+    externalPlugins,
+    collaboration,
+    collaborationModules,
+  ]);
   // NOTE: onSelectionChange removed from dependencies - accessed via ref to prevent infinite loops
 
   // Update editable state
@@ -651,7 +863,8 @@ export function HiddenProseMirror(
     if (!viewRef.current) {
       return;
     }
-    // EditorView will call editable() on each check, so we don't need to update
+    // EditorView calls editable() dynamically; ARIA state needs explicit sync.
+    syncHiddenEditorAccessibility(viewRef.current, readOnly);
   }, [readOnly]);
 
   // ========================================================================
@@ -795,19 +1008,36 @@ export function HiddenProseMirror(
     [],
   );
 
+  if (hasCollaboration && collaborationModulesError) {
+    let detail = "unknown error";
+    if (collaborationModulesError instanceof Error) {
+      detail = collaborationModulesError.message;
+    } else if (typeof collaborationModulesError === "string") {
+      detail = collaborationModulesError;
+    }
+    panic(
+      `Failed to load collaboration editor modules. Reload the document to retry. Cause: ${detail}`,
+    );
+  }
+
   // ========================================================================
   // Render
   // ========================================================================
 
   return (
     <div
-      ref={hostRef}
-      className="paged-editor__hidden-pm"
-      style={{
-        ...HIDDEN_HOST_STYLES,
-        width: widthPx > 0 ? `${widthPx}px` : undefined,
-      }}
-      // DO NOT set aria-hidden - this editor provides semantic structure
-    />
+      className="paged-editor__hidden-pm-wrapper"
+      style={HIDDEN_WRAPPER_STYLES}
+    >
+      <div
+        ref={hostRef}
+        className="paged-editor__hidden-pm"
+        style={{
+          ...HIDDEN_HOST_STYLES,
+          width: widthPx > 0 ? `${widthPx}px` : undefined,
+        }}
+        // DO NOT set aria-hidden - this editor provides semantic structure
+      />
+    </div>
   );
 }

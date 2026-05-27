@@ -134,6 +134,7 @@ type FontMetricsEntry = {
   ascent: number;
   descent: number;
   lineHeight: number;
+  singleLineRatio: number;
 };
 
 /**
@@ -148,7 +149,7 @@ let fontCacheMaxSize = DEFAULT_FONT_CACHE_SIZE;
 
 /**
  * LRU cache for font metrics
- * Key format: "fontFamily|fontSize|bold|italic"
+ * Key format: "fontFamily|fontSize|bold|italic|fontVariant"
  */
 const fontMetricsCache = new Map<string, FontMetricsEntry>();
 
@@ -160,8 +161,9 @@ function makeFontKey(
   fontSize: number,
   bold: boolean = false,
   italic: boolean = false,
+  fontVariant?: string,
 ): string {
-  return `${fontFamily}|${fontSize}|${bold}|${italic}`;
+  return `${fontFamily}|${fontSize}|${bold}|${italic}|${fontVariant ?? ""}`;
 }
 
 /**
@@ -185,8 +187,9 @@ export function getCachedFontMetrics(
   fontSize: number,
   bold: boolean = false,
   italic: boolean = false,
+  fontVariant?: string,
 ): FontMetricsEntry | undefined {
-  const key = makeFontKey(fontFamily, fontSize, bold, italic);
+  const key = makeFontKey(fontFamily, fontSize, bold, italic, fontVariant);
   const entry = fontMetricsCache.get(key);
 
   if (entry !== undefined) {
@@ -208,8 +211,9 @@ export function setCachedFontMetrics(
   bold: boolean,
   italic: boolean,
   metrics: FontMetricsEntry,
+  fontVariant?: string,
 ): void {
-  const key = makeFontKey(fontFamily, fontSize, bold, italic);
+  const key = makeFontKey(fontFamily, fontSize, bold, italic, fontVariant);
   fontMetricsCache.set(key, metrics);
   evictFontEntries();
 }
