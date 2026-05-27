@@ -254,13 +254,11 @@
     "analyzing": "Analüüsin...",
     "columns": {
       "caseNumber": "Kohtuasja number",
-      "country": "Riik",
       "court": "Kohus"
     },
     "decisionNotFound": "Otsust ei leitud",
     "emptyState": "Otsuseid ei leitud. Seadistage allikas ja käivitage sünkroonimine kohtupraktika importimiseks.",
     "filters": {
-      "country": "Riik",
       "court": "Kohus",
       "dateFrom": "Alates",
       "dateTo": "Kuni",
@@ -636,6 +634,7 @@
     "copied": "Copied to clipboard",
     "copy": "Kopeeri",
     "copyLink": "Kopeeri link",
+    "country": "Riik",
     "createdAt": "Loodud {date}",
     "currency": "Valuuta",
     "currentPage": "Praegune lehekülg",

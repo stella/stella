@@ -254,13 +254,11 @@
     "analyzing": "Analizē...",
     "columns": {
       "caseNumber": "Lietas numurs",
-      "country": "Valsts",
       "court": "Tiesa"
     },
     "decisionNotFound": "Lēmums nav atrasts",
     "emptyState": "Lēmumi nav atrasti. Konfigurējiet avotu un palaidiet sinhronizāciju, lai importētu tiesu praksi.",
     "filters": {
-      "country": "Valsts",
       "court": "Tiesa",
       "dateFrom": "No",
       "dateTo": "Līdz",
@@ -636,6 +634,7 @@
     "copied": "Copied to clipboard",
     "copy": "Kopēt",
     "copyLink": "Kopēt saiti",
+    "country": "Valsts",
     "createdAt": "Izveidots {date}",
     "currency": "Valūta",
     "currentPage": "Pašreizējā lapa",

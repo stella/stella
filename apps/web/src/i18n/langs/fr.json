@@ -254,13 +254,11 @@
     "analyzing": "Analyse en cours...",
     "columns": {
       "caseNumber": "Numéro d'affaire",
-      "country": "Pays",
       "court": "Juridiction"
     },
     "decisionNotFound": "Décision introuvable",
     "emptyState": "Aucune décision trouvée. Configurez une source et lancez une synchronisation pour importer la jurisprudence.",
     "filters": {
-      "country": "Pays",
       "court": "Juridiction",
       "dateFrom": "Du",
       "dateTo": "Au",
@@ -636,6 +634,7 @@
     "copied": "Copied to clipboard",
     "copy": "Copier",
     "copyLink": "Copier le lien",
+    "country": "Pays",
     "createdAt": "Créé le {date}",
     "currency": "Devise",
     "currentPage": "Page actuelle",

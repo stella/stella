@@ -254,13 +254,11 @@
     "analyzing": "Analizowanie...",
     "columns": {
       "caseNumber": "Sygnatura akt",
-      "country": "Kraj",
       "court": "Sąd"
     },
     "decisionNotFound": "Nie znaleziono orzeczenia",
     "emptyState": "Brak orzeczeń. Skonfiguruj źródło i uruchom synchronizację, aby zaimportować orzecznictwo.",
     "filters": {
-      "country": "Kraj",
       "court": "Sąd",
       "dateFrom": "Od",
       "dateTo": "Do",
@@ -636,6 +634,7 @@
     "copied": "Skopiowano do schowka",
     "copy": "Kopiuj",
     "copyLink": "Kopiuj link",
+    "country": "Kraj",
     "createdAt": "Utworzono {date}",
     "currency": "Waluta",
     "currentPage": "Bieżąca strona",

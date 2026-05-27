@@ -15,7 +15,7 @@
     "test": "bun test --pass-with-no-tests"
   },
   "dependencies": {
-    "@hocuspocus/server": "^4.0.0",
+    "@hocuspocus/server": "^4.1.0",
     "@stll/errors": "workspace:*",
     "@t3-oss/env-core": "catalog:",
     "better-result": "catalog:",
@@ -24,7 +24,7 @@
     "yjs": "^13.6.30"
   },
   "devDependencies": {
-    "@hocuspocus/provider": "^4.0.0",
+    "@hocuspocus/provider": "^4.1.0",
     "@stll/typescript-config": "workspace:*",
     "@types/bun": "catalog:",
     "typescript": "catalog:"

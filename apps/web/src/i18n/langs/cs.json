@@ -254,13 +254,11 @@
     "analyzing": "Analyzuji...",
     "columns": {
       "caseNumber": "Spisová značka",
-      "country": "Stát",
       "court": "Soud"
     },
     "decisionNotFound": "Rozhodnutí nenalezeno",
     "emptyState": "Žádná rozhodnutí nenalezena. Nastavte zdroj a spusťte synchronizaci pro import judikatury.",
     "filters": {
-      "country": "Stát",
       "court": "Soud",
       "dateFrom": "Od",
       "dateTo": "Do",
@@ -636,6 +634,7 @@
     "copied": "Zkopírováno do schránky",
     "copy": "Kopírovat",
     "copyLink": "Kopírovat odkaz",
+    "country": "Stát",
     "createdAt": "Vytvořeno {date}",
     "currency": "Měna",
     "currentPage": "Aktuální stránka",

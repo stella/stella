@@ -254,13 +254,11 @@
     "analyzing": "Analisando...",
     "columns": {
       "caseNumber": "Número do processo",
-      "country": "País",
       "court": "Tribunal"
     },
     "decisionNotFound": "Decisão não encontrada",
     "emptyState": "Nenhuma decisão encontrada. Configure uma fonte e execute uma sincronização para importar jurisprudência.",
     "filters": {
-      "country": "País",
       "court": "Tribunal",
       "dateFrom": "De",
       "dateTo": "Para",
@@ -636,6 +634,7 @@
     "copied": "Copiado para a área de transferência",
     "copy": "Copiar",
     "copyLink": "Copiar link",
+    "country": "País",
     "createdAt": "Criado em {date}",
     "currency": "Moeda",
     "currentPage": "Página atual",

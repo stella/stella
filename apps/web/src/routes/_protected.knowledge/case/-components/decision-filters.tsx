@@ -88,7 +88,7 @@ export const DecisionFilters = ({
           value={filters.country ?? ""}
         >
           <SelectTrigger className="w-32">
-            <SelectValue placeholder={t("caseLaw.filters.country")} />
+            <SelectValue placeholder={t("common.country")} />
           </SelectTrigger>
           <SelectPopup>
             <SelectItem value="">{t("common.all")}</SelectItem>
@@ -104,7 +104,7 @@ export const DecisionFilters = ({
           className="max-w-32"
           defaultValue={filters.country ?? ""}
           onChange={(e) => handleCountryInputChange(e.currentTarget.value)}
-          placeholder={t("caseLaw.filters.country")}
+          placeholder={t("common.country")}
         />
       )}
 
