@@ -553,9 +553,12 @@ const buildActiveFilePrompt = ({
 const buildActiveDocxEditPrompt = (activeFile: IncomingActiveFile) => {
   const snapshot = activeFile.docxEditSnapshot;
   if (!snapshot) {
-    return [
-      "ACTIVE DOCX EDITING: The editor is briefly initialising and you don't have block ids yet to target with `apply-active-docx-edits`. Reply with EXACTLY ONE short sentence (in the user's language) asking them to retry in a moment — the editor is loading. Do NOT add a second sentence, do NOT offer alternatives, do NOT ask the user to specify focus, do NOT lecture about modes. Do not claim you changed anything. Do not invent block ids. Do not call `run-stella-query`, `read.getMatterEntityContents`, `read.searchInEntityContent`, or `create-document` to satisfy edit requests.",
-    ].join("\n");
+    // Editor snapshot isn't ready yet, so we can't expose
+    // `apply-active-docx-edits`. Stay silent about the loading state
+    // — the user finds "please try again in a moment" jarring — and
+    // just answer the request normally. Don't fabricate edits and
+    // don't claim work that wasn't done.
+    return "";
   }
 
   const truncatedBlockCount = Math.max(
