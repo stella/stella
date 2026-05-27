@@ -265,15 +265,17 @@ export const AskUserCard = ({
 
       {/* Questions */}
       <div className="border-border/50 space-y-3 border-t px-3 py-3">
-        {input.questions.map((q, i) => (
+        {input.questions.map((q, i) => {
+          const hasOptions = q.options !== undefined && q.options.length > 0;
+          return (
           <div className="space-y-1.5" key={q.question}>
             <p className="text-xs font-medium">
               {i + 1}. {renderAnonPills(q.question, pairs)}
             </p>
 
-            {!isDone && q.options && !customMode[i] && (
+            {!isDone && hasOptions && !customMode[i] && (
               <div className="flex flex-wrap gap-1.5">
-                {q.options.map((opt) => (
+                {q.options?.map((opt) => (
                   <button
                     className={cn(
                       "rounded-md border px-2 py-1 text-xs",
@@ -300,7 +302,7 @@ export const AskUserCard = ({
               </div>
             )}
 
-            {!isDone && (!q.options || customMode[i]) && (
+            {!isDone && (!hasOptions || customMode[i]) && (
               <div className="flex gap-1.5">
                 <input
                   className="bg-background focus-visible:ring-ring flex-1 rounded-md border px-2 py-1 text-xs focus-visible:ring-1 focus-visible:outline-none"
@@ -309,7 +311,7 @@ export const AskUserCard = ({
                   type="text"
                   value={answers[i] ?? ""}
                 />
-                {q.options && customMode[i] && (
+                {hasOptions && customMode[i] && (
                   <button
                     className="text-muted-foreground hover:text-foreground text-xs"
                     onClick={() => toggleCustom(i)}
@@ -332,7 +334,8 @@ export const AskUserCard = ({
               </p>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Submit */}

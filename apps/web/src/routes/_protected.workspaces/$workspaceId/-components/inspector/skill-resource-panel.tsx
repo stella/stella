@@ -2,6 +2,7 @@ import { ScrollArea } from "@stll/ui/components/scroll-area";
 
 import { MessageResponse } from "@/components/ai-elements/message";
 
+import { InspectorTabHeader } from "./inspector-tab-header";
 import type { SkillResourceTab } from "./inspector-store";
 
 const MARKDOWN_MIME_PREFIX = "text/markdown";
@@ -16,22 +17,33 @@ const isMarkdown = (mimeType: string, resourcePath: string): boolean => {
   return MARKDOWN_EXTENSIONS.some((ext) => lowered.endsWith(ext));
 };
 
-export const SkillResourcePanel = ({ tab }: { tab: SkillResourceTab }) => {
+const basenameOf = (path: string): string => {
+  const lastSlash = path.lastIndexOf("/");
+  return lastSlash === -1 ? path : path.slice(lastSlash + 1);
+};
+
+type SkillResourcePanelProps = {
+  tab: SkillResourceTab;
+  onClose: () => void;
+};
+
+export const SkillResourcePanel = ({ tab, onClose }: SkillResourcePanelProps) => {
   const { skillName, resourcePath, mimeType, content } = tab;
 
   return (
     <div className="bg-background flex h-full min-h-0 flex-col">
-      <div className="flex h-8 shrink-0 items-center gap-2 border-b px-3">
-        <span className="text-foreground truncate text-xs font-medium">
-          {skillName}
-        </span>
-        <span
-          className="text-muted-foreground truncate font-mono text-[10px]"
-          title={resourcePath}
-        >
-          {resourcePath}
-        </span>
-      </div>
+      <InspectorTabHeader
+        label={basenameOf(resourcePath)}
+        matter={
+          <span
+            className="text-muted-foreground truncate font-mono text-[10px]"
+            title={`${skillName} · ${resourcePath}`}
+          >
+            {skillName}
+          </span>
+        }
+        onClose={onClose}
+      />
       <SkillResourceBody
         content={content}
         mimeType={mimeType}

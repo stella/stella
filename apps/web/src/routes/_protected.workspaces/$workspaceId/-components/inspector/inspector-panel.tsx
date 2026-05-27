@@ -452,7 +452,10 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
       )}
 
       {!minimized && activeTab?.type === "skill-resource" && (
-        <SkillResourcePanel tab={activeTab} />
+        <SkillResourcePanel
+          onClose={() => handleCloseTab(activeTab.id)}
+          tab={activeTab}
+        />
       )}
 
       {!minimized && activeTab?.type === "matter" && (
