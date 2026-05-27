@@ -291,6 +291,53 @@ const entityContentSchema = v.strictObject({
   ),
 });
 
+const entitySearchHitSchema = v.strictObject({
+  snippet: v.pipe(
+    v.string(),
+    v.description(
+      "Excerpt around the match (~200 chars on each side). The match itself appears verbatim — no surrounding markup. Hits are ordered by document position; use the array index for relative ordering.",
+    ),
+  ),
+});
+
+const entitySearchResultSchema = v.strictObject({
+  charCount: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(0),
+    v.description("Total character count of the entity's extracted text"),
+  ),
+  entityRef: entityRefSchema,
+  hits: v.array(entitySearchHitSchema),
+  matterRef: matterRefSchema,
+  mention: v.pipe(
+    v.string(),
+    v.description("Markdown mention to copy when referring to this entity"),
+  ),
+  name: v.nullable(v.pipe(v.string(), v.description("Entity name"))),
+  sourceDocument: sourceDocumentSchema,
+  totalHits: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(0),
+    v.description(
+      "Number of matches counted in the document. Equal to the absolute count when `totalHitsCapped` is false; when `totalHitsCapped` is true the value is a LOWER BOUND (the scan was stopped to fence pathological queries) and the real count may be higher.",
+    ),
+  ),
+  totalHitsCapped: v.pipe(
+    v.boolean(),
+    v.description(
+      "True when the server stopped counting at a defensive cap (currently 100 matches per entity). If true, `totalHits` is a lower bound, not an exact count — narrow the query (e.g. `wholeWord: true` or a more specific phrase) to get an exact count.",
+    ),
+  ),
+  truncated: v.pipe(
+    v.boolean(),
+    v.description(
+      "Whether the hits array was capped by `limit`. If true, more matches exist past those returned (raise `limit` to surface more).",
+    ),
+  ),
+});
+
 const listMatterPropertiesInputSchema = v.strictObject({
   matterRefs: matterRefsSchema,
   ...paginationInputEntries,
@@ -325,6 +372,45 @@ const getMatterEntitiesInputSchema = v.strictObject({
 const getMatterEntityContentsInputSchema = v.strictObject({
   entityRefs: contentEntityRefsSchema,
   matterRefs: matterRefsSchema,
+});
+
+const searchInEntityContentLimitSchema = v.optional(
+  v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(1),
+    v.maxValue(20),
+    v.description("Max hits to return per entity"),
+  ),
+  10,
+);
+
+const searchInEntityContentInputSchema = v.strictObject({
+  caseSensitive: v.optional(
+    v.pipe(
+      v.boolean(),
+      v.description("Whether the query is matched case-sensitively"),
+    ),
+    false,
+  ),
+  entityRefs: contentEntityRefsSchema,
+  limit: searchInEntityContentLimitSchema,
+  matterRefs: matterRefsSchema,
+  query: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(LIMITS.searchQueryMaxLength),
+    v.description("Literal substring to find (NOT a regex)"),
+  ),
+  wholeWord: v.optional(
+    v.pipe(
+      v.boolean(),
+      v.description(
+        "Whether to match only whole words (matches surrounded by non-letter/digit characters)",
+      ),
+    ),
+    false,
+  ),
 });
 
 export const listMatterPropertiesContract = createReadonlyFunctionContract({
@@ -362,10 +448,21 @@ export const getMatterEntitiesContract = createReadonlyFunctionContract({
 
 export const getMatterEntityContentsContract = createReadonlyFunctionContract({
   summary: "Get extracted text content for known entity refs in known matters.",
-  details: "Text is truncated server-side when needed.",
+  details:
+    "Text is truncated server-side when needed. For long documents, prefer `searchInEntityContent` to find specific terms without paging — `getMatterEntityContents` only returns the start of the document.",
   input: getMatterEntityContentsInputSchema,
   name: "getMatterEntityContents",
   output: buildItemsOutputSchema(entityContentSchema),
+});
+
+export const searchInEntityContentContract = createReadonlyFunctionContract({
+  summary:
+    "Search for a literal substring inside one or more entities' extracted text, anywhere in the document — not limited to the truncated head returned by getMatterEntityContents.",
+  details:
+    "Use this instead of `getMatterEntityContents` whenever the user asks where, whether, or how a term/phrase appears in a long document (definitions, citations, references). Returns matching snippets in document order with a ~200-char context window. `totalHits` is the absolute match count UNLESS `totalHitsCapped` is true — in which case the server stopped at a defensive cap (~100/entity) and `totalHits` is a lower bound. `truncated` is independent: it indicates the `hits` array was clipped by `limit`, not that the count is incomplete.",
+  input: searchInEntityContentInputSchema,
+  name: "searchInEntityContent",
+  output: buildItemsOutputSchema(entitySearchResultSchema),
 });
 
 export const readonlyWorkspaceFunctionContracts = [
@@ -374,6 +471,7 @@ export const readonlyWorkspaceFunctionContracts = [
   listMatterEntitiesContract,
   getMatterEntitiesContract,
   getMatterEntityContentsContract,
+  searchInEntityContentContract,
 ] as const satisfies readonly ReadonlyFunctionContract[];
 
 export type ReadonlyWorkspaceFunctionName =
