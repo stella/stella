@@ -206,9 +206,8 @@ export const applyFolioAIEditOperations = ({
 
   // Build the live-block indexes once per batch so individual op
   // resolutions don't each re-walk the doc. ParaId-anchored ids are
-  // resolved against `liveBlocksByParaId` first; the hash bucket is
-  // the fallback for ordinal-encoded snapshot ids and stale paraId
-  // refs.
+  // resolved against `liveBlocksByParaId`; the hash bucket is only
+  // the fallback for ordinal-encoded snapshot ids.
   const liveBlocks = collectLiveBlocksByHash(view.state.doc);
   const liveBlocksByParaId = collectLiveBlocksByParaId(view.state.doc);
 
@@ -642,13 +641,17 @@ const resolveOperation = (
   // Prefer a paraId-anchored lookup when the snapshot id encodes one.
   // It survives structural edits, including an earlier-in-document
   // duplicate of the same text appearing between snapshot and apply,
-  // which the hash+ordinal path would mis-target. Falls through to
-  // the hash bucket for fallback ids and for stale paraId refs that
-  // no longer match a live block.
+  // which the hash+ordinal path would mis-target. Missing paraIds
+  // are stale anchors, so they skip rather than falling back to a
+  // same-text block that may be unrelated.
   const encodedParaId = extractParaIdFromBlockId(operation.blockId);
-  let live: LiveBlockEntry | undefined =
-    encodedParaId !== null ? liveBlocksByParaId.get(encodedParaId) : undefined;
-  if (!live) {
+  let live: LiveBlockEntry | undefined;
+  if (encodedParaId !== null) {
+    live = liveBlocksByParaId.get(encodedParaId);
+    if (!live) {
+      return { type: "skip", reason: "missingBlock" };
+    }
+  } else {
     const ordinal = ordinalAmongSameHash(snapshot, operation.blockId);
     if (ordinal < 0) {
       return { type: "skip", reason: "missingBlock" };

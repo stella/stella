@@ -489,6 +489,35 @@ describe("Folio AI edit operations", () => {
     expect(view.state.doc.child(0).textContent).toBe("Payment changed.");
   });
 
+  test("paraId-anchored op skips when the live paraId is gone", () => {
+    const originalState = makeState([{ text: "Payment.", paraId: "AAAA0001" }]);
+    const snapshot = createFolioAIEditSnapshot(originalState.doc);
+    const view = makeView(
+      makeState([{ text: "Payment.", paraId: "BBBB0002" }]),
+    );
+
+    const result = applyFolioAIEditOperations({
+      view,
+      snapshot,
+      operations: [
+        {
+          id: "op-1",
+          type: "replaceInBlock",
+          blockId: "AAAA0001",
+          find: "Payment",
+          replace: "Charge",
+        },
+      ],
+      mode: "direct",
+    });
+
+    expect(result).toEqual({
+      applied: [],
+      skipped: [{ id: "op-1", reason: "missingBlock" }],
+    });
+    expect(view.state.doc.child(0).textContent).toBe("Payment.");
+  });
+
   test("applies multiple insertAfterBlock ops at the same position in document order", () => {
     // Same-position ops must apply in a deterministic, logical
     // order. Sorting by `from` alone is non-deterministic for
