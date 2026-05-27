@@ -198,6 +198,25 @@ describe("Folio AI edit operations", () => {
     expect(snapshot.anchors["seq-0001"]?.textHash).toMatch(/^h/u);
   });
 
+  test("snapshot uses sequential fallback ids for duplicate paraIds", () => {
+    const state = makeState([
+      { text: "First paragraph.", paraId: "AAAA0001" },
+      { text: "Second paragraph.", paraId: "AAAA0001" },
+      { text: "Third paragraph.", paraId: "BBBB0002" },
+    ]);
+
+    const snapshot = createFolioAIEditSnapshot(state.doc);
+
+    expect(snapshot.blocks.map((block) => block.id)).toEqual([
+      "AAAA0001",
+      "seq-0002",
+      "BBBB0002",
+    ]);
+    expect(snapshot.anchors["AAAA0001"]?.text).toBe("First paragraph.");
+    expect(snapshot.anchors["seq-0002"]?.text).toBe("Second paragraph.");
+    expect(snapshot.anchors["BBBB0002"]?.text).toBe("Third paragraph.");
+  });
+
   test("captures formatted preview runs in the AI-facing block snapshot", () => {
     const boldType = schema.marks["bold"];
     const italicType = schema.marks["italic"];

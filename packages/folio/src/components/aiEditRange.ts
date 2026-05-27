@@ -6,7 +6,43 @@
  * inline content" can be unit-tested without spinning up a real PM view.
  */
 
+import type { Node as PMNode } from "prosemirror-model";
+
+import {
+  createFolioAIEditSnapshot,
+  getFolioAIParaIdFromBlockId,
+} from "../core/ai-edits/snapshot";
+import type { FolioAIEditSnapshot } from "../core/ai-edits/types";
+import { findParagraphByParaId } from "../core/prosemirror/utils/findParagraphByParaId";
+
 export type DocPositionRange = { from: number; to: number };
+
+type ResolveFolioAIBlockRangeOptions = {
+  blockId: string;
+  doc: PMNode;
+  snapshot?: FolioAIEditSnapshot | null | undefined;
+};
+
+export const resolveFolioAIBlockRange = ({
+  blockId,
+  doc,
+  snapshot,
+}: ResolveFolioAIBlockRangeOptions): DocPositionRange | null => {
+  const paraId = getFolioAIParaIdFromBlockId(blockId);
+  if (paraId !== null) {
+    const liveRange = findParagraphByParaId(doc, paraId);
+    if (liveRange !== null) {
+      return { from: liveRange.from, to: liveRange.to };
+    }
+  }
+
+  const resolvedSnapshot = snapshot ?? createFolioAIEditSnapshot(doc);
+  const anchor = resolvedSnapshot.anchors[blockId];
+  if (!anchor) {
+    return null;
+  }
+  return clampRangeToDocSize(doc.content.size, anchor);
+};
 
 /**
  * Clamp a `{from, to}` pair so both endpoints fit inside a document of

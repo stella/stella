@@ -9,6 +9,14 @@ import type {
   FolioAIEditSnapshot,
 } from "./types";
 
+const SEQUENTIAL_BLOCK_ID_PREFIX = "seq-";
+
+const isFolioAISequentialBlockId = (blockId: string): boolean =>
+  blockId.startsWith(SEQUENTIAL_BLOCK_ID_PREFIX);
+
+export const getFolioAIParaIdFromBlockId = (blockId: string): string | null =>
+  isFolioAISequentialBlockId(blockId) ? null : blockId;
+
 export const normalizeFolioAIBlockText = (text: string): string =>
   text.replace(/\s+/gu, " ").trim();
 
@@ -26,6 +34,7 @@ export const createFolioAIEditSnapshot = (doc: PMNode): FolioAIEditSnapshot => {
     anchor: Omit<FolioAIBlockAnchor, "hashOccurrenceCount">;
   }[] = [];
   const hashCounts = new Map<string, number>();
+  const usedBlockIds = new Set<string>();
 
   let blockIndex = 0;
   doc.descendants((node, pos) => {
@@ -58,16 +67,22 @@ export const createFolioAIEditSnapshot = (doc: PMNode): FolioAIEditSnapshot => {
     //
     // Pre-allocator fallback: a snapshot taken from a doc the
     // allocator never ran on (typical in tests, possible in headless
-    // contexts) carries `paraId: null`. Fall back to a sequential
-    // ordinal prefixed with `seq-` so the apply path can tell at a
-    // glance which lookup strategy to use (paraId-direct vs.
-    // hash+ordinal).
+    // contexts) carries `paraId: null`. Duplicate source paraIds are
+    // treated the same way because raw duplicate ids would collapse
+    // `anchors`. Fall back to a unique sequential id prefixed with
+    // `seq-` so the apply path can tell at a glance which lookup
+    // strategy to use (paraId-direct vs. hash+ordinal).
     blockIndex++;
     const paraIdAttr: unknown = node.attrs["paraId"];
-    const id =
+    const paraId =
       typeof paraIdAttr === "string" && paraIdAttr.length > 0
         ? paraIdAttr
-        : `seq-${String(blockIndex).padStart(4, "0")}`;
+        : null;
+    const id =
+      paraId !== null && !usedBlockIds.has(paraId)
+        ? paraId
+        : getSequentialBlockId(blockIndex, usedBlockIds);
+    usedBlockIds.add(id);
     const kind = getBlockKind(node);
     const displayLabel = getDisplayLabel(node);
     const previewRuns = getPreviewRuns(node);
@@ -102,6 +117,20 @@ export const createFolioAIEditSnapshot = (doc: PMNode): FolioAIEditSnapshot => {
   }
 
   return { blocks, anchors };
+};
+
+const getSequentialBlockId = (
+  preferredBlockIndex: number,
+  usedBlockIds: ReadonlySet<string>,
+): string => {
+  let blockIndex = preferredBlockIndex;
+  while (true) {
+    const candidate = `${SEQUENTIAL_BLOCK_ID_PREFIX}${String(blockIndex).padStart(4, "0")}`;
+    if (!usedBlockIds.has(candidate)) {
+      return candidate;
+    }
+    blockIndex += 1;
+  }
 };
 
 const getBlockKind = (node: PMNode): FolioAIBlockKind => {

@@ -2,7 +2,11 @@ import type { Mark, Node as PMNode } from "prosemirror-model";
 import type { EditorState, Transaction } from "prosemirror-state";
 
 import { buildCleanBlockText } from "./clean-text";
-import { hashFolioAIBlockText, normalizeFolioAIBlockText } from "./snapshot";
+import {
+  getFolioAIParaIdFromBlockId,
+  hashFolioAIBlockText,
+  normalizeFolioAIBlockText,
+} from "./snapshot";
 import type {
   FolioAIEditAppliedOperation,
   FolioAIEditApplyMode,
@@ -142,15 +146,6 @@ const collectLiveBlocksByParaId = (doc: PMNode) => {
   });
   return byParaId;
 };
-
-/**
- * Identify a snapshot block id as a paraId. The snapshot emits a
- * bare `w14:paraId` for paragraphs that have one and
- * `seq-${4-digit-ordinal}` as the pre-allocator fallback; only the
- * former should be looked up in the live paraId index.
- */
-const extractParaIdFromBlockId = (blockId: string): string | null =>
-  blockId.startsWith("seq-") ? null : blockId;
 
 /**
  * The snapshot recorded an `hashOccurrenceCount` per anchor but
@@ -644,7 +639,7 @@ const resolveOperation = (
   // which the hash+ordinal path would mis-target. Missing paraIds
   // are stale anchors, so they skip rather than falling back to a
   // same-text block that may be unrelated.
-  const encodedParaId = extractParaIdFromBlockId(operation.blockId);
+  const encodedParaId = getFolioAIParaIdFromBlockId(operation.blockId);
   let live: LiveBlockEntry | undefined;
   if (encodedParaId !== null) {
     live = liveBlocksByParaId.get(encodedParaId);
