@@ -774,6 +774,12 @@
             "location": "apps/web/src/components/ai-elements/conversation.tsx#4"
           },
           {
+            "location": "apps/web/src/components/ai-elements/message-response.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/ai-elements/message-response.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/ai-elements/message.tsx#3"
           },
           {
@@ -789,10 +795,13 @@
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#25"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#16"
+            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.impl.tsx#16"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#17"
+            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.impl.tsx#17"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#1"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/host.tsx#17"
@@ -801,10 +810,13 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#18"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#8"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#8"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#9"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#9"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#1"
           },
           {
             "location": "apps/web/src/components/api-version-mismatch-banner.tsx#1"
@@ -1257,10 +1269,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#13"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#16"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#14"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell.tsx#1"
@@ -1456,6 +1468,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#1"
@@ -1842,6 +1860,9 @@
             "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#4"
           },
           {
+            "location": "apps/api/src/handlers/chat/tools/web-search-tools.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#5"
           },
           {
@@ -1864,6 +1885,12 @@
           },
           {
             "location": "apps/api/src/lib/views-schema.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/web-search/tavily.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/web-search/types.ts#2"
           },
           {
             "location": "apps/api/src/lib/workflow/ai-prompts.ts#1"
@@ -2250,6 +2277,12 @@
             "location": "apps/web/src/components/ai-elements/conversation.tsx#4"
           },
           {
+            "location": "apps/web/src/components/ai-elements/message-response.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/ai-elements/message-response.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/ai-elements/message.tsx#3"
           },
           {
@@ -2265,10 +2298,13 @@
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#25"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#16"
+            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.impl.tsx#16"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#17"
+            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.impl.tsx#17"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#1"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/host.tsx#17"
@@ -2277,10 +2313,13 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#18"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#8"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#8"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#9"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#9"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#1"
           },
           {
             "location": "apps/web/src/components/api-version-mismatch-banner.tsx#1"
@@ -2733,10 +2772,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#13"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#16"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#14"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell.tsx#1"
@@ -2932,6 +2971,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#1"
@@ -4548,6 +4593,12 @@
             "location": "apps/web/src/components/ai-elements/conversation.tsx#4"
           },
           {
+            "location": "apps/web/src/components/ai-elements/message-response.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/ai-elements/message-response.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/ai-elements/message.tsx#3"
           },
           {
@@ -4563,10 +4614,13 @@
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#25"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#16"
+            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.impl.tsx#16"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#17"
+            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.impl.tsx#17"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#1"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/host.tsx#17"
@@ -4575,10 +4629,13 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#18"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#8"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#8"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#9"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#9"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#1"
           },
           {
             "location": "apps/web/src/components/api-version-mismatch-banner.tsx#1"
@@ -5031,10 +5088,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#13"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#16"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#14"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell.tsx#1"
@@ -5230,6 +5287,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#1"
@@ -6601,6 +6664,12 @@
             "location": "apps/web/src/components/ai-elements/conversation.tsx#4"
           },
           {
+            "location": "apps/web/src/components/ai-elements/message-response.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/ai-elements/message-response.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/ai-elements/message.tsx#3"
           },
           {
@@ -6616,10 +6685,13 @@
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#25"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#16"
+            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.impl.tsx#16"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#17"
+            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.impl.tsx#17"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#1"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/host.tsx#17"
@@ -6628,10 +6700,13 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#18"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#8"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#8"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#9"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#9"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#1"
           },
           {
             "location": "apps/web/src/components/api-version-mismatch-banner.tsx#1"
@@ -7084,10 +7159,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#13"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#16"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#14"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell.tsx#1"
@@ -7283,6 +7358,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#1"
@@ -8040,7 +8121,7 @@
             "location": "apps/web/src/components/chat/chat-thread-messages.tsx#17"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#8"
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#8"
@@ -8268,7 +8349,7 @@
             "location": "apps/web/src/lib/types.ts#10"
           },
           {
-            "location": "apps/web/src/lib/types.ts#23"
+            "location": "apps/web/src/lib/types.ts#24"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/utils.ts#1"
@@ -8307,7 +8388,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-helpers.tsx#17"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#24"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#16"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#26"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-store.tsx#4"
@@ -8331,7 +8415,7 @@
         },
         {
           "name": "ExportedModules",
-          "value": "@stll/api/types,ChatAnonRestoration,@stll/api/types/ChatAnonRestoration,ChatMessage,@stll/api/types/ChatMessage,ChatPart,@stll/api/types/ChatPart,ChatUITools,@stll/api/types/ChatUITools,SafeId,@stll/api/types/SafeId,SafeIdType,@stll/api/types/SafeIdType,EntityKind,@stll/api/types/EntityKind,ViewFilterCondition,@stll/api/types/ViewFilterCondition,AgendaItemKind,@stll/api/types/AgendaItemKind,AgendaItemSource,@stll/api/types/AgendaItemSource,ViewLayout,@stll/api/types/ViewLayout,ViewLayoutType,@stll/api/types/ViewLayoutType"
+          "value": "@stll/api/types,ChatAnonRestoration,@stll/api/types/ChatAnonRestoration,ChatMessage,@stll/api/types/ChatMessage,ChatPart,@stll/api/types/ChatPart,ChatUITools,@stll/api/types/ChatUITools,SafeId,@stll/api/types/SafeId,SafeIdType,@stll/api/types/SafeIdType,EntityKind,@stll/api/types/EntityKind,ViewFilterCondition,@stll/api/types/ViewFilterCondition,AgendaItemKind,@stll/api/types/AgendaItemKind,AgendaItemSource,@stll/api/types/AgendaItemSource,ViewLayout,@stll/api/types/ViewLayout,ViewLayoutType,@stll/api/types/ViewLayoutType,ViewTemplateProperty,@stll/api/types/ViewTemplateProperty"
         }
       ],
       "purl": "pkg:npm/%40stll/api@0.0.0",
@@ -8601,6 +8685,12 @@
         "occurrences": [
           {
             "location": "apps/api/src/handlers/entities/create-from-legal-source.ts#4"
+          },
+          {
+            "location": "packages/folio/src/core/docx/modelValidation.ts#1"
+          },
+          {
+            "location": "packages/folio/src/core/docx/modelValidation.ts#5"
           }
         ]
       },
@@ -8796,7 +8886,7 @@
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#38"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#19"
+            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.impl.tsx#19"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/host.tsx#38"
@@ -8805,19 +8895,19 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#47"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#21"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#21"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#22"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#22"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#30"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#31"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#32"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#38"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#39"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-tab-panel.tsx#14"
@@ -9022,6 +9112,12 @@
           }
         ],
         "occurrences": [
+          {
+            "location": "apps/api/src/handlers/views/create.ts#4"
+          },
+          {
+            "location": "apps/api/src/handlers/views/update.ts#4"
+          },
           {
             "location": "apps/api/src/lib/api-handlers.ts#11"
           },
@@ -9396,7 +9492,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts#10"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#39"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#39"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#59"
@@ -9418,6 +9514,9 @@
           },
           {
             "location": "apps/web/src/router.tsx#10"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-web-search-toggle.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#27"
@@ -9573,7 +9672,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#35"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#47"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#48"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#22"
@@ -9588,7 +9687,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#45"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#46"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#47"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/docx-desktop-open-button.tsx#7"
@@ -9630,7 +9729,13 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#20"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#47"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog.tsx#19"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#38"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#49"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#39"
@@ -9681,7 +9786,7 @@
             "location": "apps/desktop/src/mainview/App.tsx#7"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#23"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#23"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#42"
@@ -9726,7 +9831,7 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#48"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#24"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#24"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#43"
@@ -9741,7 +9846,7 @@
             "location": "apps/web/src/components/chat/needs-matter-card.tsx#15"
           },
           {
-            "location": "apps/web/src/components/chat/tool-approval-card.tsx#14"
+            "location": "apps/web/src/components/chat/tool-approval-card.tsx#15"
           },
           {
             "location": "apps/web/src/components/chat-input-surface.tsx#7"
@@ -9780,13 +9885,16 @@
             "location": "apps/web/src/routes/_protected.chat/-components/chat-anonymized-toggle.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#9"
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#13"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-web-search-toggle.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#18"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/index.tsx#24"
+            "location": "apps/web/src/routes/_protected.chat/index.tsx#25"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/$contactId.tsx#13"
@@ -9954,7 +10062,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#20"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#39"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#40"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#8"
@@ -9966,7 +10074,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inline-edit.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#29"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#30"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#33"
@@ -10050,7 +10158,13 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-metadata.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#35"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#27"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#37"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters.tsx#15"
@@ -10158,7 +10272,7 @@
             "location": "apps/desktop/src/mainview/App.tsx#9"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#25"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#25"
           },
           {
             "location": "apps/web/src/components/search-dialog.tsx#29"
@@ -10311,6 +10425,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel.tsx#10"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#37"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/-components/create-matter-dialog.tsx#36"
           },
           {
@@ -10374,7 +10491,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/billing-codes-dialog.tsx#13"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#46"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#48"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/timesheets.tsx#21"
@@ -10395,19 +10512,22 @@
             "location": "apps/web/src/components/ai-elements/conversation.tsx#9"
           },
           {
-            "location": "apps/web/src/components/ai-elements/message.tsx#12"
+            "location": "apps/web/src/components/ai-elements/message-response.tsx#11"
+          },
+          {
+            "location": "apps/web/src/components/ai-elements/message.tsx#8"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#39"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#20"
+            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#3"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/host.tsx#55"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#40"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#40"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#60"
@@ -10440,13 +10560,16 @@
             "location": "apps/web/src/components/chat/source-chips.tsx#14"
           },
           {
-            "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#15"
+            "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#16"
           },
           {
-            "location": "apps/web/src/components/chat/tool-approval-card.tsx#15"
+            "location": "apps/web/src/components/chat/tool-approval-card.tsx#16"
           },
           {
             "location": "apps/web/src/components/chat/tool-call-card.tsx#21"
+          },
+          {
+            "location": "apps/web/src/components/chat/web-search-sources.tsx#4"
           },
           {
             "location": "apps/web/src/components/chat-input-surface.tsx#8"
@@ -10500,10 +10623,13 @@
             "location": "apps/web/src/routes/_protected.chat/-components/chat-anonymized-toggle.tsx#5"
           },
           {
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-web-search-toggle.tsx#7"
+          },
+          {
             "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#28"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/index.tsx#25"
+            "location": "apps/web/src/routes/_protected.chat/index.tsx#26"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx#42"
@@ -10596,9 +10722,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#36"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#48"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon.tsx#3"
           },
           {
@@ -10617,7 +10740,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/docx-desktop-open-button.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#19"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#37"
@@ -10707,7 +10830,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-subtasks.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#48"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#50"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#40"
@@ -10884,6 +11007,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input.tsx#17"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog.tsx#16"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx#35"
           },
           {
@@ -10911,7 +11037,7 @@
             "location": "apps/web/src/components/ai-config-role-model-picker.tsx#12"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#26"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#26"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#44"
@@ -11028,7 +11154,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#32"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#38"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#39"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#33"
@@ -11041,6 +11167,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog.tsx#18"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters.tsx#16"
@@ -11094,7 +11223,7 @@
             "location": "apps/web/src/components/ai-config-role-model-picker.tsx#19"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#38"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#38"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-owners-editor.tsx#11"
@@ -11139,7 +11268,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-form.tsx#17"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#46"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#47"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/field-value-select.tsx#9"
@@ -11181,6 +11310,9 @@
             "location": "packages/folio/src/components/ui/FontPicker.tsx#12"
           },
           {
+            "location": "packages/folio/src/components/ui/FontSizePicker.tsx#12"
+          },
+          {
             "location": "packages/folio/src/components/ui/StylePicker.tsx#16"
           },
           {
@@ -11196,7 +11328,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#37"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#38"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/-components/create-matter-dialog.tsx#24"
@@ -11232,7 +11364,7 @@
             "location": "packages/folio/src/components/ui/Tooltip.tsx#15"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#31"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#31"
           },
           {
             "location": "apps/web/src/components/breadcrumbs/workspace-breadcrumb.tsx#19"
@@ -11346,7 +11478,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#44"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#45"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#46"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-anchored-menu.tsx#4"
@@ -11370,7 +11502,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#43"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#45"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#47"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters.tsx#22"
@@ -11532,6 +11664,12 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/property-conditions.tsx#16"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog.tsx#15"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#36"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx#34"
           },
           {
@@ -11685,6 +11823,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#20"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog.tsx#17"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx#36"
           },
           {
@@ -11751,7 +11892,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#32"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#34"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#26"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#36"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx#32"
@@ -11846,7 +11990,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/ai-elements/message.tsx#6"
+            "location": "apps/web/src/components/ai-elements/message-response.tsx#6"
           }
         ]
       },
@@ -11902,7 +12046,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/ai-elements/message.tsx#7"
+            "location": "apps/web/src/components/ai-elements/message-response.tsx#7"
           }
         ]
       },
@@ -11958,7 +12102,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/ai-elements/message.tsx#8"
+            "location": "apps/web/src/components/ai-elements/message-response.tsx#8"
           }
         ]
       },
@@ -12537,6 +12681,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-mutations/time-entries.ts#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-mutations/view-templates.ts#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-mutations/views.ts#1"
           },
           {
@@ -12579,6 +12726,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/time-entries.ts#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/view-templates.ts#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/views.ts#1"
           },
           {
@@ -12600,7 +12750,7 @@
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#27"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#11"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#11"
           },
           {
             "location": "apps/web/src/components/api-version-mismatch-banner.tsx#3"
@@ -12687,13 +12837,16 @@
             "location": "apps/web/src/routes/__root.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#3"
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#7"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-web-search-toggle.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/index.tsx#8"
+            "location": "apps/web/src/routes/_protected.chat/index.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/$contactId.tsx#3"
@@ -12843,7 +12996,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#18"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/editable-field.tsx#15"
@@ -12864,7 +13017,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/document-ai-source-bar.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#11"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#11"
@@ -12922,6 +13075,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-metadata.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#8"
@@ -13182,13 +13338,16 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow.ts#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-mutations/view-templates.ts#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/workspace.ts#2"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#28"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#12"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#12"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#15"
@@ -13269,13 +13428,13 @@
             "location": "apps/web/src/routes/_protected.chat/$threadId.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#4"
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#8"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#14"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/index.tsx#14"
+            "location": "apps/web/src/routes/_protected.chat/index.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/new.tsx#1"
@@ -13413,7 +13572,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#19"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#17"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#19"
@@ -13459,6 +13618,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/entities/$entityId.tsx#1"
@@ -14831,6 +14993,12 @@
             "location": "apps/web/src/components/ai-elements/conversation.tsx#4"
           },
           {
+            "location": "apps/web/src/components/ai-elements/message-response.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/ai-elements/message-response.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/ai-elements/message.tsx#3"
           },
           {
@@ -14846,10 +15014,13 @@
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#25"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#16"
+            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.impl.tsx#16"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#17"
+            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.impl.tsx#17"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#1"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/host.tsx#17"
@@ -14858,10 +15029,13 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#18"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#8"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#8"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#9"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#9"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#1"
           },
           {
             "location": "apps/web/src/components/api-version-mismatch-banner.tsx#1"
@@ -15314,10 +15488,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#13"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#16"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#14"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell.tsx#1"
@@ -15513,6 +15687,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#1"
@@ -16057,6 +16237,9 @@
             "location": "apps/api/src/handlers/chat/tools/tool-policy.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/chat/tools/web-search-tools.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#2"
           },
           {
@@ -16111,7 +16294,7 @@
             "location": "apps/web/src/routes/_protected.chat/-queries.ts#8"
           },
           {
-            "location": "apps/web/src/components/ai-elements/message.tsx#9"
+            "location": "apps/web/src/components/ai-elements/message.tsx#6"
           },
           {
             "location": "apps/web/src/components/chat/ask-user-card.tsx#4"
@@ -16548,6 +16731,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/update-thread.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/upload-files.ts#3"
@@ -17114,6 +17300,15 @@
             "location": "apps/api/src/handlers/user-files/read-content.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/view-templates/create.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/view-templates/delete.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/view-templates/list.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/views/convert.ts#1"
           },
           {
@@ -17294,6 +17489,9 @@
             "location": "apps/api/src/lib/subprocess.ts#1"
           },
           {
+            "location": "apps/api/src/lib/web-search/types.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#4"
           },
           {
@@ -17378,6 +17576,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic.ts#1"
           },
           {
+            "location": "packages/docx-core/src/validate/docx.ts#1"
+          },
+          {
             "location": "packages/errors/src/index.ts#1"
           },
           {
@@ -17403,6 +17604,9 @@
           },
           {
             "location": "packages/folio/src/core/layout-painter/renderPage.ts#8"
+          },
+          {
+            "location": "packages/folio/src/core/prosemirror/attrs/index.ts#1"
           },
           {
             "location": "packages/folio/src/core/prosemirror/extensions/ExtensionManager.ts#9"
@@ -18546,6 +18750,9 @@
             "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#4"
           },
           {
+            "location": "apps/api/src/handlers/chat/update-thread.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/chat/upload-files.ts#4"
           },
           {
@@ -18813,6 +19020,9 @@
             "location": "apps/api/src/handlers/properties/delete-by-id.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/properties/property-lock.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/properties/update-by-id.ts#2"
           },
           {
@@ -18946,6 +19156,18 @@
           },
           {
             "location": "apps/api/src/handlers/verify/resolve-auth.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/view-templates/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/view-templates/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/view-templates/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/view-templates/properties.ts#2"
           },
           {
             "location": "apps/api/src/handlers/views/convert.ts#2"
@@ -19375,6 +19597,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/send-message.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/update-thread.ts#3"
           },
           {
             "location": "apps/api/src/handlers/clauses/categories-delete.ts#1"
@@ -20023,6 +20248,15 @@
           },
           {
             "location": "apps/api/src/handlers/verify/routes.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/view-templates/create.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/view-templates/delete.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/view-templates/routes.ts#1"
           },
           {
             "location": "apps/api/src/handlers/views/convert.ts#3"
@@ -20705,7 +20939,7 @@
             "location": "packages/docx-core/src/serialize/docx.ts#1"
           },
           {
-            "location": "packages/docx-core/src/validate/docx.ts#1"
+            "location": "packages/docx-core/src/validate/docx.ts#2"
           },
           {
             "location": "packages/docx-utils/src/zip.ts#1"
@@ -20788,7 +21022,7 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#27"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#18"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#18"
           },
           {
             "location": "apps/web/src/components/api-version-mismatch-banner.tsx#4"
@@ -20824,13 +21058,16 @@
             "location": "apps/web/src/components/chat/source-chips.tsx#7"
           },
           {
-            "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#12"
+            "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#13"
           },
           {
-            "location": "apps/web/src/components/chat/tool-approval-card.tsx#11"
+            "location": "apps/web/src/components/chat/tool-approval-card.tsx#12"
           },
           {
             "location": "apps/web/src/components/chat/tool-call-card.tsx#13"
+          },
+          {
+            "location": "apps/web/src/components/chat/web-search-sources.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat-input-surface.tsx#4"
@@ -20890,13 +21127,16 @@
             "location": "apps/web/src/routes/_protected.chat/-components/chat-anonymized-toggle.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#5"
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-web-search-toggle.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/index.tsx#21"
+            "location": "apps/web/src/routes/_protected.chat/index.tsx#22"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/$contactId.tsx#10"
@@ -21079,7 +21319,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/document-icon.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#27"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#24"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/drop-zone.tsx#9"
@@ -21100,7 +21340,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#29"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#26"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#27"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#27"
@@ -21112,7 +21352,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/docx-desktop-open-button.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#12"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#20"
@@ -21235,7 +21475,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-subtasks.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#21"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#13"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#23"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters.tsx#3"
@@ -22165,6 +22408,9 @@
             "location": "packages/folio/src/core/layout-bridge/toFlowBlocks.ts#8"
           },
           {
+            "location": "packages/folio/src/core/prosemirror/attrs/index.ts#2"
+          },
+          {
             "location": "packages/folio/src/core/prosemirror/commands/comments.ts#7"
           },
           {
@@ -22217,6 +22463,12 @@
           },
           {
             "location": "packages/folio/src/core/prosemirror/plugins/suggestionMode.ts#14"
+          },
+          {
+            "location": "packages/folio/src/core/prosemirror/selectionState.ts#7"
+          },
+          {
+            "location": "packages/folio/src/core/prosemirror/validation.ts#1"
           },
           {
             "location": "packages/folio/src/core/utils/headingCollector.ts#1"
@@ -22351,7 +22603,7 @@
             "location": "packages/folio/src/core/prosemirror/extensions/types.ts#12"
           },
           {
-            "location": "packages/folio/src/core/prosemirror/index.ts#43"
+            "location": "packages/folio/src/core/prosemirror/index.ts#54"
           },
           {
             "location": "packages/folio/src/core/prosemirror/plugins/aiCitationDecorations.ts#15"
@@ -22378,7 +22630,7 @@
             "location": "packages/folio/src/core/prosemirror/plugins/suggestionMode.ts#16"
           },
           {
-            "location": "packages/folio/src/core/prosemirror/selectionState.ts#7"
+            "location": "packages/folio/src/core/prosemirror/selectionState.ts#8"
           },
           {
             "location": "packages/folio/src/paged-editor/transactionDirtyRange.ts#1"
@@ -22515,6 +22767,9 @@
           },
           {
             "location": "packages/folio/src/core/prosemirror/extensions/features/ParagraphChangeTrackerExtension.ts#17"
+          },
+          {
+            "location": "packages/folio/src/paged-editor/transactionDirtyRange.ts#2"
           }
         ]
       },
@@ -22607,7 +22862,7 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#28"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#28"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#25"
           },
           {
             "location": "packages/folio/src/components/DocxEditor.tsx#34"
@@ -23129,6 +23384,12 @@
             "location": "apps/web/src/components/ai-elements/conversation.tsx#4"
           },
           {
+            "location": "apps/web/src/components/ai-elements/message-response.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/ai-elements/message-response.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/ai-elements/message.tsx#3"
           },
           {
@@ -23144,10 +23405,13 @@
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#25"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#16"
+            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.impl.tsx#16"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#17"
+            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.impl.tsx#17"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#1"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/host.tsx#17"
@@ -23156,10 +23420,13 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#18"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#8"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#8"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#9"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#9"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#1"
           },
           {
             "location": "apps/web/src/components/api-version-mismatch-banner.tsx#1"
@@ -23612,10 +23879,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#13"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#16"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#14"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell.tsx#1"
@@ -23811,6 +24078,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#1"
@@ -24256,7 +24529,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/ai-elements/message.tsx#10"
+            "location": "apps/web/src/components/ai-elements/message-response.tsx#9"
           },
           {
             "location": "apps/web/src/components/chat/ask-user-card.tsx#11"
@@ -24648,7 +24921,7 @@
             "location": "apps/web/src/components/ai-suggestions/host.tsx#29"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#19"
+            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#19"
           },
           {
             "location": "apps/web/src/components/api-version-mismatch-banner.tsx#5"
@@ -24684,13 +24957,16 @@
             "location": "apps/web/src/components/chat/prompt-suggestions.tsx#1"
           },
           {
-            "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#13"
+            "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#14"
           },
           {
-            "location": "apps/web/src/components/chat/tool-approval-card.tsx#12"
+            "location": "apps/web/src/components/chat/tool-approval-card.tsx#13"
           },
           {
             "location": "apps/web/src/components/chat/tool-call-card.tsx#14"
+          },
+          {
+            "location": "apps/web/src/components/chat/web-search-sources.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat-editor-provider.tsx#26"
@@ -24753,13 +25029,16 @@
             "location": "apps/web/src/routes/_protected.chat/-components/chat-anonymized-toggle.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#6"
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#10"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-web-search-toggle.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#16"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/index.tsx#22"
+            "location": "apps/web/src/routes/_protected.chat/index.tsx#23"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/$contactId.tsx#11"
@@ -25002,7 +25281,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#18"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#29"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#26"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/drop-zone.tsx#10"
@@ -25032,7 +25311,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-context-menu.tsx#16"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#27"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-facet.tsx#28"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/chat-tab-panel.tsx#28"
@@ -25044,7 +25323,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/docx-desktop-open-button.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#13"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/entity-metadata-panel.tsx#17"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#21"
@@ -25164,7 +25443,13 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-subtasks.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#22"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#14"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#24"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters.tsx#13"
@@ -25577,6 +25862,9 @@
             "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#4"
           },
           {
+            "location": "apps/api/src/handlers/chat/tools/web-search-tools.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#5"
           },
           {
@@ -25599,6 +25887,12 @@
           },
           {
             "location": "apps/api/src/lib/views-schema.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/web-search/tavily.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/web-search/types.ts#2"
           },
           {
             "location": "apps/api/src/lib/workflow/ai-prompts.ts#1"
@@ -25922,6 +26216,12 @@
             "location": "apps/web/src/lib/chat-draft-store.ts#2"
           },
           {
+            "location": "apps/web/src/lib/chat-web-search-store.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/chat-web-search-store.ts#2"
+          },
+          {
             "location": "apps/web/src/lib/dev-store.ts#1"
           },
           {
@@ -26076,6 +26376,9 @@
           },
           {
             "location": "apps/web/src/lib/chat-anonymized-store.ts#2"
+          },
+          {
+            "location": "apps/web/src/lib/chat-web-search-store.ts#2"
           },
           {
             "location": "apps/web/src/lib/dev-store.ts#2"
