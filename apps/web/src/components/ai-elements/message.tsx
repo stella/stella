@@ -79,7 +79,7 @@ const LazyMessageResponse = lazy(async () => {
 // rename of `SKILL_REF_HASH_PREFIX` invalidates this matcher at
 // compile time instead of silently leaving raw markdown to flash.
 const SKILL_LINK_RE = new RegExp(
-  `\\[([^\\]]+)]\\(${SKILL_REF_HASH_PREFIX.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}([^)]+)\\)`,
+  `\\[([^\\]]+)\\]\\(${SKILL_REF_HASH_PREFIX.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}([^)]+)\\)`,
   "gu",
 );
 
