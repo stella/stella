@@ -14,7 +14,7 @@
  */
 
 import type { ReactNode, RefObject } from "react";
-import { useState } from "react";
+import { startTransition, useState } from "react";
 
 import type { DocxEditorRef } from "@stll/folio";
 
@@ -99,7 +99,13 @@ export const FileChatOverlayHost = ({
     if (activeFile) {
       useReviewStore.getState().resetSession(activeFile.entityId);
     }
-    setCurrentChatThreadId(createChatThreadId());
+    // Wrap the swap in a transition so React keeps the current chat
+    // visible while `chatThreadOptions` suspends on the new key,
+    // instead of unmounting back to the Suspense spinner. The fresh
+    // thread snaps in atomically once its (empty) state is ready.
+    startTransition(() => {
+      setCurrentChatThreadId(createChatThreadId());
+    });
   };
 
   return (

@@ -658,6 +658,14 @@ const FileChatOverlayInner = ({
     if (editorReady || !hasDocxEditSurface) {
       return undefined;
     }
+    // Un-defer the hidden editor view. Without this, opening a doc and
+    // going straight to the chat composer (never clicking into the
+    // body) leaves the view null forever, so `createAIEditSnapshot()`
+    // never returns and the composer stays on "Loading editor". The
+    // first call here is a no-op for `pagedEditorRef.current`-null
+    // races; the 80 ms poller below retries `createAIEditSnapshot`
+    // until createView() commits.
+    docxEditorRef.current?.ensureEditorView();
     const probe = () => {
       if (docxEditorRef.current?.createAIEditSnapshot()) {
         setEditorReady(true);
@@ -857,6 +865,33 @@ const FileChatOverlayInner = ({
     placeholder: filePlaceholder,
     threadRef,
   });
+  // Focus the composer when the user explicitly starts a new thread,
+  // so they can type the first message without an extra click. The
+  // initial mount is skipped (entering the document should not steal
+  // focus from whatever the user was doing).
+  const previousChatThreadIdRef = useRef(chatThreadId);
+  const focusController = editorController.focus;
+  const editorInstance = editorController.editor;
+  useEffect(() => {
+    if (previousChatThreadIdRef.current === chatThreadId) {
+      return undefined;
+    }
+    if (!editorInstance || editorInstance.isDestroyed) {
+      // The TipTap editor for the new thread isn't mounted yet; wait
+      // for the next render to retry (this effect re-runs when
+      // `editorInstance` becomes non-null).
+      return undefined;
+    }
+    previousChatThreadIdRef.current = chatThreadId;
+    // rAF lets TipTap's DOM finish settling so `focus()` lands; without
+    // this, focus is silently dropped on the just-remounted instance.
+    const id = requestAnimationFrame(() => {
+      focusController();
+    });
+    return () => {
+      cancelAnimationFrame(id);
+    };
+  }, [chatThreadId, editorInstance, focusController]);
   const canSubmitWithCurrentDocxSnapshot = useEffectEvent(() => {
     if (!hasDocxEditSurface) {
       return true;

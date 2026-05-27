@@ -292,6 +292,12 @@ export type PagedEditorRef = {
   getState(): EditorState | null;
   /** Get the ProseMirror EditorView. */
   getView(): EditorView | null;
+  /**
+   * Force-create the hidden editor view if it has been deferred.
+   * Use from surfaces that need a live view before any user
+   * interaction (e.g. AI chat reading a snapshot of the doc).
+   */
+  ensureView(): void;
   /** Focus the editor. */
   focus(): void;
   /** Blur the editor. */
@@ -5720,6 +5726,9 @@ export function PagedEditor(
       getView() {
         return hiddenPMRef.current?.getView() ?? null;
       },
+      ensureView() {
+        ensureHiddenEditorView({ sync: true });
+      },
       focus() {
         hiddenPMRef.current?.focus();
         setIsFocused(true);
@@ -5761,7 +5770,13 @@ export function PagedEditor(
       scrollToPosition: scrollToPositionImpl,
       scrollToPage: scrollToPageImpl,
     }),
-    [layout, runLayoutPipeline, scrollToPageImpl, scrollToPositionImpl],
+    [
+      ensureHiddenEditorView,
+      layout,
+      runLayoutPipeline,
+      scrollToPageImpl,
+      scrollToPositionImpl,
+    ],
   );
 
   useEffect(() => {
