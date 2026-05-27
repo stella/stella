@@ -877,10 +877,15 @@ const FileChatOverlayInner = ({
   // initial mount is skipped (entering the document should not steal
   // focus from whatever the user was doing).
   const previousChatThreadIdRef = useRef(chatThreadId);
+  const shouldFocusComposerAfterNewThreadRef = useRef(false);
   const focusController = editorController.focus;
   const editorInstance = editorController.editor;
   useEffect(() => {
     if (previousChatThreadIdRef.current === chatThreadId) {
+      return undefined;
+    }
+    if (!shouldFocusComposerAfterNewThreadRef.current) {
+      previousChatThreadIdRef.current = chatThreadId;
       return undefined;
     }
     if (!editorInstance || editorInstance.isDestroyed) {
@@ -890,6 +895,7 @@ const FileChatOverlayInner = ({
       return undefined;
     }
     previousChatThreadIdRef.current = chatThreadId;
+    shouldFocusComposerAfterNewThreadRef.current = false;
     // rAF lets TipTap's DOM finish settling so `focus()` lands; without
     // this, focus is silently dropped on the just-remounted instance.
     // Re-check the editor inside the callback — between scheduling and
@@ -1065,6 +1071,7 @@ const FileChatOverlayInner = ({
           layout="floating"
           newThreadLabel={t("chat.newChat")}
           onNewThread={() => {
+            shouldFocusComposerAfterNewThreadRef.current = true;
             setPanelOpen(false);
             onNewThread();
           }}
