@@ -653,11 +653,21 @@ const FileChatOverlayInner = ({
   // with "editor is loading" instead of doing real work. Poll until
   // the first non-null snapshot lands, then stop — once ready stays
   // ready for the lifetime of the editor.
-  const [editorReady, setEditorReady] = useState(false);
+  // Initialize from the ref so a transition-induced remount of an
+  // already-ready editor starts ready (without this, useTransition's
+  // Suspense swap unmounts + remounts this subtree with fresh state,
+  // and the poller racing with a second rerender can leave the gate
+  // stuck closed even though the underlying view is live).
+  const [editorReady, setEditorReady] = useState(() =>
+    Boolean(docxEditorRef?.current?.createAIEditSnapshot()),
+  );
   useEffect(() => {
     if (editorReady || !hasDocxEditSurface) {
       return undefined;
     }
+    const ensure = () =>
+      docxEditorRef.current?.ensureEditorView({ focus: false });
+    ensure();
     const probe = () => {
       if (docxEditorRef.current?.createAIEditSnapshot()) {
         setEditorReady(true);
@@ -669,6 +679,11 @@ const FileChatOverlayInner = ({
       return undefined;
     }
     const id = window.setInterval(() => {
+      // Re-call ensure on each tick: when the surrounding tree is in
+      // a concurrent transition (e.g. right after the "new chat" swap),
+      // the first ensure can be coalesced away by React's batching.
+      // The state setter is a no-op once the view is already created.
+      ensure();
       if (probe()) {
         window.clearInterval(id);
       }
@@ -857,6 +872,45 @@ const FileChatOverlayInner = ({
     placeholder: filePlaceholder,
     threadRef,
   });
+  // Focus the composer when the user explicitly starts a new thread,
+  // so they can type the first message without an extra click. The
+  // initial mount is skipped (entering the document should not steal
+  // focus from whatever the user was doing).
+  const previousChatThreadIdRef = useRef(chatThreadId);
+  const shouldFocusComposerAfterNewThreadRef = useRef(false);
+  const focusController = editorController.focus;
+  const editorInstance = editorController.editor;
+  useEffect(() => {
+    if (previousChatThreadIdRef.current === chatThreadId) {
+      return undefined;
+    }
+    if (!shouldFocusComposerAfterNewThreadRef.current) {
+      previousChatThreadIdRef.current = chatThreadId;
+      return undefined;
+    }
+    if (!editorInstance || editorInstance.isDestroyed) {
+      // The TipTap editor for the new thread isn't mounted yet; wait
+      // for the next render to retry (this effect re-runs when
+      // `editorInstance` becomes non-null).
+      return undefined;
+    }
+    previousChatThreadIdRef.current = chatThreadId;
+    shouldFocusComposerAfterNewThreadRef.current = false;
+    // rAF lets TipTap's DOM finish settling so `focus()` lands; without
+    // this, focus is silently dropped on the just-remounted instance.
+    // Re-check the editor inside the callback — between scheduling and
+    // firing, the user might have closed the overlay or swapped threads
+    // again, destroying the instance we captured.
+    const id = requestAnimationFrame(() => {
+      if (editorInstance.isDestroyed) {
+        return;
+      }
+      focusController();
+    });
+    return () => {
+      cancelAnimationFrame(id);
+    };
+  }, [chatThreadId, editorInstance, focusController]);
   const canSubmitWithCurrentDocxSnapshot = useEffectEvent(() => {
     if (!hasDocxEditSurface) {
       return true;
@@ -1017,6 +1071,7 @@ const FileChatOverlayInner = ({
           layout="floating"
           newThreadLabel={t("chat.newChat")}
           onNewThread={() => {
+            shouldFocusComposerAfterNewThreadRef.current = true;
             setPanelOpen(false);
             onNewThread();
           }}

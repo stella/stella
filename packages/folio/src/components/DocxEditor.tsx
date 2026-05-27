@@ -2517,6 +2517,9 @@ export function DocxEditor({
       print: handleDirectPrint,
       loadDocument: loadParsedDocument,
       loadDocumentBuffer: loadBuffer,
+      ensureEditorView: (options?: { focus?: boolean }) => {
+        pagedEditorRef.current?.ensureView(options);
+      },
       createAIEditSnapshot: () => {
         const view = pagedEditorRef.current?.getView();
         return view ? createFolioAIEditSnapshot(view.state.doc) : null;

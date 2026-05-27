@@ -475,6 +475,7 @@ export function FormattingBar(props: FormattingBarProps) {
       role="toolbar"
       aria-label={t("formattingToolbar")}
       tabIndex={-1}
+      data-folio-toolbar="true"
       onMouseDown={inline ? undefined : handleBarMouseDown}
       onMouseUp={inline ? undefined : handleBarMouseUp}
     >

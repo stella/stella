@@ -166,6 +166,7 @@ import { isReadOnlyEditKey } from "./readOnlyEditAttempt";
 import {
   getPageScrollTarget,
   isValidPmScrollPosition,
+  prefersReducedMotionBehavior,
 } from "./scrollNavigation";
 import { computePerBlockWidths } from "./sectionBlockWidths";
 import { SelectionOverlay } from "./SelectionOverlay";
@@ -292,6 +293,12 @@ export type PagedEditorRef = {
   getState(): EditorState | null;
   /** Get the ProseMirror EditorView. */
   getView(): EditorView | null;
+  /**
+   * Force-create the hidden editor view if it has been deferred.
+   * Use from surfaces that need a live view before any user
+   * interaction (e.g. AI chat reading a snapshot of the doc).
+   */
+  ensureView(options?: { focus?: boolean }): void;
   /** Focus the editor. */
   focus(): void;
   /** Blur the editor. */
@@ -329,6 +336,7 @@ type QueuedHiddenEditorInput =
   | { type: "keydown"; eventInit: KeyboardEventInit };
 
 type EnsureHiddenEditorViewOptions = {
+  focus?: boolean;
   sync?: boolean;
 };
 
@@ -2136,6 +2144,7 @@ export function PagedEditor(
   const [measures, setMeasures] = useState<Measure[]>([]);
   const [shouldCreateHiddenEditorView, setShouldCreateHiddenEditorView] =
     useState(() => collaboration !== undefined);
+  const shouldFocusHiddenEditorOnReadyRef = useRef(collaboration !== undefined);
   const [precomputedInitialState, setPrecomputedInitialState] =
     useState<EditorState | null>(null);
   const layoutArtifactsRef = useRef<{
@@ -2211,7 +2220,16 @@ export function PagedEditor(
   const dragAnchorRef = useRef<number | null>(null);
 
   const ensureHiddenEditorView = useCallback(
-    ({ sync = false }: EnsureHiddenEditorViewOptions = {}) => {
+    ({ focus = true, sync = false }: EnsureHiddenEditorViewOptions = {}) => {
+      if (focus) {
+        shouldFocusHiddenEditorOnReadyRef.current = true;
+      } else if (
+        !shouldCreateHiddenEditorView &&
+        !hiddenPMRef.current?.getView()
+      ) {
+        shouldFocusHiddenEditorOnReadyRef.current = false;
+      }
+
       if (sync) {
         flushSync(() => {
           setShouldCreateHiddenEditorView(true);
@@ -2221,7 +2239,7 @@ export function PagedEditor(
 
       setShouldCreateHiddenEditorView(true);
     },
-    [],
+    [shouldCreateHiddenEditorView],
   );
 
   const queueHiddenEditorSelection = useCallback(
@@ -3803,7 +3821,10 @@ export function PagedEditor(
     // instead of jumping straight to the target.
     const exact = findBodyPmAnchor(pageContainer, pmPos);
     if (exact) {
-      exact.scrollIntoView({ behavior: "smooth", block: "center" });
+      exact.scrollIntoView({
+        behavior: prefersReducedMotionBehavior(),
+        block: "center",
+      });
       return;
     }
 
@@ -3824,7 +3845,10 @@ export function PagedEditor(
       }
     }
     if (runMatch) {
-      runMatch.scrollIntoView({ behavior: "smooth", block: "center" });
+      runMatch.scrollIntoView({
+        behavior: prefersReducedMotionBehavior(),
+        block: "center",
+      });
       return;
     }
 
@@ -3843,14 +3867,20 @@ export function PagedEditor(
       return;
     }
     const { element: shell } = shellHit;
-    shell.scrollIntoView({ behavior: "smooth", block: "center" });
+    shell.scrollIntoView({
+      behavior: prefersReducedMotionBehavior(),
+      block: "center",
+    });
 
     let attempts = 0;
     const refine = () => {
       attempts++;
       const exactInShell = findBodyPmAnchor(shell, pmPos);
       if (exactInShell) {
-        exactInShell.scrollIntoView({ behavior: "smooth", block: "center" });
+        exactInShell.scrollIntoView({
+          behavior: prefersReducedMotionBehavior(),
+          block: "center",
+        });
         return;
       }
       let bestEl: HTMLElement | null = null;
@@ -3872,7 +3902,10 @@ export function PagedEditor(
         }
       }
       if (bestEl) {
-        bestEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        bestEl.scrollIntoView({
+          behavior: prefersReducedMotionBehavior(),
+          block: "center",
+        });
         return;
       }
       // IntersectionObserver populates on the next tick; give it
@@ -5086,10 +5119,14 @@ export function PagedEditor(
     if (relatedTarget && containerRef.current?.contains(relatedTarget)) {
       return; // Focus staying within editor
     }
-    // Keep selection visible when focus moves to toolbar or dropdown portals
+    // Keep selection visible when focus moves to the editor's own
+    // formatting toolbar or dropdown portals. Use `[data-folio-toolbar]`
+    // (not `[role="toolbar"]`) so the AI chat composer — which uses
+    // `role="toolbar"` for accessibility — does NOT count as "still in
+    // the editor" and the caret correctly hides when typing in chat.
     if (
       relatedTarget?.closest(
-        '[role="toolbar"], [data-radix-popper-content-wrapper], [data-radix-select-content], .docx-table-options-dropdown',
+        '[data-folio-toolbar="true"], [data-radix-popper-content-wrapper], [data-radix-select-content], .docx-table-options-dropdown',
       )
     ) {
       return;
@@ -5493,13 +5530,19 @@ export function PagedEditor(
         anonymizationDecorationsKey.getState(view.state)?.matches ?? [];
 
       const focusReadyView = () => {
-        if (!readOnly) {
-          requestAnimationFrame(() => {
-            applyPendingHiddenEditorInput(view);
-            view.focus();
-            setIsFocused(true);
-          });
+        if (readOnly || !shouldFocusHiddenEditorOnReadyRef.current) {
+          return;
         }
+
+        requestAnimationFrame(() => {
+          if (hiddenPMRef.current?.getView() !== view) {
+            return;
+          }
+
+          applyPendingHiddenEditorInput(view);
+          view.focus();
+          setIsFocused(true);
+        });
       };
 
       if (lastLaidOutPmDocRef.current?.eq(view.state.doc)) {
@@ -5720,6 +5763,15 @@ export function PagedEditor(
       getView() {
         return hiddenPMRef.current?.getView() ?? null;
       },
+      ensureView(options?: { focus?: boolean }) {
+        // Async (no flushSync) so this is safe to call from a consumer's
+        // useEffect during a concurrent render — flushSync inside a
+        // commit-phase effect throws "flushSync was called from inside
+        // a lifecycle method". The state setter still schedules a
+        // re-render that runs createView in the next layout effect;
+        // callers that need the view immediately can poll.
+        ensureHiddenEditorView(options);
+      },
       focus() {
         hiddenPMRef.current?.focus();
         setIsFocused(true);
@@ -5761,7 +5813,13 @@ export function PagedEditor(
       scrollToPosition: scrollToPositionImpl,
       scrollToPage: scrollToPageImpl,
     }),
-    [layout, runLayoutPipeline, scrollToPageImpl, scrollToPositionImpl],
+    [
+      ensureHiddenEditorView,
+      layout,
+      runLayoutPipeline,
+      scrollToPageImpl,
+      scrollToPositionImpl,
+    ],
   );
 
   useEffect(() => {
