@@ -476,7 +476,9 @@ describe("Folio AI edit operations", () => {
         {
           id: "op-1",
           type: "insertAfterBlock",
-          blockId: "b-0001",
+          // Source paragraph carries `paraId: "para-source"`, so the
+          // snapshot keys it as `b-para-source` (paraId-anchored).
+          blockId: "b-para-source",
           text: "Inherited follow-up.",
           inheritFormatting: true,
         },

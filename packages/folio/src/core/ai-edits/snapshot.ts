@@ -49,7 +49,20 @@ export const createFolioAIEditSnapshot = (doc: PMNode): FolioAIEditSnapshot => {
     const textHash = hashFolioAIBlockText(normalizedText);
     hashCounts.set(textHash, (hashCounts.get(textHash) ?? 0) + 1);
 
-    const id = `b-${String(++blockIndex).padStart(4, "0")}`;
+    // Prefer the paragraph's Word `w14:paraId` (allocated by
+    // `ParaIdAllocatorExtension` if the parsed DOCX didn't have one)
+    // so block ids are STABLE across edits and across separate
+    // snapshots. Fall back to a sequential ordinal id only for the
+    // pre-allocator case (e.g. a snapshot taken before the editor's
+    // first allocation pass, or a non-paragraph textblock that the
+    // allocator skips); the prefix `b-` is preserved either way so
+    // chip parsers (`#folio:b-…`) keep working.
+    blockIndex++;
+    const paraIdAttr: unknown = node.attrs["paraId"];
+    const id =
+      typeof paraIdAttr === "string" && paraIdAttr.length > 0
+        ? `b-${paraIdAttr}`
+        : `b-${String(blockIndex).padStart(4, "0")}`;
     const kind = getBlockKind(node);
     const displayLabel = getDisplayLabel(node);
     const previewRuns = getPreviewRuns(node);
