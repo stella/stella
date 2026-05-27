@@ -311,6 +311,10 @@ export type PagedEditorRef = {
   scrollToPosition(pmPos: number): void;
   /** Scroll the visible pages to bring a page into view. */
   scrollToPage(pageNumber: number): void;
+  /** Resolve the page number (1-indexed) that contains the given PM position,
+   *  or null if no layout is available yet. Works for unrendered pages too via
+   *  the page shell map. */
+  getPageNumberForPmPos(pmPos: number): number | null;
 };
 
 // =============================================================================
@@ -4702,6 +4706,65 @@ export function PagedEditor(
       },
       scrollToPosition: scrollToPositionImpl,
       scrollToPage: scrollToPageImpl,
+      getPageNumberForPmPos(pmPos) {
+        const container = pagesContainerRef.current;
+        if (!container) {
+          return null;
+        }
+        // Fast path: virtualised docs keep a pm-to-shell map.
+        const hit = findPageShellForPmPos(container, pmPos);
+        if (hit) {
+          const raw = hit.element.dataset["pageNumber"];
+          const parsed = raw === undefined ? Number.NaN : Number(raw);
+          if (Number.isFinite(parsed)) {
+            return parsed;
+          }
+        }
+        // Fallback for non-virtualised docs (< 8 pages): every page is in the
+        // DOM eagerly, so scan shells and find the one whose pm range covers
+        // the target.
+        const shells =
+          container.querySelectorAll<HTMLElement>("[data-page-number]");
+        let bestNumber: number | null = null;
+        let bestStart = Number.NEGATIVE_INFINITY;
+        for (const shell of shells) {
+          const anchors =
+            shell.querySelectorAll<HTMLElement>("[data-pm-start]");
+          if (anchors.length === 0) {
+            continue;
+          }
+          let pageStart = Number.POSITIVE_INFINITY;
+          let pageEnd = Number.NEGATIVE_INFINITY;
+          for (const el of anchors) {
+            const pm = Number(el.dataset["pmStart"]);
+            if (!Number.isFinite(pm)) {
+              continue;
+            }
+            if (pm < pageStart) {
+              pageStart = pm;
+            }
+            if (pm > pageEnd) {
+              pageEnd = pm;
+            }
+          }
+          if (pageStart === Number.POSITIVE_INFINITY) {
+            continue;
+          }
+          const raw = shell.dataset["pageNumber"];
+          const parsed = raw === undefined ? Number.NaN : Number(raw);
+          if (!Number.isFinite(parsed)) {
+            continue;
+          }
+          if (pageStart <= pmPos && pmPos <= pageEnd) {
+            return parsed;
+          }
+          if (pageStart <= pmPos && pageStart > bestStart) {
+            bestStart = pageStart;
+            bestNumber = parsed;
+          }
+        }
+        return bestNumber;
+      },
     }),
     [layout, runLayoutPipeline, scrollToPageImpl, scrollToPositionImpl],
   );

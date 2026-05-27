@@ -238,8 +238,6 @@ export const FileTabPanel = ({
         <InspectorTabHeader
           actions={
             <>
-              {downloadButton}
-              {desktopOpenButton}
               <Tooltip
                 content={t("workspaces.pdf.backToPeek")}
                 render={

@@ -787,3 +787,22 @@
       transparent
     );
 }
+
+/* Brief flash when a heading is jumped to from the document outline rail. */
+@keyframes folio-outline-flash {
+  0% {
+    background-color: color-mix(
+      in oklch,
+      var(--color-primary, oklch(0.6 0.2 24)) 18%,
+      transparent
+    );
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.layout-page-content [data-folio-outline-flash] {
+  animation: folio-outline-flash 1.2s ease-out;
+  border-radius: 2px;
+}

@@ -184,6 +184,7 @@ import type { TrackedChangeEntry } from "./CommentsSidebar";
 import type { FindMatch } from "./dialogs/findReplaceUtils";
 import type { ImagePropertiesData } from "./dialogs/ImagePropertiesDialog";
 import { useFindReplace as useFindReplaceState } from "./dialogs/useFindReplace";
+import { DocumentOutline } from "./DocumentOutline";
 import type {
   DocxEditorProps,
   DocxEditorRef,
@@ -419,7 +420,7 @@ export function DocxEditor({
   preserveDocumentWhileLoading = false,
   initialScrollTop,
   onScrollTopChange,
-  showOutline: showOutlineProp = false,
+  showOutline: showOutlineProp = true,
   onPrint,
   onCopy: _onCopy,
   onCut: _onCut,
@@ -459,7 +460,7 @@ export function DocxEditor({
   const [showOutline, setShowOutline] = useState(showOutlineProp);
   const showOutlineRef = useRef(false);
   showOutlineRef.current = showOutline;
-  const [_outlineHeadings, setHeadingInfos] = useState<HeadingInfo[]>([]);
+  const [outlineHeadings, setHeadingInfos] = useState<HeadingInfo[]>([]);
 
   // Comments sidebar state
   const [showCommentsSidebar, setShowCommentsSidebar] = useState(false);
@@ -508,6 +509,12 @@ export function DocxEditor({
   const extractTrackedChangesTimerRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
+
+  // Debounce timer for collectHeadings — same reasoning as tracked changes:
+  // a doc-wide descend on every keystroke stalls typing on large documents.
+  const collectHeadingsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   // Extract tracked changes from ProseMirror state
   const extractTrackedChanges = useCallback(() => {
@@ -564,11 +571,14 @@ export function DocxEditor({
     setTrackedChanges(merged);
   }, []);
 
-  // Clean up debounce timer on unmount
+  // Clean up debounce timers on unmount
   useEffect(
     () => () => {
       if (extractTrackedChangesTimerRef.current) {
         clearTimeout(extractTrackedChangesTimerRef.current);
+      }
+      if (collectHeadingsTimerRef.current) {
+        clearTimeout(collectHeadingsTimerRef.current);
       }
     },
     [],
@@ -577,12 +587,6 @@ export function DocxEditor({
   // Sync outline visibility when prop changes
   useEffect(() => {
     setShowOutline(showOutlineProp);
-    if (showOutlineProp) {
-      const view = pagedEditorRef.current?.getView();
-      if (view) {
-        setHeadingInfos(collectHeadings(view.state.doc));
-      }
-    }
   }, [showOutlineProp]);
 
   // History hook for undo/redo - start with null document
@@ -767,6 +771,54 @@ export function DocxEditor({
     };
   }, [onEditorViewReady]);
 
+  // Refresh outline headings when the document loads or the outline is enabled.
+  // handleDocumentChange keeps it in sync after subsequent edits. Page-number
+  // resolution depends on the paged layout having run at least once, so we
+  // retry briefly until every heading has a page or we give up.
+  useEffect(() => {
+    if (!showOutline) {
+      return;
+    }
+    const view = pagedEditorRef.current?.getView();
+    if (!view) {
+      return;
+    }
+    const headings = collectHeadings(view.state.doc);
+    setHeadingInfos(headings);
+
+    let attempts = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const fill = () => {
+      attempts++;
+      const pagedRef = pagedEditorRef.current;
+      if (!pagedRef) {
+        return;
+      }
+      let unresolved = false;
+      for (const heading of headings) {
+        if (heading.pageNumber == null) {
+          const page = pagedRef.getPageNumberForPmPos(heading.pmPos);
+          if (page !== null) {
+            heading.pageNumber = page;
+          } else {
+            unresolved = true;
+          }
+        }
+      }
+      // Push a fresh array so React picks up the mutated entries.
+      setHeadingInfos([...headings]);
+      if (unresolved && attempts < 10) {
+        timer = setTimeout(fill, 300);
+      }
+    };
+    timer = setTimeout(fill, 100);
+    return () => {
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [showOutline, history.state]);
+
   // Refs
   const pagedEditorRef = useRef<PagedEditorRef>(null);
   const hfEditorRef = useRef<InlineHeaderFooterEditorRef>(null);
@@ -784,7 +836,7 @@ export function DocxEditor({
   } = useContextMenu({ pagedEditorRef });
   const toolbarWrapperRef = useRef<HTMLDivElement>(null);
   const toolbarRoRef = useRef<ResizeObserver | null>(null);
-  const [_toolbarHeight, setToolbarHeight] = useState(0);
+  const [toolbarHeight, setToolbarHeight] = useState(0);
   // Keep history.state accessible in stable callbacks without stale closures
   const historyStateRef = useRef(history.state);
   historyStateRef.current = history.state;
@@ -1135,12 +1187,24 @@ export function DocxEditor({
       documentWithComments.package.document.comments = currentComments;
       pushDocument(documentWithComments);
       onChange?.(documentWithComments);
-      // Update outline headings if sidebar is open
+      // Update outline headings if sidebar is open (debounced — collectHeadings
+      // descends the whole doc, expensive on large files).
       if (showOutlineRef.current) {
-        const view = pagedEditorRef.current?.getView();
-        if (view) {
-          setHeadingInfos(collectHeadings(view.state.doc));
+        if (collectHeadingsTimerRef.current) {
+          clearTimeout(collectHeadingsTimerRef.current);
         }
+        collectHeadingsTimerRef.current = setTimeout(() => {
+          const view = pagedEditorRef.current?.getView();
+          if (view) {
+            const headings = collectHeadings(view.state.doc);
+            const pagedRef = pagedEditorRef.current;
+            for (const heading of headings) {
+              heading.pageNumber =
+                pagedRef?.getPageNumberForPmPos(heading.pmPos) ?? null;
+            }
+            setHeadingInfos(headings);
+          }
+        }, 400);
       }
       // Re-extract tracked changes after document change (debounced to avoid
       // full-document walk on every keystroke in suggestion mode)
@@ -3484,7 +3548,44 @@ export function DocxEditor({
               )}
 
               {/* Document outline sidebar — absolutely positioned, doesn't scroll */}
-              {/* Document outline and comments sidebar provided by host app */}
+              {showOutline && outlineHeadings.length > 1 && (
+                <DocumentOutline
+                  headings={outlineHeadings}
+                  scrollContainerRef={scrollContainerRef}
+                  topOffset={toolbarHeight}
+                  docSize={
+                    pagedEditorRef.current?.getView()?.state.doc.content.size ??
+                    0
+                  }
+                  onHeadingClick={(pmPos) => {
+                    pagedEditorRef.current?.scrollToPosition(pmPos);
+                    // Wait for the paged editor to mount the target paragraph
+                    // (smooth-scroll + virtualisation buffer warm-up), then
+                    // trigger the CSS flash animation.
+                    let attempts = 0;
+                    const flash = () => {
+                      attempts++;
+                      const container = scrollContainerRef.current;
+                      if (!container) {
+                        return;
+                      }
+                      const el = container.querySelector<HTMLElement>(
+                        `.layout-page-content [data-pm-start="${String(pmPos)}"]`,
+                      );
+                      if (el) {
+                        delete el.dataset["folioOutlineFlash"];
+                        void el.offsetWidth;
+                        el.dataset["folioOutlineFlash"] = "";
+                        return;
+                      }
+                      if (attempts < 30) {
+                        requestAnimationFrame(flash);
+                      }
+                    };
+                    requestAnimationFrame(flash);
+                  }}
+                />
+              )}
             </div>
             {/* end wrapper for scroll container + outline */}
           </div>

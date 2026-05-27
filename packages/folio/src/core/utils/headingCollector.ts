@@ -10,6 +10,8 @@ export type HeadingInfo = {
   level: number;
   /** ProseMirror document position of the paragraph node */
   pmPos: number;
+  /** 1-indexed page number, filled in by the editor once layout is known. */
+  pageNumber?: number | null;
 };
 
 /**

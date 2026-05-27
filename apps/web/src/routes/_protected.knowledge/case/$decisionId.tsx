@@ -8,6 +8,7 @@ import * as v from "valibot";
 import { useShallow } from "zustand/react/shallow";
 
 import { parseDocumentAst } from "@stll/case-law/document-ast";
+import { ScrollMarkers } from "@stll/ui/components/scroll-markers";
 
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { useCaseSearchStore } from "@/lib/case-search-store";
@@ -17,10 +18,10 @@ import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 import { optionalSearchStringSchema } from "@/lib/schema";
 import { MarginNotes } from "@/routes/_protected.knowledge/case/-components/case-viewer/analysis/margin-notes";
-import { ScrollMarkers } from "@/routes/_protected.knowledge/case/-components/case-viewer/analysis/scroll-markers";
 import {
   buildSectionMap,
   flattenAnalysisHeadings,
+  getCategoryVar,
 } from "@/routes/_protected.knowledge/case/-components/case-viewer/analysis/types";
 import { useDecisionAnalysis } from "@/routes/_protected.knowledge/case/-components/case-viewer/analysis/use-decision-analysis";
 import { DecisionText } from "@/routes/_protected.knowledge/case/-components/case-viewer/decision-text";
@@ -200,13 +201,42 @@ function DecisionViewer() {
       <div className="relative min-h-0 flex-1">
         {hasAnalysis && analysisTree.length > 0 && (
           <ScrollMarkers
-            headings={flatAnalysisHeadings.map((heading) => ({
+            markers={flatAnalysisHeadings.map((heading) => ({
               id: heading.id,
               label: heading.label,
-              startAnchorId: getHeadingDisplayAnchorId(heading),
-              category: heading.category,
+              cssVar: getCategoryVar(heading.category),
+              anchorId: getHeadingDisplayAnchorId(heading),
             }))}
             scrollContainerRef={mainRef}
+            resolveTop={(marker, container) => {
+              const el = container.querySelector<HTMLElement>(
+                `#${CSS.escape(marker.anchorId)}`,
+              );
+              if (!el) {
+                return null;
+              }
+              return (
+                el.getBoundingClientRect().top -
+                container.getBoundingClientRect().top +
+                container.scrollTop
+              );
+            }}
+            onMarkerClick={(marker, container) => {
+              const el = container.querySelector<HTMLElement>(
+                `#${CSS.escape(marker.anchorId)}`,
+              );
+              if (!el) {
+                return;
+              }
+              const offset =
+                el.getBoundingClientRect().top -
+                container.getBoundingClientRect().top +
+                container.scrollTop;
+              container.scrollTo({ top: offset, behavior: "instant" });
+              delete el.dataset["highlight"];
+              void el.offsetWidth;
+              el.dataset["highlight"] = "";
+            }}
           />
         )}
 
