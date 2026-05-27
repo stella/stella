@@ -1,6 +1,7 @@
 export { applyFolioAIEditOperations } from "./apply";
 export {
   createFolioAIEditSnapshot,
+  getFolioAIParaIdFromBlockId,
   hashFolioAIBlockText,
   normalizeFolioAIBlockText,
 } from "./snapshot";

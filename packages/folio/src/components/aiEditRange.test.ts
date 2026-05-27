@@ -1,6 +1,31 @@
 import { describe, expect, test } from "bun:test";
+import { Schema } from "prosemirror-model";
 
-import { clampRangeToDocSize } from "./aiEditRange";
+import { createFolioAIEditSnapshot } from "../core/ai-edits/snapshot";
+import { clampRangeToDocSize, resolveFolioAIBlockRange } from "./aiEditRange";
+
+const schema = new Schema({
+  nodes: {
+    doc: { content: "block+" },
+    paragraph: {
+      group: "block",
+      content: "inline*",
+      attrs: { paraId: { default: null } },
+    },
+    text: { group: "inline" },
+  },
+});
+
+const makeDoc = (blocks: { paraId: string | null; text: string }[]) =>
+  schema.node(
+    "doc",
+    null,
+    blocks.map((block) =>
+      schema.node("paragraph", { paraId: block.paraId }, [
+        schema.text(block.text),
+      ]),
+    ),
+  );
 
 describe("clampRangeToDocSize", () => {
   test("passes a range untouched when both endpoints sit inside the doc", () => {
@@ -45,5 +70,57 @@ describe("clampRangeToDocSize", () => {
       from: 20,
       to: 20,
     });
+  });
+});
+
+describe("resolveFolioAIBlockRange", () => {
+  test("resolves paraId block ids against the live document before snapshot positions", () => {
+    const snapshot = createFolioAIEditSnapshot(
+      makeDoc([
+        { paraId: "11111111", text: "Before" },
+        { paraId: "AAAA0001", text: "Target" },
+      ]),
+    );
+    const liveDoc = makeDoc([
+      { paraId: "22222222", text: "Inserted" },
+      { paraId: "11111111", text: "Before" },
+      { paraId: "AAAA0001", text: "Target" },
+    ]);
+
+    const range = resolveFolioAIBlockRange({
+      blockId: "AAAA0001",
+      doc: liveDoc,
+      snapshot,
+    });
+
+    if (range === null) {
+      throw new Error("Expected paraId-backed block to resolve");
+    }
+    expect(liveDoc.resolve(range.from + 1).parent.textContent).toBe("Target");
+  });
+
+  test("keeps seq fallback block ids anchored to the snapshot", () => {
+    const snapshot = createFolioAIEditSnapshot(
+      makeDoc([
+        { paraId: null, text: "Before" },
+        { paraId: null, text: "Target" },
+      ]),
+    );
+    const liveDoc = makeDoc([
+      { paraId: null, text: "Inserted" },
+      { paraId: null, text: "Before" },
+      { paraId: null, text: "Target" },
+    ]);
+
+    const range = resolveFolioAIBlockRange({
+      blockId: "seq-0002",
+      doc: liveDoc,
+      snapshot,
+    });
+
+    if (range === null) {
+      throw new Error("Expected seq-backed block to resolve");
+    }
+    expect(liveDoc.resolve(range.from + 1).parent.textContent).toBe("Inserted");
   });
 });

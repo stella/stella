@@ -163,7 +163,7 @@ import { useDocumentHistory } from "../hooks/useHistory";
 import { useTableSelection } from "../hooks/useTableSelection";
 import { PagedEditor } from "../paged-editor/PagedEditor";
 import type { PagedEditorRef } from "../paged-editor/PagedEditor";
-import { clampRangeToDocSize } from "./aiEditRange";
+import { clampRangeToDocSize, resolveFolioAIBlockRange } from "./aiEditRange";
 import { resolveCommentCreationRange } from "./commentAnchors";
 import {
   EMPTY_ANCHOR_POSITIONS,
@@ -2681,22 +2681,19 @@ export function DocxEditor({
         if (!view) {
           return false;
         }
-        // Prefer the caller's snapshot (the one the AI saw when it
-        // generated the suggestion); only fall back to a fresh recompute
-        // when the caller didn't pass one. A recomputed snapshot
-        // re-numbers blocks after any structural accept, so `b-0007`
-        // would point to a different paragraph than the panel's pending
-        // suggestion is referencing.
-        const resolvedSnapshot =
-          snapshot ?? createFolioAIEditSnapshot(view.state.doc);
-        const anchor = resolvedSnapshot.anchors[blockId];
-        if (!anchor) {
+        // ParaId-backed ids resolve against the live document so
+        // queued suggestions still navigate correctly after earlier
+        // accepts insert or delete paragraphs above them. `seq-*`
+        // fallback ids keep using the snapshot the AI saw.
+        const range = resolveFolioAIBlockRange({
+          blockId,
+          doc: view.state.doc,
+          snapshot,
+        });
+        if (range === null) {
           return false;
         }
-        const { from, to } = clampRangeToDocSize(
-          view.state.doc.content.size,
-          anchor,
-        );
+        const { from, to } = range;
         const $from = view.state.doc.resolve(from);
         const $to = view.state.doc.resolve(to);
         view.dispatch(

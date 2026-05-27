@@ -23,6 +23,7 @@ import { ImagePasteExtension } from "./features/ImagePasteExtension";
 // Features
 import { ListExtension } from "./features/ListExtension";
 import { ParagraphChangeTrackerExtension } from "./features/ParagraphChangeTrackerExtension";
+import { ParaIdAllocatorExtension } from "./features/ParaIdAllocatorExtension";
 import { PasteStyleInlinerExtension } from "./features/PasteStyleInlinerExtension";
 import { SelectionTrackerExtension } from "./features/SelectionTrackerExtension";
 import { AllCapsExtension } from "./marks/AllCapsExtension";
@@ -171,6 +172,11 @@ export function createStarterKit(
           onSelectionChange: options.onSelectionChange,
         }),
   );
+  // Register the paraId allocator BEFORE the change tracker so any
+  // freshly-allocated id is already on the paragraph when the tracker
+  // records it as changed. The plugin sets `addToHistory: false` so
+  // undo/redo doesn't trip on the allocation.
+  add("paraIdAllocator", ParaIdAllocatorExtension());
   add("paragraphChangeTracker", ParagraphChangeTrackerExtension());
   add("bidiShortcut", BidiShortcutExtension());
 
