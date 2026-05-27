@@ -134,7 +134,9 @@ const getSkillResourceOutput = (
   const content = getStringProperty(output, "content");
   const mimeType = getStringProperty(output, "mimeType");
   const skillId = getNullableStringProperty(output, "skillId");
-  const originRaw = Object.getOwnPropertyDescriptor(output, "origin")?.value;
+  const originRaw: unknown = "origin" in output
+    ? Object.getOwnPropertyDescriptor(output, "origin")?.value
+    : undefined;
   if (
     skillName === undefined ||
     path === undefined ||

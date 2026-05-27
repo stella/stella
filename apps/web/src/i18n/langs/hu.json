@@ -1246,6 +1246,7 @@
       "importSkill": "Importálás URL-ből",
       "importTitle": "Készség importálása",
       "license": "Licenc: {license}",
+      "pdfPreviewSoon": "PDF preview will be available once binary skill resources are supported.",
       "privateSection": "Saját készségek",
       "resources": "{count, plural, one {# erőforrás} other {# erőforrás}}",
       "scope": "Láthatóság",

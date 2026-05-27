@@ -1246,6 +1246,7 @@
       "importSkill": "Importovat z URL",
       "importTitle": "Importovat dovednost",
       "license": "Licence: {license}",
+      "pdfPreviewSoon": "PDF preview will be available once binary skill resources are supported.",
       "privateSection": "Vaše dovednosti",
       "resources": "{count, plural, one {# zdroj} few {# zdroje} other {# zdrojů}}",
       "scope": "Viditelnost",

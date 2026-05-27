@@ -22,6 +22,16 @@ import type { PastedTextSource } from "@/components/chat-pasted-text-extension";
 
 const CHIP_MAX_LABEL_WIDTH_CLASS = "max-w-48";
 
+const pickChipIcon = (source: PastedTextSource) => {
+  if (source === "skill") {
+    return WandSparklesIcon;
+  }
+  if (source === "prompt") {
+    return SparklesIcon;
+  }
+  return ClipboardPasteIcon;
+};
+
 export const ChatPastedTextNode = (props: NodeViewProps) => {
   const t = useTranslations();
   // SAFETY: attrs from our own pastedText node schema
@@ -54,12 +64,7 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
         });
   const chipLabel = attrs.label.length > 0 ? attrs.label : fallbackLabel;
 
-  const Icon =
-    attrs.source === "skill"
-      ? WandSparklesIcon
-      : attrs.source === "prompt"
-        ? SparklesIcon
-        : ClipboardPasteIcon;
+  const Icon = pickChipIcon(attrs.source);
 
   return (
     <NodeViewWrapper className="inline" data-source={attrs.source}>

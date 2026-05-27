@@ -1246,6 +1246,7 @@
       "importSkill": "Importar de URL",
       "importTitle": "Importar habilidade",
       "license": "Licença: {license}",
+      "pdfPreviewSoon": "PDF preview will be available once binary skill resources are supported.",
       "privateSection": "Suas habilidades",
       "resources": "{count, plural, one {# recurso} other {# recursos}}",
       "scope": "Visibilidade",

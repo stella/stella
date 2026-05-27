@@ -717,9 +717,9 @@ export const useChatEditor = ({
         body: s.prompt,
       },
     }));
-    const skillRows = skillPages?.pages.flatMap((p) => p.installed ?? []) ?? [];
+    const skillRows = skillPages?.pages.flatMap((p) => p.installed) ?? [];
     const skillItems: SlashItem[] = skillRows
-      .filter((row) => row?.enabled === true)
+      .filter((row) => row.enabled)
       .map((row) => ({
         kind: "skill" as const,
         skill: {

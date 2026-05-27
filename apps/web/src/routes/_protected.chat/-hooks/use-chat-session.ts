@@ -370,33 +370,41 @@ export const useChatSession = ({
         return;
       }
 
-      const truncated = messages.slice(0, targetIndex + 1).map((message) => {
-        if (message.role !== "assistant") {
-          return message;
-        }
-        // Reset the matching ask-user part so `addToolOutput` can
-        // overwrite its output without the SDK no-op'ing because
-        // the state is already `output-available`. Using the
-        // `input-available` shape keeps the input visible so the
-        // card body stays consistent during the brief frame
-        // between truncation and the next `addToolOutput` call.
-        const nextParts = message.parts.map((part) => {
-          if (
-            part.type === "tool-ask-user" &&
-            part.toolCallId === toolCallId &&
-            part.state === "output-available"
-          ) {
-            return {
-              type: "tool-ask-user" as const,
-              toolCallId: part.toolCallId,
-              state: "input-available" as const,
-              input: part.input,
-            };
+      // SAFETY: spreading inside `.map` is flagged by no-map-spread,
+      // but slice's elements are shared refs with the original
+      // `messages` array — mutating in place would corrupt the
+      // SDK's history. The spread builds a new message object that
+      // owns the rewritten parts array.
+      const truncated = messages
+        .slice(0, targetIndex + 1)
+        // eslint-disable-next-line oxc/no-map-spread
+        .map((message) => {
+          if (message.role !== "assistant") {
+            return message;
           }
-          return part;
+          // Reset the matching ask-user part so `addToolOutput` can
+          // overwrite its output without the SDK no-op'ing because
+          // the state is already `output-available`. Using the
+          // `input-available` shape keeps the input visible so the
+          // card body stays consistent during the brief frame
+          // between truncation and the next `addToolOutput` call.
+          const nextParts = message.parts.map((part) => {
+            if (
+              part.type === "tool-ask-user" &&
+              part.toolCallId === toolCallId &&
+              part.state === "output-available"
+            ) {
+              return {
+                type: "tool-ask-user" as const,
+                toolCallId: part.toolCallId,
+                state: "input-available" as const,
+                input: part.input,
+              };
+            }
+            return part;
+          });
+          return { ...message, parts: nextParts };
         });
-        return { ...message, parts: nextParts };
-      });
       setMessages(truncated);
       await addToolOutput({
         tool: "ask-user",
@@ -458,7 +466,7 @@ export const useChatSession = ({
       // is the presigned URL roundtrip + S3 download. We kick this
       // off as a fire-and-forget; failures are silent because the
       // editor will retry the same query on mount.
-      if (response.data.fieldId) {
+      if (typeof response.data.fieldId === "string") {
         void queryClient.prefetchQuery(
           fileOptions({
             workspaceId: matterId,

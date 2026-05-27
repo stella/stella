@@ -1246,6 +1246,7 @@
       "importSkill": "Impordi URL-ist",
       "importTitle": "Impordi oskus",
       "license": "Litsents: {license}",
+      "pdfPreviewSoon": "PDF preview will be available once binary skill resources are supported.",
       "privateSection": "Sinu oskused",
       "resources": "{count, plural, one {# ressurss} other {# ressurssi}}",
       "scope": "Nähtavus",

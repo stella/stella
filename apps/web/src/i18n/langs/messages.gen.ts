@@ -1249,6 +1249,7 @@ type Messages = {
       "importSkill": "Import from URL";
       "importTitle": "Import skill";
       "license": "License: {license}";
+      "pdfPreviewSoon": "PDF preview will be available once binary skill resources are supported.";
       "privateSection": "Your skills";
       "resources": "{count, plural, one {# resource} other {# resources}}";
       "scope": "Visibility";

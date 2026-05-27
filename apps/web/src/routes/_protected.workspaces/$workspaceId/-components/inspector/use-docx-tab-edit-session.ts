@@ -112,13 +112,12 @@ export const useDocxTabEditSession = ({
       return;
     }
     const compatibility = docxCompatibilityByTab.get(target.id);
-    // Wait for the compatibility CHECK itself to finish, not just for
-    // the map entry to exist. `canSafelyEdit` lands as undefined while
-    // the server probe is in flight; firing handleStartDocxEdit too
-    // early surfaces a "still verifying…" toast the moment the user
-    // opens the file, which reads as a complaint about a click they
-    // didn't make. Let the effect re-run once canSafelyEdit resolves.
-    if (!compatibility || compatibility.canSafelyEdit === undefined) {
+    // Wait for the compatibility check to finish — map gets the
+    // entry only once the probe lands. The direct-click and
+    // requestEditMode paths in docx-browser-editor already queue
+    // silently via inspector.requestDocxEdit, so the toast that used
+    // to fire prematurely no longer triggers from those paths.
+    if (!compatibility) {
       return;
     }
     void handleStartDocxEdit(target.id);

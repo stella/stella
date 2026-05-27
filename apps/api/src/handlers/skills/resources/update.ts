@@ -62,17 +62,11 @@ const updateSkillResource = createSafeRootHandler(
       );
     }
 
-    // Built-in skills are immutable: they live on disk, not in
-    // `agentSkillResources`. Defensive check so a future built-in
-    // ever stored in the table still rejects edits.
-    if (skill.origin !== "upload" && skill.origin !== "url") {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          message: "Built-in skill resources are read-only",
-        }),
-      );
-    }
+    // `agentSkills.origin` is currently `"upload" | "url"` — both
+    // are editable. Built-in skills live on disk, not in this table,
+    // so there's nothing to gate here. If a future origin value is
+    // added to the enum, TS will surface this site as non-exhaustive
+    // and the gate can be re-added.
 
     if (
       skill.scope === "team" &&

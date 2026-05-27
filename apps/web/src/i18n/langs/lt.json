@@ -1246,6 +1246,7 @@
       "importSkill": "Importuoti iš URL",
       "importTitle": "Importuoti įgūdį",
       "license": "Licencija: {license}",
+      "pdfPreviewSoon": "PDF preview will be available once binary skill resources are supported.",
       "privateSection": "Jūsų įgūdžiai",
       "resources": "{count, plural, one {# išteklius} few {# ištekliai} other {# išteklių}}",
       "scope": "Matomumas",

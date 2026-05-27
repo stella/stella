@@ -161,37 +161,72 @@ export const SkillResourcePanel = ({ tab, onClose }: SkillResourcePanelProps) =>
         }
         onClose={onClose}
       />
-      {renderMode === "pdf" ? (
-        <div className="flex flex-1 items-center justify-center p-6">
-          <p className="text-muted-foreground max-w-sm text-center text-sm">
-            PDF preview will be available once binary skill resources are
-            supported.
-          </p>
-        </div>
-      ) : editing ? (
-        <div className="flex min-h-0 flex-1 flex-col p-3">
-          <Textarea
-            aria-label={t("common.edit")}
-            className="min-h-full flex-1 font-mono text-xs"
-            onChange={(event) => setDraft(event.currentTarget.value)}
-            value={draft}
-          />
-        </div>
-      ) : (
-        <ScrollArea className="min-h-0 flex-1">
-          <article className="px-4 py-3 text-sm">
-            {renderMode === "markdown" ? (
-              <MessageResponse className="text-sm" components={{}}>
-                {tab.content}
-              </MessageResponse>
-            ) : (
-              <pre className="text-foreground font-mono text-xs whitespace-pre-wrap">
-                {tab.content}
-              </pre>
-            )}
-          </article>
-        </ScrollArea>
-      )}
+      <SkillResourceBody
+        content={tab.content}
+        draft={draft}
+        editing={editing}
+        editLabel={t("common.edit")}
+        onDraftChange={setDraft}
+        pdfPlaceholder={t("knowledge.agentSkills.pdfPreviewSoon")}
+        renderMode={renderMode}
+      />
     </div>
+  );
+};
+
+type SkillResourceBodyProps = {
+  content: string;
+  draft: string;
+  editing: boolean;
+  editLabel: string;
+  onDraftChange: (next: string) => void;
+  pdfPlaceholder: string;
+  renderMode: RenderMode;
+};
+
+const SkillResourceBody = ({
+  content,
+  draft,
+  editing,
+  editLabel,
+  onDraftChange,
+  pdfPlaceholder,
+  renderMode,
+}: SkillResourceBodyProps) => {
+  if (renderMode === "pdf") {
+    return (
+      <div className="flex flex-1 items-center justify-center p-6">
+        <p className="text-muted-foreground max-w-sm text-center text-sm">
+          {pdfPlaceholder}
+        </p>
+      </div>
+    );
+  }
+  if (editing) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col p-3">
+        <Textarea
+          aria-label={editLabel}
+          className="min-h-full flex-1 font-mono text-xs"
+          onChange={(event) => onDraftChange(event.currentTarget.value)}
+          value={draft}
+        />
+      </div>
+    );
+  }
+  return (
+    <ScrollArea className="min-h-0 flex-1">
+      <article className="px-4 py-3 text-sm">
+        {renderMode === "markdown" ? (
+          <MessageResponse className="text-sm" components={{}}>
+            {content}
+          </MessageResponse>
+        ) : (
+          <pre className="text-foreground font-mono text-xs whitespace-pre-wrap">
+            {content}
+          </pre>
+        )}
+      </article>
+    </ScrollArea>
   );
 };
