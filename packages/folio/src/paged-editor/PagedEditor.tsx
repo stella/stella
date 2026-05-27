@@ -5092,10 +5092,14 @@ export function PagedEditor(
     if (relatedTarget && containerRef.current?.contains(relatedTarget)) {
       return; // Focus staying within editor
     }
-    // Keep selection visible when focus moves to toolbar or dropdown portals
+    // Keep selection visible when focus moves to the editor's own
+    // formatting toolbar or dropdown portals. Use `[data-folio-toolbar]`
+    // (not `[role="toolbar"]`) so the AI chat composer — which uses
+    // `role="toolbar"` for accessibility — does NOT count as "still in
+    // the editor" and the caret correctly hides when typing in chat.
     if (
       relatedTarget?.closest(
-        '[role="toolbar"], [data-radix-popper-content-wrapper], [data-radix-select-content], .docx-table-options-dropdown',
+        '[data-folio-toolbar="true"], [data-radix-popper-content-wrapper], [data-radix-select-content], .docx-table-options-dropdown',
       )
     ) {
       return;
