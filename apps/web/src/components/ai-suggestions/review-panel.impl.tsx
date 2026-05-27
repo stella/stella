@@ -508,38 +508,33 @@ export const ReviewPanelImpl = ({
               </span>
             </span>
           </div>
-          <div className="flex max-w-full min-w-0 items-center gap-1.5 text-xs">
-            <span className="text-muted-foreground shrink-0">
-              {t("docxReview.groupBy")}:
-            </span>
-            <Select
-              onValueChange={(value) => {
-                if (value === "severity" || value === "area") {
-                  setGroupAxis(value);
-                  setFilter(null);
-                }
-              }}
-              value={groupAxis}
+          <Select
+            onValueChange={(value) => {
+              if (value === "severity" || value === "area") {
+                setGroupAxis(value);
+                setFilter(null);
+              }
+            }}
+            value={groupAxis}
+          >
+            <SelectTrigger
+              aria-label={t("docxReview.groupBy")}
+              className="hover:bg-muted h-7 w-auto min-w-0 justify-between gap-1 border-0 bg-transparent px-1.5 text-xs font-medium"
             >
-              <SelectTrigger className="hover:bg-muted h-7 w-44 min-w-0 justify-between gap-1 border-0 bg-transparent px-1.5 text-xs font-medium">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup>
-                <SelectItem value="severity">
-                  {t("docxReview.bySeverity")}
-                </SelectItem>
-                <SelectItem value="area">{t("docxReview.byArea")}</SelectItem>
-              </SelectPopup>
-            </Select>
-          </div>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup>
+              <SelectItem value="severity">
+                {t("docxReview.bySeverity")}
+              </SelectItem>
+              <SelectItem value="area">{t("docxReview.byArea")}</SelectItem>
+            </SelectPopup>
+          </Select>
         </div>
 
         {pendingCount > 0 && (
           <div className="mt-2.5">
             <div className="flex min-w-0 items-center gap-1.5 text-xs">
-              <span className="text-muted-foreground shrink-0">
-                {t("docxReview.applyAs")}
-              </span>
               <Select
                 onValueChange={(value) => {
                   if (value === "tracked-changes" || value === "direct") {
@@ -548,7 +543,10 @@ export const ReviewPanelImpl = ({
                 }}
                 value={applyMode}
               >
-                <SelectTrigger className="hover:bg-muted h-7 w-56 min-w-0 justify-between gap-1 border-0 bg-transparent px-1.5 text-xs font-medium">
+                <SelectTrigger
+                  aria-label={t("docxReview.applyAs")}
+                  className="hover:bg-muted h-7 w-auto min-w-0 justify-between gap-1 border-0 bg-transparent px-1.5 text-xs font-medium"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectPopup>
@@ -652,29 +650,27 @@ export const ReviewPanelImpl = ({
         )}
       </div>
       {pendingCount > 0 && (
-        <footer className="bg-background/95 supports-[backdrop-filter]:bg-background/80 shrink-0 border-t px-3 py-2 backdrop-blur">
-          <div className="flex items-center gap-2">
-            <Button
-              className="h-8 flex-1 px-2.5 text-xs"
-              onClick={() => {
-                void handleBatchAccept();
-              }}
-              size="sm"
-              variant="default"
-            >
-              <CheckIcon className="me-1 size-3.5" />
-              {t("docxReview.acceptAll")}
-            </Button>
-            <Button
-              className="h-8 flex-1 px-2.5 text-xs"
-              onClick={handleBatchReject}
-              size="sm"
-              variant="outline"
-            >
-              <XIcon className="me-1 size-3.5" />
-              {t("docxReview.rejectAll")}
-            </Button>
-          </div>
+        <footer className="bg-background/95 supports-[backdrop-filter]:bg-background/80 flex h-12 shrink-0 items-center gap-2 border-t px-3 backdrop-blur">
+          <Button
+            className="flex-1"
+            onClick={() => {
+              void handleBatchAccept();
+            }}
+            size="sm"
+            variant="default"
+          >
+            <CheckIcon className="me-1 size-3.5" />
+            {t("docxReview.acceptAll")}
+          </Button>
+          <Button
+            className="flex-1"
+            onClick={handleBatchReject}
+            size="sm"
+            variant="outline"
+          >
+            <XIcon className="me-1 size-3.5" />
+            {t("docxReview.rejectAll")}
+          </Button>
         </footer>
       )}
     </div>
