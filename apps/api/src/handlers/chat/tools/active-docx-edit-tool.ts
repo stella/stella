@@ -76,9 +76,13 @@ const operationSchema = v.variant("type", [
   v.strictObject({
     ...baseOperationSchema,
     type: v.literal("replaceBlock"),
+    // Allow empty text — the client normalizes
+    // `replaceBlock(text: "")` to a `deleteBlock`, so the model
+    // doesn't have to pick between the two when its intent is
+    // "remove this paragraph". Schema stays liberal; the apply path
+    // produces the canonical op.
     text: v.pipe(
       v.string(),
-      v.minLength(1),
       v.description("Full replacement text for the target block."),
     ),
     preserveFormatting: v.optional(v.boolean()),

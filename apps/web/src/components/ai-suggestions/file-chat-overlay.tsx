@@ -183,6 +183,23 @@ const prepareOperations = (
         break;
       }
       case "replaceBlock": {
+        // Empty replacement = the model intends to remove the block.
+        // The canonical op for that is `deleteBlock` (keeps the
+        // paragraph container deletion semantics, doesn't leave an
+        // orphan empty paragraph). Normalize at the boundary so the
+        // model doesn't have to pick between two operations.
+        if (operation.text.length === 0) {
+          const next: FolioAIEditOperation = {
+            blockId: operation.blockId,
+            id,
+            type: "deleteBlock",
+          };
+          if (comment) {
+            next.comment = comment;
+          }
+          folio = next;
+          break;
+        }
         const next: FolioAIEditOperation = {
           blockId: operation.blockId,
           id,
