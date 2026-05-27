@@ -13,6 +13,26 @@ export type PageScrollTarget =
 export const isValidPmScrollPosition = (pmPos: number): boolean =>
   Number.isInteger(pmPos) && pmPos >= 0;
 
+/**
+ * Pick a `scrollIntoView` / `scrollTo` `behavior` that respects the
+ * user's `prefers-reduced-motion` setting. Chrome silently no-ops
+ * `behavior: "smooth"` when reduced motion is on (instead of falling
+ * back to instant), so a stale "smooth" call from scroll-to-block
+ * leaves the user wondering why the chip "doesn't work". Use the
+ * helper everywhere we'd otherwise hard-code `"smooth"`.
+ */
+export const prefersReducedMotionBehavior = (): ScrollBehavior => {
+  if (
+    typeof window === "undefined" ||
+    typeof window.matchMedia !== "function"
+  ) {
+    return "smooth";
+  }
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ? "auto"
+    : "smooth";
+};
+
 export const getPageScrollTarget = (
   layout: Layout | null,
   pageNumber: number,

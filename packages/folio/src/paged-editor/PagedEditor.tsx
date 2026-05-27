@@ -166,6 +166,7 @@ import { isReadOnlyEditKey } from "./readOnlyEditAttempt";
 import {
   getPageScrollTarget,
   isValidPmScrollPosition,
+  prefersReducedMotionBehavior,
 } from "./scrollNavigation";
 import { computePerBlockWidths } from "./sectionBlockWidths";
 import { SelectionOverlay } from "./SelectionOverlay";
@@ -3809,7 +3810,10 @@ export function PagedEditor(
     // instead of jumping straight to the target.
     const exact = findBodyPmAnchor(pageContainer, pmPos);
     if (exact) {
-      exact.scrollIntoView({ behavior: "smooth", block: "center" });
+      exact.scrollIntoView({
+        behavior: prefersReducedMotionBehavior(),
+        block: "center",
+      });
       return;
     }
 
@@ -3830,7 +3834,10 @@ export function PagedEditor(
       }
     }
     if (runMatch) {
-      runMatch.scrollIntoView({ behavior: "smooth", block: "center" });
+      runMatch.scrollIntoView({
+        behavior: prefersReducedMotionBehavior(),
+        block: "center",
+      });
       return;
     }
 
@@ -3849,14 +3856,20 @@ export function PagedEditor(
       return;
     }
     const { element: shell } = shellHit;
-    shell.scrollIntoView({ behavior: "smooth", block: "center" });
+    shell.scrollIntoView({
+      behavior: prefersReducedMotionBehavior(),
+      block: "center",
+    });
 
     let attempts = 0;
     const refine = () => {
       attempts++;
       const exactInShell = findBodyPmAnchor(shell, pmPos);
       if (exactInShell) {
-        exactInShell.scrollIntoView({ behavior: "smooth", block: "center" });
+        exactInShell.scrollIntoView({
+          behavior: prefersReducedMotionBehavior(),
+          block: "center",
+        });
         return;
       }
       let bestEl: HTMLElement | null = null;
@@ -3878,7 +3891,10 @@ export function PagedEditor(
         }
       }
       if (bestEl) {
-        bestEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        bestEl.scrollIntoView({
+          behavior: prefersReducedMotionBehavior(),
+          block: "center",
+        });
         return;
       }
       // IntersectionObserver populates on the next tick; give it

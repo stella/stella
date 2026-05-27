@@ -14,6 +14,7 @@ import type {
   Run,
 } from "../../core/types/content";
 import type { Document } from "../../core/types/document";
+import { prefersReducedMotionBehavior } from "../../paged-editor/scrollNavigation";
 
 // ============================================================================
 // TYPES
@@ -507,5 +508,8 @@ export function scrollToMatch(
       .querySelectorAll(".layout-paragraph")
       .item(match.paragraphIndex);
 
-  paragraphElement.scrollIntoView({ behavior: "smooth", block: "center" });
+  paragraphElement.scrollIntoView({
+    behavior: prefersReducedMotionBehavior(),
+    block: "center",
+  });
 }

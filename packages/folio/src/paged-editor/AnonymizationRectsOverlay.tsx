@@ -28,6 +28,7 @@ import React, { useEffect, useRef } from "react";
 
 import type { SelectionRect } from "../core/layout-bridge/selectionRects";
 import { slugAnonymizationLabel } from "../core/prosemirror/plugins/anonymizationDecorations";
+import { prefersReducedMotionBehavior } from "./scrollNavigation";
 
 export type AnonymizationRectGroup = {
   /** Same shape as SelectionOverlay — adjusted into container space. */
@@ -110,7 +111,10 @@ export const AnonymizationRectsOverlay = ({
     cycleRef.current = { canonical: selectedCanonical, index: nextIndex };
     const el = spans[nextIndex];
     if (el) {
-      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      el.scrollIntoView({
+        block: "center",
+        behavior: prefersReducedMotionBehavior(),
+      });
     }
   }, [selectedCanonical, selectionSeq]);
 

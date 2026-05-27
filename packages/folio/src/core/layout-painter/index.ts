@@ -7,6 +7,7 @@
 
 import { panic } from "better-result";
 
+import { prefersReducedMotionBehavior } from "../../paged-editor/scrollNavigation";
 import type {
   Layout,
   Page,
@@ -340,7 +341,10 @@ export class LayoutPainter {
   scrollToPage(pageNumber: number): void {
     const state = this.pageStates.find((s) => s.pageNumber === pageNumber);
     if (state?.element) {
-      state.element.scrollIntoView({ behavior: "smooth", block: "start" });
+      state.element.scrollIntoView({
+        behavior: prefersReducedMotionBehavior(),
+        block: "start",
+      });
     }
   }
 }
