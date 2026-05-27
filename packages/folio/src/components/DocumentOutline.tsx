@@ -90,7 +90,7 @@ export const DocumentOutline: React.FC<DocumentOutlineProps> = ({
     }
     let maxLevel = TICK_MAX_LEVEL;
     let runningCount = headings.length;
-    while (maxLevel > 0 && runningCount > RAIL_MAX_TICKS) {
+    while (maxLevel > 1 && runningCount > RAIL_MAX_TICKS) {
       runningCount -= countsByLevel[maxLevel]!;
       maxLevel--;
     }
@@ -125,8 +125,7 @@ export const DocumentOutline: React.FC<DocumentOutlineProps> = ({
       // heading matches what the eye reads as "current section". Anchoring it
       // at the top picks the heading on the previous page once the user
       // jumps to a new section via the rail.
-      const threshold =
-        container.scrollTop + topOffset + container.clientHeight / 2;
+      const threshold = container.scrollTop + container.clientHeight / 2;
       const offsets: { pm: number; top: number }[] = [];
       for (const el of anchors) {
         const pm = Number(el.dataset["pmStart"]);
@@ -172,7 +171,7 @@ export const DocumentOutline: React.FC<DocumentOutlineProps> = ({
       cancelAnimationFrame(raf);
       container.removeEventListener("scroll", onScroll);
     };
-  }, [scrollContainerRef, headings, topOffset]);
+  }, [scrollContainerRef, headings]);
 
   const jumpToHeading = useCallback(
     (pmPos: number, index: number) => {

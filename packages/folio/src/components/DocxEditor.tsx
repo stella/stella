@@ -1102,6 +1102,10 @@ export function DocxEditor({
           clearTimeout(extractTrackedChangesTimerRef.current);
           extractTrackedChangesTimerRef.current = null;
         }
+        if (collectHeadingsTimerRef.current) {
+          clearTimeout(collectHeadingsTimerRef.current);
+          collectHeadingsTimerRef.current = null;
+        }
       }, [findReplace, setHfEditPosition]),
       setDocumentLoadState: useCallback((documentLoad: DocumentLoadState) => {
         setState((prev) => ({ ...prev, documentLoad }));

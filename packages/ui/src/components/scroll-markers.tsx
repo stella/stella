@@ -18,6 +18,7 @@ import {
   type RefObject,
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -92,16 +93,24 @@ export const ScrollMarkers = <M extends ScrollMarker>({
     setPositioned(next);
   }, [scrollContainerRef, markers, resolveTop]);
 
+  const recalcRef = useRef(recalc);
+  recalcRef.current = recalc;
+
+  useEffect(() => {
+    recalc();
+  }, [recalc]);
+
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) {
       return undefined;
     }
-    recalc();
-    const observer = new ResizeObserver(recalc);
+    const observer = new ResizeObserver(() => {
+      recalcRef.current();
+    });
     observer.observe(container);
     return () => observer.disconnect();
-  }, [scrollContainerRef, recalc]);
+  }, [scrollContainerRef]);
 
   if (positioned.length === 0) {
     return null;
