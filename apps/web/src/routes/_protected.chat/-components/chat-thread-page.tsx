@@ -132,6 +132,7 @@ export const ChatThreadPage = ({
     handleAllowInConversation,
     handleDeny,
     handleAskUserSubmit,
+    handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
     handleOpenCreatedDocument,
@@ -319,6 +320,7 @@ export const ChatThreadPage = ({
                   error={error}
                   isGenerating={isGenerating}
                   messages={messages}
+                  onAskUserEditAndRerun={handleAskUserEditAndRerun}
                   onAskUserSubmit={handleAskUserSubmit}
                   onCreateDocumentResolve={handleCreateDocumentResolve}
                   onOpenCreatedDocument={handleOpenCreatedDocument}

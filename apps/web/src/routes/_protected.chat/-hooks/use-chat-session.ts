@@ -140,6 +140,7 @@ export const useChatSession = ({
     messages,
     regenerate,
     sendMessage: sendChatMessage,
+    setMessages,
     stop,
     status,
     addToolApprovalResponse,
@@ -326,6 +327,84 @@ export const useChatSession = ({
         output,
       }),
     [addToolOutput],
+  );
+
+  /**
+   * Edit an already-answered ask-user card and replay the model
+   * from that point. We don't have a "rewind to message" primitive
+   * in the AI SDK, so this is a truncate-and-replay:
+   *
+   *   1. Find the assistant message that owns the ask-user part.
+   *   2. Drop every message after it (downstream replies are
+   *      out-of-scope for this iteration — the user gets a warning
+   *      on the card before they confirm).
+   *   3. Reset the ask-user part itself to `input-available` so
+   *      `addToolOutput` writes a fresh output and the
+   *      `sendAutomaticallyWhen` predicate (which fires when the
+   *      latest assistant message has a complete tool call) drives
+   *      the next turn.
+   *
+   * Caveat: the backend persists messages by appending, not by
+   * truncation. Dropped client-side messages stay in the server's
+   * thread; only the new turn is sent. Full server-side truncation
+   * is the out-of-scope follow-up the card's warning copy hints at.
+   */
+  const handleAskUserEditAndRerun = useCallback(
+    async (toolCallId: string, output: AskUserOutput) => {
+      let targetIndex = -1;
+      for (let i = 0; i < messages.length; i += 1) {
+        const candidate = messages[i];
+        if (!candidate || candidate.role !== "assistant") {
+          continue;
+        }
+        const hasPart = candidate.parts.some(
+          (part) =>
+            part.type === "tool-ask-user" && part.toolCallId === toolCallId,
+        );
+        if (hasPart) {
+          targetIndex = i;
+          break;
+        }
+      }
+      if (targetIndex === -1) {
+        return;
+      }
+
+      const truncated = messages.slice(0, targetIndex + 1).map((message) => {
+        if (message.role !== "assistant") {
+          return message;
+        }
+        // Reset the matching ask-user part so `addToolOutput` can
+        // overwrite its output without the SDK no-op'ing because
+        // the state is already `output-available`. Using the
+        // `input-available` shape keeps the input visible so the
+        // card body stays consistent during the brief frame
+        // between truncation and the next `addToolOutput` call.
+        const nextParts = message.parts.map((part) => {
+          if (
+            part.type === "tool-ask-user" &&
+            part.toolCallId === toolCallId &&
+            part.state === "output-available"
+          ) {
+            return {
+              type: "tool-ask-user" as const,
+              toolCallId: part.toolCallId,
+              state: "input-available" as const,
+              input: part.input,
+            };
+          }
+          return part;
+        });
+        return { ...message, parts: nextParts };
+      });
+      setMessages(truncated);
+      await addToolOutput({
+        tool: "ask-user",
+        toolCallId,
+        output,
+      });
+    },
+    [addToolOutput, messages, setMessages],
   );
 
   const { data: workspacesNavigation, isPending: isLoadingMatters } = useQuery(
@@ -566,6 +645,7 @@ export const useChatSession = ({
     handleAllowInConversation,
     handleDeny,
     handleAskUserSubmit,
+    handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
     handleOpenCreatedDocument,

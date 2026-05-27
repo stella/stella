@@ -332,10 +332,14 @@
     },
     "askAnything": "Opýtajte sa na čokoľvek",
     "askUser": {
+      "cancelEdit": "Zrušiť",
       "custom": "Napísať vlastnú",
       "default": "Predvolená",
+      "edit": "Upraviť odpovede",
+      "editWarning": "Opätovné spustenie zahodí nadväzujúce odpovede v tejto konverzácii.",
       "noAnswer": "Bez odpovede",
       "placeholder": "Vaša odpoveď",
+      "rerun": "Spustiť znovu odtiaľto",
       "submit": "Odoslať odpovede"
     },
     "attachFile": "Priložiť súbor",

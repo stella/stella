@@ -332,10 +332,14 @@
     },
     "askAnything": "Kérdezzen bármit",
     "askUser": {
+      "cancelEdit": "Mégse",
       "custom": "Saját válasz",
       "default": "Alapértelmezett",
+      "edit": "Válaszok szerkesztése",
+      "editWarning": "Az újrafuttatás elveti a beszélgetés következő válaszait.",
       "noAnswer": "Nincs válasz",
       "placeholder": "Az Ön válasza",
+      "rerun": "Újrafuttatás innen",
       "submit": "Válaszok elküldése"
     },
     "attachFile": "Fájl csatolása",

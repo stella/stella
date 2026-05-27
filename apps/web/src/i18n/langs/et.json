@@ -332,10 +332,14 @@
     },
     "askAnything": "Küsi mida tahes",
     "askUser": {
+      "cancelEdit": "Tühista",
       "custom": "Kirjuta oma",
       "default": "Vaikimisi",
+      "edit": "Muuda vastuseid",
+      "editWarning": "Uuesti käivitamine kustutab selle vestluse järgnevad vastused.",
       "noAnswer": "Vastus puudub",
       "placeholder": "Teie vastus",
+      "rerun": "Käivita siit uuesti",
       "submit": "Esita vastused"
     },
     "attachFile": "Lisa fail",

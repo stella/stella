@@ -332,10 +332,14 @@
     },
     "askAnything": "Jautājiet jebko",
     "askUser": {
+      "cancelEdit": "Atcelt",
       "custom": "Rakstīt savu",
       "default": "Noklusējuma",
+      "edit": "Rediģēt atbildes",
+      "editWarning": "Atkārtota palaišana izmetīs šīs sarunas turpmākās atbildes.",
       "noAnswer": "Nav atbildes",
       "placeholder": "Jūsu atbilde",
+      "rerun": "Palaist no šejienes vēlreiz",
       "submit": "Iesniegt atbildes"
     },
     "attachFile": "Pievienot failu",

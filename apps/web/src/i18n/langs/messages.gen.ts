@@ -335,10 +335,14 @@ type Messages = {
     };
     "askAnything": "Ask anything";
     "askUser": {
+      "cancelEdit": "Cancel";
       "custom": "Write your own";
       "default": "Default";
+      "edit": "Edit answers";
+      "editWarning": "Re-running will discard the downstream replies in this conversation.";
       "noAnswer": "No answer";
       "placeholder": "Your answer";
+      "rerun": "Re-run from here";
       "submit": "Submit answers";
     };
     "attachFile": "Attach file";

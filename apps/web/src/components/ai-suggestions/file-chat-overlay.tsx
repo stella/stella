@@ -841,6 +841,7 @@ const FileChatOverlayInner = ({
     handleAllowInConversation,
     handleDeny,
     handleAskUserSubmit,
+    handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
     handleOpenCreatedDocument,
@@ -1045,6 +1046,7 @@ const FileChatOverlayInner = ({
                 error={error}
                 isGenerating={isGenerating}
                 messages={messages}
+                onAskUserEditAndRerun={handleAskUserEditAndRerun}
                 onAskUserSubmit={handleAskUserSubmit}
                 onCreateDocumentResolve={handleCreateDocumentResolve}
                 onOpenCreatedDocument={handleOpenCreatedDocument}

@@ -332,10 +332,14 @@
     },
     "askAnything": "Pregunta lo que quieras",
     "askUser": {
+      "cancelEdit": "Cancelar",
       "custom": "Escribir propia",
       "default": "Predeterminada",
+      "edit": "Editar respuestas",
+      "editWarning": "Reejecutar descartará las respuestas posteriores de esta conversación.",
       "noAnswer": "Sin respuesta",
       "placeholder": "Su respuesta",
+      "rerun": "Reejecutar desde aquí",
       "submit": "Enviar respuestas"
     },
     "attachFile": "Adjuntar archivo",

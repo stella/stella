@@ -332,10 +332,14 @@
     },
     "askAnything": "Zeptejte se na cokoli",
     "askUser": {
+      "cancelEdit": "Zrušit",
       "custom": "Napsat vlastní",
       "default": "Výchozí",
+      "edit": "Upravit odpovědi",
+      "editWarning": "Opětovné spuštění zahodí navazující odpovědi v této konverzaci.",
       "noAnswer": "Bez odpovědi",
       "placeholder": "Vaše odpověď",
+      "rerun": "Spustit znovu odsud",
       "submit": "Odeslat odpovědi"
     },
     "attachFile": "Připojit soubor",

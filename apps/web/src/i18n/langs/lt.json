@@ -332,10 +332,14 @@
     },
     "askAnything": "Klauskite bet ko",
     "askUser": {
+      "cancelEdit": "Atšaukti",
       "custom": "Rašyti savo",
       "default": "Numatytasis",
+      "edit": "Redaguoti atsakymus",
+      "editWarning": "Pakartotinis vykdymas pašalins tolesnius šio pokalbio atsakymus.",
       "noAnswer": "Atsakymo nėra",
       "placeholder": "Jūsų atsakymas",
+      "rerun": "Vykdyti iš naujo nuo čia",
       "submit": "Pateikti atsakymus"
     },
     "attachFile": "Prisegti failą",

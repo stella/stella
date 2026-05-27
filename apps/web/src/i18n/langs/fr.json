@@ -332,10 +332,14 @@
     },
     "askAnything": "Posez n’importe quelle question",
     "askUser": {
+      "cancelEdit": "Annuler",
       "custom": "Écrire la vôtre",
       "default": "Par défaut",
+      "edit": "Modifier les réponses",
+      "editWarning": "Relancer effacera les réponses ultérieures de cette conversation.",
       "noAnswer": "Aucune réponse",
       "placeholder": "Votre réponse",
+      "rerun": "Relancer à partir d'ici",
       "submit": "Envoyer les réponses"
     },
     "attachFile": "Joindre un fichier",
