@@ -141,6 +141,46 @@ const getOperationComment = (
   }
 };
 
+// Strip legal-source directive markers (`@pagebreak`, `@clause LEVEL
+// "TITLE"`, `@signatures party: …`, `@paragraph `, `@signature`,
+// `@section`) and unwrap `[[placeholders]]` to plain text. The model
+// sometimes carries the create-document template syntax into apply
+// operations; without cleanup those tokens render as raw characters
+// in the document, which looks buggy.
+//
+// This pass only flattens the text — it does NOT produce real page
+// breaks, headings, or signature tables. Folio's apply ops don't
+// have a field for `pageBreakBefore` or `styleId`; structural
+// expansion requires a new op-schema (`insertPageBreak`,
+// `insertHeading`, `insertSignatureTable`) before the apply layer
+// can render those properly.
+const DIRECTIVE_LINE_RE =
+  /^\s*@(?:pagebreak|signature|signatures|signature_block|section|paragraph|clause|schedule|note|recital|recitals)\b\s*/iu;
+const PLACEHOLDER_RE = /\[\[([^\]]+)\]\]/gu;
+const CLAUSE_HEADING_RE = /^@clause\s+\d+\s*"([^"]*)"\s*$/iu;
+const cleanDirectiveText = (text: string): string => {
+  const lines = text.split("\n").map((line) => {
+    const clauseMatch = CLAUSE_HEADING_RE.exec(line);
+    if (clauseMatch) {
+      return clauseMatch[1] ?? "";
+    }
+    return line.replace(DIRECTIVE_LINE_RE, "").trimEnd();
+  });
+  // Collapse runs of empty lines so stripped directives don't leave
+  // huge gaps.
+  const collapsed: string[] = [];
+  for (const line of lines) {
+    if (line.length === 0 && collapsed.at(-1)?.length === 0) {
+      continue;
+    }
+    collapsed.push(line);
+  }
+  return collapsed
+    .join("\n")
+    .replace(PLACEHOLDER_RE, (_, inner: string) => inner.trim())
+    .trim();
+};
+
 const prepareOperations = (
   operations: ApplyActiveDocxEditsInput["operations"],
 ): PreparedOperation[] => {
@@ -170,7 +210,7 @@ const prepareOperations = (
         const next: FolioAIEditOperation = {
           blockId: operation.blockId,
           id,
-          text: operation.text,
+          text: cleanDirectiveText(operation.text),
           type: operation.type,
         };
         if (operation.inheritFormatting !== undefined) {
@@ -183,12 +223,13 @@ const prepareOperations = (
         break;
       }
       case "replaceBlock": {
+        const cleanedText = cleanDirectiveText(operation.text);
         // Empty replacement = the model intends to remove the block.
         // The canonical op for that is `deleteBlock` (keeps the
         // paragraph container deletion semantics, doesn't leave an
         // orphan empty paragraph). Normalize at the boundary so the
         // model doesn't have to pick between two operations.
-        if (operation.text.length === 0) {
+        if (cleanedText.length === 0) {
           const next: FolioAIEditOperation = {
             blockId: operation.blockId,
             id,
@@ -203,7 +244,7 @@ const prepareOperations = (
         const next: FolioAIEditOperation = {
           blockId: operation.blockId,
           id,
-          text: operation.text,
+          text: cleanedText,
           type: operation.type,
         };
         if (operation.preserveFormatting !== undefined) {
