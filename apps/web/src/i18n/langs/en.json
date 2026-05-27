@@ -429,12 +429,6 @@
       },
       "tryOne": "Try one of these to start"
     },
-    "skills": {
-      "scope": {
-        "private": "Your AI skills",
-        "team": "Team AI skills"
-      }
-    },
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
     "queuedNotice": "Queued — sends when the current response finishes",
     "removeSuggestion": "(remove)",
@@ -448,6 +442,12 @@
     "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin to upgrade the plan.",
     "sendPrompt": "Send message",
     "sendWithoutAnonymization": "Send without anonymization",
+    "skills": {
+      "scope": {
+        "private": "Your AI skills",
+        "team": "Team AI skills"
+      }
+    },
     "sources": "Sources:",
     "stopResponse": "Stop",
     "suggestionSeverity": {

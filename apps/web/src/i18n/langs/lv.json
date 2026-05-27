@@ -429,12 +429,6 @@
       },
       "tryOne": "Izmēģini vienu no tiem"
     },
-    "skills": {
-      "scope": {
-        "private": "Jūsu MI prasmes",
-        "team": "Komandas MI prasmes"
-      }
-    },
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
     "queuedNotice": "Queued — sends when the current response finishes",
     "removeSuggestion": "(noņemt)",
@@ -448,6 +442,12 @@
     "sendErrorQuotaExhausted": "AI pakalpojumu sniedzēja kvota ir izsmelta. Mēģiniet vēlreiz pēc minūtes vai sazinieties ar darba telpas administratoru, lai uzlabotu plānu.",
     "sendPrompt": "Sūtīt ziņojumu",
     "sendWithoutAnonymization": "Sūtīt bez anonimizācijas",
+    "skills": {
+      "scope": {
+        "private": "Jūsu MI prasmes",
+        "team": "Komandas MI prasmes"
+      }
+    },
     "sources": "Avoti:",
     "stopResponse": "Apturēt",
     "suggestionSeverity": {

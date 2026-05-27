@@ -429,12 +429,6 @@
       },
       "tryOne": "Zacznij od jednego z tych"
     },
-    "skills": {
-      "scope": {
-        "private": "Twoje umiejętności AI",
-        "team": "Umiejętności AI zespołu"
-      }
-    },
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
     "queuedNotice": "Queued — sends when the current response finishes",
     "removeSuggestion": "(usuń)",
@@ -448,6 +442,12 @@
     "sendErrorQuotaExhausted": "Limit dostawcy AI został wyczerpany. Spróbuj za chwilę ponownie lub poproś administratora obszaru roboczego o ulepszenie planu.",
     "sendPrompt": "Wyślij wiadomość",
     "sendWithoutAnonymization": "Wyślij bez anonimizacji",
+    "skills": {
+      "scope": {
+        "private": "Twoje umiejętności AI",
+        "team": "Umiejętności AI zespołu"
+      }
+    },
     "sources": "Źródła:",
     "stopResponse": "Zatrzymaj",
     "suggestionSeverity": {

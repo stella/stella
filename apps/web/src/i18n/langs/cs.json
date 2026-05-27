@@ -429,12 +429,6 @@
       },
       "tryOne": "Začni s jedním z těchto"
     },
-    "skills": {
-      "scope": {
-        "private": "Vaše AI dovednosti",
-        "team": "Týmové AI dovednosti"
-      }
-    },
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
     "queuedNotice": "Queued — sends when the current response finishes",
     "removeSuggestion": "(odebrat)",
@@ -448,6 +442,12 @@
     "sendErrorQuotaExhausted": "Kvóta AI poskytovatele je vyčerpaná. Zkuste to za chvíli znovu nebo požádejte správce pracovního prostoru o navýšení plánu.",
     "sendPrompt": "Odeslat zprávu",
     "sendWithoutAnonymization": "Odeslat bez anonymizace",
+    "skills": {
+      "scope": {
+        "private": "Vaše AI dovednosti",
+        "team": "Týmové AI dovednosti"
+      }
+    },
     "sources": "Zdroje:",
     "stopResponse": "Zastavit",
     "suggestionSeverity": {

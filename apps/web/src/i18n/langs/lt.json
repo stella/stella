@@ -429,12 +429,6 @@
       },
       "tryOne": "Pradėk vienu iš šių"
     },
-    "skills": {
-      "scope": {
-        "private": "Jūsų DI įgūdžiai",
-        "team": "Komandos DI įgūdžiai"
-      }
-    },
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
     "queuedNotice": "Queued — sends when the current response finishes",
     "removeSuggestion": "(pašalinti)",
@@ -448,6 +442,12 @@
     "sendErrorQuotaExhausted": "AI teikėjo kvota išnaudota. Pabandykite po minutės dar kartą arba paprašykite darbo srities administratoriaus atnaujinti planą.",
     "sendPrompt": "Siųsti pranešimą",
     "sendWithoutAnonymization": "Siųsti be anonimizavimo",
+    "skills": {
+      "scope": {
+        "private": "Jūsų DI įgūdžiai",
+        "team": "Komandos DI įgūdžiai"
+      }
+    },
     "sources": "Šaltiniai:",
     "stopResponse": "Stabdyti",
     "suggestionSeverity": {

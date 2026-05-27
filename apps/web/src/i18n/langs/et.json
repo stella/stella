@@ -429,12 +429,6 @@
       },
       "tryOne": "Alusta ühe nendest"
     },
-    "skills": {
-      "scope": {
-        "private": "Sinu AI oskused",
-        "team": "Tiimi AI oskused"
-      }
-    },
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
     "queuedNotice": "Queued — sends when the current response finishes",
     "removeSuggestion": "(eemalda)",
@@ -448,6 +442,12 @@
     "sendErrorQuotaExhausted": "AI-teenusepakkuja kvoot on otsas. Proovi minuti pärast uuesti või palu töökoha administraatoril paketti uuendada.",
     "sendPrompt": "Saada sõnum",
     "sendWithoutAnonymization": "Saada anonüümimiseta",
+    "skills": {
+      "scope": {
+        "private": "Sinu AI oskused",
+        "team": "Tiimi AI oskused"
+      }
+    },
     "sources": "Allikad:",
     "stopResponse": "Peata",
     "suggestionSeverity": {

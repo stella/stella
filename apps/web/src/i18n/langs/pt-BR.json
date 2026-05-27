@@ -429,12 +429,6 @@
       },
       "tryOne": "Experimente um destes para começar"
     },
-    "skills": {
-      "scope": {
-        "private": "Suas habilidades de IA",
-        "team": "Habilidades de IA da equipe"
-      }
-    },
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
     "queuedNotice": "Queued — sends when the current response finishes",
     "removeSuggestion": "(remover)",
@@ -448,6 +442,12 @@
     "sendErrorQuotaExhausted": "A cota do provedor de IA foi esgotada. Tente novamente em um minuto ou peça ao administrador do espaço de trabalho para atualizar o plano.",
     "sendPrompt": "Enviar mensagem",
     "sendWithoutAnonymization": "Enviar sem anonimização",
+    "skills": {
+      "scope": {
+        "private": "Suas habilidades de IA",
+        "team": "Habilidades de IA da equipe"
+      }
+    },
     "sources": "Fontes:",
     "stopResponse": "Parar",
     "suggestionSeverity": {

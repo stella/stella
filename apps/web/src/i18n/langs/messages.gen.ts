@@ -432,12 +432,6 @@ type Messages = {
       };
       "tryOne": "Try one of these to start";
     };
-    "skills": {
-      "scope": {
-        "private": "Your AI skills";
-        "team": "Team AI skills";
-      };
-    };
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}";
     "queuedNotice": "Queued — sends when the current response finishes";
     "removeSuggestion": "(remove)";
@@ -451,6 +445,12 @@ type Messages = {
     "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin to upgrade the plan.";
     "sendPrompt": "Send message";
     "sendWithoutAnonymization": "Send without anonymization";
+    "skills": {
+      "scope": {
+        "private": "Your AI skills";
+        "team": "Team AI skills";
+      };
+    };
     "sources": "Sources:";
     "stopResponse": "Stop";
     "suggestionSeverity": {
@@ -1071,7 +1071,7 @@ type Messages = {
     "editOpenFailedTitle": "Could not open DOCX";
     "editPermissionDenied": "You do not have permission to edit this document.";
     "editSaveFailedTitle": "Could not save DOCX";
-    "editSessionTakenOver": "This editing session was taken over elsewhere.";
+    "editSessionTakenOver": "Another tab, window, or device opened this document for editing, so this session was released. Unsaved local changes are preserved — reopen the doc to continue.";
     "findReplace": {
       "close": "Close search";
       "find": "Find";

@@ -429,12 +429,6 @@
       },
       "tryOne": "Prueba uno de estos para empezar"
     },
-    "skills": {
-      "scope": {
-        "private": "Tus habilidades de IA",
-        "team": "Habilidades de IA del equipo"
-      }
-    },
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
     "queuedNotice": "Queued — sends when the current response finishes",
     "removeSuggestion": "(eliminar)",
@@ -448,6 +442,12 @@
     "sendErrorQuotaExhausted": "Se ha agotado la cuota del proveedor de IA. Inténtalo de nuevo en un minuto o pídele al administrador del espacio de trabajo que mejore el plan.",
     "sendPrompt": "Enviar mensaje",
     "sendWithoutAnonymization": "Enviar sin anonimización",
+    "skills": {
+      "scope": {
+        "private": "Tus habilidades de IA",
+        "team": "Habilidades de IA del equipo"
+      }
+    },
     "sources": "Fuentes:",
     "stopResponse": "Detener",
     "suggestionSeverity": {

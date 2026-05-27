@@ -429,12 +429,6 @@
       },
       "tryOne": "Próbáld ki valamelyiket"
     },
-    "skills": {
-      "scope": {
-        "private": "Saját AI skillek",
-        "team": "Csapat AI skillek"
-      }
-    },
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
     "queuedNotice": "Queued — sends when the current response finishes",
     "removeSuggestion": "(eltávolítás)",
@@ -448,6 +442,12 @@
     "sendErrorQuotaExhausted": "Az AI-szolgáltató kvótája kimerült. Próbáld újra egy perc múlva, vagy kérd a munkaterület adminisztrátorát, hogy bővítse a csomagot.",
     "sendPrompt": "Üzenet küldése",
     "sendWithoutAnonymization": "Küldés anonimizálás nélkül",
+    "skills": {
+      "scope": {
+        "private": "Saját AI skillek",
+        "team": "Csapat AI skillek"
+      }
+    },
     "sources": "Források:",
     "stopResponse": "Leállítás",
     "suggestionSeverity": {
