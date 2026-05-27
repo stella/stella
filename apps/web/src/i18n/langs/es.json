@@ -2143,6 +2143,18 @@
       "uploading": "Subiendo archivos",
       "uploadingDescription": "No cierre esta página hasta que se completen las subidas",
       "uploadingProgress": "{completed, number} de {total, number} subidos",
+      "versionOrNewFile": {
+        "createNewDescription": "Agregar como archivo separado en el espacio de trabajo",
+        "createNewOption": "Crear nuevo archivo",
+        "description": "Soltaste \"{fileName}\" sobre un documento existente.",
+        "extensionMismatch": "Extensión no coincide: esperado .{expected}, recibido .{actual}",
+        "extensionMismatchError": "La extensión del archivo no coincide con el documento existente",
+        "replaceDescription": "Agregar como nueva versión de este documento",
+        "replaceOption": "Reemplazar como nueva versión",
+        "title": "¿Reemplazar o crear nuevo?"
+      },
+      "versionUploadFailed": "Error al subir versión",
+      "versionUploaded": "Nueva versión subida",
       "xfaFormNotSupported": "Este PDF contiene un formulario XFA. Es posible que la vista previa no se muestre correctamente."
     },
     "filesystem": {

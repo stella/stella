@@ -2143,6 +2143,18 @@
       "uploading": "Nahrávání souborů",
       "uploadingDescription": "Nezavírejte tuto stránku, dokud nebudou soubory nahrány",
       "uploadingProgress": "{completed, number} z {total, number} nahráno",
+      "versionOrNewFile": {
+        "createNewDescription": "Přidat jako samostatný soubor do prostoru",
+        "createNewOption": "Vytvořit nový soubor",
+        "description": "Přetáhli jste \"{fileName}\" na existující dokument.",
+        "extensionMismatch": "Neshodná přípona: očekáváno .{expected}, dostáno .{actual}",
+        "extensionMismatchError": "Přípona souboru neodpovídá existujícímu dokumentu",
+        "replaceDescription": "Přidat jako novou verzi tohoto dokumentu",
+        "replaceOption": "Nahradit jako novou verzi",
+        "title": "Nahradit nebo vytvořit nový?"
+      },
+      "versionUploadFailed": "Nahrání verze selhalo",
+      "versionUploaded": "Nová verze nahrána",
       "xfaFormNotSupported": "Tento PDF obsahuje formulář XFA. Náhled nemusí zobrazit vše správně."
     },
     "filesystem": {

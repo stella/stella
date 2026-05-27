@@ -9,17 +9,28 @@ import {
 import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import {
+  RowDropTargetProvider,
+  useIsRowDropTargetActive,
+} from "@/routes/_protected.workspaces/$workspaceId/-context/row-drop-target-context";
 import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 
 type DropZoneProps = PropsWithChildren<{
   workspaceId: string;
 }>;
 
-export const DropZone = ({ workspaceId, children }: DropZoneProps) => {
+export const DropZone = ({ workspaceId, children }: DropZoneProps) => (
+  <RowDropTargetProvider>
+    <DropZoneInner workspaceId={workspaceId}>{children}</DropZoneInner>
+  </RowDropTargetProvider>
+);
+
+const DropZoneInner = ({ workspaceId, children }: DropZoneProps) => {
   const t = useTranslations();
   const dropRef = useRef<HTMLDivElement>(null);
   const [isPending, createFileEntities] = useCreateFileEntities(workspaceId);
   const [isDropTarget, setIsDropTarget] = useState(false);
+  const isRowDropTargetActive = useIsRowDropTargetActive();
 
   // Store isPending in a ref so the effect closure always
   // sees the latest value without re-registering.
@@ -52,10 +63,13 @@ export const DropZone = ({ workspaceId, children }: DropZoneProps) => {
     });
   }, []);
 
+  // Suppress overlay when a row-level drop target is active
+  const showOverlay = isDropTarget && !isRowDropTargetActive;
+
   return (
     <div className="relative flex min-h-0 flex-1 flex-col" ref={dropRef}>
       {children}
-      {isDropTarget && (
+      {showOverlay && (
         <div className="border-foreground/20 bg-foreground/5 pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-lg border-2 border-dashed">
           <div className="text-foreground-subtle flex flex-col items-center gap-2">
             <UploadIcon className="size-8" />

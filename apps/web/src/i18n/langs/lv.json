@@ -2143,6 +2143,18 @@
       "uploading": "Augšupielādē failus",
       "uploadingDescription": "Neaizveriet šo lapu, kamēr faili nav augšupielādēti",
       "uploadingProgress": "{completed, number} no {total, number} augšupielādēti",
+      "versionOrNewFile": {
+        "createNewDescription": "Pievienot kā atsevišķu failu darba telpā",
+        "createNewOption": "Izveidot jaunu failu",
+        "description": "Jūs nometāt \"{fileName}\" uz esoša dokumenta.",
+        "extensionMismatch": "Paplašinājums nesakrīt: gaidīts .{expected}, saņemts .{actual}",
+        "extensionMismatchError": "Faila paplašinājums nesakrīt ar esošo dokumentu",
+        "replaceDescription": "Pievienot kā šī dokumenta jaunu versiju",
+        "replaceOption": "Aizstāt ar jaunu versiju",
+        "title": "Aizstāt vai izveidot jaunu?"
+      },
+      "versionUploadFailed": "Versijas augšupielāde neizdevās",
+      "versionUploaded": "Jauna versija augšupielādēta",
       "xfaFormNotSupported": "Šis PDF satur XFA veidlapu. Priekšskatījums var netikt parādīts pareizi."
     },
     "filesystem": {

@@ -2143,6 +2143,18 @@
       "uploading": "Failide üleslaadimine",
       "uploadingDescription": "Ärge sulgege seda lehte enne, kui failid on üles laaditud",
       "uploadingProgress": "{completed, number}/{total, number} üles laaditud",
+      "versionOrNewFile": {
+        "createNewDescription": "Lisa eraldi failina tööruumi",
+        "createNewOption": "Loo uus fail",
+        "description": "Sa lohistasid \"{fileName}\" olemasolevale dokumendile.",
+        "extensionMismatch": "Laiend ei ühti: oodatud .{expected}, saadud .{actual}",
+        "extensionMismatchError": "Faililaiend ei ühti olemasoleva dokumendiga",
+        "replaceDescription": "Lisa selle dokumendi uue versioonina",
+        "replaceOption": "Asenda uue versiooniga",
+        "title": "Asendada või luua uus?"
+      },
+      "versionUploadFailed": "Versiooni üleslaadimine ebaõnnestus",
+      "versionUploaded": "Uus versioon üles laaditud",
       "xfaFormNotSupported": "See PDF sisaldab XFA-vormi. Eelvaade ei pruugi korrektset kuvada."
     },
     "filesystem": {

@@ -43,8 +43,12 @@ import {
   PinnedBoundary,
   selectColId,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
+import { VersionOrNewFileDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog";
 import type { TableContentMode } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
+import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
+import { useExternalFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
+import { useUploadVersion } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-upload-version";
 import {
   getEntityName,
   getFirstFile,
@@ -212,6 +216,11 @@ export const DraggableRow = ({
   const [contextPropertyId, setContextPropertyId] = useState<string | null>(
     null,
   );
+  // State for version-or-new-file dialog
+  const [versionDialogFile, setVersionDialogFile] = useState<File | null>(null);
+  const uploadVersion = useUploadVersion();
+  const [, createFileEntities] = useCreateFileEntities(workspaceId);
+
   const entity = row.original;
   const isFolder = entity.kind === "folder";
   const isTask = entity.kind === "task";
@@ -244,6 +253,61 @@ export const DraggableRow = ({
     rowRef,
     visibleCells,
   });
+
+  // Handle file drops on document rows (non-folder, non-task)
+  const handleFileDrop = useCallback(
+    (files: File[]) => {
+      // Multi-file drop or folder: create new files
+      if (files.length > 1 || isFolder) {
+        createFileEntities(files);
+        return;
+      }
+
+      // Single file drop on document row: show dialog
+      const droppedFile = files[0];
+      if (droppedFile && file) {
+        setVersionDialogFile(droppedFile);
+      } else {
+        // Entity has no file (shouldn't happen for file entities), just create new
+        createFileEntities(files);
+      }
+    },
+    [createFileEntities, file, isFolder],
+  );
+
+  // Only enable drop target for file entities (not folders, not tasks)
+  const canAcceptDrop = !isFolder && !isTask && file !== null;
+  const { isDropTarget } = useExternalFileDrop({
+    id: entity.entityId,
+    onDrop: handleFileDrop,
+    enabled: canAcceptDrop,
+    externalRef: rowRef,
+  });
+
+  const handleReplaceVersion = () => {
+    if (!versionDialogFile || !file) {
+      return;
+    }
+    uploadVersion.mutate(
+      {
+        workspaceId,
+        entityId: entity.entityId,
+        entityFileName: file.fileName,
+        file: versionDialogFile,
+      },
+      {
+        onSettled: () => setVersionDialogFile(null),
+      },
+    );
+  };
+
+  const handleCreateNewFile = () => {
+    if (!versionDialogFile) {
+      return;
+    }
+    createFileEntities([versionDialogFile]);
+    setVersionDialogFile(null);
+  };
 
   const getBulkSelectedEntities = () => {
     const selectedRows = table.getSelectedRowModel().rows;
@@ -415,43 +479,64 @@ export const DraggableRow = ({
   }
 
   return (
-    <WorkspaceGridRow
-      aria-rowindex={virtualIndex + 2}
-      aria-selected={row.getIsSelected()}
-      className={cn(
-        "transition-opacity duration-150",
-        contentMode === "tight" && TOOLBAR_ROW_HEIGHT,
-        isTask && "cursor-pointer",
-        isFocusedExpansionRow && "relative z-20",
-        isMutedByExpandedCell && "opacity-[0.92] hover:opacity-100",
+    <>
+      <WorkspaceGridRow
+        aria-rowindex={virtualIndex + 2}
+        aria-selected={row.getIsSelected()}
+        className={cn(
+          "transition-[opacity,background-color,box-shadow] duration-150",
+          contentMode === "tight" && TOOLBAR_ROW_HEIGHT,
+          isTask && "cursor-pointer",
+          isFocusedExpansionRow && "relative z-20",
+          isMutedByExpandedCell && "opacity-[0.92] hover:opacity-100",
+          isDropTarget &&
+            "bg-primary/5 shadow-[inset_0_0_0_2px_var(--color-primary)]",
+        )}
+        data-active={activeRow || undefined}
+        data-drop-target={isDropTarget || undefined}
+        data-index={virtualIndex}
+        data-state={row.getIsSelected() ? "selected" : undefined}
+        key={row.id}
+        onClick={containedHandler(rowRef, handleRowClick)}
+        onContextMenu={handleContextMenu}
+        ref={setRowRef}
+      >
+        <DataRowCells
+          expandedCellId={expandedCellId}
+          contentMode={contentMode}
+          hasExpandedCell={isFocusedExpansionRow}
+          onCellClick={handleCellClick}
+          selectCellWithActions={selectCellWithActions}
+          visibleCells={visibleCells}
+        />
+        <RowEndFillerCell
+          addPropertyColumn={addPropertyColumn}
+          renderColumns={renderColumns}
+          selected={row.getIsSelected()}
+        />
+        <AddPropertyCell
+          cell={addPropertyCell}
+          columnIndex={renderColumns.length + 1}
+          selected={row.getIsSelected()}
+        />
+      </WorkspaceGridRow>
+      {versionDialogFile && (
+        <VersionOrNewFileDialog
+          droppedFile={versionDialogFile}
+          entityFileName={file?.fileName}
+          isCreatePending={false}
+          isReplacePending={uploadVersion.isPending}
+          onCreateNewFile={handleCreateNewFile}
+          onOpenChange={(open) => {
+            if (!open) {
+              setVersionDialogFile(null);
+            }
+          }}
+          onReplaceVersion={handleReplaceVersion}
+          open
+        />
       )}
-      data-active={activeRow || undefined}
-      data-index={virtualIndex}
-      data-state={row.getIsSelected() ? "selected" : undefined}
-      key={row.id}
-      onClick={containedHandler(rowRef, handleRowClick)}
-      onContextMenu={handleContextMenu}
-      ref={setRowRef}
-    >
-      <DataRowCells
-        expandedCellId={expandedCellId}
-        contentMode={contentMode}
-        hasExpandedCell={isFocusedExpansionRow}
-        onCellClick={handleCellClick}
-        selectCellWithActions={selectCellWithActions}
-        visibleCells={visibleCells}
-      />
-      <RowEndFillerCell
-        addPropertyColumn={addPropertyColumn}
-        renderColumns={renderColumns}
-        selected={row.getIsSelected()}
-      />
-      <AddPropertyCell
-        cell={addPropertyCell}
-        columnIndex={renderColumns.length + 1}
-        selected={row.getIsSelected()}
-      />
-    </WorkspaceGridRow>
+    </>
   );
 };
 

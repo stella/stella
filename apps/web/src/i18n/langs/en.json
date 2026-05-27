@@ -2143,6 +2143,18 @@
       "uploading": "Uploading files",
       "uploadingDescription": "Don't close this page until the files are uploaded",
       "uploadingProgress": "{completed, number} of {total, number} uploaded",
+      "versionOrNewFile": {
+        "createNewDescription": "Add as a separate file in the workspace",
+        "createNewOption": "Create new file",
+        "description": "You dropped \"{fileName}\" onto an existing document.",
+        "extensionMismatch": "Extension mismatch: expected .{expected}, got .{actual}",
+        "extensionMismatchError": "File extension does not match the existing document",
+        "replaceDescription": "Add as a new version of this document",
+        "replaceOption": "Replace as new version",
+        "title": "Replace or create new?"
+      },
+      "versionUploadFailed": "Version upload failed",
+      "versionUploaded": "New version uploaded",
       "xfaFormNotSupported": "This PDF contains an XFA form. Preview may not display correctly."
     },
     "filesystem": {
