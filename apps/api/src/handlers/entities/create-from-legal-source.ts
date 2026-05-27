@@ -78,6 +78,11 @@ export default createSafeHandler(
       success: true as const,
       fileName: created.fileName,
       entityId: created.entityId,
+      // Returned so the client can immediately prefetch the file
+      // bytes via `fileOptions({ workspaceId, fieldId, purpose })`,
+      // priming the docx editor's buffer cache before the user
+      // clicks "Open in editor".
+      fieldId: created.fieldId,
       workspaceId,
       entityRef,
       matterRef,

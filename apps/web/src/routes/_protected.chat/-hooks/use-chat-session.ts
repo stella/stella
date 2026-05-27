@@ -10,7 +10,7 @@ import type { ComponentProps } from "react";
 
 import { useChat } from "@ai-sdk/react";
 import type { Chat } from "@ai-sdk/react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { isToolUIPart } from "ai";
 import { v7 as uuidv7 } from "uuid";
@@ -41,6 +41,7 @@ import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
+import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
@@ -422,6 +423,7 @@ export const useChatSession = ({
     [workspacesNavigation],
   );
 
+  const queryClient = useQueryClient();
   const handleCreateDocumentResolve = useCallback(
     async (
       toolCallId: string,
@@ -450,13 +452,29 @@ export const useChatSession = ({
         return;
       }
 
+      // Prime the file-bytes cache the moment the server returns —
+      // there's typically a multi-second gap before the user clicks
+      // "Open in editor", and the docx editor's biggest mount cost
+      // is the presigned URL roundtrip + S3 download. We kick this
+      // off as a fire-and-forget; failures are silent because the
+      // editor will retry the same query on mount.
+      if (response.data.fieldId) {
+        void queryClient.prefetchQuery(
+          fileOptions({
+            workspaceId: matterId,
+            fieldId: response.data.fieldId,
+            purpose: "native-display",
+          }),
+        );
+      }
+
       await addToolOutput({
         tool: "create-document",
         toolCallId,
         output: response.data,
       });
     },
-    [addToolOutput],
+    [addToolOutput, queryClient],
   );
 
   const handleOpenCreatedDocument = useCallback(
