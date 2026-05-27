@@ -12,6 +12,7 @@ import {
   readWorkspaceAnonymizationTerms,
 } from "@/api/handlers/workspaces/anonymization-terms";
 import archiveWorkspace from "@/api/handlers/workspaces/archive";
+import cellRetry from "@/api/handlers/workspaces/cell-retry";
 import createWorkspaces from "@/api/handlers/workspaces/create";
 import deleteWorkspace from "@/api/handlers/workspaces/delete-by-id";
 import duplicateWorkspace from "@/api/handlers/workspaces/duplicate";
@@ -197,6 +198,10 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
         .post("/workflow/start", workflowStart.handler, {
           body: workflowStart.config.body,
           permissions: workflowStart.config.permissions,
+        })
+        .post("/cell-retry", cellRetry.handler, {
+          body: cellRetry.config.body,
+          permissions: cellRetry.config.permissions,
         })
         .post("/justifications/query", readJustifications.handler, {
           body: readJustifications.config.body,

@@ -204,6 +204,13 @@ type StartWorkflowArgs = {
   scopedDb: ScopedDb;
   entityIds?: SafeId<"entity">[];
   entityIdsOrder?: SafeId<"entity">[];
+  /**
+   * Restrict the execution plan to these property IDs only. Used by
+   * single-cell retry to re-run one property for one entity without
+   * touching the rest of the entity's cells. Properties outside the
+   * filter are dropped from every level of the plan.
+   */
+  propertyIds?: SafeId<"property">[];
 };
 
 type StartWorkflowResult = {
@@ -429,6 +436,23 @@ const collectFullWorkflowTargetIds = async ({
   }
 };
 
+const filterPlanByPropertyIds = (
+  plan: ExecutionLevel[],
+  propertyIds: readonly SafeId<"property">[],
+): ExecutionLevel[] => {
+  const allowed = new Set<string>(propertyIds);
+  return plan
+    .map((level) =>
+      level
+        .map((batch) => ({
+          ...batch,
+          properties: batch.properties.filter((p) => allowed.has(p.id)),
+        }))
+        .filter((batch) => batch.properties.length > 0),
+    )
+    .filter((level) => level.length > 0);
+};
+
 /**
  * Start a workflow: build execution plan, enqueue entity jobs.
  */
@@ -439,6 +463,7 @@ export const startWorkflow = async ({
   scopedDb,
   entityIds: inputEntityIds,
   entityIdsOrder: inputOrder,
+  propertyIds: inputPropertyIds,
 }: StartWorkflowArgs): Promise<StartWorkflowResult> => {
   const redis = getRedis();
 
@@ -478,7 +503,12 @@ export const startWorkflow = async ({
           }
         : executionPlanData;
 
-    const executionPlan = getPropertyExecutionPlan(planInput);
+    const fullExecutionPlan = getPropertyExecutionPlan(planInput);
+
+    const executionPlan =
+      inputPropertyIds && inputPropertyIds.length > 0
+        ? filterPlanByPropertyIds(fullExecutionPlan, inputPropertyIds)
+        : fullExecutionPlan;
 
     const hasWork = executionPlan.some((level) =>
       level.some((batch) => batch.properties.length > 0),

@@ -1,9 +1,10 @@
 import type { PropsWithChildren } from "react";
 
-import { EyeIcon } from "lucide-react";
+import { EyeIcon, RefreshCwIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { MenuItem } from "@stll/ui/components/menu";
 
 import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
 import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
@@ -11,8 +12,10 @@ import { CellMetadataFlags } from "@/routes/_protected.workspaces/$workspaceId/-
 import { CellResult } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-result";
 import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { useAnchoredMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/use-anchored-menu";
 import { PropertyPopover } from "@/routes/_protected.workspaces/$workspaceId/-components/property-popover";
 import type { TableColumnDef } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+import { useRetryCell } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
@@ -136,38 +139,48 @@ const PropertyCell = ({
 
     if (fileFieldId) {
       return (
-        <WithOpenEntityButton
+        <RetryableCellShell
           entityId={entity.entityId}
-          fieldId={fileFieldId}
-          justificationFieldId={field.id}
-          label={fileName}
-          mimeType={mimeType}
-          pdfFileId={pdfFileId}
           propertyId={property.id}
           workspaceId={property.workspaceId}
         >
-          <CellMetadataFlags
+          <WithOpenEntityButton
             entityId={entity.entityId}
-            metadata={cellMetadata}
+            fieldId={fileFieldId}
+            justificationFieldId={field.id}
+            label={fileName}
+            mimeType={mimeType}
+            pdfFileId={pdfFileId}
             propertyId={property.id}
             workspaceId={property.workspaceId}
-          />
-          <EditableField
-            content={fieldContent}
-            entityId={entity.entityId}
-            entityKind={entity.kind}
-            property={property}
-            propertyId={property.id}
-            showDateIcon={false}
-            workspaceId={property.workspaceId}
-          />
-        </WithOpenEntityButton>
+          >
+            <CellMetadataFlags
+              entityId={entity.entityId}
+              metadata={cellMetadata}
+              propertyId={property.id}
+              workspaceId={property.workspaceId}
+            />
+            <EditableField
+              content={fieldContent}
+              entityId={entity.entityId}
+              entityKind={entity.kind}
+              property={property}
+              propertyId={property.id}
+              showDateIcon={false}
+              workspaceId={property.workspaceId}
+            />
+          </WithOpenEntityButton>
+        </RetryableCellShell>
       );
     }
   }
 
   return (
-    <>
+    <RetryableCellShell
+      entityId={entity.entityId}
+      propertyId={property.id}
+      workspaceId={property.workspaceId}
+    >
       <CellMetadataFlags
         entityId={entity.entityId}
         metadata={cellMetadata}
@@ -183,7 +196,43 @@ const PropertyCell = ({
         showDateIcon={false}
         workspaceId={property.workspaceId}
       />
-    </>
+    </RetryableCellShell>
+  );
+};
+
+type RetryableCellShellProps = {
+  entityId: string;
+  propertyId: string;
+  workspaceId: string;
+};
+
+/**
+ * Adds a right-click menu with "Retry extraction" to AI-model cells.
+ * Wraps children in a div so the contextmenu listener has a DOM node;
+ * `display: contents` keeps the wrapper out of the cell's layout.
+ */
+const RetryableCellShell = ({
+  entityId,
+  propertyId,
+  workspaceId,
+  children,
+}: PropsWithChildren<RetryableCellShellProps>) => {
+  const t = useTranslations();
+  const retryCell = useRetryCell(workspaceId);
+  const menu = useAnchoredMenu({
+    children: (
+      <MenuItem onClick={() => void retryCell({ entityId, propertyId })}>
+        <RefreshCwIcon />
+        {t("common.retry")}
+      </MenuItem>
+    ),
+  });
+
+  return (
+    <div className="contents" onContextMenu={menu.openAt}>
+      {children}
+      {menu.element}
+    </div>
   );
 };
 
