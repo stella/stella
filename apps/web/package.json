@@ -28,7 +28,7 @@
     "@elysiajs/eden": "^1.4.9",
     "@hocuspocus/provider": "^4.1.0",
     "@libpdf/core": "catalog:",
-    "@posthog/react": "^1.9.0",
+    "@posthog/react": "^1.9.1",
     "@pydantic/genai-prices": "^0.0.61",
     "@stll/anonymize-chat": "workspace:*",
     "@stll/anonymize-data": "catalog:",
