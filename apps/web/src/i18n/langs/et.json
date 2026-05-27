@@ -598,6 +598,7 @@
       "address": "Aadress",
       "bankAccountNumber": "Pangakonto number",
       "birthNumber": "Sünninumber",
+      "country": "Country",
       "creditCardNumber": "Krediitkaardi number",
       "date": "Kuupäev",
       "dateOfBirth": "Sünnikuupäev",

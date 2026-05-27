@@ -68,6 +68,7 @@ const LABEL_TRANSLATION_KEY = {
   organization: "common.anonymizationLabels.organization",
   "phone number": "common.anonymizationLabels.phoneNumber",
   address: "common.anonymizationLabels.address",
+  country: "common.anonymizationLabels.country",
   "email address": "common.anonymizationLabels.emailAddress",
   date: "common.anonymizationLabels.date",
   "date of birth": "common.anonymizationLabels.dateOfBirth",

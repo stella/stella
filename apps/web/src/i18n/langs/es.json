@@ -598,6 +598,7 @@
       "address": "Dirección",
       "bankAccountNumber": "Número de cuenta bancaria",
       "birthNumber": "Número de nacimiento",
+      "country": "Country",
       "creditCardNumber": "Número de tarjeta de crédito",
       "date": "Fecha",
       "dateOfBirth": "Fecha de nacimiento",

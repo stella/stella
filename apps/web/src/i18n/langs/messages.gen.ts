@@ -601,6 +601,7 @@ type Messages = {
       "address": "Address";
       "bankAccountNumber": "Bank account number";
       "birthNumber": "Birth number";
+      "country": "Country";
       "creditCardNumber": "Credit card number";
       "date": "Date";
       "dateOfBirth": "Date of birth";

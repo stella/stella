@@ -598,6 +598,7 @@
       "address": "Cím",
       "bankAccountNumber": "Bankszámlaszám",
       "birthNumber": "Születési szám",
+      "country": "Country",
       "creditCardNumber": "Bankkártyaszám",
       "date": "Dátum",
       "dateOfBirth": "Születési dátum",

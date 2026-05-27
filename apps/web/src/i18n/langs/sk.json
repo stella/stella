@@ -598,6 +598,7 @@
       "address": "Adresa",
       "bankAccountNumber": "Číslo bankového účtu",
       "birthNumber": "Rodné číslo",
+      "country": "Country",
       "creditCardNumber": "Číslo platobnej karty",
       "date": "Dátum",
       "dateOfBirth": "Dátum narodenia",
