@@ -5727,7 +5727,13 @@ export function PagedEditor(
         return hiddenPMRef.current?.getView() ?? null;
       },
       ensureView() {
-        ensureHiddenEditorView({ sync: true });
+        // Async (no flushSync) so this is safe to call from a consumer's
+        // useEffect during a concurrent render — flushSync inside a
+        // commit-phase effect throws "flushSync was called from inside
+        // a lifecycle method". The state setter still schedules a
+        // re-render that runs createView in the next layout effect;
+        // callers that need the view immediately can poll.
+        ensureHiddenEditorView();
       },
       focus() {
         hiddenPMRef.current?.focus();

@@ -653,19 +653,20 @@ const FileChatOverlayInner = ({
   // with "editor is loading" instead of doing real work. Poll until
   // the first non-null snapshot lands, then stop — once ready stays
   // ready for the lifetime of the editor.
-  const [editorReady, setEditorReady] = useState(false);
+  // Initialize from the ref so a transition-induced remount of an
+  // already-ready editor starts ready (without this, useTransition's
+  // Suspense swap unmounts + remounts this subtree with fresh state,
+  // and the poller racing with a second rerender can leave the gate
+  // stuck closed even though the underlying view is live).
+  const [editorReady, setEditorReady] = useState(() =>
+    Boolean(docxEditorRef?.current?.createAIEditSnapshot()),
+  );
   useEffect(() => {
     if (editorReady || !hasDocxEditSurface) {
       return undefined;
     }
-    // Un-defer the hidden editor view. Without this, opening a doc and
-    // going straight to the chat composer (never clicking into the
-    // body) leaves the view null forever, so `createAIEditSnapshot()`
-    // never returns and the composer stays on "Loading editor". The
-    // first call here is a no-op for `pagedEditorRef.current`-null
-    // races; the 80 ms poller below retries `createAIEditSnapshot`
-    // until createView() commits.
-    docxEditorRef.current?.ensureEditorView();
+    const ensure = () => docxEditorRef.current?.ensureEditorView();
+    ensure();
     const probe = () => {
       if (docxEditorRef.current?.createAIEditSnapshot()) {
         setEditorReady(true);
@@ -677,6 +678,11 @@ const FileChatOverlayInner = ({
       return undefined;
     }
     const id = window.setInterval(() => {
+      // Re-call ensure on each tick: when the surrounding tree is in
+      // a concurrent transition (e.g. right after the "new chat" swap),
+      // the first ensure can be coalesced away by React's batching.
+      // The state setter is a no-op once the view is already created.
+      ensure();
       if (probe()) {
         window.clearInterval(id);
       }
@@ -885,7 +891,13 @@ const FileChatOverlayInner = ({
     previousChatThreadIdRef.current = chatThreadId;
     // rAF lets TipTap's DOM finish settling so `focus()` lands; without
     // this, focus is silently dropped on the just-remounted instance.
+    // Re-check the editor inside the callback — between scheduling and
+    // firing, the user might have closed the overlay or swapped threads
+    // again, destroying the instance we captured.
     const id = requestAnimationFrame(() => {
+      if (editorInstance.isDestroyed) {
+        return;
+      }
       focusController();
     });
     return () => {
