@@ -291,6 +291,53 @@ const entityContentSchema = v.strictObject({
   ),
 });
 
+const entitySearchHitSchema = v.strictObject({
+  position: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(0),
+    v.description("Character offset of the match in the full extracted text"),
+  ),
+  snippet: v.pipe(
+    v.string(),
+    v.description(
+      "Excerpt around the match (~200 chars on each side). The match itself appears verbatim — no surrounding markup.",
+    ),
+  ),
+});
+
+const entitySearchResultSchema = v.strictObject({
+  charCount: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(0),
+    v.description("Total character count of the entity's extracted text"),
+  ),
+  entityRef: entityRefSchema,
+  hits: v.array(entitySearchHitSchema),
+  matterRef: matterRefSchema,
+  mention: v.pipe(
+    v.string(),
+    v.description("Markdown mention to copy when referring to this entity"),
+  ),
+  name: v.nullable(v.pipe(v.string(), v.description("Entity name"))),
+  sourceDocument: sourceDocumentSchema,
+  totalHits: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(0),
+    v.description(
+      "Total number of matches in the document (may exceed hits.length when capped by limit).",
+    ),
+  ),
+  truncated: v.pipe(
+    v.boolean(),
+    v.description(
+      "Whether the hits array was capped by `limit`. If true, more matches exist past those returned.",
+    ),
+  ),
+});
+
 const listMatterPropertiesInputSchema = v.strictObject({
   matterRefs: matterRefsSchema,
   ...paginationInputEntries,
@@ -325,6 +372,45 @@ const getMatterEntitiesInputSchema = v.strictObject({
 const getMatterEntityContentsInputSchema = v.strictObject({
   entityRefs: contentEntityRefsSchema,
   matterRefs: matterRefsSchema,
+});
+
+const searchInEntityContentLimitSchema = v.optional(
+  v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(1),
+    v.maxValue(20),
+    v.description("Max hits to return per entity"),
+  ),
+  10,
+);
+
+const searchInEntityContentInputSchema = v.strictObject({
+  caseSensitive: v.optional(
+    v.pipe(
+      v.boolean(),
+      v.description("Whether the query is matched case-sensitively"),
+    ),
+    false,
+  ),
+  entityRefs: contentEntityRefsSchema,
+  limit: searchInEntityContentLimitSchema,
+  matterRefs: matterRefsSchema,
+  query: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(LIMITS.searchQueryMaxLength),
+    v.description("Literal substring to find (NOT a regex)"),
+  ),
+  wholeWord: v.optional(
+    v.pipe(
+      v.boolean(),
+      v.description(
+        "Whether to match only whole words (matches surrounded by non-letter/digit characters)",
+      ),
+    ),
+    false,
+  ),
 });
 
 export const listMatterPropertiesContract = createReadonlyFunctionContract({
@@ -362,10 +448,21 @@ export const getMatterEntitiesContract = createReadonlyFunctionContract({
 
 export const getMatterEntityContentsContract = createReadonlyFunctionContract({
   summary: "Get extracted text content for known entity refs in known matters.",
-  details: "Text is truncated server-side when needed.",
+  details:
+    "Text is truncated server-side when needed. For long documents, prefer `searchInEntityContent` to find specific terms without paging — `getMatterEntityContents` only returns the start of the document.",
   input: getMatterEntityContentsInputSchema,
   name: "getMatterEntityContents",
   output: buildItemsOutputSchema(entityContentSchema),
+});
+
+export const searchInEntityContentContract = createReadonlyFunctionContract({
+  summary:
+    "Find every occurrence of a literal substring inside one or more entities' extracted text, anywhere in the document — not limited to the truncated head returned by getMatterEntityContents.",
+  details:
+    "Use this instead of `getMatterEntityContents` whenever the user asks where, whether, or how a term/phrase appears in a long document (definitions, citations, references). Returns each hit's character offset and a ~200-char context window around it. `totalHits` is the absolute count, even when `hits` is capped at `limit`.",
+  input: searchInEntityContentInputSchema,
+  name: "searchInEntityContent",
+  output: buildItemsOutputSchema(entitySearchResultSchema),
 });
 
 export const readonlyWorkspaceFunctionContracts = [
@@ -374,6 +471,7 @@ export const readonlyWorkspaceFunctionContracts = [
   listMatterEntitiesContract,
   getMatterEntitiesContract,
   getMatterEntityContentsContract,
+  searchInEntityContentContract,
 ] as const satisfies readonly ReadonlyFunctionContract[];
 
 export type ReadonlyWorkspaceFunctionName =

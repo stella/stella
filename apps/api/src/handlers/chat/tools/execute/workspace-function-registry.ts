@@ -12,6 +12,7 @@ import {
   getMatterPropertiesContract,
   listMatterEntitiesContract,
   listMatterPropertiesContract,
+  searchInEntityContentContract,
 } from "@/api/handlers/chat/tools/execute/workspace-manifest";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
@@ -19,6 +20,90 @@ import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { deserializeAITool } from "@/api/lib/markdown/ai-tool";
 
 const CONTENT_MAX_CHARS = 8000;
+
+/**
+ * Window of context to include on each side of a search hit
+ * returned by `searchInEntityContent`. 200 + 200 + query length
+ * is enough to read a full sentence around most matches without
+ * blowing up the AI's token budget.
+ */
+const SEARCH_SNIPPET_CONTEXT_CHARS = 200;
+
+/**
+ * Hard cap on how many matches the search scans for per entity,
+ * regardless of the requested `limit`. Prevents pathological queries
+ * (a single space, a single common letter) from walking the whole
+ * doc. `totalHits` clamps to this value and is reported back so the
+ * model knows when it should narrow its query.
+ */
+const SEARCH_MAX_HITS_SCANNED = 100;
+
+/**
+ * Escape a literal substring so it can be embedded into a `RegExp`.
+ * The caller wants to search for the user's query verbatim, not as
+ * a regex pattern, so any regex metacharacter is neutralised.
+ */
+const escapeRegExp = (value: string): string =>
+  // eslint-disable-next-line require-unicode-regexp -- u flag rejected by @valibot/to-json-schema elsewhere; keeping policy consistent here.
+  value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+type SearchHit = { position: number; snippet: string };
+type SearchResult = {
+  hits: SearchHit[];
+  totalHits: number;
+  truncated: boolean;
+};
+
+const findHitsInText = (
+  text: string,
+  query: string,
+  options: { caseSensitive: boolean; limit: number; wholeWord: boolean },
+): SearchResult => {
+  const flags = options.caseSensitive ? "g" : "gi";
+  const escaped = escapeRegExp(query);
+  const pattern = options.wholeWord
+    ? `(?:^|[^\\p{L}\\p{N}])(${escaped})(?=$|[^\\p{L}\\p{N}])`
+    : `(${escaped})`;
+  // Unicode flag (`u`) is appended explicitly so `\p{L}` / `\p{N}`
+  // whole-word boundaries cover non-ASCII alphabets used in legal
+  // docs (the rule only fires on `new RegExp(literal)` without `u`).
+  const re = new RegExp(pattern, `${flags}u`);
+  const hits: SearchHit[] = [];
+  let totalHits = 0;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text)) !== null) {
+    // Capture group 1 always exists because the pattern wraps the
+    // escaped query in `(...)`. Narrowing here keeps the helper
+    // self-contained without a runtime branch.
+    const captured = match[1] ?? panic("search match missing capture group");
+    totalHits++;
+    if (hits.length < options.limit) {
+      const hitStart = match.index + (match[0].length - captured.length);
+      const snippetStart = Math.max(0, hitStart - SEARCH_SNIPPET_CONTEXT_CHARS);
+      const snippetEnd = Math.min(
+        text.length,
+        hitStart + captured.length + SEARCH_SNIPPET_CONTEXT_CHARS,
+      );
+      hits.push({
+        position: hitStart,
+        snippet: text.slice(snippetStart, snippetEnd),
+      });
+    }
+    if (totalHits >= SEARCH_MAX_HITS_SCANNED) {
+      break;
+    }
+    // Guard against zero-width matches (shouldn't happen with a
+    // non-empty `query`, but cheap insurance against an infinite loop).
+    if (match.index === re.lastIndex) {
+      re.lastIndex++;
+    }
+  }
+  return {
+    hits,
+    totalHits,
+    truncated: hits.length < totalHits,
+  };
+};
 
 type WorkspaceFunctionContext = {
   allowedWorkspaceIds: SafeId<"workspace">[];
@@ -473,6 +558,117 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
         catch: (cause) =>
           new ChatToolError({
             message: "Failed to load extracted content.",
+            cause,
+          }),
+      });
+
+      return Result.ok({ items });
+    },
+  ),
+
+  [searchInEntityContentContract.name]: createToolFunction(
+    searchInEntityContentContract,
+    async function* (input) {
+      const workspaceIds = yield* refRegistry.resolveMatterRefs(
+        input.matterRefs,
+      );
+      const scopedWorkspaceIds = yield* ensureAllowedWorkspaceIds({
+        allowedWorkspaceIds,
+        workspaceIds,
+      });
+      const entityIds = yield* refRegistry.resolveEntityRefs(input.entityRefs);
+
+      const contentRows = yield* await safeDb((tx) =>
+        tx.query.extractedContent.findMany({
+          where: {
+            entityId: { in: entityIds },
+            organizationId: { eq: organizationId },
+            workspaceId: { in: scopedWorkspaceIds },
+          },
+          columns: {
+            charCount: true,
+            ciphertext: true,
+            entityId: true,
+            extractedAt: true,
+            iv: true,
+            workspaceId: true,
+          },
+          with: {
+            entity: {
+              columns: {
+                kind: true,
+                name: true,
+              },
+              with: {
+                currentVersion: {
+                  columns: {},
+                  with: {
+                    fields: {
+                      columns: { content: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          orderBy: {
+            extractedAt: "asc",
+          },
+        }),
+      );
+
+      const items = yield* await Result.tryPromise({
+        try: async () =>
+          await Promise.all(
+            contentRows.map(async (row) => {
+              const plaintext = await decryptContent(
+                organizationId,
+                row.ciphertext,
+                row.iv,
+              );
+              const entity = row.entity;
+              const fieldsForSource = entity?.currentVersion?.fields;
+              const name = entity?.name ?? null;
+              const { hits, totalHits, truncated } = findHitsInText(
+                plaintext,
+                input.query,
+                {
+                  caseSensitive: input.caseSensitive,
+                  limit: input.limit,
+                  wholeWord: input.wholeWord,
+                },
+              );
+
+              return {
+                charCount: row.charCount,
+                entityRef: refRegistry.toEntityRef({
+                  entityId: row.entityId,
+                  workspaceId: row.workspaceId,
+                }),
+                hits,
+                matterRef: refRegistry.toMatterRef(row.workspaceId),
+                mention: refRegistry.toEntityMention({
+                  entityId: row.entityId,
+                  label: name ?? "Untitled",
+                  workspaceId: row.workspaceId,
+                }),
+                name,
+                sourceDocument: buildChatSourceDocumentWithRefs({
+                  entityId: row.entityId,
+                  fields: fieldsForSource,
+                  kind: entity?.kind,
+                  name: entity?.name,
+                  refRegistry,
+                  workspaceId: row.workspaceId,
+                }),
+                totalHits,
+                truncated,
+              };
+            }),
+          ),
+        catch: (cause) =>
+          new ChatToolError({
+            message: "Failed to search extracted content.",
             cause,
           }),
       });

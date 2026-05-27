@@ -25,6 +25,7 @@ describe("workspace manifest helpers", () => {
         "listMatterEntities",
         "getMatterEntities",
         "getMatterEntityContents",
+        "searchInEntityContent",
       ]);
     }
   });
