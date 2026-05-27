@@ -1,4 +1,4 @@
-import type { PropsWithChildren } from "react";
+import { useState, type PropsWithChildren } from "react";
 
 import { EyeIcon, RefreshCwIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -140,6 +140,7 @@ const PropertyCell = ({
     if (fileFieldId) {
       return (
         <RetryableCellShell
+          disabled={cellMetadata?.locked === true || entity.readOnly}
           entityId={entity.entityId}
           propertyId={property.id}
           workspaceId={property.workspaceId}
@@ -177,6 +178,7 @@ const PropertyCell = ({
 
   return (
     <RetryableCellShell
+      disabled={cellMetadata?.locked === true || entity.readOnly}
       entityId={entity.entityId}
       propertyId={property.id}
       workspaceId={property.workspaceId}
@@ -204,10 +206,17 @@ type RetryableCellShellProps = {
   entityId: string;
   propertyId: string;
   workspaceId: string;
+  /**
+   * `true` when the cell is manually locked or the entity is
+   * read-only. The menu still opens (so the user sees the action
+   * exists) but the retry item is disabled — the server would reject
+   * the request anyway with a 409.
+   */
+  disabled?: boolean;
 };
 
 /**
- * Adds a right-click menu with "Retry extraction" to AI-model cells.
+ * Adds a right-click menu with a "Retry" item to AI-model cells.
  * Wraps children in a div so the contextmenu listener has a DOM node;
  * `display: contents` keeps the wrapper out of the cell's layout.
  */
@@ -215,13 +224,34 @@ const RetryableCellShell = ({
   entityId,
   propertyId,
   workspaceId,
+  disabled,
   children,
 }: PropsWithChildren<RetryableCellShellProps>) => {
   const t = useTranslations();
   const retryCell = useRetryCell(workspaceId);
+  // Block double-submits while the request is in flight; a duplicate
+  // click would otherwise race a second mutation against the server's
+  // workflow-running check and toast a misleading 409.
+  const [isPending, setIsPending] = useState(false);
+
+  const handleRetry = async () => {
+    if (isPending || disabled) {
+      return;
+    }
+    setIsPending(true);
+    try {
+      await retryCell({ entityId, propertyId });
+    } finally {
+      setIsPending(false);
+    }
+  };
+
   const menu = useAnchoredMenu({
     children: (
-      <MenuItem onClick={() => void retryCell({ entityId, propertyId })}>
+      <MenuItem
+        disabled={disabled || isPending}
+        onClick={() => void handleRetry()}
+      >
         <RefreshCwIcon />
         {t("common.retry")}
       </MenuItem>

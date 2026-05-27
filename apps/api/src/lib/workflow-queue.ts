@@ -86,6 +86,13 @@ type EntityJobData = {
   entityId: string;
   executionPlan: ExecutionLevel[];
   requestId: string;
+  /**
+   * Property IDs the caller wants processed even if their current
+   * content would normally cause `prepareBatch` to skip them (e.g. a
+   * `fresh` cell with a real value). Used by single-cell retry so a
+   * user can re-run an extraction over an already-populated cell.
+   */
+  forcePropertyIds?: string[];
 };
 
 // ── Public API ─────────────────────────────────────────
@@ -236,6 +243,7 @@ type EnqueueEntityJobsArgs = {
   requestId: string;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
+  forcePropertyIds?: readonly SafeId<"property">[];
 };
 
 const chunkItems = <T>(items: readonly T[], size: number): T[][] => {
@@ -263,6 +271,7 @@ const enqueueEntityJobs = async ({
   requestId,
   userId,
   workspaceId,
+  forcePropertyIds,
 }: EnqueueEntityJobsArgs): Promise<void> => {
   if (entityIds.length === 0) {
     return;
@@ -283,6 +292,10 @@ const enqueueEntityJobs = async ({
           entityId,
           executionPlan,
           requestId,
+          ...(forcePropertyIds &&
+            forcePropertyIds.length > 0 && {
+              forcePropertyIds: [...forcePropertyIds],
+            }),
         } satisfies EntityJobData,
         opts: { jobId },
       };
@@ -603,6 +616,10 @@ export const startWorkflow = async ({
           requestId,
           userId,
           workspaceId,
+          ...(inputPropertyIds &&
+            inputPropertyIds.length > 0 && {
+              forcePropertyIds: inputPropertyIds,
+            }),
         });
       }
     } catch (error: unknown) {
@@ -820,7 +837,9 @@ const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
     entityId,
     executionPlan,
     requestId,
+    forcePropertyIds,
   } = data;
+  const forcedPropertyIds: ReadonlySet<string> = new Set(forcePropertyIds);
 
   // Brand IDs at the boundary — job data stores plain strings (JSON).
   const branded = brandValidatedWorkflowActorKey({
@@ -876,6 +895,7 @@ const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
             scopedDb,
             requestId,
             signal,
+            forcedPropertyIds,
           }),
       ),
     );
@@ -906,6 +926,7 @@ type ProcessOneBatchArgs = {
   scopedDb: ScopedDb;
   requestId: string;
   signal: AbortSignal;
+  forcedPropertyIds: ReadonlySet<string>;
 };
 
 type BatchPreviewPublisherArgs = {
@@ -990,6 +1011,7 @@ const processOneBatch = async ({
   scopedDb,
   requestId,
   signal,
+  forcedPropertyIds,
 }: ProcessOneBatchArgs) => {
   signal.throwIfAborted();
   const isCurrentRequest = await isCurrentWorkflowRequest({
@@ -1054,7 +1076,12 @@ const processOneBatch = async ({
       .map((row) => row.propertyId),
   );
 
-  const batch = prepareBatch(rawBatch, fieldContentMap, lockedPropertyIds);
+  const batch = prepareBatch(
+    rawBatch,
+    fieldContentMap,
+    lockedPropertyIds,
+    forcedPropertyIds,
+  );
 
   if (batch.properties.length === 0) {
     return;
