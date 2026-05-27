@@ -43,11 +43,20 @@ export const useDocxFitZoom = (
       setFitZoom(clampDocxZoom(Math.round(cappedFitZoom * 100) / 100));
     };
 
+    // First synchronous measure for the common case (parent already
+    // sized when we mount).
     updateZoom();
+    // Belt-and-braces retry on the next frame for surfaces where the
+    // parent finishes sizing after our layout effect — e.g. when the
+    // inspector pane expands from rail to full width at the same
+    // commit cycle the docx tab opens; without this the editor sticks
+    // at zoom=1 and the page overflows the panel.
+    const rafId = requestAnimationFrame(updateZoom);
     const observer = new ResizeObserver(updateZoom);
     observer.observe(container);
 
     return () => {
+      cancelAnimationFrame(rafId);
       observer.disconnect();
     };
   }, [containerRef, maxAutoZoom]);
