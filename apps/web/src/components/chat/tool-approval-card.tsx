@@ -263,6 +263,10 @@ const ActiveDocxEditSummary = ({ input }: ActiveDocxEditSummaryProps) => {
         return t("docxCommentSummary", {
           blockId: operation.blockId,
         });
+      case "insertSignatureTable":
+        return t("docxSignatureTableSummary", {
+          blockId: operation.blockId,
+        });
       default:
         operation satisfies never;
         return panic("Unsupported DOCX edit operation");

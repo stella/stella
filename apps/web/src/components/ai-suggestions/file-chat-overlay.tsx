@@ -104,13 +104,25 @@ const summarizeOperation = (operation: ToolInputOperation): string => {
     case "replaceBlock":
       return `Replace block ${operation.blockId}`;
     case "insertAfterBlock":
-      return `Insert after ${operation.blockId}: ${operation.text}`;
-    case "insertBeforeBlock":
-      return `Insert before ${operation.blockId}: ${operation.text}`;
+    case "insertBeforeBlock": {
+      const direction =
+        operation.type === "insertAfterBlock" ? "after" : "before";
+      if (operation.pageBreakBefore === true && operation.text.length === 0) {
+        return `Insert page break ${direction} ${operation.blockId}`;
+      }
+      if (operation.styleId !== undefined) {
+        return `Insert ${operation.styleId} ${direction} ${operation.blockId}: ${operation.text}`;
+      }
+      return `Insert ${direction} ${operation.blockId}: ${operation.text}`;
+    }
     case "deleteBlock":
       return `Delete block ${operation.blockId}`;
     case "commentOnBlock":
       return `Comment on ${operation.blockId}`;
+    case "insertSignatureTable": {
+      const names = operation.parties.map((p) => p.name).join(", ");
+      return `Insert signature table for ${names}`;
+    }
     default:
       operation satisfies never;
       return "";
@@ -132,6 +144,7 @@ const getOperationComment = (
     case "insertBeforeBlock":
     case "replaceBlock":
     case "deleteBlock":
+    case "insertSignatureTable":
       return operation.comment ? { text: operation.comment.text } : undefined;
     case "commentOnBlock":
       return { text: operation.comment.text };
@@ -141,19 +154,11 @@ const getOperationComment = (
   }
 };
 
-// Strip legal-source directive markers (`@pagebreak`, `@clause LEVEL
-// "TITLE"`, `@signatures party: …`, `@paragraph `, `@signature`,
-// `@section`) and unwrap `[[placeholders]]` to plain text. The model
-// sometimes carries the create-document template syntax into apply
-// operations; without cleanup those tokens render as raw characters
-// in the document, which looks buggy.
-//
-// This pass only flattens the text — it does NOT produce real page
-// breaks, headings, or signature tables. Folio's apply ops don't
-// have a field for `pageBreakBefore` or `styleId`; structural
-// expansion requires a new op-schema (`insertPageBreak`,
-// `insertHeading`, `insertSignatureTable`) before the apply layer
-// can render those properly.
+// Defense-in-depth: even with the structural ops below, the model can
+// still emit raw directive text inside `text` (older transcripts, or
+// when it forgets to use the canonical op). Strip directive markers
+// and unwrap `[[placeholders]]` so the text reads cleanly rather than
+// landing in the doc as literal `@pagebreak` / `[[date]]` characters.
 const DIRECTIVE_LINE_RE =
   /^\s*@(?:pagebreak|signature|signatures|signature_block|section|paragraph|clause|schedule|note|recital|recitals)\b\s*/iu;
 const PLACEHOLDER_RE = /\[\[([^\]]+)\]\]/gu;
@@ -181,6 +186,134 @@ const cleanDirectiveText = (text: string): string => {
     .trim();
 };
 
+type PrepareOperationOptions = {
+  operation: ToolInputOperation;
+  id: string;
+  comment: { text: string } | undefined;
+};
+
+const toFolioOperation = ({
+  operation,
+  id,
+  comment,
+}: PrepareOperationOptions): FolioAIEditOperation | null => {
+  switch (operation.type) {
+    case "replaceInBlock": {
+      const next: FolioAIEditOperation = {
+        blockId: operation.blockId,
+        find: operation.find,
+        id,
+        replace: operation.replace,
+        type: operation.type,
+      };
+      if (comment) {
+        next.comment = comment;
+      }
+      return next;
+    }
+    case "insertAfterBlock":
+    case "insertBeforeBlock": {
+      const next: FolioAIEditOperation = {
+        blockId: operation.blockId,
+        id,
+        text: cleanDirectiveText(operation.text),
+        type: operation.type,
+      };
+      if (operation.inheritFormatting !== undefined) {
+        next.inheritFormatting = operation.inheritFormatting;
+      }
+      if (operation.pageBreakBefore !== undefined) {
+        next.pageBreakBefore = operation.pageBreakBefore;
+      }
+      if (operation.styleId !== undefined) {
+        next.styleId = operation.styleId;
+      }
+      if (comment) {
+        next.comment = comment;
+      }
+      return next;
+    }
+    case "replaceBlock": {
+      const cleanedText = cleanDirectiveText(operation.text);
+      // Empty replacement = remove the block. The canonical op for
+      // that is `deleteBlock`; normalize at the boundary so the model
+      // doesn't have to pick between two operations.
+      if (cleanedText.length === 0) {
+        const next: FolioAIEditOperation = {
+          blockId: operation.blockId,
+          id,
+          type: "deleteBlock",
+        };
+        if (comment) {
+          next.comment = comment;
+        }
+        return next;
+      }
+      const next: FolioAIEditOperation = {
+        blockId: operation.blockId,
+        id,
+        text: cleanedText,
+        type: operation.type,
+      };
+      if (operation.preserveFormatting !== undefined) {
+        next.preserveFormatting = operation.preserveFormatting;
+      }
+      if (operation.styleId !== undefined) {
+        next.styleId = operation.styleId;
+      }
+      if (comment) {
+        next.comment = comment;
+      }
+      return next;
+    }
+    case "insertSignatureTable": {
+      const next: FolioAIEditOperation = {
+        blockId: operation.blockId,
+        id,
+        parties: operation.parties.map((p) => ({
+          name: p.name,
+          ...(p.signatory !== undefined && { signatory: p.signatory }),
+          ...(p.title !== undefined && { title: p.title }),
+        })),
+        type: operation.type,
+      };
+      if (operation.position !== undefined) {
+        next.position = operation.position;
+      }
+      if (comment) {
+        next.comment = comment;
+      }
+      return next;
+    }
+    case "deleteBlock": {
+      const next: FolioAIEditOperation = {
+        blockId: operation.blockId,
+        id,
+        type: operation.type,
+      };
+      if (comment) {
+        next.comment = comment;
+      }
+      return next;
+    }
+    case "commentOnBlock": {
+      const next: FolioAIEditOperation = {
+        blockId: operation.blockId,
+        comment: { text: operation.comment.text },
+        id,
+        type: operation.type,
+      };
+      if (operation.quote !== undefined) {
+        next.quote = operation.quote;
+      }
+      return next;
+    }
+    default:
+      operation satisfies never;
+      return null;
+  }
+};
+
 const prepareOperations = (
   operations: ApplyActiveDocxEditsInput["operations"],
 ): PreparedOperation[] => {
@@ -189,102 +322,9 @@ const prepareOperations = (
   for (const [index, operation] of operations.entries()) {
     const id = `ai-docx-${String(index + 1)}-${uuidv7()}`;
     const comment = getOperationComment(operation);
-    let folio: FolioAIEditOperation;
-    switch (operation.type) {
-      case "replaceInBlock": {
-        const next: FolioAIEditOperation = {
-          blockId: operation.blockId,
-          find: operation.find,
-          id,
-          replace: operation.replace,
-          type: operation.type,
-        };
-        if (comment) {
-          next.comment = comment;
-        }
-        folio = next;
-        break;
-      }
-      case "insertAfterBlock":
-      case "insertBeforeBlock": {
-        const next: FolioAIEditOperation = {
-          blockId: operation.blockId,
-          id,
-          text: cleanDirectiveText(operation.text),
-          type: operation.type,
-        };
-        if (operation.inheritFormatting !== undefined) {
-          next.inheritFormatting = operation.inheritFormatting;
-        }
-        if (comment) {
-          next.comment = comment;
-        }
-        folio = next;
-        break;
-      }
-      case "replaceBlock": {
-        const cleanedText = cleanDirectiveText(operation.text);
-        // Empty replacement = the model intends to remove the block.
-        // The canonical op for that is `deleteBlock` (keeps the
-        // paragraph container deletion semantics, doesn't leave an
-        // orphan empty paragraph). Normalize at the boundary so the
-        // model doesn't have to pick between two operations.
-        if (cleanedText.length === 0) {
-          const next: FolioAIEditOperation = {
-            blockId: operation.blockId,
-            id,
-            type: "deleteBlock",
-          };
-          if (comment) {
-            next.comment = comment;
-          }
-          folio = next;
-          break;
-        }
-        const next: FolioAIEditOperation = {
-          blockId: operation.blockId,
-          id,
-          text: cleanedText,
-          type: operation.type,
-        };
-        if (operation.preserveFormatting !== undefined) {
-          next.preserveFormatting = operation.preserveFormatting;
-        }
-        if (comment) {
-          next.comment = comment;
-        }
-        folio = next;
-        break;
-      }
-      case "deleteBlock": {
-        const next: FolioAIEditOperation = {
-          blockId: operation.blockId,
-          id,
-          type: operation.type,
-        };
-        if (comment) {
-          next.comment = comment;
-        }
-        folio = next;
-        break;
-      }
-      case "commentOnBlock": {
-        const next: FolioAIEditOperation = {
-          blockId: operation.blockId,
-          comment: { text: operation.comment.text },
-          id,
-          type: operation.type,
-        };
-        if (operation.quote !== undefined) {
-          next.quote = operation.quote;
-        }
-        folio = next;
-        break;
-      }
-      default: {
-        operation satisfies never;
-        continue;
-      }
+    const folio = toFolioOperation({ operation, id, comment });
+    if (folio === null) {
+      continue;
     }
     prepared.push({ folio, input: operation, id });
   }
@@ -421,6 +461,21 @@ const buildPreview = (
             anchorRuns: block.previewRuns,
             anchorEnd: Math.min(blockText.length, PREVIEW_ANCHOR_CHARS),
           }),
+      };
+    case "insertSignatureTable":
+      return {
+        type: "insertSignatureTable",
+        anchor: blockText.slice(0, PREVIEW_ANCHOR_CHARS),
+        parties: operation.parties.map((p) => ({
+          name: p.name,
+          ...(p.signatory !== undefined && { signatory: p.signatory }),
+          ...(p.title !== undefined && { title: p.title }),
+        })),
+        position: operation.position ?? "after",
+        ...(block?.previewRuns !== undefined && {
+          anchorRuns: block.previewRuns,
+          anchorEnd: Math.min(blockText.length, PREVIEW_ANCHOR_CHARS),
+        }),
       };
     default:
       operation satisfies never;

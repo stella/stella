@@ -484,6 +484,7 @@
       "docxInsertBeforeSummary": "Insert text before {blockId}",
       "docxReplaceBlockSummary": "Replace {blockId}",
       "docxReplaceSummary": "Replace “{find}” with “{replace}”",
+      "docxSignatureTableSummary": "Insert signature table near {blockId}",
       "execute-typescript": "Leyendo datos del asunto",
       "fetch_url": "Leyendo página",
       "load-skill": "Leyendo instrucciones",

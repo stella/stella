@@ -1090,6 +1090,32 @@ const RedlinePreview = ({
           {preview.anchor}
         </p>
       );
+    case "insertSignatureTable": {
+      // Compact preview: anchor snippet + an arrow + a column-list
+      // of party names. The reviewer needs to recognise that this
+      // is a structural insert, not free text — listing the party
+      // names captures the gist without recreating the full table
+      // layout inside the panel card.
+      const partyList = preview.parties
+        .map((party) => party.name)
+        .filter((name) => name.length > 0)
+        .join("  |  ");
+      return (
+        <p aria-label={srSummary} className={baseCls}>
+          {preview.anchorRuns !== undefined &&
+            preview.anchorEnd !== undefined && (
+              <>
+                {renderFormattedRuns(
+                  slicePreviewRuns(preview.anchorRuns, 0, preview.anchorEnd),
+                  contextCls,
+                )}
+                {arrow}
+              </>
+            )}
+          <span className={insCls}>{partyList}</span>
+        </p>
+      );
+    }
     default:
       preview satisfies never;
       return null;

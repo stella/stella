@@ -487,6 +487,7 @@ type Messages = {
       "docxInsertBeforeSummary": "Insert text before {blockId}";
       "docxReplaceBlockSummary": "Replace {blockId}";
       "docxReplaceSummary": "Replace “{find}” with “{replace}”";
+      "docxSignatureTableSummary": "Insert signature table near {blockId}";
       "execute-typescript": "Reading workspace data";
       "fetch_url": "Reading page";
       "load-skill": "Reading guidance";

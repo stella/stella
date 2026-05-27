@@ -484,6 +484,7 @@
       "docxInsertBeforeSummary": "Vložiť text pred {blockId}",
       "docxReplaceBlockSummary": "Nahradiť {blockId}",
       "docxReplaceSummary": "Nahradiť „{find}“ za „{replace}“",
+      "docxSignatureTableSummary": "Insert signature table near {blockId}",
       "execute-typescript": "Čítam dáta veci",
       "fetch_url": "Čítanie stránky",
       "load-skill": "Čítam pokyny",

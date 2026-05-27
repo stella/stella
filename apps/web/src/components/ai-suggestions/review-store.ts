@@ -73,6 +73,17 @@ export type ReviewSuggestionPreview =
       anchor: string;
       anchorRuns?: readonly FolioAIBlockPreviewRun[];
       anchorEnd?: number;
+    }
+  | {
+      type: "insertSignatureTable";
+      /** Short excerpt of the anchor block the table will sit beside. */
+      anchor: string;
+      anchorRuns?: readonly FolioAIBlockPreviewRun[];
+      anchorEnd?: number;
+      /** Party names rendered in the preview, in column order. */
+      parties: readonly { name: string; signatory?: string; title?: string }[];
+      /** "after" (default) or "before" the anchor block. */
+      position: "after" | "before";
     };
 
 export type ReviewSuggestion = {
