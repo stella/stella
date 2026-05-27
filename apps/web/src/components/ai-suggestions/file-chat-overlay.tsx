@@ -688,8 +688,19 @@ const FileChatOverlayInner = ({
         window.clearInterval(id);
       }
     }, 80);
+    // Safety net: never leave the chat input gated indefinitely. If the probe
+    // hasn't succeeded after a few seconds (e.g. an edge case where the
+    // virtualised paged editor hasn't surfaced a non-empty doc to
+    // `createAIEditSnapshot` yet), unlock the input anyway —
+    // `canSubmitWithCurrentDocxSnapshot` runs at submit time and re-checks
+    // the snapshot, so a stale unlock can't send unanchored edits.
+    const fallback = window.setTimeout(() => {
+      window.clearInterval(id);
+      setEditorReady(true);
+    }, 3000);
     return () => {
       window.clearInterval(id);
+      window.clearTimeout(fallback);
     };
   }, [editorReady, hasDocxEditSurface, docxEditorRef]);
   // Reset readiness when the active file changes — the new doc has
