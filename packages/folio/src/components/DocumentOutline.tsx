@@ -212,7 +212,7 @@ export const DocumentOutline: React.FC<DocumentOutlineProps> = ({
     [],
   );
 
-  if (positioned.length < 2) {
+  if (headings.length < 2 || positioned.length === 0) {
     return null;
   }
 
