@@ -476,38 +476,12 @@ export const ReviewPanelImpl = ({
           </div>
         )}
 
-        {/* Progress + group-by row. The progress bar gives the
-         *  reviewer an at-a-glance sense of how far they've gotten;
-         *  the dropdown lets them switch axis without burning two
-         *  full toggle buttons in a narrow facet panel. */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <div className="flex max-w-full min-w-36 flex-1 items-center gap-2">
-            <div
-              aria-hidden="true"
-              className="bg-muted h-1 min-w-12 flex-1 overflow-hidden rounded-full"
-            >
-              <div
-                className="h-full bg-emerald-500 transition-[width] duration-300 ease-out dark:bg-emerald-400"
-                style={{
-                  width: total > 0 ? `${(reviewedCount / total) * 100}%` : "0%",
-                }}
-              />
-            </div>
-            <span
-              aria-label={t("docxReview.progressAria", {
-                reviewed: String(reviewedCount),
-                total: String(total),
-              })}
-              className="text-foreground shrink-0 text-xs whitespace-nowrap tabular-nums"
-            >
-              <span className="font-semibold">
-                {reviewedCount} / {total}
-              </span>{" "}
-              <span className="text-muted-foreground">
-                {t("docxReview.reviewed")}
-              </span>
-            </span>
-          </div>
+        {/* Settings row — group-by + apply-mode + author avatar as
+         *  subtle chips. Progress is communicated by the list itself
+         *  (cards disappear as the reviewer acts on them) and by the
+         *  per-section header counts; a dedicated progress strip
+         *  duplicated that info for no gain. */}
+        <div className="flex min-w-0 items-center gap-1.5 text-xs">
           <Select
             onValueChange={(value) => {
               if (value === "severity" || value === "area") {
@@ -530,11 +504,8 @@ export const ReviewPanelImpl = ({
               <SelectItem value="area">{t("docxReview.byArea")}</SelectItem>
             </SelectPopup>
           </Select>
-        </div>
-
-        {pendingCount > 0 && (
-          <div className="mt-2.5">
-            <div className="flex min-w-0 items-center gap-1.5 text-xs">
+          {pendingCount > 0 && (
+            <>
               <Select
                 onValueChange={(value) => {
                   if (value === "tracked-changes" || value === "direct") {
@@ -575,9 +546,9 @@ export const ReviewPanelImpl = ({
                   onHideAcceptedChange={setHideAccepted}
                 />
               )}
-            </div>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto px-2 py-2">
