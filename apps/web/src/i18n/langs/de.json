@@ -425,6 +425,12 @@
       },
       "tryOne": "Probiere einen davon zum Start"
     },
+    "skills": {
+      "scope": {
+        "private": "Eigene KI-Skills",
+        "team": "Team-KI-Skills"
+      }
+    },
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
     "queuedNotice": "Queued — sends when the current response finishes",
     "removeSuggestion": "(entfernen)",

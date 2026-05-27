@@ -6,7 +6,8 @@ import { ChatPastedTextNode } from "@/components/chat-pasted-text-node";
 
 export const PASTED_TEXT_NODE_NAME = "pastedText";
 
-export const PASTED_TEXT_SOURCES = ["paste", "prompt"] as const;
+export const PASTED_TEXT_SOURCES = ["paste", "prompt", "skill"] as const;
+export const SKILL_CHIP_HREF_PREFIX = "#stella-skill-ref=";
 export type PastedTextSource = (typeof PASTED_TEXT_SOURCES)[number];
 
 export type PastedTextAttrs = {
@@ -146,6 +147,20 @@ export const PastedText = Node.create({
   renderHTML({ HTMLAttributes, node }) {
     const text =
       typeof node.attrs["text"] === "string" ? node.attrs["text"] : "";
+    const source = isPastedTextSource(node.attrs["source"])
+      ? node.attrs["source"]
+      : "paste";
+    if (source === "skill") {
+      const label =
+        typeof node.attrs["label"] === "string" && node.attrs["label"].length > 0
+          ? node.attrs["label"]
+          : text;
+      return [
+        "pasted-text",
+        mergeAttributes(HTMLAttributes),
+        ["a", { href: `${SKILL_CHIP_HREF_PREFIX}${text}` }, label],
+      ];
+    }
     return [
       "pasted-text",
       mergeAttributes(HTMLAttributes),
@@ -154,7 +169,19 @@ export const PastedText = Node.create({
   },
 
   renderText({ node }) {
-    return typeof node.attrs["text"] === "string" ? node.attrs["text"] : "";
+    const text =
+      typeof node.attrs["text"] === "string" ? node.attrs["text"] : "";
+    const source = isPastedTextSource(node.attrs["source"])
+      ? node.attrs["source"]
+      : "paste";
+    if (source === "skill") {
+      const label =
+        typeof node.attrs["label"] === "string" && node.attrs["label"].length > 0
+          ? node.attrs["label"]
+          : text;
+      return `[${label}](${SKILL_CHIP_HREF_PREFIX}${text})`;
+    }
+    return text;
   },
 
   addNodeView() {

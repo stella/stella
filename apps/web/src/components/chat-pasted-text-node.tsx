@@ -2,7 +2,12 @@ import { useEffect, useState } from "react";
 
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
-import { ClipboardPasteIcon, SparklesIcon, XIcon } from "lucide-react";
+import {
+  ClipboardPasteIcon,
+  SparklesIcon,
+  WandSparklesIcon,
+  XIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -42,14 +47,19 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
   };
 
   const fallbackLabel =
-    attrs.source === "prompt"
+    attrs.source === "prompt" || attrs.source === "skill"
       ? t("chat.pastedText.fromPromptFallback")
       : t("chat.pastedText.fromClipboard", {
           count: attrs.text.length,
         });
   const chipLabel = attrs.label.length > 0 ? attrs.label : fallbackLabel;
 
-  const Icon = attrs.source === "prompt" ? SparklesIcon : ClipboardPasteIcon;
+  const Icon =
+    attrs.source === "skill"
+      ? WandSparklesIcon
+      : attrs.source === "prompt"
+        ? SparklesIcon
+        : ClipboardPasteIcon;
 
   return (
     <NodeViewWrapper className="inline" data-source={attrs.source}>

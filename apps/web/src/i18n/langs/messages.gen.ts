@@ -428,6 +428,12 @@ type Messages = {
       };
       "tryOne": "Try one of these to start";
     };
+    "skills": {
+      "scope": {
+        "private": "Your AI skills";
+        "team": "Team AI skills";
+      };
+    };
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}";
     "queuedNotice": "Queued — sends when the current response finishes";
     "removeSuggestion": "(remove)";

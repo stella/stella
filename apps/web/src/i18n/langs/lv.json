@@ -425,6 +425,12 @@
       },
       "tryOne": "Izmēģini vienu no tiem"
     },
+    "skills": {
+      "scope": {
+        "private": "Jūsu MI prasmes",
+        "team": "Komandas MI prasmes"
+      }
+    },
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
     "queuedNotice": "Queued — sends when the current response finishes",
     "removeSuggestion": "(noņemt)",

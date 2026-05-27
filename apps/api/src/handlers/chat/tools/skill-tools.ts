@@ -126,6 +126,7 @@ export const createSkillTools = ({
         return {
           skillName,
           path,
+          mimeType: inferSkillResourceMimeType(path),
           content: await readSkillResourceContent({
             organizationId,
             path,
@@ -166,6 +167,25 @@ const readSkillResourceContent = async ({
     });
   }
   return resourceResult.value;
+};
+
+const SKILL_RESOURCE_MIME_BY_EXT: Record<string, string> = {
+  md: "text/markdown",
+  markdown: "text/markdown",
+  txt: "text/plain",
+  json: "application/json",
+  yaml: "application/yaml",
+  yml: "application/yaml",
+  pdf: "application/pdf",
+};
+
+const inferSkillResourceMimeType = (path: string): string => {
+  const lastDot = path.lastIndexOf(".");
+  if (lastDot === -1) {
+    return "text/plain";
+  }
+  const ext = path.slice(lastDot + 1).toLowerCase();
+  return SKILL_RESOURCE_MIME_BY_EXT[ext] ?? "text/plain";
 };
 
 const assertAvailableSkill = ({

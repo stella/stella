@@ -10,7 +10,11 @@ import {
 } from "react";
 import type React from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import HardBreak from "@tiptap/extension-hard-break";
@@ -44,6 +48,7 @@ import {
 import {
   createPromptSlashSuggestion,
   PromptSlash,
+  type SlashItem,
 } from "@/components/chat/prompt-slash-extension";
 import { createPromptEditorDocument } from "@/components/prompt-editor";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -55,7 +60,10 @@ import {
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import type { WorkspaceEntity } from "@/lib/types";
-import { shortcutsOptions } from "@/routes/_protected.knowledge/-queries";
+import {
+  shortcutsOptions,
+  skillsOptions,
+} from "@/routes/_protected.knowledge/-queries";
 import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 
@@ -695,19 +703,37 @@ export const useChatEditor = ({
   const { data: shortcuts = [] } = useQuery(
     shortcutsOptions(activeOrganizationId),
   );
-  const allPrompts = useMemo(
-    () =>
-      shortcuts.map((s) => ({
+  const { data: skillPages } = useInfiniteQuery(
+    skillsOptions(activeOrganizationId),
+  );
+  const slashItems = useMemo<SlashItem[]>(() => {
+    const promptItems: SlashItem[] = shortcuts.map((s) => ({
+      kind: "prompt" as const,
+      prompt: {
         id: s.id,
         scope: s.scope,
         name: s.name,
         command: s.command,
         body: s.prompt,
-      })),
-    [shortcuts],
-  );
-  const promptsRef = useRef(allPrompts);
-  promptsRef.current = allPrompts;
+      },
+    }));
+    const skillRows = skillPages?.pages.flatMap((p) => p.installed ?? []) ?? [];
+    const skillItems: SlashItem[] = skillRows
+      .filter((row) => row?.enabled === true)
+      .map((row) => ({
+        kind: "skill" as const,
+        skill: {
+          id: row.id,
+          name: row.name,
+          slug: row.slug,
+          description: row.description,
+          scope: row.scope,
+        },
+      }));
+    return [...promptItems, ...skillItems];
+  }, [shortcuts, skillPages]);
+  const slashItemsRef = useRef(slashItems);
+  slashItemsRef.current = slashItems;
 
   const handleMessageHistoryKeyDown = useCallback(
     (state: EditorState, event: KeyboardEvent) => {
@@ -817,7 +843,7 @@ export const useChatEditor = ({
         deleteTriggerWithBackspace: true,
       }),
       PromptSlash.configure({
-        suggestion: createPromptSlashSuggestion(() => promptsRef.current),
+        suggestion: createPromptSlashSuggestion(() => slashItemsRef.current),
       }),
       PastedText,
     ],

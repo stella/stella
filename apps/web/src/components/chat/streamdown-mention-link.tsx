@@ -10,6 +10,7 @@ import {
   LandmarkIcon,
   LayersIcon,
   ListTodoIcon,
+  WandSparklesIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -34,6 +35,7 @@ import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-quer
 const DECISION_HASH_PREFIX = "#stella-decision=";
 const ENTITY_REF_HASH_PREFIX = "#stella-entity-ref=";
 const WORKSPACE_REF_HASH_PREFIX = "#stella-workspace-ref=";
+export const SKILL_REF_HASH_PREFIX = "#stella-skill-ref=";
 // Hash fragment, NOT a `folio:` scheme. Streamdown runs
 // rehype-sanitize over rendered links; only its protocol
 // whitelist (http/https/mailto/tel) survives. Custom schemes
@@ -241,36 +243,120 @@ const EntityRefChip = ({
   rawId,
   label,
   fallbackWorkspaceId,
+  interactive,
 }: {
   rawId: string;
   label: React.ReactNode;
   fallbackWorkspaceId?: string | undefined;
+  interactive: boolean;
 }) => {
+  const navigate = useNavigate();
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+
   const separator = rawId.indexOf(":");
   const refWorkspaceId =
     separator !== -1 ? rawId.slice(0, separator) : fallbackWorkspaceId;
   const refEntityId = separator !== -1 ? rawId.slice(separator + 1) : rawId;
+  const textLabel = typeof label === "string" ? label : "Reference";
+  const icon = (
+    <EntityChipIcon
+      entityId={refEntityId}
+      label={label}
+      workspaceId={refWorkspaceId}
+    />
+  );
+  const displayLabel = getEntityDisplayLabel(label);
+
+  if (!interactive || !refWorkspaceId) {
+    return (
+      <InlinePill leadingIcon={icon} truncate>
+        {displayLabel}
+      </InlinePill>
+    );
+  }
+
   return (
     <InlinePill
-      leadingIcon={
-        <EntityChipIcon
-          entityId={refEntityId}
-          label={label}
-          workspaceId={refWorkspaceId}
-        />
-      }
+      leadingIcon={icon}
+      onActivate={buildParsedEntityActivate({
+        navigate,
+        pathname,
+        id: refEntityId,
+        textLabel,
+        workspaceId: refWorkspaceId,
+      })}
       truncate
     >
-      {getEntityDisplayLabel(label)}
+      {displayLabel}
     </InlinePill>
   );
 };
 
-const WorkspaceRefChip = ({ label }: { label: React.ReactNode }) => (
-  <InlinePill leadingIcon={<LayersIcon className="size-3 shrink-0" />} truncate>
-    {label}
-  </InlinePill>
-);
+const SkillRefChip = ({
+  label,
+  interactive,
+}: {
+  slug: string;
+  label: React.ReactNode;
+  interactive: boolean;
+}) => {
+  const navigate = useNavigate();
+  const icon = <WandSparklesIcon className="size-3 shrink-0" />;
+  if (!interactive) {
+    return (
+      <InlinePill leadingIcon={icon} truncate>
+        {label}
+      </InlinePill>
+    );
+  }
+  return (
+    <InlinePill
+      leadingIcon={icon}
+      onActivate={() =>
+        void navigate({ to: "/knowledge/skills" })
+      }
+      truncate
+    >
+      {label}
+    </InlinePill>
+  );
+};
+
+const WorkspaceRefChip = ({
+  workspaceId,
+  label,
+  interactive,
+}: {
+  workspaceId: string;
+  label: React.ReactNode;
+  interactive: boolean;
+}) => {
+  const navigate = useNavigate();
+  const icon = <LayersIcon className="size-3 shrink-0" />;
+  if (!interactive) {
+    return (
+      <InlinePill leadingIcon={icon} truncate>
+        {label}
+      </InlinePill>
+    );
+  }
+  return (
+    <InlinePill
+      leadingIcon={icon}
+      onActivate={() =>
+        void navigate({
+          to: "/workspaces/$workspaceId",
+          params: { workspaceId },
+        })
+      }
+      truncate
+    >
+      {label}
+    </InlinePill>
+  );
+};
 
 const buildParsedEntityActivate =
   ({
@@ -415,6 +501,7 @@ const MentionChip = ({
     return (
       <EntityRefChip
         fallbackWorkspaceId={workspaceId}
+        interactive={interactive}
         label={label}
         rawId={href.slice(ENTITY_REF_HASH_PREFIX.length)}
       />
@@ -422,7 +509,23 @@ const MentionChip = ({
   }
 
   if (href.startsWith(WORKSPACE_REF_HASH_PREFIX)) {
-    return <WorkspaceRefChip label={label} />;
+    return (
+      <WorkspaceRefChip
+        interactive={interactive}
+        label={label}
+        workspaceId={href.slice(WORKSPACE_REF_HASH_PREFIX.length)}
+      />
+    );
+  }
+
+  if (href.startsWith(SKILL_REF_HASH_PREFIX)) {
+    return (
+      <SkillRefChip
+        interactive={interactive}
+        label={label}
+        slug={href.slice(SKILL_REF_HASH_PREFIX.length)}
+      />
+    );
   }
 
   const parsed = parseStellaMentionHref(href);
@@ -470,6 +573,7 @@ export const StreamdownMentionLink = ({
     href.startsWith(DECISION_HASH_PREFIX) ||
     href.startsWith(ENTITY_REF_HASH_PREFIX) ||
     href.startsWith(WORKSPACE_REF_HASH_PREFIX) ||
+    href.startsWith(SKILL_REF_HASH_PREFIX) ||
     parseStellaMentionHref(href) ? (
       <MentionChip
         href={href}

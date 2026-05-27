@@ -26,6 +26,7 @@ import {
 } from "@/components/chat/chat-ui-tools";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
 type ToolPart = Parameters<typeof getToolName>[0];
 
@@ -78,6 +79,53 @@ const getStringInputValue = ({
   const descriptor = Object.getOwnPropertyDescriptor(input, key);
   const value: unknown = descriptor?.value;
   return typeof value === "string" ? value : undefined;
+};
+
+type SkillResourceOutput = {
+  skillName: string;
+  path: string;
+  content: string;
+  mimeType: string;
+};
+
+const getStringProperty = (source: object, key: string): string | undefined => {
+  if (!(key in source)) {
+    return undefined;
+  }
+  const descriptor = Object.getOwnPropertyDescriptor(source, key);
+  const value: unknown = descriptor?.value;
+  return typeof value === "string" ? value : undefined;
+};
+
+const getSkillResourceOutput = (
+  part: ToolPart,
+): SkillResourceOutput | undefined => {
+  if (!("output" in part)) {
+    return undefined;
+  }
+  const output: unknown = part.output;
+  if (output === null || typeof output !== "object") {
+    return undefined;
+  }
+  const skillName = getStringProperty(output, "skillName");
+  const path = getStringProperty(output, "path");
+  const content = getStringProperty(output, "content");
+  const mimeType = getStringProperty(output, "mimeType");
+  if (
+    skillName === undefined ||
+    path === undefined ||
+    content === undefined ||
+    mimeType === undefined
+  ) {
+    return undefined;
+  }
+  return { skillName, path, content, mimeType };
+};
+
+const basenameOf = (path: string): string => {
+  const segments = path.split("/");
+  const last = segments.at(-1);
+  return last && last.length > 0 ? last : path;
 };
 
 const getToolSubtitle = ({
@@ -266,12 +314,18 @@ export const ToolCallCard = ({
   const codeToolSource = getCodeToolSource(part, name);
   const showCodeToolOutput = CODE_TOOL_NAMES.has(name) && hasOutput;
   const showMcpExactCall = mcpToolInfo !== null && toolInput !== undefined;
+  const skillResourceOutput =
+    name === "read-skill-resource" && hasOutput
+      ? getSkillResourceOutput(part)
+      : undefined;
   const canExpand =
     showMcpExactCall ||
     codeToolSource !== undefined ||
     showCodeToolOutput ||
     (showDetails && toolInput !== undefined) ||
     (showDetails && hasOutput);
+  const headerOpensSkillResource = skillResourceOutput !== undefined;
+  const headerInteractive = headerOpensSkillResource || canExpand;
 
   return (
     <div className="my-1 text-xs">
@@ -284,9 +338,19 @@ export const ToolCallCard = ({
         <button
           className={cn(
             "flex min-w-0 items-center gap-1.5 text-start",
-            !canExpand && "cursor-default",
+            !headerInteractive && "cursor-default",
           )}
           onClick={() => {
+            if (skillResourceOutput) {
+              useInspectorStore.getState().openSkillResourceTab({
+                skillName: skillResourceOutput.skillName,
+                resourcePath: skillResourceOutput.path,
+                mimeType: skillResourceOutput.mimeType,
+                content: skillResourceOutput.content,
+                label: basenameOf(skillResourceOutput.path),
+              });
+              return;
+            }
             if (canExpand) {
               setExpanded((e) => !e);
             }
@@ -322,7 +386,7 @@ export const ToolCallCard = ({
             </PopoverPopup>
           </Popover>
         )}
-        {canExpand && (
+        {canExpand && (!headerOpensSkillResource || showDetails) && (
           <button
             aria-label={t("chat.toolCall.toggleDetails")}
             className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 shrink-0 rounded focus-visible:ring-2 focus-visible:outline-none"

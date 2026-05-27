@@ -425,6 +425,12 @@
       },
       "tryOne": "Próbáld ki valamelyiket"
     },
+    "skills": {
+      "scope": {
+        "private": "Saját AI skillek",
+        "team": "Csapat AI skillek"
+      }
+    },
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
     "queuedNotice": "Queued — sends when the current response finishes",
     "removeSuggestion": "(eltávolítás)",

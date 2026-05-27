@@ -425,6 +425,12 @@
       },
       "tryOne": "Essaie l'un d'entre eux pour commencer"
     },
+    "skills": {
+      "scope": {
+        "private": "Vos skills IA",
+        "team": "Skills IA d'équipe"
+      }
+    },
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
     "queuedNotice": "Queued — sends when the current response finishes",
     "removeSuggestion": "(supprimer)",

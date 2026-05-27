@@ -48,10 +48,31 @@ import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   ChatEmptyCompletionError,
+  ChatToolError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 
 const MAX_TOOL_STEPS = 8;
+const CHAT_TOOL_ERROR_UNWRAP_DEPTH = 8;
+
+const unwrapChatToolError = (error: unknown): ChatToolError | null => {
+  let current: unknown = error;
+  for (let depth = 0; depth < CHAT_TOOL_ERROR_UNWRAP_DEPTH; depth += 1) {
+    if (current instanceof ChatToolError) {
+      return current;
+    }
+    if (
+      current === null ||
+      typeof current !== "object" ||
+      !("cause" in current) ||
+      current.cause === undefined
+    ) {
+      return null;
+    }
+    current = current.cause;
+  }
+  return null;
+};
 const THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE =
   "Cannot send this attachment to the AI in anonymized mode because stella cannot extract and anonymize it safely.";
 
@@ -347,6 +368,10 @@ export const streamChat = async ({
   const onAiError = (error: unknown): string => {
     const kind = classifyAIError(error);
     captureError(error, { threadId, kind });
+    const toolError = unwrapChatToolError(error);
+    if (toolError) {
+      return toolError.message;
+    }
     return kind;
   };
 

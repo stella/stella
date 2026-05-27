@@ -27,6 +27,7 @@ import { FileTabPanel } from "@/routes/_protected.workspaces/$workspaceId/-compo
 import { InspectorRail } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import type { FileTab } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { SkillResourcePanel } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/skill-resource-panel";
 import {
   InspectorTabHeader,
   MatterOriginLink,
@@ -448,6 +449,10 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           tab={activeTab}
           workspaceId={workspaceId}
         />
+      )}
+
+      {!minimized && activeTab?.type === "skill-resource" && (
+        <SkillResourcePanel tab={activeTab} />
       )}
 
       {!minimized && activeTab?.type === "matter" && (

@@ -425,6 +425,12 @@
       },
       "tryOne": "Pradėk vienu iš šių"
     },
+    "skills": {
+      "scope": {
+        "private": "Jūsų DI įgūdžiai",
+        "team": "Komandos DI įgūdžiai"
+      }
+    },
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
     "queuedNotice": "Queued — sends when the current response finishes",
     "removeSuggestion": "(pašalinti)",

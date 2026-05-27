@@ -125,12 +125,40 @@ export type ExternalTab = {
   text?: string | undefined;
 };
 
+export type SkillResourceTabId = `skill-resource:${string}`;
+
+export type SkillResourceTab = {
+  type: "skill-resource";
+  id: SkillResourceTabId;
+  /** Display label — typically the resource filename. */
+  label: string;
+  /** Slug of the skill (matches load-skill's skillName). */
+  skillName: string;
+  /** Path inside the skill bundle (e.g. references/edpb-criteria.md). */
+  resourcePath: string;
+  /** MIME type from the read-skill-resource tool output. */
+  mimeType: string;
+  /** Raw text content from the tool output. For binary types
+   *  (e.g. application/pdf), the content is a base64 string when
+   *  the backend later supports it; today it's always text. */
+  content: string;
+};
+
+export const buildSkillResourceTabId = ({
+  skillName,
+  resourcePath,
+}: {
+  skillName: string;
+  resourcePath: string;
+}): SkillResourceTabId => `skill-resource:${skillName}/${resourcePath}`;
+
 export type InspectorTab =
   | FileTab
   | TaskTab
   | ChatTab
   | MatterTab
-  | ExternalTab;
+  | ExternalTab
+  | SkillResourceTab;
 
 type State = {
   tabs: InspectorTab[];
@@ -201,6 +229,12 @@ type Actions = {
     label: string;
     color?: string | null | undefined;
   }) => void;
+  openSkillResourceTab: (
+    tab: Omit<SkillResourceTab, "type" | "id"> & {
+      skillName: string;
+      resourcePath: string;
+    },
+  ) => void;
   /**
    * Open a chat tab. Without args, creates a new (local-only) chat
    * with a generated id. Pass `id` + optional `threadId` to restore
@@ -595,6 +629,16 @@ const isInspectorTab = (value: unknown): value is InspectorTab => {
     );
   }
 
+  if (type === "skill-resource") {
+    return (
+      typeof label === "string" &&
+      typeof value["skillName"] === "string" &&
+      typeof value["resourcePath"] === "string" &&
+      typeof value["mimeType"] === "string" &&
+      typeof value["content"] === "string"
+    );
+  }
+
   if (type !== "pdf") {
     return false;
   }
@@ -851,6 +895,38 @@ export const useInspectorStore = create<State & Actions>()(
           existing.label = label;
           existing.workspaceId = workspaceId;
           existing.color = color;
+        }
+        state.activeId = id;
+        state.activationSeq += 1;
+        state.minimized = false;
+      }),
+
+    openSkillResourceTab: ({
+      skillName,
+      resourcePath,
+      label,
+      mimeType,
+      content,
+    }) =>
+      set((state) => {
+        const id = buildSkillResourceTabId({ skillName, resourcePath });
+        const existing = state.tabs.find((t) => t.id === id);
+        if (!existing) {
+          state.tabs.push({
+            type: "skill-resource",
+            id,
+            label,
+            skillName,
+            resourcePath,
+            mimeType,
+            content,
+          });
+        } else if (existing.type === "skill-resource") {
+          existing.label = label;
+          existing.skillName = skillName;
+          existing.resourcePath = resourcePath;
+          existing.mimeType = mimeType;
+          existing.content = content;
         }
         state.activeId = id;
         state.activationSeq += 1;

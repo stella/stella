@@ -6,19 +6,45 @@ import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 
 import { insertPastedTextChip } from "@/components/chat-pasted-text-extension";
 import { PromptSlashList } from "@/components/chat/prompt-slash-list";
-import type { ChatPrompt } from "@/lib/prompts/types";
+import type { ChatPrompt, PromptScope } from "@/lib/prompts/types";
 
-const insertPromptAsChip = (
+export type SlashSkill = {
+  id: string;
+  name: string;
+  /** Slug used by the AI's `load-skill` tool. */
+  slug: string;
+  description: string;
+  scope: PromptScope;
+};
+
+export type SlashItem =
+  | { kind: "prompt"; prompt: ChatPrompt }
+  | { kind: "skill"; skill: SlashSkill };
+
+const insertSlashItem = (
   editor: Editor,
   range: { from: number; to: number },
-  prompt: ChatPrompt,
+  item: SlashItem,
 ) => {
+  if (item.kind === "prompt") {
+    insertPastedTextChip(
+      editor,
+      {
+        label: item.prompt.name,
+        source: "prompt",
+        text: item.prompt.body,
+      },
+      { replaceRange: range },
+    );
+    return;
+  }
+
   insertPastedTextChip(
     editor,
     {
-      label: prompt.name,
-      source: "prompt",
-      text: prompt.body,
+      label: item.skill.name,
+      source: "skill",
+      text: item.skill.slug,
     },
     { replaceRange: range },
   );
@@ -27,18 +53,17 @@ const insertPromptAsChip = (
 const PLUGIN_NAME = "promptSlash";
 
 type PromptSlashOptions = {
-  suggestion: Omit<SuggestionOptions<ChatPrompt, ChatPrompt>, "editor">;
+  suggestion: Omit<SuggestionOptions<SlashItem, SlashItem>, "editor">;
 };
 
 /**
  * `/`-triggered TipTap extension that lets the user pick a saved
- * prompt and drop it into the composer as a collapsible chip.
- * Triggers when `/` is typed at the start of a paragraph or after
- * whitespace, so a `/` inside a URL (e.g. `https://...`) is just a
- * slash. Selection inserts a `pastedText` chip carrying the prompt
- * name as the label and the body as the underlying text — same
- * visual treatment as a long paste, so a multi-paragraph skill
- * doesn't dump a wall of text into the input.
+ * prompt or installed skill and drop it into the composer as a
+ * collapsible chip. Triggers when `/` is typed at the start of a
+ * paragraph or after whitespace, so a `/` inside a URL (e.g.
+ * `https://...`) is just a slash. Prompts insert their body
+ * verbatim; skills insert a short directive that nudges the model
+ * to call `load-skill` on the next turn.
  */
 export const PromptSlash = Extension.create<PromptSlashOptions>({
   name: PLUGIN_NAME,
@@ -50,7 +75,7 @@ export const PromptSlash = Extension.create<PromptSlashOptions>({
         allowSpaces: false,
         items: () => [],
         command: ({ editor, range, props }) => {
-          insertPromptAsChip(editor, range, props);
+          insertSlashItem(editor, range, props);
         },
       },
     };
@@ -66,43 +91,56 @@ export const PromptSlash = Extension.create<PromptSlashOptions>({
   },
 });
 
-const filterPrompts = (prompts: ChatPrompt[], query: string): ChatPrompt[] => {
+const matchesQuery = (haystack: string, needle: string): boolean =>
+  haystack.toLowerCase().includes(needle);
+
+const filterItems = (items: SlashItem[], query: string): SlashItem[] => {
   const trimmed = query.trim().toLowerCase();
   if (!trimmed) {
-    return prompts;
+    return items;
   }
-  return prompts.filter(
-    (prompt) =>
-      prompt.name.toLowerCase().includes(trimmed) ||
-      prompt.command?.toLowerCase().includes(trimmed) === true ||
-      prompt.body.toLowerCase().includes(trimmed),
-  );
+  return items.filter((item) => {
+    if (item.kind === "prompt") {
+      const { name, command, body } = item.prompt;
+      return (
+        matchesQuery(name, trimmed) ||
+        (command !== undefined && matchesQuery(command, trimmed)) ||
+        matchesQuery(body, trimmed)
+      );
+    }
+    const { name, slug, description } = item.skill;
+    return (
+      matchesQuery(name, trimmed) ||
+      matchesQuery(slug, trimmed) ||
+      matchesQuery(description, trimmed)
+    );
+  });
 };
 
 /**
- * Build the Suggestion config used by `PromptSlash`. `getPrompts`
- * is read on every keystroke so the host can mix stock and DB-backed
- * prompts (Stage 3) without re-creating the extension.
+ * Build the Suggestion config used by `PromptSlash`. `getItems`
+ * is read on every keystroke so the host can mix prompts and skills
+ * (and any future kinds) without re-creating the extension.
  */
 export const createPromptSlashSuggestion = (
-  getPrompts: () => ChatPrompt[],
-): Omit<SuggestionOptions<ChatPrompt, ChatPrompt>, "editor"> => ({
+  getItems: () => SlashItem[],
+): Omit<SuggestionOptions<SlashItem, SlashItem>, "editor"> => ({
   char: "/",
   allowSpaces: false,
-  items: ({ query }) => filterPrompts(getPrompts(), query),
+  items: ({ query }) => filterItems(getItems(), query),
 
   command: ({ editor, range, props }) => {
-    insertPromptAsChip(editor, range, props);
+    insertSlashItem(editor, range, props);
   },
 
   render: () => {
     let component: ReactRenderer<
       ReturnType<NonNullable<SuggestionOptions["render"]>>,
-      SuggestionProps<ChatPrompt>
+      SuggestionProps<SlashItem>
     > | null = null;
 
     return {
-      onStart: (props: SuggestionProps<ChatPrompt>) => {
+      onStart: (props: SuggestionProps<SlashItem>) => {
         if (!props.clientRect) {
           return;
         }
@@ -111,7 +149,7 @@ export const createPromptSlashSuggestion = (
           editor: props.editor,
         });
       },
-      onUpdate: (props: SuggestionProps<ChatPrompt>) => {
+      onUpdate: (props: SuggestionProps<SlashItem>) => {
         component?.updateProps(props);
       },
       onKeyDown: (props) => Boolean(component?.ref?.onKeyDown?.(props)),

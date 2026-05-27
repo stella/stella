@@ -425,6 +425,12 @@
       },
       "tryOne": "Začni s jedným z týchto"
     },
+    "skills": {
+      "scope": {
+        "private": "Vaše AI zručnosti",
+        "team": "Tímové AI zručnosti"
+      }
+    },
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
     "queuedNotice": "Queued — sends when the current response finishes",
     "removeSuggestion": "(odstrániť)",

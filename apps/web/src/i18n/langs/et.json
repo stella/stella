@@ -425,6 +425,12 @@
       },
       "tryOne": "Alusta ühe nendest"
     },
+    "skills": {
+      "scope": {
+        "private": "Sinu AI oskused",
+        "team": "Tiimi AI oskused"
+      }
+    },
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
     "queuedNotice": "Queued — sends when the current response finishes",
     "removeSuggestion": "(eemalda)",
