@@ -1035,7 +1035,7 @@ export function PromptBarShell({
     <div
       {...rest}
       className={cn(
-        "group/bar bg-background/75 relative flex items-end gap-1 rounded-2xl border backdrop-blur-xl backdrop-saturate-150 transition-[box-shadow,border-color]",
+        "group/bar bg-background/75 border-foreground/15 relative flex items-end gap-1 rounded-2xl border backdrop-blur-xl backdrop-saturate-150 transition-[box-shadow,border-color]",
         "shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
         "after:pointer-events-none after:absolute after:-inset-6 after:-z-10 after:rounded-3xl after:bg-[radial-gradient(ellipse_at_center,var(--background)_0%,transparent_75%)] after:opacity-90",
         "w-[min(560px,calc(100%-2rem))] py-1 ps-1.5 pe-1",
