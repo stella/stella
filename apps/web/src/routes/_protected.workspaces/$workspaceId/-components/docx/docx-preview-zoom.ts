@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 const DOCX_PAGE_WIDTH = 816;
@@ -22,9 +22,19 @@ export const useDocxFitZoom = (
   maxAutoZoom: number = DOCX_MAX_ZOOM,
 ) => {
   const [fitZoom, setFitZoom] = useState(DOCX_DEFAULT_ZOOM);
+  const trackedRef = useRef<HTMLElement | null>(null);
 
   useLayoutEffect(() => {
+    // The container ref starts null when DocxBrowserEditor renders a
+    // loading fallback; the real `<div ref={containerRef}>` only
+    // appears after the doc buffer loads. A one-shot effect would
+    // bail forever in that case. Re-check the ref on every commit so
+    // we attach the observer as soon as the container appears.
     const container = containerRef.current;
+    if (container === trackedRef.current) {
+      return undefined;
+    }
+    trackedRef.current = container;
     if (!container) {
       return undefined;
     }
@@ -43,14 +53,9 @@ export const useDocxFitZoom = (
       setFitZoom(clampDocxZoom(Math.round(cappedFitZoom * 100) / 100));
     };
 
-    // First synchronous measure for the common case (parent already
-    // sized when we mount).
     updateZoom();
     // Belt-and-braces retry on the next frame for surfaces where the
-    // parent finishes sizing after our layout effect — e.g. when the
-    // inspector pane expands from rail to full width at the same
-    // commit cycle the docx tab opens; without this the editor sticks
-    // at zoom=1 and the page overflows the panel.
+    // parent finishes sizing after our first measure.
     const rafId = requestAnimationFrame(updateZoom);
     const observer = new ResizeObserver(updateZoom);
     observer.observe(container);
@@ -59,7 +64,7 @@ export const useDocxFitZoom = (
       cancelAnimationFrame(rafId);
       observer.disconnect();
     };
-  }, [containerRef, maxAutoZoom]);
+  });
 
   return clampDocxZoom(fitZoom + scaleOffset);
 };
