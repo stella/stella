@@ -11,7 +11,7 @@ import type { ComponentProps } from "react";
 import { useChat } from "@ai-sdk/react";
 import type { Chat } from "@ai-sdk/react";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate, useRouteContext } from "@tanstack/react-router";
+import { useRouteContext } from "@tanstack/react-router";
 import { isToolUIPart } from "ai";
 import { v7 as uuidv7 } from "uuid";
 
@@ -121,7 +121,6 @@ export const useChatSession = ({
   getSendMode,
   workspaceId,
 }: UseChatSessionOptions) => {
-  const navigate = useNavigate();
   const organizationId = useRouteContext({
     from: "/_protected",
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -385,9 +384,8 @@ export const useChatSession = ({
   const handleOpenCreatedDocument = useCallback(
     async (output: CreateDocumentSuccess) => {
       // Old chat threads predate `entityId`/`workspaceId` on the
-      // tool output. Without them we can't construct a route, so
-      // skip the navigation — the card surfaces this by hiding the
-      // open affordance.
+      // tool output. Without them we can't open the file, so bail —
+      // the card surfaces this by hiding the open affordance.
       if (!output.entityId || !output.workspaceId) {
         return;
       }
@@ -404,19 +402,16 @@ export const useChatSession = ({
         ...(workspaceId !== undefined && { workspaceId }),
         contextMatterIds: [output.workspaceId],
       });
-      // Navigate to the workspace shell (not the fullscreen document
-      // route) so the inspector is the surface that hosts the file —
-      // the user wanted to land with the chat tucked into the right
-      // panel, not on the dedicated document page.
-      await navigate({
-        to: "/workspaces/$workspaceId/$viewId",
-        params: { workspaceId: output.workspaceId, viewId: "all" },
-      });
-      // Open the entity in the inspector, then ask the panel to
+      // Keep the user on the chat surface and let the global
+      // InspectorPanel (mounted on every protected route) host the
+      // file. Tabs carry their own `workspaceId`, so a doc that
+      // lives in workspace B while the chat is bound to workspace A
+      // (or to no workspace at all) still renders correctly without
+      // a route change. `openEntityInInspector` resolves the file
+      // field and synchronously calls `openFile`, so the tab is in
+      // the store by the time we read it; we then ask the panel to
       // start folio edit mode for whichever PDF tab carries the
-      // entity. `openEntityInInspector` resolves the file field
-      // and synchronously calls `openFile`, so the tab is in the
-      // store by the time we read it.
+      // entity.
       await openEntityInInspector(
         output.entityId,
         output.fileName,
@@ -432,7 +427,7 @@ export const useChatSession = ({
         useInspectorStore.getState().requestDocxEdit(tab.id);
       }
     },
-    [conversationId, navigate, workspaceId],
+    [conversationId, workspaceId],
   );
   const streamdownComponents = useMemo(
     () => ({
