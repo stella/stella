@@ -2,7 +2,13 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 const DOCX_PAGE_WIDTH = 816;
-const DOCX_FIT_PADDING = 16;
+// Target the typical Word text area (page minus ~1-inch margins on
+// each side at 96 DPI). Fitting to this rather than the full page
+// keeps the body text full-width in the inspector instead of leaving
+// the page margins as dead whitespace. The page edges then overflow
+// horizontally and the user can scroll to inspect margins.
+const DOCX_TEXT_AREA_WIDTH = 624;
+const DOCX_FIT_PADDING = 4;
 const DOCX_DEFAULT_ZOOM = 1;
 const DOCX_MIN_ZOOM = 0.25;
 const DOCX_MAX_ZOOM = 2;
@@ -46,7 +52,7 @@ export const useDocxFitZoom = (
       }
 
       const availableWidth = Math.max(1, clientWidth - DOCX_FIT_PADDING * 2);
-      const nextFitZoom = availableWidth / DOCX_PAGE_WIDTH;
+      const nextFitZoom = availableWidth / DOCX_TEXT_AREA_WIDTH;
 
       const cappedFitZoom = Math.min(maxAutoZoom, nextFitZoom);
 
