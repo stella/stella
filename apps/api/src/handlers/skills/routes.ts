@@ -1,6 +1,7 @@
 import Elysia from "elysia";
 
 import deleteSkill from "@/api/handlers/skills/delete";
+import generateSkillDraft from "@/api/handlers/skills/generate-draft";
 import getSkill from "@/api/handlers/skills/get";
 import importSkillFromUrl from "@/api/handlers/skills/import-url";
 import listSkills from "@/api/handlers/skills/list";
@@ -32,6 +33,10 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
     body: importSkillFromUrl.config.body,
     invalidateQuery: true,
     permissions: importSkillFromUrl.config.permissions,
+  })
+  .post("/generate-draft", generateSkillDraft.handler, {
+    body: generateSkillDraft.config.body,
+    permissions: generateSkillDraft.config.permissions,
   })
   .patch("/:skillId", updateSkill.handler, {
     body: updateSkill.config.body,
