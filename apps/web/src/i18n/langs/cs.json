@@ -1068,7 +1068,7 @@
     "editOpenFailedTitle": "DOCX se nepodařilo otevřít",
     "editPermissionDenied": "Nemáte oprávnění tento dokument upravovat.",
     "editSaveFailedTitle": "DOCX se nepodařilo uložit",
-    "editSessionTakenOver": "Tuto relaci úprav převzalo jiné okno.",
+    "editSessionTakenOver": "Tento dokument byl otevřen k úpravám v jiné kartě, okně nebo zařízení, takže byla tato relace ukončena. Neuložené místní změny zůstávají zachovány — otevřete dokument znovu a pokračujte.",
     "findReplace": {
       "close": "Zavřít hledání",
       "find": "Najít",

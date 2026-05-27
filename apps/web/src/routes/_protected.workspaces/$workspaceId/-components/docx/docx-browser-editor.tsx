@@ -1339,7 +1339,14 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         }
         className="h-full w-full"
         description={
-          state.detail ?? t(editSessionErrorDescriptionKey(state.reason))
+          // For known reasons, prefer the localized message — the
+          // backend `state.detail` is wire jargon ("Desktop editing
+          // moved to another device.") even for in-browser sessions
+          // and reads as alarming. Fall back to detail only when the
+          // reason is "unknown".
+          state.reason === "unknown" && state.detail !== undefined
+            ? state.detail
+            : t(editSessionErrorDescriptionKey(state.reason))
         }
         status="error"
         title={t("folio.editSaveFailedTitle")}
