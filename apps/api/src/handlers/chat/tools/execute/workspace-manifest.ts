@@ -292,16 +292,10 @@ const entityContentSchema = v.strictObject({
 });
 
 const entitySearchHitSchema = v.strictObject({
-  position: v.pipe(
-    v.number(),
-    v.integer(),
-    v.minValue(0),
-    v.description("Character offset of the match in the full extracted text"),
-  ),
   snippet: v.pipe(
     v.string(),
     v.description(
-      "Excerpt around the match (~200 chars on each side). The match itself appears verbatim — no surrounding markup.",
+      "Excerpt around the match (~200 chars on each side). The match itself appears verbatim — no surrounding markup. Hits are ordered by document position; use the array index for relative ordering.",
     ),
   ),
 });

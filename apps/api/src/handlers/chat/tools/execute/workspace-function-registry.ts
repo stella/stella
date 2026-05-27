@@ -47,7 +47,7 @@ const escapeRegExp = (value: string): string =>
   // eslint-disable-next-line require-unicode-regexp -- u flag rejected by @valibot/to-json-schema elsewhere; keeping policy consistent here.
   value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-type SearchHit = { position: number; snippet: string };
+type SearchHit = { snippet: string };
 type SearchResult = {
   hits: SearchHit[];
   totalHits: number;
@@ -80,6 +80,9 @@ const findHitsInText = (
     const captured = match[1] ?? panic("search match missing capture group");
     totalHits++;
     if (hits.length < options.limit) {
+      // Anchor the snippet window around the start of the captured
+      // substring (not `match.index`, which for whole-word matches
+      // includes the leading non-letter/non-digit boundary char).
       const hitStart = match.index + (match[0].length - captured.length);
       const snippetStart = Math.max(0, hitStart - SEARCH_SNIPPET_CONTEXT_CHARS);
       const snippetEnd = Math.min(
@@ -87,7 +90,6 @@ const findHitsInText = (
         hitStart + captured.length + SEARCH_SNIPPET_CONTEXT_CHARS,
       );
       hits.push({
-        position: hitStart,
         snippet: text.slice(snippetStart, snippetEnd),
       });
     }
