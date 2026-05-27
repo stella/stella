@@ -13,9 +13,9 @@ import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 
-import { InspectorTabHeader } from "./inspector-tab-header";
 import type { SkillResourceTab } from "./inspector-store";
 import { useInspectorStore } from "./inspector-store";
+import { InspectorTabHeader } from "./inspector-tab-header";
 
 const MARKDOWN_MIME_PREFIX = "text/markdown";
 const PDF_MIME = "application/pdf";
@@ -23,7 +23,10 @@ const MARKDOWN_EXTENSIONS = [".md", ".markdown"] as const;
 
 type RenderMode = "markdown" | "text" | "pdf";
 
-const detectRenderMode = (mimeType: string, resourcePath: string): RenderMode => {
+const detectRenderMode = (
+  mimeType: string,
+  resourcePath: string,
+): RenderMode => {
   const mime = mimeType.toLowerCase();
   if (mime === PDF_MIME || resourcePath.toLowerCase().endsWith(".pdf")) {
     return "pdf";
@@ -48,7 +51,10 @@ type SkillResourcePanelProps = {
   onClose: () => void;
 };
 
-export const SkillResourcePanel = ({ tab, onClose }: SkillResourcePanelProps) => {
+export const SkillResourcePanel = ({
+  tab,
+  onClose,
+}: SkillResourcePanelProps) => {
   const t = useTranslations();
   const updateSkillResourceTabContent = useInspectorStore(
     (s) => s.updateSkillResourceTabContent,

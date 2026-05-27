@@ -57,7 +57,6 @@ import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
 import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import {
   useDocxFitZoom,
   useDocxWheelZoom,
@@ -69,6 +68,7 @@ import { useIsAnonymizationActive } from "@/routes/_protected.workspaces/$worksp
 import { useAnonymizationMatchesStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-matches-store";
 import { useAnonymizationSelectionStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-selection-store";
 import { useDocumentTextSelectionStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/document-text-selection-store";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { anonymizationAllowlistOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-terms";
 import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.css";

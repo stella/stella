@@ -4,7 +4,6 @@ import { lazy, Suspense } from "react";
 import type { HTMLAttributes, ReactNode } from "react";
 
 import type { UIMessage } from "ai";
-
 import { WandSparklesIcon } from "lucide-react";
 
 import { cn } from "@stll/ui/lib/utils";

@@ -459,10 +459,7 @@ type ChatThreadMessagesProps = {
    * mid-stream, etc.).
    */
   onAskUserEditAndRerun?:
-    | ((
-        toolCallId: string,
-        output: AskUserOutput,
-      ) => void | PromiseLike<void>)
+    | ((toolCallId: string, output: AskUserOutput) => void | PromiseLike<void>)
     | undefined;
   onCreateDocumentResolve: (
     toolCallId: string,

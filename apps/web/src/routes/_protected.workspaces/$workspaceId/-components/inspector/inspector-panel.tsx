@@ -27,12 +27,12 @@ import { FileTabPanel } from "@/routes/_protected.workspaces/$workspaceId/-compo
 import { InspectorRail } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import type { FileTab } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
-import { SkillResourcePanel } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/skill-resource-panel";
 import {
   InspectorTabHeader,
   MatterOriginLink,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-tab-header";
 import { buildMaximizeTabAction } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/maximize-tab";
+import { SkillResourcePanel } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/skill-resource-panel";
 import { useDocxTabEditSession } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/use-docx-tab-edit-session";
 import { useFileTabRename } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/use-file-tab-rename";
 import { usePdfTabZoom } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/use-pdf-tab-zoom";

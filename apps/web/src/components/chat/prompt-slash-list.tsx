@@ -63,7 +63,9 @@ const groupItems = (
 };
 
 const getItemKey = (item: SlashItem): string =>
-  item.kind === "prompt" ? `prompt:${item.prompt.id}` : `skill:${item.skill.id}`;
+  item.kind === "prompt"
+    ? `prompt:${item.prompt.id}`
+    : `skill:${item.skill.id}`;
 
 const getItemName = (item: SlashItem): string =>
   item.kind === "prompt" ? item.prompt.name : item.skill.name;

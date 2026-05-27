@@ -152,7 +152,8 @@ export const PastedText = Node.create({
       : "paste";
     if (source === "skill") {
       const label =
-        typeof node.attrs["label"] === "string" && node.attrs["label"].length > 0
+        typeof node.attrs["label"] === "string" &&
+        node.attrs["label"].length > 0
           ? node.attrs["label"]
           : text;
       return [
@@ -176,7 +177,8 @@ export const PastedText = Node.create({
       : "paste";
     if (source === "skill") {
       const label =
-        typeof node.attrs["label"] === "string" && node.attrs["label"].length > 0
+        typeof node.attrs["label"] === "string" &&
+        node.attrs["label"].length > 0
           ? node.attrs["label"]
           : text;
       return `[${label}](${SKILL_CHIP_HREF_PREFIX}${text})`;

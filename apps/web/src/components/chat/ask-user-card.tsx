@@ -267,7 +267,11 @@ export const AskUserCard = ({
     for (let i = 0; i < input.questions.length; i++) {
       const question = input.questions[i];
       const previous = answeredOutput.answers[i]?.answer;
-      if (question?.options && previous && !question.options.includes(previous)) {
+      if (
+        question?.options &&
+        previous &&
+        !question.options.includes(previous)
+      ) {
         nextCustom[i] = true;
       }
     }
@@ -360,72 +364,72 @@ export const AskUserCard = ({
         {input.questions.map((q, i) => {
           const hasOptions = q.options !== undefined && q.options.length > 0;
           return (
-          <div className="space-y-1.5" key={q.question}>
-            <p className="text-xs font-medium">
-              {i + 1}. {renderAnonPills(q.question, pairs)}
-            </p>
+            <div className="space-y-1.5" key={q.question}>
+              <p className="text-xs font-medium">
+                {i + 1}. {renderAnonPills(q.question, pairs)}
+              </p>
 
-            {!isDone && hasOptions && !customMode[i] && (
-              <div className="flex flex-wrap gap-1.5">
-                {q.options?.map((opt) => (
+              {!isDone && hasOptions && !customMode[i] && (
+                <div className="flex flex-wrap gap-1.5">
+                  {q.options?.map((opt) => (
+                    <button
+                      className={cn(
+                        "rounded-md border px-2 py-1 text-xs",
+                        "transition-colors",
+                        answers[i] === opt
+                          ? "border-foreground bg-foreground text-background"
+                          : "hover:bg-muted",
+                      )}
+                      key={opt}
+                      onClick={() => setAnswer(i, opt)}
+                      type="button"
+                    >
+                      {renderAnonPills(opt, pairs, { interactive: false })}
+                    </button>
+                  ))}
                   <button
-                    className={cn(
-                      "rounded-md border px-2 py-1 text-xs",
-                      "transition-colors",
-                      answers[i] === opt
-                        ? "border-foreground bg-foreground text-background"
-                        : "hover:bg-muted",
-                    )}
-                    key={opt}
-                    onClick={() => setAnswer(i, opt)}
-                    type="button"
-                  >
-                    {renderAnonPills(opt, pairs, { interactive: false })}
-                  </button>
-                ))}
-                <button
-                  className="text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors"
-                  onClick={() => toggleCustom(i)}
-                  type="button"
-                >
-                  <PencilIcon className="size-2.5" />
-                  {t("chat.askUser.custom")}
-                </button>
-              </div>
-            )}
-
-            {!isDone && (!hasOptions || customMode[i]) && (
-              <div className="flex gap-1.5">
-                <input
-                  className="bg-background focus-visible:ring-ring flex-1 rounded-md border px-2 py-1 text-xs focus-visible:ring-1 focus-visible:outline-none"
-                  onChange={(e) => setAnswer(i, e.target.value)}
-                  placeholder={q.default ?? t("chat.askUser.placeholder")}
-                  type="text"
-                  value={answers[i] ?? ""}
-                />
-                {hasOptions && customMode[i] && (
-                  <button
-                    className="text-muted-foreground hover:text-foreground text-xs"
+                    className="text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors"
                     onClick={() => toggleCustom(i)}
                     type="button"
                   >
-                    A/B/C
+                    <PencilIcon className="size-2.5" />
+                    {t("chat.askUser.custom")}
                   </button>
-                )}
-              </div>
-            )}
+                </div>
+              )}
 
-            {isDone && (
-              <p className="text-muted-foreground text-xs">
-                {renderAnonPills(
-                  answeredOutput?.answers[i]?.answer ||
-                    answers[i] ||
-                    t("chat.askUser.noAnswer"),
-                  pairs,
-                )}
-              </p>
-            )}
-          </div>
+              {!isDone && (!hasOptions || customMode[i]) && (
+                <div className="flex gap-1.5">
+                  <input
+                    className="bg-background focus-visible:ring-ring flex-1 rounded-md border px-2 py-1 text-xs focus-visible:ring-1 focus-visible:outline-none"
+                    onChange={(e) => setAnswer(i, e.target.value)}
+                    placeholder={q.default ?? t("chat.askUser.placeholder")}
+                    type="text"
+                    value={answers[i] ?? ""}
+                  />
+                  {hasOptions && customMode[i] && (
+                    <button
+                      className="text-muted-foreground hover:text-foreground text-xs"
+                      onClick={() => toggleCustom(i)}
+                      type="button"
+                    >
+                      A/B/C
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {isDone && (
+                <p className="text-muted-foreground text-xs">
+                  {renderAnonPills(
+                    answeredOutput?.answers[i]?.answer ||
+                      answers[i] ||
+                      t("chat.askUser.noAnswer"),
+                    pairs,
+                  )}
+                </p>
+              )}
+            </div>
           );
         })}
       </div>
@@ -444,9 +448,7 @@ export const AskUserCard = ({
               onClick={isEditing ? handleRerun : handleSubmit}
               type="button"
             >
-              {isEditing
-                ? t("chat.askUser.rerun")
-                : t("chat.askUser.submit")}
+              {isEditing ? t("chat.askUser.rerun") : t("chat.askUser.submit")}
             </button>
             {isEditing && (
               <button
