@@ -1,12 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 
-const DOCX_PAGE_WIDTH = 816;
 // Target the typical Word text area (page minus ~1-inch margins on
-// each side at 96 DPI). Fitting to this rather than the full page
-// keeps the body text full-width in the inspector instead of leaving
-// the page margins as dead whitespace. The page edges then overflow
-// horizontally and the user can scroll to inspect margins.
+// each side at 96 DPI). Fitting to this rather than the full 816px
+// page keeps the body text full-width in the inspector instead of
+// leaving the page margins as dead whitespace. The page edges then
+// overflow horizontally and the user can scroll to inspect margins.
 const DOCX_TEXT_AREA_WIDTH = 624;
 const DOCX_FIT_PADDING = 4;
 const DOCX_DEFAULT_ZOOM = 1;

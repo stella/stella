@@ -57,6 +57,7 @@ import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
 import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import {
   useDocxFitZoom,
   useDocxWheelZoom,
@@ -683,12 +684,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     onClose();
   }, [onClose, t]);
 
-  const reportPendingCompatibility = useCallback(() => {
-    stellaToast.info(t("folio.checkingDocxEditTitle"), {
-      description: t("folio.checkingDocxEditDescription"),
-    });
-  }, [t]);
-
   const requestEditMode = useCallback(async () => {
     if (isCollaborativeEditing) {
       return true;
@@ -702,7 +697,12 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       canSafelyEdit: compatibility?.canSafelyEdit,
     });
     if (blockReason === "pendingCompatibility") {
-      reportPendingCompatibility();
+      // Don't bother the user with a "still verifying…" toast just
+      // because they clicked the doc while the safety probe is in
+      // flight. Queue the request via the inspector's pending-edit
+      // slot; `use-docx-tab-edit-session` re-runs once
+      // `canSafelyEdit` resolves and silently enters edit mode then.
+      useInspectorStore.getState().requestDocxEdit(fieldId);
       return false;
     }
 
@@ -731,11 +731,11 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   }, [
     compatibility?.canSafelyEdit,
     collaborationEnabled,
+    fieldId,
     isCollaborativeEditing,
     open,
     previewFile,
     requestCollaboration,
-    reportPendingCompatibility,
     reportUnsupportedEditAttempt,
     state.status,
   ]);
@@ -1129,7 +1129,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       canSafelyEdit: compatibility?.canSafelyEdit,
     });
     if (blockReason === "pendingCompatibility") {
-      reportPendingCompatibility();
+      // Queue silently — see requestEditMode for rationale.
+      useInspectorStore.getState().requestDocxEdit(fieldId);
       return;
     }
 
@@ -1154,11 +1155,11 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     canUnlock,
     compatibility?.canSafelyEdit,
     collaborationEnabled,
+    fieldId,
     onBlockedUnlock,
     open,
     previewFile,
     requestCollaboration,
-    reportPendingCompatibility,
     reportUnsupportedEditAttempt,
     state.status,
   ]);

@@ -151,6 +151,7 @@ export const FileTabPanel = ({
   const navigate = useNavigate();
   const openFile = useInspectorStore((s) => s.openFile);
   const setFileFacet = useInspectorStore((s) => s.setFileFacet);
+  const requestDocxEdit = useInspectorStore((s) => s.requestDocxEdit);
 
   if (minimized) {
     return null;
@@ -375,9 +376,11 @@ export const FileTabPanel = ({
       canSafelyEdit: compatibility?.canSafelyEdit,
     });
     if (blockReason === "pendingCompatibility") {
-      stellaToast.info(t("folio.checkingDocxEditTitle"), {
-        description: t("folio.checkingDocxEditDescription"),
-      });
+      // Queue the unlock via the inspector's pending-edit slot;
+      // `use-docx-tab-edit-session` re-runs once canSafelyEdit
+      // resolves and enters edit mode silently. Avoids a
+      // "still verifying…" toast on what reads as a non-action.
+      requestDocxEdit(tab.id);
       return;
     }
 

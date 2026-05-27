@@ -38,7 +38,6 @@ import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { api } from "@/lib/api";
-import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
@@ -469,28 +468,19 @@ export const useChatSession = ({
         return;
       }
       // Pin this chat thread in the workspace inspector. Inherit
-      // the thread's existing scope (`workspaceId` arg from the
-      // session, may be undefined for a global thread) — claiming
-      // the destination matter as the thread's owner triggers a
-      // server-side scope-mismatch error in fetchThreadMessages.
-      // Seed the chat's matter context so the AI keeps the picked
-      // matter in scope without forcing thread ownership.
-      const inspector = useInspectorStore.getState();
-      inspector.openChat({
-        id: toChatThreadId(conversationId),
-        ...(workspaceId !== undefined && { workspaceId }),
-        contextMatterIds: [output.workspaceId],
-      });
       // Keep the user on the chat surface and let the global
       // InspectorPanel (mounted on every protected route) host the
       // file. Tabs carry their own `workspaceId`, so a doc that
       // lives in workspace B while the chat is bound to workspace A
       // (or to no workspace at all) still renders correctly without
-      // a route change. `openEntityInInspector` resolves the file
-      // field and synchronously calls `openFile`, so the tab is in
-      // the store by the time we read it; we then ask the panel to
-      // start folio edit mode for whichever PDF tab carries the
-      // entity.
+      // a route change. Skip pinning the chat as a separate inspector
+      // tab — the user is already in this chat as the main surface,
+      // so a duplicate chat tab in the side panel reads as confusing
+      // ("the doc AND the same chat I am in"). `openEntityInInspector`
+      // resolves the file field and synchronously calls `openFile`,
+      // so the tab is in the store by the time we read it; we then
+      // ask the panel to start folio edit mode for whichever PDF tab
+      // carries the entity.
       await openEntityInInspector(
         output.entityId,
         output.fileName,
@@ -506,7 +496,7 @@ export const useChatSession = ({
         useInspectorStore.getState().requestDocxEdit(tab.id);
       }
     },
-    [conversationId, workspaceId],
+    [],
   );
   const streamdownComponents = useMemo(
     () => ({

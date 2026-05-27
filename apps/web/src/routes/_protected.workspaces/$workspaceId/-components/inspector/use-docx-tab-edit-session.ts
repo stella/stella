@@ -112,7 +112,13 @@ export const useDocxTabEditSession = ({
       return;
     }
     const compatibility = docxCompatibilityByTab.get(target.id);
-    if (!compatibility) {
+    // Wait for the compatibility CHECK itself to finish, not just for
+    // the map entry to exist. `canSafelyEdit` lands as undefined while
+    // the server probe is in flight; firing handleStartDocxEdit too
+    // early surfaces a "still verifying…" toast the moment the user
+    // opens the file, which reads as a complaint about a click they
+    // didn't make. Let the effect re-run once canSafelyEdit resolves.
+    if (!compatibility || compatibility.canSafelyEdit === undefined) {
       return;
     }
     void handleStartDocxEdit(target.id);
