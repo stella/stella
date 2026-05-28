@@ -617,34 +617,77 @@ function HfCaretOverlay({
   selection: HfCaretSelection;
   pagesContainer: HTMLDivElement | null;
 }) {
-  const [rect, setRect] = useState<{
+  const [caret, setCaret] = useState<{
     x: number;
     y: number;
     height: number;
   } | null>(null);
+  const [rangeRects, setRangeRects] = useState<
+    { x: number; y: number; width: number; height: number }[]
+  >([]);
 
   useEffect(() => {
     if (!pagesContainer) {
       return;
     }
     const recompute = () => {
-      const anchor = findHfPmAnchor(
-        pagesContainer,
-        selection.kind,
-        selection.rId,
-        selection.from,
-      );
-      if (!anchor) {
-        setRect(null);
+      const cr = pagesContainer.getBoundingClientRect();
+      const collapsed = selection.from === selection.to;
+      if (collapsed) {
+        const anchor = findHfPmAnchor(
+          pagesContainer,
+          selection.kind,
+          selection.rId,
+          selection.from,
+        );
+        if (!anchor) {
+          setCaret(null);
+          setRangeRects([]);
+          return;
+        }
+        const ar = anchor.getBoundingClientRect();
+        setCaret({
+          x: ar.left - cr.left,
+          y: ar.top - cr.top,
+          height: ar.height || 16,
+        });
+        setRangeRects([]);
         return;
       }
-      const ar = anchor.getBoundingClientRect();
-      const cr = pagesContainer.getBoundingClientRect();
-      setRect({
-        x: ar.left - cr.left,
-        y: ar.top - cr.top,
-        height: ar.height || 16,
-      });
+      // Range selection — walk every painted pm span inside the slot
+      // and project the union of those whose [pmStart,pmEnd] intersect
+      // [from,to). The painter emits one span per run so this is good
+      // enough for single-line and multi-line highlights without doing
+      // glyph-level math (Word's selection model is paragraph-line-based
+      // — same convention).
+      const slotSelector =
+        selection.kind === "header"
+          ? `.layout-page-header[data-rid="${selection.rId}"]`
+          : `.layout-page-footer[data-rid="${selection.rId}"]`;
+      const spans = pagesContainer.querySelectorAll<HTMLElement>(
+        `${slotSelector} span[data-pm-start][data-pm-end]`,
+      );
+      const rects: { x: number; y: number; width: number; height: number }[] =
+        [];
+      for (const span of spans) {
+        const spanStart = Number.parseInt(span.dataset["pmStart"] ?? "", 10);
+        const spanEnd = Number.parseInt(span.dataset["pmEnd"] ?? "", 10);
+        if (!Number.isFinite(spanStart) || !Number.isFinite(spanEnd)) {
+          continue;
+        }
+        if (spanEnd <= selection.from || spanStart >= selection.to) {
+          continue;
+        }
+        const r = span.getBoundingClientRect();
+        rects.push({
+          x: r.left - cr.left,
+          y: r.top - cr.top,
+          width: r.width,
+          height: r.height,
+        });
+      }
+      setRangeRects(rects);
+      setCaret(null);
     };
     recompute();
     const onPainted = () => recompute();
@@ -654,24 +697,41 @@ function HfCaretOverlay({
     };
   }, [selection, pagesContainer]);
 
-  if (!rect) {
-    return null;
-  }
   return (
-    <div
-      data-testid="hf-caret"
-      style={{
-        position: "absolute",
-        left: rect.x,
-        top: rect.y,
-        width: 2,
-        height: rect.height,
-        backgroundColor: "var(--doc-canvas-text, #000)",
-        pointerEvents: "none",
-        zIndex: 11,
-        animation: "folio-caret-blink 1060ms steps(1, end) infinite",
-      }}
-    />
+    <>
+      {rangeRects.map((r, i) => (
+        <div
+          key={`hf-sel-${i}-${r.x}-${r.y}-${r.width}`}
+          data-testid="hf-selection-rect"
+          style={{
+            position: "absolute",
+            left: r.x,
+            top: r.y,
+            width: r.width,
+            height: r.height,
+            backgroundColor: "var(--doc-selection, rgba(66, 133, 244, 0.3))",
+            pointerEvents: "none",
+            zIndex: 10,
+          }}
+        />
+      ))}
+      {caret && (
+        <div
+          data-testid="hf-caret"
+          style={{
+            position: "absolute",
+            left: caret.x,
+            top: caret.y,
+            width: 2,
+            height: caret.height,
+            backgroundColor: "var(--doc-canvas-text, #000)",
+            pointerEvents: "none",
+            zIndex: 11,
+            animation: "folio-caret-blink 1060ms steps(1, end) infinite",
+          }}
+        />
+      )}
+    </>
   );
 }
 
@@ -2363,6 +2423,14 @@ export function PagedEditor(
   // Drag selection state
   const isDraggingRef = useRef(false);
   const dragAnchorRef = useRef<number | null>(null);
+  // When the drag originated inside a painted HF slot, the anchor lives in
+  // that slot's PM (`hfPMsRef.current.getView(rId)`), not the body PM. The
+  // pointer pipeline reads this on every mousemove + on shift-click extend
+  // so drag-select / shift-extend dispatch on the right surface.
+  const activeHfDragSurfaceRef = useRef<{
+    rId: string;
+    kind: "header" | "footer";
+  } | null>(null);
 
   const ensureHiddenEditorView = useCallback(
     ({ focus = true, sync = false }: EnsureHiddenEditorViewOptions = {}) => {
@@ -4295,9 +4363,9 @@ export function PagedEditor(
       // hidden HF EditorView. The painter (not PM) is the visible HF renderer,
       // so we translate the click via clickToPositionDom (which inspects the
       // painted span's data-pm-start/end markers) and dispatch the resulting
-      // PM position on the matching hidden view. Skipping the body click flow
-      // here keeps `hiddenPMRef.current.setSelection(0)` from firing on
-      // every HF click and stealing focus into the body editor.
+      // PM position on the matching hidden view. The drag-extend / shift-click
+      // refs are populated here too so subsequent mousemove + handlePagesClick
+      // dispatch on the same surface.
       if (!readOnly && hfEditMode) {
         const slot = findHfSlotForTarget(target);
         if (slot) {
@@ -4313,10 +4381,28 @@ export function PagedEditor(
             if (pos !== null) {
               const docEnd = hfView.state.doc.content.size;
               const clamped = Math.max(0, Math.min(pos, docEnd));
-              const $pos = hfView.state.doc.resolve(clamped);
-              hfView.dispatch(
-                hfView.state.tr.setSelection(TextSelection.near($pos)),
-              );
+              if (e.shiftKey && dragAnchorRef.current !== null) {
+                const $anchor = hfView.state.doc.resolve(
+                  Math.max(0, Math.min(dragAnchorRef.current, docEnd)),
+                );
+                const $head = hfView.state.doc.resolve(clamped);
+                hfView.dispatch(
+                  hfView.state.tr.setSelection(
+                    TextSelection.between($anchor, $head),
+                  ),
+                );
+              } else {
+                const $pos = hfView.state.doc.resolve(clamped);
+                hfView.dispatch(
+                  hfView.state.tr.setSelection(TextSelection.near($pos)),
+                );
+                dragAnchorRef.current = clamped;
+              }
+              isDraggingRef.current = true;
+              activeHfDragSurfaceRef.current = {
+                rId: slot.rId,
+                kind: slot.kind,
+              };
             }
             hfView.focus();
             return;
@@ -4551,6 +4637,31 @@ export function PagedEditor(
     if (!isDraggingRef.current || dragAnchorRef.current === null) {
       return;
     }
+    const hfSurface = activeHfDragSurfaceRef.current;
+    if (hfSurface) {
+      const hfView = hfPMsRef.current?.getView(hfSurface.rId);
+      if (!hfView) {
+        return;
+      }
+      const pmPos = clickToPositionDom(
+        pagesContainerRef.current ?? hfView.dom,
+        cx,
+        cy,
+        zoom,
+      );
+      if (pmPos === null) {
+        return;
+      }
+      const docEnd = hfView.state.doc.content.size;
+      const anchor = Math.max(0, Math.min(dragAnchorRef.current, docEnd));
+      const head = Math.max(0, Math.min(pmPos, docEnd));
+      const $anchor = hfView.state.doc.resolve(anchor);
+      const $head = hfView.state.doc.resolve(head);
+      hfView.dispatch(
+        hfView.state.tr.setSelection(TextSelection.between($anchor, $head)),
+      );
+      return;
+    }
     if (!hiddenPMRef.current) {
       return;
     }
@@ -4643,6 +4754,16 @@ export function PagedEditor(
 
       // Auto-scroll when dragging near viewport edges
       updateDragScroll(e.clientX, e.clientY);
+
+      // HF drag: route the rest of the mousemove through the active HF PM.
+      // We skip the body's cell-select / link-anchor logic — none of it
+      // applies in the HF surface — and let dragExtendRef handle the
+      // selection dispatch on the HF view. The painter then repaints via
+      // the HF caret overlay.
+      if (activeHfDragSurfaceRef.current) {
+        dragExtendRef.current(e.clientX, e.clientY);
+        return;
+      }
 
       const pmPos = getPositionFromMouse(e.clientX, e.clientY);
       if (pmPos === null) {
@@ -4912,6 +5033,7 @@ export function PagedEditor(
     isCellDraggingRef.current = false;
     cellDragLastPmPosRef.current = null;
     cellDragOverflowXRef.current = null;
+    activeHfDragSurfaceRef.current = null;
     stopDragAutoScroll();
     // Keep dragAnchorRef for potential shift-click extension
   }, [stopDragAutoScroll]);
