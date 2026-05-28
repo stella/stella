@@ -649,12 +649,12 @@ export const FileTabPanel = ({
 
   const sidepeekFacet = tab.facet ?? "preview";
 
-  // Hide the facet row while editing — switching facets
-  // unmounts the live editor and would silently drop session
-  // state. The tab header's Save / close buttons are the
-  // only legitimate exits during an edit; once the session
-  // ends the facet bar comes back.
-  const facetBar = isEditingNativeDocx ? null : (
+  // Facet bar stays visible during edit. The viewer (with the
+  // live editor) is kept mounted via CSS hide on facet switches
+  // (see `sidepeekBody` below) so unsaved session state survives a
+  // pop-out to Metadata / Versions / etc. and is restored intact
+  // when the user returns to Preview.
+  const facetBar = (
     <TabFacetBar
       baseFacets={FACETS}
       entityId={tab.entityId}
