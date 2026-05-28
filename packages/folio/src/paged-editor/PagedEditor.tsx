@@ -28,7 +28,7 @@ import { flushSync } from "react-dom";
 import type { Mark, Node as PMNode } from "prosemirror-model";
 import { NodeSelection, TextSelection } from "prosemirror-state";
 import type { EditorState, Transaction, Plugin } from "prosemirror-state";
-import type { CellSelection } from "prosemirror-tables";
+import { CellSelection } from "prosemirror-tables";
 import type { EditorView } from "prosemirror-view";
 
 import { HiddenHeaderFooterPMs } from "../components/HiddenHeaderFooterPMs";
@@ -4019,29 +4019,37 @@ export function PagedEditor(
    * Find the table cell position in ProseMirror doc for a given PM position.
    * Returns the position just inside the cell node, suitable for CellSelection.create().
    */
-  const findCellPosFromPmPos = useCallback((pmPos: number): number | null => {
-    const view = hiddenPMRef.current?.getView();
-    if (!view) {
-      return null;
-    }
-    try {
-      const $pos = view.state.doc.resolve(pmPos);
-      for (let d = $pos.depth; d > 0; d--) {
-        const node = $pos.node(d);
-        if (
-          node.type.name === "tableCell" ||
-          node.type.name === "tableHeader"
-        ) {
-          // Return position of the cell node itself (before(d)).
-          // CellSelection.create will resolve this and use cellAround() internally.
-          return $pos.before(d);
+  const findCellPosInDoc = useCallback(
+    (doc: PMNode, pmPos: number): number | null => {
+      try {
+        const $pos = doc.resolve(pmPos);
+        for (let d = $pos.depth; d > 0; d--) {
+          const node = $pos.node(d);
+          if (
+            node.type.name === "tableCell" ||
+            node.type.name === "tableHeader"
+          ) {
+            return $pos.before(d);
+          }
         }
+      } catch {
+        // Position resolution failed
       }
-    } catch {
-      // Position resolution failed
-    }
-    return null;
-  }, []);
+      return null;
+    },
+    [],
+  );
+
+  const findCellPosFromPmPos = useCallback(
+    (pmPos: number): number | null => {
+      const view = hiddenPMRef.current?.getView();
+      if (!view) {
+        return null;
+      }
+      return findCellPosInDoc(view.state.doc, pmPos);
+    },
+    [findCellPosInDoc],
+  );
 
   /**
    * Find the closest image element from a click target.
@@ -4365,7 +4373,9 @@ export function PagedEditor(
       // painted span's data-pm-start/end markers) and dispatch the resulting
       // PM position on the matching hidden view. The drag-extend / shift-click
       // refs are populated here too so subsequent mousemove + handlePagesClick
-      // dispatch on the same surface.
+      // dispatch on the same surface. Cell drag inside an HF table seeds
+      // cellDragAnchorPosRef with the HF cell position; the mousemove path
+      // dispatches CellSelection on the HF view.
       if (!readOnly && hfEditMode) {
         const slot = findHfSlotForTarget(target);
         if (slot) {
@@ -4398,6 +4408,8 @@ export function PagedEditor(
                 );
                 dragAnchorRef.current = clamped;
               }
+              const cellPos = findCellPosInDoc(hfView.state.doc, clamped);
+              cellDragAnchorPosRef.current = cellPos;
               isDraggingRef.current = true;
               activeHfDragSurfaceRef.current = {
                 rId: slot.rId,
@@ -4783,11 +4795,41 @@ export function PagedEditor(
       updateDragScroll(e.clientX, e.clientY);
 
       // HF drag: route the rest of the mousemove through the active HF PM.
-      // We skip the body's cell-select / link-anchor logic — none of it
-      // applies in the HF surface — and let dragExtendRef handle the
-      // selection dispatch on the HF view. The painter then repaints via
-      // the HF caret overlay.
+      // If the drag started inside an HF table cell, dispatch CellSelection
+      // on the HF view; otherwise dragExtendRef handles text selection.
+      // The painter repaints via the HF caret overlay either way.
       if (activeHfDragSurfaceRef.current) {
+        const hfSurface = activeHfDragSurfaceRef.current;
+        const hfView = hfPMsRef.current?.getView(hfSurface.rId);
+        if (hfView && cellDragAnchorPosRef.current !== null) {
+          const hfPos = clickToPositionDom(
+            pagesContainerRef.current,
+            e.clientX,
+            e.clientY,
+            zoom,
+          );
+          if (hfPos !== null) {
+            const currentCellPos = findCellPosInDoc(hfView.state.doc, hfPos);
+            if (currentCellPos !== null) {
+              try {
+                hfView.dispatch(
+                  hfView.state.tr.setSelection(
+                    CellSelection.create(
+                      hfView.state.doc,
+                      cellDragAnchorPosRef.current,
+                      currentCellPos,
+                    ),
+                  ),
+                );
+                isCellDraggingRef.current = true;
+                return;
+              } catch {
+                // Cell positions weren't valid for CellSelection; fall
+                // through to text drag.
+              }
+            }
+          }
+        }
         dragExtendRef.current(e.clientX, e.clientY);
         return;
       }
@@ -4858,7 +4900,13 @@ export function PagedEditor(
       const anchor = dragAnchorRef.current;
       hiddenPMRef.current.setSelection(anchor, pmPos);
     },
-    [getPositionFromMouse, findCellPosFromPmPos, updateDragScroll],
+    [
+      getPositionFromMouse,
+      findCellPosFromPmPos,
+      findCellPosInDoc,
+      updateDragScroll,
+      zoom,
+    ],
   );
 
   /**
