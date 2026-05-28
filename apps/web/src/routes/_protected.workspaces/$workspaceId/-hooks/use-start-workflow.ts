@@ -22,7 +22,11 @@ export const useStartWorkflow = (workspaceId: string) => {
     aiAvailabilityOptions({ organizationId: activeOrganizationId }),
   );
 
-  return async (args?: { entityIds?: string[]; entityIdsOrder?: string[] }) => {
+  return async (args?: {
+    entityIds?: string[];
+    entityIdsOrder?: string[];
+    propertyIds?: string[];
+  }) => {
     if (!aiAvailability?.available) {
       return undefined;
     }
@@ -38,6 +42,9 @@ export const useStartWorkflow = (workspaceId: string) => {
             entityIdsOrder: args.entityIdsOrder.map((id) =>
               toSafeId<"entity">(id),
             ),
+          }),
+          ...(args?.propertyIds && {
+            propertyIds: args.propertyIds.map((id) => toSafeId<"property">(id)),
           }),
         });
 

@@ -24,7 +24,8 @@ export const PinProperty = ({ column }: PinPropertyProps) => {
   if (isPinned) {
     return (
       <Button
-        className="justify-start font-semibold"
+        className="justify-start font-normal"
+        size="sm"
         onClick={togglePinned}
         variant="ghost"
       >
@@ -35,7 +36,8 @@ export const PinProperty = ({ column }: PinPropertyProps) => {
 
   return (
     <Button
-      className="justify-start font-semibold"
+      className="justify-start font-normal"
+      size="sm"
       onClick={togglePinned}
       variant="ghost"
     >

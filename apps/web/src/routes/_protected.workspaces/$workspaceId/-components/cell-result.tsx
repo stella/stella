@@ -39,16 +39,22 @@ export const CellResult = ({
     const hasPreview = preview !== undefined && preview.length > 0;
 
     return (
-      <div className="grid min-w-0 grid-cols-[1fr_auto] items-center justify-between gap-1.5">
-        <span className={hasPreview ? "line-clamp-2" : "truncate"}>
-          {hasPreview ? preview : t("workspaces.fields.calculating")}
-        </span>
+      <>
         <Loader2Icon
           aria-hidden="true"
-          className="text-muted-foreground size-3 shrink-0 animate-spin"
+          className="text-muted-foreground absolute end-1 top-1 z-20 size-3 shrink-0 animate-spin"
           strokeWidth={2.25}
         />
-      </div>
+        <span
+          className={
+            hasPreview
+              ? "line-clamp-2 min-w-0"
+              : "text-muted-foreground truncate"
+          }
+        >
+          {hasPreview ? preview : t("workspaces.fields.calculating")}
+        </span>
+      </>
     );
   }
 

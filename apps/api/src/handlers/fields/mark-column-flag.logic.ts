@@ -5,6 +5,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 
 const CELL_METADATA_VERSION = 1;
 const MANUAL_FLAGS_MAX_ITEMS = 16;
+const VERIFIED_FLAG_ID = "verified";
 
 type CellMetadataInsert = {
   workspaceId: SafeId<"workspace">;
@@ -86,14 +87,24 @@ export const buildColumnFlagMutation = ({
         existingProvenance[manualFlag] ?? { addedBy: userId, addedAt },
       ]),
     );
+    // Adding Verified locks the cell so a subsequent AI sweep can't
+    // overwrite the human-confirmed answer. Matches the single-cell
+    // behaviour in the frontend toggleFlag handler.
+    const willAutoLock = flag === VERIFIED_FLAG_ID && existing?.locked !== true;
+    const autoLockProvenance = willAutoLock
+      ? {
+          lockedBy: userId,
+          lockedAt: addedAt,
+          reason: "explicit" as const,
+        }
+      : undefined;
+    const nextLockProvenance = existing?.lockProvenance ?? autoLockProvenance;
     const metadata: CellMetadata = {
       version: CELL_METADATA_VERSION,
       manualFlags,
       flagProvenance,
-      ...(existing?.locked === true && { locked: true }),
-      ...(existing?.lockProvenance && {
-        lockProvenance: existing.lockProvenance,
-      }),
+      ...((existing?.locked === true || willAutoLock) && { locked: true }),
+      ...(nextLockProvenance && { lockProvenance: nextLockProvenance }),
     };
 
     insertValues.push({

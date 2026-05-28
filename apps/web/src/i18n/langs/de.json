@@ -2240,6 +2240,7 @@
       "previewUnsupported": "Vorschau für diesen Dokumenttyp nicht unterstützt.",
       "readingFrom": "Liest aus",
       "referencesItself": "Eigenschaft referenziert sich selbst über andere Eigenschaften",
+      "rerunColumn": "Rerun column",
       "resultType": "Ergebnistyp",
       "returnsLabel": "Ergibt",
       "saveChanges": "Änderungen speichern",
@@ -2288,6 +2289,7 @@
         "verifiedDescription": "Manuell bestätigt."
       },
       "lock": {
+        "lock": "Lock cell",
         "locked": "Gesperrt",
         "unlock": "Zelle entsperren"
       },

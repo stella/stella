@@ -12,6 +12,7 @@ const config = {
   body: t.Object({
     entityIds: t.Optional(t.Array(tSafeId("entity"))),
     entityIdsOrder: t.Optional(t.Array(tSafeId("entity"))),
+    propertyIds: t.Optional(t.Array(tSafeId("property"))),
   }),
 } satisfies HandlerConfig;
 
@@ -30,6 +31,7 @@ const workflowStart = createSafeHandler(
             ...(body.entityIdsOrder && {
               entityIdsOrder: body.entityIdsOrder,
             }),
+            ...(body.propertyIds && { propertyIds: body.propertyIds }),
           }),
         catch: (cause) =>
           new HandlerError({

@@ -2240,6 +2240,7 @@
       "previewUnsupported": "Eelvaade pole selle dokumenditüübi jaoks toetatud.",
       "readingFrom": "Reading from",
       "referencesItself": "Omadus viitab iseendale teiste omaduste kaudu",
+      "rerunColumn": "Rerun column",
       "resultType": "Tulemuse tüüp",
       "returnsLabel": "Returns",
       "saveChanges": "Save changes",
@@ -2288,6 +2289,7 @@
         "verifiedDescription": "Käsitsi kinnitatud."
       },
       "lock": {
+        "lock": "Lock cell",
         "locked": "Lukus",
         "unlock": "Vabasta lahter"
       },

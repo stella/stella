@@ -706,7 +706,7 @@
     "remove": "Odstranit",
     "rename": "Přejmenovat",
     "required": "Povinné",
-    "retry": "Zkusit znovu",
+    "retry": "Spustit znovu",
     "role": "Role",
     "run": "Spustit",
     "save": "Uložit",
@@ -1944,7 +1944,7 @@
     "entitiesCount": "{count, plural, one {# položka} few {# položky} other {# položek}}",
     "exportToCsv": "Exportovat do CSV",
     "fields": {
-      "calculating": "Počítá se...",
+      "calculating": "Načítá se…",
       "currencyLabel": "Měna (nepovinné)",
       "currencyPlaceholder": "např. USD, EUR",
       "editFieldValue": "Upravit hodnotu pole",
@@ -2197,8 +2197,8 @@
       },
       "defaultPromptPrefix": "Najdi {propertyName} v ",
       "defaultPromptPropertyName": "informace",
-      "deleteProperty": "Smazat vlastnost",
-      "deletePropertyConfirmDescription": "Opravdu chcete smazat vlastnost \"{propertyName}\"? Tuto akci nelze vrátit.",
+      "deleteProperty": "Smazat sloupec",
+      "deletePropertyConfirmDescription": "Opravdu chcete smazat sloupec \"{propertyName}\"? Tuto akci nelze vrátit.",
       "documentsLabel": "Dokumenty",
       "editColumn": "Upravit sloupec",
       "editConditions": "Upravit podmínky",
@@ -2240,6 +2240,7 @@
       "previewUnsupported": "Náhled není pro tento typ dokumentu podporovaný.",
       "readingFrom": "Čte z",
       "referencesItself": "Vlastnost odkazuje sama na sebe přes jiné vlastnosti",
+      "rerunColumn": "Spustit znovu sloupec",
       "resultType": "Typ výsledku",
       "returnsLabel": "Vrací",
       "saveChanges": "Uložit změny",
@@ -2273,7 +2274,7 @@
       "parties": "Strany"
     },
     "table": {
-      "clearFlags": "Vymazat označení",
+      "clearFlags": "Odstranit označení",
       "flagCell": "Označit buňku",
       "flags": {
         "contradiction": "Rozpor",
@@ -2288,6 +2289,7 @@
         "verifiedDescription": "Ručně potvrzeno."
       },
       "lock": {
+        "lock": "Zamknout buňku",
         "locked": "Zamčeno",
         "unlock": "Odemknout buňku"
       },

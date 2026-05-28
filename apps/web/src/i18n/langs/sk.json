@@ -2240,6 +2240,7 @@
       "previewUnsupported": "Náhľad nie je pre tento typ dokumentu podporovaný.",
       "readingFrom": "Číta z",
       "referencesItself": "Vlastnosť odkazuje sama na seba cez iné vlastnosti",
+      "rerunColumn": "Rerun column",
       "resultType": "Typ výsledku",
       "returnsLabel": "Vracia",
       "saveChanges": "Uložiť zmeny",
@@ -2288,6 +2289,7 @@
         "verifiedDescription": "Ručne potvrdené."
       },
       "lock": {
+        "lock": "Lock cell",
         "locked": "Uzamknuté",
         "unlock": "Odomknúť bunku"
       },

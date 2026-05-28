@@ -2240,6 +2240,7 @@
       "previewUnsupported": "Podgląd niedostępny dla tego typu dokumentu.",
       "readingFrom": "Reading from",
       "referencesItself": "Właściwość odwołuje się do siebie przez inne właściwości",
+      "rerunColumn": "Rerun column",
       "resultType": "Typ wyniku",
       "returnsLabel": "Returns",
       "saveChanges": "Save changes",
@@ -2288,6 +2289,7 @@
         "verifiedDescription": "Potwierdzone ręcznie."
       },
       "lock": {
+        "lock": "Lock cell",
         "locked": "Zablokowana",
         "unlock": "Odblokuj komórkę"
       },

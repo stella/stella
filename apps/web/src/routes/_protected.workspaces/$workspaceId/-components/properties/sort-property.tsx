@@ -41,7 +41,8 @@ export const SortProperty = ({ column, sortHint }: SortPropertyProps) => {
   return (
     <div className="flex flex-col p-1">
       <Button
-        className="justify-start font-semibold"
+        className="justify-start font-normal"
+        size="sm"
         disabled={disabled}
         onClick={() => {
           column.toggleSorting(false, false);
@@ -51,7 +52,8 @@ export const SortProperty = ({ column, sortHint }: SortPropertyProps) => {
         <ArrowUpIcon /> {ascLabel}
       </Button>
       <Button
-        className="justify-start font-semibold"
+        className="justify-start font-normal"
+        size="sm"
         disabled={disabled}
         onClick={() => {
           column.toggleSorting(true, false);

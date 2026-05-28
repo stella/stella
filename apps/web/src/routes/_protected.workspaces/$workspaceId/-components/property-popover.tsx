@@ -7,7 +7,12 @@ import {
 } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2Icon, EyeOffIcon, PencilLineIcon } from "lucide-react";
+import {
+  CheckCircle2Icon,
+  EyeOffIcon,
+  PencilLineIcon,
+  RefreshCwIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -185,7 +190,7 @@ export const PropertyPopover = ({
               <>
                 <div className="flex flex-col p-1">
                   <Button
-                    className="justify-start gap-1.5"
+                    className="justify-start gap-1.5 font-normal"
                     onClick={() => {
                       setIsOpen(false);
                       setEditorOpen(true);
@@ -213,19 +218,7 @@ export const PropertyPopover = ({
               />
               <PinProperty column={header.column} />
               <Button
-                className="justify-start gap-1.5"
-                disabled={markAllReviewed.isPending}
-                onClick={() => {
-                  markAllReviewed.mutate();
-                }}
-                size="sm"
-                variant="ghost"
-              >
-                <CheckCircle2Icon />
-                {t("workspaces.properties.markAllAsReviewed")}
-              </Button>
-              <Button
-                className="justify-start gap-1.5"
+                className="justify-start gap-1.5 font-normal"
                 onClick={() => {
                   header.column.toggleVisibility(false);
                   setIsOpen(false);
@@ -236,6 +229,38 @@ export const PropertyPopover = ({
                 <EyeOffIcon />
                 {t("workspaces.kanban.hideColumn")}
               </Button>
+            </div>
+            <Separator />
+            <div className="flex flex-col p-1">
+              {property.tool.type === "ai-model" && (
+                <Button
+                  className="justify-start gap-1.5 font-normal"
+                  onClick={() => {
+                    setIsOpen(false);
+                    void startWorkflow({ propertyIds: [id] });
+                  }}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <RefreshCwIcon />
+                  {t("workspaces.properties.rerunColumn")}
+                </Button>
+              )}
+              <Button
+                className="justify-start gap-1.5 font-normal"
+                disabled={markAllReviewed.isPending}
+                onClick={() => {
+                  markAllReviewed.mutate();
+                }}
+                size="sm"
+                variant="ghost"
+              >
+                <CheckCircle2Icon />
+                {t("workspaces.properties.markAllAsReviewed")}
+              </Button>
+            </div>
+            <Separator />
+            <div className="flex flex-col p-1">
               <DeleteProperty property={property} workspaceId={workspaceId} />
             </div>
           </div>

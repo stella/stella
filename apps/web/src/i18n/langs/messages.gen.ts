@@ -2243,6 +2243,7 @@ type Messages = {
       "previewUnsupported": "Preview unsupported for this document type.";
       "readingFrom": "Reading from";
       "referencesItself": "Property references itself through other properties";
+      "rerunColumn": "Rerun column";
       "resultType": "Result type";
       "returnsLabel": "Returns";
       "saveChanges": "Save changes";
@@ -2291,6 +2292,7 @@ type Messages = {
         "verifiedDescription": "Manually confirmed.";
       };
       "lock": {
+        "lock": "Lock cell";
         "locked": "Locked";
         "unlock": "Unlock cell";
       };

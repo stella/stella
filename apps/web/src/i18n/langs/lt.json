@@ -2240,6 +2240,7 @@
       "previewUnsupported": "Peržiūra šio tipo dokumentui nepalaikoma.",
       "readingFrom": "Reading from",
       "referencesItself": "Savybė nurodo pati save per kitas savybes",
+      "rerunColumn": "Rerun column",
       "resultType": "Rezultato tipas",
       "returnsLabel": "Returns",
       "saveChanges": "Save changes",
@@ -2288,6 +2289,7 @@
         "verifiedDescription": "Patvirtinta rankiniu būdu."
       },
       "lock": {
+        "lock": "Lock cell",
         "locked": "Užrakinta",
         "unlock": "Atrakinti langelį"
       },
