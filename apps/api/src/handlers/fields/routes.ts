@@ -1,5 +1,6 @@
 import Elysia from "elysia";
 
+import markColumnFlag from "@/api/handlers/fields/mark-column-flag";
 import updateCellMetadata from "@/api/handlers/fields/update-cell-metadata";
 import upsertField from "@/api/handlers/fields/upsert-by-id";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
@@ -21,4 +22,9 @@ export const fieldsRoute = new Elysia({ prefix: "/fields/:workspaceId" })
     body: updateCellMetadata.config.body,
     invalidateQuery: true,
     permissions: updateCellMetadata.config.permissions,
+  })
+  .patch("/metadata-batch", markColumnFlag.handler, {
+    body: markColumnFlag.config.body,
+    invalidateQuery: true,
+    permissions: markColumnFlag.config.permissions,
   });

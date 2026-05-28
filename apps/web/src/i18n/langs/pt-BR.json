@@ -2164,6 +2164,7 @@
       "int": "Inteiro",
       "keepEmpty": "Manter vazio",
       "manualColumn": "Coluna manual",
+      "markAllAsReviewed": "Marcar tudo como revisado",
       "multiSelect": "Seleção múltipla",
       "nameProperty": "Propriedade de nome",
       "newColumn": "Nova coluna",

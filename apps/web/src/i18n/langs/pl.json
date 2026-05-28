@@ -2164,6 +2164,7 @@
       "int": "Liczba całkowita",
       "keepEmpty": "Pozostaw puste",
       "manualColumn": "Kolumna ręczna",
+      "markAllAsReviewed": "Oznacz wszystkie jako sprawdzone",
       "multiSelect": "Wielokrotny wybór",
       "nameProperty": "Właściwość nazwy",
       "newColumn": "Nowa kolumna",

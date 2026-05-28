@@ -2164,6 +2164,7 @@
       "int": "Celé číslo",
       "keepEmpty": "Ponechat prázdné",
       "manualColumn": "Manuální sloupec",
+      "markAllAsReviewed": "Označit vše jako zkontrolováno",
       "multiSelect": "Vícenásobný výběr",
       "nameProperty": "Vlastnost názvu",
       "newColumn": "Nový sloupec",

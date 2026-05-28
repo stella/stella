@@ -6,7 +6,8 @@ import {
   useTransition,
 } from "react";
 
-import { EyeOffIcon, PencilLineIcon } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { CheckCircle2Icon, EyeOffIcon, PencilLineIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -14,6 +15,9 @@ import { Popover, PopoverPopup } from "@stll/ui/components/popover";
 import { Separator } from "@stll/ui/components/separator";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { api } from "@/lib/api";
+import { toAPIError } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import type { PropertyDependency, WorkspaceProperty } from "@/lib/types";
 import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
 import { DeleteProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/delete-property";
@@ -27,6 +31,7 @@ import {
 import type { TableHeader } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import { useUpdateProperty } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
+import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 type PropertyPopoverProps = {
   property: WorkspaceProperty;
@@ -38,6 +43,8 @@ type ReplaceAction = {
   next: PropertyDependency;
 };
 
+const VERIFIED_FLAG = "verified";
+
 export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
   const t = useTranslations();
   const { workspaceId, id, name } = property;
@@ -45,6 +52,37 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
   const [editorOpen, setEditorOpen] = useState(false);
   const updateProperty = useUpdateProperty();
   const startWorkflow = useStartWorkflow(workspaceId);
+  const queryClient = useQueryClient();
+
+  const markAllReviewed = useMutation({
+    mutationFn: async () => {
+      const response = await api
+        .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        ["metadata-batch"].patch({
+          queryKey: entitiesKeys.all(workspaceId),
+          propertyId: toSafeId<"property">(id),
+          flag: VERIFIED_FLAG,
+        });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: entitiesKeys.all(workspaceId),
+      });
+    },
+    onError: (error) => {
+      stellaToast.add({
+        title: t("errors.actionFailed"),
+        description:
+          error instanceof Error ? error.message : t("common.unexpectedError"),
+        type: "error",
+      });
+    },
+  });
 
   // The composer's CreatableContentType union excludes "file" by
   // design — file columns are created by upload, not by user choice,
@@ -163,6 +201,19 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
                 workspaceId={workspaceId}
               />
               <PinProperty column={header.column} />
+              <Button
+                className="justify-start gap-1.5"
+                disabled={markAllReviewed.isPending}
+                onClick={() => {
+                  markAllReviewed.mutate();
+                  setIsOpen(false);
+                }}
+                size="sm"
+                variant="ghost"
+              >
+                <CheckCircle2Icon />
+                {t("workspaces.properties.markAllAsReviewed")}
+              </Button>
               <Button
                 className="justify-start gap-1.5"
                 onClick={() => {
