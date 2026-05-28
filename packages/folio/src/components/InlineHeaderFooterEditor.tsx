@@ -134,20 +134,35 @@ export function InlineHeaderFooterEditor({
   }, [targetElement, parentElement]);
 
   // Focus the persistent HF PM when the chrome mounts so typing starts
-  // immediately after double-click. Mirrors what the old visible-PM mount
-  // did via requestAnimationFrame + view.focus().
+  // immediately after double-click. The HF view may not exist yet at
+  // mount: HiddenHeaderFooterPMs creates views inside a useEffect, and
+  // for freshly-created HF parts (empty header on a doc that had none),
+  // the chrome and the view-creation effect can land in either order.
+  // Retry across a short rAF window so focus lands as soon as the view
+  // is available; bail after MAX_FOCUS_ATTEMPTS frames to avoid leaking
+  // a rAF loop in pathological cases.
   useEffect(() => {
-    const view = getActiveView();
-    if (view) {
-      // Defer one frame so the painted DOM is in place before focus.
-      const id = requestAnimationFrame(() => {
+    const MAX_FOCUS_ATTEMPTS = 10;
+    let attempts = 0;
+    let rafId: number | null = null;
+    const tryFocus = () => {
+      const view = getActiveView();
+      if (view) {
         view.focus();
-      });
-      return () => cancelAnimationFrame(id);
-    }
-    return undefined;
-    // getActiveView is intentionally not in deps — it's a stable function
-    // by design from the parent.
+        return;
+      }
+      attempts++;
+      if (attempts < MAX_FOCUS_ATTEMPTS) {
+        rafId = requestAnimationFrame(tryFocus);
+      }
+    };
+    rafId = requestAnimationFrame(tryFocus);
+    return () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+    };
+    // getActiveView is a closure over parent state; we only fire on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
