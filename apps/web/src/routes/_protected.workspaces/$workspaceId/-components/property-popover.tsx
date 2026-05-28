@@ -73,6 +73,7 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
       void queryClient.invalidateQueries({
         queryKey: entitiesKeys.all(workspaceId),
       });
+      setIsOpen(false);
     },
     onError: (error) => {
       stellaToast.add({
@@ -206,7 +207,6 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
                 disabled={markAllReviewed.isPending}
                 onClick={() => {
                   markAllReviewed.mutate();
-                  setIsOpen(false);
                 }}
                 size="sm"
                 variant="ghost"

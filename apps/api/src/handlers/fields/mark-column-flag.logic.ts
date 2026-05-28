@@ -1,0 +1,124 @@
+import type { CellMetadata } from "@/api/db/schema-validators";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditEvent } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
+
+const CELL_METADATA_VERSION = 1;
+
+type CellMetadataInsert = {
+  workspaceId: SafeId<"workspace">;
+  entityVersionId: SafeId<"entityVersion">;
+  propertyId: SafeId<"property">;
+  metadata: CellMetadata;
+  createdBy: string;
+  updatedBy: string;
+};
+
+export type ColumnFlagTarget = {
+  entityId: SafeId<"entity">;
+  entityVersionId: SafeId<"entityVersion">;
+};
+
+type ExistingCellMetadataRow = {
+  entityVersionId: SafeId<"entityVersion">;
+  metadata: CellMetadata;
+};
+
+type BuildColumnFlagMutationArgs = {
+  workspaceId: SafeId<"workspace">;
+  propertyId: SafeId<"property">;
+  flag: string;
+  targets: readonly ColumnFlagTarget[];
+  existingRows: readonly ExistingCellMetadataRow[];
+  userId: string;
+  addedAt: string;
+};
+
+type ColumnFlagMutation = {
+  auditEvents: AuditEvent[];
+  insertValues: CellMetadataInsert[];
+  updatedCount: number;
+};
+
+const normalizeManualFlags = (flags: string[]) =>
+  [...new Set(flags)].toSorted();
+
+export const sortColumnFlagTargetsForLocking = (
+  targets: readonly ColumnFlagTarget[],
+) =>
+  targets.toSorted((a, b) =>
+    a.entityVersionId.localeCompare(b.entityVersionId),
+  );
+
+export const buildColumnFlagMutation = ({
+  workspaceId,
+  propertyId,
+  flag,
+  targets,
+  existingRows,
+  userId,
+  addedAt,
+}: BuildColumnFlagMutationArgs): ColumnFlagMutation => {
+  const existingByVersionId = new Map(
+    existingRows.map((row) => [row.entityVersionId, row.metadata]),
+  );
+  const auditEvents: AuditEvent[] = [];
+  const insertValues: CellMetadataInsert[] = [];
+
+  for (const target of targets) {
+    const existing = existingByVersionId.get(target.entityVersionId);
+    const existingFlags = normalizeManualFlags(existing?.manualFlags ?? []);
+
+    if (existingFlags.includes(flag)) {
+      continue;
+    }
+
+    const manualFlags = normalizeManualFlags([...existingFlags, flag]);
+    const existingProvenance = existing?.flagProvenance ?? {};
+    const flagProvenance = Object.fromEntries(
+      manualFlags.map((manualFlag) => [
+        manualFlag,
+        existingProvenance[manualFlag] ?? { addedBy: userId, addedAt },
+      ]),
+    );
+    const metadata: CellMetadata = {
+      version: CELL_METADATA_VERSION,
+      manualFlags,
+      flagProvenance,
+      ...(existing?.locked === true && { locked: true }),
+      ...(existing?.lockProvenance && {
+        lockProvenance: existing.lockProvenance,
+      }),
+    };
+
+    insertValues.push({
+      workspaceId,
+      entityVersionId: target.entityVersionId,
+      propertyId,
+      metadata,
+      createdBy: userId,
+      updatedBy: userId,
+    });
+
+    auditEvents.push({
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.FIELD,
+      resourceId: `${target.entityVersionId}:${propertyId}`,
+      changes: {
+        manualFlags: { old: existingFlags, new: manualFlags },
+      },
+      metadata: {
+        entityId: target.entityId,
+        entityVersionId: target.entityVersionId,
+        propertyId,
+        bulk: true,
+      },
+    });
+  }
+
+  return {
+    auditEvents,
+    insertValues,
+    updatedCount: insertValues.length,
+  };
+};
