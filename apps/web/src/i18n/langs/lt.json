@@ -2164,6 +2164,7 @@
       "int": "Sveikasis skaičius",
       "keepEmpty": "Palikti tuščią",
       "manualColumn": "Rankinis stulpelis",
+      "markAllAsReviewed": "Pažymėti visus kaip peržiūrėtus",
       "multiSelect": "Keli pasirinkimai",
       "nameProperty": "Pavadinimo savybė",
       "newColumn": "Naujas stulpelis",

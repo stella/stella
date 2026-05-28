@@ -2164,6 +2164,7 @@
       "int": "Täisarv",
       "keepEmpty": "Jäta tühjaks",
       "manualColumn": "Käsitsi veerg",
+      "markAllAsReviewed": "Märgi kõik ülevaadatuks",
       "multiSelect": "Mitmikvalik",
       "nameProperty": "Nimeomadus",
       "newColumn": "Uus veerg",

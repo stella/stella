@@ -1,7 +1,13 @@
 import { Result } from "better-result";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
-import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
+import {
+  cellMetadata,
+  entities,
+  entityVersions,
+  fields,
+  workspaces,
+} from "@/api/db/schema";
 import { computeVersionDiffStats } from "@/api/handlers/entities/compute-version-diff";
 import { uploadVersionBodySchema } from "@/api/handlers/entities/upload-version-schema";
 import {
@@ -28,6 +34,19 @@ const config = {
   permissions: { entity: ["update"] },
   body: uploadVersionBodySchema,
 } satisfies HandlerConfig;
+
+type UploadVersionWriteResult =
+  | {
+      status: "ok";
+      versionNumber: number;
+    }
+  | {
+      status:
+        | "current-version-not-found"
+        | "entity-not-found"
+        | "entity-read-only"
+        | "missing-file-field";
+    };
 
 export default createSafeHandler(
   config,
@@ -160,18 +179,63 @@ export default createSafeHandler(
       ),
     );
 
-    const nextVersionNumber = currentVersion.versionNumber + 1;
     const nextVersionId = createSafeId<"entityVersion">();
     const fileFieldId = createSafeId<"field">();
-    const nextVersionStamp = buildVersionStamp({
-      docSequence: entity.docSequence,
-      versionNumber: nextVersionNumber,
-      workspaceReference: workspace?.reference ?? null,
-    });
 
     // Create new version in DB
-    yield* Result.await(
-      safeDb(async (tx) => {
+    const writeResult = yield* Result.await(
+      safeDb(async (tx): Promise<UploadVersionWriteResult> => {
+        const entityRows = await tx
+          .select({
+            currentVersionId: entities.currentVersionId,
+            docSequence: entities.docSequence,
+            readOnly: entities.readOnly,
+          })
+          .from(entities)
+          .where(
+            and(
+              eq(entities.id, entityId),
+              eq(entities.workspaceId, workspaceId),
+            ),
+          )
+          .limit(1)
+          .for("update");
+        const lockedEntity = entityRows.at(0);
+
+        if (!lockedEntity?.currentVersionId) {
+          return { status: "entity-not-found" };
+        }
+        if (lockedEntity.readOnly) {
+          return { status: "entity-read-only" };
+        }
+
+        const freshCurrentVersionId = lockedEntity.currentVersionId;
+        const freshCurrentVersion = await tx.query.entityVersions.findFirst({
+          where: { id: { eq: freshCurrentVersionId } },
+          columns: { versionNumber: true },
+          with: {
+            fields: { columns: { content: true, propertyId: true } },
+          },
+        });
+
+        if (!freshCurrentVersion) {
+          return { status: "current-version-not-found" };
+        }
+
+        const freshFileField = freshCurrentVersion.fields.find(
+          (f) => f.content.type === "file",
+        );
+        if (!freshFileField) {
+          return { status: "missing-file-field" };
+        }
+
+        const nextVersionNumber = freshCurrentVersion.versionNumber + 1;
+        const nextVersionStamp = buildVersionStamp({
+          docSequence: lockedEntity.docSequence,
+          versionNumber: nextVersionNumber,
+          workspaceReference: workspace?.reference ?? null,
+        });
+
         await tx.insert(entityVersions).values({
           createdBy: userId,
           entityId,
@@ -184,9 +248,9 @@ export default createSafeHandler(
 
         await tx.insert(fields).values(
           cloneFieldsForRevision({
-            currentFields: currentVersion.fields,
+            currentFields: freshCurrentVersion.fields,
             entityVersionId: nextVersionId,
-            propertyId: fileField.propertyId,
+            propertyId: freshFileField.propertyId,
             replacementFieldId: fileFieldId,
             replacementContent: {
               encrypted: false,
@@ -208,6 +272,43 @@ export default createSafeHandler(
           }),
         );
 
+        const currentCellMetadataRows = await tx
+          .select({
+            createdAt: cellMetadata.createdAt,
+            createdBy: cellMetadata.createdBy,
+            metadata: cellMetadata.metadata,
+            propertyId: cellMetadata.propertyId,
+            updatedAt: cellMetadata.updatedAt,
+            updatedBy: cellMetadata.updatedBy,
+          })
+          .from(cellMetadata)
+          .where(
+            and(
+              eq(cellMetadata.workspaceId, workspaceId),
+              eq(cellMetadata.entityVersionId, freshCurrentVersionId),
+            ),
+          )
+          .for("update");
+
+        const cellMetadataRowsToCopy = currentCellMetadataRows.filter(
+          (row) => row.propertyId !== freshFileField.propertyId,
+        );
+
+        if (cellMetadataRowsToCopy.length > 0) {
+          await tx.insert(cellMetadata).values(
+            cellMetadataRowsToCopy.map((row) => ({
+              workspaceId,
+              entityVersionId: nextVersionId,
+              propertyId: row.propertyId,
+              metadata: row.metadata,
+              createdBy: row.createdBy,
+              updatedBy: row.updatedBy,
+              createdAt: row.createdAt,
+              updatedAt: row.updatedAt,
+            })),
+          );
+        }
+
         await tx
           .update(entities)
           .set({
@@ -215,7 +316,12 @@ export default createSafeHandler(
             lastEditedBy: userId,
             updatedAt: new Date(),
           })
-          .where(eq(entities.id, entityId));
+          .where(
+            and(
+              eq(entities.id, entityId),
+              eq(entities.workspaceId, workspaceId),
+            ),
+          );
 
         await tx
           .update(workspaces)
@@ -253,14 +359,44 @@ export default createSafeHandler(
             resourceId: entityId,
             changes: {
               currentVersionId: {
-                old: currentVersionId,
+                old: freshCurrentVersionId,
                 new: nextVersionId,
               },
             },
           },
         ]);
+
+        return { status: "ok", versionNumber: nextVersionNumber };
       }),
     );
+
+    if (writeResult.status !== "ok") {
+      switch (writeResult.status) {
+        case "entity-not-found":
+          return Result.err(
+            new HandlerError({ status: 404, message: "Entity not found" }),
+          );
+        case "entity-read-only":
+          return Result.err(
+            new HandlerError({ status: 409, message: "Entity is read-only" }),
+          );
+        case "current-version-not-found":
+          return Result.err(
+            new HandlerError({
+              status: 404,
+              message: "Current version not found",
+            }),
+          );
+        case "missing-file-field":
+          return Result.err(
+            new HandlerError({
+              status: 400,
+              message: "Entity has no file field",
+            }),
+          );
+      }
+    }
+    const nextVersionNumber = writeResult.versionNumber;
 
     // Fire-and-forget: extraction + diff stats
     processExtraction(entityId).catch((error: unknown) => {

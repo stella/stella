@@ -27,20 +27,46 @@ const deserializeKey = (key: string) =>
   // eslint-disable-next-line typescript/no-unsafe-type-assertion
   key.split(PATH_SEPARATOR) as RouterFullPath[];
 
-type BreadcrumbComponent<TPath extends RouterFullPath> = (
-  params: ResolveParams<TPath>,
-) => React.JSX.Element;
+type BreadcrumbEntry =
+  | React.JSX.Element
+  | ((params: ResolveParams<RouterFullPath>) => React.ReactNode);
+
+const renderPdfBreadcrumb = () => <PdfBreadcrumb />;
+
+const renderWorkspaceBreadcrumb = (params: ResolveParams<RouterFullPath>) => (
+  <WorkspaceBreadcrumb
+    // SAFETY: this renderer is only registered for /workspaces/$workspaceId.
+    {...(params as ResolveParams<"/workspaces/$workspaceId">)}
+  />
+);
+
+const renderContactBreadcrumb = (params: ResolveParams<RouterFullPath>) => (
+  <ContactBreadcrumb
+    // SAFETY: this renderer is only registered for /contacts/$contactId.
+    {...(params as ResolveParams<"/contacts/$contactId">)}
+  />
+);
+
+const renderCaseLawBreadcrumb = (params: ResolveParams<RouterFullPath>) => (
+  <CaseLawBreadcrumb
+    // SAFETY: this renderer is only registered for /knowledge/case/$decisionId.
+    {...(params as ResolveParams<"/knowledge/case/$decisionId">)}
+  />
+);
+
+const renderBreadcrumbEntry = (
+  entry: BreadcrumbEntry,
+  params: ResolveParams<RouterFullPath>,
+): React.ReactNode => (typeof entry === "function" ? entry(params) : entry);
 
 export const AppBreadcrumbs = () => {
   const t = useTranslations();
   const matches = useMatches();
   const id = useId();
 
-  const breadcrumbMap: Partial<
-    Record<string, BreadcrumbComponent<RouterFullPath>>
-  > = useMemo(
+  const breadcrumbMap: Partial<Record<string, BreadcrumbEntry>> = useMemo(
     () => ({
-      [serializeKey(["/workspaces/"])]: () => (
+      [serializeKey(["/workspaces/"])]: (
         <BreadcrumbItem className="min-w-8 shrink">
           <Link
             activeOptions={{ exact: true, includeSearch: false }}
@@ -53,87 +79,80 @@ export const AppBreadcrumbs = () => {
           </Link>
         </BreadcrumbItem>
       ),
-      [serializeKey(["/workspaces/$workspaceId"])]: (params) => (
-        <WorkspaceBreadcrumb {...params} />
-      ),
-      [serializeKey(["/workspaces/$workspaceId/$viewId/document"])]: () => (
-        <PdfBreadcrumb />
-      ),
-      [serializeKey(["/todos/"])]: () => (
+      [serializeKey(["/workspaces/$workspaceId"])]: renderWorkspaceBreadcrumb,
+      [serializeKey(["/workspaces/$workspaceId/$viewId/document"])]:
+        renderPdfBreadcrumb,
+      [serializeKey(["/todos/"])]: (
         <BreadcrumbLink to="/todos">{t("navigation.myTodos")}</BreadcrumbLink>
       ),
-      [serializeKey(["/knowledge"])]: () => (
+      [serializeKey(["/knowledge"])]: (
         <BreadcrumbLink to="/knowledge">
           {t("navigation.knowledge")}
         </BreadcrumbLink>
       ),
-      [serializeKey(["/knowledge/templates"])]: () => (
+      [serializeKey(["/knowledge/templates"])]: (
         <BreadcrumbLink to="/knowledge/templates">
           {t("navigation.templates")}
         </BreadcrumbLink>
       ),
-      [serializeKey(["/contacts/"])]: () => (
+      [serializeKey(["/contacts/"])]: (
         <BreadcrumbLink to="/contacts">
           {t("navigation.contacts")}
         </BreadcrumbLink>
       ),
-      [serializeKey(["/knowledge/clauses"])]: () => (
+      [serializeKey(["/knowledge/clauses"])]: (
         <BreadcrumbLink to="/knowledge/clauses">
           {t("common.clauses")}
         </BreadcrumbLink>
       ),
-      [serializeKey(["/contacts/$contactId"])]: (params) => (
-        <ContactBreadcrumb {...params} />
-      ),
-      [serializeKey(["/knowledge/skills"])]: () => (
+      [serializeKey(["/contacts/$contactId"])]: renderContactBreadcrumb,
+      [serializeKey(["/knowledge/skills"])]: (
         <BreadcrumbItem>{t("knowledge.sections.skills.title")}</BreadcrumbItem>
       ),
-      [serializeKey(["/knowledge/prompts"])]: () => (
+      [serializeKey(["/knowledge/prompts"])]: (
         <BreadcrumbItem>{t("knowledge.sections.prompts.title")}</BreadcrumbItem>
       ),
-      [serializeKey(["/knowledge/mcp"])]: () => (
+      [serializeKey(["/knowledge/mcp"])]: (
         <BreadcrumbItem>{t("knowledge.sections.mcp.title")}</BreadcrumbItem>
       ),
-      [serializeKey(["/knowledge/case/"])]: () => (
+      [serializeKey(["/knowledge/case/"])]: (
         <BreadcrumbLink to="/knowledge/case">
           {t("common.caseLaw")}
         </BreadcrumbLink>
       ),
-      [serializeKey(["/knowledge/case/$decisionId"])]: (params) => (
-        <CaseLawBreadcrumb {...params} />
-      ),
-      [serializeKey(["/settings"])]: () => (
+      [serializeKey(["/knowledge/case/$decisionId"])]: renderCaseLawBreadcrumb,
+      [serializeKey(["/settings"])]: (
         <BreadcrumbLink to="/settings">{t("settings.title")}</BreadcrumbLink>
       ),
-      [serializeKey(["/settings/account/profile"])]: () => (
+      [serializeKey(["/settings/account/profile"])]: (
         <BreadcrumbLink to="/settings/account/profile">
           {t("settings.account.profile")}
         </BreadcrumbLink>
       ),
-      [serializeKey(["/settings/account/desktop"])]: () => (
+      [serializeKey(["/settings/account/desktop"])]: (
         <BreadcrumbLink to="/settings/account/desktop">
           {t("settings.account.desktop")}
         </BreadcrumbLink>
       ),
-      [serializeKey(["/settings/organization"])]: () => (
+      [serializeKey(["/settings/organization"])]: (
         <BreadcrumbItem>{t("settings.organization.title")}</BreadcrumbItem>
       ),
-      [serializeKey(["/settings/organization/members"])]: () => (
+      [serializeKey(["/settings/organization/members"])]: (
         <BreadcrumbLink to="/settings/organization/members">
           {t("navigation.members")}
         </BreadcrumbLink>
       ),
-      [serializeKey(["/settings/organization/matter-numbering"])]: () => (
+      [serializeKey(["/settings/organization/matter-numbering"])]: (
         <BreadcrumbLink to="/settings/organization/matter-numbering">
           {t("settings.organization.matterNumbering")}
         </BreadcrumbLink>
       ),
-      [serializeKey(["/settings/organization/ai"])]: () => (
+      [serializeKey(["/settings/organization/ai"])]: (
         <BreadcrumbLink to="/settings/organization/ai">
           {t("settings.organization.ai")}
         </BreadcrumbLink>
       ),
-      [serializeKey(["/chat"])]: () => (
+      [serializeKey(["/chat"])]: (
         <BreadcrumbLink to="/chat">{t("navigation.chat")}</BreadcrumbLink>
       ),
     }),
@@ -141,20 +160,27 @@ export const AppBreadcrumbs = () => {
   );
 
   const breadcrumbs = useMemo(() => {
-    const results = new Map<string, React.JSX.Element>();
+    const results = new Map<string, React.ReactNode>();
 
     for (const match of matches) {
       for (const key of Object.keys(breadcrumbMap)) {
         const parsedKey = deserializeKey(key);
 
         if (parsedKey.some((path) => match.fullPath.startsWith(path))) {
+          const entry = breadcrumbMap[key];
+
+          if (entry === undefined) {
+            continue;
+          }
+
           // SAFETY: match.params from TanStack Router for known route
-          const result = breadcrumbMap[key]?.(
+          const result = renderBreadcrumbEntry(
+            entry,
             // eslint-disable-next-line typescript/no-unsafe-type-assertion
             match.params as ResolveParams<RouterFullPath>,
           );
 
-          if (result) {
+          if (result !== null && result !== undefined && result !== false) {
             results.set(key, result);
           }
         }

@@ -136,7 +136,7 @@ export const uniquePath = (seen: Set<string>, path: string): string => {
  * `worker` must not reject: a rejection surfaces from the generator and
  * breaks the consuming stream. Callers wrap failures into the result.
  *
- * @yields each worker result, in the order of `items`.
+ * @yields {R} each worker result, in the order of `items`.
  */
 export const mapOrderedConcurrent = async function* <T, R>(
   items: Iterable<T>,

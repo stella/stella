@@ -50,6 +50,17 @@ const formSchema = v.strictObject({
 const hasSocialProviders = env.VITE_AUTH_GOOGLE || env.VITE_AUTH_MICROSOFT;
 const termsUrl = sanitizeHref(env.VITE_TERMS_URL) ?? "/terms";
 
+const renderTermsLink = (chunks: React.ReactNode) => (
+  <a
+    className="hover:text-foreground underline"
+    href={termsUrl}
+    rel="noopener"
+    target="_blank"
+  >
+    {chunks}
+  </a>
+);
+
 function LoginOrSignup() {
   const t = useTranslations();
   const analytics = useAnalytics();
@@ -267,16 +278,7 @@ function LoginOrSignup() {
       </Form>
       <p className="text-foreground-muted text-xs">
         {t.rich("onboarding.termsNotice", {
-          terms: (chunks: React.ReactNode) => (
-            <a
-              className="hover:text-foreground underline"
-              href={termsUrl}
-              rel="noopener"
-              target="_blank"
-            >
-              {chunks}
-            </a>
-          ),
+          terms: renderTermsLink,
         })}
       </p>
     </div>

@@ -2164,6 +2164,7 @@
       "int": "Egész szám",
       "keepEmpty": "Hagyja üresen",
       "manualColumn": "Kézi oszlop",
+      "markAllAsReviewed": "Mind megjelölése ellenőrzöttként",
       "multiSelect": "Többszörös választás",
       "nameProperty": "Névelőzmény",
       "newColumn": "Új oszlop",

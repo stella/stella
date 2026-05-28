@@ -2167,6 +2167,7 @@ type Messages = {
       "int": "Integer";
       "keepEmpty": "Keep Empty";
       "manualColumn": "Manual column";
+      "markAllAsReviewed": "Mark all as reviewed";
       "multiSelect": "Multi Select";
       "nameProperty": "Name property";
       "newColumn": "New column";

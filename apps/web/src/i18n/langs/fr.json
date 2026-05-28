@@ -2164,6 +2164,7 @@
       "int": "Entier",
       "keepEmpty": "Laisser vide",
       "manualColumn": "Colonne manuelle",
+      "markAllAsReviewed": "Tout marquer comme vérifié",
       "multiSelect": "Sélection multiple",
       "nameProperty": "Propriété du nom",
       "newColumn": "Nouvelle colonne",

@@ -201,6 +201,13 @@ import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { AIKeyRequiredDialog } from "@/components/require-ai-key";
 
+const renderPlaygroundAnchor = ({
+  children,
+  ...props
+}: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+  <a {...props}>{children}</a>
+);
+
 type ComboboxOption = {
   id: string;
   label: string;
@@ -1334,7 +1341,7 @@ function SharedChatRendererSample() {
             }}
             showToolCalls={false}
             streamdownComponents={{
-              a: ({ children, ...props }) => <a {...props}>{children}</a>,
+              a: renderPlaygroundAnchor,
             }}
           />
         </ChatApprovalContext>

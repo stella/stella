@@ -2164,6 +2164,7 @@
       "int": "Ganzzahl",
       "keepEmpty": "Leer lassen",
       "manualColumn": "Manuelle Spalte",
+      "markAllAsReviewed": "Alle als geprüft markieren",
       "multiSelect": "Mehrfachauswahl",
       "nameProperty": "Namenseigenschaft",
       "newColumn": "Neue Spalte",
