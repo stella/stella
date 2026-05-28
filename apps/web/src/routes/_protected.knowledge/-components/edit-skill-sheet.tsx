@@ -15,12 +15,12 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 import {
-  Sheet,
-  SheetHeader,
-  SheetPanel,
-  SheetPopup,
-  SheetTitle,
-} from "@stll/ui/components/sheet";
+  Dialog,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "@stll/ui/components/dialog";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
@@ -74,8 +74,8 @@ export function EditSkillSheet({
   skill,
 }: EditSkillSheetProps) {
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetPopup className="max-w-4xl" side="right">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogPopup className="flex h-[min(900px,90vh)] w-[min(1100px,92vw)] max-w-none flex-col p-0">
         {skill ? (
           <EditSkillSheetBody
             key={skill.id}
@@ -83,8 +83,8 @@ export function EditSkillSheet({
             skill={skill}
           />
         ) : null}
-      </SheetPopup>
-    </Sheet>
+      </DialogPopup>
+    </Dialog>
   );
 }
 
@@ -317,8 +317,8 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
 
   return (
     <>
-      <SheetHeader className="border-b">
-        <SheetTitle>{tSkills("editTitle")}</SheetTitle>
+      <DialogHeader className="border-b">
+        <DialogTitle>{tSkills("editTitle")}</DialogTitle>
         <div className="mt-2 flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <Input
@@ -362,7 +362,7 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
             />
           </div>
         </div>
-      </SheetHeader>
+      </DialogHeader>
       <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
         <aside className="bg-muted/20 max-h-64 shrink-0 overflow-y-auto border-b sm:max-h-none sm:w-64 sm:border-e sm:border-b-0">
           <div className="p-3">
@@ -385,7 +385,7 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
             )}
           </div>
         </aside>
-        <SheetPanel className="flex min-h-0 flex-1 flex-col gap-3 p-4">
+        <DialogPanel className="flex min-h-0 flex-1 flex-col gap-3 p-4">
           {detail.isLoading && (
             <p className="text-muted-foreground text-sm">
               {t("common.loading")}
@@ -455,7 +455,7 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
               )}
             </>
           )}
-        </SheetPanel>
+        </DialogPanel>
       </div>
     </>
   );
