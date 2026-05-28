@@ -3205,6 +3205,16 @@ export function PagedEditor(
       footerContent,
       firstPageHeaderContent,
       firstPageFooterContent,
+      // HF rIds drive which hidden EditorView the pipeline sources from
+      // AND the `data-rid` stamped on each painted slot. Omitting them
+      // from this dep array let an rId swap between byte-identical
+      // HeaderFooter objects reuse a stale runLayoutPipeline closure
+      // and the painter emitted the previous slot's `data-rid` so
+      // clicks routed to the wrong HF view (Codex #487 P2: 23:21).
+      headerContentRId,
+      footerContentRId,
+      firstPageHeaderContentRId,
+      firstPageFooterContentRId,
       _theme,
       sectionProperties,
       document,
