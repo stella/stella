@@ -178,4 +178,9 @@ export const API_RATE_LIMITS = {
    *  against unauthenticated input, so the budget is intentionally
    *  much tighter than the general API. */
   folioCollab: { duration: 60_000, max: 30 },
+  /** Document translation: 30 req/min per IP. Each call ships a
+   *  full document to the external translation provider and
+   *  consumes the org's paid character quota, so this stays well
+   *  below the upload budget. */
+  translate: { duration: 60_000, max: 30 },
 } as const;
