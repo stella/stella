@@ -89,8 +89,13 @@ const signaturePartySchema = v.strictObject({
   ),
 });
 
+// `v.object` (not `strictObject`): the model occasionally tacks on
+// fields valid on one variant but not another (e.g. `position` on
+// `insertAfterBlock`). Strict mode rejects the whole batch over a
+// single stray key and the user's approved edit silently vanishes.
+// Liberal mode strips the unknown field and proceeds.
 const operationSchema = v.variant("type", [
-  v.strictObject({
+  v.object({
     ...baseOperationSchema,
     type: v.literal("replaceInBlock"),
     find: v.pipe(
@@ -101,7 +106,7 @@ const operationSchema = v.variant("type", [
     replace: v.pipe(v.string(), v.description("Replacement text.")),
     comment: v.optional(commentSchema),
   }),
-  v.strictObject({
+  v.object({
     ...baseOperationSchema,
     type: v.union([
       v.literal("insertAfterBlock"),
@@ -129,7 +134,7 @@ const operationSchema = v.variant("type", [
     styleId: v.optional(styleIdSchema),
     comment: v.optional(commentSchema),
   }),
-  v.strictObject({
+  v.object({
     ...baseOperationSchema,
     type: v.literal("replaceBlock"),
     // Allow empty text — the client normalizes
@@ -145,12 +150,12 @@ const operationSchema = v.variant("type", [
     styleId: v.optional(styleIdSchema),
     comment: v.optional(commentSchema),
   }),
-  v.strictObject({
+  v.object({
     ...baseOperationSchema,
     type: v.literal("deleteBlock"),
     comment: v.optional(commentSchema),
   }),
-  v.strictObject({
+  v.object({
     ...baseOperationSchema,
     type: v.literal("commentOnBlock"),
     quote: v.optional(
@@ -162,7 +167,7 @@ const operationSchema = v.variant("type", [
     ),
     comment: commentSchema,
   }),
-  v.strictObject({
+  v.object({
     ...baseOperationSchema,
     type: v.literal("insertSignatureTable"),
     position: v.optional(
