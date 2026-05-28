@@ -25,6 +25,10 @@ type SlashSkillPage = {
   installed: readonly SlashSkillRow[];
 };
 
+// Mirrors LIMITS.agentSkillsChatMetadataMax on the API side. The chat backend
+// only exposes this many enabled installed skills to `load-skill`.
+const CHAT_VISIBLE_INSTALLED_SKILL_LIMIT = 200;
+
 type BuildChatSlashItemsInput = {
   shortcuts: readonly SlashShortcutRow[];
   skillPages: readonly SlashSkillPage[] | undefined;
@@ -45,10 +49,9 @@ export const buildChatSlashItems = ({
     },
   }));
 
-  const installedSkillRows =
-    skillPages?.flatMap((page) => page.installed) ?? [];
+  const installedSkillRows = getChatVisibleInstalledSkillRows(skillPages);
   const enabledInstalledSlugs = new Set(
-    installedSkillRows.filter((row) => row.enabled).map((row) => row.slug),
+    installedSkillRows.map((row) => row.slug),
   );
   const builtInSkillRows =
     skillPages
@@ -69,4 +72,63 @@ export const buildChatSlashItems = ({
     }));
 
   return [...promptItems, ...skillItems];
+};
+
+const getChatVisibleInstalledSkillRows = (
+  skillPages: readonly SlashSkillPage[] | undefined,
+): SlashSkillRow[] => {
+  const installedRows = skillPages?.flatMap((page) => page.installed) ?? [];
+  const visibleRows: SlashSkillRow[] = [];
+  const seenSlugs = new Set<string>();
+  const chatMetadataRows = installedRows
+    .filter((row) => row.enabled)
+    .toSorted(compareChatInstalledSkillRows)
+    .slice(0, CHAT_VISIBLE_INSTALLED_SKILL_LIMIT);
+
+  for (const row of chatMetadataRows) {
+    if (seenSlugs.has(row.slug)) {
+      continue;
+    }
+    seenSlugs.add(row.slug);
+    visibleRows.push(row);
+  }
+
+  return visibleRows;
+};
+
+const compareChatInstalledSkillRows = (
+  left: SlashSkillRow,
+  right: SlashSkillRow,
+): number =>
+  compareSkillScope(left.scope, right.scope) ||
+  compareString(left.slug, right.slug) ||
+  compareString(left.id, right.id);
+
+const compareSkillScope = (
+  left: SlashSkillScope,
+  right: SlashSkillScope,
+): number => scopePriority(left) - scopePriority(right);
+
+const scopePriority = (scope: SlashSkillScope): number => {
+  switch (scope) {
+    case "private":
+      return 0;
+    case "team":
+      return 1;
+    case "built-in":
+      return 2;
+    default:
+      scope satisfies never;
+      return 2;
+  }
+};
+
+const compareString = (left: string, right: string): number => {
+  if (left < right) {
+    return -1;
+  }
+  if (left > right) {
+    return 1;
+  }
+  return 0;
 };

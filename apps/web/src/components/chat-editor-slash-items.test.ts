@@ -62,7 +62,7 @@ describe("buildChatSlashItems", () => {
               enabled: true,
               id: "installed-2",
               name: "Installed 2",
-              scope: "private",
+              scope: "team",
               slug: "installed-2",
             },
           ],
@@ -73,6 +73,93 @@ describe("buildChatSlashItems", () => {
     expect(
       items.map((item) => (item.kind === "skill" ? item.skill.slug : "")),
     ).toEqual(["installed-1", "installed-2"]);
+  });
+
+  test("excludes installed skills outside the backend chat metadata cap", () => {
+    const visibleInstalled = Array.from({ length: 200 }, (_, index) =>
+      skillRow({
+        id: `installed-${index.toString().padStart(3, "0")}`,
+        slug: `allowed-${index.toString().padStart(3, "0")}`,
+      }),
+    );
+    const items = buildChatSlashItems({
+      shortcuts: [],
+      skillPages: [
+        {
+          builtIn: [
+            skillRow({
+              description: "Built-in fallback.",
+              id: "zz-over-limit",
+              scope: "built-in",
+              slug: "zz-over-limit",
+            }),
+          ],
+          installed: [
+            ...visibleInstalled,
+            skillRow({
+              description: "Outside chat metadata cap.",
+              id: "installed-over-limit",
+              slug: "zz-over-limit",
+            }),
+          ],
+        },
+      ],
+    });
+
+    expect(
+      items.some(
+        (item) =>
+          item.kind === "skill" && item.skill.id === "installed-over-limit",
+      ),
+    ).toBe(false);
+    expect(items).toContainEqual({
+      kind: "skill",
+      skill: {
+        description: "Built-in fallback.",
+        id: "zz-over-limit",
+        name: "zz-over-limit",
+        scope: "built-in",
+        slug: "zz-over-limit",
+      },
+    });
+  });
+
+  test("uses the private installed skill when private and team skills share a slug", () => {
+    const items = buildChatSlashItems({
+      shortcuts: [],
+      skillPages: [
+        {
+          builtIn: [],
+          installed: [
+            skillRow({
+              description: "Team version.",
+              id: "team-summarize",
+              scope: "team",
+              slug: "summarize",
+            }),
+            skillRow({
+              description: "Private version.",
+              id: "private-summarize",
+              scope: "private",
+              slug: "summarize",
+            }),
+          ],
+        },
+      ],
+    });
+
+    expect(items).toEqual([
+      {
+        kind: "skill",
+        skill: {
+          description: "Private version.",
+          id: "private-summarize",
+          name: "summarize",
+          scope: "private",
+          slug: "summarize",
+        },
+      },
+    ]);
   });
 
   test("hides built-in skills shadowed by enabled installed skills", () => {
@@ -153,4 +240,29 @@ describe("buildChatSlashItems", () => {
       },
     ]);
   });
+});
+
+type SkillRowInput = {
+  description?: string;
+  enabled?: boolean;
+  id: string;
+  name?: string;
+  scope?: "built-in" | "private" | "team";
+  slug: string;
+};
+
+const skillRow = ({
+  description = "Skill description.",
+  enabled = true,
+  id,
+  name,
+  scope = "private",
+  slug,
+}: SkillRowInput) => ({
+  description,
+  enabled,
+  id,
+  name: name ?? slug,
+  scope,
+  slug,
 });
