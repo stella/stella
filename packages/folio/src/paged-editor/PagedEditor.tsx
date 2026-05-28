@@ -621,9 +621,11 @@ type HfCaretSelection = {
 function HfCaretOverlay({
   selection,
   pagesContainer,
+  zoom,
 }: {
   selection: HfCaretSelection;
   pagesContainer: HTMLDivElement | null;
+  zoom: number;
 }) {
   const [caret, setCaret] = useState<{
     x: number;
@@ -640,6 +642,14 @@ function HfCaretOverlay({
     }
     const recompute = () => {
       const cr = pagesContainer.getBoundingClientRect();
+      // getBoundingClientRect reports post-transform viewport pixels;
+      // the caret divs live inside pagesContainer where CSS lengths
+      // get scaled by the viewport's `transform: scale(zoom)`. At
+      // 1.5× a 100px text offset would land at 150px on screen if
+      // written through unchanged, but writing it as CSS lets the
+      // parent transform scale it AGAIN to 225px — so divide every
+      // delta by zoom before passing to style (Codex #487 P2: 22:16).
+      const zoomDivisor = zoom !== 0 ? zoom : 1;
       // Scope every lookup to the specific painted page the user is
       // editing. When a default HF rId is shared across N pages we'd
       // otherwise paint the caret on the first matching slot (page 1)
@@ -668,11 +678,12 @@ function HfCaretOverlay({
           return;
         }
         const ar = hit.element.getBoundingClientRect();
-        const x = (hit.edge === "right" ? ar.right : ar.left) - cr.left;
+        const x =
+          ((hit.edge === "right" ? ar.right : ar.left) - cr.left) / zoomDivisor;
         setCaret({
           x,
-          y: ar.top - cr.top,
-          height: ar.height || 16,
+          y: (ar.top - cr.top) / zoomDivisor,
+          height: (ar.height || 16) / zoomDivisor,
         });
         setRangeRects([]);
         return;
@@ -703,10 +714,10 @@ function HfCaretOverlay({
         }
         const r = span.getBoundingClientRect();
         rects.push({
-          x: r.left - cr.left,
-          y: r.top - cr.top,
-          width: r.width,
-          height: r.height,
+          x: (r.left - cr.left) / zoomDivisor,
+          y: (r.top - cr.top) / zoomDivisor,
+          width: r.width / zoomDivisor,
+          height: r.height / zoomDivisor,
         });
       }
       setRangeRects(rects);
@@ -729,6 +740,7 @@ function HfCaretOverlay({
     selection.to,
     selection.pageNumber,
     pagesContainer,
+    zoom,
   ]);
 
   if (!pagesContainer) {
@@ -4503,6 +4515,14 @@ export function PagedEditor(
           const hfView = hfPMsRef.current?.getView(slot.rId);
           if (hfView) {
             e.preventDefault();
+            // Stop the click from bubbling to `handleContainerMouseDown`.
+            // The painted slot is `.layout-page-header` /
+            // `.layout-page-footer`, which is NOT an `[data-hf-r-id]`
+            // descendant; the existing container guard would miss this
+            // path and `focusHiddenEditor()` would steal focus to the
+            // body editor immediately after we focused the HF view
+            // (Codex #487 P1: 22:16 review).
+            e.stopPropagation();
             // Slot-scoped mapper so a whitespace click inside the painted
             // header / footer can't fall through to clickToPositionDom's
             // body-content nearest-span path (Codex #487 P2: 21:02).
@@ -6808,6 +6828,7 @@ export function PagedEditor(
             <HfCaretOverlay
               selection={hfCaretSelection}
               pagesContainer={pagesContainerRef.current}
+              zoom={zoom}
             />
           )}
           {layout &&
