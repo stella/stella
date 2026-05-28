@@ -3865,7 +3865,11 @@ export function PagedEditor(
       if (docChanged) {
         const pkg = document?.package;
         if (pkg) {
-          const hf = pkg.headers?.get(rId) ?? pkg.footers?.get(rId);
+          // Use the kind parameter, not a fallback chain — defensive
+          // against any pathological document that registers the same
+          // rId under both headers and footers.
+          const bag = kind === "header" ? pkg.headers : pkg.footers;
+          const hf = bag?.get(rId);
           if (hf) {
             hf.content = proseDocToBlocks(view.state.doc);
           }

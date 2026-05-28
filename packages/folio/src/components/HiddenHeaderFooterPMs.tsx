@@ -188,17 +188,22 @@ export const HiddenHeaderFooterPMs = memo(
       const hostRef = useRef<HTMLDivElement>(null);
       const mountedRef = useRef<Map<string, MountedView>>(new Map());
       const managersRef = useRef<Map<string, ExtensionManager>>(new Map());
+      // Latest document captured in a ref so resolveHf has a stable identity
+      // and the mount-effect doesn't re-run on every body PM transaction
+      // (each pushDocument returns a new Document identity).
+      const documentRef = useRef(document);
+      documentRef.current = document;
 
       const resolveHf = useCallback(
         (rId: string, kind: HfPartKind): HeaderFooter | null => {
-          const pkg = document?.package;
+          const pkg = documentRef.current?.package;
           if (!pkg) {
             return null;
           }
           const bag = kind === "header" ? pkg.headers : pkg.footers;
           return bag?.get(rId) ?? null;
         },
-        [document],
+        [],
       );
 
       const slots = useMemo<HfPartKey[]>(
