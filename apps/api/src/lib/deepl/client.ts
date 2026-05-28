@@ -139,6 +139,46 @@ const deeplFetch = async (
 };
 
 /**
+ * Body-read helpers. `deeplFetch` only catches failures up to the
+ * point a response object is returned; an `AbortSignal.timeout`
+ * that fires while the body streams (or a mid-stream connection
+ * drop) rejects on the `.json()` / `.text()` / `.arrayBuffer()`
+ * promise instead, escaping the wrapper unless we catch it here.
+ */
+const readDeepLText = async (response: Response): Promise<string> => {
+  try {
+    return await response.text();
+  } catch (error) {
+    throw new DeepLUpstreamError({
+      message: "DeepL response body could not be read",
+      cause: error,
+    });
+  }
+};
+
+const readDeepLJson = async (response: Response): Promise<unknown> => {
+  try {
+    return await response.json();
+  } catch (error) {
+    throw new DeepLUpstreamError({
+      message: "DeepL response body could not be read",
+      cause: error,
+    });
+  }
+};
+
+const readDeepLBytes = async (response: Response): Promise<Uint8Array> => {
+  try {
+    return new Uint8Array(await response.arrayBuffer());
+  } catch (error) {
+    throw new DeepLUpstreamError({
+      message: "DeepL response body could not be read",
+      cause: error,
+    });
+  }
+};
+
+/**
  * DeepL returns errors as `{ "message": "..." }` JSON. Surface the
  * message when present; fall back to the truncated raw body for
  * non-JSON edges (HTML error pages from intermediaries, etc.).
@@ -230,10 +270,10 @@ const uploadDocument = async (
   );
 
   if (!response.ok) {
-    mapHttpError(response.status, await response.text());
+    mapHttpError(response.status, await readDeepLText(response));
   }
 
-  const json = v.parse(uploadResponseSchema, await response.json());
+  const json = v.parse(uploadResponseSchema, await readDeepLJson(response));
   return { documentId: json.document_id, documentKey: json.document_key };
 };
 
@@ -256,10 +296,10 @@ const fetchStatus = async (
   );
 
   if (!response.ok) {
-    mapHttpError(response.status, await response.text());
+    mapHttpError(response.status, await readDeepLText(response));
   }
 
-  const json = v.parse(statusResponseSchema, await response.json());
+  const json = v.parse(statusResponseSchema, await readDeepLJson(response));
 
   return {
     documentId: json.document_id,
@@ -289,10 +329,10 @@ const downloadResult = async (
   );
 
   if (!response.ok) {
-    mapHttpError(response.status, await response.text());
+    mapHttpError(response.status, await readDeepLText(response));
   }
 
-  return new Uint8Array(await response.arrayBuffer());
+  return await readDeepLBytes(response);
 };
 
 const delay = async (ms: number) => await Bun.sleep(ms);
@@ -360,10 +400,10 @@ export const fetchTargetLanguages = async (
   );
 
   if (!response.ok) {
-    mapHttpError(response.status, await response.text());
+    mapHttpError(response.status, await readDeepLText(response));
   }
 
-  const json = v.parse(languagesResponseSchema, await response.json());
+  const json = v.parse(languagesResponseSchema, await readDeepLJson(response));
 
   return json.map((lang) => ({
     code: lang.language,
