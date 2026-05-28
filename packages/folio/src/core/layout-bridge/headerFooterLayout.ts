@@ -742,7 +742,14 @@ function blockSig(b: FlowBlock): string {
       } else if (r.kind === "lineBreak") {
         text += "\\n;";
       } else if (r.kind === "image") {
-        text += `[i${r.width}x${r.height}];`;
+        // Include src + transform + wrapType so swapping the painted
+        // image (different logo at the same dims) invalidates the
+        // signature — width × height alone would let an unchanged
+        // layout slip past the painter's incremental cache (Codex
+        // #487 P2: 23:09 review).
+        text +=
+          `[i${r.width}x${r.height}|${r.src}|` +
+          `${r.transform ?? ""}|${r.wrapType ?? ""}];`;
       } else {
         // field run
         text += `F:${r.fieldType}|${serializeRunFmt(r)};`;
@@ -765,7 +772,10 @@ function blockSig(b: FlowBlock): string {
     return `t:${b.rows.length}:${cellParts.join("|")}`;
   }
   if (b.kind === "image") {
-    return `i:${b.width}x${b.height}`;
+    return (
+      `i:${b.width}x${b.height}|${b.src}|` +
+      `${b.transform ?? ""}|${b.anchor?.behindDoc ? "behind" : ""}`
+    );
   }
   if (b.kind === "textBox") {
     // Text boxes can carry their own content (paragraph + runs). Recurse
