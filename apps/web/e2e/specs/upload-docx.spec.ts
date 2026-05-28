@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { apiUploadDocx } from "../helpers/api";
+import { apiGet, apiUploadDocx } from "../helpers/api";
 import {
   type TestWorkspace,
   createTestWorkspace,
@@ -60,20 +60,13 @@ test.describe("DOCX upload + inspector", () => {
     // The document view requires both entity + field URL params (see
     // apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx:198).
     // Read the entity to find the file field id.
-    const entity = await request
-      .get(
-        `${process.env["E2E_API_URL"] ?? "http://localhost:3001"}/v1/entities/${workspace.id}/entity/${uploaded.entityId}`,
-      )
-      .then(async (r) => {
-        expect(r.ok(), `read entity: ${String(r.status())}`).toBeTruthy();
-        return (await r.json()) as {
-          fields: {
-            id: string;
-            propertyId: string;
-            content: { type: string };
-          }[];
-        };
-      });
+    const entity = await apiGet<{
+      fields: {
+        id: string;
+        propertyId: string;
+        content: { type: string };
+      }[];
+    }>(request, `/entities/${workspace.id}/entity/${uploaded.entityId}`);
 
     const fileField = entity.fields.find(
       (f) =>
@@ -88,9 +81,7 @@ test.describe("DOCX upload + inspector", () => {
     // The route stays mounted (didn't redirect to /auth or the workspace
     // index). toHaveURL retries until it matches the timeout, so we don't
     // have to fight networkidle on a page that keeps long-poll/SSE sockets
-    // open. We can't assert on a specific viewer DOM node yet — the inner
-    // chrome rewrites often — so the regression we catch here is "the
-    // document route loads and doesn't crash on a valid DOCX entity."
+    // open.
     await expect(page).toHaveURL(
       new RegExp(
         `/workspaces/${workspace.id}/${workspace.viewId}/document(\\?|$)`,
@@ -98,10 +89,13 @@ test.describe("DOCX upload + inspector", () => {
       ),
     );
 
-    // Give the route a beat to do its initial lazy imports and surface
-    // any synchronous render errors. 2s is a heuristic; if it gets flaky,
-    // replace with a positive assertion against a stable viewer element.
-    await page.waitForTimeout(2000);
+    // Positive proof the viewer actually rendered: the fixture's first
+    // paragraph appears in the DOM. This catches render crashes (an error
+    // boundary fallback wouldn't contain this string) without an arbitrary
+    // sleep. Generous timeout because Folio is lazy-loaded.
+    await expect(page.getByText("Stella E2E test document.")).toBeVisible({
+      timeout: 15_000,
+    });
 
     expect(errors, errors.join("\n\n")).toEqual([]);
   });
