@@ -23,7 +23,7 @@ import React, {
   useImperativeHandle,
 } from "react";
 import type { CSSProperties, Ref } from "react";
-import { flushSync } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 
 import type { Mark, Node as PMNode } from "prosemirror-model";
 import { NodeSelection, TextSelection } from "prosemirror-state";
@@ -706,7 +706,17 @@ function HfCaretOverlay({
     pagesContainer,
   ]);
 
-  return (
+  if (!pagesContainer) {
+    return null;
+  }
+  // Portal into pagesContainer so the absolute-positioned caret + rects
+  // share the same containing block as the painted spans we measured
+  // against. Previously the JSX rendered as siblings of pagesContainer
+  // inside .paged-editor__viewport, which has VIEWPORT_PADDING_TOP +
+  // a scale transform applied — HF carets/rects drifted above the
+  // painted slot. Portalling restores positional alignment without
+  // changing the coordinate math.
+  return createPortal(
     <>
       {rangeRects.map((r, i) => (
         <div
@@ -740,7 +750,8 @@ function HfCaretOverlay({
           }}
         />
       )}
-    </>
+    </>,
+    pagesContainer,
   );
 }
 
