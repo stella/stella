@@ -2431,6 +2431,13 @@ export function PagedEditor(
     rId: string;
     kind: "header" | "footer";
   } | null>(null);
+  // Same idea for table resize: when the resize handle lives inside an HF
+  // table the commit must dispatch setNodeMarkup on that slot's PM, not on
+  // the body PM. Captured at mousedown, cleared on mouseup.
+  const resizingHfSurfaceRef = useRef<{
+    rId: string;
+    kind: "header" | "footer";
+  } | null>(null);
 
   const ensureHiddenEditorView = useCallback(
     ({ focus = true, sync = false }: EnsureHiddenEditorViewOptions = {}) => {
@@ -4367,6 +4374,25 @@ export function PagedEditor(
         }
       }
 
+      // Resize handles must be intercepted BEFORE the HF text-routing
+      // branch — otherwise the table-edge handles painted inside an HF
+      // slot would be treated as a regular HF click and the user could
+      // never start a resize. The resize blocks below resolve the
+      // active surface (body or HF) and read the source columnWidths /
+      // row height from the matching PM.
+      const isResizeHandleTarget =
+        !readOnly &&
+        (target.classList.contains("layout-table-resize-handle") ||
+          target.classList.contains("layout-table-row-resize-handle") ||
+          target.classList.contains("layout-table-edge-handle-bottom") ||
+          target.classList.contains("layout-table-edge-handle-right"));
+      const resizeHfSlot = isResizeHandleTarget
+        ? findHfSlotForTarget(target)
+        : null;
+      const resizeViewForRead: EditorView | null = resizeHfSlot
+        ? (hfPMsRef.current?.getView(resizeHfSlot.rId) ?? null)
+        : hiddenPMRef.current.getView();
+
       // HF edit mode + click inside a painted HF slot → route to the persistent
       // hidden HF EditorView. The painter (not PM) is the visible HF renderer,
       // so we translate the click via clickToPositionDom (which inspects the
@@ -4376,7 +4402,7 @@ export function PagedEditor(
       // dispatch on the same surface. Cell drag inside an HF table seeds
       // cellDragAnchorPosRef with the HF cell position; the mousemove path
       // dispatches CellSelection on the HF view.
-      if (!readOnly && hfEditMode) {
+      if (!readOnly && hfEditMode && !isResizeHandleTarget) {
         const slot = findHfSlotForTarget(target);
         if (slot) {
           const hfView = hfPMsRef.current?.getView(slot.rId);
@@ -4446,6 +4472,9 @@ export function PagedEditor(
         e.preventDefault();
         e.stopPropagation();
         isResizingColumnRef.current = true;
+        resizingHfSurfaceRef.current = resizeHfSlot
+          ? { rId: resizeHfSlot.rId, kind: resizeHfSlot.kind }
+          : null;
         resizeStartXRef.current = e.clientX;
         resizeHandleRef.current = target;
         target.classList.add("dragging");
@@ -4460,8 +4489,7 @@ export function PagedEditor(
           10,
         );
 
-        // Get current column widths from the ProseMirror doc
-        const view = hiddenPMRef.current.getView();
+        const view = resizeViewForRead;
         if (view) {
           const $pos = view.state.doc.resolve(
             resizeTablePmStartRef.current + 1,
@@ -4496,6 +4524,9 @@ export function PagedEditor(
         e.preventDefault();
         e.stopPropagation();
         isResizingRowRef.current = true;
+        resizingHfSurfaceRef.current = resizeHfSlot
+          ? { rId: resizeHfSlot.rId, kind: resizeHfSlot.kind }
+          : null;
         resizeStartYRef.current = e.clientY;
         resizeRowHandleRef.current = target;
         resizeRowIsEdgeRef.current = target.dataset["isEdge"] === "bottom";
@@ -4508,8 +4539,7 @@ export function PagedEditor(
           10,
         );
 
-        // Get current row height from ProseMirror doc
-        const view = hiddenPMRef.current.getView();
+        const view = resizeViewForRead;
         if (view) {
           const $pos = view.state.doc.resolve(
             resizeRowTablePmStartRef.current + 1,
@@ -4552,6 +4582,9 @@ export function PagedEditor(
         e.preventDefault();
         e.stopPropagation();
         isResizingRightEdgeRef.current = true;
+        resizingHfSurfaceRef.current = resizeHfSlot
+          ? { rId: resizeHfSlot.rId, kind: resizeHfSlot.kind }
+          : null;
         resizeRightEdgeStartXRef.current = e.clientX;
         resizeRightEdgeHandleRef.current = target;
         target.classList.add("dragging");
@@ -4567,7 +4600,7 @@ export function PagedEditor(
         );
 
         // Get current last column width from ProseMirror doc
-        const view = hiddenPMRef.current.getView();
+        const view = resizeViewForRead;
         if (view) {
           const $pos = view.state.doc.resolve(
             resizeRightEdgePmStartRef.current + 1,
@@ -4921,8 +4954,13 @@ export function PagedEditor(
         resizeHandleRef.current = null;
       }
 
-      // Update ProseMirror document with new column widths
-      const view = hiddenPMRef.current?.getView();
+      // Update ProseMirror document with new column widths. Commit on the
+      // HF view if the resize started inside an HF slot, else body.
+      const view =
+        (resizingHfSurfaceRef.current
+          ? hfPMsRef.current?.getView(resizingHfSurfaceRef.current.rId)
+          : hiddenPMRef.current?.getView()) ?? null;
+      resizingHfSurfaceRef.current = null;
       if (view) {
         const pmStart = resizeTablePmStartRef.current;
         const colIdx = resizeColumnIndexRef.current;
@@ -4994,7 +5032,11 @@ export function PagedEditor(
         resizeRowHandleRef.current = null;
       }
 
-      const view = hiddenPMRef.current?.getView();
+      const view =
+        (resizingHfSurfaceRef.current
+          ? hfPMsRef.current?.getView(resizingHfSurfaceRef.current.rId)
+          : hiddenPMRef.current?.getView()) ?? null;
+      resizingHfSurfaceRef.current = null;
       if (view) {
         const pmStart = resizeRowTablePmStartRef.current;
         const rowIdx = resizeRowIndexRef.current;
@@ -5042,7 +5084,11 @@ export function PagedEditor(
         resizeRightEdgeHandleRef.current = null;
       }
 
-      const view = hiddenPMRef.current?.getView();
+      const view =
+        (resizingHfSurfaceRef.current
+          ? hfPMsRef.current?.getView(resizingHfSurfaceRef.current.rId)
+          : hiddenPMRef.current?.getView()) ?? null;
+      resizingHfSurfaceRef.current = null;
       if (view) {
         const pmStart = resizeRightEdgePmStartRef.current;
         const colIdx = resizeRightEdgeColIndexRef.current;
