@@ -92,10 +92,23 @@ test.describe("DOCX upload + inspector", () => {
     // Positive proof the viewer actually rendered: the fixture's first
     // paragraph appears in the DOM. This catches render crashes (an error
     // boundary fallback wouldn't contain this string) without an arbitrary
-    // sleep. Generous timeout because Folio is lazy-loaded.
-    await expect(page.getByText("Stella E2E test document.")).toBeVisible({
-      timeout: 15_000,
-    });
+    // sleep. Generous timeout because in CI the Folio chunk compiles + loads
+    // cold AND the DOCX file is fetched from the API + parsed.
+    const docxText = page.getByText("Stella E2E test document.");
+    try {
+      await expect(docxText).toBeVisible({ timeout: 45_000 });
+    } catch (error) {
+      // Surface any errors collected so far — they're usually the real cause
+      // of the viewer never mounting (network failure, render crash caught
+      // by an error boundary, etc.).
+      if (errors.length > 0) {
+        throw new Error(
+          `viewer text never appeared; collected errors:\n${errors.join("\n\n")}`,
+          { cause: error },
+        );
+      }
+      throw error;
+    }
 
     expect(errors, errors.join("\n\n")).toEqual([]);
   });
