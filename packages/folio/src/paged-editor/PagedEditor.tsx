@@ -120,6 +120,7 @@ import {
   mergeTableCellAttrs,
   mergeTableRowAttrs,
 } from "../core/prosemirror/attrs";
+import { proseDocToBlocks } from "../core/prosemirror/conversion/fromProseDoc";
 import type { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
 import { anonymizationDecorationsKey } from "../core/prosemirror/plugins/anonymizationDecorations";
 import type { AnonymizationMatch } from "../core/prosemirror/plugins/anonymizationDecorations";
@@ -3671,6 +3672,41 @@ export function PagedEditor(
   );
 
   /**
+   * Handle a transaction on a persistent hidden HF EditorView.
+   *
+   * Two responsibilities:
+   *   1. Mirror the PM doc back into `Document.package.headers/footers[rId].content`
+   *      so the existing save path (which reads `hf.content`) ships the latest
+   *      HF content. Mutating in place matches upstream's pattern and avoids
+   *      churning history on every keystroke (the persistent PM is the
+   *      source of truth while loaded — same model the body PM uses).
+   *   2. Re-run the layout pipeline so the painter repaints with the new
+   *      HF blocks. We reuse the body PM's current state as the layout
+   *      input because `scheduleLayout` derives body blocks from that
+   *      state; the HF blocks are pulled from the HF PM via
+   *      `renderHfFromContentOrPm` on the next layout tick.
+   */
+  const handleHfPmTransaction = useCallback(
+    (rId: string, view: EditorView, docChanged: boolean) => {
+      if (!docChanged) {
+        return;
+      }
+      const pkg = document?.package;
+      if (pkg) {
+        const hf = pkg.headers?.get(rId) ?? pkg.footers?.get(rId);
+        if (hf) {
+          hf.content = proseDocToBlocks(view.state.doc);
+        }
+      }
+      const bodyState = hiddenPMRef.current?.getState();
+      if (bodyState) {
+        scheduleLayout(bodyState, null);
+      }
+    },
+    [document, scheduleLayout],
+  );
+
+  /**
    * Handle selection change from PM.
    */
   const handleSelectionChange = useCallback(
@@ -6034,6 +6070,7 @@ export function PagedEditor(
       <HiddenHeaderFooterPMs
         ref={hfPMsRef}
         document={document}
+        onTransaction={handleHfPmTransaction}
         {...(styles !== undefined ? { styles } : {})}
         {...(_theme !== undefined ? { theme: _theme } : {})}
       />
