@@ -453,7 +453,13 @@ jobs:
 
       - name: Start docker stack
         if: steps.changed.outputs.run == 'true'
-        run: docker compose --profile dev up -d --wait
+        # `--wait` only on long-running services; `minio-setup` is a one-shot
+        # bucket-creator container that exits 0, which `--wait` treats as
+        # "not running" and fails the whole command. Run it separately in
+        # the foreground so we still block on its success.
+        run: |
+          docker compose --profile dev up -d --wait postgres minio valkey gotenberg
+          docker compose --profile dev up minio-setup
 
       - name: Run database migrations
         if: steps.changed.outputs.run == 'true'
