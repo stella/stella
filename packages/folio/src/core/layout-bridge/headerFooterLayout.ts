@@ -709,12 +709,16 @@ function finalizeHeaderFooterContent(
  * character, toggling bold, etc. — so the painter's incremental path then
  * skips re-rendering page shells and the user's HF edits stay invisible
  * until something else triggers a full repaint (Codex #487 P1 follow-up:
- * 21:02 review).
+ * 21:02 review; extended for run formatting + fields per 21:28 review).
  *
- * Walk every text-bearing run in every paragraph block and concat the text.
- * For folio HF (small, bounded), this is cheap and detects any text change
- * that the user would expect to see repainted. Tables, images, and text
- * boxes are summarised by kind + dims so resize / image swap also invalidate.
+ * For each run carry text + every visual-affecting field: text characters,
+ * field type (PAGE / NUMPAGES / DATE / TIME), and the full RunFormatting
+ * record (bold, italic, color, underline, fontSize, font, etc.). Toggling
+ * bold or inserting a PAGE field on existing same-height content now
+ * differentiates the signature and forces a repaint. Tables, images, and
+ * text boxes are summarised by kind + dims so resize / image swap also
+ * invalidate. JSON.stringify is moderately expensive but folio HF is
+ * bounded (a handful of paragraphs, max).
  */
 function computeHeaderFooterTextSig(blocks: FlowBlock[]): string {
   const parts: string[] = [];
@@ -723,13 +727,16 @@ function computeHeaderFooterTextSig(blocks: FlowBlock[]): string {
       let text = "p:";
       for (const r of b.runs) {
         if (r.kind === "text") {
-          text += r.text;
+          text += `T:${r.text}|${serializeRunFmt(r)};`;
         } else if (r.kind === "tab") {
-          text += "\t";
+          text += `\\t|${serializeRunFmt(r)};`;
         } else if (r.kind === "lineBreak") {
-          text += "\n";
+          text += "\\n;";
         } else if (r.kind === "image") {
-          text += `[i${r.width}x${r.height}]`;
+          text += `[i${r.width}x${r.height}];`;
+        } else {
+          // field run
+          text += `F:${r.fieldType}|${serializeRunFmt(r)};`;
         }
       }
       parts.push(text);
@@ -742,4 +749,35 @@ function computeHeaderFooterTextSig(blocks: FlowBlock[]): string {
     }
   }
   return parts.join("|");
+}
+
+/**
+ * Serialise the RunFormatting fields that actually drive the painter's
+ * visual output. The Run type spreads RunFormatting in place, so we project
+ * a small shape and JSON-stringify it; properties that are undefined are
+ * skipped so the resulting string stays compact for unstyled runs.
+ */
+function serializeRunFmt(run: Record<string, unknown>): string {
+  const keys = [
+    "bold",
+    "italic",
+    "underline",
+    "strikethrough",
+    "color",
+    "highlightColor",
+    "fontSize",
+    "fontFamily",
+    "verticalAlign",
+    "letterSpacing",
+    "smallCaps",
+    "allCaps",
+  ];
+  const out: Record<string, unknown> = {};
+  for (const k of keys) {
+    const v = run[k];
+    if (v !== undefined && v !== null) {
+      out[k] = v;
+    }
+  }
+  return JSON.stringify(out);
 }
