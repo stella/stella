@@ -2288,6 +2288,7 @@
         "verifiedDescription": "Kézzel megerősítve."
       },
       "lock": {
+        "lock": "Lock cell",
         "locked": "Zárolva",
         "unlock": "Cella feloldása"
       },

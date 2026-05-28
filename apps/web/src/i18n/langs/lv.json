@@ -2288,6 +2288,7 @@
         "verifiedDescription": "Manuāli apstiprināts."
       },
       "lock": {
+        "lock": "Lock cell",
         "locked": "Bloķēta",
         "unlock": "Atbloķēt šūnu"
       },

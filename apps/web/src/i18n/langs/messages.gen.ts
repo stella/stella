@@ -2291,6 +2291,7 @@ type Messages = {
         "verifiedDescription": "Manually confirmed.";
       };
       "lock": {
+        "lock": "Lock cell";
         "locked": "Locked";
         "unlock": "Unlock cell";
       };

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";
@@ -12,9 +12,9 @@ import {
   ShieldAlertIcon,
   StarIcon,
 } from "lucide-react";
+import { useDebouncedCallback } from "use-debounce";
 import { useLocale, useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
 import {
   MenuGroup,
   MenuGroupLabel,
@@ -22,7 +22,6 @@ import {
   MenuSeparator,
 } from "@stll/ui/components/menu";
 import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
 import { UserAvatar } from "@/components/user-avatar";
@@ -31,6 +30,10 @@ import { toAPIError } from "@/lib/errors";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceCellMetadata } from "@/lib/types";
+import {
+  cellOverrideKey,
+  useCellMetadataOverridesStore,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-overrides-store";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 const CELL_FLAG_IDS = [
@@ -136,27 +139,32 @@ export const CellMetadataFlags = ({
   metadata,
 }: CellMetadataFlagsProps) => {
   const getFlagLabel = useFlagLabel();
-  const {
-    decorativeFlags,
-    hasVerifiedFlag,
-    isLocked,
-    lockProvenance,
-    toggleFlag,
-  } = useCellMetadataFlags({
-    entityId,
-    metadata,
-    propertyId,
-    workspaceId,
-  });
-  const cornerFlag = decorativeFlags.at(0);
+  const { activeFlags, hasVerifiedFlag, isLocked, lockProvenance, toggleFlag } =
+    useCellMetadataFlags({
+      entityId,
+      metadata,
+      propertyId,
+      workspaceId,
+    });
+  const hasActiveFlag = activeFlags.length > 0;
   const verifiedProvenance = metadata?.flagProvenance?.[VERIFIED_FLAG_ID];
 
   return (
     <>
+      {hasVerifiedFlag && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-0"
+          style={{
+            backgroundColor: VERIFIED_CELL_FLAG.background,
+            opacity: 0.35,
+          }}
+        />
+      )}
       {isLocked && <CellLockBadge provenance={lockProvenance} />}
-      {cornerFlag ? (
+      {hasActiveFlag ? (
         <CellCornerFlag
-          flags={decorativeFlags}
+          flags={activeFlags}
           metadata={metadata}
           onDrop={toggleFlag}
         />
@@ -172,35 +180,16 @@ export const CellMetadataFlags = ({
           render={
             <button
               aria-label={getFlagLabel(VERIFIED_FLAG_ID)}
-              className={cn(
-                "bg-background/55 focus-visible:ring-ring absolute end-1 top-1 z-20 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px] transition-opacity outline-none focus-visible:ring-1",
-                hasVerifiedFlag
-                  ? "opacity-100"
-                  : "text-foreground-ghost opacity-0 group-hover/cell-content:opacity-100",
-              )}
+              className="bg-background/55 text-foreground-ghost focus-visible:ring-ring absolute end-1 top-1 z-20 flex size-3 items-center justify-center rounded-full opacity-0 backdrop-blur-[2px] transition-opacity outline-none group-hover/cell-content:opacity-100 focus-visible:ring-1"
               onClick={(event) => {
                 event.stopPropagation();
                 toggleFlag(VERIFIED_FLAG_ID);
               }}
-              style={
-                hasVerifiedFlag
-                  ? {
-                      color: VERIFIED_CELL_FLAG.color,
-                    }
-                  : undefined
-              }
               type="button"
             />
           }
         >
-          <span
-            className="size-1.5 rounded-full bg-current"
-            style={{
-              backgroundColor: hasVerifiedFlag
-                ? VERIFIED_CELL_FLAG.color
-                : "currentColor",
-            }}
-          />
+          <span className="size-1.5 rounded-full bg-current" />
         </Tooltip>
       )}
     </>
@@ -347,6 +336,30 @@ const FlagProvenanceTooltip = ({
   );
 };
 
+export const CellLockMenuItem = ({
+  workspaceId,
+  entityId,
+  propertyId,
+  metadata,
+}: CellMetadataFlagsProps) => {
+  const t = useTranslations();
+  const { isLocked, setLocked } = useCellMetadataFlags({
+    entityId,
+    metadata,
+    propertyId,
+    workspaceId,
+  });
+
+  return (
+    <MenuItem onClick={() => setLocked(!isLocked)}>
+      {isLocked ? <LockOpenIcon /> : <LockIcon />}
+      {isLocked
+        ? t("workspaces.table.lock.unlock")
+        : t("workspaces.table.lock.lock")}
+    </MenuItem>
+  );
+};
+
 export const CellMetadataMenuSection = ({
   workspaceId,
   entityId,
@@ -354,13 +367,12 @@ export const CellMetadataMenuSection = ({
   metadata,
 }: CellMetadataFlagsProps) => {
   const t = useTranslations();
-  const { activeFlags, clearFlags, isLocked, setLocked, toggleFlag } =
-    useCellMetadataFlags({
-      entityId,
-      metadata,
-      propertyId,
-      workspaceId,
-    });
+  const { activeFlags, clearFlags, toggleFlag } = useCellMetadataFlags({
+    entityId,
+    metadata,
+    propertyId,
+    workspaceId,
+  });
 
   return (
     <>
@@ -368,7 +380,7 @@ export const CellMetadataMenuSection = ({
         <MenuGroupLabel>{t("workspaces.table.flagCell")}</MenuGroupLabel>
         {CELL_FLAGS.map((flag) => {
           const Icon = flag.icon;
-          const checked = metadata?.manualFlags.includes(flag.id) ?? false;
+          const checked = activeFlags.some((f) => f.id === flag.id);
           return (
             <MenuItem
               className="min-h-7 py-0.5 text-sm"
@@ -390,34 +402,14 @@ export const CellMetadataMenuSection = ({
           );
         })}
       </MenuGroup>
-      {isLocked && (
-        <>
-          <MenuSeparator />
-          <MenuItem
-            className="min-h-7 py-0.5 text-sm"
-            onClick={() => setLocked(false)}
-          >
-            <LockOpenIcon className="size-3.5 shrink-0 opacity-75" />
-            <span className="min-w-0 flex-1 truncate">
-              {t("workspaces.table.lock.unlock")}
-            </span>
-          </MenuItem>
-        </>
-      )}
       {activeFlags.length > 0 && (
         <>
           <MenuSeparator />
-          <Button
-            className="mx-1 mb-1 w-[calc(100%-0.5rem)] justify-start"
-            onClick={(event) => {
-              event.stopPropagation();
-              clearFlags();
-            }}
-            size="xs"
-            variant="ghost"
-          >
-            {t("workspaces.table.clearFlags")}
-          </Button>
+          <MenuItem className="min-h-7 py-0.5 text-sm" onClick={clearFlags}>
+            <span className="min-w-0 flex-1 truncate ps-6">
+              {t("workspaces.table.clearFlags")}
+            </span>
+          </MenuItem>
         </>
       )}
     </>
@@ -432,25 +424,39 @@ const useCellMetadataFlags = ({
 }: CellMetadataFlagsProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const [pendingManualFlags, setPendingManualFlags] = useState<string[] | null>(
-    null,
+  const key = cellOverrideKey(entityId, propertyId);
+  const override = useCellMetadataOverridesStore(
+    (state) => state.overrides[key],
   );
-  const pendingManualFlagsRef = useRef<string[] | null>(null);
+  const setOverride = useCellMetadataOverridesStore(
+    (state) => state.setOverride,
+  );
+  const clearOverride = useCellMetadataOverridesStore(
+    (state) => state.clearOverride,
+  );
+
   const metadataManualFlags = useMemo(
     () => normalizeManualFlags(metadata?.manualFlags ?? []),
     [metadata?.manualFlags],
   );
-  const currentManualFlags = pendingManualFlags ?? metadataManualFlags;
+  const serverLocked = metadata?.locked === true;
 
+  const currentManualFlags = override?.manualFlags ?? metadataManualFlags;
+  const isLocked = override?.locked ?? serverLocked;
+
+  // Clear the override when the server has caught up — both
+  // dimensions must match (or be unset on the override side).
   useEffect(() => {
-    if (
-      pendingManualFlags !== null &&
-      haveSameFlags(pendingManualFlags, metadataManualFlags)
-    ) {
-      pendingManualFlagsRef.current = null;
-      setPendingManualFlags(null);
+    if (override === undefined) {
+      return;
     }
-  }, [metadataManualFlags, pendingManualFlags]);
+    const flagsMatch = haveSameFlags(override.manualFlags, metadataManualFlags);
+    const lockedMatch =
+      override.locked === undefined || override.locked === serverLocked;
+    if (flagsMatch && lockedMatch) {
+      clearOverride(key);
+    }
+  }, [override, metadataManualFlags, serverLocked, clearOverride, key]);
 
   const activeFlags = useMemo(
     () =>
@@ -460,10 +466,12 @@ const useCellMetadataFlags = ({
       }),
     [currentManualFlags],
   );
-  const decorativeFlags = activeFlags.filter(
-    (flag) => flag.id !== VERIFIED_FLAG_ID,
-  );
   const hasVerifiedFlag = currentManualFlags.includes(VERIFIED_FLAG_ID);
+
+  // Refs let the debounced flush read the latest server snapshot
+  // without re-creating the callback on every prop change.
+  const serverBaseRef = useRef(metadataManualFlags);
+  serverBaseRef.current = metadataManualFlags;
 
   const updateMetadata = useMutation({
     mutationFn: async ({
@@ -495,8 +503,7 @@ const useCellMetadataFlags = ({
       });
     },
     onError: (error) => {
-      pendingManualFlagsRef.current = null;
-      setPendingManualFlags(null);
+      clearOverride(key);
       stellaToast.add({
         title: t("errors.actionFailed"),
         description:
@@ -506,41 +513,64 @@ const useCellMetadataFlags = ({
     },
   });
 
-  const toggleFlag = (flagId: CellFlagId) => {
-    const current = pendingManualFlagsRef.current ?? metadataManualFlags;
-    const next = normalizeManualFlags(
-      current.includes(flagId)
-        ? current.filter((id) => id !== flagId)
-        : [...current, flagId],
-    );
-    pendingManualFlagsRef.current = next;
-    setPendingManualFlags(next);
-    updateMetadata.mutate({ baseManualFlags: current, manualFlags: next });
-  };
-
-  const clearFlags = () => {
-    const current = pendingManualFlagsRef.current ?? metadataManualFlags;
-    pendingManualFlagsRef.current = [];
-    setPendingManualFlags([]);
-    updateMetadata.mutate({ baseManualFlags: current, manualFlags: [] });
-  };
-
-  const setLocked = (locked: boolean) => {
-    const current = pendingManualFlagsRef.current ?? metadataManualFlags;
+  // Coalesce rapid clicks (e.g. dropping two flags) into a single
+  // request — the user sees both flags vanish immediately from the
+  // optimistic store, then one mutation hits the server with the
+  // final state.
+  const flush = useDebouncedCallback(() => {
+    const latest = useCellMetadataOverridesStore.getState().overrides[key];
+    if (!latest) {
+      return;
+    }
     updateMetadata.mutate({
-      baseManualFlags: current,
-      manualFlags: current,
-      locked,
+      baseManualFlags: serverBaseRef.current,
+      manualFlags: latest.manualFlags,
+      ...(latest.locked !== undefined && { locked: latest.locked }),
+    });
+  }, 200);
+
+  const writeOverride = (next: {
+    manualFlags: string[];
+    locked?: boolean | undefined;
+  }) => {
+    setOverride(key, {
+      manualFlags: next.manualFlags,
+      locked: next.locked ?? override?.locked,
+    });
+    flush();
+  };
+
+  const toggleFlag = (flagId: CellFlagId) => {
+    const wasActive = currentManualFlags.includes(flagId);
+    const nextFlags = normalizeManualFlags(
+      wasActive
+        ? currentManualFlags.filter((id) => id !== flagId)
+        : [...currentManualFlags, flagId],
+    );
+    // Adding Verified locks the cell so the curated answer can't be
+    // overwritten by a later AI sweep or a stray keystroke. Removing
+    // Verified does not auto-unlock (user may still want it locked).
+    const shouldAutoLock =
+      !wasActive && flagId === VERIFIED_FLAG_ID && !isLocked;
+    writeOverride({
+      manualFlags: nextFlags,
+      ...(shouldAutoLock && { locked: true }),
     });
   };
 
-  const isLocked = metadata?.locked === true;
+  const clearFlags = () => {
+    writeOverride({ manualFlags: [] });
+  };
+
+  const setLocked = (locked: boolean) => {
+    writeOverride({ manualFlags: currentManualFlags, locked });
+  };
+
   const lockProvenance = metadata?.lockProvenance;
 
   return {
     activeFlags,
     clearFlags,
-    decorativeFlags,
     hasVerifiedFlag,
     isLocked,
     lockProvenance,

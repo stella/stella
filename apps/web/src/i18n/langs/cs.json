@@ -706,7 +706,7 @@
     "remove": "Odstranit",
     "rename": "Přejmenovat",
     "required": "Povinné",
-    "retry": "Zkusit znovu",
+    "retry": "Spustit znovu",
     "role": "Role",
     "run": "Spustit",
     "save": "Uložit",
@@ -1944,7 +1944,7 @@
     "entitiesCount": "{count, plural, one {# položka} few {# položky} other {# položek}}",
     "exportToCsv": "Exportovat do CSV",
     "fields": {
-      "calculating": "Počítá se...",
+      "calculating": "Načítá se…",
       "currencyLabel": "Měna (nepovinné)",
       "currencyPlaceholder": "např. USD, EUR",
       "editFieldValue": "Upravit hodnotu pole",
@@ -2288,6 +2288,7 @@
         "verifiedDescription": "Ručně potvrzeno."
       },
       "lock": {
+        "lock": "Zamknout buňku",
         "locked": "Zamčeno",
         "unlock": "Odemknout buňku"
       },

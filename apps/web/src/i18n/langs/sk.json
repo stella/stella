@@ -2288,6 +2288,7 @@
         "verifiedDescription": "Ručne potvrdené."
       },
       "lock": {
+        "lock": "Lock cell",
         "locked": "Uzamknuté",
         "unlock": "Odomknúť bunku"
       },

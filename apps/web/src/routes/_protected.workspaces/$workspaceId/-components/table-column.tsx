@@ -4,7 +4,6 @@ import { EyeIcon, RefreshCwIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
-import { MenuItem } from "@stll/ui/components/menu";
 
 import type {
   ViewFilterCondition,
@@ -16,7 +15,6 @@ import { CellMetadataFlags } from "@/routes/_protected.workspaces/$workspaceId/-
 import { CellResult } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-result";
 import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
-import { useAnchoredMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/use-anchored-menu";
 import { PropertyPopover } from "@/routes/_protected.workspaces/$workspaceId/-components/property-popover";
 import type { TableColumnDef } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { useRetryCell } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell";
@@ -156,50 +154,39 @@ const PropertyCell = ({
 
     if (fileFieldId) {
       return (
-        <RetryableCellShell
-          disabled={cellMetadata?.locked === true || entity.readOnly}
+        <WithOpenEntityButton
           entityId={entity.entityId}
+          fieldId={fileFieldId}
+          justificationFieldId={field.id}
+          label={fileName}
+          mimeType={mimeType}
+          pdfFileId={pdfFileId}
           propertyId={property.id}
+          retryDisabled={cellMetadata?.locked === true || entity.readOnly}
           workspaceId={property.workspaceId}
         >
-          <WithOpenEntityButton
+          <CellMetadataFlags
             entityId={entity.entityId}
-            fieldId={fileFieldId}
-            justificationFieldId={field.id}
-            label={fileName}
-            mimeType={mimeType}
-            pdfFileId={pdfFileId}
+            metadata={cellMetadata}
             propertyId={property.id}
             workspaceId={property.workspaceId}
-          >
-            <CellMetadataFlags
-              entityId={entity.entityId}
-              metadata={cellMetadata}
-              propertyId={property.id}
-              workspaceId={property.workspaceId}
-            />
-            <EditableField
-              content={fieldContent}
-              entityId={entity.entityId}
-              entityKind={entity.kind}
-              property={property}
-              propertyId={property.id}
-              showDateIcon={false}
-              workspaceId={property.workspaceId}
-            />
-          </WithOpenEntityButton>
-        </RetryableCellShell>
+          />
+          <EditableField
+            content={fieldContent}
+            entityId={entity.entityId}
+            entityKind={entity.kind}
+            property={property}
+            propertyId={property.id}
+            showDateIcon={false}
+            workspaceId={property.workspaceId}
+          />
+        </WithOpenEntityButton>
       );
     }
   }
 
   return (
-    <RetryableCellShell
-      disabled={cellMetadata?.locked === true || entity.readOnly}
-      entityId={entity.entityId}
-      propertyId={property.id}
-      workspaceId={property.workspaceId}
-    >
+    <>
       <CellMetadataFlags
         entityId={entity.entityId}
         metadata={cellMetadata}
@@ -215,71 +202,7 @@ const PropertyCell = ({
         showDateIcon={false}
         workspaceId={property.workspaceId}
       />
-    </RetryableCellShell>
-  );
-};
-
-type RetryableCellShellProps = {
-  entityId: string;
-  propertyId: string;
-  workspaceId: string;
-  /**
-   * `true` when the cell is manually locked or the entity is
-   * read-only. The menu still opens (so the user sees the action
-   * exists) but the retry item is disabled — the server would reject
-   * the request anyway with a 409.
-   */
-  disabled?: boolean;
-};
-
-/**
- * Adds a right-click menu with a "Retry" item to AI-model cells.
- * Wraps children in a div so the contextmenu listener has a DOM node;
- * `display: contents` keeps the wrapper out of the cell's layout.
- */
-const RetryableCellShell = ({
-  entityId,
-  propertyId,
-  workspaceId,
-  disabled,
-  children,
-}: PropsWithChildren<RetryableCellShellProps>) => {
-  const t = useTranslations();
-  const retryCell = useRetryCell(workspaceId);
-  // Block double-submits while the request is in flight; a duplicate
-  // click would otherwise race a second mutation against the server's
-  // workflow-running check and toast a misleading 409.
-  const [isPending, setIsPending] = useState(false);
-
-  const handleRetry = async () => {
-    if (isPending || disabled) {
-      return;
-    }
-    setIsPending(true);
-    try {
-      await retryCell({ entityId, propertyId });
-    } finally {
-      setIsPending(false);
-    }
-  };
-
-  const menu = useAnchoredMenu({
-    children: (
-      <MenuItem
-        disabled={disabled || isPending}
-        onClick={() => void handleRetry()}
-      >
-        <RefreshCwIcon />
-        {t("common.retry")}
-      </MenuItem>
-    ),
-  });
-
-  return (
-    <div className="contents" onContextMenu={menu.openAt}>
-      {children}
-      {menu.element}
-    </div>
+    </>
   );
 };
 
@@ -291,6 +214,7 @@ type WithOpenEntityButtonProps = {
   mimeType?: string | undefined;
   pdfFileId?: string | null | undefined;
   propertyId: string;
+  retryDisabled: boolean;
   workspaceId: string;
 };
 
@@ -303,11 +227,15 @@ const WithOpenEntityButton = ({
   mimeType,
   pdfFileId,
   propertyId,
+  retryDisabled,
   workspaceId,
   children,
 }: PropsWithChildren<WithOpenEntityButtonProps>) => {
   const t = useTranslations();
   const openFile = useInspectorStore((s) => s.openFile);
+  const retryCell = useRetryCell(workspaceId);
+  const [isRetrying, setIsRetrying] = useState(false);
+
   const handleOpenPreview = () => {
     openFile({
       id: fieldId,
@@ -321,22 +249,54 @@ const WithOpenEntityButton = ({
     });
   };
 
+  const handleRetry = async () => {
+    if (isRetrying) {
+      return;
+    }
+    setIsRetrying(true);
+    try {
+      await retryCell({ entityId, propertyId });
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
+  const inlineActionClass =
+    "text-foreground-ghost hover:text-foreground hidden h-6 gap-1 px-1.5 text-xs opacity-70 group-data-[expanded-cell]/cell-content:flex hover:opacity-100";
+
   return (
     <div className="w-full min-w-0 text-start">
       {children}
-      <Button
-        className="text-foreground-ghost hover:text-foreground absolute end-1.5 bottom-1.5 hidden h-6 gap-1 px-1.5 text-xs opacity-70 group-data-[expanded-cell]/cell-content:flex hover:opacity-100"
+      <div
+        className="absolute end-1.5 bottom-1.5 hidden items-center gap-1 group-data-[expanded-cell]/cell-content:flex"
         data-row-expansion-ignore
-        onClick={(event) => {
-          event.stopPropagation();
-          handleOpenPreview();
-        }}
-        size="xs"
-        variant="ghost"
       >
-        <EyeIcon className="size-3.5" />
-        {t("common.preview")}
-      </Button>
+        <Button
+          className={inlineActionClass}
+          disabled={retryDisabled || isRetrying}
+          onClick={(event) => {
+            event.stopPropagation();
+            void handleRetry();
+          }}
+          size="xs"
+          variant="ghost"
+        >
+          <RefreshCwIcon className="size-3.5" />
+          {t("common.retry")}
+        </Button>
+        <Button
+          className={inlineActionClass}
+          onClick={(event) => {
+            event.stopPropagation();
+            handleOpenPreview();
+          }}
+          size="xs"
+          variant="ghost"
+        >
+          <EyeIcon className="size-3.5" />
+          {t("common.preview")}
+        </Button>
+      </div>
     </div>
   );
 };

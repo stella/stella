@@ -185,7 +185,7 @@ export const PropertyPopover = ({
               <>
                 <div className="flex flex-col p-1">
                   <Button
-                    className="justify-start gap-1.5"
+                    className="justify-start gap-1.5 font-normal"
                     onClick={() => {
                       setIsOpen(false);
                       setEditorOpen(true);
@@ -213,7 +213,7 @@ export const PropertyPopover = ({
               />
               <PinProperty column={header.column} />
               <Button
-                className="justify-start gap-1.5"
+                className="justify-start gap-1.5 font-normal"
                 disabled={markAllReviewed.isPending}
                 onClick={() => {
                   markAllReviewed.mutate();
@@ -225,7 +225,7 @@ export const PropertyPopover = ({
                 {t("workspaces.properties.markAllAsReviewed")}
               </Button>
               <Button
-                className="justify-start gap-1.5"
+                className="justify-start gap-1.5 font-normal"
                 onClick={() => {
                   header.column.toggleVisibility(false);
                   setIsOpen(false);

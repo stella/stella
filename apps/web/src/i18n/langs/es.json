@@ -2288,6 +2288,7 @@
         "verifiedDescription": "Confirmado manualmente."
       },
       "lock": {
+        "lock": "Lock cell",
         "locked": "Bloqueada",
         "unlock": "Desbloquear celda"
       },

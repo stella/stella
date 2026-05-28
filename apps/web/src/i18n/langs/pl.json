@@ -2288,6 +2288,7 @@
         "verifiedDescription": "Potwierdzone ręcznie."
       },
       "lock": {
+        "lock": "Lock cell",
         "locked": "Zablokowana",
         "unlock": "Odblokuj komórkę"
       },

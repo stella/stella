@@ -2288,6 +2288,7 @@
         "verifiedDescription": "Käsitsi kinnitatud."
       },
       "lock": {
+        "lock": "Lock cell",
         "locked": "Lukus",
         "unlock": "Vabasta lahter"
       },

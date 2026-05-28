@@ -141,7 +141,8 @@ export const PropertyConditions = ({
       <DialogTrigger
         render={
           <Button
-            className="w-full justify-start font-semibold"
+            className="w-full justify-start font-normal"
+            size="sm"
             variant="ghost"
           />
         }

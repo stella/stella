@@ -2288,6 +2288,7 @@
         "verifiedDescription": "Manuell bestätigt."
       },
       "lock": {
+        "lock": "Lock cell",
         "locked": "Gesperrt",
         "unlock": "Zelle entsperren"
       },

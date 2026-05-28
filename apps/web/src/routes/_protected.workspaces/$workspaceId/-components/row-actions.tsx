@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
@@ -16,6 +17,7 @@ import {
   Maximize2Icon,
   MessageSquareIcon,
   PencilIcon,
+  RefreshCwIcon,
   Trash2Icon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -56,17 +58,22 @@ import { ClientOperationError, isUnauthorizedError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceCellMetadata, WorkspaceEntity } from "@/lib/types";
 import { isFileDisplayable } from "@/lib/types";
-import { CellMetadataMenuSection } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
+import {
+  CellLockMenuItem,
+  CellMetadataMenuSection,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
 import { CopyToMatterDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { getPdfDownloadFileName } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { useEntitiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
+import { useRetryCell } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell";
 import {
   useCreateEntities,
   useDeleteEntities,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useIsWorkflowRunning } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import {
@@ -117,7 +124,10 @@ export const RowActions = ({
   const navigate = useNavigate();
   const deleteEntities = useDeleteEntities();
   const requestChatAbout = useRequestChatAbout(workspaceId);
+  const retryCell = useRetryCell(workspaceId);
   const [copyToMatterOpen, setCopyToMatterOpen] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const { data: properties } = useQuery(propertiesOptions(workspaceId));
   const file = getFirstFile(entity);
   const name = getEntityName(entity);
   const isFolder = entity.kind === "folder";
@@ -341,6 +351,37 @@ export const RowActions = ({
     }
   };
 
+  const cellProperty =
+    cellMetadataTarget && properties
+      ? properties.find((p) => p.id === cellMetadataTarget.propertyId)
+      : undefined;
+  const cellField = cellMetadataTarget
+    ? entity.fields[cellMetadataTarget.propertyId]
+    : undefined;
+  const canRetryCell =
+    cellProperty?.tool.type === "ai-model" &&
+    cellProperty.content.type !== "file";
+  const retryDisabled =
+    isRetrying ||
+    entity.readOnly ||
+    cellMetadataTarget?.metadata?.locked === true ||
+    cellField?.content.type === "pending";
+
+  const handleRetryCell = async () => {
+    if (!cellMetadataTarget || isRetrying) {
+      return;
+    }
+    setIsRetrying(true);
+    try {
+      await retryCell({
+        entityId: entity.entityId,
+        propertyId: cellMetadataTarget.propertyId,
+      });
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
   const handleChatAbout = () => {
     const targets = isBulk ? selectedEntities : [entity];
     const mentions = targets.map((e) => {
@@ -474,6 +515,21 @@ export const RowActions = ({
         )}
         {!isBulk && cellMetadataTarget && (
           <>
+            {canRetryCell && (
+              <MenuItem
+                disabled={retryDisabled}
+                onClick={() => void handleRetryCell()}
+              >
+                <RefreshCwIcon />
+                {t("common.retry")}
+              </MenuItem>
+            )}
+            <CellLockMenuItem
+              entityId={entity.entityId}
+              metadata={cellMetadataTarget.metadata}
+              propertyId={cellMetadataTarget.propertyId}
+              workspaceId={workspaceId}
+            />
             <MenuSeparator />
             <CellMetadataMenuSection
               entityId={entity.entityId}

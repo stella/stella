@@ -2288,6 +2288,7 @@
         "verifiedDescription": "Patvirtinta rankiniu būdu."
       },
       "lock": {
+        "lock": "Lock cell",
         "locked": "Užrakinta",
         "unlock": "Atrakinti langelį"
       },
