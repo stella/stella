@@ -1,8 +1,9 @@
 import { Result } from "better-result";
-import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { cellMetadata, entities, properties } from "@/api/db/schema";
+import type { EntityKind } from "@/api/db/schema-validators";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { acquireCellLock } from "@/api/lib/cell-lock";
@@ -13,6 +14,11 @@ import {
   buildColumnFlagMutation,
   sortColumnFlagTargetsForLocking,
 } from "./mark-column-flag.logic";
+
+const TABLE_COLUMN_FLAG_EXCLUDED_ENTITY_KINDS = [
+  "folder",
+  "task",
+] satisfies EntityKind[];
 
 const config = {
   permissions: {
@@ -64,6 +70,10 @@ const markColumnFlag = createSafeHandler(
             and(
               eq(entities.workspaceId, workspaceId),
               isNotNull(entities.currentVersionId),
+              notInArray(
+                entities.kind,
+                TABLE_COLUMN_FLAG_EXCLUDED_ENTITY_KINDS,
+              ),
             ),
           )
           .orderBy(asc(entities.id))
