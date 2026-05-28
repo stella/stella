@@ -739,6 +739,31 @@ const buildSkillZip = async (
   return new File([blob], "skill.zip", { type: "application/zip" });
 };
 
+const getDuplicateResourcePaths = (
+  resources: readonly DraftResource[],
+): Set<string> => {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const resource of resources) {
+    const path = resource.path.trim();
+    if (path.length === 0) {
+      continue;
+    }
+    if (seen.has(path)) {
+      duplicates.add(path);
+      continue;
+    }
+    seen.add(path);
+  }
+  return duplicates;
+};
+
+const hasResourceValidationErrors = (
+  resources: readonly DraftResource[],
+): boolean =>
+  resources.some((resource) => !isValidResource(resource)) ||
+  getDuplicateResourcePaths(resources).size > 0;
+
 function GenerateSkillDialog({
   canManageTeam,
   onChanged,
@@ -878,7 +903,7 @@ function GenerateSkillDialog({
   };
 
   const handleInstall = () => {
-    if (!draft.trim() || resources.some((r) => !isValidResource(r))) {
+    if (!draft.trim() || hasResourceValidationErrors(resources)) {
       return;
     }
     install.mutate({ markdown: draft, resources, scope });
@@ -913,6 +938,9 @@ function GenerateSkillDialog({
   const hasResourceErrors = resources.some(
     (resource) => !isValidResource(resource),
   );
+  const duplicateResourcePaths = getDuplicateResourcePaths(resources);
+  const hasResourceValidationError =
+    hasResourceErrors || duplicateResourcePaths.size > 0;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -1004,6 +1032,9 @@ function GenerateSkillDialog({
                     onChange={(patch) => updateResource(resource.id, patch)}
                     onRemove={() => removeResource(resource.id)}
                     resource={resource}
+                    showDuplicatePathError={duplicateResourcePaths.has(
+                      resource.path.trim(),
+                    )}
                     showPathError={
                       resource.path.length > 0 &&
                       !RESOURCE_PATH_PATTERN.test(resource.path.trim())
@@ -1068,7 +1099,7 @@ function GenerateSkillDialog({
               !draft.trim() ||
               install.isPending ||
               generate.isPending ||
-              hasResourceErrors
+              hasResourceValidationError
             }
             onClick={handleInstall}
           >
@@ -1097,6 +1128,7 @@ type ResourceCardProps = {
   onChange: (patch: Partial<DraftResource>) => void;
   onRemove: () => void;
   resource: DraftResource;
+  showDuplicatePathError: boolean;
   showPathError: boolean;
 };
 
@@ -1104,6 +1136,7 @@ function ResourceCard({
   onChange,
   onRemove,
   resource,
+  showDuplicatePathError,
   showPathError,
 }: ResourceCardProps) {
   const t = useTranslations();
@@ -1113,7 +1146,7 @@ function ResourceCard({
     <div className="border-border bg-card animate-in fade-in-0 flex flex-col gap-2 rounded-lg border p-3 duration-150">
       <div className="flex items-center gap-2">
         <Input
-          aria-invalid={showPathError || undefined}
+          aria-invalid={showPathError || showDuplicatePathError || undefined}
           className="font-mono text-xs"
           onChange={(event) => onChange({ path: event.target.value })}
           placeholder="knowledge/01-foundations.md"
@@ -1131,6 +1164,11 @@ function ResourceCard({
       {showPathError && (
         <p className="text-destructive text-xs">
           {tSkills("generateResourcePathError")}
+        </p>
+      )}
+      {!showPathError && showDuplicatePathError && (
+        <p className="text-destructive text-xs">
+          {tSkills("generateResourceDuplicatePathError")}
         </p>
       )}
       <Textarea

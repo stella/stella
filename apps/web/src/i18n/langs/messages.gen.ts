@@ -1266,6 +1266,7 @@ type Messages = {
       "generateIntentLabel": "What should this skill do?";
       "generateIntentPlaceholder": "A skill that summarises court rulings into a short brief with the holding, reasoning, and citation.";
       "generateResourceContentPlaceholder": "Markdown content for this file…";
+      "generateResourceDuplicatePathError": "Each companion file path must be unique.";
       "generateResourcePathError": "Path must start with references/, prompts/, or knowledge/ and end in .md (lowercase letters, digits, hyphens, dots, underscores).";
       "generateResourcesHelp": "Companion markdown files bundled alongside SKILL.md.";
       "generateResourcesLabel": "Companion files";
