@@ -339,6 +339,10 @@ export const ToolCallCard = ({
   const isLoading = isRunningToolPart(part);
   const hasOutput = part.state === "output-available";
   const hasError = part.state === "output-error";
+  const errorMessage =
+    hasError && "errorText" in part && typeof part.errorText === "string"
+      ? part.errorText
+      : undefined;
   const toolInput = getToolInput(part);
   const codeToolSource = getCodeToolSource(part, name);
   const showCodeToolOutput = CODE_TOOL_NAMES.has(name) && hasOutput;
@@ -361,8 +365,10 @@ export const ToolCallCard = ({
       <div
         className={cn(
           "bg-muted/30 inline-flex max-w-full items-center gap-1.5 rounded-md px-2 py-1 align-top",
-          hasError && "border-destructive/40 border",
+          hasError &&
+            "bg-destructive/10 border-destructive/60 text-destructive border",
         )}
+        title={errorMessage}
       >
         <button
           className={cn(
@@ -486,11 +492,6 @@ export const ToolCallCard = ({
               )}
           </div>
         )}
-      {hasError && "errorText" in part && (
-        <div className="text-destructive border-t px-2 py-1.5">
-          {part.errorText}
-        </div>
-      )}
     </div>
   );
 };
