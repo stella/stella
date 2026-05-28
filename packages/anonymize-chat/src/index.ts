@@ -25,7 +25,6 @@ export const DEFAULT_CHAT_ANON_ENTITY_LABELS = [
   "organization",
   "phone number",
   "address",
-  "country",
   "email address",
   "date",
   "date of birth",

@@ -12,9 +12,7 @@ const loadAnonymizationGazetteerEntriesMock = mock();
 const decryptContentMock = mock();
 const captureErrorMock = mock();
 const analyticsCaptureMock = mock();
-const analyticsFlushMock = mock(async function flushAnalyticsMock() {
-  return;
-});
+const analyticsFlushMock = mock(async () => undefined);
 const getAnalyticsMock = mock(() => ({
   capture: analyticsCaptureMock,
   flush: analyticsFlushMock,
