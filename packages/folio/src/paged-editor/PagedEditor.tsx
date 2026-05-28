@@ -3915,7 +3915,24 @@ export function PagedEditor(
       // dispatchTransaction, so we only need to nudge the layout pipeline
       // and update HF caret + toolbar state here.
       if (docChanged) {
-        const bodyState = hiddenPMRef.current?.getState();
+        // The body HiddenProseMirror view may still be deferred when the
+        // user enters HF editing first (a doc opened without
+        // collaboration that hasn't been clicked into yet). The HF PMs
+        // are mounted unconditionally so an HF transaction can fire
+        // before any body view exists; without a bodyState
+        // `scheduleLayout` was a no-op and the painter never repainted
+        // the in-flight HF edit (Codex #487 P1: 21:59 review). Use the
+        // precomputed initial state when present, otherwise force-create
+        // the view via `ensureHiddenEditorView` so the next read returns
+        // a state.
+        let bodyState = hiddenPMRef.current?.getState();
+        if (!bodyState && precomputedInitialStateRef.current) {
+          bodyState = precomputedInitialStateRef.current;
+        }
+        if (!bodyState) {
+          ensureHiddenEditorView({ sync: true });
+          bodyState = hiddenPMRef.current?.getState();
+        }
         if (bodyState) {
           scheduleLayout(bodyState, null);
         }
@@ -3939,7 +3956,7 @@ export function PagedEditor(
         onSelectionChangeRef.current?.(from, to);
       }
     },
-    [scheduleLayout],
+    [scheduleLayout, ensureHiddenEditorView],
   );
 
   // Clear HF caret state + cross-surface drag state on any hfEditMode
