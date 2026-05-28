@@ -901,6 +901,17 @@ type LayoutInputSignatureOptions = {
   firstPageHeaderContent: HeaderFooter | null | undefined;
   footerContent: HeaderFooter | null | undefined;
   headerContent: HeaderFooter | null | undefined;
+  // Active rId per HF slot. Switching to a different HF part with
+  // identical content + height previously left the layout signature
+  // unchanged so the painter incremental path skipped repaint and the
+  // old `data-rid` lingered in the DOM, routing clicks to a stale HF
+  // view (Codex #487 P2: 22:48 review). Including the rId guarantees a
+  // relayout when the slot's owning rId changes even if the rendered
+  // content is byte-equivalent.
+  headerContentRId: string | null | undefined;
+  footerContentRId: string | null | undefined;
+  firstPageHeaderContentRId: string | null | undefined;
+  firstPageFooterContentRId: string | null | undefined;
   margins: PageMargins;
   pageGap: number;
   pageSize: { h: number; w: number };
@@ -2759,6 +2770,10 @@ export function PagedEditor(
         firstPageHeaderContent,
         footerContent,
         headerContent,
+        headerContentRId,
+        footerContentRId,
+        firstPageHeaderContentRId,
+        firstPageFooterContentRId,
         margins,
         pageGap,
         pageSize,
@@ -2774,6 +2789,10 @@ export function PagedEditor(
       firstPageHeaderContent,
       footerContent,
       headerContent,
+      headerContentRId,
+      footerContentRId,
+      firstPageHeaderContentRId,
+      firstPageFooterContentRId,
       margins,
       pageGap,
       pageSize,

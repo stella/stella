@@ -2373,14 +2373,16 @@ function computeOptionsHash(options: RenderPageOptions): string {
   // same-height in-place edits (typing a replacement char, bold toggle, etc.)
   // invalidate the hash and force the per-page shells to re-render — block
   // count / height / visualBounds alone miss those (Codex #487 P1: 21:02
-  // review).
+  // review). Include `rId` so switching to a different HF part with
+  // identical content invalidates the hash too — otherwise the painted
+  // `data-rid` would stay stale (Codex #487 P2: 22:48 review).
   if (options.headerContent) {
     parts.push(
       `hdr:${options.headerContent.blocks.length},${options.headerContent.height},${
         options.headerContent.visualTop ?? 0
       },${options.headerContent.visualBottom ?? options.headerContent.height},${
-        options.headerContent.textSig ?? ""
-      }`,
+        options.headerContent.rId ?? ""
+      },${options.headerContent.textSig ?? ""}`,
     );
   }
   if (options.footerContent) {
@@ -2388,23 +2390,23 @@ function computeOptionsHash(options: RenderPageOptions): string {
       `ftr:${options.footerContent.blocks.length},${options.footerContent.height},${
         options.footerContent.visualTop ?? 0
       },${options.footerContent.visualBottom ?? options.footerContent.height},${
-        options.footerContent.textSig ?? ""
-      }`,
+        options.footerContent.rId ?? ""
+      },${options.footerContent.textSig ?? ""}`,
     );
   }
 
   if (options.firstPageHeaderContent) {
     parts.push(
       `fp-hdr:${options.firstPageHeaderContent.blocks.length},${options.firstPageHeaderContent.height},${
-        options.firstPageHeaderContent.textSig ?? ""
-      }`,
+        options.firstPageHeaderContent.rId ?? ""
+      },${options.firstPageHeaderContent.textSig ?? ""}`,
     );
   }
   if (options.firstPageFooterContent) {
     parts.push(
       `fp-ftr:${options.firstPageFooterContent.blocks.length},${options.firstPageFooterContent.height},${
-        options.firstPageFooterContent.textSig ?? ""
-      }`,
+        options.firstPageFooterContent.rId ?? ""
+      },${options.firstPageFooterContent.textSig ?? ""}`,
     );
   }
   if (options.titlePg) {
