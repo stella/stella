@@ -355,19 +355,21 @@ function ChatIndex() {
                 // reads the *same* cached instance, so kicking off
                 // `sendMessage` here lets the thread page observe
                 // the in-flight stream as soon as it mounts.
-                const message = await buildChatRequestMessage(draft);
-                const { chat } = await queryClient.ensureQueryData(
-                  chatThreadOptions({
-                    activeOrganizationId,
-                    key: threadRef,
-                    context: {
-                      allowMissingThread: true,
-                      getUserContext,
-                      getContextMatterIds,
-                      getSendMode,
-                    },
-                  }),
-                );
+                const [message, { chat }] = await Promise.all([
+                  buildChatRequestMessage(draft),
+                  queryClient.ensureQueryData(
+                    chatThreadOptions({
+                      activeOrganizationId,
+                      key: threadRef,
+                      context: {
+                        allowMissingThread: true,
+                        getUserContext,
+                        getContextMatterIds,
+                        getSendMode,
+                      },
+                    }),
+                  ),
+                ]);
 
                 // Fire-and-forget: don't block navigation on the
                 // streaming response. The thread page picks up the
