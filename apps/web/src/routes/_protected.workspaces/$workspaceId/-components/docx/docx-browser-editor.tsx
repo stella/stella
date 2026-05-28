@@ -1149,6 +1149,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     });
     if (blockReason === "pendingCompatibility") {
       // Queue silently — see requestEditMode for rationale.
+      pendingEditRequestRef.current = true;
       useInspectorStore.getState().requestDocxEdit(fieldId);
       return;
     }
