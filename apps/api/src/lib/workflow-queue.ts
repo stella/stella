@@ -499,15 +499,15 @@ export const startWorkflow = async ({
     const executionPlanData = await getExecutionPlanData(workspaceId, scopedDb);
 
     // Property-status freshness is an optimization for full-workspace
-    // runs ("nothing changed, skip"). When the caller passes explicit
-    // `entityIds` they're saying "I just created these rows, please
-    // backfill them" — every AI property is dirty for those rows even
-    // if the property itself is otherwise "fresh" (its existing rows
-    // are computed). Force the planner to include all AI properties
-    // by overriding their status to "stale"; the per-entity targeting
-    // below still scopes the actual computation to the new rows.
+    // runs ("nothing changed, skip"). It must be bypassed when the
+    // caller is asking for an explicit re-run: entity backfills
+    // ("backfill these new rows") and column reruns ("re-extract this
+    // column") both need the property in the plan even if it is
+    // marked fresh. The per-entity / per-property targeting below
+    // still scopes the actual computation correctly.
     const planInput =
-      inputEntityIds && inputEntityIds.length > 0
+      (inputEntityIds && inputEntityIds.length > 0) ||
+      (inputPropertyIds && inputPropertyIds.length > 0)
         ? {
             ...executionPlanData,
             properties: executionPlanData.properties.map((p) => ({
@@ -594,13 +594,22 @@ export const startWorkflow = async ({
       RUNNING_LOCK_TTL_SEC,
     );
 
-    // Single-cell retries and other `propertyIds`-scoped runs only
-    // touch a subset of (entity, property) pairs. `finishWorkflow`
-    // must NOT freshen those properties workspace-wide afterwards: the
-    // other entities still hold values from the previous extraction,
-    // so the property is genuinely still stale at workspace scope. The
+    // Single-cell retries (propertyIds + entityIds) only touch a
+    // subset of (entity, property) pairs. `finishWorkflow` must NOT
+    // freshen those properties workspace-wide afterwards: the other
+    // entities still hold values from the previous extraction, so
+    // the property is genuinely still stale at workspace scope. The
     // flag lets us tell scoped runs apart from a full sweep.
-    if (inputPropertyIds && inputPropertyIds.length > 0) {
+    //
+    // Column reruns (propertyIds without entityIds) re-process every
+    // entity for the property, so finishWorkflow may freshen as
+    // usual — do NOT set the scoped flag in that case.
+    const isCellScopedRun =
+      inputPropertyIds &&
+      inputPropertyIds.length > 0 &&
+      inputEntityIds &&
+      inputEntityIds.length > 0;
+    if (isCellScopedRun) {
       await redis.set(
         workflowKey(workspaceId, "scoped"),
         "1",

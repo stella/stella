@@ -533,6 +533,23 @@ const useCellMetadataFlags = ({
   // without re-creating the callback on every prop change.
   const serverBaseRef = useRef(metadataManualFlags);
   serverBaseRef.current = metadataManualFlags;
+  // Tracks the flag set most recently sent to the server. Used as
+  // the merge base for the next flush so a rapid add-then-remove
+  // diffs against the in-flight value rather than the now-stale
+  // server snapshot.
+  const lastSentRef = useRef<string[] | null>(null);
+
+  // Once the server-side metadata catches up with what we last sent,
+  // drop the in-flight base so the next flush diffs against the
+  // server again.
+  useEffect(() => {
+    if (
+      lastSentRef.current !== null &&
+      haveSameFlags(lastSentRef.current, metadataManualFlags)
+    ) {
+      lastSentRef.current = null;
+    }
+  }, [metadataManualFlags]);
 
   const updateMetadata = useMutation({
     mutationFn: async ({
@@ -564,6 +581,7 @@ const useCellMetadataFlags = ({
       });
     },
     onError: (error) => {
+      lastSentRef.current = null;
       clearOverride(key);
       stellaToast.add({
         title: t("errors.actionFailed"),
@@ -583,8 +601,10 @@ const useCellMetadataFlags = ({
     if (!latest) {
       return;
     }
+    const baseManualFlags = lastSentRef.current ?? serverBaseRef.current;
+    lastSentRef.current = latest.manualFlags;
     updateMetadata.mutate({
-      baseManualFlags: serverBaseRef.current,
+      baseManualFlags,
       manualFlags: latest.manualFlags,
       ...(latest.locked !== undefined && { locked: latest.locked }),
     });
