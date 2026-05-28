@@ -5989,6 +5989,20 @@ export function PagedEditor(
         return;
       }
 
+      // Don't take over keydown events that originated inside a persistent
+      // hidden HF EditorView — the HF PM has its own native handlers, and
+      // the body-PM routing below would steal focus + dispatch into the
+      // body editor (e.g. Space scrolling to the body, the first typed key
+      // landing under the cursor in the document instead of the active
+      // HF). Mirrors the focus / mousedown guards in handleContainerFocus
+      // and handleContainerMouseDown (Codex #487 P1: 21:12 review).
+      if (
+        e.target instanceof HTMLElement &&
+        e.target.closest("[data-hf-r-id]")
+      ) {
+        return;
+      }
+
       let view = hiddenPMRef.current?.getView();
       if (!view) {
         ensureHiddenEditorView({ sync: true });
