@@ -4,6 +4,8 @@ import { Result } from "better-result";
 import { Loader2Icon, SquareMinusIcon } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
 
+import { cn } from "@stll/ui/lib/utils";
+
 import Tooltip from "@/components/tooltip";
 import { isFileDisplayable } from "@/lib/types";
 import type { WorkspaceField, WorkspaceProperty } from "@/lib/types";
@@ -45,32 +47,31 @@ export const CellResult = ({
           className="text-muted-foreground absolute end-1 top-1 z-20 size-3 shrink-0 animate-spin"
           strokeWidth={2.25}
         />
-        <span
-          className={
-            hasPreview
-              ? "line-clamp-2 min-w-0"
-              : "text-muted-foreground truncate"
-          }
+        <div
+          className={cn(
+            "line-clamp-2 min-w-0",
+            !hasPreview && "text-muted-foreground",
+          )}
         >
           {hasPreview ? preview : t("workspaces.fields.calculating")}
-        </span>
+        </div>
       </>
     );
   }
 
   if (type === "error") {
     return (
-      <span className="text-destructive block truncate italic">
+      <div className="text-destructive line-clamp-2 italic">
         {t("workspaces.fields.errored")}
-      </span>
+      </div>
     );
   }
 
   if (type === "unsupported") {
     return (
-      <span className="text-muted-foreground block truncate italic">
+      <div className="text-muted-foreground line-clamp-2 italic">
         {t("workspaces.fields.formatNotSupported")}
-      </span>
+      </div>
     );
   }
 

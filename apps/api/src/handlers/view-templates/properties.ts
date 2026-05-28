@@ -1,5 +1,4 @@
 import { deepEquals } from "bun";
-import { eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db";
 import { properties, propertyDependencies } from "@/api/db/schema";
@@ -133,8 +132,14 @@ export const resolveTemplateProperties = async ({
   recordAuditEvent,
 }: ResolveTemplatePropertiesOptions): Promise<ResolveTemplatePropertiesResult> => {
   if (!templateProperties || templateProperties.length === 0) {
-    const propertyIds = await readPropertyIds(tx, workspaceId);
-    return { ok: true, layout, propertyIds };
+    const existing = await readExistingProperties(tx, workspaceId);
+    const systemFile = findSystemFileProperty(existing);
+    prependSystemFileToColumnOrder(layout, systemFile);
+    return {
+      ok: true,
+      layout,
+      propertyIds: existing.map((property) => property.id),
+    };
   }
 
   const validationError = validateTemplateProperties(templateProperties);
@@ -144,16 +149,8 @@ export const resolveTemplateProperties = async ({
 
   await lockWorkspacePropertyWrites(tx, workspaceId);
 
-  const existingProperties = await tx.query.properties.findMany({
-    where: { workspaceId: { eq: workspaceId } },
-    columns: {
-      id: true,
-      name: true,
-      content: true,
-      tool: true,
-    },
-    orderBy: { createdAt: "asc" },
-  });
+  const existingProperties = await readExistingProperties(tx, workspaceId);
+  const systemFileProperty = findSystemFileProperty(existingProperties);
   const existingDependencyEdges = await tx.query.propertyDependencies.findMany({
     where: { workspaceId: { eq: workspaceId } },
     columns: { propertyId: true },
@@ -275,10 +272,55 @@ export const resolveTemplateProperties = async ({
     propertyIdBySourceId,
     createdPropertySourceIds,
     recordAuditEvent,
+    systemFilePropertyId: systemFileProperty?.id,
   });
 
   remapLayoutPropertyIds(layout, propertyIdBySourceId);
+  prependSystemFileToColumnOrder(layout, systemFileProperty);
+
   return { ok: true, layout, propertyIds: nextPropertyIds };
+};
+
+const readExistingProperties = (
+  tx: Transaction,
+  workspaceId: SafeId<"workspace">,
+) =>
+  tx.query.properties.findMany({
+    where: { workspaceId: { eq: workspaceId } },
+    columns: {
+      id: true,
+      name: true,
+      content: true,
+      tool: true,
+      system: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+type ExistingProperty = Awaited<
+  ReturnType<typeof readExistingProperties>
+>[number];
+
+const findSystemFileProperty = (existing: readonly ExistingProperty[]) =>
+  existing.find(
+    (property) => property.system && property.content.type === "file",
+  );
+
+// Templates strip system properties, so their saved columnOrder never
+// carries the workspace-specific Documents id. Without this prepend it
+// lands at the end of the table.
+const prependSystemFileToColumnOrder = (
+  layout: ViewLayout,
+  systemFileProperty: ExistingProperty | undefined,
+): void => {
+  if (
+    layout.type !== "table" ||
+    !systemFileProperty ||
+    layout.columnOrder.includes(systemFileProperty.id)
+  ) {
+    return;
+  }
+  layout.columnOrder = [systemFileProperty.id, ...layout.columnOrder];
 };
 
 const sanitizeTemplatePropertyTool = (
@@ -304,6 +346,7 @@ const recreateTemplateDependencies = async ({
   propertyIdBySourceId,
   createdPropertySourceIds,
   recordAuditEvent,
+  systemFilePropertyId,
 }: {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
@@ -311,6 +354,7 @@ const recreateTemplateDependencies = async ({
   propertyIdBySourceId: ReadonlyMap<string, string>;
   createdPropertySourceIds: ReadonlySet<string>;
   recordAuditEvent: AuditRecorder;
+  systemFilePropertyId: string | undefined;
 }): Promise<void> => {
   const rows = templateProperties.flatMap((templateProperty) => {
     if (!createdPropertySourceIds.has(templateProperty.sourceId)) {
@@ -318,29 +362,58 @@ const recreateTemplateDependencies = async ({
     }
 
     const propertyId = propertyIdBySourceId.get(templateProperty.sourceId);
-    if (!propertyId || !templateProperty.dependencies) {
+    if (!propertyId) {
       return [];
     }
-    return templateProperty.dependencies.flatMap((dep) => {
-      const dependsOnPropertyId = propertyIdBySourceId.get(
-        dep.dependsOnSourceId,
-      );
-      // Drop edges where either endpoint failed to remap; the
-      // missing-property branch above already declined to create
-      // them, so the workflow planner will treat the property as
-      // having no inputs rather than crashing.
-      if (!dependsOnPropertyId || dependsOnPropertyId === propertyId) {
-        return [];
-      }
+
+    const resolvedEdges = (templateProperty.dependencies ?? []).flatMap(
+      (dep) => {
+        const dependsOnPropertyId = propertyIdBySourceId.get(
+          dep.dependsOnSourceId,
+        );
+        // Drop edges where either endpoint failed to remap; the
+        // missing-property branch above already declined to create
+        // them, so the workflow planner will treat the property as
+        // having no inputs rather than crashing.
+        if (!dependsOnPropertyId || dependsOnPropertyId === propertyId) {
+          return [];
+        }
+        return [
+          {
+            workspaceId,
+            propertyId: brandPersistedPropertyId(propertyId),
+            dependsOnPropertyId: brandPersistedPropertyId(dependsOnPropertyId),
+            condition: dep.condition,
+          },
+        ];
+      },
+    );
+
+    // Templates strip the workspace-specific Documents id, so an AI
+    // column whose only dependency pointed at Documents loses every
+    // edge in remap. Fall back to the target workspace's system file
+    // property so the new AI column has a source. Skip when the
+    // template explicitly declared no dependencies (static-prompt
+    // columns), so we don't force a spurious source on them.
+    if (
+      resolvedEdges.length === 0 &&
+      templateProperty.dependencies !== undefined &&
+      templateProperty.dependencies.length > 0 &&
+      templateProperty.tool.type === "ai-model" &&
+      systemFilePropertyId !== undefined &&
+      systemFilePropertyId !== propertyId
+    ) {
       return [
         {
           workspaceId,
           propertyId: brandPersistedPropertyId(propertyId),
-          dependsOnPropertyId: brandPersistedPropertyId(dependsOnPropertyId),
-          condition: dep.condition,
+          dependsOnPropertyId: brandPersistedPropertyId(systemFilePropertyId),
+          condition: null,
         },
       ];
-    });
+    }
+
+    return resolvedEdges;
   });
 
   if (rows.length === 0) {
@@ -435,17 +508,6 @@ const hasTemplateDependencyCycle = ({
   }
 
   return false;
-};
-
-const readPropertyIds = async (
-  tx: Transaction,
-  workspaceId: SafeId<"workspace">,
-): Promise<string[]> => {
-  const rows = await tx
-    .select({ id: properties.id })
-    .from(properties)
-    .where(eq(properties.workspaceId, workspaceId));
-  return rows.map((row) => row.id);
 };
 
 const validateTemplateProperties = (
