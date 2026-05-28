@@ -4438,7 +4438,19 @@ export function PagedEditor(
       // dispatch on the same surface. Cell drag inside an HF table seeds
       // cellDragAnchorPosRef with the HF cell position; the mousemove path
       // dispatches CellSelection on the HF view.
-      if (!readOnly && hfEditMode && !isResizeHandleTarget) {
+      //
+      // Image targets are skipped here so the later findImageElement branch
+      // can dispatch NodeSelection.create on the matching HF view —
+      // without this guard the generic text-click flow would silently
+      // shadow the image NodeSelect path (Codex #487 P2, 20:40 review).
+      const isHfImageTarget =
+        !readOnly && hfEditMode && findImageElement(target) !== null;
+      if (
+        !readOnly &&
+        hfEditMode &&
+        !isResizeHandleTarget &&
+        !isHfImageTarget
+      ) {
         const slot = findHfSlotForTarget(target);
         if (slot) {
           const hfView = hfPMsRef.current?.getView(slot.rId);
