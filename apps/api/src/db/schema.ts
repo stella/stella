@@ -2074,6 +2074,10 @@ export const organizationSettings = p.pgTable(
     aiConfigEncrypted: bytea("ai_config_encrypted"),
     /** AES-GCM initialization vector for aiConfigEncrypted. */
     aiConfigIv: bytea("ai_config_iv"),
+    /** Encrypted DeepL API key (single opaque string, AES-256-GCM). */
+    deeplApiKeyEncrypted: bytea("deepl_api_key_encrypted"),
+    /** AES-GCM initialization vector for deeplApiKeyEncrypted. */
+    deeplApiKeyIv: bytea("deepl_api_key_iv"),
     /**
      * Whether stella may annotate AI requests with prompt-cache
      * markers (Anthropic `cacheControl`, OpenAI `promptCacheKey`).

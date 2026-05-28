@@ -766,6 +766,7 @@ type Messages = {
     "sort": "Sort";
     "status": "Status";
     "today": "Today";
+    "translate": "Translate";
     "tryAgain": "Try again";
     "type": "Type";
     "typeNameToConfirm": "Type the name to confirm";
@@ -1963,6 +1964,42 @@ type Messages = {
     "versionLabel": "Version {version}";
     "versionsEmpty": "No version history";
     "viewVersion": "View";
+  };
+  "translate": {
+    "dialog": {
+      "description": "Translate the open document via DeepL. The translated copy lands in this matter as a new document.";
+      "notConfigured": "DeepL is not configured for this organisation. Add a DeepL API key in organisation settings to enable translation.";
+      "selectPlaceholder": "Choose a language";
+      "targetLanguage": "Target language";
+      "title": "Translate document";
+      "translate": "Translate";
+      "translating": "Translating…";
+    };
+    "error": {
+      "title": "Translation failed";
+    };
+    "settings": {
+      "apiKeyLabel": "API key";
+      "apiKeyPlaceholder": "00000000-0000-0000-0000-000000000000:fx";
+      "currentKey": "Stored key";
+      "description": "Configure a DeepL API key to enable document translation. Free and Pro keys are both supported.";
+      "remove": "Remove";
+      "removed": "DeepL key removed";
+      "removedDescription": "Translation is disabled until a new key is added.";
+      "removing": "Removing…";
+      "save": "Save";
+      "saved": "DeepL key saved";
+      "savedDescription": "Translations are now available.";
+      "saving": "Saving…";
+      "tierFree": "Free tier";
+      "tierPro": "Pro";
+      "title": "DeepL translation";
+    };
+    "success": {
+      "description": "Saved as \"{fileName}\"";
+      "title": "Translation ready";
+    };
+    "tooltip": "Translate";
   };
   "validation": {
     "organizationNameRequired": "Organization name is required";
