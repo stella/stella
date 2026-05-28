@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { cellMetadata, entities, properties } from "@/api/db/schema";
@@ -65,7 +65,9 @@ const markColumnFlag = createSafeHandler(
               eq(entities.workspaceId, workspaceId),
               isNotNull(entities.currentVersionId),
             ),
-          );
+          )
+          .orderBy(asc(entities.id))
+          .for("update");
 
         const targets = sortColumnFlagTargetsForLocking(
           entityRows.flatMap((row) =>
