@@ -4,6 +4,7 @@ import type { AuditEvent } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 
 const CELL_METADATA_VERSION = 1;
+const MANUAL_FLAGS_MAX_ITEMS = 16;
 
 type CellMetadataInsert = {
   workspaceId: SafeId<"workspace">;
@@ -70,6 +71,10 @@ export const buildColumnFlagMutation = ({
     const existingFlags = normalizeManualFlags(existing?.manualFlags ?? []);
 
     if (existingFlags.includes(flag)) {
+      continue;
+    }
+
+    if (existingFlags.length >= MANUAL_FLAGS_MAX_ITEMS) {
       continue;
     }
 

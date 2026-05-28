@@ -147,4 +147,35 @@ describe("mark column flag metadata planning", () => {
       updatedCount: 0,
     });
   });
+
+  test("skips cells that would exceed the manual flag cap", () => {
+    const target = createTarget("ent_flag_cap", "ver_flag_cap");
+    const existingFlags = Array.from(
+      { length: 16 },
+      (_, index) => `flag-${index.toString().padStart(2, "0")}`,
+    );
+    const mutation = buildColumnFlagMutation({
+      workspaceId: WORKSPACE_ID,
+      propertyId: PROPERTY_ID,
+      flag: "verified",
+      targets: [target],
+      existingRows: [
+        {
+          entityVersionId: target.entityVersionId,
+          metadata: {
+            version: 1,
+            manualFlags: existingFlags,
+          },
+        },
+      ],
+      userId: USER_ID,
+      addedAt: ADDED_AT,
+    });
+
+    expect(mutation).toEqual({
+      auditEvents: [],
+      insertValues: [],
+      updatedCount: 0,
+    });
+  });
 });

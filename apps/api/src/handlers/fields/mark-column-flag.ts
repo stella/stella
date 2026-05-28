@@ -37,6 +37,7 @@ const TABLE_COLUMN_FLAG_EXCLUDED_ENTITY_KINDS = [
   "task",
 ] satisfies EntityKind[];
 const COLUMN_FLAG_TARGET_BATCH_SIZE = 500;
+const VERIFIED_COLUMN_FLAG = "verified";
 
 const config = {
   permissions: {
@@ -44,7 +45,7 @@ const config = {
   },
   body: t.Object({
     propertyId: tSafeId("property"),
-    flag: t.String({ minLength: 1, maxLength: 64 }),
+    flag: t.Literal(VERIFIED_COLUMN_FLAG),
     filters: t.Array(tViewFilterConditionSchema),
   }),
 } satisfies HandlerConfig;
