@@ -5516,8 +5516,17 @@ export function PagedEditor(
         return;
       }
 
-      // Double-click on header/footer area triggers editing mode
-      if (!readOnly && e.detail === 2 && onHeaderFooterDoubleClick) {
+      // Double-click on header/footer area enters editing mode. Gate on
+      // `!hfEditMode` so a double-click *while already editing* falls
+      // through to the active-HF word/paragraph-select branch below
+      // instead of pointlessly re-firing `onHeaderFooterDoubleClick`
+      // (Codex #487 P2: 21:49 review).
+      if (
+        !readOnly &&
+        !hfEditMode &&
+        e.detail === 2 &&
+        onHeaderFooterDoubleClick
+      ) {
         const headerEl = target.closest(".layout-page-header");
         const footerEl = target.closest(".layout-page-footer");
         if (headerEl || footerEl) {
