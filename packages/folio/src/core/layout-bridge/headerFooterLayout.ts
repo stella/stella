@@ -721,34 +721,56 @@ function finalizeHeaderFooterContent(
  * bounded (a handful of paragraphs, max).
  */
 function computeHeaderFooterTextSig(blocks: FlowBlock[]): string {
-  const parts: string[] = [];
-  for (const b of blocks) {
-    if (b.kind === "paragraph") {
-      let text = "p:";
-      for (const r of b.runs) {
-        if (r.kind === "text") {
-          text += `T:${r.text}|${serializeRunFmt(r)};`;
-        } else if (r.kind === "tab") {
-          text += `\\t|${serializeRunFmt(r)};`;
-        } else if (r.kind === "lineBreak") {
-          text += "\\n;";
-        } else if (r.kind === "image") {
-          text += `[i${r.width}x${r.height}];`;
-        } else {
-          // field run
-          text += `F:${r.fieldType}|${serializeRunFmt(r)};`;
-        }
+  return blocks.map(blockSig).join("|");
+}
+
+function blockSig(b: FlowBlock): string {
+  if (b.kind === "paragraph") {
+    let text = "p:";
+    for (const r of b.runs) {
+      if (r.kind === "text") {
+        text += `T:${r.text}|${serializeRunFmt(r)};`;
+      } else if (r.kind === "tab") {
+        text += `\\t|${serializeRunFmt(r)};`;
+      } else if (r.kind === "lineBreak") {
+        text += "\\n;";
+      } else if (r.kind === "image") {
+        text += `[i${r.width}x${r.height}];`;
+      } else {
+        // field run
+        text += `F:${r.fieldType}|${serializeRunFmt(r)};`;
       }
-      parts.push(text);
-    } else if (b.kind === "table") {
-      parts.push(`t:${b.rows.length}`);
-    } else if (b.kind === "image") {
-      parts.push(`i:${b.width}x${b.height}`);
-    } else if (b.kind === "textBox") {
-      parts.push("tb");
     }
+    return text;
   }
-  return parts.join("|");
+  if (b.kind === "table") {
+    // Recurse into cells — same-height text / formatting / field edits
+    // inside an existing HF table cell are otherwise invisible to the
+    // painter's incremental cache (Codex #487 P2: 21:41 review). Row
+    // count + per-cell block signatures detect every visible change a
+    // user can produce without growing the table.
+    const cellParts: string[] = [];
+    for (const row of b.rows) {
+      for (const cell of row.cells) {
+        cellParts.push(cell.blocks.map(blockSig).join(","));
+      }
+    }
+    return `t:${b.rows.length}:${cellParts.join("|")}`;
+  }
+  if (b.kind === "image") {
+    return `i:${b.width}x${b.height}`;
+  }
+  if (b.kind === "textBox") {
+    // Text boxes can carry their own content (paragraph + runs). Recurse
+    // when the layout-engine TextBoxBlock surfaces nested blocks; for
+    // shapes that only carry dims we keep the original bare tag.
+    const inner = (b as { blocks?: FlowBlock[] }).blocks;
+    if (Array.isArray(inner) && inner.length > 0) {
+      return `tb:${inner.map(blockSig).join(",")}`;
+    }
+    return "tb";
+  }
+  return "";
 }
 
 /**
