@@ -139,14 +139,21 @@ export const CellMetadataFlags = ({
   propertyId,
   metadata,
 }: CellMetadataFlagsProps) => {
+  const t = useTranslations();
   const getFlagLabel = useFlagLabel();
-  const { activeFlags, hasVerifiedFlag, isLocked, lockProvenance, toggleFlag } =
-    useCellMetadataFlags({
-      entityId,
-      metadata,
-      propertyId,
-      workspaceId,
-    });
+  const {
+    activeFlags,
+    hasVerifiedFlag,
+    isLocked,
+    lockProvenance,
+    setLocked,
+    toggleFlag,
+  } = useCellMetadataFlags({
+    entityId,
+    metadata,
+    propertyId,
+    workspaceId,
+  });
   const hasActiveFlag = activeFlags.length > 0;
   const verifiedProvenance = metadata?.flagProvenance?.[VERIFIED_FLAG_ID];
 
@@ -167,7 +174,30 @@ export const CellMetadataFlags = ({
           }}
         />
       )}
-      {isLocked && <CellLockBadge provenance={lockProvenance} />}
+      {isLocked ? (
+        <CellLockBadge
+          onUnlock={() => setLocked(false)}
+          provenance={lockProvenance}
+        />
+      ) : (
+        <Tooltip
+          content={t("workspaces.table.lock.lock")}
+          render={
+            <button
+              aria-label={t("workspaces.table.lock.lock")}
+              className="bg-background/55 text-foreground-ghost focus-visible:ring-ring absolute start-1 top-1 z-20 flex size-3 items-center justify-center rounded-full opacity-0 backdrop-blur-[2px] transition-opacity outline-none group-hover/cell-content:opacity-100 focus-visible:ring-1"
+              data-row-expansion-ignore
+              onClick={(event) => {
+                event.stopPropagation();
+                setLocked(true);
+              }}
+              type="button"
+            />
+          }
+        >
+          <LockIcon className="size-2.5" strokeWidth={2.5} />
+        </Tooltip>
+      )}
       {hasActiveFlag ? (
         <CellCornerFlag
           flags={activeFlags}
@@ -195,7 +225,7 @@ export const CellMetadataFlags = ({
             />
           }
         >
-          <span className="size-1.5 rounded-full bg-current" />
+          <CheckCircle2Icon className="size-2.5" strokeWidth={2.5} />
         </Tooltip>
       )}
     </>
@@ -253,9 +283,10 @@ const CellCornerFlag = ({ flags, metadata, onDrop }: CellCornerFlagProps) => {
 
 type CellLockBadgeProps = {
   provenance: LockProvenance | undefined;
+  onUnlock: () => void;
 };
 
-const CellLockBadge = ({ provenance }: CellLockBadgeProps) => {
+const CellLockBadge = ({ provenance, onUnlock }: CellLockBadgeProps) => {
   const t = useTranslations();
   const locale = useLocale();
   const displayName = provenance?.lockedByName ?? null;
@@ -289,11 +320,12 @@ const CellLockBadge = ({ provenance }: CellLockBadgeProps) => {
       content={tooltipContent}
       render={
         <button
-          aria-label={t("workspaces.table.lock.locked")}
+          aria-label={t("workspaces.table.lock.unlock")}
           className="bg-background/55 text-foreground-ghost focus-visible:ring-ring absolute start-1 top-1 z-20 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px] outline-none focus-visible:ring-1"
           data-row-expansion-ignore
           onClick={(event) => {
             event.stopPropagation();
+            onUnlock();
           }}
           type="button"
         >

@@ -2240,6 +2240,7 @@
       "previewUnsupported": "Az előnézet ehhez a dokumentumtípushoz nem támogatott.",
       "readingFrom": "Reading from",
       "referencesItself": "A tulajdonság más tulajdonságokon keresztül hivatkozik önmagára",
+      "rerunColumn": "Rerun column",
       "resultType": "Eredmény típusa",
       "returnsLabel": "Returns",
       "saveChanges": "Save changes",

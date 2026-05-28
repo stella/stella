@@ -2240,6 +2240,7 @@
       "previewUnsupported": "Priekšskatījums šim dokumenta tipam nav atbalstīts.",
       "readingFrom": "Reading from",
       "referencesItself": "Rekvizīts atsaucas pats uz sevi caur citiem rekvizītiem",
+      "rerunColumn": "Rerun column",
       "resultType": "Rezultāta tips",
       "returnsLabel": "Returns",
       "saveChanges": "Save changes",

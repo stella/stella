@@ -2240,6 +2240,7 @@
       "previewUnsupported": "Vista previa no compatible con este tipo de documento.",
       "readingFrom": "Reading from",
       "referencesItself": "La propiedad se referencia a sí misma a través de otras propiedades",
+      "rerunColumn": "Rerun column",
       "resultType": "Tipo de resultado",
       "returnsLabel": "Returns",
       "saveChanges": "Save changes",
