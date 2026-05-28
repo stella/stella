@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import {
+  buildSkillResourceTabId,
   getInspectorTabsBroadcastChannelName,
   initializeInspectorTabBroadcast,
   useInspectorStore,
@@ -206,6 +207,70 @@ describe("openExternal", () => {
 
     expect(tab.connectorSlug).toBe("salvia");
     expect(tab.iconHref).toBe("https://salvia.example/favicon.ico");
+  });
+});
+
+describe("openSkillResourceTab", () => {
+  test("preserves edited content when reopening the same resource source", () => {
+    const resource = {
+      content: "Built-in content",
+      label: "Guidance",
+      mimeType: "text/markdown",
+      origin: "built-in" as const,
+      resourcePath: "knowledge/guidance.md",
+      skillId: null,
+      skillName: "review",
+    };
+
+    useInspectorStore.getState().openSkillResourceTab(resource);
+    useInspectorStore
+      .getState()
+      .updateSkillResourceTabContent(
+        buildSkillResourceTabId(resource),
+        "Edited content",
+      );
+    useInspectorStore.getState().openSkillResourceTab({
+      ...resource,
+      content: "Stale tool output",
+    });
+
+    const tab = useInspectorStore
+      .getState()
+      .tabs.find((item) => item.id === buildSkillResourceTabId(resource));
+    expect(tab).toMatchObject({
+      type: "skill-resource",
+      content: "Edited content",
+    });
+  });
+
+  test("refreshes content when reopening a resource from a different source", () => {
+    const resource = {
+      content: "Built-in content",
+      label: "Guidance",
+      mimeType: "text/markdown",
+      origin: "built-in" as const,
+      resourcePath: "knowledge/guidance.md",
+      skillId: null,
+      skillName: "review",
+    };
+
+    useInspectorStore.getState().openSkillResourceTab(resource);
+    useInspectorStore.getState().openSkillResourceTab({
+      ...resource,
+      content: "Installed content",
+      origin: "upload",
+      skillId: "agentSkill_1",
+    });
+
+    const tab = useInspectorStore
+      .getState()
+      .tabs.find((item) => item.id === buildSkillResourceTabId(resource));
+    expect(tab).toMatchObject({
+      type: "skill-resource",
+      content: "Installed content",
+      origin: "upload",
+      skillId: "agentSkill_1",
+    });
   });
 });
 

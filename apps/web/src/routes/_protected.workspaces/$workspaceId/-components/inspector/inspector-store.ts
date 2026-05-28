@@ -946,12 +946,17 @@ export const useInspectorStore = create<State & Actions>()(
             content,
           });
         } else if (existing.type === "skill-resource") {
+          const sourceChanged =
+            existing.skillId !== skillId || existing.origin !== origin;
           existing.label = label;
           existing.skillName = skillName;
           existing.skillId = skillId;
           existing.origin = origin;
           existing.resourcePath = resourcePath;
           existing.mimeType = mimeType;
+          if (sourceChanged) {
+            existing.content = content;
+          }
         }
         state.activeId = id;
         state.activationSeq += 1;
