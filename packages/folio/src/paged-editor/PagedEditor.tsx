@@ -5712,6 +5712,18 @@ export function PagedEditor(
               const clamped = Math.max(0, Math.min(pos, docEnd));
               const $pos = hfView.state.doc.resolve(clamped);
               const parent = $pos.parent;
+              // Set page scope BEFORE the dispatch — view.dispatch
+              // synchronously fires handleHfPmTransaction, which reads
+              // activeHfPageNumberRef.current to stamp the new
+              // HfCaretSelection. Without this, double / triple-click
+              // word / paragraph selection on a later page would
+              // render the highlight on the first matching painted
+              // instance (Codex #487 P2: 23:09 review).
+              const pageEl = slot.element.closest<HTMLElement>(".layout-page");
+              const pageNumStr = pageEl?.dataset["pageNumber"];
+              activeHfPageNumberRef.current = pageNumStr
+                ? Number.parseInt(pageNumStr, 10)
+                : null;
               if (e.detail === 3) {
                 const start = $pos.start($pos.depth);
                 const end = $pos.end($pos.depth);
