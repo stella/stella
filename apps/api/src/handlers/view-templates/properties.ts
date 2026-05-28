@@ -367,9 +367,13 @@ const recreateTemplateDependencies = async ({
     // Templates strip the workspace-specific Documents id, so an AI
     // column whose only dependency pointed at Documents loses every
     // edge in remap. Fall back to the target workspace's system file
-    // property so the new AI column has a source.
+    // property so the new AI column has a source. Skip when the
+    // template explicitly declared no dependencies (static-prompt
+    // columns), so we don't force a spurious source on them.
     if (
       resolvedEdges.length === 0 &&
+      templateProperty.dependencies !== undefined &&
+      templateProperty.dependencies.length > 0 &&
       templateProperty.tool.type === "ai-model" &&
       systemFilePropertyId !== undefined &&
       systemFilePropertyId !== propertyId
