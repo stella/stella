@@ -56,7 +56,6 @@ const RESOURCE_PATH_PATTERN =
   /^[a-z0-9][a-z0-9._-]*(\/[a-z0-9][a-z0-9._-]*)*$/u;
 const FILENAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/u;
 
-const KNOWN_FOLDERS = ["knowledge", "prompts", "references"] as const;
 const UPLOAD_ACCEPT = ".md,.txt,text/markdown,text/plain";
 const UPLOAD_MAX_BYTES = 100_000;
 
@@ -812,16 +811,13 @@ function SkillFileTree({
     [tree],
   );
 
-  // Always render the three known folders, even if empty, so the
-  // user has a "+" affordance regardless of the current state.
-  const renderedPrefixes = new Set<string>(KNOWN_FOLDERS);
-  // Plus any extra prefixes that exist in the tree (e.g. "assets", "scripts").
-  for (const group of tree) {
-    if (group.prefix !== "/") {
-      renderedPrefixes.add(group.prefix);
-    }
-  }
-  const knownFolders = [...renderedPrefixes].sort((a, b) => a.localeCompare(b));
+  // Only render folders that actually exist in the skill. Empty
+  // "+ New file" affordances for knowledge/prompts/references would
+  // create phantom folders the user can't see in the source bundle.
+  const knownFolders = tree
+    .map((group) => group.prefix)
+    .filter((prefix) => prefix !== "/")
+    .sort((a, b) => a.localeCompare(b));
   const rootGroup = groupByPrefix.get("/");
 
   return (
