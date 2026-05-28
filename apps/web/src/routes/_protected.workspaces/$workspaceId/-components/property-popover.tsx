@@ -18,7 +18,11 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
-import type { PropertyDependency, WorkspaceProperty } from "@/lib/types";
+import type {
+  PropertyDependency,
+  ViewFilterCondition,
+  WorkspaceProperty,
+} from "@/lib/types";
 import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
 import { DeleteProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/delete-property";
 import { PinProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/pin-property";
@@ -36,6 +40,7 @@ import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queri
 type PropertyPopoverProps = {
   property: WorkspaceProperty;
   header: TableHeader;
+  filters: ViewFilterCondition[];
 };
 
 type ReplaceAction = {
@@ -45,7 +50,11 @@ type ReplaceAction = {
 
 const VERIFIED_FLAG = "verified";
 
-export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
+export const PropertyPopover = ({
+  property,
+  header,
+  filters,
+}: PropertyPopoverProps) => {
   const t = useTranslations();
   const { workspaceId, id, name } = property;
   const [isOpen, setIsOpen] = useState(false);
@@ -62,6 +71,7 @@ export const PropertyPopover = ({ property, header }: PropertyPopoverProps) => {
           queryKey: entitiesKeys.all(workspaceId),
           propertyId: toSafeId<"property">(id),
           flag: VERIFIED_FLAG,
+          filters,
         });
 
       if (response.error) {

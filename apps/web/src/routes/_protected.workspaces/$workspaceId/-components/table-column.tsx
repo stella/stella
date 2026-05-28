@@ -6,7 +6,11 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 import { MenuItem } from "@stll/ui/components/menu";
 
-import type { WorkspaceEntity, WorkspaceProperty } from "@/lib/types";
+import type {
+  ViewFilterCondition,
+  WorkspaceEntity,
+  WorkspaceProperty,
+} from "@/lib/types";
 import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
 import { CellMetadataFlags } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
 import { CellResult } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-result";
@@ -19,13 +23,26 @@ import { useRetryCell } from "@/routes/_protected.workspaces/$workspaceId/-hooks
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
-export const getPropertyColumn = (
-  property: WorkspaceProperty,
-): TableColumnDef => ({
+type PropertyColumnOptions = {
+  filters: ViewFilterCondition[];
+};
+
+export const getPropertyColumn = ({
+  filters,
+  property,
+}: PropertyColumnOptions & {
+  property: WorkspaceProperty;
+}): TableColumnDef => ({
   id: property.id,
   accessorKey: property.id,
   accessorFn: (row) => row.fields[property.id],
-  header: (ctx) => <PropertyPopover header={ctx.header} property={property} />,
+  header: (ctx) => (
+    <PropertyPopover
+      filters={filters}
+      header={ctx.header}
+      property={property}
+    />
+  ),
   size: 200,
   cell: (props) => (
     <PropertyCell entity={props.row.original} property={property} />

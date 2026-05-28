@@ -149,7 +149,10 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
     ];
 
     for (const property of properties) {
-      const col = getPropertyColumn(property);
+      const col = getPropertyColumn({
+        filters: view.layout.filters,
+        property,
+      });
       columnDefs.push(col);
     }
 
@@ -206,7 +209,7 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
     });
 
     return columnDefs;
-  }, [properties, t]);
+  }, [properties, t, view.layout.filters]);
 
   const table = useReactTable({
     columnResizeMode: "onChange",

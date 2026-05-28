@@ -20,7 +20,12 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLock } from "@/api/lib/cell-lock";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { buildFilterConditions } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  tViewFilterConditionSchema,
+  type ViewFilterCondition,
+} from "@/api/lib/views-schema";
 
 import {
   buildColumnFlagMutation,
@@ -40,6 +45,7 @@ const config = {
   body: t.Object({
     propertyId: tSafeId("property"),
     flag: t.String({ minLength: 1, maxLength: 64 }),
+    filters: t.Array(tViewFilterConditionSchema),
   }),
 } satisfies HandlerConfig;
 
@@ -59,6 +65,7 @@ type ProcessColumnFlagBatchArgs = {
   workspaceId: SafeId<"workspace">;
   propertyId: SafeId<"property">;
   flag: string;
+  filters: ViewFilterCondition[];
   userId: SafeId<"user">;
   cursor: SafeId<"entity"> | null;
   addedAt: string;
@@ -70,6 +77,7 @@ const processColumnFlagBatch = async ({
   workspaceId,
   propertyId,
   flag,
+  filters,
   userId,
   cursor,
   addedAt,
@@ -106,6 +114,7 @@ const processColumnFlagBatch = async ({
           eq(entities.workspaceId, workspaceId),
           isNotNull(entities.currentVersionId),
           notInArray(entities.kind, TABLE_COLUMN_FLAG_EXCLUDED_ENTITY_KINDS),
+          ...buildFilterConditions(filters),
           ...(cursorCondition ? [cursorCondition] : []),
         ),
       )
@@ -216,6 +225,7 @@ const markColumnFlag = createSafeHandler(
           workspaceId,
           propertyId: body.propertyId,
           flag: body.flag,
+          filters: body.filters,
           userId: user.id,
           cursor,
           addedAt,
