@@ -608,6 +608,14 @@ type HfCaretSelection = {
   kind: "header" | "footer";
   from: number;
   to: number;
+  /**
+   * Page number (1-indexed) the user clicked/typed into. When a shared HF
+   * rId is painted on multiple pages, the caret + range rects must scope to
+   * the page the user is actually editing — otherwise the lookup picks the
+   * first matching slot and the caret appears on page 1 while the user is
+   * typing on page 5 (Codex #487 P2: 21:28 review).
+   */
+  pageNumber?: number;
 };
 
 function HfCaretOverlay({
@@ -632,6 +640,15 @@ function HfCaretOverlay({
     }
     const recompute = () => {
       const cr = pagesContainer.getBoundingClientRect();
+      // Scope every lookup to the specific painted page the user is
+      // editing. When a default HF rId is shared across N pages we'd
+      // otherwise paint the caret on the first matching slot (page 1)
+      // even if the user is typing on page 5 (Codex #487 P2: 21:28).
+      const pageScope: ParentNode = selection.pageNumber
+        ? (pagesContainer.querySelector(
+            `.layout-page[data-page-number="${selection.pageNumber}"]`,
+          ) ?? pagesContainer)
+        : pagesContainer;
       const collapsed = selection.from === selection.to;
       if (collapsed) {
         // Use findHfCaretSpan so a caret at the end of a run / paragraph
@@ -640,7 +657,7 @@ function HfCaretOverlay({
         // caret as soon as the user typed to the end of their text
         // (Codex #487 P2: 20:32 review).
         const hit = findHfCaretSpan(
-          pagesContainer,
+          pageScope,
           selection.kind,
           selection.rId,
           selection.from,
@@ -670,7 +687,7 @@ function HfCaretOverlay({
         selection.kind === "header"
           ? `.layout-page-header[data-rid="${selection.rId}"]`
           : `.layout-page-footer[data-rid="${selection.rId}"]`;
-      const spans = pagesContainer.querySelectorAll<HTMLElement>(
+      const spans = pageScope.querySelectorAll<HTMLElement>(
         `${slotSelector} span[data-pm-start][data-pm-end]`,
       );
       const rects: { x: number; y: number; width: number; height: number }[] =
@@ -710,6 +727,7 @@ function HfCaretOverlay({
     selection.kind,
     selection.from,
     selection.to,
+    selection.pageNumber,
     pagesContainer,
   ]);
 
@@ -3874,12 +3892,15 @@ export function PagedEditor(
    *      state; the HF blocks are pulled from the HF PM via
    *      `renderHfFromContentOrPm` on the next layout tick.
    */
-  const [hfCaretSelection, setHfCaretSelection] = useState<{
-    rId: string;
-    kind: "header" | "footer";
-    from: number;
-    to: number;
-  } | null>(null);
+  const [hfCaretSelection, setHfCaretSelection] =
+    useState<HfCaretSelection | null>(null);
+  // Page number (1-indexed) of the painted slot the user most recently
+  // clicked / dispatched into. Persisted across HF PM transactions so
+  // typing after a click on page 5 keeps the caret on page 5 — without
+  // this, the painter would scope the caret to whichever painted instance
+  // of the rId the lookup found first (page 1) on every subsequent
+  // selection update (Codex #487 P2: 21:28).
+  const activeHfPageNumberRef = useRef<number | null>(null);
 
   const handleHfPmTransaction = useCallback(
     (
@@ -3901,7 +3922,14 @@ export function PagedEditor(
       }
       if (docChanged || selectionChanged) {
         const { from, to } = view.state.selection;
-        setHfCaretSelection({ rId, kind, from, to });
+        const pageNumber = activeHfPageNumberRef.current;
+        setHfCaretSelection({
+          rId,
+          kind,
+          from,
+          to,
+          ...(pageNumber !== null ? { pageNumber } : {}),
+        });
         // Fan the HF PM selection out the same channel the body PM uses
         // (DocxEditor's onSelectionChange handler then re-reads the
         // active view via getActiveEditorView and re-syncs FormattingBar
@@ -3925,6 +3953,7 @@ export function PagedEditor(
     }
     dragAnchorRef.current = null;
     activeHfDragSurfaceRef.current = null;
+    activeHfPageNumberRef.current = null;
   }, [hfEditMode]);
 
   /**
@@ -4494,6 +4523,14 @@ export function PagedEditor(
                 rId: slot.rId,
                 kind: slot.kind,
               };
+              // Remember the painted page so the caret overlay scopes
+              // subsequent renders to this slot instance instead of the
+              // first matching rId in document order.
+              const pageEl = slot.element.closest<HTMLElement>(".layout-page");
+              const pageNumStr = pageEl?.dataset["pageNumber"];
+              activeHfPageNumberRef.current = pageNumStr
+                ? Number.parseInt(pageNumStr, 10)
+                : null;
             }
             hfView.focus();
             return;
@@ -5486,6 +5523,11 @@ export function PagedEditor(
         if (headerEl || footerEl) {
           const pageEl = closestHtmlElement(target, "[data-page-number]");
           const pageNum = pageEl ? Number(pageEl.dataset["pageNumber"]) : 1;
+          // Seed the HF caret overlay's page scope so the very first
+          // transaction after entering edit mode draws on the page the
+          // user double-clicked, not the first painted instance of the
+          // shared rId.
+          activeHfPageNumberRef.current = pageNum;
           if (headerEl) {
             e.preventDefault();
             e.stopPropagation();
