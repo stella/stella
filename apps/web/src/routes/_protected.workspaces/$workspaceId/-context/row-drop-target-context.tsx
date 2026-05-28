@@ -37,5 +37,5 @@ export const useRowDropTarget = (): RowDropTargetState => {
  */
 export const useIsRowDropTargetActive = (): boolean => {
   const context = useContext(RowDropTargetContext);
-  return context?.activeRowId !== null;
+  return context !== null && context.activeRowId !== null;
 };
