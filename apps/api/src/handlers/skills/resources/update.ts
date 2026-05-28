@@ -8,6 +8,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 
 const updateSkillResourceParamsSchema = t.Object({
   skillId: tSafeId("agentSkill"),
@@ -15,7 +16,7 @@ const updateSkillResourceParamsSchema = t.Object({
 
 const updateSkillResourceBodySchema = t.Object({
   path: t.String({ minLength: 1, maxLength: 512 }),
-  content: t.String(),
+  content: t.String({ maxLength: LIMITS.agentSkillResourceMaxChars }),
 });
 
 const config = {

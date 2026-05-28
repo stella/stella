@@ -335,19 +335,17 @@ export const useChatSession = ({
    * in the AI SDK, so this is a truncate-and-replay:
    *
    *   1. Find the assistant message that owns the ask-user part.
-   *   2. Drop every message after it (downstream replies are
-   *      out-of-scope for this iteration — the user gets a warning
-   *      on the card before they confirm).
+   *   2. Drop every message after it locally; the backend receives
+   *      the same truncation target for persisted history.
    *   3. Reset the ask-user part itself to `input-available` so
    *      `addToolOutput` writes a fresh output and the
    *      `sendAutomaticallyWhen` predicate (which fires when the
    *      latest assistant message has a complete tool call) drives
    *      the next turn.
    *
-   * Caveat: the backend persists messages by appending, not by
-   * truncation. Dropped client-side messages stay in the server's
-   * thread; only the new turn is sent. Full server-side truncation
-   * is the out-of-scope follow-up the card's warning copy hints at.
+   * The replay request also carries `truncateAfterMessageId`, so the
+   * backend drops persisted downstream turns before preparing the next
+   * model context.
    */
   const handleAskUserEditAndRerun = useCallback(
     async (toolCallId: string, output: AskUserOutput) => {
@@ -367,6 +365,10 @@ export const useChatSession = ({
         }
       }
       if (targetIndex === -1) {
+        return;
+      }
+      const targetMessage = messages[targetIndex];
+      if (!targetMessage || targetMessage.role !== "assistant") {
         return;
       }
 
@@ -406,13 +408,17 @@ export const useChatSession = ({
           return { ...message, parts: nextParts };
         });
       setMessages(truncated);
+      const replayOptions = withSendModeSnapshot({
+        body: { truncateAfterMessageId: targetMessage.id },
+      });
       await addToolOutput({
         tool: "ask-user",
         toolCallId,
         output,
+        ...(replayOptions === undefined ? {} : { options: replayOptions }),
       });
     },
-    [addToolOutput, messages, setMessages],
+    [addToolOutput, messages, setMessages, withSendModeSnapshot],
   );
 
   const { data: workspacesNavigation, isPending: isLoadingMatters } = useQuery(

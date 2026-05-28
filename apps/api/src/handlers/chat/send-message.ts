@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { Static } from "elysia";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -304,10 +304,51 @@ const sendMessage = createSafeRootHandler(
       message: uploadResult.message,
     });
 
+    let messagesForPersistence = thread.data.messages;
+    let deleteMessageIdsBeforeLatest: SafeId<"chatMessage">[] = [];
+    if (body.truncateAfterMessageId !== undefined) {
+      if (parsedMessage.message.id !== body.truncateAfterMessageId) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Truncation target must match the incoming message",
+          }),
+        );
+      }
+
+      const truncateIndex = thread.data.messages.findIndex(
+        (message) => message.id === body.truncateAfterMessageId,
+      );
+      if (truncateIndex === -1) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Truncation target was not found in the chat thread",
+          }),
+        );
+      }
+
+      messagesForPersistence = thread.data.messages.slice(0, truncateIndex + 1);
+      deleteMessageIdsBeforeLatest = thread.data.messages
+        .slice(truncateIndex + 1)
+        .map((message) => message.id);
+    }
+
     const latestMessagePlan = planMessagePersistence({
       message: parsedMessage.message,
-      storedMessages: thread.data.messages,
+      storedMessages: messagesForPersistence,
     });
+    if (
+      body.truncateAfterMessageId !== undefined &&
+      latestMessagePlan.persistencePlan.type !== "update"
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Truncation requires updating an existing message",
+        }),
+      );
+    }
 
     const messageWindow = latestMessagePlan.messages.slice(-MESSAGE_WINDOW);
     const chatContextResult = await prepareChatContext({
@@ -378,6 +419,7 @@ const sendMessage = createSafeRootHandler(
         userId: user.id,
         workspaceId,
         persistencePlan: latestMessagePlan.persistencePlan,
+        deleteMessageIds: deleteMessageIdsBeforeLatest,
       }),
     );
 
@@ -1417,6 +1459,7 @@ type PersistMessageProps = {
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
   persistencePlan: MessagePersistencePlan;
+  deleteMessageIds?: SafeId<"chatMessage">[];
 };
 
 const persistMessage = async ({
@@ -1426,6 +1469,7 @@ const persistMessage = async ({
   userId,
   workspaceId,
   persistencePlan,
+  deleteMessageIds = [],
 }: PersistMessageProps) => {
   if (persistencePlan.type === "insert") {
     return await insertMessages({
@@ -1440,6 +1484,27 @@ const persistMessage = async ({
 
   if (persistencePlan.type === "update") {
     const updateResult = await safeDb(async (tx) => {
+      if (deleteMessageIds.length > 0) {
+        await tx
+          .delete(chatMessages)
+          .where(
+            and(
+              eq(chatMessages.threadId, threadId),
+              inArray(chatMessages.id, deleteMessageIds),
+            ),
+          );
+
+        for (const deletedMessageId of deleteMessageIds) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.DELETE,
+            resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
+            resourceId: deletedMessageId,
+            workspaceId,
+            metadata: { threadId, reason: "truncate_for_replay" },
+          });
+        }
+      }
+
       const updatedMessageId = brandPersistedChatMessageId(
         persistencePlan.messageId,
       );

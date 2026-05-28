@@ -93,11 +93,7 @@ type SkillResourceOutput = {
 };
 
 const getStringProperty = (source: object, key: string): string | undefined => {
-  if (!(key in source)) {
-    return undefined;
-  }
-  const descriptor = Object.getOwnPropertyDescriptor(source, key);
-  const value: unknown = descriptor?.value;
+  const value: unknown = Reflect.get(source, key);
   return typeof value === "string" ? value : undefined;
 };
 
@@ -108,11 +104,7 @@ const getNullableStringProperty = (
   source: object,
   key: string,
 ): string | null | undefined => {
-  if (!(key in source)) {
-    return undefined;
-  }
-  const descriptor = Object.getOwnPropertyDescriptor(source, key);
-  const value: unknown = descriptor?.value;
+  const value: unknown = Reflect.get(source, key);
   if (value === null) {
     return null;
   }
@@ -134,10 +126,7 @@ const getSkillResourceOutput = (
   const content = getStringProperty(output, "content");
   const mimeType = getStringProperty(output, "mimeType");
   const skillId = getNullableStringProperty(output, "skillId");
-  const originRaw: unknown =
-    "origin" in output
-      ? Object.getOwnPropertyDescriptor(output, "origin")?.value
-      : undefined;
+  const originRaw: unknown = Reflect.get(output, "origin");
   if (
     skillName === undefined ||
     path === undefined ||
@@ -492,6 +481,11 @@ export const ToolCallCard = ({
               )}
           </div>
         )}
+      {hasError && errorMessage && (
+        <p className="text-destructive mt-1 max-w-xl px-2 py-1 text-[11px] leading-relaxed whitespace-pre-wrap">
+          {errorMessage}
+        </p>
+      )}
     </div>
   );
 };

@@ -170,7 +170,7 @@ const rewriteSkillResource = createSafeRootHandler(
       );
     }
 
-    return Result.ok({ content: rewritten });
+    return Result.ok({ content: rewritten, path: resource.path });
   },
 );
 

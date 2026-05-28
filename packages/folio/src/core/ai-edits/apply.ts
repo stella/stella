@@ -70,6 +70,31 @@ const stripIdentityAttrs = (attrs: Record<string, unknown>) => {
   return next;
 };
 
+const applyReplaceBlockStyleId = ({
+  item,
+  tr,
+}: {
+  item: ResolvedOperation;
+  tr: Transaction;
+}): Transaction => {
+  if (
+    item.operation.type !== "replaceBlock" ||
+    item.operation.styleId === undefined
+  ) {
+    return tr;
+  }
+
+  const block = tr.doc.nodeAt(item.blockFrom);
+  if (!block) {
+    return tr;
+  }
+
+  return tr.setNodeMarkup(item.blockFrom, undefined, {
+    ...block.attrs,
+    styleId: item.operation.styleId,
+  });
+};
+
 type LiveBlockEntry = { from: number; to: number; node: PMNode };
 
 /**
@@ -445,6 +470,7 @@ export const applyFolioAIEditOperations = ({
           revisionIdInsert,
           commentMark,
         });
+        tr = applyReplaceBlockStyleId({ item, tr });
         if (mode === "tracked-changes") {
           appliedRevisionIds = [revisionIdDelete, revisionIdInsert];
         }
@@ -452,6 +478,18 @@ export const applyFolioAIEditOperations = ({
       }
       case "insertAfterBlock":
       case "insertBeforeBlock": {
+        if (
+          mode === "tracked-changes" &&
+          item.operation.pageBreakBefore === true &&
+          (!item.insertText || item.insertText.length === 0)
+        ) {
+          skipped.push({
+            id: item.operation.id,
+            reason: "unsupportedBlock",
+          });
+          continue;
+        }
+
         const marks = [];
         if (mode === "tracked-changes" && insertionType) {
           const revisionId = revisionSeed++;
@@ -505,6 +543,14 @@ export const applyFolioAIEditOperations = ({
         break;
       }
       case "insertSignatureTable": {
+        if (mode === "tracked-changes") {
+          skipped.push({
+            id: item.operation.id,
+            reason: "unsupportedBlock",
+          });
+          continue;
+        }
+
         const node = buildSignatureTableNode({
           schema: view.state.schema,
           parties: item.operation.parties,
@@ -891,12 +937,20 @@ const resolveOperation = ({
       return { type: "skip", reason: "emptyOperation" };
     }
     const position = operation.position ?? "after";
+    const tableBoundary = findEnclosingTableBoundary(doc, blockFrom);
+    let insertFrom: number;
+    if (tableBoundary) {
+      insertFrom =
+        position === "after" ? tableBoundary.after : tableBoundary.before;
+    } else {
+      insertFrom = position === "after" ? blockTo : blockFrom;
+    }
     return {
       type: "resolved",
       operation: {
         operation,
-        from: position === "after" ? blockTo : blockFrom,
-        to: position === "after" ? blockTo : blockFrom,
+        from: insertFrom,
+        to: insertFrom,
         blockFrom,
         blockTo,
         blockNode,

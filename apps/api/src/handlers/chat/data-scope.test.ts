@@ -249,6 +249,7 @@ describe("extractIncomingMessageWorkspaceIds", () => {
             success: true,
             fileName: "Generated Agreement.docx",
             entityId: "00000000-0000-0000-0000-0000000000ee",
+            fieldId: "00000000-0000-0000-0000-0000000000ff",
             workspaceId: wsA,
             entityRef: "ent_1",
             matterRef: "mat_1",

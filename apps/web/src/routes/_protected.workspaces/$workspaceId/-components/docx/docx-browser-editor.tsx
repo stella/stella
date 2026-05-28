@@ -519,6 +519,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     s.source === "sidebar" && s.fieldId === fieldId ? s.seq : 0,
   );
   const didOpenRef = useRef(false);
+  const pendingEditRequestRef = useRef(false);
   const errorToastShownRef = useRef(false);
   const lastStyleLabelRef = useRef("Normal");
   const lastStyleLabelStyleRef = useRef<CSSProperties | undefined>(undefined);
@@ -674,6 +675,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     lastEditingBufferRef.current = null;
     hasSessionChangesRef.current = false;
     preservedLoadedBufferRef.current = null;
+    pendingEditRequestRef.current = false;
     setCompatibilityState({ targetKey: editTargetKey, value: null });
   }, [editTargetKey, fieldId]);
 
@@ -702,6 +704,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       // flight. Queue the request via the inspector's pending-edit
       // slot; `use-docx-tab-edit-session` re-runs once
       // `canSafelyEdit` resolves and silently enters edit mode then.
+      pendingEditRequestRef.current = true;
       useInspectorStore.getState().requestDocxEdit(fieldId);
       return false;
     }
@@ -739,6 +742,22 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     reportUnsupportedEditAttempt,
     state.status,
   ]);
+
+  useEffect(() => {
+    if (!pendingEditRequestRef.current) {
+      return;
+    }
+    if (
+      compatibility === null ||
+      previewFile === null ||
+      state.status !== "idle"
+    ) {
+      return;
+    }
+
+    pendingEditRequestRef.current = false;
+    void requestEditMode();
+  }, [compatibility, previewFile, requestEditMode, state.status]);
 
   // Auto-open when this component is used as a direct editor, or when the
   // preview is explicitly unlocked from the shell toolbar.

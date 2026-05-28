@@ -91,8 +91,10 @@ export const PromptSlash = Extension.create<PromptSlashOptions>({
   },
 });
 
-const matchesQuery = (haystack: string, needle: string): boolean =>
-  haystack.toLowerCase().includes(needle);
+const matchesQuery = (
+  haystack: string | null | undefined,
+  needle: string,
+): boolean => (haystack ? haystack.toLowerCase().includes(needle) : false);
 
 const filterItems = (items: SlashItem[], query: string): SlashItem[] => {
   const trimmed = query.trim().toLowerCase();
@@ -104,7 +106,7 @@ const filterItems = (items: SlashItem[], query: string): SlashItem[] => {
       const { name, command, body } = item.prompt;
       return (
         matchesQuery(name, trimmed) ||
-        (command !== undefined && matchesQuery(command, trimmed)) ||
+        matchesQuery(command, trimmed) ||
         matchesQuery(body, trimmed)
       );
     }

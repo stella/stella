@@ -952,7 +952,6 @@ export const useInspectorStore = create<State & Actions>()(
           existing.origin = origin;
           existing.resourcePath = resourcePath;
           existing.mimeType = mimeType;
-          existing.content = content;
         }
         state.activeId = id;
         state.activationSeq += 1;

@@ -66,6 +66,7 @@ export const useDocxFitZoom = (
     observer.observe(container);
 
     return () => {
+      trackedRef.current = null;
       cancelAnimationFrame(rafId);
       observer.disconnect();
     };

@@ -16,6 +16,29 @@ import { RESOURCE_PATH_PATTERN, inferResourceKind } from "./resource-path";
 
 const UPLOAD_MAX_SIZE = "5m" as const;
 
+const inferBinaryUploadMimeType = ({
+  file,
+  path,
+}: {
+  file: File;
+  path: string;
+}): string | null => {
+  if (file.type === DOCX_MIME_TYPE || file.type === PDF_MIME_TYPE) {
+    return file.type;
+  }
+
+  const filename = file.name.toLowerCase();
+  const resourcePath = path.toLowerCase();
+  if (filename.endsWith(".docx") || resourcePath.endsWith(".docx")) {
+    return DOCX_MIME_TYPE;
+  }
+  if (filename.endsWith(".pdf") || resourcePath.endsWith(".pdf")) {
+    return PDF_MIME_TYPE;
+  }
+
+  return null;
+};
+
 const uploadSkillResourceParamsSchema = t.Object({
   skillId: tSafeId("agentSkill"),
 });
@@ -130,12 +153,11 @@ const uploadSkillResource = createSafeRootHandler(
     }
 
     const buffer = await body.file.arrayBuffer();
-    const isBinary =
-      body.file.type === DOCX_MIME_TYPE || body.file.type === PDF_MIME_TYPE;
+    const binaryMimeType = inferBinaryUploadMimeType({ file: body.file, path });
 
     let content: string;
-    if (isBinary) {
-      const extracted = await extractFileText(buffer, body.file.type, {
+    if (binaryMimeType !== null) {
+      const extracted = await extractFileText(buffer, binaryMimeType, {
         source: "skill-resource-upload",
         skillId: params.skillId,
       });

@@ -64,12 +64,15 @@ const unwrapChatToolError = (error: unknown): ChatToolError | null => {
     if (
       current === null ||
       typeof current !== "object" ||
-      !("cause" in current) ||
-      current.cause === undefined
+      !("cause" in current)
     ) {
       return null;
     }
-    current = current.cause;
+    const cause: unknown = Reflect.get(current, "cause");
+    if (cause === undefined) {
+      return null;
+    }
+    current = cause;
   }
   return null;
 };

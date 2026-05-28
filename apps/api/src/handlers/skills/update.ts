@@ -7,8 +7,9 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { PG_ERROR } from "@/api/lib/pg-error";
 
 const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/u;
 
@@ -18,9 +19,7 @@ const updateSkillParamsSchema = t.Object({
 
 const updateSkillBodySchema = t.Object({
   enabled: t.Optional(t.Boolean()),
-  name: t.Optional(
-    t.String({ minLength: 1, maxLength: 64, pattern: "^[a-z0-9][a-z0-9-]*$" }),
-  ),
+  name: t.Optional(t.String({ minLength: 1, maxLength: 64 })),
   description: t.Optional(
     t.String({ minLength: 1, maxLength: LIMITS.agentSkillDescriptionMaxChars }),
   ),
@@ -46,6 +45,7 @@ type SkillUpdateFields = {
   description?: string;
   enabled?: boolean;
   name?: string;
+  slug?: string;
   version?: string | null;
 };
 
@@ -56,6 +56,7 @@ type SkillUpdateChanges = {
   description?: SkillUpdateChange<string>;
   enabled?: SkillUpdateChange<boolean>;
   name?: SkillUpdateChange<string>;
+  slug?: SkillUpdateChange<string>;
   version?: SkillUpdateChange<string | null>;
 };
 
@@ -166,7 +167,9 @@ const updateSkill = createSafeRootHandler(
     }
     if (body.name !== undefined && body.name !== existing.name) {
       updates.name = body.name;
+      updates.slug = body.name;
       changes.name = { old: existing.name, new: body.name };
+      changes.slug = { old: existing.slug, new: body.name };
     }
     if (
       body.description !== undefined &&
@@ -198,25 +201,37 @@ const updateSkill = createSafeRootHandler(
     // stored columns. Leaving the existing hash in place until per-resource
     // editing lands so the hash stays consistent across editable surfaces.
 
-    yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await tx.transaction(async (innerTx) => {
-            await innerTx
-              .update(agentSkills)
-              .set(updates)
-              .where(eq(agentSkills.id, params.skillId));
+    const updateResult = await safeDb(
+      async (tx) =>
+        await tx.transaction(async (innerTx) => {
+          await innerTx
+            .update(agentSkills)
+            .set(updates)
+            .where(eq(agentSkills.id, params.skillId));
 
-            await recordAuditEvent(innerTx, {
-              action: AUDIT_ACTION.UPDATE,
-              resourceType: AUDIT_RESOURCE_TYPE.AGENT_SKILL,
-              resourceId: params.skillId,
-              changes,
-              metadata: { slug: existing.slug },
-            });
-          }),
-      ),
+          await recordAuditEvent(innerTx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.AGENT_SKILL,
+            resourceId: params.skillId,
+            changes,
+            metadata: { slug: updates.slug ?? existing.slug },
+          });
+        }),
     );
+    if (Result.isError(updateResult)) {
+      if (
+        DatabaseError.is(updateResult.error) &&
+        updateResult.error.code === PG_ERROR.UNIQUE_VIOLATION
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: `A skill named "${updates.slug ?? existing.slug}" already exists`,
+          }),
+        );
+      }
+      return Result.err(updateResult.error);
+    }
 
     return Result.ok({ id: params.skillId });
   },

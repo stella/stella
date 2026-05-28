@@ -46,6 +46,11 @@ const ALLOWED_ATTRS: Record<string, Set<string>> = {
 };
 
 const ALLOWED_HREF_SCHEMES = new Set(["https:", "mailto:", "tel:"]);
+const SKILL_REF_HREF_PREFIX = "#stella-skill-ref=";
+
+const isAllowedLocalHref = (href: string): boolean =>
+  href.startsWith(SKILL_REF_HREF_PREFIX) &&
+  href.length > SKILL_REF_HREF_PREFIX.length;
 
 const sanitizeHtml = (html: string): string => {
   const $ = cheerio.load(html, undefined, false);
@@ -74,12 +79,17 @@ const sanitizeHtml = (html: string): string => {
       continue;
     }
 
-    if (!URL.canParse(el.attribs["href"], "https://placeholder.invalid")) {
+    const href = el.attribs["href"];
+    if (isAllowedLocalHref(href)) {
+      continue;
+    }
+
+    if (!URL.canParse(href, "https://placeholder.invalid")) {
       $(el).removeAttr("href");
       continue;
     }
 
-    const url = new URL(el.attribs["href"], "https://placeholder.invalid");
+    const url = new URL(href, "https://placeholder.invalid");
     if (!ALLOWED_HREF_SCHEMES.has(url.protocol)) {
       $(el).removeAttr("href");
     }

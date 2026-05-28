@@ -60,6 +60,15 @@ describe("chat message markdown serializer", () => {
     expect(markdown).toContain("[good](https://example.com)");
   });
 
+  test("preserves skill reference links for explicit skill loading", () => {
+    const html =
+      '<p>Use <a href="#stella-skill-ref=due-diligence">Due Diligence</a>.</p>';
+
+    expect(normalizeChatMessageHtml(html, []).text).toBe(
+      "Use [Due Diligence](#stella-skill-ref=due-diligence).",
+    );
+  });
+
   test("drops inaccessible workspace mentions from markdown and metadata", () => {
     const html =
       '<p>In <entity-mention data-id="ws_bad" data-label="Secret" data-category="workspace"></entity-mention> and <entity-mention data-id="ws_ok" data-label="OK WS" data-category="workspace"></entity-mention>.</p>';

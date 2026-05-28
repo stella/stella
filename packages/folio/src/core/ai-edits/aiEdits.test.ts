@@ -14,6 +14,7 @@ const schema = new Schema({
       group: "block",
       attrs: {
         listMarker: { default: null },
+        pageBreakBefore: { default: null },
         styleId: { default: null },
         // Identity attrs — must NOT be copied when a new block is
         // synthesized from a sibling, otherwise downstream tracking
@@ -99,7 +100,9 @@ type BlockSpec =
   | {
       text: string;
       listMarker?: string;
+      pageBreakBefore?: boolean;
       paraId?: string;
+      styleId?: string;
       textId?: string;
     };
 
@@ -116,7 +119,9 @@ const makeState = (blocks: BlockSpec[]) =>
             ? {}
             : {
                 listMarker: block.listMarker ?? null,
+                pageBreakBefore: block.pageBreakBefore ?? null,
                 paraId: block.paraId ?? null,
+                styleId: block.styleId ?? null,
                 textId: block.textId ?? null,
               };
         return schema.node(
@@ -654,6 +659,31 @@ describe("Folio AI edit operations", () => {
     expect(result.skipped).toEqual([]);
     expect(view.state.doc.firstChild?.textContent).toBe("Now just plain text.");
     expect(view.state.doc.firstChild?.attrs["listMarker"]).toBeNull();
+  });
+
+  test("replaceBlock applies requested styleId in tracked-changes mode", () => {
+    const view = makeView(
+      makeState([{ styleId: "BodyText", text: "Intro paragraph." }]),
+    );
+    const snapshot = createFolioAIEditSnapshot(view.state.doc);
+
+    const result = applyFolioAIEditOperations({
+      view,
+      snapshot,
+      operations: [
+        {
+          id: "op-1",
+          type: "replaceBlock",
+          blockId: "seq-0001",
+          text: "Clause heading.",
+          styleId: "ClauseHeading1",
+        },
+      ],
+    });
+
+    expect(result.skipped).toEqual([]);
+    expect(result.applied[0]?.revisionIds).toHaveLength(2);
+    expect(view.state.doc.firstChild?.attrs["styleId"]).toBe("ClauseHeading1");
   });
 
   test("replaceBlock marks only diverging tokens, leaves shared runs untouched", () => {
@@ -1307,5 +1337,106 @@ describe("Folio AI edit operations", () => {
     expect(view.state.doc.child(0).textContent).toBe("Before.");
     expect(view.state.doc.child(1).textContent).toBe("Pre-table sibling.");
     expect(view.state.doc.child(2).type.name).toBe("table");
+  });
+
+  test("page-break-only inserts are skipped in tracked-changes mode", () => {
+    const view = makeView(makeState(["Anchor block."]));
+    const snapshot = createFolioAIEditSnapshot(view.state.doc);
+
+    const result = applyFolioAIEditOperations({
+      view,
+      snapshot,
+      operations: [
+        {
+          id: "op-1",
+          type: "insertAfterBlock",
+          blockId: "seq-0001",
+          text: "",
+          pageBreakBefore: true,
+        },
+      ],
+    });
+
+    expect(result.applied).toEqual([]);
+    expect(result.skipped).toEqual([
+      { id: "op-1", reason: "unsupportedBlock" },
+    ]);
+    expect(view.state.doc.childCount).toBe(1);
+  });
+
+  test("signature-table inserts are skipped in tracked-changes mode", () => {
+    const view = makeView(makeState(["Anchor block."]));
+    const snapshot = createFolioAIEditSnapshot(view.state.doc);
+
+    const result = applyFolioAIEditOperations({
+      view,
+      snapshot,
+      operations: [
+        {
+          id: "op-1",
+          type: "insertSignatureTable",
+          blockId: "seq-0001",
+          parties: [{ name: "Buyer" }, { name: "Seller" }],
+        },
+      ],
+    });
+
+    expect(result.applied).toEqual([]);
+    expect(result.skipped).toEqual([
+      { id: "op-1", reason: "unsupportedBlock" },
+    ]);
+    expect(view.state.doc.childCount).toBe(1);
+  });
+
+  test("signature-table inserts anchored inside a table cell land after the table", () => {
+    const cellParagraph = schema.node(
+      "paragraph",
+      { listMarker: null, paraId: "cell-3", textId: null },
+      [schema.text("Cell text.")],
+    );
+    const table = schema.node("table", null, [
+      schema.node("tableRow", null, [
+        schema.node("tableCell", null, [cellParagraph]),
+      ]),
+    ]);
+    const docNode = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        { listMarker: null, paraId: null, textId: null },
+        [schema.text("Before.")],
+      ),
+      table,
+      schema.node(
+        "paragraph",
+        { listMarker: null, paraId: null, textId: null },
+        [schema.text("After.")],
+      ),
+    ]);
+    const state = EditorState.create({ schema, doc: docNode });
+    const snapshot = createFolioAIEditSnapshot(state.doc);
+    const view = makeView(state);
+
+    const result = applyFolioAIEditOperations({
+      view,
+      snapshot,
+      operations: [
+        {
+          id: "op-1",
+          type: "insertSignatureTable",
+          blockId: "cell-3",
+          parties: [{ name: "Buyer" }, { name: "Seller" }],
+        },
+      ],
+      mode: "direct",
+    });
+
+    expect(result.skipped).toEqual([]);
+    expect(result.applied).toHaveLength(1);
+    expect(view.state.doc.childCount).toBe(4);
+    expect(view.state.doc.child(0).textContent).toBe("Before.");
+    expect(view.state.doc.child(1).type.name).toBe("table");
+    expect(view.state.doc.child(2).type.name).toBe("table");
+    expect(view.state.doc.child(2).textContent).toContain("Buyer");
+    expect(view.state.doc.child(3).textContent).toBe("After.");
   });
 });

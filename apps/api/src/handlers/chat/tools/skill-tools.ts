@@ -183,11 +183,12 @@ const SKILL_RESOURCE_MIME_BY_EXT: Record<string, string> = {
 };
 
 const inferSkillResourceMimeType = (path: string): string => {
-  const lastDot = path.lastIndexOf(".");
+  const filename = path.split("/").pop() ?? "";
+  const lastDot = filename.lastIndexOf(".");
   if (lastDot === -1) {
     return "text/plain";
   }
-  const ext = path.slice(lastDot + 1).toLowerCase();
+  const ext = filename.slice(lastDot + 1).toLowerCase();
   return SKILL_RESOURCE_MIME_BY_EXT[ext] ?? "text/plain";
 };
 

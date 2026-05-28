@@ -45,6 +45,7 @@ import { skillDetailOptions } from "@/routes/_protected.knowledge/-queries";
 
 const SKILL_BODY_FILE_NAME = "SKILL.md";
 const TEXT_RESOURCE_KINDS = new Set([
+  "asset",
   "knowledge",
   "prompt",
   "reference",
@@ -394,14 +395,15 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
       return response.data;
     },
     onSuccess: (data) => {
-      // Load as a dirty draft on the currently selected resource so the user
-      // can review the rewrite before saving.
-      if (selected.type !== "resource") {
+      // Load as a dirty draft on the resource that requested the rewrite so the
+      // user can review it before saving, even if selection changed mid-flight.
+      const target = resources.find((resource) => resource.path === data.path);
+      if (!target) {
         return;
       }
       setDraftResources((current) => ({
         ...current,
-        [selected.resourceId]: data.content,
+        [target.id]: data.content,
       }));
       setRewriteOpen(false);
       setRewritePrompt("");
