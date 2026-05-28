@@ -4,19 +4,14 @@
  */
 
 import { useState, useMemo, useCallback } from "react";
-import type { RefObject } from "react";
 
-import { proseDocToBlocks } from "../../core/prosemirror/conversion/fromProseDoc";
 import type {
   Document,
   DocumentBody,
   HeaderFooter,
   SectionProperties,
-  Paragraph,
-  Table,
 } from "../../core/types/document";
 import type { UseHistoryReturn } from "../../hooks/useHistory";
-import type { InlineHeaderFooterEditorRef } from "../InlineHeaderFooterEditor";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -25,7 +20,6 @@ import type { InlineHeaderFooterEditorRef } from "../InlineHeaderFooterEditor";
 type UseHeaderFooterEditorParams = {
   history: UseHistoryReturn<Document | null>;
   pushDocument: (document: Document) => Document;
-  hfEditorRef: RefObject<InlineHeaderFooterEditorRef | null>;
 };
 
 type UseHeaderFooterEditorReturn = {
@@ -61,8 +55,13 @@ type UseHeaderFooterEditorReturn = {
     position: "header" | "footer",
     pageNumber?: number,
   ) => void;
-  /** Persist edited blocks back into the document package */
-  handleHeaderFooterSave: (content: (Paragraph | Table)[]) => void;
+  /**
+   * Snapshot the current HF state into a new Document via pushDocument so
+   * the edit session lands in undo history. Content lives in
+   * `package.headers/footers[rId].content` (kept current by the persistent
+   * HF PM's in-place sync) — no caller payload needed.
+   */
+  handleHeaderFooterSave: () => void;
   /** Save and close HF editor when the body is clicked */
   handleBodyClick: () => void;
   /** Remove the active header/footer from the document */
@@ -91,7 +90,6 @@ export function resolveEffectiveSectionProperties(
 export const useHeaderFooterEditor = ({
   history,
   pushDocument,
-  hfEditorRef,
 }: UseHeaderFooterEditorParams): UseHeaderFooterEditorReturn => {
   // -------------------------------------------------------------------------
   // State
@@ -427,41 +425,40 @@ export const useHeaderFooterEditor = ({
     ],
   );
 
-  const handleHeaderFooterSave = useCallback(
-    (content: (Paragraph | Table)[]) => {
-      if (!hfEditPosition || !history.state?.package) {
-        setHfEditPosition(null);
-        return;
-      }
+  const handleHeaderFooterSave = useCallback(() => {
+    if (!hfEditPosition || !history.state?.package) {
+      setHfEditPosition(null);
+      return;
+    }
 
-      const pkg = history.state.package;
-      // Save into the rId resolved by the SAME algorithm that picks
-      // the displayed H/F (see the resolver useMemo above). Routing
-      // saves through `pkg.document?.finalSectionProperties` would
-      // write into the *last* section's rId, which can be different
-      // from the rendered one in multi-section docs (NVCA-style:
-      // title-page section has the body H/F; signature sections
-      // override default with stripped-down rIds). Codex PR #258
-      // review.
-      let activeRId =
-        hfEditPosition === "header" ? activeHeaderRId : activeFooterRId;
-      if (hfEditIsFirstPage) {
-        activeRId =
-          hfEditPosition === "header"
-            ? activeFirstHeaderRId
-            : activeFirstFooterRId;
-      }
-      const refType = hfEditIsFirstPage ? "first" : "default";
-      const mapKey = hfEditPosition === "header" ? "headers" : "footers";
-      const map = pkg[mapKey];
+    const pkg = history.state.package;
+    // Save into the rId resolved by the SAME algorithm that picks the
+    // displayed H/F (see the resolver useMemo above) — for multi-section
+    // docs (NVCA-style title-page + signature sections) this is the
+    // rendered rId, not finalSectionProperties' rId. Codex PR #258 review.
+    let activeRId =
+      hfEditPosition === "header" ? activeHeaderRId : activeFooterRId;
+    if (hfEditIsFirstPage) {
+      activeRId =
+        hfEditPosition === "header"
+          ? activeFirstHeaderRId
+          : activeFirstFooterRId;
+    }
+    const refType = hfEditIsFirstPage ? "first" : "default";
+    const mapKey = hfEditPosition === "header" ? "headers" : "footers";
+    const map = pkg[mapKey];
 
-      if (activeRId && map) {
-        const existing = map.get(activeRId);
+    if (activeRId && map) {
+      const existing = map.get(activeRId);
+      if (existing) {
+        // Spread existing without overriding `content` so the array
+        // reference is preserved — HiddenHeaderFooterPMs's mount
+        // effect uses reference equality on `appliedContent` to skip
+        // a state rebuild on in-session pushDocument snapshots.
         const updated: HeaderFooter = {
+          ...existing,
           type: hfEditPosition,
           hdrFtrType: refType,
-          ...existing,
-          content,
         };
         const newMap = new Map(map);
         newMap.set(activeRId, updated);
@@ -475,34 +472,29 @@ export const useHeaderFooterEditor = ({
         };
         pushDocument(newDoc);
       }
+    }
 
-      setHfEditPosition(null);
-    },
-    [
-      hfEditPosition,
-      hfEditIsFirstPage,
-      activeHeaderRId,
-      activeFooterRId,
-      activeFirstHeaderRId,
-      activeFirstFooterRId,
-      history,
-      pushDocument,
-    ],
-  );
+    setHfEditPosition(null);
+  }, [
+    hfEditPosition,
+    hfEditIsFirstPage,
+    activeHeaderRId,
+    activeFooterRId,
+    activeFirstHeaderRId,
+    activeFirstFooterRId,
+    history,
+    pushDocument,
+  ]);
 
   const handleBodyClick = useCallback(() => {
     if (!hfEditPosition) {
       return;
     }
-    // Save if dirty, then close
-    const view = hfEditorRef.current?.getView();
-    if (view) {
-      const blocks = proseDocToBlocks(view.state.doc);
-      handleHeaderFooterSave(blocks);
-    } else {
-      setHfEditPosition(null);
-    }
-  }, [hfEditPosition, hfEditorRef, handleHeaderFooterSave]);
+    // HF content is kept current by the HF PM's in-place sync
+    // (HiddenHeaderFooterPMs.dispatchTransaction); the close path just
+    // needs to publish the current state as a history snapshot.
+    handleHeaderFooterSave();
+  }, [hfEditPosition, handleHeaderFooterSave]);
 
   const handleRemoveHeaderFooter = useCallback(() => {
     if (!hfEditPosition || !history.state?.package) {

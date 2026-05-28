@@ -36,6 +36,7 @@ import { EditorState } from "prosemirror-state";
 import type { EditorState as EditorStateT } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 
+import { proseDocToBlocks } from "../core/prosemirror/conversion/fromProseDoc";
 import { headerFooterToProseDoc } from "../core/prosemirror/conversion/toProseDoc";
 import { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
 import { createStarterKit } from "../core/prosemirror/extensions/StarterKit";
@@ -43,7 +44,9 @@ import { schema } from "../core/prosemirror/schema";
 import type {
   Document,
   HeaderFooter,
+  Paragraph,
   StyleDefinitions,
+  Table,
   Theme,
 } from "../core/types/document";
 
@@ -109,6 +112,23 @@ type MountedView = {
   view: EditorView;
   /** DOM node `view` is mounted on (one `<div>` per rId inside the off-screen host). */
   mountNode: HTMLElement;
+  /**
+   * Reference to the `HeaderFooter` object the view was built from. Used to
+   * detect when a new document brings in a different HF for the same rId
+   * (truly new doc load, or undo/redo reverting an HF edit) so the view's
+   * state can be rebuilt from the new content. In-session in-place
+   * mutations don't change this reference.
+   */
+  appliedHf: HeaderFooter;
+  /**
+   * Reference to the content array on `appliedHf` at the moment the
+   * view was last synced. handleDispatchTransaction writes the latest
+   * `proseDocToBlocks(state.doc)` here so the change-detection check
+   * works even when the surrounding HF object is re-allocated by a
+   * history snapshot (the array reference survives if the snapshot
+   * spreads `...existing` without overriding content).
+   */
+  appliedContent: (Paragraph | Table)[];
 };
 
 function buildInitialState(
@@ -233,11 +253,34 @@ export const HiddenHeaderFooterPMs = memo(
         }
 
         for (const slot of slots) {
-          if (have.has(slot.rId)) {
-            continue;
-          }
           const hf = resolveHf(slot.rId, slot.kind);
           if (!hf) {
+            continue;
+          }
+          const existing = have.get(slot.rId);
+          if (existing) {
+            // Same rId is still around. Decide whether the view needs to
+            // adopt new content (truly new document, or undo/redo
+            // restoring an earlier HF state) by comparing the active
+            // HeaderFooter reference. handleDispatchTransaction keeps
+            // appliedHf / appliedContent pointing at the same array
+            // reference the in-place sync wrote, so an in-session
+            // pushDocument that spreads `...existing` survives without
+            // a state rebuild.
+            if (
+              existing.appliedHf === hf &&
+              existing.appliedContent === hf.content
+            ) {
+              continue;
+            }
+            const mgr = managersRef.current.get(slot.rId);
+            if (!mgr) {
+              continue;
+            }
+            const newState = buildInitialState(hf, styles, theme, mgr);
+            existing.view.updateState(newState);
+            existing.appliedHf = hf;
+            existing.appliedContent = hf.content;
             continue;
           }
 
@@ -259,6 +302,22 @@ export const HiddenHeaderFooterPMs = memo(
             dispatchTransaction(tr) {
               const newState = view.state.apply(tr);
               view.updateState(newState);
+              if (tr.docChanged) {
+                const mounted = mountedRef.current.get(slotRId);
+                const target = mounted?.appliedHf;
+                if (target) {
+                  // Mutate the source HeaderFooter in place so the
+                  // existing save path (pushDocument reads hf.content)
+                  // sees the latest blocks without an extra hop. Track
+                  // the new array reference on the MountedView so the
+                  // next enumerate pass can tell "same content under a
+                  // new HF wrapper" (in-session save) apart from "new
+                  // doc / undo" (genuine content change).
+                  const blocks = proseDocToBlocks(newState.doc);
+                  target.content = blocks;
+                  mounted.appliedContent = blocks;
+                }
+              }
               onTransactionRef.current?.(
                 slotRId,
                 slotKind,
@@ -273,13 +332,10 @@ export const HiddenHeaderFooterPMs = memo(
             kind: slot.kind,
             view,
             mountNode: node,
+            appliedHf: hf,
+            appliedContent: hf.content,
           });
         }
-        // `document` is intentionally excluded — slot enumeration flows via
-        // `slots`, and `resolveHf` reads from the captured closure. Depending
-        // on `document` directly causes a full remount on every body PM
-        // transaction (each pushDocument returns a new identity), which
-        // destroys IME state and selection.
       }, [slots, resolveHf, styles, theme]);
 
       // Tear everything down on unmount.

@@ -1020,7 +1020,7 @@ export function DocxEditor({
     handleHeaderFooterDoubleClick,
     handleBodyClick,
     handleRemoveHeaderFooter,
-  } = useHeaderFooterEditor({ history, pushDocument, hfEditorRef });
+  } = useHeaderFooterEditor({ history, pushDocument });
 
   // Helper to get the active editor's view — returns HF editor view when in HF editing mode
   const getActiveEditorView = useCallback(() => {

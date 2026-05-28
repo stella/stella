@@ -125,7 +125,6 @@ import {
   mergeTableCellAttrs,
   mergeTableRowAttrs,
 } from "../core/prosemirror/attrs";
-import { proseDocToBlocks } from "../core/prosemirror/conversion/fromProseDoc";
 import type { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
 import { anonymizationDecorationsKey } from "../core/prosemirror/plugins/anonymizationDecorations";
 import type { AnonymizationMatch } from "../core/prosemirror/plugins/anonymizationDecorations";
@@ -3872,18 +3871,11 @@ export function PagedEditor(
       docChanged: boolean,
       selectionChanged: boolean,
     ) => {
+      // HiddenHeaderFooterPMs writes the new blocks into
+      // package.headers/footers[rId].content in place inside its own
+      // dispatchTransaction, so we only need to nudge the layout pipeline
+      // and update HF caret state here.
       if (docChanged) {
-        const pkg = document?.package;
-        if (pkg) {
-          // Use the kind parameter, not a fallback chain — defensive
-          // against any pathological document that registers the same
-          // rId under both headers and footers.
-          const bag = kind === "header" ? pkg.headers : pkg.footers;
-          const hf = bag?.get(rId);
-          if (hf) {
-            hf.content = proseDocToBlocks(view.state.doc);
-          }
-        }
         const bodyState = hiddenPMRef.current?.getState();
         if (bodyState) {
           scheduleLayout(bodyState, null);
@@ -3894,7 +3886,7 @@ export function PagedEditor(
         setHfCaretSelection({ rId, kind, from, to });
       }
     },
-    [document, scheduleLayout],
+    [scheduleLayout],
   );
 
   // Clear HF caret state + cross-surface drag state on any hfEditMode
