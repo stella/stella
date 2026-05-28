@@ -118,6 +118,27 @@ const authHeader = (apiKey: string): Record<string, string> => ({
 });
 
 /**
+ * Wrap `fetch` so transport-layer failures — `AbortSignal.timeout`
+ * firing, DNS, TLS, connection resets — land as `DeepLUpstreamError`.
+ * Without this the rejection bubbles up as a bare `DOMException` /
+ * `TypeError`, slips past the handler's tagged-error branches, and
+ * surfaces as a generic 500 instead of an actionable 502.
+ */
+const deeplFetch = async (
+  url: string,
+  init: RequestInit,
+): Promise<Response> => {
+  try {
+    return await fetch(url, init);
+  } catch (error) {
+    throw new DeepLUpstreamError({
+      message: "DeepL request failed before a response was received",
+      cause: error,
+    });
+  }
+};
+
+/**
  * DeepL returns errors as `{ "message": "..." }` JSON. Surface the
  * message when present; fall back to the truncated raw body for
  * non-JSON edges (HTML error pages from intermediaries, etc.).
@@ -198,7 +219,7 @@ const uploadDocument = async (
   form.append("formality", input.formality ?? "prefer_more");
   form.append("file", blob, input.fileName);
 
-  const response = await fetch(
+  const response = await deeplFetch(
     `${resolveDeepLBaseUrl(input.apiKey)}/v2/document`,
     {
       method: "POST",
@@ -221,7 +242,7 @@ const fetchStatus = async (
   handle: DocumentHandle,
 ): Promise<DocumentStatus> => {
   const body = new URLSearchParams({ document_key: handle.documentKey });
-  const response = await fetch(
+  const response = await deeplFetch(
     `${resolveDeepLBaseUrl(apiKey)}/v2/document/${handle.documentId}`,
     {
       method: "POST",
@@ -254,7 +275,7 @@ const downloadResult = async (
   handle: DocumentHandle,
 ): Promise<Uint8Array> => {
   const body = new URLSearchParams({ document_key: handle.documentKey });
-  const response = await fetch(
+  const response = await deeplFetch(
     `${resolveDeepLBaseUrl(apiKey)}/v2/document/${handle.documentId}/result`,
     {
       method: "POST",
@@ -330,7 +351,7 @@ export const translateDocument = async (
 export const fetchTargetLanguages = async (
   apiKey: string,
 ): Promise<{ code: string; name: string; supportsFormality: boolean }[]> => {
-  const response = await fetch(
+  const response = await deeplFetch(
     `${resolveDeepLBaseUrl(apiKey)}/v2/languages?type=target`,
     {
       headers: authHeader(apiKey),
