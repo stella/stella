@@ -130,6 +130,7 @@ import {
   findNextChange,
   findPreviousChange,
 } from "../core/prosemirror/commands/comments";
+import { proseDocToBlocks } from "../core/prosemirror/conversion/fromProseDoc";
 import { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
 import {
   getChangedParagraphIds,
@@ -1279,6 +1280,36 @@ export function DocxEditor({
     const pmDoc = pagedEditorRef.current?.getDocument();
     if (pmDoc) {
       doc.package.document.content = pmDoc.package.document.content;
+    }
+    // Flush in-flight HF PM edits into the cloned package — the persistent
+    // hidden HF EditorViews don't mutate history.state per keystroke
+    // (Codex #487 P1: 20:18 review), so a "Save As .docx" called while the
+    // chrome is still open would otherwise ship the pre-edit content for
+    // every rId the user touched (Codex #487 P1 follow-up: 20:52 review).
+    // We walk the cloned headers / footers (structuredClone gave us fresh
+    // HF objects), look up the matching persistent view, and overwrite
+    // each rId's `.content` with `proseDocToBlocks(view.state.doc)`. The
+    // original history.state remains untouched because every mutation
+    // lands on the cloned Map / HF objects.
+    const editor = pagedEditorRef.current;
+    if (editor) {
+      const flushBag = (bag: Map<string, { content: unknown }> | undefined) => {
+        if (!bag) {
+          return;
+        }
+        for (const [rId, hf] of bag) {
+          const view = editor.getHfView(rId);
+          if (view) {
+            hf.content = proseDocToBlocks(view.state.doc);
+          }
+        }
+      };
+      flushBag(
+        doc.package.headers as Map<string, { content: unknown }> | undefined,
+      );
+      flushBag(
+        doc.package.footers as Map<string, { content: unknown }> | undefined,
+      );
     }
     // Drop comment threads whose anchor text has been edited away. The
     // in-memory `comments` array can outlive its in-body anchors (PM
