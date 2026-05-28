@@ -2883,6 +2883,18 @@ function populatePageShell(
 
   data.rendered = true;
   syncPageShellFingerprints(shell, data, options);
+
+  // Fire painter:painted on the pages container so HfCaretOverlay
+  // recomputes against the now-populated shell. Without this, an HF
+  // edit on a later page in a virtualized doc would emit
+  // painter:painted while only the first three shells were populated
+  // (full-rebuild path), the overlay would clear, and the caret would
+  // not return until another transaction (Codex #487 P2: 22:27
+  // review).
+  const container = shell.parentElement;
+  if (container instanceof HTMLElement) {
+    emitPainterPainted(container);
+  }
 }
 
 /**

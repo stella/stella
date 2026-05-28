@@ -4536,6 +4536,20 @@ export function PagedEditor(
             if (pos !== null) {
               const docEnd = hfView.state.doc.content.size;
               const clamped = Math.max(0, Math.min(pos, docEnd));
+              // Set the page-scope ref BEFORE the dispatch — view.dispatch
+              // synchronously invokes our dispatchTransaction →
+              // handleHfPmTransaction, which reads
+              // activeHfPageNumberRef.current to stamp on the new
+              // HfCaretSelection. If we set it after the dispatch, the
+              // first selection update on this click still records the
+              // previous page and the caret renders on the wrong
+              // painted instance until the next transaction (Codex
+              // #487 P2: 22:27 review).
+              const pageEl = slot.element.closest<HTMLElement>(".layout-page");
+              const pageNumStr = pageEl?.dataset["pageNumber"];
+              activeHfPageNumberRef.current = pageNumStr
+                ? Number.parseInt(pageNumStr, 10)
+                : null;
               if (e.shiftKey && dragAnchorRef.current !== null) {
                 const $anchor = hfView.state.doc.resolve(
                   Math.max(0, Math.min(dragAnchorRef.current, docEnd)),
@@ -4560,14 +4574,6 @@ export function PagedEditor(
                 rId: slot.rId,
                 kind: slot.kind,
               };
-              // Remember the painted page so the caret overlay scopes
-              // subsequent renders to this slot instance instead of the
-              // first matching rId in document order.
-              const pageEl = slot.element.closest<HTMLElement>(".layout-page");
-              const pageNumStr = pageEl?.dataset["pageNumber"];
-              activeHfPageNumberRef.current = pageNumStr
-                ? Number.parseInt(pageNumStr, 10)
-                : null;
             }
             hfView.focus();
             return;
