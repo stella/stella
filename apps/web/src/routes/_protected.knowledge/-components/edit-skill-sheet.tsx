@@ -837,7 +837,7 @@ function SkillFileTree({
       </li>
       {knownFolders.map((prefix) => {
         const group = groupByPrefix.get(prefix);
-        const entries = group?.entries ?? [];
+        const children = group?.children ?? [];
         return (
           <li className="flex flex-col gap-1" key={prefix}>
             <FolderHeader
@@ -845,30 +845,22 @@ function SkillFileTree({
               onCreateFile={onCreateFile}
               prefix={prefix}
             />
-            <ul className="flex flex-col">
-              {entries.map((entry) => (
-                <li key={entry.id}>
-                  <ResourceRow
-                    deletePending={deletePending}
-                    dirty={dirtySet.has(entry.id)}
-                    entry={entry}
-                    onCancelRename={onCancelRename}
-                    onDeleteFile={onDeleteFile}
-                    onSelect={onSelect}
-                    onStartRename={onStartRename}
-                    onSubmitRename={onSubmitRename}
-                    renamePending={renamePending}
-                    renameValue={renameValue}
-                    renaming={renamingResourceId === entry.id}
-                    selected={
-                      selected.type === "resource" &&
-                      selected.resourceId === entry.id
-                    }
-                    setRenameValue={setRenameValue}
-                  />
-                </li>
-              ))}
-            </ul>
+            <TreeNodeList
+              deletePending={deletePending}
+              depth={1}
+              dirtySet={dirtySet}
+              nodes={children}
+              onCancelRename={onCancelRename}
+              onDeleteFile={onDeleteFile}
+              onSelect={onSelect}
+              onStartRename={onStartRename}
+              onSubmitRename={onSubmitRename}
+              renamePending={renamePending}
+              renameValue={renameValue}
+              renamingResourceId={renamingResourceId}
+              selected={selected}
+              setRenameValue={setRenameValue}
+            />
           </li>
         );
       })}
@@ -877,11 +869,72 @@ function SkillFileTree({
           createPending={createPending}
           onCreateFile={onCreateFile}
         />
-        <ul className="flex flex-col">
-          {(rootGroup?.entries ?? []).map((entry) => (
-            <li key={entry.id}>
+        <TreeNodeList
+          deletePending={deletePending}
+          depth={1}
+          dirtySet={dirtySet}
+          nodes={rootGroup?.children ?? []}
+          onCancelRename={onCancelRename}
+          onDeleteFile={onDeleteFile}
+          onSelect={onSelect}
+          onStartRename={onStartRename}
+          onSubmitRename={onSubmitRename}
+          renamePending={renamePending}
+          renameValue={renameValue}
+          renamingResourceId={renamingResourceId}
+          selected={selected}
+          setRenameValue={setRenameValue}
+        />
+      </li>
+    </ul>
+  );
+}
+
+const TREE_INDENT_PX = 14;
+
+type TreeNodeListProps = {
+  deletePending: boolean;
+  depth: number;
+  dirtySet: Set<string>;
+  nodes: TreeNode[];
+  onCancelRename: () => void;
+  onDeleteFile: (entry: TreeEntry) => void;
+  onSelect: (next: SelectedFile) => void;
+  onStartRename: (entry: TreeEntry) => void;
+  onSubmitRename: (oldPath: string, newPath: string) => void;
+  renamePending: boolean;
+  renameValue: string;
+  renamingResourceId: string | null;
+  selected: SelectedFile;
+  setRenameValue: (value: string) => void;
+};
+
+function TreeNodeList({
+  deletePending,
+  depth,
+  dirtySet,
+  nodes,
+  onCancelRename,
+  onDeleteFile,
+  onSelect,
+  onStartRename,
+  onSubmitRename,
+  renamePending,
+  renameValue,
+  renamingResourceId,
+  selected,
+  setRenameValue,
+}: TreeNodeListProps) {
+  return (
+    <ul className="flex flex-col">
+      {nodes.map((node) => {
+        if (node.type === "file") {
+          const entry = node.entry;
+          return (
+            <li key={`f:${entry.id}`}>
               <ResourceRow
                 deletePending={deletePending}
+                depth={depth}
                 dirty={dirtySet.has(entry.id)}
                 entry={entry}
                 onCancelRename={onCancelRename}
@@ -899,10 +952,45 @@ function SkillFileTree({
                 setRenameValue={setRenameValue}
               />
             </li>
-          ))}
-        </ul>
-      </li>
+          );
+        }
+        return (
+          <li className="flex flex-col" key={`d:${depth}:${node.name}`}>
+            <NestedFolderHeader depth={depth} name={node.name} />
+            <TreeNodeList
+              deletePending={deletePending}
+              depth={depth + 1}
+              dirtySet={dirtySet}
+              nodes={node.children}
+              onCancelRename={onCancelRename}
+              onDeleteFile={onDeleteFile}
+              onSelect={onSelect}
+              onStartRename={onStartRename}
+              onSubmitRename={onSubmitRename}
+              renamePending={renamePending}
+              renameValue={renameValue}
+              renamingResourceId={renamingResourceId}
+              selected={selected}
+              setRenameValue={setRenameValue}
+            />
+          </li>
+        );
+      })}
     </ul>
+  );
+}
+
+type NestedFolderHeaderProps = { depth: number; name: string };
+
+function NestedFolderHeader({ depth, name }: NestedFolderHeaderProps) {
+  return (
+    <div
+      className="text-muted-foreground flex items-center gap-1.5 py-1 text-xs"
+      style={{ paddingInlineStart: `${8 + depth * TREE_INDENT_PX}px` }}
+    >
+      <FolderIcon className="size-3.5" />
+      <span className="font-mono">{name}/</span>
+    </div>
   );
 }
 
@@ -1053,6 +1141,7 @@ function RootFolderHeader({
 
 type ResourceRowProps = {
   deletePending: boolean;
+  depth: number;
   dirty: boolean;
   entry: TreeEntry;
   onCancelRename: () => void;
@@ -1069,6 +1158,7 @@ type ResourceRowProps = {
 
 function ResourceRow({
   deletePending,
+  depth,
   dirty,
   entry,
   onCancelRename,
@@ -1082,6 +1172,7 @@ function ResourceRow({
   selected,
   setRenameValue,
 }: ResourceRowProps) {
+  const paddingInlineStart = `${8 + depth * TREE_INDENT_PX}px`;
   const tSkills = useTranslations("knowledge.agentSkills");
   const t = useTranslations();
   const tCommonCancel = t("common.cancel");
@@ -1089,10 +1180,11 @@ function ResourceRow({
 
   if (renaming) {
     return (
-      <div className="group/row flex items-center gap-1 rounded px-1 py-1">
-        <span className="text-muted-foreground ps-1">
-          {kindIcon(entry.kind)}
-        </span>
+      <div
+        className="group/row flex items-center gap-1 rounded py-1 pe-1"
+        style={{ paddingInlineStart }}
+      >
+        <span className="text-muted-foreground">{kindIcon(entry.kind)}</span>
         <Input
           autoFocus
           className="h-7 flex-1 font-mono text-xs"
@@ -1121,7 +1213,7 @@ function ResourceRow({
     <div className="group/row relative flex items-center">
       <button
         className={cn(
-          "hover:bg-muted/60 flex w-full items-center gap-2 rounded px-2 py-1 text-start text-sm",
+          "hover:bg-muted/60 flex w-full items-center gap-2 rounded py-1 pe-2 text-start text-sm",
           selected && "bg-muted text-foreground",
         )}
         onClick={() =>
@@ -1131,6 +1223,7 @@ function ResourceRow({
             path: entry.path,
           })
         }
+        style={{ paddingInlineStart }}
         type="button"
       >
         <span className="text-muted-foreground">{kindIcon(entry.kind)}</span>
@@ -1244,37 +1337,82 @@ type TreeEntry = {
   kind: string;
 };
 
+type TreeNode =
+  | { type: "file"; entry: TreeEntry }
+  | { type: "folder"; name: string; children: TreeNode[] };
+
 type TreeGroup = {
   prefix: string;
-  entries: TreeEntry[];
+  children: TreeNode[];
+};
+
+const findFolderNode = (nodes: TreeNode[], name: string) => {
+  for (const node of nodes) {
+    if (node.type === "folder" && node.name === name) {
+      return node;
+    }
+  }
+  return undefined;
+};
+
+const sortTreeNodes = (nodes: TreeNode[]) => {
+  nodes.sort((a, b) => {
+    if (a.type !== b.type) {
+      return a.type === "folder" ? -1 : 1;
+    }
+    const an = a.type === "folder" ? a.name : a.entry.fileName;
+    const bn = b.type === "folder" ? b.name : b.entry.fileName;
+    return an.localeCompare(bn);
+  });
+  for (const node of nodes) {
+    if (node.type === "folder") {
+      sortTreeNodes(node.children);
+    }
+  }
 };
 
 const buildTree = (resources: SkillResource[]): TreeGroup[] => {
-  const groups = new Map<string, TreeEntry[]>();
+  const groups = new Map<string, TreeNode[]>();
   for (const resource of resources) {
-    const slashIndex = resource.path.indexOf("/");
-    const prefix = slashIndex === -1 ? "" : resource.path.slice(0, slashIndex);
-    const fileName =
-      slashIndex === -1 ? resource.path : resource.path.slice(slashIndex + 1);
-    const bucket = groups.get(prefix);
+    const segments = resource.path.split("/").filter((s) => s.length > 0);
+    if (segments.length === 0) {
+      continue;
+    }
+    const fileName = segments.at(-1) ?? resource.path;
     const entry: TreeEntry = {
       id: resource.id,
       path: resource.path,
       fileName,
       kind: resource.kind,
     };
-    if (bucket) {
-      bucket.push(entry);
-    } else {
-      groups.set(prefix, [entry]);
+    const topLevelPrefix = segments.length === 1 ? "" : (segments.at(0) ?? "");
+    const key = topLevelPrefix === "" ? "" : topLevelPrefix;
+    let bucket = groups.get(key);
+    if (!bucket) {
+      bucket = [];
+      groups.set(key, bucket);
     }
+    let cursor = bucket;
+    // segments[0] is the top-level prefix; segments[1..length-2] are
+    // intermediate folder names; segments[length-1] is the file name.
+    for (let i = 1; i < segments.length - 1; i++) {
+      const name = segments.at(i);
+      if (name === undefined) {
+        continue;
+      }
+      let folder = findFolderNode(cursor, name);
+      if (!folder) {
+        folder = { type: "folder", name, children: [] };
+        cursor.push(folder);
+      }
+      cursor = folder.children;
+    }
+    cursor.push({ type: "file", entry });
   }
   const out: TreeGroup[] = [];
-  for (const [prefix, entries] of groups) {
-    out.push({
-      prefix: prefix === "" ? "/" : prefix,
-      entries: entries.sort((a, b) => a.fileName.localeCompare(b.fileName)),
-    });
+  for (const [prefix, children] of groups) {
+    sortTreeNodes(children);
+    out.push({ prefix: prefix === "" ? "/" : prefix, children });
   }
   return out.sort((a, b) => a.prefix.localeCompare(b.prefix));
 };
