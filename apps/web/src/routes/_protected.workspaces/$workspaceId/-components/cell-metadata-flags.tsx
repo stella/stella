@@ -195,7 +195,7 @@ export const CellMetadataFlags = ({
             />
           }
         >
-          <LockIcon className="size-2.5" strokeWidth={2.5} />
+          <LockOpenIcon className="size-2.5" strokeWidth={2.5} />
         </Tooltip>
       )}
       {hasActiveFlag ? (
@@ -321,7 +321,7 @@ const CellLockBadge = ({ provenance, onUnlock }: CellLockBadgeProps) => {
       render={
         <button
           aria-label={t("workspaces.table.lock.unlock")}
-          className="bg-background/55 text-foreground-ghost focus-visible:ring-ring absolute start-1 top-1 z-20 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px] outline-none focus-visible:ring-1"
+          className="bg-background/55 text-foreground focus-visible:ring-ring animate-in fade-in-0 zoom-in-75 absolute start-1 top-1 z-20 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px] duration-150 outline-none focus-visible:ring-1"
           data-row-expansion-ignore
           onClick={(event) => {
             event.stopPropagation();
