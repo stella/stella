@@ -10,13 +10,15 @@
     "build:analyze": "vite build --mode analyze",
     "clean": "git clean -xdf .cache .turbo node_modules",
     "typegen": "bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/langs",
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "tsgo --noEmit && tsgo --noEmit -p e2e/tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/web",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/web",
     "format": "oxfmt -c ../../.oxfmtrc.json .",
     "i18n:check": "bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/langs --check && bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs",
     "i18n:sync": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs --sync && bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/langs",
-    "test": "bun test"
+    "test": "bun test --path-ignore-patterns='e2e/**'",
+    "test:e2e": "playwright test --config e2e/playwright.config.ts",
+    "test:e2e:ui": "playwright test --config e2e/playwright.config.ts --ui"
   },
   "dependencies": {
     "@ai-sdk/react": "3.0.186",
@@ -99,6 +101,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
+    "@playwright/test": "^1.60.0",
     "@rolldown/plugin-babel": "^0.2.2",
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",

@@ -288,6 +288,7 @@
       },
       "devDependencies": {
         "@babel/core": "^7.29.0",
+        "@playwright/test": "^1.60.0",
         "@rolldown/plugin-babel": "^0.2.2",
         "@stll/typescript-config": "workspace:*",
         "@tailwindcss/vite": "catalog:",
