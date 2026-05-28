@@ -726,7 +726,14 @@ function computeHeaderFooterTextSig(blocks: FlowBlock[]): string {
 
 function blockSig(b: FlowBlock): string {
   if (b.kind === "paragraph") {
-    let text = "p:";
+    // Carry paragraph-level formatting so same-height changes (alignment,
+    // RTL/LTR, indent, line spacing, paragraph style, borders, shading,
+    // list properties) still invalidate the cache. textSig was opening
+    // every paragraph with a constant `p:` before, so the body PM could
+    // toggle alignment / line spacing inside an HF paragraph without
+    // shifting computeOptionsHash and the painter's incremental path
+    // would skip the repaint (Codex #487 P2: 22:48 review).
+    let text = `p:${serializeParagraphAttrs(b.attrs)}|`;
     for (const r of b.runs) {
       if (r.kind === "text") {
         text += `T:${r.text}|${serializeRunFmt(r)};`;
@@ -771,6 +778,41 @@ function blockSig(b: FlowBlock): string {
     return "tb";
   }
   return "";
+}
+
+function serializeParagraphAttrs(
+  attrs: Record<string, unknown> | undefined,
+): string {
+  if (!attrs) {
+    return "";
+  }
+  const keys = [
+    "alignment",
+    "bidi",
+    "indent",
+    "spacing",
+    "styleId",
+    "borders",
+    "shading",
+    "contextualSpacing",
+    "keepNext",
+    "keepLines",
+    "pageBreakBefore",
+    "numPr",
+    "listMarker",
+    "listIsBullet",
+    "listMarkerHidden",
+    "listMarkerSuffix",
+    "tabs",
+  ];
+  const out: Record<string, unknown> = {};
+  for (const k of keys) {
+    const v = attrs[k];
+    if (v !== undefined && v !== null) {
+      out[k] = v;
+    }
+  }
+  return JSON.stringify(out);
 }
 
 /**
