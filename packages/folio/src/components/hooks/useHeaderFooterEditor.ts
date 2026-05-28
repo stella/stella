@@ -5,11 +5,16 @@
 
 import { useState, useMemo, useCallback } from "react";
 
+import type { EditorView } from "prosemirror-view";
+
+import { proseDocToBlocks } from "../../core/prosemirror/conversion/fromProseDoc";
 import type {
   Document,
   DocumentBody,
   HeaderFooter,
+  Paragraph,
   SectionProperties,
+  Table,
 } from "../../core/types/document";
 import type { UseHistoryReturn } from "../../hooks/useHistory";
 
@@ -20,6 +25,14 @@ import type { UseHistoryReturn } from "../../hooks/useHistory";
 type UseHeaderFooterEditorParams = {
   history: UseHistoryReturn<Document | null>;
   pushDocument: (document: Document) => Document;
+  /**
+   * Look up the persistent hidden HF EditorView for an rId. Returns null
+   * when the view isn't mounted (e.g. the chrome unmounted before the
+   * close path ran). Called at close time so the save path can read live
+   * PM state and serialise it into the new HeaderFooter without mutating
+   * the current history.state.
+   */
+  getHfView: (rId: string) => EditorView | null;
 };
 
 type UseHeaderFooterEditorReturn = {
@@ -57,9 +70,9 @@ type UseHeaderFooterEditorReturn = {
   ) => void;
   /**
    * Snapshot the current HF state into a new Document via pushDocument so
-   * the edit session lands in undo history. Content lives in
-   * `package.headers/footers[rId].content` (kept current by the persistent
-   * HF PM's in-place sync) — no caller payload needed.
+   * the edit session lands in undo history. Reads `content` from the
+   * active HF PM (via getActiveHfView at hook init) at call time; nothing
+   * in `history.state` is mutated until the new Document is pushed.
    */
   handleHeaderFooterSave: () => void;
   /** Save and close HF editor when the body is clicked */
@@ -90,6 +103,7 @@ export function resolveEffectiveSectionProperties(
 export const useHeaderFooterEditor = ({
   history,
   pushDocument,
+  getHfView,
 }: UseHeaderFooterEditorParams): UseHeaderFooterEditorReturn => {
   // -------------------------------------------------------------------------
   // State
@@ -450,15 +464,21 @@ export const useHeaderFooterEditor = ({
 
     if (activeRId && map) {
       const existing = map.get(activeRId);
-      if (existing) {
-        // Spread existing without overriding `content` so the array
-        // reference is preserved — HiddenHeaderFooterPMs's mount
-        // effect uses reference equality on `appliedContent` to skip
-        // a state rebuild on in-session pushDocument snapshots.
+      const view = getHfView(activeRId);
+      if (existing && view) {
+        // Read fresh blocks from PM state — HiddenHeaderFooterPMs no
+        // longer mutates `existing.content` in place (Codex #487 P1
+        // re-fixed), so `existing` here still holds the pre-edit
+        // snapshot. We construct a brand-new HeaderFooter inside a
+        // brand-new Map so the previous Document referenced by every
+        // earlier history entry stays untouched and undo can step
+        // back to the pre-edit state.
+        const blocks: (Paragraph | Table)[] = proseDocToBlocks(view.state.doc);
         const updated: HeaderFooter = {
           ...existing,
           type: hfEditPosition,
           hdrFtrType: refType,
+          content: blocks,
         };
         const newMap = new Map(map);
         newMap.set(activeRId, updated);
@@ -484,6 +504,7 @@ export const useHeaderFooterEditor = ({
     activeFirstFooterRId,
     history,
     pushDocument,
+    getHfView,
   ]);
 
   const handleBodyClick = useCallback(() => {

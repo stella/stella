@@ -1020,7 +1020,17 @@ export function DocxEditor({
     handleHeaderFooterDoubleClick,
     handleBodyClick,
     handleRemoveHeaderFooter,
-  } = useHeaderFooterEditor({ history, pushDocument });
+  } = useHeaderFooterEditor({
+    history,
+    pushDocument,
+    // Hook reads live HF PM state at close time (the in-place sync
+    // that previously kept package.headers/footers current per
+    // keystroke was removed to fix the undo-corruption bug; the
+    // close path now flushes via this callback). PagedEditor's ref
+    // exposes per-rId view lookup; the hook supplies the rId it
+    // already resolved internally for save / remove.
+    getHfView: (rId) => pagedEditorRef.current?.getHfView(rId) ?? null,
+  });
 
   // Helper to get the active editor's view — returns HF editor view when in HF editing mode
   const getActiveEditorView = useCallback(() => {

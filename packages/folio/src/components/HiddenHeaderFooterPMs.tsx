@@ -36,7 +36,6 @@ import { EditorState } from "prosemirror-state";
 import type { EditorState as EditorStateT } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 
-import { proseDocToBlocks } from "../core/prosemirror/conversion/fromProseDoc";
 import { headerFooterToProseDoc } from "../core/prosemirror/conversion/toProseDoc";
 import { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
 import { createStarterKit } from "../core/prosemirror/extensions/StarterKit";
@@ -302,22 +301,21 @@ export const HiddenHeaderFooterPMs = memo(
             dispatchTransaction(tr) {
               const newState = view.state.apply(tr);
               view.updateState(newState);
-              if (tr.docChanged) {
-                const mounted = mountedRef.current.get(slotRId);
-                const target = mounted?.appliedHf;
-                if (target) {
-                  // Mutate the source HeaderFooter in place so the
-                  // existing save path (pushDocument reads hf.content)
-                  // sees the latest blocks without an extra hop. Track
-                  // the new array reference on the MountedView so the
-                  // next enumerate pass can tell "same content under a
-                  // new HF wrapper" (in-session save) apart from "new
-                  // doc / undo" (genuine content change).
-                  const blocks = proseDocToBlocks(newState.doc);
-                  target.content = blocks;
-                  mounted.appliedContent = blocks;
-                }
-              }
+              // INTENTIONALLY no in-place mutation of `appliedHf.content`.
+              // Earlier revisions did `target.content = blocks` here to
+              // keep `Document.package.headers/footers[rId].content`
+              // current with each keystroke, but `appliedHf` is the
+              // same HeaderFooter object referenced by every undo entry
+              // in history that pre-dates this edit session — mutating
+              // it corrupted those snapshots, so a document-undo after
+              // closing HF mode couldn't restore the pre-edit content
+              // (Codex #487 P1). The view's state.doc is now the only
+              // source of truth while the chrome is open; the painter
+              // already reads through `convertHeaderFooterPmDocToContent`
+              // when a view exists, and `handleHeaderFooterSave` flushes
+              // the latest blocks into a brand-new HeaderFooter object
+              // in a brand-new Map on close, so history only ever sees
+              // committed snapshots.
               onTransactionRef.current?.(
                 slotRId,
                 slotKind,
