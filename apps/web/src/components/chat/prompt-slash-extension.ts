@@ -8,13 +8,15 @@ import { insertPastedTextChip } from "@/components/chat-pasted-text-extension";
 import { PromptSlashList } from "@/components/chat/prompt-slash-list";
 import type { ChatPrompt, PromptScope } from "@/lib/prompts/types";
 
+export type SlashSkillScope = PromptScope | "built-in";
+
 export type SlashSkill = {
   id: string;
   name: string;
   /** Slug used by the AI's `load-skill` tool. */
   slug: string;
   description: string;
-  scope: PromptScope;
+  scope: SlashSkillScope;
 };
 
 export type SlashItem =

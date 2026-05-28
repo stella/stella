@@ -9,17 +9,18 @@ import { cn } from "@stll/ui/lib/utils";
 
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import type { TranslationKey } from "@/i18n/types";
-import type { PromptScope } from "@/lib/prompts/types";
 
 type SectionKey =
   | "prompt:private"
   | "prompt:team"
+  | "skill:built-in"
   | "skill:private"
   | "skill:team";
 
 const SECTION_ORDER: SectionKey[] = [
   "prompt:private",
   "prompt:team",
+  "skill:built-in",
   "skill:private",
   "skill:team",
 ];
@@ -27,14 +28,16 @@ const SECTION_ORDER: SectionKey[] = [
 const SECTION_LABEL_KEYS = {
   "prompt:private": "chat.prompts.scope.private",
   "prompt:team": "chat.prompts.scope.team",
+  "skill:built-in": "knowledge.agentSkills.builtInSection",
   "skill:private": "chat.skills.scope.private",
   "skill:team": "chat.skills.scope.team",
 } satisfies Record<SectionKey, TranslationKey>;
 
 const getSectionKey = (item: SlashItem): SectionKey => {
-  const scope: PromptScope =
-    item.kind === "prompt" ? item.prompt.scope : item.skill.scope;
-  return `${item.kind}:${scope}`;
+  if (item.kind === "prompt") {
+    return `prompt:${item.prompt.scope}`;
+  }
+  return `skill:${item.skill.scope}`;
 };
 
 const groupItems = (

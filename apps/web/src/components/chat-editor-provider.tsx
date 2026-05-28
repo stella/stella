@@ -29,6 +29,7 @@ import { panic, Result } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import { buildChatSlashItems } from "@/components/chat-editor-slash-items";
 import {
   ChatMention,
   createChatSuggestion,
@@ -703,35 +704,25 @@ export const useChatEditor = ({
   const { data: shortcuts = [] } = useQuery(
     shortcutsOptions(activeOrganizationId),
   );
-  const { data: skillPages } = useInfiniteQuery(
-    skillsOptions(activeOrganizationId),
+  const {
+    data: skillPages,
+    fetchNextPage: fetchNextSkillPage,
+    hasNextPage: hasNextSkillPage,
+    isFetchingNextPage: isFetchingNextSkillPage,
+  } = useInfiniteQuery(skillsOptions(activeOrganizationId));
+
+  useEffect(() => {
+    if (!hasNextSkillPage || isFetchingNextSkillPage) {
+      return;
+    }
+    void fetchNextSkillPage();
+  }, [fetchNextSkillPage, hasNextSkillPage, isFetchingNextSkillPage]);
+
+  const skillPageRows = skillPages?.pages;
+  const slashItems = useMemo<SlashItem[]>(
+    () => buildChatSlashItems({ shortcuts, skillPages: skillPageRows }),
+    [shortcuts, skillPageRows],
   );
-  const slashItems = useMemo<SlashItem[]>(() => {
-    const promptItems: SlashItem[] = shortcuts.map((s) => ({
-      kind: "prompt" as const,
-      prompt: {
-        id: s.id,
-        scope: s.scope,
-        name: s.name,
-        command: s.command,
-        body: s.prompt,
-      },
-    }));
-    const skillRows = skillPages?.pages.flatMap((p) => p.installed) ?? [];
-    const skillItems: SlashItem[] = skillRows
-      .filter((row) => row.enabled)
-      .map((row) => ({
-        kind: "skill" as const,
-        skill: {
-          id: row.id,
-          name: row.name,
-          slug: row.slug,
-          description: row.description,
-          scope: row.scope,
-        },
-      }));
-    return [...promptItems, ...skillItems];
-  }, [shortcuts, skillPages]);
   const slashItemsRef = useRef(slashItems);
   slashItemsRef.current = slashItems;
 

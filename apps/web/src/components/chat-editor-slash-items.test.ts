@@ -1,0 +1,156 @@
+import { describe, expect, test } from "bun:test";
+
+import { buildChatSlashItems } from "@/components/chat-editor-slash-items";
+
+describe("buildChatSlashItems", () => {
+  test("includes built-in skills when no installed skill shadows them", () => {
+    const items = buildChatSlashItems({
+      shortcuts: [],
+      skillPages: [
+        {
+          builtIn: [
+            {
+              description: "Review a clause.",
+              enabled: true,
+              id: "review-clause",
+              name: "review-clause",
+              scope: "built-in",
+              slug: "review-clause",
+            },
+          ],
+          installed: [],
+        },
+      ],
+    });
+
+    expect(items).toEqual([
+      {
+        kind: "skill",
+        skill: {
+          description: "Review a clause.",
+          id: "review-clause",
+          name: "review-clause",
+          scope: "built-in",
+          slug: "review-clause",
+        },
+      },
+    ]);
+  });
+
+  test("includes installed skills from every fetched page", () => {
+    const items = buildChatSlashItems({
+      shortcuts: [],
+      skillPages: [
+        {
+          builtIn: [],
+          installed: [
+            {
+              description: "First page.",
+              enabled: true,
+              id: "installed-1",
+              name: "Installed 1",
+              scope: "team",
+              slug: "installed-1",
+            },
+          ],
+        },
+        {
+          builtIn: [],
+          installed: [
+            {
+              description: "Second page.",
+              enabled: true,
+              id: "installed-2",
+              name: "Installed 2",
+              scope: "private",
+              slug: "installed-2",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(
+      items.map((item) => (item.kind === "skill" ? item.skill.slug : "")),
+    ).toEqual(["installed-1", "installed-2"]);
+  });
+
+  test("hides built-in skills shadowed by enabled installed skills", () => {
+    const items = buildChatSlashItems({
+      shortcuts: [],
+      skillPages: [
+        {
+          builtIn: [
+            {
+              description: "Built-in.",
+              enabled: true,
+              id: "summarize",
+              name: "summarize",
+              scope: "built-in",
+              slug: "summarize",
+            },
+          ],
+          installed: [
+            {
+              description: "Team override.",
+              enabled: true,
+              id: "installed-summarize",
+              name: "Summarize",
+              scope: "team",
+              slug: "summarize",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      kind: "skill",
+      skill: { id: "installed-summarize", slug: "summarize" },
+    });
+  });
+
+  test("keeps built-in skills shadowed only by disabled installed skills", () => {
+    const items = buildChatSlashItems({
+      shortcuts: [],
+      skillPages: [
+        {
+          builtIn: [
+            {
+              description: "Built-in.",
+              enabled: true,
+              id: "draft",
+              name: "draft",
+              scope: "built-in",
+              slug: "draft",
+            },
+          ],
+          installed: [
+            {
+              description: "Disabled override.",
+              enabled: false,
+              id: "installed-draft",
+              name: "Draft",
+              scope: "private",
+              slug: "draft",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(items).toEqual([
+      {
+        kind: "skill",
+        skill: {
+          description: "Built-in.",
+          id: "draft",
+          name: "draft",
+          scope: "built-in",
+          slug: "draft",
+        },
+      },
+    ]);
+  });
+});
