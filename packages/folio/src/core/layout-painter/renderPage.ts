@@ -157,6 +157,13 @@ export type HeaderFooterContent = {
    */
   marginPushTop?: number;
   marginPushBottom?: number;
+  /**
+   * Relationship id (`rId`) of the source HF part. Emitted as `data-rid`
+   * on the painted `.layout-page-header` / `.layout-page-footer` so the
+   * pointer pipeline can resolve clicks to the matching hidden HF
+   * EditorView (see `HiddenHeaderFooterPMs`).
+   */
+  rId?: string;
 };
 
 /**
@@ -1824,6 +1831,9 @@ export function renderPage(
 
     const headerEl = doc.createElement("div");
     headerEl.className = PAGE_CLASS_NAMES.header;
+    if (options.headerContent?.rId) {
+      headerEl.dataset["rid"] = options.headerContent.rId;
+    }
     headerEl.style.position = "absolute";
     headerEl.style.top = `${headerDistance + headerVisualTop}px`;
     headerEl.style.left = `${page.margins.left}px`;
@@ -1919,6 +1929,9 @@ export function renderPage(
     const footerContainerTop = footerNaturalTop + footerVisualTop;
     const footerEl = doc.createElement("div");
     footerEl.className = PAGE_CLASS_NAMES.footer;
+    if (options.footerContent?.rId) {
+      footerEl.dataset["rid"] = options.footerContent.rId;
+    }
     footerEl.style.position = "absolute";
     footerEl.style.top = `${footerContainerTop}px`;
     footerEl.style.left = `${page.margins.left}px`;
@@ -2749,6 +2762,40 @@ export function renderPages(
   for (let i = 0; i < initialRenderCount; i++) {
     populatePageShell(pageShells[i]!, pageDataMap, totalPages, options); // SAFETY: i < initialRenderCount <= pages.length
   }
+
+  emitPainterPainted(container);
+}
+
+// =============================================================================
+// painter:painted event bus
+// =============================================================================
+//
+// Subscribers (e.g. SelectionOverlay's HF caret cache, hidden HF PMs) need a
+// single signal that the painter has finished writing children for the current
+// layout pass. The body's hidden-PM + painter pipeline already exposes this
+// implicitly via `syncCoordinator.onLayoutComplete`; for HF caret math the
+// snapshot needs to invalidate the moment the painted DOM changes. A bubbling
+// CustomEvent on the container element keeps the API ergonomic
+// (`container.addEventListener("painter:painted", ...)`) without introducing a
+// global EventTarget that would leak across multiple editor mounts.
+
+export const PAINTER_PAINTED_EVENT = "painter:painted" as const;
+
+export type PainterPaintedDetail = {
+  container: HTMLElement;
+  pageCount: number;
+};
+
+function emitPainterPainted(container: HTMLElement): void {
+  const pageCount = container.querySelectorAll(
+    `.${PAGE_CLASS_NAMES.page}`,
+  ).length;
+  const event = new CustomEvent<PainterPaintedDetail>(PAINTER_PAINTED_EVENT, {
+    detail: { container, pageCount },
+    bubbles: true,
+    cancelable: false,
+  });
+  container.dispatchEvent(event);
 }
 
 /**

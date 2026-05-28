@@ -1012,6 +1012,10 @@ export function DocxEditor({
     footerContent,
     firstPageHeaderContent,
     firstPageFooterContent,
+    activeHeaderRId,
+    activeFooterRId,
+    activeFirstHeaderRId,
+    activeFirstFooterRId,
     effectiveSectionProperties,
     handleHeaderFooterDoubleClick,
     handleHeaderFooterSave,
@@ -3196,6 +3200,10 @@ export function DocxEditor({
                       footerContent={footerContent}
                       firstPageHeaderContent={firstPageHeaderContent}
                       firstPageFooterContent={firstPageFooterContent}
+                      headerContentRId={activeHeaderRId}
+                      footerContentRId={activeFooterRId}
+                      firstPageHeaderContentRId={activeFirstHeaderRId}
+                      firstPageFooterContentRId={activeFirstFooterRId}
                       {...(history.state.package.styles
                         ? { styles: history.state.package.styles }
                         : {})}

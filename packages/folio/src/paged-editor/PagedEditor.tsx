@@ -31,6 +31,8 @@ import type { EditorState, Transaction, Plugin } from "prosemirror-state";
 import type { CellSelection } from "prosemirror-tables";
 import type { EditorView } from "prosemirror-view";
 
+import { HiddenHeaderFooterPMs } from "../components/HiddenHeaderFooterPMs";
+import type { HiddenHeaderFooterPMsRef } from "../components/HiddenHeaderFooterPMs";
 import { getFootnoteText } from "../core/docx/footnoteParser";
 import { clickToPosition } from "../core/layout-bridge/clickToPosition";
 import { clickToPositionDom } from "../core/layout-bridge/clickToPositionDom";
@@ -44,8 +46,14 @@ import {
   collectFootnoteRefs,
   buildFootnoteContentMap,
 } from "../core/layout-bridge/footnoteLayout";
-import { convertHeaderFooterToContent } from "../core/layout-bridge/headerFooterLayout";
-import type { HeaderFooterMetrics } from "../core/layout-bridge/headerFooterLayout";
+import {
+  convertHeaderFooterPmDocToContent,
+  convertHeaderFooterToContent,
+} from "../core/layout-bridge/headerFooterLayout";
+import type {
+  ConvertHeaderFooterOptions,
+  HeaderFooterMetrics,
+} from "../core/layout-bridge/headerFooterLayout";
 import {
   hitTestFragment,
   hitTestTableCell,
@@ -96,6 +104,7 @@ import {
   renderPages,
 } from "../core/layout-painter/renderPage";
 import type {
+  HeaderFooterContent,
   RenderPageOptions,
   FootnoteRenderItem,
 } from "../core/layout-painter/renderPage";
@@ -196,6 +205,15 @@ export type PagedEditorProps = {
   firstPageHeaderContent?: HeaderFooter | null;
   /** Footer content for first page only (when titlePg is set). */
   firstPageFooterContent?: HeaderFooter | null;
+  /**
+   * Relationship ids for the displayed HF slots — used by the painter to
+   * emit `data-rid` on `.layout-page-header` / `.layout-page-footer` and
+   * by the layout pipeline to look up persistent hidden HF EditorViews.
+   */
+  headerContentRId?: string | null;
+  footerContentRId?: string | null;
+  firstPageHeaderContentRId?: string | null;
+  firstPageFooterContentRId?: string | null;
   /** Whether the editor is read-only. */
   readOnly?: boolean;
   /** Gap between pages in pixels. */
@@ -569,6 +587,37 @@ const loadSelectionGeometry = (): Promise<SelectionGeometryModule> => {
 
   return selectionGeometryPromise;
 };
+
+// Source HeaderFooterContent for the painter from either a persistent hidden
+// HF EditorView (preferred — keeps the painter in lockstep with live PM edits)
+// or the HeaderFooter document blocks (fallback before the view mounts).
+// `rId` is stamped on the result so the painter emits `data-rid` and the
+// pointer pipeline can route clicks back to the matching EditorView.
+function renderHfFromContentOrPm(
+  hf: HeaderFooter | null | undefined,
+  rId: string | null | undefined,
+  hfPMs: HiddenHeaderFooterPMsRef | null,
+  contentWidth: number,
+  metrics: HeaderFooterMetrics,
+  options: ConvertHeaderFooterOptions,
+): HeaderFooterContent | undefined {
+  if (!hf) {
+    return undefined;
+  }
+  const optsWithRId: ConvertHeaderFooterOptions = rId
+    ? { ...options, rId }
+    : options;
+  const view = rId ? hfPMs?.getView(rId) : null;
+  if (view) {
+    return convertHeaderFooterPmDocToContent(
+      view.state.doc,
+      contentWidth,
+      metrics,
+      optsWithRId,
+    );
+  }
+  return convertHeaderFooterToContent(hf, contentWidth, metrics, optsWithRId);
+}
 
 type LayoutInputSignatureOptions = {
   columns: ColumnLayout | undefined;
@@ -2078,6 +2127,10 @@ export function PagedEditor(
     footerContent,
     firstPageHeaderContent,
     firstPageFooterContent,
+    headerContentRId,
+    footerContentRId,
+    firstPageHeaderContentRId,
+    firstPageFooterContentRId,
     readOnly = false,
     pageGap = DEFAULT_PAGE_GAP,
     zoom = 1,
@@ -2119,6 +2172,7 @@ export function PagedEditor(
   const containerRef = useRef<HTMLDivElement>(null);
   const pagesContainerRef = useRef<HTMLDivElement>(null);
   const hiddenPMRef = useRef<HiddenProseMirrorRef>(null);
+  const hfPMsRef = useRef<HiddenHeaderFooterPMsRef>(null);
   const painterRef = useRef<LayoutPainter | null>(null);
 
   // Visual line navigation (ArrowUp/ArrowDown with sticky X)
@@ -2570,30 +2624,38 @@ export function PagedEditor(
             ? { defaultTabStopTwips: defaultTabStop }
             : {}),
         };
-        const headerContentForRender = convertHeaderFooterToContent(
+        const headerContentForRender = renderHfFromContentOrPm(
           headerContent,
+          headerContentRId,
+          hfPMsRef.current,
           contentWidth,
           hfMetricsHeader,
           hfOptions,
         );
-        const footerContentForRender = convertHeaderFooterToContent(
+        const footerContentForRender = renderHfFromContentOrPm(
           footerContent,
+          footerContentRId,
+          hfPMsRef.current,
           contentWidth,
           hfMetricsFooter,
           hfOptions,
         );
         const hasTitlePg = sectionProperties?.titlePg === true;
         const firstPageHeaderForRender = hasTitlePg
-          ? convertHeaderFooterToContent(
+          ? renderHfFromContentOrPm(
               firstPageHeaderContent,
+              firstPageHeaderContentRId,
+              hfPMsRef.current,
               contentWidth,
               hfMetricsHeader,
               hfOptions,
             )
           : undefined;
         const firstPageFooterForRender = hasTitlePg
-          ? convertHeaderFooterToContent(
+          ? renderHfFromContentOrPm(
               firstPageFooterContent,
+              firstPageFooterContentRId,
+              hfPMsRef.current,
               contentWidth,
               hfMetricsFooter,
               hfOptions,
@@ -5964,6 +6026,18 @@ export function PagedEditor(
       onKeyDown={handleKeyDown}
       onMouseDown={handleContainerMouseDown}
     >
+      {/* Persistent off-screen ProseMirror per HF rId — the painter reads
+          from these views when a slot's view exists (see HF unification port,
+          eigenpal#611). Currently shadow instances: the inline overlay still
+          owns user input. Switching the layout pipeline to source from these
+          views is the next phase. */}
+      <HiddenHeaderFooterPMs
+        ref={hfPMsRef}
+        document={document}
+        {...(styles !== undefined ? { styles } : {})}
+        {...(_theme !== undefined ? { theme: _theme } : {})}
+      />
+
       {/* Hidden ProseMirror for keyboard input */}
       <HiddenProseMirror
         ref={hiddenPMRef}

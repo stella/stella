@@ -17,6 +17,8 @@
  * inherited spacing). Measurement uses the normalized copy.
  */
 
+import type { Node as PMNode } from "prosemirror-model";
+
 import type {
   FlowBlock,
   FloatingTablePosition,
@@ -545,6 +547,13 @@ export type ConvertHeaderFooterOptions = {
   measureBlocks: MeasureBlocksFn;
   /** Document-wide `w:defaultTabStop` in twips — forwarded to toFlowBlocks. */
   defaultTabStopTwips?: number;
+  /**
+   * Relationship id of the source HF part. Stamped onto the returned
+   * `HeaderFooterContent.rId` so the painter can emit `data-rid` on the
+   * `.layout-page-header` / `.layout-page-footer` DOM node for the pointer
+   * pipeline (`HiddenHeaderFooterPMs` + `findHfPmSpans`).
+   */
+  rId?: string;
 };
 
 /**
@@ -590,6 +599,57 @@ export function convertHeaderFooterToContent(
     flowOptions.defaultTabStopTwips = options.defaultTabStopTwips;
   }
   const blocks = toFlowBlocks(pmDoc, flowOptions);
+  return finalizeHeaderFooterContent(blocks, contentWidth, metrics, options);
+}
+
+// =============================================================================
+// 5. PM doc source (persistent hidden HF EditorView path)
+// =============================================================================
+
+/**
+ * Same as {@link convertHeaderFooterToContent}, but sourced from a live
+ * ProseMirror document instead of `HeaderFooter.content`. Used by the
+ * persistent hidden HF EditorView pipeline so the painter renders the PM's
+ * current state (Word-style WYSIWYG: every keystroke repaints).
+ *
+ * The pmDoc is expected to be a body-shaped PM doc (the result of
+ * `headerFooterToProseDoc` at mount, plus any user edits applied since).
+ * Theme + styles do NOT need to be threaded again — they only matter for the
+ * initial parse path; subsequent transformations are PM-internal.
+ */
+export function convertHeaderFooterPmDocToContent(
+  pmDoc: PMNode | null | undefined,
+  contentWidth: number,
+  metrics: HeaderFooterMetrics,
+  options: Omit<ConvertHeaderFooterOptions, "styles">,
+): HeaderFooterContent | undefined {
+  if (!pmDoc || pmDoc.content.size === 0) {
+    return undefined;
+  }
+  const flowOptions: {
+    theme?: Theme | null;
+    defaultTabStopTwips?: number;
+  } = {};
+  if (options.theme !== undefined) {
+    flowOptions.theme = options.theme;
+  }
+  if (options.defaultTabStopTwips !== undefined) {
+    flowOptions.defaultTabStopTwips = options.defaultTabStopTwips;
+  }
+  const blocks = toFlowBlocks(pmDoc, flowOptions);
+  return finalizeHeaderFooterContent(blocks, contentWidth, metrics, options);
+}
+
+// =============================================================================
+// 6. Shared tail — blocks → HeaderFooterContent
+// =============================================================================
+
+function finalizeHeaderFooterContent(
+  blocks: FlowBlock[],
+  contentWidth: number,
+  metrics: HeaderFooterMetrics,
+  options: { measureBlocks: MeasureBlocksFn; rId?: string },
+): HeaderFooterContent | undefined {
   if (blocks.length === 0) {
     return undefined;
   }
@@ -606,8 +666,6 @@ export function convertHeaderFooterToContent(
     if (m.kind === "paragraph") {
       totalHeight += m.totalHeight;
     } else if (m.kind === "table") {
-      // Floating tables (`<w:tblpPr>`) anchor at (tblpX, tblpY) and don't
-      // contribute to the in-flow height that drives body push-down.
       if (!(b.kind === "table" && b.floating)) {
         totalHeight += m.totalHeight;
       }
@@ -639,5 +697,6 @@ export function convertHeaderFooterToContent(
     visualBottom,
     marginPushTop,
     marginPushBottom,
+    ...(options.rId ? { rId: options.rId } : {}),
   };
 }

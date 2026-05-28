@@ -6,11 +6,13 @@ import type {
   ParagraphBlock,
   TableBlock,
 } from "../layout-engine/types";
+import { headerFooterToProseDoc } from "../prosemirror/conversion/toProseDoc";
 import type { HeaderFooter } from "../types/document";
 import type { HeaderFooterMetrics } from "./headerFooterLayout";
 import {
   calculateHeaderFooterMarginPushBounds,
   calculateHeaderFooterVisualBounds,
+  convertHeaderFooterPmDocToContent,
   convertHeaderFooterToContent,
   normalizeHeaderFooterMeasureBlocks,
 } from "./headerFooterLayout";
@@ -333,5 +335,136 @@ describe("header/footer layout conversion", () => {
     expect(
       (blocks[4] as ParagraphBlock).attrs?.suppressEmptyParagraphHeight,
     ).toBe(true);
+  });
+});
+
+describe("convertHeaderFooterPmDocToContent", () => {
+  // PM-doc source path used by the persistent hidden HF EditorView. Every
+  // keystroke in the HF PM repaints via this function; the round-trip below
+  // proves that "rebuild HeaderFooterContent from PM doc" produces the same
+  // visible layout as "rebuild HeaderFooterContent from HeaderFooter.content",
+  // so the switch from inline-overlay edit to PM-driven repaint is invisible.
+  const pmMetrics: HeaderFooterMetrics = {
+    section: "header",
+    pageSize: { w: 600, h: 800 },
+    margins: {
+      top: 100,
+      right: 72,
+      bottom: 100,
+      left: 72,
+      header: 48,
+      footer: 48,
+    },
+  };
+
+  test("returns undefined for a null pm doc", () => {
+    expect(
+      convertHeaderFooterPmDocToContent(null, 456, pmMetrics, {
+        measureBlocks,
+      }),
+    ).toBeUndefined();
+  });
+
+  test("matches convertHeaderFooterToContent for paragraph + table fixture", () => {
+    const hf: HeaderFooter = {
+      type: "header",
+      hdrFtrType: "default",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "run", content: [{ type: "text", text: "Header line" }] },
+          ],
+        },
+        {
+          type: "table",
+          rows: [
+            {
+              type: "tableRow",
+              cells: [
+                {
+                  type: "tableCell",
+                  content: [
+                    {
+                      type: "paragraph",
+                      content: [
+                        {
+                          type: "run",
+                          content: [{ type: "text", text: "cell" }],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        { type: "paragraph", content: [] },
+      ],
+    };
+
+    const fromContent = convertHeaderFooterToContent(hf, 456, pmMetrics, {
+      measureBlocks,
+    });
+    const pmDoc = headerFooterToProseDoc(hf.content);
+    const fromPmDoc = convertHeaderFooterPmDocToContent(pmDoc, 456, pmMetrics, {
+      measureBlocks,
+    });
+
+    expect(fromPmDoc).toBeDefined();
+    expect(fromContent).toBeDefined();
+    expect(fromPmDoc?.height).toBe(fromContent!.height);
+    expect(fromPmDoc?.visualTop).toBe(fromContent!.visualTop);
+    expect(fromPmDoc?.visualBottom).toBe(fromContent!.visualBottom);
+    expect(fromPmDoc?.blocks.length).toBe(fromContent!.blocks.length);
+    expect(fromPmDoc?.measures.length).toBe(fromContent!.measures.length);
+    expect(fromPmDoc?.blocks.map((b) => b.kind)).toEqual(
+      fromContent!.blocks.map((b) => b.kind),
+    );
+  });
+
+  test("applies PR #457 trailing-empty-after-table normalization on the PM-doc path", () => {
+    const hf: HeaderFooter = {
+      type: "header",
+      hdrFtrType: "default",
+      content: [
+        {
+          type: "table",
+          rows: [
+            {
+              type: "tableRow",
+              cells: [
+                {
+                  type: "tableCell",
+                  content: [
+                    {
+                      type: "paragraph",
+                      content: [
+                        {
+                          type: "run",
+                          content: [{ type: "text", text: "in-cell" }],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        { type: "paragraph", content: [] },
+      ],
+    };
+    const pmDoc = headerFooterToProseDoc(hf.content);
+    const out = convertHeaderFooterPmDocToContent(pmDoc, 456, pmMetrics, {
+      measureBlocks,
+    });
+    expect(out).toBeDefined();
+    const trailing = out!.measures.at(-1);
+    expect(trailing?.kind).toBe("paragraph");
+    if (trailing?.kind === "paragraph") {
+      expect(trailing.totalHeight).toBe(0);
+    }
   });
 });

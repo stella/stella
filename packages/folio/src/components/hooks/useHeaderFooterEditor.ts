@@ -42,6 +42,17 @@ type UseHeaderFooterEditorReturn = {
   firstPageFooterContent: HeaderFooter | null;
   hasTitlePg: boolean;
 
+  /**
+   * Relationship ids for the *displayed* H/F slots — same values used to
+   * route save/remove (Codex PR #258). The persistent hidden HF PM model
+   * looks views up by these rIds; the painter emits them as `data-rid` so
+   * the pointer pipeline can route clicks back to the matching view.
+   */
+  activeHeaderRId: string | null;
+  activeFooterRId: string | null;
+  activeFirstHeaderRId: string | null;
+  activeFirstFooterRId: string | null;
+
   /** Section properties with titlePg merged from inline sections */
   effectiveSectionProperties: SectionProperties | undefined;
 
@@ -579,6 +590,10 @@ export const useHeaderFooterEditor = ({
     firstPageHeaderContent,
     firstPageFooterContent,
     hasTitlePg,
+    activeHeaderRId,
+    activeFooterRId,
+    activeFirstHeaderRId,
+    activeFirstFooterRId,
     effectiveSectionProperties,
     handleHeaderFooterDoubleClick,
     handleHeaderFooterSave,
