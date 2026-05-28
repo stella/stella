@@ -85,6 +85,7 @@ export const createFolioAIEditSnapshot = (doc: PMNode): FolioAIEditSnapshot => {
     usedBlockIds.add(id);
     const kind = getBlockKind(node);
     const displayLabel = getDisplayLabel(node);
+    const styleId = getStyleId(node);
     const previewRuns = getPreviewRuns(node);
 
     draftBlocks.push({
@@ -93,6 +94,7 @@ export const createFolioAIEditSnapshot = (doc: PMNode): FolioAIEditSnapshot => {
         kind,
         text,
         ...(displayLabel !== undefined && { displayLabel }),
+        ...(styleId !== undefined && { styleId }),
         ...(previewRuns !== undefined && { previewRuns }),
       },
       anchor: {
@@ -163,6 +165,13 @@ const getDisplayLabel = (node: PMNode): string | undefined => {
   }
 
   return undefined;
+};
+
+const getStyleId = (node: PMNode): string | undefined => {
+  const styleId: unknown = node.attrs["styleId"];
+  return typeof styleId === "string" && styleId.length > 0
+    ? styleId
+    : undefined;
 };
 
 type PreviewRunStyle = Omit<FolioAIBlockPreviewRun, "text">;

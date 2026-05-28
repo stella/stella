@@ -10,6 +10,7 @@ type CreateDocumentOutput =
       success: true;
       fileName: string;
       entityId: string;
+      fieldId: string;
       workspaceId: string;
       entityRef: string;
       matterRef: string;
@@ -103,6 +104,7 @@ const normalizeCreateDocumentOutput = (
     success: true,
     fileName,
     entityId: getStringProperty(output, "entityId") ?? LEGACY_MISSING_ROUTE_ID,
+    fieldId: getStringProperty(output, "fieldId") ?? LEGACY_MISSING_ROUTE_ID,
     workspaceId:
       getStringProperty(output, "workspaceId") ?? LEGACY_MISSING_ROUTE_ID,
     entityRef,

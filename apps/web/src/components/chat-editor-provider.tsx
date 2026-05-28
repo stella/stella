@@ -10,7 +10,11 @@ import {
 } from "react";
 import type React from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import HardBreak from "@tiptap/extension-hard-break";
@@ -25,6 +29,7 @@ import { panic, Result } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import { buildChatSlashItems } from "@/components/chat-editor-slash-items";
 import {
   ChatMention,
   createChatSuggestion,
@@ -44,6 +49,7 @@ import {
 import {
   createPromptSlashSuggestion,
   PromptSlash,
+  type SlashItem,
 } from "@/components/chat/prompt-slash-extension";
 import { createPromptEditorDocument } from "@/components/prompt-editor";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -55,7 +61,10 @@ import {
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import type { WorkspaceEntity } from "@/lib/types";
-import { shortcutsOptions } from "@/routes/_protected.knowledge/-queries";
+import {
+  shortcutsOptions,
+  skillsOptions,
+} from "@/routes/_protected.knowledge/-queries";
 import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 
@@ -695,19 +704,27 @@ export const useChatEditor = ({
   const { data: shortcuts = [] } = useQuery(
     shortcutsOptions(activeOrganizationId),
   );
-  const allPrompts = useMemo(
-    () =>
-      shortcuts.map((s) => ({
-        id: s.id,
-        scope: s.scope,
-        name: s.name,
-        command: s.command,
-        body: s.prompt,
-      })),
-    [shortcuts],
+  const {
+    data: skillPages,
+    fetchNextPage: fetchNextSkillPage,
+    hasNextPage: hasNextSkillPage,
+    isFetchingNextPage: isFetchingNextSkillPage,
+  } = useInfiniteQuery(skillsOptions(activeOrganizationId));
+
+  useEffect(() => {
+    if (!hasNextSkillPage || isFetchingNextSkillPage) {
+      return;
+    }
+    void fetchNextSkillPage();
+  }, [fetchNextSkillPage, hasNextSkillPage, isFetchingNextSkillPage]);
+
+  const skillPageRows = skillPages?.pages;
+  const slashItems = useMemo<SlashItem[]>(
+    () => buildChatSlashItems({ shortcuts, skillPages: skillPageRows }),
+    [shortcuts, skillPageRows],
   );
-  const promptsRef = useRef(allPrompts);
-  promptsRef.current = allPrompts;
+  const slashItemsRef = useRef(slashItems);
+  slashItemsRef.current = slashItems;
 
   const handleMessageHistoryKeyDown = useCallback(
     (state: EditorState, event: KeyboardEvent) => {
@@ -817,7 +834,7 @@ export const useChatEditor = ({
         deleteTriggerWithBackspace: true,
       }),
       PromptSlash.configure({
-        suggestion: createPromptSlashSuggestion(() => promptsRef.current),
+        suggestion: createPromptSlashSuggestion(() => slashItemsRef.current),
       }),
       PastedText,
     ],

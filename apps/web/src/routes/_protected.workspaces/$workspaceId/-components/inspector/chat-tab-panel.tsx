@@ -203,6 +203,7 @@ export const ChatTabPanel = ({
     handleAllowInConversation,
     handleDeny,
     handleAskUserSubmit,
+    handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
     handleOpenCreatedDocument,
@@ -336,6 +337,7 @@ export const ChatTabPanel = ({
                   error={error}
                   isGenerating={isGenerating}
                   messages={messages}
+                  onAskUserEditAndRerun={handleAskUserEditAndRerun}
                   onAskUserSubmit={handleAskUserSubmit}
                   onCreateDocumentResolve={handleCreateDocumentResolve}
                   onOpenCreatedDocument={handleOpenCreatedDocument}

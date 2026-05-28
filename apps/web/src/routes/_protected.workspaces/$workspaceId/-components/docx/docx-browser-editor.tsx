@@ -68,6 +68,7 @@ import { useIsAnonymizationActive } from "@/routes/_protected.workspaces/$worksp
 import { useAnonymizationMatchesStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-matches-store";
 import { useAnonymizationSelectionStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-selection-store";
 import { useDocumentTextSelectionStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/document-text-selection-store";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { anonymizationAllowlistOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-terms";
 import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.css";
@@ -518,6 +519,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     s.source === "sidebar" && s.fieldId === fieldId ? s.seq : 0,
   );
   const didOpenRef = useRef(false);
+  const pendingEditRequestRef = useRef(false);
   const errorToastShownRef = useRef(false);
   const lastStyleLabelRef = useRef("Normal");
   const lastStyleLabelStyleRef = useRef<CSSProperties | undefined>(undefined);
@@ -673,6 +675,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     lastEditingBufferRef.current = null;
     hasSessionChangesRef.current = false;
     preservedLoadedBufferRef.current = null;
+    pendingEditRequestRef.current = false;
     setCompatibilityState({ targetKey: editTargetKey, value: null });
   }, [editTargetKey, fieldId]);
 
@@ -682,12 +685,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     });
     onClose();
   }, [onClose, t]);
-
-  const reportPendingCompatibility = useCallback(() => {
-    stellaToast.info(t("folio.checkingDocxEditTitle"), {
-      description: t("folio.checkingDocxEditDescription"),
-    });
-  }, [t]);
 
   const requestEditMode = useCallback(async () => {
     if (isCollaborativeEditing) {
@@ -702,7 +699,13 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       canSafelyEdit: compatibility?.canSafelyEdit,
     });
     if (blockReason === "pendingCompatibility") {
-      reportPendingCompatibility();
+      // Don't bother the user with a "still verifying…" toast just
+      // because they clicked the doc while the safety probe is in
+      // flight. Queue the request via the inspector's pending-edit
+      // slot; `use-docx-tab-edit-session` re-runs once
+      // `canSafelyEdit` resolves and silently enters edit mode then.
+      pendingEditRequestRef.current = true;
+      useInspectorStore.getState().requestDocxEdit(fieldId);
       return false;
     }
 
@@ -731,14 +734,30 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   }, [
     compatibility?.canSafelyEdit,
     collaborationEnabled,
+    fieldId,
     isCollaborativeEditing,
     open,
     previewFile,
     requestCollaboration,
-    reportPendingCompatibility,
     reportUnsupportedEditAttempt,
     state.status,
   ]);
+
+  useEffect(() => {
+    if (!pendingEditRequestRef.current) {
+      return;
+    }
+    if (
+      compatibility === null ||
+      previewFile === null ||
+      state.status !== "idle"
+    ) {
+      return;
+    }
+
+    pendingEditRequestRef.current = false;
+    void requestEditMode();
+  }, [compatibility, previewFile, requestEditMode, state.status]);
 
   // Auto-open when this component is used as a direct editor, or when the
   // preview is explicitly unlocked from the shell toolbar.
@@ -1129,7 +1148,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       canSafelyEdit: compatibility?.canSafelyEdit,
     });
     if (blockReason === "pendingCompatibility") {
-      reportPendingCompatibility();
+      // Queue silently — see requestEditMode for rationale.
+      pendingEditRequestRef.current = true;
+      useInspectorStore.getState().requestDocxEdit(fieldId);
       return;
     }
 
@@ -1154,11 +1175,11 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     canUnlock,
     compatibility?.canSafelyEdit,
     collaborationEnabled,
+    fieldId,
     onBlockedUnlock,
     open,
     previewFile,
     requestCollaboration,
-    reportPendingCompatibility,
     reportUnsupportedEditAttempt,
     state.status,
   ]);
@@ -1338,7 +1359,14 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         }
         className="h-full w-full"
         description={
-          state.detail ?? t(editSessionErrorDescriptionKey(state.reason))
+          // For known reasons, prefer the localized message — the
+          // backend `state.detail` is wire jargon ("Desktop editing
+          // moved to another device.") even for in-browser sessions
+          // and reads as alarming. Fall back to detail only when the
+          // reason is "unknown".
+          state.reason === "unknown" && state.detail !== undefined
+            ? state.detail
+            : t(editSessionErrorDescriptionKey(state.reason))
         }
         status="error"
         title={t("folio.editSaveFailedTitle")}

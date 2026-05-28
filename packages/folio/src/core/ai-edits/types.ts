@@ -16,6 +16,7 @@ export type FolioAIBlock = {
   kind: FolioAIBlockKind;
   text: string;
   displayLabel?: string;
+  styleId?: string;
   previewRuns?: FolioAIBlockPreviewRun[];
 };
 
@@ -51,6 +52,18 @@ export type FolioAIEditReviewMeta = {
   area?: string;
 };
 
+/**
+ * A party in an `insertSignatureTable` op. Mirrors the
+ * `signatureTable` helper in `docx-core/legal-source/compile.ts`:
+ * name is rendered bold; `signatory` and `title` are optional
+ * lines under the signature rule (title in italics).
+ */
+export type FolioAISignatureParty = {
+  name: string;
+  signatory?: string;
+  title?: string;
+};
+
 export type FolioAIEditOperation = FolioAIEditReviewMeta &
   (
     | {
@@ -67,6 +80,19 @@ export type FolioAIEditOperation = FolioAIEditReviewMeta &
         blockId: string;
         text: string;
         inheritFormatting?: boolean;
+        /**
+         * When true, mark the inserted paragraph with
+         * `pageBreakBefore` so the layout engine starts it on a
+         * new page. Use for explicit page-break inserts.
+         */
+        pageBreakBefore?: boolean;
+        /**
+         * Override the paragraph `styleId` attr of the inserted
+         * block (e.g. `ClauseHeading1`). When omitted the inserted
+         * block inherits the source block's styleId via
+         * `inheritFormatting`.
+         */
+        styleId?: string;
         comment?: FolioAIComment;
       }
     | {
@@ -75,6 +101,7 @@ export type FolioAIEditOperation = FolioAIEditReviewMeta &
         blockId: string;
         text: string;
         preserveFormatting?: boolean;
+        styleId?: string;
         comment?: FolioAIComment;
       }
     | {
@@ -89,6 +116,19 @@ export type FolioAIEditOperation = FolioAIEditReviewMeta &
         blockId: string;
         quote?: string;
         comment: FolioAIComment;
+      }
+    | {
+        id: string;
+        type: "insertSignatureTable";
+        blockId: string;
+        /**
+         * Position the table after the anchor block (default) or
+         * before it. Always inserts as a sibling at the document
+         * level — no nested-table support.
+         */
+        position?: "after" | "before";
+        parties: FolioAISignatureParty[];
+        comment?: FolioAIComment;
       }
   );
 

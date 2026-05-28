@@ -1,8 +1,13 @@
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 
-const DOCX_PAGE_WIDTH = 816;
-const DOCX_FIT_PADDING = 16;
+// Target the typical Word text area (page minus ~1-inch margins on
+// each side at 96 DPI). Fitting to this rather than the full 816px
+// page keeps the body text full-width in the inspector instead of
+// leaving the page margins as dead whitespace. The page edges then
+// overflow horizontally and the user can scroll to inspect margins.
+const DOCX_TEXT_AREA_WIDTH = 624;
+const DOCX_FIT_PADDING = 4;
 const DOCX_DEFAULT_ZOOM = 1;
 const DOCX_MIN_ZOOM = 0.25;
 const DOCX_MAX_ZOOM = 2;
@@ -22,9 +27,19 @@ export const useDocxFitZoom = (
   maxAutoZoom: number = DOCX_MAX_ZOOM,
 ) => {
   const [fitZoom, setFitZoom] = useState(DOCX_DEFAULT_ZOOM);
+  const trackedRef = useRef<HTMLElement | null>(null);
 
   useLayoutEffect(() => {
+    // The container ref starts null when DocxBrowserEditor renders a
+    // loading fallback; the real `<div ref={containerRef}>` only
+    // appears after the doc buffer loads. A one-shot effect would
+    // bail forever in that case. Re-check the ref on every commit so
+    // we attach the observer as soon as the container appears.
     const container = containerRef.current;
+    if (container === trackedRef.current) {
+      return undefined;
+    }
+    trackedRef.current = container;
     if (!container) {
       return undefined;
     }
@@ -36,7 +51,7 @@ export const useDocxFitZoom = (
       }
 
       const availableWidth = Math.max(1, clientWidth - DOCX_FIT_PADDING * 2);
-      const nextFitZoom = availableWidth / DOCX_PAGE_WIDTH;
+      const nextFitZoom = availableWidth / DOCX_TEXT_AREA_WIDTH;
 
       const cappedFitZoom = Math.min(maxAutoZoom, nextFitZoom);
 
@@ -44,13 +59,18 @@ export const useDocxFitZoom = (
     };
 
     updateZoom();
+    // Belt-and-braces retry on the next frame for surfaces where the
+    // parent finishes sizing after our first measure.
+    const rafId = requestAnimationFrame(updateZoom);
     const observer = new ResizeObserver(updateZoom);
     observer.observe(container);
 
     return () => {
+      trackedRef.current = null;
+      cancelAnimationFrame(rafId);
       observer.disconnect();
     };
-  }, [containerRef, maxAutoZoom]);
+  });
 
   return clampDocxZoom(fitZoom + scaleOffset);
 };

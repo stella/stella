@@ -2,7 +2,12 @@ import { useEffect, useState } from "react";
 
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
-import { ClipboardPasteIcon, SparklesIcon, XIcon } from "lucide-react";
+import {
+  ClipboardPasteIcon,
+  SparklesIcon,
+  WandSparklesIcon,
+  XIcon,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -16,6 +21,16 @@ import { cn } from "@stll/ui/lib/utils";
 import type { PastedTextSource } from "@/components/chat-pasted-text-extension";
 
 const CHIP_MAX_LABEL_WIDTH_CLASS = "max-w-48";
+
+const pickChipIcon = (source: PastedTextSource) => {
+  if (source === "skill") {
+    return WandSparklesIcon;
+  }
+  if (source === "prompt") {
+    return SparklesIcon;
+  }
+  return ClipboardPasteIcon;
+};
 
 export const ChatPastedTextNode = (props: NodeViewProps) => {
   const t = useTranslations();
@@ -42,14 +57,14 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
   };
 
   const fallbackLabel =
-    attrs.source === "prompt"
+    attrs.source === "prompt" || attrs.source === "skill"
       ? t("chat.pastedText.fromPromptFallback")
       : t("chat.pastedText.fromClipboard", {
           count: attrs.text.length,
         });
   const chipLabel = attrs.label.length > 0 ? attrs.label : fallbackLabel;
 
-  const Icon = attrs.source === "prompt" ? SparklesIcon : ClipboardPasteIcon;
+  const Icon = pickChipIcon(attrs.source);
 
   return (
     <NodeViewWrapper className="inline" data-source={attrs.source}>

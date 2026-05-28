@@ -480,7 +480,7 @@ export function FormattingBar(props: FormattingBarProps) {
       onMouseUp={inline ? undefined : handleBarMouseUp}
     >
       {/* Formatting controls */}
-      <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto overflow-y-hidden overscroll-x-contain">
+      <div className="flex min-w-0 flex-1 [scrollbar-width:none] items-center gap-0.5 overflow-x-auto overflow-y-hidden overscroll-x-contain [&::-webkit-scrollbar]:hidden">
         {/* Undo / Redo */}
         <ToolbarGroup className="gap-0" label={t("historyGroup")}>
           <ToolbarButton

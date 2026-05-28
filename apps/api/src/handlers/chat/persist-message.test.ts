@@ -12,6 +12,7 @@ const workspaceId = toSafeId<"workspace">(
   "0dc54d0c-10d7-501d-897e-e801dbd0998c",
 );
 const entityId = toSafeId<"entity">("c09ec856-d945-5ecc-82e3-bb5382165f34");
+const fieldId = toSafeId<"field">("12549e0d-f3dd-589a-8012-d4f27b8cd641");
 const propertyId = toSafeId<"property">("750890f7-42ce-59ab-9627-9171e5dc6346");
 
 const stored = (message: ChatMessage) => ({
@@ -58,6 +59,7 @@ const createDocumentFinishedMessage = {
         success: true,
         fileName: "Draft agreement.docx",
         entityId,
+        fieldId,
         workspaceId,
         entityRef: entityId,
         matterRef: workspaceId,

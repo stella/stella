@@ -111,7 +111,7 @@ export function Toolbar({
     <div
       ref={toolbarRef}
       className={cn(
-        "flex h-10 items-center justify-center overflow-x-auto border-b border-[var(--doc-border)] bg-[var(--doc-page)] px-1",
+        "flex h-10 [scrollbar-width:none] items-center justify-center overflow-x-auto border-b border-[var(--doc-border)] bg-[var(--doc-page)] px-1 [&::-webkit-scrollbar]:hidden",
         className,
       )}
       style={style}

@@ -194,7 +194,7 @@ function OTP() {
             disabled={verifyOtp.isPending || resendOtp.isPending}
             loading={resendOtp.isPending}
             onClick={() => resendOtp.mutate()}
-            variant="ghost"
+            variant="link"
           >
             {t("auth.resendCode", { email })}
           </Button>
@@ -208,7 +208,7 @@ function OTP() {
                 replace: true,
               });
             }}
-            variant="ghost"
+            variant="link"
           >
             {t("auth.useDifferentEmail")}
           </Button>

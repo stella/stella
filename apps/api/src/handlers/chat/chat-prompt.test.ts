@@ -82,7 +82,7 @@ describe("chat prompt builders", () => {
     }
   });
 
-  test("does not include UI locale in the prompt", () => {
+  test("renders UI locale as a BCP-47 cue so the model anchors language to it", () => {
     const prompt = buildUserContextBlock({
       locale: "cs",
       timezone: "Europe/Prague",
@@ -90,9 +90,8 @@ describe("chat prompt builders", () => {
     });
 
     expect(prompt).toContain("User registered as: Jan Kubica");
+    expect(prompt).toContain("User UI language (BCP-47): cs");
     expect(prompt).toContain("Current date/time:");
-    expect(prompt).not.toContain("UX language:");
-    expect(prompt).not.toContain("cs");
   });
 
   test("keeps the cache-stable prefix independent from volatile user context", () => {
@@ -226,6 +225,7 @@ describe("chat prompt builders", () => {
               displayLabel: "7.1",
               id: "b-1",
               kind: "paragraph",
+              styleId: "ClauseHeading1",
               text: "David Cuketa r.č.: DOPLNIT nar. 32.5.1990 bytem: xxx",
             },
           ],
@@ -246,6 +246,7 @@ describe("chat prompt builders", () => {
     // since the prompt was scrubbed of locale-specific examples.
     expect(prompt).toContain("confirms an earlier proposal");
     expect(prompt).toContain('"blockId":"b-1"');
+    expect(prompt).toContain('"styleId":"ClauseHeading1"');
     expect(prompt).toContain("David Cuketa");
     expect(prompt).toContain(
       "only ids that appear in `applied` represent actual document changes",

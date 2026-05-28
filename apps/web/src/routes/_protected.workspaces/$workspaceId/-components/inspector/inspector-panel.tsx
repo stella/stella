@@ -32,6 +32,7 @@ import {
   MatterOriginLink,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-tab-header";
 import { buildMaximizeTabAction } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/maximize-tab";
+import { SkillResourcePanel } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/skill-resource-panel";
 import { useDocxTabEditSession } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/use-docx-tab-edit-session";
 import { useFileTabRename } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/use-file-tab-rename";
 import { usePdfTabZoom } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/use-pdf-tab-zoom";
@@ -447,6 +448,13 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           onClose={() => handleCloseTab(activeTab.id)}
           tab={activeTab}
           workspaceId={workspaceId}
+        />
+      )}
+
+      {!minimized && activeTab?.type === "skill-resource" && (
+        <SkillResourcePanel
+          onClose={() => handleCloseTab(activeTab.id)}
+          tab={activeTab}
         />
       )}
 

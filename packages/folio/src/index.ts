@@ -57,6 +57,7 @@ export {
   type FolioAIEditSkipReason,
   type FolioAIEditSkippedOperation,
   type FolioAIEditSnapshot,
+  type FolioAISignatureParty,
 } from "./core/ai-edits";
 export {
   resolveSuggestionAnchor,

@@ -123,16 +123,20 @@ export const createSkillTools = ({
           });
         }
 
+        const read = await readSkillResourceContent({
+          organizationId,
+          path,
+          safeDb,
+          skillName,
+          userId,
+        });
         return {
           skillName,
           path,
-          content: await readSkillResourceContent({
-            organizationId,
-            path,
-            safeDb,
-            skillName,
-            userId,
-          }),
+          mimeType: inferSkillResourceMimeType(path),
+          content: read.content,
+          skillId: read.skillId,
+          origin: read.origin,
         };
       },
     }),
@@ -166,6 +170,26 @@ const readSkillResourceContent = async ({
     });
   }
   return resourceResult.value;
+};
+
+const SKILL_RESOURCE_MIME_BY_EXT: Record<string, string> = {
+  md: "text/markdown",
+  markdown: "text/markdown",
+  txt: "text/plain",
+  json: "application/json",
+  yaml: "application/yaml",
+  yml: "application/yaml",
+  pdf: "application/pdf",
+};
+
+const inferSkillResourceMimeType = (path: string): string => {
+  const filename = path.split("/").pop() ?? "";
+  const lastDot = filename.lastIndexOf(".");
+  if (lastDot === -1) {
+    return "text/plain";
+  }
+  const ext = filename.slice(lastDot + 1).toLowerCase();
+  return SKILL_RESOURCE_MIME_BY_EXT[ext] ?? "text/plain";
 };
 
 const assertAvailableSkill = ({

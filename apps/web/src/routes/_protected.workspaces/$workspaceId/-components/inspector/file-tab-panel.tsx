@@ -151,6 +151,7 @@ export const FileTabPanel = ({
   const navigate = useNavigate();
   const openFile = useInspectorStore((s) => s.openFile);
   const setFileFacet = useInspectorStore((s) => s.setFileFacet);
+  const requestDocxEdit = useInspectorStore((s) => s.requestDocxEdit);
 
   if (minimized) {
     return null;
@@ -375,9 +376,11 @@ export const FileTabPanel = ({
       canSafelyEdit: compatibility?.canSafelyEdit,
     });
     if (blockReason === "pendingCompatibility") {
-      stellaToast.info(t("folio.checkingDocxEditTitle"), {
-        description: t("folio.checkingDocxEditDescription"),
-      });
+      // Queue the unlock via the inspector's pending-edit slot;
+      // `use-docx-tab-edit-session` re-runs once canSafelyEdit
+      // resolves and enters edit mode silently. Avoids a
+      // "still verifying…" toast on what reads as a non-action.
+      requestDocxEdit(tab.id);
       return;
     }
 
@@ -646,12 +649,12 @@ export const FileTabPanel = ({
 
   const sidepeekFacet = tab.facet ?? "preview";
 
-  // Hide the facet row while editing — switching facets
-  // unmounts the live editor and would silently drop session
-  // state. The tab header's Save / close buttons are the
-  // only legitimate exits during an edit; once the session
-  // ends the facet bar comes back.
-  const facetBar = isEditingNativeDocx ? null : (
+  // Facet bar stays visible during edit. The viewer (with the
+  // live editor) is kept mounted via CSS hide on facet switches
+  // (see `sidepeekBody` below) so unsaved session state survives a
+  // pop-out to Metadata / Versions / etc. and is restored intact
+  // when the user returns to Preview.
+  const facetBar = (
     <TabFacetBar
       baseFacets={FACETS}
       entityId={tab.entityId}

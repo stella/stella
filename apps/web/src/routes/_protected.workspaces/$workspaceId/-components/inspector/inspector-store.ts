@@ -125,12 +125,47 @@ export type ExternalTab = {
   text?: string | undefined;
 };
 
+export type SkillResourceTabId = `skill-resource:${string}`;
+
+export type SkillResourceTab = {
+  type: "skill-resource";
+  id: SkillResourceTabId;
+  /** Display label — typically the resource filename. */
+  label: string;
+  /** Slug of the skill (matches load-skill's skillName). */
+  skillName: string;
+  /** DB row id when the skill is installed; `null` for built-in
+   *  skills that live on disk and have no row to mutate. Drives
+   *  whether the inspector panel can render the edit affordance. */
+  skillId: string | null;
+  /** Resource source — built-in skills are immutable, the others
+   *  can be edited in place. */
+  origin: "built-in" | "upload" | "url";
+  /** Path inside the skill bundle (e.g. references/edpb-criteria.md). */
+  resourcePath: string;
+  /** MIME type from the read-skill-resource tool output. */
+  mimeType: string;
+  /** Raw text content from the tool output. For binary types
+   *  (e.g. application/pdf), the content is a base64 string when
+   *  the backend later supports it; today it's always text. */
+  content: string;
+};
+
+export const buildSkillResourceTabId = ({
+  skillName,
+  resourcePath,
+}: {
+  skillName: string;
+  resourcePath: string;
+}): SkillResourceTabId => `skill-resource:${skillName}/${resourcePath}`;
+
 export type InspectorTab =
   | FileTab
   | TaskTab
   | ChatTab
   | MatterTab
-  | ExternalTab;
+  | ExternalTab
+  | SkillResourceTab;
 
 type State = {
   tabs: InspectorTab[];
@@ -201,6 +236,21 @@ type Actions = {
     label: string;
     color?: string | null | undefined;
   }) => void;
+  openSkillResourceTab: (
+    tab: Omit<SkillResourceTab, "type" | "id"> & {
+      skillName: string;
+      resourcePath: string;
+    },
+  ) => void;
+  /**
+   * Replace the `content` of an open skill-resource tab. Called
+   * after a successful save so the panel reflects the new text
+   * without refetching from the tool history.
+   */
+  updateSkillResourceTabContent: (
+    tabId: SkillResourceTabId,
+    content: string,
+  ) => void;
   /**
    * Open a chat tab. Without args, creates a new (local-only) chat
    * with a generated id. Pass `id` + optional `threadId` to restore
@@ -595,6 +645,20 @@ const isInspectorTab = (value: unknown): value is InspectorTab => {
     );
   }
 
+  if (type === "skill-resource") {
+    const skillId = value["skillId"];
+    const origin = value["origin"];
+    return (
+      typeof label === "string" &&
+      typeof value["skillName"] === "string" &&
+      (skillId === null || typeof skillId === "string") &&
+      (origin === "built-in" || origin === "upload" || origin === "url") &&
+      typeof value["resourcePath"] === "string" &&
+      typeof value["mimeType"] === "string" &&
+      typeof value["content"] === "string"
+    );
+  }
+
   if (type !== "pdf") {
     return false;
   }
@@ -855,6 +919,56 @@ export const useInspectorStore = create<State & Actions>()(
         state.activeId = id;
         state.activationSeq += 1;
         state.minimized = false;
+      }),
+
+    openSkillResourceTab: ({
+      skillName,
+      skillId,
+      origin,
+      resourcePath,
+      label,
+      mimeType,
+      content,
+    }) =>
+      set((state) => {
+        const id = buildSkillResourceTabId({ skillName, resourcePath });
+        const existing = state.tabs.find((t) => t.id === id);
+        if (!existing) {
+          state.tabs.push({
+            type: "skill-resource",
+            id,
+            label,
+            skillName,
+            skillId,
+            origin,
+            resourcePath,
+            mimeType,
+            content,
+          });
+        } else if (existing.type === "skill-resource") {
+          const sourceChanged =
+            existing.skillId !== skillId || existing.origin !== origin;
+          existing.label = label;
+          existing.skillName = skillName;
+          existing.skillId = skillId;
+          existing.origin = origin;
+          existing.resourcePath = resourcePath;
+          existing.mimeType = mimeType;
+          if (sourceChanged) {
+            existing.content = content;
+          }
+        }
+        state.activeId = id;
+        state.activationSeq += 1;
+        state.minimized = false;
+      }),
+
+    updateSkillResourceTabContent: (tabId, content) =>
+      set((state) => {
+        const tab = state.tabs.find((t) => t.id === tabId);
+        if (tab && tab.type === "skill-resource") {
+          tab.content = content;
+        }
       }),
 
     openChat: (args = {}) =>

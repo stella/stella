@@ -88,6 +88,7 @@ describe("legacy chat tool input compatibility", () => {
           success: true,
           fileName: "Legacy agreement.docx",
           entityId: "",
+          fieldId: "",
           workspaceId: "",
           entityRef: "MAT-001/0001.v1",
           matterRef: "MAT-001",

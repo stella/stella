@@ -29,6 +29,19 @@ type AskUserPart = ToolUIPart<Pick<ChatUITools, "ask-user">>;
 type AskUserCardProps = {
   part: AskUserPart;
   onSubmit: (toolCallId: string, output: AskUserOutput) => void;
+  /**
+   * Optional re-run callback. When provided, an answered card
+   * exposes an "Edit answers" affordance: the user can change
+   * their answers and resubmit, which truncates the transcript
+   * down to this ask-user call and replays the model from here.
+   * `discardsDownstream` flips the submit button label to a
+   * warning copy when the edit will drop replies that came after
+   * this ask-user turn.
+   */
+  onEditAndRerun?:
+    | ((toolCallId: string, output: AskUserOutput) => void | Promise<void>)
+    | undefined;
+  discardsDownstream?: boolean | undefined;
   workspaceId?: string | undefined;
   /**
    * Placeholder → original pairs from the assistant message's
@@ -113,6 +126,8 @@ const renderAnonPills = (
 export const AskUserCard = ({
   part,
   onSubmit,
+  onEditAndRerun,
+  discardsDownstream,
   workspaceId,
   restorationPairs,
 }: AskUserCardProps) => {
@@ -178,7 +193,15 @@ export const AskUserCard = ({
 
   const [customMode, setCustomMode] = useState<Record<number, boolean>>({});
   const [submitted, setSubmitted] = useState(false);
-  const isDone = answeredOutput !== null || submitted;
+  // Local "edit mode" lets the user flip an answered card back
+  // into its input form, pre-filled with the previous answers, so
+  // they can amend and re-run from this point. Cancel restores
+  // the read-only view. The card never mutates the persisted tool
+  // output itself; that's `useChatSession`'s job once submit fires.
+  const [isEditing, setIsEditing] = useState(false);
+  const canRerun = onEditAndRerun !== undefined;
+  const isAnswered = answeredOutput !== null || submitted;
+  const isDone = isAnswered && !isEditing;
 
   const setAnswer = useCallback(
     (idx: number, value: string) =>
@@ -195,21 +218,83 @@ export const AskUserCard = ({
     [],
   );
 
-  const handleSubmit = useCallback(() => {
-    if (!input || submitted) {
-      return;
+  const buildOutput = useCallback((): AskUserOutput | null => {
+    if (!input) {
+      return null;
     }
-    setSubmitted(true);
-
-    const output: AskUserOutput = {
+    return {
       answers: input.questions.map((q, i) => ({
         question: q.question,
         answer: answers[i] ?? "",
       })),
     };
+  }, [input, answers]);
 
+  const handleSubmit = useCallback(() => {
+    if (!input || submitted) {
+      return;
+    }
+    const output = buildOutput();
+    if (!output) {
+      return;
+    }
+    setSubmitted(true);
     onSubmit(part.toolCallId, output);
-  }, [input, answers, submitted, onSubmit, part.toolCallId]);
+  }, [input, submitted, buildOutput, onSubmit, part.toolCallId]);
+
+  const handleStartEdit = useCallback(() => {
+    if (!input || !answeredOutput || !canRerun) {
+      return;
+    }
+    const seeded: Record<number, string> = {};
+    for (let i = 0; i < input.questions.length; i++) {
+      const previous = answeredOutput.answers[i]?.answer;
+      if (previous !== undefined) {
+        seeded[i] = previous;
+      } else {
+        const def = input.questions[i]?.default;
+        if (def) {
+          seeded[i] = def;
+        }
+      }
+    }
+    setAnswers(seeded);
+    // Reset custom-vs-options mode based on whether the previous
+    // answer matches one of the offered options; if it doesn't,
+    // flip the question into free-text so the prior text stays
+    // visible and editable.
+    const nextCustom: Record<number, boolean> = {};
+    for (let i = 0; i < input.questions.length; i++) {
+      const question = input.questions[i];
+      const previous = answeredOutput.answers[i]?.answer;
+      if (
+        question?.options &&
+        previous &&
+        !question.options.includes(previous)
+      ) {
+        nextCustom[i] = true;
+      }
+    }
+    setCustomMode(nextCustom);
+    setIsEditing(true);
+  }, [input, answeredOutput, canRerun]);
+
+  const handleCancelEdit = useCallback(() => {
+    setIsEditing(false);
+    setCustomMode({});
+  }, []);
+
+  const handleRerun = useCallback(() => {
+    if (!input || !onEditAndRerun) {
+      return;
+    }
+    const output = buildOutput();
+    if (!output) {
+      return;
+    }
+    setIsEditing(false);
+    void onEditAndRerun(part.toolCallId, output);
+  }, [input, onEditAndRerun, buildOutput, part.toolCallId]);
 
   if (!input) {
     return (
@@ -239,6 +324,17 @@ export const AskUserCard = ({
         {isDone && (
           <CheckIcon className="ms-auto size-3.5 shrink-0 text-green-600 dark:text-green-400" />
         )}
+        {isDone && canRerun && answeredOutput !== null && (
+          <button
+            aria-label={t("chat.askUser.edit")}
+            className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
+            onClick={handleStartEdit}
+            type="button"
+          >
+            <PencilIcon className="size-3" />
+            {t("chat.askUser.edit")}
+          </button>
+        )}
       </div>
 
       {/* Analysis */}
@@ -265,86 +361,105 @@ export const AskUserCard = ({
 
       {/* Questions */}
       <div className="border-border/50 space-y-3 border-t px-3 py-3">
-        {input.questions.map((q, i) => (
-          <div className="space-y-1.5" key={q.question}>
-            <p className="text-xs font-medium">
-              {i + 1}. {renderAnonPills(q.question, pairs)}
-            </p>
+        {input.questions.map((q, i) => {
+          const hasOptions = q.options !== undefined && q.options.length > 0;
+          return (
+            <div className="space-y-1.5" key={q.question}>
+              <p className="text-xs font-medium">
+                {i + 1}. {renderAnonPills(q.question, pairs)}
+              </p>
 
-            {!isDone && q.options && !customMode[i] && (
-              <div className="flex flex-wrap gap-1.5">
-                {q.options.map((opt) => (
+              {!isDone && hasOptions && !customMode[i] && (
+                <div className="flex flex-wrap gap-1.5">
+                  {q.options?.map((opt) => (
+                    <button
+                      className={cn(
+                        "rounded-md border px-2 py-1 text-xs",
+                        "transition-colors",
+                        answers[i] === opt
+                          ? "border-foreground bg-foreground text-background"
+                          : "hover:bg-muted",
+                      )}
+                      key={opt}
+                      onClick={() => setAnswer(i, opt)}
+                      type="button"
+                    >
+                      {renderAnonPills(opt, pairs, { interactive: false })}
+                    </button>
+                  ))}
                   <button
-                    className={cn(
-                      "rounded-md border px-2 py-1 text-xs",
-                      "transition-colors",
-                      answers[i] === opt
-                        ? "border-foreground bg-foreground text-background"
-                        : "hover:bg-muted",
-                    )}
-                    key={opt}
-                    onClick={() => setAnswer(i, opt)}
-                    type="button"
-                  >
-                    {renderAnonPills(opt, pairs, { interactive: false })}
-                  </button>
-                ))}
-                <button
-                  className="text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors"
-                  onClick={() => toggleCustom(i)}
-                  type="button"
-                >
-                  <PencilIcon className="size-2.5" />
-                  {t("chat.askUser.custom")}
-                </button>
-              </div>
-            )}
-
-            {!isDone && (!q.options || customMode[i]) && (
-              <div className="flex gap-1.5">
-                <input
-                  className="bg-background focus-visible:ring-ring flex-1 rounded-md border px-2 py-1 text-xs focus-visible:ring-1 focus-visible:outline-none"
-                  onChange={(e) => setAnswer(i, e.target.value)}
-                  placeholder={q.default ?? t("chat.askUser.placeholder")}
-                  type="text"
-                  value={answers[i] ?? ""}
-                />
-                {q.options && customMode[i] && (
-                  <button
-                    className="text-muted-foreground hover:text-foreground text-xs"
+                    className="text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors"
                     onClick={() => toggleCustom(i)}
                     type="button"
                   >
-                    A/B/C
+                    <PencilIcon className="size-2.5" />
+                    {t("chat.askUser.custom")}
                   </button>
-                )}
-              </div>
-            )}
+                </div>
+              )}
 
-            {isDone && (
-              <p className="text-muted-foreground text-xs">
-                {renderAnonPills(
-                  answeredOutput?.answers[i]?.answer ||
-                    answers[i] ||
-                    t("chat.askUser.noAnswer"),
-                  pairs,
-                )}
-              </p>
-            )}
-          </div>
-        ))}
+              {!isDone && (!hasOptions || customMode[i]) && (
+                <div className="flex gap-1.5">
+                  <input
+                    className="bg-background focus-visible:ring-ring flex-1 rounded-md border px-2 py-1 text-xs focus-visible:ring-1 focus-visible:outline-none"
+                    onChange={(e) => setAnswer(i, e.target.value)}
+                    placeholder={q.default ?? t("chat.askUser.placeholder")}
+                    type="text"
+                    value={answers[i] ?? ""}
+                  />
+                  {hasOptions && customMode[i] && (
+                    <button
+                      className="text-muted-foreground hover:text-foreground text-xs"
+                      onClick={() => toggleCustom(i)}
+                      type="button"
+                    >
+                      A/B/C
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {isDone && (
+                <p className="text-muted-foreground text-xs">
+                  {renderAnonPills(
+                    answeredOutput?.answers[i]?.answer ||
+                      answers[i] ||
+                      t("chat.askUser.noAnswer"),
+                    pairs,
+                  )}
+                </p>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Submit */}
       {!isDone && !isLoading && (
         <div className="border-border/50 border-t px-3 py-2">
-          <button
-            className="bg-foreground text-background focus-visible:ring-ring rounded-md px-3 py-1 text-xs font-medium transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-offset-1"
-            onClick={handleSubmit}
-            type="button"
-          >
-            {t("chat.askUser.submit")}
-          </button>
+          {isEditing && discardsDownstream && (
+            <p className="text-muted-foreground mb-2 text-xs">
+              {t("chat.askUser.editWarning")}
+            </p>
+          )}
+          <div className="flex items-center gap-2">
+            <button
+              className="bg-foreground text-background focus-visible:ring-ring rounded-md px-3 py-1 text-xs font-medium transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-offset-1"
+              onClick={isEditing ? handleRerun : handleSubmit}
+              type="button"
+            >
+              {isEditing ? t("chat.askUser.rerun") : t("chat.askUser.submit")}
+            </button>
+            {isEditing && (
+              <button
+                className="text-muted-foreground hover:text-foreground text-xs"
+                onClick={handleCancelEdit}
+                type="button"
+              >
+                {t("chat.askUser.cancelEdit")}
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -452,6 +452,15 @@ type ChatThreadMessagesProps = {
     toolCallId: string,
     output: AskUserOutput,
   ) => void | PromiseLike<void>;
+  /**
+   * Re-run callback for answered ask-user cards. When omitted,
+   * the edit affordance stays hidden — useful for surfaces that
+   * shouldn't allow branching the conversation (read-only views,
+   * mid-stream, etc.).
+   */
+  onAskUserEditAndRerun?:
+    | ((toolCallId: string, output: AskUserOutput) => void | PromiseLike<void>)
+    | undefined;
   onCreateDocumentResolve: (
     toolCallId: string,
     matterId: string,
@@ -494,6 +503,7 @@ export const ChatThreadMessages = ({
   onResend,
   onSendWithoutAnonymization,
   onAskUserSubmit,
+  onAskUserEditAndRerun,
   onCreateDocumentResolve,
   onOpenCreatedDocument,
   showThinkingIndicator = false,
@@ -529,7 +539,11 @@ export const ChatThreadMessages = ({
               <>
                 <AssistantMessageParts
                   activeOrganizationId={activeOrganizationId}
+                  isLatestAssistantMessage={
+                    message.id === retryableAssistantMessageId
+                  }
                   message={message}
+                  onAskUserEditAndRerun={onAskUserEditAndRerun}
                   onAskUserSubmit={onAskUserSubmit}
                   onCreateDocumentResolve={onCreateDocumentResolve}
                   onOpenCreatedDocument={onOpenCreatedDocument}
@@ -667,6 +681,7 @@ const QueuedUserMessages = ({
 
 type AssistantMessagePartsProps = Pick<
   ChatThreadMessagesProps,
+  | "onAskUserEditAndRerun"
   | "onAskUserSubmit"
   | "onCreateDocumentResolve"
   | "onOpenCreatedDocument"
@@ -674,6 +689,7 @@ type AssistantMessagePartsProps = Pick<
   | "workspaceId"
 > & {
   activeOrganizationId: string;
+  isLatestAssistantMessage: boolean;
   message: PersistedChatMessage;
   shouldShowToolCalls: boolean;
 };
@@ -688,7 +704,9 @@ type AssistantMessagePartsProps = Pick<
  */
 const AssistantMessageParts = ({
   activeOrganizationId,
+  isLatestAssistantMessage,
   message,
+  onAskUserEditAndRerun,
   onAskUserSubmit,
   onCreateDocumentResolve,
   onOpenCreatedDocument,
@@ -714,7 +732,13 @@ const AssistantMessageParts = ({
         if (part.type === "tool-ask-user") {
           return (
             <AskUserCard
+              discardsDownstream={!isLatestAssistantMessage}
               key={part.toolCallId}
+              {...(onAskUserEditAndRerun && {
+                onEditAndRerun: (toolCallId, output) => {
+                  void onAskUserEditAndRerun(toolCallId, output);
+                },
+              })}
               onSubmit={(toolCallId, output) => {
                 void onAskUserSubmit(toolCallId, output);
               }}

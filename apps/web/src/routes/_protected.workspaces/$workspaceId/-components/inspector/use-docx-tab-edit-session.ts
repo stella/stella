@@ -112,6 +112,11 @@ export const useDocxTabEditSession = ({
       return;
     }
     const compatibility = docxCompatibilityByTab.get(target.id);
+    // Wait for the compatibility check to finish — map gets the
+    // entry only once the probe lands. The direct-click and
+    // requestEditMode paths in docx-browser-editor already queue
+    // silently via inspector.requestDocxEdit, so the toast that used
+    // to fire prematurely no longer triggers from those paths.
     if (!compatibility) {
       return;
     }

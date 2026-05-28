@@ -8,6 +8,7 @@ import {
   MessageSquareIcon,
   MessageSquarePlusIcon,
   PanelRightIcon,
+  WandSparklesIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -218,6 +219,10 @@ const VerticalTabIcon = ({
         iconHref={externalIconHref}
       />
     );
+  }
+
+  if (tab.type === "skill-resource") {
+    return <WandSparklesIcon className="size-3.5" />;
   }
 
   if (active && tab.mimeType) {

@@ -1,13 +1,16 @@
 "use client";
 
 import { lazy, Suspense } from "react";
-import type { HTMLAttributes } from "react";
+import type { HTMLAttributes, ReactNode } from "react";
 
 import type { UIMessage } from "ai";
+import { WandSparklesIcon } from "lucide-react";
 
 import { cn } from "@stll/ui/lib/utils";
 
 import type { MessageResponseProps } from "@/components/ai-elements/message-response";
+import { SKILL_REF_HASH_PREFIX } from "@/components/chat/streamdown-mention-link";
+import { InlinePill } from "@/components/inline-pill";
 
 type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"] | "system";
@@ -65,12 +68,62 @@ const LazyMessageResponse = lazy(async () => {
   return { default: m.MessageResponseImpl };
 });
 
+// Skill chip markdown link: `[label](#stella-skill-ref=slug)`. We
+// inline-render these as placeholder `<InlinePill>`s during the
+// Streamdown lazy-chunk load, so the raw `[...](#stella-skill-ref=...)`
+// source never paints between the composer chip leaving and the
+// transcript `SkillRefChip` arriving. The placeholder's visual
+// shape matches the real chip, so no second flash when Streamdown
+// finishes parsing. Prefix is imported from the chip module so a
+// rename of `SKILL_REF_HASH_PREFIX` invalidates this matcher at
+// compile time instead of silently leaving raw markdown to flash.
+const SKILL_LINK_RE = new RegExp(
+  `\\[([^\\]]+)\\]\\(${SKILL_REF_HASH_PREFIX.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}([^)]+)\\)`,
+  "gu",
+);
+
+const renderFallbackChildren = (children: ReactNode): ReactNode => {
+  if (typeof children !== "string") {
+    return children;
+  }
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  // Reset between calls: `RegExp.exec` with `g` keeps lastIndex
+  // across invocations of the same regex instance.
+  SKILL_LINK_RE.lastIndex = 0;
+  let match: RegExpExecArray | null = SKILL_LINK_RE.exec(children);
+  while (match !== null) {
+    if (match.index > cursor) {
+      nodes.push(children.slice(cursor, match.index));
+    }
+    const label = match[1] ?? "";
+    nodes.push(
+      <InlinePill
+        key={`${match.index}-${match[2] ?? ""}`}
+        leadingIcon={<WandSparklesIcon className="size-3 shrink-0" />}
+        truncate
+      >
+        {label}
+      </InlinePill>,
+    );
+    cursor = match.index + match[0].length;
+    match = SKILL_LINK_RE.exec(children);
+  }
+  if (nodes.length === 0) {
+    return children;
+  }
+  if (cursor < children.length) {
+    nodes.push(children.slice(cursor));
+  }
+  return nodes;
+};
+
 const MessageResponseFallback = ({
   children,
   className,
 }: MessageResponseProps) => (
   <div className={cn("size-full whitespace-pre-wrap", className)}>
-    {children}
+    {renderFallbackChildren(children)}
   </div>
 );
 

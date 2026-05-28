@@ -1,4 +1,4 @@
-import type { Mark, Node as PMNode } from "prosemirror-model";
+import type { Mark, Node as PMNode, Schema } from "prosemirror-model";
 import type { EditorState, Transaction } from "prosemirror-state";
 
 import { buildCleanBlockText } from "./clean-text";
@@ -15,6 +15,7 @@ import type {
   FolioAIEditSnapshot,
   FolioAIEditSkipReason,
   FolioAIEditSkippedOperation,
+  FolioAISignatureParty,
 } from "./types";
 import { diffWordSegments } from "./word-diff";
 
@@ -67,6 +68,31 @@ const stripIdentityAttrs = (attrs: Record<string, unknown>) => {
     next[key] = value;
   }
   return next;
+};
+
+const applyReplaceBlockStyleId = ({
+  item,
+  tr,
+}: {
+  item: ResolvedOperation;
+  tr: Transaction;
+}): Transaction => {
+  if (
+    item.operation.type !== "replaceBlock" ||
+    item.operation.styleId === undefined
+  ) {
+    return tr;
+  }
+
+  const block = tr.doc.nodeAt(item.blockFrom);
+  if (!block) {
+    return tr;
+  }
+
+  return tr.setNodeMarkup(item.blockFrom, undefined, {
+    ...block.attrs,
+    styleId: item.operation.styleId,
+  });
 };
 
 type LiveBlockEntry = { from: number; to: number; node: PMNode };
@@ -148,6 +174,37 @@ const collectLiveBlocksByParaId = (doc: PMNode) => {
 };
 
 /**
+ * Insert ops (insertAfterBlock / insertBeforeBlock) target a block
+ * by id. When that block lives inside a `tableCell`, naively
+ * inserting at the block's `before` / `after` position drops the
+ * new node INSIDE the cell — which is never what the model wants
+ * when it says "insert after this paragraph". Escape outward to
+ * the nearest enclosing `table` so the synthesized sibling lands
+ * adjacent to the table as a doc-level peer.
+ *
+ * Returns the table's outer boundary positions when the block lies
+ * inside one, otherwise `null` to keep the default block-adjacent
+ * behaviour for paragraphs at the document root.
+ */
+type TableBoundary = { before: number; after: number };
+
+const findEnclosingTableBoundary = (
+  doc: PMNode,
+  blockFrom: number,
+): TableBoundary | null => {
+  const resolved = doc.resolve(blockFrom);
+  // Walk from the deepest ancestor outwards. `depth` is the
+  // resolved-position's parent depth; the doc node sits at depth 0,
+  // so the loop stops before trying to take a `before` of the doc.
+  for (let depth = resolved.depth; depth > 0; depth--) {
+    if (resolved.node(depth).type.name === "table") {
+      return { before: resolved.before(depth), after: resolved.after(depth) };
+    }
+  }
+  return null;
+};
+
+/**
  * The snapshot recorded an `hashOccurrenceCount` per anchor but
  * not which ordinal within that bucket the block was — recompute
  * on demand from the snapshot's anchor map. Stable iteration
@@ -172,6 +229,92 @@ const ordinalAmongSameHash = (
     }
   }
   return -1;
+};
+
+/**
+ * Length of the underscore signature rule. Mirrors the constant
+ * in `docx-core/legal-source/compile.ts` so the on-screen signature
+ * line matches what `create-document` produces.
+ */
+const SIGNATURE_LINE = "_".repeat(28);
+
+type BuildSignatureTableNodeOptions = {
+  schema: Schema;
+  parties: readonly FolioAISignatureParty[];
+};
+
+/**
+ * Build a borderless PM table mirroring docx-core's
+ * `signatureTable` helper: one row, one cell per party, each cell
+ * containing party name (bold), two spacer paragraphs, a signature
+ * rule, then optional signatory and italic title lines.
+ *
+ * Returns `null` when the editor schema is missing one of the
+ * required node types — callers should surface the op as a skip
+ * rather than crashing.
+ */
+const buildSignatureTableNode = ({
+  schema,
+  parties,
+}: BuildSignatureTableNodeOptions): PMNode | null => {
+  const paragraphType = schema.nodes["paragraph"];
+  const cellType = schema.nodes["tableCell"];
+  const rowType = schema.nodes["tableRow"];
+  const tableType = schema.nodes["table"];
+  if (!paragraphType || !cellType || !rowType || !tableType) {
+    return null;
+  }
+  const boldType = schema.marks["bold"];
+  const italicType = schema.marks["italic"];
+
+  const buildParagraph = (
+    text: string,
+    options: {
+      styleId: string;
+      bold?: boolean;
+      italic?: boolean;
+    },
+  ): PMNode => {
+    const marks: Mark[] = [];
+    if (options.bold && boldType) {
+      marks.push(boldType.create());
+    }
+    if (options.italic && italicType) {
+      marks.push(italicType.create());
+    }
+    const content = text.length > 0 ? schema.text(text, marks) : null;
+    return paragraphType.create({ styleId: options.styleId }, content);
+  };
+
+  const buildCell = (party: FolioAISignatureParty): PMNode => {
+    const cellContent: PMNode[] = [
+      buildParagraph(party.name, { styleId: "SignatureParty", bold: true }),
+      buildParagraph("", { styleId: "SignatureSpacer" }),
+      buildParagraph("", { styleId: "SignatureSpacer" }),
+      buildParagraph(SIGNATURE_LINE, { styleId: "SignatureRule" }),
+    ];
+    if (party.signatory && party.signatory.length > 0) {
+      cellContent.push(
+        buildParagraph(party.signatory, { styleId: "SignatureField" }),
+      );
+    }
+    if (party.title && party.title.length > 0) {
+      cellContent.push(
+        buildParagraph(party.title, {
+          styleId: "SignatureField",
+          italic: true,
+        }),
+      );
+    }
+    // Cell attrs left to schema defaults — column widths and
+    // borders are decided by the table renderer; we just need the
+    // structural shape.
+    return cellType.create({}, cellContent);
+  };
+
+  const cells = parties.map(buildCell);
+  const row = rowType.create({}, cells);
+  return tableType.create({}, row);
 };
 
 export const applyFolioAIEditOperations = ({
@@ -216,12 +359,13 @@ export const applyFolioAIEditOperations = ({
       continue;
     }
 
-    const resolution = resolveOperation(
+    const resolution = resolveOperation({
       snapshot,
       operation,
       liveBlocks,
       liveBlocksByParaId,
-    );
+      doc: view.state.doc,
+    });
     if (resolution.type === "skip") {
       skipped.push({ id: operation.id, reason: resolution.reason });
       continue;
@@ -302,8 +446,12 @@ export const applyFolioAIEditOperations = ({
           const replacement = item.operation.text;
           const paragraphType = view.state.schema.nodes["paragraph"];
           if (paragraphType) {
+            const replaceAttrs: Record<string, unknown> | null =
+              item.operation.styleId !== undefined
+                ? { styleId: item.operation.styleId }
+                : null;
             const node = paragraphType.create(
-              null,
+              replaceAttrs,
               replacement.length === 0
                 ? null
                 : view.state.schema.text(replacement),
@@ -322,6 +470,7 @@ export const applyFolioAIEditOperations = ({
           revisionIdInsert,
           commentMark,
         });
+        tr = applyReplaceBlockStyleId({ item, tr });
         if (mode === "tracked-changes") {
           appliedRevisionIds = [revisionIdDelete, revisionIdInsert];
         }
@@ -329,6 +478,18 @@ export const applyFolioAIEditOperations = ({
       }
       case "insertAfterBlock":
       case "insertBeforeBlock": {
+        if (
+          mode === "tracked-changes" &&
+          item.operation.pageBreakBefore === true &&
+          (!item.insertText || item.insertText.length === 0)
+        ) {
+          skipped.push({
+            id: item.operation.id,
+            reason: "unsupportedBlock",
+          });
+          continue;
+        }
+
         const marks = [];
         if (mode === "tracked-changes" && insertionType) {
           const revisionId = revisionSeed++;
@@ -352,11 +513,61 @@ export const applyFolioAIEditOperations = ({
         // the source block but never reuse identity attrs — a new
         // paragraph must get fresh paraId/textId so trackers don't
         // collide.
-        const attrs =
+        const baseAttrs =
           item.operation.inheritFormatting === false
             ? {}
             : stripIdentityAttrs(item.blockNode.attrs);
+        const attrs: Record<string, unknown> = { ...baseAttrs };
+        if (item.operation.pageBreakBefore === true) {
+          attrs["pageBreakBefore"] = true;
+        }
+        if (item.operation.styleId !== undefined) {
+          // Heading / clause style ids (e.g. ClauseHeading1) take
+          // precedence over the source block's style so the
+          // inserted paragraph renders as the requested kind, not
+          // as a clone of the anchor.
+          attrs["styleId"] = item.operation.styleId;
+          // A heading is logically a fresh block; drop list marker
+          // attrs that would otherwise leak from the anchor and
+          // render the heading as a list item.
+          if (item.operation.inheritFormatting !== false) {
+            attrs["listMarker"] = null;
+            attrs["listMarkerHidden"] = null;
+            attrs["listLevelNumFmts"] = null;
+            attrs["listAbstractNumId"] = null;
+            attrs["listStartOverride"] = null;
+          }
+        }
         const node = item.blockNode.type.create(attrs, content);
+        tr = tr.insert(item.from, node);
+        break;
+      }
+      case "insertSignatureTable": {
+        if (mode === "tracked-changes") {
+          skipped.push({
+            id: item.operation.id,
+            reason: "unsupportedBlock",
+          });
+          continue;
+        }
+
+        const node = buildSignatureTableNode({
+          schema: view.state.schema,
+          parties: item.operation.parties,
+        });
+        if (!node) {
+          skipped.push({
+            id: item.operation.id,
+            reason: "unsupportedBlock",
+          });
+          continue;
+        }
+        // Tables don't carry tracked-change marks here — the
+        // table structure itself is the insert, and inline
+        // insertion marks on the paragraph runs inside would
+        // double-up with the structural addition. Apply directly;
+        // tracked-changes for new tables is a separate future
+        // concern.
         tr = tr.insert(item.from, node);
         break;
       }
@@ -622,12 +833,23 @@ const applyTextReplacement = ({
 
 type ResolvedBase = Omit<ResolvedOperation, "originalIndex" | "commentId">;
 
-const resolveOperation = (
-  snapshot: FolioAIEditSnapshot,
-  operation: FolioAIEditOperation,
-  liveBlocks: Map<string, LiveBlockEntry[]>,
-  liveBlocksByParaId: Map<string, LiveBlockEntry>,
-): { type: "resolved"; operation: ResolvedBase } | OperationResolutionSkip => {
+type ResolveOperationArgs = {
+  snapshot: FolioAIEditSnapshot;
+  operation: FolioAIEditOperation;
+  liveBlocks: Map<string, LiveBlockEntry[]>;
+  liveBlocksByParaId: Map<string, LiveBlockEntry>;
+  doc: PMNode;
+};
+
+const resolveOperation = ({
+  snapshot,
+  operation,
+  liveBlocks,
+  liveBlocksByParaId,
+  doc,
+}: ResolveOperationArgs):
+  | { type: "resolved"; operation: ResolvedBase }
+  | OperationResolutionSkip => {
   const anchor = snapshot.anchors[operation.blockId];
   if (!anchor) {
     return { type: "skip", reason: "missingBlock" };
@@ -675,19 +897,63 @@ const resolveOperation = (
     operation.type === "insertAfterBlock" ||
     operation.type === "insertBeforeBlock"
   ) {
-    if (operation.text.length === 0) {
+    // An empty `text` is normally an error, but a page-break-only
+    // paragraph is legitimate (the user just wants whitespace +
+    // forced break). Letting it through with no inline content
+    // means the inserted block renders as an empty paragraph that
+    // starts a new page.
+    if (operation.text.length === 0 && operation.pageBreakBefore !== true) {
       return { type: "skip", reason: "emptyOperation" };
+    }
+    // If the anchor lives inside a `tableCell`, the model meant
+    // "place the new block adjacent to the table", not "stuff it
+    // into the cell". Override the insertion bounds to the table's
+    // outer boundary so the synthesized sibling lands as a peer of
+    // the table at doc level.
+    const tableBoundary = findEnclosingTableBoundary(doc, blockFrom);
+    const isInsertAfter = operation.type === "insertAfterBlock";
+    let insertFrom: number;
+    if (tableBoundary) {
+      insertFrom = isInsertAfter ? tableBoundary.after : tableBoundary.before;
+    } else {
+      insertFrom = isInsertAfter ? blockTo : blockFrom;
     }
     return {
       type: "resolved",
       operation: {
         operation,
-        from: operation.type === "insertAfterBlock" ? blockTo : blockFrom,
-        to: operation.type === "insertAfterBlock" ? blockTo : blockFrom,
+        from: insertFrom,
+        to: insertFrom,
         blockFrom,
         blockTo,
         blockNode,
         insertText: operation.text,
+      },
+    };
+  }
+
+  if (operation.type === "insertSignatureTable") {
+    if (operation.parties.length === 0) {
+      return { type: "skip", reason: "emptyOperation" };
+    }
+    const position = operation.position ?? "after";
+    const tableBoundary = findEnclosingTableBoundary(doc, blockFrom);
+    let insertFrom: number;
+    if (tableBoundary) {
+      insertFrom =
+        position === "after" ? tableBoundary.after : tableBoundary.before;
+    } else {
+      insertFrom = position === "after" ? blockTo : blockFrom;
+    }
+    return {
+      type: "resolved",
+      operation: {
+        operation,
+        from: insertFrom,
+        to: insertFrom,
+        blockFrom,
+        blockTo,
+        blockNode,
       },
     };
   }

@@ -476,70 +476,36 @@ export const ReviewPanelImpl = ({
           </div>
         )}
 
-        {/* Progress + group-by row. The progress bar gives the
-         *  reviewer an at-a-glance sense of how far they've gotten;
-         *  the dropdown lets them switch axis without burning two
-         *  full toggle buttons in a narrow facet panel. */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <div className="flex max-w-full min-w-36 flex-1 items-center gap-2">
-            <div
-              aria-hidden="true"
-              className="bg-muted h-1 min-w-12 flex-1 overflow-hidden rounded-full"
+        {/* Settings row — group-by + apply-mode + author avatar as
+         *  subtle chips. Progress is communicated by the list itself
+         *  (cards disappear as the reviewer acts on them) and by the
+         *  per-section header counts; a dedicated progress strip
+         *  duplicated that info for no gain. */}
+        <div className="flex min-w-0 items-center gap-1.5 text-xs">
+          <Select
+            onValueChange={(value) => {
+              if (value === "severity" || value === "area") {
+                setGroupAxis(value);
+                setFilter(null);
+              }
+            }}
+            value={groupAxis}
+          >
+            <SelectTrigger
+              aria-label={t("docxReview.groupBy")}
+              className="hover:bg-muted h-7 w-auto min-w-0 justify-between gap-1 border-0 bg-transparent px-1.5 text-xs font-medium"
             >
-              <div
-                className="h-full bg-emerald-500 transition-[width] duration-300 ease-out dark:bg-emerald-400"
-                style={{
-                  width: total > 0 ? `${(reviewedCount / total) * 100}%` : "0%",
-                }}
-              />
-            </div>
-            <span
-              aria-label={t("docxReview.progressAria", {
-                reviewed: String(reviewedCount),
-                total: String(total),
-              })}
-              className="text-foreground shrink-0 text-xs whitespace-nowrap tabular-nums"
-            >
-              <span className="font-semibold">
-                {reviewedCount} / {total}
-              </span>{" "}
-              <span className="text-muted-foreground">
-                {t("docxReview.reviewed")}
-              </span>
-            </span>
-          </div>
-          <div className="flex max-w-full min-w-0 items-center gap-1.5 text-xs">
-            <span className="text-muted-foreground shrink-0">
-              {t("docxReview.groupBy")}:
-            </span>
-            <Select
-              onValueChange={(value) => {
-                if (value === "severity" || value === "area") {
-                  setGroupAxis(value);
-                  setFilter(null);
-                }
-              }}
-              value={groupAxis}
-            >
-              <SelectTrigger className="hover:bg-muted h-7 w-44 min-w-0 justify-between gap-1 border-0 bg-transparent px-1.5 text-xs font-medium">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup>
-                <SelectItem value="severity">
-                  {t("docxReview.bySeverity")}
-                </SelectItem>
-                <SelectItem value="area">{t("docxReview.byArea")}</SelectItem>
-              </SelectPopup>
-            </Select>
-          </div>
-        </div>
-
-        {pendingCount > 0 && (
-          <div className="mt-2.5">
-            <div className="flex min-w-0 items-center gap-1.5 text-xs">
-              <span className="text-muted-foreground shrink-0">
-                {t("docxReview.applyAs")}
-              </span>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup>
+              <SelectItem value="severity">
+                {t("docxReview.bySeverity")}
+              </SelectItem>
+              <SelectItem value="area">{t("docxReview.byArea")}</SelectItem>
+            </SelectPopup>
+          </Select>
+          {pendingCount > 0 && (
+            <>
               <Select
                 onValueChange={(value) => {
                   if (value === "tracked-changes" || value === "direct") {
@@ -548,7 +514,10 @@ export const ReviewPanelImpl = ({
                 }}
                 value={applyMode}
               >
-                <SelectTrigger className="hover:bg-muted h-7 w-56 min-w-0 justify-between gap-1 border-0 bg-transparent px-1.5 text-xs font-medium">
+                <SelectTrigger
+                  aria-label={t("docxReview.applyAs")}
+                  className="hover:bg-muted h-7 w-auto min-w-0 justify-between gap-1 border-0 bg-transparent px-1.5 text-xs font-medium"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectPopup>
@@ -577,9 +546,9 @@ export const ReviewPanelImpl = ({
                   onHideAcceptedChange={setHideAccepted}
                 />
               )}
-            </div>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto px-2 py-2">
@@ -652,29 +621,27 @@ export const ReviewPanelImpl = ({
         )}
       </div>
       {pendingCount > 0 && (
-        <footer className="bg-background/95 supports-[backdrop-filter]:bg-background/80 shrink-0 border-t px-3 py-2 backdrop-blur">
-          <div className="flex items-center gap-2">
-            <Button
-              className="h-8 flex-1 px-2.5 text-xs"
-              onClick={() => {
-                void handleBatchAccept();
-              }}
-              size="sm"
-              variant="default"
-            >
-              <CheckIcon className="me-1 size-3.5" />
-              {t("docxReview.acceptAll")}
-            </Button>
-            <Button
-              className="h-8 flex-1 px-2.5 text-xs"
-              onClick={handleBatchReject}
-              size="sm"
-              variant="outline"
-            >
-              <XIcon className="me-1 size-3.5" />
-              {t("docxReview.rejectAll")}
-            </Button>
-          </div>
+        <footer className="bg-background/95 supports-[backdrop-filter]:bg-background/80 flex h-12 shrink-0 items-center gap-2 border-t px-3 backdrop-blur">
+          <Button
+            className="flex-1"
+            onClick={() => {
+              void handleBatchAccept();
+            }}
+            size="sm"
+            variant="default"
+          >
+            <CheckIcon className="me-1 size-3.5" />
+            {t("docxReview.acceptAll")}
+          </Button>
+          <Button
+            className="flex-1"
+            onClick={handleBatchReject}
+            size="sm"
+            variant="outline"
+          >
+            <XIcon className="me-1 size-3.5" />
+            {t("docxReview.rejectAll")}
+          </Button>
         </footer>
       )}
     </div>
@@ -1123,6 +1090,32 @@ const RedlinePreview = ({
           {preview.anchor}
         </p>
       );
+    case "insertSignatureTable": {
+      // Compact preview: anchor snippet + an arrow + a column-list
+      // of party names. The reviewer needs to recognise that this
+      // is a structural insert, not free text — listing the party
+      // names captures the gist without recreating the full table
+      // layout inside the panel card.
+      const partyList = preview.parties
+        .map((party) => party.name)
+        .filter((name) => name.length > 0)
+        .join("  |  ");
+      return (
+        <p aria-label={srSummary} className={baseCls}>
+          {preview.anchorRuns !== undefined &&
+            preview.anchorEnd !== undefined && (
+              <>
+                {renderFormattedRuns(
+                  slicePreviewRuns(preview.anchorRuns, 0, preview.anchorEnd),
+                  contextCls,
+                )}
+                {arrow}
+              </>
+            )}
+          <span className={insCls}>{partyList}</span>
+        </p>
+      );
+    }
     default:
       preview satisfies never;
       return null;

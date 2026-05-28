@@ -13,6 +13,7 @@ import {
   extractAssistantWorkspaceIds,
   extractIncomingMessageWorkspaceIds,
   extractMentionWorkspaceIds,
+  extractThreadDataWorkspaceIds,
 } from "./data-scope";
 
 const wsA = toSafeId<"workspace">("00000000-0000-0000-0000-00000000000a");
@@ -249,6 +250,7 @@ describe("extractIncomingMessageWorkspaceIds", () => {
             success: true,
             fileName: "Generated Agreement.docx",
             entityId: "00000000-0000-0000-0000-0000000000ee",
+            fieldId: "00000000-0000-0000-0000-0000000000ff",
             workspaceId: wsA,
             entityRef: "ent_1",
             matterRef: "mat_1",
@@ -261,6 +263,62 @@ describe("extractIncomingMessageWorkspaceIds", () => {
 
     expect(
       extractIncomingMessageWorkspaceIds({ message, mentions: [] }),
+    ).toEqual([wsA]);
+  });
+});
+
+describe("extractThreadDataWorkspaceIds", () => {
+  test("recomputes scope from retained persisted messages", () => {
+    const messages = [
+      {
+        id: "user-1",
+        role: "user",
+        parts: [
+          {
+            type: "text",
+            text: `Use [Matter A](#stella-workspace=${wsA}) and [Doc B](#stella-entity=${wsB}:00000000-0000-0000-0000-000000000001).`,
+          },
+        ],
+      },
+      {
+        id: "assistant-1",
+        role: "assistant",
+        parts: [
+          {
+            type: "data-stella-source-document",
+            data: {
+              entityId: "00000000-0000-0000-0000-000000000002",
+              kind: "document",
+              mimeType: "application/pdf",
+              title: "Motion.pdf",
+              workspaceId: wsC,
+            },
+          },
+        ],
+      },
+    ] satisfies ChatMessage[];
+
+    expect(new Set(extractThreadDataWorkspaceIds(messages))).toEqual(
+      new Set([wsA, wsB, wsC]),
+    );
+  });
+
+  test("excludes workspace refs from messages omitted by replay truncation", () => {
+    const messagesBeforeTruncation = [
+      {
+        id: "user-1",
+        role: "user",
+        parts: [{ type: "text", text: `Keep #stella-workspace=${wsA}` }],
+      },
+      {
+        id: "assistant-deleted",
+        role: "assistant",
+        parts: [{ type: "text", text: `Drop #stella-workspace=${wsC}` }],
+      },
+    ] satisfies ChatMessage[];
+
+    expect(
+      extractThreadDataWorkspaceIds(messagesBeforeTruncation.slice(0, 1)),
     ).toEqual([wsA]);
   });
 });

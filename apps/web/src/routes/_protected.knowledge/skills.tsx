@@ -6,12 +6,17 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
+import JSZip from "jszip";
 import {
   DownloadIcon,
+  FilePlusIcon,
   FileUpIcon,
   GlobeIcon,
   LibraryIcon,
+  LoaderIcon,
+  PencilIcon,
   PowerIcon,
+  SparklesIcon,
   TrashIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -34,6 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
+import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -44,6 +50,7 @@ import {
   userErrorMessage,
 } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
+import { EditSkillSheet } from "@/routes/_protected.knowledge/-components/edit-skill-sheet";
 import {
   knowledgeKeys,
   skillsOptions,
@@ -99,7 +106,9 @@ function SkillsPage() {
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [generateOpen, setGenerateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<InstalledSkill | null>(null);
+  const [editTarget, setEditTarget] = useState<InstalledSkill | null>(null);
   const firstPage = data?.pages.at(0);
   const canManageTeam = firstPage?.canManageTeam ?? false;
   const installed = useMemo(
@@ -175,6 +184,14 @@ function SkillsPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button
+            onClick={() => setGenerateOpen(true)}
+            size="sm"
+            variant="secondary"
+          >
+            <SparklesIcon className="me-1.5 size-4" />
+            {tSkills("generateSkill")}
+          </Button>
+          <Button
             onClick={() => setImportOpen(true)}
             size="sm"
             variant="secondary"
@@ -206,9 +223,11 @@ function SkillsPage() {
           {teamSkills.map((skill) => (
             <InstalledSkillCard
               canDelete={canManageTeam}
+              canEdit={canManageTeam}
               canToggle={canManageTeam}
               key={skill.id}
               onDelete={setDeleteTarget}
+              onEdit={setEditTarget}
               onToggle={(target) => {
                 void toggleSkill(target);
               }}
@@ -223,9 +242,11 @@ function SkillsPage() {
           {privateSkills.map((skill) => (
             <InstalledSkillCard
               canDelete
+              canEdit
               canToggle
               key={skill.id}
               onDelete={setDeleteTarget}
+              onEdit={setEditTarget}
               onToggle={(target) => {
                 void toggleSkill(target);
               }}
@@ -269,6 +290,12 @@ function SkillsPage() {
         open={importOpen}
         onOpenChange={setImportOpen}
       />
+      <GenerateSkillDialog
+        canManageTeam={canManageTeam}
+        onChanged={invalidate}
+        open={generateOpen}
+        onOpenChange={setGenerateOpen}
+      />
       <DeleteSkillDialog
         onConfirm={() => {
           void deleteSkill();
@@ -280,6 +307,16 @@ function SkillsPage() {
         }}
         open={deleteTarget !== null}
         skill={deleteTarget}
+      />
+      <EditSkillSheet
+        onChanged={invalidate}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditTarget(null);
+          }
+        }}
+        open={editTarget !== null}
+        skill={editTarget}
       />
     </div>
   );
@@ -303,16 +340,20 @@ function SkillSection({ children, title }: SkillSectionProps) {
 
 type InstalledSkillCardProps = {
   canDelete: boolean;
+  canEdit: boolean;
   canToggle: boolean;
   onDelete: (skill: InstalledSkill) => void;
+  onEdit: (skill: InstalledSkill) => void;
   onToggle: (skill: InstalledSkill) => void;
   skill: InstalledSkill;
 };
 
 function InstalledSkillCard({
   canDelete,
+  canEdit,
   canToggle,
   onDelete,
+  onEdit,
   onToggle,
   skill,
 }: InstalledSkillCardProps) {
@@ -335,6 +376,16 @@ function InstalledSkillCard({
         slug={skill.slug}
       />
       <div className="flex shrink-0 items-center gap-1">
+        {canEdit && (
+          <Button
+            aria-label={tSkills("editSkill")}
+            onClick={() => onEdit(skill)}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <PencilIcon className="size-4" />
+          </Button>
+        )}
         {canToggle && (
           <Button
             aria-label={
@@ -650,6 +701,484 @@ function ImportSkillDialog({
         </DialogFooter>
       </DialogPopup>
     </Dialog>
+  );
+}
+
+type DraftResource = {
+  content: string;
+  id: string;
+  path: string;
+};
+
+const RESOURCE_PATH_PATTERN =
+  /^(references|prompts|knowledge)\/[a-z0-9][a-z0-9._-]*\.md$/u;
+
+const SKILL_MD_FILENAME = "SKILL.md";
+
+const newResourceId = () => globalThis.crypto.randomUUID();
+
+const toDraftResource = (resource: {
+  content: string;
+  path: string;
+}): DraftResource => ({
+  content: resource.content,
+  id: newResourceId(),
+  path: resource.path,
+});
+
+const buildSkillZip = async (
+  markdown: string,
+  resources: readonly DraftResource[],
+): Promise<File> => {
+  const zip = new JSZip();
+  zip.file(SKILL_MD_FILENAME, markdown);
+  for (const resource of resources) {
+    zip.file(resource.path.trim(), resource.content);
+  }
+  const blob = await zip.generateAsync({ type: "blob" });
+  return new File([blob], "skill.zip", { type: "application/zip" });
+};
+
+const getDuplicateResourcePaths = (
+  resources: readonly DraftResource[],
+): Set<string> => {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const resource of resources) {
+    const path = resource.path.trim();
+    if (path.length === 0) {
+      continue;
+    }
+    if (seen.has(path)) {
+      duplicates.add(path);
+      continue;
+    }
+    seen.add(path);
+  }
+  return duplicates;
+};
+
+const hasResourceValidationErrors = (
+  resources: readonly DraftResource[],
+): boolean =>
+  resources.some((resource) => !isValidResource(resource)) ||
+  getDuplicateResourcePaths(resources).size > 0;
+
+function GenerateSkillDialog({
+  canManageTeam,
+  onChanged,
+  onOpenChange,
+  open,
+}: SkillFormDialogProps) {
+  const t = useTranslations();
+  const tSkills = useTranslations("knowledge.agentSkills");
+  const [intent, setIntent] = useState("");
+  const [examples, setExamples] = useState("");
+  const [scope, setScope] = useState<SkillScope>("private");
+  const [draft, setDraft] = useState("");
+  const [resources, setResources] = useState<DraftResource[]>([]);
+  const [feedback, setFeedback] = useState("");
+
+  const resetForm = () => {
+    setIntent("");
+    setExamples("");
+    setDraft("");
+    setResources([]);
+    setFeedback("");
+    setScope("private");
+  };
+
+  const generate = useMutation({
+    mutationFn: async (payload: {
+      intent: string;
+      examples?: string;
+      previousDraft?: string;
+      previousResources?: { content: string; path: string }[];
+      feedback?: string;
+    }) => {
+      const response = await api.skills["generate-draft"].post({
+        intent: payload.intent,
+        ...(payload.examples ? { examples: payload.examples } : {}),
+        ...(payload.previousDraft
+          ? { previousDraft: payload.previousDraft }
+          : {}),
+        ...(payload.previousResources !== undefined &&
+        payload.previousResources.length > 0
+          ? { previousResources: payload.previousResources }
+          : {}),
+        ...(payload.feedback ? { feedback: payload.feedback } : {}),
+      });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: (data) => {
+      setDraft(data.markdown);
+      setResources(data.resources.map(toDraftResource));
+      setFeedback("");
+    },
+    onError: (error) => {
+      const fallback = t("common.unexpectedError");
+      stellaToast.add({
+        title: fallback,
+        description: userErrorFromThrown(error, fallback),
+        type: "error",
+      });
+    },
+  });
+
+  const install = useMutation({
+    mutationFn: async (payload: {
+      markdown: string;
+      resources: DraftResource[];
+      scope: SkillScope;
+    }) => {
+      const file =
+        payload.resources.length > 0
+          ? await buildSkillZip(payload.markdown, payload.resources)
+          : new File([payload.markdown], SKILL_MD_FILENAME, {
+              type: "text/markdown",
+            });
+      const response = await api.skills.upload.post({
+        file,
+        scope: payload.scope,
+        queryKey: ["skills"],
+      });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      onChanged();
+      resetForm();
+      onOpenChange(false);
+    },
+    onError: (error) => {
+      const fallback = t("common.unexpectedError");
+      stellaToast.add({
+        title: fallback,
+        description: userErrorFromThrown(error, fallback),
+        type: "error",
+      });
+    },
+  });
+
+  const handleGenerate = () => {
+    const trimmedIntent = intent.trim();
+    if (!trimmedIntent) {
+      return;
+    }
+    const trimmedExamples = examples.trim();
+    generate.mutate({
+      intent: trimmedIntent,
+      ...(trimmedExamples ? { examples: trimmedExamples } : {}),
+    });
+  };
+
+  const handleRegenerate = () => {
+    const trimmedIntent = intent.trim();
+    if (!trimmedIntent || !draft) {
+      return;
+    }
+    const trimmedExamples = examples.trim();
+    const trimmedFeedback = feedback.trim();
+    const previousResources = resources
+      .filter(
+        (resource) =>
+          resource.path.trim().length > 0 && resource.content.length > 0,
+      )
+      .map((resource) => ({
+        content: resource.content,
+        path: resource.path.trim(),
+      }));
+    generate.mutate({
+      intent: trimmedIntent,
+      previousDraft: draft,
+      ...(trimmedExamples ? { examples: trimmedExamples } : {}),
+      ...(previousResources.length > 0 ? { previousResources } : {}),
+      ...(trimmedFeedback ? { feedback: trimmedFeedback } : {}),
+    });
+  };
+
+  const handleInstall = () => {
+    if (!draft.trim() || hasResourceValidationErrors(resources)) {
+      return;
+    }
+    install.mutate({ markdown: draft, resources, scope });
+  };
+
+  const handleOpenChange = (next: boolean) => {
+    if (!next) {
+      resetForm();
+    }
+    onOpenChange(next);
+  };
+
+  const updateResource = (id: string, patch: Partial<DraftResource>) => {
+    setResources((current) =>
+      current.map((resource) =>
+        resource.id === id ? { ...resource, ...patch } : resource,
+      ),
+    );
+  };
+
+  const removeResource = (id: string) => {
+    setResources((current) => current.filter((resource) => resource.id !== id));
+  };
+
+  const addResource = () => {
+    setResources((current) => [
+      ...current,
+      { content: "", id: newResourceId(), path: "" },
+    ]);
+  };
+
+  const hasResourceErrors = resources.some(
+    (resource) => !isValidResource(resource),
+  );
+  const duplicateResourcePaths = getDuplicateResourcePaths(resources);
+  const hasResourceValidationError =
+    hasResourceErrors || duplicateResourcePaths.size > 0;
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogPopup className="sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle className="text-pretty">
+            {tSkills("generateTitle")}
+          </DialogTitle>
+        </DialogHeader>
+        <DialogPanel className="flex flex-col gap-5">
+          <p className="text-muted-foreground text-sm text-pretty">
+            {tSkills("generateHelp")}
+          </p>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium" htmlFor="skill-intent">
+              {tSkills("generateIntentLabel")}
+            </label>
+            <Textarea
+              autoFocus
+              id="skill-intent"
+              onChange={(event) => setIntent(event.target.value)}
+              placeholder={tSkills("generateIntentPlaceholder")}
+              rows={3}
+              value={intent}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium" htmlFor="skill-examples">
+              {tSkills("generateExamplesLabel")}
+            </label>
+            <Textarea
+              id="skill-examples"
+              onChange={(event) => setExamples(event.target.value)}
+              placeholder={tSkills("generateExamplesPlaceholder")}
+              rows={2}
+              value={examples}
+            />
+          </div>
+
+          {!draft && (
+            <Button
+              className="self-start"
+              disabled={!intent.trim() || generate.isPending}
+              onClick={handleGenerate}
+              size="sm"
+            >
+              {generate.isPending ? (
+                <LoaderIcon className="me-1.5 size-4 animate-spin" />
+              ) : (
+                <SparklesIcon className="me-1.5 size-4" />
+              )}
+              {generate.isPending
+                ? tSkills("generating")
+                : tSkills("generateDraft")}
+            </Button>
+          )}
+
+          {draft && (
+            <div className="animate-in fade-in-0 slide-in-from-top-1 flex flex-col gap-4 duration-200">
+              <div className="flex flex-col gap-1.5">
+                <label
+                  className="text-muted-foreground font-mono text-xs"
+                  htmlFor="skill-draft"
+                >
+                  {SKILL_MD_FILENAME}
+                </label>
+                <Textarea
+                  className="font-mono text-xs leading-relaxed"
+                  id="skill-draft"
+                  onChange={(event) => setDraft(event.target.value)}
+                  rows={18}
+                  value={draft}
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <div className="flex items-baseline justify-between gap-2">
+                  <h3 className="text-sm font-medium">
+                    {tSkills("generateResourcesLabel")}
+                  </h3>
+                  <span className="text-muted-foreground text-xs">
+                    {tSkills("generateResourcesHelp")}
+                  </span>
+                </div>
+
+                {resources.map((resource) => (
+                  <ResourceCard
+                    key={resource.id}
+                    onChange={(patch) => updateResource(resource.id, patch)}
+                    onRemove={() => removeResource(resource.id)}
+                    resource={resource}
+                    showDuplicatePathError={duplicateResourcePaths.has(
+                      resource.path.trim(),
+                    )}
+                    showPathError={
+                      resource.path.length > 0 &&
+                      !RESOURCE_PATH_PATTERN.test(resource.path.trim())
+                    }
+                  />
+                ))}
+
+                <Button
+                  className="self-start"
+                  onClick={addResource}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <FilePlusIcon className="me-1.5 size-4" />
+                  {tSkills("generateAddResource")}
+                </Button>
+              </div>
+
+              <div className="border-border bg-muted/10 flex flex-col gap-2 rounded-lg border p-3">
+                <label className="text-sm font-medium" htmlFor="skill-feedback">
+                  {tSkills("generateFeedbackLabel")}
+                </label>
+                <Textarea
+                  id="skill-feedback"
+                  onChange={(event) => setFeedback(event.target.value)}
+                  placeholder={tSkills("generateFeedbackPlaceholder")}
+                  rows={2}
+                  value={feedback}
+                />
+                <Button
+                  className="self-start"
+                  disabled={generate.isPending || !intent.trim()}
+                  onClick={handleRegenerate}
+                  size="sm"
+                  variant="secondary"
+                >
+                  {generate.isPending ? (
+                    <LoaderIcon className="me-1.5 size-4 animate-spin" />
+                  ) : (
+                    <SparklesIcon className="me-1.5 size-4" />
+                  )}
+                  {generate.isPending
+                    ? tSkills("generating")
+                    : tSkills("regenerate")}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <ScopeField
+            canManageTeam={canManageTeam}
+            scope={scope}
+            onScopeChange={setScope}
+          />
+        </DialogPanel>
+        <DialogFooter>
+          <DialogClose render={<Button variant="ghost" />}>
+            {t("common.cancel")}
+          </DialogClose>
+          <Button
+            disabled={
+              !draft.trim() ||
+              install.isPending ||
+              generate.isPending ||
+              hasResourceValidationError
+            }
+            onClick={handleInstall}
+          >
+            {install.isPending ? (
+              <LoaderIcon className="me-1.5 size-4 animate-spin" />
+            ) : (
+              <DownloadIcon className="me-1.5 size-4" />
+            )}
+            {t("common.add")}
+          </Button>
+        </DialogFooter>
+      </DialogPopup>
+    </Dialog>
+  );
+}
+
+const isValidResource = (resource: DraftResource): boolean => {
+  const path = resource.path.trim();
+  if (!RESOURCE_PATH_PATTERN.test(path)) {
+    return false;
+  }
+  return resource.content.length > 0;
+};
+
+type ResourceCardProps = {
+  onChange: (patch: Partial<DraftResource>) => void;
+  onRemove: () => void;
+  resource: DraftResource;
+  showDuplicatePathError: boolean;
+  showPathError: boolean;
+};
+
+function ResourceCard({
+  onChange,
+  onRemove,
+  resource,
+  showDuplicatePathError,
+  showPathError,
+}: ResourceCardProps) {
+  const t = useTranslations();
+  const tSkills = useTranslations("knowledge.agentSkills");
+
+  return (
+    <div className="border-border bg-card animate-in fade-in-0 flex flex-col gap-2 rounded-lg border p-3 duration-150">
+      <div className="flex items-center gap-2">
+        <Input
+          aria-invalid={showPathError || showDuplicatePathError || undefined}
+          className="font-mono text-xs"
+          onChange={(event) => onChange({ path: event.target.value })}
+          placeholder="knowledge/01-foundations.md"
+          value={resource.path}
+        />
+        <Button
+          aria-label={t("common.delete")}
+          onClick={onRemove}
+          size="icon-sm"
+          variant="ghost"
+        >
+          <TrashIcon className="size-4" />
+        </Button>
+      </div>
+      {showPathError && (
+        <p className="text-destructive text-xs">
+          {tSkills("generateResourcePathError")}
+        </p>
+      )}
+      {!showPathError && showDuplicatePathError && (
+        <p className="text-destructive text-xs">
+          {tSkills("generateResourceDuplicatePathError")}
+        </p>
+      )}
+      <Textarea
+        className="font-mono text-xs leading-relaxed"
+        onChange={(event) => onChange({ content: event.target.value })}
+        placeholder={tSkills("generateResourceContentPlaceholder")}
+        rows={6}
+        value={resource.content}
+      />
+    </div>
   );
 }
 

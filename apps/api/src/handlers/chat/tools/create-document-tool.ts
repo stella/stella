@@ -36,6 +36,7 @@ const createDocumentToolOutputSchema = v.union([
     success: v.literal(true),
     fileName: v.string(),
     entityId: v.string(),
+    fieldId: v.string(),
     workspaceId: v.string(),
     entityRef: v.string(),
     matterRef: v.string(),

@@ -10,8 +10,8 @@ import type { ComponentProps } from "react";
 
 import { useChat } from "@ai-sdk/react";
 import type { Chat } from "@ai-sdk/react";
-import { useQuery } from "@tanstack/react-query";
-import { useNavigate, useRouteContext } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouteContext } from "@tanstack/react-router";
 import { isToolUIPart } from "ai";
 import { v7 as uuidv7 } from "uuid";
 
@@ -38,10 +38,10 @@ import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { api } from "@/lib/api";
-import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
+import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
@@ -121,7 +121,6 @@ export const useChatSession = ({
   getSendMode,
   workspaceId,
 }: UseChatSessionOptions) => {
-  const navigate = useNavigate();
   const organizationId = useRouteContext({
     from: "/_protected",
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -141,6 +140,7 @@ export const useChatSession = ({
     messages,
     regenerate,
     sendMessage: sendChatMessage,
+    setMessages,
     stop,
     status,
     addToolApprovalResponse,
@@ -329,6 +329,98 @@ export const useChatSession = ({
     [addToolOutput],
   );
 
+  /**
+   * Edit an already-answered ask-user card and replay the model
+   * from that point. We don't have a "rewind to message" primitive
+   * in the AI SDK, so this is a truncate-and-replay:
+   *
+   *   1. Find the assistant message that owns the ask-user part.
+   *   2. Drop every message after it locally; the backend receives
+   *      the same truncation target for persisted history.
+   *   3. Reset the ask-user part itself to `input-available` so
+   *      `addToolOutput` writes a fresh output and the
+   *      `sendAutomaticallyWhen` predicate (which fires when the
+   *      latest assistant message has a complete tool call) drives
+   *      the next turn.
+   *
+   * The replay request also carries `truncateAfterMessageId`, so the
+   * backend drops persisted downstream turns before preparing the next
+   * model context.
+   */
+  const handleAskUserEditAndRerun = useCallback(
+    async (toolCallId: string, output: AskUserOutput) => {
+      let targetIndex = -1;
+      for (let i = 0; i < messages.length; i += 1) {
+        const candidate = messages[i];
+        if (!candidate || candidate.role !== "assistant") {
+          continue;
+        }
+        const hasPart = candidate.parts.some(
+          (part) =>
+            part.type === "tool-ask-user" && part.toolCallId === toolCallId,
+        );
+        if (hasPart) {
+          targetIndex = i;
+          break;
+        }
+      }
+      if (targetIndex === -1) {
+        return;
+      }
+      const targetMessage = messages[targetIndex];
+      if (!targetMessage || targetMessage.role !== "assistant") {
+        return;
+      }
+
+      // SAFETY: spreading inside `.map` is flagged by no-map-spread,
+      // but slice's elements are shared refs with the original
+      // `messages` array — mutating in place would corrupt the
+      // SDK's history. The spread builds a new message object that
+      // owns the rewritten parts array.
+      const truncated = messages
+        .slice(0, targetIndex + 1)
+        // eslint-disable-next-line oxc/no-map-spread
+        .map((message) => {
+          if (message.role !== "assistant") {
+            return message;
+          }
+          // Reset the matching ask-user part so `addToolOutput` can
+          // overwrite its output without the SDK no-op'ing because
+          // the state is already `output-available`. Using the
+          // `input-available` shape keeps the input visible so the
+          // card body stays consistent during the brief frame
+          // between truncation and the next `addToolOutput` call.
+          const nextParts = message.parts.map((part) => {
+            if (
+              part.type === "tool-ask-user" &&
+              part.toolCallId === toolCallId &&
+              part.state === "output-available"
+            ) {
+              return {
+                type: "tool-ask-user" as const,
+                toolCallId: part.toolCallId,
+                state: "input-available" as const,
+                input: part.input,
+              };
+            }
+            return part;
+          });
+          return { ...message, parts: nextParts };
+        });
+      setMessages(truncated);
+      const replayOptions = withSendModeSnapshot({
+        body: { truncateAfterMessageId: targetMessage.id },
+      });
+      await addToolOutput({
+        tool: "ask-user",
+        toolCallId,
+        output,
+        ...(replayOptions === undefined ? {} : { options: replayOptions }),
+      });
+    },
+    [addToolOutput, messages, setMessages, withSendModeSnapshot],
+  );
+
   const { data: workspacesNavigation, isPending: isLoadingMatters } = useQuery(
     workspacesNavigationOptions(organizationId),
   );
@@ -345,6 +437,7 @@ export const useChatSession = ({
     [workspacesNavigation],
   );
 
+  const queryClient = useQueryClient();
   const handleCreateDocumentResolve = useCallback(
     async (
       toolCallId: string,
@@ -373,50 +466,53 @@ export const useChatSession = ({
         return;
       }
 
+      // Prime the file-bytes cache the moment the server returns —
+      // there's typically a multi-second gap before the user clicks
+      // "Open in editor", and the docx editor's biggest mount cost
+      // is the presigned URL roundtrip + S3 download. We kick this
+      // off as a fire-and-forget; failures are silent because the
+      // editor will retry the same query on mount.
+      if (typeof response.data.fieldId === "string") {
+        void queryClient.prefetchQuery(
+          fileOptions({
+            workspaceId: matterId,
+            fieldId: response.data.fieldId,
+            purpose: "native-display",
+          }),
+        );
+      }
+
       await addToolOutput({
         tool: "create-document",
         toolCallId,
         output: response.data,
       });
     },
-    [addToolOutput],
+    [addToolOutput, queryClient],
   );
 
   const handleOpenCreatedDocument = useCallback(
     async (output: CreateDocumentSuccess) => {
       // Old chat threads predate `entityId`/`workspaceId` on the
-      // tool output. Without them we can't construct a route, so
-      // skip the navigation — the card surfaces this by hiding the
-      // open affordance.
+      // tool output. Without them we can't open the file, so bail —
+      // the card surfaces this by hiding the open affordance.
       if (!output.entityId || !output.workspaceId) {
         return;
       }
       // Pin this chat thread in the workspace inspector. Inherit
-      // the thread's existing scope (`workspaceId` arg from the
-      // session, may be undefined for a global thread) — claiming
-      // the destination matter as the thread's owner triggers a
-      // server-side scope-mismatch error in fetchThreadMessages.
-      // Seed the chat's matter context so the AI keeps the picked
-      // matter in scope without forcing thread ownership.
-      const inspector = useInspectorStore.getState();
-      inspector.openChat({
-        id: toChatThreadId(conversationId),
-        ...(workspaceId !== undefined && { workspaceId }),
-        contextMatterIds: [output.workspaceId],
-      });
-      // Navigate to the workspace shell (not the fullscreen document
-      // route) so the inspector is the surface that hosts the file —
-      // the user wanted to land with the chat tucked into the right
-      // panel, not on the dedicated document page.
-      await navigate({
-        to: "/workspaces/$workspaceId/$viewId",
-        params: { workspaceId: output.workspaceId, viewId: "all" },
-      });
-      // Open the entity in the inspector, then ask the panel to
-      // start folio edit mode for whichever PDF tab carries the
-      // entity. `openEntityInInspector` resolves the file field
-      // and synchronously calls `openFile`, so the tab is in the
-      // store by the time we read it.
+      // Keep the user on the chat surface and let the global
+      // InspectorPanel (mounted on every protected route) host the
+      // file. Tabs carry their own `workspaceId`, so a doc that
+      // lives in workspace B while the chat is bound to workspace A
+      // (or to no workspace at all) still renders correctly without
+      // a route change. Skip pinning the chat as a separate inspector
+      // tab — the user is already in this chat as the main surface,
+      // so a duplicate chat tab in the side panel reads as confusing
+      // ("the doc AND the same chat I am in"). `openEntityInInspector`
+      // resolves the file field and synchronously calls `openFile`,
+      // so the tab is in the store by the time we read it; we then
+      // ask the panel to start folio edit mode for whichever PDF tab
+      // carries the entity.
       await openEntityInInspector(
         output.entityId,
         output.fileName,
@@ -432,7 +528,7 @@ export const useChatSession = ({
         useInspectorStore.getState().requestDocxEdit(tab.id);
       }
     },
-    [conversationId, navigate, workspaceId],
+    [],
   );
   const streamdownComponents = useMemo(
     () => ({
@@ -494,7 +590,13 @@ export const useChatSession = ({
     }
     replaceQueuedMessages(queuedMessages.slice(1));
     isGeneratingRef.current = true;
-    void sendChatMessage(next.message);
+    // Preserve the request options the message was queued with —
+    // notably `body.sendMode` (anonymized / raw) snapshotted by
+    // withSendModeSnapshot at queue time. The manual drain path
+    // already passes them; the automatic drain must too, otherwise
+    // toggling the mode between queueing and draining sends the
+    // queued turn with the wrong mode.
+    void sendChatMessage(next.message, next.options);
   }, [
     isGenerating,
     queuedMessages,
@@ -571,6 +673,7 @@ export const useChatSession = ({
     handleAllowInConversation,
     handleDeny,
     handleAskUserSubmit,
+    handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
     handleOpenCreatedDocument,

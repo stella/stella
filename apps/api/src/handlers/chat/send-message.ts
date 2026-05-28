@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { Static } from "elysia";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -31,6 +31,7 @@ import {
   expandThreadDataScope,
   extractAssistantWorkspaceIds,
   extractIncomingMessageWorkspaceIds,
+  extractThreadDataWorkspaceIds,
 } from "@/api/handlers/chat/data-scope";
 import { ChatError } from "@/api/handlers/chat/errors";
 import { generateThreadTitle } from "@/api/handlers/chat/generate-thread-title";
@@ -252,7 +253,7 @@ const sendMessage = createSafeRootHandler(
     });
     if (
       thread.type === "existing" &&
-      !contextMatterIdsEqual(
+      !workspaceIdsEqual(
         thread.data.contextMatterIds,
         effectiveContextMatterIds,
       )
@@ -304,10 +305,60 @@ const sendMessage = createSafeRootHandler(
       message: uploadResult.message,
     });
 
+    let messagesForPersistence = thread.data.messages;
+    let deleteMessageIdsBeforeLatest: SafeId<"chatMessage">[] = [];
+    if (body.truncateAfterMessageId !== undefined) {
+      if (parsedMessage.message.id !== body.truncateAfterMessageId) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Truncation target must match the incoming message",
+          }),
+        );
+      }
+
+      const truncateIndex = thread.data.messages.findIndex(
+        (message) => message.id === body.truncateAfterMessageId,
+      );
+      if (truncateIndex === -1) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Truncation target was not found in the chat thread",
+          }),
+        );
+      }
+
+      messagesForPersistence = thread.data.messages.slice(0, truncateIndex + 1);
+      deleteMessageIdsBeforeLatest = thread.data.messages
+        .slice(truncateIndex + 1)
+        .map((message) => message.id);
+    }
+
     const latestMessagePlan = planMessagePersistence({
       message: parsedMessage.message,
-      storedMessages: thread.data.messages,
+      storedMessages: messagesForPersistence,
     });
+    if (
+      body.truncateAfterMessageId !== undefined &&
+      latestMessagePlan.persistencePlan.type !== "update"
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Truncation requires updating an existing message",
+        }),
+      );
+    }
+
+    const recomputedDataWorkspaceIds =
+      body.truncateAfterMessageId !== undefined
+        ? recomputeThreadDataScope({
+            accessibleSet,
+            baseWorkspaceId: workspaceId,
+            messages: latestMessagePlan.messages,
+          })
+        : null;
 
     const messageWindow = latestMessagePlan.messages.slice(-MESSAGE_WINDOW);
     const chatContextResult = await prepareChatContext({
@@ -342,13 +393,11 @@ const sendMessage = createSafeRootHandler(
     }
     const chatContext = chatContextResult.value;
 
-    // Widen the thread's data scope BEFORE persisting the incoming
-    // message so any workspace IDs it embeds are recorded on the
-    // thread row. User messages can embed entity/workspace mentions;
-    // assistant updates can embed client-executed tool outputs such
-    // as create-document results. Without this, a global thread
-    // could store workspace-scoped content while its data scope
-    // remains stale.
+    // Keep the thread's data scope aligned with the messages being
+    // stored. Normal sends append newly observed workspace IDs
+    // before persisting. Replay truncation recomputes the exact
+    // retained scope and writes it in the same transaction as the
+    // replay update below.
     //
     // Intersect with `accessibleWorkspaceIds` first: an unknown ID
     // (model hallucination, copy-pasted UUID from elsewhere) added
@@ -359,16 +408,21 @@ const sendMessage = createSafeRootHandler(
       mentions: parsedMessage.mentions,
       message: parsedMessage.message,
     }).filter((id) => accessibleSet.has(id));
-    const dataScopeAfterIncomingMessage = yield* Result.await(
-      expandThreadDataScope({
-        currentDataWorkspaceIds: thread.data.dataWorkspaceIds,
-        newWorkspaceIds: incomingMessageWorkspaceIds,
-        recordAuditEvent,
-        safeDb,
-        threadId: body.threadId,
-        threadWorkspaceId: workspaceId,
-      }),
-    );
+    let dataScopeAfterIncomingMessage: SafeId<"workspace">[];
+    if (recomputedDataWorkspaceIds !== null) {
+      dataScopeAfterIncomingMessage = recomputedDataWorkspaceIds;
+    } else {
+      dataScopeAfterIncomingMessage = yield* Result.await(
+        expandThreadDataScope({
+          currentDataWorkspaceIds: thread.data.dataWorkspaceIds,
+          newWorkspaceIds: incomingMessageWorkspaceIds,
+          recordAuditEvent,
+          safeDb,
+          threadId: body.threadId,
+          threadWorkspaceId: workspaceId,
+        }),
+      );
+    }
 
     yield* Result.await(
       persistMessage({
@@ -378,6 +432,14 @@ const sendMessage = createSafeRootHandler(
         userId: user.id,
         workspaceId,
         persistencePlan: latestMessagePlan.persistencePlan,
+        deleteMessageIds: deleteMessageIdsBeforeLatest,
+        dataWorkspaceIdsChange:
+          recomputedDataWorkspaceIds === null
+            ? undefined
+            : {
+                oldDataWorkspaceIds: thread.data.dataWorkspaceIds,
+                newDataWorkspaceIds: recomputedDataWorkspaceIds,
+              },
       }),
     );
 
@@ -1417,6 +1479,13 @@ type PersistMessageProps = {
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
   persistencePlan: MessagePersistencePlan;
+  deleteMessageIds?: SafeId<"chatMessage">[];
+  dataWorkspaceIdsChange?:
+    | {
+        oldDataWorkspaceIds: readonly SafeId<"workspace">[];
+        newDataWorkspaceIds: SafeId<"workspace">[];
+      }
+    | undefined;
 };
 
 const persistMessage = async ({
@@ -1426,6 +1495,8 @@ const persistMessage = async ({
   userId,
   workspaceId,
   persistencePlan,
+  deleteMessageIds = [],
+  dataWorkspaceIdsChange,
 }: PersistMessageProps) => {
   if (persistencePlan.type === "insert") {
     return await insertMessages({
@@ -1440,6 +1511,27 @@ const persistMessage = async ({
 
   if (persistencePlan.type === "update") {
     const updateResult = await safeDb(async (tx) => {
+      if (deleteMessageIds.length > 0) {
+        await tx
+          .delete(chatMessages)
+          .where(
+            and(
+              eq(chatMessages.threadId, threadId),
+              inArray(chatMessages.id, deleteMessageIds),
+            ),
+          );
+
+        for (const deletedMessageId of deleteMessageIds) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.DELETE,
+            resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
+            resourceId: deletedMessageId,
+            workspaceId,
+            metadata: { threadId, reason: "truncate_for_replay" },
+          });
+        }
+      }
+
       const updatedMessageId = brandPersistedChatMessageId(
         persistencePlan.messageId,
       );
@@ -1455,8 +1547,36 @@ const persistMessage = async ({
         .where(eq(chatMessages.id, updatedMessageId));
       await tx
         .update(chatThreads)
-        .set({ updatedAt: new Date() })
+        .set(
+          dataWorkspaceIdsChange === undefined
+            ? { updatedAt: new Date() }
+            : {
+                updatedAt: new Date(),
+                dataWorkspaceIds: dataWorkspaceIdsChange.newDataWorkspaceIds,
+              },
+        )
         .where(eq(chatThreads.id, threadId));
+
+      if (
+        dataWorkspaceIdsChange !== undefined &&
+        !workspaceIdsEqual(
+          dataWorkspaceIdsChange.oldDataWorkspaceIds,
+          dataWorkspaceIdsChange.newDataWorkspaceIds,
+        )
+      ) {
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+          resourceId: threadId,
+          workspaceId,
+          changes: {
+            dataWorkspaceIds: {
+              old: [...dataWorkspaceIdsChange.oldDataWorkspaceIds],
+              new: [...dataWorkspaceIdsChange.newDataWorkspaceIds],
+            },
+          },
+        });
+      }
 
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.UPDATE,
@@ -1509,9 +1629,32 @@ const persistMessage = async ({
   });
 };
 
-const contextMatterIdsEqual = (
-  a: SafeId<"workspace">[],
-  b: SafeId<"workspace">[],
+type RecomputeThreadDataScopeProps = {
+  accessibleSet: ReadonlySet<string>;
+  baseWorkspaceId: SafeId<"workspace"> | null;
+  messages: readonly ChatMessage[];
+};
+
+const recomputeThreadDataScope = ({
+  accessibleSet,
+  baseWorkspaceId,
+  messages,
+}: RecomputeThreadDataScopeProps): SafeId<"workspace">[] => {
+  const ids = new Set<SafeId<"workspace">>();
+  if (baseWorkspaceId !== null && accessibleSet.has(baseWorkspaceId)) {
+    ids.add(baseWorkspaceId);
+  }
+  for (const id of extractThreadDataWorkspaceIds(messages)) {
+    if (accessibleSet.has(id)) {
+      ids.add(id);
+    }
+  }
+  return Array.from(ids);
+};
+
+const workspaceIdsEqual = (
+  a: readonly SafeId<"workspace">[],
+  b: readonly SafeId<"workspace">[],
 ): boolean => {
   if (a.length !== b.length) {
     return false;

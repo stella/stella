@@ -64,6 +64,7 @@ class MissingFilePropertyError extends TaggedError("MissingFilePropertyError")<{
 export type CreateEntityFromBufferResult = Result<
   {
     entityId: SafeId<"entity">;
+    fieldId: SafeId<"field">;
     fileName: string;
   },
   EntityLimitError | MissingFilePropertyError
@@ -230,5 +231,5 @@ export const createEntityFromBuffer = async ({
     workspaceId,
   }).catch(captureError);
 
-  return Result.ok({ entityId, fileName });
+  return Result.ok({ entityId, fieldId, fileName });
 };

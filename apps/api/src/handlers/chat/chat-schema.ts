@@ -58,6 +58,7 @@ export const activeFileSchema = t.Object({
           ]),
           text: t.String(),
           displayLabel: t.Optional(t.String()),
+          styleId: t.Optional(t.String()),
         }),
       ),
     }),
@@ -95,6 +96,7 @@ export const sendMessageBodySchema = t.Object({
    */
   contextMatterIds: t.Optional(t.Array(tSafeId("workspace"))),
   message: rawMessageSchema,
+  truncateAfterMessageId: t.Optional(tSafeId("chatMessage")),
   userContext: t.Optional(userContextSchema),
   activeFile: t.Optional(activeFileSchema),
   activeDecision: t.Optional(activeDecisionSchema),

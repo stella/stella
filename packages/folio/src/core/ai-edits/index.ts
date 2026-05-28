@@ -22,4 +22,5 @@ export type {
   FolioAIEditSkipReason,
   FolioAIEditSkippedOperation,
   FolioAIEditSnapshot,
+  FolioAISignatureParty,
 } from "./types";

@@ -173,11 +173,7 @@ export const createChatExecutionTools = ({
         });
 
         if (Result.isOk(result)) {
-          return {
-            value: result.value.value,
-            hostCalls: result.value.hostCalls,
-            durationMs: result.value.durationMs,
-          };
+          return { value: result.value.value };
         }
 
         throw new ChatToolError({

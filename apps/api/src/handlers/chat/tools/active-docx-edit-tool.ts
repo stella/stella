@@ -47,8 +47,55 @@ const baseOperationSchema = {
   area: areaSchema,
 } as const;
 
+const styleIdSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(64),
+  v.description(
+    "Optional Word paragraph style id to apply to the inserted or " +
+      "replaced paragraph. Use canonical legal-source ids: " +
+      '"ClauseHeading1", "ClauseHeading2", "ClauseHeading3" for ' +
+      "numbered headings. Leave unset for plain body paragraphs.",
+  ),
+);
+
+const signaturePartySchema = v.strictObject({
+  name: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.description(
+      "Legal name of the party. Rendered bold above the signature line.",
+    ),
+  ),
+  signatory: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.description(
+        "Name of the person signing for this party. Rendered below " +
+          "the signature line; omit to leave it blank for hand-fill.",
+      ),
+    ),
+  ),
+  title: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.description(
+        "Optional role/title of the signatory, e.g. 'CEO'. Rendered " +
+          "in italics below the signatory name.",
+      ),
+    ),
+  ),
+});
+
+// `v.object` (not `strictObject`): the model occasionally tacks on
+// fields valid on one variant but not another (e.g. `position` on
+// `insertAfterBlock`). Strict mode rejects the whole batch over a
+// single stray key and the user's approved edit silently vanishes.
+// Liberal mode strips the unknown field and proceeds.
 const operationSchema = v.variant("type", [
-  v.strictObject({
+  v.object({
     ...baseOperationSchema,
     type: v.literal("replaceInBlock"),
     find: v.pipe(
@@ -59,7 +106,7 @@ const operationSchema = v.variant("type", [
     replace: v.pipe(v.string(), v.description("Replacement text.")),
     comment: v.optional(commentSchema),
   }),
-  v.strictObject({
+  v.object({
     ...baseOperationSchema,
     type: v.union([
       v.literal("insertAfterBlock"),
@@ -67,29 +114,48 @@ const operationSchema = v.variant("type", [
     ]),
     text: v.pipe(
       v.string(),
-      v.minLength(1),
-      v.description("Text for the inserted block."),
+      v.description(
+        "Text for the inserted block. May be empty when " +
+          "`pageBreakBefore` is true (the inserted paragraph " +
+          "exists only to force a page break).",
+      ),
     ),
     inheritFormatting: v.optional(v.boolean()),
+    pageBreakBefore: v.optional(
+      v.pipe(
+        v.boolean(),
+        v.description(
+          "When true, the inserted paragraph carries `pageBreakBefore` " +
+            "so the layout starts it on a new page. Use this for " +
+            "explicit page breaks instead of literal directive text.",
+        ),
+      ),
+    ),
+    styleId: v.optional(styleIdSchema),
     comment: v.optional(commentSchema),
   }),
-  v.strictObject({
+  v.object({
     ...baseOperationSchema,
     type: v.literal("replaceBlock"),
+    // Allow empty text — the client normalizes
+    // `replaceBlock(text: "")` to a `deleteBlock`, so the model
+    // doesn't have to pick between the two when its intent is
+    // "remove this paragraph". Schema stays liberal; the apply path
+    // produces the canonical op.
     text: v.pipe(
       v.string(),
-      v.minLength(1),
       v.description("Full replacement text for the target block."),
     ),
     preserveFormatting: v.optional(v.boolean()),
+    styleId: v.optional(styleIdSchema),
     comment: v.optional(commentSchema),
   }),
-  v.strictObject({
+  v.object({
     ...baseOperationSchema,
     type: v.literal("deleteBlock"),
     comment: v.optional(commentSchema),
   }),
-  v.strictObject({
+  v.object({
     ...baseOperationSchema,
     type: v.literal("commentOnBlock"),
     quote: v.optional(
@@ -100,6 +166,31 @@ const operationSchema = v.variant("type", [
       ),
     ),
     comment: commentSchema,
+  }),
+  v.object({
+    ...baseOperationSchema,
+    type: v.literal("insertSignatureTable"),
+    position: v.optional(
+      v.pipe(
+        v.picklist(["after", "before"]),
+        v.description(
+          "Where to insert the signature table relative to the " +
+            'anchor block. Defaults to "after".',
+        ),
+      ),
+    ),
+    parties: v.pipe(
+      v.array(signaturePartySchema),
+      v.minLength(1),
+      v.maxLength(8),
+      v.description(
+        "Parties to render side-by-side in the signature table, " +
+          "one column per party. Each column has the party name " +
+          "bold, two blank spacer lines, an underscore signature " +
+          "rule, then optional signatory and italic title lines.",
+      ),
+    ),
+    comment: v.optional(commentSchema),
   }),
 ]);
 
@@ -112,6 +203,7 @@ const skippedOperationSchema = v.strictObject({
     "missingFind",
     "unsupportedBlock",
     "emptyOperation",
+    "noopOperation",
     "documentNotEditable",
   ]),
 });

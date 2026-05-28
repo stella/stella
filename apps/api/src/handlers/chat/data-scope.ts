@@ -48,6 +48,22 @@ export const extractIncomingMessageWorkspaceIds = ({
   return [];
 };
 
+export const extractMessageWorkspaceIds = (
+  message: ChatMessage,
+): SafeId<"workspace">[] => collectPartsWorkspaceIds(message.parts);
+
+export const extractThreadDataWorkspaceIds = (
+  messages: readonly ChatMessage[],
+): SafeId<"workspace">[] => {
+  const ids = new Set<SafeId<"workspace">>();
+  for (const message of messages) {
+    for (const id of extractMessageWorkspaceIds(message)) {
+      ids.add(id);
+    }
+  }
+  return Array.from(ids);
+};
+
 // Walks an assistant message's parts for workspace-scoped data
 // embedded by the model. Two complementary carriers are scanned:
 //
@@ -68,6 +84,10 @@ export const extractIncomingMessageWorkspaceIds = ({
 // handles legacy/migrated message shapes without forcing callers to
 // pre-validate against the live `ChatMessage` union.
 export const extractAssistantWorkspaceIds = (
+  parts: readonly unknown[],
+): SafeId<"workspace">[] => collectPartsWorkspaceIds(parts);
+
+const collectPartsWorkspaceIds = (
   parts: readonly unknown[],
 ): SafeId<"workspace">[] => {
   const ids = new Set<SafeId<"workspace">>();
