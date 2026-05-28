@@ -82,7 +82,7 @@ describe("chat prompt builders", () => {
     }
   });
 
-  test("does not include UI locale in the prompt", () => {
+  test("renders UI locale as a BCP-47 cue so the model anchors language to it", () => {
     const prompt = buildUserContextBlock({
       locale: "cs",
       timezone: "Europe/Prague",
@@ -90,9 +90,8 @@ describe("chat prompt builders", () => {
     });
 
     expect(prompt).toContain("User registered as: Jan Kubica");
+    expect(prompt).toContain("User UI language (BCP-47): cs");
     expect(prompt).toContain("Current date/time:");
-    expect(prompt).not.toContain("UX language:");
-    expect(prompt).not.toContain("cs");
   });
 
   test("keeps the cache-stable prefix independent from volatile user context", () => {
