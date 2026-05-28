@@ -273,6 +273,18 @@ const WithOpenEntityButton = ({
       >
         <Button
           className={inlineActionClass}
+          onClick={(event) => {
+            event.stopPropagation();
+            handleOpenPreview();
+          }}
+          size="xs"
+          variant="ghost"
+        >
+          <EyeIcon className="size-3.5" />
+          {t("common.preview")}
+        </Button>
+        <Button
+          className={inlineActionClass}
           disabled={retryDisabled || isRetrying}
           onClick={(event) => {
             event.stopPropagation();
@@ -283,18 +295,6 @@ const WithOpenEntityButton = ({
         >
           <RefreshCwIcon className="size-3.5" />
           {t("common.retry")}
-        </Button>
-        <Button
-          className={inlineActionClass}
-          onClick={(event) => {
-            event.stopPropagation();
-            handleOpenPreview();
-          }}
-          size="xs"
-          variant="ghost"
-        >
-          <EyeIcon className="size-3.5" />
-          {t("common.preview")}
         </Button>
       </div>
     </div>

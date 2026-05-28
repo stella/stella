@@ -2273,7 +2273,7 @@
       "parties": "Strany"
     },
     "table": {
-      "clearFlags": "Vymazat označení",
+      "clearFlags": "Odstranit označení",
       "flagCell": "Označit buňku",
       "flags": {
         "contradiction": "Rozpor",

@@ -11,6 +11,7 @@ import {
   MessageSquareWarningIcon,
   ShieldAlertIcon,
   StarIcon,
+  XIcon,
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useLocale, useTranslations } from "use-intl";
@@ -161,7 +162,7 @@ export const CellMetadataFlags = ({
           className="pointer-events-none absolute inset-0"
           style={{
             backgroundColor: VERIFIED_CELL_FLAG.background,
-            opacity: 0.18,
+            opacity: 0.28,
             zIndex: -1,
           }}
         />
@@ -411,7 +412,8 @@ export const CellMetadataMenuSection = ({
         <>
           <MenuSeparator />
           <MenuItem className="min-h-7 py-0.5 text-sm" onClick={clearFlags}>
-            <span className="min-w-0 flex-1 truncate ps-6">
+            <XIcon className="size-3.5 shrink-0 opacity-75" />
+            <span className="min-w-0 flex-1 truncate">
               {t("workspaces.table.clearFlags")}
             </span>
           </MenuItem>
