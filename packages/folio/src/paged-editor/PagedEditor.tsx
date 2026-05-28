@@ -4583,17 +4583,44 @@ export function PagedEditor(
         const pmStart = imageEl.dataset["pmStart"];
         if (pmStart !== undefined) {
           const pos = Number.parseInt(pmStart, 10);
-          if (hiddenPMRef.current.getView()) {
-            hiddenPMRef.current.setNodeSelection(pos);
+          // HF edit mode + image inside an HF slot: NodeSelect on the
+          // matching HF PM. Otherwise selection would land on body at
+          // an HF-doc position, which doesn't address a valid node and
+          // silently no-ops (or worse, picks an unrelated body node).
+          const hfSlot = hfEditMode ? findHfSlotForTarget(imageEl) : null;
+          const hfView = hfSlot ? hfPMsRef.current?.getView(hfSlot.rId) : null;
+          if (hfView) {
+            try {
+              hfView.dispatch(
+                hfView.state.tr.setSelection(
+                  NodeSelection.create(hfView.state.doc, pos),
+                ),
+              );
+            } catch {
+              // Pos didn't address a selectable node — fall back to a
+              // near text selection so the user still gets focus.
+              const $pos = hfView.state.doc.resolve(
+                Math.min(pos, hfView.state.doc.content.size),
+              );
+              hfView.dispatch(
+                hfView.state.tr.setSelection(TextSelection.near($pos)),
+              );
+            }
+            hfView.focus();
+            // Image selection chrome is body-only today; HF image select
+            // shows browser-default selection ring. Tracked for follow-up.
           } else {
-            queueHiddenEditorSelection({ type: "node", pos });
+            if (hiddenPMRef.current.getView()) {
+              hiddenPMRef.current.setNodeSelection(pos);
+            } else {
+              queueHiddenEditorSelection({ type: "node", pos });
+            }
+            setSelectedImageInfo(buildImageSelectionInfo(imageEl, pos));
+            setSelectionRects([]);
+            setCaretPosition(null);
+            focusHiddenEditor();
           }
-          setSelectedImageInfo(buildImageSelectionInfo(imageEl, pos));
-          setSelectionRects([]);
-          setCaretPosition(null);
         }
-
-        focusHiddenEditor();
         return;
       }
 
