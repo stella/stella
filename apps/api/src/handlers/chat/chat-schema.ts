@@ -58,6 +58,7 @@ export const activeFileSchema = t.Object({
           ]),
           text: t.String(),
           displayLabel: t.Optional(t.String()),
+          styleId: t.Optional(t.String()),
         }),
       ),
     }),

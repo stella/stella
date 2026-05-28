@@ -225,6 +225,7 @@ describe("chat prompt builders", () => {
               displayLabel: "7.1",
               id: "b-1",
               kind: "paragraph",
+              styleId: "ClauseHeading1",
               text: "David Cuketa r.č.: DOPLNIT nar. 32.5.1990 bytem: xxx",
             },
           ],
@@ -245,6 +246,7 @@ describe("chat prompt builders", () => {
     // since the prompt was scrubbed of locale-specific examples.
     expect(prompt).toContain("confirms an earlier proposal");
     expect(prompt).toContain('"blockId":"b-1"');
+    expect(prompt).toContain('"styleId":"ClauseHeading1"');
     expect(prompt).toContain("David Cuketa");
     expect(prompt).toContain(
       "only ids that appear in `applied` represent actual document changes",

@@ -39,6 +39,7 @@ import type {
 import { cn } from "@stll/ui/lib/utils";
 
 import { PromptBar } from "@/components/ai-suggestions/host";
+import { isNoopReviewOperation } from "@/components/ai-suggestions/review-operation-utils";
 import {
   REVIEW_UNSPECIFIED_AREA,
   useReviewStore,
@@ -391,31 +392,11 @@ const inputOperationArea = (operation: ToolInputOperation): string =>
   operation.area ?? REVIEW_UNSPECIFIED_AREA;
 /* oxlint-enable typescript/no-unnecessary-condition */
 
-const isNoopReviewOperation = (
-  operation: FolioAIEditOperation,
-  blocksById: Map<string, SnapshotBlock>,
-): boolean => {
-  switch (operation.type) {
-    case "replaceInBlock":
-      return operation.find === operation.replace;
-    case "replaceBlock":
-      return operation.text === (blocksById.get(operation.blockId)?.text ?? "");
-    case "commentOnBlock":
-    case "deleteBlock":
-    case "insertAfterBlock":
-    case "insertBeforeBlock":
-    case "insertSignatureTable":
-      return false;
-    default:
-      operation satisfies never;
-      return false;
-  }
-};
-
 type SnapshotBlock = {
   id: string;
   text: string;
   displayLabel?: string | undefined;
+  styleId?: string;
   previewRuns?: FolioAIEditSnapshot["blocks"][number]["previewRuns"];
 };
 

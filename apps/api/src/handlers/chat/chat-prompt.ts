@@ -572,6 +572,7 @@ const buildActiveDocxEditPrompt = (activeFile: IncomingActiveFile) => {
         blockId: string;
         kind: typeof block.kind;
         label?: string;
+        styleId?: string;
         text: string;
       } = {
         blockId: block.id,
@@ -584,6 +585,9 @@ const buildActiveDocxEditPrompt = (activeFile: IncomingActiveFile) => {
 
       if (block.displayLabel) {
         promptBlock.label = block.displayLabel;
+      }
+      if (block.styleId) {
+        promptBlock.styleId = block.styleId;
       }
 
       return promptBlock;

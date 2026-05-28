@@ -294,6 +294,7 @@ export const buildDocxBlocksMessage = ({
       kind: typeof block.kind;
       text: string;
       label?: string;
+      styleId?: string;
     } = {
       blockId: block.id,
       kind: block.kind,
@@ -301,6 +302,9 @@ export const buildDocxBlocksMessage = ({
     };
     if (block.displayLabel) {
       out.label = block.displayLabel;
+    }
+    if (block.styleId) {
+      out.styleId = block.styleId;
     }
     return out;
   });

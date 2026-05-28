@@ -39,6 +39,7 @@ type ActiveFileContext = {
           displayLabel?: string | undefined;
           id: string;
           kind: "heading" | "listItem" | "paragraph";
+          styleId?: string | undefined;
           text: string;
         }[];
         canApplyEdits?: boolean | undefined;

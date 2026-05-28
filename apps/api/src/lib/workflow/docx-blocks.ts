@@ -792,12 +792,14 @@ const extractBlocksFromXmlDocument = (
     }
 
     const { kind, displayLabel } = detectKind(paragraph);
+    const styleId = getStyleId(paragraph);
     const id = `b-${String(++blockIndex).padStart(4, "0")}`;
     blocks.push({
       id,
       kind,
       text,
       ...(displayLabel ? { displayLabel } : {}),
+      ...(styleId ? { styleId } : {}),
     });
   }
 

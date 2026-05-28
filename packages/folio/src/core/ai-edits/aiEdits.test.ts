@@ -232,6 +232,20 @@ describe("Folio AI edit operations", () => {
     expect(snapshot.anchors["BBBB0002"]?.text).toBe("Third paragraph.");
   });
 
+  test("captures paragraph style ids in the AI-facing block snapshot", () => {
+    const state = makeState([
+      { styleId: "ClauseHeading1", text: "Payment terms" },
+    ]);
+
+    const snapshot = createFolioAIEditSnapshot(state.doc);
+
+    expect(snapshot.blocks[0]).toMatchObject({
+      id: "seq-0001",
+      styleId: "ClauseHeading1",
+      text: "Payment terms",
+    });
+  });
+
   test("captures formatted preview runs in the AI-facing block snapshot", () => {
     const boldType = schema.marks["bold"];
     const italicType = schema.marks["italic"];

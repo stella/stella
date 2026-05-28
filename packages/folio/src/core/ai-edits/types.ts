@@ -16,6 +16,7 @@ export type FolioAIBlock = {
   kind: FolioAIBlockKind;
   text: string;
   displayLabel?: string;
+  styleId?: string;
   previewRuns?: FolioAIBlockPreviewRun[];
 };
 
