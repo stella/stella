@@ -154,10 +154,15 @@ export const CellMetadataFlags = ({
       {hasVerifiedFlag && (
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-0 z-0"
+          // Negative z-index keeps the tint behind cell text. The
+          // parent WorkspaceGridCell sets `relative z-0`, which
+          // creates a stacking context so this stays scoped to the
+          // cell.
+          className="pointer-events-none absolute inset-0"
           style={{
             backgroundColor: VERIFIED_CELL_FLAG.background,
-            opacity: 0.35,
+            opacity: 0.18,
+            zIndex: -1,
           }}
         />
       )}
@@ -529,29 +534,49 @@ const useCellMetadataFlags = ({
     });
   }, 200);
 
-  const writeOverride = (next: {
-    manualFlags: string[];
-    locked?: boolean | undefined;
-  }) => {
+  // Read the latest store state inside handlers (not render-scope
+  // closures) so rapid clicks compose against the most recent
+  // optimistic value rather than a stale React snapshot.
+  const readLatest = () => {
+    const stored = useCellMetadataOverridesStore.getState().overrides[key];
+    return {
+      manualFlags: stored?.manualFlags ?? metadataManualFlags,
+      locked: stored?.locked ?? serverLocked,
+      storedLocked: stored?.locked,
+    };
+  };
+
+  const writeOverride = (
+    next: { manualFlags: string[]; locked?: boolean | undefined },
+    options?: { immediate?: boolean },
+  ) => {
+    const { storedLocked } = readLatest();
     setOverride(key, {
       manualFlags: next.manualFlags,
-      locked: next.locked ?? override?.locked,
+      locked: next.locked ?? storedLocked,
     });
     flush();
+    if (options?.immediate === true) {
+      // Discrete actions (lock toggle, clear flags) close the menu
+      // and may unmount before the 200ms debounce fires, so commit
+      // the patch immediately.
+      flush.flush();
+    }
   };
 
   const toggleFlag = (flagId: CellFlagId) => {
-    const wasActive = currentManualFlags.includes(flagId);
+    const { manualFlags: latestFlags, locked: latestLocked } = readLatest();
+    const wasActive = latestFlags.includes(flagId);
     const nextFlags = normalizeManualFlags(
       wasActive
-        ? currentManualFlags.filter((id) => id !== flagId)
-        : [...currentManualFlags, flagId],
+        ? latestFlags.filter((id) => id !== flagId)
+        : [...latestFlags, flagId],
     );
     // Adding Verified locks the cell so the curated answer can't be
     // overwritten by a later AI sweep or a stray keystroke. Removing
     // Verified does not auto-unlock (user may still want it locked).
     const shouldAutoLock =
-      !wasActive && flagId === VERIFIED_FLAG_ID && !isLocked;
+      !wasActive && flagId === VERIFIED_FLAG_ID && !latestLocked;
     writeOverride({
       manualFlags: nextFlags,
       ...(shouldAutoLock && { locked: true }),
@@ -559,12 +584,17 @@ const useCellMetadataFlags = ({
   };
 
   const clearFlags = () => {
-    writeOverride({ manualFlags: [] });
+    writeOverride({ manualFlags: [] }, { immediate: true });
   };
 
   const setLocked = (locked: boolean) => {
-    writeOverride({ manualFlags: currentManualFlags, locked });
+    const { manualFlags: latestFlags } = readLatest();
+    writeOverride({ manualFlags: latestFlags, locked }, { immediate: true });
   };
+
+  // Safety net — if the component unmounts with a pending change,
+  // commit it instead of dropping the request.
+  useEffect(() => () => flush.flush(), [flush]);
 
   const lockProvenance = metadata?.lockProvenance;
 
