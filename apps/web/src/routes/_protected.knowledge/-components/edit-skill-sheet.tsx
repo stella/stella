@@ -673,11 +673,11 @@ const buildTree = (resources: SkillResource[]): TreeNode[] => {
     if (segments.length === 0) {
       continue;
     }
-    const fileName = segments[segments.length - 1] ?? resource.path;
+    const fileName = segments.at(-1) ?? resource.path;
     let cursor = root;
     let accum = "";
     for (let i = 0; i < segments.length - 1; i++) {
-      const name = segments[i];
+      const name = segments.at(i);
       if (name === undefined) {
         continue;
       }
