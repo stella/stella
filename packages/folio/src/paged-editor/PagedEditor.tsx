@@ -678,12 +678,15 @@ function HfCaretOverlay({
           return;
         }
         const ar = hit.element.getBoundingClientRect();
-        // Default to the span edge findHfCaretSpan returned. For mid-span
-        // text positions (clicked / arrowed into the middle of a run),
-        // sample the exact character X via the Range API so the caret
-        // lines up with the glyph the PM selection actually sits at — a
-        // bare edge anchor would paint at the run's left edge regardless
-        // of where the user clicked (Codex #487 P2: 22:38 review).
+        // Default fallback uses the span edge findHfCaretSpan returned —
+        // safe for atom spans (images, breaks) that lack a text node.
+        // For text-bearing spans, sample the *exact* visual position
+        // via a collapsed Range at (selection.from - pmStart) inside
+        // the text node. The Range API returns the caret rect in
+        // visual (direction-aware) coordinates so it lands on the
+        // correct side of the run in RTL / bidi headers / footers as
+        // well as the middle of mid-span LTR runs (Codex #487 P2:
+        // 22:38 + 22:58 reviews).
         let absX = hit.edge === "right" ? ar.right : ar.left;
         let absY = ar.top;
         let absHeight = ar.height || 16;
@@ -693,29 +696,27 @@ function HfCaretOverlay({
           ? Number.parseInt(pmStartStr, 10)
           : Number.NaN;
         const pmEnd = pmEndStr ? Number.parseInt(pmEndStr, 10) : Number.NaN;
+        const textNode = hit.element.firstChild;
         if (
+          textNode &&
+          textNode.nodeType === Node.TEXT_NODE &&
           Number.isFinite(pmStart) &&
-          Number.isFinite(pmEnd) &&
-          selection.from > pmStart &&
-          selection.from < pmEnd
+          Number.isFinite(pmEnd)
         ) {
-          const textNode = hit.element.firstChild;
-          if (textNode && textNode.nodeType === Node.TEXT_NODE) {
-            const textContent = textNode.textContent ?? "";
-            const charOffset = Math.min(
-              selection.from - pmStart,
-              textContent.length,
-            );
-            const ownerDoc = hit.element.ownerDocument;
-            const range = ownerDoc.createRange();
-            range.setStart(textNode, charOffset);
-            range.setEnd(textNode, charOffset);
-            const rRect = range.getBoundingClientRect();
-            if (rRect.height > 0 || rRect.width > 0 || rRect.left > 0) {
-              absX = rRect.left;
-              absY = rRect.top;
-              absHeight = rRect.height || absHeight;
-            }
+          const textContent = textNode.textContent ?? "";
+          const charOffset = Math.min(
+            Math.max(0, selection.from - pmStart),
+            textContent.length,
+          );
+          const ownerDoc = hit.element.ownerDocument;
+          const range = ownerDoc.createRange();
+          range.setStart(textNode, charOffset);
+          range.setEnd(textNode, charOffset);
+          const rRect = range.getBoundingClientRect();
+          if (rRect.height > 0 || rRect.width > 0 || rRect.left > 0) {
+            absX = rRect.left;
+            absY = rRect.top;
+            absHeight = rRect.height || absHeight;
           }
         }
         setCaret({
