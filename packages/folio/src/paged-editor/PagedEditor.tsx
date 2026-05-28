@@ -43,6 +43,7 @@ import {
   findBodyPmSpans,
 } from "../core/layout-bridge/findBodyPmSpans";
 import {
+  clickToPositionInHfSlot,
   findHfCaretSpan,
   findHfSlotForTarget,
 } from "../core/layout-bridge/findHfPmSpans";
@@ -4456,11 +4457,15 @@ export function PagedEditor(
           const hfView = hfPMsRef.current?.getView(slot.rId);
           if (hfView) {
             e.preventDefault();
-            const pos = clickToPositionDom(
+            // Slot-scoped mapper so a whitespace click inside the painted
+            // header / footer can't fall through to clickToPositionDom's
+            // body-content nearest-span path (Codex #487 P2: 21:02).
+            const pos = clickToPositionInHfSlot(
               pagesContainerRef.current ?? slot.element,
+              slot.kind,
+              slot.rId,
               e.clientX,
               e.clientY,
-              zoom,
             );
             if (pos !== null) {
               const docEnd = hfView.state.doc.content.size;
@@ -4760,14 +4765,15 @@ export function PagedEditor(
     const hfSurface = activeHfDragSurfaceRef.current;
     if (hfSurface) {
       const hfView = hfPMsRef.current?.getView(hfSurface.rId);
-      if (!hfView) {
+      if (!hfView || !pagesContainerRef.current) {
         return;
       }
-      const pmPos = clickToPositionDom(
-        pagesContainerRef.current ?? hfView.dom,
+      const pmPos = clickToPositionInHfSlot(
+        pagesContainerRef.current,
+        hfSurface.kind,
+        hfSurface.rId,
         cx,
         cy,
-        zoom,
       );
       if (pmPos === null) {
         return;
@@ -4883,11 +4889,12 @@ export function PagedEditor(
         const hfSurface = activeHfDragSurfaceRef.current;
         const hfView = hfPMsRef.current?.getView(hfSurface.rId);
         if (hfView && cellDragAnchorPosRef.current !== null) {
-          const hfPos = clickToPositionDom(
+          const hfPos = clickToPositionInHfSlot(
             pagesContainerRef.current,
+            hfSurface.kind,
+            hfSurface.rId,
             e.clientX,
             e.clientY,
-            zoom,
           );
           if (hfPos !== null) {
             const currentCellPos = findCellPosInDoc(hfView.state.doc, hfPos);
@@ -4986,7 +4993,6 @@ export function PagedEditor(
       findCellPosFromPmPos,
       findCellPosInDoc,
       updateDragScroll,
-      zoom,
     ],
   );
 
@@ -5510,11 +5516,12 @@ export function PagedEditor(
         if (slot) {
           const hfView = hfPMsRef.current.getView(slot.rId);
           if (hfView) {
-            const pos = clickToPositionDom(
+            const pos = clickToPositionInHfSlot(
               pagesContainerRef.current ?? slot.element,
+              slot.kind,
+              slot.rId,
               e.clientX,
               e.clientY,
-              zoom,
             );
             if (pos !== null) {
               const docEnd = hfView.state.doc.content.size;
@@ -5697,11 +5704,12 @@ export function PagedEditor(
           const hfView = hfPMsRef.current?.getView(slot.rId);
           if (hfView) {
             const { from, to } = hfView.state.selection;
-            const pmPos = clickToPositionDom(
+            const pmPos = clickToPositionInHfSlot(
               pagesContainerRef.current ?? slot.element,
+              slot.kind,
+              slot.rId,
               e.clientX,
               e.clientY,
-              zoom,
             );
             if (pmPos !== null && (from === to || pmPos < from || pmPos > to)) {
               const docEnd = hfView.state.doc.content.size;
@@ -5744,7 +5752,7 @@ export function PagedEditor(
 
       onContextMenu({ x: e.clientX, y: e.clientY, hasSelection });
     },
-    [hfEditMode, onContextMenu, getPositionFromMouse, readOnly, zoom],
+    [hfEditMode, onContextMenu, getPositionFromMouse, readOnly],
   );
 
   /**

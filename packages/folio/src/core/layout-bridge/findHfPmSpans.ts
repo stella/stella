@@ -9,6 +9,8 @@
  * share a header by rId share both the painted spans and the EditorView).
  */
 
+import { findPositionInSpan } from "./clickToPositionDom";
+
 export type HfSlotKind = "header" | "footer";
 
 function slotSelector(kind: HfSlotKind, rId: string): string {
@@ -131,6 +133,119 @@ function hasCloset(value: unknown): value is ClosestCapable {
     value !== null &&
     typeof (value as { closest?: unknown }).closest === "function"
   );
+}
+
+/**
+ * Slot-scoped click-to-position mapper. `clickToPositionDom`'s fallback
+ * (`findNearestSpan`) is hardcoded to `.layout-page-content` — body — so when
+ * the user clicks HF whitespace (right of the text, between lines, etc.),
+ * the body fallback can return a body PM position that the HF dispatch then
+ * applies to the HF EditorView (clamped) and the caret leaps to an
+ * unrelated HF doc position (Codex #487 P2: 21:02 review).
+ *
+ * Scope everything to the slot element: try the exact-span lookup via
+ * `document.elementsFromPoint` filtered to descendants of `slot`; fall back
+ * to nearest-span-in-line + start/end edge math within the same slot.
+ */
+export function clickToPositionInHfSlot(
+  container: ParentNode,
+  kind: HfSlotKind,
+  rId: string,
+  clientX: number,
+  clientY: number,
+): number | null {
+  const ownerDoc =
+    container instanceof Element ? container.ownerDocument : document;
+  const slotSel = slotSelector(kind, rId);
+  const elements = ownerDoc.elementsFromPoint(clientX, clientY);
+  for (const el of elements) {
+    if (!(el instanceof HTMLElement)) {
+      continue;
+    }
+    // Match any painted slot with this rId — there can be one per page when
+    // the same header is referenced across pages, so a drag that crosses
+    // between paginated instances must accept the hit regardless of which
+    // exact slot DOM node it lands in.
+    if (!el.closest(slotSel)) {
+      continue;
+    }
+    if (
+      el.tagName === "SPAN" &&
+      el.dataset["pmStart"] !== undefined &&
+      el.dataset["pmEnd"] !== undefined
+    ) {
+      return findPositionInSpan(el, clientX, clientY);
+    }
+  }
+  return findNearestSpanInHfSlots(container, kind, rId, clientX, clientY);
+}
+
+function computeColDist(
+  inside: boolean,
+  rect: DOMRect,
+  clientX: number,
+): number {
+  if (inside) {
+    return 0;
+  }
+  if (clientX < rect.left) {
+    return rect.left - clientX;
+  }
+  return clientX - rect.right;
+}
+
+function findNearestSpanInHfSlots(
+  container: ParentNode,
+  kind: HfSlotKind,
+  rId: string,
+  clientX: number,
+  clientY: number,
+): number | null {
+  const spans = container.querySelectorAll<HTMLElement>(
+    `${slotSelector(kind, rId)} span[data-pm-start][data-pm-end]`,
+  );
+  if (spans.length === 0) {
+    return null;
+  }
+  // Pick the line whose vertical centre is closest to clientY, then the
+  // span on that line whose horizontal range contains clientX, otherwise
+  // the closest by horizontal distance. Mirrors clickToPositionDom's
+  // body-fallback shape so the UX feels identical.
+  let bestSpan: HTMLElement | null = null;
+  let bestRowDist = Number.POSITIVE_INFINITY;
+  let bestColDist = Number.POSITIVE_INFINITY;
+  let bestInside = false;
+  for (const span of spans) {
+    const rect = span.getBoundingClientRect();
+    const centerY = (rect.top + rect.bottom) / 2;
+    const rowDist = Math.abs(clientY - centerY);
+    const inside = clientX >= rect.left && clientX <= rect.right;
+    const colDist = computeColDist(inside, rect, clientX);
+    const better =
+      rowDist < bestRowDist ||
+      (rowDist === bestRowDist &&
+        ((inside && !bestInside) ||
+          (inside === bestInside && colDist < bestColDist)));
+    if (better) {
+      bestRowDist = rowDist;
+      bestColDist = colDist;
+      bestInside = inside;
+      bestSpan = span;
+    }
+  }
+  if (!bestSpan) {
+    return null;
+  }
+  if (bestInside) {
+    return findPositionInSpan(bestSpan, clientX, clientY);
+  }
+  const rect = bestSpan.getBoundingClientRect();
+  if (clientX < rect.left) {
+    const v = bestSpan.dataset["pmStart"];
+    return v ? Number(v) : null;
+  }
+  const v = bestSpan.dataset["pmEnd"];
+  return v ? Number(v) : null;
 }
 
 export function findHfSlotForTarget(target: Node | null): {
