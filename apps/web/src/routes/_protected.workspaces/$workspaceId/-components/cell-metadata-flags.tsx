@@ -95,6 +95,17 @@ const cellFlagsById = new Map<string, CellFlagDefinition>(
   CELL_FLAGS.map((flag) => [flag.id, flag]),
 );
 
+// Determines which active flag colors the cell background tint when
+// several flags coexist. Verified wins (the desired final state),
+// then the most pressing review/issue flags.
+const TINT_PRIORITY: readonly CellFlagId[] = [
+  "verified",
+  "contradiction",
+  "follow-up",
+  "needs-review",
+  "important",
+];
+
 const FLAG_LABEL_KEYS = {
   "needs-review": "workspaces.table.flags.needsReview",
   important: "workspaces.table.flags.important",
@@ -143,10 +154,10 @@ export const CellMetadataFlags = ({
   const getFlagLabel = useFlagLabel();
   const {
     activeFlags,
-    hasVerifiedFlag,
     isLocked,
     lockProvenance,
     setLocked,
+    tintFlag,
     toggleFlag,
   } = useCellMetadataFlags({
     entityId,
@@ -159,7 +170,7 @@ export const CellMetadataFlags = ({
 
   return (
     <>
-      {hasVerifiedFlag && (
+      {tintFlag && (
         <span
           aria-hidden
           // Negative z-index keeps the tint behind cell text. The
@@ -168,7 +179,7 @@ export const CellMetadataFlags = ({
           // cell.
           className="pointer-events-none absolute inset-0"
           style={{
-            backgroundColor: VERIFIED_CELL_FLAG.background,
+            backgroundColor: tintFlag.background,
             opacity: 0.28,
             zIndex: -1,
           }}
@@ -506,6 +517,17 @@ const useCellMetadataFlags = ({
     [currentManualFlags],
   );
   const hasVerifiedFlag = currentManualFlags.includes(VERIFIED_FLAG_ID);
+  const tintFlag = useMemo(
+    () =>
+      TINT_PRIORITY.flatMap((flagId) => {
+        if (!currentManualFlags.includes(flagId)) {
+          return [];
+        }
+        const flag = cellFlagsById.get(flagId);
+        return flag === undefined ? [] : [flag];
+      }).at(0) ?? null,
+    [currentManualFlags],
+  );
 
   // Refs let the debounced flush read the latest server snapshot
   // without re-creating the callback on every prop change.
@@ -639,6 +661,7 @@ const useCellMetadataFlags = ({
     isLocked,
     lockProvenance,
     setLocked,
+    tintFlag,
     toggleFlag,
   };
 };
