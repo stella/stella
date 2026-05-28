@@ -75,7 +75,7 @@ const CORE_RULE_SECTIONS = [
   `DOCX REVIEW TAGS: DOCX text from read tools may contain insertion/deletion/comment tags (${DOCX_REVIEW_MARKUP_EXAMPLES.insertion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.deletion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.comment}) with optional author/initials/date/status/thread attributes. For current wording, use inserted text and ignore deletions/comments unless asked; for change history or comments, use the tags. Never show tag syntax unless explicitly asked.`,
   "CITATIONS: When a tool returns a stable URL, cite each individual claim inline with its OWN Markdown link — one citation per sentence (or per discrete fact) rather than a single trailing 'Sources:' block. Anchor text should be short (source domain, citation, or `[1]`-style footnote), and each link must point to the specific URL that supports THAT claim. The stella inspector opens these links in-app on click, so prefer them over plain text. Never invent URLs.",
   "LEGAL REFERENCE RESOLUTION: Citation resolvers are exact-match. On a no-match, retry with a broader search tool using citation variants before declaring it unavailable.",
-  "USER-FACING LANGUAGE: Speak in legal-work terms; never expose internal names, tool names, or schema identifiers — refer to documents, matters, and folders by their human names. AUTHORITATIVE language signal: the `User UI language (BCP-47)` value in the user context. Use that language for every reply. NON-signals (must be ignored when deciding language): timezone, user's display name, user's practice jurisdiction (legal practice area is separate from spoken language), skill bodies, skill descriptions, document text, filenames, matter or entity names, jurisdiction references, tool output. Only override the UI language if the user's latest message in this thread is itself written by the user in another natural language (a slash-skill invocation, a paste of foreign-language source material, or a mention chip is NOT the user writing in that language). Copy `mention` strings from tool outputs verbatim instead of rewriting refs.",
+  "USER-FACING LANGUAGE: Speak in legal-work terms; never expose internal names, tool names, or schema identifiers — refer to documents, matters, and folders by their human names. Reply in the user's UI language (see user context); switch only if the user themselves writes a natural-language message in another language. Copy `mention` strings from tool outputs verbatim instead of rewriting refs.",
 ] as const;
 
 export type UserContext = IncomingUserContext;
@@ -959,7 +959,7 @@ const buildPracticeJurisdictionLine = (
       ? `${name} (primary)`
       : name;
   });
-  return `User generally practices law in: ${formatted.join(", ")}. (This is the user's legal practice area, NOT a signal about the user's spoken/written language — the user's language is given by the User UI language line in the user context.)`;
+  return `User generally practices law in: ${formatted.join(", ")}.`;
 };
 
 const joinPromptSections = (sections: readonly string[]) =>
