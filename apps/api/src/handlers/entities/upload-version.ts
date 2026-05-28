@@ -290,9 +290,13 @@ export default createSafeHandler(
           )
           .for("update");
 
-        if (currentCellMetadataRows.length > 0) {
+        const cellMetadataRowsToCopy = currentCellMetadataRows.filter(
+          (row) => row.propertyId !== freshFileField.propertyId,
+        );
+
+        if (cellMetadataRowsToCopy.length > 0) {
           await tx.insert(cellMetadata).values(
-            currentCellMetadataRows.map((row) => ({
+            cellMetadataRowsToCopy.map((row) => ({
               workspaceId,
               entityVersionId: nextVersionId,
               propertyId: row.propertyId,
