@@ -3,6 +3,7 @@ import {
   Suspense,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -638,6 +639,10 @@ const ReadOnlyDocxDocumentViewer = ({
     scaleOffset,
     0.85,
   );
+  const composedContainerRef = useMemo(
+    () => composeRefs(containerRef, fitZoomRef),
+    [fitZoomRef],
+  );
 
   useLayoutEffect(() => {
     editorRef.current?.setZoom(targetZoom);
@@ -645,10 +650,7 @@ const ReadOnlyDocxDocumentViewer = ({
   useDocxWheelZoom(containerRef, editorRef);
 
   return (
-    <div
-      ref={composeRefs(containerRef, fitZoomRef)}
-      className="h-full overflow-auto"
-    >
+    <div ref={composedContainerRef} className="h-full overflow-auto">
       <ReadOnlyDocxViewer
         ref={editorRef}
         className="folio-docx-preview h-full"

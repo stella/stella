@@ -552,6 +552,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     scaleOffset,
     0.85,
   );
+  const composedContainerRef = useMemo(
+    () => composeRefs(containerRef, fitZoomRef),
+    [fitZoomRef],
+  );
   const t = useTranslations();
   const previewPlaceholder =
     optimisticPreviewRef.current?.fieldId === fieldId
@@ -1413,7 +1417,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
 
   return (
     <div
-      ref={composeRefs(containerRef, fitZoomRef)}
+      ref={composedContainerRef}
       className="flex h-full w-full min-w-0 flex-col"
     >
       {/* Folio editor with AI overlay */}

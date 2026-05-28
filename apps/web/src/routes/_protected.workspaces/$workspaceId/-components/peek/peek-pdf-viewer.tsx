@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -467,6 +468,10 @@ const PeekDocxViewer = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const { containerRef: fitZoomRef, fitZoom: targetZoom } =
     useDocxFitZoom(scaleOffset);
+  const composedContainerRef = useMemo(
+    () => composeRefs(containerRef, fitZoomRef),
+    [fitZoomRef],
+  );
   useDocxBlockScroll({ editorRef, fieldId });
 
   // Sync scaleOffset from inspector +/- buttons to Folio zoom
@@ -498,10 +503,7 @@ const PeekDocxViewer = ({
   }, [analytics, fieldId, printActionsRef, workspaceId]);
 
   return (
-    <div
-      ref={composeRefs(containerRef, fitZoomRef)}
-      className="h-full overflow-auto"
-    >
+    <div ref={composedContainerRef} className="h-full overflow-auto">
       <DocxEditor
         ref={editorRef}
         autoOpenReviewSidebar={false}
