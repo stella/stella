@@ -254,26 +254,15 @@ export const DraggableRow = ({
     visibleCells,
   });
 
-  // Handle file drops on document rows (non-folder, non-task)
-  const handleFileDrop = useCallback(
-    (files: File[]) => {
-      // Multi-file drop or folder: create new files
-      if (files.length > 1 || isFolder) {
-        createFileEntities(files);
-        return;
-      }
-
-      // Single file drop on document row: show dialog
-      const droppedFile = files[0];
-      if (droppedFile && file) {
-        setVersionDialogFile(droppedFile);
-      } else {
-        // Entity has no file (shouldn't happen for file entities), just create new
-        createFileEntities(files);
-      }
-    },
-    [createFileEntities, file, isFolder],
-  );
+  // `canDrop` in useExternalFileDrop only fires this for a single file
+  // whose MIME matches the entity's. Multi-file and mismatched drags fall
+  // through to the workspace-level DropZone.
+  const handleFileDrop = (files: File[]) => {
+    const droppedFile = files[0];
+    if (droppedFile) {
+      setVersionDialogFile(droppedFile);
+    }
+  };
 
   // Only enable drop target for file entities (not folders, not tasks)
   const canAcceptDrop = !isFolder && !isTask && file !== null;
@@ -282,6 +271,7 @@ export const DraggableRow = ({
     onDrop: handleFileDrop,
     enabled: canAcceptDrop,
     externalRef: rowRef,
+    expectedMimeType: file?.mimeType,
   });
 
   const handleReplaceVersion = () => {

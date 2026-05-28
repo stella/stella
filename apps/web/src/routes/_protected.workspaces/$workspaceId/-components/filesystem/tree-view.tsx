@@ -1202,27 +1202,22 @@ const FilesystemRow = ({
   const uploadVersion = useUploadVersion();
   const [, createFileEntities] = useCreateFileEntities(workspaceId);
 
-  const handleFileDrop = useCallback(
-    (files: File[]) => {
-      if (files.length > 1) {
-        createFileEntities(files);
-        return;
-      }
-      const droppedFile = files[0];
-      if (droppedFile && file) {
-        setVersionDialogFile(droppedFile);
-      } else {
-        createFileEntities(files);
-      }
-    },
-    [createFileEntities, file],
-  );
+  // `canDrop` in useExternalFileDrop only fires this for a single file
+  // whose MIME matches the entity's. Multi-file and mismatched drags fall
+  // through to the workspace-level DropZone.
+  const handleFileDrop = (files: File[]) => {
+    const droppedFile = files[0];
+    if (droppedFile) {
+      setVersionDialogFile(droppedFile);
+    }
+  };
 
   const { isDropTarget: isExternalDropTarget } = useExternalFileDrop({
     id: node.entityId,
     onDrop: handleFileDrop,
     enabled: canAcceptDrop,
     externalRef: rowRef,
+    expectedMimeType: file?.mimeType,
   });
 
   const handleReplaceVersion = () => {
