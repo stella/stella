@@ -42,6 +42,7 @@ import {
   findBodyPmAnchors,
   findBodyPmSpans,
 } from "../core/layout-bridge/findBodyPmSpans";
+import { findHfSlotForTarget } from "../core/layout-bridge/findHfPmSpans";
 import {
   collectFootnoteRefs,
   buildFootnoteContentMap,
@@ -312,6 +313,12 @@ export type PagedEditorRef = {
   getState(): EditorState | null;
   /** Get the ProseMirror EditorView. */
   getView(): EditorView | null;
+  /**
+   * Look up the persistent hidden HF EditorView by `rId`. Returns null when
+   * the slot isn't mounted (e.g. document has no HF for that rId, or the
+   * hidden host hasn't mounted yet).
+   */
+  getHfView(rId: string): EditorView | null;
   /**
    * Force-create the hidden editor view if it has been deferred.
    * Use from surfaces that need a live view before any user
@@ -4182,6 +4189,39 @@ export function PagedEditor(
         }
       }
 
+      // HF edit mode + click inside a painted HF slot → route to the persistent
+      // hidden HF EditorView. The painter (not PM) is the visible HF renderer,
+      // so we translate the click via clickToPositionDom (which inspects the
+      // painted span's data-pm-start/end markers) and dispatch the resulting
+      // PM position on the matching hidden view. Skipping the body click flow
+      // here keeps `hiddenPMRef.current.setSelection(0)` from firing on
+      // every HF click and stealing focus into the body editor.
+      if (!readOnly && hfEditMode) {
+        const slot = findHfSlotForTarget(target);
+        if (slot) {
+          const hfView = hfPMsRef.current?.getView(slot.rId);
+          if (hfView) {
+            e.preventDefault();
+            const pos = clickToPositionDom(
+              pagesContainerRef.current ?? slot.element,
+              e.clientX,
+              e.clientY,
+              zoom,
+            );
+            if (pos !== null) {
+              const docEnd = hfView.state.doc.content.size;
+              const clamped = Math.max(0, Math.min(pos, docEnd));
+              const $pos = hfView.state.doc.resolve(clamped);
+              hfView.dispatch(
+                hfView.state.tr.setSelection(TextSelection.near($pos)),
+              );
+            }
+            hfView.focus();
+            return;
+          }
+        }
+      }
+
       // In normal mode, clicks in header/footer area should place cursor at
       // start of body content, not inside header/footer (matches Word/Google Docs)
       if (!readOnly && !hfEditMode) {
@@ -5864,6 +5904,9 @@ export function PagedEditor(
       },
       getView() {
         return hiddenPMRef.current?.getView() ?? null;
+      },
+      getHfView(rId: string) {
+        return hfPMsRef.current?.getView(rId) ?? null;
       },
       ensureView(options?: { focus?: boolean }) {
         // Async (no flushSync) so this is safe to call from a consumer's

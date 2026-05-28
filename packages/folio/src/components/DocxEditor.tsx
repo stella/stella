@@ -1018,7 +1018,6 @@ export function DocxEditor({
     activeFirstFooterRId,
     effectiveSectionProperties,
     handleHeaderFooterDoubleClick,
-    handleHeaderFooterSave,
     handleBodyClick,
     handleRemoveHeaderFooter,
   } = useHeaderFooterEditor({ history, pushDocument, hfEditorRef });
@@ -3547,20 +3546,35 @@ export function DocxEditor({
                         if (!targetEl || !parentEl) {
                           return null;
                         }
+                        // Resolve the active HF rId for this edit session;
+                        // the chrome delegates getView/focus/undo/redo to the
+                        // persistent hidden HF EditorView mounted by
+                        // HiddenHeaderFooterPMs (post-eigenpal#611). The
+                        // inline overlay no longer mounts its own visible PM.
+                        const activeRId = (() => {
+                          if (hfEditIsFirstPage) {
+                            return hfEditPosition === "header"
+                              ? activeFirstHeaderRId
+                              : activeFirstFooterRId;
+                          }
+                          return hfEditPosition === "header"
+                            ? activeHeaderRId
+                            : activeFooterRId;
+                        })();
+                        const getActiveView = () =>
+                          activeRId
+                            ? (pagedEditorRef.current?.getHfView(activeRId) ??
+                              null)
+                            : null;
                         return (
                           <InlineHeaderFooterEditor
                             ref={hfEditorRef}
-                            headerFooter={activeHf}
                             position={hfEditPosition}
                             targetElement={targetEl}
                             parentElement={parentEl}
-                            onSave={handleHeaderFooterSave}
+                            getActiveView={getActiveView}
                             onClose={() => setHfEditPosition(null)}
-                            onSelectionChange={handleSelectionChange}
                             onRemove={handleRemoveHeaderFooter}
-                            {...(history.state.package.styles
-                              ? { styles: history.state.package.styles }
-                              : {})}
                           />
                         );
                       })()}
