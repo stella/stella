@@ -1,5 +1,4 @@
 import { deepEquals } from "bun";
-import { eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db";
 import { properties, propertyDependencies } from "@/api/db/schema";
@@ -133,8 +132,14 @@ export const resolveTemplateProperties = async ({
   recordAuditEvent,
 }: ResolveTemplatePropertiesOptions): Promise<ResolveTemplatePropertiesResult> => {
   if (!templateProperties || templateProperties.length === 0) {
-    const propertyIds = await readPropertyIds(tx, workspaceId);
-    return { ok: true, layout, propertyIds };
+    const existing = await readExistingProperties(tx, workspaceId);
+    const systemFile = findSystemFileProperty(existing);
+    prependSystemFileToColumnOrder(layout, systemFile);
+    return {
+      ok: true,
+      layout,
+      propertyIds: existing.map((property) => property.id),
+    };
   }
 
   const validationError = validateTemplateProperties(templateProperties);
@@ -144,20 +149,8 @@ export const resolveTemplateProperties = async ({
 
   await lockWorkspacePropertyWrites(tx, workspaceId);
 
-  const existingProperties = await tx.query.properties.findMany({
-    where: { workspaceId: { eq: workspaceId } },
-    columns: {
-      id: true,
-      name: true,
-      content: true,
-      tool: true,
-      system: true,
-    },
-    orderBy: { createdAt: "asc" },
-  });
-  const systemFileProperty = existingProperties.find(
-    (property) => property.system && property.content.type === "file",
-  );
+  const existingProperties = await readExistingProperties(tx, workspaceId);
+  const systemFileProperty = findSystemFileProperty(existingProperties);
   const existingDependencyEdges = await tx.query.propertyDependencies.findMany({
     where: { workspaceId: { eq: workspaceId } },
     columns: { propertyId: true },
@@ -283,19 +276,51 @@ export const resolveTemplateProperties = async ({
   });
 
   remapLayoutPropertyIds(layout, propertyIdBySourceId);
-
-  // Templates strip system properties, so their saved columnOrder never
-  // carries the workspace-specific Documents id. Without this prepend it
-  // lands at the end of the table.
-  if (
-    layout.type === "table" &&
-    systemFileProperty &&
-    !layout.columnOrder.includes(systemFileProperty.id)
-  ) {
-    layout.columnOrder = [systemFileProperty.id, ...layout.columnOrder];
-  }
+  prependSystemFileToColumnOrder(layout, systemFileProperty);
 
   return { ok: true, layout, propertyIds: nextPropertyIds };
+};
+
+const readExistingProperties = (
+  tx: Transaction,
+  workspaceId: SafeId<"workspace">,
+) =>
+  tx.query.properties.findMany({
+    where: { workspaceId: { eq: workspaceId } },
+    columns: {
+      id: true,
+      name: true,
+      content: true,
+      tool: true,
+      system: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+type ExistingProperty = Awaited<
+  ReturnType<typeof readExistingProperties>
+>[number];
+
+const findSystemFileProperty = (existing: readonly ExistingProperty[]) =>
+  existing.find(
+    (property) => property.system && property.content.type === "file",
+  );
+
+// Templates strip system properties, so their saved columnOrder never
+// carries the workspace-specific Documents id. Without this prepend it
+// lands at the end of the table.
+const prependSystemFileToColumnOrder = (
+  layout: ViewLayout,
+  systemFileProperty: ExistingProperty | undefined,
+): void => {
+  if (
+    layout.type !== "table" ||
+    !systemFileProperty ||
+    layout.columnOrder.includes(systemFileProperty.id)
+  ) {
+    return;
+  }
+  layout.columnOrder = [systemFileProperty.id, ...layout.columnOrder];
 };
 
 const sanitizeTemplatePropertyTool = (
@@ -483,17 +508,6 @@ const hasTemplateDependencyCycle = ({
   }
 
   return false;
-};
-
-const readPropertyIds = async (
-  tx: Transaction,
-  workspaceId: SafeId<"workspace">,
-): Promise<string[]> => {
-  const rows = await tx
-    .select({ id: properties.id })
-    .from(properties)
-    .where(eq(properties.workspaceId, workspaceId));
-  return rows.map((row) => row.id);
 };
 
 const validateTemplateProperties = (
