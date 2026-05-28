@@ -13,7 +13,6 @@ import {
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
-import { Input } from "@stll/ui/components/input";
 import {
   Dialog,
   DialogHeader,
@@ -21,6 +20,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/components/dialog";
+import { Input } from "@stll/ui/components/input";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
