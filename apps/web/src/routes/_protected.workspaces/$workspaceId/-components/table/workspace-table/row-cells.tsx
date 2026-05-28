@@ -484,13 +484,17 @@ export const DraggableRow = ({
         aria-rowindex={virtualIndex + 2}
         aria-selected={row.getIsSelected()}
         className={cn(
-          "transition-[opacity,background-color,box-shadow] duration-150",
+          "transition-opacity duration-150",
           contentMode === "tight" && TOOLBAR_ROW_HEIGHT,
           isTask && "cursor-pointer",
-          isFocusedExpansionRow && "relative z-20",
+          isFocusedExpansionRow && "z-20",
           isMutedByExpandedCell && "opacity-[0.92] hover:opacity-100",
+          // Cells render their own backgrounds on top of the row, so
+          // the drop-target outline lives in a pseudo-element above
+          // the cells. Cell tint is handled by WorkspaceGridCell's
+          // `group-data-[drop-target]/row:` selector.
           isDropTarget &&
-            "bg-primary/5 shadow-[inset_0_0_0_2px_var(--color-primary)]",
+            "after:pointer-events-none after:absolute after:inset-0 after:z-10 after:shadow-[inset_0_0_0_2px_var(--color-primary)] after:content-['']",
         )}
         data-active={activeRow || undefined}
         data-drop-target={isDropTarget || undefined}
