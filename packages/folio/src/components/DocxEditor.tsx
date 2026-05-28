@@ -3217,8 +3217,18 @@ export function DocxEditor({
                         ? { onReadOnlyEditAttempt: onReadonlyEditAttempt }
                         : {})}
                       onSelectionChange={(_from, _to) => {
-                        // Extract full selection state from PM and use the standard handler
-                        const view = pagedEditorRef.current?.getView();
+                        // Extract full selection state from whichever PM
+                        // is active. When the user is editing HF the
+                        // hfEditorRef delegates to the persistent hidden
+                        // HF view via pagedEditorRef.getHfView(activeRId);
+                        // reading body PM here would leave the toolbar
+                        // (FormattingBar, table / image context) showing
+                        // stale body-selection state while its actions
+                        // target the HF view (post-eigenpal#611).
+                        const view =
+                          getActiveEditorView() ??
+                          pagedEditorRef.current?.getView() ??
+                          null;
                         if (view) {
                           const selectionState = extractSelectionState(
                             view.state,

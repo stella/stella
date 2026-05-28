@@ -3885,7 +3885,7 @@ export function PagedEditor(
       // HiddenHeaderFooterPMs writes the new blocks into
       // package.headers/footers[rId].content in place inside its own
       // dispatchTransaction, so we only need to nudge the layout pipeline
-      // and update HF caret state here.
+      // and update HF caret + toolbar state here.
       if (docChanged) {
         const bodyState = hiddenPMRef.current?.getState();
         if (bodyState) {
@@ -3895,6 +3895,13 @@ export function PagedEditor(
       if (docChanged || selectionChanged) {
         const { from, to } = view.state.selection;
         setHfCaretSelection({ rId, kind, from, to });
+        // Fan the HF PM selection out the same channel the body PM uses
+        // (DocxEditor's onSelectionChange handler then re-reads the
+        // active view via getActiveEditorView and re-syncs FormattingBar
+        // / context state to the HF surface). Without this the toolbar
+        // would freeze on the previous body selection while its actions
+        // dispatch on the HF view.
+        onSelectionChangeRef.current?.(from, to);
       }
     },
     [scheduleLayout],
@@ -5734,6 +5741,16 @@ export function PagedEditor(
       ) {
         return;
       }
+      // Don't steal focus from a persistent hidden HF EditorView. The
+      // HF host marks each view's mount node with `data-hf-r-id`; once
+      // an HF view holds focus, the body PM redirect would immediately
+      // bounce keystrokes off it (Codex #487 P1).
+      if (
+        e.target instanceof HTMLElement &&
+        e.target.closest("[data-hf-r-id]")
+      ) {
+        return;
+      }
       focusHiddenEditor();
     },
     [focusHiddenEditor],
@@ -6049,6 +6066,14 @@ export function PagedEditor(
       if (
         e.target instanceof HTMLElement &&
         e.target.closest(".docx-comments-sidebar")
+      ) {
+        return;
+      }
+      // Don't steal focus from the persistent hidden HF EditorView host
+      // — see handleContainerFocus for the same guard rationale.
+      if (
+        e.target instanceof HTMLElement &&
+        e.target.closest("[data-hf-r-id]")
       ) {
         return;
       }
