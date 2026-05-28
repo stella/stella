@@ -920,6 +920,9 @@ function renderHeaderFooterContent(
     width: number;
     height: number;
     alt?: string;
+    /** Run-level PM position so the pointer pipeline can NodeSelect HF images. */
+    pmStart?: number;
+    pmEnd?: number;
     paragraphY: number; // Y position of the containing paragraph
     behindDoc?: boolean;
     position: {
@@ -975,6 +978,8 @@ function renderHeaderFooterContent(
             width: run.width,
             height: run.height,
             ...(run.alt !== undefined ? { alt: run.alt } : {}),
+            ...(run.pmStart !== undefined ? { pmStart: run.pmStart } : {}),
+            ...(run.pmEnd !== undefined ? { pmEnd: run.pmEnd } : {}),
             paragraphY: paragraphStartY,
             behindDoc: run.wrapType === "behind",
             position: run.position ?? {},
@@ -1135,6 +1140,18 @@ function renderHeaderFooterContent(
     img.height = floatImg.height;
     if (floatImg.alt) {
       img.alt = floatImg.alt;
+    }
+    // Mark as a click-resolvable image fragment so the pointer pipeline's
+    // `findImageElement` matches it. Without these markers an anchored HF
+    // image rendered here would fall through to the generic HF text-click
+    // branch and no NodeSelection could be created on the HF view
+    // (Codex #487 P2 follow-up: 20:52 review).
+    img.classList.add("layout-run", "layout-run-image");
+    if (floatImg.pmStart !== undefined) {
+      img.dataset["pmStart"] = String(floatImg.pmStart);
+    }
+    if (floatImg.pmEnd !== undefined) {
+      img.dataset["pmEnd"] = String(floatImg.pmEnd);
     }
 
     img.style.position = "absolute";
