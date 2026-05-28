@@ -489,12 +489,6 @@ export const DraggableRow = ({
           isTask && "cursor-pointer",
           isFocusedExpansionRow && "z-20",
           isMutedByExpandedCell && "opacity-[0.92] hover:opacity-100",
-          // Cells render their own backgrounds on top of the row, so
-          // the drop-target outline lives in a pseudo-element above
-          // the cells. Cell tint is handled by WorkspaceGridCell's
-          // `group-data-[drop-target]/row:` selector.
-          isDropTarget &&
-            "after:pointer-events-none after:absolute after:inset-0 after:z-10 after:shadow-[inset_0_0_0_2px_var(--color-primary)] after:content-['']",
         )}
         data-active={activeRow || undefined}
         data-drop-target={isDropTarget || undefined}

@@ -75,7 +75,11 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-cells";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+import { VersionOrNewFileDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog";
+import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
+import { useExternalFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
+import { useUploadVersion } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-upload-version";
 import {
   useMoveEntity,
   useRenameEntity,
@@ -1187,7 +1191,64 @@ const FilesystemRow = ({
   useInspectorFlash(node.entityId, rowRef);
 
   const moveEntity = useMoveEntity();
-  const [isDropTarget, setIsDropTarget] = useState(false);
+  const [isFolderDropTarget, setIsFolderDropTarget] = useState(false);
+
+  // External file drop (upload new version vs. create new file).
+  // Only file entities accept the drop; folders fall through to the
+  // workspace-level DropZone, and tasks aren't files.
+  const isTask = node.kind === "task";
+  const canAcceptDrop = !isFolder && !isTask && file !== null;
+  const [versionDialogFile, setVersionDialogFile] = useState<File | null>(null);
+  const uploadVersion = useUploadVersion();
+  const [, createFileEntities] = useCreateFileEntities(workspaceId);
+
+  const handleFileDrop = useCallback(
+    (files: File[]) => {
+      if (files.length > 1) {
+        createFileEntities(files);
+        return;
+      }
+      const droppedFile = files[0];
+      if (droppedFile && file) {
+        setVersionDialogFile(droppedFile);
+      } else {
+        createFileEntities(files);
+      }
+    },
+    [createFileEntities, file],
+  );
+
+  const { isDropTarget: isExternalDropTarget } = useExternalFileDrop({
+    id: node.entityId,
+    onDrop: handleFileDrop,
+    enabled: canAcceptDrop,
+    externalRef: rowRef,
+  });
+
+  const handleReplaceVersion = () => {
+    if (!versionDialogFile || !file) {
+      return;
+    }
+    uploadVersion.mutate(
+      {
+        workspaceId,
+        entityId: node.entityId,
+        entityFileName: file.fileName,
+        file: versionDialogFile,
+      },
+      {
+        onSettled: () => setVersionDialogFile(null),
+      },
+    );
+  };
+
+  const handleCreateNewFile = () => {
+    if (!versionDialogFile) {
+      return;
+    }
+    createFileEntities([versionDialogFile]);
+    setVersionDialogFile(null);
+  };
 
   // Store volatile values in refs so the effect doesn't
   // re-register drag/drop handlers on every render.
@@ -1293,17 +1354,17 @@ const FilesystemRow = ({
               },
               getData: () => ({ entityId: node.entityId }),
               onDragEnter: () => {
-                setIsDropTarget(true);
+                setIsFolderDropTarget(true);
                 if (!expandedRef.current) {
                   scheduleAutoExpand();
                 }
               },
               onDragLeave: () => {
-                setIsDropTarget(false);
+                setIsFolderDropTarget(false);
                 scheduleAutoExpand.cancel();
               },
               onDrop: ({ source }) => {
-                setIsDropTarget(false);
+                setIsFolderDropTarget(false);
                 scheduleAutoExpand.cancel();
                 const entityIds = getDragEntityIds(source.data);
                 if (!entityIds) {
@@ -1431,8 +1492,8 @@ const FilesystemRow = ({
   ));
 
   const gridCls = cn(
-    "hover:bg-muted grid h-full w-full items-center gap-x-4 rounded px-2 text-start text-sm",
-    isDropTarget && "bg-accent ring-primary ring-2",
+    "hover:bg-muted grid h-full w-full items-center gap-x-4 rounded px-2 text-start text-sm transition-colors duration-150",
+    (isFolderDropTarget || isExternalDropTarget) && "bg-accent",
     isSelected && "bg-accent",
   );
 
@@ -1545,56 +1606,79 @@ const FilesystemRow = ({
   );
 
   return (
-    <div
-      className="group/row relative h-full"
-      data-entity-row
-      onContextMenu={handleContextMenu}
-      ref={rowRef}
-    >
-      {isFolder ? (
-        <div className={gridCls} style={{ gridTemplateColumns: gridTemplate }}>
-          <button
-            className="text-start"
-            onClick={(e) => {
-              const intent = getFolderClickIntent({
-                currentFolderId,
-                hasModifier: e.metaKey || e.ctrlKey,
-              });
-
-              if (intent.type === "toggle-selection") {
-                onSelect(node.entityId, true);
-                return;
-              }
-
-              onClearSelection();
-              if (intent.type === "clear-and-navigate") {
-                onNavigateToFolder(node.entityId);
-              } else {
-                onToggleFolder(node.entityId);
-              }
-            }}
-            onDoubleClick={() => onNavigateToFolder(node.entityId)}
-            style={contentSpanStyle}
-            type="button"
+    <>
+      <div
+        className="group/row relative h-full"
+        data-entity-row
+        onContextMenu={handleContextMenu}
+        ref={rowRef}
+      >
+        {isFolder ? (
+          <div
+            className={gridCls}
+            style={{ gridTemplateColumns: gridTemplate }}
           >
-            {contentCells}
-          </button>
-          {rowActionsNode}
-        </div>
-      ) : (
-        <div className={gridCls} style={{ gridTemplateColumns: gridTemplate }}>
-          <button
-            onClick={(e) => onSelect(node.entityId, e.metaKey || e.ctrlKey)}
-            onDoubleClick={() => openInInspector?.()}
-            style={contentSpanStyle}
-            type="button"
+            <button
+              className="text-start"
+              onClick={(e) => {
+                const intent = getFolderClickIntent({
+                  currentFolderId,
+                  hasModifier: e.metaKey || e.ctrlKey,
+                });
+
+                if (intent.type === "toggle-selection") {
+                  onSelect(node.entityId, true);
+                  return;
+                }
+
+                onClearSelection();
+                if (intent.type === "clear-and-navigate") {
+                  onNavigateToFolder(node.entityId);
+                } else {
+                  onToggleFolder(node.entityId);
+                }
+              }}
+              onDoubleClick={() => onNavigateToFolder(node.entityId)}
+              style={contentSpanStyle}
+              type="button"
+            >
+              {contentCells}
+            </button>
+            {rowActionsNode}
+          </div>
+        ) : (
+          <div
+            className={gridCls}
+            style={{ gridTemplateColumns: gridTemplate }}
           >
-            {contentCells}
-          </button>
-          {rowActionsNode}
-        </div>
+            <button
+              onClick={(e) => onSelect(node.entityId, e.metaKey || e.ctrlKey)}
+              onDoubleClick={() => openInInspector?.()}
+              style={contentSpanStyle}
+              type="button"
+            >
+              {contentCells}
+            </button>
+            {rowActionsNode}
+          </div>
+        )}
+      </div>
+      {versionDialogFile && file && (
+        <VersionOrNewFileDialog
+          droppedFile={versionDialogFile}
+          entityFileName={file.fileName}
+          isReplacePending={uploadVersion.isPending}
+          onCreateNewFile={handleCreateNewFile}
+          onOpenChange={(open) => {
+            if (!open) {
+              setVersionDialogFile(null);
+            }
+          }}
+          onReplaceVersion={handleReplaceVersion}
+          open
+        />
       )}
-    </div>
+    </>
   );
 };
 
