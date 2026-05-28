@@ -2612,6 +2612,10 @@ export function renderPages(
     prevState.totalPages = totalPages;
     prevState.currentOptions = options;
 
+    // Incremental path: existing shells were repopulated in place; fire
+    // painter:painted so caret/selection overlays recompute against the
+    // freshly written DOM (Codex #487 P2: 22:09 review).
+    emitPainterPainted(container);
     return;
   }
 
@@ -2662,7 +2666,12 @@ export function renderPages(
 
   if (!useVirtualization) {
     // Store state for potential future incremental updates (won't be used
-    // since small docs skip the incremental path, but keeps data consistent)
+    // since small docs skip the incremental path, but keeps data consistent).
+    // Fire painter:painted before returning so consumers — notably
+    // HfCaretOverlay, which recomputes after the painter writes new HF
+    // DOM — see the event in the common small-document path too
+    // (Codex #487 P2: 22:09 review).
+    emitPainterPainted(container);
     return;
   }
 
