@@ -159,17 +159,61 @@ const getOperationComment = (
 // when it forgets to use the canonical op). Strip directive markers
 // and unwrap `[[placeholders]]` so the text reads cleanly rather than
 // landing in the doc as literal `@pagebreak` / `[[date]]` characters.
-const DIRECTIVE_LINE_RE =
-  /^\s*@(?:pagebreak|signature|signatures|signature_block|section|paragraph|clause|schedule|note|recital|recitals)\b\s*/iu;
-const PLACEHOLDER_RE = /\[\[([^\]]+)\]\]/gu;
-const CLAUSE_HEADING_RE = /^@clause\s+\d+\s*"([^"]*)"\s*$/iu;
+// Trim a leading `@directive` token from a line. Pure string-walking
+// to avoid the regex backtracking warning the linter flags on
+// `\s*`-flanked patterns even when the alternatives are fixed.
+const DIRECTIVE_NAMES = new Set([
+  "pagebreak",
+  "signature",
+  "signatures",
+  "signature_block",
+  "section",
+  "paragraph",
+  "clause",
+  "schedule",
+  "note",
+  "recital",
+  "recitals",
+]);
+const DIRECTIVE_NAME_CHAR_RE = /[a-z_]/iu;
+// oxlint-disable-next-line sonarjs/slow-regex -- input is single-line paragraph text; linear backtracking only
+const PLACEHOLDER_RE = /\[\[([^\]]+?)\]\]/gu;
+const CLAUSE_HEADING_RE = /^@clause +\d+ *"([^"]*)" *$/iu;
+const stripDirectivePrefix = (line: string): string => {
+  const trimmed = line.trimStart();
+  if (!trimmed.startsWith("@")) {
+    return line;
+  }
+  let nameEnd = 1;
+  while (
+    nameEnd < trimmed.length &&
+    DIRECTIVE_NAME_CHAR_RE.test(trimmed[nameEnd] ?? "")
+  ) {
+    nameEnd += 1;
+  }
+  if (nameEnd === 1) {
+    return line;
+  }
+  const directive = trimmed.slice(1, nameEnd).toLowerCase();
+  if (!DIRECTIVE_NAMES.has(directive)) {
+    return line;
+  }
+  // Require a word boundary (whitespace or end-of-line) right after
+  // the directive name so we don't strip e.g. `@paragraphical`.
+  const afterName = trimmed[nameEnd];
+  if (afterName !== undefined && afterName !== " " && afterName !== "\t") {
+    return line;
+  }
+  return trimmed.slice(nameEnd).trimStart().trimEnd();
+};
+
 const cleanDirectiveText = (text: string): string => {
   const lines = text.split("\n").map((line) => {
     const clauseMatch = CLAUSE_HEADING_RE.exec(line);
     if (clauseMatch) {
       return clauseMatch[1] ?? "";
     }
-    return line.replace(DIRECTIVE_LINE_RE, "").trimEnd();
+    return stripDirectivePrefix(line);
   });
   // Collapse runs of empty lines so stripped directives don't leave
   // huge gaps.
