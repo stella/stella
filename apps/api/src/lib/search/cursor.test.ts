@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import { decodeCursor, encodeCursor } from "./cursor";
 
@@ -21,5 +22,38 @@ describe("search cursor encoding", () => {
     expect(decodeCursor(malformed)).toBeNull();
     expect(decodeCursor(missingId)).toBeNull();
     expect(decodeCursor(infiniteScore)).toBeNull();
+  });
+});
+
+describe("search cursor encoding — properties", () => {
+  // The decoder splits on ":" and takes only the first two parts, so ids containing ":"
+  // cannot round-trip. -0 is excluded because String(-0) === "0" loses the sign.
+  const arbId = fc
+    .string({ minLength: 1, maxLength: 32 })
+    .filter((s) => !s.includes(":"));
+  const arbScore = fc
+    .double({ noNaN: true, noDefaultInfinity: true })
+    .filter((n) => !Object.is(n, -0));
+
+  test("encode → decode round-trips finite score + id pairs", () => {
+    fc.assert(
+      fc.property(arbScore, arbId, (score, id) => {
+        expect(decodeCursor(encodeCursor(score, id))).toEqual({ score, id });
+      }),
+    );
+  });
+
+  test("decode is total — never throws on arbitrary strings", () => {
+    fc.assert(
+      fc.property(fc.string(), (input) => {
+        const result = decodeCursor(input);
+        const ok =
+          result === null ||
+          (Number.isFinite(result.score) &&
+            typeof result.id === "string" &&
+            result.id.length > 0);
+        expect(ok).toBe(true);
+      }),
+    );
   });
 });
