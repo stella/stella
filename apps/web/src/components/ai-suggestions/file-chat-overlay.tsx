@@ -97,7 +97,9 @@ type ActiveExternal = {
 
 type ToolInputOperation = ApplyActiveDocxEditsInput["operations"][number];
 
-const summarizeOperation = (operation: ToolInputOperation): string => {
+const summarizeOperation = (
+  operation: FolioAIEditOperation | ToolInputOperation,
+): string => {
   switch (operation.type) {
     case "replaceInBlock":
       return `Replace “${operation.find}” with “${operation.replace}”`;
@@ -389,6 +391,27 @@ const inputOperationArea = (operation: ToolInputOperation): string =>
   operation.area ?? REVIEW_UNSPECIFIED_AREA;
 /* oxlint-enable typescript/no-unnecessary-condition */
 
+const isNoopReviewOperation = (
+  operation: FolioAIEditOperation,
+  blocksById: Map<string, SnapshotBlock>,
+): boolean => {
+  switch (operation.type) {
+    case "replaceInBlock":
+      return operation.find === operation.replace;
+    case "replaceBlock":
+      return operation.text === (blocksById.get(operation.blockId)?.text ?? "");
+    case "commentOnBlock":
+    case "deleteBlock":
+    case "insertAfterBlock":
+    case "insertBeforeBlock":
+    case "insertSignatureTable":
+      return false;
+    default:
+      operation satisfies never;
+      return false;
+  }
+};
+
 type SnapshotBlock = {
   id: string;
   text: string;
@@ -427,7 +450,7 @@ const PREVIEW_ANCHOR_CHARS = 80;
  * mid-stream and the AI got an outdated copy).
  */
 const buildPreview = (
-  operation: ToolInputOperation,
+  operation: FolioAIEditOperation,
   blocksById: Map<string, SnapshotBlock>,
 ): ReviewSuggestionPreview | null => {
   const block = blocksById.get(operation.blockId);
@@ -554,15 +577,11 @@ const queueReviewSuggestions = ({
     // occasionally emits `find === replace` (or replaceBlock text
     // identical to the source) as a side effect of running through
     // every block. Showing them as "X → X" cards is noise.
-    if (
-      (input.type === "replaceInBlock" && input.find === input.replace) ||
-      (input.type === "replaceBlock" &&
-        input.text === (blocksById.get(input.blockId)?.text ?? ""))
-    ) {
+    if (isNoopReviewOperation(folio, blocksById)) {
       skipped.push({ id, reason: "noopOperation" });
       return [];
     }
-    const preview = buildPreview(input, blocksById);
+    const preview = buildPreview(folio, blocksById);
     if (!preview) {
       skipped.push({ id, reason: "missingBlock" });
       return [];
@@ -570,9 +589,9 @@ const queueReviewSuggestions = ({
     queuedIds.push(id);
     const base: ReviewSuggestion = {
       id,
-      blockId: input.blockId,
-      type: input.type,
-      summary: summarizeOperation(input),
+      blockId: folio.blockId,
+      type: folio.type,
+      summary: summarizeOperation(folio),
       preview,
       severity: inputOperationSeverity(input),
       area: inputOperationArea(input),
@@ -586,8 +605,8 @@ const queueReviewSuggestions = ({
     if (label !== undefined) {
       base.blockLabel = label;
     }
-    if (input.comment) {
-      base.comment = input.comment.text;
+    if (folio.comment) {
+      base.comment = folio.comment.text;
     }
     return [base];
   });
