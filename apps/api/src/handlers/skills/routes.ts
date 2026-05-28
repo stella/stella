@@ -10,6 +10,7 @@ import deleteSkillResource from "@/api/handlers/skills/resources/delete";
 import renameSkillResource from "@/api/handlers/skills/resources/rename";
 import rewriteSkillResource from "@/api/handlers/skills/resources/rewrite";
 import updateSkillResource from "@/api/handlers/skills/resources/update";
+import uploadSkillResource from "@/api/handlers/skills/resources/upload";
 import updateSkill from "@/api/handlers/skills/update";
 import uploadSkill from "@/api/handlers/skills/upload";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
@@ -71,6 +72,12 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
     invalidateQuery: true,
     params: renameSkillResource.config.params,
     permissions: renameSkillResource.config.permissions,
+  })
+  .post("/:skillId/resources/upload", uploadSkillResource.handler, {
+    body: uploadSkillResource.config.body,
+    invalidateQuery: true,
+    params: uploadSkillResource.config.params,
+    permissions: uploadSkillResource.config.permissions,
   })
   .post("/:skillId/resources/rewrite", rewriteSkillResource.handler, {
     body: rewriteSkillResource.config.body,

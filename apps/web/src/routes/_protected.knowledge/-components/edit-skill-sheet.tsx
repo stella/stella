@@ -58,8 +58,18 @@ const RESOURCE_PATH_PATTERN =
   /^[a-z0-9][a-z0-9._-]*(\/[a-z0-9][a-z0-9._-]*)*$/u;
 const FILENAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/u;
 
-const UPLOAD_ACCEPT = ".md,.txt,text/markdown,text/plain";
-const UPLOAD_MAX_BYTES = 100_000;
+const UPLOAD_ACCEPT =
+  ".md,.txt,.docx,.pdf,text/markdown,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const UPLOAD_MAX_BYTES_TEXT = 100_000;
+const UPLOAD_MAX_BYTES_BINARY = 5 * 1024 * 1024;
+const DOCX_MIME =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const PDF_MIME = "application/pdf";
+const isBinaryUpload = (file: File) =>
+  file.type === DOCX_MIME ||
+  file.type === PDF_MIME ||
+  file.name.toLowerCase().endsWith(".docx") ||
+  file.name.toLowerCase().endsWith(".pdf");
 
 type EditableSkill = {
   id: string;
@@ -293,6 +303,31 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
     onError: (error) => toastError(error, t("common.unexpectedError")),
   });
 
+  const uploadResource = useMutation({
+    mutationFn: async (payload: { path: string; file: File }) => {
+      const response = await api
+        .skills({ skillId: safeSkillId })
+        .resources.upload.post({
+          ...payload,
+          queryKey: ["skills"],
+        });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: (data) => {
+      onChanged();
+      void detail.refetch();
+      setSelected({
+        type: "resource",
+        resourceId: data.id,
+        path: data.path,
+      });
+    },
+    onError: (error) => toastError(error, t("common.unexpectedError")),
+  });
+
   const deleteResource = useMutation({
     mutationFn: async (payload: { path: string; resourceId: string }) => {
       const response = await api
@@ -464,7 +499,9 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
     (selectedResource ? TEXT_RESOURCE_KINDS.has(selectedResource.kind) : false);
 
   const handleUpload = async (file: File) => {
-    if (file.size > UPLOAD_MAX_BYTES) {
+    const binary = isBinaryUpload(file);
+    const maxBytes = binary ? UPLOAD_MAX_BYTES_BINARY : UPLOAD_MAX_BYTES_TEXT;
+    if (file.size > maxBytes) {
       stellaToast.add({
         title: t("common.unexpectedError"),
         description: tSkills("uploadHelp"),
@@ -472,8 +509,12 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
       });
       return;
     }
-    const content = await file.text();
-    const sanitizedName = file.name
+    // For binary uploads we replace the extension with `.md` because the
+    // stored resource holds the extracted text, not the original bytes.
+    const baseName = binary
+      ? `${file.name.replace(/\.(docx|pdf)$/iu, "")}.md`
+      : file.name;
+    const sanitizedName = baseName
       .toLowerCase()
       .replaceAll(/[^a-z0-9._-]/gu, "-");
     if (!FILENAME_PATTERN.test(sanitizedName)) {
@@ -491,6 +532,11 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
       suffix += 1;
       path = `knowledge/${sanitizedName.replace(/(\.[^.]+)?$/u, `-${suffix}$1`)}`;
     }
+    if (binary) {
+      uploadResource.mutate({ path, file });
+      return;
+    }
+    const content = await file.text();
     createResource.mutate({ path, content });
   };
 
@@ -595,7 +641,7 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
               </p>
               <Button
                 aria-label={tSkills("uploadFile")}
-                disabled={createResource.isPending}
+                disabled={createResource.isPending || uploadResource.isPending}
                 onClick={onTriggerUpload}
                 size="icon-sm"
                 variant="ghost"
