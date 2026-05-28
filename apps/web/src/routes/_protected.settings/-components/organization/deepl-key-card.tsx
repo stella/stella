@@ -20,7 +20,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { deepLAvailabilityOptions, deepLKeys } from "@/lib/deepl/queries";
+import { deepLConfigOptions, deepLKeys } from "@/lib/deepl/queries";
 import { toAPIError } from "@/lib/errors";
 
 export const DeepLKeyCard = () => {
@@ -34,8 +34,8 @@ export const DeepLKeyCard = () => {
     select: (ctx) => ctx.user.activeOrganizationId,
   });
 
-  const { data: availability } = useQuery(
-    deepLAvailabilityOptions({ organizationId: activeOrganizationId }),
+  const { data: deeplConfig } = useQuery(
+    deepLConfigOptions({ organizationId: activeOrganizationId }),
   );
 
   const [apiKey, setApiKey] = useState("");
@@ -52,11 +52,7 @@ export const DeepLKeyCard = () => {
     },
     onSuccess: async () => {
       setApiKey("");
-      await queryClient.invalidateQueries({
-        queryKey: deepLKeys.availability({
-          organizationId: activeOrganizationId,
-        }),
-      });
+      await queryClient.invalidateQueries({ queryKey: deepLKeys.all });
       stellaToast.add({
         title: t("saved"),
         description: t("savedDescription"),
@@ -82,11 +78,7 @@ export const DeepLKeyCard = () => {
       return response.data;
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: deepLKeys.availability({
-          organizationId: activeOrganizationId,
-        }),
-      });
+      await queryClient.invalidateQueries({ queryKey: deepLKeys.all });
       stellaToast.add({
         title: t("removed"),
         description: t("removedDescription"),
@@ -102,7 +94,7 @@ export const DeepLKeyCard = () => {
     },
   });
 
-  const isConfigured = availability?.configured === true;
+  const isConfigured = deeplConfig?.configured === true;
   const canSave = apiKey.trim().length > 0 && !saveMutation.isPending;
 
   return (
@@ -112,17 +104,17 @@ export const DeepLKeyCard = () => {
         <p className="text-muted-foreground text-sm">{t("description")}</p>
       </div>
 
-      {isConfigured && (
+      {deeplConfig?.configured === true && (
         <div className="flex items-center justify-between gap-2">
           <div className="bg-muted flex flex-wrap items-center gap-2 rounded border px-3 py-2">
             <span className="text-muted-foreground text-xs">
               {t("currentKey")}:
             </span>
             <span className="font-mono text-xs">
-              {availability.apiKeyMasked}
+              {deeplConfig.apiKeyMasked}
             </span>
             <span className="text-muted-foreground text-xs">
-              ({availability.tier === "free" ? t("tierFree") : t("tierPro")})
+              ({deeplConfig.tier === "free" ? t("tierFree") : t("tierPro")})
             </span>
           </div>
           <Button

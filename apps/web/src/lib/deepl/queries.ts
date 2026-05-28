@@ -12,6 +12,12 @@ export const deepLKeys = {
   all: ["organization-deepl"] as const,
   availability: ({ organizationId }: DeepLAvailabilityKey) => [
     ...deepLKeys.all,
+    "availability",
+    organizationId,
+  ],
+  config: ({ organizationId }: DeepLAvailabilityKey) => [
+    ...deepLKeys.all,
+    "config",
     organizationId,
   ],
 };
@@ -25,6 +31,24 @@ export const deepLAvailabilityOptions = ({
     queryKey: deepLKeys.availability({ organizationId }),
     queryFn: async ({ signal }) => {
       const response = await api["organization-settings"].deepl.get({
+        fetch: { signal },
+      });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+  });
+
+export const deepLConfigOptions = ({
+  organizationId,
+}: DeepLAvailabilityOptionsInput) =>
+  queryOptions({
+    queryKey: deepLKeys.config({ organizationId }),
+    queryFn: async ({ signal }) => {
+      const response = await api["organization-settings"]["deepl-config"].get({
         fetch: { signal },
       });
 

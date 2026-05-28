@@ -8,6 +8,7 @@ import readAIAvailability from "@/api/handlers/organization-settings/read-ai-ava
 import readAIConfig from "@/api/handlers/organization-settings/read-ai-config";
 import readAnonymizationBlacklist from "@/api/handlers/organization-settings/read-anonymization-blacklist";
 import readDeepLAvailability from "@/api/handlers/organization-settings/read-deepl-availability";
+import readDeepLConfig from "@/api/handlers/organization-settings/read-deepl-config";
 import updateOrganizationSettings from "@/api/handlers/organization-settings/update";
 import updateAIConfig from "@/api/handlers/organization-settings/update-ai-config";
 import updateAnonymizationBlacklist from "@/api/handlers/organization-settings/update-anonymization-blacklist";
@@ -53,6 +54,9 @@ export const organizationSettingsRoute = new Elysia({
   })
   .get("/deepl", readDeepLAvailability.handler, {
     permissions: readDeepLAvailability.config.permissions,
+  })
+  .get("/deepl-config", readDeepLConfig.handler, {
+    permissions: readDeepLConfig.config.permissions,
   })
   .post("/deepl", updateDeepLKey.handler, {
     body: updateDeepLKey.config.body,
