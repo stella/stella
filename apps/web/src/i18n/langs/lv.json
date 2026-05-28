@@ -1222,6 +1222,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "binaryPreviewUnsupported": "Binary preview is not supported. Edit this file by re-uploading the skill package.",
       "builtInBadge": "Iebūvēts",
       "builtInSection": "Iebūvētās prasmes",
       "chooseFile": "Izvēlieties failu vai ievelciet to šeit",
@@ -1230,6 +1231,7 @@
       "description": "Instalējiet SKILL.md pakas, kas tērzēšanai pievieno specializētas metodes un tikai lasāmus resursus.",
       "disableSkill": "Atspējot prasmi",
       "disabled": "Atspējota",
+      "discardChanges": "Discard",
       "dropFile": "Nometiet SKILL.md vai .zip šeit",
       "editSkill": "Edit skill",
       "editTitle": "Edit skill",
@@ -1237,6 +1239,7 @@
       "emptyTitle": "Instalējiet pirmo prasmi",
       "enableSkill": "Iespējot prasmi",
       "enabled": "Iespējota",
+      "filesHeading": "Files",
       "formBody": "Instructions",
       "formBodyHelp": "Markdown instructions the agent reads when the skill is invoked.",
       "formDescription": "Description",
@@ -1274,6 +1277,7 @@
       "sourceUpload": "Augšupielādēts",
       "sourceUrl": "Publisks URL",
       "teamSection": "Komandas prasmes",
+      "unsavedChanges": "Unsaved changes — discard?",
       "uploadHelp": "Izmantojiet SKILL.md failu vai .zip mapi ar SKILL.md un izvēles tikai lasāmiem resursiem.",
       "uploadSkill": "Augšupielādēt prasmi",
       "uploadTitle": "Augšupielādēt prasmi",

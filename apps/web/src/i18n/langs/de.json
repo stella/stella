@@ -1222,6 +1222,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "binaryPreviewUnsupported": "Binary preview is not supported. Edit this file by re-uploading the skill package.",
       "builtInBadge": "Integriert",
       "builtInSection": "Integrierte Skills",
       "chooseFile": "Datei auswählen oder hierher ziehen",
@@ -1230,6 +1231,7 @@
       "description": "Installiere SKILL.md-Pakete, die dem Chat spezialisierte Methoden und schreibgeschützte Ressourcen hinzufügen.",
       "disableSkill": "Skill deaktivieren",
       "disabled": "Deaktiviert",
+      "discardChanges": "Discard",
       "dropFile": "SKILL.md oder .zip hier ablegen",
       "editSkill": "Edit skill",
       "editTitle": "Edit skill",
@@ -1237,6 +1239,7 @@
       "emptyTitle": "Installiere deinen ersten Skill",
       "enableSkill": "Skill aktivieren",
       "enabled": "Aktiviert",
+      "filesHeading": "Files",
       "formBody": "Instructions",
       "formBodyHelp": "Markdown instructions the agent reads when the skill is invoked.",
       "formDescription": "Description",
@@ -1274,6 +1277,7 @@
       "sourceUpload": "Hochgeladen",
       "sourceUrl": "Öffentliche URL",
       "teamSection": "Team-Skills",
+      "unsavedChanges": "Unsaved changes — discard?",
       "uploadHelp": "Verwende eine SKILL.md-Datei oder einen .zip-Ordner mit SKILL.md und optionalen schreibgeschützten Ressourcen.",
       "uploadSkill": "Skill hochladen",
       "uploadTitle": "Skill hochladen",

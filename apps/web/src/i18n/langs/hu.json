@@ -1222,6 +1222,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "binaryPreviewUnsupported": "Binary preview is not supported. Edit this file by re-uploading the skill package.",
       "builtInBadge": "Beépített",
       "builtInSection": "Beépített készségek",
       "chooseFile": "Válassz fájlt, vagy húzd ide",
@@ -1230,6 +1231,7 @@
       "description": "Telepíts SKILL.md-csomagokat, amelyek speciális módszereket és csak olvasható erőforrásokat adnak a chathez.",
       "disableSkill": "Készség kikapcsolása",
       "disabled": "Kikapcsolva",
+      "discardChanges": "Discard",
       "dropFile": "Húzd ide a SKILL.md vagy .zip fájlt",
       "editSkill": "Edit skill",
       "editTitle": "Edit skill",
@@ -1237,6 +1239,7 @@
       "emptyTitle": "Telepítsd az első készségedet",
       "enableSkill": "Készség bekapcsolása",
       "enabled": "Bekapcsolva",
+      "filesHeading": "Files",
       "formBody": "Instructions",
       "formBodyHelp": "Markdown instructions the agent reads when the skill is invoked.",
       "formDescription": "Description",
@@ -1274,6 +1277,7 @@
       "sourceUpload": "Feltöltve",
       "sourceUrl": "Nyilvános URL",
       "teamSection": "Csapatkészségek",
+      "unsavedChanges": "Unsaved changes — discard?",
       "uploadHelp": "Használj SKILL.md fájlt vagy olyan .zip mappát, amely SKILL.md fájlt és opcionális csak olvasható erőforrásokat tartalmaz.",
       "uploadSkill": "Készség feltöltése",
       "uploadTitle": "Készség feltöltése",

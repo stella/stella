@@ -1222,6 +1222,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "binaryPreviewUnsupported": "Binary preview is not supported. Edit this file by re-uploading the skill package.",
       "builtInBadge": "Sisseehitatud",
       "builtInSection": "Sisseehitatud oskused",
       "chooseFile": "Vali fail või lohista see siia",
@@ -1230,6 +1231,7 @@
       "description": "Paigalda SKILL.md-paketid, mis lisavad vestlusele erimeetodeid ja kirjutuskaitstud ressursse.",
       "disableSkill": "Keela oskus",
       "disabled": "Keelatud",
+      "discardChanges": "Discard",
       "dropFile": "Lohista SKILL.md või .zip siia",
       "editSkill": "Edit skill",
       "editTitle": "Edit skill",
@@ -1237,6 +1239,7 @@
       "emptyTitle": "Paigalda esimene oskus",
       "enableSkill": "Luba oskus",
       "enabled": "Lubatud",
+      "filesHeading": "Files",
       "formBody": "Instructions",
       "formBodyHelp": "Markdown instructions the agent reads when the skill is invoked.",
       "formDescription": "Description",
@@ -1274,6 +1277,7 @@
       "sourceUpload": "Üles laaditud",
       "sourceUrl": "Avalik URL",
       "teamSection": "Tiimi oskused",
+      "unsavedChanges": "Unsaved changes — discard?",
       "uploadHelp": "Kasuta SKILL.md-faili või .zip-kausta, mis sisaldab faili SKILL.md ja valikulisi kirjutuskaitstud ressursse.",
       "uploadSkill": "Laadi oskus üles",
       "uploadTitle": "Laadi oskus üles",

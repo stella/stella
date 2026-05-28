@@ -1,8 +1,8 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { agentSkills } from "@/api/db/schema";
+import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -74,7 +74,23 @@ const getSkill = createSafeRootHandler(
       );
     }
 
-    return Result.ok(skill);
+    const resources = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({
+            id: agentSkillResources.id,
+            path: agentSkillResources.path,
+            kind: agentSkillResources.kind,
+            sizeBytes: agentSkillResources.sizeBytes,
+            content: agentSkillResources.content,
+          })
+          .from(agentSkillResources)
+          .where(eq(agentSkillResources.skillId, skill.id))
+          .orderBy(asc(agentSkillResources.path)),
+      ),
+    );
+
+    return Result.ok({ ...skill, resources });
   },
 );
 

@@ -1222,6 +1222,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "binaryPreviewUnsupported": "Binary preview is not supported. Edit this file by re-uploading the skill package.",
       "builtInBadge": "Integrada",
       "builtInSection": "Habilidades integradas",
       "chooseFile": "Escolha um arquivo ou arraste-o aqui",
@@ -1230,6 +1231,7 @@
       "description": "Instale pacotes SKILL.md que adicionam métodos especializados e recursos somente leitura ao chat.",
       "disableSkill": "Desativar habilidade",
       "disabled": "Desativada",
+      "discardChanges": "Discard",
       "dropFile": "Solte SKILL.md ou .zip aqui",
       "editSkill": "Edit skill",
       "editTitle": "Edit skill",
@@ -1237,6 +1239,7 @@
       "emptyTitle": "Instale sua primeira habilidade",
       "enableSkill": "Ativar habilidade",
       "enabled": "Ativada",
+      "filesHeading": "Files",
       "formBody": "Instructions",
       "formBodyHelp": "Markdown instructions the agent reads when the skill is invoked.",
       "formDescription": "Description",
@@ -1274,6 +1277,7 @@
       "sourceUpload": "Enviada",
       "sourceUrl": "URL pública",
       "teamSection": "Habilidades da equipe",
+      "unsavedChanges": "Unsaved changes — discard?",
       "uploadHelp": "Use um arquivo SKILL.md ou uma pasta .zip contendo SKILL.md e recursos opcionais somente leitura.",
       "uploadSkill": "Enviar habilidade",
       "uploadTitle": "Enviar habilidade",

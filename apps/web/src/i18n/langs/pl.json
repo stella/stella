@@ -1222,6 +1222,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "binaryPreviewUnsupported": "Binary preview is not supported. Edit this file by re-uploading the skill package.",
       "builtInBadge": "Wbudowana",
       "builtInSection": "Wbudowane umiejętności",
       "chooseFile": "Wybierz plik lub przeciągnij go tutaj",
@@ -1230,6 +1231,7 @@
       "description": "Instaluj pakiety SKILL.md, które dodają do czatu specjalistyczne metody i zasoby tylko do odczytu.",
       "disableSkill": "Wyłącz umiejętność",
       "disabled": "Wyłączona",
+      "discardChanges": "Discard",
       "dropFile": "Upuść tutaj SKILL.md lub .zip",
       "editSkill": "Edit skill",
       "editTitle": "Edit skill",
@@ -1237,6 +1239,7 @@
       "emptyTitle": "Zainstaluj pierwszą umiejętność",
       "enableSkill": "Włącz umiejętność",
       "enabled": "Włączona",
+      "filesHeading": "Files",
       "formBody": "Instructions",
       "formBodyHelp": "Markdown instructions the agent reads when the skill is invoked.",
       "formDescription": "Description",
@@ -1274,6 +1277,7 @@
       "sourceUpload": "Przesłano",
       "sourceUrl": "Publiczny URL",
       "teamSection": "Umiejętności zespołu",
+      "unsavedChanges": "Unsaved changes — discard?",
       "uploadHelp": "Użyj pliku SKILL.md lub folderu .zip zawierającego SKILL.md i opcjonalne zasoby tylko do odczytu.",
       "uploadSkill": "Prześlij umiejętność",
       "uploadTitle": "Prześlij umiejętność",

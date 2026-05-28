@@ -1222,6 +1222,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "binaryPreviewUnsupported": "Binary preview is not supported. Edit this file by re-uploading the skill package.",
       "builtInBadge": "Vestavěné",
       "builtInSection": "Vestavěné dovednosti",
       "chooseFile": "Vyberte soubor nebo ho sem přetáhněte",
@@ -1230,6 +1231,7 @@
       "description": "Instalujte balíčky SKILL.md, které do chatu přidají specializované postupy a zdroje jen pro čtení.",
       "disableSkill": "Vypnout dovednost",
       "disabled": "Vypnuto",
+      "discardChanges": "Discard",
       "dropFile": "Přetáhněte sem SKILL.md nebo .zip",
       "editSkill": "Edit skill",
       "editTitle": "Edit skill",
@@ -1237,6 +1239,7 @@
       "emptyTitle": "Nainstalujte první dovednost",
       "enableSkill": "Zapnout dovednost",
       "enabled": "Zapnuto",
+      "filesHeading": "Files",
       "formBody": "Instructions",
       "formBodyHelp": "Markdown instructions the agent reads when the skill is invoked.",
       "formDescription": "Description",
@@ -1274,6 +1277,7 @@
       "sourceUpload": "Nahráno",
       "sourceUrl": "Veřejná URL",
       "teamSection": "Týmové dovednosti",
+      "unsavedChanges": "Unsaved changes — discard?",
       "uploadHelp": "Použijte soubor SKILL.md nebo složku .zip obsahující SKILL.md a volitelné zdroje jen pro čtení.",
       "uploadSkill": "Nahrát dovednost",
       "uploadTitle": "Nahrát dovednost",

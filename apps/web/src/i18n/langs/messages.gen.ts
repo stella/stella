@@ -1225,6 +1225,7 @@ type Messages = {
   };
   "knowledge": {
     "agentSkills": {
+      "binaryPreviewUnsupported": "Binary preview is not supported. Edit this file by re-uploading the skill package.";
       "builtInBadge": "Built in";
       "builtInSection": "Built-in skills";
       "chooseFile": "Choose a file or drag it here";
@@ -1233,6 +1234,7 @@ type Messages = {
       "description": "Install SKILL.md packs that add specialist methods and read-only resources to chat.";
       "disableSkill": "Disable skill";
       "disabled": "Disabled";
+      "discardChanges": "Discard";
       "dropFile": "Drop SKILL.md or .zip here";
       "editSkill": "Edit skill";
       "editTitle": "Edit skill";
@@ -1240,6 +1242,7 @@ type Messages = {
       "emptyTitle": "Install your first skill";
       "enableSkill": "Enable skill";
       "enabled": "Enabled";
+      "filesHeading": "Files";
       "formBody": "Instructions";
       "formBodyHelp": "Markdown instructions the agent reads when the skill is invoked.";
       "formDescription": "Description";
@@ -1277,6 +1280,7 @@ type Messages = {
       "sourceUpload": "Uploaded";
       "sourceUrl": "Public URL";
       "teamSection": "Team skills";
+      "unsavedChanges": "Unsaved changes — discard?";
       "uploadHelp": "Use a SKILL.md file or a .zip folder containing SKILL.md and optional read-only resources.";
       "uploadSkill": "Upload skill";
       "uploadTitle": "Upload skill";
