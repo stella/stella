@@ -18,6 +18,8 @@ coverage
 
 # Playwright (storage-state, screenshots, traces)
 .playwright/
+playwright-report/
+test-results/
 
 # Claude Code worktrees (local state)
 .claude/worktrees/

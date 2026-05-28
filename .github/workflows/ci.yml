@@ -382,6 +382,158 @@ jobs:
         if: steps.changed.outputs.run == 'true'
         run: bun --filter @stll/landing build
 
+  # Playwright end-to-end suite. Boots the full local stack
+  # (Postgres, MinIO, Valkey, Gotenberg) plus the API and web
+  # dev server, then runs the E2E specs under
+  # apps/web/e2e/. Catches integration regressions that
+  # lint/typecheck/unit tests miss (auth, routing, upload flow,
+  # document rendering).
+  e2e:
+    needs: trust-check
+    if: >-
+      needs.trust-check.outputs.trusted == 'true'
+      || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check whether E2E-affecting paths changed
+        id: changed
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          base_ref="origin/$BASE_REF"
+          mapfile -t changed_files < <(git diff --name-only "$base_ref"...HEAD)
+          run=false
+          for file in "${changed_files[@]}"; do
+            case "$file" in
+              apps/web/*|apps/api/*|packages/*|docker-compose.yml|bun.lock|package.json|.github/workflows/ci.yml)
+                run=true
+                break
+                ;;
+            esac
+          done
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          if [[ "$run" != "true" ]]; then
+            echo "::notice::No E2E-affecting paths changed; skipping E2E."
+          fi
+
+      - name: Setup Bun
+        if: steps.changed.outputs.run == 'true'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        if: steps.changed.outputs.run == 'true'
+        run: bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        if: steps.changed.outputs.run == 'true'
+        run: |
+          cd ./apps/api
+          mv .env.example .env
+          cd ../web
+          mv .env.example .env
+
+      - name: Start docker stack
+        if: steps.changed.outputs.run == 'true'
+        run: docker compose --profile dev up -d --wait
+
+      - name: Run database migrations
+        if: steps.changed.outputs.run == 'true'
+        run: bun --filter @stll/api db:push
+
+      - name: Seed test user
+        if: steps.changed.outputs.run == 'true'
+        run: bun --filter @stll/api db:seed-test-user
+
+      - name: Start API server
+        if: steps.changed.outputs.run == 'true'
+        # `--watch` is for local dev; CI runs the server flat. Logs land in
+        # /tmp/api.log so the "Upload server logs" step can publish them on
+        # failure for debugging.
+        run: |
+          cd apps/api
+          NODE_ENV=development nohup bun --port 3001 src/index.ts > /tmp/api.log 2>&1 &
+          echo $! > /tmp/api.pid
+
+      - name: Wait for API
+        if: steps.changed.outputs.run == 'true'
+        run: |
+          for i in {1..60}; do
+            if curl -sf http://localhost:3001/health > /dev/null 2>&1; then
+              echo "API up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::API never came up"
+          tail -200 /tmp/api.log || true
+          exit 1
+
+      - name: Start web dev server
+        if: steps.changed.outputs.run == 'true'
+        run: |
+          cd apps/web
+          nohup bun --bun vite --port 3000 > /tmp/web.log 2>&1 &
+          echo $! > /tmp/web.pid
+
+      - name: Wait for web
+        if: steps.changed.outputs.run == 'true'
+        run: |
+          for i in {1..60}; do
+            if curl -sf http://localhost:3000 > /dev/null 2>&1; then
+              echo "Web up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Web never came up"
+          tail -200 /tmp/web.log || true
+          exit 1
+
+      - name: Install Playwright browsers
+        if: steps.changed.outputs.run == 'true'
+        run: cd apps/web && bunx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        if: steps.changed.outputs.run == 'true'
+        run: bun --filter @stll/web test:e2e
+
+      - name: Upload Playwright report
+        if: failure() && steps.changed.outputs.run == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7
+
+      - name: Upload server logs
+        if: failure() && steps.changed.outputs.run == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: server-logs
+          path: |
+            /tmp/api.log
+            /tmp/web.log
+          retention-days: 7
+
   # Aggregation job for branch protection. The ruleset requires
   # this check to pass, which ensures untrusted PRs cannot be
   # merged without CI and trusted PRs must pass all checks.
@@ -395,7 +547,7 @@ jobs:
         || 'ci-result'
       }}
     if: always()
-    needs: [trust-check, ci-checks, web-build, landing-build]
+    needs: [trust-check, ci-checks, web-build, landing-build, e2e]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -403,6 +555,7 @@ jobs:
       - name: Evaluate CI outcome
         env:
           CI_RESULT: ${{ needs.ci-checks.result }}
+          E2E_RESULT: ${{ needs.e2e.result }}
           EVENT: ${{ github.event_name }}
           LANDING_RESULT: ${{ needs.landing-build.result }}
           TRUSTED: ${{ needs.trust-check.outputs.trusted }}
@@ -420,7 +573,8 @@ jobs:
           if [[ "$EVENT" == "workflow_dispatch" ]]; then
             if [[ "$CI_RESULT" == "failure" || "$CI_RESULT" == "cancelled" \
                   || "$WEB_RESULT" == "failure" || "$WEB_RESULT" == "cancelled" \
-                  || "$LANDING_RESULT" == "failure" || "$LANDING_RESULT" == "cancelled" ]]; then
+                  || "$LANDING_RESULT" == "failure" || "$LANDING_RESULT" == "cancelled" \
+                  || "$E2E_RESULT" == "failure" || "$E2E_RESULT" == "cancelled" ]]; then
               echo "::error::CI checks failed."
               exit 1
             fi
@@ -434,12 +588,12 @@ jobs:
 
           # "cancelled" means cancel-in-progress replaced this
           # run with a newer one; the newer run is authoritative.
-          if [[ "$CI_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" ]]; then
+          if [[ "$CI_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
-          if [[ "$CI_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$LANDING_RESULT" == "failure" ]]; then
+          if [[ "$CI_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" ]]; then
             echo "::error::CI checks failed."
             exit 1
           fi

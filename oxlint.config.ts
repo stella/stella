@@ -348,6 +348,21 @@ export default defineConfig({
       rules: { "no-bare-error/no-bare-error": "off" },
     },
     {
+      // Playwright end-to-end tests. They run outside the app process
+      // (no env module, no `panic()` plumbing) and talk to a live HTTP
+      // API where bare `throw new Error(...)` is the right signal.
+      files: ["apps/web/e2e/**/*.ts"],
+      rules: {
+        "no-console": "off",
+        "no-bare-error/no-bare-error": "off",
+        "no-non-null-assertion": "off",
+        "no-any-casts/no-any-casts": "off",
+        "typescript/no-unsafe-type-assertion": "off",
+        "forbid-process-env-outside-env-ts/forbid-process-env-outside-env-ts":
+          "off",
+      },
+    },
+    {
       // Legacy DOCX/editor code has parser and layout state machines that need
       // dedicated extraction passes. Keep the rule visible without blocking
       // this guardrail rollout on a broad folio rewrite.
@@ -629,6 +644,7 @@ export default defineConfig({
               "apps/api/src/lib/s3.ts",
               "apps/api/src/lib/scheduler/runner.ts",
               "apps/api/src/lib/subprocess.ts",
+              "apps/web/e2e/helpers/api.ts",
             ],
           },
         ],

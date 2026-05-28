@@ -1,0 +1,9 @@
+{
+  "extends": "@stll/typescript-config/base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "tsBuildInfoFile": "./.cache/tsbuildinfo.json"
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules"]
+}
