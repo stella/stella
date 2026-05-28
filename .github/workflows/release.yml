@@ -188,10 +188,15 @@ jobs:
           trap cleanup_smoke EXIT
           cleanup_smoke
 
+          # Satisfies the staging/production boot guard in
+          # apps/api/src/env.ts; the smoke never persists data.
+          export CONTENT_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+
           docker run --detach --network host \
             --name stella-api-smoke \
             --env BETTER_AUTH_SECRET \
             --env BETTER_AUTH_URL \
+            --env CONTENT_ENCRYPTION_KEY \
             --env DATABASE_URL \
             --env EMAIL_PROVIDER \
             --env FRONTEND_URL \
