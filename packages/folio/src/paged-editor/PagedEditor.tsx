@@ -678,12 +678,50 @@ function HfCaretOverlay({
           return;
         }
         const ar = hit.element.getBoundingClientRect();
-        const x =
-          ((hit.edge === "right" ? ar.right : ar.left) - cr.left) / zoomDivisor;
+        // Default to the span edge findHfCaretSpan returned. For mid-span
+        // text positions (clicked / arrowed into the middle of a run),
+        // sample the exact character X via the Range API so the caret
+        // lines up with the glyph the PM selection actually sits at — a
+        // bare edge anchor would paint at the run's left edge regardless
+        // of where the user clicked (Codex #487 P2: 22:38 review).
+        let absX = hit.edge === "right" ? ar.right : ar.left;
+        let absY = ar.top;
+        let absHeight = ar.height || 16;
+        const pmStartStr = hit.element.dataset["pmStart"];
+        const pmEndStr = hit.element.dataset["pmEnd"];
+        const pmStart = pmStartStr
+          ? Number.parseInt(pmStartStr, 10)
+          : Number.NaN;
+        const pmEnd = pmEndStr ? Number.parseInt(pmEndStr, 10) : Number.NaN;
+        if (
+          Number.isFinite(pmStart) &&
+          Number.isFinite(pmEnd) &&
+          selection.from > pmStart &&
+          selection.from < pmEnd
+        ) {
+          const textNode = hit.element.firstChild;
+          if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+            const textContent = textNode.textContent ?? "";
+            const charOffset = Math.min(
+              selection.from - pmStart,
+              textContent.length,
+            );
+            const ownerDoc = hit.element.ownerDocument;
+            const range = ownerDoc.createRange();
+            range.setStart(textNode, charOffset);
+            range.setEnd(textNode, charOffset);
+            const rRect = range.getBoundingClientRect();
+            if (rRect.height > 0 || rRect.width > 0 || rRect.left > 0) {
+              absX = rRect.left;
+              absY = rRect.top;
+              absHeight = rRect.height || absHeight;
+            }
+          }
+        }
         setCaret({
-          x,
-          y: (ar.top - cr.top) / zoomDivisor,
-          height: (ar.height || 16) / zoomDivisor,
+          x: (absX - cr.left) / zoomDivisor,
+          y: (absY - cr.top) / zoomDivisor,
+          height: absHeight / zoomDivisor,
         });
         setRangeRects([]);
         return;
@@ -712,6 +750,38 @@ function HfCaretOverlay({
         if (spanEnd <= selection.from || spanStart >= selection.to) {
           continue;
         }
+        // For text-bearing spans, clip the highlight to the selected
+        // sub-range with the Range API instead of using the whole span
+        // bounding box. Without this a partial selection inside a run
+        // (double-clicking a word, dragging a few characters) painted
+        // the entire run as selected (Codex #487 P2: 22:38 review).
+        const textNode = span.firstChild;
+        if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+          const textContent = textNode.textContent ?? "";
+          const startChar = Math.max(0, selection.from - spanStart);
+          const endChar = Math.min(
+            textContent.length,
+            selection.to - spanStart,
+          );
+          if (startChar < endChar) {
+            const ownerDoc = span.ownerDocument;
+            const range = ownerDoc.createRange();
+            range.setStart(textNode, startChar);
+            range.setEnd(textNode, endChar);
+            for (const cRect of Array.from(range.getClientRects())) {
+              rects.push({
+                x: (cRect.left - cr.left) / zoomDivisor,
+                y: (cRect.top - cr.top) / zoomDivisor,
+                width: cRect.width / zoomDivisor,
+                height: cRect.height / zoomDivisor,
+              });
+            }
+            continue;
+          }
+        }
+        // No text node (atom inline, image, etc.) — fall back to the
+        // span's full bounding rect; selection of the atom still paints
+        // visibly.
         const r = span.getBoundingClientRect();
         rects.push({
           x: (r.left - cr.left) / zoomDivisor,
