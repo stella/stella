@@ -463,7 +463,11 @@ jobs:
 
       - name: Run database migrations
         if: steps.changed.outputs.run == 'true'
-        run: bun --filter @stll/api db:push
+        # `db:migrate` (not `db:push`) so role bootstrap migrations such as
+        # `20260516000000_case_law_ingestion_role` actually execute. `db:push`
+        # only diffs the declarative schema, which references `stella_ingestion`
+        # as `existing()` and then fails when later policy creates target it.
+        run: bun --filter @stll/api db:migrate
 
       - name: Seed test user
         if: steps.changed.outputs.run == 'true'
