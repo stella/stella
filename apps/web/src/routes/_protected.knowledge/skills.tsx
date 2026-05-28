@@ -733,7 +733,7 @@ const buildSkillZip = async (
   const zip = new JSZip();
   zip.file(SKILL_MD_FILENAME, markdown);
   for (const resource of resources) {
-    zip.file(resource.path, resource.content);
+    zip.file(resource.path.trim(), resource.content);
   }
   const blob = await zip.generateAsync({ type: "blob" });
   return new File([blob], "skill.zip", { type: "application/zip" });
