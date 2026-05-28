@@ -80,6 +80,10 @@ export const TranslateDocumentDialog = ({
         .translate.post({
           fieldId: toSafeId<"field">(fieldId),
           targetLang,
+          // Send explicitly: Elysia coerces absent optional UnionEnums to the
+          // first value (`default`), which would bypass the client's
+          // prefer_more default and ruin legal-register output.
+          formality: "prefer_more",
           queryKey: entitiesKeys.all(workspaceId),
         });
 
@@ -104,7 +108,9 @@ export const TranslateDocumentDialog = ({
       void navigate({
         to: "/workspaces/$workspaceId/$viewId/document",
         params: { workspaceId, viewId: data.entityId },
-        search: { entity: data.entityId },
+        // `field` is required by the route guard; without it
+        // `RouteComponent` bounces back to the workspace.
+        search: { entity: data.entityId, field: data.fieldId },
       });
     },
     onError: (error: unknown) => {

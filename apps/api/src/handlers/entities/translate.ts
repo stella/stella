@@ -308,6 +308,7 @@ const translateEntity = createSafeHandler(
 
     return Result.ok({
       entityId: createResult.value.entityId,
+      fieldId: createResult.value.fieldId,
       fileName: createResult.value.fileName,
       billedCharacters: translation.billedCharacters,
     });
