@@ -5275,10 +5275,19 @@ export function PagedEditor(
             }
           }
         } else if (onHyperlinkClick) {
-          // External hyperlink — show popup only if not a drag-to-select
-          const view = hiddenPMRef.current?.getView();
+          // External hyperlink — show popup only if not a drag-to-select.
+          // Check the active surface's selection: when the user is editing
+          // an HF and clicks a link inside that slot, we read HF PM
+          // selection state, not body. Without this fix, a single-click
+          // on an HF hyperlink while a body range was selected would
+          // incorrectly suppress the popup.
+          const hfSlot = hfEditMode ? findHfSlotForTarget(target) : null;
+          const surfaceView =
+            (hfSlot ? hfPMsRef.current?.getView(hfSlot.rId) : null) ??
+            hiddenPMRef.current?.getView();
           const hasRangeSelection =
-            view && view.state.selection.from !== view.state.selection.to;
+            surfaceView &&
+            surfaceView.state.selection.from !== surfaceView.state.selection.to;
           if (!hasRangeSelection) {
             const displayText = anchorEl.textContent || "";
             const tooltip = anchorEl.getAttribute("title") || undefined;
