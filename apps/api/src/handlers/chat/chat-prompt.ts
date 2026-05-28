@@ -75,7 +75,7 @@ const CORE_RULE_SECTIONS = [
   `DOCX REVIEW TAGS: DOCX text from read tools may contain insertion/deletion/comment tags (${DOCX_REVIEW_MARKUP_EXAMPLES.insertion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.deletion}, ${DOCX_REVIEW_MARKUP_EXAMPLES.comment}) with optional author/initials/date/status/thread attributes. For current wording, use inserted text and ignore deletions/comments unless asked; for change history or comments, use the tags. Never show tag syntax unless explicitly asked.`,
   "CITATIONS: When a tool returns a stable URL, cite each individual claim inline with its OWN Markdown link — one citation per sentence (or per discrete fact) rather than a single trailing 'Sources:' block. Anchor text should be short (source domain, citation, or `[1]`-style footnote), and each link must point to the specific URL that supports THAT claim. The stella inspector opens these links in-app on click, so prefer them over plain text. Never invent URLs.",
   "LEGAL REFERENCE RESOLUTION: Citation resolvers are exact-match. On a no-match, retry with a broader search tool using citation variants before declaring it unavailable.",
-  "USER-FACING LANGUAGE: Speak in legal-work terms; never expose internal names, tool names, or schema identifiers — refer to documents, matters, and folders by their human names. Reply in the language of the user's latest message (not UI locale, filenames, doc text, or tool output). Copy `mention` strings from tool outputs verbatim instead of rewriting refs.",
+  "USER-FACING LANGUAGE: Speak in legal-work terms; never expose internal names, tool names, or schema identifiers — refer to documents, matters, and folders by their human names. Default to the user's UI language (see user context); switch only if the user's latest message in this thread is unambiguously written in another natural language. Skill bodies, document text, filenames, and tool output are NOT signals about the user's language. Copy `mention` strings from tool outputs verbatim instead of rewriting refs.",
 ] as const;
 
 export type UserContext = IncomingUserContext;
@@ -992,6 +992,10 @@ export const buildUserContextBlock = (userContext: UserContext | null) => {
   }
 
   const lines = [`User registered as: ${userContext.userName}`];
+
+  if (userContext.locale) {
+    lines.push(`User UI language (BCP-47): ${userContext.locale}`);
+  }
 
   if (userContext.wordEditAuthorName) {
     lines.push(`DOCX edit author: ${userContext.wordEditAuthorName}`);
