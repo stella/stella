@@ -5317,6 +5317,83 @@ export function PagedEditor(
         }
       }
 
+      // Double / triple-click inside an active HF slot routes word /
+      // paragraph selection to the matching hidden HF EditorView instead of
+      // the body PM. We re-resolve the slot from the target so the
+      // selection lands on the right surface even when this handler fires
+      // before any prior HF click set drag state.
+      if (
+        !readOnly &&
+        hfEditMode &&
+        (e.detail === 2 || e.detail === 3) &&
+        hfPMsRef.current
+      ) {
+        const slot = findHfSlotForTarget(target);
+        if (slot) {
+          const hfView = hfPMsRef.current.getView(slot.rId);
+          if (hfView) {
+            const pos = clickToPositionDom(
+              pagesContainerRef.current ?? slot.element,
+              e.clientX,
+              e.clientY,
+              zoom,
+            );
+            if (pos !== null) {
+              const docEnd = hfView.state.doc.content.size;
+              const clamped = Math.max(0, Math.min(pos, docEnd));
+              const $pos = hfView.state.doc.resolve(clamped);
+              const parent = $pos.parent;
+              if (e.detail === 3) {
+                const start = $pos.start($pos.depth);
+                const end = $pos.end($pos.depth);
+                hfView.dispatch(
+                  hfView.state.tr.setSelection(
+                    TextSelection.create(hfView.state.doc, start, end),
+                  ),
+                );
+              } else if (parent.isTextblock) {
+                const pmAlignedParts: string[] = [];
+                for (let i = 0; i < parent.content.childCount; i++) {
+                  const node = parent.content.child(i);
+                  pmAlignedParts.push(
+                    node.isText ? (node.text ?? "") : " ".repeat(node.nodeSize),
+                  );
+                }
+                const pmAlignedText = pmAlignedParts.join("");
+                const offset = $pos.parentOffset;
+                let start = offset;
+                while (
+                  start > 0 &&
+                  /\w/u.test(pmAlignedText[start - 1]!) // SAFETY: start > 0
+                ) {
+                  start--;
+                }
+                let end = offset;
+                while (
+                  end < pmAlignedText.length &&
+                  /\w/u.test(pmAlignedText[end]!) // SAFETY: end < pmAlignedText.length
+                ) {
+                  end++;
+                }
+                const absStart = $pos.start() + start;
+                const absEnd = $pos.start() + end;
+                if (absStart < absEnd) {
+                  hfView.dispatch(
+                    hfView.state.tr.setSelection(
+                      TextSelection.create(hfView.state.doc, absStart, absEnd),
+                    ),
+                  );
+                }
+              }
+              hfView.focus();
+              e.preventDefault();
+              e.stopPropagation();
+            }
+            return;
+          }
+        }
+      }
+
       // Double-click: select entire cell (CellSelection) if in table, otherwise word selection
       if (e.detail === 2 && hiddenPMRef.current) {
         const pmPos = getPositionFromMouse(e.clientX, e.clientY);
@@ -5431,6 +5508,43 @@ export function PagedEditor(
 
       e.preventDefault();
 
+      // HF edit mode: route the right-click to the matching HF PM so the
+      // context menu reads HF selection state. Without this the menu would
+      // act on body PM state — wrong "has selection" flag and any caret
+      // move on right-click would land in the body.
+      const target = e.target instanceof HTMLElement ? e.target : null;
+      if (!readOnly && hfEditMode && target) {
+        const slot = findHfSlotForTarget(target);
+        if (slot) {
+          const hfView = hfPMsRef.current?.getView(slot.rId);
+          if (hfView) {
+            const { from, to } = hfView.state.selection;
+            const pmPos = clickToPositionDom(
+              pagesContainerRef.current ?? slot.element,
+              e.clientX,
+              e.clientY,
+              zoom,
+            );
+            if (pmPos !== null && (from === to || pmPos < from || pmPos > to)) {
+              const docEnd = hfView.state.doc.content.size;
+              const clamped = Math.max(0, Math.min(pmPos, docEnd));
+              const $pos = hfView.state.doc.resolve(clamped);
+              hfView.dispatch(
+                hfView.state.tr.setSelection(TextSelection.near($pos)),
+              );
+              hfView.focus();
+            }
+            const after = hfView.state.selection;
+            onContextMenu({
+              x: e.clientX,
+              y: e.clientY,
+              hasSelection: after.from !== after.to,
+            });
+            return;
+          }
+        }
+      }
+
       const view = hiddenPMRef.current?.getView();
       if (!view) {
         return;
@@ -5439,15 +5553,12 @@ export function PagedEditor(
       const { from, to } = view.state.selection;
       const pmPos = getPositionFromMouse(e.clientX, e.clientY);
 
-      // If the right-click is within the existing selection, keep it
-      // Otherwise, move cursor to the right-click position
       if (pmPos !== null && (from === to || pmPos < from || pmPos > to)) {
         hiddenPMRef.current?.setSelection(pmPos);
         hiddenPMRef.current?.focus();
         setIsFocused(true);
       }
 
-      // Read updated selection state after potential change
       const updatedState = hiddenPMRef.current?.getState();
       const hasSelection = updatedState
         ? updatedState.selection.from !== updatedState.selection.to
@@ -5455,7 +5566,7 @@ export function PagedEditor(
 
       onContextMenu({ x: e.clientX, y: e.clientY, hasSelection });
     },
-    [onContextMenu, getPositionFromMouse],
+    [hfEditMode, onContextMenu, getPositionFromMouse, readOnly, zoom],
   );
 
   /**
