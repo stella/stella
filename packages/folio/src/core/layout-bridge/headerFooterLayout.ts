@@ -697,6 +697,49 @@ function finalizeHeaderFooterContent(
     visualBottom,
     marginPushTop,
     marginPushBottom,
+    textSig: computeHeaderFooterTextSig(blocks),
     ...(options.rId ? { rId: options.rId } : {}),
   };
+}
+
+/**
+ * Cheap content fingerprint for the painter's incremental-render cache. The
+ * default fields hashed by `computeOptionsHash` (block count + flow height +
+ * visual bounds) miss same-height in-place edits — typing a replacement
+ * character, toggling bold, etc. — so the painter's incremental path then
+ * skips re-rendering page shells and the user's HF edits stay invisible
+ * until something else triggers a full repaint (Codex #487 P1 follow-up:
+ * 21:02 review).
+ *
+ * Walk every text-bearing run in every paragraph block and concat the text.
+ * For folio HF (small, bounded), this is cheap and detects any text change
+ * that the user would expect to see repainted. Tables, images, and text
+ * boxes are summarised by kind + dims so resize / image swap also invalidate.
+ */
+function computeHeaderFooterTextSig(blocks: FlowBlock[]): string {
+  const parts: string[] = [];
+  for (const b of blocks) {
+    if (b.kind === "paragraph") {
+      let text = "p:";
+      for (const r of b.runs) {
+        if (r.kind === "text") {
+          text += r.text;
+        } else if (r.kind === "tab") {
+          text += "\t";
+        } else if (r.kind === "lineBreak") {
+          text += "\n";
+        } else if (r.kind === "image") {
+          text += `[i${r.width}x${r.height}]`;
+        }
+      }
+      parts.push(text);
+    } else if (b.kind === "table") {
+      parts.push(`t:${b.rows.length}`);
+    } else if (b.kind === "image") {
+      parts.push(`i:${b.width}x${b.height}`);
+    } else if (b.kind === "textBox") {
+      parts.push("tb");
+    }
+  }
+  return parts.join("|");
 }

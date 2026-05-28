@@ -164,6 +164,14 @@ export type HeaderFooterContent = {
    * EditorView (see `HiddenHeaderFooterPMs`).
    */
   rId?: string;
+  /**
+   * Cheap text fingerprint of the rendered blocks. Used by
+   * `computeOptionsHash` so same-height in-place HF edits (typing
+   * replacing the same number of chars, bold toggle, etc.) invalidate
+   * the cached options hash and force the painter to re-render shells
+   * (Codex #487 P1 follow-up: 21:02 review).
+   */
+  textSig?: string;
 };
 
 /**
@@ -2361,30 +2369,42 @@ function runContentKey(run: Run): string {
 function computeOptionsHash(options: RenderPageOptions): string {
   const parts: string[] = [];
 
-  // Header/footer content changes affect all pages
+  // Header/footer content changes affect all pages. Include `textSig` so
+  // same-height in-place edits (typing a replacement char, bold toggle, etc.)
+  // invalidate the hash and force the per-page shells to re-render — block
+  // count / height / visualBounds alone miss those (Codex #487 P1: 21:02
+  // review).
   if (options.headerContent) {
     parts.push(
       `hdr:${options.headerContent.blocks.length},${options.headerContent.height},${
         options.headerContent.visualTop ?? 0
-      },${options.headerContent.visualBottom ?? options.headerContent.height}`,
+      },${options.headerContent.visualBottom ?? options.headerContent.height},${
+        options.headerContent.textSig ?? ""
+      }`,
     );
   }
   if (options.footerContent) {
     parts.push(
       `ftr:${options.footerContent.blocks.length},${options.footerContent.height},${
         options.footerContent.visualTop ?? 0
-      },${options.footerContent.visualBottom ?? options.footerContent.height}`,
+      },${options.footerContent.visualBottom ?? options.footerContent.height},${
+        options.footerContent.textSig ?? ""
+      }`,
     );
   }
 
   if (options.firstPageHeaderContent) {
     parts.push(
-      `fp-hdr:${options.firstPageHeaderContent.blocks.length},${options.firstPageHeaderContent.height}`,
+      `fp-hdr:${options.firstPageHeaderContent.blocks.length},${options.firstPageHeaderContent.height},${
+        options.firstPageHeaderContent.textSig ?? ""
+      }`,
     );
   }
   if (options.firstPageFooterContent) {
     parts.push(
-      `fp-ftr:${options.firstPageFooterContent.blocks.length},${options.firstPageFooterContent.height}`,
+      `fp-ftr:${options.firstPageFooterContent.blocks.length},${options.firstPageFooterContent.height},${
+        options.firstPageFooterContent.textSig ?? ""
+      }`,
     );
   }
   if (options.titlePg) {
