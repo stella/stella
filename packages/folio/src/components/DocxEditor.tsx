@@ -3573,7 +3573,7 @@ export function DocxEditor({
                             targetElement={targetEl}
                             parentElement={parentEl}
                             getActiveView={getActiveView}
-                            onClose={() => setHfEditPosition(null)}
+                            onClose={handleBodyClick}
                             onRemove={handleRemoveHeaderFooter}
                           />
                         );
