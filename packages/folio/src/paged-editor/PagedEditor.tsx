@@ -695,7 +695,17 @@ function HfCaretOverlay({
     return () => {
       pagesContainer.removeEventListener(PAINTER_PAINTED_EVENT, onPainted);
     };
-  }, [selection, pagesContainer]);
+    // Destructure selection so the effect only re-runs when a field
+    // actually changes; otherwise every handleHfPmTransaction-driven
+    // setHfCaretSelection allocates a new object and we'd churn the
+    // DOM lookup + getBoundingClientRect chain on every keystroke.
+  }, [
+    selection.rId,
+    selection.kind,
+    selection.from,
+    selection.to,
+    pagesContainer,
+  ]);
 
   return (
     <>
