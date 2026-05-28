@@ -43,7 +43,7 @@ import {
   findBodyPmSpans,
 } from "../core/layout-bridge/findBodyPmSpans";
 import {
-  findHfPmAnchor,
+  findHfCaretSpan,
   findHfSlotForTarget,
 } from "../core/layout-bridge/findHfPmSpans";
 import {
@@ -633,20 +633,26 @@ function HfCaretOverlay({
       const cr = pagesContainer.getBoundingClientRect();
       const collapsed = selection.from === selection.to;
       if (collapsed) {
-        const anchor = findHfPmAnchor(
+        // Use findHfCaretSpan so a caret at the end of a run / paragraph
+        // (selection.from == span's data-pm-end) still finds a span to
+        // anchor to — exact data-pm-start matching alone would lose the
+        // caret as soon as the user typed to the end of their text
+        // (Codex #487 P2: 20:32 review).
+        const hit = findHfCaretSpan(
           pagesContainer,
           selection.kind,
           selection.rId,
           selection.from,
         );
-        if (!anchor) {
+        if (!hit) {
           setCaret(null);
           setRangeRects([]);
           return;
         }
-        const ar = anchor.getBoundingClientRect();
+        const ar = hit.element.getBoundingClientRect();
+        const x = (hit.edge === "right" ? ar.right : ar.left) - cr.left;
         setCaret({
-          x: ar.left - cr.left,
+          x,
           y: ar.top - cr.top,
           height: ar.height || 16,
         });

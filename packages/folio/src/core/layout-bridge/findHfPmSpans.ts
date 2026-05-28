@@ -56,6 +56,66 @@ export function findHfPmAnchor(
 }
 
 /**
+ * Locate the span that covers a PM position for caret rendering, including
+ * `pmEnd` boundaries. `findHfPmAnchor` only matches `data-pm-start="${pos}"`
+ * exactly; when the caret sits at the end of a run / paragraph,
+ * `selection.from` equals that span's `data-pm-end` and the exact lookup
+ * returns null. This helper falls back to a range scan over the slot's
+ * `[data-pm-start][data-pm-end]` spans and reports the edge the caret
+ * should hug so the renderer can pick `left` vs `right`.
+ */
+export type HfCaretSpanHit = {
+  element: HTMLElement;
+  /** Which edge of the span's getBoundingClientRect to anchor the caret to. */
+  edge: "left" | "right";
+};
+
+export function findHfCaretSpan(
+  container: ParentNode,
+  kind: HfSlotKind,
+  rId: string,
+  pos: number,
+): HfCaretSpanHit | null {
+  if (!Number.isFinite(pos)) {
+    return null;
+  }
+  const exact = container.querySelector<HTMLElement>(
+    `${slotSelector(kind, rId)} [data-pm-start="${String(pos)}"]`,
+  );
+  if (exact) {
+    return { element: exact, edge: "left" };
+  }
+  const spans = container.querySelectorAll<HTMLElement>(
+    `${slotSelector(kind, rId)} span[data-pm-start][data-pm-end]`,
+  );
+  let best: HfCaretSpanHit | null = null;
+  for (const span of spans) {
+    const startStr = span.dataset["pmStart"];
+    const endStr = span.dataset["pmEnd"];
+    if (startStr === undefined || endStr === undefined) {
+      continue;
+    }
+    const start = Number.parseInt(startStr, 10);
+    const end = Number.parseInt(endStr, 10);
+    if (!Number.isFinite(start) || !Number.isFinite(end)) {
+      continue;
+    }
+    if (pos === end) {
+      // Exact end-of-span match — prefer the latest (rightmost) hit so
+      // a caret at the boundary between two adjacent runs lands on the
+      // right edge of the run that precedes it, matching browser
+      // selection behaviour.
+      best = { element: span, edge: "right" };
+    } else if (pos > start && pos < end && !best) {
+      // Mid-span coverage. Rare for a collapsed caret but keep the
+      // fallback so anything weird still renders something.
+      best = { element: span, edge: "left" };
+    }
+  }
+  return best;
+}
+
+/**
  * Find the painted HF slot enclosing the given DOM target. Returns the
  * slot's kind and rId for the pointer pipeline to dispatch on the matching
  * hidden HF EditorView. Returns `null` when the target is not inside an HF
