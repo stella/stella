@@ -476,7 +476,7 @@ type SkillFileTreeProps = {
   dirtyResourceIds: string[];
   onSelect: (next: SelectedFile) => void;
   selected: SelectedFile;
-  tree: TreeGroup[];
+  tree: TreeNode[];
 };
 
 function SkillFileTree({
@@ -488,9 +488,10 @@ function SkillFileTree({
 }: SkillFileTreeProps) {
   const dirtySet = useMemo(() => new Set(dirtyResourceIds), [dirtyResourceIds]);
   return (
-    <ul className="flex flex-col gap-3">
+    <ul className="flex flex-col">
       <li>
         <FileRow
+          depth={0}
           dirty={bodyDirty}
           icon={<FileTextIcon className="size-4" />}
           label={SKILL_BODY_FILE_NAME}
@@ -498,41 +499,94 @@ function SkillFileTree({
           selected={selected.type === "body"}
         />
       </li>
-      {tree.map((group) => (
-        <li className="flex flex-col gap-1" key={group.prefix}>
-          <div className="text-muted-foreground flex items-center gap-1.5 px-2 text-xs">
-            <FolderIcon className="size-3.5" />
-            <span className="font-mono">{group.prefix}/</span>
-          </div>
-          <ul className="flex flex-col">
-            {group.entries.map((entry) => (
-              <li key={entry.id}>
-                <FileRow
-                  dirty={dirtySet.has(entry.id)}
-                  icon={kindIcon(entry.kind)}
-                  label={entry.fileName}
-                  onClick={() =>
-                    onSelect({
-                      type: "resource",
-                      resourceId: entry.id,
-                      path: entry.path,
-                    })
-                  }
-                  selected={
-                    selected.type === "resource" &&
-                    selected.resourceId === entry.id
-                  }
-                />
-              </li>
-            ))}
-          </ul>
-        </li>
+      {tree.map((node) => (
+        <TreeNodeRow
+          depth={0}
+          dirtySet={dirtySet}
+          key={node.type === "folder" ? `f:${node.path}` : node.id}
+          node={node}
+          onSelect={onSelect}
+          selected={selected}
+        />
       ))}
     </ul>
   );
 }
 
+type TreeNodeRowProps = {
+  depth: number;
+  dirtySet: Set<string>;
+  node: TreeNode;
+  onSelect: (next: SelectedFile) => void;
+  selected: SelectedFile;
+};
+
+function TreeNodeRow({
+  depth,
+  dirtySet,
+  node,
+  onSelect,
+  selected,
+}: TreeNodeRowProps) {
+  if (node.type === "file") {
+    return (
+      <li>
+        <FileRow
+          depth={depth}
+          dirty={dirtySet.has(node.id)}
+          icon={kindIcon(node.kind)}
+          label={node.fileName}
+          onClick={() =>
+            onSelect({
+              type: "resource",
+              resourceId: node.id,
+              path: node.path,
+            })
+          }
+          selected={
+            selected.type === "resource" && selected.resourceId === node.id
+          }
+        />
+      </li>
+    );
+  }
+  return (
+    <li className="flex flex-col">
+      <FolderRow depth={depth} label={node.name} />
+      <ul className="flex flex-col">
+        {node.children.map((child) => (
+          <TreeNodeRow
+            depth={depth + 1}
+            dirtySet={dirtySet}
+            key={child.type === "folder" ? `f:${child.path}` : child.id}
+            node={child}
+            onSelect={onSelect}
+            selected={selected}
+          />
+        ))}
+      </ul>
+    </li>
+  );
+}
+
+const TREE_INDENT_PX = 14;
+
+type FolderRowProps = { depth: number; label: string };
+
+function FolderRow({ depth, label }: FolderRowProps) {
+  return (
+    <div
+      className="text-muted-foreground flex items-center gap-1.5 px-2 py-1 text-xs"
+      style={{ paddingInlineStart: `${8 + depth * TREE_INDENT_PX}px` }}
+    >
+      <FolderIcon className="size-3.5" />
+      <span className="font-mono">{label}</span>
+    </div>
+  );
+}
+
 type FileRowProps = {
+  depth: number;
   dirty: boolean;
   icon: React.ReactNode;
   label: string;
@@ -540,7 +594,14 @@ type FileRowProps = {
   selected: boolean;
 };
 
-function FileRow({ dirty, icon, label, onClick, selected }: FileRowProps) {
+function FileRow({
+  depth,
+  dirty,
+  icon,
+  label,
+  onClick,
+  selected,
+}: FileRowProps) {
   return (
     <button
       className={cn(
@@ -548,6 +609,7 @@ function FileRow({ dirty, icon, label, onClick, selected }: FileRowProps) {
         selected && "bg-muted text-foreground",
       )}
       onClick={onClick}
+      style={{ paddingInlineStart: `${8 + depth * TREE_INDENT_PX}px` }}
       type="button"
     >
       <span className="text-muted-foreground">{icon}</span>
@@ -575,46 +637,68 @@ const kindIcon = (kind: string) => {
   return <FileIcon className="size-4" />;
 };
 
-type TreeEntry = {
-  id: string;
-  path: string;
-  fileName: string;
-  kind: string;
+type TreeNode =
+  | { type: "file"; id: string; path: string; fileName: string; kind: string }
+  | { type: "folder"; name: string; path: string; children: TreeNode[] };
+
+const findFolder = (nodes: TreeNode[], name: string) => {
+  for (const node of nodes) {
+    if (node.type === "folder" && node.name === name) {
+      return node;
+    }
+  }
+  return undefined;
 };
 
-type TreeGroup = {
-  prefix: string;
-  entries: TreeEntry[];
+const sortNodes = (nodes: TreeNode[]) => {
+  nodes.sort((a, b) => {
+    if (a.type !== b.type) {
+      return a.type === "folder" ? -1 : 1;
+    }
+    const an = a.type === "folder" ? a.name : a.fileName;
+    const bn = b.type === "folder" ? b.name : b.fileName;
+    return an.localeCompare(bn);
+  });
+  for (const node of nodes) {
+    if (node.type === "folder") {
+      sortNodes(node.children);
+    }
+  }
 };
 
-const buildTree = (resources: SkillResource[]): TreeGroup[] => {
-  const groups = new Map<string, TreeEntry[]>();
+const buildTree = (resources: SkillResource[]): TreeNode[] => {
+  const root: TreeNode[] = [];
   for (const resource of resources) {
-    const slashIndex = resource.path.indexOf("/");
-    const prefix = slashIndex === -1 ? "" : resource.path.slice(0, slashIndex);
-    const fileName =
-      slashIndex === -1 ? resource.path : resource.path.slice(slashIndex + 1);
-    const bucket = groups.get(prefix);
-    const entry: TreeEntry = {
+    const segments = resource.path.split("/").filter((s) => s.length > 0);
+    if (segments.length === 0) {
+      continue;
+    }
+    const fileName = segments[segments.length - 1] ?? resource.path;
+    let cursor = root;
+    let accum = "";
+    for (let i = 0; i < segments.length - 1; i++) {
+      const name = segments[i];
+      if (name === undefined) {
+        continue;
+      }
+      accum = accum.length > 0 ? `${accum}/${name}` : name;
+      let folder = findFolder(cursor, name);
+      if (!folder) {
+        folder = { type: "folder", name, path: accum, children: [] };
+        cursor.push(folder);
+      }
+      cursor = folder.children;
+    }
+    cursor.push({
+      type: "file",
       id: resource.id,
       path: resource.path,
       fileName,
       kind: resource.kind,
-    };
-    if (bucket) {
-      bucket.push(entry);
-    } else {
-      groups.set(prefix, [entry]);
-    }
-  }
-  const out: TreeGroup[] = [];
-  for (const [prefix, entries] of groups) {
-    out.push({
-      prefix: prefix === "" ? "/" : prefix,
-      entries: entries.sort((a, b) => a.fileName.localeCompare(b.fileName)),
     });
   }
-  return out.sort((a, b) => a.prefix.localeCompare(b.prefix));
+  sortNodes(root);
+  return root;
 };
 
 const toastError = (error: unknown, fallback: string) => {
