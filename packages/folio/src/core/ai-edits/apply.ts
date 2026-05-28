@@ -149,6 +149,37 @@ const collectLiveBlocksByParaId = (doc: PMNode) => {
 };
 
 /**
+ * Insert ops (insertAfterBlock / insertBeforeBlock) target a block
+ * by id. When that block lives inside a `tableCell`, naively
+ * inserting at the block's `before` / `after` position drops the
+ * new node INSIDE the cell — which is never what the model wants
+ * when it says "insert after this paragraph". Escape outward to
+ * the nearest enclosing `table` so the synthesized sibling lands
+ * adjacent to the table as a doc-level peer.
+ *
+ * Returns the table's outer boundary positions when the block lies
+ * inside one, otherwise `null` to keep the default block-adjacent
+ * behaviour for paragraphs at the document root.
+ */
+type TableBoundary = { before: number; after: number };
+
+const findEnclosingTableBoundary = (
+  doc: PMNode,
+  blockFrom: number,
+): TableBoundary | null => {
+  const resolved = doc.resolve(blockFrom);
+  // Walk from the deepest ancestor outwards. `depth` is the
+  // resolved-position's parent depth; the doc node sits at depth 0,
+  // so the loop stops before trying to take a `before` of the doc.
+  for (let depth = resolved.depth; depth > 0; depth--) {
+    if (resolved.node(depth).type.name === "table") {
+      return { before: resolved.before(depth), after: resolved.after(depth) };
+    }
+  }
+  return null;
+};
+
+/**
  * The snapshot recorded an `hashOccurrenceCount` per anchor but
  * not which ordinal within that bucket the block was — recompute
  * on demand from the snapshot's anchor map. Stable iteration
@@ -303,12 +334,13 @@ export const applyFolioAIEditOperations = ({
       continue;
     }
 
-    const resolution = resolveOperation(
+    const resolution = resolveOperation({
       snapshot,
       operation,
       liveBlocks,
       liveBlocksByParaId,
-    );
+      doc: view.state.doc,
+    });
     if (resolution.type === "skip") {
       skipped.push({ id: operation.id, reason: resolution.reason });
       continue;
@@ -755,12 +787,23 @@ const applyTextReplacement = ({
 
 type ResolvedBase = Omit<ResolvedOperation, "originalIndex" | "commentId">;
 
-const resolveOperation = (
-  snapshot: FolioAIEditSnapshot,
-  operation: FolioAIEditOperation,
-  liveBlocks: Map<string, LiveBlockEntry[]>,
-  liveBlocksByParaId: Map<string, LiveBlockEntry>,
-): { type: "resolved"; operation: ResolvedBase } | OperationResolutionSkip => {
+type ResolveOperationArgs = {
+  snapshot: FolioAIEditSnapshot;
+  operation: FolioAIEditOperation;
+  liveBlocks: Map<string, LiveBlockEntry[]>;
+  liveBlocksByParaId: Map<string, LiveBlockEntry>;
+  doc: PMNode;
+};
+
+const resolveOperation = ({
+  snapshot,
+  operation,
+  liveBlocks,
+  liveBlocksByParaId,
+  doc,
+}: ResolveOperationArgs):
+  | { type: "resolved"; operation: ResolvedBase }
+  | OperationResolutionSkip => {
   const anchor = snapshot.anchors[operation.blockId];
   if (!anchor) {
     return { type: "skip", reason: "missingBlock" };
@@ -816,12 +859,25 @@ const resolveOperation = (
     if (operation.text.length === 0 && operation.pageBreakBefore !== true) {
       return { type: "skip", reason: "emptyOperation" };
     }
+    // If the anchor lives inside a `tableCell`, the model meant
+    // "place the new block adjacent to the table", not "stuff it
+    // into the cell". Override the insertion bounds to the table's
+    // outer boundary so the synthesized sibling lands as a peer of
+    // the table at doc level.
+    const tableBoundary = findEnclosingTableBoundary(doc, blockFrom);
+    const isInsertAfter = operation.type === "insertAfterBlock";
+    let insertFrom: number;
+    if (tableBoundary) {
+      insertFrom = isInsertAfter ? tableBoundary.after : tableBoundary.before;
+    } else {
+      insertFrom = isInsertAfter ? blockTo : blockFrom;
+    }
     return {
       type: "resolved",
       operation: {
         operation,
-        from: operation.type === "insertAfterBlock" ? blockTo : blockFrom,
-        to: operation.type === "insertAfterBlock" ? blockTo : blockFrom,
+        from: insertFrom,
+        to: insertFrom,
         blockFrom,
         blockTo,
         blockNode,

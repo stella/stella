@@ -24,6 +24,16 @@ const schema = new Schema({
       },
     },
     text: {},
+    table: {
+      content: "tableRow+",
+      group: "block",
+    },
+    tableRow: {
+      content: "tableCell+",
+    },
+    tableCell: {
+      content: "paragraph+",
+    },
   },
   marks: {
     insertion: {
@@ -1183,5 +1193,119 @@ describe("Folio AI edit operations", () => {
     expect(marksByText["Kupující musí zaplatit do "] ?? []).not.toContain(
       "deletion",
     );
+  });
+
+  test("insertAfterBlock anchored inside a table cell lands after the table, not in the cell", () => {
+    // The AI sometimes anchors an `insertAfterBlock` to a
+    // paragraph that lives inside a `tableCell` (e.g. when the
+    // last visible block before the desired insertion point is a
+    // cell line). Pre-fix, the new block would be inserted inside
+    // the cell — visually invisible and structurally wrong. The
+    // resolver now escapes outward to the enclosing `table` and
+    // places the synthesized sibling adjacent to the table.
+    const cellParagraph = schema.node(
+      "paragraph",
+      { listMarker: null, paraId: "cell-1", textId: null },
+      [schema.text("Cell text.")],
+    );
+    const table = schema.node("table", null, [
+      schema.node("tableRow", null, [
+        schema.node("tableCell", null, [cellParagraph]),
+      ]),
+    ]);
+    const docNode = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        { listMarker: null, paraId: null, textId: null },
+        [schema.text("Before.")],
+      ),
+      table,
+      schema.node(
+        "paragraph",
+        { listMarker: null, paraId: null, textId: null },
+        [schema.text("After.")],
+      ),
+    ]);
+    const state = EditorState.create({ schema, doc: docNode });
+    const snapshot = createFolioAIEditSnapshot(state.doc);
+    const view = makeView(state);
+
+    const result = applyFolioAIEditOperations({
+      view,
+      snapshot,
+      operations: [
+        {
+          id: "op-1",
+          type: "insertAfterBlock",
+          blockId: "cell-1",
+          text: "Inserted sibling.",
+          inheritFormatting: false,
+        },
+      ],
+      mode: "direct",
+    });
+
+    expect(result.skipped).toEqual([]);
+    expect(result.applied).toHaveLength(1);
+
+    // Doc top-level shape: Before. | table | Inserted sibling. | After.
+    expect(view.state.doc.childCount).toBe(4);
+    expect(view.state.doc.child(0).textContent).toBe("Before.");
+    expect(view.state.doc.child(1).type.name).toBe("table");
+    expect(view.state.doc.child(2).type.name).toBe("paragraph");
+    expect(view.state.doc.child(2).textContent).toBe("Inserted sibling.");
+    expect(view.state.doc.child(3).textContent).toBe("After.");
+
+    // The cell itself must still hold only the original paragraph.
+    const liveTable = view.state.doc.child(1);
+    const liveRow = liveTable.child(0);
+    const liveCell = liveRow.child(0);
+    expect(liveCell.childCount).toBe(1);
+    expect(liveCell.child(0).textContent).toBe("Cell text.");
+  });
+
+  test("insertBeforeBlock anchored inside a table cell lands before the table, not in the cell", () => {
+    const cellParagraph = schema.node(
+      "paragraph",
+      { listMarker: null, paraId: "cell-2", textId: null },
+      [schema.text("Cell text.")],
+    );
+    const table = schema.node("table", null, [
+      schema.node("tableRow", null, [
+        schema.node("tableCell", null, [cellParagraph]),
+      ]),
+    ]);
+    const docNode = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        { listMarker: null, paraId: null, textId: null },
+        [schema.text("Before.")],
+      ),
+      table,
+    ]);
+    const state = EditorState.create({ schema, doc: docNode });
+    const snapshot = createFolioAIEditSnapshot(state.doc);
+    const view = makeView(state);
+
+    const result = applyFolioAIEditOperations({
+      view,
+      snapshot,
+      operations: [
+        {
+          id: "op-1",
+          type: "insertBeforeBlock",
+          blockId: "cell-2",
+          text: "Pre-table sibling.",
+          inheritFormatting: false,
+        },
+      ],
+      mode: "direct",
+    });
+
+    expect(result.skipped).toEqual([]);
+    expect(view.state.doc.childCount).toBe(3);
+    expect(view.state.doc.child(0).textContent).toBe("Before.");
+    expect(view.state.doc.child(1).textContent).toBe("Pre-table sibling.");
+    expect(view.state.doc.child(2).type.name).toBe("table");
   });
 });
