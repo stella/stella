@@ -3897,11 +3897,17 @@ export function PagedEditor(
     [document, scheduleLayout],
   );
 
-  // Clear HF caret state on exit from HF edit mode.
+  // Clear HF caret state + cross-surface drag state on any hfEditMode
+  // transition. Without this, dragAnchorRef leftover from the previous
+  // surface lets a Shift-click resolve an anchor in the wrong PM
+  // (e.g. body anchor used as the HF range start, or vice versa) and
+  // produces a nonsense selection.
   useEffect(() => {
     if (!hfEditMode) {
       setHfCaretSelection(null);
     }
+    dragAnchorRef.current = null;
+    activeHfDragSurfaceRef.current = null;
   }, [hfEditMode]);
 
   /**
