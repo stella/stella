@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { AnchorHTMLAttributes, ComponentProps, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { ToolUIPart } from "ai";
@@ -45,6 +45,15 @@ const escapeRegex = (value: string) => value.replaceAll(REGEX_SPECIALS, "\\$&");
 const EMPTY_RESTORATION_PAIRS: readonly ChatAnonRestoration[] = Object.freeze(
   [],
 );
+
+const createAnalysisAnchor = (workspaceId: string | undefined) =>
+  function AnalysisAnchor(props: AnchorHTMLAttributes<HTMLAnchorElement>) {
+    return <EntityLink {...props} workspaceId={workspaceId} />;
+  };
+
+const renderAnalysisAnonymizedSpan = (
+  props: ComponentProps<"button"> & { ph?: string },
+) => <AnonymizedSpan {...props} />;
 
 /**
  * Walk a plain string and wrap every `original` substring in an
@@ -114,12 +123,8 @@ export const AskUserCard = ({
     restorationPairs ?? EMPTY_RESTORATION_PAIRS;
   const analysisComponents = useMemo(
     () => ({
-      a: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
-        <EntityLink {...props} workspaceId={workspaceId} />
-      ),
-      "stll-anon": (
-        props: React.ComponentProps<"button"> & { ph?: string },
-      ) => <AnonymizedSpan {...props} />,
+      a: createAnalysisAnchor(workspaceId),
+      "stll-anon": renderAnalysisAnonymizedSpan,
     }),
     [workspaceId],
   );

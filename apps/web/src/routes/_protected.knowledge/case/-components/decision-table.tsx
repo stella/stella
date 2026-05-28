@@ -7,6 +7,7 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
+import type { CellContext } from "@tanstack/react-table";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { createCaseLawDecisionRouteParam } from "@/lib/case-law-route";
@@ -33,6 +34,39 @@ type DecisionTableProps = {
 
 const columnHelper = createColumnHelper<Decision>();
 
+const renderCaseNumberCell = (info: CellContext<Decision, string>) => {
+  const { id, headline } = info.row.original;
+
+  return (
+    <div>
+      <Link
+        className="text-foreground font-medium hover:underline"
+        params={{
+          decisionId: createCaseLawDecisionRouteParam({
+            caseNumber: info.getValue(),
+            decisionId: id,
+          }),
+        }}
+        to="/knowledge/case/$decisionId"
+      >
+        {info.getValue()}
+      </Link>
+      {headline && (
+        <p
+          className="text-muted-foreground [&_mark]:text-foreground mt-0.5 line-clamp-2 text-xs [&_mark]:bg-yellow-200/50 [&_mark]:font-medium dark:[&_mark]:bg-yellow-500/20"
+          dangerouslySetInnerHTML={{ __html: headline }}
+        />
+      )}
+    </div>
+  );
+};
+
+const renderCountryCell = (info: CellContext<Decision, string>) => (
+  <span className="bg-muted rounded px-1.5 py-0.5 text-xs">
+    {info.getValue()}
+  </span>
+);
+
 export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -41,42 +75,14 @@ export const DecisionTable = ({ decisions, isLoading }: DecisionTableProps) => {
     () => [
       columnHelper.accessor("caseNumber", {
         header: t("caseLaw.columns.caseNumber"),
-        cell: (info) => {
-          const { id, headline } = info.row.original;
-          return (
-            <div>
-              <Link
-                className="text-foreground font-medium hover:underline"
-                params={{
-                  decisionId: createCaseLawDecisionRouteParam({
-                    caseNumber: info.getValue(),
-                    decisionId: id,
-                  }),
-                }}
-                to="/knowledge/case/$decisionId"
-              >
-                {info.getValue()}
-              </Link>
-              {headline && (
-                <p
-                  className="text-muted-foreground [&_mark]:text-foreground mt-0.5 line-clamp-2 text-xs [&_mark]:bg-yellow-200/50 [&_mark]:font-medium dark:[&_mark]:bg-yellow-500/20"
-                  dangerouslySetInnerHTML={{ __html: headline }}
-                />
-              )}
-            </div>
-          );
-        },
+        cell: renderCaseNumberCell,
       }),
       columnHelper.accessor("court", {
         header: t("caseLaw.columns.court"),
       }),
       columnHelper.accessor("country", {
         header: t("common.country"),
-        cell: (info) => (
-          <span className="bg-muted rounded px-1.5 py-0.5 text-xs">
-            {info.getValue()}
-          </span>
-        ),
+        cell: renderCountryCell,
       }),
       columnHelper.accessor("decisionDate", {
         header: t("common.date"),

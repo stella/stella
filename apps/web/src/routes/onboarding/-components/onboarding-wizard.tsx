@@ -42,6 +42,7 @@ import {
   JurisdictionStep,
 } from "@/routes/onboarding/-components/steps/jurisdiction-step";
 import { OrganizationStep } from "@/routes/onboarding/-components/steps/organization-step";
+
 type Step =
   | "organization"
   | "jurisdiction"

@@ -5,7 +5,9 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
+import type { CellContext, HeaderContext } from "@tanstack/react-table";
 import { ClockIcon, HashIcon, TableIcon, UserIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { useAIKeyGate } from "@/components/require-ai-key";
@@ -17,8 +19,12 @@ import {
   VersionCell,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-cells";
 import { MetadataPopover } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-popover";
+import type { SortHint } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property";
 import { getPropertyColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/table-column";
-import type { TableColumnDef } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+import type {
+  TableColumnDef,
+  TableTreeNode,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
 import { useSyncJustificationChunks } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
@@ -38,6 +44,37 @@ const selectColId = getInternalColId("select");
 const addPropertyColId = getInternalColId("add-property");
 const DEFAULT_COLUMN_MIN_SIZE = 64;
 const ADD_PROPERTY_COLUMN_SIZE = 48;
+
+type MetadataHeaderOptions = {
+  icon: LucideIcon;
+  label: string;
+  sortHint: SortHint;
+};
+
+const createMetadataHeader =
+  ({ icon, label, sortHint }: MetadataHeaderOptions) =>
+  ({ header }: HeaderContext<TableTreeNode, unknown>) => (
+    <MetadataPopover
+      column={header.column}
+      icon={icon}
+      label={label}
+      sortHint={sortHint}
+    />
+  );
+
+const renderAuthorCell = ({ row }: CellContext<TableTreeNode, unknown>) => (
+  <AuthorCell entity={row.original} />
+);
+
+const renderLastUpdatedCell = ({
+  row,
+}: CellContext<TableTreeNode, unknown>) => (
+  <LastUpdatedCell entity={row.original} />
+);
+
+const renderVersionCell = ({ row }: CellContext<TableTreeNode, unknown>) => (
+  <VersionCell entity={row.original} />
+);
 
 type TableLayoutProps = {
   workspaceId: string;
@@ -120,15 +157,12 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
       id: getInternalPropertyId("created-by"),
       accessorKey: getInternalPropertyId("created-by"),
       meta: { muted: true },
-      header: (ctx) => (
-        <MetadataPopover
-          column={ctx.header.column}
-          icon={UserIcon}
-          label={t("workspaces.filesystem.author")}
-          sortHint="text"
-        />
-      ),
-      cell: (props) => <AuthorCell entity={props.row.original} />,
+      header: createMetadataHeader({
+        icon: UserIcon,
+        label: t("workspaces.filesystem.author"),
+        sortHint: "text",
+      }),
+      cell: renderAuthorCell,
       size: 160,
     });
 
@@ -136,15 +170,12 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
       id: getInternalPropertyId("updated-at"),
       accessorKey: getInternalPropertyId("updated-at"),
       meta: { muted: true },
-      header: (ctx) => (
-        <MetadataPopover
-          column={ctx.header.column}
-          icon={ClockIcon}
-          label={t("workspaces.filesystem.lastUpdated")}
-          sortHint="date"
-        />
-      ),
-      cell: (props) => <LastUpdatedCell entity={props.row.original} />,
+      header: createMetadataHeader({
+        icon: ClockIcon,
+        label: t("workspaces.filesystem.lastUpdated"),
+        sortHint: "date",
+      }),
+      cell: renderLastUpdatedCell,
       size: 140,
     });
 
@@ -152,15 +183,12 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
       id: getInternalPropertyId("version"),
       accessorKey: getInternalPropertyId("version"),
       meta: { muted: true },
-      header: (ctx) => (
-        <MetadataPopover
-          column={ctx.header.column}
-          icon={HashIcon}
-          label={t("workspaces.filesystem.version")}
-          sortHint="number"
-        />
-      ),
-      cell: (props) => <VersionCell entity={props.row.original} />,
+      header: createMetadataHeader({
+        icon: HashIcon,
+        label: t("workspaces.filesystem.version"),
+        sortHint: "number",
+      }),
+      cell: renderVersionCell,
       size: 80,
     });
 
