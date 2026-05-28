@@ -1225,12 +1225,18 @@ type Messages = {
   };
   "knowledge": {
     "agentSkills": {
+      "aiRewrite": "Rewrite with AI";
+      "aiRewritePlaceholder": "Tighten the wording; add a step for citing sources…";
+      "aiRewritePrompt": "Describe how to rewrite this file";
+      "aiRewriteRunning": "Rewriting…";
       "binaryPreviewUnsupported": "Binary preview is not supported. Edit this file by re-uploading the skill package.";
       "builtInBadge": "Built in";
       "builtInSection": "Built-in skills";
       "chooseFile": "Choose a file or drag it here";
       "deleteConfirmDescription": "\"{name}\" will be removed from this workspace.";
       "deleteConfirmTitle": "Delete skill?";
+      "deleteFile": "Delete file";
+      "deleteFileConfirm": "Delete file? This cannot be undone.";
       "description": "Install SKILL.md packs that add specialist methods and read-only resources to chat.";
       "disableSkill": "Disable skill";
       "disabled": "Disabled";
@@ -1242,6 +1248,7 @@ type Messages = {
       "emptyTitle": "Install your first skill";
       "enableSkill": "Enable skill";
       "enabled": "Enabled";
+      "fileExists": "A file with this path already exists";
       "filesHeading": "Files";
       "formBody": "Instructions";
       "formBodyHelp": "Markdown instructions the agent reads when the skill is invoked.";
@@ -1268,10 +1275,15 @@ type Messages = {
       "importHelp": "Paste a direct SKILL.md URL, a GitHub file URL, or a GitHub folder URL that contains SKILL.md.";
       "importSkill": "Import from URL";
       "importTitle": "Import skill";
+      "invalidPath": "Path must use lowercase letters, digits, dots, hyphens, or underscores";
       "license": "License: {license}";
+      "newFile": "New file";
+      "newFileFilenamePlaceholder": "notes.md";
+      "newFilePathPlaceholder": "folder/notes.md";
       "pdfPreviewSoon": "PDF preview will be available once binary skill resources are supported.";
       "privateSection": "Your skills";
       "regenerate": "Regenerate";
+      "renameFile": "Rename";
       "resources": "{count, plural, one {# resource} other {# resources}}";
       "scope": "Visibility";
       "scopePrivate": "Only me";
@@ -1281,6 +1293,7 @@ type Messages = {
       "sourceUrl": "Public URL";
       "teamSection": "Team skills";
       "unsavedChanges": "Unsaved changes — discard?";
+      "uploadFile": "Upload file";
       "uploadHelp": "Use a SKILL.md file or a .zip folder containing SKILL.md and optional read-only resources.";
       "uploadSkill": "Upload skill";
       "uploadTitle": "Upload skill";

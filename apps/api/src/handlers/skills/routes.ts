@@ -5,6 +5,10 @@ import generateSkillDraft from "@/api/handlers/skills/generate-draft";
 import getSkill from "@/api/handlers/skills/get";
 import importSkillFromUrl from "@/api/handlers/skills/import-url";
 import listSkills from "@/api/handlers/skills/list";
+import createSkillResource from "@/api/handlers/skills/resources/create";
+import deleteSkillResource from "@/api/handlers/skills/resources/delete";
+import renameSkillResource from "@/api/handlers/skills/resources/rename";
+import rewriteSkillResource from "@/api/handlers/skills/resources/rewrite";
 import updateSkillResource from "@/api/handlers/skills/resources/update";
 import updateSkill from "@/api/handlers/skills/update";
 import uploadSkill from "@/api/handlers/skills/upload";
@@ -49,6 +53,29 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
     invalidateQuery: true,
     params: updateSkillResource.config.params,
     permissions: updateSkillResource.config.permissions,
+  })
+  .post("/:skillId/resources", createSkillResource.handler, {
+    body: createSkillResource.config.body,
+    invalidateQuery: true,
+    params: createSkillResource.config.params,
+    permissions: createSkillResource.config.permissions,
+  })
+  .delete("/:skillId/resources", deleteSkillResource.handler, {
+    body: deleteSkillResource.config.body,
+    invalidateQuery: true,
+    params: deleteSkillResource.config.params,
+    permissions: deleteSkillResource.config.permissions,
+  })
+  .post("/:skillId/resources/rename", renameSkillResource.handler, {
+    body: renameSkillResource.config.body,
+    invalidateQuery: true,
+    params: renameSkillResource.config.params,
+    permissions: renameSkillResource.config.permissions,
+  })
+  .post("/:skillId/resources/rewrite", rewriteSkillResource.handler, {
+    body: rewriteSkillResource.config.body,
+    params: rewriteSkillResource.config.params,
+    permissions: rewriteSkillResource.config.permissions,
   })
   .delete("/:skillId", deleteSkill.handler, {
     invalidateQuery: true,

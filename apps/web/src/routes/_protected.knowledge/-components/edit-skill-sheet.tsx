@@ -1,14 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import {
   BookOpenIcon,
   FileIcon,
+  FilePlusIcon,
   FileTextIcon,
   FolderIcon,
   MessageSquareTextIcon,
+  PencilIcon,
+  PlusIcon,
   PowerIcon,
+  SparklesIcon,
+  Trash2Icon,
+  UploadIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -21,6 +27,11 @@ import {
   DialogTitle,
 } from "@stll/ui/components/dialog";
 import { Input } from "@stll/ui/components/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@stll/ui/components/popover";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
@@ -38,6 +49,16 @@ const TEXT_RESOURCE_KINDS = new Set([
   "script",
   "template",
 ]);
+
+// Mirrors apps/api/src/handlers/skills/resources/resource-path.ts.
+// Keep the two in sync.
+const RESOURCE_PATH_PATTERN =
+  /^[a-z0-9][a-z0-9._-]*(\/[a-z0-9][a-z0-9._-]*)*$/u;
+const FILENAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/u;
+
+const KNOWN_FOLDERS = ["knowledge", "prompts", "references"] as const;
+const UPLOAD_ACCEPT = ".md,.txt,text/markdown,text/plain";
+const UPLOAD_MAX_BYTES = 100_000;
 
 type EditableSkill = {
   id: string;
@@ -113,6 +134,13 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
   const [enabled, setEnabled] = useState(skill.enabled);
   const [confirmDiscardFor, setConfirmDiscardFor] =
     useState<SelectedFile | null>(null);
+  const [rewritePrompt, setRewritePrompt] = useState("");
+  const [rewriteOpen, setRewriteOpen] = useState(false);
+  const [renamingResourceId, setRenamingResourceId] = useState<string | null>(
+    null,
+  );
+  const [renameValue, setRenameValue] = useState("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!detail.data) {
@@ -130,6 +158,11 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
     }
     return detail.data.resources;
   }, [detail.data]);
+
+  const existingPaths = useMemo(
+    () => new Set(resources.map((entry) => entry.path)),
+    [resources],
+  );
 
   const bodyServerValue = detail.data?.body ?? "";
   const bodyValue = draftBody ?? bodyServerValue;
@@ -152,11 +185,13 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
 
   const currentDirty = selected.type === "body" ? bodyDirty : resourceDirty;
 
+  const safeSkillId = toSafeId<"agentSkill">(skill.id);
+
   // Mutations
   const patchBody = useMutation({
     mutationFn: async (nextBody: string) => {
       const response = await api
-        .skills({ skillId: toSafeId<"agentSkill">(skill.id) })
+        .skills({ skillId: safeSkillId })
         .patch({ body: nextBody, queryKey: ["skills"] });
       if (response.error) {
         throw toAPIError(response.error);
@@ -179,7 +214,7 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
       enabled?: boolean;
     }) => {
       const response = await api
-        .skills({ skillId: toSafeId<"agentSkill">(skill.id) })
+        .skills({ skillId: safeSkillId })
         .patch({ ...payload, queryKey: ["skills"] });
       if (response.error) {
         throw toAPIError(response.error);
@@ -196,7 +231,7 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
   const patchResource = useMutation({
     mutationFn: async (payload: { path: string; content: string }) => {
       const response = await api
-        .skills({ skillId: toSafeId<"agentSkill">(skill.id) })
+        .skills({ skillId: safeSkillId })
         .resources.patch({ ...payload, queryKey: ["skills"] });
       if (response.error) {
         throw toAPIError(response.error);
@@ -204,13 +239,7 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
       return response.data;
     },
     onSuccess: (_data, variables) => {
-      // Drop the dirty draft for the saved resource.
       setDraftResources((current) => {
-        if (selected.type !== "resource") {
-          return current;
-        }
-        // Match by the resource's path, not the current selection: the user
-        // might have navigated away while the request was in flight.
         const matching = resources.find(
           (entry) => entry.path === variables.path,
         );
@@ -222,6 +251,110 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
       });
       onChanged();
       void detail.refetch();
+    },
+    onError: (error) => toastError(error, t("common.unexpectedError")),
+  });
+
+  const createResource = useMutation({
+    mutationFn: async (payload: { path: string; content: string }) => {
+      const response = await api
+        .skills({ skillId: safeSkillId })
+        .resources.post({ ...payload, queryKey: ["skills"] });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: (data) => {
+      onChanged();
+      void detail.refetch();
+      // Select the newly created file so the user can keep editing it.
+      setSelected({
+        type: "resource",
+        resourceId: data.id,
+        path: data.path,
+      });
+    },
+    onError: (error) => toastError(error, t("common.unexpectedError")),
+  });
+
+  const deleteResource = useMutation({
+    mutationFn: async (payload: { path: string; resourceId: string }) => {
+      const response = await api
+        .skills({ skillId: safeSkillId })
+        .resources.delete({ path: payload.path, queryKey: ["skills"] });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return { ...response.data, resourceId: payload.resourceId };
+    },
+    onSuccess: (result) => {
+      // If the deleted file was selected, jump back to SKILL.md.
+      if (
+        selected.type === "resource" &&
+        selected.resourceId === result.resourceId
+      ) {
+        setSelected({ type: "body" });
+      }
+      setDraftResources((current) => {
+        const { [result.resourceId]: _unused, ...rest } = current;
+        return rest;
+      });
+      onChanged();
+      void detail.refetch();
+    },
+    onError: (error) => toastError(error, t("common.unexpectedError")),
+  });
+
+  const renameResource = useMutation({
+    mutationFn: async (payload: { oldPath: string; newPath: string }) => {
+      const response = await api
+        .skills({ skillId: safeSkillId })
+        .resources.rename.post({ ...payload, queryKey: ["skills"] });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: (data) => {
+      onChanged();
+      void detail.refetch();
+      setRenamingResourceId(null);
+      setRenameValue("");
+      // Follow the rename: if the renamed row was selected, refresh selection.
+      if (selected.type === "resource" && selected.resourceId === data.id) {
+        setSelected({
+          type: "resource",
+          resourceId: data.id,
+          path: data.path,
+        });
+      }
+    },
+    onError: (error) => toastError(error, t("common.unexpectedError")),
+  });
+
+  const rewriteResource = useMutation({
+    mutationFn: async (payload: { path: string; prompt: string }) => {
+      const response = await api
+        .skills({ skillId: safeSkillId })
+        .resources.rewrite.post(payload);
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: (data) => {
+      // Load as a dirty draft on the currently selected resource so the user
+      // can review the rewrite before saving.
+      if (selected.type !== "resource") {
+        return;
+      }
+      setDraftResources((current) => ({
+        ...current,
+        [selected.resourceId]: data.content,
+      }));
+      setRewriteOpen(false);
+      setRewritePrompt("");
     },
     onError: (error) => toastError(error, t("common.unexpectedError")),
   });
@@ -315,6 +448,81 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
     selected.type === "body" ||
     (selectedResource ? TEXT_RESOURCE_KINDS.has(selectedResource.kind) : false);
 
+  const handleUpload = async (file: File) => {
+    if (file.size > UPLOAD_MAX_BYTES) {
+      stellaToast.add({
+        title: t("common.unexpectedError"),
+        description: tSkills("uploadHelp"),
+        type: "error",
+      });
+      return;
+    }
+    const content = await file.text();
+    const sanitizedName = file.name
+      .toLowerCase()
+      .replaceAll(/[^a-z0-9._-]/gu, "-");
+    if (!FILENAME_PATTERN.test(sanitizedName)) {
+      stellaToast.add({
+        title: tSkills("invalidPath"),
+        type: "error",
+      });
+      return;
+    }
+    // Drop new uploads into knowledge/ by default. The user can rename
+    // afterward if they want a different folder.
+    let path = `knowledge/${sanitizedName}`;
+    let suffix = 1;
+    while (existingPaths.has(path)) {
+      suffix += 1;
+      path = `knowledge/${sanitizedName.replace(/(\.[^.]+)?$/u, `-${suffix}$1`)}`;
+    }
+    createResource.mutate({ path, content });
+  };
+
+  const onFilePickerChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      void handleUpload(file);
+    }
+    // Reset so picking the same file again still triggers onChange.
+    event.target.value = "";
+  };
+
+  const onTriggerUpload = () => {
+    fileInputRef.current?.click();
+  };
+
+  const onCreateFile = (path: string, content: string) => {
+    if (!RESOURCE_PATH_PATTERN.test(path)) {
+      stellaToast.add({ title: tSkills("invalidPath"), type: "error" });
+      return false;
+    }
+    if (existingPaths.has(path)) {
+      stellaToast.add({ title: tSkills("fileExists"), type: "error" });
+      return false;
+    }
+    createResource.mutate({ path, content });
+    return true;
+  };
+
+  const onConfirmRename = (oldPath: string, newPath: string) => {
+    const trimmed = newPath.trim();
+    if (trimmed === oldPath) {
+      setRenamingResourceId(null);
+      setRenameValue("");
+      return;
+    }
+    if (!RESOURCE_PATH_PATTERN.test(trimmed)) {
+      stellaToast.add({ title: tSkills("invalidPath"), type: "error" });
+      return;
+    }
+    if (existingPaths.has(trimmed)) {
+      stellaToast.add({ title: tSkills("fileExists"), type: "error" });
+      return;
+    }
+    renameResource.mutate({ oldPath, newPath: trimmed });
+  };
+
   return (
     <>
       <DialogHeader className="border-b">
@@ -364,11 +572,29 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
         </div>
       </DialogHeader>
       <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
-        <aside className="bg-muted/20 max-h-64 shrink-0 overflow-y-auto border-b sm:max-h-none sm:w-64 sm:border-e sm:border-b-0">
+        <aside className="bg-muted/20 max-h-72 shrink-0 overflow-y-auto border-b sm:max-h-none sm:w-72 sm:border-e sm:border-b-0">
           <div className="p-3">
-            <p className="text-muted-foreground mb-2 px-1 text-xs font-semibold tracking-wider uppercase">
-              {tSkills("filesHeading")}
-            </p>
+            <div className="mb-2 flex items-center justify-between gap-1 px-1">
+              <p className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                {tSkills("filesHeading")}
+              </p>
+              <Button
+                aria-label={tSkills("uploadFile")}
+                disabled={createResource.isPending}
+                onClick={onTriggerUpload}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <UploadIcon className="size-4" />
+              </Button>
+              <input
+                accept={UPLOAD_ACCEPT}
+                className="hidden"
+                onChange={onFilePickerChange}
+                ref={fileInputRef}
+                type="file"
+              />
+            </div>
             {detail.isLoading && (
               <p className="text-muted-foreground px-1 text-xs">
                 {t("common.loading")}
@@ -377,9 +603,31 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
             {detail.data && (
               <SkillFileTree
                 bodyDirty={bodyDirty}
+                createPending={createResource.isPending}
+                deletePending={deleteResource.isPending}
                 dirtyResourceIds={Object.keys(draftResources)}
+                onCreateFile={onCreateFile}
+                onDeleteFile={(entry) =>
+                  deleteResource.mutate({
+                    path: entry.path,
+                    resourceId: entry.id,
+                  })
+                }
                 onSelect={trySelect}
+                onStartRename={(entry) => {
+                  setRenamingResourceId(entry.id);
+                  setRenameValue(entry.path);
+                }}
+                onSubmitRename={onConfirmRename}
+                onCancelRename={() => {
+                  setRenamingResourceId(null);
+                  setRenameValue("");
+                }}
+                renameValue={renameValue}
+                renamePending={renameResource.isPending}
+                renamingResourceId={renamingResourceId}
                 selected={selected}
+                setRenameValue={setRenameValue}
                 tree={tree}
               />
             )}
@@ -404,9 +652,23 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
                     ? SKILL_BODY_FILE_NAME
                     : selected.path}
                 </span>
-                <Button disabled={saveDisabled} onClick={onSave} size="sm">
-                  {isSaving ? t("common.loading") : t("common.save")}
-                </Button>
+                <div className="flex items-center gap-2">
+                  {selected.type === "resource" && (
+                    <Button
+                      aria-label={tSkills("aiRewrite")}
+                      disabled={rewriteResource.isPending}
+                      onClick={() => setRewriteOpen((open) => !open)}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      <SparklesIcon className="size-4" />
+                      <span className="ms-1">{tSkills("aiRewrite")}</span>
+                    </Button>
+                  )}
+                  <Button disabled={saveDisabled} onClick={onSave} size="sm">
+                    {isSaving ? t("common.loading") : t("common.save")}
+                  </Button>
+                </div>
               </div>
               {confirmDiscardFor && (
                 <div className="bg-muted/40 border-border flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm">
@@ -429,6 +691,42 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
                       variant="destructive"
                     >
                       {tSkills("discardChanges")}
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {rewriteOpen && selected.type === "resource" && (
+                <div className="border-border bg-muted/30 flex flex-col gap-2 rounded-md border p-2">
+                  <label
+                    className="text-muted-foreground px-1 text-xs"
+                    htmlFor="ai-rewrite-prompt"
+                  >
+                    {tSkills("aiRewritePrompt")}
+                  </label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="ai-rewrite-prompt"
+                      className="flex-1"
+                      onChange={(event) => setRewritePrompt(event.target.value)}
+                      placeholder={tSkills("aiRewritePlaceholder")}
+                      value={rewritePrompt}
+                    />
+                    <Button
+                      disabled={
+                        rewriteResource.isPending ||
+                        rewritePrompt.trim().length === 0
+                      }
+                      onClick={() => {
+                        rewriteResource.mutate({
+                          path: selected.path,
+                          prompt: rewritePrompt.trim(),
+                        });
+                      }}
+                      size="sm"
+                    >
+                      {rewriteResource.isPending
+                        ? tSkills("aiRewriteRunning")
+                        : tSkills("aiRewrite")}
                     </Button>
                   </div>
                 </div>
@@ -473,25 +771,63 @@ const sameSelection = (a: SelectedFile, b: SelectedFile) => {
 
 type SkillFileTreeProps = {
   bodyDirty: boolean;
+  createPending: boolean;
+  deletePending: boolean;
   dirtyResourceIds: string[];
+  onCancelRename: () => void;
+  onCreateFile: (path: string, content: string) => boolean;
+  onDeleteFile: (entry: TreeEntry) => void;
   onSelect: (next: SelectedFile) => void;
+  onStartRename: (entry: TreeEntry) => void;
+  onSubmitRename: (oldPath: string, newPath: string) => void;
+  renamePending: boolean;
+  renameValue: string;
+  renamingResourceId: string | null;
   selected: SelectedFile;
-  tree: TreeNode[];
+  setRenameValue: (value: string) => void;
+  tree: TreeGroup[];
 };
 
 function SkillFileTree({
   bodyDirty,
+  createPending,
+  deletePending,
   dirtyResourceIds,
+  onCancelRename,
+  onCreateFile,
+  onDeleteFile,
   onSelect,
+  onStartRename,
+  onSubmitRename,
+  renamePending,
+  renameValue,
+  renamingResourceId,
   selected,
+  setRenameValue,
   tree,
 }: SkillFileTreeProps) {
   const dirtySet = useMemo(() => new Set(dirtyResourceIds), [dirtyResourceIds]);
+  const groupByPrefix = useMemo(
+    () => new Map(tree.map((group) => [group.prefix, group])),
+    [tree],
+  );
+
+  // Always render the three known folders, even if empty, so the
+  // user has a "+" affordance regardless of the current state.
+  const renderedPrefixes = new Set<string>(KNOWN_FOLDERS);
+  // Plus any extra prefixes that exist in the tree (e.g. "assets", "scripts").
+  for (const group of tree) {
+    if (group.prefix !== "/") {
+      renderedPrefixes.add(group.prefix);
+    }
+  }
+  const knownFolders = [...renderedPrefixes].sort((a, b) => a.localeCompare(b));
+  const rootGroup = groupByPrefix.get("/");
+
   return (
-    <ul className="flex flex-col">
+    <ul className="flex flex-col gap-3">
       <li>
         <FileRow
-          depth={0}
           dirty={bodyDirty}
           icon={<FileTextIcon className="size-4" />}
           label={SKILL_BODY_FILE_NAME}
@@ -499,94 +835,366 @@ function SkillFileTree({
           selected={selected.type === "body"}
         />
       </li>
-      {tree.map((node) => (
-        <TreeNodeRow
-          depth={0}
-          dirtySet={dirtySet}
-          key={node.type === "folder" ? `f:${node.path}` : node.id}
-          node={node}
-          onSelect={onSelect}
-          selected={selected}
+      {knownFolders.map((prefix) => {
+        const group = groupByPrefix.get(prefix);
+        const entries = group?.entries ?? [];
+        return (
+          <li className="flex flex-col gap-1" key={prefix}>
+            <FolderHeader
+              createPending={createPending}
+              onCreateFile={onCreateFile}
+              prefix={prefix}
+            />
+            <ul className="flex flex-col">
+              {entries.map((entry) => (
+                <li key={entry.id}>
+                  <ResourceRow
+                    deletePending={deletePending}
+                    dirty={dirtySet.has(entry.id)}
+                    entry={entry}
+                    onCancelRename={onCancelRename}
+                    onDeleteFile={onDeleteFile}
+                    onSelect={onSelect}
+                    onStartRename={onStartRename}
+                    onSubmitRename={onSubmitRename}
+                    renamePending={renamePending}
+                    renameValue={renameValue}
+                    renaming={renamingResourceId === entry.id}
+                    selected={
+                      selected.type === "resource" &&
+                      selected.resourceId === entry.id
+                    }
+                    setRenameValue={setRenameValue}
+                  />
+                </li>
+              ))}
+            </ul>
+          </li>
+        );
+      })}
+      <li className="flex flex-col gap-1">
+        <RootFolderHeader
+          createPending={createPending}
+          onCreateFile={onCreateFile}
         />
-      ))}
+        <ul className="flex flex-col">
+          {(rootGroup?.entries ?? []).map((entry) => (
+            <li key={entry.id}>
+              <ResourceRow
+                deletePending={deletePending}
+                dirty={dirtySet.has(entry.id)}
+                entry={entry}
+                onCancelRename={onCancelRename}
+                onDeleteFile={onDeleteFile}
+                onSelect={onSelect}
+                onStartRename={onStartRename}
+                onSubmitRename={onSubmitRename}
+                renamePending={renamePending}
+                renameValue={renameValue}
+                renaming={renamingResourceId === entry.id}
+                selected={
+                  selected.type === "resource" &&
+                  selected.resourceId === entry.id
+                }
+                setRenameValue={setRenameValue}
+              />
+            </li>
+          ))}
+        </ul>
+      </li>
     </ul>
   );
 }
 
-type TreeNodeRowProps = {
-  depth: number;
-  dirtySet: Set<string>;
-  node: TreeNode;
-  onSelect: (next: SelectedFile) => void;
-  selected: SelectedFile;
+type FolderHeaderProps = {
+  createPending: boolean;
+  onCreateFile: (path: string, content: string) => boolean;
+  prefix: string;
 };
 
-function TreeNodeRow({
-  depth,
-  dirtySet,
-  node,
-  onSelect,
-  selected,
-}: TreeNodeRowProps) {
-  if (node.type === "file") {
-    return (
-      <li>
-        <FileRow
-          depth={depth}
-          dirty={dirtySet.has(node.id)}
-          icon={kindIcon(node.kind)}
-          label={node.fileName}
-          onClick={() =>
-            onSelect({
-              type: "resource",
-              resourceId: node.id,
-              path: node.path,
-            })
-          }
-          selected={
-            selected.type === "resource" && selected.resourceId === node.id
+function FolderHeader({
+  createPending,
+  onCreateFile,
+  prefix,
+}: FolderHeaderProps) {
+  const tSkills = useTranslations("knowledge.agentSkills");
+  const [open, setOpen] = useState(false);
+  const [filename, setFilename] = useState("");
+
+  const submit = () => {
+    const trimmed = filename.trim();
+    if (!trimmed) {
+      return;
+    }
+    const normalized = trimmed.endsWith(".md") ? trimmed : `${trimmed}.md`;
+    const ok = onCreateFile(`${prefix}/${normalized}`, "");
+    if (ok) {
+      setFilename("");
+      setOpen(false);
+    }
+  };
+
+  return (
+    <div className="text-muted-foreground flex items-center gap-1.5 px-2 text-xs">
+      <FolderIcon className="size-3.5" />
+      <span className="font-mono">{prefix}/</span>
+      <Popover onOpenChange={setOpen} open={open}>
+        <PopoverTrigger
+          render={
+            <Button
+              aria-label={tSkills("newFile")}
+              className="ms-auto"
+              size="icon-sm"
+              variant="ghost"
+            >
+              <PlusIcon className="size-3.5" />
+            </Button>
           }
         />
-      </li>
-    );
-  }
-  return (
-    <li className="flex flex-col">
-      <FolderRow depth={depth} label={node.name} />
-      <ul className="flex flex-col">
-        {node.children.map((child) => (
-          <TreeNodeRow
-            depth={depth + 1}
-            dirtySet={dirtySet}
-            key={child.type === "folder" ? `f:${child.path}` : child.id}
-            node={child}
-            onSelect={onSelect}
-            selected={selected}
+        <PopoverContent className="flex w-64 flex-col gap-2 p-2">
+          <Input
+            autoFocus
+            onChange={(event) => setFilename(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                submit();
+              }
+              if (event.key === "Escape") {
+                setOpen(false);
+              }
+            }}
+            placeholder={tSkills("newFileFilenamePlaceholder")}
+            value={filename}
           />
-        ))}
-      </ul>
-    </li>
+          <Button
+            disabled={createPending || filename.trim().length === 0}
+            onClick={submit}
+            size="sm"
+          >
+            {tSkills("newFile")}
+          </Button>
+        </PopoverContent>
+      </Popover>
+    </div>
   );
 }
 
-const TREE_INDENT_PX = 14;
+type RootFolderHeaderProps = {
+  createPending: boolean;
+  onCreateFile: (path: string, content: string) => boolean;
+};
 
-type FolderRowProps = { depth: number; label: string };
+function RootFolderHeader({
+  createPending,
+  onCreateFile,
+}: RootFolderHeaderProps) {
+  const tSkills = useTranslations("knowledge.agentSkills");
+  const [open, setOpen] = useState(false);
+  const [path, setPath] = useState("");
 
-function FolderRow({ depth, label }: FolderRowProps) {
+  const submit = () => {
+    const trimmed = path.trim();
+    if (!trimmed) {
+      return;
+    }
+    const ok = onCreateFile(trimmed, "");
+    if (ok) {
+      setPath("");
+      setOpen(false);
+    }
+  };
+
   return (
-    <div
-      className="text-muted-foreground flex items-center gap-1.5 px-2 py-1 text-xs"
-      style={{ paddingInlineStart: `${8 + depth * TREE_INDENT_PX}px` }}
-    >
-      <FolderIcon className="size-3.5" />
-      <span className="font-mono">{label}</span>
+    <div className="text-muted-foreground flex items-center gap-1.5 px-2 text-xs">
+      <FilePlusIcon className="size-3.5" />
+      <span className="font-mono">/</span>
+      <Popover onOpenChange={setOpen} open={open}>
+        <PopoverTrigger
+          render={
+            <Button
+              aria-label={tSkills("newFile")}
+              className="ms-auto"
+              size="icon-sm"
+              variant="ghost"
+            >
+              <PlusIcon className="size-3.5" />
+            </Button>
+          }
+        />
+        <PopoverContent className="flex w-72 flex-col gap-2 p-2">
+          <Input
+            autoFocus
+            onChange={(event) => setPath(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                submit();
+              }
+              if (event.key === "Escape") {
+                setOpen(false);
+              }
+            }}
+            placeholder={tSkills("newFilePathPlaceholder")}
+            value={path}
+          />
+          <Button
+            disabled={createPending || path.trim().length === 0}
+            onClick={submit}
+            size="sm"
+          >
+            {tSkills("newFile")}
+          </Button>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
+type ResourceRowProps = {
+  deletePending: boolean;
+  dirty: boolean;
+  entry: TreeEntry;
+  onCancelRename: () => void;
+  onDeleteFile: (entry: TreeEntry) => void;
+  onSelect: (next: SelectedFile) => void;
+  onStartRename: (entry: TreeEntry) => void;
+  onSubmitRename: (oldPath: string, newPath: string) => void;
+  renamePending: boolean;
+  renameValue: string;
+  renaming: boolean;
+  selected: boolean;
+  setRenameValue: (value: string) => void;
+};
+
+function ResourceRow({
+  deletePending,
+  dirty,
+  entry,
+  onCancelRename,
+  onDeleteFile,
+  onSelect,
+  onStartRename,
+  onSubmitRename,
+  renamePending,
+  renameValue,
+  renaming,
+  selected,
+  setRenameValue,
+}: ResourceRowProps) {
+  const tSkills = useTranslations("knowledge.agentSkills");
+  const t = useTranslations();
+  const tCommonCancel = t("common.cancel");
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  if (renaming) {
+    return (
+      <div className="group/row flex items-center gap-1 rounded px-1 py-1">
+        <span className="text-muted-foreground ps-1">
+          {kindIcon(entry.kind)}
+        </span>
+        <Input
+          autoFocus
+          className="h-7 flex-1 font-mono text-xs"
+          onBlur={() => {
+            if (renameValue.trim() === entry.path) {
+              onCancelRename();
+            }
+          }}
+          onChange={(event) => setRenameValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              onSubmitRename(entry.path, renameValue);
+            }
+            if (event.key === "Escape") {
+              onCancelRename();
+            }
+          }}
+          value={renameValue}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="group/row relative flex items-center">
+      <button
+        className={cn(
+          "hover:bg-muted/60 flex w-full items-center gap-2 rounded px-2 py-1 text-start text-sm",
+          selected && "bg-muted text-foreground",
+        )}
+        onClick={() =>
+          onSelect({
+            type: "resource",
+            resourceId: entry.id,
+            path: entry.path,
+          })
+        }
+        type="button"
+      >
+        <span className="text-muted-foreground">{kindIcon(entry.kind)}</span>
+        <span className="truncate font-mono text-xs">{entry.fileName}</span>
+        {dirty && (
+          <span
+            aria-hidden="true"
+            className="ms-auto size-1.5 shrink-0 rounded-full bg-amber-500"
+          />
+        )}
+      </button>
+      <div className="invisible absolute end-1 flex gap-0.5 group-hover/row:visible">
+        <Button
+          aria-label={tSkills("renameFile")}
+          disabled={renamePending}
+          onClick={() => onStartRename(entry)}
+          size="icon-sm"
+          variant="ghost"
+        >
+          <PencilIcon className="size-3.5" />
+        </Button>
+        <Popover onOpenChange={setConfirmingDelete} open={confirmingDelete}>
+          <PopoverTrigger
+            render={
+              <Button
+                aria-label={tSkills("deleteFile")}
+                disabled={deletePending}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <Trash2Icon className="size-3.5" />
+              </Button>
+            }
+          />
+          <PopoverContent className="flex w-56 flex-col gap-2 p-2 text-sm">
+            <span>{tSkills("deleteFileConfirm")}</span>
+            <div className="flex justify-end gap-2">
+              <Button
+                onClick={() => setConfirmingDelete(false)}
+                size="sm"
+                variant="ghost"
+              >
+                {tCommonCancel}
+              </Button>
+              <Button
+                disabled={deletePending}
+                onClick={() => {
+                  setConfirmingDelete(false);
+                  onDeleteFile(entry);
+                }}
+                size="sm"
+                variant="destructive"
+              >
+                {tSkills("deleteFile")}
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
     </div>
   );
 }
 
 type FileRowProps = {
-  depth: number;
   dirty: boolean;
   icon: React.ReactNode;
   label: string;
@@ -594,14 +1202,7 @@ type FileRowProps = {
   selected: boolean;
 };
 
-function FileRow({
-  depth,
-  dirty,
-  icon,
-  label,
-  onClick,
-  selected,
-}: FileRowProps) {
+function FileRow({ dirty, icon, label, onClick, selected }: FileRowProps) {
   return (
     <button
       className={cn(
@@ -609,7 +1210,6 @@ function FileRow({
         selected && "bg-muted text-foreground",
       )}
       onClick={onClick}
-      style={{ paddingInlineStart: `${8 + depth * TREE_INDENT_PX}px` }}
       type="button"
     >
       <span className="text-muted-foreground">{icon}</span>
@@ -637,68 +1237,46 @@ const kindIcon = (kind: string) => {
   return <FileIcon className="size-4" />;
 };
 
-type TreeNode =
-  | { type: "file"; id: string; path: string; fileName: string; kind: string }
-  | { type: "folder"; name: string; path: string; children: TreeNode[] };
-
-const findFolder = (nodes: TreeNode[], name: string) => {
-  for (const node of nodes) {
-    if (node.type === "folder" && node.name === name) {
-      return node;
-    }
-  }
-  return undefined;
+type TreeEntry = {
+  id: string;
+  path: string;
+  fileName: string;
+  kind: string;
 };
 
-const sortNodes = (nodes: TreeNode[]) => {
-  nodes.sort((a, b) => {
-    if (a.type !== b.type) {
-      return a.type === "folder" ? -1 : 1;
-    }
-    const an = a.type === "folder" ? a.name : a.fileName;
-    const bn = b.type === "folder" ? b.name : b.fileName;
-    return an.localeCompare(bn);
-  });
-  for (const node of nodes) {
-    if (node.type === "folder") {
-      sortNodes(node.children);
-    }
-  }
+type TreeGroup = {
+  prefix: string;
+  entries: TreeEntry[];
 };
 
-const buildTree = (resources: SkillResource[]): TreeNode[] => {
-  const root: TreeNode[] = [];
+const buildTree = (resources: SkillResource[]): TreeGroup[] => {
+  const groups = new Map<string, TreeEntry[]>();
   for (const resource of resources) {
-    const segments = resource.path.split("/").filter((s) => s.length > 0);
-    if (segments.length === 0) {
-      continue;
-    }
-    const fileName = segments.at(-1) ?? resource.path;
-    let cursor = root;
-    let accum = "";
-    for (let i = 0; i < segments.length - 1; i++) {
-      const name = segments.at(i);
-      if (name === undefined) {
-        continue;
-      }
-      accum = accum.length > 0 ? `${accum}/${name}` : name;
-      let folder = findFolder(cursor, name);
-      if (!folder) {
-        folder = { type: "folder", name, path: accum, children: [] };
-        cursor.push(folder);
-      }
-      cursor = folder.children;
-    }
-    cursor.push({
-      type: "file",
+    const slashIndex = resource.path.indexOf("/");
+    const prefix = slashIndex === -1 ? "" : resource.path.slice(0, slashIndex);
+    const fileName =
+      slashIndex === -1 ? resource.path : resource.path.slice(slashIndex + 1);
+    const bucket = groups.get(prefix);
+    const entry: TreeEntry = {
       id: resource.id,
       path: resource.path,
       fileName,
       kind: resource.kind,
+    };
+    if (bucket) {
+      bucket.push(entry);
+    } else {
+      groups.set(prefix, [entry]);
+    }
+  }
+  const out: TreeGroup[] = [];
+  for (const [prefix, entries] of groups) {
+    out.push({
+      prefix: prefix === "" ? "/" : prefix,
+      entries: entries.sort((a, b) => a.fileName.localeCompare(b.fileName)),
     });
   }
-  sortNodes(root);
-  return root;
+  return out.sort((a, b) => a.prefix.localeCompare(b.prefix));
 };
 
 const toastError = (error: unknown, fallback: string) => {
