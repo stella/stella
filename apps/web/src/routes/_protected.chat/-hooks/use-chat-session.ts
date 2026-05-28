@@ -584,7 +584,13 @@ export const useChatSession = ({
     }
     replaceQueuedMessages(queuedMessages.slice(1));
     isGeneratingRef.current = true;
-    void sendChatMessage(next.message);
+    // Preserve the request options the message was queued with —
+    // notably `body.sendMode` (anonymized / raw) snapshotted by
+    // withSendModeSnapshot at queue time. The manual drain path
+    // already passes them; the automatic drain must too, otherwise
+    // toggling the mode between queueing and draining sends the
+    // queued turn with the wrong mode.
+    void sendChatMessage(next.message, next.options);
   }, [
     isGenerating,
     queuedMessages,

@@ -546,6 +546,9 @@ const queueReviewSuggestions = ({
       labelsById.set(b.id, b.displayLabel);
     }
   }
+  const queuedIds: string[] = [];
+  const skipped: { id: string; reason: "noopOperation" | "missingBlock" }[] =
+    [];
   const items: ReviewSuggestion[] = prepared.flatMap(({ id, input, folio }) => {
     // Drop true no-ops before they ever reach the panel: the model
     // occasionally emits `find === replace` (or replaceBlock text
@@ -556,12 +559,15 @@ const queueReviewSuggestions = ({
       (input.type === "replaceBlock" &&
         input.text === (blocksById.get(input.blockId)?.text ?? ""))
     ) {
+      skipped.push({ id, reason: "noopOperation" });
       return [];
     }
     const preview = buildPreview(input, blocksById);
     if (!preview) {
+      skipped.push({ id, reason: "missingBlock" });
       return [];
     }
+    queuedIds.push(id);
     const base: ReviewSuggestion = {
       id,
       blockId: input.blockId,
@@ -600,6 +606,8 @@ const queueReviewSuggestions = ({
   if (tab) {
     inspectorState.setFileFacet(tab.id, "suggestions", { pulse: true });
   }
+
+  return { queuedIds, skipped };
 };
 
 const isApplyActiveDocxEditsInput = (
@@ -927,7 +935,7 @@ const FileChatOverlayInner = ({
       // empty list when the editor never produced a snapshot —
       // preview + apply both handle that defensively.
       const lastSnapshot = lastSentDocxEditSnapshotRef.current;
-      queueReviewSuggestions({
+      const { queuedIds, skipped } = queueReviewSuggestions({
         entityId: activeFile.entityId,
         prepared,
         snapshotBlocks: lastSnapshot?.blocks ?? [],
@@ -935,8 +943,8 @@ const FileChatOverlayInner = ({
       });
       return {
         applied: [],
-        queued: prepared.map(({ id }) => ({ id })),
-        skipped: [],
+        queued: queuedIds.map((id) => ({ id })),
+        skipped,
       };
     },
   );

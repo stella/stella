@@ -203,6 +203,7 @@ const skippedOperationSchema = v.strictObject({
     "missingFind",
     "unsupportedBlock",
     "emptyOperation",
+    "noopOperation",
     "documentNotEditable",
   ]),
 });
