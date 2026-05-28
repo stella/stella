@@ -39,7 +39,7 @@ type SlotProps = React.HTMLAttributes<HTMLElement> & {
  * callbacks and returns a combined cleanup so React can
  * invoke it on unmount instead of re-calling with `null`.
  */
-const composeRefs =
+export const composeRefs =
   <T,>(
     ...refs: (React.Ref<T> | undefined)[]
   ): ((node: T | null) => (() => void) | undefined) =>

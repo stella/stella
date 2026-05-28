@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { RefObject } from "react";
 
 // Target the typical Word text area (page minus ~1-inch margins on
@@ -21,58 +21,60 @@ type ZoomableDocxEditor = {
 export const clampDocxZoom = (zoom: number) =>
   Math.max(DOCX_MIN_ZOOM, Math.min(DOCX_MAX_ZOOM, zoom));
 
+type DocxFitZoomResult = {
+  containerRef: (node: HTMLElement | null) => (() => void) | undefined;
+  fitZoom: number;
+};
+
 export const useDocxFitZoom = (
-  containerRef: RefObject<HTMLElement | null>,
   scaleOffset: number = 0,
   maxAutoZoom: number = DOCX_MAX_ZOOM,
-) => {
+): DocxFitZoomResult => {
   const [fitZoom, setFitZoom] = useState(DOCX_DEFAULT_ZOOM);
-  const trackedRef = useRef<HTMLElement | null>(null);
 
-  useLayoutEffect(() => {
-    // The container ref starts null when DocxBrowserEditor renders a
-    // loading fallback; the real `<div ref={containerRef}>` only
-    // appears after the doc buffer loads. A one-shot effect would
-    // bail forever in that case. Re-check the ref on every commit so
-    // we attach the observer as soon as the container appears.
-    const container = containerRef.current;
-    if (container === trackedRef.current) {
-      return undefined;
-    }
-    trackedRef.current = container;
-    if (!container) {
-      return undefined;
-    }
-
-    const updateZoom = () => {
-      const { clientWidth } = container;
-      if (clientWidth <= 0) {
-        return;
+  // Callback ref: React invokes this once when the container
+  // attaches to the DOM and runs the returned cleanup when it
+  // detaches. Subscribing via useEffect on a passed-in RefObject
+  // does not work here because the real container only appears
+  // after a loading fallback unmounts, and useEffect does not
+  // re-run on ref mutation. The callback-ref form attaches the
+  // ResizeObserver exactly once per node lifetime regardless of
+  // parent re-renders.
+  const containerRef = useCallback(
+    (node: HTMLElement | null) => {
+      if (!node) {
+        return undefined;
       }
 
-      const availableWidth = Math.max(1, clientWidth - DOCX_FIT_PADDING * 2);
-      const nextFitZoom = availableWidth / DOCX_TEXT_AREA_WIDTH;
+      const updateZoom = () => {
+        const { clientWidth } = node;
+        if (clientWidth <= 0) {
+          return;
+        }
+        const availableWidth = Math.max(1, clientWidth - DOCX_FIT_PADDING * 2);
+        const nextFitZoom = availableWidth / DOCX_TEXT_AREA_WIDTH;
+        const cappedFitZoom = Math.min(maxAutoZoom, nextFitZoom);
+        setFitZoom(clampDocxZoom(Math.round(cappedFitZoom * 100) / 100));
+      };
 
-      const cappedFitZoom = Math.min(maxAutoZoom, nextFitZoom);
+      updateZoom();
+      // Belt-and-braces retry on the next frame for surfaces
+      // where the parent finishes sizing after our first measure
+      // (e.g., inspector pane expanding on the same commit as
+      // the docx tab opening).
+      const rafId = requestAnimationFrame(updateZoom);
+      const observer = new ResizeObserver(updateZoom);
+      observer.observe(node);
 
-      setFitZoom(clampDocxZoom(Math.round(cappedFitZoom * 100) / 100));
-    };
+      return () => {
+        cancelAnimationFrame(rafId);
+        observer.disconnect();
+      };
+    },
+    [maxAutoZoom],
+  );
 
-    updateZoom();
-    // Belt-and-braces retry on the next frame for surfaces where the
-    // parent finishes sizing after our first measure.
-    const rafId = requestAnimationFrame(updateZoom);
-    const observer = new ResizeObserver(updateZoom);
-    observer.observe(container);
-
-    return () => {
-      trackedRef.current = null;
-      cancelAnimationFrame(rafId);
-      observer.disconnect();
-    };
-  });
-
-  return clampDocxZoom(fitZoom + scaleOffset);
+  return { containerRef, fitZoom: clampDocxZoom(fitZoom + scaleOffset) };
 };
 
 export const useDocxWheelZoom = (

@@ -56,6 +56,7 @@ import { StatusMessage } from "@/components/route-components";
 import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
+import { composeRefs } from "@/lib/slot";
 import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
 import {
   useDocxFitZoom,
@@ -547,7 +548,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       : null;
   const [autosaveStatus, setAutosaveStatus] =
     useState<AutosaveStatus>("synced");
-  const targetZoom = useDocxFitZoom(containerRef, scaleOffset, 0.85);
+  const { containerRef: fitZoomRef, fitZoom: targetZoom } = useDocxFitZoom(
+    scaleOffset,
+    0.85,
+  );
   const t = useTranslations();
   const previewPlaceholder =
     optimisticPreviewRef.current?.fieldId === fieldId
@@ -1408,7 +1412,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   const collaborationIdentity = collaborationSession?.sessionId ?? "local";
 
   return (
-    <div ref={containerRef} className="flex h-full w-full min-w-0 flex-col">
+    <div
+      ref={composeRefs(containerRef, fitZoomRef)}
+      className="flex h-full w-full min-w-0 flex-col"
+    >
       {/* Folio editor with AI overlay */}
       <div
         className="min-w-0 flex-1 overflow-hidden"

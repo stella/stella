@@ -50,6 +50,7 @@ import {
   usePDFStore,
 } from "@/lib/pdf/pdf-context";
 import { toSafeId } from "@/lib/safe-id";
+import { composeRefs } from "@/lib/slot";
 import { shouldUseDocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
 import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
 import {
@@ -633,7 +634,10 @@ const ReadOnlyDocxDocumentViewer = ({
 }) => {
   const editorRef = useRef<DocxEditorRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const targetZoom = useDocxFitZoom(containerRef, scaleOffset, 0.85);
+  const { containerRef: fitZoomRef, fitZoom: targetZoom } = useDocxFitZoom(
+    scaleOffset,
+    0.85,
+  );
 
   useLayoutEffect(() => {
     editorRef.current?.setZoom(targetZoom);
@@ -641,7 +645,10 @@ const ReadOnlyDocxDocumentViewer = ({
   useDocxWheelZoom(containerRef, editorRef);
 
   return (
-    <div ref={containerRef} className="h-full overflow-auto">
+    <div
+      ref={composeRefs(containerRef, fitZoomRef)}
+      className="h-full overflow-auto"
+    >
       <ReadOnlyDocxViewer
         ref={editorRef}
         className="folio-docx-preview h-full"

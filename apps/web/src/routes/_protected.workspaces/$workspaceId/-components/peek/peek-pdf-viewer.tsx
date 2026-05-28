@@ -37,6 +37,7 @@ import { APIError } from "@/lib/errors";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
+import { composeRefs } from "@/lib/slot";
 import {
   useDocxFitZoom,
   useDocxWheelZoom,
@@ -464,7 +465,8 @@ const PeekDocxViewer = ({
   const analytics = useAnalytics();
   const editorRef = useRef<DocxEditorRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const targetZoom = useDocxFitZoom(containerRef, scaleOffset);
+  const { containerRef: fitZoomRef, fitZoom: targetZoom } =
+    useDocxFitZoom(scaleOffset);
   useDocxBlockScroll({ editorRef, fieldId });
 
   // Sync scaleOffset from inspector +/- buttons to Folio zoom
@@ -496,7 +498,10 @@ const PeekDocxViewer = ({
   }, [analytics, fieldId, printActionsRef, workspaceId]);
 
   return (
-    <div ref={containerRef} className="h-full overflow-auto">
+    <div
+      ref={composeRefs(containerRef, fitZoomRef)}
+      className="h-full overflow-auto"
+    >
       <DocxEditor
         ref={editorRef}
         autoOpenReviewSidebar={false}
