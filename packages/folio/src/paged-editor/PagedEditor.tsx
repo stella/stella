@@ -42,7 +42,10 @@ import {
   findBodyPmAnchors,
   findBodyPmSpans,
 } from "../core/layout-bridge/findBodyPmSpans";
-import { findHfSlotForTarget } from "../core/layout-bridge/findHfPmSpans";
+import {
+  findHfPmAnchor,
+  findHfSlotForTarget,
+} from "../core/layout-bridge/findHfPmSpans";
 import {
   collectFootnoteRefs,
   buildFootnoteContentMap,
@@ -102,6 +105,7 @@ import { LayoutPainter } from "../core/layout-painter";
 import type { BlockLookup } from "../core/layout-painter";
 import {
   findPageShellForPmPos,
+  PAINTER_PAINTED_EVENT,
   renderPages,
 } from "../core/layout-painter/renderPage";
 import type {
@@ -595,6 +599,81 @@ const loadSelectionGeometry = (): Promise<SelectionGeometryModule> => {
 
   return selectionGeometryPromise;
 };
+
+// HF caret overlay — minimal "paint the caret + selection rects for the
+// currently focused HF PM" implementation. Re-runs the DOM lookup on each
+// painter:painted event and whenever the selection changes.
+type HfCaretSelection = {
+  rId: string;
+  kind: "header" | "footer";
+  from: number;
+  to: number;
+};
+
+function HfCaretOverlay({
+  selection,
+  pagesContainer,
+}: {
+  selection: HfCaretSelection;
+  pagesContainer: HTMLDivElement | null;
+}) {
+  const [rect, setRect] = useState<{
+    x: number;
+    y: number;
+    height: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!pagesContainer) {
+      return;
+    }
+    const recompute = () => {
+      const anchor = findHfPmAnchor(
+        pagesContainer,
+        selection.kind,
+        selection.rId,
+        selection.from,
+      );
+      if (!anchor) {
+        setRect(null);
+        return;
+      }
+      const ar = anchor.getBoundingClientRect();
+      const cr = pagesContainer.getBoundingClientRect();
+      setRect({
+        x: ar.left - cr.left,
+        y: ar.top - cr.top,
+        height: ar.height || 16,
+      });
+    };
+    recompute();
+    const onPainted = () => recompute();
+    pagesContainer.addEventListener(PAINTER_PAINTED_EVENT, onPainted);
+    return () => {
+      pagesContainer.removeEventListener(PAINTER_PAINTED_EVENT, onPainted);
+    };
+  }, [selection, pagesContainer]);
+
+  if (!rect) {
+    return null;
+  }
+  return (
+    <div
+      data-testid="hf-caret"
+      style={{
+        position: "absolute",
+        left: rect.x,
+        top: rect.y,
+        width: 2,
+        height: rect.height,
+        backgroundColor: "var(--doc-canvas-text, #000)",
+        pointerEvents: "none",
+        zIndex: 11,
+        animation: "folio-caret-blink 1060ms steps(1, end) infinite",
+      }}
+    />
+  );
+}
 
 // Source HeaderFooterContent for the painter from either a persistent hidden
 // HF EditorView (preferred — keeps the painter in lockstep with live PM edits)
@@ -3693,25 +3772,48 @@ export function PagedEditor(
    *      state; the HF blocks are pulled from the HF PM via
    *      `renderHfFromContentOrPm` on the next layout tick.
    */
+  const [hfCaretSelection, setHfCaretSelection] = useState<{
+    rId: string;
+    kind: "header" | "footer";
+    from: number;
+    to: number;
+  } | null>(null);
+
   const handleHfPmTransaction = useCallback(
-    (rId: string, view: EditorView, docChanged: boolean) => {
-      if (!docChanged) {
-        return;
-      }
-      const pkg = document?.package;
-      if (pkg) {
-        const hf = pkg.headers?.get(rId) ?? pkg.footers?.get(rId);
-        if (hf) {
-          hf.content = proseDocToBlocks(view.state.doc);
+    (
+      rId: string,
+      kind: "header" | "footer",
+      view: EditorView,
+      docChanged: boolean,
+      selectionChanged: boolean,
+    ) => {
+      if (docChanged) {
+        const pkg = document?.package;
+        if (pkg) {
+          const hf = pkg.headers?.get(rId) ?? pkg.footers?.get(rId);
+          if (hf) {
+            hf.content = proseDocToBlocks(view.state.doc);
+          }
+        }
+        const bodyState = hiddenPMRef.current?.getState();
+        if (bodyState) {
+          scheduleLayout(bodyState, null);
         }
       }
-      const bodyState = hiddenPMRef.current?.getState();
-      if (bodyState) {
-        scheduleLayout(bodyState, null);
+      if (docChanged || selectionChanged) {
+        const { from, to } = view.state.selection;
+        setHfCaretSelection({ rId, kind, from, to });
       }
     },
     [document, scheduleLayout],
   );
+
+  // Clear HF caret state on exit from HF edit mode.
+  useEffect(() => {
+    if (!hfEditMode) {
+      setHfCaretSelection(null);
+    }
+  }, [hfEditMode]);
 
   /**
    * Handle selection change from PM.
@@ -6176,6 +6278,19 @@ export function PagedEditor(
             isFocused={isFocused}
             pageGap={pageGap}
           />
+          {/* HF caret overlay — draws the caret + selection rects for the
+              focused persistent hidden HF EditorView. Painted DOM is the
+              source of truth: we walk findHfPmAnchor markers under
+              .layout-page-header[data-rid] / .layout-page-footer[data-rid]
+              and project the rects relative to the pages container. The
+              `painter:painted` and `hfCaretSelection` change events both
+              re-run the lookup. */}
+          {hfCaretSelection && (
+            <HfCaretOverlay
+              selection={hfCaretSelection}
+              pagesContainer={pagesContainerRef.current}
+            />
+          )}
           {layout &&
             remoteSelections.map((remoteSelection) => (
               <RemoteSelectionOverlay

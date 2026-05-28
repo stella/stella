@@ -86,10 +86,17 @@ export type HiddenHeaderFooterPMsProps = {
   defaultTabStopTwips?: number | null;
   /**
    * Fires after every transaction lands on any HF EditorView. Parent uses
-   * this to trigger relayout (so the painter repaints the new PM doc) and
-   * to schedule a debounced write-back into `Document.package.headers[rId]`.
+   * this to trigger relayout (so the painter repaints the new PM doc),
+   * write back into `Document.package.headers/footers[rId]`, and drive the
+   * HF caret overlay from the new selection.
    */
-  onTransaction?: (rId: string, view: EditorView, docChanged: boolean) => void;
+  onTransaction?: (
+    rId: string,
+    kind: HfPartKind,
+    view: EditorView,
+    docChanged: boolean,
+    selectionChanged: boolean,
+  ) => void;
 };
 
 // =============================================================================
@@ -241,12 +248,19 @@ export const HiddenHeaderFooterPMs = memo(
 
           const state = buildInitialState(hf, styles, theme, mgr);
           const slotRId = slot.rId;
+          const slotKind = slot.kind;
           const view: EditorView = new EditorView(node, {
             state,
             dispatchTransaction(tr) {
               const newState = view.state.apply(tr);
               view.updateState(newState);
-              onTransactionRef.current?.(slotRId, view, tr.docChanged);
+              onTransactionRef.current?.(
+                slotRId,
+                slotKind,
+                view,
+                tr.docChanged,
+                tr.selectionSet,
+              );
             },
           });
           have.set(slot.rId, {
