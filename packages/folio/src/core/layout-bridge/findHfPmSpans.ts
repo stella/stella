@@ -61,29 +61,42 @@ export function findHfPmAnchor(
  * hidden HF EditorView. Returns `null` when the target is not inside an HF
  * slot (body or unrelated chrome).
  */
+type ClosestCapable = {
+  closest(selector: string): HTMLElement | null;
+};
+
+function hasCloset(value: unknown): value is ClosestCapable {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { closest?: unknown }).closest === "function"
+  );
+}
+
 export function findHfSlotForTarget(target: Node | null): {
   kind: HfSlotKind;
   rId: string;
   element: HTMLElement;
 } | null {
-  if (!(target instanceof Element)) {
-    if (!target) {
-      return null;
-    }
-    const owner = target.parentElement;
+  if (!target) {
+    return null;
+  }
+  if (!hasCloset(target)) {
+    // Text nodes don't have `closest`; walk up via parentElement.
+    const owner = (target as Node).parentElement;
     if (!owner) {
       return null;
     }
     return findHfSlotForTarget(owner);
   }
-  const header = target.closest<HTMLElement>(".layout-page-header[data-rid]");
+  const header = target.closest(".layout-page-header[data-rid]");
   if (header) {
     const rId = header.dataset["rid"];
     if (rId) {
       return { kind: "header", rId, element: header };
     }
   }
-  const footer = target.closest<HTMLElement>(".layout-page-footer[data-rid]");
+  const footer = target.closest(".layout-page-footer[data-rid]");
   if (footer) {
     const rId = footer.dataset["rid"];
     if (rId) {
