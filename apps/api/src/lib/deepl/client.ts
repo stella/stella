@@ -118,12 +118,34 @@ const authHeader = (apiKey: string): Record<string, string> => ({
 });
 
 /**
+ * DeepL returns errors as `{ "message": "..." }` JSON. Surface the
+ * message when present; fall back to the truncated raw body for
+ * non-JSON edges (HTML error pages from intermediaries, etc.).
+ */
+const extractDeepLMessage = (bodyText: string): string => {
+  try {
+    const parsed: unknown = JSON.parse(bodyText);
+    if (
+      parsed !== null &&
+      typeof parsed === "object" &&
+      "message" in parsed &&
+      typeof parsed.message === "string"
+    ) {
+      return parsed.message;
+    }
+  } catch {
+    // Fall through to the raw body.
+  }
+  return bodyText.slice(0, 500);
+};
+
+/**
  * Map DeepL HTTP failures to typed errors. The `bodyText` is
  * DeepL's response body (often JSON with a `message` field) and
  * is preserved as `cause` for telemetry.
  */
 const mapHttpError = (status: number, bodyText: string): never => {
-  const detail = bodyText.slice(0, 500);
+  const detail = extractDeepLMessage(bodyText);
 
   if (status === 401 || status === 403) {
     throw new DeepLAuthError({

@@ -97,7 +97,9 @@ export const TranslateDocumentDialog = ({
         }),
         type: "success",
       });
-      await queryClient.invalidateQueries({ queryKey: ["entities"] });
+      await queryClient.invalidateQueries({
+        queryKey: entitiesKeys.all(workspaceId),
+      });
       setOpen(false);
       void navigate({
         to: "/workspaces/$workspaceId/$viewId/document",

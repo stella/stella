@@ -182,7 +182,9 @@ const translateEntity = createSafeHandler(
       );
     }
 
-    // 3. Fetch source bytes from S3.
+    // 3. Fetch source bytes from S3 directly — Bun's S3Client
+    // streams bytes from the SDK and avoids a presign + public-
+    // network round-trip (and the matching NAT egress).
     const sourceKey = createFileKey({
       organizationId: session.activeOrganizationId,
       workspaceId,
@@ -190,12 +192,14 @@ const translateEntity = createSafeHandler(
       mimeType: sourceContent.mimeType,
     });
 
-    const sourceResponse = await fetch(
-      getS3().presign(sourceKey, { expiresIn: 900 }),
-      { signal: AbortSignal.timeout(60_000) },
-    );
+    const sourceBytesResult = await Result.tryPromise({
+      try: async () =>
+        new Uint8Array(await getS3().file(sourceKey).arrayBuffer()),
+      catch: (error: unknown) => error,
+    });
 
-    if (!sourceResponse.ok) {
+    if (sourceBytesResult.isErr()) {
+      captureError(sourceBytesResult.error);
       return Result.err(
         new HandlerError({
           status: 502,
@@ -204,7 +208,7 @@ const translateEntity = createSafeHandler(
       );
     }
 
-    const sourceBytes = new Uint8Array(await sourceResponse.arrayBuffer());
+    const sourceBytes = sourceBytesResult.value;
 
     // 4. Translate via DeepL.
     const translationResult = await Result.tryPromise({
