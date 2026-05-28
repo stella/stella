@@ -59,7 +59,7 @@
       "version": "3.0.78"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/azure@3.0.65",
+      "bom-ref": "pkg:npm/@ai-sdk/azure@3.0.66",
       "evidence": {
         "identity": [
           {
@@ -107,13 +107,13 @@
           "value": "node_modules/@ai-sdk/azure/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/azure@3.0.65",
+      "purl": "pkg:npm/%40ai-sdk/azure@3.0.66",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.65"
+      "version": "3.0.66"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/devtools@0.0.18",
@@ -416,7 +416,7 @@
       "version": "3.0.37"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/openai@3.0.64",
+      "bom-ref": "pkg:npm/@ai-sdk/openai@3.0.65",
       "evidence": {
         "identity": [
           {
@@ -464,14 +464,14 @@
           "value": "node_modules/@ai-sdk/openai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/openai@3.0.64",
+      "purl": "pkg:npm/%40ai-sdk/openai@3.0.65",
       "scope": "required",
       "tags": [
         "framework",
         "ml"
       ],
       "type": "framework",
-      "version": "3.0.64"
+      "version": "3.0.65"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/provider-utils@4.0.27",
@@ -1110,12 +1110,6 @@
             "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/analysis/margin-notes.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/analysis/scroll-markers.tsx#10"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/analysis/scroll-markers.tsx#11"
-          },
-          {
             "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/case-search-trigger.tsx#1"
           },
           {
@@ -1593,10 +1587,16 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#20"
+            "location": "packages/folio/src/components/DocumentOutline.tsx#15"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#21"
+            "location": "packages/folio/src/components/DocumentOutline.tsx#23"
+          },
+          {
+            "location": "packages/folio/src/components/DocxEditor.tsx#22"
+          },
+          {
+            "location": "packages/folio/src/components/DocxEditor.tsx#23"
           },
           {
             "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
@@ -1662,16 +1662,19 @@
             "location": "packages/folio/src/components/ui/StylePicker.tsx#8"
           },
           {
-            "location": "packages/folio/src/components/ui/Tooltip.tsx#8"
+            "location": "packages/folio/src/components/ui/Tooltip.tsx#1"
+          },
+          {
+            "location": "packages/folio/src/components/ui/Tooltip.tsx#2"
           },
           {
             "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#18"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#19"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#26"
           },
           {
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#12"
@@ -1741,6 +1744,9 @@
           },
           {
             "location": "packages/ui/src/components/preview-card.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/scroll-markers.tsx#23"
           },
           {
             "location": "packages/ui/src/components/select.tsx#3"
@@ -2613,12 +2619,6 @@
             "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/analysis/margin-notes.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/analysis/scroll-markers.tsx#10"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/analysis/scroll-markers.tsx#11"
-          },
-          {
             "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/case-search-trigger.tsx#1"
           },
           {
@@ -3096,10 +3096,16 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#20"
+            "location": "packages/folio/src/components/DocumentOutline.tsx#15"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#21"
+            "location": "packages/folio/src/components/DocumentOutline.tsx#23"
+          },
+          {
+            "location": "packages/folio/src/components/DocxEditor.tsx#22"
+          },
+          {
+            "location": "packages/folio/src/components/DocxEditor.tsx#23"
           },
           {
             "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
@@ -3165,16 +3171,19 @@
             "location": "packages/folio/src/components/ui/StylePicker.tsx#8"
           },
           {
-            "location": "packages/folio/src/components/ui/Tooltip.tsx#8"
+            "location": "packages/folio/src/components/ui/Tooltip.tsx#1"
+          },
+          {
+            "location": "packages/folio/src/components/ui/Tooltip.tsx#2"
           },
           {
             "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#18"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#19"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#26"
           },
           {
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#12"
@@ -3244,6 +3253,9 @@
           },
           {
             "location": "packages/ui/src/components/preview-card.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/scroll-markers.tsx#23"
           },
           {
             "location": "packages/ui/src/components/select.tsx#3"
@@ -4929,12 +4941,6 @@
             "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/analysis/margin-notes.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/analysis/scroll-markers.tsx#10"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/analysis/scroll-markers.tsx#11"
-          },
-          {
             "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/case-search-trigger.tsx#1"
           },
           {
@@ -5412,10 +5418,16 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#20"
+            "location": "packages/folio/src/components/DocumentOutline.tsx#15"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#21"
+            "location": "packages/folio/src/components/DocumentOutline.tsx#23"
+          },
+          {
+            "location": "packages/folio/src/components/DocxEditor.tsx#22"
+          },
+          {
+            "location": "packages/folio/src/components/DocxEditor.tsx#23"
           },
           {
             "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
@@ -5481,16 +5493,19 @@
             "location": "packages/folio/src/components/ui/StylePicker.tsx#8"
           },
           {
-            "location": "packages/folio/src/components/ui/Tooltip.tsx#8"
+            "location": "packages/folio/src/components/ui/Tooltip.tsx#1"
+          },
+          {
+            "location": "packages/folio/src/components/ui/Tooltip.tsx#2"
           },
           {
             "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#18"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#19"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#26"
           },
           {
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#12"
@@ -5560,6 +5575,9 @@
           },
           {
             "location": "packages/ui/src/components/preview-card.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/scroll-markers.tsx#23"
           },
           {
             "location": "packages/ui/src/components/select.tsx#3"
@@ -5864,6 +5882,9 @@
           },
           {
             "location": "packages/folio/src/components/TextContextMenu.tsx#9"
+          },
+          {
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#26"
           }
         ]
       },
@@ -5899,7 +5920,7 @@
       "version": "2.1.8"
     },
     {
-      "bom-ref": "pkg:npm/@hocuspocus/provider@4.0.0",
+      "bom-ref": "pkg:npm/@hocuspocus/provider@4.1.0",
       "description": "hocuspocus provider",
       "evidence": {
         "identity": [
@@ -5919,6 +5940,9 @@
         "occurrences": [
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session.ts#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session.ts#4"
           }
         ]
       },
@@ -5948,13 +5972,13 @@
           "value": "node_modules/@hocuspocus/provider/package.json"
         }
       ],
-      "purl": "pkg:npm/%40hocuspocus/provider@4.0.0",
+      "purl": "pkg:npm/%40hocuspocus/provider@4.1.0",
       "scope": "required",
       "type": "library",
-      "version": "4.0.0"
+      "version": "4.1.0"
     },
     {
-      "bom-ref": "pkg:npm/@hocuspocus/server@4.0.0",
+      "bom-ref": "pkg:npm/@hocuspocus/server@4.1.0",
       "description": "plug & play collaboration backend",
       "evidence": {
         "identity": [
@@ -6006,10 +6030,10 @@
           "value": "node_modules/@hocuspocus/server/package.json"
         }
       ],
-      "purl": "pkg:npm/%40hocuspocus/server@4.0.0",
+      "purl": "pkg:npm/%40hocuspocus/server@4.1.0",
       "scope": "required",
       "type": "library",
-      "version": "4.0.0"
+      "version": "4.1.0"
     },
     {
       "authors": [
@@ -6417,10 +6441,75 @@
     {
       "authors": [
         {
-          "name": "hey@posthog.com"
+          "name": "Microsoft Corporation"
         }
       ],
-      "bom-ref": "pkg:npm/@posthog/react@1.9.0",
+      "bom-ref": "pkg:npm/@playwright/test@1.60.0",
+      "description": "A high-level API to automate web browsers",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@playwright/test/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@playwright/test/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "packages/folio/scripts/profile-editor.ts#1"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://playwright.dev"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/microsoft/playwright.git"
+        }
+      ],
+      "group": "@playwright",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "test",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@playwright/test/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40playwright/test@1.60.0",
+      "scope": "required",
+      "tags": [
+        "api",
+        "framework",
+        "web"
+      ],
+      "type": "framework",
+      "version": "1.60.0"
+    },
+    {
+      "authors": [
+        {
+          "name": "engineering@posthog.com"
+        }
+      ],
+      "bom-ref": "pkg:npm/@posthog/react@1.9.1",
       "description": "Provides components and hooks for React integrations of PostHog.",
       "evidence": {
         "identity": [
@@ -7000,12 +7089,6 @@
             "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/analysis/margin-notes.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/analysis/scroll-markers.tsx#10"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/analysis/scroll-markers.tsx#11"
-          },
-          {
             "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/case-search-trigger.tsx#1"
           },
           {
@@ -7483,10 +7566,16 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#20"
+            "location": "packages/folio/src/components/DocumentOutline.tsx#15"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#21"
+            "location": "packages/folio/src/components/DocumentOutline.tsx#23"
+          },
+          {
+            "location": "packages/folio/src/components/DocxEditor.tsx#22"
+          },
+          {
+            "location": "packages/folio/src/components/DocxEditor.tsx#23"
           },
           {
             "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
@@ -7552,16 +7641,19 @@
             "location": "packages/folio/src/components/ui/StylePicker.tsx#8"
           },
           {
-            "location": "packages/folio/src/components/ui/Tooltip.tsx#8"
+            "location": "packages/folio/src/components/ui/Tooltip.tsx#1"
+          },
+          {
+            "location": "packages/folio/src/components/ui/Tooltip.tsx#2"
           },
           {
             "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#18"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#19"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#26"
           },
           {
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#12"
@@ -7633,6 +7725,9 @@
             "location": "packages/ui/src/components/preview-card.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/scroll-markers.tsx#23"
+          },
+          {
             "location": "packages/ui/src/components/select.tsx#3"
           },
           {
@@ -7672,10 +7767,10 @@
           "value": "node_modules/@posthog/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40posthog/react@1.9.0",
+      "purl": "pkg:npm/%40posthog/react@1.9.1",
       "scope": "required",
       "type": "library",
-      "version": "1.9.0"
+      "version": "1.9.1"
     },
     {
       "authors": [
@@ -8214,7 +8309,7 @@
       "version": "0.0.6"
     },
     {
-      "bom-ref": "pkg:npm/@stll/anonymize-wasm@1.4.4",
+      "bom-ref": "pkg:npm/@stll/anonymize-wasm@1.4.5",
       "description": "PII detection and anonymization for browsers via WebAssembly. Same API as @stll/anonymize.",
       "evidence": {
         "identity": [
@@ -8295,13 +8390,13 @@
           "value": "node_modules/@stll/anonymize-wasm/package.json"
         }
       ],
-      "purl": "pkg:npm/%40stll/anonymize-wasm@1.4.4",
+      "purl": "pkg:npm/%40stll/anonymize-wasm@1.4.5",
       "scope": "required",
       "tags": [
         "api"
       ],
       "type": "library",
-      "version": "1.4.4"
+      "version": "1.4.5"
     },
     {
       "bom-ref": "pkg:npm/@stll/api@0.0.0",
@@ -8871,7 +8966,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll.ts#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session.ts#9"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session.ts#10"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-docx-tab-edit-session.ts#5"
@@ -9237,61 +9332,6 @@
       "version": "0.0.0"
     },
     {
-      "bom-ref": "pkg:npm/@stll/stdnum@0.0.1",
-      "description": "Validate, compact, and format standard identifiers (IČO, IBAN, VAT, birth numbers, credit cards). Pure TypeScript, zero dependencies.",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@stll/anonymize-wasm/node_modules/@stll/stdnum/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@stll/anonymize-wasm/node_modules/@stll/stdnum/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "packages/ares/src/validation.ts#1"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/stella/stdnum#readme"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/stella/stdnum"
-        }
-      ],
-      "group": "@stll",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "stdnum",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@stll/anonymize-wasm/node_modules/@stll/stdnum/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40stll/stdnum@0.0.1",
-      "scope": "required",
-      "type": "library",
-      "version": "0.0.1"
-    },
-    {
       "bom-ref": "pkg:npm/@stll/stdnum@1.0.0",
       "description": "Validate, compact, and format standard identifiers for Node.js and Bun. Pure TypeScript, zero dependencies, tree-shakeable per identifier.",
       "evidence": {
@@ -9490,6 +9530,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts#10"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell.ts#4"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#39"
@@ -10239,7 +10282,7 @@
             "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#7"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#37"
+            "location": "packages/folio/src/components/DocxEditor.tsx#39"
           },
           {
             "location": "packages/folio/src/components/ErrorBoundary.tsx#29"
@@ -10644,9 +10687,6 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx#30"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/analysis/scroll-markers.tsx#13"
-          },
-          {
             "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/decision-text.tsx#8"
           },
           {
@@ -10887,7 +10927,7 @@
             "location": "packages/ui/src/components/checkbox.tsx#5"
           },
           {
-            "location": "packages/ui/src/components/color-picker.tsx#10"
+            "location": "packages/ui/src/components/color-picker.tsx#9"
           },
           {
             "location": "packages/ui/src/components/combobox.tsx#10"
@@ -10942,6 +10982,9 @@
           },
           {
             "location": "packages/ui/src/components/scroll-area.tsx#5"
+          },
+          {
+            "location": "packages/ui/src/components/scroll-markers.tsx#25"
           },
           {
             "location": "packages/ui/src/components/select.tsx#12"
@@ -11304,7 +11347,7 @@
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#156"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#54"
+            "location": "packages/folio/src/components/DocxEditor.tsx#56"
           },
           {
             "location": "packages/folio/src/components/ui/FontPicker.tsx#12"
@@ -11359,9 +11402,6 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#187"
-          },
-          {
-            "location": "packages/folio/src/components/ui/Tooltip.tsx#15"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#31"
@@ -11502,6 +11542,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#43"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column.tsx#7"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#47"
           },
           {
@@ -11526,7 +11569,7 @@
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#127"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#47"
+            "location": "packages/folio/src/components/DocxEditor.tsx#49"
           },
           {
             "location": "packages/folio/src/components/FormattingBar.tsx#28"
@@ -11907,6 +11950,9 @@
             "location": "packages/ui/src/components/destructive-confirm-dialog.tsx#14"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/case/$decisionId.tsx#11"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/entity-pagination.tsx#9"
           },
           {
@@ -11935,9 +11981,6 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#96"
-          },
-          {
-            "location": "packages/ui/src/components/color-picker.tsx#9"
           }
         ]
       },
@@ -12645,7 +12688,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-edit-session.ts#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session.ts#4"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session.ts#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/files/queries.ts#1"
@@ -12661,6 +12704,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-limits.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow.ts#1"
@@ -14020,7 +14066,7 @@
       "version": "2.11.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/core@3.23.4",
+      "bom-ref": "pkg:npm/@tiptap/core@3.23.6",
       "description": "headless rich text editor",
       "evidence": {
         "identity": [
@@ -14078,13 +14124,13 @@
           "value": "node_modules/@tiptap/core/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/core@3.23.4",
+      "purl": "pkg:npm/%40tiptap/core@3.23.6",
       "scope": "required",
       "type": "library",
-      "version": "3.23.4"
+      "version": "3.23.6"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.23.4",
+      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.23.6",
       "description": "bold extension for tiptap",
       "evidence": {
         "identity": [
@@ -14133,13 +14179,13 @@
           "value": "node_modules/@tiptap/extension-bold/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-bold@3.23.4",
+      "purl": "pkg:npm/%40tiptap/extension-bold@3.23.6",
       "scope": "required",
       "type": "library",
-      "version": "3.23.4"
+      "version": "3.23.6"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-document@3.23.4",
+      "bom-ref": "pkg:npm/@tiptap/extension-document@3.23.6",
       "description": "document extension for tiptap",
       "evidence": {
         "identity": [
@@ -14191,13 +14237,13 @@
           "value": "node_modules/@tiptap/extension-document/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-document@3.23.4",
+      "purl": "pkg:npm/%40tiptap/extension-document@3.23.6",
       "scope": "required",
       "type": "library",
-      "version": "3.23.4"
+      "version": "3.23.6"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.23.4",
+      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.23.6",
       "description": "hard break extension for tiptap",
       "evidence": {
         "identity": [
@@ -14246,13 +14292,13 @@
           "value": "node_modules/@tiptap/extension-hard-break/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.23.4",
+      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.23.6",
       "scope": "required",
       "type": "library",
-      "version": "3.23.4"
+      "version": "3.23.6"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.23.4",
+      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.23.6",
       "description": "heading extension for tiptap",
       "evidence": {
         "identity": [
@@ -14301,13 +14347,13 @@
           "value": "node_modules/@tiptap/extension-heading/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-heading@3.23.4",
+      "purl": "pkg:npm/%40tiptap/extension-heading@3.23.6",
       "scope": "required",
       "type": "library",
-      "version": "3.23.4"
+      "version": "3.23.6"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-history@3.23.4",
+      "bom-ref": "pkg:npm/@tiptap/extension-history@3.23.6",
       "description": "history extension for tiptap",
       "evidence": {
         "identity": [
@@ -14362,13 +14408,13 @@
           "value": "node_modules/@tiptap/extension-history/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-history@3.23.4",
+      "purl": "pkg:npm/%40tiptap/extension-history@3.23.6",
       "scope": "required",
       "type": "library",
-      "version": "3.23.4"
+      "version": "3.23.6"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.23.4",
+      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.23.6",
       "description": "italic extension for tiptap",
       "evidence": {
         "identity": [
@@ -14417,13 +14463,13 @@
           "value": "node_modules/@tiptap/extension-italic/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-italic@3.23.4",
+      "purl": "pkg:npm/%40tiptap/extension-italic@3.23.6",
       "scope": "required",
       "type": "library",
-      "version": "3.23.4"
+      "version": "3.23.6"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.23.4",
+      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.23.6",
       "description": "mention extension for tiptap",
       "evidence": {
         "identity": [
@@ -14481,13 +14527,13 @@
           "value": "node_modules/@tiptap/extension-mention/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-mention@3.23.4",
+      "purl": "pkg:npm/%40tiptap/extension-mention@3.23.6",
       "scope": "required",
       "type": "library",
-      "version": "3.23.4"
+      "version": "3.23.6"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.23.4",
+      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.23.6",
       "description": "paragraph extension for tiptap",
       "evidence": {
         "identity": [
@@ -14542,13 +14588,13 @@
           "value": "node_modules/@tiptap/extension-paragraph/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.23.4",
+      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.23.6",
       "scope": "required",
       "type": "library",
-      "version": "3.23.4"
+      "version": "3.23.6"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-placeholder@3.23.4",
+      "bom-ref": "pkg:npm/@tiptap/extension-placeholder@3.23.6",
       "description": "placeholder extension for tiptap",
       "evidence": {
         "identity": [
@@ -14603,13 +14649,13 @@
           "value": "node_modules/@tiptap/extension-placeholder/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-placeholder@3.23.4",
+      "purl": "pkg:npm/%40tiptap/extension-placeholder@3.23.6",
       "scope": "required",
       "type": "library",
-      "version": "3.23.4"
+      "version": "3.23.6"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-text@3.23.4",
+      "bom-ref": "pkg:npm/@tiptap/extension-text@3.23.6",
       "description": "text extension for tiptap",
       "evidence": {
         "identity": [
@@ -14664,13 +14710,13 @@
           "value": "node_modules/@tiptap/extension-text/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-text@3.23.4",
+      "purl": "pkg:npm/%40tiptap/extension-text@3.23.6",
       "scope": "required",
       "type": "library",
-      "version": "3.23.4"
+      "version": "3.23.6"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/pm@3.23.4",
+      "bom-ref": "pkg:npm/@tiptap/pm@3.23.6",
       "description": "prosemirror wrapper package for tiptap",
       "evidence": {
         "identity": [
@@ -14743,13 +14789,13 @@
           "value": "node_modules/@tiptap/pm/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/pm@3.23.4",
+      "purl": "pkg:npm/%40tiptap/pm@3.23.6",
       "scope": "required",
       "type": "library",
-      "version": "3.23.4"
+      "version": "3.23.6"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/react@3.23.4",
+      "bom-ref": "pkg:npm/@tiptap/react@3.23.6",
       "description": "React components for tiptap",
       "evidence": {
         "identity": [
@@ -15329,12 +15375,6 @@
             "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/analysis/margin-notes.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/analysis/scroll-markers.tsx#10"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/analysis/scroll-markers.tsx#11"
-          },
-          {
             "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/case-search-trigger.tsx#1"
           },
           {
@@ -15812,10 +15852,16 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#20"
+            "location": "packages/folio/src/components/DocumentOutline.tsx#15"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#21"
+            "location": "packages/folio/src/components/DocumentOutline.tsx#23"
+          },
+          {
+            "location": "packages/folio/src/components/DocxEditor.tsx#22"
+          },
+          {
+            "location": "packages/folio/src/components/DocxEditor.tsx#23"
           },
           {
             "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
@@ -15881,16 +15927,19 @@
             "location": "packages/folio/src/components/ui/StylePicker.tsx#8"
           },
           {
-            "location": "packages/folio/src/components/ui/Tooltip.tsx#8"
+            "location": "packages/folio/src/components/ui/Tooltip.tsx#1"
+          },
+          {
+            "location": "packages/folio/src/components/ui/Tooltip.tsx#2"
           },
           {
             "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#18"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#19"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#26"
           },
           {
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#12"
@@ -15962,6 +16011,9 @@
             "location": "packages/ui/src/components/preview-card.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/scroll-markers.tsx#23"
+          },
+          {
             "location": "packages/ui/src/components/select.tsx#3"
           },
           {
@@ -16001,13 +16053,13 @@
           "value": "node_modules/@tiptap/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/react@3.23.4",
+      "purl": "pkg:npm/%40tiptap/react@3.23.6",
       "scope": "required",
       "type": "library",
-      "version": "3.23.4"
+      "version": "3.23.6"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/suggestion@3.23.4",
+      "bom-ref": "pkg:npm/@tiptap/suggestion@3.23.6",
       "description": "suggestion plugin for tiptap",
       "evidence": {
         "identity": [
@@ -16074,10 +16126,10 @@
           "value": "node_modules/@tiptap/suggestion/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/suggestion@3.23.4",
+      "purl": "pkg:npm/%40tiptap/suggestion@3.23.6",
       "scope": "required",
       "type": "library",
-      "version": "3.23.4"
+      "version": "3.23.6"
     },
     {
       "authors": [
@@ -17339,6 +17391,9 @@
             "location": "apps/api/src/handlers/workspaces/archive.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/workspaces/cell-retry.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/workspaces/create.ts#1"
           },
           {
@@ -17567,7 +17622,7 @@
             "location": "apps/web/src/routes/_protected.chat/-queries.ts#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session.ts#5"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session.ts#6"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-download-service.ts#1"
@@ -17580,6 +17635,9 @@
           },
           {
             "location": "packages/errors/src/index.ts#1"
+          },
+          {
+            "location": "packages/folio/scripts/profile-editor.ts#2"
           },
           {
             "location": "packages/folio/src/core/docx/parser.ts#21"
@@ -17739,6 +17797,9 @@
           },
           {
             "location": "packages/folio/src/components/ui/AlignmentButtons.tsx#8"
+          },
+          {
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#28"
           }
         ]
       },
@@ -19197,6 +19258,9 @@
             "location": "apps/api/src/handlers/workspaces/archive.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/workspaces/cell-retry.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/workspaces/create.ts#2"
           },
           {
@@ -20275,6 +20339,9 @@
           },
           {
             "location": "apps/api/src/handlers/workspaces/anonymization-terms.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/cell-retry.ts#3"
           },
           {
             "location": "apps/api/src/handlers/workspaces/create.ts#3"
@@ -21547,7 +21614,7 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#21"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#32"
+            "location": "packages/folio/src/components/DocxEditor.tsx#34"
           },
           {
             "location": "packages/folio/src/components/DocxEditorHelpers.tsx#5"
@@ -22285,7 +22352,7 @@
             "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#20"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#21"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#29"
           }
         ]
       },
@@ -22387,6 +22454,9 @@
         ],
         "occurrences": [
           {
+            "location": "packages/folio/src/components/aiEditRange.ts#9"
+          },
+          {
             "location": "packages/folio/src/components/hooks/findReplaceSelection.ts#1"
           },
           {
@@ -22468,10 +22538,16 @@
             "location": "packages/folio/src/core/prosemirror/selectionState.ts#7"
           },
           {
+            "location": "packages/folio/src/core/prosemirror/utils/findParagraphByParaId.ts#7"
+          },
+          {
             "location": "packages/folio/src/core/prosemirror/validation.ts#1"
           },
           {
             "location": "packages/folio/src/core/utils/headingCollector.ts#1"
+          },
+          {
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#28"
           }
         ]
       },
@@ -22576,6 +22652,9 @@
             "location": "packages/folio/src/core/prosemirror/extensions/features/ListExtension.ts#8"
           },
           {
+            "location": "packages/folio/src/core/prosemirror/extensions/features/ParaIdAllocatorExtension.ts#16"
+          },
+          {
             "location": "packages/folio/src/core/prosemirror/extensions/features/ParagraphChangeTrackerExtension.ts#9"
           },
           {
@@ -22642,16 +22721,16 @@
             "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#21"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#22"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#30"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#28"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#36"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#27"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#29"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#28"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#30"
           }
         ]
       },
@@ -22709,10 +22788,10 @@
             "location": "packages/folio/src/core/prosemirror/extensions/nodes/TableExtension.ts#18"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#29"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#37"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#29"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#31"
           }
         ]
       },
@@ -22865,7 +22944,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#25"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#34"
+            "location": "packages/folio/src/components/DocxEditor.tsx#36"
           },
           {
             "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#22"
@@ -22874,22 +22953,22 @@
             "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#40"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#30"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#38"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#31"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#39"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#49"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#57"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#30"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#32"
           },
           {
             "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#40"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#49"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#57"
           }
         ]
       },
@@ -23102,6 +23181,9 @@
           },
           {
             "location": "packages/folio/src/components/TextContextMenu.tsx#9"
+          },
+          {
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#26"
           }
         ]
       },
@@ -23720,12 +23802,6 @@
             "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/analysis/margin-notes.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/analysis/scroll-markers.tsx#10"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/analysis/scroll-markers.tsx#11"
-          },
-          {
             "location": "apps/web/src/routes/_protected.knowledge/case/-components/case-viewer/case-search-trigger.tsx#1"
           },
           {
@@ -24203,10 +24279,16 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#20"
+            "location": "packages/folio/src/components/DocumentOutline.tsx#15"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#21"
+            "location": "packages/folio/src/components/DocumentOutline.tsx#23"
+          },
+          {
+            "location": "packages/folio/src/components/DocxEditor.tsx#22"
+          },
+          {
+            "location": "packages/folio/src/components/DocxEditor.tsx#23"
           },
           {
             "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
@@ -24272,16 +24354,19 @@
             "location": "packages/folio/src/components/ui/StylePicker.tsx#8"
           },
           {
-            "location": "packages/folio/src/components/ui/Tooltip.tsx#8"
+            "location": "packages/folio/src/components/ui/Tooltip.tsx#1"
+          },
+          {
+            "location": "packages/folio/src/components/ui/Tooltip.tsx#2"
           },
           {
             "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#18"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#19"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#26"
           },
           {
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#12"
@@ -24351,6 +24436,9 @@
           },
           {
             "location": "packages/ui/src/components/preview-card.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/scroll-markers.tsx#23"
           },
           {
             "location": "packages/ui/src/components/select.tsx#3"
@@ -24898,6 +24986,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell.ts#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/-hooks/use-sort-labels.ts#1"
@@ -25551,7 +25642,7 @@
             "location": "packages/folio/src/components/CommentsSidebar.tsx#22"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.tsx#35"
+            "location": "packages/folio/src/components/DocxEditor.tsx#37"
           },
           {
             "location": "packages/folio/src/components/DocxEditorHelpers.tsx#6"
@@ -25603,62 +25694,6 @@
       "scope": "required",
       "type": "library",
       "version": "4.12.0"
-    },
-    {
-      "authors": [
-        {
-          "name": "photopea (https://github.com/photopea)"
-        }
-      ],
-      "bom-ref": "pkg:npm/utif2@4.1.0",
-      "description": "Fast and advanced TIFF decoder",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/utif2/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/utif2/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "packages/folio/src/core/utils/tiffConverter.ts#11"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/photopea/UTIF.js"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "utif2",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/utif2/package.json"
-        }
-      ],
-      "purl": "pkg:npm/utif2@4.1.0",
-      "scope": "required",
-      "type": "library",
-      "version": "4.1.0"
     },
     {
       "bom-ref": "pkg:npm/uuid@11.1.0",
@@ -26051,10 +26086,10 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session.ts#6"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session.ts#7"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#37"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#40"
           }
         ]
       },
@@ -26086,9 +26121,6 @@
       ],
       "purl": "pkg:npm/y-prosemirror@1.3.7",
       "scope": "required",
-      "tags": [
-        "xml"
-      ],
       "type": "library",
       "version": "1.3.7"
     },
@@ -26120,16 +26152,16 @@
             "location": "apps/collab/src/server.ts#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session.ts#7"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session.ts#8"
           },
           {
             "location": "packages/folio/src/components/DocxEditor.props.ts#5"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#38"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#41"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#39"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#42"
           }
         ]
       },
