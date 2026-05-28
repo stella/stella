@@ -174,15 +174,17 @@ export const AssigneePicker = ({
   const assignedIds = new Set(assignees.map((a) => a.user.id));
 
   const invalidate = async () => {
-    await queryClient.invalidateQueries({
-      queryKey: taskKeys.detail(workspaceId, taskId),
-    });
-    await queryClient.invalidateQueries({
-      queryKey: entitiesKeys.all(workspaceId),
-    });
-    await queryClient.invalidateQueries({
-      queryKey: workspacesKeys.overview(workspaceId),
-    });
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: taskKeys.detail(workspaceId, taskId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: entitiesKeys.all(workspaceId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: workspacesKeys.overview(workspaceId),
+      }),
+    ]);
   };
 
   const queryKey = entitiesKeys.all(workspaceId);
