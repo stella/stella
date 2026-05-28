@@ -3,12 +3,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import {
-  BookOpenIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  FileCodeIcon,
   FileIcon,
   FilePlusIcon,
   FileTextIcon,
   FolderIcon,
-  MessageSquareTextIcon,
+  FolderPlusIcon,
   PencilIcon,
   PlusIcon,
   PowerIcon,
@@ -139,6 +141,20 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
     null,
   );
   const [renameValue, setRenameValue] = useState("");
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const toggleCollapsed = (path: string) => {
+    setCollapsedFolders((current) => {
+      const next = new Set(current);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  };
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -627,6 +643,8 @@ function EditSkillSheetBody({ onChanged, skill }: EditSkillSheetBodyProps) {
                 renamingResourceId={renamingResourceId}
                 selected={selected}
                 setRenameValue={setRenameValue}
+                collapsedFolders={collapsedFolders}
+                onToggleCollapsed={toggleCollapsed}
                 tree={tree}
               />
             )}
@@ -770,6 +788,7 @@ const sameSelection = (a: SelectedFile, b: SelectedFile) => {
 
 type SkillFileTreeProps = {
   bodyDirty: boolean;
+  collapsedFolders: Set<string>;
   createPending: boolean;
   deletePending: boolean;
   dirtyResourceIds: string[];
@@ -779,6 +798,7 @@ type SkillFileTreeProps = {
   onSelect: (next: SelectedFile) => void;
   onStartRename: (entry: TreeEntry) => void;
   onSubmitRename: (oldPath: string, newPath: string) => void;
+  onToggleCollapsed: (path: string) => void;
   renamePending: boolean;
   renameValue: string;
   renamingResourceId: string | null;
@@ -789,6 +809,7 @@ type SkillFileTreeProps = {
 
 function SkillFileTree({
   bodyDirty,
+  collapsedFolders,
   createPending,
   deletePending,
   dirtyResourceIds,
@@ -798,6 +819,7 @@ function SkillFileTree({
   onSelect,
   onStartRename,
   onSubmitRename,
+  onToggleCollapsed,
   renamePending,
   renameValue,
   renamingResourceId,
@@ -834,29 +856,39 @@ function SkillFileTree({
       {knownFolders.map((prefix) => {
         const group = groupByPrefix.get(prefix);
         const children = group?.children ?? [];
+        const collapsed = collapsedFolders.has(prefix);
         return (
           <li className="flex flex-col gap-1" key={prefix}>
             <FolderHeader
+              collapsed={collapsed}
               createPending={createPending}
               onCreateFile={onCreateFile}
+              onToggleCollapsed={() => onToggleCollapsed(prefix)}
               prefix={prefix}
             />
-            <TreeNodeList
-              deletePending={deletePending}
-              depth={1}
-              dirtySet={dirtySet}
-              nodes={children}
-              onCancelRename={onCancelRename}
-              onDeleteFile={onDeleteFile}
-              onSelect={onSelect}
-              onStartRename={onStartRename}
-              onSubmitRename={onSubmitRename}
-              renamePending={renamePending}
-              renameValue={renameValue}
-              renamingResourceId={renamingResourceId}
-              selected={selected}
-              setRenameValue={setRenameValue}
-            />
+            {!collapsed && (
+              <TreeNodeList
+                collapsedFolders={collapsedFolders}
+                deletePending={deletePending}
+                depth={1}
+                dirtySet={dirtySet}
+                nodes={children}
+                onCancelRename={onCancelRename}
+                onCreateFile={onCreateFile}
+                onDeleteFile={onDeleteFile}
+                onSelect={onSelect}
+                onStartRename={onStartRename}
+                onSubmitRename={onSubmitRename}
+                onToggleCollapsed={onToggleCollapsed}
+                parentPath={prefix}
+                createPending={createPending}
+                renamePending={renamePending}
+                renameValue={renameValue}
+                renamingResourceId={renamingResourceId}
+                selected={selected}
+                setRenameValue={setRenameValue}
+              />
+            )}
           </li>
         );
       })}
@@ -866,15 +898,20 @@ function SkillFileTree({
           onCreateFile={onCreateFile}
         />
         <TreeNodeList
+          collapsedFolders={collapsedFolders}
+          createPending={createPending}
           deletePending={deletePending}
           depth={1}
           dirtySet={dirtySet}
           nodes={rootGroup?.children ?? []}
           onCancelRename={onCancelRename}
+          onCreateFile={onCreateFile}
           onDeleteFile={onDeleteFile}
           onSelect={onSelect}
           onStartRename={onStartRename}
           onSubmitRename={onSubmitRename}
+          onToggleCollapsed={onToggleCollapsed}
+          parentPath=""
           renamePending={renamePending}
           renameValue={renameValue}
           renamingResourceId={renamingResourceId}
@@ -889,15 +926,20 @@ function SkillFileTree({
 const TREE_INDENT_PX = 14;
 
 type TreeNodeListProps = {
+  collapsedFolders: Set<string>;
+  createPending: boolean;
   deletePending: boolean;
   depth: number;
   dirtySet: Set<string>;
   nodes: TreeNode[];
   onCancelRename: () => void;
+  onCreateFile: (path: string, content: string) => boolean;
   onDeleteFile: (entry: TreeEntry) => void;
   onSelect: (next: SelectedFile) => void;
   onStartRename: (entry: TreeEntry) => void;
   onSubmitRename: (oldPath: string, newPath: string) => void;
+  onToggleCollapsed: (path: string) => void;
+  parentPath: string;
   renamePending: boolean;
   renameValue: string;
   renamingResourceId: string | null;
@@ -906,15 +948,20 @@ type TreeNodeListProps = {
 };
 
 function TreeNodeList({
+  collapsedFolders,
+  createPending,
   deletePending,
   depth,
   dirtySet,
   nodes,
   onCancelRename,
+  onCreateFile,
   onDeleteFile,
   onSelect,
   onStartRename,
   onSubmitRename,
+  onToggleCollapsed,
+  parentPath,
   renamePending,
   renameValue,
   renamingResourceId,
@@ -950,25 +997,43 @@ function TreeNodeList({
             </li>
           );
         }
+        const folderPath =
+          parentPath.length > 0 ? `${parentPath}/${node.name}` : node.name;
+        const collapsed = collapsedFolders.has(folderPath);
         return (
-          <li className="flex flex-col" key={`d:${depth}:${node.name}`}>
-            <NestedFolderHeader depth={depth} name={node.name} />
-            <TreeNodeList
-              deletePending={deletePending}
-              depth={depth + 1}
-              dirtySet={dirtySet}
-              nodes={node.children}
-              onCancelRename={onCancelRename}
-              onDeleteFile={onDeleteFile}
-              onSelect={onSelect}
-              onStartRename={onStartRename}
-              onSubmitRename={onSubmitRename}
-              renamePending={renamePending}
-              renameValue={renameValue}
-              renamingResourceId={renamingResourceId}
-              selected={selected}
-              setRenameValue={setRenameValue}
+          <li className="flex flex-col" key={`d:${folderPath}`}>
+            <NestedFolderHeader
+              collapsed={collapsed}
+              createPending={createPending}
+              depth={depth}
+              folderPath={folderPath}
+              name={node.name}
+              onCreateFile={onCreateFile}
+              onToggleCollapsed={() => onToggleCollapsed(folderPath)}
             />
+            {!collapsed && (
+              <TreeNodeList
+                collapsedFolders={collapsedFolders}
+                createPending={createPending}
+                deletePending={deletePending}
+                depth={depth + 1}
+                dirtySet={dirtySet}
+                nodes={node.children}
+                onCancelRename={onCancelRename}
+                onCreateFile={onCreateFile}
+                onDeleteFile={onDeleteFile}
+                onSelect={onSelect}
+                onStartRename={onStartRename}
+                onSubmitRename={onSubmitRename}
+                onToggleCollapsed={onToggleCollapsed}
+                parentPath={folderPath}
+                renamePending={renamePending}
+                renameValue={renameValue}
+                renamingResourceId={renamingResourceId}
+                selected={selected}
+                setRenameValue={setRenameValue}
+              />
+            )}
           </li>
         );
       })}
@@ -976,58 +1041,191 @@ function TreeNodeList({
   );
 }
 
-type NestedFolderHeaderProps = { depth: number; name: string };
+type NestedFolderHeaderProps = {
+  collapsed: boolean;
+  createPending: boolean;
+  depth: number;
+  folderPath: string;
+  name: string;
+  onCreateFile: (path: string, content: string) => boolean;
+  onToggleCollapsed: () => void;
+};
 
-function NestedFolderHeader({ depth, name }: NestedFolderHeaderProps) {
+function NestedFolderHeader({
+  collapsed,
+  createPending,
+  depth,
+  folderPath,
+  name,
+  onCreateFile,
+  onToggleCollapsed,
+}: NestedFolderHeaderProps) {
   return (
-    <div
-      className="text-muted-foreground flex items-center gap-1.5 py-1 text-xs"
-      style={{ paddingInlineStart: `${8 + depth * TREE_INDENT_PX}px` }}
-    >
-      <FolderIcon className="size-3.5" />
-      <span className="font-mono">{name}/</span>
-    </div>
+    <FolderHeaderShell
+      collapsed={collapsed}
+      createPending={createPending}
+      folderPath={folderPath}
+      label={`${name}/`}
+      onCreateFile={onCreateFile}
+      onToggleCollapsed={onToggleCollapsed}
+      paddingInlineStart={`${8 + depth * TREE_INDENT_PX}px`}
+    />
   );
 }
 
 type FolderHeaderProps = {
+  collapsed: boolean;
   createPending: boolean;
   onCreateFile: (path: string, content: string) => boolean;
+  onToggleCollapsed: () => void;
   prefix: string;
 };
 
 function FolderHeader({
+  collapsed,
   createPending,
   onCreateFile,
+  onToggleCollapsed,
   prefix,
 }: FolderHeaderProps) {
-  const tSkills = useTranslations("knowledge.agentSkills");
-  const [open, setOpen] = useState(false);
-  const [filename, setFilename] = useState("");
+  return (
+    <FolderHeaderShell
+      collapsed={collapsed}
+      createPending={createPending}
+      folderPath={prefix}
+      label={`${prefix}/`}
+      onCreateFile={onCreateFile}
+      onToggleCollapsed={onToggleCollapsed}
+      paddingInlineStart="8px"
+    />
+  );
+}
 
-  const submit = () => {
+type FolderHeaderShellProps = {
+  collapsed: boolean;
+  createPending: boolean;
+  folderPath: string;
+  label: string;
+  onCreateFile: (path: string, content: string) => boolean;
+  onToggleCollapsed: () => void;
+  paddingInlineStart: string;
+};
+
+function FolderHeaderShell({
+  collapsed,
+  createPending,
+  folderPath,
+  label,
+  onCreateFile,
+  onToggleCollapsed,
+  paddingInlineStart,
+}: FolderHeaderShellProps) {
+  const tSkills = useTranslations("knowledge.agentSkills");
+  const [newFileOpen, setNewFileOpen] = useState(false);
+  const [filename, setFilename] = useState("");
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [subfolder, setSubfolder] = useState("");
+  const [subfolderFilename, setSubfolderFilename] = useState("");
+
+  const submitNewFile = () => {
     const trimmed = filename.trim();
     if (!trimmed) {
       return;
     }
     const normalized = trimmed.endsWith(".md") ? trimmed : `${trimmed}.md`;
-    const ok = onCreateFile(`${prefix}/${normalized}`, "");
+    const ok = onCreateFile(`${folderPath}/${normalized}`, "");
     if (ok) {
       setFilename("");
-      setOpen(false);
+      setNewFileOpen(false);
+    }
+  };
+
+  const submitNewFolder = () => {
+    const folder = subfolder.trim();
+    const file = subfolderFilename.trim() || "README.md";
+    if (!folder) {
+      return;
+    }
+    const normalizedFile = file.endsWith(".md") ? file : `${file}.md`;
+    const ok = onCreateFile(`${folderPath}/${folder}/${normalizedFile}`, "");
+    if (ok) {
+      setSubfolder("");
+      setSubfolderFilename("");
+      setNewFolderOpen(false);
     }
   };
 
   return (
-    <div className="text-muted-foreground flex items-center gap-1.5 px-2 text-xs">
-      <FolderIcon className="size-3.5" />
-      <span className="font-mono">{prefix}/</span>
-      <Popover onOpenChange={setOpen} open={open}>
+    <div
+      className="text-muted-foreground flex items-center gap-1.5 py-1 text-xs"
+      style={{ paddingInlineStart }}
+    >
+      <button
+        aria-expanded={!collapsed}
+        className="hover:text-foreground flex flex-1 items-center gap-1.5 text-start"
+        onClick={onToggleCollapsed}
+        type="button"
+      >
+        {collapsed ? (
+          <ChevronRightIcon className="size-3.5" />
+        ) : (
+          <ChevronDownIcon className="size-3.5" />
+        )}
+        <FolderIcon className="size-3.5" />
+        <span className="font-mono">{label}</span>
+      </button>
+      <Popover onOpenChange={setNewFolderOpen} open={newFolderOpen}>
+        <PopoverTrigger
+          render={
+            <Button
+              aria-label={tSkills("newFolder")}
+              size="icon-sm"
+              variant="ghost"
+            >
+              <FolderPlusIcon className="size-3.5" />
+            </Button>
+          }
+        />
+        <PopoverContent className="flex w-72 flex-col gap-2 p-2">
+          <Input
+            autoFocus
+            onChange={(event) => setSubfolder(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setNewFolderOpen(false);
+              }
+            }}
+            placeholder={tSkills("newFolderNamePlaceholder")}
+            value={subfolder}
+          />
+          <Input
+            onChange={(event) => setSubfolderFilename(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                submitNewFolder();
+              }
+              if (event.key === "Escape") {
+                setNewFolderOpen(false);
+              }
+            }}
+            placeholder={tSkills("newFolderFilenamePlaceholder")}
+            value={subfolderFilename}
+          />
+          <Button
+            disabled={createPending || subfolder.trim().length === 0}
+            onClick={submitNewFolder}
+            size="sm"
+          >
+            {tSkills("newFolder")}
+          </Button>
+        </PopoverContent>
+      </Popover>
+      <Popover onOpenChange={setNewFileOpen} open={newFileOpen}>
         <PopoverTrigger
           render={
             <Button
               aria-label={tSkills("newFile")}
-              className="ms-auto"
               size="icon-sm"
               variant="ghost"
             >
@@ -1042,10 +1240,10 @@ function FolderHeader({
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
-                submit();
+                submitNewFile();
               }
               if (event.key === "Escape") {
-                setOpen(false);
+                setNewFileOpen(false);
               }
             }}
             placeholder={tSkills("newFileFilenamePlaceholder")}
@@ -1053,7 +1251,7 @@ function FolderHeader({
           />
           <Button
             disabled={createPending || filename.trim().length === 0}
-            onClick={submit}
+            onClick={submitNewFile}
             size="sm"
           >
             {tSkills("newFile")}
@@ -1180,7 +1378,9 @@ function ResourceRow({
         className="group/row flex items-center gap-1 rounded py-1 pe-1"
         style={{ paddingInlineStart }}
       >
-        <span className="text-muted-foreground">{kindIcon(entry.kind)}</span>
+        <span className="text-muted-foreground">
+          {fileIcon(entry.fileName)}
+        </span>
         <Input
           autoFocus
           className="h-7 flex-1 font-mono text-xs"
@@ -1222,7 +1422,9 @@ function ResourceRow({
         style={{ paddingInlineStart }}
         type="button"
       >
-        <span className="text-muted-foreground">{kindIcon(entry.kind)}</span>
+        <span className="text-muted-foreground">
+          {fileIcon(entry.fileName)}
+        </span>
         <span className="truncate font-mono text-xs">{entry.fileName}</span>
         {dirty && (
           <span
@@ -1313,15 +1515,29 @@ function FileRow({ dirty, icon, label, onClick, selected }: FileRowProps) {
   );
 }
 
-const kindIcon = (kind: string) => {
-  if (kind === "knowledge") {
-    return <BookOpenIcon className="size-4" />;
-  }
-  if (kind === "prompt") {
-    return <MessageSquareTextIcon className="size-4" />;
-  }
-  if (kind === "reference") {
+const CODE_EXTENSIONS = new Set([
+  "json",
+  "yml",
+  "yaml",
+  "toml",
+  "ts",
+  "tsx",
+  "js",
+  "jsx",
+  "py",
+  "rb",
+  "sh",
+]);
+const TEXT_EXTENSIONS = new Set(["md", "mdx", "txt", "csv", "tsv"]);
+
+const fileIcon = (fileName: string) => {
+  const dotIndex = fileName.lastIndexOf(".");
+  const ext = dotIndex === -1 ? "" : fileName.slice(dotIndex + 1).toLowerCase();
+  if (TEXT_EXTENSIONS.has(ext)) {
     return <FileTextIcon className="size-4" />;
+  }
+  if (CODE_EXTENSIONS.has(ext)) {
+    return <FileCodeIcon className="size-4" />;
   }
   return <FileIcon className="size-4" />;
 };
