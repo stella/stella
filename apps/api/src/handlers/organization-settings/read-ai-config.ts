@@ -2,7 +2,11 @@ import { Result } from "better-result";
 
 import { decryptAIConfig, maskApiKey } from "@/api/lib/ai-config-crypto";
 import { hasInstanceProvider } from "@/api/lib/ai-models";
-import type { DataRegion, OrgAIConfig } from "@/api/lib/ai-models";
+import type {
+  DataRegion,
+  OrgAIConfig,
+  OrgAIProviderConfig,
+} from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -29,6 +33,41 @@ type AIConfigResult = {
       overrideModels: OrgAIConfig["overrideModels"];
     }
 );
+
+const providerResponseRegion = (
+  providerConfig: OrgAIProviderConfig,
+): DataRegion => {
+  switch (providerConfig.provider) {
+    case "azure_foundry":
+    case "huggingface":
+      return "global";
+    default:
+      return providerConfig.region ?? "global";
+  }
+};
+
+type ProviderResponseExtras = {
+  endpoint?: string;
+  apiVersion?: string;
+};
+
+const providerResponseExtras = (
+  providerConfig: OrgAIProviderConfig,
+): ProviderResponseExtras => {
+  switch (providerConfig.provider) {
+    case "azure_foundry":
+      return {
+        endpoint: providerConfig.baseURL,
+        ...(providerConfig.apiVersion
+          ? { apiVersion: providerConfig.apiVersion }
+          : {}),
+      };
+    case "huggingface":
+      return { endpoint: providerConfig.baseURL };
+    default:
+      return {};
+  }
+};
 
 const config = {
   permissions: { organizationSettings: ["update"] },
@@ -83,16 +122,8 @@ const readAIConfig = createSafeRootHandler(
           providers: aiConfig.providers.map((providerConfig) => ({
             provider: providerConfig.provider,
             apiKeyMasked: maskApiKey(providerConfig.apiKey),
-            region:
-              providerConfig.provider === "azure_foundry"
-                ? "global"
-                : (providerConfig.region ?? "global"),
-            ...(providerConfig.provider === "azure_foundry"
-              ? {
-                  endpoint: providerConfig.baseURL,
-                  apiVersion: providerConfig.apiVersion,
-                }
-              : {}),
+            region: providerResponseRegion(providerConfig),
+            ...providerResponseExtras(providerConfig),
           })),
           overrideModels: aiConfig.overrideModels,
           instanceProvisioned,

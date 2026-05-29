@@ -14,6 +14,8 @@
  * - "mistral": Mistral AI (MISTRAL_API_KEY)
  * - "openai_compatible": Any OpenAI-compatible endpoint
  *   (OPENAI_API_KEY + AI_PROVIDER_BASE_URL)
+ * - "huggingface": HuggingFace Inference Endpoint (OpenAI-compatible)
+ *   (HUGGINGFACE_API_KEY + HUGGINGFACE_BASE_URL)
  *
  * When AI_PROVIDER is not set, auto-detects from available
  * API keys: OPENROUTER → Google → OpenAI → Azure → Anthropic → Mistral.
@@ -68,6 +70,7 @@ export const AI_PROVIDERS = [
   "anthropic",
   "mistral",
   "openai_compatible",
+  "huggingface",
 ] as const;
 
 export type AIProvider = (typeof AI_PROVIDERS)[number];
@@ -122,6 +125,12 @@ export const DEFAULT_MODELS = {
     reasoning: "default",
     pdf: "default",
   },
+  huggingface: {
+    fast: "speakleash/Bielik-1.5B-v3.0-Instruct",
+    chat: "speakleash/Bielik-11B-v2.3-Instruct",
+    reasoning: "speakleash/Bielik-11B-v2.3-Instruct",
+    pdf: "speakleash/Bielik-11B-v2.3-Instruct",
+  },
 } as const satisfies Record<AIProvider, Record<ModelRole, string>>;
 
 /**
@@ -154,6 +163,7 @@ export const BYOK_MODEL_OPTIONS = {
   ],
   openai: ["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.2"],
   azure_foundry: [],
+  huggingface: [],
   openrouter: [
     "google/gemini-3.1-pro-preview",
     "google/gemini-3.5-flash",
@@ -170,7 +180,10 @@ export const BYOK_MODEL_OPTIONS = {
 
 export type BYOKProvider = keyof typeof BYOK_MODEL_OPTIONS;
 
-const CUSTOM_BYOK_MODEL_PROVIDERS = new Set<BYOKProvider>(["azure_foundry"]);
+const CUSTOM_BYOK_MODEL_PROVIDERS = new Set<BYOKProvider>([
+  "azure_foundry",
+  "huggingface",
+]);
 
 export const isBYOKProvider = (
   provider: AIProvider,
@@ -343,6 +356,8 @@ const hasInstanceProviderCredentials = (provider: AIProvider): boolean => {
       return !!env.MISTRAL_API_KEY;
     case "openai_compatible":
       return !!(env.OPENAI_API_KEY && env.AI_PROVIDER_BASE_URL);
+    case "huggingface":
+      return !!(env.HUGGINGFACE_API_KEY && env.HUGGINGFACE_BASE_URL);
     default: {
       const _exhaustive: never = provider;
       return _exhaustive;
@@ -547,6 +562,21 @@ const createModelFactory = ({
       });
       return (id) => client(id);
     }
+    case "huggingface": {
+      const key =
+        apiKey ??
+        env.HUGGINGFACE_API_KEY ??
+        panic("HUGGINGFACE_API_KEY required for huggingface");
+      const url =
+        baseURL ??
+        env.HUGGINGFACE_BASE_URL ??
+        panic("HUGGINGFACE_BASE_URL required for huggingface");
+      const client = createOpenAI({
+        baseURL: url,
+        apiKey: key,
+      });
+      return (id) => client(id);
+    }
     default:
       // Exhaustive check: if a new provider is added to
       // AIProvider but not handled above, this errors at
@@ -583,7 +613,7 @@ export type OrgAIConfig = {
 };
 
 export type StandardOrgAIProviderConfig = {
-  provider: Exclude<AIProvider, "azure_foundry">;
+  provider: Exclude<AIProvider, "azure_foundry" | "huggingface">;
   /** Decrypted API key. */
   apiKey: string;
   /**
@@ -603,9 +633,21 @@ export type AzureFoundryOrgAIProviderConfig = {
   apiVersion?: string | undefined;
 };
 
+export type HuggingFaceOrgAIProviderConfig = {
+  provider: "huggingface";
+  /** Decrypted API key (HF user token or Inference Endpoint token). */
+  apiKey: string;
+  /**
+   * OpenAI-compatible base URL of the Inference Endpoint
+   * (e.g. https://<id>.endpoints.huggingface.cloud/v1).
+   */
+  baseURL: string;
+};
+
 export type OrgAIProviderConfig =
   | StandardOrgAIProviderConfig
-  | AzureFoundryOrgAIProviderConfig;
+  | AzureFoundryOrgAIProviderConfig
+  | HuggingFaceOrgAIProviderConfig;
 
 export type OrgAIModelSelection = {
   provider: AIProvider;
@@ -651,11 +693,17 @@ const byokCacheKey = (config: OrgAIProviderConfig): string => {
   const hasher = new Bun.CryptoHasher("sha256");
   hasher.update(config.provider);
   hasher.update(config.apiKey);
-  if (config.provider === "azure_foundry") {
-    hasher.update(config.baseURL);
-    hasher.update(resolveAzureApiVersion(config.apiVersion));
-  } else {
-    hasher.update(config.region ?? "global");
+  switch (config.provider) {
+    case "azure_foundry":
+      hasher.update(config.baseURL);
+      hasher.update(resolveAzureApiVersion(config.apiVersion));
+      break;
+    case "huggingface":
+      hasher.update(config.baseURL);
+      break;
+    default:
+      hasher.update(config.region ?? "global");
+      break;
   }
   const hash = hasher.digest("hex").slice(0, 16);
   return `${config.provider}:${hash}`;
@@ -677,12 +725,26 @@ const getCachedFactory = (config: OrgAIProviderConfig): ModelFactory => {
   const factory = createModelFactory({
     provider: config.provider,
     apiKey: config.apiKey,
-    ...(config.provider === "azure_foundry"
-      ? { baseURL: config.baseURL, apiVersion: config.apiVersion }
-      : { region: config.region }),
+    ...factoryExtras(config),
   });
   byokCache.set(key, factory);
   return factory;
+};
+
+type FactoryExtras = Pick<
+  ModelFactoryOptions,
+  "baseURL" | "apiVersion" | "region"
+>;
+
+const factoryExtras = (config: OrgAIProviderConfig): FactoryExtras => {
+  switch (config.provider) {
+    case "azure_foundry":
+      return { baseURL: config.baseURL, apiVersion: config.apiVersion };
+    case "huggingface":
+      return { baseURL: config.baseURL };
+    default:
+      return { region: config.region };
+  }
 };
 
 // -- Instance-level singleton (lazy) ----------------------------
@@ -1098,6 +1160,18 @@ const withInstrumentation = (
 
 // -- Public API -------------------------------------------------
 
+const providerRegion = (
+  config: OrgAIProviderConfig,
+): DataRegion | undefined => {
+  switch (config.provider) {
+    case "azure_foundry":
+    case "huggingface":
+      return undefined;
+    default:
+      return config.region;
+  }
+};
+
 const getPrimaryOrgProvider = (config: OrgAIConfig): OrgAIProviderConfig =>
   config.providers.at(0) ?? panic("Org AI config has no configured providers");
 
@@ -1232,10 +1306,7 @@ export const getModelInfoForRole = (
       keySource: "byok",
       provider: providerConfig.provider,
       modelId: selection.modelId,
-      region:
-        providerConfig.provider === "azure_foundry"
-          ? undefined
-          : providerConfig.region,
+      region: providerRegion(providerConfig),
     };
   }
 
@@ -1260,10 +1331,7 @@ export const getModelInfoById = (
       keySource: "byok",
       provider: providerConfig.provider,
       modelId: override.modelId,
-      region:
-        providerConfig.provider === "azure_foundry"
-          ? undefined
-          : providerConfig.region,
+      region: providerRegion(providerConfig),
     };
   }
 

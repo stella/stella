@@ -37,6 +37,7 @@ const BYOK_PROVIDER_VALUES = [
   "azure_foundry",
   "anthropic",
   "mistral",
+  "huggingface",
 ] as const satisfies readonly AIProvider[];
 type BYOKProvider = (typeof BYOK_PROVIDER_VALUES)[number];
 
@@ -220,21 +221,48 @@ const updateAIConfig = createSafeRootHandler(
       providers: orgConfig.providers.map((providerConfig) => ({
         provider: providerConfig.provider,
         apiKeyMasked: maskApiKey(providerConfig.apiKey),
-        region:
-          providerConfig.provider === "azure_foundry"
-            ? "global"
-            : (providerConfig.region ?? "global"),
-        ...(providerConfig.provider === "azure_foundry"
-          ? {
-              endpoint: providerConfig.baseURL,
-              apiVersion: providerConfig.apiVersion,
-            }
-          : {}),
+        region: providerResponseRegion(providerConfig),
+        ...providerResponseExtras(providerConfig),
       })),
       overrideModels: orgConfig.overrideModels,
     });
   },
 );
+
+type ProviderResponseExtras = {
+  endpoint?: string;
+  apiVersion?: string;
+};
+
+const providerResponseRegion = (
+  providerConfig: OrgAIProviderConfig,
+): DataRegion => {
+  switch (providerConfig.provider) {
+    case "azure_foundry":
+    case "huggingface":
+      return "global";
+    default:
+      return providerConfig.region ?? "global";
+  }
+};
+
+const providerResponseExtras = (
+  providerConfig: OrgAIProviderConfig,
+): ProviderResponseExtras => {
+  switch (providerConfig.provider) {
+    case "azure_foundry":
+      return {
+        endpoint: providerConfig.baseURL,
+        ...(providerConfig.apiVersion
+          ? { apiVersion: providerConfig.apiVersion }
+          : {}),
+      };
+    case "huggingface":
+      return { endpoint: providerConfig.baseURL };
+    default:
+      return {};
+  }
+};
 
 type ValidationResult = ProviderProbeResult;
 
@@ -252,6 +280,79 @@ type ProviderConfigResult =
       providers: (OrgAIProviderConfig & { provider: BYOKProvider })[];
     }
   | { valid: false; error: string };
+
+type ResolveExternalProviderArgs = {
+  apiKey: string;
+  providerInput: ProviderConfigInput;
+  existingProvider: OrgAIProviderConfig | undefined;
+};
+
+type ResolveExternalProviderResult<TConfig extends OrgAIProviderConfig> =
+  | { valid: true; config: TConfig }
+  | { valid: false; error: string };
+
+const resolveAzureProviderConfig = ({
+  apiKey,
+  providerInput,
+  existingProvider,
+}: ResolveExternalProviderArgs): ResolveExternalProviderResult<
+  OrgAIProviderConfig & { provider: "azure_foundry" }
+> => {
+  const existingEndpoint =
+    existingProvider?.provider === "azure_foundry"
+      ? existingProvider.baseURL
+      : undefined;
+  const endpoint = providerInput.endpoint?.trim() || existingEndpoint;
+  if (!endpoint) {
+    return { valid: false, error: "Endpoint is required for azure_foundry" };
+  }
+
+  const normalized = normalizeAzureFoundryBaseURL(endpoint);
+  if (!normalized.ok) {
+    return { valid: false, error: normalized.error };
+  }
+
+  const existingApiVersion =
+    existingProvider?.provider === "azure_foundry"
+      ? existingProvider.apiVersion
+      : undefined;
+  const apiVersion = providerInput.apiVersion?.trim() || existingApiVersion;
+
+  return {
+    valid: true,
+    config: {
+      provider: "azure_foundry",
+      apiKey,
+      baseURL: normalized.baseURL,
+      ...(apiVersion ? { apiVersion } : {}),
+    },
+  };
+};
+
+const resolveHuggingFaceProviderConfig = ({
+  apiKey,
+  providerInput,
+  existingProvider,
+}: ResolveExternalProviderArgs): ResolveExternalProviderResult<
+  OrgAIProviderConfig & { provider: "huggingface" }
+> => {
+  const existingEndpoint =
+    existingProvider?.provider === "huggingface"
+      ? existingProvider.baseURL
+      : undefined;
+  const endpoint = providerInput.endpoint?.trim() || existingEndpoint;
+  if (!endpoint) {
+    return { valid: false, error: "Endpoint is required for huggingface" };
+  }
+  return {
+    valid: true,
+    config: {
+      provider: "huggingface",
+      apiKey,
+      baseURL: endpoint.replace(/\/$/u, ""),
+    },
+  };
+};
 
 const resolveProviderConfigs = (
   providers: readonly ProviderConfigInput[],
@@ -284,35 +385,28 @@ const resolveProviderConfigs = (
     }
 
     if (providerInput.provider === "azure_foundry") {
-      const existingEndpoint =
-        existingProvider?.provider === "azure_foundry"
-          ? existingProvider.baseURL
-          : undefined;
-      const endpoint = providerInput.endpoint?.trim() || existingEndpoint;
-      if (!endpoint) {
-        return {
-          valid: false,
-          error: "Endpoint is required for azure_foundry",
-        };
-      }
-
-      const normalized = normalizeAzureFoundryBaseURL(endpoint);
-      if (!normalized.ok) {
-        return { valid: false, error: normalized.error };
-      }
-
-      const existingApiVersion =
-        existingProvider?.provider === "azure_foundry"
-          ? existingProvider.apiVersion
-          : undefined;
-      const apiVersion = providerInput.apiVersion?.trim() || existingApiVersion;
-
-      resolvedProviders.push({
-        provider: providerInput.provider,
+      const resolved = resolveAzureProviderConfig({
         apiKey,
-        baseURL: normalized.baseURL,
-        ...(apiVersion ? { apiVersion } : {}),
+        providerInput,
+        existingProvider,
       });
+      if (!resolved.valid) {
+        return resolved;
+      }
+      resolvedProviders.push(resolved.config);
+      continue;
+    }
+
+    if (providerInput.provider === "huggingface") {
+      const resolved = resolveHuggingFaceProviderConfig({
+        apiKey,
+        providerInput,
+        existingProvider,
+      });
+      if (!resolved.valid) {
+        return resolved;
+      }
+      resolvedProviders.push(resolved.config);
       continue;
     }
 
@@ -329,15 +423,18 @@ const resolveProviderConfigs = (
       };
     }
 
+    const existingRegion =
+      existingProvider &&
+      existingProvider.provider !== "azure_foundry" &&
+      existingProvider.provider !== "huggingface"
+        ? existingProvider.region
+        : undefined;
+
     resolvedProviders.push({
       provider: providerInput.provider,
       apiKey,
       region: supportsRegion(providerInput.provider)
-        ? (providerInput.region ??
-          (existingProvider?.provider === "azure_foundry"
-            ? undefined
-            : existingProvider?.region) ??
-          "global")
+        ? (providerInput.region ?? existingRegion ?? "global")
         : "global",
     });
   }
@@ -454,30 +551,40 @@ const shouldValidateProviderConfig = ({
     return true;
   }
 
-  if (providerConfig.provider !== "azure_foundry") {
-    return false;
+  if (providerConfig.provider === "azure_foundry") {
+    const existingProvider = existingConfig?.providers.find(
+      (candidate) => candidate.provider === providerConfig.provider,
+    );
+    if (existingProvider?.provider !== "azure_foundry") {
+      return true;
+    }
+
+    if (
+      providerConfig.baseURL !== existingProvider.baseURL ||
+      providerConfig.apiVersion !== existingProvider.apiVersion
+    ) {
+      return true;
+    }
+
+    return MODEL_ROLES.some(
+      (role) =>
+        overrideModels[role].provider === "azure_foundry" &&
+        existingConfig?.overrideModels[role]?.modelId !==
+          overrideModels[role].modelId,
+    );
   }
 
-  const existingProvider = existingConfig?.providers.find(
-    (candidate) => candidate.provider === providerConfig.provider,
-  );
-  if (existingProvider?.provider !== "azure_foundry") {
-    return true;
+  if (providerConfig.provider === "huggingface") {
+    const existingProvider = existingConfig?.providers.find(
+      (candidate) => candidate.provider === providerConfig.provider,
+    );
+    if (existingProvider?.provider !== "huggingface") {
+      return true;
+    }
+    return providerConfig.baseURL !== existingProvider.baseURL;
   }
 
-  if (
-    providerConfig.baseURL !== existingProvider.baseURL ||
-    providerConfig.apiVersion !== existingProvider.apiVersion
-  ) {
-    return true;
-  }
-
-  return MODEL_ROLES.some(
-    (role) =>
-      overrideModels[role].provider === "azure_foundry" &&
-      existingConfig?.overrideModels[role]?.modelId !==
-        overrideModels[role].modelId,
-  );
+  return false;
 };
 
 // Settings save tolerates a slower upstream than onboarding's probe:
@@ -497,20 +604,28 @@ const validateProviderKey = async (
   providerConfig: OrgAIProviderConfig & { provider: BYOKProvider },
   overrideModels: Record<ModelRole, OrgAIModelSelection>,
 ): Promise<ValidationResult> => {
+  const probeEndpoint =
+    providerConfig.provider === "azure_foundry" ||
+    providerConfig.provider === "huggingface"
+      ? providerConfig.baseURL
+      : undefined;
+  const probeApiVersion =
+    providerConfig.provider === "azure_foundry"
+      ? providerConfig.apiVersion
+      : undefined;
+  const probeAzureDeployments =
+    providerConfig.provider === "azure_foundry"
+      ? collectAzureDeployments(overrideModels)
+      : undefined;
+
   const result = await Result.tryPromise({
     try: async () =>
       await probeProvider(
         providerConfig.provider,
         providerConfig.apiKey,
-        providerConfig.provider === "azure_foundry"
-          ? providerConfig.baseURL
-          : undefined,
-        providerConfig.provider === "azure_foundry"
-          ? providerConfig.apiVersion
-          : undefined,
-        providerConfig.provider === "azure_foundry"
-          ? collectAzureDeployments(overrideModels)
-          : undefined,
+        probeEndpoint,
+        probeApiVersion,
+        probeAzureDeployments,
         SETTINGS_PROBE_TIMEOUT_MS,
       ),
     catch: (error: unknown) =>
