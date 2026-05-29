@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
 import { properties, propertyDependencies } from "@/api/db/schema";
@@ -64,14 +64,15 @@ const createPropertiesBatch = createSafeHandler(
           }
         }
         if (allDependencyIds.size > 0) {
-          const dependencyRows = await tx.query.properties.findMany({
-            where: (table, { and, eq, inArray }) =>
+          const dependencyRows = await tx
+            .select({ id: properties.id })
+            .from(properties)
+            .where(
               and(
-                eq(table.workspaceId, workspaceId),
-                inArray(table.id, [...allDependencyIds]),
+                eq(properties.workspaceId, workspaceId),
+                inArray(properties.id, [...allDependencyIds]),
               ),
-            columns: { id: true },
-          });
+            );
           if (dependencyRows.length !== allDependencyIds.size) {
             return {
               ok: false as const,
