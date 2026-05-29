@@ -778,7 +778,7 @@ const stripCacheMarkersFromPrompt = (
       cleanedProviderOptions !== undefined
         ? { providerOptions: cleanedProviderOptions }
         : {};
-    if (message.role === "system") {
+    if (message.role === "system" || typeof message.content === "string") {
       return { ...message, ...providerOptionsPatch };
     }
     return {
