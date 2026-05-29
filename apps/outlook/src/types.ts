@@ -1,3 +1,5 @@
+import type { SafeId } from "@stll/api/types";
+
 export type MailAddress = {
   email: string;
   name: string;
@@ -40,8 +42,8 @@ export type AttachmentDownloadResult =
 
 export type WorkspaceSummary = {
   clientName: string | null;
-  id: string;
-  lastActivityAt: string | Date | null;
+  id: SafeId<"workspace">;
+  lastActivityAt: Date | string | null;
   name: string;
   reference: string | null;
 };
