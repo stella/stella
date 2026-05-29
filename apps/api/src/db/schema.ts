@@ -1366,6 +1366,7 @@ export const PENDING_UPLOAD_STATUSES = [
 export const PENDING_UPLOAD_PURPOSES = [
   "entity_create",
   "entity_version",
+  "agent_skill",
 ] as const;
 
 export type PendingUploadPurposeData =
@@ -1376,6 +1377,13 @@ export type PendingUploadPurposeData =
   | {
       type: "entity_version";
       entityId: SafeId<"entity">;
+    }
+  | {
+      type: "agent_skill";
+      // "team" requires admin/owner role; "private" is per-user.
+      // Kept inline (not aliased to `AgentSkillScope`) because that
+      // type is declared further down the file.
+      scope: "team" | "private";
     };
 
 export type PendingUploadFinalizedResult =
@@ -1394,6 +1402,12 @@ export type PendingUploadFinalizedResult =
       versionNumber: number;
       fileId: string;
       fileName: string;
+    }
+  | {
+      type: "agent_skill";
+      skillId: SafeId<"agentSkill">;
+      name: string;
+      version: string;
     };
 
 export const pendingUploads = p.pgTable(

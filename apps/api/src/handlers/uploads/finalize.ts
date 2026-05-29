@@ -24,6 +24,7 @@ import { t } from "elysia";
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { pendingUploads } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
+import { finalizeAgentSkill } from "@/api/handlers/uploads/agent-skill";
 import { finalizeEntityCreate } from "@/api/handlers/uploads/entity-create";
 import { finalizeEntityVersion } from "@/api/handlers/uploads/entity-version";
 import {
@@ -62,6 +63,7 @@ const finalizeUpload = createSafeHandler(
     session,
     workspaceId,
     user,
+    memberRole,
     params,
     recordAuditEvent,
   }) {
@@ -143,6 +145,7 @@ const finalizeUpload = createSafeHandler(
       organizationId: session.activeOrganizationId,
       workspaceId,
       userId: user.id,
+      memberRole,
       safeDb,
       recordAuditEvent,
     });
@@ -206,6 +209,7 @@ type RunFinalizeProps = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
+  memberRole: { role: string };
   safeDb: SafeDb;
   recordAuditEvent: AuditRecorder;
 };
@@ -228,6 +232,7 @@ const runFinalize = async function* ({
   organizationId,
   workspaceId,
   userId,
+  memberRole,
   safeDb,
   recordAuditEvent,
 }: RunFinalizeProps): AsyncGenerator<
@@ -325,10 +330,37 @@ const runFinalize = async function* ({
     scanWarnings,
   };
 
-  const purposeOk =
-    purposeData.type === "entity_create"
-      ? yield* finalizeEntityCreate({ ...domainArgs, purposeData })
-      : yield* finalizeEntityVersion({ ...domainArgs, purposeData });
+  // Dispatch on purposeData. Each variant is independent; the
+  // `purposeData` field is the source of truth (it carries the
+  // discriminator), and the body schemas at presign time guarantee
+  // it matches the URL purpose.
+  type RunAnyPurpose = Awaited<
+    ReturnType<
+      | typeof finalizeEntityCreate
+      | typeof finalizeEntityVersion
+      | typeof finalizeAgentSkill
+    >
+  > extends AsyncGenerator<unknown, infer R, unknown>
+    ? R
+    : never;
+  let purposeOk: RunAnyPurpose;
+  if (purposeData.type === "entity_create") {
+    purposeOk = yield* finalizeEntityCreate({ ...domainArgs, purposeData });
+  } else if (purposeData.type === "entity_version") {
+    purposeOk = yield* finalizeEntityVersion({ ...domainArgs, purposeData });
+  } else {
+    purposeOk = yield* finalizeAgentSkill({
+      safeDb,
+      recordAuditEvent,
+      organizationId,
+      userId,
+      memberRole,
+      fileBuffer,
+      declaredName: claimed.declaredName,
+      declaredMime: claimed.declaredMime,
+      scope: purposeData.scope,
+    });
+  }
   if (purposeOk.status === "error") {
     return purposeOk;
   }
