@@ -438,34 +438,80 @@ export const DocumentAiSourceBar = ({
 };
 
 /**
- * Walk the rendered folio DOM for the layout page that owns the
- * cited block. The editor lays paragraphs into `div.layout-page`
- * containers carrying `data-page-number`, and tags each paragraph
- * with both `data-para-id` (the Word `w14:paraId` we store in the
- * citation) and `data-block-id` (the sequential layout id). Probe
- * paraId first since that's what citations actually carry; fall
- * back to block-id for the seq-N fallback case. Returns `null`
- * while the editor is still mounting or if the block is on a page
- * that hasn't been laid out yet.
+ * Resolve the page for a folio citation by walking the editor's
+ * two parallel DOM trees:
+ *
+ * - `.paged-editor__hidden-pm` is the ProseMirror source tree.
+ *   Each paragraph carries `data-para-id` (the Word `w14:paraId`
+ *   we store in the citation) but no page metadata — it lives
+ *   outside the paginated layout.
+ * - `.layout-page` is the rendered paginated tree. Each visible
+ *   paragraph is tagged `data-block-id="block-N"` (sequential, NOT
+ *   the paraId) and the enclosing page carries
+ *   `data-page-number`.
+ *
+ * The two trees are walked in the same order, so the Nth paraId
+ * paragraph in the PM tree corresponds to the Nth `block-N` in
+ * the layout. We use that ordinal as the bridge.
+ *
+ * Returns `null` while the editor is still mounting or if the
+ * block lives on a page that hasn't been paginated yet (folio
+ * lays out lazily; later pages only enter the DOM after a scroll
+ * to them).
  */
+const getPageNumberFromElement = (element: Element): number | null => {
+  const pageEl = element.closest("[data-page-number]");
+  const raw = pageEl?.getAttribute("data-page-number") ?? null;
+  const parsed = raw === null ? Number.NaN : Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 const findFolioBlockPage = (blockId: string): number | null => {
   const escaped =
     typeof CSS !== "undefined" && typeof CSS.escape === "function"
       ? CSS.escape(blockId)
       : blockId.replace(/"/gu, '\\"');
-  const element =
-    document.querySelector(`[data-para-id="${escaped}"]`) ??
-    document.querySelector(`[data-block-id="${escaped}"]`);
-  if (!element) {
-    return null;
+
+  // paraId path: find the paragraph in the PM source tree, take
+  // its ordinal, look up the same ordinal in the layout tree.
+  const pmParagraph = document.querySelector(
+    `.paged-editor__hidden-pm [data-para-id="${escaped}"]`,
+  );
+  if (pmParagraph) {
+    const pmParagraphs = Array.from(
+      document.querySelectorAll(".paged-editor__hidden-pm [data-para-id]"),
+    );
+    const ordinal = pmParagraphs.indexOf(pmParagraph);
+    if (ordinal >= 0) {
+      const layoutBlocks = document.querySelectorAll(
+        ".layout-page [data-block-id]",
+      );
+      const layoutBlock = layoutBlocks[ordinal];
+      if (layoutBlock) {
+        const page = getPageNumberFromElement(layoutBlock);
+        if (page !== null) {
+          return page;
+        }
+      }
+    }
   }
-  const pageEl = element.closest("[data-page-number]");
-  if (!pageEl) {
-    return null;
+
+  // Direct fallback for `seq-NNNN` ids — those map to layout
+  // block ids by extracting the numeric suffix.
+  const seqMatch = /^seq-(\d+)$/u.exec(blockId);
+  if (seqMatch) {
+    const direct = document.querySelector(
+      `.layout-page [data-block-id="block-${Number.parseInt(seqMatch[1] ?? "0", 10)}"]`,
+    );
+    if (direct) {
+      const page = getPageNumberFromElement(direct);
+      if (page !== null) {
+        return page;
+      }
+    }
   }
-  const raw = pageEl.getAttribute("data-page-number");
-  const parsed = raw === null ? Number.NaN : Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) ? parsed : null;
+
+  return null;
 };
 
 /**
