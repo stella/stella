@@ -34,6 +34,7 @@ import { InlineOptionEditor } from "@/routes/_protected.workspaces/$workspaceId/
 import { PropertyPromptInput } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
 import type { PropertyPromptFieldHandle } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
 import { usePropertiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
+import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import {
   useCreatePropertiesBatch,
   useSuggestPrompt,
@@ -227,6 +228,7 @@ type BulkBodyProps = {
 const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
   const t = useTranslations();
   const batch = useCreatePropertiesBatch({ workspaceId });
+  const startWorkflow = useStartWorkflow(workspaceId);
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
 
   const fileProperties = useMemo<FileChip[]>(
@@ -307,6 +309,12 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
     });
     try {
       await batch.mutateAsync({ items });
+      // Created columns with AI prompts need a workflow run for the
+      // extraction to actually populate cells; manual columns don't.
+      // Same convention the single-column dialog uses.
+      if (items.some((item) => item.toolType === "ai-model")) {
+        void startWorkflow();
+      }
       stellaToast.add({
         title:
           items.length === 1
