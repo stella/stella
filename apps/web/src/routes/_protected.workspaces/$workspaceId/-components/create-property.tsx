@@ -2,7 +2,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
-import { AtSignIcon, FileTextIcon, PlusIcon, XIcon } from "lucide-react";
+import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -13,12 +13,6 @@ import {
   DialogTrigger,
 } from "@stll/ui/components/dialog";
 import { Input } from "@stll/ui/components/input";
-import {
-  Popover,
-  PopoverClose,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
@@ -31,10 +25,14 @@ import type {
 import {
   COMPOSER_CARD_CLASS,
   isCreatableContentType,
+  ReadingFromRow,
   TypeChipsRow,
   useChipDefinitions,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/composer-primitives";
-import type { CreatableContentType } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/composer-primitives";
+import type {
+  CreatableContentType,
+  FileChip,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/properties/composer-primitives";
 import { InlineOptionEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/inline-option-editor";
 import { PropertyPromptInput } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
 import type { PropertyPromptFieldHandle } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
@@ -687,12 +685,13 @@ const PropertyComposerBody = ({
       </header>
 
       <div className="flex flex-col gap-3.5 px-5 pt-1 pb-4">
-        <div className="bg-muted/24 flex items-center rounded-[9px] border px-1 py-0.5">
+        <div className="bg-muted/24 flex items-center rounded-[9px] border px-3 py-0.5">
           <Input
             autoComplete="off"
             autoFocus
-            className="text-foreground placeholder:text-foreground-label border-0 bg-transparent text-sm font-medium shadow-none focus-visible:ring-0 focus-visible:outline-none"
+            className="text-foreground placeholder:text-foreground-label px-0 text-sm font-medium"
             onChange={(e) => setName(e.target.value)}
+            unstyled
             onKeyDown={(e) => {
               if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && canSubmit) {
                 e.preventDefault();
@@ -777,8 +776,6 @@ const PropertyComposerBody = ({
     </>
   );
 };
-
-type FileChip = { id: string; name: string };
 
 type ComposerCardProps = {
   workspaceId: string;
@@ -887,107 +884,5 @@ const ManualTypeRow = ({
         typeChanged={typeChanged}
       />
     </div>
-  );
-};
-
-type ReadingFromRowProps = {
-  fileChips: FileChip[];
-  onRemoveFile: (id: string) => void;
-  availableFiles?: FileChip[];
-  addFile?: (id: string) => void;
-};
-
-const ReadingFromRow = ({
-  fileChips,
-  onRemoveFile,
-  availableFiles,
-  addFile,
-}: ReadingFromRowProps) => {
-  const t = useTranslations();
-  const canAdd =
-    addFile !== undefined &&
-    availableFiles !== undefined &&
-    availableFiles.length > 0;
-
-  return (
-    <div className="text-muted-foreground flex items-center gap-1.5 text-[11.5px]">
-      <span className="inline-flex items-center gap-1">
-        <AtSignIcon className="size-2.5" />
-        {t("workspaces.properties.readingFrom")}
-      </span>
-      {fileChips.map((chip) => (
-        <ReadingChip
-          key={chip.id}
-          label={chip.name || t("workspaces.properties.documentsLabel")}
-          {...(fileChips.length > 1
-            ? { onRemove: () => onRemoveFile(chip.id) }
-            : {})}
-        />
-      ))}
-      {canAdd && (
-        <Popover>
-          <PopoverTrigger
-            render={
-              <Button
-                className="text-foreground-label hover:text-foreground gap-0.5 px-1 text-[11.5px]"
-                size="xs"
-                type="button"
-                variant="ghost"
-              />
-            }
-          >
-            <PlusIcon className="size-2.5" />
-            {t("workspaces.properties.addReadingSource")}
-          </PopoverTrigger>
-          <PopoverPopup className="*:data-[slot=popover-viewport]:p-1!">
-            <div className="flex w-48 flex-col gap-0.5">
-              {availableFiles.map((file) => (
-                <PopoverClose
-                  key={file.id}
-                  render={
-                    <Button
-                      className="justify-start gap-2"
-                      onClick={() => addFile(file.id)}
-                      size="sm"
-                      type="button"
-                      variant="ghost"
-                    />
-                  }
-                >
-                  <FileTextIcon className="text-muted-foreground size-3" />
-                  <span className="truncate">{file.name}</span>
-                </PopoverClose>
-              ))}
-            </div>
-          </PopoverPopup>
-        </Popover>
-      )}
-    </div>
-  );
-};
-
-type ReadingChipProps = {
-  label: string;
-  onRemove?: () => void;
-};
-
-const ReadingChip = ({ label, onRemove }: ReadingChipProps) => {
-  const t = useTranslations();
-
-  return (
-    <span className="bg-muted/64 group inline-flex h-6 items-center gap-1 rounded-md px-2 text-[11.5px]">
-      <FileTextIcon className="size-3" />
-      {label}
-      {onRemove && (
-        <button
-          aria-label={t("common.remove")}
-          className="text-foreground-placeholder hover:text-foreground ms-0.5 -me-1 inline-flex size-3.5 items-center justify-center opacity-0 group-hover:opacity-100"
-          onClick={onRemove}
-          type="button"
-        >
-          <XIcon className="size-2.5" />
-        </button>
-      )}
-    </span>
   );
 };

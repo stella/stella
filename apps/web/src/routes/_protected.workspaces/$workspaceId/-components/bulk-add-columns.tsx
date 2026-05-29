@@ -1,5 +1,6 @@
 import { Suspense, useCallback, useMemo, useRef, useState } from "react";
 
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { PlusIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -17,29 +18,36 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import {
   COMPOSER_CARD_CLASS,
+  ReadingFromRow,
   TypeChipsRow,
   useChipDefinitions,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/composer-primitives";
-import type { CreatableContentType } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/composer-primitives";
+import type {
+  CreatableContentType,
+  FileChip,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/properties/composer-primitives";
 import { PropertyPromptInput } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
 import type { PropertyPromptFieldHandle } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
 import { usePropertiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
 import { useCreatePropertiesBatch } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
 import type { CreatePropertySpec } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
+import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 
 type Draft = {
   id: number;
   name: string;
   prompt: string;
   mentions: string[];
+  fileIds: string[];
   contentType: CreatableContentType;
 };
 
-const makeEmptyDraft = (id: number): Draft => ({
+const makeEmptyDraft = (id: number, defaultFileIds: string[]): Draft => ({
   id,
   name: "",
   prompt: "",
   mentions: [],
+  fileIds: defaultFileIds,
   contentType: "text",
 });
 
@@ -170,7 +178,23 @@ type BulkBodyProps = {
 const BulkBody = ({ workspaceId, onClose }: BulkBodyProps) => {
   const t = useTranslations();
   const batch = useCreatePropertiesBatch({ workspaceId });
-  const [drafts, setDrafts] = useState<Draft[]>(() => [makeEmptyDraft(0)]);
+  const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
+
+  const fileProperties = useMemo<FileChip[]>(
+    () =>
+      properties
+        .filter((p) => p.content.type === "file")
+        .map((p) => ({ id: p.id, name: p.name })),
+    [properties],
+  );
+  const defaultFileIds = useMemo(
+    () => fileProperties.map((p) => p.id),
+    [fileProperties],
+  );
+
+  const [drafts, setDrafts] = useState<Draft[]>(() => [
+    makeEmptyDraft(0, defaultFileIds),
+  ]);
   const nextId = useNextId(drafts.length);
 
   const updateDraft = useCallback((id: number, patch: Partial<Draft>) => {
@@ -186,8 +210,8 @@ const BulkBody = ({ workspaceId, onClose }: BulkBodyProps) => {
   }, []);
 
   const addDraft = useCallback(() => {
-    setDrafts((prev) => [...prev, makeEmptyDraft(nextId())]);
-  }, [nextId]);
+    setDrafts((prev) => [...prev, makeEmptyDraft(nextId(), defaultFileIds)]);
+  }, [defaultFileIds, nextId]);
 
   const validDrafts = useMemo(
     () => drafts.filter((d) => d.name.trim().length > 0),
@@ -201,21 +225,19 @@ const BulkBody = ({ workspaceId, onClose }: BulkBodyProps) => {
     }
     const items: CreatePropertySpec[] = validDrafts.map((d) => {
       const hasPrompt = promptFromHtml(d.prompt).length > 0;
-      const dependencies = d.mentions.map((id) => ({
+      const dependencyIds = [...new Set([...d.fileIds, ...d.mentions])];
+      const dependencies = dependencyIds.map((id) => ({
         dependsOnPropertyId: id,
         condition: null,
       }));
-      return {
-        name: d.name.trim(),
-          contentType: d.contentType,
-        ...(hasPrompt
-          ? {
-              toolType: "ai-model" as const,
-              prompt: d.prompt,
-              ...(dependencies.length > 0 ? { dependencies } : {}),
-            }
-          : { toolType: "manual-input" as const }),
-      };
+      return Object.assign({
+	name: d.name.trim(),
+	contentType: d.contentType
+}, hasPrompt ? {
+	toolType: 'ai-model' as const,
+	prompt: d.prompt,
+	...dependencies.length > 0 ? { dependencies } : {}
+} : { toolType: 'manual-input' as const });
     });
     try {
       await batch.mutateAsync({ items });
@@ -250,6 +272,7 @@ const BulkBody = ({ workspaceId, onClose }: BulkBodyProps) => {
           <DraftCard
             canRemove={drafts.length > 1}
             draft={draft}
+            fileProperties={fileProperties}
             key={draft.id}
             onChange={(patch) => updateDraft(draft.id, patch)}
             onRemove={() => removeDraft(draft.id)}
@@ -299,6 +322,7 @@ type DraftCardProps = {
   draft: Draft;
   canRemove: boolean;
   workspaceId: string;
+  fileProperties: FileChip[];
   onChange: (patch: Partial<Draft>) => void;
   onRemove: () => void;
 };
@@ -307,6 +331,7 @@ const DraftCard = ({
   draft,
   canRemove,
   workspaceId,
+  fileProperties,
   onChange,
   onRemove,
 }: DraftCardProps) => {
@@ -333,15 +358,28 @@ const DraftCard = ({
     [onChange],
   );
 
+  const selectedFiles = useMemo(
+    () =>
+      draft.fileIds.flatMap((id) => {
+        const found = fileProperties.find((p) => p.id === id);
+        return found ? [found] : [];
+      }),
+    [draft.fileIds, fileProperties],
+  );
+  const availableFiles = fileProperties.filter(
+    (p) => !draft.fileIds.includes(p.id),
+  );
+
   return (
     <div className={COMPOSER_CARD_CLASS}>
       <div className="flex items-center gap-2">
         <Input
           autoComplete="off"
           autoFocus
-          className="text-foreground placeholder:text-foreground-label border-0 bg-transparent text-sm font-medium shadow-none focus-visible:ring-0 focus-visible:outline-none"
+          className="text-foreground placeholder:text-foreground-label px-0 text-sm font-medium"
           onChange={(e) => onChange({ name: e.target.value })}
           placeholder={t("workspaces.properties.newColumnName")}
+          unstyled
           value={draft.name}
         />
         {canRemove && (
@@ -357,6 +395,20 @@ const DraftCard = ({
           </Button>
         )}
       </div>
+
+      <ReadingFromRow
+        fileChips={selectedFiles}
+        onRemoveFile={(id) =>
+          onChange({ fileIds: draft.fileIds.filter((f) => f !== id) })
+        }
+        {...(availableFiles.length > 0
+          ? {
+              addFile: (id: string) =>
+                onChange({ fileIds: [...draft.fileIds, id] }),
+              availableFiles,
+            }
+          : {})}
+      />
 
       <PropertyPromptInput
         autoPopulateOnEmpty={false}

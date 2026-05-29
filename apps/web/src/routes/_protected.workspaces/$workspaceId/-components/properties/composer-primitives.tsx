@@ -1,14 +1,25 @@
 import {
   AlertTriangleIcon,
   AlignLeftIcon,
+  AtSignIcon,
   CalendarIcon,
   CircleDotIcon,
+  FileTextIcon,
   HashIcon,
+  PlusIcon,
   TagsIcon,
+  XIcon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/components/button";
+import {
+  Popover,
+  PopoverClose,
+  PopoverPopup,
+  PopoverTrigger,
+} from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
 
 export type CreatableContentType =
@@ -119,5 +130,109 @@ export const TypeChipsRow = ({
         </p>
       )}
     </div>
+  );
+};
+
+export type FileChip = { id: string; name: string };
+
+type ReadingFromRowProps = {
+  fileChips: FileChip[];
+  onRemoveFile: (id: string) => void;
+  availableFiles?: FileChip[];
+  addFile?: (id: string) => void;
+};
+
+export const ReadingFromRow = ({
+  fileChips,
+  onRemoveFile,
+  availableFiles,
+  addFile,
+}: ReadingFromRowProps) => {
+  const t = useTranslations();
+  const canAdd =
+    addFile !== undefined &&
+    availableFiles !== undefined &&
+    availableFiles.length > 0;
+
+  return (
+    <div className="text-muted-foreground flex items-center gap-1.5 text-[11.5px]">
+      <span className="inline-flex items-center gap-1">
+        <AtSignIcon className="size-2.5" />
+        {t("workspaces.properties.readingFrom")}
+      </span>
+      {fileChips.map((chip) => (
+        <ReadingChip
+          key={chip.id}
+          label={chip.name || t("workspaces.properties.documentsLabel")}
+          {...(fileChips.length > 1
+            ? { onRemove: () => onRemoveFile(chip.id) }
+            : {})}
+        />
+      ))}
+      {canAdd && (
+        <Popover>
+          <PopoverTrigger
+            render={
+              <Button
+                className="text-foreground-label hover:text-foreground gap-0.5 px-1 text-[11.5px]"
+                size="xs"
+                type="button"
+                variant="ghost"
+              />
+            }
+          >
+            <PlusIcon className="size-2.5" />
+            {t("workspaces.properties.addReadingSource")}
+          </PopoverTrigger>
+          <PopoverPopup className="*:data-[slot=popover-viewport]:p-1!">
+            <div className="flex w-48 flex-col gap-0.5">
+              {availableFiles.map((file) => (
+                <PopoverClose
+                  key={file.id}
+                  render={
+                    <Button
+                      className="justify-start gap-2"
+                      onClick={() => addFile(file.id)}
+                      size="sm"
+                      type="button"
+                      variant="ghost"
+                    />
+                  }
+                >
+                  <FileTextIcon className="text-muted-foreground size-3" />
+                  <span className="truncate">{file.name}</span>
+                </PopoverClose>
+              ))}
+            </div>
+          </PopoverPopup>
+        </Popover>
+      )}
+    </div>
+  );
+};
+
+type ReadingChipProps = {
+  label: string;
+  onRemove?: () => void;
+};
+
+const ReadingChip = ({ label, onRemove }: ReadingChipProps) => {
+  const t = useTranslations();
+
+  return (
+    <span className="bg-muted/64 group inline-flex h-6 items-center gap-1 rounded-md px-2 text-[11.5px]">
+      <FileTextIcon className="size-3" />
+      {label}
+      {onRemove && (
+        <button
+          aria-label={t("common.remove")}
+          className="text-foreground-placeholder hover:text-foreground ms-0.5 -me-1 inline-flex size-3.5 items-center justify-center opacity-0 group-hover:opacity-100"
+          onClick={onRemove}
+          type="button"
+        >
+          <XIcon className="size-2.5" />
+        </button>
+      )}
+    </span>
   );
 };
