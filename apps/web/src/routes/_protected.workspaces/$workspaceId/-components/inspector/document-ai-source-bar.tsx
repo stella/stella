@@ -440,17 +440,22 @@ export const DocumentAiSourceBar = ({
 /**
  * Walk the rendered folio DOM for the layout page that owns the
  * cited block. The editor lays paragraphs into `div.layout-page`
- * containers carrying `data-page-number`, so we can derive a real
- * page number for the chip without a separate API surface. Returns
- * `null` while the editor is still mounting or if the block is on
- * a page that hasn't been laid out yet.
+ * containers carrying `data-page-number`, and tags each paragraph
+ * with both `data-para-id` (the Word `w14:paraId` we store in the
+ * citation) and `data-block-id` (the sequential layout id). Probe
+ * paraId first since that's what citations actually carry; fall
+ * back to block-id for the seq-N fallback case. Returns `null`
+ * while the editor is still mounting or if the block is on a page
+ * that hasn't been laid out yet.
  */
 const findFolioBlockPage = (blockId: string): number | null => {
   const escaped =
     typeof CSS !== "undefined" && typeof CSS.escape === "function"
       ? CSS.escape(blockId)
       : blockId.replace(/"/gu, '\\"');
-  const element = document.querySelector(`[data-block-id="${escaped}"]`);
+  const element =
+    document.querySelector(`[data-para-id="${escaped}"]`) ??
+    document.querySelector(`[data-block-id="${escaped}"]`);
   if (!element) {
     return null;
   }
@@ -463,43 +468,34 @@ const findFolioBlockPage = (blockId: string): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-const FOLIO_BLOCK_PAGE_RETRY_MS = 150;
-const FOLIO_BLOCK_PAGE_RETRY_LIMIT = 12;
-
+/**
+ * Resolve the page for a folio block. Folio renders virtual pages —
+ * a block on page 8 is only added to the DOM when the editor
+ * paginates that far. Listen via MutationObserver instead of a
+ * bounded retry loop so the chip catches up whenever the block
+ * actually lands, including after a `scrollToBlock` triggers a
+ * lazy layout pass.
+ */
 const useFolioBlockPage = (blockId: string): number | null => {
   const [page, setPage] = useState<number | null>(() =>
     findFolioBlockPage(blockId),
   );
   useEffect(() => {
-    const initial = findFolioBlockPage(blockId);
-    setPage(initial);
-    if (initial !== null) {
-      return undefined;
-    }
-    // Folio pagination runs async after the editor mounts. Retry
-    // briefly so the chip catches up without us wiring an event
-    // bridge through the editor's layout passes.
-    let cancelled = false;
-    let attempts = 0;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const tick = () => {
-      if (cancelled) return;
+    setPage(findFolioBlockPage(blockId));
+    const observer = new MutationObserver(() => {
       const next = findFolioBlockPage(blockId);
-      if (next !== null) {
-        setPage(next);
-        return;
-      }
-      attempts += 1;
-      if (attempts < FOLIO_BLOCK_PAGE_RETRY_LIMIT) {
-        timer = setTimeout(tick, FOLIO_BLOCK_PAGE_RETRY_MS);
-      }
-    };
-    timer = setTimeout(tick, FOLIO_BLOCK_PAGE_RETRY_MS);
+      // Only set when changed so we don't churn React state on
+      // every unrelated DOM tick the editor emits during typing.
+      setPage((prev) => (prev === next ? prev : next));
+    });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-page-number", "data-para-id", "data-block-id"],
+    });
     return () => {
-      cancelled = true;
-      if (timer !== null) {
-        clearTimeout(timer);
-      }
+      observer.disconnect();
     };
   }, [blockId]);
   return page;
