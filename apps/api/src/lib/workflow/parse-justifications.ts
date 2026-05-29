@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 
 import { isFolioBlockId } from "@stll/folio/server";
-import type { FolioBlockId } from "@stll/folio/server";
 
 import type {
   DocxFolioJustificationBlock,
@@ -23,7 +22,7 @@ export type JustificationFilename = {
        *  AI citations AND to embed the quoted text in the saved
        *  justification so the frontend can render it without
        *  re-fetching/re-parsing the DOCX. */
-      blocksById: ReadonlyMap<FolioBlockId, string>;
+      blocksById: ReadonlyMap<string, string>;
     }
 );
 
@@ -113,7 +112,7 @@ const buildDocxBlock = (
     // the runtime check, then dedupe; embed the literal block text
     // alongside each id so the frontend can render the quote
     // without a round-trip to the document.
-    const seen = new Set<FolioBlockId>();
+    const seen = new Set<string>();
     const citations: DocxFolioJustificationBlock["statements"][number]["citations"] =
       [];
     for (const raw of statement.citations) {
