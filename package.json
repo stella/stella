@@ -30,7 +30,7 @@
     "link-codex": "bash scripts/link-codex-skills.sh",
     "format": "turbo run format",
     "format:check": "turbo run format -- --check",
-    "lint": "turbo run lint && bash scripts/lint-oxlint-fixtures.sh",
+    "lint": "bash scripts/lint-oxlint-fixtures.sh && turbo run lint",
     "lint:fix": "turbo run lint:fix",
     "lint:fixtures": "bash scripts/lint-oxlint-fixtures.sh",
     "lint:ws": "sherif -r unsync-similar-dependencies && bun packages/scripts/src/workspace-hygiene.ts",

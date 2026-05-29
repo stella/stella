@@ -32,9 +32,10 @@
 //     (ASCII `"`, `'`, `` ` ``, `(`, `[`, `{`; typographic
 //     `“`, `”`, `‘`, `’`, `„`, `«`, `»`, `‹`, `›`; Spanish `¿`, `¡`).
 //
-// Non-head template quasis (text after `${…}`) do not get the
+// Non-head template quasis (text after `${…}`) and JSX text nodes
+// that follow a sibling expression / element do not get the
 // start-of-text sentence-start carve-out, because the preceding
-// expression could substitute any value.
+// expression or element could substitute any value.
 //
 // Disable narrowly with `// oxlint-disable-next-line
 // stella-lowercase/stella-lowercase` and a comment explaining why the
@@ -117,6 +118,13 @@ const isSentenceStart = (
       i--;
       continue;
     }
+    // In a continuation, newlines at the start of the text come from
+    // source formatting around the preceding expression/element, not
+    // from a real prose line break, so walk past them too.
+    if (isContinuation && (ch === "\n" || ch === "\r")) {
+      i--;
+      continue;
+    }
     break;
   }
   if (i < 0) {
@@ -183,6 +191,26 @@ const isImportOrExportSource = (literalNode: AstNode): boolean => {
   );
 };
 
+// A JSXText node that is not the first child of its parent JSX
+// element / fragment can be preceded by a sibling expression
+// (`<p>{name} Stella…</p>`) or a sibling element with arbitrary
+// trailing content. Treat its start position as a continuation
+// of preceding output rather than as a sentence start.
+const isJsxContinuation = (node: AstNode): boolean => {
+  const parent = node.parent;
+  if (!isAstNode(parent)) {
+    return false;
+  }
+  if (parent.type !== "JSXElement" && parent.type !== "JSXFragment") {
+    return false;
+  }
+  const children = parent.children;
+  if (!Array.isArray(children)) {
+    return false;
+  }
+  return children.indexOf(node) > 0;
+};
+
 const quasiText = (quasi: unknown): string | null => {
   if (!isAstNode(quasi)) {
     return null;
@@ -238,7 +266,7 @@ export default {
             if (typeof node.value !== "string") {
               return;
             }
-            checkText(context, node, node.value, false);
+            checkText(context, node, node.value, isJsxContinuation(node));
           },
         };
       },

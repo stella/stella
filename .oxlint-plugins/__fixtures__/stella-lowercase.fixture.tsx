@@ -27,6 +27,14 @@ const _nonHeadQuasi = (label: string): string =>
   // oxlint-disable-next-line stella-lowercase/stella-lowercase
   `${label} Stella refused`;
 
+const _jsxAfterExpression = ({ name }: { name: string }) => (
+  <p>
+    {name}
+    {/* oxlint-disable-next-line stella-lowercase/stella-lowercase */}
+    Stella will follow up
+  </p>
+);
+
 const _jsxMidSentence = () => (
   <p>
     {/* oxlint-disable-next-line stella-lowercase/stella-lowercase */}
@@ -77,6 +85,7 @@ export const __stellaLowercaseFixture = {
   _midSentenceTemplate,
   _periodButNotImmediate,
   _nonHeadQuasi,
+  _jsxAfterExpression,
   _jsxMidSentence,
   _xmlMetadataMidString,
   _stringStart,
