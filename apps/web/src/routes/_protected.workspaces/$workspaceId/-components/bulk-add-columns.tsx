@@ -288,23 +288,26 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
           ? { options: d.options, fallback: d.fallback }
           : {};
       if (d.tool === "manual-input") {
-        return Object.assign({
-	name: d.name.trim(),
-	contentType: d.contentType,
-	toolType: 'manual-input' as const
-}, selectFields);
+        return {
+          name: d.name.trim(),
+            contentType: d.contentType,
+            toolType: "manual-input" as const,
+          ...selectFields,
+        };
       }
       const dependencyIds = [...new Set([...d.fileIds, ...d.mentions])];
       const dependencies = dependencyIds.map((id) => ({
         dependsOnPropertyId: id,
         condition: null,
       }));
-      return Object.assign({
-	name: d.name.trim(),
-	contentType: d.contentType,
-	toolType: 'ai-model' as const,
-	prompt: d.prompt
-}, dependencies.length > 0 ? { dependencies } : {}, selectFields);
+      return {
+        name: d.name.trim(),
+          contentType: d.contentType,
+          toolType: "ai-model" as const,
+          prompt: d.prompt,
+        ...(dependencies.length > 0 ? { dependencies } : {}),
+        ...selectFields,
+      };
     });
     try {
       await batch.mutateAsync({ items });
