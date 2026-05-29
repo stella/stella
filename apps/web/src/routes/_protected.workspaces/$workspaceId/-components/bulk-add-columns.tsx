@@ -16,6 +16,7 @@ import {
 import { Input } from "@stll/ui/components/input";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import {
   COMPOSER_CARD_CLASS,
@@ -75,8 +76,12 @@ export const BulkAddColumns = ({
   open,
   onOpenChange,
 }: BulkAddColumnsProps) => {
+  const t = useTranslations();
   const isLimitReached = usePropertiesCountLimit(workspaceId);
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const [flashClose, setFlashClose] = useState(false);
+  const dirtyRef = useRef(false);
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dialogOpen = open ?? uncontrolledOpen;
   const setDialogOpen = (next: boolean) => {
     onOpenChange?.(next);
@@ -85,17 +90,49 @@ export const BulkAddColumns = ({
     }
   };
 
+  const triggerFlash = useCallback(() => {
+    if (flashTimerRef.current !== null) {
+      clearTimeout(flashTimerRef.current);
+    }
+    setFlashClose(true);
+    flashTimerRef.current = setTimeout(() => {
+      setFlashClose(false);
+      flashTimerRef.current = null;
+    }, 700);
+  }, []);
+
   if (isLimitReached) {
     return null;
   }
 
   return (
-    <Dialog onOpenChange={setDialogOpen} open={dialogOpen}>
+    <Dialog
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && dirtyRef.current) {
+          triggerFlash();
+          return;
+        }
+        setDialogOpen(nextOpen);
+      }}
+      open={dialogOpen}
+    >
       <BulkTrigger triggerVariant={triggerVariant} />
-      <DialogPopup className="sm:max-w-[640px]">
+      <DialogPopup className="sm:max-w-[640px]" showCloseButton={false}>
+        <DialogClose
+          aria-label={t("common.close")}
+          className={cn(
+            "absolute end-2 top-2 z-10 transition-[transform,box-shadow,background-color] duration-200",
+            flashClose &&
+              "bg-muted ring-foreground-strong-muted scale-125 ring-2",
+          )}
+          render={<Button size="icon" variant="ghost" />}
+        >
+          <XIcon />
+        </DialogClose>
         {dialogOpen && (
           <Suspense fallback={<BulkBodyFallback />}>
             <BulkBody
+              dirtyRef={dirtyRef}
               onClose={() => setDialogOpen(false)}
               workspaceId={workspaceId}
             />
@@ -178,9 +215,10 @@ const BulkBodyFallback = () => (
 type BulkBodyProps = {
   workspaceId: string;
   onClose: () => void;
+  dirtyRef: React.RefObject<boolean>;
 };
 
-const BulkBody = ({ workspaceId, onClose }: BulkBodyProps) => {
+const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
   const t = useTranslations();
   const batch = useCreatePropertiesBatch({ workspaceId });
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
@@ -223,6 +261,10 @@ const BulkBody = ({ workspaceId, onClose }: BulkBodyProps) => {
     [drafts],
   );
   const canSubmit = validDrafts.length > 0 && !batch.isPending;
+
+  dirtyRef.current = drafts.some(
+    (d) => d.name.trim().length > 0 || d.prompt.trim().length > 0,
+  );
 
   const handleSubmit = async () => {
     if (!canSubmit) {
