@@ -10,6 +10,7 @@ import {
   Dialog,
   DialogClose,
   DialogPopup,
+  DialogTitle,
   DialogTrigger,
 } from "@stll/ui/components/dialog";
 import { Input } from "@stll/ui/components/input";
@@ -676,19 +677,17 @@ const PropertyComposerBody = ({
 
   return (
     <>
-      <header className="flex items-center gap-2 px-5 pt-4 pb-3">
-        <h2 className="flex-1 text-[15px] leading-none font-medium">
-          {isEditMode
-            ? t("workspaces.properties.editColumn")
-            : t("workspaces.properties.composerTitle")}
-        </h2>
-      </header>
+      <DialogTitle className="sr-only">
+        {isEditMode
+          ? t("workspaces.properties.editColumn")
+          : t("workspaces.properties.composerTitle")}
+      </DialogTitle>
 
-      <div className="flex flex-col gap-3 px-5 pt-1 pb-4">
+      <div className="flex flex-col gap-3 px-5 pt-5 pb-4">
         <Input
           autoComplete="off"
           autoFocus
-          className="text-foreground placeholder:text-foreground-placeholder w-full px-0 text-[15px] font-semibold tracking-tight"
+          className="text-foreground placeholder:text-foreground-placeholder w-full px-0 text-base font-semibold tracking-tight"
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && canSubmit) {
