@@ -35,6 +35,14 @@ const _jsxAfterExpression = ({ name }: { name: string }) => (
   </p>
 );
 
+const _jsxExpressionAfterText = () => (
+  <p>
+    Welcome to{" "}
+    {/* oxlint-disable-next-line stella-lowercase/stella-lowercase */}
+    {"Stella"}
+  </p>
+);
+
 const _jsxMidSentence = () => (
   <p>
     {/* oxlint-disable-next-line stella-lowercase/stella-lowercase */}
@@ -86,6 +94,7 @@ export const __stellaLowercaseFixture = {
   _periodButNotImmediate,
   _nonHeadQuasi,
   _jsxAfterExpression,
+  _jsxExpressionAfterText,
   _jsxMidSentence,
   _xmlMetadataMidString,
   _stringStart,

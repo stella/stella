@@ -32,8 +32,10 @@
 //     (ASCII `"`, `'`, `` ` ``, `(`, `[`, `{`; typographic
 //     `“`, `”`, `‘`, `’`, `„`, `«`, `»`, `‹`, `›`; Spanish `¿`, `¡`).
 //
-// Non-head template quasis (text after `${…}`) and JSX text nodes
-// that follow a sibling expression / element do not get the
+// Non-head template quasis (text after `${…}`), JSX text nodes
+// that follow a sibling expression / element, and string / template
+// literals inside a JSX expression container that itself follows
+// other JSX siblings (`<p>Welcome to {"Stella"}</p>`) do not get the
 // start-of-text sentence-start carve-out, because the preceding
 // expression or element could substitute any value.
 //
@@ -64,10 +66,14 @@ const isAstNode = (node: unknown): node is AstNode =>
 // because letters/digits on either side suppress the word boundary.
 const STELLA_PATTERN = /\bStella\b/gu;
 
-// Path-shaped strings (no spaces, only path-safe characters). Treated as
-// asset / module paths and skipped wholesale so `./components/StellaMark`
-// and `/Applications/Stella.app/Contents/MacOS/stella` don't flag.
-const WHOLE_PATH = /^[\w./\\:~@-]+$/u;
+// Path-shaped strings (no spaces, only path-safe characters, and at
+// least one real path separator beyond `\w`+`-`). Treated as asset /
+// module paths and skipped wholesale so `./components/StellaMark`,
+// `/Applications/Stella.app/Contents/MacOS/stella`, and
+// `Stella-macos-universal.dmg` don't flag. The lookahead requirement
+// keeps bare identifier-shaped strings like `"Stella"` out of this
+// branch so they still reach the token-level checks.
+const WHOLE_PATH = /^(?=.*[/\\.:~@])[\w./\\:~@-]+$/u;
 
 // Whitespace characters to skip when scanning back for the previous
 // significant character (ASCII space, tab, NBSP).
@@ -211,6 +217,30 @@ const isJsxContinuation = (node: AstNode): boolean => {
   return children.indexOf(node) > 0;
 };
 
+// A string / template literal that is the direct expression of a
+// `JSXExpressionContainer` (e.g. `<p>Welcome to {"Stella"}</p>`) is a
+// continuation when the container is not the first child of its
+// parent JSX element / fragment. Without this, `{"Stella"}` after
+// sibling JSX content would look like a fresh sentence start.
+const isJsxExpressionContinuation = (node: AstNode): boolean => {
+  const parent = node.parent;
+  if (!isAstNode(parent) || parent.type !== "JSXExpressionContainer") {
+    return false;
+  }
+  const grandparent = parent.parent;
+  if (!isAstNode(grandparent)) {
+    return false;
+  }
+  if (grandparent.type !== "JSXElement" && grandparent.type !== "JSXFragment") {
+    return false;
+  }
+  const children = grandparent.children;
+  if (!Array.isArray(children)) {
+    return false;
+  }
+  return children.indexOf(parent) > 0;
+};
+
 const quasiText = (quasi: unknown): string | null => {
   if (!isAstNode(quasi)) {
     return null;
@@ -247,19 +277,25 @@ export default {
             if (isImportOrExportSource(node)) {
               return;
             }
-            checkText(context, node, node.value, false);
+            checkText(
+              context,
+              node,
+              node.value,
+              isJsxExpressionContinuation(node),
+            );
           },
           TemplateLiteral(node: AstNode) {
             if (!Array.isArray(node.quasis)) {
               return;
             }
+            const headIsContinuation = isJsxExpressionContinuation(node);
             for (let i = 0; i < node.quasis.length; i++) {
               const quasi = node.quasis[i];
               const value = quasiText(quasi);
               if (value === null) {
                 continue;
               }
-              checkText(context, quasi, value, i > 0);
+              checkText(context, quasi, value, headIsContinuation || i > 0);
             }
           },
           JSXText(node: AstNode) {
