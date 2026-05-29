@@ -1,0 +1,133 @@
+/**
+ * Generic presigned-upload entrypoint. The body's `purpose` field
+ * picks the per-surface validation + future finalize callback;
+ * everything else (limits, MIME, expiry, signed-URL generation) is
+ * shared.
+ *
+ * Phase 1 wires only `entity_create`. Phases 2–4 will extend the
+ * `t.Union(...)` and add a `switch(body.purpose)` branch.
+ */
+import { Result } from "better-result";
+import { t } from "elysia";
+import type { Static } from "elysia";
+
+import { pendingUploads } from "@/api/db/schema";
+import { validateEntityCreate } from "@/api/handlers/uploads/entity-create";
+import {
+  PRESIGN_URL_EXPIRY_SECONDS,
+  sha256HexToBase64,
+  tmpUploadKey,
+} from "@/api/handlers/uploads/lib";
+import { createSafeHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { createSafeId } from "@/api/lib/branded-types";
+import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { presignUploadUrl } from "@/api/lib/s3-presign";
+
+const entityCreatePresignBodySchema = t.Object({
+  purpose: t.Literal("entity_create"),
+  propertyId: tSafeId("property"),
+  name: tDefaultVarchar,
+  mimeType: t.String({ minLength: 1, maxLength: 255 }),
+  size: t.Integer({
+    minimum: 1,
+    // S3 enforces this via the signed Content-Length; finalize
+    // re-checks via S3.HEAD. Pinning it at the schema level lets
+    // the API refuse oversized requests before even minting a URL.
+    maximum: FILE_SIZE_LIMIT_BYTES.document,
+  }),
+  // Lowercase hex, exactly 64 chars. The same format the legacy
+  // entity upload stores at `fields.content.sha256Hex`, so we can
+  // round-trip without re-encoding inside the migration.
+  sha256Hex: t.RegExp(/^[0-9a-f]{64}$/u),
+});
+
+const presignBodySchema = t.Union([entityCreatePresignBodySchema]);
+
+type PresignBody = Static<typeof presignBodySchema>;
+
+const config = {
+  permissions: { entity: ["create"] },
+  body: presignBodySchema,
+} satisfies HandlerConfig;
+
+const presignUpload = createSafeHandler(
+  config,
+  async function* ({ safeDb, session, workspaceId, user, body }) {
+    const purposeBody = body as PresignBody;
+
+    if (purposeBody.purpose === "entity_create") {
+      const validation = yield* validateEntityCreate({
+        safeDb,
+        workspaceId,
+        propertyId: purposeBody.propertyId,
+      });
+      if (Result.isError(validation)) {
+        return validation;
+      }
+    }
+
+    const uploadId = createSafeId<"pendingUpload">();
+    const now = new Date();
+    const expiresAt = new Date(
+      now.getTime() + PRESIGN_URL_EXPIRY_SECONDS * 1000,
+    );
+
+    const presign = await presignUploadUrl({
+      key: tmpUploadKey(uploadId),
+      expiresIn: PRESIGN_URL_EXPIRY_SECONDS,
+      contentType: purposeBody.mimeType,
+      contentLength: purposeBody.size,
+      sha256Base64: sha256HexToBase64(purposeBody.sha256Hex),
+    });
+    if (Result.isError(presign)) {
+      return Result.err(
+        new HandlerError({
+          status: 500,
+          message: "Failed to issue upload URL",
+        }),
+      );
+    }
+
+    // Persist intent. RLS pins the row to this workspace, so even
+    // a stolen URL can only be finalized by a request that
+    // resolves to the same workspace_ids on the API role.
+    yield* Result.await(
+      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+      safeDb((tx) => {
+        // audit: skip — presigned URL bookkeeping; the audit row is
+        // emitted by the per-purpose finalize once the upload
+        // becomes a durable entity.
+        return tx.insert(pendingUploads).values({
+          id: uploadId,
+          organizationId: session.activeOrganizationId,
+          workspaceId,
+          userId: user.id,
+          purpose: purposeBody.purpose,
+          purposeData: {
+            type: "entity_create",
+            propertyId: purposeBody.propertyId,
+          },
+          declaredName: purposeBody.name,
+          declaredMime: purposeBody.mimeType,
+          declaredSize: purposeBody.size,
+          declaredSha256: purposeBody.sha256Hex,
+          status: "pending",
+          expiresAt,
+          createdAt: now,
+        });
+      }),
+    );
+
+    return Result.ok({
+      uploadId,
+      url: presign.value.url,
+      expiresAt: expiresAt.toISOString(),
+      headers: presign.value.headers,
+    });
+  },
+);
+
+export default presignUpload;

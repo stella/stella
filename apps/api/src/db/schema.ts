@@ -1373,7 +1373,8 @@ export type PendingUploadPurposeData = {
 export type PendingUploadFinalizedResult = {
   type: "entity_create";
   entityId: SafeId<"entity">;
-  fileId: SafeId<"userFile">;
+  /** UUIDv7 stored on `fields.content.id`; not a branded SafeId. */
+  fileId: string;
   fileName: string;
   renamed: boolean;
 };

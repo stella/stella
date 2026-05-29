@@ -128,6 +128,8 @@ export const FILE_SIZE_LIMITS = {
  * validate before a framework-level t.File() parser runs.
  */
 export const FILE_SIZE_LIMIT_BYTES = {
+  /** General document uploads (entities, templates). */
+  document: 50 * 1024 * 1024,
   /** Agent skill packs (`SKILL.md` or a ZIP folder). */
   skillPack: 2 * 1024 * 1024,
   /** Chat context file attachments. */
