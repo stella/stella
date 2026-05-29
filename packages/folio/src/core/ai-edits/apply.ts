@@ -1,12 +1,9 @@
 import type { Mark, Node as PMNode, Schema } from "prosemirror-model";
 import type { EditorState, Transaction } from "prosemirror-state";
 
+import { getFolioParaIdFromBlockId } from "../types/block-id";
 import { buildCleanBlockText } from "./clean-text";
-import {
-  getFolioAIParaIdFromBlockId,
-  hashFolioAIBlockText,
-  normalizeFolioAIBlockText,
-} from "./snapshot";
+import { hashFolioAIBlockText, normalizeFolioAIBlockText } from "./snapshot";
 import type {
   FolioAIEditAppliedOperation,
   FolioAIEditApplyMode,
@@ -861,7 +858,7 @@ const resolveOperation = ({
   // which the hash+ordinal path would mis-target. Missing paraIds
   // are stale anchors, so they skip rather than falling back to a
   // same-text block that may be unrelated.
-  const encodedParaId = getFolioAIParaIdFromBlockId(operation.blockId);
+  const encodedParaId = getFolioParaIdFromBlockId(operation.blockId);
   let live: LiveBlockEntry | undefined;
   if (encodedParaId !== null) {
     live = liveBlocksByParaId.get(encodedParaId);

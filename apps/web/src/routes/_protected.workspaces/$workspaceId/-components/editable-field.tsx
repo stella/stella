@@ -45,6 +45,8 @@ type EditableFieldProps = {
   content: WorkspaceFieldContent | undefined;
   readonly?: boolean;
   showDateIcon?: boolean;
+  /** Fires after a successful manual save — used to lock AI cells. */
+  onManualSave?: () => void;
 };
 
 export const EditableField = ({
@@ -56,6 +58,7 @@ export const EditableField = ({
   content,
   readonly = false,
   showDateIcon = true,
+  onManualSave,
 }: EditableFieldProps) => {
   const type = property.content.type;
 
@@ -79,6 +82,7 @@ export const EditableField = ({
       content={content}
       entityId={entityId}
       entityKind={entityKind}
+      onManualSave={onManualSave}
       property={property}
       propertyId={propertyId}
       showDateIcon={showDateIcon}
@@ -194,6 +198,8 @@ const ReadOnlyValue = ({
 
 // -- Inline editor --
 
+type InlineEditorOnManualSave = (() => void) | undefined;
+
 type InlineEditorProps = {
   workspaceId: string;
   entityId: string;
@@ -203,6 +209,7 @@ type InlineEditorProps = {
   content: WorkspaceFieldContent | undefined;
   type: "text" | "date" | "single-select" | "multi-select" | "int";
   showDateIcon: boolean;
+  onManualSave: InlineEditorOnManualSave;
 };
 
 const InlineEditor = ({
@@ -214,6 +221,7 @@ const InlineEditor = ({
   content,
   type,
   showDateIcon,
+  onManualSave,
 }: InlineEditorProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -238,6 +246,12 @@ const InlineEditor = ({
       void queryClient.invalidateQueries({
         queryKey: entitiesKeys.all(workspaceId),
       });
+      // Manual edit on an AI-extraction cell should latch the
+      // cell so the next workflow sweep doesn't overwrite what
+      // the user just wrote. Manual-input cells pass no callback
+      // and never re-run AI on themselves, so the call is a no-op
+      // there.
+      onManualSave?.();
       // Folders can't have AI-derived metadata
       if (entityKind === "folder") {
         return;
@@ -337,10 +351,12 @@ const InlineTextEditor = ({
       <button
         className="hover:bg-muted block w-full truncate rounded px-2 py-1 text-start text-sm transition-colors"
         data-open-expanded-cell
-        onClick={(event) => {
-          if (!event.currentTarget.closest("[data-expanded-cell='true']")) {
-            return;
-          }
+        onClick={() => {
+          // Drop straight into edit mode on first click. The
+          // row-expansion side effect still fires via the
+          // data-open-expanded-cell attribute the table grid reads,
+          // so the cell gets the extra space at the same moment the
+          // textarea mounts.
           setDraft(value);
           setEditing(true);
         }}

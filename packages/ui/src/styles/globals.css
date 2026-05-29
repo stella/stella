@@ -55,6 +55,7 @@
   --color-card: var(--card);
   --animate-skeleton: skeleton 2s -1s infinite linear;
   --animate-caret-blink: caret-blink 1.25s ease-out infinite;
+  --animate-source-bar-flash: source-bar-flash 700ms ease-out;
   @keyframes skeleton {
     to {
       background-position: -200% 0;
@@ -68,6 +69,17 @@
     }
     20%,
     50% {
+      opacity: 0;
+    }
+  }
+  @keyframes source-bar-flash {
+    0% {
+      opacity: 0;
+    }
+    18% {
+      opacity: 1;
+    }
+    100% {
       opacity: 0;
     }
   }

@@ -24,6 +24,8 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
+import { deriveBlockId } from "@stll/folio/server";
+
 import { rootDb } from "@/api/db/root";
 import {
   billingCodes,
@@ -2944,7 +2946,11 @@ const buildExportReviewJustificationContent = ({
               text: citationSeed.statement,
               citations: [
                 {
-                  blockId: `b-${String(metadata.pageNumber).padStart(4, "0")}`,
+                  blockId: deriveBlockId({
+                    paraId: null,
+                    index: metadata.pageNumber,
+                    taken: new Set(),
+                  }),
                   text: citationSeed.quote,
                 },
               ],

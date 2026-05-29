@@ -45,7 +45,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
 import { ClientOperationError } from "@/lib/errors";
 import type { ViewLayout, WorkspaceProperty, WorkspaceView } from "@/lib/types";
-import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
+import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
 import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
@@ -215,7 +215,7 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
           <span className="bg-border mx-1 h-4 w-px" />
           <TableContentModeControl viewId={view.id} />
           <TableExportMenu view={view} workspaceId={workspaceId} />
-          <CreateProperty triggerVariant="labelled" workspaceId={workspaceId} />
+          <BulkAddColumns triggerVariant="labelled" workspaceId={workspaceId} />
         </>
       )}
     </div>

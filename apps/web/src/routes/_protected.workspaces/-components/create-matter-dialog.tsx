@@ -42,7 +42,6 @@ import { toSafeId } from "@/lib/safe-id";
 import { useCreateContact } from "@/routes/_protected.contacts/-mutations";
 import { contactsKeys } from "@/routes/_protected.contacts/-queries";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
-import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 import {
   buildCollaboratorStats,
   compareMembersByCollaboratorStats,
@@ -315,40 +314,19 @@ const CreateMatterDialogBody = ({
       return;
     }
 
-    // Fetch views for the new workspace (the API lazily creates
-    // default views on first access) and navigate directly to the
-    // first view. This skips the index route redirect which triggers
-    // a TanStack Router double-slash path bug when transitioning
-    // between workspaces.
     const workspaceId = result.value.id;
 
     handleClose();
-    try {
-      const views = await queryClient.fetchQuery(viewsOptions(workspaceId));
-      const firstViewId = views.at(0)?.id;
-
-      if (firstViewId) {
-        await navigate({
-          to: "/workspaces/$workspaceId/$viewId",
-          params: { workspaceId, viewId: firstViewId },
-          replace: true,
-        });
-      } else {
-        await navigate({
-          to: "/workspaces/$workspaceId",
-          params: { workspaceId },
-          replace: true,
-        });
-      }
-    } catch {
-      // View fetch failed; fall back to the workspace root which
-      // triggers the index route redirect as a fallback.
-      await navigate({
-        to: "/workspaces/$workspaceId",
-        params: { workspaceId },
-        replace: true,
-      });
-    }
+    // Navigate to the workspace root immediately and let the index
+    // route's beforeLoad redirect land us on the first view. Going
+    // straight to /$viewId here would force us to fetch views inline
+    // first, leaving the user on the matters listing for the
+    // round-trip — which reads as a stall after they just submitted.
+    await navigate({
+      to: "/workspaces/$workspaceId",
+      params: { workspaceId },
+      replace: true,
+    });
   };
 
   const canSubmit = !createWorkspace.isPending && !createContact.isPending;

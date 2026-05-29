@@ -170,14 +170,16 @@ function RouteComponent() {
         return;
       }
 
+      // Backend sends "clear" right after the entity-invalidation
+      // broadcast, but the invalidation's refetch needs a network
+      // round-trip — clearing the preview synchronously here makes
+      // the cell flip preview → pending skeleton → final value, with
+      // the skeleton visible for the duration of the refetch. Hold
+      // the preview instead: CellResult only reads it while the
+      // field is still pending, so once the refetch lands and the
+      // field finalises, the preview becomes invisible automatically.
+      // The TTL below still cleans up if the stream is abandoned.
       if (data.status === "clear" || data.answer === null) {
-        const key = extractionPreviewKey(data.entityId, data.propertyId);
-        const timer = previewClearTimersRef.current.get(key);
-        if (timer !== undefined) {
-          clearTimeout(timer);
-          previewClearTimersRef.current.delete(key);
-        }
-        workspaceStore.clearExtractionPreview(data.entityId, data.propertyId);
         return;
       }
 

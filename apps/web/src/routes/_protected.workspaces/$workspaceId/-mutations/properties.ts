@@ -75,6 +75,63 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
   });
 };
 
+export type CreatePropertySpec = {
+  name: string;
+  contentType: PropertyContentType;
+  toolType?: "ai-model" | "manual-input";
+  prompt?: string;
+  dependencies?: CreatePropertyDependency[];
+  options?: WorkspacePropertyOption[];
+  fallback?: string | null;
+};
+
+export const useCreatePropertiesBatch = ({
+  workspaceId,
+}: {
+  workspaceId: string;
+}) => {
+  const analytics = useAnalytics();
+
+  return useMutation({
+    mutationFn: async ({ items }: { items: CreatePropertySpec[] }) => {
+      const response = await api
+        .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .batch.put({
+          queryKey: propertiesKeys.all(workspaceId),
+          items: items.map((item) => ({
+            name: item.name,
+            contentType: item.contentType,
+            ...(item.toolType ? { toolType: item.toolType } : {}),
+            ...(item.prompt === undefined ? {} : { prompt: item.prompt }),
+            ...(item.dependencies && item.dependencies.length > 0
+              ? {
+                  dependencies: item.dependencies.map((dep) => ({
+                    dependsOnPropertyId: toSafeId<"property">(
+                      dep.dependsOnPropertyId,
+                    ),
+                    condition: dep.condition,
+                  })),
+                }
+              : {}),
+            ...(item.options && item.options.length > 0
+              ? { options: item.options }
+              : {}),
+            ...(item.fallback !== undefined ? { fallback: item.fallback } : {}),
+          })),
+        });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
+};
+
 type UpdatePropertyVars = {
   workspaceId: string;
   propertyId: string;

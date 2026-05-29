@@ -1,7 +1,12 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type React from "react";
 
-import { useSuspenseQuery } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
 import History from "@tiptap/extension-history";
 import Paragraph from "@tiptap/extension-paragraph";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -18,18 +23,31 @@ import { FieldError } from "@stll/ui/components/field";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { cn } from "@stll/ui/lib/utils";
 
+import { buildChatSlashItems } from "@/components/chat-editor-slash-items";
+import { PastedText } from "@/components/chat-pasted-text-extension";
+import {
+  createPromptSlashSuggestion,
+  PromptSlash,
+} from "@/components/chat/prompt-slash-extension";
+import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import {
   createPromptEditorDocument,
   handlePromptEditorSelectAll,
   PROMPT_EDITOR_SELECTION_CLASS,
   PromptEditorContent,
 } from "@/components/prompt-editor";
+import {
+  shortcutsOptions,
+  skillsOptions,
+} from "@/routes/_protected.knowledge/-queries";
 import { PropertyFormField } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/form";
 import {
   createCustomMention,
   createSuggestion,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/custom-mention";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
+
+const protectedRouteApi = getRouteApi("/_protected");
 
 const getMentions = (editor: Editor): string[] => {
   const mentions = new Set<string>();
@@ -103,11 +121,28 @@ export const PropertyPromptInput = ({
     .map((item) => ({ id: item.id, label: item.name }))
     .filter((item) => item.id !== propertyId);
   const fileProperty = properties.find((p) => p.content.type === "file");
+
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data: shortcuts = [] } = useQuery(
+    shortcutsOptions(activeOrganizationId),
+  );
+  const { data: skillPages } = useInfiniteQuery(
+    skillsOptions(activeOrganizationId),
+  );
+  const slashItemsRef = useRef<SlashItem[]>([]);
+  slashItemsRef.current = useMemo<SlashItem[]>(
+    () => buildChatSlashItems({ shortcuts, skillPages: skillPages?.pages }),
+    [shortcuts, skillPages],
+  );
+
   const editor = useEditor({
     extensions: [
       createPromptEditorDocument(),
       Paragraph,
       Text,
+      PastedText,
       Placeholder.configure({
         placeholder:
           placeholder ?? t("workspaces.properties.setPromptPlaceholder"),
@@ -116,6 +151,9 @@ export const PropertyPromptInput = ({
       createCustomMention(workspaceId).configure({
         suggestion: createSuggestion(suggestionOptions),
         deleteTriggerWithBackspace: true,
+      }),
+      PromptSlash.configure({
+        suggestion: createPromptSlashSuggestion(() => slashItemsRef.current),
       }),
       History,
     ],

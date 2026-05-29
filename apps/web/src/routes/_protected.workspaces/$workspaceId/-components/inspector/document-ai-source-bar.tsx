@@ -237,6 +237,36 @@ export const DocumentAiSourceBar = ({
     setScrollTo,
   ]);
 
+  // Folio (DOCX) parallel: once the justification activates on this
+  // tab, queue a scroll to the first citation's block so the user
+  // doesn't have to click a chip to land on it. Mirrors the PDF
+  // first-bbox auto-scroll above. Tracks "already scrolled for this
+  // justification id" so swapping back to the same cell doesn't
+  // re-fire the request mid-typing.
+  const scrolledForDocxJustificationRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isActiveTab || !justificationId) {
+      return;
+    }
+    if (scrolledForDocxJustificationRef.current === justificationId) {
+      return;
+    }
+    const firstDocxCitation = citations.find(
+      (citation) => citation.kind === "docx-folio",
+    );
+    if (!firstDocxCitation) {
+      return;
+    }
+    scrolledForDocxJustificationRef.current = justificationId;
+    requestBlockScroll(activeTab.id, firstDocxCitation.blockId);
+  }, [
+    activeTab.id,
+    citations,
+    isActiveTab,
+    justificationId,
+    requestBlockScroll,
+  ]);
+
   // Sync activeJustification before paint so PageCitation can
   // render bboxes without waiting for PeekJustification's effect.
   // Only set for the ACTIVE tab — inactive tabs stay mounted but
@@ -326,10 +356,19 @@ export const DocumentAiSourceBar = ({
     : [];
 
   return (
-    <div className="bg-muted/30 flex shrink-0 flex-col border-b px-3">
+    <div className="bg-muted/30 relative flex shrink-0 flex-col border-b px-3">
+      {/* One-shot tint pulse so a freshly activated justification
+          reads as a connected event, not a quiet re-render. Keyed
+          on the justification id so each new activation re-mounts
+          the overlay and re-runs the keyframe. */}
+      <div
+        aria-hidden
+        className="bg-primary/12 animate-source-bar-flash pointer-events-none absolute inset-0 opacity-0"
+        key={justificationId}
+      />
       <div
         className={cn(
-          "flex w-full min-w-0 items-center gap-2 text-xs",
+          "relative flex w-full min-w-0 items-center gap-2 text-xs",
           TOOLBAR_ROW_HEIGHT,
         )}
       >
@@ -399,7 +438,7 @@ export const DocumentAiSourceBar = ({
         </Button>
       </div>
       {isAnswerExpanded && shortAnswer !== null && (
-        <div className="text-foreground-strong-muted max-h-32 min-w-0 overflow-y-auto pb-2 text-xs leading-relaxed break-words">
+        <div className="text-foreground-strong-muted relative max-h-32 min-w-0 overflow-y-auto pb-2 text-xs leading-relaxed break-words">
           {justificationNodes}
         </div>
       )}
@@ -407,7 +446,119 @@ export const DocumentAiSourceBar = ({
   );
 };
 
-const DOCX_SOURCE_PREVIEW_CHARS = 28;
+/**
+ * Resolve the page for a folio citation by walking the editor's
+ * two parallel DOM trees:
+ *
+ * - `.paged-editor__hidden-pm` is the ProseMirror source tree.
+ *   Each paragraph carries `data-para-id` (the Word `w14:paraId`
+ *   we store in the citation) but no page metadata — it lives
+ *   outside the paginated layout.
+ * - `.layout-page` is the rendered paginated tree. Each visible
+ *   paragraph is tagged `data-block-id="block-N"` (sequential, NOT
+ *   the paraId) and the enclosing page carries
+ *   `data-page-number`.
+ *
+ * The two trees are walked in the same order, so the Nth paraId
+ * paragraph in the PM tree corresponds to the Nth `block-N` in
+ * the layout. We use that ordinal as the bridge.
+ *
+ * Returns `null` while the editor is still mounting or if the
+ * block lives on a page that hasn't been paginated yet (folio
+ * lays out lazily; later pages only enter the DOM after a scroll
+ * to them).
+ */
+const getPageNumberFromElement = (element: Element): number | null => {
+  const pageEl = element.closest<HTMLElement>("[data-page-number]");
+  const raw = pageEl?.dataset["pageNumber"] ?? null;
+  const parsed = raw === null ? Number.NaN : Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const findFolioBlockPage = (blockId: string): number | null => {
+  // CSS.escape is universally available in modern browsers we
+  // support; the previous "manually escape only quotes" fallback
+  // failed to escape `\`, `]`, or other CSS identifier specials,
+  // which CodeQL correctly flagged as incomplete encoding.
+  const escaped = CSS.escape(blockId);
+
+  // paraId path: find the paragraph in the PM source tree, take
+  // its ordinal, look up the same ordinal in the layout tree.
+  const pmParagraph = document.querySelector(
+    `.paged-editor__hidden-pm [data-para-id="${escaped}"]`,
+  );
+  if (pmParagraph) {
+    const pmParagraphs = Array.from(
+      document.querySelectorAll(".paged-editor__hidden-pm [data-para-id]"),
+    );
+    const ordinal = pmParagraphs.indexOf(pmParagraph);
+    if (ordinal !== -1) {
+      const layoutBlocks = document.querySelectorAll(
+        ".layout-page [data-block-id]",
+      );
+      const layoutBlock = layoutBlocks[ordinal];
+      if (layoutBlock) {
+        const page = getPageNumberFromElement(layoutBlock);
+        if (page !== null) {
+          return page;
+        }
+      }
+    }
+  }
+
+  // Direct fallback for `seq-NNNN` ids — those map to layout
+  // block ids by extracting the numeric suffix.
+  const seqMatch = /^seq-(\d+)$/u.exec(blockId);
+  if (seqMatch) {
+    const direct = document.querySelector(
+      `.layout-page [data-block-id="block-${Number.parseInt(seqMatch[1] ?? "0", 10)}"]`,
+    );
+    if (direct) {
+      const page = getPageNumberFromElement(direct);
+      if (page !== null) {
+        return page;
+      }
+    }
+  }
+
+  return null;
+};
+
+/**
+ * Resolve the page for a folio block. Folio renders virtual pages —
+ * a block on page 8 is only added to the DOM when the editor
+ * paginates that far. Listen via MutationObserver instead of a
+ * bounded retry loop so the chip catches up whenever the block
+ * actually lands, including after a `scrollToBlock` triggers a
+ * lazy layout pass.
+ */
+const useFolioBlockPage = (blockId: string): number | null => {
+  const [page, setPage] = useState<number | null>(() =>
+    findFolioBlockPage(blockId),
+  );
+  useEffect(() => {
+    setPage(findFolioBlockPage(blockId));
+    const observer = new MutationObserver(() => {
+      const next = findFolioBlockPage(blockId);
+      // Only set when changed so we don't churn React state on
+      // every unrelated DOM tick the editor emits during typing.
+      setPage((prev) => (prev === next ? prev : next));
+    });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-page-number", "data-para-id", "data-block-id"],
+    });
+    return () => {
+      observer.disconnect();
+    };
+  }, [blockId]);
+  return page;
+};
+
+const SOURCE_CITATION_CHIP_CLASS =
+  "border-border bg-muted/64 text-foreground-strong-muted hover:bg-muted hover:text-foreground hover:border-foreground/24 inline-flex shrink-0 items-center rounded-md border px-1.5 py-0.5 align-middle text-[10.5px] font-medium tracking-tight transition-colors";
 
 const SourceCitationChip = ({
   citation,
@@ -419,7 +570,7 @@ const SourceCitationChip = ({
   if (citation.kind === "pdf-bates") {
     return (
       <button
-        className="bg-primary/10 text-primary hover:bg-primary/20 inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium transition-colors"
+        className={SOURCE_CITATION_CHIP_CLASS}
         onClick={onClick}
         type="button"
       >
@@ -428,20 +579,39 @@ const SourceCitationChip = ({
     );
   }
 
-  const trimmed = citation.text.trim();
-  const preview =
-    trimmed.length > DOCX_SOURCE_PREVIEW_CHARS
-      ? `${trimmed.slice(0, DOCX_SOURCE_PREVIEW_CHARS).trimEnd()}...`
-      : trimmed || "Text";
+  return (
+    <DocxSourceCitationChip
+      blockId={citation.blockId}
+      onClick={onClick}
+      tooltip={citation.text.trim() || undefined}
+    />
+  );
+};
+
+const DocxSourceCitationChip = ({
+  blockId,
+  onClick,
+  tooltip,
+}: {
+  blockId: string;
+  onClick: () => void;
+  tooltip: string | undefined;
+}) => {
+  const page = useFolioBlockPage(blockId);
+  // Page resolution races the editor's paginator on first mount —
+  // fall back to an em dash so the chip stays the same width and
+  // the layout doesn't reshuffle when the number lands.
+  const label = page !== null ? `p. ${page}` : "p. —";
 
   return (
     <button
-      className="bg-primary/10 text-primary hover:bg-primary/20 inline-flex max-w-36 shrink-0 items-center truncate rounded-md px-1.5 py-0.5 text-[11px] font-medium transition-colors"
+      aria-label={tooltip}
+      className={SOURCE_CITATION_CHIP_CLASS}
       onClick={onClick}
-      title={trimmed || undefined}
+      title={tooltip}
       type="button"
     >
-      "{preview}"
+      {label}
     </button>
   );
 };

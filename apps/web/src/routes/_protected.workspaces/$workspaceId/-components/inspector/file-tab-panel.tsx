@@ -547,7 +547,12 @@ export const FileTabPanel = ({
           initialScrollTop={docxScrollTopByTab.get(tab.id)}
           isEditing={isEditingNativeDocx}
           onClose={() => {
-            docxActionsRef.current.delete(tab.id);
+            // Don't touch docxActionsRef here. The editor stays
+            // mounted across error → idle transitions; only its
+            // own cleanup effect should release the slot, otherwise
+            // the next "Edit file" click finds no entry and silently
+            // no-ops. setEditingDocxTabId(null) is enough to flip
+            // the UI back out of edit mode.
             setEditingDocxTabId(null);
           }}
           onCompatibilityChange={(compatibility) => {

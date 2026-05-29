@@ -67,20 +67,30 @@ export const useDocxBlockScroll = ({
   useEffect(() => {
     let cancelScroll: (() => void) | null = null;
 
-    const handler = (event: CustomEvent<{ blockId: string }>) => {
-      if (!event.detail.blockId) {
+    // `FOLIO_SCROLL_EVENT` isn't in the WindowEventMap because it's
+    // a custom in-app channel; receive Event and narrow inside.
+    const handler: EventListener = (event) => {
+      if (!(event instanceof CustomEvent)) {
+        return;
+      }
+      const detail: unknown = event.detail;
+      if (typeof detail !== "object" || detail === null) {
+        return;
+      }
+      const blockId: unknown = (detail as { blockId?: unknown }).blockId;
+      if (typeof blockId !== "string" || blockId.length === 0) {
         return;
       }
 
       debugDocxBlockScroll("hook:event", {
-        blockId: event.detail.blockId,
+        blockId,
         fieldId,
       });
 
       cancelScroll?.();
       cancelScroll = scheduleDocxBlockScroll({
-        blockId: event.detail.blockId,
-        scrollToBlock: (blockId) => editorRef.current?.scrollToBlock(blockId),
+        blockId,
+        scrollToBlock: (id) => editorRef.current?.scrollToBlock(id),
       });
     };
 
