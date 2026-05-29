@@ -21,6 +21,41 @@ type ResolveFolioAIBlockRangeOptions = {
   snapshot?: FolioAIEditSnapshot | null | undefined;
 };
 
+const LEGACY_BLOCK_ID_PATTERN = /^b-(\d+)$/u;
+
+/**
+ * Walk the document in order and return the range for the Nth (1-indexed)
+ * textblock. Used as the resolution path for the legacy `b-NNNN` block-id
+ * shape: those ids are a zero-padded 1-based document-order counter from
+ * before {@link deriveBlockId} unified the on-disk format, so the only
+ * way to resolve a row that was persisted under one is to count.
+ */
+const findTextblockByDocumentOrder = (
+  doc: PMNode,
+  oneBasedIndex: number,
+): DocPositionRange | null => {
+  if (oneBasedIndex < 1) {
+    return null;
+  }
+  let seen = 0;
+  let result: DocPositionRange | null = null;
+  doc.descendants((node, pos) => {
+    if (result !== null) {
+      return false;
+    }
+    if (!node.isTextblock) {
+      return true;
+    }
+    seen += 1;
+    if (seen === oneBasedIndex) {
+      result = { from: pos, to: pos + node.nodeSize };
+      return false;
+    }
+    return false;
+  });
+  return result;
+};
+
 export const resolveFolioAIBlockRange = ({
   blockId,
   doc,
@@ -36,10 +71,25 @@ export const resolveFolioAIBlockRange = ({
 
   const resolvedSnapshot = snapshot ?? createFolioAIEditSnapshot(doc);
   const anchor = resolvedSnapshot.anchors[blockId];
-  if (!anchor) {
-    return null;
+  if (anchor) {
+    return clampRangeToDocSize(doc.content.size, anchor);
   }
-  return clampRangeToDocSize(doc.content.size, anchor);
+
+  // Legacy fallback: citations persisted under the pre-deriveBlockId
+  // `b-NNNN` scheme don't appear in the live paraId set or the
+  // snapshot's anchor map. The number is a 1-based document-order
+  // counter, so resolving by ordinal lands on the same paragraph
+  // the original extraction was anchored to.
+  const legacyMatch = LEGACY_BLOCK_ID_PATTERN.exec(blockId);
+  if (legacyMatch) {
+    const oneBasedIndex = Number.parseInt(legacyMatch[1] ?? "0", 10);
+    const range = findTextblockByDocumentOrder(doc, oneBasedIndex);
+    if (range !== null) {
+      return clampRangeToDocSize(doc.content.size, range);
+    }
+  }
+
+  return null;
 };
 
 /**
