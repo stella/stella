@@ -1191,7 +1191,9 @@ function convertTableRow(
   const rowIsFirstRow = rowCnf?.firstRow ?? isFirstRow;
   const rowIsLastRow = rowCnf?.lastRow ?? isLastRow;
   const totalCols =
-    totalColumns != null && totalColumns > 0 ? totalColumns : numCells;
+    totalColumns != null && totalColumns > 0
+      ? totalColumns
+      : Math.max(numCells, 1);
 
   // A literal `<w:tr/>` from a non-Word producer parses with zero cells. PM's
   // tableRow content is `(tableCell | tableHeader)+`, so emit one placeholder
