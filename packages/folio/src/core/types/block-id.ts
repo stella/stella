@@ -68,14 +68,16 @@ export const deriveBlockId = ({
   return brand(formatted);
 };
 
-export const isSequentialFolioBlockId = (id: FolioBlockId): boolean =>
+export const isSequentialFolioBlockId = (id: string): boolean =>
   SEQUENTIAL_BLOCK_ID_PATTERN.test(id);
 
 /**
  * Extract the paraId an id was derived from, if any. Returns `null`
- * for sequential fallbacks.
+ * for sequential fallbacks. Accepts plain `string` so consumers that
+ * have a raw id (snapshot anchors, operation blockIds) can call it
+ * without an upfront brand check.
  */
-export const getFolioParaIdFromBlockId = (id: FolioBlockId): string | null =>
+export const getFolioParaIdFromBlockId = (id: string): string | null =>
   isSequentialFolioBlockId(id) ? null : id;
 
 /**
