@@ -506,56 +506,56 @@ jobs:
           TARGET_ENV: production
           INFRA_REPO: ${{ github.repository_owner }}/stella-infra
         run: |
+          set -euo pipefail
           dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           # Must match the `run-name:` template in
           # stella-infra/.github/workflows/promote-release.yml
           expected_title="Promote ${RELEASE_REF} → ${TARGET_ENV}"
-          dispatch_output="$(
-            gh workflow run promote-release.yml \
-              --repo "$INFRA_REPO" \
-              --field release_ref="$RELEASE_REF" \
-              --field target_environment="$TARGET_ENV" \
-              --field run_migrations=true \
-              --field frontend=true 2>&1
-          )"
-          printf '%s\n' "$dispatch_output"
 
-          run_id="$(
-            printf '%s\n' "$dispatch_output" \
-              | sed -nE 's#.*https://github.com/[^/]+/[^/]+/actions/runs/([0-9]+).*#\1#p' \
-              | head -n 1
-          )"
+          # Use the dispatches REST endpoint directly. `gh workflow
+          # run` first looks up the workflow by filename and the
+          # repo's default branch; with the narrowly-scoped App
+          # token (permission-actions: write only, no contents/
+          # metadata) those implicit lookups can fail silently and
+          # kill the step in well under a second with no output.
+          # Calling /dispatches directly uses exactly the
+          # actions:write we have and any failure surfaces as a
+          # real HTTP error in the log.
+          echo "Dispatching promote-release.yml on ${INFRA_REPO} (target=${TARGET_ENV}, release=${RELEASE_REF})..."
+          gh api --method POST \
+            "/repos/${INFRA_REPO}/actions/workflows/promote-release.yml/dispatches" \
+            -f "ref=main" \
+            -f "inputs[release_ref]=${RELEASE_REF}" \
+            -f "inputs[target_environment]=${TARGET_ENV}" \
+            -f "inputs[run_migrations]=true" \
+            -f "inputs[frontend]=true"
 
-          for _ in {1..30}; do
-            if [[ -n "$run_id" ]]; then
-              break
-            fi
-
-            # Match by exact displayTitle so concurrent dispatches
+          echo "Dispatch accepted. Polling for the new run..."
+          run_id=""
+          for attempt in {1..30}; do
+            # Match by exact display_title so concurrent dispatches
             # cannot be confused, and prefix-overlapping refs
             # (v1.2.3 vs v1.2.3-rc.1, v1.2.3-rc.1 vs v1.2.3-rc.10)
             # never collide.
             run_id="$(
-              gh run list \
-                --repo "$INFRA_REPO" \
-                --workflow promote-release.yml \
-                --event workflow_dispatch \
-                --json databaseId,createdAt,displayTitle \
-                --jq ".[] | select(.createdAt >= \"$dispatched_at\") | select(.displayTitle == \"$expected_title\") | .databaseId" \
-                --limit 10 \
+              gh api \
+                "/repos/${INFRA_REPO}/actions/workflows/promote-release.yml/runs?event=workflow_dispatch&per_page=10" \
+                --jq ".workflow_runs[] | select(.created_at >= \"${dispatched_at}\") | select(.display_title == \"${expected_title}\") | .id" \
                 | head -n 1
             )"
-
-            if [[ -z "$run_id" ]]; then
-              sleep 2
+            if [[ -n "$run_id" ]]; then
+              echo "Found dispatched run: ${run_id} (attempt ${attempt}/30)"
+              break
             fi
+            sleep 2
           done
 
           if [[ -z "$run_id" ]]; then
-            echo "Could not find the dispatched promotion workflow run." >&2
+            echo "::error::Dispatched a promote run but never observed it in the workflow's run list." >&2
             exit 1
           fi
 
+          echo "Watching run ${run_id}..."
           gh run watch "$run_id" \
             --repo "$INFRA_REPO" \
             --compact \
@@ -590,56 +590,45 @@ jobs:
           TARGET_ENV: staging
           INFRA_REPO: ${{ github.repository_owner }}/stella-infra
         run: |
+          set -euo pipefail
           dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           # Must match the `run-name:` template in
           # stella-infra/.github/workflows/promote-release.yml
           expected_title="Promote ${RELEASE_REF} → ${TARGET_ENV}"
-          dispatch_output="$(
-            gh workflow run promote-release.yml \
-              --repo "$INFRA_REPO" \
-              --field release_ref="$RELEASE_REF" \
-              --field target_environment="$TARGET_ENV" \
-              --field run_migrations=true \
-              --field frontend=true 2>&1
-          )"
-          printf '%s\n' "$dispatch_output"
 
-          run_id="$(
-            printf '%s\n' "$dispatch_output" \
-              | sed -nE 's#.*https://github.com/[^/]+/[^/]+/actions/runs/([0-9]+).*#\1#p' \
-              | head -n 1
-          )"
+          # See the production variant above for why we call the
+          # dispatches endpoint directly instead of `gh workflow run`.
+          echo "Dispatching promote-release.yml on ${INFRA_REPO} (target=${TARGET_ENV}, release=${RELEASE_REF})..."
+          gh api --method POST \
+            "/repos/${INFRA_REPO}/actions/workflows/promote-release.yml/dispatches" \
+            -f "ref=main" \
+            -f "inputs[release_ref]=${RELEASE_REF}" \
+            -f "inputs[target_environment]=${TARGET_ENV}" \
+            -f "inputs[run_migrations]=true" \
+            -f "inputs[frontend]=true"
 
-          for _ in {1..30}; do
-            if [[ -n "$run_id" ]]; then
-              break
-            fi
-
-            # Match by exact displayTitle so concurrent dispatches
-            # cannot be confused, and prefix-overlapping refs
-            # (v1.2.3 vs v1.2.3-rc.1, v1.2.3-rc.1 vs v1.2.3-rc.10)
-            # never collide.
+          echo "Dispatch accepted. Polling for the new run..."
+          run_id=""
+          for attempt in {1..30}; do
             run_id="$(
-              gh run list \
-                --repo "$INFRA_REPO" \
-                --workflow promote-release.yml \
-                --event workflow_dispatch \
-                --json databaseId,createdAt,displayTitle \
-                --jq ".[] | select(.createdAt >= \"$dispatched_at\") | select(.displayTitle == \"$expected_title\") | .databaseId" \
-                --limit 10 \
+              gh api \
+                "/repos/${INFRA_REPO}/actions/workflows/promote-release.yml/runs?event=workflow_dispatch&per_page=10" \
+                --jq ".workflow_runs[] | select(.created_at >= \"${dispatched_at}\") | select(.display_title == \"${expected_title}\") | .id" \
                 | head -n 1
             )"
-
-            if [[ -z "$run_id" ]]; then
-              sleep 2
+            if [[ -n "$run_id" ]]; then
+              echo "Found dispatched run: ${run_id} (attempt ${attempt}/30)"
+              break
             fi
+            sleep 2
           done
 
           if [[ -z "$run_id" ]]; then
-            echo "Could not find the dispatched promotion workflow run." >&2
+            echo "::error::Dispatched a promote run but never observed it in the workflow's run list." >&2
             exit 1
           fi
 
+          echo "Watching run ${run_id}..."
           gh run watch "$run_id" \
             --repo "$INFRA_REPO" \
             --compact \
