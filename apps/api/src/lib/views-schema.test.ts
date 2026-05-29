@@ -88,20 +88,26 @@ const arbFilter = fc.oneof(
     op: fc.constant("in" as const),
     value: fc.array(arbEntityKind, { maxLength: 5 }),
   }),
-  fc.record({
-    id: arbId,
-    field: fc.constant("property" as const),
-    propertyId: arbPropertyId,
-    op: fc.constantFrom("eq", "neq", "contains", "is_empty"),
-    value: arbStringOrArray,
-  }),
-  fc.record({
-    id: arbId,
-    field: fc.constant("builtin" as const),
-    builtinField: arbBuiltinField,
-    op: fc.constantFrom("eq", "neq", "in", "is_empty"),
-    value: arbStringOrArray,
-  }),
+  fc.record(
+    {
+      id: arbId,
+      field: fc.constant("property" as const),
+      propertyId: arbPropertyId,
+      op: fc.constantFrom("eq", "neq", "contains", "is_empty"),
+      value: arbStringOrArray,
+    },
+    { requiredKeys: ["id", "field", "propertyId", "op"] },
+  ),
+  fc.record(
+    {
+      id: arbId,
+      field: fc.constant("builtin" as const),
+      builtinField: arbBuiltinField,
+      op: fc.constantFrom("eq", "neq", "in", "is_empty"),
+      value: arbStringOrArray,
+    },
+    { requiredKeys: ["id", "field", "builtinField", "op"] },
+  ),
 );
 
 const arbSort = fc.record({
@@ -128,28 +134,61 @@ const arbLayout = fc.oneof(
     type: fc.constant("filesystem" as const),
     ...baseLayoutFields,
   }),
-  fc.record({
-    type: fc.constant("kanban" as const),
-    ...baseLayoutFields,
-    groupByPropertyId: arbPropertyId,
-  }),
-  fc.record({
-    type: fc.constant("calendar" as const),
-    ...baseLayoutFields,
-    datePropertyId: arbPropertyId,
-    endDatePropertyId: arbPropertyId,
-    additionalDatePropertyIds: fc.array(arbPropertyId, { maxLength: 3 }),
-    mode: fc.constantFrom("month", "week", "year"),
-  }),
-  fc.record({
-    type: fc.constant("timeline" as const),
-    ...baseLayoutFields,
-    startDatePropertyId: arbPropertyId,
-    endDatePropertyId: arbPropertyId,
-    zoom: fc.constantFrom("day", "week", "month", "quarter"),
-    groupByPropertyId: arbPropertyId,
-    showTable: fc.boolean(),
-  }),
+  fc.record(
+    {
+      type: fc.constant("kanban" as const),
+      ...baseLayoutFields,
+      groupByPropertyId: arbPropertyId,
+    },
+    {
+      requiredKeys: ["type", "version", "filters", "sorts", "hiddenProperties"],
+    },
+  ),
+  fc.record(
+    {
+      type: fc.constant("calendar" as const),
+      ...baseLayoutFields,
+      datePropertyId: arbPropertyId,
+      endDatePropertyId: arbPropertyId,
+      additionalDatePropertyIds: fc.array(arbPropertyId, { maxLength: 3 }),
+      mode: fc.constantFrom("month", "week", "year"),
+    },
+    {
+      requiredKeys: [
+        "type",
+        "version",
+        "filters",
+        "sorts",
+        "hiddenProperties",
+        "datePropertyId",
+        "mode",
+      ],
+    },
+  ),
+  fc.record(
+    {
+      type: fc.constant("timeline" as const),
+      ...baseLayoutFields,
+      startDatePropertyId: arbPropertyId,
+      endDatePropertyId: arbPropertyId,
+      zoom: fc.constantFrom("day", "week", "month", "quarter"),
+      groupByPropertyId: arbPropertyId,
+      showTable: fc.boolean(),
+    },
+    {
+      requiredKeys: [
+        "type",
+        "version",
+        "filters",
+        "sorts",
+        "hiddenProperties",
+        "startDatePropertyId",
+        "endDatePropertyId",
+        "zoom",
+        "showTable",
+      ],
+    },
+  ),
 );
 
 const declaredLayoutKeys = new Set([
