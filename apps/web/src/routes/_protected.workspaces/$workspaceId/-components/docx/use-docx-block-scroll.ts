@@ -67,30 +67,37 @@ export const useDocxBlockScroll = ({
   useEffect(() => {
     let cancelScroll: (() => void) | null = null;
 
-    const handler = (event: CustomEvent<{ blockId: FolioBlockId }>) => {
-      if (!event.detail.blockId) {
+    // `FOLIO_SCROLL_EVENT` isn't in the WindowEventMap because it's
+    // a custom in-app channel; receive Event and narrow inside.
+    const handler: EventListener = (event) => {
+      if (!(event instanceof CustomEvent)) {
+        return;
+      }
+      const detail: unknown = event.detail;
+      if (typeof detail !== "object" || detail === null) {
+        return;
+      }
+      const blockId: unknown = (detail as { blockId?: unknown }).blockId;
+      if (typeof blockId !== "string" || blockId.length === 0) {
         return;
       }
 
       debugDocxBlockScroll("hook:event", {
-        blockId: event.detail.blockId,
+        blockId,
         fieldId,
       });
 
       cancelScroll?.();
       cancelScroll = scheduleDocxBlockScroll({
-        blockId: event.detail.blockId,
-        scrollToBlock: (blockId) => editorRef.current?.scrollToBlock(blockId),
+        blockId: blockId as FolioBlockId,
+        scrollToBlock: (id) => editorRef.current?.scrollToBlock(id),
       });
     };
 
-    // `FOLIO_SCROLL_EVENT` isn't in the WindowEventMap because it's
-    // a custom in-app channel; cast through `EventListener` so the
-    // typed handler stays domain-typed at its call site.
-    window.addEventListener(FOLIO_SCROLL_EVENT, handler as EventListener);
+    window.addEventListener(FOLIO_SCROLL_EVENT, handler);
     return () => {
       cancelScroll?.();
-      window.removeEventListener(FOLIO_SCROLL_EVENT, handler as EventListener);
+      window.removeEventListener(FOLIO_SCROLL_EVENT, handler);
     };
   }, [editorRef, fieldId]);
 };

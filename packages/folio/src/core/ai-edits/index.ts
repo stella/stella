@@ -1,10 +1,10 @@
 export { applyFolioAIEditOperations } from "./apply";
 export {
   createFolioAIEditSnapshot,
-  getFolioAIParaIdFromBlockId,
   hashFolioAIBlockText,
   normalizeFolioAIBlockText,
 } from "./snapshot";
+export { getFolioParaIdFromBlockId } from "../types/block-id";
 export { diffWordSegments } from "./word-diff";
 export type { WordDiffSegment } from "./word-diff";
 export type {
