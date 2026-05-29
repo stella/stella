@@ -151,8 +151,19 @@ const PropertyCell = ({
       referencedFile?.content.type === "file"
         ? referencedFile.content.pdfFileId
         : firstFile?.pdfFileId;
+    // The inspector tab's propertyId must point at the FILE property
+    // (the one whose content is the DOCX/PDF), not the AI-extraction
+    // property whose cell triggered the open. Downstream consumers —
+    // DocxBrowserEditor's edit-session, the desktop-open button, and
+    // inspector-panel's latestFileFieldForProperty lookup — all index
+    // by the file's propertyId. Using the AI property here makes the
+    // backend reject the open with "Target property is not an
+    // editable DOCX field". The AI cell's identity travels via
+    // justificationFieldId, which is what the source bar reads.
+    const filePropertyId =
+      referencedFile?.propertyId ?? firstFile?.propertyId;
 
-    if (fileFieldId) {
+    if (fileFieldId && filePropertyId) {
       return (
         <WithOpenEntityButton
           entityId={entity.entityId}
@@ -161,7 +172,7 @@ const PropertyCell = ({
           label={fileName}
           mimeType={mimeType}
           pdfFileId={pdfFileId}
-          propertyId={property.id}
+          propertyId={filePropertyId}
           retryDisabled={cellMetadata?.locked === true || entity.readOnly}
           workspaceId={property.workspaceId}
         >
