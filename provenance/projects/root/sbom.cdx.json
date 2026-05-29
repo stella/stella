@@ -1074,6 +1074,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#1"
           },
           {
@@ -1197,7 +1200,7 @@
             "location": "apps/web/src/routes/_protected.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#8"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#1"
@@ -1267,9 +1270,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#14"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/drop-zone.tsx#1"
@@ -1347,6 +1347,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/measured-pdf-provider.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/skill-resource-panel.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/suggestions-facet.tsx#23"
           },
           {
@@ -1401,10 +1404,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#9"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#10"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/form.tsx#1"
@@ -1881,6 +1884,9 @@
             "location": "apps/api/src/handlers/search/ai.ts#8"
           },
           {
+            "location": "apps/api/src/handlers/skills/generate-draft.ts#5"
+          },
+          {
             "location": "apps/api/src/lib/ai-config-crypto.ts#10"
           },
           {
@@ -1965,7 +1971,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization.route.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#28"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#29"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx#8"
@@ -2583,6 +2589,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#1"
           },
           {
@@ -2706,7 +2715,7 @@
             "location": "apps/web/src/routes/_protected.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#8"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#1"
@@ -2776,9 +2785,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#14"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/drop-zone.tsx#1"
@@ -2856,6 +2862,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/measured-pdf-provider.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/skill-resource-panel.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/suggestions-facet.tsx#23"
           },
           {
@@ -2910,10 +2919,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#9"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#10"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/form.tsx#1"
@@ -3897,7 +3906,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#10"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/drop-zone.tsx#4"
@@ -3947,7 +3956,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#14"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/drop-zone.tsx#8"
@@ -4066,7 +4075,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#10"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/drop-zone.tsx#4"
@@ -4075,7 +4084,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#14"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#14"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/drop-zone.tsx#8"
@@ -4225,7 +4234,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#10"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/drop-zone.tsx#4"
@@ -4234,7 +4243,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#14"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#14"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/drop-zone.tsx#8"
@@ -4905,6 +4914,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#1"
           },
           {
@@ -5028,7 +5040,7 @@
             "location": "apps/web/src/routes/_protected.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#8"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#1"
@@ -5098,9 +5110,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#14"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/drop-zone.tsx#1"
@@ -5178,6 +5187,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/measured-pdf-provider.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/skill-resource-panel.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/suggestions-facet.tsx#23"
           },
           {
@@ -5232,10 +5244,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#9"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#10"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/form.tsx#1"
@@ -7053,6 +7065,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#1"
           },
           {
@@ -7176,7 +7191,7 @@
             "location": "apps/web/src/routes/_protected.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#8"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#1"
@@ -7246,9 +7261,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#14"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/drop-zone.tsx#1"
@@ -7326,6 +7338,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/measured-pdf-provider.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/skill-resource-panel.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/suggestions-facet.tsx#23"
           },
           {
@@ -7380,10 +7395,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#9"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#10"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/form.tsx#1"
@@ -8951,6 +8966,9 @@
             "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#17"
           },
           {
+            "location": "apps/web/src/components/ai-suggestions/review-operation-utils.ts#1"
+          },
+          {
             "location": "apps/web/src/components/ai-suggestions/review-store.ts#19"
           },
           {
@@ -8996,7 +9014,7 @@
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#22"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#30"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#31"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#32"
@@ -9011,16 +9029,16 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/suggestions-facet.tsx#27"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#23"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#24"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#41"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#42"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#49"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#25"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#26"
           }
         ]
       },
@@ -9598,6 +9616,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#43"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#38"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#19"
           },
           {
@@ -9637,7 +9658,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/prompts.tsx#18"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#37"
+            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#43"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#19"
@@ -9706,7 +9727,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#24"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#25"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.tsx#20"
@@ -9745,6 +9766,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/file-tab-panel.tsx#16"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/skill-resource-panel.tsx#9"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#20"
           },
           {
@@ -9763,10 +9787,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/delete-property.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#21"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#44"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#46"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#20"
@@ -9898,7 +9922,7 @@
             "location": "apps/web/src/components/chat-mention-list.tsx#23"
           },
           {
-            "location": "apps/web/src/components/chat-pasted-text-node.tsx#8"
+            "location": "apps/web/src/components/chat-pasted-text-node.tsx#13"
           },
           {
             "location": "apps/web/src/components/empty-screen.tsx#13"
@@ -9970,6 +9994,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#26"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#23"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#8"
           },
           {
@@ -10015,7 +10042,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/prompts.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#19"
+            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#24"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#16"
@@ -10054,7 +10081,7 @@
             "location": "apps/web/src/routes/_protected.tsx#28"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#31"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#32"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#12"
@@ -10094,9 +10121,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-header.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#17"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.tsx#8"
@@ -10141,6 +10165,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-tab-header.tsx#5"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/skill-resource-panel.tsx#6"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#43"
           },
           {
@@ -10162,7 +10189,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar.tsx#23"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#24"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#25"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/delete-property.tsx#14"
@@ -10186,10 +10213,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#12"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#18"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#33"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#35"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column.tsx#6"
@@ -10450,7 +10477,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/external-reference-panel.tsx#34"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail.tsx#14"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail.tsx#15"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/skill-resource-panel.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-view.tsx#45"
@@ -10510,7 +10540,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/property-conditions.tsx#26"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#14"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#20"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/-components/matters-toolbar.tsx#25"
@@ -10558,7 +10588,7 @@
             "location": "apps/web/src/components/ai-elements/message-response.tsx#11"
           },
           {
-            "location": "apps/web/src/components/ai-elements/message.tsx#8"
+            "location": "apps/web/src/components/ai-elements/message.tsx#9"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#39"
@@ -10603,7 +10633,7 @@
             "location": "apps/web/src/components/chat/source-chips.tsx#14"
           },
           {
-            "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#16"
+            "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#17"
           },
           {
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#16"
@@ -10624,7 +10654,7 @@
             "location": "apps/web/src/components/chat-mention-node.tsx#10"
           },
           {
-            "location": "apps/web/src/components/chat-pasted-text-node.tsx#14"
+            "location": "apps/web/src/components/chat-pasted-text-node.tsx#19"
           },
           {
             "location": "apps/web/src/components/empty-screen.tsx#14"
@@ -10681,6 +10711,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-diff-view.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#39"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/shortcut-form-dialog.tsx#26"
           },
           {
@@ -10699,7 +10732,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/prompts.tsx#19"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#38"
+            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#44"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.desktop.tsx#6"
@@ -10717,7 +10750,7 @@
             "location": "apps/web/src/routes/_protected.tsx#37"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#42"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#43"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx#10"
@@ -10753,7 +10786,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-year-grid.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#25"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-result.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.tsx#21"
@@ -10795,7 +10828,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-pdf-error-fallback.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-tab-header.tsx#6"
@@ -11122,6 +11155,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#36"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#31"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#18"
           },
           {
@@ -11146,7 +11182,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#21"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#29"
+            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#34"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#17"
@@ -11287,7 +11323,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/case/-components/decision-filters.tsx#13"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#36"
+            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#41"
           },
           {
             "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#32"
@@ -11419,10 +11455,13 @@
             "location": "apps/web/src/components/chat-mention-list.tsx#24"
           },
           {
-            "location": "apps/web/src/components/chat-pasted-text-node.tsx#13"
+            "location": "apps/web/src/components/chat-pasted-text-node.tsx#18"
           },
           {
             "location": "apps/web/src/components/matter-number-hint.tsx#11"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#36"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#26"
@@ -11452,7 +11491,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/shared.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#13"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#19"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-metadata.tsx#10"
@@ -11512,7 +11551,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-day-cell.tsx#12"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#23"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#24"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#44"
@@ -11539,10 +11578,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar.tsx#29"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#43"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column.tsx#7"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#45"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#47"
@@ -11638,6 +11674,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#35"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#30"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#17"
           },
           {
@@ -11653,7 +11692,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/prompts.tsx#17"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#28"
+            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#33"
           },
           {
             "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#22"
@@ -11662,7 +11701,7 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#20"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#40"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#41"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/billing-codes-dialog.tsx#10"
@@ -11827,10 +11866,16 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-form-dialog.tsx#23"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#37"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/shortcut-form-dialog.tsx#24"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx#28"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#42"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/expense-form.tsx#17"
@@ -11840,6 +11885,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#34"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/skill-resource-panel.tsx#8"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx#39"
@@ -11932,7 +11980,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/delete-property.tsx#13"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#32"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#34"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#26"
@@ -12832,10 +12880,10 @@
             "location": "apps/web/src/components/chat/tool-call-card.tsx#3"
           },
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#13"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#17"
           },
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#14"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#18"
           },
           {
             "location": "apps/web/src/components/chat-mention-list.tsx#10"
@@ -12916,6 +12964,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#3"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#3"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#3"
           },
           {
@@ -12994,7 +13045,7 @@
             "location": "apps/web/src/routes/_protected.tsx#12"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#20"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#21"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.index.tsx#1"
@@ -13102,7 +13153,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#12"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#13"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/property-conditions.tsx#3"
@@ -13112,6 +13163,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/mention-node.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#6"
@@ -13438,7 +13495,7 @@
             "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#5"
           },
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#15"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#19"
           },
           {
             "location": "apps/web/src/components/chat-mention-providers.tsx#4"
@@ -13511,6 +13568,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#10"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#4"
@@ -13600,7 +13660,7 @@
             "location": "apps/web/src/routes/_protected.tsx#18"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#25"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#26"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.index.tsx#2"
@@ -13660,7 +13720,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/pdf-viewer.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#3"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel.tsx#4"
@@ -13819,10 +13879,16 @@
             "location": "apps/web/src/routes/_protected.knowledge/case/-components/decision-table.tsx#9"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/case/-components/decision-table.tsx#10"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#7"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#8"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/end-fillers.tsx#1"
@@ -14262,7 +14328,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#16"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#20"
           }
         ]
       },
@@ -14372,7 +14438,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#17"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#21"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx#6"
@@ -14552,7 +14618,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#18"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#22"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx#8"
@@ -14613,7 +14679,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#19"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#23"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx#9"
@@ -14674,7 +14740,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#20"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#24"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx#10"
@@ -14744,7 +14810,7 @@
             "location": "apps/web/src/lib/anonymize/chat-anon-plugin-lifecycle.ts#1"
           },
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#21"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#25"
           },
           {
             "location": "apps/web/src/components/prompt-editor.tsx#5"
@@ -15339,6 +15405,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#1"
           },
           {
@@ -15462,7 +15531,7 @@
             "location": "apps/web/src/routes/_protected.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#8"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#1"
@@ -15532,9 +15601,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#14"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/drop-zone.tsx#1"
@@ -15612,6 +15678,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/measured-pdf-provider.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/skill-resource-panel.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/suggestions-facet.tsx#23"
           },
           {
@@ -15666,10 +15735,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#9"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#10"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/form.tsx#1"
@@ -16311,6 +16380,12 @@
           },
           {
             "location": "apps/api/src/handlers/search/ai.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/generate-draft.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/rewrite.ts#1"
           },
           {
             "location": "apps/api/src/lib/ai-error.ts#9"
@@ -16974,6 +17049,9 @@
             "location": "apps/api/src/handlers/external-preview/preview.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/fields/mark-column-flag.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/fields/update-cell-metadata.ts#1"
           },
           {
@@ -17205,6 +17283,12 @@
             "location": "apps/api/src/handlers/skills/delete.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/skills/generate-draft.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/get.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/skills/import-url.ts#1"
           },
           {
@@ -17212,6 +17296,24 @@
           },
           {
             "location": "apps/api/src/handlers/skills/list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/create.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/delete.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/rename.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/rewrite.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/update.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/upload.ts#1"
           },
           {
             "location": "apps/api/src/handlers/skills/skill-package.ts#1"
@@ -17742,7 +17844,7 @@
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#4"
           },
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#24"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#28"
           },
           {
             "location": "apps/web/src/components/require-ai-key.tsx#13"
@@ -17775,7 +17877,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-result.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#4"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells.tsx#15"
@@ -19000,6 +19102,9 @@
             "location": "apps/api/src/handlers/expenses/update.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/fields/mark-column-flag.ts#11"
+          },
+          {
             "location": "apps/api/src/handlers/fields/update-cell-metadata.ts#2"
           },
           {
@@ -19135,10 +19240,31 @@
             "location": "apps/api/src/handlers/skills/delete.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/skills/get.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/skills/install.ts#2"
           },
           {
             "location": "apps/api/src/handlers/skills/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/rename.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/rewrite.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/update.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/upload.ts#2"
           },
           {
             "location": "apps/api/src/handlers/skills/update.ts#2"
@@ -19226,9 +19352,6 @@
           },
           {
             "location": "apps/api/src/handlers/view-templates/list.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/view-templates/properties.ts#2"
           },
           {
             "location": "apps/api/src/handlers/views/convert.ts#2"
@@ -19927,6 +20050,9 @@
             "location": "apps/api/src/handlers/external-preview/routes.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/fields/mark-column-flag.ts#12"
+          },
+          {
             "location": "apps/api/src/handlers/fields/routes.ts#1"
           },
           {
@@ -20143,10 +20269,34 @@
             "location": "apps/api/src/handlers/skills/delete.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/skills/generate-draft.ts#4"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/get.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/skills/import-url.ts#2"
           },
           {
             "location": "apps/api/src/handlers/skills/list.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/create.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/delete.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/rename.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/rewrite.ts#4"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/update.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/upload.ts#3"
           },
           {
             "location": "apps/api/src/handlers/skills/routes.ts#1"
@@ -21016,6 +21166,9 @@
           },
           {
             "location": "packages/folio/src/core/docx/unzip.ts#27"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#9"
           }
         ]
       },
@@ -21080,6 +21233,9 @@
             "location": "apps/web/src/components/ai-elements/conversation.tsx#6"
           },
           {
+            "location": "apps/web/src/components/ai-elements/message.tsx#7"
+          },
+          {
             "location": "apps/web/src/components/ai-provider-icons.tsx#3"
           },
           {
@@ -21125,7 +21281,7 @@
             "location": "apps/web/src/components/chat/source-chips.tsx#7"
           },
           {
-            "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#13"
+            "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#14"
           },
           {
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#12"
@@ -21146,7 +21302,7 @@
             "location": "apps/web/src/components/chat-mention-node.tsx#8"
           },
           {
-            "location": "apps/web/src/components/chat-pasted-text-node.tsx#5"
+            "location": "apps/web/src/components/chat-pasted-text-node.tsx#10"
           },
           {
             "location": "apps/web/src/components/contact-picker.tsx#5"
@@ -21239,6 +21395,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#13"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#20"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#5"
           },
           {
@@ -21284,7 +21443,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/prompts.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#16"
+            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#21"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#13"
@@ -21317,7 +21476,7 @@
             "location": "apps/web/src/routes/_protected.tsx#25"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#26"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#27"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge.tsx#1"
@@ -21368,7 +21527,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#14"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-result.tsx#4"
@@ -21431,10 +21590,13 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-pdf-error-fallback.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail.tsx#11"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-tab-header.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/skill-resource-panel.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-rail-context-menu.tsx#1"
@@ -21476,7 +21638,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#20"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#21"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/delete-property.tsx#1"
@@ -21509,13 +21671,16 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-helpers.tsx#14"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#9"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#20"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#22"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#8"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#10"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells.tsx#16"
@@ -23766,6 +23931,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#1"
           },
           {
@@ -23889,7 +24057,7 @@
             "location": "apps/web/src/routes/_protected.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#8"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#1"
@@ -23959,9 +24127,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#14"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/drop-zone.tsx#1"
@@ -24039,6 +24204,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/measured-pdf-provider.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/skill-resource-panel.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/suggestions-facet.tsx#23"
           },
           {
@@ -24093,10 +24261,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#9"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#10"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/form.tsx#1"
@@ -24880,7 +25048,7 @@
             "location": "apps/web/src/components/app-sidebar.tsx#35"
           },
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#25"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#29"
           },
           {
             "location": "apps/web/src/components/contact-picker.tsx#6"
@@ -24905,6 +25073,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/matter-numbering-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#30"
@@ -25048,7 +25219,7 @@
             "location": "apps/web/src/components/chat/prompt-suggestions.tsx#1"
           },
           {
-            "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#14"
+            "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#15"
           },
           {
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#13"
@@ -25060,7 +25231,7 @@
             "location": "apps/web/src/components/chat/web-search-sources.tsx#2"
           },
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#26"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#30"
           },
           {
             "location": "apps/web/src/components/chat-input-surface.tsx#5"
@@ -25069,7 +25240,7 @@
             "location": "apps/web/src/components/chat-mention-list.tsx#21"
           },
           {
-            "location": "apps/web/src/components/chat-pasted-text-node.tsx#6"
+            "location": "apps/web/src/components/chat-pasted-text-node.tsx#11"
           },
           {
             "location": "apps/web/src/components/contact-picker.tsx#7"
@@ -25168,6 +25339,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#15"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/edit-skill-sheet.tsx#21"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#6"
           },
           {
@@ -25216,7 +25390,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/case/-components/decision-filters.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/case/-components/decision-table.tsx#10"
+            "location": "apps/web/src/routes/_protected.knowledge/case/-components/decision-table.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/case/index.tsx#5"
@@ -25234,7 +25408,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/prompts.tsx#6"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#17"
+            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#22"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#14"
@@ -25291,7 +25465,7 @@
             "location": "apps/web/src/routes/_protected.tsx#26"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#27"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#28"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#10"
@@ -25360,7 +25534,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-year-grid.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#17"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-result.tsx#5"
@@ -25432,7 +25606,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-pdf-error-fallback.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail.tsx#12"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-rail.tsx#13"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/skill-resource-panel.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/use-rail-context-menu.tsx#2"
@@ -25471,7 +25648,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar.tsx#11"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#21"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#22"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/delete-property.tsx#2"
@@ -25504,13 +25681,13 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-helpers.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#10"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#16"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#21"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#23"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#9"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#18"
@@ -25912,6 +26089,9 @@
             "location": "apps/api/src/handlers/search/ai.ts#8"
           },
           {
+            "location": "apps/api/src/handlers/skills/generate-draft.ts#5"
+          },
+          {
             "location": "apps/api/src/lib/ai-config-crypto.ts#10"
           },
           {
@@ -25996,7 +26176,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization.route.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#28"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#29"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx#8"
@@ -26270,6 +26450,9 @@
           },
           {
             "location": "apps/web/src/lib/pinned-store.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-overrides-store.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-active-store.ts#14"
