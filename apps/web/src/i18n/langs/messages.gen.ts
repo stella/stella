@@ -2192,7 +2192,7 @@ type Messages = {
         "title": "Add columns";
       };
       "chipDate": "Date";
-      "chipManual": "Manual";
+      "chipManual": "Without AI";
       "chipMulti": "Tags";
       "chipNumber": "Number";
       "chipSingle": "Tag";

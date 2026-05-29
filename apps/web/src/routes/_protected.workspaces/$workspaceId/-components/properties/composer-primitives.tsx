@@ -120,23 +120,6 @@ export const TypeChipsRow = ({
         <span className="text-foreground-label shrink-0 px-1.5 text-[11px] font-medium">
           {t("workspaces.properties.returnsLabel")}
         </span>
-        {manualChip && (
-          <>
-            <button
-              className={cn(
-                CHIP_BASE_CLASS,
-                manualChip.active ? CHIP_ACTIVE_CLASS : CHIP_IDLE_CLASS,
-              )}
-              key="manual"
-              onClick={manualChip.onClick}
-              type="button"
-            >
-              <manualChip.icon className="size-2.5" />
-              {manualChip.label}
-            </button>
-            <span aria-hidden className="bg-border mx-1 h-3 w-px shrink-0" />
-          </>
-        )}
         {chipDefs.map(({ type, icon: Icon, label }) => {
           const active = !manualActive && contentType === type;
           return (
@@ -154,6 +137,23 @@ export const TypeChipsRow = ({
             </button>
           );
         })}
+        {manualChip && (
+          <>
+            <span aria-hidden className="bg-border mx-1 h-3 w-px shrink-0" />
+            <button
+              className={cn(
+                CHIP_BASE_CLASS,
+                manualChip.active ? CHIP_ACTIVE_CLASS : CHIP_IDLE_CLASS,
+              )}
+              key="manual"
+              onClick={manualChip.onClick}
+              type="button"
+            >
+              <manualChip.icon className="size-2.5" />
+              {manualChip.label}
+            </button>
+          </>
+        )}
       </div>
       {typeChanged && (
         <p className="inline-flex items-center gap-1.5 text-[11px] text-amber-600 dark:text-amber-400">

@@ -2,7 +2,7 @@ import { Suspense, useCallback, useMemo, useRef, useState } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
-import { PencilIcon, PlusIcon, XIcon } from "lucide-react";
+import { KeyboardIcon, PlusIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -241,12 +241,13 @@ const BulkBody = ({ workspaceId, onClose }: BulkBodyProps) => {
         dependsOnPropertyId: id,
         condition: null,
       }));
-      return Object.assign({
-	name: d.name.trim(),
-	contentType: d.contentType,
-	toolType: 'ai-model' as const,
-	prompt: d.prompt
-}, dependencies.length > 0 ? { dependencies } : {});
+      return {
+        name: d.name.trim(),
+          contentType: d.contentType,
+          toolType: "ai-model" as const,
+          prompt: d.prompt,
+        ...(dependencies.length > 0 ? { dependencies } : {}),
+      };
     });
     try {
       await batch.mutateAsync({ items });
@@ -430,7 +431,7 @@ const DraftCard = ({
 
   const manualChip: ManualChipOption = {
     active: draft.tool === "manual-input",
-    icon: PencilIcon,
+    icon: KeyboardIcon,
     label: t("workspaces.properties.chipManual"),
     onClick: () => onChange({ tool: "manual-input" }),
   };
