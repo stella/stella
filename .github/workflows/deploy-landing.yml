@@ -104,6 +104,9 @@ jobs:
         # search engines can verify ownership. The key is intentionally
         # public (it's served at https://stll.app/<key>.txt), so the
         # gitleaks generic-api-key match below is a false positive.
+        # IndexNow is a best-effort SEO notification; a failure here must
+        # not fail the deploy, which has already succeeded by this point.
+        continue-on-error: true
         env:
           INDEXNOW_KEY: 4a9799deb8f64ac9be5f9b9e140407ca # gitleaks:allow
           HOST: stll.app
