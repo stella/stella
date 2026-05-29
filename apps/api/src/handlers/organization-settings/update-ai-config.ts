@@ -8,6 +8,10 @@ import {
   maskApiKey,
 } from "@/api/lib/ai-config-crypto";
 import {
+  providerResponseExtras,
+  providerResponseRegion,
+} from "@/api/lib/ai-config-response";
+import {
   isAllowedBYOKModel,
   MODEL_ROLES,
   supportsRegion,
@@ -229,41 +233,6 @@ const updateAIConfig = createSafeRootHandler(
   },
 );
 
-type ProviderResponseExtras = {
-  endpoint?: string;
-  apiVersion?: string;
-};
-
-const providerResponseRegion = (
-  providerConfig: OrgAIProviderConfig,
-): DataRegion => {
-  switch (providerConfig.provider) {
-    case "azure_foundry":
-    case "huggingface":
-      return "global";
-    default:
-      return providerConfig.region ?? "global";
-  }
-};
-
-const providerResponseExtras = (
-  providerConfig: OrgAIProviderConfig,
-): ProviderResponseExtras => {
-  switch (providerConfig.provider) {
-    case "azure_foundry":
-      return {
-        endpoint: providerConfig.baseURL,
-        ...(providerConfig.apiVersion
-          ? { apiVersion: providerConfig.apiVersion }
-          : {}),
-      };
-    case "huggingface":
-      return { endpoint: providerConfig.baseURL };
-    default:
-      return {};
-  }
-};
-
 type ValidationResult = ProviderProbeResult;
 
 type ProviderConfigInput = {
@@ -344,12 +313,19 @@ const resolveHuggingFaceProviderConfig = ({
   if (!endpoint) {
     return { valid: false, error: "Endpoint is required for huggingface" };
   }
+  const baseURL = endpoint.replace(/\/$/u, "");
+  if (!URL.canParse(baseURL)) {
+    return {
+      valid: false,
+      error: "Hugging Face endpoint must be a valid URL",
+    };
+  }
   return {
     valid: true,
     config: {
       provider: "huggingface",
       apiKey,
-      baseURL: endpoint.replace(/\/$/u, ""),
+      baseURL,
     },
   };
 };
