@@ -43,13 +43,22 @@ export type DeriveBlockIdInput = {
 const formatSequentialBlockId = (index: number): string =>
   `${SEQUENTIAL_BLOCK_ID_PREFIX}${String(index).padStart(SEQUENTIAL_BLOCK_ID_PADDING, "0")}`;
 
+/**
+ * The opaque `FolioBlockId` brand has no constructor; an unchecked
+ * cast is the runtime no-op that mints one. Centralising the cast
+ * here means every other site can keep `typescript/no-unsafe-type-assertion`
+ * on.
+ */
+const brand = (value: string): FolioBlockId =>
+  value as unknown as FolioBlockId;
+
 export const deriveBlockId = ({
   paraId,
   index,
   taken,
 }: DeriveBlockIdInput): FolioBlockId => {
   if (paraId !== null && paraId.length > 0 && !taken.has(paraId)) {
-    return paraId as FolioBlockId;
+    return brand(paraId);
   }
   let candidate = index;
   let formatted = formatSequentialBlockId(candidate);
@@ -57,7 +66,7 @@ export const deriveBlockId = ({
     candidate += 1;
     formatted = formatSequentialBlockId(candidate);
   }
-  return formatted as FolioBlockId;
+  return brand(formatted);
 };
 
 export const isSequentialFolioBlockId = (id: FolioBlockId): boolean =>

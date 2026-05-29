@@ -1,11 +1,6 @@
 import type { Mark, Node as PMNode } from "prosemirror-model";
 
-import {
-  deriveBlockId,
-  getFolioParaIdFromBlockId,
-  isSequentialFolioBlockId,
-  type FolioBlockId,
-} from "../types/block-id";
+import { deriveBlockId } from "../types/block-id";
 import { buildCleanBlockText } from "./clean-text";
 import type {
   FolioAIBlock,
@@ -14,12 +9,6 @@ import type {
   FolioAIBlockPreviewRun,
   FolioAIEditSnapshot,
 } from "./types";
-
-/** @deprecated Use {@link getFolioParaIdFromBlockId} from `../types/block-id`. */
-export const getFolioAIParaIdFromBlockId = (blockId: string): string | null =>
-  isSequentialFolioBlockId(blockId as FolioBlockId)
-    ? null
-    : getFolioParaIdFromBlockId(blockId as FolioBlockId);
 
 export const normalizeFolioAIBlockText = (text: string): string =>
   text.replace(/\s+/gu, " ").trim();

@@ -8,13 +8,13 @@
 
 import type { Node as PMNode } from "prosemirror-model";
 
-import {
-  createFolioAIEditSnapshot,
-  getFolioAIParaIdFromBlockId,
-} from "../core/ai-edits/snapshot";
+import { createFolioAIEditSnapshot } from "../core/ai-edits/snapshot";
 import type { FolioAIEditSnapshot } from "../core/ai-edits/types";
 import { findParagraphByParaId } from "../core/prosemirror/utils/findParagraphByParaId";
-import type { FolioBlockId } from "../core/types/block-id";
+import {
+  getFolioParaIdFromBlockId,
+  type FolioBlockId,
+} from "../core/types/block-id";
 
 export type DocPositionRange = { from: number; to: number };
 
@@ -29,7 +29,7 @@ export const resolveFolioAIBlockRange = ({
   doc,
   snapshot,
 }: ResolveFolioAIBlockRangeOptions): DocPositionRange | null => {
-  const paraId = getFolioAIParaIdFromBlockId(blockId);
+  const paraId = getFolioParaIdFromBlockId(blockId);
   if (paraId !== null) {
     const liveRange = findParagraphByParaId(doc, paraId);
     if (liveRange !== null) {
