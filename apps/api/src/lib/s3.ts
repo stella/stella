@@ -221,14 +221,39 @@ type ResolveS3CredentialsOptions = {
   staticCredentials?: OptionalS3Credentials | null;
 };
 
-const staticCredentialsFromEnv = (): OptionalS3Credentials | null => {
-  if (!envBase.S3_ACCESS_KEY_ID || !envBase.S3_SECRET_ACCESS_KEY) {
+type StaticCredentialEnv = {
+  accessKeyId: string | undefined;
+  secretAccessKey: string | undefined;
+};
+
+// Sentinel strings used in task definitions to signal "no static
+// credential is set; resolve via the runtime IAM role". Treating
+// these as real keys leaks them to AWS and gets "The AWS Access
+// Key Id you provided does not exist in our records".
+const STATIC_CREDENTIAL_PLACEHOLDERS: ReadonlySet<string> = new Set([
+  "",
+  "use-iam-role",
+]);
+
+const isUsableStaticCredential = (value: string | undefined): value is string =>
+  value !== undefined && !STATIC_CREDENTIAL_PLACEHOLDERS.has(value);
+
+export const staticCredentialsFromEnv = (
+  env: StaticCredentialEnv = {
+    accessKeyId: envBase.S3_ACCESS_KEY_ID,
+    secretAccessKey: envBase.S3_SECRET_ACCESS_KEY,
+  },
+): OptionalS3Credentials | null => {
+  if (
+    !isUsableStaticCredential(env.accessKeyId) ||
+    !isUsableStaticCredential(env.secretAccessKey)
+  ) {
     return null;
   }
 
   return {
-    accessKeyId: envBase.S3_ACCESS_KEY_ID,
-    secretAccessKey: envBase.S3_SECRET_ACCESS_KEY,
+    accessKeyId: env.accessKeyId,
+    secretAccessKey: env.secretAccessKey,
   };
 };
 

@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { getS3, isS3Stale, resolveS3Credentials } from "@/api/lib/s3";
+import {
+  getS3,
+  isS3Stale,
+  resolveS3Credentials,
+  staticCredentialsFromEnv,
+} from "@/api/lib/s3";
 
 const jsonResponse = (body: unknown): Response =>
   new Response(JSON.stringify(body), { status: 200 });
@@ -157,5 +162,70 @@ describe("resolveS3Credentials", () => {
       secretAccessKey: "static-secret-key",
     });
     expect(requestedUrls).toEqual(["http://169.254.169.254/latest/api/token"]);
+  });
+});
+
+describe("staticCredentialsFromEnv", () => {
+  test("returns null when both env vars are unset", () => {
+    expect(
+      staticCredentialsFromEnv({
+        accessKeyId: undefined,
+        secretAccessKey: undefined,
+      }),
+    ).toBeNull();
+  });
+
+  test("returns null when only access key is set", () => {
+    expect(
+      staticCredentialsFromEnv({
+        accessKeyId: "real-key",
+        secretAccessKey: undefined,
+      }),
+    ).toBeNull();
+  });
+
+  test("returns the configured credentials when both are real values", () => {
+    expect(
+      staticCredentialsFromEnv({
+        accessKeyId: "AKIA-real",
+        secretAccessKey: "real-secret",
+      }),
+    ).toEqual({
+      accessKeyId: "AKIA-real",
+      secretAccessKey: "real-secret",
+    });
+  });
+
+  test("rejects the use-iam-role placeholder so we fall through to runtime resolution", () => {
+    expect(
+      staticCredentialsFromEnv({
+        accessKeyId: "use-iam-role",
+        secretAccessKey: "use-iam-role",
+      }),
+    ).toBeNull();
+  });
+
+  test("rejects when either side is the placeholder", () => {
+    expect(
+      staticCredentialsFromEnv({
+        accessKeyId: "AKIA-real",
+        secretAccessKey: "use-iam-role",
+      }),
+    ).toBeNull();
+    expect(
+      staticCredentialsFromEnv({
+        accessKeyId: "use-iam-role",
+        secretAccessKey: "real-secret",
+      }),
+    ).toBeNull();
+  });
+
+  test("treats an empty string as unset (defensive)", () => {
+    expect(
+      staticCredentialsFromEnv({
+        accessKeyId: "",
+        secretAccessKey: "",
+      }),
+    ).toBeNull();
   });
 });
