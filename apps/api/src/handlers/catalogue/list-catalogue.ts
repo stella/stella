@@ -1,0 +1,168 @@
+import { Result } from "better-result";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
+
+import {
+  loadCatalogue,
+  recommendedSlugsForJurisdictions,
+  type LoadedCatalogueEntry,
+} from "@stll/catalogue";
+
+import { agentSkills, mcpConnectors } from "@/api/db/schema";
+import { NATIVE_TOOL_SLUGS } from "@/api/handlers/mcp-connectors/catalog-metadata";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
+
+const config = {
+  permissions: { workspace: ["read"] },
+} satisfies HandlerConfig;
+
+type InstallState = "installed" | "available" | "unavailable";
+
+type CatalogueEntryResponse = LoadedCatalogueEntry & {
+  isRecommendedForOrg: boolean;
+  installState: InstallState;
+  /**
+   * True when the entry is a system capability the user cannot toggle
+   * (pinned native-tools). UI hides install/uninstall controls and
+   * renders the entry in the "Baseline" section.
+   */
+  isLocked: boolean;
+};
+
+const listCatalogue = createSafeRootHandler(
+  config,
+  async function* ({ safeDb, session }) {
+    const entries = loadCatalogue();
+    const skillSlugs = entries
+      .filter((entry) => entry.kind === "skill")
+      .map((entry) => entry.slug);
+    const mcpUrls = entries
+      .filter((entry) => entry.kind === "mcp")
+      .map((entry) => entry.url);
+
+    const settings = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.organizationSettings.findFirst({
+          where: {
+            organizationId: { eq: session.activeOrganizationId },
+          },
+          columns: {
+            practiceJurisdictions: true,
+            nativeToolOverrides: true,
+          },
+        }),
+      ),
+    );
+
+    const installedSkills =
+      skillSlugs.length === 0
+        ? []
+        : yield* Result.await(
+            safeDb((tx) =>
+              tx
+                .select({ slug: agentSkills.slug })
+                .from(agentSkills)
+                .where(
+                  and(
+                    eq(
+                      agentSkills.organizationId,
+                      session.activeOrganizationId,
+                    ),
+                    eq(agentSkills.origin, "bundled"),
+                    inArray(agentSkills.slug, skillSlugs),
+                  ),
+                ),
+            ),
+          );
+
+    const installedMcps =
+      mcpUrls.length === 0
+        ? []
+        : yield* Result.await(
+            safeDb((tx) =>
+              tx
+                .select({ url: mcpConnectors.url })
+                .from(mcpConnectors)
+                .where(
+                  and(
+                    or(
+                      isNull(mcpConnectors.organizationId),
+                      eq(
+                        mcpConnectors.organizationId,
+                        session.activeOrganizationId,
+                      ),
+                    ),
+                    inArray(mcpConnectors.url, mcpUrls),
+                  ),
+                ),
+            ),
+          );
+
+    const practiceJurisdictions = settings?.practiceJurisdictions ?? [];
+    const nativeToolOverrides = settings?.nativeToolOverrides ?? {};
+    const practiceCountryCodes = new Set(
+      practiceJurisdictions.map((jurisdiction) =>
+        jurisdiction.countryCode.toUpperCase(),
+      ),
+    );
+    const recommendedSlugs =
+      recommendedSlugsForJurisdictions(practiceCountryCodes);
+    const installedSkillSlugs = new Set(installedSkills.map((row) => row.slug));
+    const installedMcpUrls = new Set(installedMcps.map((row) => row.url));
+    const nativeToolBackendSet = new Set(NATIVE_TOOL_SLUGS);
+
+    const response: CatalogueEntryResponse[] = [];
+    for (const entry of entries) {
+      const isLocked = entry.kind === "native-tool" && entry.pinned;
+      const installState = isLocked
+        ? ("installed" as const)
+        : computeInstallState({
+            entry,
+            installedSkillSlugs,
+            installedMcpUrls,
+            nativeToolBackendSet,
+            nativeToolOverrides,
+          });
+      response.push({
+        ...entry,
+        isLocked,
+        isRecommendedForOrg: recommendedSlugs.has(entry.slug),
+        installState,
+      });
+    }
+
+    return Result.ok({
+      entries: response,
+      practiceJurisdictions,
+    });
+  },
+);
+
+const computeInstallState = ({
+  entry,
+  installedSkillSlugs,
+  installedMcpUrls,
+  nativeToolBackendSet,
+  nativeToolOverrides,
+}: {
+  entry: LoadedCatalogueEntry;
+  installedSkillSlugs: ReadonlySet<string>;
+  installedMcpUrls: ReadonlySet<string>;
+  nativeToolBackendSet: ReadonlySet<string>;
+  nativeToolOverrides: Readonly<Record<string, boolean>>;
+}): InstallState => {
+  if (entry.kind === "skill") {
+    return installedSkillSlugs.has(entry.slug) ? "installed" : "available";
+  }
+  if (entry.kind === "mcp") {
+    return installedMcpUrls.has(entry.url) ? "installed" : "available";
+  }
+  if (!nativeToolBackendSet.has(entry.backendSlug)) {
+    return "unavailable";
+  }
+  return nativeToolOverrides[entry.backendSlug] === true
+    ? "installed"
+    : "available";
+};
+
+export default listCatalogue;

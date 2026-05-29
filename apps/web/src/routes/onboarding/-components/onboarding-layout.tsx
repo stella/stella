@@ -11,6 +11,8 @@ type OnboardingLayoutProps = {
   currentStep: number;
   totalSteps: number;
   onBack?: () => void;
+  /** Pixel width for the inner content column. Defaults to 460. */
+  contentMaxWidth?: number;
 };
 
 /**
@@ -24,22 +26,27 @@ export const OnboardingLayout = ({
   currentStep,
   totalSteps,
   onBack,
+  contentMaxWidth = 460,
 }: OnboardingLayoutProps) => {
   const t = useTranslations();
 
   return (
-    <div className="flex min-h-dvh">
+    <div className="flex h-dvh overflow-hidden">
       {/* Left: form */}
       <div className="flex w-full flex-col px-6 pt-[8vh] pb-10 md:w-1/2 md:px-12 md:pt-[10vh] lg:px-20">
-        <div className="mx-auto w-full max-w-[460px]">
+        <div
+          className="relative mx-auto flex min-h-0 w-full flex-1 flex-col"
+          style={{ maxWidth: contentMaxWidth }}
+        >
           {onBack && (
             <button
               aria-label={t("common.goBack")}
-              className="text-muted-foreground hover:text-foreground mb-4 flex items-center gap-1 text-sm transition-colors"
+              className="text-muted-foreground hover:text-foreground absolute -top-12 flex size-8 items-center justify-center rounded-md transition-colors"
               onClick={onBack}
+              style={{ insetInlineStart: "-12px" }}
               type="button"
             >
-              <ArrowLeftIcon className="size-3.5" />
+              <ArrowLeftIcon className="size-4" />
             </button>
           )}
           <OnboardingProgress
@@ -50,8 +57,10 @@ export const OnboardingLayout = ({
         </div>
       </div>
 
-      {/* Right: preview */}
-      <div className="bg-muted hidden items-center justify-center px-6 py-8 md:flex md:w-1/2">
+      {/* Right: preview — matches left column's vertical padding so the
+          floating Theme/Language buttons (top-4) and the back arrow
+          have breathing room above the card. */}
+      <div className="bg-muted hidden items-center justify-center px-6 pt-[10vh] pb-10 md:flex md:w-1/2">
         {preview}
       </div>
     </div>

@@ -72,7 +72,7 @@ type InstalledSkill = {
   id: string;
   license: string | null;
   name: string;
-  origin: "upload" | "url";
+  origin: "bundled" | "upload" | "url";
   scope: SkillScope;
   slug: string;
   sourceUrl: string | null;

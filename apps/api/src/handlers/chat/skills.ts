@@ -158,7 +158,7 @@ export type AvailableChatSkillResourceRead = {
   /** DB row id when the skill is installed; `null` for built-in
    *  skills that live on disk and have no row to mutate. */
   skillId: SafeId<"agentSkill"> | null;
-  origin: "built-in" | "upload" | "url";
+  origin: "built-in" | "bundled" | "upload" | "url";
 };
 
 export const readAvailableChatSkillResource = async ({

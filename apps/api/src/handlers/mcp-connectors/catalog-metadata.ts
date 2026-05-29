@@ -1,4 +1,5 @@
-import type { CountryCode } from "@stll/country-codes";
+import { filterCatalogueByKind, loadRecommended } from "@stll/catalogue";
+import { isCountryCode, type CountryCode } from "@stll/country-codes";
 
 import type { PracticeJurisdiction } from "@/api/db/schema";
 
@@ -22,82 +23,75 @@ export type NativeToolCatalogItem = {
   recommendedJurisdictions: readonly CountryCode[];
 };
 
-const ARES_RECOMMENDED_JURISDICTIONS = [
-  "CZ",
-] as const satisfies readonly CountryCode[];
-const BOE_RECOMMENDED_JURISDICTIONS = [
-  "ES",
-] as const satisfies readonly CountryCode[];
-const BRREG_RECOMMENDED_JURISDICTIONS = [
-  "NO",
-] as const satisfies readonly CountryCode[];
-const NATIVE_TOOL_CATALOG = [
-  {
-    slug: "ares",
-    displayName: "ARES",
-    description:
-      "Czech company lookup by IČO or company name from the public ARES register.",
-    url: "https://ares.gov.cz",
-    documentationUrl: "https://ares.gov.cz/stranky/vyvojar-info",
-    iconUrl: "https://ares.gov.cz/logo-ares-new.ico",
-    recommendedJurisdictions: [...ARES_RECOMMENDED_JURISDICTIONS],
-  },
-  {
-    slug: "boe",
-    displayName: "BOE",
-    description:
-      "Spanish consolidated legislation, daily gazette, and BORME (commercial registry gazette) from the official Boletín Oficial del Estado open-data API.",
-    url: "https://www.boe.es",
-    documentationUrl: "https://www.boe.es/datosabiertos/",
-    iconUrl: null,
-    recommendedJurisdictions: [...BOE_RECOMMENDED_JURISDICTIONS],
-  },
-  {
-    slug: "brreg",
-    displayName: "Brønnøysundregistrene",
-    description:
-      "Norwegian company lookup by organisasjonsnummer or company name from the public Brreg Enhetsregisteret open API.",
-    url: "https://www.brreg.no",
-    documentationUrl:
-      "https://data.brreg.no/enhetsregisteret/api/docs/index.html",
-    iconUrl: null,
-    recommendedJurisdictions: [...BRREG_RECOMMENDED_JURISDICTIONS],
-  },
-  {
-    slug: "web-search",
-    displayName: "Web Search",
-    description:
-      "Search the public web and read individual pages. Queries hit primary sources first (courts, legislation portals) when a jurisdiction is set; falls back to the open web otherwise. Per-thread opt-in.",
-    url: "https://tavily.com",
-    documentationUrl: null,
-    iconUrl: null,
-    recommendedJurisdictions: [],
-  },
-] satisfies NativeToolCatalogItem[];
+/**
+ * Native-tool catalogue sourced from `@stll/catalogue`. Recommendation
+ * lives in `packages/catalogue/entries/recommended.json` (maintainer-
+ * curated, CODEOWNERS-gated). `recommendedJurisdictions` here is
+ * derived: for each native-tool slug, which jurisdiction keys point to
+ * it in `recommended.json`. Keeps the per-slug recommendation logic in
+ * one place.
+ */
+const NATIVE_TOOL_CATALOG: readonly NativeToolCatalogItem[] = (() => {
+  const recommended = loadRecommended();
+  const jurisdictionsBySlug = new Map<string, CountryCode[]>();
+  for (const [jurisdiction, slugs] of Object.entries(recommended)) {
+    if (!isCountryCode(jurisdiction)) {
+      continue;
+    }
+    for (const slug of slugs) {
+      const list = jurisdictionsBySlug.get(slug) ?? [];
+      list.push(jurisdiction);
+      jurisdictionsBySlug.set(slug, list);
+    }
+  }
+
+  return filterCatalogueByKind("native-tool").map((entry) => ({
+    slug: entry.slug,
+    displayName: entry.displayName,
+    description: entry.description,
+    url: entry.url ?? entry.homepage ?? "",
+    documentationUrl: entry.documentationUrl ?? null,
+    iconUrl: entry.iconUrl ?? null,
+    recommendedJurisdictions: jurisdictionsBySlug.get(entry.slug) ?? [],
+  }));
+})();
+
+/**
+ * Slugs the backend actually implements as native tools. Source of
+ * truth for "is this tool callable?" — separate from the catalogue,
+ * which can list stubs (manifest landed before its handler). Update
+ * this list when a new handler ships.
+ */
+const IMPLEMENTED_NATIVE_TOOL_SLUGS = [
+  "ares",
+  "boe",
+  "brreg",
+  "infosoud",
+  "web-search",
+] as const;
 
 /** Authoritative slug list — independent of jurisdiction filtering. */
-export const NATIVE_TOOL_SLUGS: readonly string[] = NATIVE_TOOL_CATALOG.map(
-  (tool) => tool.slug,
-);
+export const NATIVE_TOOL_SLUGS: readonly string[] = NATIVE_TOOL_CATALOG.filter(
+  (tool) =>
+    (IMPLEMENTED_NATIVE_TOOL_SLUGS as readonly string[]).includes(tool.slug),
+).map((tool) => tool.slug);
 
 const toPracticeCountryCodeSet = (
   practiceJurisdictions: readonly PracticeJurisdiction[],
-): ReadonlySet<string> =>
+): ReadonlySet<CountryCode> =>
   new Set(
-    practiceJurisdictions.map((jurisdiction) =>
-      jurisdiction.countryCode.toUpperCase(),
-    ),
+    practiceJurisdictions.map((jurisdiction) => jurisdiction.countryCode),
   );
 
 const intersectsJurisdictions = (
-  recommendedJurisdictions: readonly string[],
-  practiceCountryCodes: ReadonlySet<string>,
+  recommendedJurisdictions: readonly CountryCode[],
+  practiceCountryCodes: ReadonlySet<CountryCode>,
 ): boolean => {
   if (recommendedJurisdictions.length === 0) {
     return true;
   }
   return recommendedJurisdictions.some((countryCode) =>
-    practiceCountryCodes.has(countryCode.toUpperCase()),
+    practiceCountryCodes.has(countryCode),
   );
 };
 
@@ -108,7 +102,7 @@ const intersectsJurisdictions = (
  */
 const isNativeToolDefaultEnabledForCodes = (
   slug: string,
-  practiceCountryCodes: ReadonlySet<string>,
+  practiceCountryCodes: ReadonlySet<CountryCode>,
 ): boolean => {
   const tool = NATIVE_TOOL_CATALOG.find((entry) => entry.slug === slug);
   if (!tool) {
@@ -122,7 +116,7 @@ const isNativeToolDefaultEnabledForCodes = (
 
 const isNativeToolEnabledForCodes = (
   slug: string,
-  practiceCountryCodes: ReadonlySet<string>,
+  practiceCountryCodes: ReadonlySet<CountryCode>,
   nativeToolOverrides: Readonly<Record<string, boolean>>,
 ): boolean => {
   const override = nativeToolOverrides[slug];
@@ -190,7 +184,7 @@ export const isMcpConnectorRecommendedForPractice = ({
   const practiceCountryCodes = toPracticeCountryCodeSet(practiceJurisdictions);
 
   return metadata.recommendedJurisdictions.some((countryCode) =>
-    practiceCountryCodes.has(countryCode.toUpperCase()),
+    practiceCountryCodes.has(countryCode),
   );
 };
 
@@ -207,7 +201,7 @@ export const getNativeToolCatalog = ({
     documentationUrl: tool.documentationUrl,
     iconUrl: tool.iconUrl,
     isRecommended: tool.recommendedJurisdictions.some((countryCode) =>
-      practiceCountryCodes.has(countryCode.toUpperCase()),
+      practiceCountryCodes.has(countryCode),
     ),
     recommendedJurisdictions: tool.recommendedJurisdictions,
     slug: tool.slug,

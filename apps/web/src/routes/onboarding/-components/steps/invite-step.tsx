@@ -228,7 +228,7 @@ export const InviteStep = ({
         )}
       </div>
 
-      <div className="mt-8 flex items-center justify-end gap-3">
+      <div className="mt-auto flex items-center justify-between gap-3 pt-8">
         <Button
           onClick={() => onNext({ emails: [] })}
           type="button"

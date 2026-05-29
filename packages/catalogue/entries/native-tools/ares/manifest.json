@@ -1,0 +1,18 @@
+{
+  "$schema": "../../../schema.json",
+  "kind": "native-tool",
+  "slug": "ares",
+  "displayName": "ARES",
+  "description": "Czech business registry lookup by IČO or company name from the public ARES register (administrative register of economic entities, Czech equivalent of a commercial registry).",
+  "author": "stella",
+  "authorUrl": "https://github.com/stella",
+  "license": "Apache-2.0",
+  "cost": "free",
+  "setup": "none",
+  "homepage": "https://ares.gov.cz",
+  "tags": ["corporate", "regulatory"],
+  "jurisdictions": ["CZ"],
+  "backendSlug": "ares",
+  "url": "https://ares.gov.cz",
+  "documentationUrl": "https://ares.gov.cz/stranky/vyvojar-info"
+}

@@ -349,7 +349,7 @@ export const AIStep = ({
         )}
       </div>
 
-      <div className="mt-6 flex items-center justify-end gap-3">
+      <div className="mt-auto flex items-center justify-between gap-3 pt-6">
         <Button onClick={onSkip} type="button" variant="ghost">
           {t("onboarding.skipStep")}
         </Button>

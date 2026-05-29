@@ -299,6 +299,43 @@
       "viewOriginal": "Zobraziť zdroj"
     }
   },
+  "catalogue": {
+    "by": "By {author}",
+    "cost": {
+      "free": "Free",
+      "paid": "Paid"
+    },
+    "empty": "No entries match the current filter.",
+    "filter": {
+      "all": "All",
+      "mcps": "MCP servers",
+      "nativeTools": "Built-in tools",
+      "skills": "Skills"
+    },
+    "firstParty": "First-party",
+    "install": "Install",
+    "installFailed": "Install failed",
+    "installPack": "Install {count, plural, one {# tool} other {# tools}}",
+    "installed": "Installed {name}",
+    "installedShort": "Installed",
+    "onboarding": {
+      "packTitle": "Recommended for your jurisdiction"
+    },
+    "openHomepage": "Open homepage",
+    "packDescription": "{count, plural, one {# tool} other {# tools}} curated for your practice. One-click install or pick individually below.",
+    "packInstalled": "{count, plural, one {# tool installed} other {# tools installed}}",
+    "packPartial": "Installed {installed}, {failed} failed",
+    "recommended": "Recommended",
+    "settings": {
+      "packTitle": "Recommended pack"
+    },
+    "setup": {
+      "account": "Account",
+      "apiKey": "API key",
+      "none": "No setup"
+    },
+    "unavailable": "Not available yet"
+  },
   "chat": {
     "acceptAllCount": "Prijať všetko ({count})",
     "actionExpand": {
@@ -487,6 +524,7 @@
       "docxSignatureTableSummary": "Insert signature table near {blockId}",
       "execute-typescript": "Čítam dáta veci",
       "fetch_url": "Čítanie stránky",
+      "infosoud_lookup_case": "Vyhľadanie spisu v InfoSoude",
       "load-skill": "Čítam pokyny",
       "read-contact": "Čítanie kontaktu",
       "read-content-across-matters": "Čítanie obsahu naprieč vecami",
@@ -1445,7 +1483,34 @@
     "aiConfigFailed": "Nastavenie AI sa nepodarilo uložiť. Môžete ho dokončiť v nastaveniach.",
     "aiSubtitle": "Prineste si vlastný API kľúč. Poskytovateľov aj modely môžete kedykoľvek zmeniť.",
     "aiTitle": "Pripojte svojho poskytovateľa AI",
+    "catalogueAlwaysOn": "Always on",
+    "catalogueClearSearch": "Clear search",
+    "catalogueCommunityHeading": "From the community",
+    "catalogueContinueWithCount": "Continue with {count, plural, one {# tool} other {# tools}}",
+    "catalogueDetailAbout": "About",
+    "catalogueDetailAccess": "Access",
+    "catalogueDetailAdd": "Add to stack",
+    "catalogueDetailAuthor": "Author",
+    "catalogueDetailCost": "Cost",
+    "catalogueDetailCoverage": "Coverage",
+    "catalogueDetailFirstParty": "stella (first-party)",
+    "catalogueDetailJurisdictions": "Jurisdictions",
+    "catalogueDetailLicense": "License",
+    "catalogueDetailProvenance": "Provenance",
+    "catalogueDetailRemove": "Remove from stack",
+    "catalogueDetailSetup": "Setup",
+    "cataloguePartial": "Installed {installed}, {failed} failed",
+    "cataloguePreviewBaseline": "Built-in",
+    "cataloguePreviewCount": "{count, plural, =0 {No capabilities} one {# capability} other {# capabilities}}",
+    "cataloguePreviewEmpty": "Pick tools below — they stack here as you add them.",
+    "cataloguePreviewYourStack": "Your stack",
+    "catalogueProposeTool": "Propose a new tool",
+    "catalogueSearchPlaceholder": "Search skills and tools",
+    "catalogueThirdPartyConfirm": "Add anyway",
+    "catalogueThirdPartyDisclaimer": "This is third-party code contributed by {author}. stella has not reviewed, endorsed, or maintained it. You are solely responsible for verifying it is suitable for your practice and compliant with your firm's policies. By adding it, you accept that you use it at your own risk.",
+    "catalogueTitle": "Choose your starter pack",
     "changeAnytime": "Toto nastavenie môžete zmeniť aj kedykoľvek neskôr.",
+    "continue": "Continue",
     "creating": {
       "ai": "Ukladáme nastavenie AI...",
       "done": "Dokončujeme nastavenie...",
@@ -1478,6 +1543,7 @@
     "skipStep": "Preskočiť",
     "someInvitesFailed": "{count, plural, one {# pozvánka zlyhala} few {# pozvánky zlyhali} other {# pozvánok zlyhalo}}",
     "stepAi": "AI",
+    "stepCatalogue": "Catalogue",
     "stepDesktop": "Aplikácia",
     "stepJurisdiction": "Jurisdikcia",
     "stepOrganization": "Tím",
@@ -1715,6 +1781,8 @@
         "termAddedToast": "Pojem „{value}“ bol pridaný do firemného zoznamu.",
         "title": "Anonymizácia"
       },
+      "catalogue": "Catalogue",
+      "catalogueDescription": "Browse and install skills, MCP servers, and first-party tools for your jurisdiction",
       "matterNumbering": "Číslovanie spisov",
       "matterNumberingDescription": "Nakonfigurujte, ako sa generujú referenčné čísla nových spisov",
       "membersDescription": "Spravujte, kto má prístup k tejto organizácii a všetky čakajúce pozvánky",

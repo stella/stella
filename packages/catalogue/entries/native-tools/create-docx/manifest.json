@@ -1,0 +1,15 @@
+{
+  "$schema": "../../../schema.json",
+  "kind": "native-tool",
+  "slug": "create-docx",
+  "displayName": "Create DOCX",
+  "description": "Generate Word documents from chat with formatting, tables, headers, and embedded styling. Output is downloadable and editable in Word, LibreOffice, and Pages.",
+  "author": "stella",
+  "authorUrl": "https://github.com/stella",
+  "license": "Apache-2.0",
+  "cost": "free",
+  "setup": "none",
+  "tags": [],
+  "backendSlug": "create-docx",
+  "pinned": true
+}

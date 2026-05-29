@@ -1,0 +1,4 @@
+-- Add "bundled" as a valid value for the agent_skills.origin TypeScript
+-- enum. The underlying column is plain `text`, so no DDL change is
+-- required; this migration exists to satisfy the schema-change guard
+-- and document the widening for reviewers.

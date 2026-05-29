@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { loadCatalogue } from "@stll/catalogue";
 import type { CountryCode } from "@stll/country-codes";
 import { stellaToast } from "@stll/ui/components/toast";
 
@@ -30,10 +31,13 @@ import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import { suggestedCountryCodes as getSuggestedCountryCodes } from "@/lib/jurisdictions";
 import { sessionOptions } from "@/routes/-queries";
 import { aiConfigKeys } from "@/routes/_protected.organization/-ai-config-queries";
+import { CatalogueDetailPreview } from "@/routes/onboarding/-components/catalogue-detail-preview";
+import { CatalogueStackPreview } from "@/routes/onboarding/-components/catalogue-stack-preview";
 import { OnboardingLayout } from "@/routes/onboarding/-components/onboarding-layout";
 import { PricesPanel } from "@/routes/onboarding/-components/prices-panel";
 import { SidebarPreview } from "@/routes/onboarding/-components/sidebar-preview";
 import { AIStep } from "@/routes/onboarding/-components/steps/ai-step";
+import { CatalogueStep } from "@/routes/onboarding/-components/steps/catalogue-step";
 import type { Phase } from "@/routes/onboarding/-components/steps/creating-step";
 import { CreatingStep } from "@/routes/onboarding/-components/steps/creating-step";
 import { DownloadStep } from "@/routes/onboarding/-components/steps/download-step";
@@ -47,6 +51,7 @@ import { OrganizationStep } from "@/routes/onboarding/-components/steps/organiza
 type Step =
   | "organization"
   | "jurisdiction"
+  | "catalogue"
   | "ai"
   | "invite"
   | "download"
@@ -56,19 +61,21 @@ type WizardData = {
   orgName: string;
   orgSlug: string;
   practiceJurisdictions: PracticeJurisdiction[];
+  catalogueSlugs: string[];
   emails: string[];
   aiProviders: ProviderCredentialDraft[];
   aiRoleModels: RoleModelSelections;
 };
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 6;
 
 const STEP_TO_PROGRESS = {
   organization: 0,
   jurisdiction: 1,
-  ai: 2,
-  invite: 3,
-  download: 4,
+  catalogue: 2,
+  ai: 3,
+  invite: 4,
+  download: 5,
 } as const satisfies Record<Exclude<Step, "creating">, number>;
 
 export const OnboardingWizard = () => {
@@ -80,10 +87,14 @@ export const OnboardingWizard = () => {
   const { data: sessionData } = useQuery(sessionOptions);
   const userEmail = sessionData?.user.email ?? "";
   const [step, setStep] = useState<Step>("organization");
+  const [catalogueFocusedSlug, setCatalogueFocusedSlug] = useState<
+    string | null
+  >(null);
   const [data, setData] = useState<WizardData>(() => ({
     orgName: "",
     orgSlug: "",
     practiceJurisdictions: [],
+    catalogueSlugs: [],
     emails: [],
     aiProviders: [createProviderCredentialDraft()],
     aiRoleModels: createDefaultRoleModels(),
@@ -212,6 +223,62 @@ export const OnboardingWizard = () => {
             analytics.captureError(toAPIError(jurisdictionError));
             stellaToast.add({
               title: t("onboarding.jurisdictionSaveFailed"),
+              type: "warning",
+            });
+          }
+        }
+
+        // Phase 1b: Install selected catalogue entries. Runs in
+        // parallel; partial failure surfaces as a toast but doesn't
+        // block the rest of setup.
+        if (finalData.catalogueSlugs.length > 0) {
+          setCreatingProgress(55);
+          const entries = loadCatalogue();
+          const installResults = await Promise.allSettled(
+            finalData.catalogueSlugs.map(async (slug) => {
+              const entry = entries.find((e) => e.slug === slug);
+              if (!entry) {
+                return;
+              }
+              if (entry.kind === "skill") {
+                const { error } = await api.catalogue["install-skill"].post({
+                  slug: entry.slug,
+                  queryKey: ["skills"],
+                });
+                if (error) {
+                  throw toAPIError(error);
+                }
+                return;
+              }
+              if (entry.kind === "native-tool") {
+                const { error } = await api.mcp["native-tools"]({
+                  slug: entry.backendSlug,
+                }).patch({ enabled: true, queryKey: ["mcp"] });
+                if (error) {
+                  throw toAPIError(error);
+                }
+                return;
+              }
+              const { error } = await api.mcp.connectors.post({
+                displayName: entry.displayName,
+                description: entry.description,
+                url: entry.url,
+                queryKey: ["mcp"],
+              });
+              if (error) {
+                throw toAPIError(error);
+              }
+            }),
+          );
+          const failed = installResults.filter(
+            (r) => r.status === "rejected",
+          ).length;
+          if (failed > 0) {
+            stellaToast.add({
+              title: t("onboarding.cataloguePartial", {
+                installed: String(finalData.catalogueSlugs.length - failed),
+                failed: String(failed),
+              }),
               type: "warning",
             });
           }
@@ -357,6 +424,38 @@ export const OnboardingWizard = () => {
         selected={data.practiceJurisdictions}
       />
     );
+  } else if (step === "catalogue") {
+    const focusedEntry = catalogueFocusedSlug
+      ? loadCatalogue().find((entry) => entry.slug === catalogueFocusedSlug)
+      : undefined;
+    if (focusedEntry) {
+      const installed = data.catalogueSlugs.includes(focusedEntry.slug);
+      preview = (
+        <CatalogueDetailPreview
+          entry={focusedEntry}
+          installed={installed}
+          onCancel={() => setCatalogueFocusedSlug(null)}
+          onConfirm={() => {
+            const next = new Set(data.catalogueSlugs);
+            if (installed) {
+              next.delete(focusedEntry.slug);
+            } else {
+              next.add(focusedEntry.slug);
+            }
+            setData((d) => ({ ...d, catalogueSlugs: [...next] }));
+            setCatalogueFocusedSlug(null);
+          }}
+        />
+      );
+    } else {
+      preview = (
+        <CatalogueStackPreview
+          entries={loadCatalogue()}
+          onFocus={setCatalogueFocusedSlug}
+          selectedSlugs={data.catalogueSlugs}
+        />
+      );
+    }
   } else if (showPrices) {
     preview = (
       <PricesPanel
@@ -415,12 +514,38 @@ export const OnboardingWizard = () => {
               setData((d) => ({ ...d, practiceJurisdictions }));
               setJurisdictionSuggestionApplied(true);
             }}
-            onNext={() => setStep("ai")}
+            onNext={() => setStep("catalogue")}
             onSkip={() => {
               setData((d) => ({ ...d, practiceJurisdictions: [] }));
               setJurisdictionSuggestionApplied(true);
+              setStep("catalogue");
+            }}
+          />
+        </OnboardingLayout>
+      );
+    }
+
+    if (step === "catalogue") {
+      return (
+        <OnboardingLayout
+          currentStep={STEP_TO_PROGRESS.catalogue}
+          onBack={() => setStep("jurisdiction")}
+          preview={preview}
+          totalSteps={TOTAL_STEPS}
+        >
+          <CatalogueStep
+            focusedSlug={catalogueFocusedSlug}
+            onChange={(catalogueSlugs) =>
+              setData((d) => ({ ...d, catalogueSlugs: [...catalogueSlugs] }))
+            }
+            onFocusChange={setCatalogueFocusedSlug}
+            onNext={() => setStep("ai")}
+            onSkip={() => {
+              setData((d) => ({ ...d, catalogueSlugs: [] }));
               setStep("ai");
             }}
+            practiceJurisdictions={data.practiceJurisdictions}
+            selectedSlugs={data.catalogueSlugs}
           />
         </OnboardingLayout>
       );
@@ -455,7 +580,7 @@ export const OnboardingWizard = () => {
               setAiPhase("providers");
               return;
             }
-            setStep("jurisdiction");
+            setStep("catalogue");
           }}
           preview={preview}
           totalSteps={TOTAL_STEPS}

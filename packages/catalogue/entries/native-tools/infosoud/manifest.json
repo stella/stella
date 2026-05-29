@@ -1,0 +1,17 @@
+{
+  "$schema": "../../../schema.json",
+  "kind": "native-tool",
+  "slug": "infosoud",
+  "displayName": "Infosoud CZ",
+  "description": "Czech court case lookup and hearing calendar from infosoud.gov.cz. Search by case reference number, court, or party to pull hearing dates and case status.",
+  "author": "stella",
+  "authorUrl": "https://github.com/stella",
+  "license": "Apache-2.0",
+  "cost": "free",
+  "setup": "none",
+  "homepage": "https://infosoud.justice.cz",
+  "tags": ["litigation", "dispute-resolution"],
+  "jurisdictions": ["CZ"],
+  "backendSlug": "infosoud",
+  "url": "https://infosoud.justice.cz"
+}

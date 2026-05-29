@@ -1,0 +1,9 @@
+{
+  "extends": "@stll/typescript-config/base.json",
+  "compilerOptions": {
+    "types": ["bun"],
+    "resolveJsonModule": true
+  },
+  "include": ["src"],
+  "exclude": ["node_modules"]
+}

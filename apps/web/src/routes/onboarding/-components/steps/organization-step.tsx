@@ -69,7 +69,7 @@ export const OrganizationStep = ({
         {t("onboarding.orgSubtitle")}
       </p>
       <Form
-        className="mt-8"
+        className="mt-8 flex flex-1 flex-col"
         errors={formErrors}
         onSubmit={(e) => {
           e.preventDefault();
@@ -101,22 +101,20 @@ export const OrganizationStep = ({
             </Field>
           )}
         </form.Field>
-        <Button
-          className="mt-6 w-full"
-          onClick={() => {
-            if (!currentName.trim()) {
-              flashInput();
-            }
-          }}
-          type="submit"
-        >
-          {currentName.trim()
-            ? t("common.next")
-            : t("onboarding.enterTeamName")}
-        </Button>
-        <p className="text-foreground-muted mt-3 text-center text-xs">
-          {t("onboarding.changeAnytime")}
-        </p>
+        <div className="mt-auto flex items-center justify-end pt-8">
+          <Button
+            onClick={() => {
+              if (!currentName.trim()) {
+                flashInput();
+              }
+            }}
+            type="submit"
+          >
+            {currentName.trim()
+              ? t("common.next")
+              : t("onboarding.enterTeamName")}
+          </Button>
+        </div>
       </Form>
     </>
   );
