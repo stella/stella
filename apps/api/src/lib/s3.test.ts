@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { getS3, isS3Stale, resolveS3Credentials } from "@/api/lib/s3";
+import {
+  credentialsFromEnvValues,
+  getS3,
+  isS3Stale,
+  resolveS3Credentials,
+} from "@/api/lib/s3";
 
 const jsonResponse = (body: unknown): Response =>
   new Response(JSON.stringify(body), { status: 200 });
@@ -157,5 +162,43 @@ describe("resolveS3Credentials", () => {
       secretAccessKey: "static-secret-key",
     });
     expect(requestedUrls).toEqual(["http://169.254.169.254/latest/api/token"]);
+  });
+});
+
+describe("credentialsFromEnvValues", () => {
+  test("returns null when both env vars are unset", () => {
+    expect(credentialsFromEnvValues(undefined, undefined)).toBeNull();
+  });
+
+  test("returns null when only access key is set", () => {
+    expect(credentialsFromEnvValues("real-key", undefined)).toBeNull();
+  });
+
+  test("returns the configured credentials when both are real values", () => {
+    expect(credentialsFromEnvValues("AKIA-real", "real-secret")).toEqual({
+      accessKeyId: "AKIA-real",
+      secretAccessKey: "real-secret",
+    });
+  });
+
+  test("rejects the use-iam-role placeholder so we fall through to runtime resolution", () => {
+    expect(credentialsFromEnvValues("use-iam-role", "use-iam-role")).toBeNull();
+  });
+
+  test("rejects when either side is the placeholder", () => {
+    expect(credentialsFromEnvValues("AKIA-real", "use-iam-role")).toBeNull();
+    expect(credentialsFromEnvValues("use-iam-role", "real-secret")).toBeNull();
+  });
+
+  test("treats an empty string as unset (defensive)", () => {
+    expect(credentialsFromEnvValues("", "")).toBeNull();
+  });
+
+  test("rejects placeholder regardless of casing or surrounding whitespace", () => {
+    expect(credentialsFromEnvValues("USE-IAM-ROLE", "use-iam-role")).toBeNull();
+    expect(
+      credentialsFromEnvValues("  use-iam-role  ", "  use-iam-role  "),
+    ).toBeNull();
+    expect(credentialsFromEnvValues("Use-Iam-Role", "use-iam-role")).toBeNull();
   });
 });

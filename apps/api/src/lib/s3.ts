@@ -221,16 +221,38 @@ type ResolveS3CredentialsOptions = {
   staticCredentials?: OptionalS3Credentials | null;
 };
 
-const staticCredentialsFromEnv = (): OptionalS3Credentials | null => {
-  if (!envBase.S3_ACCESS_KEY_ID || !envBase.S3_SECRET_ACCESS_KEY) {
+// Sentinel strings used in task definitions to signal "no static
+// credential is set; resolve via the runtime IAM role". Matched after
+// trim + lowercase so trailing whitespace and casing variants (e.g.
+// "USE-IAM-ROLE", "use-iam-role ") do not slip through.
+const STATIC_CREDENTIAL_PLACEHOLDERS: ReadonlySet<string> = new Set([
+  "",
+  "use-iam-role",
+]);
+
+const isUsableStaticCredential = (value: string | undefined): value is string =>
+  value !== undefined &&
+  !STATIC_CREDENTIAL_PLACEHOLDERS.has(value.trim().toLowerCase());
+
+export const credentialsFromEnvValues = (
+  accessKeyId: string | undefined,
+  secretAccessKey: string | undefined,
+): OptionalS3Credentials | null => {
+  if (
+    !isUsableStaticCredential(accessKeyId) ||
+    !isUsableStaticCredential(secretAccessKey)
+  ) {
     return null;
   }
 
-  return {
-    accessKeyId: envBase.S3_ACCESS_KEY_ID,
-    secretAccessKey: envBase.S3_SECRET_ACCESS_KEY,
-  };
+  return { accessKeyId, secretAccessKey };
 };
+
+const staticCredentialsFromEnv = (): OptionalS3Credentials | null =>
+  credentialsFromEnvValues(
+    envBase.S3_ACCESS_KEY_ID,
+    envBase.S3_SECRET_ACCESS_KEY,
+  );
 
 const isAwsS3Endpoint = (endpoint: string): boolean => {
   try {

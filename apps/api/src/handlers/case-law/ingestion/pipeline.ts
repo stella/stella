@@ -545,6 +545,10 @@ export const runIngestionPipeline = async ({
             caseNumber: result.caseNumber,
             cursor: cursor ?? "",
             "error.type": tag,
+            // "message" is stripped by the logger sanitizer; use
+            // "error.detail" so the SQL/HTTP/SDK reason reaches
+            // CloudWatch. Case-law data is public, no PII concern.
+            "error.detail": message.slice(0, 512),
             consecutiveFailures,
           });
           captureError(error, {
