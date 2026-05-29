@@ -1177,6 +1177,20 @@ export type ParagraphContent =
 /**
  * Paragraph (w:p)
  */
+/**
+ * Paragraph-mark tracked-change marker (ECMA-376 §17.13.5).
+ *
+ * Word writes this as a child of `<w:pPr><w:rPr>` — `<w:ins/>` when the
+ * paragraph break itself was inserted in track-changes mode (the user
+ * pressed Enter mid-paragraph), `<w:del/>` when the paragraph break is
+ * pending deletion (Backspace at paragraph start or Delete at paragraph
+ * end). The mark is independent of the inline runs the paragraph carries.
+ */
+export type ParagraphMarkChange = {
+  kind: "ins" | "del";
+  info: TrackedChangeInfo;
+};
+
 export type Paragraph = {
   type: "paragraph";
   /** Unique paragraph ID */
@@ -1187,6 +1201,8 @@ export type Paragraph = {
   formatting?: ParagraphFormatting;
   /** Paragraph-level tracked property changes (w:pPrChange) */
   propertyChanges?: ParagraphPropertyChange[];
+  /** Paragraph-mark insertion / deletion (w:pPr / w:rPr / w:ins | w:del) */
+  pPrMark?: ParagraphMarkChange;
   /** Paragraph content */
   content: ParagraphContent[];
   /** Computed list rendering (if this is a list item) */

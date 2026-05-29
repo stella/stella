@@ -10,6 +10,7 @@ import type { FloatingTableProperties, TableLook } from "../../types";
 import type {
   ParagraphAlignment,
   ParagraphFormatting,
+  ParagraphMarkChange,
   ParagraphPropertyChange,
   FieldType,
   Hyperlink,
@@ -171,6 +172,14 @@ export type ParagraphAttrs = {
    *  `w:pPrChange` history Word relies on for "show previous formatting"
    *  and for reverting an accepted property change. */
   _propertyChanges?: ParagraphPropertyChange[];
+
+  /** Paragraph-mark insertion / deletion (`<w:pPr><w:rPr><w:ins/>` /
+   *  `<w:del/>`). Word emits this when the paragraph break itself was
+   *  authored in track-changes mode — pressing Enter mid-paragraph
+   *  produces an `ins`, Backspace-at-start / Delete-at-end produce a
+   *  `del`. Stored as a discriminated union to mirror folio's
+   *  `TrackedChangeWrapperType` model rather than two parallel attrs. */
+  pPrMark?: ParagraphMarkChange;
 };
 
 /**

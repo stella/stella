@@ -343,6 +343,10 @@ function convertPMParagraph(
     paragraph.propertyChanges = [...attrs._propertyChanges];
   }
 
+  if (attrs.pPrMark) {
+    paragraph.pPrMark = attrs.pPrMark;
+  }
+
   return paragraph;
 }
 

@@ -98,10 +98,18 @@ function resolveChange(
     if (dispatch) {
       const tr = state.tr;
       const deleteRanges: { from: number; to: number }[] = [];
+      const pPrMarkOps: PPrMarkOp[] = [];
 
-      state.doc.nodesBetween(from, to, (node, pos) => {
+      state.doc.nodesBetween(from, to, (node, pos): boolean => {
+        if (node.type.name === "paragraph") {
+          const op = collectPPrMarkOp(node, pos, from, to, mode, revisionSet);
+          if (op) {
+            pPrMarkOps.push(op);
+          }
+          return true;
+        }
         if (!node.isText) {
-          return;
+          return true;
         }
         const nodeEnd = pos + node.nodeSize;
         const rangeFrom = Math.max(from, pos);
@@ -119,10 +127,44 @@ function resolveChange(
             tr.removeMark(rangeFrom, rangeTo, mark);
           }
         }
+        return true;
       });
 
       for (const range of deleteRanges.toReversed()) {
         tr.delete(range.from, range.to);
+      }
+
+      // Process paragraph-mark ops from end → start so earlier positions stay
+      // valid as later paragraphs collapse. Map every position through the
+      // accumulated transaction so the inline deletes above don't desync the
+      // attr writes or joins below.
+      pPrMarkOps.sort((a, b) => b.paragraphPos - a.paragraphPos);
+      for (const op of pPrMarkOps) {
+        const mappedPos = tr.mapping.map(op.paragraphPos);
+        const paragraph = tr.doc.nodeAt(mappedPos);
+        if (!paragraph || paragraph.type.name !== "paragraph") {
+          continue;
+        }
+        if (op.action === "clear") {
+          tr.setNodeAttribute(mappedPos, "pPrMark", null);
+          continue;
+        }
+        const joinPos = mappedPos + paragraph.nodeSize;
+        if (joinPos >= tr.doc.content.size) {
+          // No next sibling to join with (paragraph terminates the doc).
+          // Leave the marker in place — Word treats this the same way.
+          continue;
+        }
+        try {
+          tr.join(joinPos);
+          // PM's `join` keeps the first paragraph's attrs, so the marker
+          // would survive an otherwise-resolved revision. Drop it now.
+          tr.setNodeAttribute(mappedPos, "pPrMark", null);
+        } catch {
+          // PM rejects the join if the two blocks aren't structurally
+          // compatible (e.g. paragraph followed by a table). Leaving the
+          // marker is the safe fallback.
+        }
       }
 
       if (tr.steps.length > 0) {
@@ -131,6 +173,64 @@ function resolveChange(
     }
     return true;
   };
+}
+
+type PPrMarkOp = {
+  paragraphPos: number;
+  action: "clear" | "join";
+};
+
+function collectPPrMarkOp(
+  node: { attrs: Record<string, unknown>; nodeSize: number },
+  pos: number,
+  from: number,
+  to: number,
+  mode: "accept" | "reject",
+  revisionSet: Set<number> | null,
+): PPrMarkOp | null {
+  if (!rangeCoversParagraphBoundary(from, to, pos, node)) {
+    return null;
+  }
+  const pPrMark = node.attrs["pPrMark"];
+  if (!isPPrMarkAttr(pPrMark)) {
+    return null;
+  }
+  if (revisionSet !== null && !revisionSet.has(pPrMark.info.id)) {
+    return null;
+  }
+  // accept-ins / reject-del keep the paragraph break (clear attr).
+  // reject-ins / accept-del remove the paragraph break (join with next).
+  const action: PPrMarkOp["action"] =
+    (pPrMark.kind === "ins") === (mode === "accept") ? "clear" : "join";
+  return { paragraphPos: pos, action };
+}
+
+function rangeCoversParagraphBoundary(
+  from: number,
+  to: number,
+  pos: number,
+  node: { nodeSize: number },
+): boolean {
+  const boundaryFrom = pos + node.nodeSize - 1;
+  const boundaryTo = pos + node.nodeSize;
+  return from <= boundaryFrom && to >= boundaryTo;
+}
+
+function isPPrMarkAttr(
+  value: unknown,
+): value is { kind: "ins" | "del"; info: { id: number } } {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const kind = (value as { kind?: unknown }).kind;
+  const info = (value as { info?: unknown }).info;
+  if (kind !== "ins" && kind !== "del") {
+    return false;
+  }
+  if (typeof info !== "object" || info === null) {
+    return false;
+  }
+  return typeof (info as { id?: unknown }).id === "number";
 }
 
 /**

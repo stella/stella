@@ -28,6 +28,7 @@ import type {
   RelationshipMap,
   MediaFile,
   SdtProperties,
+  ParagraphMarkChange,
   ParagraphPropertyChange,
   TrackedChangeInfo,
   MathEquation,
@@ -1088,6 +1089,33 @@ function parseParagraphPropertyChanges(
   return changes.length > 0 ? changes : undefined;
 }
 
+/**
+ * Parse `<w:pPr><w:rPr><w:ins/>` or `<w:del/>` — the OOXML paragraph-mark
+ * tracked-change marker (ECMA-376 §17.13.5). Returns the first marker
+ * encountered, or undefined when none is present. `ins` and `del` are
+ * mutually exclusive in valid documents.
+ */
+function parseParagraphMarkChange(
+  pPr: XmlElement | null,
+): ParagraphMarkChange | undefined {
+  if (!pPr) {
+    return undefined;
+  }
+  const rPr = findChild(pPr, "w", "rPr");
+  if (!rPr) {
+    return undefined;
+  }
+  const ins = findChild(rPr, "w", "ins");
+  if (ins) {
+    return { kind: "ins", info: parseTrackedChangeInfo(ins) };
+  }
+  const del = findChild(rPr, "w", "del");
+  if (del) {
+    return { kind: "del", info: parseTrackedChangeInfo(del) };
+  }
+  return undefined;
+}
+
 function isTrackedChangeWrapperChild(
   content: ParagraphContent,
 ): content is Run | Hyperlink {
@@ -1716,6 +1744,11 @@ export function parseParagraph(
     );
     if (propertyChangesResult !== undefined) {
       paragraph.propertyChanges = propertyChangesResult;
+    }
+
+    const pPrMarkResult = parseParagraphMarkChange(pPr);
+    if (pPrMarkResult !== undefined) {
+      paragraph.pPrMark = pPrMarkResult;
     }
 
     // Check for section properties within paragraph (marks end of a section)

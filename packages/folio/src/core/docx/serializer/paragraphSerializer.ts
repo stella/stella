@@ -14,6 +14,7 @@ import type {
   Paragraph,
   ParagraphContent,
   ParagraphFormatting,
+  ParagraphMarkChange,
   Run,
   Hyperlink,
   BookmarkStart,
@@ -32,6 +33,7 @@ import type {
   BorderSpec,
   ShadingProperties,
   TextFormatting,
+  TrackedChangeInfo,
 } from "../../types/document";
 // oxlint-disable-next-line import/no-cycle
 import { serializeRun, serializeTextFormatting } from "./runSerializer";
@@ -409,9 +411,23 @@ function serializeFrameProperties(frame: ParagraphFormatting["frame"]): string {
 /**
  * Serialize paragraph formatting properties to w:pPr XML
  */
+function serializeTrackedChangeAttrs(info: TrackedChangeInfo): string {
+  const parts = [`w:id="${info.id}"`, `w:author="${escapeXml(info.author)}"`];
+  if (info.date !== undefined) {
+    parts.push(`w:date="${escapeXml(info.date)}"`);
+  }
+  return parts.join(" ");
+}
+
+function serializeParagraphMarkChange(mark: ParagraphMarkChange): string {
+  const attrs = serializeTrackedChangeAttrs(mark.info);
+  return `<w:${mark.kind} ${attrs}/>`;
+}
+
 export function serializeParagraphFormatting(
   formatting: ParagraphFormatting | undefined,
   propertyChanges?: ParagraphPropertyChange[],
+  pPrMark?: ParagraphMarkChange,
 ): string {
   const parts: string[] = [];
 
@@ -520,16 +536,23 @@ export function serializeParagraphFormatting(
     // run-in merge. Without serializing it back, saving a doc
     // through Folio loses the soft paragraph break and the heading
     // becomes a normal separate paragraph in Word.
-    if (formatting.runProperties || formatting.runInWithNext) {
+    //
+    // EG_ParaRPrTrackChanges (ECMA-376 §17.13.5 / wml.xsd:1837) puts
+    // <w:ins>/<w:del> FIRST inside the paragraph mark's rPr; strict
+    // readers reject other orderings.
+    if (pPrMark || formatting.runProperties || formatting.runInWithNext) {
+      const pPrMarkXml = pPrMark ? serializeParagraphMarkChange(pPrMark) : "";
       const innerRPr = formatting.runProperties
         ? extractRPrInner(serializeTextFormatting(formatting.runProperties))
         : "";
       const specVanishXml = formatting.runInWithNext ? "<w:specVanish/>" : "";
-      const fullInner = `${innerRPr}${specVanishXml}`;
+      const fullInner = `${pPrMarkXml}${innerRPr}${specVanishXml}`;
       if (fullInner.length > 0) {
         parts.push(`<w:rPr>${fullInner}</w:rPr>`);
       }
     }
+  } else if (pPrMark) {
+    parts.push(`<w:rPr>${serializeParagraphMarkChange(pPrMark)}</w:rPr>`);
   }
 
   if (propertyChanges && propertyChanges.length > 0) {
@@ -995,6 +1018,7 @@ export function serializeParagraph(paragraph: Paragraph): string {
   const pPrXml = serializeParagraphFormatting(
     paragraph.formatting,
     paragraph.propertyChanges,
+    paragraph.pPrMark,
   );
   const sectionPropertiesXml = serializeSectionProperties(
     paragraph.sectionProperties,

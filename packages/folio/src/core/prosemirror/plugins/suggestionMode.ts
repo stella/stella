@@ -16,6 +16,9 @@ import { Plugin, PluginKey, TextSelection } from "prosemirror-state";
 import type { EditorState, Transaction } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 
+import type { TrackedChangeInfo } from "../../types/document";
+import { splitBlockClearBorders } from "../extensions/features/BaseKeymapExtension";
+
 export const suggestionModeKey = new PluginKey<SuggestionModeState>(
   "suggestionMode",
 );
@@ -39,6 +42,17 @@ function makeMarkAttrs(pluginState: SuggestionModeState): MarkAttrs {
     revisionId: nextRevisionId++,
     author: pluginState.author,
     date: new Date().toISOString(),
+  };
+}
+
+function makeParagraphMarkInfo(
+  pluginState: SuggestionModeState,
+): TrackedChangeInfo {
+  const attrs = makeMarkAttrs(pluginState);
+  return {
+    id: attrs.revisionId,
+    author: attrs.author,
+    date: attrs.date,
   };
 }
 
@@ -208,6 +222,177 @@ function applySuggestionInsert(
 }
 
 /**
+ * Track-changes Enter: split the paragraph and stamp `pPrMark = 'ins'` on the
+ * FIRST half of the split (the upper paragraph), per ECMA-376 §17.13.5. The
+ * actual splitting reuses `splitBlockClearBorders` so border/style/stored-mark
+ * behavior stays identical to ordinary editing.
+ *
+ * If the source paragraph already carries a `pPrMark`, leave it alone — a
+ * prior author's revision must not be silently overwritten.
+ */
+function handleSuggestionEnter(
+  view: EditorView,
+  pluginState: SuggestionModeState,
+): boolean {
+  const { $from } = view.state.selection;
+  if ($from.parent.type.name !== "paragraph") {
+    return false;
+  }
+  const sourcePos = $from.before();
+  const sourceAttrs = $from.parent.attrs;
+
+  const captured = { tr: null as Transaction | null };
+  const ok = splitBlockClearBorders(
+    view.state,
+    (tr: Transaction) => {
+      captured.tr = tr;
+    },
+    view,
+  );
+  if (!ok || !captured.tr) {
+    return false;
+  }
+  const tr = captured.tr;
+  if (sourceAttrs["pPrMark"] == null) {
+    const sourceParagraph = tr.doc.nodeAt(sourcePos);
+    if (sourceParagraph?.type.name === "paragraph") {
+      const markInfo: ParagraphMarkAttr = {
+        kind: "ins",
+        info: makeParagraphMarkInfo(pluginState),
+      };
+      tr.setNodeAttribute(sourcePos, "pPrMark", markInfo);
+    }
+  }
+  view.dispatch(tr.scrollIntoView());
+  return true;
+}
+
+type ParagraphMarkAttr = {
+  kind: "ins" | "del";
+  info: TrackedChangeInfo;
+};
+
+/**
+ * Detect a caret-at-paragraph-boundary scenario where Backspace/Delete should
+ * record a tracked paragraph-mark deletion instead of joining paragraphs.
+ *
+ * Returns the position of the paragraph whose `pPrMark` should be set, or
+ * `null` if the caret is mid-paragraph (let the normal text-delete path run).
+ *
+ * - Backspace-at-paragraph-start → previous sibling paragraph.
+ * - Delete-at-paragraph-end     → current paragraph.
+ *
+ * Returns `null` when there is no adjacent sibling paragraph (the join would
+ * not produce paragraph-mark merging — e.g. doc start, doc end, or sibling
+ * is a table). The default merge path then runs unchanged.
+ */
+export function paragraphBoundaryTarget(
+  state: EditorState,
+  direction: "backward" | "forward",
+): number | null {
+  const { $from, empty } = state.selection;
+  if (!empty) {
+    return null;
+  }
+  if ($from.parent.type.name !== "paragraph") {
+    return null;
+  }
+  const paragraphStart = $from.before();
+  const paragraphEnd = $from.after();
+
+  if (direction === "backward") {
+    if ($from.parentOffset !== 0) {
+      return null;
+    }
+    if (paragraphStart === 0) {
+      return null;
+    }
+    const $prevEdge = state.doc.resolve(paragraphStart);
+    const prev = $prevEdge.nodeBefore;
+    if (!prev || prev.type.name !== "paragraph") {
+      return null;
+    }
+    return paragraphStart - prev.nodeSize;
+  }
+
+  if ($from.parentOffset !== $from.parent.content.size) {
+    return null;
+  }
+  if (paragraphEnd >= state.doc.content.size) {
+    return null;
+  }
+  const $nextEdge = state.doc.resolve(paragraphEnd);
+  const next = $nextEdge.nodeAfter;
+  if (!next || next.type.name !== "paragraph") {
+    return null;
+  }
+  return paragraphStart;
+}
+
+/**
+ * Mark a paragraph break as a tracked deletion. `target` is the position of
+ * the paragraph whose closing mark is being deleted (per OOXML, that's the
+ * previous paragraph for Backspace-at-start and the current paragraph for
+ * Delete-at-end). If the existing mark is the current author's insertion,
+ * retract it by joining the paragraphs back together.
+ */
+function applyPPrDel(
+  view: EditorView,
+  targetParagraphPos: number,
+  pluginState: SuggestionModeState,
+): boolean {
+  const targetNode = view.state.doc.nodeAt(targetParagraphPos);
+  if (!targetNode || targetNode.type.name !== "paragraph") {
+    return false;
+  }
+  const existingMark = targetNode.attrs["pPrMark"];
+  if (isCurrentAuthorParagraphInsertion(existingMark, pluginState.author)) {
+    const tr = view.state.tr;
+    tr.setMeta(SUGGESTION_META, true);
+    const joinPos = targetParagraphPos + targetNode.nodeSize;
+    try {
+      tr.join(joinPos);
+      tr.setNodeAttribute(targetParagraphPos, "pPrMark", null);
+      view.dispatch(tr.scrollIntoView());
+    } catch {
+      return true;
+    }
+    return true;
+  }
+  if (existingMark != null) {
+    return true;
+  }
+  const tr = view.state.tr;
+  tr.setMeta(SUGGESTION_META, true);
+  const markInfo: ParagraphMarkAttr = {
+    kind: "del",
+    info: makeParagraphMarkInfo(pluginState),
+  };
+  tr.setNodeAttribute(targetParagraphPos, "pPrMark", markInfo);
+  view.dispatch(tr.scrollIntoView());
+  return true;
+}
+
+function isCurrentAuthorParagraphInsertion(
+  value: unknown,
+  author: string,
+): value is ParagraphMarkAttr {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const mark = value as { kind?: unknown; info?: unknown };
+  if (
+    mark.kind !== "ins" ||
+    typeof mark.info !== "object" ||
+    mark.info === null
+  ) {
+    return false;
+  }
+  const info = mark.info as { author?: unknown };
+  return info.author === author;
+}
+
+/**
  * Handle delete (forward or backward) in suggestion mode.
  */
 function handleSuggestionDelete(
@@ -352,18 +537,28 @@ export function createSuggestionModePlugin(
           return false;
         },
       },
-      // Intercept Backspace and Delete to mark as deletion
+      // Intercept Enter / Backspace / Delete so paragraph-mark revisions
+      // (ECMA-376 §17.13.5) get recorded instead of silently splitting or
+      // joining paragraphs.
       handleKeyDown(view: EditorView, event: KeyboardEvent): boolean {
         const pluginState = suggestionModeKey.getState(view.state);
         if (!pluginState?.active) {
           return false;
         }
 
-        if (event.key === "Backspace") {
-          return handleSuggestionDelete(view.state, view.dispatch, "backward");
+        if (event.key === "Enter") {
+          return handleSuggestionEnter(view, pluginState);
         }
-        if (event.key === "Delete") {
-          return handleSuggestionDelete(view.state, view.dispatch, "forward");
+        if (event.key === "Backspace" || event.key === "Delete") {
+          const boundaryTarget = paragraphBoundaryTarget(
+            view.state,
+            event.key === "Backspace" ? "backward" : "forward",
+          );
+          if (boundaryTarget !== null) {
+            return applyPPrDel(view, boundaryTarget, pluginState);
+          }
+          const direction = event.key === "Backspace" ? "backward" : "forward";
+          return handleSuggestionDelete(view.state, view.dispatch, direction);
         }
         return false;
       },

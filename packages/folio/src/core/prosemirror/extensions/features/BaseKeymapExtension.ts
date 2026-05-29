@@ -105,7 +105,7 @@ const INHERITED_PARA_ATTRS = [
 /** Mark types that represent style-inherited formatting (font, size, color). */
 const STYLE_MARK_NAMES = new Set(["fontFamily", "fontSize", "textColor"]);
 
-const splitBlockClearBorders: Command = (state, dispatch, view) => {
+export const splitBlockClearBorders: Command = (state, dispatch, view) => {
   // Capture source paragraph info BEFORE split (splitBlock resets everything)
   const { $from: preSplitFrom } = state.selection;
   const sourcePara =
