@@ -16,6 +16,7 @@ import { Plugin, PluginKey, TextSelection } from "prosemirror-state";
 import type { EditorState, Transaction } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 
+import type { TrackedChangeInfo } from "../../types/document";
 import { splitBlockClearBorders } from "../extensions/features/BaseKeymapExtension";
 
 export const suggestionModeKey = new PluginKey<SuggestionModeState>(
@@ -41,6 +42,17 @@ function makeMarkAttrs(pluginState: SuggestionModeState): MarkAttrs {
     revisionId: nextRevisionId++,
     author: pluginState.author,
     date: new Date().toISOString(),
+  };
+}
+
+function makeParagraphMarkInfo(
+  pluginState: SuggestionModeState,
+): TrackedChangeInfo {
+  const attrs = makeMarkAttrs(pluginState);
+  return {
+    id: attrs.revisionId,
+    author: attrs.author,
+    date: attrs.date,
   };
 }
 
@@ -246,7 +258,7 @@ function handleSuggestionEnter(
     if (sourceParagraph?.type.name === "paragraph") {
       const markInfo: ParagraphMarkAttr = {
         kind: "ins",
-        info: makeMarkAttrs(pluginState),
+        info: makeParagraphMarkInfo(pluginState),
       };
       tr.setNodeAttribute(sourcePos, "pPrMark", markInfo);
     }
@@ -257,7 +269,7 @@ function handleSuggestionEnter(
 
 type ParagraphMarkAttr = {
   kind: "ins" | "del";
-  info: MarkAttrs;
+  info: TrackedChangeInfo;
 };
 
 /**
@@ -321,7 +333,8 @@ export function paragraphBoundaryTarget(
  * Mark a paragraph break as a tracked deletion. `target` is the position of
  * the paragraph whose closing mark is being deleted (per OOXML, that's the
  * previous paragraph for Backspace-at-start and the current paragraph for
- * Delete-at-end). Idempotent: a `pPrMark` already set is left alone.
+ * Delete-at-end). If the existing mark is the current author's insertion,
+ * retract it by joining the paragraphs back together.
  */
 function applyPPrDel(
   view: EditorView,
@@ -332,18 +345,51 @@ function applyPPrDel(
   if (!targetNode || targetNode.type.name !== "paragraph") {
     return false;
   }
-  if (targetNode.attrs["pPrMark"] != null) {
+  const existingMark = targetNode.attrs["pPrMark"];
+  if (isCurrentAuthorParagraphInsertion(existingMark, pluginState.author)) {
+    const tr = view.state.tr;
+    tr.setMeta(SUGGESTION_META, true);
+    const joinPos = targetParagraphPos + targetNode.nodeSize;
+    try {
+      tr.join(joinPos);
+      tr.setNodeAttribute(targetParagraphPos, "pPrMark", null);
+      view.dispatch(tr.scrollIntoView());
+    } catch {
+      return true;
+    }
+    return true;
+  }
+  if (existingMark != null) {
     return true;
   }
   const tr = view.state.tr;
   tr.setMeta(SUGGESTION_META, true);
   const markInfo: ParagraphMarkAttr = {
     kind: "del",
-    info: makeMarkAttrs(pluginState),
+    info: makeParagraphMarkInfo(pluginState),
   };
   tr.setNodeAttribute(targetParagraphPos, "pPrMark", markInfo);
   view.dispatch(tr.scrollIntoView());
   return true;
+}
+
+function isCurrentAuthorParagraphInsertion(
+  value: unknown,
+  author: string,
+): value is ParagraphMarkAttr {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const mark = value as { kind?: unknown; info?: unknown };
+  if (
+    mark.kind !== "ins" ||
+    typeof mark.info !== "object" ||
+    mark.info === null
+  ) {
+    return false;
+  }
+  const info = mark.info as { author?: unknown };
+  return info.author === author;
 }
 
 /**

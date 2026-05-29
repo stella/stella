@@ -130,9 +130,11 @@ describe("suggestion mode — paragraph-mark keymap", () => {
 
     const firstPPrMark = view.state.doc.child(0).attrs["pPrMark"] as {
       kind: "ins" | "del";
-      info: { author: string };
+      info: { id?: unknown; revisionId?: unknown; author: string };
     } | null;
     expect(firstPPrMark?.kind).toBe("ins");
+    expect(typeof firstPPrMark?.info.id).toBe("number");
+    expect(firstPPrMark?.info.revisionId).toBeUndefined();
     expect(firstPPrMark?.info.author).toBe("Tester");
     expect(view.state.doc.child(1).attrs["pPrMark"]).toBeNull();
   });
@@ -170,8 +172,11 @@ describe("suggestion mode — paragraph-mark keymap", () => {
     expect(view.state.doc.child(1).textContent).toBe("second");
     const firstMark = view.state.doc.child(0).attrs["pPrMark"] as {
       kind: "ins" | "del";
+      info: { id?: unknown; revisionId?: unknown };
     } | null;
     expect(firstMark?.kind).toBe("del");
+    expect(typeof firstMark?.info.id).toBe("number");
+    expect(firstMark?.info.revisionId).toBeUndefined();
   });
 
   test("Delete at paragraph end sets pPrMark.kind='del' on the current paragraph", () => {
@@ -189,7 +194,62 @@ describe("suggestion mode — paragraph-mark keymap", () => {
     expect(view.state.doc.child(0).textContent).toBe("first");
     const firstMark = view.state.doc.child(0).attrs["pPrMark"] as {
       kind: "ins" | "del";
+      info: { id?: unknown; revisionId?: unknown };
     } | null;
     expect(firstMark?.kind).toBe("del");
+    expect(typeof firstMark?.info.id).toBe("number");
+    expect(firstMark?.info.revisionId).toBeUndefined();
+  });
+
+  test("Backspace retracts the current author's paragraph-mark insertion", () => {
+    const initial = stateWith([
+      {
+        text: "first",
+        pPrMark: {
+          kind: "ins",
+          info: { id: 99, author: "Tester", date: "2026-05-01" },
+        },
+      },
+      { text: "second" },
+    ]);
+    const state = setCaret(initial, 8);
+    const view = createFakeView(state);
+    const p = plug();
+    const handled = p.props.handleKeyDown?.call(
+      p,
+      view as unknown as EditorView,
+      { key: "Backspace" } as KeyboardEvent,
+    );
+
+    expect(handled).toBe(true);
+    expect(view.state.doc.childCount).toBe(1);
+    expect(view.state.doc.child(0).textContent).toBe("firstsecond");
+    expect(view.state.doc.child(0).attrs["pPrMark"]).toBeNull();
+  });
+
+  test("Delete retracts the current author's paragraph-mark insertion", () => {
+    const initial = stateWith([
+      {
+        text: "first",
+        pPrMark: {
+          kind: "ins",
+          info: { id: 100, author: "Tester", date: "2026-05-01" },
+        },
+      },
+      { text: "second" },
+    ]);
+    const state = setCaret(initial, 6);
+    const view = createFakeView(state);
+    const p = plug();
+    const handled = p.props.handleKeyDown?.call(
+      p,
+      view as unknown as EditorView,
+      { key: "Delete" } as KeyboardEvent,
+    );
+
+    expect(handled).toBe(true);
+    expect(view.state.doc.childCount).toBe(1);
+    expect(view.state.doc.child(0).textContent).toBe("firstsecond");
+    expect(view.state.doc.child(0).attrs["pPrMark"]).toBeNull();
   });
 });
