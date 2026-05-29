@@ -260,7 +260,10 @@ export const DraggableRow = ({
     setContextAnchor({
       getBoundingClientRect: () => new DOMRect(e.clientX, e.clientY, 0, 0),
     });
-    setContextOpen(true);
+    // Defer to the next frame so the trailing pointerup from the
+    // right-click doesn't immediately count as an outside-click and
+    // dismiss the menu that the contextmenu just opened.
+    requestAnimationFrame(() => setContextOpen(true));
   };
 
   const handleRowClick = (e: React.MouseEvent) => {
