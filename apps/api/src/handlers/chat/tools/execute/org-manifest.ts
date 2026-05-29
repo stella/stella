@@ -27,19 +27,19 @@ const entityKindSchema = v.picklist(ENTITY_KINDS);
 const matterRefSchema = v.pipe(
   v.string(),
   v.regex(/^mat_\d+$/),
-  v.description("Short matter ref returned by Stella tools"),
+  v.description("Short matter ref returned by stella tools"),
 );
 
 const entityRefSchema = v.pipe(
   v.string(),
   v.regex(/^ent_\d+$/),
-  v.description("Short entity ref returned by Stella tools"),
+  v.description("Short entity ref returned by stella tools"),
 );
 
 const contactRefSchema = v.pipe(
   v.string(),
   v.regex(/^contact_\d+$/),
-  v.description("Short contact ref returned by Stella tools"),
+  v.description("Short contact ref returned by stella tools"),
 );
 /* eslint-enable require-unicode-regexp */
 

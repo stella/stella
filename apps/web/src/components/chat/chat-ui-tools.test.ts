@@ -15,7 +15,7 @@ import {
 } from "@/components/chat/chat-ui-tools";
 
 describe("chat tool titles", () => {
-  test("maps Stella API tools to translation keys", () => {
+  test("maps stella API tools to translation keys", () => {
     expect(getChatToolTitleKey("describe-stella-api")).toBe(
       "chat.tool.describe-stella-api",
     );

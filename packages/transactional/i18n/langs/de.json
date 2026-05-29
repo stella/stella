@@ -15,7 +15,7 @@
     "ignore": "Wenn Sie das waren, ist keine Aktion erforderlich. Wenn Sie diese Aktivität nicht erkennen, überprüfen Sie Ihre aktiven Sitzungen und widerrufen Sie alle, die Sie nicht erkennen.",
     "ipAddress": "IP-Adresse",
     "preview": "Neue Anmeldung von {device}",
-    "subject": "Neue Anmeldung bei Ihrem Stella-Konto",
+    "subject": "Neue Anmeldung bei Ihrem stella-Konto",
     "time": "Zeit"
   },
   "otp": {

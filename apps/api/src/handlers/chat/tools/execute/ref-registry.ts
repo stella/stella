@@ -97,7 +97,7 @@ const resolveRefs = <TTarget>({
     if (target === undefined) {
       return Result.err(
         new ChatToolError({
-          message: `Unknown ${kind} ref "${ref}". Use refs returned by Stella tools.`,
+          message: `Unknown ${kind} ref "${ref}". Use refs returned by stella tools.`,
         }),
       );
     }

@@ -177,7 +177,7 @@ describe("injectStamp", () => {
     expect(footer).toContain(stamp);
   });
 
-  test("idempotent: updates existing Stella stamp", async () => {
+  test("idempotent: updates existing stella stamp", async () => {
     const docx = await makeDocx();
     const first = await injectStamp(
       docx,

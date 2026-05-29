@@ -111,7 +111,7 @@ const documentRelsXml = (hasNumbering: boolean): string =>
 const APP_XML =
   '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
   '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">' +
-  "<Application>Stella</Application>" +
+  "<Application>stella</Application>" +
   "</Properties>";
 
 export type SerializeDocumentOptions = {

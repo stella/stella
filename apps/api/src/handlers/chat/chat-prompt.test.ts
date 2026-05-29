@@ -45,7 +45,7 @@ describe("chat prompt builders", () => {
     expect(prompt).not.toContain("Status");
   });
 
-  test("system prompts include a compact Stella API catalog", () => {
+  test("system prompts include a compact stella API catalog", () => {
     const refRegistry = createChatRefRegistry();
     const workspacePrompt = buildWorkspacePromptText({
       entityCount: 1,
@@ -177,7 +177,7 @@ describe("chat prompt builders", () => {
       userContext: null,
     });
 
-    expect(prompt.cacheStablePrefix).not.toContain("Available Stella skills");
+    expect(prompt.cacheStablePrefix).not.toContain("Available stella skills");
     expect(prompt.cacheStablePrefix).not.toContain("\n\n\n\n");
     expect(prompt.fullPrompt).not.toContain("\n\n\n\n");
   });

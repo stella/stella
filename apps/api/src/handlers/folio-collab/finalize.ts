@@ -388,7 +388,7 @@ const finalizeFolioCollabSession = createSafeTokenHandler<
             error: {
               statusCode: 409 as const,
               message:
-                "This document changed in Stella while collaborative editing was open.",
+                "This document changed in stella while collaborative editing was open.",
             },
           } as const;
         }

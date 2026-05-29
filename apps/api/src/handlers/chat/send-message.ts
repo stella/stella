@@ -1235,7 +1235,7 @@ const attachActivePdfWhenExtractionIsEmpty = async ({
         ...latestUserMessage.parts,
         {
           type: "text",
-          text: `The active file "${activePdf.fileName}" is attached directly as a PDF because Stella has no extracted text for it. Use the attached PDF itself for this question.`,
+          text: `The active file "${activePdf.fileName}" is attached directly as a PDF because stella has no extracted text for it. Use the attached PDF itself for this question.`,
         },
         createRawChatFilePart({
           bytes: activePdf.bytes,

@@ -285,7 +285,7 @@ export const finalizeDesktopEditSessionHandler = async ({
         return {
           error: {
             message:
-              "This document changed in Stella while you were editing. Your local copy is preserved.",
+              "This document changed in stella while you were editing. Your local copy is preserved.",
             statusCode: 409,
           },
         } as const;

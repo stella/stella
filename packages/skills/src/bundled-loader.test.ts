@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-describe("bundled Stella skill loader", () => {
+describe("bundled stella skill loader", () => {
   test("loads skills after bundling without a neighboring skills directory", async () => {
     const testDir = mkdtempSync(path.join(tmpdir(), "stella-skills-bundle-"));
     const entrypoint = path.join(testDir, "entrypoint.ts");

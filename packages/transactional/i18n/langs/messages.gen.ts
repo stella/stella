@@ -18,7 +18,7 @@ type Messages = {
     "ignore": "If this was you, no action is needed. If you don't recognize this activity, review your active sessions and revoke any you don't recognize.";
     "ipAddress": "IP address";
     "preview": "New sign-in from {device}";
-    "subject": "New sign-in to your Stella account";
+    "subject": "New sign-in to your stella account";
     "time": "Time";
   };
   "otp": {

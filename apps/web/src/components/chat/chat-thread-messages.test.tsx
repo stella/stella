@@ -212,7 +212,7 @@ describe("chat thread messages", () => {
             JSON.stringify({
               code: "third_party_boundary_refusal",
               message:
-                "Cannot send this attachment to the AI in anonymized mode because Stella cannot extract and anonymize it safely.",
+                "Cannot send this attachment to the AI in anonymized mode because stella cannot extract and anonymize it safely.",
             }),
           )
         }

@@ -24,7 +24,7 @@ const rootRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
-    <w:p><w:r><w:t>Stella E2E test document.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>stella E2E test document.</w:t></w:r></w:p>
     <w:p><w:r><w:t>Used to verify upload + inspector rendering.</w:t></w:r></w:p>
   </w:body>
 </w:document>`;

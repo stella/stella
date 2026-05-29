@@ -10,7 +10,7 @@ import type {
 } from "./types";
 
 const AUTHOR: RevisionAuthor = {
-  name: "Stella AI",
+  name: "stella AI",
   date: "2026-02-17T12:00:00Z",
 };
 

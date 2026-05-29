@@ -4,7 +4,7 @@ import { injectComments } from "./inject-comments";
 import type { DocxComment, RevisionAuthor } from "./types";
 
 const AUTHOR: RevisionAuthor = {
-  name: "Stella AI",
+  name: "stella AI",
   date: "2026-02-17T12:00:00Z",
 };
 
@@ -56,7 +56,7 @@ describe("injectComments", () => {
     expect(result.commentsXml).toContain("w:comments");
     expect(result.commentsXml).toContain("w:comment");
     expect(result.commentsXml).toContain("Check greeting");
-    expect(result.commentsXml).toContain('w:author="Stella AI"');
+    expect(result.commentsXml).toContain('w:author="stella AI"');
   });
 
   test("multiple comments get unique IDs", () => {

@@ -174,7 +174,7 @@ const buildPrompt = ({
   feedback?: string | undefined;
 }): string => {
   const sections = [
-    `You are drafting a Stella agent skill, returned as JSON matching the provided schema.
+    `You are drafting a stella agent skill, returned as JSON matching the provided schema.
 
 A skill bundle contains a SKILL.md file at the root and zero or more companion Markdown files under fixed subfolders. The bundle teaches an AI agent when to use the skill and how to follow it.
 

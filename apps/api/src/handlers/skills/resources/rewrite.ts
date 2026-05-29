@@ -182,7 +182,7 @@ const buildPrompt = ({
   path: string;
   instruction: string;
   currentContent: string;
-}): string => `You are rewriting a file inside a Stella agent skill bundle.
+}): string => `You are rewriting a file inside a stella agent skill bundle.
 
 Rewrite the file below according to the user's instruction. Return ONLY the new
 file contents, no preamble, no explanations, no surrounding code fences. Keep the

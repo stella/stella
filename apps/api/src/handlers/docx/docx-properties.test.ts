@@ -27,7 +27,7 @@ import type { RevisionAuthor } from "./types";
 import { collectAllIds, validateOoxml } from "./validate-ooxml";
 
 const AUTHOR: RevisionAuthor = {
-  name: "Stella AI",
+  name: "stella AI",
   date: "2026-02-17T12:00:00Z",
 };
 

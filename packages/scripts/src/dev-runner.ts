@@ -804,7 +804,7 @@ const ensureDockerServices = async ({
       )
       .join("\n");
     panic(
-      `Shared Docker ports are held by containers from another Compose project:\n${detail}\nStop the conflicting stack, or use --infra-offset to shift Stella's infra ports.`,
+      `Shared Docker ports are held by containers from another Compose project:\n${detail}\nStop the conflicting stack, or use --infra-offset to shift stella's infra ports.`,
     );
   }
 
@@ -826,7 +826,7 @@ const ensureDockerServices = async ({
     );
   } else if (!(await areSharedDockerPortsFree(infraPorts))) {
     panic(
-      `Shared Docker ports (${sharedInfraPortList(infraPorts).join(", ")}) are already allocated, but the shared dev services did not pass health checks. Stop the conflicting stack, or use --infra-offset to shift Stella's infra ports.`,
+      `Shared Docker ports (${sharedInfraPortList(infraPorts).join(", ")}) are already allocated, but the shared dev services did not pass health checks. Stop the conflicting stack, or use --infra-offset to shift stella's infra ports.`,
     );
   }
 

@@ -63,7 +63,7 @@ const WRAP = (body: string) =>
 const P = (text: string) =>
   `<w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 
-const AUTHOR = { name: "Stella AI", date: "2026-02-17T12:00:00Z" };
+const AUTHOR = { name: "stella AI", date: "2026-02-17T12:00:00Z" };
 
 describe("editWithTracking", () => {
   test("applies edits and produces valid DOCX", async () => {
@@ -134,7 +134,7 @@ describe("editWithTracking", () => {
     const commentsXml = await zip.file("word/comments.xml")?.async("string");
     expect(commentsXml).toBeDefined();
     expect(commentsXml).toContain("Check this greeting");
-    expect(commentsXml).toContain("Stella AI");
+    expect(commentsXml).toContain("stella AI");
 
     // document.xml should have comment anchors
     const docXml = await zip.file("word/document.xml")?.async("string");

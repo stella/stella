@@ -126,7 +126,7 @@ describe("search query text", () => {
     });
   });
 
-  test("validates Stella search syntax for AI-generated queries", () => {
+  test("validates stella search syntax for AI-generated queries", () => {
     expect(validateStellaSearchQuery("Černý reorganizace")).toEqual({
       valid: true,
     });

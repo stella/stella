@@ -248,7 +248,7 @@ describe("readManifest", () => {
     expect(result?.fields[0]?.validation).toBeUndefined();
   });
 
-  test("returns null for non-Stella custom XML", async () => {
+  test("returns null for non-stella custom XML", async () => {
     const zip = new JSZip();
     zip.file(
       "word/document.xml",
@@ -291,7 +291,7 @@ describe("writeManifest", () => {
     expect(ct).toContain("customXmlProperties");
   });
 
-  test("throws when overwriting non-Stella custom XML", async () => {
+  test("throws when overwriting non-stella custom XML", async () => {
     const zip = new JSZip();
     zip.file(
       "word/document.xml",
@@ -308,7 +308,7 @@ describe("writeManifest", () => {
     const buf = Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
 
     expect(writeManifest(buf, sampleManifest)).rejects.toThrow(
-      "non-Stella custom XML",
+      "non-stella custom XML",
     );
   });
 
@@ -437,7 +437,7 @@ describe("stripManifest", () => {
     expect(stripped).toBe(docx);
   });
 
-  test("preserves non-Stella custom XML", async () => {
+  test("preserves non-stella custom XML", async () => {
     const zip = new JSZip();
     zip.file(
       "word/document.xml",

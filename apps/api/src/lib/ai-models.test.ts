@@ -256,7 +256,7 @@ describe("BYOK model overrides", () => {
     });
   });
 
-  test("routes every Stella role through configured OpenRouter models", () => {
+  test("routes every stella role through configured OpenRouter models", () => {
     const orgConfig: OrgAIConfig = {
       providers: [
         {
@@ -294,7 +294,7 @@ describe("BYOK model overrides", () => {
     }
   });
 
-  test("routes every Stella role through configured Mistral models", () => {
+  test("routes every stella role through configured Mistral models", () => {
     const orgConfig: OrgAIConfig = {
       providers: [
         {

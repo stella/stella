@@ -4,7 +4,7 @@ import { applyEdits } from "./apply-edits";
 import type { DocxEdit, RevisionAuthor } from "./types";
 
 const AUTHOR: RevisionAuthor = {
-  name: "Stella AI",
+  name: "stella AI",
   date: "2026-02-17T12:00:00Z",
 };
 
@@ -37,7 +37,7 @@ describe("applyEdits", () => {
 
     expect(result).toContain("w:ins");
     expect(result).toContain(" world");
-    expect(result).toContain('w:author="Stella AI"');
+    expect(result).toContain('w:author="stella AI"');
     expect(result).toContain("2026-02-17T12:00:00Z");
   });
 

@@ -85,7 +85,7 @@ describe("chat tool schemas", () => {
     expect(JSON.stringify(tools)).not.toContain("acme-closing-strategy");
   });
 
-  test("chat tools expose readonly data through the Stella API", () => {
+  test("chat tools expose readonly data through the stella API", () => {
     const tools = getChatTools({
       organizationId,
       refRegistry: createChatRefRegistry(),

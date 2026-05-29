@@ -15,7 +15,7 @@
     "ignore": "Kui see olite teie, ei ole vaja midagi teha. Kui te seda tegevust ei tunne ära, vaadake oma aktiivseid seansse ja tühistage need, mida te ei tunne ära.",
     "ipAddress": "IP-aadress",
     "preview": "Uus sisselogimine seadmest {device}",
-    "subject": "Uus sisselogimine teie Stella kontole",
+    "subject": "Uus sisselogimine teie stella kontole",
     "time": "Aeg"
   },
   "otp": {

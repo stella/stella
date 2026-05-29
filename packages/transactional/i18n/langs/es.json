@@ -15,7 +15,7 @@
     "ignore": "Si fue usted, no es necesario hacer nada. Si no reconoce esta actividad, revise sus sesiones activas y revoque las que no reconozca.",
     "ipAddress": "Dirección IP",
     "preview": "Nuevo inicio de sesión desde {device}",
-    "subject": "Nuevo inicio de sesión en su cuenta Stella",
+    "subject": "Nuevo inicio de sesión en su cuenta stella",
     "time": "Hora"
   },
   "otp": {

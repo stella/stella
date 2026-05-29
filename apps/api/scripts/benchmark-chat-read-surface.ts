@@ -182,7 +182,7 @@ const readCatalog = [
 ] as const;
 
 const oldMixedSystem = [
-  "You answer questions for Stella, a legal workspace.",
+  "You answer questions for stella, a legal workspace.",
   "The read surface is mixed:",
   "- Direct read tools exist for focused reads.",
   "- Sandbox reads use describe-stella-function plus execute-typescript with stella.*.",
@@ -196,8 +196,8 @@ const oldMixedSystem = [
 ].join("\n");
 
 const newDescribeSystem = [
-  "You answer questions for Stella, a legal workspace.",
-  "For Stella data reads, use the Stella API:",
+  "You answer questions for stella, a legal workspace.",
+  "For stella data reads, use the stella API:",
   "1. call describe-stella-api if you need the catalog",
   "2. call run-stella-query with TypeScript that uses read.*",
   "3. every read result stores records in result.items",
@@ -205,8 +205,8 @@ const newDescribeSystem = [
 ].join("\n");
 
 const newInlineSystem = [
-  "You answer questions for Stella, a legal workspace.",
-  "For Stella data reads, call run-stella-query with TypeScript that uses read.*.",
+  "You answer questions for stella, a legal workspace.",
+  "For stella data reads, call run-stella-query with TypeScript that uses read.*.",
   "Every read result stores records in result.items.",
   "Available reads:",
   ...readCatalog.map((entry) => `- ${entry}`),
@@ -530,7 +530,7 @@ const simulateSandbox = ({
 const buildOldTools = (trace: BenchTrace) => ({
   "describe-stella-function": tool({
     description:
-      "Describe available Stella sandbox read functions. Omit name to list them.",
+      "Describe available stella sandbox read functions. Omit name to list them.",
     inputSchema: valibotSchema(
       v.strictObject({
         name: v.optional(v.string()),
@@ -560,7 +560,7 @@ const buildOldTools = (trace: BenchTrace) => ({
   }),
   "execute-typescript": tool({
     description:
-      "Run TypeScript against Stella sandbox reads through stella.*.",
+      "Run TypeScript against stella sandbox reads through stella.*.",
     inputSchema: valibotSchema(
       v.strictObject({
         code: v.string(),
@@ -667,7 +667,7 @@ const buildNewTools = ({
   const runner = {
     "run-stella-query": tool({
       description:
-        "Run TypeScript against Stella readonly reads through read.*.",
+        "Run TypeScript against stella readonly reads through read.*.",
       inputSchema: valibotSchema(
         v.strictObject({
           code: v.string(),
@@ -699,7 +699,7 @@ const buildNewTools = ({
   return {
     "describe-stella-api": tool({
       description:
-        "Describe available Stella readonly read functions. Omit name to list them.",
+        "Describe available stella readonly read functions. Omit name to list them.",
       inputSchema: valibotSchema(
         v.strictObject({
           name: v.optional(v.string()),

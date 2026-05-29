@@ -368,7 +368,7 @@ export const writeManifest = async (
         message:
           "Cannot write manifest: " +
           `${CUSTOM_XML_ITEM_PATH} contains ` +
-          "non-Stella custom XML",
+          "non-stella custom XML",
       });
     }
   }
