@@ -56,7 +56,8 @@ const updateOrganizationSettings = createSafeRootHandler(
         // Only touch promptCachingEnabled when the body carries it;
         // omitting it from the upsert set keeps a concurrent toggle
         // request from being clobbered by a stale read.
-        const wantsPromptCachingUpdate = body.promptCachingEnabled !== undefined;
+        const wantsPromptCachingUpdate =
+          body.promptCachingEnabled !== undefined;
         const existing = wantsPromptCachingUpdate
           ? await tx.query.organizationSettings.findFirst({
               where: { organizationId: { eq: session.activeOrganizationId } },
