@@ -25,7 +25,6 @@ import {
   S3Client as AwsS3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { HttpRequest } from "@smithy/protocol-http";
 import { Result, TaggedError } from "better-result";
 
 import { envBase } from "@/api/env-base";
@@ -154,39 +153,20 @@ export const presignUploadUrl = async ({
         Key: key,
         ContentType: contentType,
         ContentLength: contentLength,
+        ChecksumSHA256: sha256Base64,
+        ChecksumAlgorithm: "SHA256",
       });
 
-      // SDK v3's flexible-checksums middleware only translates the
-      // `ChecksumSHA256` command field into a request header when it
-      // can compute / verify against a real body. Presigning skips
-      // that path (there's no body yet), so the header — and the
-      // signature binding we depend on — never appears. Inject the
-      // header at the `build` step on this command's middleware
-      // stack so the SigV4 signer sees it and includes it in
-      // `X-Amz-SignedHeaders`. Per-command stack avoids leaking the
-      // header into unrelated PutObject calls on the shared client.
-      command.middlewareStack.add(
-        (next) => async (args) => {
-          if (HttpRequest.isInstance(args.request)) {
-            args.request.headers["x-amz-checksum-sha256"] = sha256Base64;
-            args.request.headers["x-amz-sdk-checksum-algorithm"] = "SHA256";
-          }
-          const result = await next(args);
-          return result;
-        },
-        { step: "build", name: "injectPresignChecksumHeader" },
-      );
-
+      // SDK v3 hoists `x-amz-*` headers into the query string when
+      // presigning rather than listing them in `X-Amz-SignedHeaders`.
+      // The signature still covers them — the full query string is
+      // part of SigV4 — so the integrity binding holds either way.
+      // `signableHeaders` here forces `content-type` and
+      // `content-length` into the signed-headers list so a client
+      // can't deviate from those values either.
       const url = await getSignedUrl(client, command, {
         expiresIn,
-        // Pin the headers into the signature. Without this, S3 ignores
-        // the values the client sends — defeating the integrity gate.
-        signableHeaders: new Set([
-          "content-type",
-          "content-length",
-          "x-amz-checksum-sha256",
-          "x-amz-sdk-checksum-algorithm",
-        ]),
+        signableHeaders: new Set(["content-type", "content-length"]),
       });
 
       const headers: PresignedUploadHeaders = {
