@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Checkbox } from "@stll/ui/components/checkbox";
@@ -22,13 +21,11 @@ export const PromptCachingCard = () => {
   const { data: settings } = useQuery(organizationSettingsOptions);
 
   const mutation = useMutation({
+    // Send only the prompt-caching field so a stale matter-numbering
+    // value from `settings` cannot roll back a concurrent admin's
+    // matter-numbering change.
     mutationFn: async (nextEnabled: boolean) => {
-      if (!settings) {
-        return panic("Settings query has no data");
-      }
       const response = await api["organization-settings"].post({
-        matterNumberPattern: settings.matterNumberPattern,
-        matterNumberPadding: settings.matterNumberPadding,
         promptCachingEnabled: nextEnabled,
       });
       if (response.error) {

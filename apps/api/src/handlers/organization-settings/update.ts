@@ -10,8 +10,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { validatePattern } from "@/api/lib/matter-reference";
 
 const updateOrganizationSettingsBodySchema = t.Object({
-  matterNumberPattern: t.String({ minLength: 1, maxLength: 128 }),
-  matterNumberPadding: t.Integer({ minimum: 1, maximum: 6 }),
+  matterNumberPattern: t.Optional(t.String({ minLength: 1, maxLength: 128 })),
+  matterNumberPadding: t.Optional(t.Integer({ minimum: 1, maximum: 6 })),
   promptCachingEnabled: t.Optional(t.Boolean()),
 });
 
@@ -23,15 +23,36 @@ const config = {
 const updateOrganizationSettings = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, body, recordAuditEvent }) {
-    const validation = validatePattern(
-      body.matterNumberPattern,
-      body.matterNumberPadding,
-    );
+    const wantsMatterUpdate =
+      body.matterNumberPattern !== undefined ||
+      body.matterNumberPadding !== undefined;
 
-    if (Result.isError(validation)) {
+    if (
+      wantsMatterUpdate &&
+      (body.matterNumberPattern === undefined ||
+        body.matterNumberPadding === undefined)
+    ) {
       return Result.err(
-        new HandlerError({ status: 400, message: validation.error.message }),
+        new HandlerError({
+          status: 400,
+          message:
+            "matterNumberPattern and matterNumberPadding must be sent together",
+        }),
       );
+    }
+
+    if (wantsMatterUpdate) {
+      const validation = validatePattern(
+        // SAFETY: branch only entered when both are defined per the guard above.
+        body.matterNumberPattern as string,
+        body.matterNumberPadding as number,
+      );
+
+      if (Result.isError(validation)) {
+        return Result.err(
+          new HandlerError({ status: 400, message: validation.error.message }),
+        );
+      }
     }
 
     yield* Result.await(
@@ -47,13 +68,20 @@ const updateOrganizationSettings = createSafeRootHandler(
             })
           : undefined;
 
+        // Insert path needs schema defaults for any required column
+        // the body did not carry. Matter columns are NOT NULL with
+        // schema defaults — Drizzle infers them when omitted.
         await tx
           .insert(organizationSettings)
           .values({
             id: createSafeId<"organizationSettings">(),
             organizationId: session.activeOrganizationId,
-            matterNumberPattern: body.matterNumberPattern,
-            matterNumberPadding: body.matterNumberPadding,
+            ...(wantsMatterUpdate
+              ? {
+                  matterNumberPattern: body.matterNumberPattern,
+                  matterNumberPadding: body.matterNumberPadding,
+                }
+              : {}),
             ...(wantsPromptCachingUpdate
               ? { promptCachingEnabled: body.promptCachingEnabled }
               : {}),
@@ -61,8 +89,12 @@ const updateOrganizationSettings = createSafeRootHandler(
           .onConflictDoUpdate({
             target: organizationSettings.organizationId,
             set: {
-              matterNumberPattern: body.matterNumberPattern,
-              matterNumberPadding: body.matterNumberPadding,
+              ...(wantsMatterUpdate
+                ? {
+                    matterNumberPattern: body.matterNumberPattern,
+                    matterNumberPadding: body.matterNumberPadding,
+                  }
+                : {}),
               ...(wantsPromptCachingUpdate
                 ? { promptCachingEnabled: body.promptCachingEnabled }
                 : {}),
@@ -75,14 +107,18 @@ const updateOrganizationSettings = createSafeRootHandler(
           resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
           resourceId: session.activeOrganizationId,
           changes: {
-            matterNumberPattern: {
-              old: null,
-              new: body.matterNumberPattern,
-            },
-            matterNumberPadding: {
-              old: null,
-              new: body.matterNumberPadding,
-            },
+            ...(wantsMatterUpdate
+              ? {
+                  matterNumberPattern: {
+                    old: null,
+                    new: body.matterNumberPattern,
+                  },
+                  matterNumberPadding: {
+                    old: null,
+                    new: body.matterNumberPadding,
+                  },
+                }
+              : {}),
             ...(wantsPromptCachingUpdate &&
             body.promptCachingEnabled !==
               (existing?.promptCachingEnabled ?? true)
@@ -99,8 +135,12 @@ const updateOrganizationSettings = createSafeRootHandler(
     );
 
     return Result.ok({
-      matterNumberPattern: body.matterNumberPattern,
-      matterNumberPadding: body.matterNumberPadding,
+      ...(body.matterNumberPattern !== undefined
+        ? { matterNumberPattern: body.matterNumberPattern }
+        : {}),
+      ...(body.matterNumberPadding !== undefined
+        ? { matterNumberPadding: body.matterNumberPadding }
+        : {}),
       ...(body.promptCachingEnabled !== undefined
         ? { promptCachingEnabled: body.promptCachingEnabled }
         : {}),

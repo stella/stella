@@ -758,15 +758,12 @@ const stripCacheMarkersFromProviderOptions = (
   return next;
 };
 
+type PromptMessage = CallOptions["prompt"][number];
+
 const stripCacheMarkersFromPrompt = (
   prompt: CallOptions["prompt"],
 ): CallOptions["prompt"] =>
-  // SAFETY: the map mutates only `providerOptions` and preserves
-  // every part's `type` discriminator. The cast is needed because
-  // TypeScript widens the spread result to `Partial<Part>` and
-  // loses the discriminated union; structurally the shape is
-  // unchanged.
-  prompt.map((message) => {
+  prompt.map((message): PromptMessage => {
     const cleanedProviderOptions = stripCacheMarkersFromProviderOptions(
       message.providerOptions,
     );
@@ -777,15 +774,46 @@ const stripCacheMarkersFromPrompt = (
     if (message.role === "system" || typeof message.content === "string") {
       return { ...message, ...providerOptionsPatch };
     }
-    const cleanedContent = message.content.map((part) => {
-      const cleaned = stripCacheMarkersFromProviderOptions(part.providerOptions);
-      return cleaned === undefined ? part : { ...part, providerOptions: cleaned };
-    });
+    if (message.role === "user") {
+      return {
+        ...message,
+        ...providerOptionsPatch,
+        content: message.content.map((part) => {
+          const cleaned = stripCacheMarkersFromProviderOptions(
+            part.providerOptions,
+          );
+          return cleaned === undefined
+            ? part
+            : { ...part, providerOptions: cleaned };
+        }),
+      };
+    }
+    if (message.role === "assistant") {
+      return {
+        ...message,
+        ...providerOptionsPatch,
+        content: message.content.map((part) => {
+          const cleaned = stripCacheMarkersFromProviderOptions(
+            part.providerOptions,
+          );
+          return cleaned === undefined
+            ? part
+            : { ...part, providerOptions: cleaned };
+        }),
+      };
+    }
     return {
       ...message,
       ...providerOptionsPatch,
-      content: cleanedContent,
-    } as (typeof message);
+      content: message.content.map((part) => {
+        const cleaned = stripCacheMarkersFromProviderOptions(
+          part.providerOptions,
+        );
+        return cleaned === undefined
+          ? part
+          : { ...part, providerOptions: cleaned };
+      }),
+    };
   });
 
 const markAnthropicSystemEphemeral = (
