@@ -1,42 +1,37 @@
 /**
- * InlineHeaderFooterEditor — inline overlay editor for header/footer content
+ * InlineHeaderFooterEditor — UI chrome for HF editing.
  *
- * Renders a ProseMirror EditorView positioned over the header/footer area
- * on the page, Google Docs style. The main body is dimmed and the toolbar
- * routes formatting commands to this editor while it's active.
+ * Before the HF editing unification, this component mounted its own visible
+ * ProseMirror EditorView positioned over the painted HF area. The painter
+ * underneath was hidden via `visibility: hidden` and the visible PM owned
+ * editing. That model produced edit/non-edit geometry drift, field-insert
+ * extra keystrokes, scroll-to-page-1 on cross-page HF edits, and imprecise
+ * caret placement.
+ *
+ * Post-unification (eigenpal#611), the painter is the sole visible HF
+ * renderer in both edit and non-edit modes; user input flows through the
+ * persistent off-screen EditorView mounted by `HiddenHeaderFooterPMs`.
+ * This component is now just chrome: a positioned label, an options menu
+ * (Insert PAGE / NUMPAGES / Remove / Close), and the separator bar.
+ *
+ * The ref still exposes `getView` / `focus` / `undo` / `redo` so existing
+ * callers (`useHeaderFooterEditor`, toolbar wiring) keep working — those
+ * methods now delegate to the active HF PM via `getActiveView`.
  */
 
-import React, {
-  useRef,
-  useEffect,
+import {
   useCallback,
-  useMemo,
-  useState,
+  useEffect,
   useImperativeHandle,
-  useLayoutEffect,
+  useRef,
+  useState,
 } from "react";
 import type { CSSProperties, Ref } from "react";
 
-import { undo, redo } from "prosemirror-history";
-import { EditorState } from "prosemirror-state";
-import { EditorView } from "prosemirror-view";
+import { redo, undo } from "prosemirror-history";
+import type { EditorView } from "prosemirror-view";
 
-import {
-  extractSelectionState,
-  createStyleResolver,
-} from "../core/prosemirror";
-import type { SelectionState } from "../core/prosemirror";
-import { proseDocToBlocks } from "../core/prosemirror/conversion/fromProseDoc";
-import { headerFooterToProseDoc } from "../core/prosemirror/conversion/toProseDoc";
-import { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
-import { createStarterKit } from "../core/prosemirror/extensions/StarterKit";
-import { schema } from "../core/prosemirror/schema";
-import type {
-  HeaderFooter,
-  Paragraph,
-  Table,
-  StyleDefinitions,
-} from "../core/types/document";
+import { schema } from "../core/prosemirror";
 import "prosemirror-view/style/prosemirror.css";
 
 // ============================================================================
@@ -44,34 +39,32 @@ import "prosemirror-view/style/prosemirror.css";
 // ============================================================================
 
 export type InlineHeaderFooterEditorProps = {
-  /** The header or footer being edited */
-  headerFooter: HeaderFooter;
   /** Whether editing header or footer */
   position: "header" | "footer";
-  /** Document styles for style resolution */
-  styles?: StyleDefinitions | null;
   /** The DOM element to overlay (the .layout-page-header / .layout-page-footer) */
   targetElement: HTMLElement;
   /** The positioning parent element (the div wrapping PagedEditor) */
   parentElement: HTMLElement;
-  /** Callback when editing is complete — receives updated content blocks */
-  onSave: (content: (Paragraph | Table)[]) => void;
-  /** Callback when editing is cancelled */
+  /**
+   * Returns the persistent hidden HF EditorView the user is currently
+   * editing. The chrome's ref methods (`getView`, `focus`, `undo`, `redo`)
+   * and the options menu's field inserts all route through this.
+   */
+  getActiveView: () => EditorView | null;
+  /** Callback when editing is cancelled (Escape / Close button) */
   onClose: () => void;
-  /** Callback when selection changes in the HF editor (for toolbar sync) */
-  onSelectionChange?: (state: SelectionState | null) => void;
   /** Callback to remove the header/footer entirely */
   onRemove?: () => void;
 };
 
 export type InlineHeaderFooterEditorRef = {
-  /** Get the ProseMirror EditorView */
+  /** Get the active HF PM EditorView (the persistent hidden one). */
   getView(): EditorView | null;
-  /** Focus the editor */
+  /** Focus the active HF PM. */
   focus(): void;
-  /** Undo */
+  /** Undo on the active HF PM. */
   undo(): boolean;
-  /** Redo */
+  /** Redo on the active HF PM. */
   redo(): boolean;
 };
 
@@ -100,47 +93,25 @@ const labelStyle: CSSProperties = {
 
 export function InlineHeaderFooterEditor({
   ref,
-  headerFooter,
   position,
-  styles,
   targetElement,
   parentElement,
-  onSave,
+  getActiveView,
   onClose,
-  onSelectionChange,
   onRemove,
 }: InlineHeaderFooterEditorProps & {
   ref?: Ref<InlineHeaderFooterEditorRef>;
 }) {
-  const editorContainerRef = useRef<HTMLDivElement>(null);
-  const viewRef = useRef<EditorView | null>(null);
-  const [isDirty, setIsDirty] = useState(false);
-
-  // Resolve default font size from document styles so the PM editor's
-  // line-height calculations use the correct base (not browser-default 16px)
-  const defaultFontSizePt = useMemo(() => {
-    if (!styles) {
-      return 11;
-    } // Word 2007+ default
-    const resolver = createStyleResolver(styles);
-    const resolved = resolver.resolveParagraphStyle(undefined);
-    // fontSize in document model is in half-points
-    return resolved.runFormatting?.fontSize
-      ? (resolved.runFormatting.fontSize as number) / 2
-      : 11;
-  }, [styles]);
-
   const [showOptions, setShowOptions] = useState(false);
   const optionsRef = useRef<HTMLDivElement>(null);
 
-  // Compute overlay position relative to the parent element
   const [overlayPos, setOverlayPos] = useState<{
     top: number;
     left: number;
     width: number;
   } | null>(null);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const computePosition = () => {
       const parentRect = parentElement.getBoundingClientRect();
       const targetRect = targetElement.getBoundingClientRect();
@@ -152,7 +123,6 @@ export function InlineHeaderFooterEditor({
     };
     computePosition();
 
-    // Recompute on scroll/resize
     const scrollParent =
       parentElement.closest('[style*="overflow"]') || parentElement;
     scrollParent.addEventListener("scroll", computePosition);
@@ -163,97 +133,55 @@ export function InlineHeaderFooterEditor({
     };
   }, [targetElement, parentElement]);
 
-  // Create ProseMirror editor when the container is available
-  // (overlayPos starts null → first render returns null → container ref not set)
+  // Focus the persistent HF PM when the chrome mounts so typing starts
+  // immediately after double-click. The HF view may not exist yet at
+  // mount: HiddenHeaderFooterPMs creates views inside a useEffect, and
+  // for freshly-created HF parts (empty header on a doc that had none),
+  // the chrome and the view-creation effect can land in either order.
+  // Retry across a short rAF window so focus lands as soon as the view
+  // is available; bail after MAX_FOCUS_ATTEMPTS frames to avoid leaking
+  // a rAF loop in pathological cases.
   useEffect(() => {
-    if (!editorContainerRef.current || viewRef.current) {
-      return;
-    }
-
-    // Convert header/footer content to PM document
-    const pmDoc =
-      styles === undefined || styles === null
-        ? headerFooterToProseDoc(headerFooter.content)
-        : headerFooterToProseDoc(headerFooter.content, { styles });
-
-    // Create a fresh ExtensionManager to get independent plugin instances
-    // (keyed plugins like history$ can't be shared across EditorViews)
-    const hfMgr = new ExtensionManager(createStarterKit());
-    hfMgr.buildSchema();
-    hfMgr.initializeRuntime();
-    const plugins = hfMgr.getPlugins();
-
-    const state = EditorState.create({
-      doc: pmDoc,
-      schema,
-      plugins,
-    });
-
-    const view = new EditorView(editorContainerRef.current, {
-      state,
-      dispatchTransaction(tr) {
-        const newState = view.state.apply(tr);
-        view.updateState(newState);
-        if (tr.docChanged) {
-          setIsDirty(true);
-        }
-        // Report selection changes for toolbar sync
-        if (tr.selectionSet || tr.docChanged) {
-          const selState = extractSelectionState(newState);
-          onSelectionChange?.(selState);
-        }
-      },
-    });
-
-    viewRef.current = view;
-
-    // Auto-focus
-    requestAnimationFrame(() => {
-      view.focus();
-      // Report initial selection state
-      const selState = extractSelectionState(view.state);
-      onSelectionChange?.(selState);
-    });
-
-    return () => {
-      view.destroy();
-      viewRef.current = null;
+    const MAX_FOCUS_ATTEMPTS = 10;
+    let attempts = 0;
+    let rafId: number | null = null;
+    const tryFocus = () => {
+      const view = getActiveView();
+      if (view) {
+        view.focus();
+        return;
+      }
+      attempts++;
+      if (attempts < MAX_FOCUS_ATTEMPTS) {
+        rafId = requestAnimationFrame(tryFocus);
+      }
     };
+    rafId = requestAnimationFrame(tryFocus);
+    return () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+    };
+    // getActiveView is a closure over parent state; we only fire on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [overlayPos]); // Re-run when position is computed (container becomes available)
+  }, []);
 
-  // Save current content
-  const handleSave = useCallback(() => {
-    if (!viewRef.current) {
-      return;
-    }
-    const blocks = proseDocToBlocks(viewRef.current.state.doc);
-    onSave(blocks);
-  }, [onSave]);
+  const handleClose = useCallback(() => {
+    onClose();
+  }, [onClose]);
 
-  // Save + close
-  const handleSaveAndClose = useCallback(() => {
-    if (isDirty) {
-      handleSave();
-    } else {
-      onClose();
-    }
-  }, [isDirty, handleSave, onClose]);
-
-  // Handle Escape key — save + close
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
-        handleSaveAndClose();
+        handleClose();
       }
     }
     document.addEventListener("keydown", handleKeyDown, true);
     return () => document.removeEventListener("keydown", handleKeyDown, true);
-  }, [handleSaveAndClose]);
+  }, [handleClose]);
 
-  // Close options dropdown when clicking outside
   useEffect(() => {
     if (!showOptions) {
       return;
@@ -270,19 +198,18 @@ export function InlineHeaderFooterEditor({
     return () => document.removeEventListener("mousedown", handleClick);
   }, [showOptions]);
 
-  // Expose ref
   useImperativeHandle(ref, () => ({
-    getView: () => viewRef.current,
-    focus: () => viewRef.current?.focus(),
+    getView: () => getActiveView(),
+    focus: () => getActiveView()?.focus(),
     undo: () => {
-      const view = viewRef.current;
+      const view = getActiveView();
       if (!view) {
         return false;
       }
       return undo(view.state, view.dispatch);
     },
     redo: () => {
-      const view = viewRef.current;
+      const view = getActiveView();
       if (!view) {
         return false;
       }
@@ -302,6 +229,10 @@ export function InlineHeaderFooterEditor({
     left: overlayPos.left,
     width: overlayPos.width,
     zIndex: 10,
+    // No pointer events on the chrome container itself — the painted HF
+    // beneath must receive clicks so the pointer pipeline routes them to
+    // the persistent HF PM. Individual chrome buttons opt back in.
+    pointerEvents: "none",
   };
 
   return (
@@ -309,14 +240,12 @@ export function InlineHeaderFooterEditor({
       role="presentation"
       className="hf-inline-editor"
       style={containerStyle}
-      onMouseDown={(e) => {
-        // Prevent clicks from bubbling to pages container / body click handler
-        e.stopPropagation();
-      }}
     >
-      {/* Separator bar — shown below for header, above for footer */}
       {position === "footer" && (
-        <div className="hf-separator-bar" style={separatorBarStyle}>
+        <div
+          className="hf-separator-bar"
+          style={{ ...separatorBarStyle, pointerEvents: "auto" }}
+        >
           <span style={labelStyle}>{label}</span>
           <OptionsMenu
             label={label}
@@ -324,26 +253,17 @@ export function InlineHeaderFooterEditor({
             setShowOptions={setShowOptions}
             optionsRef={optionsRef}
             onRemove={onRemove}
-            onClose={handleSaveAndClose}
-            viewRef={viewRef}
+            onClose={handleClose}
+            getActiveView={getActiveView}
           />
         </div>
       )}
 
-      {/* ProseMirror editor area */}
-      <div
-        ref={editorContainerRef}
-        className="hf-editor-pm"
-        style={{
-          minHeight: 40,
-          outline: "none",
-          fontSize: `${defaultFontSizePt}pt`,
-        }}
-      />
-
-      {/* Separator bar — shown below for header */}
       {position === "header" && (
-        <div className="hf-separator-bar" style={separatorBarStyle}>
+        <div
+          className="hf-separator-bar"
+          style={{ ...separatorBarStyle, pointerEvents: "auto" }}
+        >
           <span style={labelStyle}>{label}</span>
           <OptionsMenu
             label={label}
@@ -351,8 +271,8 @@ export function InlineHeaderFooterEditor({
             setShowOptions={setShowOptions}
             optionsRef={optionsRef}
             onRemove={onRemove}
-            onClose={handleSaveAndClose}
-            viewRef={viewRef}
+            onClose={handleClose}
+            getActiveView={getActiveView}
           />
         </div>
       )}
@@ -371,7 +291,7 @@ function OptionsMenu({
   optionsRef,
   onRemove,
   onClose,
-  viewRef,
+  getActiveView,
 }: {
   label: string;
   showOptions: boolean;
@@ -379,14 +299,13 @@ function OptionsMenu({
   optionsRef: React.RefObject<HTMLDivElement | null>;
   onRemove?: (() => void) | undefined;
   onClose: () => void;
-  viewRef: React.RefObject<EditorView | null>;
+  getActiveView: () => EditorView | null;
 }) {
   const insertField = (fieldType: "PAGE" | "NUMPAGES") => {
-    const view = viewRef.current;
+    const view = getActiveView();
     if (!view) {
       return;
     }
-    // Get marks at the current cursor position so the field inherits surrounding styling
     const { $from, from } = view.state.selection;
     const marks = view.state.storedMarks || $from.marks();
     const node = schema.nodes["field"]!.create({

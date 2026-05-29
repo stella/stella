@@ -17,6 +17,8 @@
  * inherited spacing). Measurement uses the normalized copy.
  */
 
+import type { Node as PMNode } from "prosemirror-model";
+
 import type {
   FlowBlock,
   FloatingTablePosition,
@@ -545,6 +547,13 @@ export type ConvertHeaderFooterOptions = {
   measureBlocks: MeasureBlocksFn;
   /** Document-wide `w:defaultTabStop` in twips — forwarded to toFlowBlocks. */
   defaultTabStopTwips?: number;
+  /**
+   * Relationship id of the source HF part. Stamped onto the returned
+   * `HeaderFooterContent.rId` so the painter can emit `data-rid` on the
+   * `.layout-page-header` / `.layout-page-footer` DOM node for the pointer
+   * pipeline (`HiddenHeaderFooterPMs` + `findHfPmSpans`).
+   */
+  rId?: string;
 };
 
 /**
@@ -590,6 +599,57 @@ export function convertHeaderFooterToContent(
     flowOptions.defaultTabStopTwips = options.defaultTabStopTwips;
   }
   const blocks = toFlowBlocks(pmDoc, flowOptions);
+  return finalizeHeaderFooterContent(blocks, contentWidth, metrics, options);
+}
+
+// =============================================================================
+// 5. PM doc source (persistent hidden HF EditorView path)
+// =============================================================================
+
+/**
+ * Same as {@link convertHeaderFooterToContent}, but sourced from a live
+ * ProseMirror document instead of `HeaderFooter.content`. Used by the
+ * persistent hidden HF EditorView pipeline so the painter renders the PM's
+ * current state (Word-style WYSIWYG: every keystroke repaints).
+ *
+ * The pmDoc is expected to be a body-shaped PM doc (the result of
+ * `headerFooterToProseDoc` at mount, plus any user edits applied since).
+ * Theme + styles do NOT need to be threaded again — they only matter for the
+ * initial parse path; subsequent transformations are PM-internal.
+ */
+export function convertHeaderFooterPmDocToContent(
+  pmDoc: PMNode | null | undefined,
+  contentWidth: number,
+  metrics: HeaderFooterMetrics,
+  options: Omit<ConvertHeaderFooterOptions, "styles">,
+): HeaderFooterContent | undefined {
+  if (!pmDoc || pmDoc.content.size === 0) {
+    return undefined;
+  }
+  const flowOptions: {
+    theme?: Theme | null;
+    defaultTabStopTwips?: number;
+  } = {};
+  if (options.theme !== undefined) {
+    flowOptions.theme = options.theme;
+  }
+  if (options.defaultTabStopTwips !== undefined) {
+    flowOptions.defaultTabStopTwips = options.defaultTabStopTwips;
+  }
+  const blocks = toFlowBlocks(pmDoc, flowOptions);
+  return finalizeHeaderFooterContent(blocks, contentWidth, metrics, options);
+}
+
+// =============================================================================
+// 6. Shared tail — blocks → HeaderFooterContent
+// =============================================================================
+
+function finalizeHeaderFooterContent(
+  blocks: FlowBlock[],
+  contentWidth: number,
+  metrics: HeaderFooterMetrics,
+  options: { measureBlocks: MeasureBlocksFn; rId?: string },
+): HeaderFooterContent | undefined {
   if (blocks.length === 0) {
     return undefined;
   }
@@ -606,8 +666,6 @@ export function convertHeaderFooterToContent(
     if (m.kind === "paragraph") {
       totalHeight += m.totalHeight;
     } else if (m.kind === "table") {
-      // Floating tables (`<w:tblpPr>`) anchor at (tblpX, tblpY) and don't
-      // contribute to the in-flow height that drives body push-down.
       if (!(b.kind === "table" && b.floating)) {
         totalHeight += m.totalHeight;
       }
@@ -639,5 +697,161 @@ export function convertHeaderFooterToContent(
     visualBottom,
     marginPushTop,
     marginPushBottom,
+    textSig: computeHeaderFooterTextSig(blocks),
+    ...(options.rId ? { rId: options.rId } : {}),
   };
+}
+
+/**
+ * Cheap content fingerprint for the painter's incremental-render cache. The
+ * default fields hashed by `computeOptionsHash` (block count + flow height +
+ * visual bounds) miss same-height in-place edits — typing a replacement
+ * character, toggling bold, etc. — so the painter's incremental path then
+ * skips re-rendering page shells and the user's HF edits stay invisible
+ * until something else triggers a full repaint (Codex #487 P1 follow-up:
+ * 21:02 review; extended for run formatting + fields per 21:28 review).
+ *
+ * For each run carry text + every visual-affecting field: text characters,
+ * field type (PAGE / NUMPAGES / DATE / TIME), and the full RunFormatting
+ * record (bold, italic, color, underline, fontSize, font, etc.). Toggling
+ * bold or inserting a PAGE field on existing same-height content now
+ * differentiates the signature and forces a repaint. Tables, images, and
+ * text boxes are summarised by kind + dims so resize / image swap also
+ * invalidate. JSON.stringify is moderately expensive but folio HF is
+ * bounded (a handful of paragraphs, max).
+ */
+function computeHeaderFooterTextSig(blocks: FlowBlock[]): string {
+  return blocks.map(blockSig).join("|");
+}
+
+function blockSig(b: FlowBlock): string {
+  if (b.kind === "paragraph") {
+    // Carry paragraph-level formatting so same-height changes (alignment,
+    // RTL/LTR, indent, line spacing, paragraph style, borders, shading,
+    // list properties) still invalidate the cache. textSig was opening
+    // every paragraph with a constant `p:` before, so the body PM could
+    // toggle alignment / line spacing inside an HF paragraph without
+    // shifting computeOptionsHash and the painter's incremental path
+    // would skip the repaint (Codex #487 P2: 22:48 review).
+    let text = `p:${serializeParagraphAttrs(b.attrs)}|`;
+    for (const r of b.runs) {
+      if (r.kind === "text") {
+        text += `T:${r.text}|${serializeRunFmt(r)};`;
+      } else if (r.kind === "tab") {
+        text += `\\t|${serializeRunFmt(r)};`;
+      } else if (r.kind === "lineBreak") {
+        text += "\\n;";
+      } else if (r.kind === "image") {
+        // Include src + transform + wrapType so swapping the painted
+        // image (different logo at the same dims) invalidates the
+        // signature — width × height alone would let an unchanged
+        // layout slip past the painter's incremental cache (Codex
+        // #487 P2: 23:09 review).
+        text +=
+          `[i${r.width}x${r.height}|${r.src}|` +
+          `${r.transform ?? ""}|${r.wrapType ?? ""}];`;
+      } else {
+        // field run
+        text += `F:${r.fieldType}|${serializeRunFmt(r)};`;
+      }
+    }
+    return text;
+  }
+  if (b.kind === "table") {
+    // Recurse into cells — same-height text / formatting / field edits
+    // inside an existing HF table cell are otherwise invisible to the
+    // painter's incremental cache (Codex #487 P2: 21:41 review). Row
+    // count + per-cell block signatures detect every visible change a
+    // user can produce without growing the table.
+    const cellParts: string[] = [];
+    for (const row of b.rows) {
+      for (const cell of row.cells) {
+        cellParts.push(cell.blocks.map(blockSig).join(","));
+      }
+    }
+    return `t:${b.rows.length}:${cellParts.join("|")}`;
+  }
+  if (b.kind === "image") {
+    return (
+      `i:${b.width}x${b.height}|${b.src}|` +
+      `${b.transform ?? ""}|${b.anchor?.behindDoc ? "behind" : ""}`
+    );
+  }
+  if (b.kind === "textBox") {
+    // Text boxes can carry their own content (paragraph + runs). Recurse
+    // when the layout-engine TextBoxBlock surfaces nested blocks; for
+    // shapes that only carry dims we keep the original bare tag.
+    const inner = (b as { blocks?: FlowBlock[] }).blocks;
+    if (Array.isArray(inner) && inner.length > 0) {
+      return `tb:${inner.map(blockSig).join(",")}`;
+    }
+    return "tb";
+  }
+  return "";
+}
+
+function serializeParagraphAttrs(
+  attrs: Record<string, unknown> | undefined,
+): string {
+  if (!attrs) {
+    return "";
+  }
+  const keys = [
+    "alignment",
+    "bidi",
+    "indent",
+    "spacing",
+    "styleId",
+    "borders",
+    "shading",
+    "contextualSpacing",
+    "keepNext",
+    "keepLines",
+    "pageBreakBefore",
+    "numPr",
+    "listMarker",
+    "listIsBullet",
+    "listMarkerHidden",
+    "listMarkerSuffix",
+    "tabs",
+  ];
+  const out: Record<string, unknown> = {};
+  for (const k of keys) {
+    const v = attrs[k];
+    if (v !== undefined && v !== null) {
+      out[k] = v;
+    }
+  }
+  return JSON.stringify(out);
+}
+
+/**
+ * Serialise the RunFormatting fields that actually drive the painter's
+ * visual output. The Run type spreads RunFormatting in place, so we project
+ * a small shape and JSON-stringify it; properties that are undefined are
+ * skipped so the resulting string stays compact for unstyled runs.
+ */
+function serializeRunFmt(run: Record<string, unknown>): string {
+  const keys = [
+    "bold",
+    "italic",
+    "underline",
+    "strikethrough",
+    "color",
+    "highlightColor",
+    "fontSize",
+    "fontFamily",
+    "verticalAlign",
+    "letterSpacing",
+    "smallCaps",
+    "allCaps",
+  ];
+  const out: Record<string, unknown> = {};
+  for (const k of keys) {
+    const v = run[k];
+    if (v !== undefined && v !== null) {
+      out[k] = v;
+    }
+  }
+  return JSON.stringify(out);
 }

@@ -130,6 +130,7 @@ import {
   findNextChange,
   findPreviousChange,
 } from "../core/prosemirror/commands/comments";
+import { proseDocToBlocks } from "../core/prosemirror/conversion/fromProseDoc";
 import { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
 import {
   getChangedParagraphIds,
@@ -1012,12 +1013,25 @@ export function DocxEditor({
     footerContent,
     firstPageHeaderContent,
     firstPageFooterContent,
+    activeHeaderRId,
+    activeFooterRId,
+    activeFirstHeaderRId,
+    activeFirstFooterRId,
     effectiveSectionProperties,
     handleHeaderFooterDoubleClick,
-    handleHeaderFooterSave,
     handleBodyClick,
     handleRemoveHeaderFooter,
-  } = useHeaderFooterEditor({ history, pushDocument, hfEditorRef });
+  } = useHeaderFooterEditor({
+    history,
+    pushDocument,
+    // Hook reads live HF PM state at close time (the in-place sync
+    // that previously kept package.headers/footers current per
+    // keystroke was removed to fix the undo-corruption bug; the
+    // close path now flushes via this callback). PagedEditor's ref
+    // exposes per-rId view lookup; the hook supplies the rId it
+    // already resolved internally for save / remove.
+    getHfView: (rId) => pagedEditorRef.current?.getHfView(rId) ?? null,
+  });
 
   // Helper to get the active editor's view — returns HF editor view when in HF editing mode
   const getActiveEditorView = useCallback(() => {
@@ -1266,6 +1280,36 @@ export function DocxEditor({
     const pmDoc = pagedEditorRef.current?.getDocument();
     if (pmDoc) {
       doc.package.document.content = pmDoc.package.document.content;
+    }
+    // Flush in-flight HF PM edits into the cloned package — the persistent
+    // hidden HF EditorViews don't mutate history.state per keystroke
+    // (Codex #487 P1: 20:18 review), so a "Save As .docx" called while the
+    // chrome is still open would otherwise ship the pre-edit content for
+    // every rId the user touched (Codex #487 P1 follow-up: 20:52 review).
+    // We walk the cloned headers / footers (structuredClone gave us fresh
+    // HF objects), look up the matching persistent view, and overwrite
+    // each rId's `.content` with `proseDocToBlocks(view.state.doc)`. The
+    // original history.state remains untouched because every mutation
+    // lands on the cloned Map / HF objects.
+    const editor = pagedEditorRef.current;
+    if (editor) {
+      const flushBag = (bag: Map<string, { content: unknown }> | undefined) => {
+        if (!bag) {
+          return;
+        }
+        for (const [rId, hf] of bag) {
+          const view = editor.getHfView(rId);
+          if (view) {
+            hf.content = proseDocToBlocks(view.state.doc);
+          }
+        }
+      };
+      flushBag(
+        doc.package.headers as Map<string, { content: unknown }> | undefined,
+      );
+      flushBag(
+        doc.package.footers as Map<string, { content: unknown }> | undefined,
+      );
     }
     // Drop comment threads whose anchor text has been edited away. The
     // in-memory `comments` array can outlive its in-body anchors (PM
@@ -3196,6 +3240,10 @@ export function DocxEditor({
                       footerContent={footerContent}
                       firstPageHeaderContent={firstPageHeaderContent}
                       firstPageFooterContent={firstPageFooterContent}
+                      headerContentRId={activeHeaderRId}
+                      footerContentRId={activeFooterRId}
+                      firstPageHeaderContentRId={activeFirstHeaderRId}
+                      firstPageFooterContentRId={activeFirstFooterRId}
                       {...(history.state.package.styles
                         ? { styles: history.state.package.styles }
                         : {})}
@@ -3210,8 +3258,18 @@ export function DocxEditor({
                         ? { onReadOnlyEditAttempt: onReadonlyEditAttempt }
                         : {})}
                       onSelectionChange={(_from, _to) => {
-                        // Extract full selection state from PM and use the standard handler
-                        const view = pagedEditorRef.current?.getView();
+                        // Extract full selection state from whichever PM
+                        // is active. When the user is editing HF the
+                        // hfEditorRef delegates to the persistent hidden
+                        // HF view via pagedEditorRef.getHfView(activeRId);
+                        // reading body PM here would leave the toolbar
+                        // (FormattingBar, table / image context) showing
+                        // stale body-selection state while its actions
+                        // target the HF view (post-eigenpal#611).
+                        const view =
+                          getActiveEditorView() ??
+                          pagedEditorRef.current?.getView() ??
+                          null;
                         if (view) {
                           const selectionState = extractSelectionState(
                             view.state,
@@ -3539,20 +3597,35 @@ export function DocxEditor({
                         if (!targetEl || !parentEl) {
                           return null;
                         }
+                        // Resolve the active HF rId for this edit session;
+                        // the chrome delegates getView/focus/undo/redo to the
+                        // persistent hidden HF EditorView mounted by
+                        // HiddenHeaderFooterPMs (post-eigenpal#611). The
+                        // inline overlay no longer mounts its own visible PM.
+                        const activeRId = (() => {
+                          if (hfEditIsFirstPage) {
+                            return hfEditPosition === "header"
+                              ? activeFirstHeaderRId
+                              : activeFirstFooterRId;
+                          }
+                          return hfEditPosition === "header"
+                            ? activeHeaderRId
+                            : activeFooterRId;
+                        })();
+                        const getActiveView = () =>
+                          activeRId
+                            ? (pagedEditorRef.current?.getHfView(activeRId) ??
+                              null)
+                            : null;
                         return (
                           <InlineHeaderFooterEditor
                             ref={hfEditorRef}
-                            headerFooter={activeHf}
                             position={hfEditPosition}
                             targetElement={targetEl}
                             parentElement={parentEl}
-                            onSave={handleHeaderFooterSave}
-                            onClose={() => setHfEditPosition(null)}
-                            onSelectionChange={handleSelectionChange}
+                            getActiveView={getActiveView}
+                            onClose={handleBodyClick}
                             onRemove={handleRemoveHeaderFooter}
-                            {...(history.state.package.styles
-                              ? { styles: history.state.package.styles }
-                              : {})}
                           />
                         );
                       })()}

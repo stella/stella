@@ -90,11 +90,21 @@ test.describe("DOCX upload + inspector", () => {
     );
 
     // Positive proof the viewer actually rendered: the fixture's first
-    // paragraph appears in the DOM. This catches render crashes (an error
-    // boundary fallback wouldn't contain this string) without an arbitrary
-    // sleep. Generous timeout because in CI the Folio chunk compiles + loads
-    // cold AND the DOCX file is fetched from the API + parsed.
-    const docxText = page.getByText("Stella E2E test document.");
+    // paragraph appears in the painted layout. This catches render crashes
+    // (an error boundary fallback wouldn't contain this string) without an
+    // arbitrary sleep. Generous timeout because in CI the Folio chunk
+    // compiles + loads cold AND the DOCX file is fetched from the API +
+    // parsed.
+    //
+    // Scope to `.layout-run-text` (emitted by the layout painter in
+    // packages/folio/src/core/layout-painter/renderParagraph.ts) rather
+    // than getByText so the assertion targets the *visible* painted span
+    // only. The hidden ProseMirror at left:-9999px also contains the same
+    // text inside a <p> under aria-label="Document content" — a bare
+    // getByText hits both elements and trips Playwright strict mode.
+    const docxText = page.locator(".layout-run-text", {
+      hasText: "Stella E2E test document.",
+    });
     try {
       await expect(docxText).toBeVisible({ timeout: 45_000 });
     } catch (error) {

@@ -157,6 +157,21 @@ export type HeaderFooterContent = {
    */
   marginPushTop?: number;
   marginPushBottom?: number;
+  /**
+   * Relationship id (`rId`) of the source HF part. Emitted as `data-rid`
+   * on the painted `.layout-page-header` / `.layout-page-footer` so the
+   * pointer pipeline can resolve clicks to the matching hidden HF
+   * EditorView (see `HiddenHeaderFooterPMs`).
+   */
+  rId?: string;
+  /**
+   * Cheap text fingerprint of the rendered blocks. Used by
+   * `computeOptionsHash` so same-height in-place HF edits (typing
+   * replacing the same number of chars, bold toggle, etc.) invalidate
+   * the cached options hash and force the painter to re-render shells
+   * (Codex #487 P1 follow-up: 21:02 review).
+   */
+  textSig?: string;
 };
 
 /**
@@ -913,6 +928,9 @@ function renderHeaderFooterContent(
     width: number;
     height: number;
     alt?: string;
+    /** Run-level PM position so the pointer pipeline can NodeSelect HF images. */
+    pmStart?: number;
+    pmEnd?: number;
     paragraphY: number; // Y position of the containing paragraph
     behindDoc?: boolean;
     position: {
@@ -968,6 +986,8 @@ function renderHeaderFooterContent(
             width: run.width,
             height: run.height,
             ...(run.alt !== undefined ? { alt: run.alt } : {}),
+            ...(run.pmStart !== undefined ? { pmStart: run.pmStart } : {}),
+            ...(run.pmEnd !== undefined ? { pmEnd: run.pmEnd } : {}),
             paragraphY: paragraphStartY,
             behindDoc: run.wrapType === "behind",
             position: run.position ?? {},
@@ -1128,6 +1148,18 @@ function renderHeaderFooterContent(
     img.height = floatImg.height;
     if (floatImg.alt) {
       img.alt = floatImg.alt;
+    }
+    // Mark as a click-resolvable image fragment so the pointer pipeline's
+    // `findImageElement` matches it. Without these markers an anchored HF
+    // image rendered here would fall through to the generic HF text-click
+    // branch and no NodeSelection could be created on the HF view
+    // (Codex #487 P2 follow-up: 20:52 review).
+    img.classList.add("layout-run", "layout-run-image");
+    if (floatImg.pmStart !== undefined) {
+      img.dataset["pmStart"] = String(floatImg.pmStart);
+    }
+    if (floatImg.pmEnd !== undefined) {
+      img.dataset["pmEnd"] = String(floatImg.pmEnd);
     }
 
     img.style.position = "absolute";
@@ -1824,6 +1856,9 @@ export function renderPage(
 
     const headerEl = doc.createElement("div");
     headerEl.className = PAGE_CLASS_NAMES.header;
+    if (options.headerContent?.rId) {
+      headerEl.dataset["rid"] = options.headerContent.rId;
+    }
     headerEl.style.position = "absolute";
     headerEl.style.top = `${headerDistance + headerVisualTop}px`;
     headerEl.style.left = `${page.margins.left}px`;
@@ -1919,6 +1954,9 @@ export function renderPage(
     const footerContainerTop = footerNaturalTop + footerVisualTop;
     const footerEl = doc.createElement("div");
     footerEl.className = PAGE_CLASS_NAMES.footer;
+    if (options.footerContent?.rId) {
+      footerEl.dataset["rid"] = options.footerContent.rId;
+    }
     footerEl.style.position = "absolute";
     footerEl.style.top = `${footerContainerTop}px`;
     footerEl.style.left = `${page.margins.left}px`;
@@ -2331,30 +2369,44 @@ function runContentKey(run: Run): string {
 function computeOptionsHash(options: RenderPageOptions): string {
   const parts: string[] = [];
 
-  // Header/footer content changes affect all pages
+  // Header/footer content changes affect all pages. Include `textSig` so
+  // same-height in-place edits (typing a replacement char, bold toggle, etc.)
+  // invalidate the hash and force the per-page shells to re-render — block
+  // count / height / visualBounds alone miss those (Codex #487 P1: 21:02
+  // review). Include `rId` so switching to a different HF part with
+  // identical content invalidates the hash too — otherwise the painted
+  // `data-rid` would stay stale (Codex #487 P2: 22:48 review).
   if (options.headerContent) {
     parts.push(
       `hdr:${options.headerContent.blocks.length},${options.headerContent.height},${
         options.headerContent.visualTop ?? 0
-      },${options.headerContent.visualBottom ?? options.headerContent.height}`,
+      },${options.headerContent.visualBottom ?? options.headerContent.height},${
+        options.headerContent.rId ?? ""
+      },${options.headerContent.textSig ?? ""}`,
     );
   }
   if (options.footerContent) {
     parts.push(
       `ftr:${options.footerContent.blocks.length},${options.footerContent.height},${
         options.footerContent.visualTop ?? 0
-      },${options.footerContent.visualBottom ?? options.footerContent.height}`,
+      },${options.footerContent.visualBottom ?? options.footerContent.height},${
+        options.footerContent.rId ?? ""
+      },${options.footerContent.textSig ?? ""}`,
     );
   }
 
   if (options.firstPageHeaderContent) {
     parts.push(
-      `fp-hdr:${options.firstPageHeaderContent.blocks.length},${options.firstPageHeaderContent.height}`,
+      `fp-hdr:${options.firstPageHeaderContent.blocks.length},${options.firstPageHeaderContent.height},${
+        options.firstPageHeaderContent.rId ?? ""
+      },${options.firstPageHeaderContent.textSig ?? ""}`,
     );
   }
   if (options.firstPageFooterContent) {
     parts.push(
-      `fp-ftr:${options.firstPageFooterContent.blocks.length},${options.firstPageFooterContent.height}`,
+      `fp-ftr:${options.firstPageFooterContent.blocks.length},${options.firstPageFooterContent.height},${
+        options.firstPageFooterContent.rId ?? ""
+      },${options.firstPageFooterContent.textSig ?? ""}`,
     );
   }
   if (options.titlePg) {
@@ -2562,6 +2614,10 @@ export function renderPages(
     prevState.totalPages = totalPages;
     prevState.currentOptions = options;
 
+    // Incremental path: existing shells were repopulated in place; fire
+    // painter:painted so caret/selection overlays recompute against the
+    // freshly written DOM (Codex #487 P2: 22:09 review).
+    emitPainterPainted(container);
     return;
   }
 
@@ -2612,7 +2668,12 @@ export function renderPages(
 
   if (!useVirtualization) {
     // Store state for potential future incremental updates (won't be used
-    // since small docs skip the incremental path, but keeps data consistent)
+    // since small docs skip the incremental path, but keeps data consistent).
+    // Fire painter:painted before returning so consumers — notably
+    // HfCaretOverlay, which recomputes after the painter writes new HF
+    // DOM — see the event in the common small-document path too
+    // (Codex #487 P2: 22:09 review).
+    emitPainterPainted(container);
     return;
   }
 
@@ -2749,6 +2810,40 @@ export function renderPages(
   for (let i = 0; i < initialRenderCount; i++) {
     populatePageShell(pageShells[i]!, pageDataMap, totalPages, options); // SAFETY: i < initialRenderCount <= pages.length
   }
+
+  emitPainterPainted(container);
+}
+
+// =============================================================================
+// painter:painted event bus
+// =============================================================================
+//
+// Subscribers (e.g. SelectionOverlay's HF caret cache, hidden HF PMs) need a
+// single signal that the painter has finished writing children for the current
+// layout pass. The body's hidden-PM + painter pipeline already exposes this
+// implicitly via `syncCoordinator.onLayoutComplete`; for HF caret math the
+// snapshot needs to invalidate the moment the painted DOM changes. A bubbling
+// CustomEvent on the container element keeps the API ergonomic
+// (`container.addEventListener("painter:painted", ...)`) without introducing a
+// global EventTarget that would leak across multiple editor mounts.
+
+export const PAINTER_PAINTED_EVENT = "painter:painted" as const;
+
+export type PainterPaintedDetail = {
+  container: HTMLElement;
+  pageCount: number;
+};
+
+function emitPainterPainted(container: HTMLElement): void {
+  const pageCount = container.querySelectorAll(
+    `.${PAGE_CLASS_NAMES.page}`,
+  ).length;
+  const event = new CustomEvent<PainterPaintedDetail>(PAINTER_PAINTED_EVENT, {
+    detail: { container, pageCount },
+    bubbles: true,
+    cancelable: false,
+  });
+  container.dispatchEvent(event);
 }
 
 /**
@@ -2790,6 +2885,18 @@ function populatePageShell(
 
   data.rendered = true;
   syncPageShellFingerprints(shell, data, options);
+
+  // Fire painter:painted on the pages container so HfCaretOverlay
+  // recomputes against the now-populated shell. Without this, an HF
+  // edit on a later page in a virtualized doc would emit
+  // painter:painted while only the first three shells were populated
+  // (full-rebuild path), the overlay would clear, and the caret would
+  // not return until another transaction (Codex #487 P2: 22:27
+  // review).
+  const container = shell.parentElement;
+  if (container instanceof HTMLElement) {
+    emitPainterPainted(container);
+  }
 }
 
 /**

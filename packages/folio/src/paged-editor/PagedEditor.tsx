@@ -23,14 +23,16 @@ import React, {
   useImperativeHandle,
 } from "react";
 import type { CSSProperties, Ref } from "react";
-import { flushSync } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 
 import type { Mark, Node as PMNode } from "prosemirror-model";
 import { NodeSelection, TextSelection } from "prosemirror-state";
 import type { EditorState, Transaction, Plugin } from "prosemirror-state";
-import type { CellSelection } from "prosemirror-tables";
+import { CellSelection } from "prosemirror-tables";
 import type { EditorView } from "prosemirror-view";
 
+import { HiddenHeaderFooterPMs } from "../components/HiddenHeaderFooterPMs";
+import type { HiddenHeaderFooterPMsRef } from "../components/HiddenHeaderFooterPMs";
 import { getFootnoteText } from "../core/docx/footnoteParser";
 import { clickToPosition } from "../core/layout-bridge/clickToPosition";
 import { clickToPositionDom } from "../core/layout-bridge/clickToPositionDom";
@@ -41,11 +43,22 @@ import {
   findBodyPmSpans,
 } from "../core/layout-bridge/findBodyPmSpans";
 import {
+  clickToPositionInHfSlot,
+  findHfCaretSpan,
+  findHfSlotForTarget,
+} from "../core/layout-bridge/findHfPmSpans";
+import {
   collectFootnoteRefs,
   buildFootnoteContentMap,
 } from "../core/layout-bridge/footnoteLayout";
-import { convertHeaderFooterToContent } from "../core/layout-bridge/headerFooterLayout";
-import type { HeaderFooterMetrics } from "../core/layout-bridge/headerFooterLayout";
+import {
+  convertHeaderFooterPmDocToContent,
+  convertHeaderFooterToContent,
+} from "../core/layout-bridge/headerFooterLayout";
+import type {
+  ConvertHeaderFooterOptions,
+  HeaderFooterMetrics,
+} from "../core/layout-bridge/headerFooterLayout";
 import {
   hitTestFragment,
   hitTestTableCell,
@@ -93,9 +106,11 @@ import { LayoutPainter } from "../core/layout-painter";
 import type { BlockLookup } from "../core/layout-painter";
 import {
   findPageShellForPmPos,
+  PAINTER_PAINTED_EVENT,
   renderPages,
 } from "../core/layout-painter/renderPage";
 import type {
+  HeaderFooterContent,
   RenderPageOptions,
   FootnoteRenderItem,
 } from "../core/layout-painter/renderPage";
@@ -196,6 +211,15 @@ export type PagedEditorProps = {
   firstPageHeaderContent?: HeaderFooter | null;
   /** Footer content for first page only (when titlePg is set). */
   firstPageFooterContent?: HeaderFooter | null;
+  /**
+   * Relationship ids for the displayed HF slots — used by the painter to
+   * emit `data-rid` on `.layout-page-header` / `.layout-page-footer` and
+   * by the layout pipeline to look up persistent hidden HF EditorViews.
+   */
+  headerContentRId?: string | null;
+  footerContentRId?: string | null;
+  firstPageHeaderContentRId?: string | null;
+  firstPageFooterContentRId?: string | null;
   /** Whether the editor is read-only. */
   readOnly?: boolean;
   /** Gap between pages in pixels. */
@@ -293,6 +317,12 @@ export type PagedEditorRef = {
   getState(): EditorState | null;
   /** Get the ProseMirror EditorView. */
   getView(): EditorView | null;
+  /**
+   * Look up the persistent hidden HF EditorView by `rId`. Returns null when
+   * the slot isn't mounted (e.g. document has no HF for that rId, or the
+   * hidden host hasn't mounted yet).
+   */
+  getHfView(rId: string): EditorView | null;
   /**
    * Force-create the hidden editor view if it has been deferred.
    * Use from surfaces that need a live view before any user
@@ -570,6 +600,300 @@ const loadSelectionGeometry = (): Promise<SelectionGeometryModule> => {
   return selectionGeometryPromise;
 };
 
+// HF caret overlay — minimal "paint the caret + selection rects for the
+// currently focused HF PM" implementation. Re-runs the DOM lookup on each
+// painter:painted event and whenever the selection changes.
+type HfCaretSelection = {
+  rId: string;
+  kind: "header" | "footer";
+  from: number;
+  to: number;
+  /**
+   * Page number (1-indexed) the user clicked/typed into. When a shared HF
+   * rId is painted on multiple pages, the caret + range rects must scope to
+   * the page the user is actually editing — otherwise the lookup picks the
+   * first matching slot and the caret appears on page 1 while the user is
+   * typing on page 5 (Codex #487 P2: 21:28 review).
+   */
+  pageNumber?: number;
+};
+
+function HfCaretOverlay({
+  selection,
+  pagesContainer,
+  zoom,
+}: {
+  selection: HfCaretSelection;
+  pagesContainer: HTMLDivElement | null;
+  zoom: number;
+}) {
+  const [caret, setCaret] = useState<{
+    x: number;
+    y: number;
+    height: number;
+  } | null>(null);
+  const [rangeRects, setRangeRects] = useState<
+    { x: number; y: number; width: number; height: number }[]
+  >([]);
+
+  useEffect(() => {
+    if (!pagesContainer) {
+      return;
+    }
+    const recompute = () => {
+      const cr = pagesContainer.getBoundingClientRect();
+      // getBoundingClientRect reports post-transform viewport pixels;
+      // the caret divs live inside pagesContainer where CSS lengths
+      // get scaled by the viewport's `transform: scale(zoom)`. At
+      // 1.5× a 100px text offset would land at 150px on screen if
+      // written through unchanged, but writing it as CSS lets the
+      // parent transform scale it AGAIN to 225px — so divide every
+      // delta by zoom before passing to style (Codex #487 P2: 22:16).
+      const zoomDivisor = zoom !== 0 ? zoom : 1;
+      // Scope every lookup to the specific painted page the user is
+      // editing. When a default HF rId is shared across N pages we'd
+      // otherwise paint the caret on the first matching slot (page 1)
+      // even if the user is typing on page 5 (Codex #487 P2: 21:28).
+      const pageScope: ParentNode = selection.pageNumber
+        ? (pagesContainer.querySelector(
+            `.layout-page[data-page-number="${selection.pageNumber}"]`,
+          ) ?? pagesContainer)
+        : pagesContainer;
+      const collapsed = selection.from === selection.to;
+      if (collapsed) {
+        // Use findHfCaretSpan so a caret at the end of a run / paragraph
+        // (selection.from == span's data-pm-end) still finds a span to
+        // anchor to — exact data-pm-start matching alone would lose the
+        // caret as soon as the user typed to the end of their text
+        // (Codex #487 P2: 20:32 review).
+        const hit = findHfCaretSpan(
+          pageScope,
+          selection.kind,
+          selection.rId,
+          selection.from,
+        );
+        if (!hit) {
+          setCaret(null);
+          setRangeRects([]);
+          return;
+        }
+        const ar = hit.element.getBoundingClientRect();
+        // Default fallback uses the span edge findHfCaretSpan returned —
+        // safe for atom spans (images, breaks) that lack a text node.
+        // For text-bearing spans, sample the *exact* visual position
+        // via a collapsed Range at (selection.from - pmStart) inside
+        // the text node. The Range API returns the caret rect in
+        // visual (direction-aware) coordinates so it lands on the
+        // correct side of the run in RTL / bidi headers / footers as
+        // well as the middle of mid-span LTR runs (Codex #487 P2:
+        // 22:38 + 22:58 reviews).
+        let absX = hit.edge === "right" ? ar.right : ar.left;
+        let absY = ar.top;
+        let absHeight = ar.height || 16;
+        const pmStartStr = hit.element.dataset["pmStart"];
+        const pmEndStr = hit.element.dataset["pmEnd"];
+        const pmStart = pmStartStr
+          ? Number.parseInt(pmStartStr, 10)
+          : Number.NaN;
+        const pmEnd = pmEndStr ? Number.parseInt(pmEndStr, 10) : Number.NaN;
+        const textNode = hit.element.firstChild;
+        if (
+          textNode &&
+          textNode.nodeType === Node.TEXT_NODE &&
+          Number.isFinite(pmStart) &&
+          Number.isFinite(pmEnd)
+        ) {
+          const textContent = textNode.textContent ?? "";
+          const charOffset = Math.min(
+            Math.max(0, selection.from - pmStart),
+            textContent.length,
+          );
+          const ownerDoc = hit.element.ownerDocument;
+          const range = ownerDoc.createRange();
+          range.setStart(textNode, charOffset);
+          range.setEnd(textNode, charOffset);
+          const rRect = range.getBoundingClientRect();
+          if (rRect.height > 0 || rRect.width > 0 || rRect.left > 0) {
+            absX = rRect.left;
+            absY = rRect.top;
+            absHeight = rRect.height || absHeight;
+          }
+        }
+        setCaret({
+          x: (absX - cr.left) / zoomDivisor,
+          y: (absY - cr.top) / zoomDivisor,
+          height: absHeight / zoomDivisor,
+        });
+        setRangeRects([]);
+        return;
+      }
+      // Range selection — walk every painted pm span inside the slot
+      // and project the union of those whose [pmStart,pmEnd] intersect
+      // [from,to). The painter emits one span per run so this is good
+      // enough for single-line and multi-line highlights without doing
+      // glyph-level math (Word's selection model is paragraph-line-based
+      // — same convention).
+      const slotSelector =
+        selection.kind === "header"
+          ? `.layout-page-header[data-rid="${selection.rId}"]`
+          : `.layout-page-footer[data-rid="${selection.rId}"]`;
+      const spans = pageScope.querySelectorAll<HTMLElement>(
+        `${slotSelector} span[data-pm-start][data-pm-end]`,
+      );
+      const rects: { x: number; y: number; width: number; height: number }[] =
+        [];
+      for (const span of spans) {
+        const spanStart = Number.parseInt(span.dataset["pmStart"] ?? "", 10);
+        const spanEnd = Number.parseInt(span.dataset["pmEnd"] ?? "", 10);
+        if (!Number.isFinite(spanStart) || !Number.isFinite(spanEnd)) {
+          continue;
+        }
+        if (spanEnd <= selection.from || spanStart >= selection.to) {
+          continue;
+        }
+        // For text-bearing spans, clip the highlight to the selected
+        // sub-range with the Range API instead of using the whole span
+        // bounding box. Without this a partial selection inside a run
+        // (double-clicking a word, dragging a few characters) painted
+        // the entire run as selected (Codex #487 P2: 22:38 review).
+        const textNode = span.firstChild;
+        if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+          const textContent = textNode.textContent ?? "";
+          const startChar = Math.max(0, selection.from - spanStart);
+          const endChar = Math.min(
+            textContent.length,
+            selection.to - spanStart,
+          );
+          if (startChar < endChar) {
+            const ownerDoc = span.ownerDocument;
+            const range = ownerDoc.createRange();
+            range.setStart(textNode, startChar);
+            range.setEnd(textNode, endChar);
+            for (const cRect of Array.from(range.getClientRects())) {
+              rects.push({
+                x: (cRect.left - cr.left) / zoomDivisor,
+                y: (cRect.top - cr.top) / zoomDivisor,
+                width: cRect.width / zoomDivisor,
+                height: cRect.height / zoomDivisor,
+              });
+            }
+            continue;
+          }
+        }
+        // No text node (atom inline, image, etc.) — fall back to the
+        // span's full bounding rect; selection of the atom still paints
+        // visibly.
+        const r = span.getBoundingClientRect();
+        rects.push({
+          x: (r.left - cr.left) / zoomDivisor,
+          y: (r.top - cr.top) / zoomDivisor,
+          width: r.width / zoomDivisor,
+          height: r.height / zoomDivisor,
+        });
+      }
+      setRangeRects(rects);
+      setCaret(null);
+    };
+    recompute();
+    const onPainted = () => recompute();
+    pagesContainer.addEventListener(PAINTER_PAINTED_EVENT, onPainted);
+    return () => {
+      pagesContainer.removeEventListener(PAINTER_PAINTED_EVENT, onPainted);
+    };
+    // Destructure selection so the effect only re-runs when a field
+    // actually changes; otherwise every handleHfPmTransaction-driven
+    // setHfCaretSelection allocates a new object and we'd churn the
+    // DOM lookup + getBoundingClientRect chain on every keystroke.
+  }, [
+    selection.rId,
+    selection.kind,
+    selection.from,
+    selection.to,
+    selection.pageNumber,
+    pagesContainer,
+    zoom,
+  ]);
+
+  if (!pagesContainer) {
+    return null;
+  }
+  // Portal into pagesContainer so the absolute-positioned caret + rects
+  // share the same containing block as the painted spans we measured
+  // against. Previously the JSX rendered as siblings of pagesContainer
+  // inside .paged-editor__viewport, which has VIEWPORT_PADDING_TOP +
+  // a scale transform applied — HF carets/rects drifted above the
+  // painted slot. Portalling restores positional alignment without
+  // changing the coordinate math.
+  return createPortal(
+    <>
+      {rangeRects.map((r, i) => (
+        <div
+          key={`hf-sel-${i}-${r.x}-${r.y}-${r.width}`}
+          data-testid="hf-selection-rect"
+          style={{
+            position: "absolute",
+            left: r.x,
+            top: r.y,
+            width: r.width,
+            height: r.height,
+            backgroundColor: "var(--doc-selection, rgba(66, 133, 244, 0.3))",
+            pointerEvents: "none",
+            zIndex: 10,
+          }}
+        />
+      ))}
+      {caret && (
+        <div
+          data-testid="hf-caret"
+          style={{
+            position: "absolute",
+            left: caret.x,
+            top: caret.y,
+            width: 2,
+            height: caret.height,
+            backgroundColor: "var(--doc-canvas-text, #000)",
+            pointerEvents: "none",
+            zIndex: 11,
+            animation: "folio-caret-blink 1060ms steps(1, end) infinite",
+          }}
+        />
+      )}
+    </>,
+    pagesContainer,
+  );
+}
+
+// Source HeaderFooterContent for the painter from either a persistent hidden
+// HF EditorView (preferred — keeps the painter in lockstep with live PM edits)
+// or the HeaderFooter document blocks (fallback before the view mounts).
+// `rId` is stamped on the result so the painter emits `data-rid` and the
+// pointer pipeline can route clicks back to the matching EditorView.
+function renderHfFromContentOrPm(
+  hf: HeaderFooter | null | undefined,
+  rId: string | null | undefined,
+  hfPMs: HiddenHeaderFooterPMsRef | null,
+  contentWidth: number,
+  metrics: HeaderFooterMetrics,
+  options: ConvertHeaderFooterOptions,
+): HeaderFooterContent | undefined {
+  if (!hf) {
+    return undefined;
+  }
+  const optsWithRId: ConvertHeaderFooterOptions = rId
+    ? { ...options, rId }
+    : options;
+  const view = rId ? hfPMs?.getView(rId) : null;
+  if (view) {
+    return convertHeaderFooterPmDocToContent(
+      view.state.doc,
+      contentWidth,
+      metrics,
+      optsWithRId,
+    );
+  }
+  return convertHeaderFooterToContent(hf, contentWidth, metrics, optsWithRId);
+}
+
 type LayoutInputSignatureOptions = {
   columns: ColumnLayout | undefined;
   contentWidth: number;
@@ -578,6 +902,17 @@ type LayoutInputSignatureOptions = {
   firstPageHeaderContent: HeaderFooter | null | undefined;
   footerContent: HeaderFooter | null | undefined;
   headerContent: HeaderFooter | null | undefined;
+  // Active rId per HF slot. Switching to a different HF part with
+  // identical content + height previously left the layout signature
+  // unchanged so the painter incremental path skipped repaint and the
+  // old `data-rid` lingered in the DOM, routing clicks to a stale HF
+  // view (Codex #487 P2: 22:48 review). Including the rId guarantees a
+  // relayout when the slot's owning rId changes even if the rendered
+  // content is byte-equivalent.
+  headerContentRId: string | null | undefined;
+  footerContentRId: string | null | undefined;
+  firstPageHeaderContentRId: string | null | undefined;
+  firstPageFooterContentRId: string | null | undefined;
   margins: PageMargins;
   pageGap: number;
   pageSize: { h: number; w: number };
@@ -2078,6 +2413,10 @@ export function PagedEditor(
     footerContent,
     firstPageHeaderContent,
     firstPageFooterContent,
+    headerContentRId,
+    footerContentRId,
+    firstPageHeaderContentRId,
+    firstPageFooterContentRId,
     readOnly = false,
     pageGap = DEFAULT_PAGE_GAP,
     zoom = 1,
@@ -2119,6 +2458,7 @@ export function PagedEditor(
   const containerRef = useRef<HTMLDivElement>(null);
   const pagesContainerRef = useRef<HTMLDivElement>(null);
   const hiddenPMRef = useRef<HiddenProseMirrorRef>(null);
+  const hfPMsRef = useRef<HiddenHeaderFooterPMsRef>(null);
   const painterRef = useRef<LayoutPainter | null>(null);
 
   // Visual line navigation (ArrowUp/ArrowDown with sticky X)
@@ -2222,6 +2562,21 @@ export function PagedEditor(
   // Drag selection state
   const isDraggingRef = useRef(false);
   const dragAnchorRef = useRef<number | null>(null);
+  // When the drag originated inside a painted HF slot, the anchor lives in
+  // that slot's PM (`hfPMsRef.current.getView(rId)`), not the body PM. The
+  // pointer pipeline reads this on every mousemove + on shift-click extend
+  // so drag-select / shift-extend dispatch on the right surface.
+  const activeHfDragSurfaceRef = useRef<{
+    rId: string;
+    kind: "header" | "footer";
+  } | null>(null);
+  // Same idea for table resize: when the resize handle lives inside an HF
+  // table the commit must dispatch setNodeMarkup on that slot's PM, not on
+  // the body PM. Captured at mousedown, cleared on mouseup.
+  const resizingHfSurfaceRef = useRef<{
+    rId: string;
+    kind: "header" | "footer";
+  } | null>(null);
 
   const ensureHiddenEditorView = useCallback(
     ({ focus = true, sync = false }: EnsureHiddenEditorViewOptions = {}) => {
@@ -2416,6 +2771,10 @@ export function PagedEditor(
         firstPageHeaderContent,
         footerContent,
         headerContent,
+        headerContentRId,
+        footerContentRId,
+        firstPageHeaderContentRId,
+        firstPageFooterContentRId,
         margins,
         pageGap,
         pageSize,
@@ -2431,6 +2790,10 @@ export function PagedEditor(
       firstPageHeaderContent,
       footerContent,
       headerContent,
+      headerContentRId,
+      footerContentRId,
+      firstPageHeaderContentRId,
+      firstPageFooterContentRId,
       margins,
       pageGap,
       pageSize,
@@ -2570,30 +2933,38 @@ export function PagedEditor(
             ? { defaultTabStopTwips: defaultTabStop }
             : {}),
         };
-        const headerContentForRender = convertHeaderFooterToContent(
+        const headerContentForRender = renderHfFromContentOrPm(
           headerContent,
+          headerContentRId,
+          hfPMsRef.current,
           contentWidth,
           hfMetricsHeader,
           hfOptions,
         );
-        const footerContentForRender = convertHeaderFooterToContent(
+        const footerContentForRender = renderHfFromContentOrPm(
           footerContent,
+          footerContentRId,
+          hfPMsRef.current,
           contentWidth,
           hfMetricsFooter,
           hfOptions,
         );
         const hasTitlePg = sectionProperties?.titlePg === true;
         const firstPageHeaderForRender = hasTitlePg
-          ? convertHeaderFooterToContent(
+          ? renderHfFromContentOrPm(
               firstPageHeaderContent,
+              firstPageHeaderContentRId,
+              hfPMsRef.current,
               contentWidth,
               hfMetricsHeader,
               hfOptions,
             )
           : undefined;
         const firstPageFooterForRender = hasTitlePg
-          ? convertHeaderFooterToContent(
+          ? renderHfFromContentOrPm(
               firstPageFooterContent,
+              firstPageFooterContentRId,
+              hfPMsRef.current,
               contentWidth,
               hfMetricsFooter,
               hfOptions,
@@ -2834,6 +3205,16 @@ export function PagedEditor(
       footerContent,
       firstPageHeaderContent,
       firstPageFooterContent,
+      // HF rIds drive which hidden EditorView the pipeline sources from
+      // AND the `data-rid` stamped on each painted slot. Omitting them
+      // from this dep array let an rId swap between byte-identical
+      // HeaderFooter objects reuse a stale runLayoutPipeline closure
+      // and the painter emitted the previous slot's `data-rid` so
+      // clicks routed to the wrong HF view (Codex #487 P2: 23:21).
+      headerContentRId,
+      footerContentRId,
+      firstPageHeaderContentRId,
+      firstPageFooterContentRId,
       _theme,
       sectionProperties,
       document,
@@ -3609,6 +3990,102 @@ export function PagedEditor(
   );
 
   /**
+   * Handle a transaction on a persistent hidden HF EditorView.
+   *
+   * Two responsibilities:
+   *   1. Mirror the PM doc back into `Document.package.headers/footers[rId].content`
+   *      so the existing save path (which reads `hf.content`) ships the latest
+   *      HF content. Mutating in place matches upstream's pattern and avoids
+   *      churning history on every keystroke (the persistent PM is the
+   *      source of truth while loaded — same model the body PM uses).
+   *   2. Re-run the layout pipeline so the painter repaints with the new
+   *      HF blocks. We reuse the body PM's current state as the layout
+   *      input because `scheduleLayout` derives body blocks from that
+   *      state; the HF blocks are pulled from the HF PM via
+   *      `renderHfFromContentOrPm` on the next layout tick.
+   */
+  const [hfCaretSelection, setHfCaretSelection] =
+    useState<HfCaretSelection | null>(null);
+  // Page number (1-indexed) of the painted slot the user most recently
+  // clicked / dispatched into. Persisted across HF PM transactions so
+  // typing after a click on page 5 keeps the caret on page 5 — without
+  // this, the painter would scope the caret to whichever painted instance
+  // of the rId the lookup found first (page 1) on every subsequent
+  // selection update (Codex #487 P2: 21:28).
+  const activeHfPageNumberRef = useRef<number | null>(null);
+
+  const handleHfPmTransaction = useCallback(
+    (
+      rId: string,
+      kind: "header" | "footer",
+      view: EditorView,
+      docChanged: boolean,
+      selectionChanged: boolean,
+    ) => {
+      // HiddenHeaderFooterPMs writes the new blocks into
+      // package.headers/footers[rId].content in place inside its own
+      // dispatchTransaction, so we only need to nudge the layout pipeline
+      // and update HF caret + toolbar state here.
+      if (docChanged) {
+        // The body HiddenProseMirror view may still be deferred when the
+        // user enters HF editing first (a doc opened without
+        // collaboration that hasn't been clicked into yet). The HF PMs
+        // are mounted unconditionally so an HF transaction can fire
+        // before any body view exists; without a bodyState
+        // `scheduleLayout` was a no-op and the painter never repainted
+        // the in-flight HF edit (Codex #487 P1: 21:59 review). Use the
+        // precomputed initial state when present, otherwise force-create
+        // the view via `ensureHiddenEditorView` so the next read returns
+        // a state.
+        let bodyState = hiddenPMRef.current?.getState();
+        if (!bodyState && precomputedInitialStateRef.current) {
+          bodyState = precomputedInitialStateRef.current;
+        }
+        if (!bodyState) {
+          ensureHiddenEditorView({ sync: true });
+          bodyState = hiddenPMRef.current?.getState();
+        }
+        if (bodyState) {
+          scheduleLayout(bodyState, null);
+        }
+      }
+      if (docChanged || selectionChanged) {
+        const { from, to } = view.state.selection;
+        const pageNumber = activeHfPageNumberRef.current;
+        setHfCaretSelection({
+          rId,
+          kind,
+          from,
+          to,
+          ...(pageNumber !== null ? { pageNumber } : {}),
+        });
+        // Fan the HF PM selection out the same channel the body PM uses
+        // (DocxEditor's onSelectionChange handler then re-reads the
+        // active view via getActiveEditorView and re-syncs FormattingBar
+        // / context state to the HF surface). Without this the toolbar
+        // would freeze on the previous body selection while its actions
+        // dispatch on the HF view.
+        onSelectionChangeRef.current?.(from, to);
+      }
+    },
+    [scheduleLayout, ensureHiddenEditorView],
+  );
+
+  // Clear HF caret state + cross-surface drag state on any hfEditMode
+  // transition. Without this, dragAnchorRef leftover from the previous
+  // surface lets a Shift-click resolve an anchor in the wrong PM
+  // (e.g. body anchor used as the HF range start, or vice versa) and
+  // produces a nonsense selection.
+  useEffect(() => {
+    if (!hfEditMode) {
+      setHfCaretSelection(null);
+    }
+    dragAnchorRef.current = null;
+    activeHfDragSurfaceRef.current = null;
+    activeHfPageNumberRef.current = null;
+  }, [hfEditMode]);
+
+  /**
    * Handle selection change from PM.
    */
   const handleSelectionChange = useCallback(
@@ -3744,29 +4221,37 @@ export function PagedEditor(
    * Find the table cell position in ProseMirror doc for a given PM position.
    * Returns the position just inside the cell node, suitable for CellSelection.create().
    */
-  const findCellPosFromPmPos = useCallback((pmPos: number): number | null => {
-    const view = hiddenPMRef.current?.getView();
-    if (!view) {
-      return null;
-    }
-    try {
-      const $pos = view.state.doc.resolve(pmPos);
-      for (let d = $pos.depth; d > 0; d--) {
-        const node = $pos.node(d);
-        if (
-          node.type.name === "tableCell" ||
-          node.type.name === "tableHeader"
-        ) {
-          // Return position of the cell node itself (before(d)).
-          // CellSelection.create will resolve this and use cellAround() internally.
-          return $pos.before(d);
+  const findCellPosInDoc = useCallback(
+    (doc: PMNode, pmPos: number): number | null => {
+      try {
+        const $pos = doc.resolve(pmPos);
+        for (let d = $pos.depth; d > 0; d--) {
+          const node = $pos.node(d);
+          if (
+            node.type.name === "tableCell" ||
+            node.type.name === "tableHeader"
+          ) {
+            return $pos.before(d);
+          }
         }
+      } catch {
+        // Position resolution failed
       }
-    } catch {
-      // Position resolution failed
-    }
-    return null;
-  }, []);
+      return null;
+    },
+    [],
+  );
+
+  const findCellPosFromPmPos = useCallback(
+    (pmPos: number): number | null => {
+      const view = hiddenPMRef.current?.getView();
+      if (!view) {
+        return null;
+      }
+      return findCellPosInDoc(view.state.doc, pmPos);
+    },
+    [findCellPosInDoc],
+  );
 
   /**
    * Find the closest image element from a click target.
@@ -4084,6 +4569,118 @@ export function PagedEditor(
         }
       }
 
+      // Resize handles must be intercepted BEFORE the HF text-routing
+      // branch — otherwise the table-edge handles painted inside an HF
+      // slot would be treated as a regular HF click and the user could
+      // never start a resize. The resize blocks below resolve the
+      // active surface (body or HF) and read the source columnWidths /
+      // row height from the matching PM.
+      const isResizeHandleTarget =
+        !readOnly &&
+        (target.classList.contains("layout-table-resize-handle") ||
+          target.classList.contains("layout-table-row-resize-handle") ||
+          target.classList.contains("layout-table-edge-handle-bottom") ||
+          target.classList.contains("layout-table-edge-handle-right"));
+      const resizeHfSlot = isResizeHandleTarget
+        ? findHfSlotForTarget(target)
+        : null;
+      const resizeViewForRead: EditorView | null = resizeHfSlot
+        ? (hfPMsRef.current?.getView(resizeHfSlot.rId) ?? null)
+        : hiddenPMRef.current.getView();
+
+      // HF edit mode + click inside a painted HF slot → route to the persistent
+      // hidden HF EditorView. The painter (not PM) is the visible HF renderer,
+      // so we translate the click via clickToPositionDom (which inspects the
+      // painted span's data-pm-start/end markers) and dispatch the resulting
+      // PM position on the matching hidden view. The drag-extend / shift-click
+      // refs are populated here too so subsequent mousemove + handlePagesClick
+      // dispatch on the same surface. Cell drag inside an HF table seeds
+      // cellDragAnchorPosRef with the HF cell position; the mousemove path
+      // dispatches CellSelection on the HF view.
+      //
+      // Image targets are skipped here so the later findImageElement branch
+      // can dispatch NodeSelection.create on the matching HF view —
+      // without this guard the generic text-click flow would silently
+      // shadow the image NodeSelect path (Codex #487 P2, 20:40 review).
+      const isHfImageTarget =
+        !readOnly && hfEditMode && findImageElement(target) !== null;
+      if (
+        !readOnly &&
+        hfEditMode &&
+        !isResizeHandleTarget &&
+        !isHfImageTarget
+      ) {
+        const slot = findHfSlotForTarget(target);
+        if (slot) {
+          const hfView = hfPMsRef.current?.getView(slot.rId);
+          if (hfView) {
+            e.preventDefault();
+            // Stop the click from bubbling to `handleContainerMouseDown`.
+            // The painted slot is `.layout-page-header` /
+            // `.layout-page-footer`, which is NOT an `[data-hf-r-id]`
+            // descendant; the existing container guard would miss this
+            // path and `focusHiddenEditor()` would steal focus to the
+            // body editor immediately after we focused the HF view
+            // (Codex #487 P1: 22:16 review).
+            e.stopPropagation();
+            // Slot-scoped mapper so a whitespace click inside the painted
+            // header / footer can't fall through to clickToPositionDom's
+            // body-content nearest-span path (Codex #487 P2: 21:02).
+            const pos = clickToPositionInHfSlot(
+              pagesContainerRef.current ?? slot.element,
+              slot.kind,
+              slot.rId,
+              e.clientX,
+              e.clientY,
+            );
+            if (pos !== null) {
+              const docEnd = hfView.state.doc.content.size;
+              const clamped = Math.max(0, Math.min(pos, docEnd));
+              // Set the page-scope ref BEFORE the dispatch — view.dispatch
+              // synchronously invokes our dispatchTransaction →
+              // handleHfPmTransaction, which reads
+              // activeHfPageNumberRef.current to stamp on the new
+              // HfCaretSelection. If we set it after the dispatch, the
+              // first selection update on this click still records the
+              // previous page and the caret renders on the wrong
+              // painted instance until the next transaction (Codex
+              // #487 P2: 22:27 review).
+              const pageEl = slot.element.closest<HTMLElement>(".layout-page");
+              const pageNumStr = pageEl?.dataset["pageNumber"];
+              activeHfPageNumberRef.current = pageNumStr
+                ? Number.parseInt(pageNumStr, 10)
+                : null;
+              if (e.shiftKey && dragAnchorRef.current !== null) {
+                const $anchor = hfView.state.doc.resolve(
+                  Math.max(0, Math.min(dragAnchorRef.current, docEnd)),
+                );
+                const $head = hfView.state.doc.resolve(clamped);
+                hfView.dispatch(
+                  hfView.state.tr.setSelection(
+                    TextSelection.between($anchor, $head),
+                  ),
+                );
+              } else {
+                const $pos = hfView.state.doc.resolve(clamped);
+                hfView.dispatch(
+                  hfView.state.tr.setSelection(TextSelection.near($pos)),
+                );
+                dragAnchorRef.current = clamped;
+              }
+              const cellPos = findCellPosInDoc(hfView.state.doc, clamped);
+              cellDragAnchorPosRef.current = cellPos;
+              isDraggingRef.current = true;
+              activeHfDragSurfaceRef.current = {
+                rId: slot.rId,
+                kind: slot.kind,
+              };
+            }
+            hfView.focus();
+            return;
+          }
+        }
+      }
+
       // In normal mode, clicks in header/footer area should place cursor at
       // start of body content, not inside header/footer (matches Word/Google Docs)
       if (!readOnly && !hfEditMode) {
@@ -4108,6 +4705,9 @@ export function PagedEditor(
         e.preventDefault();
         e.stopPropagation();
         isResizingColumnRef.current = true;
+        resizingHfSurfaceRef.current = resizeHfSlot
+          ? { rId: resizeHfSlot.rId, kind: resizeHfSlot.kind }
+          : null;
         resizeStartXRef.current = e.clientX;
         resizeHandleRef.current = target;
         target.classList.add("dragging");
@@ -4122,8 +4722,7 @@ export function PagedEditor(
           10,
         );
 
-        // Get current column widths from the ProseMirror doc
-        const view = hiddenPMRef.current.getView();
+        const view = resizeViewForRead;
         if (view) {
           const $pos = view.state.doc.resolve(
             resizeTablePmStartRef.current + 1,
@@ -4158,6 +4757,9 @@ export function PagedEditor(
         e.preventDefault();
         e.stopPropagation();
         isResizingRowRef.current = true;
+        resizingHfSurfaceRef.current = resizeHfSlot
+          ? { rId: resizeHfSlot.rId, kind: resizeHfSlot.kind }
+          : null;
         resizeStartYRef.current = e.clientY;
         resizeRowHandleRef.current = target;
         resizeRowIsEdgeRef.current = target.dataset["isEdge"] === "bottom";
@@ -4170,8 +4772,7 @@ export function PagedEditor(
           10,
         );
 
-        // Get current row height from ProseMirror doc
-        const view = hiddenPMRef.current.getView();
+        const view = resizeViewForRead;
         if (view) {
           const $pos = view.state.doc.resolve(
             resizeRowTablePmStartRef.current + 1,
@@ -4214,6 +4815,9 @@ export function PagedEditor(
         e.preventDefault();
         e.stopPropagation();
         isResizingRightEdgeRef.current = true;
+        resizingHfSurfaceRef.current = resizeHfSlot
+          ? { rId: resizeHfSlot.rId, kind: resizeHfSlot.kind }
+          : null;
         resizeRightEdgeStartXRef.current = e.clientX;
         resizeRightEdgeHandleRef.current = target;
         target.classList.add("dragging");
@@ -4229,7 +4833,7 @@ export function PagedEditor(
         );
 
         // Get current last column width from ProseMirror doc
-        const view = hiddenPMRef.current.getView();
+        const view = resizeViewForRead;
         if (view) {
           const $pos = view.state.doc.resolve(
             resizeRightEdgePmStartRef.current + 1,
@@ -4257,17 +4861,44 @@ export function PagedEditor(
         const pmStart = imageEl.dataset["pmStart"];
         if (pmStart !== undefined) {
           const pos = Number.parseInt(pmStart, 10);
-          if (hiddenPMRef.current.getView()) {
-            hiddenPMRef.current.setNodeSelection(pos);
+          // HF edit mode + image inside an HF slot: NodeSelect on the
+          // matching HF PM. Otherwise selection would land on body at
+          // an HF-doc position, which doesn't address a valid node and
+          // silently no-ops (or worse, picks an unrelated body node).
+          const hfSlot = hfEditMode ? findHfSlotForTarget(imageEl) : null;
+          const hfView = hfSlot ? hfPMsRef.current?.getView(hfSlot.rId) : null;
+          if (hfView) {
+            try {
+              hfView.dispatch(
+                hfView.state.tr.setSelection(
+                  NodeSelection.create(hfView.state.doc, pos),
+                ),
+              );
+            } catch {
+              // Pos didn't address a selectable node — fall back to a
+              // near text selection so the user still gets focus.
+              const $pos = hfView.state.doc.resolve(
+                Math.min(pos, hfView.state.doc.content.size),
+              );
+              hfView.dispatch(
+                hfView.state.tr.setSelection(TextSelection.near($pos)),
+              );
+            }
+            hfView.focus();
+            // Image selection chrome is body-only today; HF image select
+            // shows browser-default selection ring. Tracked for follow-up.
           } else {
-            queueHiddenEditorSelection({ type: "node", pos });
+            if (hiddenPMRef.current.getView()) {
+              hiddenPMRef.current.setNodeSelection(pos);
+            } else {
+              queueHiddenEditorSelection({ type: "node", pos });
+            }
+            setSelectedImageInfo(buildImageSelectionInfo(imageEl, pos));
+            setSelectionRects([]);
+            setCaretPosition(null);
+            focusHiddenEditor();
           }
-          setSelectedImageInfo(buildImageSelectionInfo(imageEl, pos));
-          setSelectionRects([]);
-          setCaretPosition(null);
         }
-
-        focusHiddenEditor();
         return;
       }
 
@@ -4309,6 +4940,32 @@ export function PagedEditor(
   // Wire up the drag-extend callback after getPositionFromMouse is available
   dragExtendRef.current = (cx: number, cy: number) => {
     if (!isDraggingRef.current || dragAnchorRef.current === null) {
+      return;
+    }
+    const hfSurface = activeHfDragSurfaceRef.current;
+    if (hfSurface) {
+      const hfView = hfPMsRef.current?.getView(hfSurface.rId);
+      if (!hfView || !pagesContainerRef.current) {
+        return;
+      }
+      const pmPos = clickToPositionInHfSlot(
+        pagesContainerRef.current,
+        hfSurface.kind,
+        hfSurface.rId,
+        cx,
+        cy,
+      );
+      if (pmPos === null) {
+        return;
+      }
+      const docEnd = hfView.state.doc.content.size;
+      const anchor = Math.max(0, Math.min(dragAnchorRef.current, docEnd));
+      const head = Math.max(0, Math.min(pmPos, docEnd));
+      const $anchor = hfView.state.doc.resolve(anchor);
+      const $head = hfView.state.doc.resolve(head);
+      hfView.dispatch(
+        hfView.state.tr.setSelection(TextSelection.between($anchor, $head)),
+      );
       return;
     }
     if (!hiddenPMRef.current) {
@@ -4404,6 +5061,47 @@ export function PagedEditor(
       // Auto-scroll when dragging near viewport edges
       updateDragScroll(e.clientX, e.clientY);
 
+      // HF drag: route the rest of the mousemove through the active HF PM.
+      // If the drag started inside an HF table cell, dispatch CellSelection
+      // on the HF view; otherwise dragExtendRef handles text selection.
+      // The painter repaints via the HF caret overlay either way.
+      if (activeHfDragSurfaceRef.current) {
+        const hfSurface = activeHfDragSurfaceRef.current;
+        const hfView = hfPMsRef.current?.getView(hfSurface.rId);
+        if (hfView && cellDragAnchorPosRef.current !== null) {
+          const hfPos = clickToPositionInHfSlot(
+            pagesContainerRef.current,
+            hfSurface.kind,
+            hfSurface.rId,
+            e.clientX,
+            e.clientY,
+          );
+          if (hfPos !== null) {
+            const currentCellPos = findCellPosInDoc(hfView.state.doc, hfPos);
+            if (currentCellPos !== null) {
+              try {
+                hfView.dispatch(
+                  hfView.state.tr.setSelection(
+                    CellSelection.create(
+                      hfView.state.doc,
+                      cellDragAnchorPosRef.current,
+                      currentCellPos,
+                    ),
+                  ),
+                );
+                isCellDraggingRef.current = true;
+                return;
+              } catch {
+                // Cell positions weren't valid for CellSelection; fall
+                // through to text drag.
+              }
+            }
+          }
+        }
+        dragExtendRef.current(e.clientX, e.clientY);
+        return;
+      }
+
       const pmPos = getPositionFromMouse(e.clientX, e.clientY);
       if (pmPos === null) {
         return;
@@ -4470,7 +5168,12 @@ export function PagedEditor(
       const anchor = dragAnchorRef.current;
       hiddenPMRef.current.setSelection(anchor, pmPos);
     },
-    [getPositionFromMouse, findCellPosFromPmPos, updateDragScroll],
+    [
+      getPositionFromMouse,
+      findCellPosFromPmPos,
+      findCellPosInDoc,
+      updateDragScroll,
+    ],
   );
 
   /**
@@ -4485,8 +5188,13 @@ export function PagedEditor(
         resizeHandleRef.current = null;
       }
 
-      // Update ProseMirror document with new column widths
-      const view = hiddenPMRef.current?.getView();
+      // Update ProseMirror document with new column widths. Commit on the
+      // HF view if the resize started inside an HF slot, else body.
+      const view =
+        (resizingHfSurfaceRef.current
+          ? hfPMsRef.current?.getView(resizingHfSurfaceRef.current.rId)
+          : hiddenPMRef.current?.getView()) ?? null;
+      resizingHfSurfaceRef.current = null;
       if (view) {
         const pmStart = resizeTablePmStartRef.current;
         const colIdx = resizeColumnIndexRef.current;
@@ -4558,7 +5266,11 @@ export function PagedEditor(
         resizeRowHandleRef.current = null;
       }
 
-      const view = hiddenPMRef.current?.getView();
+      const view =
+        (resizingHfSurfaceRef.current
+          ? hfPMsRef.current?.getView(resizingHfSurfaceRef.current.rId)
+          : hiddenPMRef.current?.getView()) ?? null;
+      resizingHfSurfaceRef.current = null;
       if (view) {
         const pmStart = resizeRowTablePmStartRef.current;
         const rowIdx = resizeRowIndexRef.current;
@@ -4606,7 +5318,11 @@ export function PagedEditor(
         resizeRightEdgeHandleRef.current = null;
       }
 
-      const view = hiddenPMRef.current?.getView();
+      const view =
+        (resizingHfSurfaceRef.current
+          ? hfPMsRef.current?.getView(resizingHfSurfaceRef.current.rId)
+          : hiddenPMRef.current?.getView()) ?? null;
+      resizingHfSurfaceRef.current = null;
       if (view) {
         const pmStart = resizeRightEdgePmStartRef.current;
         const colIdx = resizeRightEdgeColIndexRef.current;
@@ -4672,6 +5388,7 @@ export function PagedEditor(
     isCellDraggingRef.current = false;
     cellDragLastPmPosRef.current = null;
     cellDragOverflowXRef.current = null;
+    activeHfDragSurfaceRef.current = null;
     stopDragAutoScroll();
     // Keep dragAnchorRef for potential shift-click extension
   }, [stopDragAutoScroll]);
@@ -4913,10 +5630,19 @@ export function PagedEditor(
             }
           }
         } else if (onHyperlinkClick) {
-          // External hyperlink — show popup only if not a drag-to-select
-          const view = hiddenPMRef.current?.getView();
+          // External hyperlink — show popup only if not a drag-to-select.
+          // Check the active surface's selection: when the user is editing
+          // an HF and clicks a link inside that slot, we read HF PM
+          // selection state, not body. Without this fix, a single-click
+          // on an HF hyperlink while a body range was selected would
+          // incorrectly suppress the popup.
+          const hfSlot = hfEditMode ? findHfSlotForTarget(target) : null;
+          const surfaceView =
+            (hfSlot ? hfPMsRef.current?.getView(hfSlot.rId) : null) ??
+            hiddenPMRef.current?.getView();
           const hasRangeSelection =
-            view && view.state.selection.from !== view.state.selection.to;
+            surfaceView &&
+            surfaceView.state.selection.from !== surfaceView.state.selection.to;
           if (!hasRangeSelection) {
             const displayText = anchorEl.textContent || "";
             const tooltip = anchorEl.getAttribute("title") || undefined;
@@ -4933,13 +5659,27 @@ export function PagedEditor(
         return;
       }
 
-      // Double-click on header/footer area triggers editing mode
-      if (!readOnly && e.detail === 2 && onHeaderFooterDoubleClick) {
+      // Double-click on header/footer area enters editing mode. Gate on
+      // `!hfEditMode` so a double-click *while already editing* falls
+      // through to the active-HF word/paragraph-select branch below
+      // instead of pointlessly re-firing `onHeaderFooterDoubleClick`
+      // (Codex #487 P2: 21:49 review).
+      if (
+        !readOnly &&
+        !hfEditMode &&
+        e.detail === 2 &&
+        onHeaderFooterDoubleClick
+      ) {
         const headerEl = target.closest(".layout-page-header");
         const footerEl = target.closest(".layout-page-footer");
         if (headerEl || footerEl) {
           const pageEl = closestHtmlElement(target, "[data-page-number]");
           const pageNum = pageEl ? Number(pageEl.dataset["pageNumber"]) : 1;
+          // Seed the HF caret overlay's page scope so the very first
+          // transaction after entering edit mode draws on the page the
+          // user double-clicked, not the first painted instance of the
+          // shared rId.
+          activeHfPageNumberRef.current = pageNum;
           if (headerEl) {
             e.preventDefault();
             e.stopPropagation();
@@ -4950,6 +5690,96 @@ export function PagedEditor(
             e.preventDefault();
             e.stopPropagation();
             onHeaderFooterDoubleClick("footer", pageNum);
+            return;
+          }
+        }
+      }
+
+      // Double / triple-click inside an active HF slot routes word /
+      // paragraph selection to the matching hidden HF EditorView instead of
+      // the body PM. We re-resolve the slot from the target so the
+      // selection lands on the right surface even when this handler fires
+      // before any prior HF click set drag state.
+      if (
+        !readOnly &&
+        hfEditMode &&
+        (e.detail === 2 || e.detail === 3) &&
+        hfPMsRef.current
+      ) {
+        const slot = findHfSlotForTarget(target);
+        if (slot) {
+          const hfView = hfPMsRef.current.getView(slot.rId);
+          if (hfView) {
+            const pos = clickToPositionInHfSlot(
+              pagesContainerRef.current ?? slot.element,
+              slot.kind,
+              slot.rId,
+              e.clientX,
+              e.clientY,
+            );
+            if (pos !== null) {
+              const docEnd = hfView.state.doc.content.size;
+              const clamped = Math.max(0, Math.min(pos, docEnd));
+              const $pos = hfView.state.doc.resolve(clamped);
+              const parent = $pos.parent;
+              // Set page scope BEFORE the dispatch — view.dispatch
+              // synchronously fires handleHfPmTransaction, which reads
+              // activeHfPageNumberRef.current to stamp the new
+              // HfCaretSelection. Without this, double / triple-click
+              // word / paragraph selection on a later page would
+              // render the highlight on the first matching painted
+              // instance (Codex #487 P2: 23:09 review).
+              const pageEl = slot.element.closest<HTMLElement>(".layout-page");
+              const pageNumStr = pageEl?.dataset["pageNumber"];
+              activeHfPageNumberRef.current = pageNumStr
+                ? Number.parseInt(pageNumStr, 10)
+                : null;
+              if (e.detail === 3) {
+                const start = $pos.start($pos.depth);
+                const end = $pos.end($pos.depth);
+                hfView.dispatch(
+                  hfView.state.tr.setSelection(
+                    TextSelection.create(hfView.state.doc, start, end),
+                  ),
+                );
+              } else if (parent.isTextblock) {
+                const pmAlignedParts: string[] = [];
+                for (let i = 0; i < parent.content.childCount; i++) {
+                  const node = parent.content.child(i);
+                  pmAlignedParts.push(
+                    node.isText ? (node.text ?? "") : " ".repeat(node.nodeSize),
+                  );
+                }
+                const pmAlignedText = pmAlignedParts.join("");
+                const offset = $pos.parentOffset;
+                let start = offset;
+                while (
+                  start > 0 &&
+                  /\w/u.test(pmAlignedText[start - 1]!) // SAFETY: start > 0
+                ) {
+                  start--;
+                }
+                let end = offset;
+                while (
+                  end < pmAlignedText.length &&
+                  /\w/u.test(pmAlignedText[end]!) // SAFETY: end < pmAlignedText.length
+                ) {
+                  end++;
+                }
+                const absStart = $pos.start() + start;
+                const absEnd = $pos.start() + end;
+                if (absStart < absEnd) {
+                  hfView.dispatch(
+                    hfView.state.tr.setSelection(
+                      TextSelection.create(hfView.state.doc, absStart, absEnd),
+                    ),
+                  );
+                }
+              }
+              hfView.focus();
+              e.preventDefault();
+              e.stopPropagation();
+            }
             return;
           }
         }
@@ -5069,6 +5899,44 @@ export function PagedEditor(
 
       e.preventDefault();
 
+      // HF edit mode: route the right-click to the matching HF PM so the
+      // context menu reads HF selection state. Without this the menu would
+      // act on body PM state — wrong "has selection" flag and any caret
+      // move on right-click would land in the body.
+      const target = e.target instanceof HTMLElement ? e.target : null;
+      if (!readOnly && hfEditMode && target) {
+        const slot = findHfSlotForTarget(target);
+        if (slot) {
+          const hfView = hfPMsRef.current?.getView(slot.rId);
+          if (hfView) {
+            const { from, to } = hfView.state.selection;
+            const pmPos = clickToPositionInHfSlot(
+              pagesContainerRef.current ?? slot.element,
+              slot.kind,
+              slot.rId,
+              e.clientX,
+              e.clientY,
+            );
+            if (pmPos !== null && (from === to || pmPos < from || pmPos > to)) {
+              const docEnd = hfView.state.doc.content.size;
+              const clamped = Math.max(0, Math.min(pmPos, docEnd));
+              const $pos = hfView.state.doc.resolve(clamped);
+              hfView.dispatch(
+                hfView.state.tr.setSelection(TextSelection.near($pos)),
+              );
+              hfView.focus();
+            }
+            const after = hfView.state.selection;
+            onContextMenu({
+              x: e.clientX,
+              y: e.clientY,
+              hasSelection: after.from !== after.to,
+            });
+            return;
+          }
+        }
+      }
+
       const view = hiddenPMRef.current?.getView();
       if (!view) {
         return;
@@ -5077,15 +5945,12 @@ export function PagedEditor(
       const { from, to } = view.state.selection;
       const pmPos = getPositionFromMouse(e.clientX, e.clientY);
 
-      // If the right-click is within the existing selection, keep it
-      // Otherwise, move cursor to the right-click position
       if (pmPos !== null && (from === to || pmPos < from || pmPos > to)) {
         hiddenPMRef.current?.setSelection(pmPos);
         hiddenPMRef.current?.focus();
         setIsFocused(true);
       }
 
-      // Read updated selection state after potential change
       const updatedState = hiddenPMRef.current?.getState();
       const hasSelection = updatedState
         ? updatedState.selection.from !== updatedState.selection.to
@@ -5093,7 +5958,7 @@ export function PagedEditor(
 
       onContextMenu({ x: e.clientX, y: e.clientY, hasSelection });
     },
-    [onContextMenu, getPositionFromMouse],
+    [hfEditMode, onContextMenu, getPositionFromMouse, readOnly],
   );
 
   /**
@@ -5105,6 +5970,16 @@ export function PagedEditor(
       if (
         e.target instanceof HTMLElement &&
         e.target.closest(".docx-comments-sidebar")
+      ) {
+        return;
+      }
+      // Don't steal focus from a persistent hidden HF EditorView. The
+      // HF host marks each view's mount node with `data-hf-r-id`; once
+      // an HF view holds focus, the body PM redirect would immediately
+      // bounce keystrokes off it (Codex #487 P1).
+      if (
+        e.target instanceof HTMLElement &&
+        e.target.closest("[data-hf-r-id]")
       ) {
         return;
       }
@@ -5320,6 +6195,20 @@ export function PagedEditor(
         return;
       }
 
+      // Don't take over keydown events that originated inside a persistent
+      // hidden HF EditorView — the HF PM has its own native handlers, and
+      // the body-PM routing below would steal focus + dispatch into the
+      // body editor (e.g. Space scrolling to the body, the first typed key
+      // landing under the cursor in the document instead of the active
+      // HF). Mirrors the focus / mousedown guards in handleContainerFocus
+      // and handleContainerMouseDown (Codex #487 P1: 21:12 review).
+      if (
+        e.target instanceof HTMLElement &&
+        e.target.closest("[data-hf-r-id]")
+      ) {
+        return;
+      }
+
       let view = hiddenPMRef.current?.getView();
       if (!view) {
         ensureHiddenEditorView({ sync: true });
@@ -5423,6 +6312,14 @@ export function PagedEditor(
       if (
         e.target instanceof HTMLElement &&
         e.target.closest(".docx-comments-sidebar")
+      ) {
+        return;
+      }
+      // Don't steal focus from the persistent hidden HF EditorView host
+      // — see handleContainerFocus for the same guard rationale.
+      if (
+        e.target instanceof HTMLElement &&
+        e.target.closest("[data-hf-r-id]")
       ) {
         return;
       }
@@ -5767,6 +6664,9 @@ export function PagedEditor(
       getView() {
         return hiddenPMRef.current?.getView() ?? null;
       },
+      getHfView(rId: string) {
+        return hfPMsRef.current?.getView(rId) ?? null;
+      },
       ensureView(options?: { focus?: boolean }) {
         // Async (no flushSync) so this is safe to call from a consumer's
         // useEffect during a concurrent render — flushSync inside a
@@ -5964,6 +6864,19 @@ export function PagedEditor(
       onKeyDown={handleKeyDown}
       onMouseDown={handleContainerMouseDown}
     >
+      {/* Persistent off-screen ProseMirror per HF rId — the painter reads
+          from these views when a slot's view exists (see HF unification port,
+          eigenpal#611). Currently shadow instances: the inline overlay still
+          owns user input. Switching the layout pipeline to source from these
+          views is the next phase. */}
+      <HiddenHeaderFooterPMs
+        ref={hfPMsRef}
+        document={document}
+        onTransaction={handleHfPmTransaction}
+        {...(styles !== undefined ? { styles } : {})}
+        {...(_theme !== undefined ? { theme: _theme } : {})}
+      />
+
       {/* Hidden ProseMirror for keyboard input */}
       <HiddenProseMirror
         ref={hiddenPMRef}
@@ -6022,6 +6935,20 @@ export function PagedEditor(
             isFocused={isFocused}
             pageGap={pageGap}
           />
+          {/* HF caret overlay — draws the caret + selection rects for the
+              focused persistent hidden HF EditorView. Painted DOM is the
+              source of truth: we walk findHfPmAnchor markers under
+              .layout-page-header[data-rid] / .layout-page-footer[data-rid]
+              and project the rects relative to the pages container. The
+              `painter:painted` and `hfCaretSelection` change events both
+              re-run the lookup. */}
+          {hfCaretSelection && (
+            <HfCaretOverlay
+              selection={hfCaretSelection}
+              pagesContainer={pagesContainerRef.current}
+              zoom={zoom}
+            />
+          )}
           {layout &&
             remoteSelections.map((remoteSelection) => (
               <RemoteSelectionOverlay

@@ -109,7 +109,7 @@ export function clickToPositionDom(
  * unavailable or returns a point outside this span (e.g. the
  * caret API resolved to a sibling text node at the same y).
  */
-function findPositionInSpan(
+export function findPositionInSpan(
   spanEl: HTMLElement,
   clientX: number,
   clientY: number,

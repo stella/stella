@@ -577,61 +577,14 @@
   padding: 4px 0;
 }
 
-.hf-editor-pm .ProseMirror {
-  outline: none;
-  min-height: 40px;
-  padding: 0;
-}
-
-.hf-editor-pm .ProseMirror:focus {
-  outline: none;
-}
-
-.hf-editor-pm .ProseMirror p {
-  display: block;
-  margin: 0 !important;
-  padding-top: var(--docx-space-before, 0);
-  padding-right: 0;
-  padding-bottom: var(--docx-space-after, 0);
-  padding-left: 0;
-  min-height: 1em;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  line-height: normal !important;
-}
-
-.hf-editor-pm .ProseMirror td p,
-.hf-editor-pm .ProseMirror th p {
-  margin: 0 !important;
-  padding-top: var(--docx-space-before, 0);
-  padding-right: 0;
-  padding-bottom: var(--docx-space-after, 0);
-  padding-left: 0;
-  min-height: auto;
-  line-height: normal !important;
-}
-
-.hf-editor-pm .ProseMirror .tableWrapper {
-  overflow: visible;
-}
-
-.hf-editor-pm .ProseMirror table {
-  border-collapse: collapse !important;
-  border-spacing: 0 !important;
-  table-layout: fixed !important;
-  margin: 0;
-}
-
-.hf-editor-pm .ProseMirror td.docx-table-cell,
-.hf-editor-pm .ProseMirror th.docx-table-header {
-  box-sizing: border-box !important;
-}
-
-.hf-editor-pm .ProseMirror td p:has(> img.docx-image):not(:has(> span)),
-.hf-editor-pm .ProseMirror th p:has(> img.docx-image):not(:has(> span)) {
-  font-size: 0 !important;
-  line-height: 0 !important;
-}
+/*
+ * Post-eigenpal#611: the painter is the sole visible HF renderer in both
+ * edit and non-edit modes. The .hf-editor-pm rule block (the styling for
+ * the now-deleted inline overlay PM tree) and the
+ * `.paged-editor--editing-{header,footer} > *  { visibility: hidden }`
+ * patches that hid the painter under the old overlay are gone — they
+ * have no job anymore.
+ */
 
 .paged-editor--hf-editing .layout-page-content {
   opacity: 0.4;
@@ -645,14 +598,6 @@
 
 .paged-editor--editing-footer .layout-page-footer {
   border-top: 1px dotted var(--doc-primary);
-}
-
-.paged-editor--editing-header .layout-page-header > * {
-  visibility: hidden;
-}
-
-.paged-editor--editing-footer .layout-page-footer > * {
-  visibility: hidden;
 }
 
 .paged-editor--hf-editing .layout-page-header:hover,
