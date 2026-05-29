@@ -1336,6 +1336,99 @@ export const folioCollabSessionTokens = p.pgTable(
   ],
 );
 
+/**
+ * Lifecycle of a single presigned upload, from the moment the API
+ * issues a PUT URL to the moment the resulting entity (or version,
+ * skill, attachment...) is committed.
+ *
+ * - "pending":   URL issued, client may or may not have uploaded yet
+ * - "scanning":  finalize handler claimed the row and is doing S3 I/O
+ * - "finalized": domain rows committed; `finalizedResult` populated
+ * - "rejected":  scan refused the upload; tmp deleted; terminal
+ * - "failed":    transient error (S3 5xx, DB error after S3 success);
+ *                claim can re-fire after `claimedAt + grace`
+ */
+export const PENDING_UPLOAD_STATUSES = [
+  "pending",
+  "scanning",
+  "finalized",
+  "rejected",
+  "failed",
+] as const;
+
+/**
+ * Each upload purpose drives a different finalize transaction (entity
+ * vs. version vs. skill...). The discriminator lives in its own column
+ * so phase-2 surfaces (`entity_version`, `agent_skill`, `chat_attachment`)
+ * can be added without a schema migration — only `purposeData` and
+ * `finalizedResult` shapes change.
+ */
+export const PENDING_UPLOAD_PURPOSES = ["entity_create"] as const;
+
+export type PendingUploadPurposeData = {
+  type: "entity_create";
+  propertyId: SafeId<"property">;
+};
+
+export type PendingUploadFinalizedResult = {
+  type: "entity_create";
+  entityId: SafeId<"entity">;
+  fileId: SafeId<"userFile">;
+  fileName: string;
+  renamed: boolean;
+};
+
+export const pendingUploads = p.pgTable(
+  "pending_uploads",
+  {
+    id: pUuid<"pendingUpload">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    purpose: p
+      .text("purpose", { enum: PENDING_UPLOAD_PURPOSES })
+      .notNull(),
+    purposeData: jsonb("purpose_data")
+      .$type<PendingUploadPurposeData>()
+      .notNull(),
+    declaredName: p.varchar("declared_name", { length: 255 }).notNull(),
+    declaredMime: p.varchar("declared_mime", { length: 255 }).notNull(),
+    declaredSize: p.integer("declared_size").notNull(),
+    /** hex; matches `fields.content.sha256Hex` storage shape */
+    declaredSha256: p.varchar("declared_sha256", { length: 64 }).notNull(),
+    status: p
+      .text("status", { enum: PENDING_UPLOAD_STATUSES })
+      .notNull()
+      .default("pending"),
+    /** Populated on success so retries return the same response shape. */
+    finalizedResult: jsonb(
+      "finalized_result",
+    ).$type<PendingUploadFinalizedResult | null>(),
+    rejectReason: p.text("reject_reason"),
+    /** Set inside the claim transaction. Used to detect stuck `scanning` rows. */
+    claimedAt: p.timestamp("claimed_at"),
+    claimedByRequestId: p.varchar("claimed_by_request_id", { length: 64 }),
+    /** `createdAt + 5min`. A finalize after this rejects without touching S3. */
+    expiresAt: p.timestamp("expires_at").notNull(),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    finalizedAt: p.timestamp("finalized_at"),
+  },
+  (table) => [
+    p
+      .index("pending_uploads_ws_status_created_idx")
+      .on(table.workspaceId, table.status, table.createdAt),
+    p
+      .index("pending_uploads_org_created_idx")
+      .on(table.organizationId, table.createdAt),
+    ...wsPolicies(),
+  ],
+);
+
 export const fields = p.pgTable(
   "fields",
   {
@@ -3255,6 +3348,7 @@ export const relations = defineRelations(
     desktopEditHandoffs,
     folioCollabSessions,
     folioCollabSessionTokens,
+    pendingUploads,
     fields,
     justifications,
     templates,
