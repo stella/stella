@@ -166,12 +166,13 @@ export const presignUploadUrl = async ({
       // `X-Amz-SignedHeaders`. Per-command stack avoids leaking the
       // header into unrelated PutObject calls on the shared client.
       command.middlewareStack.add(
-        (next) => (args) => {
+        (next) => async (args) => {
           if (HttpRequest.isInstance(args.request)) {
             args.request.headers["x-amz-checksum-sha256"] = sha256Base64;
             args.request.headers["x-amz-sdk-checksum-algorithm"] = "SHA256";
           }
-          return next(args);
+          const result = await next(args);
+          return result;
         },
         { step: "build", name: "injectPresignChecksumHeader" },
       );
