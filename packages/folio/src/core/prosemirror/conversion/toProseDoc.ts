@@ -1053,13 +1053,9 @@ function convertTable(
   // Track data row index (excluding header rows) for banding
   let dataRowIndex = 0;
   const totalRows = table.rows.length;
+  const gridColumnCount = columnWidths?.length ?? 0;
   const totalColumns =
-    columnWidths?.length ??
-    table.rows[0]?.cells.reduce(
-      (sum, cell) => sum + (cell.formatting?.gridSpan ?? 1),
-      0,
-    ) ??
-    0;
+    gridColumnCount > 0 ? gridColumnCount : countTableColumns(table.rows);
   const rows = table.rows.map((row, rowIndex) => {
     // Conditional formatting flag: firstRow in tblLook means "apply first-row styling"
     const isFirstRowStyled = rowIndex === 0 && !!look?.firstRow;
@@ -1101,6 +1097,18 @@ function convertTable(
   });
 
   return schema.node("table", attrs, rows);
+}
+
+function countTableColumns(rows: TableRow[]): number {
+  let maxColumns = 0;
+  for (const row of rows) {
+    let rowColumns = 0;
+    for (const cell of row.cells) {
+      rowColumns += cell.formatting?.gridSpan ?? 1;
+    }
+    maxColumns = Math.max(maxColumns, rowColumns);
+  }
+  return maxColumns;
 }
 
 /**
@@ -1165,7 +1173,8 @@ function convertTableRow(
   const rowCnf = row.formatting?.conditionalFormat;
   const rowIsFirstRow = rowCnf?.firstRow ?? isFirstRow;
   const rowIsLastRow = rowCnf?.lastRow ?? isLastRow;
-  const totalCols = totalColumns ?? numCells;
+  const totalCols =
+    totalColumns != null && totalColumns > 0 ? totalColumns : numCells;
 
   // A literal `<w:tr/>` from a non-Word producer parses with zero cells. PM's
   // tableRow content is `(tableCell | tableHeader)+`, so emit one placeholder

@@ -91,4 +91,36 @@ describe("toProseDoc — literal empty <w:tr/> rows", () => {
     expect(row.childCount).toBe(1);
     expect(row.child(0).attrs["colspan"]).toBe(1);
   });
+
+  test("derives fallback colspan from later rows when the first row is empty", () => {
+    const doc = makeDoc({
+      type: "table",
+      rows: [
+        { type: "tableRow", cells: [] },
+        {
+          type: "tableRow",
+          cells: [
+            {
+              type: "tableCell",
+              content: [{ type: "paragraph", content: [] }],
+            },
+            {
+              type: "tableCell",
+              content: [{ type: "paragraph", content: [] }],
+            },
+            {
+              type: "tableCell",
+              content: [{ type: "paragraph", content: [] }],
+            },
+          ],
+        },
+      ],
+    });
+
+    const table = firstTable(toProseDoc(doc));
+    const emptyRow = table.child(0);
+
+    expect(emptyRow.childCount).toBe(1);
+    expect(emptyRow.child(0).attrs["colspan"]).toBe(3);
+  });
 });
