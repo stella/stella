@@ -18,7 +18,8 @@
  *   (HUGGINGFACE_API_KEY + HUGGINGFACE_BASE_URL)
  *
  * When AI_PROVIDER is not set, auto-detects from available
- * API keys: OPENROUTER → Google → OpenAI → Azure → Anthropic → Mistral.
+ * API keys: OPENROUTER → Google → OpenAI → Azure → Anthropic →
+ * Mistral → HuggingFace.
  */
 
 import { anthropic, createAnthropic } from "@ai-sdk/anthropic";
@@ -317,12 +318,16 @@ const resolveProvider = (): AIProvider => {
   if (env.MISTRAL_API_KEY) {
     return "mistral";
   }
+  if (env.HUGGINGFACE_API_KEY && env.HUGGINGFACE_BASE_URL) {
+    return "huggingface";
+  }
 
   return panic(
     "No AI provider configured. Set AI_PROVIDER or " +
       "provide at least one API key: " +
       "GOOGLE_GENERATIVE_AI_API_KEY, OPENROUTER_API_KEY, " +
-      "OPENAI_API_KEY, AZURE_API_KEY, ANTHROPIC_API_KEY, or MISTRAL_API_KEY.",
+      "OPENAI_API_KEY, AZURE_API_KEY, ANTHROPIC_API_KEY, MISTRAL_API_KEY, " +
+      "or HUGGINGFACE_API_KEY (with HUGGINGFACE_BASE_URL).",
   );
 };
 
