@@ -18,6 +18,12 @@ import { useTranslations } from "use-intl";
 import { readWorkspaces, saveEmailToMatter } from "@/api";
 import { buildReplyDraft, buildSummary, runDraftChecks } from "@/checks";
 import { env } from "@/env";
+import {
+  clearAuthToken,
+  getAuthToken,
+  signInViaDialog,
+  subscribeAuthToken,
+} from "@/lib/auth";
 import { downloadAttachment, loadMailSnapshot, placeDraft } from "@/outlook";
 import type { DraftPlacement } from "@/outlook";
 import type {
@@ -54,6 +60,94 @@ type SaveState =
 
 export const App = () => {
   const t = useTranslations("outlook");
+  const [token, setToken] = useState<string | null>(() => getAuthToken());
+  const [signInState, setSignInState] = useState<
+    | { type: "idle" }
+    | { type: "signing-in" }
+    | { message: string; type: "error" }
+  >({ type: "idle" });
+
+  useEffect(() => subscribeAuthToken(setToken), []);
+
+  const handleSignIn = async () => {
+    setSignInState({ type: "signing-in" });
+    try {
+      await signInViaDialog(env.signInOrigin);
+      setSignInState({ type: "idle" });
+    } catch (error) {
+      setSignInState({
+        message: error instanceof Error ? error.message : t("loadError"),
+        type: "error",
+      });
+    }
+  };
+
+  if (!token) {
+    return (
+      <SignInPanel
+        onSignIn={() => void handleSignIn()}
+        signInState={signInState}
+        t={t}
+      />
+    );
+  }
+
+  return <AuthedApp onSignOut={() => void clearAuthToken()} t={t} />;
+};
+
+const SignInPanel = ({
+  onSignIn,
+  signInState,
+  t,
+}: {
+  onSignIn: () => void;
+  signInState:
+    | { type: "idle" }
+    | { type: "signing-in" }
+    | { message: string; type: "error" };
+  t: Translate;
+}) => (
+  <div className="app-shell">
+    <header className="app-header">
+      <div className="brand-block">
+        <span className="brand-mark" aria-hidden="true">
+          §
+        </span>
+        <div className="brand-copy">
+          <h1>{t("handoffTitle")}</h1>
+          <p>{t("handoffDescription")}</p>
+        </div>
+      </div>
+    </header>
+    <div className="pane-stack">
+      <section className="panel">
+        <button
+          className="button button-primary full-width"
+          disabled={signInState.type === "signing-in"}
+          onClick={onSignIn}
+          type="button"
+        >
+          {signInState.type === "signing-in"
+            ? t("loading")
+            : t("handoffSignInCta")}
+        </button>
+        {signInState.type === "error" && (
+          <Notice tone="risk" title={t("saveFailed")}>
+            {signInState.message}
+          </Notice>
+        )}
+      </section>
+    </div>
+  </div>
+);
+
+const AuthedApp = ({
+  onSignOut: _onSignOut,
+  t,
+}: {
+  onSignOut: () => void;
+  t: Translate;
+}) => {
   const [loadState, setLoadState] = useState<LoadState>({ type: "loading" });
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);

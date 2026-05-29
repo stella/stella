@@ -100,12 +100,49 @@ declare namespace Office {
     };
   };
 
+  type DialogMessageReceived = { message: string; origin?: string };
+  type DialogEventReceived = { error?: number };
+  type DialogHandlerType = "DialogMessageReceived" | "DialogEventReceived";
+  type DialogHandler = (
+    event: DialogMessageReceived | DialogEventReceived,
+  ) => void;
+
+  type Dialog = {
+    addEventHandler(type: DialogHandlerType, handler: DialogHandler): void;
+    close(): void;
+  };
+
+  type DisplayDialogOptions = {
+    displayInIframe?: boolean;
+    height?: number;
+    promptBeforeOpen?: boolean;
+    width?: number;
+  };
+
+  type DialogUi = {
+    displayDialogAsync(
+      startAddress: string,
+      options: DisplayDialogOptions,
+      callback: AsyncCallback<Dialog>,
+    ): void;
+    messageParent?: (message: string) => void;
+  };
+
+  type RoamingSettings = {
+    get(name: string): unknown;
+    remove(name: string): void;
+    saveAsync(callback: AsyncCallback<undefined>): void;
+    set(name: string, value: unknown): void;
+  };
+
   const context: {
     diagnostics?: {
       host?: string;
       platform?: string;
     };
     mailbox: Mailbox;
+    roamingSettings?: RoamingSettings;
+    ui: DialogUi;
   };
 
   function onReady(callback?: () => void): Promise<void>;

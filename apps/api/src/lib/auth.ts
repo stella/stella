@@ -799,6 +799,7 @@ const createAuth = () => {
       ...(env.isDev ? ["chrome-extension://*"] : []),
       ...(env.isDev ? DEV_INSPECTOR_ORIGINS : []),
       ...(env.EXTENSION_ORIGIN ? [env.EXTENSION_ORIGIN] : []),
+      ...(env.OUTLOOK_ORIGIN ? [env.OUTLOOK_ORIGIN] : []),
     ],
     disabledPaths: [
       "/token",
