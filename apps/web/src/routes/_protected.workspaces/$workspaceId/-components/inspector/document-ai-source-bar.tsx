@@ -356,10 +356,19 @@ export const DocumentAiSourceBar = ({
     : [];
 
   return (
-    <div className="bg-muted/30 flex shrink-0 flex-col border-b px-3">
+    <div className="bg-muted/30 relative flex shrink-0 flex-col border-b px-3">
+      {/* One-shot tint pulse so a freshly activated justification
+          reads as a connected event, not a quiet re-render. Keyed
+          on the justification id so each new activation re-mounts
+          the overlay and re-runs the keyframe. */}
+      <div
+        aria-hidden
+        className="bg-primary/12 animate-source-bar-flash pointer-events-none absolute inset-0 opacity-0"
+        key={justificationId}
+      />
       <div
         className={cn(
-          "flex w-full min-w-0 items-center gap-2 text-xs",
+          "relative flex w-full min-w-0 items-center gap-2 text-xs",
           TOOLBAR_ROW_HEIGHT,
         )}
       >
@@ -429,7 +438,7 @@ export const DocumentAiSourceBar = ({
         </Button>
       </div>
       {isAnswerExpanded && shortAnswer !== null && (
-        <div className="text-foreground-strong-muted max-h-32 min-w-0 overflow-y-auto pb-2 text-xs leading-relaxed break-words">
+        <div className="text-foreground-strong-muted relative max-h-32 min-w-0 overflow-y-auto pb-2 text-xs leading-relaxed break-words">
           {justificationNodes}
         </div>
       )}
