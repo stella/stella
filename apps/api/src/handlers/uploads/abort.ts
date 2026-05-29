@@ -39,13 +39,17 @@ const config = {
 
 const abortUpload = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, memberRole, params }) {
+  async function* ({ safeDb, workspaceId, user, memberRole, params }) {
     const uploadId = params.uploadId;
 
     const existing = yield* Result.await(
       safeDb((tx) =>
         tx.query.pendingUploads.findFirst({
-          where: { id: { eq: uploadId }, workspaceId: { eq: workspaceId } },
+          where: {
+            id: { eq: uploadId },
+            userId: { eq: user.id },
+            workspaceId: { eq: workspaceId },
+          },
         }),
       ),
     );
@@ -89,6 +93,7 @@ const abortUpload = createSafeHandler(
           .where(
             and(
               eq(pendingUploads.id, uploadId),
+              eq(pendingUploads.userId, user.id),
               eq(pendingUploads.workspaceId, workspaceId),
               inArray(pendingUploads.status, ["pending", "failed"]),
             ),
@@ -100,7 +105,11 @@ const abortUpload = createSafeHandler(
       const latest = yield* Result.await(
         safeDb((tx) =>
           tx.query.pendingUploads.findFirst({
-            where: { id: { eq: uploadId }, workspaceId: { eq: workspaceId } },
+            where: {
+              id: { eq: uploadId },
+              userId: { eq: user.id },
+              workspaceId: { eq: workspaceId },
+            },
             columns: { status: true },
           }),
         ),

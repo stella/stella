@@ -135,6 +135,7 @@ export const finalizeAgentSkill = async function* ({
         .where(
           and(
             eq(pendingUploads.id, uploadId),
+            eq(pendingUploads.userId, userId),
             eq(pendingUploads.workspaceId, workspaceId),
           ),
         )

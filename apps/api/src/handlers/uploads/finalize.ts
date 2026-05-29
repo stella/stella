@@ -77,7 +77,11 @@ const finalizeUpload = createSafeHandler(
     const pending = yield* Result.await(
       safeDb((tx) =>
         tx.query.pendingUploads.findFirst({
-          where: { id: { eq: uploadId }, workspaceId: { eq: workspaceId } },
+          where: {
+            id: { eq: uploadId },
+            userId: { eq: user.id },
+            workspaceId: { eq: workspaceId },
+          },
           columns: { purpose: true },
         }),
       ),
@@ -117,6 +121,7 @@ const finalizeUpload = createSafeHandler(
           .where(
             sql`${pendingUploads.id} = ${uploadId}
               AND ${pendingUploads.workspaceId} = ${workspaceId}
+              AND ${pendingUploads.userId} = ${user.id}
               AND (
                 ${pendingUploads.status} = 'pending'
                 OR (
@@ -135,7 +140,11 @@ const finalizeUpload = createSafeHandler(
       const existing = yield* Result.await(
         safeDb((tx) =>
           tx.query.pendingUploads.findFirst({
-            where: { id: { eq: uploadId }, workspaceId: { eq: workspaceId } },
+            where: {
+              id: { eq: uploadId },
+              userId: { eq: user.id },
+              workspaceId: { eq: workspaceId },
+            },
           }),
         ),
       );
@@ -195,6 +204,7 @@ const finalizeUpload = createSafeHandler(
             .where(
               and(
                 eq(pendingUploads.id, uploadId),
+                eq(pendingUploads.userId, user.id),
                 eq(pendingUploads.workspaceId, workspaceId),
               ),
             )
@@ -300,6 +310,20 @@ const runFinalize = async function* ({
 
   // 3. Download for scan.
   const fileBuffer = await getS3().file(tmpKey).arrayBuffer();
+  if (!head.value.checksumSHA256) {
+    const uploadedSha256 = new Bun.CryptoHasher("sha256")
+      .update(fileBuffer)
+      .digest("hex");
+    if (uploadedSha256 !== claimed.declaredSha256) {
+      return Result.err(
+        new UploadFinalizeError({
+          status: 422,
+          message: "Uploaded SHA-256 does not match declared",
+          rejectReason: "sha256-mismatch",
+        }),
+      );
+    }
+  }
 
   // 4. Scan — same pipeline the legacy upload handler ran inline.
   const scanResult = await scanFile({
