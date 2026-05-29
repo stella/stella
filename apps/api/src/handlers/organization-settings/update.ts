@@ -23,14 +23,14 @@ const config = {
 const updateOrganizationSettings = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, body, recordAuditEvent }) {
+    const matterPattern = body.matterNumberPattern;
+    const matterPadding = body.matterNumberPadding;
     const wantsMatterUpdate =
-      body.matterNumberPattern !== undefined ||
-      body.matterNumberPadding !== undefined;
+      matterPattern !== undefined || matterPadding !== undefined;
 
     if (
       wantsMatterUpdate &&
-      (body.matterNumberPattern === undefined ||
-        body.matterNumberPadding === undefined)
+      (matterPattern === undefined || matterPadding === undefined)
     ) {
       return Result.err(
         new HandlerError({
@@ -41,12 +41,8 @@ const updateOrganizationSettings = createSafeRootHandler(
       );
     }
 
-    if (wantsMatterUpdate) {
-      const validation = validatePattern(
-        // SAFETY: branch only entered when both are defined per the guard above.
-        body.matterNumberPattern as string,
-        body.matterNumberPadding as number,
-      );
+    if (matterPattern !== undefined && matterPadding !== undefined) {
+      const validation = validatePattern(matterPattern, matterPadding);
 
       if (Result.isError(validation)) {
         return Result.err(

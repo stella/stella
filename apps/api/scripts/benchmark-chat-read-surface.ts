@@ -299,7 +299,11 @@ const getBenchModel = async (): Promise<BenchModel | null> => {
     const info = getModelInfoForRole("fast", null);
     return {
       id: overrideModel,
-      model: getModelById(overrideModel, null),
+      model: getModelById(overrideModel, null, {
+        promptCachingEnabled: true,
+        scopeKey: null,
+        role: "fast",
+      }),
       provider: info.provider,
     };
   }
@@ -307,7 +311,10 @@ const getBenchModel = async (): Promise<BenchModel | null> => {
   const info = getModelInfoForRole("fast", null);
   return {
     id: info.modelId,
-    model: getModelForRole("fast", null),
+    model: getModelForRole("fast", null, {
+      promptCachingEnabled: true,
+      scopeKey: null,
+    }),
     provider: info.provider,
   };
 };
