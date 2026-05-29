@@ -547,6 +547,9 @@ const useFolioBlockPage = (blockId: string): number | null => {
   return page;
 };
 
+const SOURCE_CITATION_CHIP_CLASS =
+  "border-border bg-muted/64 text-foreground-strong-muted hover:bg-muted hover:text-foreground hover:border-foreground/24 inline-flex shrink-0 items-center rounded-md border px-1.5 py-0.5 align-middle text-[10.5px] font-medium tracking-tight transition-colors";
+
 const SourceCitationChip = ({
   citation,
   onClick,
@@ -557,7 +560,7 @@ const SourceCitationChip = ({
   if (citation.kind === "pdf-bates") {
     return (
       <button
-        className="text-foreground-strong-muted hover:bg-muted hover:text-foreground inline-flex shrink-0 items-center rounded px-1 py-0.5 align-middle text-[10px] font-medium transition-colors"
+        className={SOURCE_CITATION_CHIP_CLASS}
         onClick={onClick}
         type="button"
       >
@@ -593,7 +596,7 @@ const DocxSourceCitationChip = ({
   return (
     <button
       aria-label={tooltip}
-      className="text-foreground-strong-muted hover:bg-muted hover:text-foreground inline-flex shrink-0 items-center rounded px-1 py-0.5 align-middle text-[10px] font-medium transition-colors"
+      className={SOURCE_CITATION_CHIP_CLASS}
       onClick={onClick}
       title={tooltip}
       type="button"
