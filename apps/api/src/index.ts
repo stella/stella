@@ -43,6 +43,7 @@ import {
   templatesRoute,
 } from "@/api/handlers/templates/routes";
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
+import { uploadsRoute } from "@/api/handlers/uploads/routes";
 import { userFilesRoute } from "@/api/handlers/user-files/routes";
 import { verifyAuthRoute, verifyRoute } from "@/api/handlers/verify/routes";
 import { viewTemplatesRoute } from "@/api/handlers/view-templates/routes";
@@ -333,6 +334,7 @@ const api = new Elysia()
           .use(folioCollabRoute),
       )
       .use(desktopEditSessionsRoute)
+      .use(uploadsRoute)
       .use(entitiesRoute)
       .use(fieldsRoute)
       .use(templatesRoute)

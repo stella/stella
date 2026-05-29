@@ -33,7 +33,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { UserAvatar } from "@/components/user-avatar";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { toAPIError } from "@/lib/errors";
+import { ClientOperationError, toAPIError } from "@/lib/errors";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import { entityVersionsKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
@@ -84,6 +84,8 @@ const LABEL_PRESETS: LabelPreset[] = [
   { key: "signed", color: "bg-amber-500" },
 ];
 
+const UPLOAD_PUT_TIMEOUT_MS = 5 * 60 * 1000;
+
 export function VersionsSidebar({
   workspaceId,
   entityId,
@@ -110,16 +112,53 @@ export function VersionsSidebar({
   const handleUploadVersion = async (file: File) => {
     setIsUploading(true);
     try {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["upload-version"].post({
-          entityId: toSafeId<"entity">(entityId),
-          file,
-          queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
-        });
+      // 1. SHA-256 of file bytes.
+      const fileBuffer = await file.arrayBuffer();
+      const sha256Buffer = await crypto.subtle.digest("SHA-256", fileBuffer);
+      const sha256Hex = Array.from(new Uint8Array(sha256Buffer))
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join("");
 
-      if (response.error) {
-        throw toAPIError(response.error);
+      // 2. Presign.
+      const wsClient = api.uploads({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      });
+      const presign = await wsClient.presign.post({
+        purpose: "entity_version",
+        entityId: toSafeId<"entity">(entityId),
+        name: file.name,
+        mimeType: file.type || "application/octet-stream",
+        size: file.size,
+        sha256Hex,
+      });
+      if (presign.error) {
+        throw toAPIError(presign.error);
+      }
+      const { uploadId, url, headers } = presign.data;
+
+      // 3. PUT to S3.
+      const putResponse = await fetch(url, {
+        method: "PUT",
+        headers,
+        body: file,
+        signal: AbortSignal.timeout(UPLOAD_PUT_TIMEOUT_MS),
+      });
+      if (!putResponse.ok) {
+        await wsClient({ uploadId })
+          .abort.post({})
+          .catch(() => undefined);
+        throw new ClientOperationError({
+          action: "upload-version-to-s3",
+          message: `S3 rejected upload (${putResponse.status})`,
+        });
+      }
+
+      // 4. Finalize.
+      const finalize = await wsClient({ uploadId }).finalize.post({
+        queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
+      });
+      if (finalize.error) {
+        throw toAPIError(finalize.error);
       }
 
       await invalidateVersions();

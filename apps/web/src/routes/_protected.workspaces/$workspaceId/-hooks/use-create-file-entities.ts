@@ -5,6 +5,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/components/toast";
@@ -12,7 +13,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { MAX_PARALLEL_FILE_UPLOADS } from "@/consts";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { ClientOperationError, toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
@@ -43,9 +44,64 @@ type UploadResult = {
 };
 
 /**
- * Upload a single file via Eden. Throws on failure with the
- * HTTP status preserved on the error object. Attaches the raw
- * `Response` so the upload queue can read `Retry-After`.
+ * Hex-encode a SHA-256 hash already computed via Web Crypto. The
+ * API stores hex on `fields.content.sha256Hex` and converts to
+ * base64 for the S3 `x-amz-checksum-sha256` header.
+ */
+const bufferToHex = (buffer: ArrayBuffer): string => {
+  const view = new Uint8Array(buffer);
+  let out = "";
+  for (const byte of view) {
+    out += byte.toString(16).padStart(2, "0");
+  }
+  return out;
+};
+
+const attachResponseForRetry = (error: Error, response: Response): void => {
+  // The upload queue reads `Retry-After` off the raw Response on
+  // 429s; preserving it keeps the rate-limit pause behaviour the
+  // legacy multipart upload had.
+  Object.defineProperty(error, "response", {
+    value: response,
+    enumerable: false,
+  });
+};
+
+const abortUpload = async (
+  workspaceId: string,
+  uploadId: string,
+): Promise<void> => {
+  // Best-effort: the bucket lifecycle catches the tmp object after
+  // 24h and the daily prune cleans the row, so a failed abort is
+  // not fatal. We swallow errors to avoid masking the original
+  // cancellation/failure with a follow-up rejection.
+  await api
+    .uploads({ workspaceId: toSafeId<"workspace">(workspaceId) })({ uploadId })
+    .abort.post({})
+    .catch(() => undefined);
+};
+
+/**
+ * Upload a single file via the presigned-S3-PUT migration. Same
+ * external shape as the legacy multipart upload (throws with
+ * `response` attached on failure, returns `UploadResult` on
+ * success) so the surrounding `UploadQueue` integration is
+ * untouched.
+ *
+ *   1. Compute SHA-256 of the bytes in-thread. 50 MB takes
+ *      ~200–500ms on modern hardware; a Web Worker is a phase-6
+ *      optimisation, not a correctness requirement.
+ *   2. POST `/uploads/:wsId/presign` with the declared metadata.
+ *      The API records intent in `pending_uploads`, issues a
+ *      5-minute URL bound to the exact size and checksum.
+ *   3. PUT directly to S3. S3 verifies the checksum at the edge;
+ *      any mismatch fails with a 4xx before the API is involved.
+ *   4. POST `/uploads/:wsId/:uploadId/finalize`. The API runs the
+ *      claim FSM, scans, server-side promotes `tmp/` → final key,
+ *      commits the entity transaction.
+ *   5. On any abort/error mid-flight, POST `/abort` to mark the
+ *      pending row as rejected. Re-entry to step 2 returns the
+ *      cached result so accidental double-finalizes are safe.
  */
 const uploadSingleFile = async (
   file: File,
@@ -53,36 +109,100 @@ const uploadSingleFile = async (
   propertyId: string,
   signal: AbortSignal,
 ): Promise<UploadResult> => {
-  const response = await api
-    .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    .upload.post(
-      {
-        queryKey: entitiesKeys.all(workspaceId),
-        file,
-        name: file.name,
-        propertyId: toSafeId<"property">(propertyId),
-      },
-      { fetch: { signal } },
-    );
+  signal.throwIfAborted();
 
-  if (response.error) {
-    const error = toAPIError(response.error);
+  // 1. SHA-256 of file bytes.
+  const fileBuffer = await file.arrayBuffer();
+  const sha256Buffer = await crypto.subtle.digest("SHA-256", fileBuffer);
+  const sha256Hex = bufferToHex(sha256Buffer);
 
-    // Attach the raw Response so the queue can extract
-    // the Retry-After header on 429 responses.
-    Object.defineProperty(error, "response", {
-      value: response.response,
-      enumerable: false,
+  signal.throwIfAborted();
+
+  // 2. Presign.
+  const wsClient = api.uploads({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+  const presign = await wsClient.presign.post(
+    {
+      purpose: "entity_create",
+      propertyId: toSafeId<"property">(propertyId),
+      name: file.name,
+      mimeType: file.type || "application/octet-stream",
+      size: file.size,
+      sha256Hex,
+    },
+    { fetch: { signal } },
+  );
+  if (presign.error) {
+    const error = toAPIError(presign.error);
+    attachResponseForRetry(error, presign.response);
+    throw error;
+  }
+  const { uploadId, url, headers } = presign.data;
+
+  // 3. PUT to S3. S3 enforces the signed checksum + length; a
+  //    mismatched body comes back as 4xx and we surface the body
+  //    as the error message.
+  let putResponse: Response;
+  try {
+    putResponse = await fetch(url, {
+      method: "PUT",
+      headers,
+      body: file,
+      signal,
     });
-
+  } catch (error) {
+    await abortUpload(workspaceId, uploadId);
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new ClientOperationError({
+      action: "upload-file-to-s3",
+      message: "S3 upload network error",
+      cause: error,
+    });
+  }
+  if (!putResponse.ok) {
+    const detail = await putResponse.text().catch(() => "");
+    const error = new ClientOperationError({
+      action: "upload-file-to-s3",
+      message: `S3 rejected upload (${putResponse.status}${
+        detail ? `: ${detail.slice(0, 200)}` : ""
+      })`,
+    });
+    attachResponseForRetry(error, putResponse);
+    await abortUpload(workspaceId, uploadId);
     throw error;
   }
 
+  // 4. Finalize.
+  const finalize = await wsClient({ uploadId }).finalize.post(
+    { queryKey: entitiesKeys.all(workspaceId) },
+    { fetch: { signal } },
+  );
+  if (finalize.error) {
+    const error = toAPIError(finalize.error);
+    attachResponseForRetry(error, finalize.response);
+    // Finalize owns the pending row once called. 422s are terminal
+    // rejections, 409/5xx may still be in-flight or retryable.
+    throw error;
+  }
+
+  const finalizedResult = finalize.data.finalizedResult;
+  if (finalizedResult.type !== "entity_create") {
+    // The route only ever issues `entity_create` presigns, so this
+    // is a structural impossibility — narrow it explicitly so the
+    // result type doesn't leak `entity_version` fields back to
+    // callers that wouldn't know what to do with them.
+    return panic(
+      `Unexpected upload finalized as ${finalizedResult.type satisfies string}`,
+    );
+  }
   return {
-    entityId: response.data.entityId,
-    fileId: response.data.fileId,
-    fileName: response.data.fileName,
-    renamed: response.data.renamed,
+    entityId: finalizedResult.entityId,
+    fileId: finalizedResult.fileId,
+    fileName: finalizedResult.fileName,
+    renamed: finalizedResult.renamed,
   };
 };
 

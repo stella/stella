@@ -1363,20 +1363,52 @@ export const PENDING_UPLOAD_STATUSES = [
  * can be added without a schema migration — only `purposeData` and
  * `finalizedResult` shapes change.
  */
-export const PENDING_UPLOAD_PURPOSES = ["entity_create"] as const;
+export const PENDING_UPLOAD_PURPOSES = [
+  "entity_create",
+  "entity_version",
+  "agent_skill",
+] as const;
 
-export type PendingUploadPurposeData = {
-  type: "entity_create";
-  propertyId: SafeId<"property">;
-};
+export type PendingUploadPurposeData =
+  | {
+      type: "entity_create";
+      propertyId: SafeId<"property">;
+    }
+  | {
+      type: "entity_version";
+      entityId: SafeId<"entity">;
+    }
+  | {
+      type: "agent_skill";
+      // "team" requires admin/owner role; "private" is per-user.
+      // Kept inline (not aliased to `AgentSkillScope`) because that
+      // type is declared further down the file.
+      scope: "team" | "private";
+    };
 
-export type PendingUploadFinalizedResult = {
-  type: "entity_create";
-  entityId: SafeId<"entity">;
-  fileId: SafeId<"userFile">;
-  fileName: string;
-  renamed: boolean;
-};
+export type PendingUploadFinalizedResult =
+  | {
+      type: "entity_create";
+      entityId: SafeId<"entity">;
+      /** UUIDv7 stored on `fields.content.id`; not a branded SafeId. */
+      fileId: string;
+      fileName: string;
+      renamed: boolean;
+    }
+  | {
+      type: "entity_version";
+      entityId: SafeId<"entity">;
+      entityVersionId: SafeId<"entityVersion">;
+      versionNumber: number;
+      fileId: string;
+      fileName: string;
+    }
+  | {
+      type: "agent_skill";
+      skillId: SafeId<"agentSkill">;
+      name: string;
+      version: string;
+    };
 
 export const pendingUploads = p.pgTable(
   "pending_uploads",
