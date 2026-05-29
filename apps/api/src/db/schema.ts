@@ -93,10 +93,6 @@ export type DocxFolioJustificationBlock = {
      *  `blockId` lets a folio editor (Phase 2b) scroll to the same
      *  paragraph the chat editor would. */
     citations: {
-      // String at the storage boundary; refined to FolioBlockId at
-      // parse-justifications via isFolioBlockId(). Keeping this loose
-      // avoids tripping the migration-coverage check on a pure
-      // type-level tightening of jsonb structure.
       blockId: string;
       text: string;
     }[];
