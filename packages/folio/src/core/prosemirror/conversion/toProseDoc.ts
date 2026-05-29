@@ -805,6 +805,10 @@ function calculateRowSpans(table: Table): Map<string, RowSpanInfo> {
   for (let rowIndex = 0; rowIndex < numRows; rowIndex++) {
     // SAFETY: rowIndex < numRows <= table.rows.length
     const row = table.rows[rowIndex]!;
+    if (row.cells.length === 0) {
+      clearActiveVerticalMerges(activeMerges, result);
+      continue;
+    }
     let colIndex = 0;
     const rowCells = row.cells.map((cell) => {
       const colspan = cell.formatting?.gridSpan ?? 1;
@@ -878,6 +882,19 @@ function calculateRowSpans(table: Table): Map<string, RowSpanInfo> {
   }
 
   return result;
+}
+
+function clearActiveVerticalMerges(
+  activeMerges: Map<number, number>,
+  result: Map<string, RowSpanInfo>,
+): void {
+  for (const [colIndex, startRow] of activeMerges) {
+    const restartCell = result.get(`${startRow}-${colIndex}`);
+    if (restartCell) {
+      restartCell.preserveVMergeRestart = true;
+    }
+  }
+  activeMerges.clear();
 }
 
 function tableCellHasMeaningfulContent(cell: TableCell): boolean {
@@ -1053,13 +1070,9 @@ function convertTable(
   // Track data row index (excluding header rows) for banding
   let dataRowIndex = 0;
   const totalRows = table.rows.length;
+  const gridColumnCount = columnWidths?.length ?? 0;
   const totalColumns =
-    columnWidths?.length ??
-    table.rows[0]?.cells.reduce(
-      (sum, cell) => sum + (cell.formatting?.gridSpan ?? 1),
-      0,
-    ) ??
-    0;
+    gridColumnCount > 0 ? gridColumnCount : countTableColumns(table.rows);
   const rows = table.rows.map((row, rowIndex) => {
     // Conditional formatting flag: firstRow in tblLook means "apply first-row styling"
     const isFirstRowStyled = rowIndex === 0 && !!look?.firstRow;
@@ -1101,6 +1114,18 @@ function convertTable(
   });
 
   return schema.node("table", attrs, rows);
+}
+
+function countTableColumns(rows: TableRow[]): number {
+  let maxColumns = 0;
+  for (const row of rows) {
+    let rowColumns = 0;
+    for (const cell of row.cells) {
+      rowColumns += cell.formatting?.gridSpan ?? 1;
+    }
+    maxColumns = Math.max(maxColumns, rowColumns);
+  }
+  return maxColumns;
 }
 
 /**
@@ -1165,13 +1190,31 @@ function convertTableRow(
   const rowCnf = row.formatting?.conditionalFormat;
   const rowIsFirstRow = rowCnf?.firstRow ?? isFirstRow;
   const rowIsLastRow = rowCnf?.lastRow ?? isLastRow;
-  const totalCols = totalColumns ?? numCells;
+  const totalCols =
+    totalColumns != null && totalColumns > 0
+      ? totalColumns
+      : Math.max(numCells, 1);
+
+  // A literal `<w:tr/>` from a non-Word producer parses with zero cells. PM's
+  // tableRow content is `(tableCell | tableHeader)+`, so emit one placeholder
+  // cell spanning the table's grid width to keep the row valid.
+  let effectiveCells: TableCell[] = row.cells;
+  if (effectiveCells.length === 0) {
+    const fallback: TableCell = {
+      type: "tableCell",
+      content: [{ type: "paragraph", content: [] }],
+    };
+    if (totalCols > 1) {
+      fallback.formatting = { gridSpan: totalCols };
+    }
+    effectiveCells = [fallback];
+  }
 
   // Track column index for mapping to columnWidths (accounting for colspan)
   let colIndex = 0;
   const cells: PMNode[] = [];
 
-  for (const cellIndex_item of row.cells) {
+  for (const cellIndex_item of effectiveCells) {
     const cell = cellIndex_item;
     const colspan = cell.formatting?.gridSpan ?? 1;
 
