@@ -15,7 +15,6 @@ import {
 import { useTranslations } from "use-intl";
 
 import { isFolioBlockId } from "@stll/folio";
-import type { FolioBlockId } from "@stll/folio";
 import { cn } from "@stll/ui/lib/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
@@ -615,7 +614,7 @@ export const StreamdownMentionLink = ({
 };
 
 type FolioBlockChipProps = {
-  blockId: FolioBlockId;
+  blockId: string;
   interactive: boolean;
   children: React.ReactNode;
 };
@@ -674,7 +673,7 @@ const FolioBlockChip = ({
 
 const useFolioChipChildren = (
   children: React.ReactNode,
-  blockId: FolioBlockId,
+  blockId: string,
 ): React.ReactNode => {
   const t = useTranslations();
   const text = collectChipText(children).trim();

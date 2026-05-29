@@ -2,8 +2,6 @@ import { v7 as uuidv7 } from "uuid";
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 
-import type { FolioBlockId } from "@stll/folio";
-
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 
@@ -197,7 +195,7 @@ type State = {
    * from the editor lifecycle (the editor may not be mounted yet
    * if the user just opened the file via the citation).
    */
-  pendingBlockScroll: { tabId: string; blockId: FolioBlockId } | null;
+  pendingBlockScroll: { tabId: string; blockId: string } | null;
   /**
    * One-shot edit-mode request for a DOCX tab. Set by callers that
    * open a DOCX file and want the user to land directly in the
@@ -317,7 +315,7 @@ type Actions = {
   toggleMinimized: () => void;
   /** Queue a folio scroll for the active DOCX editor of `tabId`.
    *  Cleared after the editor consumes it. */
-  requestBlockScroll: (tabId: string, blockId: FolioBlockId) => void;
+  requestBlockScroll: (tabId: string, blockId: string) => void;
   clearPendingBlockScroll: () => void;
 };
 

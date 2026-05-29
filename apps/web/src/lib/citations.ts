@@ -10,8 +10,6 @@
  * map into this type.
  */
 
-import type { FolioBlockId } from "@stll/folio";
-
 import type { JustificationContent } from "@/lib/types";
 
 export type PdfBatesCitation = {
@@ -24,7 +22,7 @@ export type PdfBatesCitation = {
 export type DocxFolioCitation = {
   kind: "docx-folio";
   fileFieldId: string;
-  blockId: FolioBlockId;
+  blockId: string;
   /** Captured at extraction time; the renderer shows it as a quote
    *  so click-to-scroll is a navigation extra, not a prerequisite to
    *  seeing the source. */

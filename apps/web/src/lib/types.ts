@@ -8,7 +8,6 @@ import type {
   ViewLayout,
   ViewLayoutType,
 } from "@stll/api/types";
-import type { FolioBlockId } from "@stll/folio";
 
 import { PDF_MIME_TYPE } from "@/consts";
 import { DOCX_MIME } from "@/lib/consts";
@@ -290,7 +289,7 @@ export type DocxFolioJustificationBlock = {
      *  source without re-fetching anything. `blockId` matches the
      *  folio editor's block IDs (Phase 2b: scroll-to-block). */
     citations: {
-      blockId: FolioBlockId;
+      blockId: string;
       text: string;
     }[];
   }[];

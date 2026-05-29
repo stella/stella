@@ -1,8 +1,7 @@
 import { useEffect } from "react";
 import type { RefObject } from "react";
 
-import { isFolioBlockId } from "@stll/folio";
-import type { DocxEditorRef, FolioBlockId } from "@stll/folio";
+import type { DocxEditorRef } from "@stll/folio";
 
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -19,9 +18,9 @@ type UseDocxBlockScrollProps = {
 };
 
 type ScheduleDocxBlockScrollProps = {
-  blockId: FolioBlockId;
+  blockId: string;
   onSuccess?: (() => void) | undefined;
-  scrollToBlock: (blockId: FolioBlockId) => boolean | undefined;
+  scrollToBlock: (blockId: string) => boolean | undefined;
 };
 
 const debugDocxBlockScroll = (
@@ -79,7 +78,7 @@ export const useDocxBlockScroll = ({
         return;
       }
       const blockId: unknown = (detail as { blockId?: unknown }).blockId;
-      if (!isFolioBlockId(blockId)) {
+      if (typeof blockId !== "string" || blockId.length === 0) {
         return;
       }
 
