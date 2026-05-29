@@ -11,6 +11,7 @@
     "format": "oxfmt .",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/outlook",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/outlook",
+    "test": "bun test src",
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
