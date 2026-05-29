@@ -46,6 +46,7 @@ export type SafeIdType =
   | "mcpUserConnection"
   | "organization"
   | "organizationSettings"
+  | "pendingUpload"
   | "property"
   | "promptShortcut"
   | "propertyDependency"
