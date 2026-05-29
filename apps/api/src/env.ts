@@ -194,6 +194,7 @@ const envApi = createEnv({
       ),
     ),
     EXTENSION_ORIGIN: v.optional(v.pipe(v.string(), v.url())),
+    OUTLOOK_ORIGIN: v.optional(v.pipe(v.string(), v.url())),
 
     /**
      * Self-host escape hatch for deployments without SMTP/OAuth. When enabled,
