@@ -32,6 +32,7 @@ import {
   entityVersions,
   fields,
   pendingUploads,
+  properties,
   workspaces,
 } from "@/api/db/schema";
 import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
@@ -233,10 +234,52 @@ export const finalizeEntityCreate = async function* ({
     return promoteResult;
   }
 
-  const writeResult = await safeDb(async (tx) => {
+  type WriteResult =
+    | {
+        status: "ok";
+        finalized: Extract<
+          PendingUploadFinalizedResult,
+          { type: "entity_create" }
+        >;
+      }
+    | { status: "property-not-found" | "property-type-mismatch" };
+
+  const cleanupFinalObject = async (stage: string) => {
+    await getS3()
+      .delete(finalKey)
+      .catch((deleteError: unknown) =>
+        captureError(deleteError, {
+          entityId,
+          fieldId,
+          stage,
+        }),
+      );
+  };
+
+  const writeResultResult = await safeDb(async (tx): Promise<WriteResult> => {
+    const propertyRows = await tx
+      .select({ id: properties.id, content: properties.content })
+      .from(properties)
+      .where(
+        and(
+          eq(properties.id, purposeData.propertyId),
+          eq(properties.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    const property = propertyRows.at(0);
+
+    if (!property) {
+      return { status: "property-not-found" };
+    }
+    if (property.content.type !== "file") {
+      return { status: "property-type-mismatch" };
+    }
+
     const renamed = await resolveFileName({
       tx,
-      propertyId: purposeData.propertyId,
+      propertyId: property.id,
       name: sanitizedName,
     });
     const entityStamp = await allocateEntityStamp(tx, workspaceId);
@@ -263,7 +306,7 @@ export const finalizeEntityCreate = async function* ({
     await tx.insert(fields).values({
       id: fieldId,
       workspaceId,
-      propertyId: purposeData.propertyId,
+      propertyId: property.id,
       entityVersionId,
       content: {
         type: "file",
@@ -299,7 +342,7 @@ export const finalizeEntityCreate = async function* ({
             fileName: renamed.value,
             mimeType: declaredMime,
             sizeBytes: declaredSize,
-            propertyId: purposeData.propertyId,
+            propertyId: property.id,
           },
         },
       },
@@ -336,20 +379,24 @@ export const finalizeEntityCreate = async function* ({
       panic("Pending upload finalize marker update returned no rows");
     }
 
-    return { finalized };
+    return { status: "ok", finalized };
   });
-  if (Result.isError(writeResult)) {
-    await getS3()
-      .delete(finalKey)
-      .catch((deleteError: unknown) =>
-        captureError(deleteError, {
-          entityId,
-          fieldId,
-          stage: "final-cleanup-after-db-error",
-        }),
-      );
+  if (Result.isError(writeResultResult)) {
+    await cleanupFinalObject("final-cleanup-after-db-error");
   }
-  const { finalized } = yield* writeResult;
+  const writeResult = yield* writeResultResult;
+  if (writeResult.status !== "ok") {
+    await cleanupFinalObject("final-cleanup-after-business-error");
+    return finalizeErr({
+      status: 400,
+      message:
+        writeResult.status === "property-not-found"
+          ? "Property not found in workspace"
+          : "Property isn't of type file",
+      rejectReason: writeResult.status,
+    });
+  }
+  const { finalized } = writeResult;
 
   const afterPromote = () => {
     // Async kickoffs mirror the legacy handler. They run only after

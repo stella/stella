@@ -11,7 +11,7 @@
  * and "aborting" no longer has a meaning.
  */
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
 import { pendingUploads } from "@/api/db/schema";
@@ -73,7 +73,7 @@ const abortUpload = createSafeHandler(
       return Result.ok({ ok: true as const });
     }
 
-    yield* Result.await(
+    const abortedRows = yield* Result.await(
       // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
       safeDb((tx) => {
         // audit: skip — pending_uploads bookkeeping; the row never
@@ -90,10 +90,39 @@ const abortUpload = createSafeHandler(
             and(
               eq(pendingUploads.id, uploadId),
               eq(pendingUploads.workspaceId, workspaceId),
+              inArray(pendingUploads.status, ["pending", "failed"]),
             ),
-          );
+          )
+          .returning({ id: pendingUploads.id });
       }),
     );
+    if (!abortedRows.at(0)) {
+      const latest = yield* Result.await(
+        safeDb((tx) =>
+          tx.query.pendingUploads.findFirst({
+            where: { id: { eq: uploadId }, workspaceId: { eq: workspaceId } },
+            columns: { status: true },
+          }),
+        ),
+      );
+      if (!latest) {
+        return Result.err(
+          new HandlerError({ status: 404, message: "Upload not found" }),
+        );
+      }
+      if (latest.status === "rejected") {
+        return Result.ok({ ok: true as const });
+      }
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message:
+            latest.status === "finalized"
+              ? "Upload already finalized — use entity delete instead"
+              : "Finalize already in progress for this upload",
+        }),
+      );
+    }
 
     // Best-effort tmp cleanup. The client may have never actually
     // PUT (so the object never existed) — `delete` on a missing key
