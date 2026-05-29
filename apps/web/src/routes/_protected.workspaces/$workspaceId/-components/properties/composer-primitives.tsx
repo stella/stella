@@ -76,13 +76,27 @@ export const useChipDefinitions = (): readonly ChipDefinition[] => {
 export const COMPOSER_CARD_CLASS =
   "bg-card ring-foreground/2 flex flex-col gap-2.5 rounded-[10px] border border-[var(--input)] p-3 ring-4";
 
+export type ManualChipOption = {
+  active: boolean;
+  onClick: () => void;
+  icon: LucideIcon;
+  label: string;
+};
+
 type TypeChipsRowProps = {
   chipDefs: readonly ChipDefinition[];
   contentType: CreatableContentType;
   onContentTypeChange: (next: CreatableContentType) => void;
   showSeparator?: boolean;
   typeChanged: boolean;
+  manualChip?: ManualChipOption;
 };
+
+const CHIP_BASE_CLASS =
+  "inline-flex shrink-0 items-center gap-1.5 rounded-[6px] border px-2 py-1 text-xs font-medium transition-colors";
+const CHIP_ACTIVE_CLASS = "bg-foreground/8 text-foreground border-transparent";
+const CHIP_IDLE_CLASS =
+  "text-muted-foreground hover:text-foreground border-border";
 
 export const TypeChipsRow = ({
   chipDefs,
@@ -90,8 +104,10 @@ export const TypeChipsRow = ({
   onContentTypeChange,
   showSeparator = false,
   typeChanged,
+  manualChip,
 }: TypeChipsRowProps) => {
   const t = useTranslations();
+  const manualActive = manualChip?.active === true;
   return (
     <div className="flex flex-col gap-1.5">
       <div
@@ -103,15 +119,30 @@ export const TypeChipsRow = ({
         <span className="text-foreground-label shrink-0 px-1.5 text-[11px] font-medium">
           {t("workspaces.properties.returnsLabel")}
         </span>
+        {manualChip && (
+          <>
+            <button
+              className={cn(
+                CHIP_BASE_CLASS,
+                manualChip.active ? CHIP_ACTIVE_CLASS : CHIP_IDLE_CLASS,
+              )}
+              key="manual"
+              onClick={manualChip.onClick}
+              type="button"
+            >
+              <manualChip.icon className="size-2.5" />
+              {manualChip.label}
+            </button>
+            <span aria-hidden className="bg-border mx-1 h-3 w-px shrink-0" />
+          </>
+        )}
         {chipDefs.map(({ type, icon: Icon, label }) => {
-          const active = contentType === type;
+          const active = !manualActive && contentType === type;
           return (
             <button
               className={cn(
-                "inline-flex shrink-0 items-center gap-1.5 rounded-[6px] border px-2 py-1 text-xs font-medium transition-colors",
-                active
-                  ? "bg-foreground/8 text-foreground border-transparent"
-                  : "text-muted-foreground hover:text-foreground border-border",
+                CHIP_BASE_CLASS,
+                active ? CHIP_ACTIVE_CLASS : CHIP_IDLE_CLASS,
               )}
               key={type}
               onClick={() => onContentTypeChange(type)}
@@ -164,9 +195,7 @@ export const ReadingFromRow = ({
         <ReadingChip
           key={chip.id}
           label={chip.name || t("workspaces.properties.documentsLabel")}
-          {...(fileChips.length > 1
-            ? { onRemove: () => onRemoveFile(chip.id) }
-            : {})}
+          onRemove={() => onRemoveFile(chip.id)}
         />
       ))}
       {canAdd && (

@@ -1,7 +1,8 @@
 import { Suspense, useCallback, useMemo, useRef, useState } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { PlusIcon, XIcon } from "lucide-react";
+import type { Editor } from "@tiptap/react";
+import { PencilIcon, PlusIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -25,13 +26,19 @@ import {
 import type {
   CreatableContentType,
   FileChip,
+  ManualChipOption,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/composer-primitives";
 import { PropertyPromptInput } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
 import type { PropertyPromptFieldHandle } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
 import { usePropertiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
-import { useCreatePropertiesBatch } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
+import {
+  useCreatePropertiesBatch,
+  useSuggestPrompt,
+} from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
 import type { CreatePropertySpec } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
+
+type DraftTool = "ai-model" | "manual-input";
 
 type Draft = {
   id: number;
@@ -40,6 +47,7 @@ type Draft = {
   mentions: string[];
   fileIds: string[];
   contentType: CreatableContentType;
+  tool: DraftTool;
 };
 
 const makeEmptyDraft = (id: number, defaultFileIds: string[]): Draft => ({
@@ -49,11 +57,8 @@ const makeEmptyDraft = (id: number, defaultFileIds: string[]): Draft => ({
   mentions: [],
   fileIds: defaultFileIds,
   contentType: "text",
+  tool: "ai-model",
 });
-
-const promptFromHtml = (html: string): string =>
-  // eslint-disable-next-line sonarjs/slow-regex
-  html.replace(/<[^>]+>/gu, "").trim();
 
 type TriggerVariant = "icon" | "labelled" | "rail" | "none";
 
@@ -224,20 +229,25 @@ const BulkBody = ({ workspaceId, onClose }: BulkBodyProps) => {
       return;
     }
     const items: CreatePropertySpec[] = validDrafts.map((d) => {
-      const hasPrompt = promptFromHtml(d.prompt).length > 0;
+      if (d.tool === "manual-input") {
+        return {
+          name: d.name.trim(),
+          contentType: d.contentType,
+          toolType: "manual-input" as const,
+        };
+      }
       const dependencyIds = [...new Set([...d.fileIds, ...d.mentions])];
       const dependencies = dependencyIds.map((id) => ({
         dependsOnPropertyId: id,
         condition: null,
       }));
-      return Object.assign({
-	name: d.name.trim(),
-	contentType: d.contentType
-}, hasPrompt ? {
-	toolType: 'ai-model' as const,
-	prompt: d.prompt,
-	...dependencies.length > 0 ? { dependencies } : {}
-} : { toolType: 'manual-input' as const });
+      return {
+        name: d.name.trim(),
+          contentType: d.contentType,
+          toolType: "ai-model" as const,
+          prompt: d.prompt,
+        ...(dependencies.length > 0 ? { dependencies } : {}),
+      };
     });
     try {
       await batch.mutateAsync({ items });
@@ -337,6 +347,8 @@ const DraftCard = ({
 }: DraftCardProps) => {
   const t = useTranslations();
   const chipDefs = useChipDefinitions();
+  const suggestPrompt = useSuggestPrompt();
+  const editorRef = useRef<Editor | null>(null);
 
   const promptField: PropertyPromptFieldHandle = useMemo(
     () => ({
@@ -358,6 +370,53 @@ const DraftCard = ({
     [onChange],
   );
 
+  const handleEditorReady = useCallback((editor: Editor) => {
+    editorRef.current = editor;
+  }, []);
+
+  const trimmedName = draft.name.trim();
+  const isAi = draft.tool === "ai-model";
+  const autoPromptDisabled =
+    !isAi || trimmedName.length === 0 || suggestPrompt.isPending;
+
+  const handleAutoPrompt = useCallback(() => {
+    if (autoPromptDisabled) {
+      return;
+    }
+    suggestPrompt.mutate(
+      {
+        workspaceId,
+        name: trimmedName,
+        contentType: draft.contentType,
+      },
+      {
+        onSuccess: ({ prompt: suggested }) => {
+          const editor = editorRef.current;
+          if (!editor || editor.isDestroyed) {
+            onChange({ prompt: suggested });
+            return;
+          }
+          editor.commands.setContent(suggested);
+          onChange({ prompt: editor.getHTML() });
+        },
+        onError: () => {
+          stellaToast.add({
+            title: t("workspaces.properties.autoPromptFailed"),
+            type: "error",
+          });
+        },
+      },
+    );
+  }, [
+    autoPromptDisabled,
+    draft.contentType,
+    onChange,
+    suggestPrompt,
+    t,
+    trimmedName,
+    workspaceId,
+  ]);
+
   const selectedFiles = useMemo(
     () =>
       draft.fileIds.flatMap((id) => {
@@ -370,13 +429,20 @@ const DraftCard = ({
     (p) => !draft.fileIds.includes(p.id),
   );
 
+  const manualChip: ManualChipOption = {
+    active: draft.tool === "manual-input",
+    icon: PencilIcon,
+    label: t("workspaces.properties.chipManual"),
+    onClick: () => onChange({ tool: "manual-input" }),
+  };
+
   return (
     <div className={COMPOSER_CARD_CLASS}>
       <div className="flex items-center gap-2">
         <Input
           autoComplete="off"
           autoFocus
-          className="text-foreground placeholder:text-foreground-label px-0 text-sm font-medium"
+          className="text-foreground placeholder:text-foreground-label w-full px-0 text-sm font-medium"
           onChange={(e) => onChange({ name: e.target.value })}
           placeholder={t("workspaces.properties.newColumnName")}
           unstyled
@@ -385,7 +451,7 @@ const DraftCard = ({
         {canRemove && (
           <Button
             aria-label={t("workspaces.properties.bulk.removeRow")}
-            className="text-foreground-placeholder hover:text-foreground size-6"
+            className="text-foreground-placeholder hover:text-foreground ms-auto -me-1 size-6 shrink-0"
             onClick={onRemove}
             size="icon"
             type="button"
@@ -396,35 +462,49 @@ const DraftCard = ({
         )}
       </div>
 
-      <ReadingFromRow
-        fileChips={selectedFiles}
-        onRemoveFile={(id) =>
-          onChange({ fileIds: draft.fileIds.filter((f) => f !== id) })
-        }
-        {...(availableFiles.length > 0
-          ? {
-              addFile: (id: string) =>
-                onChange({ fileIds: [...draft.fileIds, id] }),
-              availableFiles,
+      {isAi && (
+        <>
+          <ReadingFromRow
+            fileChips={selectedFiles}
+            onRemoveFile={(id) =>
+              onChange({ fileIds: draft.fileIds.filter((f) => f !== id) })
             }
-          : {})}
-      />
+            {...(availableFiles.length > 0
+              ? {
+                  addFile: (id: string) =>
+                    onChange({ fileIds: [...draft.fileIds, id] }),
+                  availableFiles,
+                }
+              : {})}
+          />
 
-      <PropertyPromptInput
-        autoPopulateOnEmpty={false}
-        field={promptField}
-        onMentionsChange={handleMentions}
-        placeholder={t("workspaces.properties.extractionPlaceholder")}
-        propertyId=""
-        propertyName={draft.name}
-        variant="minimal"
-        workspaceId={workspaceId}
-      />
+          <PropertyPromptInput
+            aiEditAction={{
+              disabled: autoPromptDisabled,
+              isPending: suggestPrompt.isPending,
+              label: t("workspaces.properties.suggestWithAI"),
+              onClick: handleAutoPrompt,
+            }}
+            autoPopulateOnEmpty={false}
+            field={promptField}
+            onEditorReady={handleEditorReady}
+            onMentionsChange={handleMentions}
+            placeholder={t("workspaces.properties.extractionPlaceholder")}
+            propertyId=""
+            propertyName={draft.name}
+            variant="minimal"
+            workspaceId={workspaceId}
+          />
+        </>
+      )}
 
       <TypeChipsRow
         chipDefs={chipDefs}
         contentType={draft.contentType}
-        onContentTypeChange={(next) => onChange({ contentType: next })}
+        manualChip={manualChip}
+        onContentTypeChange={(next) =>
+          onChange({ contentType: next, tool: "ai-model" })
+        }
         showSeparator
         typeChanged={false}
       />

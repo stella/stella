@@ -2189,6 +2189,7 @@
         "title": "Add columns"
       },
       "chipDate": "Dátum",
+      "chipManual": "Manual",
       "chipMulti": "Viac možností",
       "chipNumber": "Číslo",
       "chipSingle": "Jedna možnosť",
@@ -2269,6 +2270,7 @@
       "sortAscendingDate": "Od najstarších",
       "sortDescending": "Radiť zostupne",
       "sortDescendingDate": "Od najnovších",
+      "suggestWithAI": "Suggest with AI",
       "text": "Text",
       "typeChangeWarning": "Existujúce dáta sa pri uložení vymažú a znovu vypočítajú.",
       "unnamedColumn": "tento stĺpec",

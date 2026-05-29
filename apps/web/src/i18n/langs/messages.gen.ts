@@ -2192,9 +2192,10 @@ type Messages = {
         "title": "Add columns";
       };
       "chipDate": "Date";
-      "chipMulti": "Multi option";
+      "chipManual": "Manual";
+      "chipMulti": "Tags";
       "chipNumber": "Number";
-      "chipSingle": "Single option";
+      "chipSingle": "Tag";
       "chipText": "Text";
       "clip": "Clip";
       "composerTitle": "Tell stella what to find";
@@ -2252,7 +2253,7 @@ type Messages = {
       "previewSkipped": "No applicable input on this document.";
       "previewSubject": "Try it on a sample";
       "previewUnsupported": "Preview unsupported for this document type.";
-      "readingFrom": "Reading from";
+      "readingFrom": "AI reads from";
       "referencesItself": "Property references itself through other properties";
       "rerunColumn": "Rerun column";
       "resultType": "Result type";
@@ -2272,6 +2273,7 @@ type Messages = {
       "sortAscendingDate": "Oldest first";
       "sortDescending": "Sort descending";
       "sortDescendingDate": "Newest first";
+      "suggestWithAI": "Suggest with AI";
       "text": "Text";
       "typeChangeWarning": "Existing data will be cleared and rebuilt on save.";
       "unnamedColumn": "this column";

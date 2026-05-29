@@ -2189,6 +2189,7 @@
         "title": "Add columns"
       },
       "chipDate": "Date",
+      "chipManual": "Manual",
       "chipMulti": "Multi option",
       "chipNumber": "Number",
       "chipSingle": "Single option",
@@ -2269,6 +2270,7 @@
       "sortAscendingDate": "Legrégebbi elöl",
       "sortDescending": "Csökkenő rendezés",
       "sortDescendingDate": "Legújabb elöl",
+      "suggestWithAI": "Suggest with AI",
       "text": "Szöveg",
       "typeChangeWarning": "Existing data will be cleared and rebuilt on save.",
       "unnamedColumn": "ez az oszlop",

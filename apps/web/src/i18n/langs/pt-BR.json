@@ -2189,6 +2189,7 @@
         "title": "Add columns"
       },
       "chipDate": "Data",
+      "chipManual": "Manual",
       "chipMulti": "Opção múltipla",
       "chipNumber": "Número",
       "chipSingle": "Opção única",
@@ -2269,6 +2270,7 @@
       "sortAscendingDate": "Mais antigo primeiro",
       "sortDescending": "Classificar em ordem decrescente",
       "sortDescendingDate": "O mais novo primeiro",
+      "suggestWithAI": "Suggest with AI",
       "text": "Texto",
       "typeChangeWarning": "Os dados existentes serão apagados e reconstruídos ao salvar.",
       "unnamedColumn": "esta coluna",
