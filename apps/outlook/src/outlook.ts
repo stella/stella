@@ -1,3 +1,4 @@
+import { OutlookError } from "@/lib/errors";
 import type {
   AttachmentDownloadResult,
   MailAddress,
@@ -153,9 +154,16 @@ export const waitForOffice = async (): Promise<void> => {
 };
 
 export const loadMailSnapshot = async (): Promise<MailSnapshot> => {
-  const item = getCurrentItem();
-  if (!item) {
+  const office = getOffice();
+  if (!office) {
     return createBrowserSampleSnapshot();
+  }
+
+  const item = office.context.mailbox.item ?? null;
+  if (!item) {
+    throw new OutlookError({
+      message: "No Outlook message is selected.",
+    });
   }
 
   const subject = await readMaybeAsync(
