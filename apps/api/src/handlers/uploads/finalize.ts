@@ -104,6 +104,7 @@ const finalizeUpload = createSafeHandler(
     //    claimed_at older than the timeout) or hit a transient
     //    error (status='failed' AND past the cool-down).
     const timeoutSec = Math.floor(FINALIZE_CLAIM_TIMEOUT_MS / 1000);
+    const claimRequestId = Bun.randomUUIDv7().slice(0, 64);
     const claimedRows = yield* Result.await(
       // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
       safeDb((tx) => {
@@ -116,12 +117,13 @@ const finalizeUpload = createSafeHandler(
           .set({
             status: "scanning",
             claimedAt: new Date(),
-            claimedByRequestId: Bun.randomUUIDv7().slice(0, 64),
+            claimedByRequestId: claimRequestId,
           })
           .where(
             sql`${pendingUploads.id} = ${uploadId}
               AND ${pendingUploads.workspaceId} = ${workspaceId}
               AND ${pendingUploads.userId} = ${user.id}
+              AND ${pendingUploads.expiresAt} > NOW()
               AND (
                 ${pendingUploads.status} = 'pending'
                 OR (
@@ -164,6 +166,39 @@ const finalizeUpload = createSafeHandler(
           }),
         );
       }
+      const expiredRows = yield* Result.await(
+        // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+        safeDb((tx) => {
+          // audit: skip — expiry transition on pending_uploads;
+          // the upload never became a durable entity.
+          return tx
+            .update(pendingUploads)
+            .set({
+              status: "rejected",
+              rejectReason: "Upload URL expired",
+              finalizedAt: new Date(),
+            })
+            .where(
+              sql`${pendingUploads.id} = ${uploadId}
+                AND ${pendingUploads.workspaceId} = ${workspaceId}
+                AND ${pendingUploads.userId} = ${user.id}
+                AND ${pendingUploads.expiresAt} <= NOW()
+                AND (
+                  ${pendingUploads.status} IN ('pending', 'failed')
+                  OR (
+                    ${pendingUploads.status} = 'scanning'
+                    AND ${pendingUploads.claimedAt} < NOW() - ${timeoutSec} * interval '1 second'
+                  )
+                )`,
+            )
+            .returning({ id: pendingUploads.id });
+        }),
+      );
+      if (expiredRows.at(0)) {
+        return Result.err(
+          new HandlerError({ status: 422, message: "Upload URL expired" }),
+        );
+      }
       return Result.err(
         new HandlerError({
           status: 409,
@@ -182,6 +217,7 @@ const finalizeUpload = createSafeHandler(
       userId: user.id,
       memberRole,
       uploadId,
+      claimRequestId,
       safeDb,
       recordAuditEvent,
     });
@@ -206,6 +242,8 @@ const finalizeUpload = createSafeHandler(
                 eq(pendingUploads.id, uploadId),
                 eq(pendingUploads.userId, user.id),
                 eq(pendingUploads.workspaceId, workspaceId),
+                eq(pendingUploads.status, "scanning"),
+                eq(pendingUploads.claimedByRequestId, claimRequestId),
               ),
             )
             .returning({ id: pendingUploads.id });
@@ -242,6 +280,7 @@ type RunFinalizeProps = {
   userId: SafeId<"user">;
   memberRole: { role: string };
   uploadId: SafeId<"pendingUpload">;
+  claimRequestId: string;
   safeDb: SafeDb;
   recordAuditEvent: AuditRecorder;
 };
@@ -266,6 +305,7 @@ const runFinalize = async function* ({
   userId,
   memberRole,
   uploadId,
+  claimRequestId,
   safeDb,
   recordAuditEvent,
 }: RunFinalizeProps): AsyncGenerator<
@@ -390,6 +430,7 @@ const runFinalize = async function* ({
     scanWarnings,
     promoteTmpObject,
     uploadId,
+    claimRequestId,
   };
 
   // Dispatch on purposeData. Each variant is independent; the
@@ -422,6 +463,7 @@ const runFinalize = async function* ({
       declaredName: claimed.declaredName,
       declaredMime: claimed.declaredMime,
       uploadId,
+      claimRequestId,
       scope: purposeData.scope,
       workspaceId,
     });

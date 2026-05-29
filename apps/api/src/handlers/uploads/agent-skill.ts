@@ -63,6 +63,7 @@ export type FinalizeAgentSkillProps = {
   declaredMime: string;
   scope: "team" | "private";
   uploadId: SafeId<"pendingUpload">;
+  claimRequestId: string;
   workspaceId: SafeId<"workspace">;
 };
 
@@ -92,6 +93,7 @@ export const finalizeAgentSkill = async function* ({
   declaredMime,
   scope,
   uploadId,
+  claimRequestId,
   workspaceId,
 }: FinalizeAgentSkillProps) {
   // parseUploadedSkillPackage takes a File; wrap the buffer back
@@ -137,6 +139,8 @@ export const finalizeAgentSkill = async function* ({
             eq(pendingUploads.id, uploadId),
             eq(pendingUploads.userId, userId),
             eq(pendingUploads.workspaceId, workspaceId),
+            eq(pendingUploads.status, "scanning"),
+            eq(pendingUploads.claimedByRequestId, claimRequestId),
           ),
         )
         .returning({ id: pendingUploads.id });

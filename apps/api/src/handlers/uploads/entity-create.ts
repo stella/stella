@@ -165,6 +165,7 @@ export type FinalizeEntityCreateProps = {
   purposeData: Extract<PendingUploadPurposeData, { type: "entity_create" }>;
   scanWarnings: string[] | undefined;
   uploadId: SafeId<"pendingUpload">;
+  claimRequestId: string;
   promoteTmpObject: (
     finalKey: string,
   ) => Promise<Result<void, UploadFinalizeError>>;
@@ -193,6 +194,7 @@ export const finalizeEntityCreate = async function* ({
   purposeData,
   scanWarnings,
   uploadId,
+  claimRequestId,
   promoteTmpObject,
 }: FinalizeEntityCreateProps) {
   const sanitizedName = sanitizeFilename(declaredName);
@@ -373,6 +375,8 @@ export const finalizeEntityCreate = async function* ({
           eq(pendingUploads.id, uploadId),
           eq(pendingUploads.userId, userId),
           eq(pendingUploads.workspaceId, workspaceId),
+          eq(pendingUploads.status, "scanning"),
+          eq(pendingUploads.claimedByRequestId, claimRequestId),
         ),
       )
       .returning({ id: pendingUploads.id });

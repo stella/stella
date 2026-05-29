@@ -108,6 +108,7 @@ export type FinalizeEntityVersionProps = {
   purposeData: Extract<PendingUploadPurposeData, { type: "entity_version" }>;
   scanWarnings: string[] | undefined;
   uploadId: SafeId<"pendingUpload">;
+  claimRequestId: string;
   promoteTmpObject: (
     finalKey: string,
   ) => Promise<Result<void, UploadFinalizeError>>;
@@ -136,6 +137,7 @@ export const finalizeEntityVersion = async function* ({
   purposeData,
   scanWarnings,
   uploadId,
+  claimRequestId,
   promoteTmpObject,
 }: FinalizeEntityVersionProps) {
   const sanitizedName = sanitizeFilename(declaredName);
@@ -395,6 +397,8 @@ export const finalizeEntityVersion = async function* ({
           eq(pendingUploads.id, uploadId),
           eq(pendingUploads.userId, userId),
           eq(pendingUploads.workspaceId, workspaceId),
+          eq(pendingUploads.status, "scanning"),
+          eq(pendingUploads.claimedByRequestId, claimRequestId),
         ),
       )
       .returning({ id: pendingUploads.id });
