@@ -241,13 +241,12 @@ const BulkBody = ({ workspaceId, onClose }: BulkBodyProps) => {
         dependsOnPropertyId: id,
         condition: null,
       }));
-      return {
-        name: d.name.trim(),
-          contentType: d.contentType,
-          toolType: "ai-model" as const,
-          prompt: d.prompt,
-        ...(dependencies.length > 0 ? { dependencies } : {}),
-      };
+      return Object.assign({
+	name: d.name.trim(),
+	contentType: d.contentType,
+	toolType: 'ai-model' as const,
+	prompt: d.prompt
+}, dependencies.length > 0 ? { dependencies } : {});
     });
     try {
       await batch.mutateAsync({ items });
@@ -272,7 +271,7 @@ const BulkBody = ({ workspaceId, onClose }: BulkBodyProps) => {
   return (
     <>
       <header className="flex items-center gap-2 px-5 pt-4 pb-3">
-        <DialogTitle className="flex-1 text-[15px] leading-none font-medium">
+        <DialogTitle className="flex-1 text-base leading-tight font-semibold">
           {t("workspaces.properties.bulk.title")}
         </DialogTitle>
       </header>
@@ -442,7 +441,7 @@ const DraftCard = ({
         <Input
           autoComplete="off"
           autoFocus
-          className="text-foreground placeholder:text-foreground-label w-full px-0 text-sm font-medium"
+          className="text-foreground placeholder:text-foreground-placeholder w-full px-0 text-[15px] font-semibold tracking-tight"
           onChange={(e) => onChange({ name: e.target.value })}
           placeholder={t("workspaces.properties.newColumnName")}
           unstyled
