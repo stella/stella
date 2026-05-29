@@ -1167,11 +1167,26 @@ function convertTableRow(
   const rowIsLastRow = rowCnf?.lastRow ?? isLastRow;
   const totalCols = totalColumns ?? numCells;
 
+  // A literal `<w:tr/>` from a non-Word producer parses with zero cells. PM's
+  // tableRow content is `(tableCell | tableHeader)+`, so emit one placeholder
+  // cell spanning the table's grid width to keep the row valid.
+  let effectiveCells: TableCell[] = row.cells;
+  if (effectiveCells.length === 0) {
+    const fallback: TableCell = {
+      type: "tableCell",
+      content: [{ type: "paragraph", content: [] }],
+    };
+    if (totalCols > 1) {
+      fallback.formatting = { gridSpan: totalCols };
+    }
+    effectiveCells = [fallback];
+  }
+
   // Track column index for mapping to columnWidths (accounting for colspan)
   let colIndex = 0;
   const cells: PMNode[] = [];
 
-  for (const cellIndex_item of row.cells) {
+  for (const cellIndex_item of effectiveCells) {
     const cell = cellIndex_item;
     const colspan = cell.formatting?.gridSpan ?? 1;
 
