@@ -817,12 +817,13 @@ const computeCachingParams = (
   provider: AIProvider,
   decision: CachingDecision,
 ): CallOptions => {
-  const strippedPrompt = stripCacheMarkersFromPrompt(params.prompt);
-  const strippedProviderOptions = stripCacheMarkersFromProviderOptions(
-    params.providerOptions,
-  );
-
+  // OFF: strip every cache marker the caller may have set so the
+  // wire payload carries no caching state regardless of provider.
   if (!decision.enabled) {
+    const strippedPrompt = stripCacheMarkersFromPrompt(params.prompt);
+    const strippedProviderOptions = stripCacheMarkersFromProviderOptions(
+      params.providerOptions,
+    );
     return {
       ...params,
       prompt: strippedPrompt,
@@ -832,11 +833,15 @@ const computeCachingParams = (
     };
   }
 
-  let nextPrompt = strippedPrompt;
-  let nextProviderOptions = strippedProviderOptions;
+  // ON: preserve caller-placed breakpoints (e.g. `markCacheBreakpoint`
+  // on the document content in workflow extraction) and only add
+  // baseline markers — Anthropic system cacheControl if absent,
+  // OpenAI promptCacheKey derived from scopeKey.
+  let nextPrompt = params.prompt;
+  let nextProviderOptions = params.providerOptions;
 
   if (provider === "anthropic") {
-    nextPrompt = markAnthropicSystemEphemeral(strippedPrompt);
+    nextPrompt = markAnthropicSystemEphemeral(params.prompt);
   }
 
   if (
