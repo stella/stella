@@ -21,22 +21,6 @@ const parseSignedHeaders = (url: string): Set<string> => {
   return new Set(raw.split(";").map((h) => h.toLowerCase()));
 };
 
-/**
- * SDK v3 hoists `x-amz-*` headers into the query string when
- * presigning rather than listing them in `X-Amz-SignedHeaders`.
- * The signature still covers them because the full query string
- * is signed under SigV4. For integrity testing we therefore need
- * to check both locations.
- */
-const isHeaderBoundToUrl = (url: string, header: string): boolean => {
-  const parsed = new URL(url);
-  const signed = parseSignedHeaders(url);
-  if (signed.has(header)) {
-    return true;
-  }
-  return parsed.searchParams.has(header);
-};
-
 const HELLO_BODY = "hello";
 const HELLO_SHA256_BASE64 = sha256Base64(HELLO_BODY);
 const HELLO_BYTES = new TextEncoder().encode(HELLO_BODY);
@@ -61,28 +45,24 @@ describe("presignUploadUrl", () => {
     }
 
     const { url, headers } = result.value;
+    const signed = parseSignedHeaders(url);
 
-    // These four MUST be bound to the URL. `content-type` and
-    // `content-length` land in `X-Amz-SignedHeaders`; the two
-    // `x-amz-*` headers get hoisted into the query string. Both
-    // locations are covered by the SigV4 signature, so a leaked
-    // URL cannot be reused with a different payload, content type,
-    // or length.
-    expect(isHeaderBoundToUrl(url, "content-type")).toBe(true);
-    expect(isHeaderBoundToUrl(url, "content-length")).toBe(true);
-    expect(isHeaderBoundToUrl(url, "x-amz-checksum-sha256")).toBe(true);
-    expect(isHeaderBoundToUrl(url, "x-amz-sdk-checksum-algorithm")).toBe(true);
+    // All four MUST land in `X-Amz-SignedHeaders` so the client is
+    // *required* to send them with the exact values the API
+    // committed to. Letting any `x-amz-checksum-*` header hoist
+    // into the query string would mean the client could PUT
+    // without the header at all — S3 would then accept any body
+    // bytes, defeating the integrity gate finalize depends on.
+    expect(signed.has("content-type")).toBe(true);
+    expect(signed.has("content-length")).toBe(true);
+    expect(signed.has("x-amz-checksum-sha256")).toBe(true);
+    expect(signed.has("x-amz-sdk-checksum-algorithm")).toBe(true);
 
-    // Hoisted query params carry the actual value the API committed
-    // to. Tampering with these in the URL would invalidate the
-    // SigV4 signature.
+    // And specifically NOT in the query string — that would mean
+    // the SDK silently hoisted them despite `unhoistableHeaders`.
     const parsed = new URL(url);
-    expect(parsed.searchParams.get("x-amz-checksum-sha256")).toBe(
-      HELLO_SHA256_BASE64,
-    );
-    expect(parsed.searchParams.get("x-amz-sdk-checksum-algorithm")).toBe(
-      "SHA256",
-    );
+    expect(parsed.searchParams.has("x-amz-checksum-sha256")).toBe(false);
+    expect(parsed.searchParams.has("x-amz-sdk-checksum-algorithm")).toBe(false);
 
     expect(headers["content-type"]).toBe("application/octet-stream");
     expect(headers["content-length"]).toBe(String(HELLO_BYTES.byteLength));

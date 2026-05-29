@@ -157,16 +157,33 @@ export const presignUploadUrl = async ({
         ChecksumAlgorithm: "SHA256",
       });
 
-      // SDK v3 hoists `x-amz-*` headers into the query string when
-      // presigning rather than listing them in `X-Amz-SignedHeaders`.
-      // The signature still covers them — the full query string is
-      // part of SigV4 — so the integrity binding holds either way.
-      // `signableHeaders` here forces `content-type` and
-      // `content-length` into the signed-headers list so a client
-      // can't deviate from those values either.
+      // SDK v3 hoists `x-amz-*` headers into the query string by
+      // default when presigning. The SigV4 signature covers the
+      // whole query string, so a hoisted header still can't be
+      // tampered with — but a hoisted header doesn't *force* the
+      // client to send the matching header to S3, and S3 only
+      // verifies the body against `x-amz-checksum-sha256` when it
+      // arrives as a request header. Without that, a client could
+      // upload bytes that don't match the checksum and S3 would
+      // silently accept them, breaking the integrity gate that
+      // finalize relies on. `unhoistableHeaders` keeps the checksum
+      // pair in the request-header list and `signableHeaders`
+      // forces them into `X-Amz-SignedHeaders` so the client is
+      // required to send them with the exact values the API
+      // committed to. `signableHeaders` for `content-type` and
+      // `content-length` pins those too.
       const url = await getSignedUrl(client, command, {
         expiresIn,
-        signableHeaders: new Set(["content-type", "content-length"]),
+        signableHeaders: new Set([
+          "content-type",
+          "content-length",
+          "x-amz-checksum-sha256",
+          "x-amz-sdk-checksum-algorithm",
+        ]),
+        unhoistableHeaders: new Set([
+          "x-amz-checksum-sha256",
+          "x-amz-sdk-checksum-algorithm",
+        ]),
       });
 
       const headers: PresignedUploadHeaders = {
