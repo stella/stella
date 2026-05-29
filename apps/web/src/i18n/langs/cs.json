@@ -2254,7 +2254,7 @@
       "referencesItself": "Vlastnost odkazuje sama na sebe přes jiné vlastnosti",
       "rerunColumn": "Spustit znovu sloupec",
       "resultType": "Typ výsledku",
-      "returnsLabel": "Vrací",
+      "returnsLabel": "Formát",
       "saveChanges": "Uložit změny",
       "scopeFile": "Aktuální soubor",
       "scopeFileDescription": "Použít {property} a spustit tento soubor nyní.",

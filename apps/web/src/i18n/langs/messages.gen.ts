@@ -2257,7 +2257,7 @@ type Messages = {
       "referencesItself": "Property references itself through other properties";
       "rerunColumn": "Rerun column";
       "resultType": "Result type";
-      "returnsLabel": "Returns";
+      "returnsLabel": "Format";
       "saveChanges": "Save changes";
       "scopeFile": "Current file";
       "scopeFileDescription": "Use {property} and run this file now.";
