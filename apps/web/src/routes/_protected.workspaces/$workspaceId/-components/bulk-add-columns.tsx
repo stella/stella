@@ -283,28 +283,27 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
     const items: CreatePropertySpec[] = validDrafts.map((d) => {
       const isSelectType =
         d.contentType === "single-select" || d.contentType === "multi-select";
-      const selectFields =
-        isSelectType && d.options.length > 0
-          ? { options: d.options, fallback: d.fallback }
-          : {};
-      if (d.tool === "manual-input") {
-        return Object.assign({
-	name: d.name.trim(),
-	contentType: d.contentType,
-	toolType: 'manual-input' as const
-}, selectFields);
+      const includeOptions = isSelectType && d.options.length > 0;
+      const item: CreatePropertySpec = {
+        name: d.name.trim(),
+        contentType: d.contentType,
+        toolType: d.tool,
+      };
+      if (d.tool === "ai-model") {
+        item.prompt = d.prompt;
+        const dependencyIds = [...new Set([...d.fileIds, ...d.mentions])];
+        if (dependencyIds.length > 0) {
+          item.dependencies = dependencyIds.map((id) => ({
+            dependsOnPropertyId: id,
+            condition: null,
+          }));
+        }
       }
-      const dependencyIds = [...new Set([...d.fileIds, ...d.mentions])];
-      const dependencies = dependencyIds.map((id) => ({
-        dependsOnPropertyId: id,
-        condition: null,
-      }));
-      return Object.assign({
-	name: d.name.trim(),
-	contentType: d.contentType,
-	toolType: 'ai-model' as const,
-	prompt: d.prompt
-}, dependencies.length > 0 ? { dependencies } : {}, selectFields);
+      if (includeOptions) {
+        item.options = d.options;
+        item.fallback = d.fallback;
+      }
+      return item;
     });
     try {
       await batch.mutateAsync({ items });
