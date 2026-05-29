@@ -152,10 +152,7 @@ describe("pPrMark accept / reject — paragraph-mark resolution", () => {
   });
 
   test("rejectChange + inline insertion on same paragraph resolves both", () => {
-    const insertion = schema.marks["insertion"];
-    if (!insertion) {
-      throw new Error("schema lacks insertion mark");
-    }
+    const insertion = schema.marks["insertion"]!;
     const state = EditorState.create({
       schema,
       doc: schema.node("doc", null, [

@@ -52,7 +52,7 @@ describe("serializeParagraph — paragraph-mark tracked change", () => {
 
     const xml = serializeParagraph(paragraph);
 
-    const rPrMatch = xml.match(/<w:rPr>([\s\S]*?)<\/w:rPr>/u);
+    const rPrMatch = /<w:rPr>([\s\S]*?)<\/w:rPr>/u.exec(xml);
     expect(rPrMatch).not.toBeNull();
     const inner = rPrMatch?.[1] ?? "";
     const insIdx = inner.indexOf("<w:ins ");
