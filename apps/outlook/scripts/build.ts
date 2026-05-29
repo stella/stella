@@ -80,7 +80,7 @@ writeFileSync(
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Stella Outlook</title>
+    <title>stella for Outlook</title>
     <script type="text/javascript">
       window.__STELLA_HISTORY__ = {
         replaceState: window.history.replaceState,
