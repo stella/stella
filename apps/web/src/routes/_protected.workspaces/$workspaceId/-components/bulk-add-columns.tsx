@@ -1,15 +1,6 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useMemo, useRef, useState } from "react";
 
-import {
-  AlignLeftIcon,
-  CalendarIcon,
-  CircleDotIcon,
-  HashIcon,
-  PlusIcon,
-  TagsIcon,
-  Trash2Icon,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { PlusIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -17,69 +8,44 @@ import {
   Dialog,
   DialogClose,
   DialogPopup,
+  DialogTitle,
   DialogTrigger,
 } from "@stll/ui/components/dialog";
 import { Input } from "@stll/ui/components/input";
-import { Textarea } from "@stll/ui/components/textarea";
+import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
 
+import {
+  COMPOSER_CARD_CLASS,
+  TypeChipsRow,
+  useChipDefinitions,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/properties/composer-primitives";
+import type { CreatableContentType } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/composer-primitives";
+import { PropertyPromptInput } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
+import type { PropertyPromptFieldHandle } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
 import { usePropertiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
 import { useCreatePropertiesBatch } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
 import type { CreatePropertySpec } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
-
-type DraftType = "text" | "single-select" | "multi-select" | "date" | "int";
 
 type Draft = {
   id: number;
   name: string;
   prompt: string;
-  contentType: DraftType;
-};
-
-type TypeChip = {
-  type: DraftType;
-  icon: LucideIcon;
-  label: string;
-};
-
-const useTypeChips = (): readonly TypeChip[] => {
-  const t = useTranslations();
-  return [
-    {
-      type: "text",
-      icon: AlignLeftIcon,
-      label: t("workspaces.properties.chipText"),
-    },
-    {
-      type: "int",
-      icon: HashIcon,
-      label: t("workspaces.properties.chipNumber"),
-    },
-    {
-      type: "date",
-      icon: CalendarIcon,
-      label: t("workspaces.properties.chipDate"),
-    },
-    {
-      type: "single-select",
-      icon: CircleDotIcon,
-      label: t("workspaces.properties.chipSingle"),
-    },
-    {
-      type: "multi-select",
-      icon: TagsIcon,
-      label: t("workspaces.properties.chipMulti"),
-    },
-  ];
+  mentions: string[];
+  contentType: CreatableContentType;
 };
 
 const makeEmptyDraft = (id: number): Draft => ({
   id,
   name: "",
   prompt: "",
+  mentions: [],
   contentType: "text",
 });
+
+const promptFromHtml = (html: string): string =>
+  // eslint-disable-next-line sonarjs/slow-regex
+  html.replace(/<[^>]+>/gu, "").trim();
 
 type TriggerVariant = "icon" | "labelled" | "rail" | "none";
 
@@ -113,12 +79,14 @@ export const BulkAddColumns = ({
   return (
     <Dialog onOpenChange={setDialogOpen} open={dialogOpen}>
       <BulkTrigger triggerVariant={triggerVariant} />
-      <DialogPopup className="sm:max-w-[680px]">
+      <DialogPopup className="sm:max-w-[640px]">
         {dialogOpen && (
-          <BulkBody
-            onClose={() => setDialogOpen(false)}
-            workspaceId={workspaceId}
-          />
+          <Suspense fallback={<BulkBodyFallback />}>
+            <BulkBody
+              onClose={() => setDialogOpen(false)}
+              workspaceId={workspaceId}
+            />
+          </Suspense>
         )}
       </DialogPopup>
     </Dialog>
@@ -187,6 +155,13 @@ const BulkTrigger = ({ triggerVariant }: BulkTriggerProps) => {
   return null;
 };
 
+const BulkBodyFallback = () => (
+  <div className="space-y-3 p-5">
+    <Skeleton className="h-5 w-24" />
+    <Skeleton className="h-32 w-full" />
+  </div>
+);
+
 type BulkBodyProps = {
   workspaceId: string;
   onClose: () => void;
@@ -196,7 +171,7 @@ const BulkBody = ({ workspaceId, onClose }: BulkBodyProps) => {
   const t = useTranslations();
   const batch = useCreatePropertiesBatch({ workspaceId });
   const [drafts, setDrafts] = useState<Draft[]>(() => [makeEmptyDraft(0)]);
-  const nextIdRef = useNextIdRef(drafts.length);
+  const nextId = useNextId(drafts.length);
 
   const updateDraft = useCallback((id: number, patch: Partial<Draft>) => {
     setDrafts((prev) =>
@@ -211,8 +186,8 @@ const BulkBody = ({ workspaceId, onClose }: BulkBodyProps) => {
   }, []);
 
   const addDraft = useCallback(() => {
-    setDrafts((prev) => [...prev, makeEmptyDraft(nextIdRef())]);
-  }, [nextIdRef]);
+    setDrafts((prev) => [...prev, makeEmptyDraft(nextId())]);
+  }, [nextId]);
 
   const validDrafts = useMemo(
     () => drafts.filter((d) => d.name.trim().length > 0),
@@ -224,13 +199,24 @@ const BulkBody = ({ workspaceId, onClose }: BulkBodyProps) => {
     if (!canSubmit) {
       return;
     }
-    const items: CreatePropertySpec[] = validDrafts.map((d) => ({
-      name: d.name.trim(),
-      contentType: d.contentType,
-      ...(d.prompt.trim().length > 0
-        ? { toolType: "ai-model" as const, prompt: d.prompt.trim() }
-        : { toolType: "manual-input" as const }),
-    }));
+    const items: CreatePropertySpec[] = validDrafts.map((d) => {
+      const hasPrompt = promptFromHtml(d.prompt).length > 0;
+      const dependencies = d.mentions.map((id) => ({
+        dependsOnPropertyId: id,
+        condition: null,
+      }));
+      return {
+        name: d.name.trim(),
+          contentType: d.contentType,
+        ...(hasPrompt
+          ? {
+              toolType: "ai-model" as const,
+              prompt: d.prompt,
+              ...(dependencies.length > 0 ? { dependencies } : {}),
+            }
+          : { toolType: "manual-input" as const }),
+      };
+    });
     try {
       await batch.mutateAsync({ items });
       stellaToast.add({
@@ -254,24 +240,24 @@ const BulkBody = ({ workspaceId, onClose }: BulkBodyProps) => {
   return (
     <>
       <header className="flex items-center gap-2 px-5 pt-4 pb-3">
-        <h2 className="flex-1 text-[15px] leading-none font-medium">
+        <DialogTitle className="flex-1 text-[15px] leading-none font-medium">
           {t("workspaces.properties.bulk.title")}
-        </h2>
+        </DialogTitle>
       </header>
 
       <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto px-5 pt-1 pb-2">
-        {drafts.map((draft, index) => (
-          <DraftRow
+        {drafts.map((draft) => (
+          <DraftCard
             canRemove={drafts.length > 1}
             draft={draft}
-            index={index}
             key={draft.id}
             onChange={(patch) => updateDraft(draft.id, patch)}
             onRemove={() => removeDraft(draft.id)}
+            workspaceId={workspaceId}
           />
         ))}
         <Button
-          className="text-muted-foreground hover:text-foreground hover:bg-accent w-fit gap-1 px-2 font-normal"
+          className="text-foreground-label hover:text-foreground hover:bg-accent w-fit gap-1 px-2 font-normal"
           onClick={addDraft}
           size="xs"
           type="button"
@@ -294,18 +280,14 @@ const BulkBody = ({ workspaceId, onClose }: BulkBodyProps) => {
           }}
           size="sm"
         >
-          {validDrafts.length <= 1
-            ? t("workspaces.properties.bulk.createOne")
-            : t("workspaces.properties.bulk.createMany", {
-                count: String(validDrafts.length),
-              })}
+          {t("workspaces.properties.bulk.title")}
         </Button>
       </div>
     </>
   );
 };
 
-const useNextIdRef = (initial: number) => {
+const useNextId = (initial: number) => {
   const ref = useRef(initial);
   return useCallback(() => {
     ref.current += 1;
@@ -313,34 +295,51 @@ const useNextIdRef = (initial: number) => {
   }, []);
 };
 
-type DraftRowProps = {
+type DraftCardProps = {
   draft: Draft;
-  index: number;
   canRemove: boolean;
+  workspaceId: string;
   onChange: (patch: Partial<Draft>) => void;
   onRemove: () => void;
 };
 
-const DraftRow = ({
+const DraftCard = ({
   draft,
-  index,
   canRemove,
+  workspaceId,
   onChange,
   onRemove,
-}: DraftRowProps) => {
+}: DraftCardProps) => {
   const t = useTranslations();
-  const chips = useTypeChips();
+  const chipDefs = useChipDefinitions();
+
+  const promptField: PropertyPromptFieldHandle = useMemo(
+    () => ({
+      name: `draft-${draft.id}`,
+      state: { value: draft.prompt },
+      handleChange: (next) => onChange({ prompt: next }),
+      handleBlur: () => undefined,
+    }),
+    // The editor reads `state.value` only on init; subsequent updates
+    // flow through `handleChange`, so a stable handle is fine.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [draft.id],
+  );
+
+  const handleMentions = useCallback(
+    (mentions: string[]) => {
+      onChange({ mentions });
+    },
+    [onChange],
+  );
 
   return (
-    <div className="bg-muted/24 flex flex-col gap-2 rounded-[9px] border p-2">
+    <div className={COMPOSER_CARD_CLASS}>
       <div className="flex items-center gap-2">
-        <span className="text-muted-foreground w-5 text-center text-xs tabular-nums">
-          {index + 1}
-        </span>
         <Input
           autoComplete="off"
-          autoFocus={index === 0}
-          className="text-foreground placeholder:text-foreground-label flex-1 border-0 bg-transparent text-sm font-medium shadow-none focus-visible:ring-0 focus-visible:outline-none"
+          autoFocus
+          className="text-foreground placeholder:text-foreground-label border-0 bg-transparent text-sm font-medium shadow-none focus-visible:ring-0 focus-visible:outline-none"
           onChange={(e) => onChange({ name: e.target.value })}
           placeholder={t("workspaces.properties.newColumnName")}
           value={draft.name}
@@ -348,45 +347,35 @@ const DraftRow = ({
         {canRemove && (
           <Button
             aria-label={t("workspaces.properties.bulk.removeRow")}
-            className="text-muted-foreground hover:text-foreground size-7"
+            className="text-foreground-placeholder hover:text-foreground size-6"
             onClick={onRemove}
             size="icon"
             type="button"
             variant="ghost"
           >
-            <Trash2Icon className="size-3.5" />
+            <XIcon className="size-3.5" />
           </Button>
         )}
       </div>
 
-      <Textarea
-        className="min-h-[60px] resize-none text-sm"
-        onChange={(e) => onChange({ prompt: e.target.value })}
-        placeholder={t("workspaces.properties.bulk.promptPlaceholder")}
-        value={draft.prompt}
+      <PropertyPromptInput
+        autoPopulateOnEmpty={false}
+        field={promptField}
+        onMentionsChange={handleMentions}
+        placeholder={t("workspaces.properties.extractionPlaceholder")}
+        propertyId=""
+        propertyName={draft.name}
+        variant="minimal"
+        workspaceId={workspaceId}
       />
 
-      <div className="flex flex-wrap gap-1.5">
-        {chips.map(({ type, icon: Icon, label }) => {
-          const active = draft.contentType === type;
-          return (
-            <button
-              className={cn(
-                "border-border ring-ring focus-visible:ring-offset-background inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs transition-colors outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
-                active
-                  ? "bg-foreground text-background border-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground bg-transparent",
-              )}
-              key={type}
-              onClick={() => onChange({ contentType: type })}
-              type="button"
-            >
-              <Icon className="size-3" />
-              {label}
-            </button>
-          );
-        })}
-      </div>
+      <TypeChipsRow
+        chipDefs={chipDefs}
+        contentType={draft.contentType}
+        onContentTypeChange={(next) => onChange({ contentType: next })}
+        showSeparator
+        typeChanged={false}
+      />
     </div>
   );
 };

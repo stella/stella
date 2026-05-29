@@ -80,6 +80,7 @@ export type CreatePropertySpec = {
   contentType: PropertyContentType;
   toolType?: "ai-model" | "manual-input";
   prompt?: string;
+  dependencies?: CreatePropertyDependency[];
 };
 
 export const useCreatePropertiesBatch = ({
@@ -100,6 +101,16 @@ export const useCreatePropertiesBatch = ({
             contentType: item.contentType,
             ...(item.toolType ? { toolType: item.toolType } : {}),
             ...(item.prompt === undefined ? {} : { prompt: item.prompt }),
+            ...(item.dependencies && item.dependencies.length > 0
+              ? {
+                  dependencies: item.dependencies.map((dep) => ({
+                    dependsOnPropertyId: toSafeId<"property">(
+                      dep.dependsOnPropertyId,
+                    ),
+                    condition: dep.condition,
+                  })),
+                }
+              : {}),
           })),
         });
 
