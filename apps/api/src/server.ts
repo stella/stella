@@ -308,6 +308,9 @@ const api = new Elysia()
         if (env.EXTENSION_ORIGIN) {
           origins.push(env.EXTENSION_ORIGIN);
         }
+        if (env.OUTLOOK_ORIGIN) {
+          origins.push(env.OUTLOOK_ORIGIN);
+        }
         return origins;
       })(),
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
