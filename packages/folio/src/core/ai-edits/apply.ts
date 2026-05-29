@@ -6,10 +6,7 @@ import {
   type FolioBlockId,
 } from "../types/block-id";
 import { buildCleanBlockText } from "./clean-text";
-import {
-  hashFolioAIBlockText,
-  normalizeFolioAIBlockText,
-} from "./snapshot";
+import { hashFolioAIBlockText, normalizeFolioAIBlockText } from "./snapshot";
 import type {
   FolioAIEditAppliedOperation,
   FolioAIEditApplyMode,

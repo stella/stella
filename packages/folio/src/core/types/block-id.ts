@@ -49,8 +49,7 @@ const formatSequentialBlockId = (index: number): string =>
  * here means every other site can keep `typescript/no-unsafe-type-assertion`
  * on.
  */
-const brand = (value: string): FolioBlockId =>
-  value as unknown as FolioBlockId;
+const brand = (value: string): FolioBlockId => value as unknown as FolioBlockId;
 
 export const deriveBlockId = ({
   paraId,
