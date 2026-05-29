@@ -104,6 +104,23 @@ const readWordAttr = (element: slimdom.Element, localName: string) =>
   element.getAttribute(localName) ??
   undefined;
 
+const W14_NS = "http://schemas.microsoft.com/office/word/2010/wordml";
+
+/**
+ * Paragraph ids are minted by Word in the `w14:paraId` attribute —
+ * the in-browser DocxEditor reads from there, so the two paths only
+ * agree if the workflow's parser does the same. Some upstream
+ * pipelines (templating tools, conversion scripts) inject their own
+ * `w:paraId` first; the generic {@link readWordAttr} would return
+ * that stale id, the AI would cite it, and the live editor — which
+ * never saw it — would refuse to scroll. Read w14 first here so the
+ * id we hand the AI is the same one the editor exposes.
+ */
+const readParaId = (element: slimdom.Element): string | undefined =>
+  element.getAttributeNS(W14_NS, "paraId") ??
+  element.getAttribute("w14:paraId") ??
+  readWordAttr(element, "paraId");
+
 const readReviewMetadata = (element: slimdom.Element): DocxReviewMetadata => {
   const metadata: DocxReviewMetadata = {};
   const author = readWAttr(element, "author");
@@ -796,7 +813,7 @@ const extractBlocksFromXmlDocument = (
     const { kind, displayLabel } = detectKind(paragraph);
     const styleId = getStyleId(paragraph);
     blockIndex += 1;
-    const sourceParaId = readWordAttr(paragraph, "paraId") ?? null;
+    const sourceParaId = readParaId(paragraph) ?? null;
     // Single source of truth shared with the in-browser snapshot —
     // see packages/folio/src/core/types/block-id.ts. Any id minted
     // here resolves in `createFolioAIEditSnapshot` without a mapping

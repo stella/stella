@@ -93,7 +93,7 @@ const createJustificationSchema = (filenames: JustificationFilenames) => {
       if (filename.kind === "pdf-bates") {
         return `- ${filename.simplified} (PDF — cite Bates stamps from the page corners, e.g. ${filename.simplified}-0002)`;
       }
-      return `- ${filename.simplified} (DOCX — cite folio blockIds from the JSON list, e.g. b-0010)`;
+      return `- ${filename.simplified} (DOCX — cite folio blockIds from the JSON list, e.g. seq-0010)`;
     })
     .join("\n");
 
@@ -107,7 +107,7 @@ const createJustificationSchema = (filenames: JustificationFilenames) => {
   if (hasDocx) {
     citationGuide.push(
       "DOCX files: each citation is a folio blockId taken verbatim " +
-        'from that file\'s JSON block list (e.g., "b-0010").',
+        'from that file\'s JSON block list (e.g., "seq-0010").',
     );
   }
   if (hasPdf && hasDocx) {
@@ -120,7 +120,7 @@ const createJustificationSchema = (filenames: JustificationFilenames) => {
   const exampleFile = filenames[0];
   const exampleCitation =
     exampleFile?.kind === "docx-folio"
-      ? "b-0010"
+      ? "seq-0010"
       : `${exampleFile?.simplified ?? "F0"}-0002`;
 
   // Schema is converted to JSON Schema by the Vercel AI SDK
