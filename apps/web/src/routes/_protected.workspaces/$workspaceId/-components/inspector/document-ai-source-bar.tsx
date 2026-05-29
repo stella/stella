@@ -476,10 +476,11 @@ const getPageNumberFromElement = (element: Element): number | null => {
 };
 
 const findFolioBlockPage = (blockId: string): number | null => {
-  const escaped =
-    typeof CSS !== "undefined" && typeof CSS.escape === "function"
-      ? CSS.escape(blockId)
-      : blockId.replace(/"/gu, '\\"');
+  // CSS.escape is universally available in modern browsers we
+  // support; the previous "manually escape only quotes" fallback
+  // failed to escape `\`, `]`, or other CSS identifier specials,
+  // which CodeQL correctly flagged as incomplete encoding.
+  const escaped = CSS.escape(blockId);
 
   // paraId path: find the paragraph in the PM source tree, take
   // its ordinal, look up the same ordinal in the layout tree.
