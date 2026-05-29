@@ -133,6 +133,7 @@ export type {
   BlockSdt,
   ParagraphContent,
   Paragraph,
+  ParagraphMarkChange,
   HeaderFooterType,
   HeaderReference,
   FooterReference,

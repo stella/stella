@@ -364,6 +364,7 @@ const paragraphNodeSpec: NodeSpec = {
     _originalFormatting: { default: null },
     _sectionProperties: { default: null },
     _propertyChanges: { default: null },
+    pPrMark: { default: null },
   },
   parseDOM: [
     {

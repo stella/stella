@@ -467,6 +467,9 @@ function paragraphFormattingToAttrs(
   if (paragraph.propertyChanges && paragraph.propertyChanges.length > 0) {
     attrs._propertyChanges = [...paragraph.propertyChanges];
   }
+  if (paragraph.pPrMark) {
+    attrs.pPrMark = paragraph.pPrMark;
+  }
 
   // Helper: assign a value only when defined
   const set = <K extends keyof ParagraphAttrs>(
