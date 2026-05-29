@@ -108,7 +108,6 @@ export const TypeChipsRow = ({
   manualChip,
 }: TypeChipsRowProps) => {
   const t = useTranslations();
-  const manualActive = manualChip?.active === true;
   return (
     <div className="flex flex-col gap-1.5">
       <div

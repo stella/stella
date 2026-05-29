@@ -254,7 +254,7 @@ export const DocumentAiSourceBar = ({
     const firstDocxCitation = citations.find(
       (citation) => citation.kind === "docx-folio",
     );
-    if (!firstDocxCitation || firstDocxCitation.kind !== "docx-folio") {
+    if (!firstDocxCitation) {
       return;
     }
     scrolledForDocxJustificationRef.current = justificationId;
@@ -469,8 +469,8 @@ export const DocumentAiSourceBar = ({
  * to them).
  */
 const getPageNumberFromElement = (element: Element): number | null => {
-  const pageEl = element.closest("[data-page-number]");
-  const raw = pageEl?.getAttribute("data-page-number") ?? null;
+  const pageEl = element.closest<HTMLElement>("[data-page-number]");
+  const raw = pageEl?.dataset["pageNumber"] ?? null;
   const parsed = raw === null ? Number.NaN : Number.parseInt(raw, 10);
   return Number.isFinite(parsed) ? parsed : null;
 };
@@ -491,7 +491,7 @@ const findFolioBlockPage = (blockId: string): number | null => {
       document.querySelectorAll(".paged-editor__hidden-pm [data-para-id]"),
     );
     const ordinal = pmParagraphs.indexOf(pmParagraph);
-    if (ordinal >= 0) {
+    if (ordinal !== -1) {
       const layoutBlocks = document.querySelectorAll(
         ".layout-page [data-block-id]",
       );

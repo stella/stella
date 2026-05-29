@@ -139,14 +139,19 @@ const PropertyCell = ({
     const justFieldId = justification?.fileFieldIds.at(0);
     const fileFieldId = justFieldId ?? firstFile?.fieldId;
 
-    // When the justification references a specific file,
-    // look it up so label and mimeType match the actual PDF.
-    const referencedFile =
+    // When the justification references a specific file, look it up
+    // so label, mimeType, and the owning propertyId all match the
+    // file the AI cited. Entries (not values) because the Record key
+    // is the propertyId — that's the identifier downstream consumers
+    // (edit-session, desktop-open) want on the inspector tab.
+    const referencedFileEntry =
       justFieldId !== undefined
-        ? Object.values(entity.fields).find(
-            (f) => f.id === justFieldId && f.content.type === "file",
+        ? Object.entries(entity.fields).find(
+            ([, f]) => f.id === justFieldId && f.content.type === "file",
           )
         : undefined;
+    const referencedFile = referencedFileEntry?.[1];
+    const referencedFilePropertyId = referencedFileEntry?.[0];
 
     const fileName =
       (referencedFile?.content.type === "file"
@@ -173,8 +178,7 @@ const PropertyCell = ({
     // backend reject the open with "Target property is not an
     // editable DOCX field". The AI cell's identity travels via
     // justificationFieldId, which is what the source bar reads.
-    const filePropertyId =
-      referencedFile?.propertyId ?? firstFile?.propertyId;
+    const filePropertyId = referencedFilePropertyId ?? firstFile?.propertyId;
 
     if (fileFieldId && filePropertyId) {
       return (
@@ -259,7 +263,7 @@ const WithOpenEntityButton = ({
   const t = useTranslations();
   const openFile = useInspectorStore((s) => s.openFile);
   const isFileAlreadyOpen = useInspectorStore((s) =>
-    s.tabs.some((t) => t.type === "pdf" && t.id === fieldId),
+    s.tabs.some((tab) => tab.type === "pdf" && tab.id === fieldId),
   );
   const retryCell = useRetryCell(workspaceId);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -319,6 +323,12 @@ const WithOpenEntityButton = ({
     "text-foreground-ghost hover:text-foreground hidden h-6 gap-1 px-1.5 text-xs opacity-70 group-data-[expanded-cell]/cell-content:flex hover:opacity-100";
 
   return (
+    // The wrapper onClick is a click-only enhancement: when the
+    // referenced file is already open in the inspector, clicking
+    // anywhere in the cell pushes that cell's justification onto
+    // the open tab. Keyboard users have a fully equivalent path via
+    // the inline Preview button rendered below.
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- see comment above
     <div className="w-full min-w-0 text-start" onClick={handleCellClick}>
       {children}
       <div
