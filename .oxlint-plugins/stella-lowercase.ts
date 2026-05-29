@@ -11,20 +11,30 @@
 //   <p>Welcome to Stella</p>
 //   `New sign-in to your Stella account`
 //   "Powered by Stella."
+//   `${label} Stella refused`               // non-head template quasi
 //
 // Allows:
-//   "Stella API request failed"           // start of string = sentence start
-//   "Workflow paused. Stella resumed"     // after `. ` = sentence start
-//   "StellaMark" / "stellaToast"          // PascalCase / camelCase identifier text
-//   "Stella-macos-universal.dmg"          // asset filename (hyphen suffix)
-//   "Stella.app" / "Stella.dmg"           // bundle identifier (dot + lowercase)
-//   "./components/StellaMark"             // path string (import / asset path)
-//   import x from "@stll/stella-thing"    // import / export source strings
+//   "Stella API request failed"             // start of string = sentence start
+//   "Workflow paused. Stella resumed"       // after `. ` = sentence start
+//   "„Stella" je dobrá volba"               // after typographic opener
+//   "¿Stella está cargando?"                // after Spanish opener
+//   "StellaMark" / "stellaToast"            // PascalCase / camelCase identifier text
+//   "Stella-macos-universal.dmg"            // asset filename (hyphen suffix)
+//   "Stella.app" / "Stella.dmg"             // bundle identifier (dot + lowercase)
+//   "./components/StellaMark"               // path string (import / asset path)
+//   import x from "@stll/stella-thing"      // import / export source strings
 //
 // Sentence-start positions:
-//   - Start of the literal value (including template-quasi start)
+//   - Start of the first quasi of a template literal, or start of a
+//     non-template string literal / JSX text.
 //   - Immediately after `.`, `!`, `?`, `…`, or a newline, optionally
-//     followed by whitespace and quoting characters.
+//     followed by whitespace and opening quote / bracket characters
+//     (ASCII `"`, `'`, `` ` ``, `(`, `[`, `{`; typographic
+//     `“`, `”`, `‘`, `’`, `„`, `«`, `»`, `‹`, `›`; Spanish `¿`, `¡`).
+//
+// Non-head template quasis (text after `${…}`) do not get the
+// start-of-text sentence-start carve-out, because the preceding
+// expression could substitute any value.
 //
 // Disable narrowly with `// oxlint-disable-next-line
 // stella-lowercase/stella-lowercase` and a comment explaining why the
@@ -58,36 +68,61 @@ const STELLA_PATTERN = /\bStella\b/gu;
 // and `/Applications/Stella.app/Contents/MacOS/stella` don't flag.
 const WHOLE_PATH = /^[\w./\\:~@-]+$/u;
 
-// Walk back past whitespace and quoting characters to find the previous
+// Whitespace characters to skip when scanning back for the previous
+// significant character (ASCII space, tab, NBSP).
+const SKIP_WHITESPACE = new Set([" ", "\t", " "]);
+
+// Quote and bracket characters that open a quoted span. Sentence-start
+// position is then determined by what precedes the opener. Covers ASCII
+// quotes plus the typographic / localized quote families our copy uses
+// (curly EN, German low-9 `„`, French/Spanish guillemets, single
+// guillemets) and Spanish opening exclamation / question marks.
+const SKIP_OPENERS = new Set([
+  '"',
+  "'",
+  "`",
+  "(",
+  "[",
+  "{",
+  "“",
+  "”",
+  "‘",
+  "’",
+  "„",
+  "«",
+  "»",
+  "‹",
+  "›",
+  "¿",
+  "¡",
+]);
+
+const SENTENCE_TERMINATORS = new Set([".", "!", "?", "…", "\n", "\r"]);
+
+// Walk back past whitespace and quote-like openers to find the previous
 // significant character. Sentence-start when that character is a
-// terminator (`. ! ? …`) or a newline, or when no previous character
-// exists at all.
-const isSentenceStart = (text: string, idx: number): boolean => {
+// terminator (`. ! ? …`) or a newline. When no preceding character exists,
+// only treat as sentence-start if `isContinuation` is false; non-head
+// template quasis can be preceded by arbitrary expression output, so a
+// bare quasi-start is not a sentence boundary.
+const isSentenceStart = (
+  text: string,
+  idx: number,
+  isContinuation: boolean,
+): boolean => {
   let i = idx - 1;
   while (i >= 0) {
     const ch = text[i];
-    if (ch === " " || ch === "\t" || ch === " ") {
-      i--;
-      continue;
-    }
-    if (ch === '"' || ch === "'" || ch === "`" || ch === "(" || ch === "[") {
+    if (SKIP_WHITESPACE.has(ch) || SKIP_OPENERS.has(ch)) {
       i--;
       continue;
     }
     break;
   }
   if (i < 0) {
-    return true;
+    return !isContinuation;
   }
-  const prev = text[i];
-  return (
-    prev === "." ||
-    prev === "!" ||
-    prev === "?" ||
-    prev === "…" ||
-    prev === "\n" ||
-    prev === "\r"
-  );
+  return SENTENCE_TERMINATORS.has(text[i]);
 };
 
 // Treat `Stella-…`, `Stella_…`, and `Stella.<lowercase>…` as code-like
@@ -108,6 +143,7 @@ const checkText = (
   context: RuleContext,
   node: unknown,
   value: string,
+  isContinuation: boolean,
 ): void => {
   if (!value.includes("Stella")) {
     return;
@@ -120,7 +156,10 @@ const checkText = (
   while (match !== null) {
     const start = match.index;
     const end = start + match[0].length;
-    if (!isSentenceStart(value, start) && !isCodeLikeSuffix(value, end)) {
+    if (
+      !isSentenceStart(value, start, isContinuation) &&
+      !isCodeLikeSuffix(value, end)
+    ) {
       context.report({
         node,
         messageId: "lowercaseStella",
@@ -144,6 +183,22 @@ const isImportOrExportSource = (literalNode: AstNode): boolean => {
   );
 };
 
+const quasiText = (quasi: unknown): string | null => {
+  if (!isAstNode(quasi)) {
+    return null;
+  }
+  const raw = quasi.value;
+  if (typeof raw !== "object" || raw === null) {
+    return null;
+  }
+  const cooked = (raw as { cooked?: unknown }).cooked;
+  if (typeof cooked === "string") {
+    return cooked;
+  }
+  const rawValue = (raw as { raw?: unknown }).raw;
+  return typeof rawValue === "string" ? rawValue : null;
+};
+
 export default {
   meta: { name: "stella-lowercase" },
   rules: {
@@ -164,28 +219,26 @@ export default {
             if (isImportOrExportSource(node)) {
               return;
             }
-            checkText(context, node, node.value);
+            checkText(context, node, node.value, false);
           },
-          TemplateElement(node: AstNode) {
-            const raw = node.value;
-            if (typeof raw !== "object" || raw === null) {
+          TemplateLiteral(node: AstNode) {
+            if (!Array.isArray(node.quasis)) {
               return;
             }
-            const cooked = (raw as { cooked?: unknown }).cooked;
-            if (typeof cooked === "string") {
-              checkText(context, node, cooked);
-              return;
-            }
-            const rawValue = (raw as { raw?: unknown }).raw;
-            if (typeof rawValue === "string") {
-              checkText(context, node, rawValue);
+            for (let i = 0; i < node.quasis.length; i++) {
+              const quasi = node.quasis[i];
+              const value = quasiText(quasi);
+              if (value === null) {
+                continue;
+              }
+              checkText(context, quasi, value, i > 0);
             }
           },
           JSXText(node: AstNode) {
             if (typeof node.value !== "string") {
               return;
             }
-            checkText(context, node, node.value);
+            checkText(context, node, node.value, false);
           },
         };
       },

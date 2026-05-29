@@ -23,6 +23,10 @@ const _midSentenceTemplate = (status: number): string =>
 // oxlint-disable-next-line stella-lowercase/stella-lowercase
 const _periodButNotImmediate = "End. The Stella step";
 
+const _nonHeadQuasi = (label: string): string =>
+  // oxlint-disable-next-line stella-lowercase/stella-lowercase
+  `${label} Stella refused`;
+
 const _jsxMidSentence = () => (
   <p>
     {/* oxlint-disable-next-line stella-lowercase/stella-lowercase */}
@@ -59,11 +63,20 @@ const _afterNewline = "Heading\nStella keeps going";
 
 const _alreadyLowercase = "Welcome to stella";
 
+const _germanLowQuote = "„Stella ist eine gute Wahl";
+
+const _frenchGuillemet = "« Stella » est en ligne";
+
+const _spanishInverted = "¿Stella está cargando?";
+
+const _curlyDoubleQuote = "“Stella” is the brand wordmark";
+
 export const __stellaLowercaseFixture = {
   _midSentenceString,
   _midSentenceError,
   _midSentenceTemplate,
   _periodButNotImmediate,
+  _nonHeadQuasi,
   _jsxMidSentence,
   _xmlMetadataMidString,
   _stringStart,
@@ -78,4 +91,8 @@ export const __stellaLowercaseFixture = {
   _pascalSuffix,
   _afterNewline,
   _alreadyLowercase,
+  _germanLowQuote,
+  _frenchGuillemet,
+  _spanishInverted,
+  _curlyDoubleQuote,
 };
