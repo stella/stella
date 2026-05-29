@@ -11,7 +11,11 @@ import { Result } from "better-result";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import { AGENT_SKILL_SCOPES, pendingUploads } from "@/api/db/schema";
+import {
+  AGENT_SKILL_SCOPES,
+  pendingUploads,
+  type PendingUploadPurposeData,
+} from "@/api/db/schema";
 import { validateAgentSkill } from "@/api/handlers/uploads/agent-skill";
 import { validateEntityCreate } from "@/api/handlers/uploads/entity-create";
 import { validateEntityVersion } from "@/api/handlers/uploads/entity-version";
@@ -72,6 +76,22 @@ const presignBodySchema = t.Union([
 
 type PresignBody = Static<typeof presignBodySchema>;
 
+const toPurposeData = (purposeBody: PresignBody): PendingUploadPurposeData => {
+  if (purposeBody.purpose === "entity_create") {
+    return {
+      type: "entity_create",
+      propertyId: purposeBody.propertyId,
+    };
+  }
+  if (purposeBody.purpose === "entity_version") {
+    return {
+      type: "entity_version",
+      entityId: purposeBody.entityId,
+    };
+  }
+  return { type: "agent_skill", scope: purposeBody.scope };
+};
+
 const config = {
   permissions: { entity: ["create"] },
   body: presignBodySchema,
@@ -85,10 +105,8 @@ const presignUpload = createSafeHandler(
     workspaceId,
     user,
     memberRole,
-    body,
+    body: purposeBody,
   }) {
-    const purposeBody = body as PresignBody;
-
     if (purposeBody.purpose === "entity_create") {
       const validation = yield* validateEntityCreate({
         safeDb,
@@ -107,7 +125,7 @@ const presignUpload = createSafeHandler(
       if (validation.status === "error") {
         return validation;
       }
-    } else if (purposeBody.purpose === "agent_skill") {
+    } else {
       const validation = yield* validateAgentSkill({
         memberRole,
         scope: purposeBody.scope,
@@ -154,22 +172,7 @@ const presignUpload = createSafeHandler(
           workspaceId,
           userId: user.id,
           purpose: purposeBody.purpose,
-          purposeData: (() => {
-            switch (purposeBody.purpose) {
-              case "entity_create":
-                return {
-                  type: "entity_create",
-                  propertyId: purposeBody.propertyId,
-                };
-              case "entity_version":
-                return {
-                  type: "entity_version",
-                  entityId: purposeBody.entityId,
-                };
-              case "agent_skill":
-                return { type: "agent_skill", scope: purposeBody.scope };
-            }
-          })(),
+          purposeData: toPurposeData(purposeBody),
           declaredName: purposeBody.name,
           declaredMime: purposeBody.mimeType,
           declaredSize: purposeBody.size,

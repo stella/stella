@@ -15,8 +15,8 @@
  *   Reuses `resolveFileName` (filename de-duplication) and
  *   `allocateEntityStamp` (workspace doc-sequence) from the
  *   existing slice. Mirrors the original handler's audit log,
- *   workspace `lastActivityAt` bump, and async PDF-derivative +
- *   extraction enqueues.
+ *   workspace `lastActivityAt` bump, and post-promote PDF-derivative
+ *   + extraction enqueues.
  */
 import { Result } from "better-result";
 import { and, eq, like } from "drizzle-orm";
@@ -41,6 +41,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { LIMITS } from "@/api/lib/limits";
+import { getS3 } from "@/api/lib/s3";
 import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
@@ -156,14 +157,17 @@ export type FinalizeEntityCreateProps = {
   declaredSha256Hex: string;
   purposeData: Extract<PendingUploadPurposeData, { type: "entity_create" }>;
   scanWarnings: string[] | undefined;
+  promoteTmpObject: (
+    finalKey: string,
+  ) => Promise<Result<void, UploadFinalizeError>>;
 };
 
 /**
  * Domain transaction for `entity_create`. Called by the generic
- * finalize runtime after scan-pass and after the bytes have been
- * server-side copied from `tmp/` to their final key. Returns the
- * same response shape as the legacy multipart handler so the web
- * UI doesn't need a discriminated response type.
+ * finalize runtime after scan-pass. It promotes the staged object
+ * before committing DB rows that point at the final key. Returns the
+ * same response shape as the legacy multipart handler so the web UI
+ * doesn't need a discriminated response type.
  *
  * @yields safeDb errors out to the parent safe-handler.
  */
@@ -180,6 +184,7 @@ export const finalizeEntityCreate = async function* ({
   declaredSha256Hex,
   purposeData,
   scanWarnings,
+  promoteTmpObject,
 }: FinalizeEntityCreateProps) {
   const sanitizedName = sanitizeFilename(declaredName);
 
@@ -215,100 +220,117 @@ export const finalizeEntityCreate = async function* ({
     mimeType: declaredMime,
   });
 
-  const resolvedName = yield* Result.await(
-    safeDb(async (tx) => {
-      const renamed = await resolveFileName({
-        tx,
-        propertyId: purposeData.propertyId,
-        name: sanitizedName,
-      });
-      const entityStamp = await allocateEntityStamp(tx, workspaceId);
+  const promoteResult = await promoteTmpObject(finalKey);
+  if (Result.isError(promoteResult)) {
+    return promoteResult;
+  }
 
-      await tx.insert(entities).values({
-        id: entityId,
-        workspaceId,
-        name: renamed.value,
-        createdBy: userId,
-        docSequence: entityStamp.docSequence,
-      });
-      await tx.insert(entityVersions).values({
-        id: entityVersionId,
-        workspaceId,
-        entityId,
-        versionNumber: 1,
-        stamp: entityStamp.stamp,
-        verificationCode: entityStamp.verificationCode,
-      });
-      await tx
-        .update(entities)
-        .set({ currentVersionId: entityVersionId })
-        .where(eq(entities.id, entityId));
-      await tx.insert(fields).values({
-        id: fieldId,
-        workspaceId,
-        propertyId: purposeData.propertyId,
-        entityVersionId,
-        content: {
-          type: "file",
-          version: 1,
-          id: fileId,
-          fileName: renamed.value,
-          mimeType: declaredMime,
-          sizeBytes: declaredSize,
+  const resolvedNameResult = await safeDb(async (tx) => {
+    const renamed = await resolveFileName({
+      tx,
+      propertyId: purposeData.propertyId,
+      name: sanitizedName,
+    });
+    const entityStamp = await allocateEntityStamp(tx, workspaceId);
+
+    await tx.insert(entities).values({
+      id: entityId,
+      workspaceId,
+      name: renamed.value,
+      createdBy: userId,
+      docSequence: entityStamp.docSequence,
+    });
+    await tx.insert(entityVersions).values({
+      id: entityVersionId,
+      workspaceId,
+      entityId,
+      versionNumber: 1,
+      stamp: entityStamp.stamp,
+      verificationCode: entityStamp.verificationCode,
+    });
+    await tx
+      .update(entities)
+      .set({ currentVersionId: entityVersionId })
+      .where(eq(entities.id, entityId));
+    await tx.insert(fields).values({
+      id: fieldId,
+      workspaceId,
+      propertyId: purposeData.propertyId,
+      entityVersionId,
+      content: {
+        type: "file",
+        version: 1,
+        id: fileId,
+        fileName: renamed.value,
+        mimeType: declaredMime,
+        sizeBytes: declaredSize,
+        encrypted,
+        sha256Hex: declaredSha256Hex,
+        pdfFileId: null,
+        pdfDerivative: pdfDerivativeStateForFile({
           encrypted,
-          sha256Hex: declaredSha256Hex,
-          pdfFileId: null,
-          pdfDerivative: pdfDerivativeStateForFile({
-            encrypted,
-            mimeType: declaredMime,
-          }),
-          ...(scanWarnings !== undefined && { scanWarnings }),
-        },
-      });
-      await tx
-        .update(workspaces)
-        .set({ lastActivityAt: new Date() })
-        .where(eq(workspaces.id, workspaceId));
+          mimeType: declaredMime,
+        }),
+        ...(scanWarnings !== undefined && { scanWarnings }),
+      },
+    });
+    await tx
+      .update(workspaces)
+      .set({ lastActivityAt: new Date() })
+      .where(eq(workspaces.id, workspaceId));
 
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.CREATE,
-        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-        resourceId: entityId,
-        changes: {
-          created: {
-            old: null,
-            new: {
-              kind: "document",
-              fileName: renamed.value,
-              mimeType: declaredMime,
-              sizeBytes: declaredSize,
-              propertyId: purposeData.propertyId,
-            },
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.CREATE,
+      resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+      resourceId: entityId,
+      changes: {
+        created: {
+          old: null,
+          new: {
+            kind: "document",
+            fileName: renamed.value,
+            mimeType: declaredMime,
+            sizeBytes: declaredSize,
+            propertyId: purposeData.propertyId,
           },
         },
-      });
+      },
+    });
 
-      return renamed;
-    }),
-  );
-
-  // Async kickoffs mirror the legacy handler — fire-and-forget
-  // with structured error capture so a failed extraction doesn't
-  // block the upload response.
-  await processExtraction(entityId).catch((error: unknown) =>
-    captureError(error, { entityId, mimeType: declaredMime }),
-  );
-  enqueuePdfDerivativeOrMarkFailed({
-    encrypted,
-    entityId,
-    fieldId,
-    mimeType: declaredMime,
-    organizationId,
-    userId,
-    workspaceId,
-  }).catch((error: unknown) => {
-    captureError(error, { entityId, fieldId, mimeType: declaredMime });
+    return renamed;
   });
+  if (Result.isError(resolvedNameResult)) {
+    await getS3()
+      .delete(finalKey)
+      .catch((deleteError: unknown) =>
+        captureError(deleteError, {
+          entityId,
+          fieldId,
+          stage: "final-cleanup-after-db-error",
+        }),
+      );
+  }
+  const resolvedName = yield* resolvedNameResult;
+
+  const afterPromote = () => {
+    // Async kickoffs mirror the legacy handler. They run only after
+    // both promotion and the DB transaction have succeeded, so
+    // consumers never read a final key before it exists.
+    processExtraction(entityId).catch((error: unknown) => {
+      captureError(error, { entityId, mimeType: declaredMime });
+    });
+    enqueuePdfDerivativeOrMarkFailed({
+      encrypted,
+      entityId,
+      fieldId,
+      mimeType: declaredMime,
+      organizationId,
+      userId,
+      workspaceId,
+    }).catch((error: unknown) => {
+      captureError(error, { entityId, fieldId, mimeType: declaredMime });
+    });
+  };
 
   const finalized: Extract<
     PendingUploadFinalizedResult,
@@ -321,7 +343,7 @@ export const finalizeEntityCreate = async function* ({
     renamed: resolvedName.renamed,
   };
 
-  return finalizeOk({ finalizedResult: finalized, finalKey });
+  return finalizeOk({ finalizedResult: finalized, finalKey, afterPromote });
 };
 
 /** Local re-export so the generic dispatcher can narrow on it. */

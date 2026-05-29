@@ -39,11 +39,13 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
+import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { broadcast } from "@/api/lib/sse";
 
 import { finalizeErr, finalizeOk } from "./lib";
+import type { UploadFinalizeError } from "./lib";
 
 export type ValidateEntityVersionProps = {
   safeDb: SafeDb;
@@ -104,6 +106,9 @@ export type FinalizeEntityVersionProps = {
   declaredSha256Hex: string;
   purposeData: Extract<PendingUploadPurposeData, { type: "entity_version" }>;
   scanWarnings: string[] | undefined;
+  promoteTmpObject: (
+    finalKey: string,
+  ) => Promise<Result<void, UploadFinalizeError>>;
 };
 
 /**
@@ -128,6 +133,7 @@ export const finalizeEntityVersion = async function* ({
   declaredSha256Hex,
   purposeData,
   scanWarnings,
+  promoteTmpObject,
 }: FinalizeEntityVersionProps) {
   const sanitizedName = sanitizeFilename(declaredName);
   const { entityId } = purposeData;
@@ -142,6 +148,11 @@ export const finalizeEntityVersion = async function* ({
     mimeType: declaredMime,
   });
 
+  const promoteResult = await promoteTmpObject(finalKey);
+  if (Result.isError(promoteResult)) {
+    return promoteResult;
+  }
+
   type WriteResult =
     | { status: "ok"; versionNumber: number }
     | {
@@ -152,199 +163,217 @@ export const finalizeEntityVersion = async function* ({
           | "missing-file-field";
       };
 
-  const writeResult = yield* Result.await(
-    safeDb(async (tx): Promise<WriteResult> => {
-      // Lock the entity row for the duration of the transaction so
-      // a concurrent version upload can't observe a stale
-      // currentVersionId.
-      const entityRows = await tx
-        .select({
-          currentVersionId: entities.currentVersionId,
-          docSequence: entities.docSequence,
-          readOnly: entities.readOnly,
-        })
-        .from(entities)
-        .where(
-          and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
-        )
-        .limit(1)
-        .for("update");
-      const lockedEntity = entityRows.at(0);
-
-      if (!lockedEntity?.currentVersionId) {
-        return { status: "entity-not-found" };
-      }
-      if (lockedEntity.readOnly) {
-        return { status: "entity-read-only" };
-      }
-
-      const freshCurrentVersionId = lockedEntity.currentVersionId;
-      const freshCurrentVersion = await tx.query.entityVersions.findFirst({
-        where: { id: { eq: freshCurrentVersionId } },
-        columns: { versionNumber: true },
-        with: {
-          fields: { columns: { content: true, propertyId: true } },
-        },
-      });
-      if (!freshCurrentVersion) {
-        return { status: "current-version-not-found" };
-      }
-
-      const freshFileField = freshCurrentVersion.fields.find(
-        (field) => field.content.type === "file",
-      );
-      if (!freshFileField) {
-        return { status: "missing-file-field" };
-      }
-
-      const workspace = await tx.query.workspaces.findFirst({
-        where: { id: { eq: workspaceId } },
-        columns: { reference: true },
-      });
-
-      const nextVersionNumber = freshCurrentVersion.versionNumber + 1;
-      const nextVersionStamp = buildVersionStamp({
-        docSequence: lockedEntity.docSequence,
-        versionNumber: nextVersionNumber,
-        workspaceReference: workspace?.reference ?? null,
-      });
-
-      await tx.insert(entityVersions).values({
-        createdBy: userId,
-        entityId,
-        id: nextVersionId,
-        stamp: nextVersionStamp.stamp,
-        verificationCode: nextVersionStamp.verificationCode,
-        versionNumber: nextVersionNumber,
-        workspaceId,
-      });
-
-      await tx.insert(fields).values(
-        cloneFieldsForRevision({
-          currentFields: freshCurrentVersion.fields,
-          entityVersionId: nextVersionId,
-          propertyId: freshFileField.propertyId,
-          replacementFieldId: fileFieldId,
-          replacementContent: {
-            encrypted: false,
-            fileName: sanitizedName,
-            id: fileId,
-            mimeType: declaredMime,
-            pdfFileId: null,
-            sha256Hex: declaredSha256Hex,
-            sizeBytes: declaredSize,
-            type: "file",
-            version: 1,
-            pdfDerivative: pdfDerivativeStateForFile({
-              encrypted: false,
-              mimeType: declaredMime,
-            }),
-            ...(scanWarnings !== undefined && { scanWarnings }),
-          },
-          workspaceId,
+  const cleanupFinalObject = async (stage: string) => {
+    await getS3()
+      .delete(finalKey)
+      .catch((deleteError: unknown) =>
+        captureError(deleteError, {
+          entityId,
+          fieldId: fileFieldId,
+          stage,
         }),
       );
+  };
 
-      // Carry over cell metadata from every property except the
-      // file field (whose metadata starts fresh per version).
-      const currentCellMetadataRows = await tx
-        .select({
-          createdAt: cellMetadata.createdAt,
-          createdBy: cellMetadata.createdBy,
-          metadata: cellMetadata.metadata,
-          propertyId: cellMetadata.propertyId,
-          updatedAt: cellMetadata.updatedAt,
-          updatedBy: cellMetadata.updatedBy,
-        })
-        .from(cellMetadata)
-        .where(
-          and(
-            eq(cellMetadata.workspaceId, workspaceId),
-            eq(cellMetadata.entityVersionId, freshCurrentVersionId),
-          ),
-        )
-        .for("update");
+  const writeResultResult = await safeDb(async (tx): Promise<WriteResult> => {
+    // Lock the entity row for the duration of the transaction so
+    // a concurrent version upload can't observe a stale
+    // currentVersionId.
+    const entityRows = await tx
+      .select({
+        currentVersionId: entities.currentVersionId,
+        docSequence: entities.docSequence,
+        readOnly: entities.readOnly,
+      })
+      .from(entities)
+      .where(
+        and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
+      )
+      .limit(1)
+      .for("update");
+    const lockedEntity = entityRows.at(0);
 
-      const cellMetadataRowsToCopy = currentCellMetadataRows.filter(
-        (row) => row.propertyId !== freshFileField.propertyId,
+    if (!lockedEntity?.currentVersionId) {
+      return { status: "entity-not-found" };
+    }
+    if (lockedEntity.readOnly) {
+      return { status: "entity-read-only" };
+    }
+
+    const freshCurrentVersionId = lockedEntity.currentVersionId;
+    const freshCurrentVersion = await tx.query.entityVersions.findFirst({
+      where: { id: { eq: freshCurrentVersionId } },
+      columns: { versionNumber: true },
+      with: {
+        fields: { columns: { content: true, propertyId: true } },
+      },
+    });
+    if (!freshCurrentVersion) {
+      return { status: "current-version-not-found" };
+    }
+
+    const freshFileField = freshCurrentVersion.fields.find(
+      (field) => field.content.type === "file",
+    );
+    if (!freshFileField) {
+      return { status: "missing-file-field" };
+    }
+
+    const workspace = await tx.query.workspaces.findFirst({
+      where: { id: { eq: workspaceId } },
+      columns: { reference: true },
+    });
+
+    const nextVersionNumber = freshCurrentVersion.versionNumber + 1;
+    const nextVersionStamp = buildVersionStamp({
+      docSequence: lockedEntity.docSequence,
+      versionNumber: nextVersionNumber,
+      workspaceReference: workspace?.reference ?? null,
+    });
+
+    await tx.insert(entityVersions).values({
+      createdBy: userId,
+      entityId,
+      id: nextVersionId,
+      stamp: nextVersionStamp.stamp,
+      verificationCode: nextVersionStamp.verificationCode,
+      versionNumber: nextVersionNumber,
+      workspaceId,
+    });
+
+    await tx.insert(fields).values(
+      cloneFieldsForRevision({
+        currentFields: freshCurrentVersion.fields,
+        entityVersionId: nextVersionId,
+        propertyId: freshFileField.propertyId,
+        replacementFieldId: fileFieldId,
+        replacementContent: {
+          encrypted: false,
+          fileName: sanitizedName,
+          id: fileId,
+          mimeType: declaredMime,
+          pdfFileId: null,
+          sha256Hex: declaredSha256Hex,
+          sizeBytes: declaredSize,
+          type: "file",
+          version: 1,
+          pdfDerivative: pdfDerivativeStateForFile({
+            encrypted: false,
+            mimeType: declaredMime,
+          }),
+          ...(scanWarnings !== undefined && { scanWarnings }),
+        },
+        workspaceId,
+      }),
+    );
+
+    // Carry over cell metadata from every property except the
+    // file field (whose metadata starts fresh per version).
+    const currentCellMetadataRows = await tx
+      .select({
+        createdAt: cellMetadata.createdAt,
+        createdBy: cellMetadata.createdBy,
+        metadata: cellMetadata.metadata,
+        propertyId: cellMetadata.propertyId,
+        updatedAt: cellMetadata.updatedAt,
+        updatedBy: cellMetadata.updatedBy,
+      })
+      .from(cellMetadata)
+      .where(
+        and(
+          eq(cellMetadata.workspaceId, workspaceId),
+          eq(cellMetadata.entityVersionId, freshCurrentVersionId),
+        ),
+      )
+      .for("update");
+
+    const cellMetadataRowsToCopy = currentCellMetadataRows.filter(
+      (row) => row.propertyId !== freshFileField.propertyId,
+    );
+
+    if (cellMetadataRowsToCopy.length > 0) {
+      await tx.insert(cellMetadata).values(
+        cellMetadataRowsToCopy.map((row) => ({
+          workspaceId,
+          entityVersionId: nextVersionId,
+          propertyId: row.propertyId,
+          metadata: row.metadata,
+          createdBy: row.createdBy,
+          updatedBy: row.updatedBy,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+        })),
+      );
+    }
+
+    await tx
+      .update(entities)
+      .set({
+        currentVersionId: nextVersionId,
+        lastEditedBy: userId,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
       );
 
-      if (cellMetadataRowsToCopy.length > 0) {
-        await tx.insert(cellMetadata).values(
-          cellMetadataRowsToCopy.map((row) => ({
-            workspaceId,
-            entityVersionId: nextVersionId,
-            propertyId: row.propertyId,
-            metadata: row.metadata,
-            createdBy: row.createdBy,
-            updatedBy: row.updatedBy,
-            createdAt: row.createdAt,
-            updatedAt: row.updatedAt,
-          })),
-        );
-      }
+    await tx
+      .update(workspaces)
+      .set({ lastActivityAt: new Date() })
+      .where(eq(workspaces.id, workspaceId));
 
-      await tx
-        .update(entities)
-        .set({
-          currentVersionId: nextVersionId,
-          lastEditedBy: userId,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
-        );
-
-      await tx
-        .update(workspaces)
-        .set({ lastActivityAt: new Date() })
-        .where(eq(workspaces.id, workspaceId));
-
-      await recordAuditEvent(tx, [
-        {
-          action: AUDIT_ACTION.CREATE,
-          resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
-          resourceId: nextVersionId,
-          changes: {
-            created: {
-              old: null,
-              new: {
-                entityId,
-                versionNumber: nextVersionNumber,
-                fileName: sanitizedName,
-                mimeType: declaredMime,
-                sizeBytes: declaredSize,
-                sha256Hex: declaredSha256Hex,
-              },
-            },
-          },
-          metadata: {
-            fileName: sanitizedName,
-            mimeType: declaredMime,
-            sizeBytes: declaredSize,
-            sha256Hex: declaredSha256Hex,
-          },
-        },
-        {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-          resourceId: entityId,
-          changes: {
-            currentVersionId: {
-              old: freshCurrentVersionId,
-              new: nextVersionId,
+    await recordAuditEvent(tx, [
+      {
+        action: AUDIT_ACTION.CREATE,
+        resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
+        resourceId: nextVersionId,
+        changes: {
+          created: {
+            old: null,
+            new: {
+              entityId,
+              versionNumber: nextVersionNumber,
+              fileName: sanitizedName,
+              mimeType: declaredMime,
+              sizeBytes: declaredSize,
+              sha256Hex: declaredSha256Hex,
             },
           },
         },
-      ]);
+        metadata: {
+          fileName: sanitizedName,
+          mimeType: declaredMime,
+          sizeBytes: declaredSize,
+          sha256Hex: declaredSha256Hex,
+        },
+      },
+      {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+        resourceId: entityId,
+        changes: {
+          currentVersionId: {
+            old: freshCurrentVersionId,
+            new: nextVersionId,
+          },
+        },
+      },
+    ]);
 
-      return { status: "ok", versionNumber: nextVersionNumber };
-    }),
-  );
+    return { status: "ok", versionNumber: nextVersionNumber };
+  });
+  if (Result.isError(writeResultResult)) {
+    await cleanupFinalObject("final-cleanup-after-db-error");
+  }
+  const writeResult = yield* writeResultResult;
 
   if (writeResult.status !== "ok") {
     const status = writeResult.status;
-    if (status === "entity-not-found" || status === "current-version-not-found") {
+    if (
+      status === "entity-not-found" ||
+      status === "current-version-not-found"
+    ) {
+      await cleanupFinalObject("final-cleanup-after-business-error");
       return finalizeErr({
         status: 404,
         message:
@@ -355,12 +384,14 @@ export const finalizeEntityVersion = async function* ({
       });
     }
     if (status === "entity-read-only") {
+      await cleanupFinalObject("final-cleanup-after-business-error");
       return finalizeErr({
         status: 409,
         message: "Entity is read-only",
         rejectReason: "entity-read-only",
       });
     }
+    await cleanupFinalObject("final-cleanup-after-business-error");
     return finalizeErr({
       status: 400,
       message: "Entity has no file field",
@@ -368,42 +399,46 @@ export const finalizeEntityVersion = async function* ({
     });
   }
 
-  // Async kickoffs mirror the legacy handler exactly.
-  processExtraction(entityId).catch((error: unknown) => {
-    captureError(error, { entityId });
-  });
-  enqueuePdfDerivativeOrMarkFailed({
-    encrypted: false,
-    entityId,
-    fieldId: fileFieldId,
-    mimeType: declaredMime,
-    organizationId,
-    userId,
-    workspaceId,
-  }).catch((error: unknown) => {
-    captureError(error, {
+  const afterPromote = () => {
+    // Async kickoffs mirror the legacy handler. They run only after
+    // both promotion and the DB transaction have succeeded, so
+    // consumers never read a final key before it exists.
+    processExtraction(entityId).catch((error: unknown) => {
+      captureError(error, { entityId });
+    });
+    enqueuePdfDerivativeOrMarkFailed({
+      encrypted: false,
       entityId,
       fieldId: fileFieldId,
       mimeType: declaredMime,
-    });
-  });
-  computeVersionDiffStats({
-    versionId: nextVersionId,
-    entityId,
-    scopedDb: createRootScopedDb({
       organizationId,
       userId,
-      workspaceIds: [workspaceId],
-    }),
-    workspaceId,
-    organizationId,
-  }).catch((error: unknown) => {
-    captureError(error, { versionId: nextVersionId });
-  });
-  broadcast(workspaceId, {
-    type: "invalidate-query",
-    data: ["entities", workspaceId],
-  });
+      workspaceId,
+    }).catch((error: unknown) => {
+      captureError(error, {
+        entityId,
+        fieldId: fileFieldId,
+        mimeType: declaredMime,
+      });
+    });
+    computeVersionDiffStats({
+      versionId: nextVersionId,
+      entityId,
+      scopedDb: createRootScopedDb({
+        organizationId,
+        userId,
+        workspaceIds: [workspaceId],
+      }),
+      workspaceId,
+      organizationId,
+    }).catch((error: unknown) => {
+      captureError(error, { versionId: nextVersionId });
+    });
+    broadcast(workspaceId, {
+      type: "invalidate-query",
+      data: ["entities", workspaceId],
+    });
+  };
 
   const finalized: Extract<
     PendingUploadFinalizedResult,
@@ -417,5 +452,5 @@ export const finalizeEntityVersion = async function* ({
     fileName: sanitizedName,
   };
 
-  return finalizeOk({ finalizedResult: finalized, finalKey });
+  return finalizeOk({ finalizedResult: finalized, finalKey, afterPromote });
 };

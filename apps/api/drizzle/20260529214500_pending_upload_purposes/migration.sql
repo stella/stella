@@ -1,0 +1,4 @@
+-- No SQL change: pending_uploads.purpose is stored as text without a
+-- database CHECK constraint. This migration records the schema.ts enum
+-- expansion to entity_version and agent_skill so the migration coverage
+-- guard sees an intentional schema input change.

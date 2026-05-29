@@ -4,11 +4,9 @@
  * mirroring the legacy multipart endpoint at
  * `apps/api/src/handlers/skills/upload.ts`.
  *
- * Unlike entity_create / entity_version, agent_skill uploads are
- * root-scoped (no `workspaceId`). The pending_uploads row carries
- * `workspace_id IS NULL` and `organization_*_root` RLS policies
- * gate access. `validateAgentSkill` enforces the team-scope
- * admin/owner check the legacy handler runs.
+ * `validateAgentSkill` enforces the team-scope admin/owner check the
+ * legacy handler runs. The route is still workspace-scoped during the
+ * migration, matching the temporary shared endpoint permission gate.
  */
 import { Result } from "better-result";
 
@@ -95,7 +93,7 @@ export const finalizeAgentSkill = async function* ({
   // archive size has already been bounded by the presign-time
   // `FILE_SIZE_LIMIT_BYTES.skillPack` check.
   const file = new File([fileBuffer], declaredName, {
-    type: declaredMime || "application/octet-stream",
+    type: declaredMime,
   });
   const parsed = await parseUploadedSkillPackage(file);
   if (Result.isError(parsed)) {
@@ -135,7 +133,7 @@ export const finalizeAgentSkill = async function* ({
     })();
     return finalizeErr({
       status,
-      message: error.message ?? "Failed to install skill",
+      message: error.message,
       rejectReason: "skill-install-failed",
     });
   }
@@ -150,17 +148,11 @@ export const finalizeAgentSkill = async function* ({
     version: parsed.value.version ?? "",
   };
 
-  // Synthetic key — the skill body lives in the DB; nothing reads
-  // from this. We still issue the server-side copy so the finalize
-  // runtime's invariant ("scanned-passed bytes always promote to a
-  // non-tmp/ key") holds across purposes.
-  const finalKey = `agent-skills/${organizationId}/${installResult.value.id}.archive`;
-
   // The audit row is emitted inside `installSkill` against the
   // newly created agentSkills row, so no extra audit call here.
   void recordAuditEvent;
   void AUDIT_ACTION;
   void AUDIT_RESOURCE_TYPE;
 
-  return finalizeOk({ finalizedResult: finalized, finalKey });
+  return finalizeOk({ finalizedResult: finalized, afterPromote: undefined });
 };

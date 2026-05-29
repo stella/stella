@@ -1,8 +1,9 @@
 /**
  * Finalize a presigned upload. Runs the claim FSM, verifies what
  * the client uploaded against what they declared, scans the bytes,
- * server-side copies `tmp/` → final key, then dispatches into the
- * per-purpose domain transaction.
+ * dispatches into the per-purpose domain finalizer, then records the
+ * finalized result. File-backed finalizers promote `tmp/` to the final
+ * key before committing DB rows that point at it.
  *
  * Concurrency-safe via an atomic `UPDATE … WHERE status IN (…)`
  * claim. A second caller for the same `uploadId` either:
@@ -67,7 +68,7 @@ const finalizeUpload = createSafeHandler(
     params,
     recordAuditEvent,
   }) {
-    const uploadId = params.uploadId as SafeId<"pendingUpload">;
+    const uploadId = params.uploadId;
 
     // 1. Claim — atomic transition into `scanning`. Re-claimable
     //    if a previous holder either died (status='scanning' AND
@@ -95,7 +96,7 @@ const finalizeUpload = createSafeHandler(
                 ${pendingUploads.status} = 'pending'
                 OR (
                   ${pendingUploads.status} IN ('failed', 'scanning')
-                  AND ${pendingUploads.claimedAt} < NOW() - (${timeoutSec} || ' seconds')::interval
+                  AND ${pendingUploads.claimedAt} < NOW() - ${timeoutSec} * interval '1 second'
                 )
               )`,
           )
@@ -168,15 +169,18 @@ const finalizeUpload = createSafeHandler(
             .where(eq(pendingUploads.id, uploadId));
         }),
       );
-      // Best-effort tmp cleanup; bucket lifecycle is the safety net.
-      await getS3()
-        .delete(tmpUploadKey(uploadId))
-        .catch((error: unknown) =>
-          captureError(error, {
-            uploadId,
-            stage: "tmp-cleanup-after-reject",
-          }),
-        );
+      if (terminalStatus === "rejected") {
+        // Best-effort tmp cleanup only for terminal rejections.
+        // Transient failures keep tmp bytes so finalize can retry.
+        await getS3()
+          .delete(tmpUploadKey(uploadId))
+          .catch((deleteError: unknown) =>
+            captureError(deleteError, {
+              uploadId,
+              stage: "tmp-cleanup-after-reject",
+            }),
+          );
+      }
       return Result.err(
         new HandlerError({ status: error.status, message: error.message }),
       );
@@ -221,8 +225,8 @@ type RunFinalizeOk = {
 /**
  * Generic finalize body. Verifies what S3 has against what the
  * pending row says, scans the bytes, dispatches into the
- * per-purpose domain transaction, then server-side promotes the
- * tmp object to its final key.
+ * per-purpose domain finalizer, then removes the tmp object after the
+ * purpose has durably accepted the upload.
  *
  * @yields SafeDb errors out to the safe-handler runner so the only
  *   errors that escape are the typed `UploadFinalizeError` cases.
@@ -312,9 +316,22 @@ const runFinalize = async function* ({
           .map((finding) => finding.message)
       : undefined;
 
-  // 5. Domain step + final key resolution. We copy AFTER the domain
-  //    transaction commits, so we never write a final-key object
-  //    the DB doesn't know about.
+  const promoteTmpObject = async (finalKey: string) => {
+    const copyResult = await copyObject(tmpKey, finalKey);
+    if (Result.isError(copyResult)) {
+      return Result.err(
+        new UploadFinalizeError({
+          status: 500,
+          message: "Failed to promote tmp object",
+          rejectReason: "copy-failed",
+        }),
+      );
+    }
+    return Result.ok(undefined);
+  };
+
+  // 5. Purpose finalization. File-backed purposes promote the tmp
+  //    object before committing DB rows that reference the final key.
   const purposeData = claimed.purposeData;
   const domainArgs = {
     safeDb,
@@ -328,21 +345,23 @@ const runFinalize = async function* ({
     declaredSize: claimed.declaredSize,
     declaredSha256Hex: claimed.declaredSha256,
     scanWarnings,
+    promoteTmpObject,
   };
 
   // Dispatch on purposeData. Each variant is independent; the
   // `purposeData` field is the source of truth (it carries the
   // discriminator), and the body schemas at presign time guarantee
   // it matches the URL purpose.
-  type RunAnyPurpose = Awaited<
-    ReturnType<
-      | typeof finalizeEntityCreate
-      | typeof finalizeEntityVersion
-      | typeof finalizeAgentSkill
-    >
-  > extends AsyncGenerator<unknown, infer R, unknown>
-    ? R
-    : never;
+  type RunAnyPurpose =
+    Awaited<
+      ReturnType<
+        | typeof finalizeEntityCreate
+        | typeof finalizeEntityVersion
+        | typeof finalizeAgentSkill
+      >
+    > extends AsyncGenerator<unknown, infer R, unknown>
+      ? R
+      : never;
   let purposeOk: RunAnyPurpose;
   if (purposeData.type === "entity_create") {
     purposeOk = yield* finalizeEntityCreate({ ...domainArgs, purposeData });
@@ -362,26 +381,28 @@ const runFinalize = async function* ({
     });
   }
   if (purposeOk.status === "error") {
-    return purposeOk;
+    return Result.err(purposeOk.error);
   }
 
-  // 6. Server-side promote: tmp/{uploadId} → final key.
-  const copyResult = await copyObject(tmpKey, purposeOk.value.finalKey);
-  if (Result.isError(copyResult)) {
-    return Result.err(
-      new UploadFinalizeError({
-        status: 500,
-        message: "Failed to promote tmp object",
-        rejectReason: "copy-failed",
-      }),
-    );
+  const afterPromote = purposeOk.value.afterPromote;
+  if (afterPromote) {
+    const postPromoteResult = await Result.tryPromise(async () => {
+      afterPromote();
+      await Promise.resolve();
+    });
+    if (Result.isError(postPromoteResult)) {
+      captureError(postPromoteResult.error, {
+        uploadId: claimed.id,
+        stage: "post-promote",
+      });
+    }
   }
 
-  // 7. Tmp cleanup. Bucket lifecycle catches anything we miss.
+  // 6. Tmp cleanup. Bucket lifecycle catches anything we miss.
   await getS3()
     .delete(tmpKey)
-    .catch((error: unknown) =>
-      captureError(error, {
+    .catch((deleteError: unknown) =>
+      captureError(deleteError, {
         uploadId: claimed.id,
         stage: "tmp-cleanup-after-promote",
       }),

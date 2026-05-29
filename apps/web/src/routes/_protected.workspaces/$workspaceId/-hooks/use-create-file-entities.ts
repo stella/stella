@@ -5,6 +5,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/components/toast";
@@ -12,7 +13,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { MAX_PARALLEL_FILE_UPLOADS } from "@/consts";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { ClientOperationError, toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
@@ -108,18 +109,14 @@ const uploadSingleFile = async (
   propertyId: string,
   signal: AbortSignal,
 ): Promise<UploadResult> => {
-  if (signal.aborted) {
-    throw new DOMException("Upload aborted", "AbortError");
-  }
+  signal.throwIfAborted();
 
   // 1. SHA-256 of file bytes.
   const fileBuffer = await file.arrayBuffer();
   const sha256Buffer = await crypto.subtle.digest("SHA-256", fileBuffer);
   const sha256Hex = bufferToHex(sha256Buffer);
 
-  if (signal.aborted) {
-    throw new DOMException("Upload aborted", "AbortError");
-  }
+  signal.throwIfAborted();
 
   // 2. Presign.
   const wsClient = api.uploads({
@@ -155,20 +152,24 @@ const uploadSingleFile = async (
       signal,
     });
   } catch (error) {
-    if (signal.aborted) {
-      await abortUpload(workspaceId, uploadId);
-      throw new DOMException("Upload aborted", "AbortError");
-    }
     await abortUpload(workspaceId, uploadId);
-    throw error instanceof Error ? error : new Error("S3 upload network error");
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new ClientOperationError({
+      action: "upload-file-to-s3",
+      message: "S3 upload network error",
+      cause: error,
+    });
   }
   if (!putResponse.ok) {
     const detail = await putResponse.text().catch(() => "");
-    const error = new Error(
-      `S3 rejected upload (${putResponse.status}${
+    const error = new ClientOperationError({
+      action: "upload-file-to-s3",
+      message: `S3 rejected upload (${putResponse.status}${
         detail ? `: ${detail.slice(0, 200)}` : ""
       })`,
-    );
+    });
     attachResponseForRetry(error, putResponse);
     await abortUpload(workspaceId, uploadId);
     throw error;
@@ -182,12 +183,8 @@ const uploadSingleFile = async (
   if (finalize.error) {
     const error = toAPIError(finalize.error);
     attachResponseForRetry(error, finalize.response);
-    // 422 (scan reject / size or sha mismatch) is terminal — the
-    // pending row is already `rejected` from the server side, no
-    // explicit abort needed. 5xx/409 leave a row we should free.
-    if (finalize.response.status >= 500 || finalize.response.status === 409) {
-      await abortUpload(workspaceId, uploadId);
-    }
+    // Finalize owns the pending row once called. 422s are terminal
+    // rejections, 409/5xx may still be in-flight or retryable.
     throw error;
   }
 
@@ -197,7 +194,7 @@ const uploadSingleFile = async (
     // is a structural impossibility — narrow it explicitly so the
     // result type doesn't leak `entity_version` fields back to
     // callers that wouldn't know what to do with them.
-    throw new Error(
+    return panic(
       `Unexpected upload finalized as ${finalizedResult.type satisfies string}`,
     );
   }

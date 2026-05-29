@@ -33,7 +33,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { UserAvatar } from "@/components/user-avatar";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { toAPIError } from "@/lib/errors";
+import { ClientOperationError, toAPIError } from "@/lib/errors";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import { entityVersionsKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
@@ -83,6 +83,8 @@ const LABEL_PRESETS: LabelPreset[] = [
   { key: "final", color: "bg-green-500 dark:bg-green-400" },
   { key: "signed", color: "bg-amber-500" },
 ];
+
+const UPLOAD_PUT_TIMEOUT_MS = 5 * 60 * 1000;
 
 export function VersionsSidebar({
   workspaceId,
@@ -139,10 +141,16 @@ export function VersionsSidebar({
         method: "PUT",
         headers,
         body: file,
+        signal: AbortSignal.timeout(UPLOAD_PUT_TIMEOUT_MS),
       });
       if (!putResponse.ok) {
-        await wsClient({ uploadId }).abort.post({}).catch(() => undefined);
-        throw new Error(`S3 rejected upload (${putResponse.status})`);
+        await wsClient({ uploadId })
+          .abort.post({})
+          .catch(() => undefined);
+        throw new ClientOperationError({
+          action: "upload-version-to-s3",
+          message: `S3 rejected upload (${putResponse.status})`,
+        });
       }
 
       // 4. Finalize.

@@ -19,7 +19,6 @@ import { tmpUploadKey } from "@/api/handlers/uploads/lib";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
@@ -42,7 +41,7 @@ const config = {
 const abortUpload = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, params }) {
-    const uploadId = params.uploadId as SafeId<"pendingUpload">;
+    const uploadId = params.uploadId;
 
     const existing = yield* Result.await(
       safeDb((tx) =>
