@@ -75,6 +75,46 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
   });
 };
 
+export type CreatePropertySpec = {
+  name: string;
+  contentType: PropertyContentType;
+  toolType?: "ai-model" | "manual-input";
+  prompt?: string;
+};
+
+export const useCreatePropertiesBatch = ({
+  workspaceId,
+}: {
+  workspaceId: string;
+}) => {
+  const analytics = useAnalytics();
+
+  return useMutation({
+    mutationFn: async ({ items }: { items: CreatePropertySpec[] }) => {
+      const response = await api
+        .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .batch.put({
+          queryKey: propertiesKeys.all(workspaceId),
+          items: items.map((item) => ({
+            name: item.name,
+            contentType: item.contentType,
+            ...(item.toolType ? { toolType: item.toolType } : {}),
+            ...(item.prompt === undefined ? {} : { prompt: item.prompt }),
+          })),
+        });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
+};
+
 type UpdatePropertyVars = {
   workspaceId: string;
   propertyId: string;

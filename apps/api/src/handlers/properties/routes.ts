@@ -1,6 +1,7 @@
 import Elysia from "elysia";
 
 import createProperty from "@/api/handlers/properties/create";
+import createPropertiesBatch from "@/api/handlers/properties/create-batch";
 import deleteProperty from "@/api/handlers/properties/delete-by-id";
 import previewProperty from "@/api/handlers/properties/preview";
 import readProperties from "@/api/handlers/properties/read";
@@ -22,6 +23,11 @@ export const propertiesRoute = new Elysia({
     body: createProperty.config.body,
     invalidateQuery: true,
     permissions: createProperty.config.permissions,
+  })
+  .put("/batch", createPropertiesBatch.handler, {
+    body: createPropertiesBatch.config.body,
+    invalidateQuery: true,
+    permissions: createPropertiesBatch.config.permissions,
   })
   .post("/preview", previewProperty.handler, {
     body: previewProperty.config.body,

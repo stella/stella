@@ -2180,6 +2180,17 @@ type Messages = {
       "addReadingSource": "add";
       "aiExtraction": "AI extraction";
       "autoPromptFailed": "Couldn't generate a prompt.";
+      "bulk": {
+        "addAnother": "Add another column";
+        "createFailed": "Couldn't create columns";
+        "createMany": "Create {count} columns";
+        "createOne": "Create column";
+        "createdMany": "Created {count} columns";
+        "createdOne": "Column created";
+        "promptPlaceholder": "What should this column extract? Refine in the column dialog to use / and @.";
+        "removeRow": "Remove";
+        "title": "Add columns";
+      };
       "chipDate": "Date";
       "chipMulti": "Multi option";
       "chipNumber": "Number";
@@ -2257,6 +2268,9 @@ type Messages = {
       "selectOperator": "Select operator";
       "setPromptPlaceholder": "Set a prompt to extract the information";
       "singleSelect": "Single Select";
+      "slashEmpty": "Nothing matches";
+      "slashKindPrompt": "Prompt";
+      "slashKindSkill": "Skill";
       "sortAscending": "Sort ascending";
       "sortAscendingDate": "Oldest first";
       "sortDescending": "Sort descending";

@@ -21,7 +21,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
-import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
+import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import {
@@ -561,7 +561,7 @@ export const WorkspaceTable = ({
           className="absolute top-0 bottom-12 z-40 w-12"
           style={{ right: verticalScrollbarWidth }}
         >
-          <CreateProperty triggerVariant="rail" workspaceId={workspaceId} />
+          <BulkAddColumns triggerVariant="rail" workspaceId={workspaceId} />
         </div>
       )}
     </div>
