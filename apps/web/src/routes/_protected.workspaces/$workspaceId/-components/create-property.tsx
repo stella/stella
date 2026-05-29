@@ -684,24 +684,22 @@ const PropertyComposerBody = ({
         </h2>
       </header>
 
-      <div className="flex flex-col gap-3.5 px-5 pt-1 pb-4">
-        <div className="bg-muted/24 flex items-center rounded-[9px] border px-3 py-0.5">
-          <Input
-            autoComplete="off"
-            autoFocus
-            className="text-foreground placeholder:text-foreground-label px-0 text-sm font-medium"
-            onChange={(e) => setName(e.target.value)}
-            unstyled
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && canSubmit) {
-                e.preventDefault();
-                handleSubmit();
-              }
-            }}
-            placeholder={t("workspaces.properties.untitledColumn")}
-            value={name}
-          />
-        </div>
+      <div className="flex flex-col gap-3 px-5 pt-1 pb-4">
+        <Input
+          autoComplete="off"
+          autoFocus
+          className="text-foreground placeholder:text-foreground-placeholder w-full px-0 text-[15px] font-semibold tracking-tight"
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && canSubmit) {
+              e.preventDefault();
+              handleSubmit();
+            }
+          }}
+          placeholder={t("workspaces.properties.untitledColumn")}
+          unstyled
+          value={name}
+        />
 
         {showAiSections ? (
           <ComposerCard
