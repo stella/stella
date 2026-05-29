@@ -36,12 +36,16 @@ const updateOrganizationSettings = createSafeRootHandler(
 
     yield* Result.await(
       safeDb(async (tx) => {
-        const existing = await tx.query.organizationSettings.findFirst({
-          where: { organizationId: { eq: session.activeOrganizationId } },
-          columns: { promptCachingEnabled: true },
-        });
-        const promptCachingEnabled =
-          body.promptCachingEnabled ?? existing?.promptCachingEnabled ?? true;
+        // Only touch promptCachingEnabled when the body carries it;
+        // omitting it from the upsert set keeps a concurrent toggle
+        // request from being clobbered by a stale read.
+        const wantsPromptCachingUpdate = body.promptCachingEnabled !== undefined;
+        const existing = wantsPromptCachingUpdate
+          ? await tx.query.organizationSettings.findFirst({
+              where: { organizationId: { eq: session.activeOrganizationId } },
+              columns: { promptCachingEnabled: true },
+            })
+          : undefined;
 
         await tx
           .insert(organizationSettings)
@@ -50,14 +54,18 @@ const updateOrganizationSettings = createSafeRootHandler(
             organizationId: session.activeOrganizationId,
             matterNumberPattern: body.matterNumberPattern,
             matterNumberPadding: body.matterNumberPadding,
-            promptCachingEnabled,
+            ...(wantsPromptCachingUpdate
+              ? { promptCachingEnabled: body.promptCachingEnabled }
+              : {}),
           })
           .onConflictDoUpdate({
             target: organizationSettings.organizationId,
             set: {
               matterNumberPattern: body.matterNumberPattern,
               matterNumberPadding: body.matterNumberPadding,
-              promptCachingEnabled,
+              ...(wantsPromptCachingUpdate
+                ? { promptCachingEnabled: body.promptCachingEnabled }
+                : {}),
               updatedAt: new Date(),
             },
           });
@@ -75,7 +83,7 @@ const updateOrganizationSettings = createSafeRootHandler(
               old: null,
               new: body.matterNumberPadding,
             },
-            ...(body.promptCachingEnabled !== undefined &&
+            ...(wantsPromptCachingUpdate &&
             body.promptCachingEnabled !==
               (existing?.promptCachingEnabled ?? true)
               ? {
@@ -93,7 +101,9 @@ const updateOrganizationSettings = createSafeRootHandler(
     return Result.ok({
       matterNumberPattern: body.matterNumberPattern,
       matterNumberPadding: body.matterNumberPadding,
-      promptCachingEnabled: body.promptCachingEnabled,
+      ...(body.promptCachingEnabled !== undefined
+        ? { promptCachingEnabled: body.promptCachingEnabled }
+        : {}),
     });
   },
 );
