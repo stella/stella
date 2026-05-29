@@ -18,7 +18,7 @@
  *   workspace `lastActivityAt` bump, and post-promote PDF-derivative
  *   + extraction enqueues.
  */
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import { and, eq, like } from "drizzle-orm";
 
 import type { SafeDb, Transaction } from "@/api/db";
@@ -27,7 +27,13 @@ import type {
   PendingUploadFinalizedResult,
   PendingUploadPurposeData,
 } from "@/api/db/schema";
-import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
+import {
+  entities,
+  entityVersions,
+  fields,
+  pendingUploads,
+  workspaces,
+} from "@/api/db/schema";
 import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
 import { isEncryptedPdf } from "@/api/handlers/files/pdf-utils";
 import { createFileKey } from "@/api/handlers/files/utils";
@@ -157,6 +163,7 @@ export type FinalizeEntityCreateProps = {
   declaredSha256Hex: string;
   purposeData: Extract<PendingUploadPurposeData, { type: "entity_create" }>;
   scanWarnings: string[] | undefined;
+  uploadId: SafeId<"pendingUpload">;
   promoteTmpObject: (
     finalKey: string,
   ) => Promise<Result<void, UploadFinalizeError>>;
@@ -184,6 +191,7 @@ export const finalizeEntityCreate = async function* ({
   declaredSha256Hex,
   purposeData,
   scanWarnings,
+  uploadId,
   promoteTmpObject,
 }: FinalizeEntityCreateProps) {
   const sanitizedName = sanitizeFilename(declaredName);
@@ -225,7 +233,7 @@ export const finalizeEntityCreate = async function* ({
     return promoteResult;
   }
 
-  const resolvedNameResult = await safeDb(async (tx) => {
+  const writeResult = await safeDb(async (tx) => {
     const renamed = await resolveFileName({
       tx,
       propertyId: purposeData.propertyId,
@@ -297,9 +305,40 @@ export const finalizeEntityCreate = async function* ({
       },
     });
 
-    return renamed;
+    const finalized: Extract<
+      PendingUploadFinalizedResult,
+      { type: "entity_create" }
+    > = {
+      type: "entity_create",
+      entityId,
+      fileId,
+      fileName: renamed.value,
+      renamed: renamed.renamed,
+    };
+
+    // audit: skip — final FSM transition on pending_uploads;
+    // the entity-level audit row landed above in this same transaction.
+    const finalizedRows = await tx
+      .update(pendingUploads)
+      .set({
+        status: "finalized",
+        finalizedResult: finalized,
+        finalizedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(pendingUploads.id, uploadId),
+          eq(pendingUploads.workspaceId, workspaceId),
+        ),
+      )
+      .returning({ id: pendingUploads.id });
+    if (!finalizedRows.at(0)) {
+      panic("Pending upload finalize marker update returned no rows");
+    }
+
+    return { finalized };
   });
-  if (Result.isError(resolvedNameResult)) {
+  if (Result.isError(writeResult)) {
     await getS3()
       .delete(finalKey)
       .catch((deleteError: unknown) =>
@@ -310,7 +349,7 @@ export const finalizeEntityCreate = async function* ({
         }),
       );
   }
-  const resolvedName = yield* resolvedNameResult;
+  const { finalized } = yield* writeResult;
 
   const afterPromote = () => {
     // Async kickoffs mirror the legacy handler. They run only after
@@ -330,17 +369,6 @@ export const finalizeEntityCreate = async function* ({
     }).catch((error: unknown) => {
       captureError(error, { entityId, fieldId, mimeType: declaredMime });
     });
-  };
-
-  const finalized: Extract<
-    PendingUploadFinalizedResult,
-    { type: "entity_create" }
-  > = {
-    type: "entity_create",
-    entityId,
-    fileId,
-    fileName: resolvedName.value,
-    renamed: resolvedName.renamed,
   };
 
   return finalizeOk({ finalizedResult: finalized, finalKey, afterPromote });

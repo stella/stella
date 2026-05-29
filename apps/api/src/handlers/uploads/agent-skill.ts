@@ -8,10 +8,14 @@
  * legacy handler runs. The route is still workspace-scoped during the
  * migration, matching the temporary shared endpoint permission gate.
  */
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
+import { and, eq } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db";
-import type { PendingUploadFinalizedResult } from "@/api/db/schema";
+import {
+  pendingUploads,
+  type PendingUploadFinalizedResult,
+} from "@/api/db/schema";
 import {
   authorizeSkillInstallScope,
   installSkill,
@@ -58,6 +62,8 @@ export type FinalizeAgentSkillProps = {
   declaredName: string;
   declaredMime: string;
   scope: "team" | "private";
+  uploadId: SafeId<"pendingUpload">;
+  workspaceId: SafeId<"workspace">;
 };
 
 /**
@@ -66,13 +72,11 @@ export type FinalizeAgentSkillProps = {
  * `installSkill` path which handles user-limit, slug-uniqueness,
  * resource fan-out, and the audit row.
  *
- * The skill rows do not have an S3 backing object (the skill body
- * + resources are inlined into the DB columns), so the
- * "finalKey" we return is a synthetic placeholder. The
- * upload-runtime still copies the tmp object to it, then
- * lifecycle-cleans because no consumer reads from there — phase 6
- * can drop the copy for skill uploads if the bookkeeping becomes
- * meaningful.
+ * Skill rows do not have an S3 backing object: the skill body and
+ * resources are inlined into DB columns. The generic upload runtime
+ * still verifies and scans the staged bytes, then this finalizer
+ * installs the skill and marks the pending-upload row inside the
+ * same transaction.
  *
  * @yields safeDb errors out to the parent safe-handler.
  */
@@ -87,6 +91,8 @@ export const finalizeAgentSkill = async function* ({
   declaredName,
   declaredMime,
   scope,
+  uploadId,
+  workspaceId,
 }: FinalizeAgentSkillProps) {
   // parseUploadedSkillPackage takes a File; wrap the buffer back
   // into one. The legacy handler's parsing is identical; the
@@ -106,6 +112,37 @@ export const finalizeAgentSkill = async function* ({
 
   const installResult = await installSkill({
     memberRole,
+    onInstalled: async (tx, skill) => {
+      const finalized: Extract<
+        PendingUploadFinalizedResult,
+        { type: "agent_skill" }
+      > = {
+        type: "agent_skill",
+        skillId: skill.id,
+        name: parsed.value.name,
+        version: parsed.value.version ?? "",
+      };
+
+      // audit: skip — final FSM transition on pending_uploads;
+      // the agent-skill audit row is recorded by installSkill in this transaction.
+      const finalizedRows = await tx
+        .update(pendingUploads)
+        .set({
+          status: "finalized",
+          finalizedResult: finalized,
+          finalizedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(pendingUploads.id, uploadId),
+            eq(pendingUploads.workspaceId, workspaceId),
+          ),
+        )
+        .returning({ id: pendingUploads.id });
+      if (!finalizedRows.at(0)) {
+        panic("Pending upload finalize marker update returned no rows");
+      }
+    },
     origin: "upload",
     parsed: parsed.value,
     recordAuditEvent,

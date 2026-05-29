@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb, Transaction } from "@/api/db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import type { AgentSkillOrigin, AgentSkillScope } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -15,6 +15,10 @@ import type { ParsedSkillPackage } from "./skill-package";
 
 type InstallSkillProps = {
   memberRole: { role: string };
+  onInstalled?: (
+    tx: Transaction,
+    skill: { id: SafeId<"agentSkill"> },
+  ) => Promise<void>;
   origin: AgentSkillOrigin;
   parsed: ParsedSkillPackage;
   recordAuditEvent: AuditRecorder;
@@ -31,6 +35,7 @@ type InstallSkillTransactionResult =
 
 export const installSkill = async ({
   memberRole,
+  onInstalled,
   origin,
   parsed,
   recordAuditEvent,
@@ -115,6 +120,7 @@ export const installSkill = async ({
               },
             },
           });
+          await onInstalled?.(innerTx, { id: row.id });
 
           return { id: row.id, type: "installed" };
         },

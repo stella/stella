@@ -17,9 +17,9 @@
  * can re-claim it because both `claimed_at` and the row's status
  * are atomically compared in the WHERE.
  */
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import type { Err } from "better-result";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
@@ -34,6 +34,10 @@ import {
   tmpUploadKey,
   UploadFinalizeError,
 } from "@/api/handlers/uploads/lib";
+import {
+  authorizeUploadPurpose,
+  uploadRoutePermission,
+} from "@/api/handlers/uploads/permissions";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -51,7 +55,7 @@ const finalizeParamsSchema = t.Object({
 });
 
 const config = {
-  permissions: { entity: ["create"] },
+  permissions: uploadRoutePermission,
   params: finalizeParamsSchema,
 } satisfies HandlerConfig;
 
@@ -69,6 +73,27 @@ const finalizeUpload = createSafeHandler(
     recordAuditEvent,
   }) {
     const uploadId = params.uploadId;
+
+    const pending = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.pendingUploads.findFirst({
+          where: { id: { eq: uploadId }, workspaceId: { eq: workspaceId } },
+          columns: { purpose: true },
+        }),
+      ),
+    );
+    if (!pending) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Upload not found" }),
+      );
+    }
+    const authorization = authorizeUploadPurpose({
+      memberRole,
+      purpose: pending.purpose,
+    });
+    if (Result.isError(authorization)) {
+      return Result.err(authorization.error);
+    }
 
     // 1. Claim — atomic transition into `scanning`. Re-claimable
     //    if a previous holder either died (status='scanning' AND
@@ -147,6 +172,7 @@ const finalizeUpload = createSafeHandler(
       workspaceId,
       userId: user.id,
       memberRole,
+      uploadId,
       safeDb,
       recordAuditEvent,
     });
@@ -154,7 +180,7 @@ const finalizeUpload = createSafeHandler(
     if (Result.isError(finalizeResult)) {
       const error = finalizeResult.error;
       const terminalStatus = error.status === 500 ? "failed" : "rejected";
-      yield* Result.await(
+      const failedRows = yield* Result.await(
         // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
         safeDb((tx) => {
           // audit: skip — terminal-state write on pending_uploads,
@@ -166,9 +192,18 @@ const finalizeUpload = createSafeHandler(
               rejectReason: error.rejectReason ?? error.message,
               finalizedAt: terminalStatus === "rejected" ? new Date() : null,
             })
-            .where(eq(pendingUploads.id, uploadId));
+            .where(
+              and(
+                eq(pendingUploads.id, uploadId),
+                eq(pendingUploads.workspaceId, workspaceId),
+              ),
+            )
+            .returning({ id: pendingUploads.id });
         }),
       );
+      if (!failedRows.at(0)) {
+        panic("Pending upload failure marker update returned no rows");
+      }
       if (terminalStatus === "rejected") {
         // Best-effort tmp cleanup only for terminal rejections.
         // Transient failures keep tmp bytes so finalize can retry.
@@ -186,24 +221,6 @@ const finalizeUpload = createSafeHandler(
       );
     }
 
-    // Success: persist the result so retries replay it verbatim.
-    yield* Result.await(
-      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-      safeDb((tx) => {
-        // audit: skip — final FSM transition on pending_uploads;
-        // the entity-level audit row landed inside the domain
-        // transaction.
-        return tx
-          .update(pendingUploads)
-          .set({
-            status: "finalized",
-            finalizedResult: finalizeResult.value.finalizedResult,
-            finalizedAt: new Date(),
-          })
-          .where(eq(pendingUploads.id, uploadId));
-      }),
-    );
-
     return Result.ok({ finalizedResult: finalizeResult.value.finalizedResult });
   },
 );
@@ -214,6 +231,7 @@ type RunFinalizeProps = {
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
   memberRole: { role: string };
+  uploadId: SafeId<"pendingUpload">;
   safeDb: SafeDb;
   recordAuditEvent: AuditRecorder;
 };
@@ -237,6 +255,7 @@ const runFinalize = async function* ({
   workspaceId,
   userId,
   memberRole,
+  uploadId,
   safeDb,
   recordAuditEvent,
 }: RunFinalizeProps): AsyncGenerator<
@@ -346,6 +365,7 @@ const runFinalize = async function* ({
     declaredSha256Hex: claimed.declaredSha256,
     scanWarnings,
     promoteTmpObject,
+    uploadId,
   };
 
   // Dispatch on purposeData. Each variant is independent; the
@@ -377,7 +397,9 @@ const runFinalize = async function* ({
       fileBuffer,
       declaredName: claimed.declaredName,
       declaredMime: claimed.declaredMime,
+      uploadId,
       scope: purposeData.scope,
+      workspaceId,
     });
   }
   if (purposeOk.status === "error") {

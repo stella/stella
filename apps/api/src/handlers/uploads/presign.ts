@@ -24,6 +24,10 @@ import {
   sha256HexToBase64,
   tmpUploadKey,
 } from "@/api/handlers/uploads/lib";
+import {
+  authorizeUploadPurpose,
+  uploadRoutePermission,
+} from "@/api/handlers/uploads/permissions";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -48,6 +52,14 @@ const baseFileMetadataSchema = {
   sha256Hex: t.RegExp(/^[0-9a-f]{64}$/u),
 } as const;
 
+const skillPackFileMetadataSchema = {
+  ...baseFileMetadataSchema,
+  size: t.Integer({
+    minimum: 1,
+    maximum: FILE_SIZE_LIMIT_BYTES.skillPack,
+  }),
+} as const;
+
 const entityCreatePresignBodySchema = t.Object({
   purpose: t.Literal("entity_create"),
   propertyId: tSafeId("property"),
@@ -65,7 +77,7 @@ const agentSkillPresignBodySchema = t.Object({
   scope: t.UnionEnum(AGENT_SKILL_SCOPES),
   // Skill packs use the smaller `skillPack` budget enforced by the
   // legacy upload, capped here too.
-  ...baseFileMetadataSchema,
+  ...skillPackFileMetadataSchema,
 });
 
 const presignBodySchema = t.Union([
@@ -93,7 +105,7 @@ const toPurposeData = (purposeBody: PresignBody): PendingUploadPurposeData => {
 };
 
 const config = {
-  permissions: { entity: ["create"] },
+  permissions: uploadRoutePermission,
   body: presignBodySchema,
 } satisfies HandlerConfig;
 
@@ -107,6 +119,14 @@ const presignUpload = createSafeHandler(
     memberRole,
     body: purposeBody,
   }) {
+    const authorization = authorizeUploadPurpose({
+      memberRole,
+      purpose: purposeBody.purpose,
+    });
+    if (Result.isError(authorization)) {
+      return Result.err(authorization.error);
+    }
+
     if (purposeBody.purpose === "entity_create") {
       const validation = yield* validateEntityCreate({
         safeDb,

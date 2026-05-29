@@ -9,7 +9,7 @@
  * resulting row is byte-for-byte identical to what the multipart
  * path would have produced.
  */
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db";
@@ -22,6 +22,7 @@ import {
   entities,
   entityVersions,
   fields,
+  pendingUploads,
   workspaces,
 } from "@/api/db/schema";
 import { computeVersionDiffStats } from "@/api/handlers/entities/compute-version-diff";
@@ -106,6 +107,7 @@ export type FinalizeEntityVersionProps = {
   declaredSha256Hex: string;
   purposeData: Extract<PendingUploadPurposeData, { type: "entity_version" }>;
   scanWarnings: string[] | undefined;
+  uploadId: SafeId<"pendingUpload">;
   promoteTmpObject: (
     finalKey: string,
   ) => Promise<Result<void, UploadFinalizeError>>;
@@ -133,6 +135,7 @@ export const finalizeEntityVersion = async function* ({
   declaredSha256Hex,
   purposeData,
   scanWarnings,
+  uploadId,
   promoteTmpObject,
 }: FinalizeEntityVersionProps) {
   const sanitizedName = sanitizeFilename(declaredName);
@@ -154,7 +157,13 @@ export const finalizeEntityVersion = async function* ({
   }
 
   type WriteResult =
-    | { status: "ok"; versionNumber: number }
+    | {
+        status: "ok";
+        finalized: Extract<
+          PendingUploadFinalizedResult,
+          { type: "entity_version" }
+        >;
+      }
     | {
         status:
           | "entity-not-found"
@@ -360,7 +369,39 @@ export const finalizeEntityVersion = async function* ({
       },
     ]);
 
-    return { status: "ok", versionNumber: nextVersionNumber };
+    const finalized: Extract<
+      PendingUploadFinalizedResult,
+      { type: "entity_version" }
+    > = {
+      type: "entity_version",
+      entityId,
+      entityVersionId: nextVersionId,
+      versionNumber: nextVersionNumber,
+      fileId,
+      fileName: sanitizedName,
+    };
+
+    // audit: skip — final FSM transition on pending_uploads;
+    // the entity/version audit rows landed above in this same transaction.
+    const finalizedRows = await tx
+      .update(pendingUploads)
+      .set({
+        status: "finalized",
+        finalizedResult: finalized,
+        finalizedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(pendingUploads.id, uploadId),
+          eq(pendingUploads.workspaceId, workspaceId),
+        ),
+      )
+      .returning({ id: pendingUploads.id });
+    if (!finalizedRows.at(0)) {
+      panic("Pending upload finalize marker update returned no rows");
+    }
+
+    return { status: "ok", finalized };
   });
   if (Result.isError(writeResultResult)) {
     await cleanupFinalObject("final-cleanup-after-db-error");
@@ -399,6 +440,7 @@ export const finalizeEntityVersion = async function* ({
     });
   }
 
+  const finalized = writeResult.finalized;
   const afterPromote = () => {
     // Async kickoffs mirror the legacy handler. They run only after
     // both promotion and the DB transaction have succeeded, so
@@ -438,18 +480,6 @@ export const finalizeEntityVersion = async function* ({
       type: "invalidate-query",
       data: ["entities", workspaceId],
     });
-  };
-
-  const finalized: Extract<
-    PendingUploadFinalizedResult,
-    { type: "entity_version" }
-  > = {
-    type: "entity_version",
-    entityId,
-    entityVersionId: nextVersionId,
-    versionNumber: writeResult.versionNumber,
-    fileId,
-    fileName: sanitizedName,
   };
 
   return finalizeOk({ finalizedResult: finalized, finalKey, afterPromote });

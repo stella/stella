@@ -11,11 +11,15 @@
  * and "aborting" no longer has a meaning.
  */
 import { Result } from "better-result";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { pendingUploads } from "@/api/db/schema";
 import { tmpUploadKey } from "@/api/handlers/uploads/lib";
+import {
+  authorizeUploadPurpose,
+  uploadRoutePermission,
+} from "@/api/handlers/uploads/permissions";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -29,18 +33,13 @@ const abortParamsSchema = t.Object({
 });
 
 const config = {
-  // entity:create matches the most common abort caller (the
-  // create-file-entities upload queue cancelling on user request).
-  // When phase 2+ adds purposes with different permissions, the
-  // check can move purpose-side, but a single `entity:create`
-  // gate is sufficient for phase 1.
-  permissions: { entity: ["create"] },
+  permissions: uploadRoutePermission,
   params: abortParamsSchema,
 } satisfies HandlerConfig;
 
 const abortUpload = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, params }) {
+  async function* ({ safeDb, workspaceId, memberRole, params }) {
     const uploadId = params.uploadId;
 
     const existing = yield* Result.await(
@@ -54,6 +53,13 @@ const abortUpload = createSafeHandler(
       return Result.err(
         new HandlerError({ status: 404, message: "Upload not found" }),
       );
+    }
+    const authorization = authorizeUploadPurpose({
+      memberRole,
+      purpose: existing.purpose,
+    });
+    if (Result.isError(authorization)) {
+      return Result.err(authorization.error);
     }
     if (existing.status === "finalized") {
       return Result.err(
@@ -80,7 +86,12 @@ const abortUpload = createSafeHandler(
             rejectReason: "Aborted by client",
             finalizedAt: new Date(),
           })
-          .where(eq(pendingUploads.id, uploadId));
+          .where(
+            and(
+              eq(pendingUploads.id, uploadId),
+              eq(pendingUploads.workspaceId, workspaceId),
+            ),
+          );
       }),
     );
 
