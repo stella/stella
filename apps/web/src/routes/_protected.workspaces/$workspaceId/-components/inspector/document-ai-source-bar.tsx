@@ -237,6 +237,36 @@ export const DocumentAiSourceBar = ({
     setScrollTo,
   ]);
 
+  // Folio (DOCX) parallel: once the justification activates on this
+  // tab, queue a scroll to the first citation's block so the user
+  // doesn't have to click a chip to land on it. Mirrors the PDF
+  // first-bbox auto-scroll above. Tracks "already scrolled for this
+  // justification id" so swapping back to the same cell doesn't
+  // re-fire the request mid-typing.
+  const scrolledForDocxJustificationRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isActiveTab || !justificationId) {
+      return;
+    }
+    if (scrolledForDocxJustificationRef.current === justificationId) {
+      return;
+    }
+    const firstDocxCitation = citations.find(
+      (citation) => citation.kind === "docx-folio",
+    );
+    if (!firstDocxCitation || firstDocxCitation.kind !== "docx-folio") {
+      return;
+    }
+    scrolledForDocxJustificationRef.current = justificationId;
+    requestBlockScroll(activeTab.id, firstDocxCitation.blockId);
+  }, [
+    activeTab.id,
+    citations,
+    isActiveTab,
+    justificationId,
+    requestBlockScroll,
+  ]);
+
   // Sync activeJustification before paint so PageCitation can
   // render bboxes without waiting for PeekJustification's effect.
   // Only set for the ACTIVE tab — inactive tabs stay mounted but
