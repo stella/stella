@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
-  CornerDownLeftIcon,
   LoaderCircleIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -438,6 +437,74 @@ export const DocumentAiSourceBar = ({
   );
 };
 
+/**
+ * Walk the rendered folio DOM for the layout page that owns the
+ * cited block. The editor lays paragraphs into `div.layout-page`
+ * containers carrying `data-page-number`, so we can derive a real
+ * page number for the chip without a separate API surface. Returns
+ * `null` while the editor is still mounting or if the block is on
+ * a page that hasn't been laid out yet.
+ */
+const findFolioBlockPage = (blockId: string): number | null => {
+  const escaped =
+    typeof CSS !== "undefined" && typeof CSS.escape === "function"
+      ? CSS.escape(blockId)
+      : blockId.replace(/"/gu, '\\"');
+  const element = document.querySelector(`[data-block-id="${escaped}"]`);
+  if (!element) {
+    return null;
+  }
+  const pageEl = element.closest("[data-page-number]");
+  if (!pageEl) {
+    return null;
+  }
+  const raw = pageEl.getAttribute("data-page-number");
+  const parsed = raw === null ? Number.NaN : Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const FOLIO_BLOCK_PAGE_RETRY_MS = 150;
+const FOLIO_BLOCK_PAGE_RETRY_LIMIT = 12;
+
+const useFolioBlockPage = (blockId: string): number | null => {
+  const [page, setPage] = useState<number | null>(() =>
+    findFolioBlockPage(blockId),
+  );
+  useEffect(() => {
+    const initial = findFolioBlockPage(blockId);
+    setPage(initial);
+    if (initial !== null) {
+      return undefined;
+    }
+    // Folio pagination runs async after the editor mounts. Retry
+    // briefly so the chip catches up without us wiring an event
+    // bridge through the editor's layout passes.
+    let cancelled = false;
+    let attempts = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const tick = () => {
+      if (cancelled) return;
+      const next = findFolioBlockPage(blockId);
+      if (next !== null) {
+        setPage(next);
+        return;
+      }
+      attempts += 1;
+      if (attempts < FOLIO_BLOCK_PAGE_RETRY_LIMIT) {
+        timer = setTimeout(tick, FOLIO_BLOCK_PAGE_RETRY_MS);
+      }
+    };
+    timer = setTimeout(tick, FOLIO_BLOCK_PAGE_RETRY_MS);
+    return () => {
+      cancelled = true;
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
+    };
+  }, [blockId]);
+  return page;
+};
+
 const SourceCitationChip = ({
   citation,
   onClick,
@@ -457,18 +524,39 @@ const SourceCitationChip = ({
     );
   }
 
-  // DOCX has no page numbers; keep the marker minimal — a subtle
-  // jump-to-block affordance with the source quote behind a tooltip,
-  // not inline noise. The full quote is still scannable on hover.
+  return (
+    <DocxSourceCitationChip
+      blockId={citation.blockId}
+      onClick={onClick}
+      tooltip={citation.text.trim() || undefined}
+    />
+  );
+};
+
+const DocxSourceCitationChip = ({
+  blockId,
+  onClick,
+  tooltip,
+}: {
+  blockId: string;
+  onClick: () => void;
+  tooltip: string | undefined;
+}) => {
+  const page = useFolioBlockPage(blockId);
+  // Page resolution races the editor's paginator on first mount —
+  // fall back to an em dash so the chip stays the same width and
+  // the layout doesn't reshuffle when the number lands.
+  const label = page !== null ? `p. ${page}` : "p. —";
+
   return (
     <button
-      aria-label={citation.text.trim() || undefined}
-      className="text-foreground-strong-muted hover:bg-muted hover:text-foreground inline-flex shrink-0 items-center justify-center rounded px-1 py-0.5 align-middle text-[10px] transition-colors"
+      aria-label={tooltip}
+      className="text-foreground-strong-muted hover:bg-muted hover:text-foreground inline-flex shrink-0 items-center rounded px-1 py-0.5 align-middle text-[10px] font-medium transition-colors"
       onClick={onClick}
-      title={citation.text.trim() || undefined}
+      title={tooltip}
       type="button"
     >
-      <CornerDownLeftIcon className="size-2.5 rotate-90" />
+      {label}
     </button>
   );
 };
