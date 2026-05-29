@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import type { RefObject } from "react";
 
+import { isFolioBlockId } from "@stll/folio";
 import type { DocxEditorRef, FolioBlockId } from "@stll/folio";
 
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
@@ -78,7 +79,7 @@ export const useDocxBlockScroll = ({
         return;
       }
       const blockId: unknown = (detail as { blockId?: unknown }).blockId;
-      if (typeof blockId !== "string" || blockId.length === 0) {
+      if (!isFolioBlockId(blockId)) {
         return;
       }
 
@@ -89,7 +90,7 @@ export const useDocxBlockScroll = ({
 
       cancelScroll?.();
       cancelScroll = scheduleDocxBlockScroll({
-        blockId: blockId as FolioBlockId,
+        blockId,
         scrollToBlock: (id) => editorRef.current?.scrollToBlock(id),
       });
     };
