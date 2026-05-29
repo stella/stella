@@ -88,6 +88,7 @@ export default defineConfig({
     ],
     "no-bare-error/no-bare-error": "error",
     "no-nanoid/no-nanoid": "error",
+    "stella-lowercase/stella-lowercase": "error",
     "must-use-result/must-use-result": "error",
     "no-any-casts/no-any-casts": "error",
     "no-dangerous-type-assertions/no-dangerous-type-assertions": "error",
@@ -265,6 +266,7 @@ export default defineConfig({
     "./.oxlint-plugins/mcp-security.ts",
     "./.oxlint-plugins/auth-lifecycle.ts",
     "./.oxlint-plugins/stella-toast.ts",
+    "./.oxlint-plugins/stella-lowercase.ts",
     "./.oxlint-plugins/no-untranslated-jsx-literal.ts",
     "./.oxlint-plugins/forbid-process-env-outside-env-ts.ts",
     "./.oxlint-plugins/no-secret-in-log-sink.ts",
@@ -1121,6 +1123,14 @@ export default defineConfig({
       files: ["packages/folio/src/core/docx/__tests__/**/*.{ts,tsx}"],
       rules: {
         "typescript/no-unsafe-type-assertion": "off",
+      },
+    },
+    {
+      // Generated i18n bundles are compiled from JSON sources. Fix the
+      // source translation files instead of patching the generated output.
+      files: ["**/i18n/langs/messages.gen.ts"],
+      rules: {
+        "stella-lowercase/stella-lowercase": "off",
       },
     },
   ],
