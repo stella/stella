@@ -192,6 +192,15 @@ const uploadSingleFile = async (
   }
 
   const finalizedResult = finalize.data.finalizedResult;
+  if (finalizedResult.type !== "entity_create") {
+    // The route only ever issues `entity_create` presigns, so this
+    // is a structural impossibility — narrow it explicitly so the
+    // result type doesn't leak `entity_version` fields back to
+    // callers that wouldn't know what to do with them.
+    throw new Error(
+      `Unexpected upload finalized as ${finalizedResult.type satisfies string}`,
+    );
+  }
   return {
     entityId: finalizedResult.entityId,
     fileId: finalizedResult.fileId,

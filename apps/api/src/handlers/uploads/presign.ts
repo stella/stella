@@ -13,6 +13,7 @@ import type { Static } from "elysia";
 
 import { pendingUploads } from "@/api/db/schema";
 import { validateEntityCreate } from "@/api/handlers/uploads/entity-create";
+import { validateEntityVersion } from "@/api/handlers/uploads/entity-version";
 import {
   PRESIGN_URL_EXPIRY_SECONDS,
   sha256HexToBase64,
@@ -26,9 +27,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { presignUploadUrl } from "@/api/lib/s3-presign";
 
-const entityCreatePresignBodySchema = t.Object({
-  purpose: t.Literal("entity_create"),
-  propertyId: tSafeId("property"),
+const baseFileMetadataSchema = {
   name: tDefaultVarchar,
   mimeType: t.String({ minLength: 1, maxLength: 255 }),
   size: t.Integer({
@@ -42,9 +41,24 @@ const entityCreatePresignBodySchema = t.Object({
   // entity upload stores at `fields.content.sha256Hex`, so we can
   // round-trip without re-encoding inside the migration.
   sha256Hex: t.RegExp(/^[0-9a-f]{64}$/u),
+} as const;
+
+const entityCreatePresignBodySchema = t.Object({
+  purpose: t.Literal("entity_create"),
+  propertyId: tSafeId("property"),
+  ...baseFileMetadataSchema,
 });
 
-const presignBodySchema = t.Union([entityCreatePresignBodySchema]);
+const entityVersionPresignBodySchema = t.Object({
+  purpose: t.Literal("entity_version"),
+  entityId: tSafeId("entity"),
+  ...baseFileMetadataSchema,
+});
+
+const presignBodySchema = t.Union([
+  entityCreatePresignBodySchema,
+  entityVersionPresignBodySchema,
+]);
 
 type PresignBody = Static<typeof presignBodySchema>;
 
@@ -65,6 +79,15 @@ const presignUpload = createSafeHandler(
         propertyId: purposeBody.propertyId,
       });
       if (Result.isError(validation)) {
+        return validation;
+      }
+    } else if (purposeBody.purpose === "entity_version") {
+      const validation = yield* validateEntityVersion({
+        safeDb,
+        workspaceId,
+        entityId: purposeBody.entityId,
+      });
+      if (validation.status === "error") {
         return validation;
       }
     }
@@ -106,10 +129,16 @@ const presignUpload = createSafeHandler(
           workspaceId,
           userId: user.id,
           purpose: purposeBody.purpose,
-          purposeData: {
-            type: "entity_create",
-            propertyId: purposeBody.propertyId,
-          },
+          purposeData:
+            purposeBody.purpose === "entity_create"
+              ? {
+                  type: "entity_create",
+                  propertyId: purposeBody.propertyId,
+                }
+              : {
+                  type: "entity_version",
+                  entityId: purposeBody.entityId,
+                },
           declaredName: purposeBody.name,
           declaredMime: purposeBody.mimeType,
           declaredSize: purposeBody.size,

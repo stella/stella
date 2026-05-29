@@ -25,6 +25,7 @@ import type { SafeDb, SafeDbError } from "@/api/db";
 import { pendingUploads } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
 import { finalizeEntityCreate } from "@/api/handlers/uploads/entity-create";
+import { finalizeEntityVersion } from "@/api/handlers/uploads/entity-version";
 import {
   FINALIZE_CLAIM_TIMEOUT_MS,
   sha256Base64ToHex,
@@ -310,17 +311,7 @@ const runFinalize = async function* ({
   //    transaction commits, so we never write a final-key object
   //    the DB doesn't know about.
   const purposeData = claimed.purposeData;
-  if (purposeData.type !== "entity_create") {
-    return Result.err(
-      new UploadFinalizeError({
-        status: 500,
-        message: "Unsupported upload purpose",
-        rejectReason: "unsupported-purpose",
-      }),
-    );
-  }
-
-  const purposeOk = yield* finalizeEntityCreate({
+  const domainArgs = {
     safeDb,
     recordAuditEvent,
     organizationId,
@@ -331,10 +322,14 @@ const runFinalize = async function* ({
     declaredMime: claimed.declaredMime,
     declaredSize: claimed.declaredSize,
     declaredSha256Hex: claimed.declaredSha256,
-    purposeData,
     scanWarnings,
-  });
-  if (Result.isError(purposeOk)) {
+  };
+
+  const purposeOk =
+    purposeData.type === "entity_create"
+      ? yield* finalizeEntityCreate({ ...domainArgs, purposeData })
+      : yield* finalizeEntityVersion({ ...domainArgs, purposeData });
+  if (purposeOk.status === "error") {
     return purposeOk;
   }
 

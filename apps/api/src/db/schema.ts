@@ -1363,21 +1363,38 @@ export const PENDING_UPLOAD_STATUSES = [
  * can be added without a schema migration — only `purposeData` and
  * `finalizedResult` shapes change.
  */
-export const PENDING_UPLOAD_PURPOSES = ["entity_create"] as const;
+export const PENDING_UPLOAD_PURPOSES = [
+  "entity_create",
+  "entity_version",
+] as const;
 
-export type PendingUploadPurposeData = {
-  type: "entity_create";
-  propertyId: SafeId<"property">;
-};
+export type PendingUploadPurposeData =
+  | {
+      type: "entity_create";
+      propertyId: SafeId<"property">;
+    }
+  | {
+      type: "entity_version";
+      entityId: SafeId<"entity">;
+    };
 
-export type PendingUploadFinalizedResult = {
-  type: "entity_create";
-  entityId: SafeId<"entity">;
-  /** UUIDv7 stored on `fields.content.id`; not a branded SafeId. */
-  fileId: string;
-  fileName: string;
-  renamed: boolean;
-};
+export type PendingUploadFinalizedResult =
+  | {
+      type: "entity_create";
+      entityId: SafeId<"entity">;
+      /** UUIDv7 stored on `fields.content.id`; not a branded SafeId. */
+      fileId: string;
+      fileName: string;
+      renamed: boolean;
+    }
+  | {
+      type: "entity_version";
+      entityId: SafeId<"entity">;
+      entityVersionId: SafeId<"entityVersion">;
+      versionNumber: number;
+      fileId: string;
+      fileName: string;
+    };
 
 export const pendingUploads = p.pgTable(
   "pending_uploads",
