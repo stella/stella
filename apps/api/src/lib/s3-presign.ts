@@ -25,6 +25,7 @@ import {
   S3Client as AwsS3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { HttpRequest } from "@smithy/protocol-http";
 import { Result, TaggedError } from "better-result";
 
 import { envBase } from "@/api/env-base";
@@ -81,13 +82,14 @@ const isPathStyleRequired = (endpoint: string): boolean => {
   }
 };
 
-let _awsClient: AwsS3Client | null = null;
-let _awsClientCreatedAt = 0;
+type CachedClient = { client: AwsS3Client; createdAt: number };
+
+let _clientPromise: Promise<CachedClient> | null = null;
 const CLIENT_MAX_AGE_MS = 50 * 60 * 1000;
 
-const buildAwsS3Client = async (): Promise<AwsS3Client> => {
+const buildAwsS3Client = async (): Promise<CachedClient> => {
   const creds = await resolveS3Credentials();
-  return new AwsS3Client({
+  const client = new AwsS3Client({
     region: envBase.S3_REGION,
     endpoint: envBase.S3_ENDPOINT,
     forcePathStyle: isPathStyleRequired(envBase.S3_ENDPOINT),
@@ -101,27 +103,32 @@ const buildAwsS3Client = async (): Promise<AwsS3Client> => {
         }
       : {}),
   });
+  return { client, createdAt: Date.now() };
 };
 
 /**
- * Lazily-built SDK v3 client. Recycled every 50 minutes so STS
- * session tokens are refreshed before they expire. The wrapper
- * mirrors the lifecycle of Bun's `getS3()` so both clients share
- * the same credential horizon.
+ * Lazily-built SDK v3 client, cached as a Promise so concurrent
+ * callers that arrive while the first build is in flight share the
+ * same client instead of each kicking off their own credential
+ * resolution. Recycled every 50 minutes so STS session tokens are
+ * refreshed before they expire — mirrors Bun's `getS3()` lifecycle
+ * so both clients share the same credential horizon.
  */
 const getAwsS3Client = async (): Promise<AwsS3Client> => {
-  if (_awsClient && Date.now() - _awsClientCreatedAt < CLIENT_MAX_AGE_MS) {
-    return _awsClient;
+  if (_clientPromise) {
+    const cached = await _clientPromise;
+    if (Date.now() - cached.createdAt < CLIENT_MAX_AGE_MS) {
+      return cached.client;
+    }
   }
-  _awsClient = await buildAwsS3Client();
-  _awsClientCreatedAt = Date.now();
-  return _awsClient;
+  _clientPromise = buildAwsS3Client();
+  const built = await _clientPromise;
+  return built.client;
 };
 
 /** Reset the cached client. Test seam; not used in prod. */
 export const resetAwsS3ClientForTesting = (): void => {
-  _awsClient = null;
-  _awsClientCreatedAt = 0;
+  _clientPromise = null;
 };
 
 /**
@@ -147,9 +154,27 @@ export const presignUploadUrl = async ({
         Key: key,
         ContentType: contentType,
         ContentLength: contentLength,
-        ChecksumSHA256: sha256Base64,
-        ChecksumAlgorithm: "SHA256",
       });
+
+      // SDK v3's flexible-checksums middleware only translates the
+      // `ChecksumSHA256` command field into a request header when it
+      // can compute / verify against a real body. Presigning skips
+      // that path (there's no body yet), so the header — and the
+      // signature binding we depend on — never appears. Inject the
+      // header at the `build` step on this command's middleware
+      // stack so the SigV4 signer sees it and includes it in
+      // `X-Amz-SignedHeaders`. Per-command stack avoids leaking the
+      // header into unrelated PutObject calls on the shared client.
+      command.middlewareStack.add(
+        (next) => async (args) => {
+          if (HttpRequest.isInstance(args.request)) {
+            args.request.headers["x-amz-checksum-sha256"] = sha256Base64;
+            args.request.headers["x-amz-sdk-checksum-algorithm"] = "SHA256";
+          }
+          return next(args);
+        },
+        { step: "build", name: "injectPresignChecksumHeader" },
+      );
 
       const url = await getSignedUrl(client, command, {
         expiresIn,

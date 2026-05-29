@@ -12,7 +12,7 @@ CREATE TABLE "pending_uploads" (
   "purpose_data" jsonb NOT NULL,
   "declared_name" varchar(255) NOT NULL,
   "declared_mime" varchar(255) NOT NULL,
-  "declared_size" integer NOT NULL,
+  "declared_size" bigint NOT NULL,
   "declared_sha256" varchar(64) NOT NULL,
   "status" text DEFAULT 'pending' NOT NULL,
   "finalized_result" jsonb,

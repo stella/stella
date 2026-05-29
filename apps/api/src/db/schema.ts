@@ -1398,7 +1398,7 @@ export const pendingUploads = p.pgTable(
       .notNull(),
     declaredName: p.varchar("declared_name", { length: 255 }).notNull(),
     declaredMime: p.varchar("declared_mime", { length: 255 }).notNull(),
-    declaredSize: p.integer("declared_size").notNull(),
+    declaredSize: p.bigint("declared_size", { mode: "number" }).notNull(),
     /** hex; matches `fields.content.sha256Hex` storage shape */
     declaredSha256: p.varchar("declared_sha256", { length: 64 }).notNull(),
     status: p

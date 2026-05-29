@@ -51,6 +51,7 @@
     "@opentelemetry/api-logs": "^0.218.0",
     "@react-email/render": "^2.0.8",
     "@sinclair/typebox": "^0.34.49",
+    "@smithy/protocol-http": "^5.3.14",
     "@stll/anonymize-chat": "workspace:*",
     "@stll/anonymize-data": "catalog:",
     "@stll/anonymize-wasm": "catalog:",
