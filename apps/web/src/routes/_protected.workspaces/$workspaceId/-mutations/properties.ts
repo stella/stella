@@ -81,6 +81,8 @@ export type CreatePropertySpec = {
   toolType?: "ai-model" | "manual-input";
   prompt?: string;
   dependencies?: CreatePropertyDependency[];
+  options?: WorkspacePropertyOption[];
+  fallback?: string | null;
 };
 
 export const useCreatePropertiesBatch = ({
@@ -111,6 +113,10 @@ export const useCreatePropertiesBatch = ({
                   })),
                 }
               : {}),
+            ...(item.options && item.options.length > 0
+              ? { options: item.options }
+              : {}),
+            ...(item.fallback !== undefined ? { fallback: item.fallback } : {}),
           })),
         });
 

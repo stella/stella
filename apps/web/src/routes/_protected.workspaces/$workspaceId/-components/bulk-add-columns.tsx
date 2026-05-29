@@ -18,6 +18,7 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import type { WorkspacePropertyOption } from "@/lib/types";
 import {
   COMPOSER_CARD_CLASS,
   ReadingFromRow,
@@ -29,6 +30,7 @@ import type {
   FileChip,
   ManualChipOption,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/composer-primitives";
+import { InlineOptionEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/inline-option-editor";
 import { PropertyPromptInput } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
 import type { PropertyPromptFieldHandle } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
 import { usePropertiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
@@ -49,6 +51,8 @@ type Draft = {
   fileIds: string[];
   contentType: CreatableContentType;
   tool: DraftTool;
+  options: WorkspacePropertyOption[];
+  fallback: string | null;
 };
 
 const makeEmptyDraft = (id: number, defaultFileIds: string[]): Draft => ({
@@ -59,6 +63,8 @@ const makeEmptyDraft = (id: number, defaultFileIds: string[]): Draft => ({
   fileIds: defaultFileIds,
   contentType: "text",
   tool: "ai-model",
+  options: [],
+  fallback: null,
 });
 
 type TriggerVariant = "icon" | "labelled" | "rail" | "none";
@@ -230,6 +236,10 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
         .map((p) => ({ id: p.id, name: p.name })),
     [properties],
   );
+  const allProperties = useMemo<FileChip[]>(
+    () => properties.map((p) => ({ id: p.id, name: p.name })),
+    [properties],
+  );
   const defaultFileIds = useMemo(
     () => fileProperties.map((p) => p.id),
     [fileProperties],
@@ -271,25 +281,30 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
       return;
     }
     const items: CreatePropertySpec[] = validDrafts.map((d) => {
+      const isSelectType =
+        d.contentType === "single-select" || d.contentType === "multi-select";
+      const selectFields =
+        isSelectType && d.options.length > 0
+          ? { options: d.options, fallback: d.fallback }
+          : {};
       if (d.tool === "manual-input") {
-        return {
-          name: d.name.trim(),
-          contentType: d.contentType,
-          toolType: "manual-input" as const,
-        };
+        return Object.assign({
+	name: d.name.trim(),
+	contentType: d.contentType,
+	toolType: 'manual-input' as const
+}, selectFields);
       }
       const dependencyIds = [...new Set([...d.fileIds, ...d.mentions])];
       const dependencies = dependencyIds.map((id) => ({
         dependsOnPropertyId: id,
         condition: null,
       }));
-      return {
-        name: d.name.trim(),
-          contentType: d.contentType,
-          toolType: "ai-model" as const,
-          prompt: d.prompt,
-        ...(dependencies.length > 0 ? { dependencies } : {}),
-      };
+      return Object.assign({
+	name: d.name.trim(),
+	contentType: d.contentType,
+	toolType: 'ai-model' as const,
+	prompt: d.prompt
+}, dependencies.length > 0 ? { dependencies } : {}, selectFields);
     });
     try {
       await batch.mutateAsync({ items });
@@ -322,9 +337,9 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
       <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto px-5 pt-1 pb-2">
         {drafts.map((draft) => (
           <DraftCard
+            allProperties={allProperties}
             canRemove={drafts.length > 1}
             draft={draft}
-            fileProperties={fileProperties}
             key={draft.id}
             onChange={(patch) => updateDraft(draft.id, patch)}
             onRemove={() => removeDraft(draft.id)}
@@ -374,7 +389,7 @@ type DraftCardProps = {
   draft: Draft;
   canRemove: boolean;
   workspaceId: string;
-  fileProperties: FileChip[];
+  allProperties: FileChip[];
   onChange: (patch: Partial<Draft>) => void;
   onRemove: () => void;
 };
@@ -383,7 +398,7 @@ const DraftCard = ({
   draft,
   canRemove,
   workspaceId,
-  fileProperties,
+  allProperties,
   onChange,
   onRemove,
 }: DraftCardProps) => {
@@ -459,17 +474,22 @@ const DraftCard = ({
     workspaceId,
   ]);
 
+  const sourceIds = useMemo(
+    () => [...new Set([...draft.fileIds, ...draft.mentions])],
+    [draft.fileIds, draft.mentions],
+  );
   const selectedFiles = useMemo(
     () =>
-      draft.fileIds.flatMap((id) => {
-        const found = fileProperties.find((p) => p.id === id);
+      sourceIds.flatMap((id) => {
+        const found = allProperties.find((p) => p.id === id);
         return found ? [found] : [];
       }),
-    [draft.fileIds, fileProperties],
+    [sourceIds, allProperties],
   );
-  const availableFiles = fileProperties.filter(
-    (p) => !draft.fileIds.includes(p.id),
-  );
+  const availableFiles = allProperties.filter((p) => !sourceIds.includes(p.id));
+  const needsOptions =
+    draft.contentType === "single-select" ||
+    draft.contentType === "multi-select";
 
   const manualChip: ManualChipOption = {
     active: draft.tool === "manual-input",
@@ -507,17 +527,17 @@ const DraftCard = ({
       {isAi && (
         <>
           <ReadingFromRow
+            addFile={(id: string) =>
+              onChange({ fileIds: [...draft.fileIds, id] })
+            }
+            availableFiles={availableFiles}
             fileChips={selectedFiles}
             onRemoveFile={(id) =>
-              onChange({ fileIds: draft.fileIds.filter((f) => f !== id) })
+              onChange({
+                fileIds: draft.fileIds.filter((f) => f !== id),
+                mentions: draft.mentions.filter((m) => m !== id),
+              })
             }
-            {...(availableFiles.length > 0
-              ? {
-                  addFile: (id: string) =>
-                    onChange({ fileIds: [...draft.fileIds, id] }),
-                  availableFiles,
-                }
-              : {})}
           />
 
           <PropertyPromptInput
@@ -538,6 +558,27 @@ const DraftCard = ({
             workspaceId={workspaceId}
           />
         </>
+      )}
+
+      {needsOptions && (
+        <InlineOptionEditor
+          fallback={draft.fallback}
+          onFallbackChange={(next) => onChange({ fallback: next })}
+          options={draft.options}
+          pushOption={(option) =>
+            onChange({ options: [...draft.options, option] })
+          }
+          removeOptionAt={(index) =>
+            onChange({
+              options: draft.options.filter((_, i) => i !== index),
+            })
+          }
+          replaceOptionAt={(index, option) =>
+            onChange({
+              options: draft.options.map((o, i) => (i === index ? option : o)),
+            })
+          }
+        />
       )}
 
       <TypeChipsRow

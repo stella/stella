@@ -187,7 +187,7 @@ export const ReadingFromRow = ({
     availableFiles.length > 0;
 
   return (
-    <div className="text-muted-foreground flex items-center gap-1.5 text-[11.5px]">
+    <div className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-[11.5px]">
       <span className="inline-flex items-center gap-1">
         <AtSignIcon className="size-2.5" />
         {t("workspaces.properties.readingFrom")}
