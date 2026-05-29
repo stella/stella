@@ -88,6 +88,11 @@ export const BulkAddColumns = ({
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [flashClose, setFlashClose] = useState(false);
   const dirtyRef = useRef(false);
+  // Set to true by the X button click handler immediately before
+  // it triggers onOpenChange(false). The dirty guard sees this flag,
+  // resets it, and lets the close through — Esc / backdrop clicks
+  // never set it, so they still get the flash treatment.
+  const explicitCloseRef = useRef(false);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dialogOpen = open ?? uncontrolledOpen;
   const setDialogOpen = (next: boolean) => {
@@ -115,10 +120,11 @@ export const BulkAddColumns = ({
   return (
     <Dialog
       onOpenChange={(nextOpen) => {
-        if (!nextOpen && dirtyRef.current) {
+        if (!nextOpen && dirtyRef.current && !explicitCloseRef.current) {
           triggerFlash();
           return;
         }
+        explicitCloseRef.current = false;
         setDialogOpen(nextOpen);
       }}
       open={dialogOpen}
@@ -132,6 +138,9 @@ export const BulkAddColumns = ({
             flashClose &&
               "bg-muted ring-foreground-strong-muted scale-125 ring-2",
           )}
+          onClick={() => {
+            explicitCloseRef.current = true;
+          }}
           render={<Button size="icon" variant="ghost" />}
         >
           <XIcon />
