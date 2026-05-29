@@ -1125,13 +1125,5 @@ export default defineConfig({
         "typescript/no-unsafe-type-assertion": "off",
       },
     },
-    {
-      // Generated i18n bundles are compiled from JSON sources. Fix the
-      // source translation files instead of patching the generated output.
-      files: ["**/i18n/langs/messages.gen.ts"],
-      rules: {
-        "stella-lowercase/stella-lowercase": "off",
-      },
-    },
   ],
 });
