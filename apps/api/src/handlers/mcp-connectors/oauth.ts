@@ -328,7 +328,7 @@ export const registerOAuthClient = async ({
     return Result.err(
       new HandlerError({
         status: 502,
-        message: "Failed to register Stella with MCP authorization server",
+        message: "Failed to register stella with MCP authorization server",
         cause: response.error,
       }),
     );

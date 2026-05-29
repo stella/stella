@@ -78,7 +78,7 @@ export const buildItemsOutputSchema = <TItemSchema extends v.GenericSchema>(
     items: v.pipe(
       v.array(itemSchema),
       v.description(
-        "Returned records. All Stella AI data-read functions put records here.",
+        "Returned records. All stella AI data-read functions put records here.",
       ),
     ),
   });

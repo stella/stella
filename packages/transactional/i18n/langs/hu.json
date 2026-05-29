@@ -15,7 +15,7 @@
     "ignore": "Ha Ön volt az, nincs teendő. Ha nem ismeri fel ezt a tevékenységet, tekintse át aktív munkameneteit, és vonja vissza azokat, amelyeket nem ismer fel.",
     "ipAddress": "IP-cím",
     "preview": "Új bejelentkezés innen: {device}",
-    "subject": "Új bejelentkezés a Stella fiókjába",
+    "subject": "Új bejelentkezés a stella fiókjába",
     "time": "Időpont"
   },
   "otp": {

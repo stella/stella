@@ -20,7 +20,7 @@ import { buildRunMap } from "./run-map";
 import type { RevisionAuthor } from "./types";
 
 const AUTHOR: RevisionAuthor = {
-  name: "Stella AI",
+  name: "stella AI",
   date: "2026-02-21T12:00:00Z",
 };
 

@@ -448,7 +448,7 @@ describe("template manifest", () => {
     expect(body.error).toContain("'expression'");
   });
 
-  test("overwrites existing Stella manifest", async () => {
+  test("overwrites existing stella manifest", async () => {
     const buf = await makeEmptyDocx();
     const first = await writeManifest(buf, sampleManifest);
 

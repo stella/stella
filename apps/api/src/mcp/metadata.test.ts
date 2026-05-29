@@ -14,7 +14,7 @@ import {
 } from "@/api/mcp/metadata";
 
 describe("MCP protected resource metadata", () => {
-  test("advertises Stella's MCP resource and supported scopes", () => {
+  test("advertises stella's MCP resource and supported scopes", () => {
     expect(getMcpProtectedResourceMetadata()).toEqual({
       authorization_servers: [getAuthIssuerUrl()],
       bearer_methods_supported: ["header"],

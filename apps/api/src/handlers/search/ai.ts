@@ -175,7 +175,7 @@ type SearchSummaryChatContext = {
   recordAuditEvent: AuditRecorder;
 };
 
-const SEARCH_REFINE_SYSTEM = `You rewrite a legal workspace search request into Stella's boolean search syntax.
+const SEARCH_REFINE_SYSTEM = `You rewrite a legal workspace search request into stella's boolean search syntax.
 
 Supported syntax:
 - AND, OR, NOT must be uppercase.
@@ -352,7 +352,7 @@ export const refineSearchQuery = async ({
     }
 
     lastValidationError =
-      "PostgreSQL rejected the generated tsquery. Use valid Stella syntax with balanced operators and searchable terms.";
+      "PostgreSQL rejected the generated tsquery. Use valid stella syntax with balanced operators and searchable terms.";
   }
 
   return status(502, { message: "Failed to improve search query" });

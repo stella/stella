@@ -152,7 +152,7 @@ const createFakeStellaApi = ({
 
   const port = server.port;
   if (port === undefined) {
-    throw new Error("Fake Stella API did not expose a listening port.");
+    throw new Error("Fake stella API did not expose a listening port.");
   }
 
   return {
@@ -294,7 +294,7 @@ describe("collaboration server", () => {
     }
   });
 
-  test("refreshes the Stella API token before storing snapshots", async () => {
+  test("refreshes the stella API token before storing snapshots", async () => {
     const initialToken = "collab_token_initial";
     const refreshedToken = "collab_token_refreshed";
     const fakeApi = createFakeStellaApi({
@@ -343,7 +343,7 @@ describe("collaboration server", () => {
     }
   });
 
-  test("rejects clients when Stella API authorization fails", async () => {
+  test("rejects clients when stella API authorization fails", async () => {
     const fakeApi = createFakeStellaApi();
     const collabServer = await createCollabServer({
       apiUrl: fakeApi.url,

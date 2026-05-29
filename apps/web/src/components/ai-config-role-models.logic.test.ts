@@ -357,7 +357,7 @@ describe("BYOK provider and model configuration", () => {
     ).toBe(false);
   });
 
-  test("blocks model IDs outside Stella's offered list", () => {
+  test("blocks model IDs outside stella's offered list", () => {
     expect(
       isKnownModelSelection({
         provider: "openrouter",
