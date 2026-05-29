@@ -2,7 +2,10 @@ import { generateText } from "ai";
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import {
+  loadOrgAIConfig,
+  loadPromptCachingPreference,
+} from "@/api/lib/ai-config-loader";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { getModelForRole, getTemperatureForRole } from "@/api/lib/ai-models";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
@@ -123,7 +126,10 @@ const suggestPrompt = createSafeHandler(
       );
     }
 
-    const orgAIConfig = await loadOrgAIConfig(session.activeOrganizationId);
+    const [orgAIConfig, promptCachingEnabled] = await Promise.all([
+      loadOrgAIConfig(session.activeOrganizationId),
+      loadPromptCachingPreference(session.activeOrganizationId),
+    ]);
 
     const aiAnalytics = createAIAnalyticsCallbacks({
       feature: "properties.suggest-prompt",
@@ -146,7 +152,10 @@ const suggestPrompt = createSafeHandler(
     const generateResult = await Result.tryPromise({
       try: async () => {
         const result = await generateText({
-          model: getModelForRole("fast", orgAIConfig),
+          model: getModelForRole("fast", orgAIConfig, {
+            promptCachingEnabled,
+            scopeKey: null,
+          }),
           temperature: getTemperatureForRole("fast"),
           system: SYSTEM_PROMPT,
           messages: [{ role: "user", content: userMessage }],

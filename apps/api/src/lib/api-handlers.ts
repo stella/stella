@@ -73,6 +73,13 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
     };
     orgAIConfig: OrgAIConfig | null;
     /**
+     * Whether stella may annotate AI requests for this org with
+     * prompt-cache markers. Threaded through to `getModelForRole`
+     * and `getModelById`; the SDK middleware strips any markers when
+     * `false` regardless of what call sites set.
+     */
+    promptCachingEnabled: boolean;
+    /**
      * Records an audit row in the supplied transaction. Identity
      * fields (org/user/IP/UA) are bound from the request context;
      * workspaceId defaults to ctx.workspaceId on workspace handlers

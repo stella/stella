@@ -97,6 +97,7 @@ type OrganizeSuggestionsHandlerProps = {
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  promptCachingEnabled: boolean;
   body: OrganizeSuggestionsBody;
 };
 
@@ -162,6 +163,7 @@ const organizeSuggestionsHandler = async function* ({
   workspaceId,
   organizationId,
   orgAIConfig,
+  promptCachingEnabled,
   body,
 }: OrganizeSuggestionsHandlerProps) {
   yield* requireAIAvailable(orgAIConfig);
@@ -192,6 +194,7 @@ const organizeSuggestionsHandler = async function* ({
       organizationId,
       workspaceId,
       orgAIConfig,
+      promptCachingEnabled,
     });
 
     if (Result.isError(summariesResult)) {
@@ -245,7 +248,10 @@ const organizeSuggestionsHandler = async function* ({
   const result = await Result.tryPromise({
     try: async () =>
       await generateText({
-        model: getModelForRole("fast", orgAIConfig),
+        model: getModelForRole("fast", orgAIConfig, {
+          promptCachingEnabled,
+          scopeKey: `${organizationId}:${workspaceId}:organize`,
+        }),
         temperature: getTemperatureForRole("fast"),
         system: ORGANIZE_SYSTEM_PROMPT,
         prompt: JSON.stringify({
@@ -649,6 +655,7 @@ type GenerateMissingSummariesOptions = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   orgAIConfig: OrgAIConfig | null;
+  promptCachingEnabled: boolean;
 };
 
 const generateMissingSummaries = async ({
@@ -656,6 +663,7 @@ const generateMissingSummaries = async ({
   organizationId,
   workspaceId,
   orgAIConfig,
+  promptCachingEnabled,
 }: GenerateMissingSummariesOptions): Promise<
   Result<GeneratedSummary[], HandlerError>
 > => {
@@ -674,7 +682,10 @@ const generateMissingSummaries = async ({
   const result = await Result.tryPromise({
     try: async () =>
       await generateText({
-        model: getModelForRole("fast", orgAIConfig),
+        model: getModelForRole("fast", orgAIConfig, {
+          promptCachingEnabled,
+          scopeKey: `${organizationId}:${workspaceId}:summaries`,
+        }),
         temperature: getTemperatureForRole("fast"),
         system: SUMMARY_SYSTEM_PROMPT,
         prompt: JSON.stringify({
@@ -1000,12 +1011,20 @@ const config = {
 
 const organizeSuggestions = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, session, orgAIConfig, body }) {
+  async function* ({
+    safeDb,
+    workspaceId,
+    session,
+    orgAIConfig,
+    promptCachingEnabled,
+    body,
+  }) {
     return yield* organizeSuggestionsHandler({
       safeDb,
       workspaceId,
       organizationId: session.activeOrganizationId,
       orgAIConfig,
+      promptCachingEnabled,
       body,
     });
   },

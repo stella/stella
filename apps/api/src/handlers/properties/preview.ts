@@ -4,7 +4,10 @@ import { t } from "elysia";
 
 import { isMockAI } from "@/api/consts";
 import { propertyContentSchema } from "@/api/db/schema-validators";
-import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import {
+  loadOrgAIConfig,
+  loadPromptCachingPreference,
+} from "@/api/lib/ai-config-loader";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -182,7 +185,10 @@ const previewProperty = createSafeHandler(
       properties: [batchProperty],
     };
 
-    const orgAIConfig = await loadOrgAIConfig(session.activeOrganizationId);
+    const [orgAIConfig, promptCachingEnabled] = await Promise.all([
+      loadOrgAIConfig(session.activeOrganizationId),
+      loadPromptCachingPreference(session.activeOrganizationId),
+    ]);
     const generateFn = isMockAI() ? generateBatchMock : generateBatch;
 
     const generateResult = await generateFn({
@@ -196,6 +202,7 @@ const previewProperty = createSafeHandler(
       workspaceId,
       scopedDb,
       orgAIConfig,
+      promptCachingEnabled,
     });
 
     if (Result.isError(generateResult)) {

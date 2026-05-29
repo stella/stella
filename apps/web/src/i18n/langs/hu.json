@@ -1722,6 +1722,11 @@
       "practiceJurisdictions": "Praxis joghatóságai",
       "profile": "Profile",
       "profileDescription": "Update name and slug",
+      "promptCaching": {
+        "description": "Bekapcsolva a stella gyorsítótár-jelzőket ad hozzá, így az ugyanazon dokumentumra vagy szálra vonatkozó ismételt MI-kérések ~10× kevesebbe kerülnek és gyorsabban befejeződnek. A gyorsítótárazott promptok legfeljebb 5 percig maradnak az MI-szolgáltatónál, a szervezetére korlátozva. Kikapcsolás esetén a stella nem küld többé gyorsítótár-jelzőket, de a szolgáltatók továbbra is opportunista módon gyorsítótárazhatnak — csak az MI-szolgáltatóval kötött Zero Data Retention szerződés tiltja le teljesen a szerveroldali gyorsítótárazást.",
+        "title": "Prompt gyorsítótárazás",
+        "toggleLabel": "Prompt gyorsítótárazás engedélyezése az MI-szolgáltatóknál"
+      },
       "renameAction": "Rename",
       "renameDescription": "Members will see the new name immediately.",
       "renameTitle": "Rename organization",
@@ -1748,6 +1753,7 @@
     "otherSessionsRevoked": "Többi munkamenet visszavonva",
     "partyAdded": "Fél hozzáadva",
     "partyRemoved": "Fél eltávolítva",
+    "promptCachingUpdated": "Prompt gyorsítótárazás beállítása frissítve",
     "roleUpdated": "Szerepkör frissítve",
     "sessionRevoked": "Munkamenet visszavonva",
     "taskCreated": "Feladat létrehozva",

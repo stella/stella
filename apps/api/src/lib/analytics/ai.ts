@@ -578,6 +578,11 @@ export const createAIAnalyticsCallbacks = ({
 
     const latencySeconds =
       (performance.now() - currentStep.startedAt) / ONE_SECOND_MS;
+    // The provider type marks `inputTokenDetails` non-optional, but
+    // SDK test fixtures and some providers leave it undefined at
+    // runtime. Read defensively to avoid a TypeError in analytics.
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- runtime undefined diverges from type
+    const cacheReadTokens = usage.inputTokenDetails?.cacheReadTokens;
 
     if (!debugEnabled) {
       analytics.capture({
@@ -597,6 +602,11 @@ export const createAIAnalyticsCallbacks = ({
             : {}),
           tool_count_bucket: bucketCount(toolCalls.length),
           total_tokens_bucket: bucketTokenCount(usage.totalTokens),
+          ...(cacheReadTokens !== undefined
+            ? {
+                cached_input_tokens_bucket: bucketTokenCount(cacheReadTokens),
+              }
+            : {}),
         },
       });
 
@@ -615,6 +625,9 @@ export const createAIAnalyticsCallbacks = ({
         }),
         $ai_input_tokens: usage.inputTokens,
         $ai_output_tokens: usage.outputTokens,
+        ...(cacheReadTokens !== undefined
+          ? { $ai_cached_input_tokens: cacheReadTokens }
+          : {}),
         $ai_latency: latencySeconds,
         $ai_model: currentStep.modelId,
         $ai_provider: currentStep.provider,

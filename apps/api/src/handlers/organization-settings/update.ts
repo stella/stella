@@ -10,8 +10,9 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { validatePattern } from "@/api/lib/matter-reference";
 
 const updateOrganizationSettingsBodySchema = t.Object({
-  matterNumberPattern: t.String({ minLength: 1, maxLength: 128 }),
-  matterNumberPadding: t.Integer({ minimum: 1, maximum: 6 }),
+  matterNumberPattern: t.Optional(t.String({ minLength: 1, maxLength: 128 })),
+  matterNumberPadding: t.Optional(t.Integer({ minimum: 1, maximum: 6 })),
+  promptCachingEnabled: t.Optional(t.Boolean()),
 });
 
 const config = {
@@ -22,32 +23,78 @@ const config = {
 const updateOrganizationSettings = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, body, recordAuditEvent }) {
-    const validation = validatePattern(
-      body.matterNumberPattern,
-      body.matterNumberPadding,
-    );
+    const matterPattern = body.matterNumberPattern;
+    const matterPadding = body.matterNumberPadding;
+    const wantsMatterUpdate =
+      matterPattern !== undefined || matterPadding !== undefined;
 
-    if (Result.isError(validation)) {
+    if (
+      wantsMatterUpdate &&
+      (matterPattern === undefined || matterPadding === undefined)
+    ) {
       return Result.err(
-        new HandlerError({ status: 400, message: validation.error.message }),
+        new HandlerError({
+          status: 400,
+          message:
+            "matterNumberPattern and matterNumberPadding must be sent together",
+        }),
       );
+    }
+
+    if (matterPattern !== undefined && matterPadding !== undefined) {
+      const validation = validatePattern(matterPattern, matterPadding);
+
+      if (Result.isError(validation)) {
+        return Result.err(
+          new HandlerError({ status: 400, message: validation.error.message }),
+        );
+      }
     }
 
     yield* Result.await(
       safeDb(async (tx) => {
+        // Only touch promptCachingEnabled when the body carries it;
+        // omitting it from the upsert set keeps a concurrent toggle
+        // request from being clobbered by a stale read.
+        const wantsPromptCachingUpdate =
+          body.promptCachingEnabled !== undefined;
+        const existing = wantsPromptCachingUpdate
+          ? await tx.query.organizationSettings.findFirst({
+              where: { organizationId: { eq: session.activeOrganizationId } },
+              columns: { promptCachingEnabled: true },
+            })
+          : undefined;
+
+        // Insert path needs schema defaults for any required column
+        // the body did not carry. Matter columns are NOT NULL with
+        // schema defaults — Drizzle infers them when omitted.
         await tx
           .insert(organizationSettings)
           .values({
             id: createSafeId<"organizationSettings">(),
             organizationId: session.activeOrganizationId,
-            matterNumberPattern: body.matterNumberPattern,
-            matterNumberPadding: body.matterNumberPadding,
+            ...(wantsMatterUpdate
+              ? {
+                  matterNumberPattern: body.matterNumberPattern,
+                  matterNumberPadding: body.matterNumberPadding,
+                }
+              : {}),
+            ...(wantsPromptCachingUpdate
+              ? { promptCachingEnabled: body.promptCachingEnabled }
+              : {}),
           })
           .onConflictDoUpdate({
             target: organizationSettings.organizationId,
             set: {
-              matterNumberPattern: body.matterNumberPattern,
-              matterNumberPadding: body.matterNumberPadding,
+              ...(wantsMatterUpdate
+                ? {
+                    matterNumberPattern: body.matterNumberPattern,
+                    matterNumberPadding: body.matterNumberPadding,
+                  }
+                : {}),
+              ...(wantsPromptCachingUpdate
+                ? { promptCachingEnabled: body.promptCachingEnabled }
+                : {}),
               updatedAt: new Date(),
             },
           });
@@ -57,22 +104,43 @@ const updateOrganizationSettings = createSafeRootHandler(
           resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
           resourceId: session.activeOrganizationId,
           changes: {
-            matterNumberPattern: {
-              old: null,
-              new: body.matterNumberPattern,
-            },
-            matterNumberPadding: {
-              old: null,
-              new: body.matterNumberPadding,
-            },
+            ...(wantsMatterUpdate
+              ? {
+                  matterNumberPattern: {
+                    old: null,
+                    new: body.matterNumberPattern,
+                  },
+                  matterNumberPadding: {
+                    old: null,
+                    new: body.matterNumberPadding,
+                  },
+                }
+              : {}),
+            ...(wantsPromptCachingUpdate &&
+            body.promptCachingEnabled !==
+              (existing?.promptCachingEnabled ?? true)
+              ? {
+                  promptCachingEnabled: {
+                    old: existing?.promptCachingEnabled ?? true,
+                    new: body.promptCachingEnabled,
+                  },
+                }
+              : {}),
           },
         });
       }),
     );
 
     return Result.ok({
-      matterNumberPattern: body.matterNumberPattern,
-      matterNumberPadding: body.matterNumberPadding,
+      ...(body.matterNumberPattern !== undefined
+        ? { matterNumberPattern: body.matterNumberPattern }
+        : {}),
+      ...(body.matterNumberPadding !== undefined
+        ? { matterNumberPadding: body.matterNumberPadding }
+        : {}),
+      ...(body.promptCachingEnabled !== undefined
+        ? { promptCachingEnabled: body.promptCachingEnabled }
+        : {}),
     });
   },
 );

@@ -3,7 +3,12 @@ import { Output, streamText } from "ai";
 import type { FilePart, TextPart } from "ai";
 import { Result } from "better-result";
 
-import { getModelForRole, getTemperatureForRole } from "@/api/lib/ai-models";
+import { markCacheBreakpoint } from "@/api/lib/ai-caching";
+import {
+  getModelForRole,
+  getTemperatureForRole,
+  resolveCaching,
+} from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -36,6 +41,7 @@ type GenerateWorkflowDataProps = {
   workspaceId: SafeId<"workspace">;
   entityVersionId: string;
   orgAIConfig?: OrgAIConfig | null;
+  promptCachingEnabled: boolean;
   onPartialAnswer?:
     | ((update: PartialAnswerUpdate) => Promise<void> | void)
     | undefined;
@@ -56,11 +62,17 @@ export const generateWorkflowData = async ({
   organizationId,
   workspaceId,
   orgAIConfig,
+  promptCachingEnabled,
   onPartialAnswer,
 }: GenerateWorkflowDataProps): Promise<
   Result<WorkflowDataOutput, WorkflowIntegrationError>
 > => {
   const schema = buildBatchSchema(properties, filenames);
+  const cachingDecision = resolveCaching({
+    promptCachingEnabled,
+    role: "pdf",
+    scopeKey: entityVersionId,
+  });
 
   const messageContent: (FilePart | TextPart)[] = [];
 
@@ -91,6 +103,16 @@ export const generateWorkflowData = async ({
     });
   }
 
+  const lastStaticIdx = messageContent.length - 1;
+  if (lastStaticIdx >= 0) {
+    const lastStatic = messageContent[lastStaticIdx];
+    if (lastStatic) {
+      messageContent[lastStaticIdx] = markCacheBreakpoint(lastStatic, {
+        decision: cachingDecision,
+      });
+    }
+  }
+
   messageContent.push({
     type: "text",
     text: buildPromptsMessage(properties),
@@ -113,7 +135,10 @@ export const generateWorkflowData = async ({
   return await Result.tryPromise({
     try: async () => {
       const result = streamText({
-        model: getModelForRole("pdf", orgAIConfig),
+        model: getModelForRole("pdf", orgAIConfig, {
+          promptCachingEnabled,
+          scopeKey: entityVersionId,
+        }),
         temperature: getTemperatureForRole("pdf"),
         messages: [{ role: "user", content: messageContent }],
         output: Output.object({ schema: valibotSchema(schema) }),

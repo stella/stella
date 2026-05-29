@@ -85,12 +85,23 @@ const generateDecisionAnalysis = createSafeRootHandler(
     permissions: { workspace: ["read"] },
     params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
   } satisfies HandlerConfig,
-  async function* ({ params: { decisionId }, scopedDb, orgAIConfig }) {
+  async function* ({
+    params: { decisionId },
+    scopedDb,
+    orgAIConfig,
+    promptCachingEnabled,
+  }) {
     yield* requireAIAvailable(orgAIConfig);
 
     const response = yield* Result.await(
       Result.tryPromise(
-        async () => await generateAnalysis(decisionId, scopedDb, orgAIConfig),
+        async () =>
+          await generateAnalysis(
+            decisionId,
+            scopedDb,
+            orgAIConfig,
+            promptCachingEnabled,
+          ),
       ),
     );
 

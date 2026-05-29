@@ -1722,6 +1722,11 @@
       "practiceJurisdictions": "Praktikos jurisdikcijos",
       "profile": "Profile",
       "profileDescription": "Update name and slug",
+      "promptCaching": {
+        "description": "Įjungus stella prideda talpyklos žymes, kad pakartotinės AI užklausos dėl to paties dokumento ar gijos kainuotų ~10× pigiau ir baigtųsi greičiau. Talpyklavime saugomos užklausos lieka pas AI tiekėją iki 5 minučių ir yra ribotos jūsų organizacijai. Išjungus stella nustoja siųsti talpyklos žymes, tačiau tiekėjai vis tiek gali talpyklavti oportunistiškai — tik Zero Data Retention sutartis su tiekėju visiškai išjungia talpyklavimą serverio pusėje.",
+        "title": "Užklausų talpyklavimas",
+        "toggleLabel": "Leisti užklausų talpyklavimą su AI tiekėjais"
+      },
       "renameAction": "Rename",
       "renameDescription": "Members will see the new name immediately.",
       "renameTitle": "Rename organization",
@@ -1748,6 +1753,7 @@
     "otherSessionsRevoked": "Kitos sesijos baigtos",
     "partyAdded": "Šalis pridėta",
     "partyRemoved": "Šalis pašalinta",
+    "promptCachingUpdated": "Užklausų talpyklavimo nuostata atnaujinta",
     "roleUpdated": "Rolė atnaujinta",
     "sessionRevoked": "Sesija baigta",
     "taskCreated": "Užduotis sukurta",

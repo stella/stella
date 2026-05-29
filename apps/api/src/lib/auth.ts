@@ -23,7 +23,10 @@ import { authSchema } from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import {
+  loadOrgAIConfig,
+  loadPromptCachingPreference,
+} from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
@@ -706,14 +709,16 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
       });
 
       // Load workspaces and AI config in parallel.
-      const [accessibleWorkspaces, orgAIConfig] = await Promise.all([
-        resolveAccessibleWorkspaces(
-          userId,
-          activeOrganizationId,
-          memberRole.role,
-        ),
-        loadOrgAIConfig(activeOrganizationId),
-      ]);
+      const [accessibleWorkspaces, orgAIConfig, promptCachingEnabled] =
+        await Promise.all([
+          resolveAccessibleWorkspaces(
+            userId,
+            activeOrganizationId,
+            memberRole.role,
+          ),
+          loadOrgAIConfig(activeOrganizationId),
+          loadPromptCachingPreference(activeOrganizationId),
+        ]);
 
       const scopedDb = createScopedDb(
         rlsDb,
@@ -764,6 +769,7 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
         safeDb,
         memberRole,
         orgAIConfig,
+        promptCachingEnabled,
         /**
          * Records audit rows in the supplied tx. Identity fields
          * (org/user/IP/UA) are bound from the request context;

@@ -1722,6 +1722,11 @@
       "practiceJurisdictions": "Prakses jurisdikcijas",
       "profile": "Profile",
       "profileDescription": "Update name and slug",
+      "promptCaching": {
+        "description": "Ja ieslēgts, stella pievieno kešatmiņas iezīmes, lai atkārtoti MI pieprasījumi par to pašu dokumentu vai sarunu izmaksātu ~10× lētāk un beigtos ātrāk. Kešotie pieprasījumi paliek pie MI pakalpojumu sniedzēja līdz 5 minūtēm un ir ierobežoti uz jūsu organizāciju. Izslēdzot stella vairs nesūta kešatmiņas iezīmes, taču pakalpojumu sniedzēji joprojām var kešot oportūnistiski — tikai Zero Data Retention līgums ar pakalpojumu sniedzēju pilnībā izslēdz servera puses kešošanu.",
+        "title": "Uzvedņu kešošana",
+        "toggleLabel": "Atļaut uzvedņu kešošanu pie MI pakalpojumu sniedzējiem"
+      },
       "renameAction": "Rename",
       "renameDescription": "Members will see the new name immediately.",
       "renameTitle": "Rename organization",
@@ -1748,6 +1753,7 @@
     "otherSessionsRevoked": "Pārējās sesijas beigtas",
     "partyAdded": "Puse pievienota",
     "partyRemoved": "Puse noņemta",
+    "promptCachingUpdated": "Uzvedņu kešošanas iestatījums atjaunināts",
     "roleUpdated": "Loma atjaunināta",
     "sessionRevoked": "Sesija beigta",
     "taskCreated": "Uzdevums izveidots",

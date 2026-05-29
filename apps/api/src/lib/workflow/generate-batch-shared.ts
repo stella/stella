@@ -49,6 +49,7 @@ export type GenerateBatchProps = {
   batch: PropertyBatch;
   entityVersionId: SafeId<"entityVersion">;
   orgAIConfig?: OrgAIConfig | null;
+  promptCachingEnabled: boolean;
   onPartialAnswer?:
     | ((update: PartialAnswerUpdate) => Promise<void> | void)
     | undefined;

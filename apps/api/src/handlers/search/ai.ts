@@ -140,6 +140,7 @@ type SearchSummaryChatBody = Static<typeof searchSummaryChatBodySchema>;
 type SearchAIContext = {
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  promptCachingEnabled: boolean;
   scopedDb: ScopedDb;
 };
 
@@ -231,6 +232,7 @@ type GenerateRefinedSearchQueryOptions = {
   body: RefineSearchBody;
   lastValidationError: string | null;
   orgAIConfig: OrgAIConfig | null;
+  promptCachingEnabled: boolean;
   stepCallbacks: ReturnType<typeof createAIAnalyticsCallbacks>["stepCallbacks"];
 };
 
@@ -255,12 +257,16 @@ const generateRefinedSearchQuery = async ({
   body,
   lastValidationError,
   orgAIConfig,
+  promptCachingEnabled,
   stepCallbacks,
 }: GenerateRefinedSearchQueryOptions) =>
   await Result.tryPromise({
     try: async () =>
       await generateText({
-        model: getModelForRole("fast", orgAIConfig),
+        model: getModelForRole("fast", orgAIConfig, {
+          promptCachingEnabled,
+          scopeKey: null,
+        }),
         temperature: getTemperatureForRole("fast"),
         system: SEARCH_REFINE_SYSTEM,
         prompt: JSON.stringify({
@@ -284,6 +290,7 @@ export const refineSearchQuery = async ({
   body,
   organizationId,
   orgAIConfig,
+  promptCachingEnabled,
   scopedDb,
 }: SearchAIContext & {
   body: RefineSearchBody;
@@ -309,6 +316,7 @@ export const refineSearchQuery = async ({
       body,
       lastValidationError,
       orgAIConfig,
+      promptCachingEnabled,
       stepCallbacks: aiAnalytics.stepCallbacks,
     });
 
@@ -363,6 +371,7 @@ export const summarizeSearchResults = async ({
   organizationId,
   accessibleWorkspaceIds,
   orgAIConfig,
+  promptCachingEnabled,
   scopedDb,
 }: SearchSummaryContext & {
   body: SummarizeSearchBody;
@@ -412,7 +421,10 @@ export const summarizeSearchResults = async ({
   const result = await Result.tryPromise({
     try: async () =>
       await generateText({
-        model: getModelForRole("fast", orgAIConfig),
+        model: getModelForRole("fast", orgAIConfig, {
+          promptCachingEnabled,
+          scopeKey: null,
+        }),
         temperature: getTemperatureForRole("fast"),
         system: SEARCH_SUMMARY_SYSTEM,
         prompt: JSON.stringify({

@@ -21,6 +21,7 @@ const TITLE_GENERATION_TIMEOUT_MS = 10_000;
 type GenerateThreadTitleProps = {
   messages: [ChatMessage, ChatMessage]; // [userMessage, AIMessage]
   orgAIConfig: OrgAIConfig | null;
+  promptCachingEnabled: boolean;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -30,6 +31,7 @@ type GenerateThreadTitleProps = {
 export const generateThreadTitle = async ({
   messages,
   orgAIConfig,
+  promptCachingEnabled,
   recordAuditEvent,
   safeDb,
   threadId,
@@ -51,7 +53,10 @@ export const generateThreadTitle = async ({
     const { text } = await generateText({
       abortSignal: AbortSignal.timeout(TITLE_GENERATION_TIMEOUT_MS),
       maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
-      model: getModelForRole("fast", orgAIConfig),
+      model: getModelForRole("fast", orgAIConfig, {
+        promptCachingEnabled,
+        scopeKey: threadId,
+      }),
       prompt: `Given this conversation, reply with a short thread title (max 6 words). Reply with the title only, nothing else.
 
 User: ${userText}

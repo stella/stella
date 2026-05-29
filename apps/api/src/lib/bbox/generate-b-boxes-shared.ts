@@ -21,6 +21,7 @@ export type GenerateBBoxesProps = {
   justificationId: SafeId<"justification">;
   organizationId: SafeId<"organization">;
   orgAIConfig?: OrgAIConfig | null;
+  promptCachingEnabled: boolean;
   workspaceId: SafeId<"workspace">;
   data: {
     prompt: string;

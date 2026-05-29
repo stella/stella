@@ -16,7 +16,10 @@ import {
 } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
-import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import {
+  loadOrgAIConfig,
+  loadPromptCachingPreference,
+} from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -1132,7 +1135,10 @@ const processOneBatch = async ({
     // Broadcast so frontend shows pending state
     broadcastInvalidation(workspaceId, ["entities", workspaceId]);
 
-    const orgAIConfig = await loadOrgAIConfig(organizationId);
+    const [orgAIConfig, promptCachingEnabled] = await Promise.all([
+      loadOrgAIConfig(organizationId),
+      loadPromptCachingPreference(organizationId),
+    ]);
     const generateFn = isMockAI() ? generateBatchMock : generateBatch;
 
     let batchResult: Awaited<ReturnType<typeof generateFn>> | undefined;
@@ -1152,6 +1158,7 @@ const processOneBatch = async ({
         workspaceId,
         scopedDb,
         orgAIConfig,
+        promptCachingEnabled,
         onPartialAnswer: previewPublisher.publish,
       });
 

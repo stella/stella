@@ -1722,6 +1722,11 @@
       "practiceJurisdictions": "Praxisjurisdiktionen",
       "profile": "Profile",
       "profileDescription": "Update name and slug",
+      "promptCaching": {
+        "description": "Wenn aktiviert, fügt stella Cache-Markierungen hinzu, sodass wiederholte KI-Anfragen über dasselbe Dokument oder denselben Thread ca. 10× weniger kosten und schneller abschließen. Zwischengespeicherte Prompts verbleiben bis zu 5 Minuten beim KI-Anbieter und sind auf Ihre Organisation beschränkt. Beim Deaktivieren sendet stella keine Cache-Markierungen mehr, Anbieter können jedoch weiterhin opportunistisch zwischenspeichern — nur ein Zero-Data-Retention-Vertrag mit dem Anbieter deaktiviert das serverseitige Caching vollständig.",
+        "title": "Prompt-Caching",
+        "toggleLabel": "Prompt-Caching bei KI-Anbietern erlauben"
+      },
       "renameAction": "Rename",
       "renameDescription": "Members will see the new name immediately.",
       "renameTitle": "Rename organization",
@@ -1748,6 +1753,7 @@
     "otherSessionsRevoked": "Andere Sitzungen beendet",
     "partyAdded": "Partei hinzugefügt",
     "partyRemoved": "Partei entfernt",
+    "promptCachingUpdated": "Prompt-Caching-Einstellung aktualisiert",
     "roleUpdated": "Rolle aktualisiert",
     "sessionRevoked": "Sitzung beendet",
     "taskCreated": "Aufgabe erstellt",

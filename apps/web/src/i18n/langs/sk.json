@@ -1722,6 +1722,11 @@
       "practiceJurisdictions": "Jurisdikcie praxe",
       "profile": "Profil",
       "profileDescription": "Upraviť názov organizácie",
+      "promptCaching": {
+        "description": "Po zapnutí stella pridáva cache značky tak, aby opakované AI dotazy nad rovnakým dokumentom alebo vláknom stáli ~10× menej a boli rýchlejšie. Cachované prompty zostávajú u poskytovateľa AI až 5 minút a sú obmedzené na vašu organizáciu. Vypnutie zastaví zasielanie cache značiek, ale poskytovatelia môžu prompty stále cachovať oportunisticky — iba zmluva Zero Data Retention s poskytovateľom úplne vypne cachovanie na strane servera.",
+        "title": "Cachovanie promptov",
+        "toggleLabel": "Povoliť cachovanie promptov u poskytovateľov AI"
+      },
       "renameAction": "Premenovať",
       "renameDescription": "Členovia uvidia nový názov okamžite.",
       "renameTitle": "Premenovať organizáciu",
@@ -1748,6 +1753,7 @@
     "otherSessionsRevoked": "Ostatné relácie boli odhlásené",
     "partyAdded": "Strana pridaná",
     "partyRemoved": "Strana odstránená",
+    "promptCachingUpdated": "Predvoľba cachovania promptov aktualizovaná",
     "roleUpdated": "Rola aktualizovaná",
     "sessionRevoked": "Relácia bola odhlásená",
     "taskCreated": "Úloha vytvorená",

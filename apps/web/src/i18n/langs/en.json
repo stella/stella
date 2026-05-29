@@ -1722,6 +1722,11 @@
       "practiceJurisdictions": "Practice jurisdictions",
       "profile": "Profile",
       "profileDescription": "Update organization name",
+      "promptCaching": {
+        "description": "When on, stella adds cache markers so repeated AI requests over the same document or thread cost ~10x less and finish faster. Cached prompts live with the AI provider for up to 5 minutes, scoped to your organization. Turning off stops stella from sending cache markers, but providers may still cache opportunistically — only a Zero Data Retention contract with the provider fully disables server-side caching.",
+        "title": "Prompt caching",
+        "toggleLabel": "Allow prompt caching with AI providers"
+      },
       "renameAction": "Rename",
       "renameDescription": "Members will see the new name immediately.",
       "renameTitle": "Rename organization",
@@ -1748,6 +1753,7 @@
     "otherSessionsRevoked": "Other sessions revoked",
     "partyAdded": "Party added",
     "partyRemoved": "Party removed",
+    "promptCachingUpdated": "Prompt caching preference updated",
     "roleUpdated": "Role updated",
     "sessionRevoked": "Session revoked",
     "taskCreated": "Task created",

@@ -1722,6 +1722,11 @@
       "practiceJurisdictions": "Praktika jurisdiktsioonid",
       "profile": "Profile",
       "profileDescription": "Update name and slug",
+      "promptCaching": {
+        "description": "Sisselülitamisel lisab stella vahemälu markerid, et korduvad AI-päringud sama dokumendi või lõime kohta maksaksid ~10× vähem ja lõpeksid kiiremini. Vahemällu salvestatud promptid jäävad AI teenusepakkuja juurde kuni 5 minutiks ning on piiratud teie organisatsiooniga. Väljalülitamisel ei saada stella enam vahemälu markereid, kuid teenusepakkujad võivad endiselt oportunistlikult vahemällu salvestada — ainult Zero Data Retention leping teenusepakkujaga lülitab serveripoolse vahemälu täielikult välja.",
+        "title": "Promptide vahemällu salvestamine",
+        "toggleLabel": "Luba promptide vahemällu salvestamine AI teenusepakkujatel"
+      },
       "renameAction": "Rename",
       "renameDescription": "Members will see the new name immediately.",
       "renameTitle": "Rename organization",
@@ -1748,6 +1753,7 @@
     "otherSessionsRevoked": "Muud seansid lõpetatud",
     "partyAdded": "Osapool lisatud",
     "partyRemoved": "Osapool eemaldatud",
+    "promptCachingUpdated": "Promptide vahemälu eelistus uuendatud",
     "roleUpdated": "Roll uuendatud",
     "sessionRevoked": "Seanss lõpetatud",
     "taskCreated": "Ülesanne loodud",

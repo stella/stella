@@ -12,6 +12,7 @@ export const generateBBoxes = async ({
   justificationId,
   organizationId,
   orgAIConfig,
+  promptCachingEnabled,
   workspaceId,
   data: { prompt, fieldContent, justificationText, pdf, pageNumber },
 }: GenerateBBoxesProps): Promise<GenerateBBoxesResult> => {
@@ -34,6 +35,7 @@ export const generateBBoxes = async ({
     justificationId,
     organizationId,
     orgAIConfig: orgAIConfig ?? null,
+    promptCachingEnabled,
     pageNumber,
     workspaceId,
   });

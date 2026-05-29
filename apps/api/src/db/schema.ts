@@ -2041,6 +2041,17 @@ export const organizationSettings = p.pgTable(
     aiConfigEncrypted: bytea("ai_config_encrypted"),
     /** AES-GCM initialization vector for aiConfigEncrypted. */
     aiConfigIv: bytea("ai_config_iv"),
+    /**
+     * Whether stella may annotate AI requests with prompt-cache
+     * markers (Anthropic `cacheControl`, OpenAI `promptCacheKey`).
+     * Controls stella's wire behaviour only — providers may still
+     * auto-cache opportunistically; ZDR contracts are the only
+     * true server-side disable.
+     */
+    promptCachingEnabled: p
+      .boolean("prompt_caching_enabled")
+      .notNull()
+      .default(true),
     updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
   },
   () => [...orgPolicies()],

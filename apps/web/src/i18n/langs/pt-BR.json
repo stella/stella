@@ -1722,6 +1722,11 @@
       "practiceJurisdictions": "Jurisdições de atuação",
       "profile": "Perfil",
       "profileDescription": "Atualizar nome da organização",
+      "promptCaching": {
+        "description": "Quando ativado, a stella adiciona marcadores de cache para que solicitações de IA repetidas sobre o mesmo documento ou thread custem ~10× menos e terminem mais rápido. Os prompts em cache permanecem com o provedor de IA por até 5 minutos, restritos à sua organização. Ao desativar, a stella para de enviar marcadores de cache, mas os provedores ainda podem cachear oportunisticamente — apenas um contrato Zero Data Retention com o provedor desativa totalmente o cache do lado do servidor.",
+        "title": "Cache de prompts",
+        "toggleLabel": "Permitir cache de prompts com provedores de IA"
+      },
       "renameAction": "Renomear",
       "renameDescription": "Os membros verão o novo nome imediatamente.",
       "renameTitle": "Renomear organização",
@@ -1748,6 +1753,7 @@
     "otherSessionsRevoked": "Outras sessões revogadas",
     "partyAdded": "Parte adicionada",
     "partyRemoved": "Parte removida",
+    "promptCachingUpdated": "Preferência de cache de prompts atualizada",
     "roleUpdated": "Função atualizada",
     "sessionRevoked": "Sessão revogada",
     "taskCreated": "Tarefa criada",

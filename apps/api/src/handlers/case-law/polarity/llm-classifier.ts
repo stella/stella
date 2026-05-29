@@ -79,7 +79,12 @@ export const classifyWithLLM = async (
   return await Result.tryPromise({
     try: async () => {
       const result = await generateText({
-        model: getModelForRole("fast"),
+        // System-level pipeline call (no per-org context) — keep caching
+        // on so identical citation/language combinations hit the cache.
+        model: getModelForRole("fast", null, {
+          promptCachingEnabled: true,
+          scopeKey: `polarity:${language}`,
+        }),
         temperature: getTemperatureForRole("fast"),
         system: SYSTEM_PROMPT,
         messages: [

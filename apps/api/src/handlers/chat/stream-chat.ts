@@ -132,7 +132,6 @@ type RunChatStreamArgs = {
   abortSignal: AbortSignal;
   system: string;
   tools: ToolSet;
-  promptCacheKey: string;
   modelMessages: Awaited<ReturnType<typeof convertToModelMessages>>;
   threadId: SafeId<"chatThread">;
   thirdPartyBoundary: ChatThirdPartyBoundary;
@@ -157,7 +156,6 @@ const runChatStream = async ({
   abortSignal,
   system,
   tools,
-  promptCacheKey,
   modelMessages,
   threadId,
   thirdPartyBoundary,
@@ -179,9 +177,6 @@ const runChatStream = async ({
     tools,
     experimental_repairToolCall: async ({ toolCall }) =>
       await Promise.resolve(repairActiveDocxEditToolCall(toolCall)),
-    providerOptions: {
-      openai: { promptCacheKey },
-    },
     stopWhen: [stepCountIs(MAX_TOOL_STEPS), hasToolCall("ask-user")],
     messages: modelMessages,
     onFinish: ({ finishReason, totalUsage }) => {
@@ -262,6 +257,7 @@ type StreamChatProps = {
   onFinish: UIMessageStreamOnFinishCallback<ChatMessage>;
   orgAIConfig: OrgAIConfig | null;
   promptCacheKey: string;
+  promptCachingEnabled: boolean;
   resolveAssistantTextRefs?: ((text: string) => string) | undefined;
   resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
   /**
@@ -289,6 +285,7 @@ export const streamChat = async ({
   onFinish,
   orgAIConfig,
   promptCacheKey,
+  promptCachingEnabled,
   resolveAssistantTextRefs,
   resolveAssistantValueRefs,
   systemSafe,
@@ -388,8 +385,15 @@ export const streamChat = async ({
         ? getModelInfoById(devModelId, orgAIConfig)
         : getModelInfoForRole("chat", orgAIConfig);
       const primaryModel = devModelId
-        ? getModelById(devModelId, orgAIConfig)
-        : getModelForRole("chat", orgAIConfig);
+        ? getModelById(devModelId, orgAIConfig, {
+            promptCachingEnabled,
+            scopeKey: promptCacheKey,
+            role: "chat",
+          })
+        : getModelForRole("chat", orgAIConfig, {
+            promptCachingEnabled,
+            scopeKey: promptCacheKey,
+          });
       // Eligible fallback: a *different* model on the same orgAI
       // config. Skip when the user has pinned a specific dev
       // override (their choice is authoritative) and when the
@@ -413,7 +417,6 @@ export const streamChat = async ({
         abortSignal,
         system,
         tools: modelTools,
-        promptCacheKey,
         modelMessages,
         threadId,
         thirdPartyBoundary,
@@ -428,7 +431,10 @@ export const streamChat = async ({
         // returns empty we surface the error chunk; one automatic
         // retry on a different model is bounded and recoverable,
         // unlike the model-keeps-failing-on-cached-prefix case.
-        const fallbackModel = getModelForRole("reasoning", orgAIConfig);
+        const fallbackModel = getModelForRole("reasoning", orgAIConfig, {
+          promptCachingEnabled,
+          scopeKey: promptCacheKey,
+        });
         await runChatStream({
           writer,
           model: fallbackModel,
@@ -437,7 +443,6 @@ export const streamChat = async ({
           abortSignal,
           system,
           tools: modelTools,
-          promptCacheKey,
           modelMessages,
           threadId,
           thirdPartyBoundary,
