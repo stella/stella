@@ -466,7 +466,7 @@ export const CellMetadataMenuSection = ({
   );
 };
 
-const useCellMetadataFlags = ({
+export const useCellMetadataFlags = ({
   workspaceId,
   entityId,
   propertyId,

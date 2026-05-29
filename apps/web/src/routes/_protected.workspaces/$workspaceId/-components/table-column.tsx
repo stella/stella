@@ -11,7 +11,10 @@ import type {
   WorkspaceProperty,
 } from "@/lib/types";
 import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
-import { CellMetadataFlags } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
+import {
+  CellMetadataFlags,
+  useCellMetadataFlags,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
 import { CellResult } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-result";
 import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -57,6 +60,16 @@ const PropertyCell = ({
   const field = entity.fields[property.id];
   const fieldContent = field?.content;
   const cellMetadata = entity.cellMetadata[property.id];
+  // Coordinated with the CellMetadataFlags child via the shared
+  // override store, so both calls land on the same in-flight patch.
+  // setLocked lets us latch an AI cell the moment the user commits
+  // a manual edit — see the AI-model branch below.
+  const { setLocked } = useCellMetadataFlags({
+    workspaceId: property.workspaceId,
+    entityId: entity.entityId,
+    propertyId: property.id,
+    metadata: cellMetadata,
+  });
 
   const justification = useWorkspaceStore((s) =>
     s.justifications.find((j) => j.fieldId === field?.id),
@@ -186,6 +199,7 @@ const PropertyCell = ({
             content={fieldContent}
             entityId={entity.entityId}
             entityKind={entity.kind}
+            onManualSave={() => setLocked(true)}
             property={property}
             propertyId={property.id}
             showDateIcon={false}
