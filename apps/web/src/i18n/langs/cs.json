@@ -1723,9 +1723,9 @@
       "profile": "Profil",
       "profileDescription": "Upravte název organizace",
       "promptCaching": {
-        "description": "When on, stella adds cache markers so repeated AI requests over the same document or thread cost ~10x less and finish faster. Cached prompts live with the AI provider for up to 5 minutes, scoped to your organization. Turn off if your policy forbids any third-party retention of client data.",
-        "title": "Prompt caching",
-        "toggleLabel": "Allow prompt caching with AI providers"
+        "description": "Pokud je zapnuto, stella přidává cache značky tak, aby opakované AI dotazy nad stejným dokumentem nebo vláknem stály ~10× méně a byly rychlejší. Cachované prompty zůstávají u poskytovatele AI až 5 minut a jsou omezené na vaši organizaci. Vypněte, pokud vaše pravidla zakazují jakékoli uchovávání klientských dat třetími stranami.",
+        "title": "Cachování promptů",
+        "toggleLabel": "Povolit cachování promptů u poskytovatelů AI"
       },
       "renameAction": "Rename",
       "renameDescription": "Members will see the new name immediately.",
@@ -1753,7 +1753,7 @@
     "otherSessionsRevoked": "Ostatní sezení odhlášena",
     "partyAdded": "Strana přidána",
     "partyRemoved": "Strana odebrána",
-    "promptCachingUpdated": "Prompt caching preference updated",
+    "promptCachingUpdated": "Předvolba cachování promptů aktualizována",
     "roleUpdated": "Role aktualizována",
     "sessionRevoked": "Sezení odhlášeno",
     "taskCreated": "Úkol vytvořen",

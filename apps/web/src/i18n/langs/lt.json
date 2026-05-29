@@ -1723,9 +1723,9 @@
       "profile": "Profile",
       "profileDescription": "Update name and slug",
       "promptCaching": {
-        "description": "When on, stella adds cache markers so repeated AI requests over the same document or thread cost ~10x less and finish faster. Cached prompts live with the AI provider for up to 5 minutes, scoped to your organization. Turn off if your policy forbids any third-party retention of client data.",
-        "title": "Prompt caching",
-        "toggleLabel": "Allow prompt caching with AI providers"
+        "description": "Įjungus stella prideda talpyklos žymes, kad pakartotinės AI užklausos dėl to paties dokumento ar gijos kainuotų ~10× pigiau ir baigtųsi greičiau. Talpyklavime saugomos užklausos lieka pas AI tiekėją iki 5 minučių ir yra ribotos jūsų organizacijai. Išjunkite, jei jūsų taisyklės draudžia bet kokį kliento duomenų saugojimą trečiosiose šalyse.",
+        "title": "Užklausų talpyklavimas",
+        "toggleLabel": "Leisti užklausų talpyklavimą su AI tiekėjais"
       },
       "renameAction": "Rename",
       "renameDescription": "Members will see the new name immediately.",
@@ -1753,7 +1753,7 @@
     "otherSessionsRevoked": "Kitos sesijos baigtos",
     "partyAdded": "Šalis pridėta",
     "partyRemoved": "Šalis pašalinta",
-    "promptCachingUpdated": "Prompt caching preference updated",
+    "promptCachingUpdated": "Užklausų talpyklavimo nuostata atnaujinta",
     "roleUpdated": "Rolė atnaujinta",
     "sessionRevoked": "Sesija baigta",
     "taskCreated": "Užduotis sukurta",

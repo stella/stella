@@ -1723,9 +1723,9 @@
       "profile": "Profile",
       "profileDescription": "Update name and slug",
       "promptCaching": {
-        "description": "When on, stella adds cache markers so repeated AI requests over the same document or thread cost ~10x less and finish faster. Cached prompts live with the AI provider for up to 5 minutes, scoped to your organization. Turn off if your policy forbids any third-party retention of client data.",
-        "title": "Prompt caching",
-        "toggleLabel": "Allow prompt caching with AI providers"
+        "description": "Bekapcsolva a stella gyorsítótár-jelzőket ad hozzá, így az ugyanazon dokumentumra vagy szálra vonatkozó ismételt MI-kérések ~10× kevesebbe kerülnek és gyorsabban befejeződnek. A gyorsítótárazott promptok legfeljebb 5 percig maradnak az MI-szolgáltatónál, a szervezetére korlátozva. Kapcsolja ki, ha a szabályzata tiltja az ügyféladatok harmadik fél általi megőrzését.",
+        "title": "Prompt gyorsítótárazás",
+        "toggleLabel": "Prompt gyorsítótárazás engedélyezése az MI-szolgáltatóknál"
       },
       "renameAction": "Rename",
       "renameDescription": "Members will see the new name immediately.",
@@ -1753,7 +1753,7 @@
     "otherSessionsRevoked": "Többi munkamenet visszavonva",
     "partyAdded": "Fél hozzáadva",
     "partyRemoved": "Fél eltávolítva",
-    "promptCachingUpdated": "Prompt caching preference updated",
+    "promptCachingUpdated": "Prompt gyorsítótárazás beállítása frissítve",
     "roleUpdated": "Szerepkör frissítve",
     "sessionRevoked": "Munkamenet visszavonva",
     "taskCreated": "Feladat létrehozva",

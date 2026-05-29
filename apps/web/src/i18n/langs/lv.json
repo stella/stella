@@ -1723,9 +1723,9 @@
       "profile": "Profile",
       "profileDescription": "Update name and slug",
       "promptCaching": {
-        "description": "When on, stella adds cache markers so repeated AI requests over the same document or thread cost ~10x less and finish faster. Cached prompts live with the AI provider for up to 5 minutes, scoped to your organization. Turn off if your policy forbids any third-party retention of client data.",
-        "title": "Prompt caching",
-        "toggleLabel": "Allow prompt caching with AI providers"
+        "description": "Ja ieslēgts, stella pievieno kešatmiņas iezīmes, lai atkārtoti MI pieprasījumi par to pašu dokumentu vai sarunu izmaksātu ~10× lētāk un beigtos ātrāk. Kešotie pieprasījumi paliek pie MI pakalpojumu sniedzēja līdz 5 minūtēm un ir ierobežoti uz jūsu organizāciju. Izslēdziet, ja jūsu noteikumi aizliedz jebkādu klientu datu glabāšanu trešo pušu pusē.",
+        "title": "Uzvedņu kešošana",
+        "toggleLabel": "Atļaut uzvedņu kešošanu pie MI pakalpojumu sniedzējiem"
       },
       "renameAction": "Rename",
       "renameDescription": "Members will see the new name immediately.",
@@ -1753,7 +1753,7 @@
     "otherSessionsRevoked": "Pārējās sesijas beigtas",
     "partyAdded": "Puse pievienota",
     "partyRemoved": "Puse noņemta",
-    "promptCachingUpdated": "Prompt caching preference updated",
+    "promptCachingUpdated": "Uzvedņu kešošanas iestatījums atjaunināts",
     "roleUpdated": "Loma atjaunināta",
     "sessionRevoked": "Sesija beigta",
     "taskCreated": "Uzdevums izveidots",

@@ -1723,9 +1723,9 @@
       "profile": "Profile",
       "profileDescription": "Update name and slug",
       "promptCaching": {
-        "description": "When on, stella adds cache markers so repeated AI requests over the same document or thread cost ~10x less and finish faster. Cached prompts live with the AI provider for up to 5 minutes, scoped to your organization. Turn off if your policy forbids any third-party retention of client data.",
-        "title": "Prompt caching",
-        "toggleLabel": "Allow prompt caching with AI providers"
+        "description": "Po włączeniu stella dodaje znaczniki cache, dzięki czemu powtarzające się zapytania AI dotyczące tego samego dokumentu lub wątku kosztują ~10× mniej i kończą się szybciej. Cache'owane prompty pozostają u dostawcy AI do 5 minut i są ograniczone do Twojej organizacji. Wyłącz, jeśli Twoja polityka zabrania jakiegokolwiek przechowywania danych klienta przez strony trzecie.",
+        "title": "Cache'owanie promptów",
+        "toggleLabel": "Zezwól na cache'owanie promptów u dostawców AI"
       },
       "renameAction": "Rename",
       "renameDescription": "Members will see the new name immediately.",
@@ -1753,7 +1753,7 @@
     "otherSessionsRevoked": "Inne sesje zakończone",
     "partyAdded": "Strona dodana",
     "partyRemoved": "Strona usunięta",
-    "promptCachingUpdated": "Prompt caching preference updated",
+    "promptCachingUpdated": "Preferencja cache'owania promptów zaktualizowana",
     "roleUpdated": "Rola zaktualizowana",
     "sessionRevoked": "Sesja zakończona",
     "taskCreated": "Zadanie utworzone",

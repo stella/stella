@@ -1723,9 +1723,9 @@
       "profile": "Perfil",
       "profileDescription": "Atualizar nome da organização",
       "promptCaching": {
-        "description": "When on, stella adds cache markers so repeated AI requests over the same document or thread cost ~10x less and finish faster. Cached prompts live with the AI provider for up to 5 minutes, scoped to your organization. Turn off if your policy forbids any third-party retention of client data.",
-        "title": "Prompt caching",
-        "toggleLabel": "Allow prompt caching with AI providers"
+        "description": "Quando ativado, a stella adiciona marcadores de cache para que solicitações de IA repetidas sobre o mesmo documento ou thread custem ~10× menos e terminem mais rápido. Os prompts em cache permanecem com o provedor de IA por até 5 minutos, restritos à sua organização. Desative se sua política proíbe qualquer retenção de dados do cliente por terceiros.",
+        "title": "Cache de prompts",
+        "toggleLabel": "Permitir cache de prompts com provedores de IA"
       },
       "renameAction": "Renomear",
       "renameDescription": "Os membros verão o novo nome imediatamente.",
@@ -1753,7 +1753,7 @@
     "otherSessionsRevoked": "Outras sessões revogadas",
     "partyAdded": "Parte adicionada",
     "partyRemoved": "Parte removida",
-    "promptCachingUpdated": "Prompt caching preference updated",
+    "promptCachingUpdated": "Preferência de cache de prompts atualizada",
     "roleUpdated": "Função atualizada",
     "sessionRevoked": "Sessão revogada",
     "taskCreated": "Tarefa criada",
