@@ -233,6 +233,9 @@ const WithOpenEntityButton = ({
 }: PropsWithChildren<WithOpenEntityButtonProps>) => {
   const t = useTranslations();
   const openFile = useInspectorStore((s) => s.openFile);
+  const isFileAlreadyOpen = useInspectorStore((s) =>
+    s.tabs.some((t) => t.type === "pdf" && t.id === fieldId),
+  );
   const retryCell = useRetryCell(workspaceId);
   const [isRetrying, setIsRetrying] = useState(false);
 
@@ -247,6 +250,32 @@ const WithOpenEntityButton = ({
       propertyId,
       workspaceId,
     });
+  };
+
+  // If the file is ALREADY open in the inspector and the user clicks
+  // anywhere in this cell, push this cell's justification onto the
+  // open tab so the source bar + folio highlight come up without
+  // making the user hunt for the inline Náhled button. Skipped when
+  // the file isn't open — opening unrelated files on every cell click
+  // would be far more disruptive than the current "just expand".
+  const handleCellClick = (event: React.MouseEvent) => {
+    if (!isFileAlreadyOpen) {
+      return;
+    }
+    // Don't fire when the user is clicking an interactive child
+    // (editable field input, action button, etc.) — those have
+    // their own click semantics that the inspector update would
+    // step on. Same predicate the row-expansion handler uses.
+    const target = event.target;
+    if (
+      target instanceof Element &&
+      target.closest(
+        "button, a, input, textarea, select, [role='button'], [role='checkbox'], [data-row-expansion-ignore], [data-slot='select-trigger']",
+      )
+    ) {
+      return;
+    }
+    handleOpenPreview();
   };
 
   const handleRetry = async () => {
@@ -265,7 +294,7 @@ const WithOpenEntityButton = ({
     "text-foreground-ghost hover:text-foreground hidden h-6 gap-1 px-1.5 text-xs opacity-70 group-data-[expanded-cell]/cell-content:flex hover:opacity-100";
 
   return (
-    <div className="w-full min-w-0 text-start">
+    <div className="w-full min-w-0 text-start" onClick={handleCellClick}>
       {children}
       <div
         className="absolute end-1.5 bottom-1.5 hidden items-center gap-1 group-data-[expanded-cell]/cell-content:flex"
