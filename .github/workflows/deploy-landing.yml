@@ -108,8 +108,13 @@ jobs:
           INDEXNOW_KEY: 4a9799deb8f64ac9be5f9b9e140407ca # gitleaks:allow
           HOST: stll.app
         run: |
+          # CloudFront can serve a transient 5xx for a short window right
+          # after the S3 origin is updated; retry the sitemap fetch and
+          # the IndexNow POST instead of failing the deploy on a blip.
           mapfile -t urls < <(
-            curl -fsSL "https://${HOST}/sitemap-0.xml" \
+            curl -fsSL \
+              --retry 5 --retry-delay 10 --retry-all-errors \
+              "https://${HOST}/sitemap-0.xml" \
               | grep -oE '<loc>[^<]+</loc>' \
               | sed -E 's#</?loc>##g'
           )
@@ -126,6 +131,7 @@ jobs:
               '{host: $host, key: $key, keyLocation: $keyLocation, urlList: $urlList}'
           )"
           curl -fsSL -X POST \
+            --retry 5 --retry-delay 10 --retry-all-errors \
             -H "Content-Type: application/json; charset=utf-8" \
             -d "$payload" \
             https://api.indexnow.org/indexnow
