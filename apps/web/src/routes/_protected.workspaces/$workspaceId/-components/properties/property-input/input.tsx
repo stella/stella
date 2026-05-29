@@ -23,6 +23,13 @@ import { FieldError } from "@stll/ui/components/field";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { cn } from "@stll/ui/lib/utils";
 
+import { buildChatSlashItems } from "@/components/chat-editor-slash-items";
+import { PastedText } from "@/components/chat-pasted-text-extension";
+import {
+  createPromptSlashSuggestion,
+  PromptSlash,
+} from "@/components/chat/prompt-slash-extension";
+import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import {
   createPromptEditorDocument,
   handlePromptEditorSelectAll,
@@ -38,11 +45,6 @@ import {
   createCustomMention,
   createSuggestion,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/custom-mention";
-import {
-  createPropertySlashSuggestion,
-  PropertySlash,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/slash-extension";
-import type { SlashItem } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/slash-extension";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 
 const protectedRouteApi = getRouteApi("/_protected");
@@ -130,33 +132,17 @@ export const PropertyPromptInput = ({
     skillsOptions(activeOrganizationId),
   );
   const slashItemsRef = useRef<SlashItem[]>([]);
-  slashItemsRef.current = useMemo<SlashItem[]>(() => {
-    const promptItems: SlashItem[] = shortcuts.map((s) => ({
-      kind: "prompt",
-      id: s.id,
-      label: s.name,
-      body: s.prompt,
-    }));
-    const firstPage = skillPages?.pages.at(0);
-    const builtIn = firstPage?.builtIn ?? [];
-    const installed = firstPage?.installed ?? [];
-    const skillItems: SlashItem[] = [...builtIn, ...installed]
-      .filter((row) => row.enabled)
-      .map((row) => ({
-        kind: "skill",
-        id: row.id,
-        label: row.name,
-        slug: row.slug,
-        description: row.description,
-      }));
-    return [...promptItems, ...skillItems];
-  }, [shortcuts, skillPages]);
+  slashItemsRef.current = useMemo<SlashItem[]>(
+    () => buildChatSlashItems({ shortcuts, skillPages: skillPages?.pages }),
+    [shortcuts, skillPages],
+  );
 
   const editor = useEditor({
     extensions: [
       createPromptEditorDocument(),
       Paragraph,
       Text,
+      PastedText,
       Placeholder.configure({
         placeholder:
           placeholder ?? t("workspaces.properties.setPromptPlaceholder"),
@@ -166,8 +152,8 @@ export const PropertyPromptInput = ({
         suggestion: createSuggestion(suggestionOptions),
         deleteTriggerWithBackspace: true,
       }),
-      PropertySlash.configure({
-        suggestion: createPropertySlashSuggestion(() => slashItemsRef.current),
+      PromptSlash.configure({
+        suggestion: createPromptSlashSuggestion(() => slashItemsRef.current),
       }),
       History,
     ],

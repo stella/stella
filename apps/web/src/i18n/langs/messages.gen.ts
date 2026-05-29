@@ -2268,9 +2268,6 @@ type Messages = {
       "selectOperator": "Select operator";
       "setPromptPlaceholder": "Set a prompt to extract the information";
       "singleSelect": "Single Select";
-      "slashEmpty": "Nothing matches";
-      "slashKindPrompt": "Prompt";
-      "slashKindSkill": "Skill";
       "sortAscending": "Sort ascending";
       "sortAscendingDate": "Oldest first";
       "sortDescending": "Sort descending";
