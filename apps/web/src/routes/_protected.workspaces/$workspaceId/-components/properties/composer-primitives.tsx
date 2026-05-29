@@ -121,7 +121,11 @@ export const TypeChipsRow = ({
           {t("workspaces.properties.returnsLabel")}
         </span>
         {chipDefs.map(({ type, icon: Icon, label }) => {
-          const active = !manualActive && contentType === type;
+          // Manual columns still have a content type — show it as
+          // active so the user can see what value shape they'll be
+          // typing into. Manual chip + content type chip light up
+          // together; they're orthogonal axes (mode vs shape).
+          const active = contentType === type;
           return (
             <button
               className={cn(

@@ -65,10 +65,11 @@ const createPropertiesBatch = createSafeHandler(
         }
         if (allDependencyIds.size > 0) {
           const dependencyRows = await tx.query.properties.findMany({
-            where: {
-              id: { in: [...allDependencyIds] },
-              workspaceId: { eq: workspaceId },
-            },
+            where: (table, { and, eq, inArray }) =>
+              and(
+                eq(table.workspaceId, workspaceId),
+                inArray(table.id, [...allDependencyIds]),
+              ),
             columns: { id: true },
           });
           if (dependencyRows.length !== allDependencyIds.size) {
