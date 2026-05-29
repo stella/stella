@@ -204,7 +204,7 @@ const truncateFieldValue = (value: string): string => {
   if (value.length <= FIELD_BODY_MAX_LENGTH) {
     return value;
   }
-  return `${value.slice(0, FIELD_BODY_MAX_LENGTH)}\n\n[Truncated by Stella Outlook add-in]`;
+  return `${value.slice(0, FIELD_BODY_MAX_LENGTH)}\n\n[Truncated by stella Outlook add-in]`;
 };
 
 const buildFieldEntries = (snapshot: MailSnapshot) => [
