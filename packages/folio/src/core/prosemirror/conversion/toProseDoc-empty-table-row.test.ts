@@ -123,4 +123,42 @@ describe("toProseDoc — literal empty <w:tr/> rows", () => {
     expect(emptyRow.childCount).toBe(1);
     expect(emptyRow.child(0).attrs["colspan"]).toBe(3);
   });
+
+  test("breaks active vertical merges before inserting a fallback cell", () => {
+    const emptyParagraph = { type: "paragraph" as const, content: [] };
+    const doc = makeDoc({
+      type: "table",
+      rows: [
+        {
+          type: "tableRow",
+          cells: [
+            {
+              type: "tableCell",
+              formatting: { vMerge: "restart" },
+              content: [emptyParagraph],
+            },
+            { type: "tableCell", content: [emptyParagraph] },
+          ],
+        },
+        { type: "tableRow", cells: [] },
+        {
+          type: "tableRow",
+          cells: [
+            {
+              type: "tableCell",
+              formatting: { vMerge: "continue" },
+              content: [emptyParagraph],
+            },
+            { type: "tableCell", content: [emptyParagraph] },
+          ],
+        },
+      ],
+    });
+
+    const table = firstTable(toProseDoc(doc));
+
+    expect(table.child(0).child(0).attrs["rowspan"]).toBe(1);
+    expect(table.child(1).child(0).attrs["colspan"]).toBe(2);
+    expect(table.child(2).childCount).toBe(2);
+  });
 });

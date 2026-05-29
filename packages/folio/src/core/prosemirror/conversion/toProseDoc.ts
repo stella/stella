@@ -805,6 +805,10 @@ function calculateRowSpans(table: Table): Map<string, RowSpanInfo> {
   for (let rowIndex = 0; rowIndex < numRows; rowIndex++) {
     // SAFETY: rowIndex < numRows <= table.rows.length
     const row = table.rows[rowIndex]!;
+    if (row.cells.length === 0) {
+      clearActiveVerticalMerges(activeMerges, result);
+      continue;
+    }
     let colIndex = 0;
     const rowCells = row.cells.map((cell) => {
       const colspan = cell.formatting?.gridSpan ?? 1;
@@ -878,6 +882,19 @@ function calculateRowSpans(table: Table): Map<string, RowSpanInfo> {
   }
 
   return result;
+}
+
+function clearActiveVerticalMerges(
+  activeMerges: Map<number, number>,
+  result: Map<string, RowSpanInfo>,
+): void {
+  for (const [colIndex, startRow] of activeMerges) {
+    const restartCell = result.get(`${startRow}-${colIndex}`);
+    if (restartCell) {
+      restartCell.preserveVMergeRestart = true;
+    }
+  }
+  activeMerges.clear();
 }
 
 function tableCellHasMeaningfulContent(cell: TableCell): boolean {
