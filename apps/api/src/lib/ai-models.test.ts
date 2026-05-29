@@ -19,6 +19,7 @@ const {
   getModelInfoForRole,
   isAllowedBYOKModel,
   REGIONAL_PROVIDERS,
+  resolveCaching,
   supportsRegion,
   validateDevModelOverride,
 } = await import("@/api/lib/ai-models");
@@ -290,7 +291,12 @@ describe("BYOK model overrides", () => {
         provider: "openrouter",
         modelId: orgConfig.overrideModels[role].modelId,
       });
-      expect(() => getModelForRole(role, orgConfig)).not.toThrow();
+      expect(() =>
+        getModelForRole(role, orgConfig, {
+          promptCachingEnabled: true,
+          scopeKey: null,
+        }),
+      ).not.toThrow();
     }
   });
 
@@ -328,7 +334,12 @@ describe("BYOK model overrides", () => {
         provider: "mistral",
         modelId: orgConfig.overrideModels[role].modelId,
       });
-      expect(() => getModelForRole(role, orgConfig)).not.toThrow();
+      expect(() =>
+        getModelForRole(role, orgConfig, {
+          promptCachingEnabled: true,
+          scopeKey: null,
+        }),
+      ).not.toThrow();
     }
   });
 
@@ -348,7 +359,12 @@ describe("BYOK model overrides", () => {
       },
     };
 
-    expect(() => getModelForRole("reasoning", orgConfig)).not.toThrow();
+    expect(() =>
+      getModelForRole("reasoning", orgConfig, {
+        promptCachingEnabled: true,
+        scopeKey: null,
+      }),
+    ).not.toThrow();
     expect(getModelInfoForRole("reasoning", orgConfig).modelId).toBe(
       "gpt-5.4-pro",
     );
@@ -379,6 +395,47 @@ describe("BYOK model overrides", () => {
       modelId: "customer-chat",
       provider: "azure_foundry",
     });
-    expect(() => getModelForRole("chat", orgConfig)).not.toThrow();
+    expect(() =>
+      getModelForRole("chat", orgConfig, {
+        promptCachingEnabled: true,
+        scopeKey: null,
+      }),
+    ).not.toThrow();
+  });
+});
+
+describe("resolveCaching", () => {
+  test("returns enabled when the org has caching on", () => {
+    const decision = resolveCaching({
+      promptCachingEnabled: true,
+      role: "pdf",
+      scopeKey: "entity-1",
+    });
+    expect(decision).toEqual({
+      enabled: true,
+      ttl: "5m",
+      scopeKey: "entity-1",
+    });
+  });
+
+  test("returns disabled with org-disabled reason when caching is off", () => {
+    const decision = resolveCaching({
+      promptCachingEnabled: false,
+      role: "chat",
+      scopeKey: "thread-1",
+    });
+    expect(decision).toEqual({
+      enabled: false,
+      reason: "org-disabled",
+    });
+  });
+
+  test("accepts null scopeKey when caching is on (opportunistic only)", () => {
+    const decision = resolveCaching({
+      promptCachingEnabled: true,
+      role: "fast",
+      scopeKey: null,
+    });
+    expect(decision).toMatchObject({ enabled: true, scopeKey: null });
   });
 });

@@ -28,7 +28,7 @@ import { createMistral, mistral } from "@ai-sdk/mistral";
 import { createOpenAI, openai } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { wrapLanguageModel } from "ai";
-import type { LanguageModel } from "ai";
+import type { LanguageModel, LanguageModelMiddleware } from "ai";
 import { panic, Result } from "better-result";
 
 import { env } from "@/api/env";
@@ -227,6 +227,45 @@ const TEMPERATURE_PER_ROLE = {
 
 export const getTemperatureForRole = (role: ModelRole): number =>
   TEMPERATURE_PER_ROLE[role];
+
+// -- Prompt caching ---------------------------------------------
+
+/**
+ * Whether stella may annotate this AI request with prompt-cache
+ * markers. `reason: "org-disabled"` means the org turned the
+ * setting off; future variants (e.g. ZDR) compose into the
+ * disabled case.
+ *
+ * When `enabled`, `scopeKey` carries an optional stable string
+ * used as the OpenAI `promptCacheKey` (cache-shard routing) and
+ * surfaces in telemetry. `null` means no routing key; opportunistic
+ * caching only.
+ */
+export type CachingDecision =
+  | { enabled: false; reason: "org-disabled" }
+  | { enabled: true; ttl: "5m"; scopeKey: string | null };
+
+const TTL_BY_ROLE = {
+  fast: "5m",
+  chat: "5m",
+  reasoning: "5m",
+  pdf: "5m",
+} as const satisfies Record<ModelRole, "5m">;
+
+export const resolveCaching = ({
+  promptCachingEnabled,
+  role,
+  scopeKey,
+}: {
+  promptCachingEnabled: boolean;
+  role: ModelRole;
+  scopeKey: string | null;
+}): CachingDecision => {
+  if (!promptCachingEnabled) {
+    return { enabled: false, reason: "org-disabled" };
+  }
+  return { enabled: true, ttl: TTL_BY_ROLE[role], scopeKey };
+};
 
 // -- Provider resolution ----------------------------------------
 
@@ -670,13 +709,181 @@ const MODEL_OVERRIDES = {
 
 const isAIDevToolsEnabled = (): boolean => env.AI_DEVTOOLS_ENABLED;
 
-const withLocalAIDevTools = (model: WrappableLanguageModel): LanguageModel => {
-  if (!isAIDevToolsEnabled()) {
-    return model;
+type SingleMiddleware = LanguageModelMiddleware;
+
+const PROVIDER_CACHE_KEY_MAX = 64;
+
+const hashScopeKey = (raw: string): string =>
+  new Bun.CryptoHasher("sha256")
+    .update(raw)
+    .digest("hex")
+    .slice(0, PROVIDER_CACHE_KEY_MAX);
+
+type CallOptions = Parameters<
+  NonNullable<LanguageModelMiddleware["transformParams"]>
+>[0]["params"];
+type ProviderOptionsMap = NonNullable<CallOptions["providerOptions"]>;
+type ProviderOptionsValue = ProviderOptionsMap[string];
+
+const omitKey = (
+  entry: ProviderOptionsValue,
+  key: string,
+): ProviderOptionsValue => {
+  if (!(key in entry)) {
+    return entry;
+  }
+  const { [key]: _omitted, ...rest } = entry;
+  return rest;
+};
+
+const stripCacheMarkersFromProviderOptions = (
+  providerOptions: ProviderOptionsMap | undefined,
+): ProviderOptionsMap | undefined => {
+  if (providerOptions === undefined) {
+    return providerOptions;
+  }
+  const next: ProviderOptionsMap = { ...providerOptions };
+  const anthropicEntry = next["anthropic"];
+  if (anthropicEntry !== undefined) {
+    next["anthropic"] = omitKey(anthropicEntry, "cacheControl");
+  }
+  const openaiEntry = next["openai"];
+  if (openaiEntry !== undefined) {
+    next["openai"] = omitKey(openaiEntry, "promptCacheKey");
+  }
+  const googleEntry = next["google"];
+  if (googleEntry !== undefined) {
+    next["google"] = omitKey(googleEntry, "cachedContent");
+  }
+  return next;
+};
+
+const stripPartProviderOptions = <
+  P extends { providerOptions?: ProviderOptionsMap | undefined },
+>(
+  part: P,
+): P => {
+  const cleaned = stripCacheMarkersFromProviderOptions(part.providerOptions);
+  return cleaned === undefined ? part : { ...part, providerOptions: cleaned };
+};
+
+const stripCacheMarkersFromPrompt = (
+  prompt: CallOptions["prompt"],
+): CallOptions["prompt"] =>
+  prompt.map((message) => {
+    const cleanedProviderOptions = stripCacheMarkersFromProviderOptions(
+      message.providerOptions,
+    );
+    const providerOptionsPatch =
+      cleanedProviderOptions !== undefined
+        ? { providerOptions: cleanedProviderOptions }
+        : {};
+    if (message.role === "system") {
+      return { ...message, ...providerOptionsPatch };
+    }
+    return {
+      ...message,
+      ...providerOptionsPatch,
+      content: message.content.map(stripPartProviderOptions),
+    };
+  });
+
+const markAnthropicSystemEphemeral = (
+  prompt: CallOptions["prompt"],
+): CallOptions["prompt"] =>
+  prompt.map((message) => {
+    if (message.role !== "system") {
+      return message;
+    }
+    const existingMessageOptions = message.providerOptions ?? {};
+    const existingAnthropic = existingMessageOptions["anthropic"] ?? {};
+    if (existingAnthropic["cacheControl"] !== undefined) {
+      return message;
+    }
+    return {
+      ...message,
+      providerOptions: {
+        ...existingMessageOptions,
+        anthropic: {
+          ...existingAnthropic,
+          cacheControl: { type: "ephemeral" },
+        },
+      },
+    };
+  });
+
+const computeCachingParams = (
+  params: CallOptions,
+  provider: AIProvider,
+  decision: CachingDecision,
+): CallOptions => {
+  const strippedPrompt = stripCacheMarkersFromPrompt(params.prompt);
+  const strippedProviderOptions = stripCacheMarkersFromProviderOptions(
+    params.providerOptions,
+  );
+
+  if (!decision.enabled) {
+    return {
+      ...params,
+      prompt: strippedPrompt,
+      ...(strippedProviderOptions !== undefined
+        ? { providerOptions: strippedProviderOptions }
+        : {}),
+    };
+  }
+
+  let nextPrompt = strippedPrompt;
+  let nextProviderOptions = strippedProviderOptions;
+
+  if (provider === "anthropic") {
+    nextPrompt = markAnthropicSystemEphemeral(strippedPrompt);
+  }
+
+  if (
+    (provider === "openai" || provider === "azure_foundry") &&
+    decision.scopeKey !== null
+  ) {
+    const existingOpenai = nextProviderOptions?.["openai"] ?? {};
+    nextProviderOptions = {
+      ...nextProviderOptions,
+      openai: {
+        ...existingOpenai,
+        promptCacheKey: hashScopeKey(decision.scopeKey),
+      },
+    };
+  }
+
+  return {
+    ...params,
+    prompt: nextPrompt,
+    ...(nextProviderOptions !== undefined
+      ? { providerOptions: nextProviderOptions }
+      : {}),
+  };
+};
+
+const cachingMiddleware = (
+  provider: AIProvider,
+  decision: CachingDecision,
+): SingleMiddleware => ({
+  specificationVersion: "v3",
+  transformParams: async ({ params }) =>
+    await Promise.resolve(computeCachingParams(params, provider, decision)),
+});
+
+const withInstrumentation = (
+  model: WrappableLanguageModel,
+  ctx: { provider: AIProvider; decision: CachingDecision },
+): LanguageModel => {
+  const middlewares: SingleMiddleware[] = [
+    cachingMiddleware(ctx.provider, ctx.decision),
+  ];
+  if (isAIDevToolsEnabled()) {
+    middlewares.push(devToolsMiddleware());
   }
   return wrapLanguageModel({
     model,
-    middleware: devToolsMiddleware(),
+    middleware: middlewares,
   });
 };
 
@@ -748,15 +955,21 @@ export const validateDevModelOverride = (
  */
 export const getModelForRole = (
   role: ModelRole,
-  orgConfig?: OrgAIConfig | null,
+  orgConfig: OrgAIConfig | null | undefined,
+  options: { promptCachingEnabled: boolean; scopeKey: string | null },
 ): LanguageModel => {
+  const { promptCachingEnabled, scopeKey } = options;
   // BYOK path: org selects a model for each role through
   // one of its configured provider credentials.
   if (orgConfig) {
     const selection = orgConfig.overrideModels[role];
     const providerConfig = getOrgProviderConfig(orgConfig, selection.provider);
     const factory = getCachedFactory(providerConfig);
-    return withLocalAIDevTools(factory(selection.modelId));
+    const decision = resolveCaching({ promptCachingEnabled, role, scopeKey });
+    return withInstrumentation(factory(selection.modelId), {
+      provider: providerConfig.provider,
+      decision,
+    });
   }
 
   // Default instance path. requireAIAvailable() gates the entry
@@ -771,9 +984,13 @@ export const getModelForRole = (
   if (!hasInstanceProvider()) {
     throw byokRoleNotConfiguredError(role);
   }
-  const modelId =
-    MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[getActiveProvider()][role];
-  return withLocalAIDevTools(getInstanceFactory()(modelId));
+  const provider = getActiveProvider();
+  const modelId = MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role];
+  const decision = resolveCaching({ promptCachingEnabled, role, scopeKey });
+  return withInstrumentation(getInstanceFactory()(modelId), {
+    provider,
+    decision,
+  });
 };
 
 const byokRoleNotConfiguredError = (role: ModelRole): HandlerError =>
@@ -848,21 +1065,33 @@ export const getModelInfoById = (
  */
 export const getModelById = (
   modelId: string,
-  orgConfig?: OrgAIConfig | null,
+  orgConfig: OrgAIConfig | null | undefined,
+  options: {
+    promptCachingEnabled: boolean;
+    scopeKey: string | null;
+    role: ModelRole;
+  },
 ): LanguageModel => {
   const override = decodeModelOverride(modelId);
+  const { promptCachingEnabled, scopeKey, role } = options;
+  const decision = resolveCaching({ promptCachingEnabled, role, scopeKey });
   if (orgConfig) {
     const providerConfig = override.provider
       ? getOrgProviderConfig(orgConfig, override.provider)
       : getPrimaryOrgProvider(orgConfig);
-    return withLocalAIDevTools(
+    return withInstrumentation(
       getCachedFactory(providerConfig)(override.modelId),
+      { provider: providerConfig.provider, decision },
     );
   }
   if (override.provider) {
-    return withLocalAIDevTools(
+    return withInstrumentation(
       createModelFactory({ provider: override.provider })(override.modelId),
+      { provider: override.provider, decision },
     );
   }
-  return withLocalAIDevTools(getInstanceFactory()(override.modelId));
+  return withInstrumentation(getInstanceFactory()(override.modelId), {
+    provider: getActiveProvider(),
+    decision,
+  });
 };

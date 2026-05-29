@@ -30,6 +30,7 @@ const generateBoundingBoxes = createSafeHandler(
     workspaceId,
     body,
     orgAIConfig,
+    promptCachingEnabled,
   }) {
     const organizationId = session.activeOrganizationId;
     const { justificationId } = body;
@@ -61,6 +62,7 @@ const generateBoundingBoxes = createSafeHandler(
         justificationId,
         organizationId,
         orgAIConfig: orgAIConfig ?? null,
+        promptCachingEnabled,
         workspaceId,
         data: {
           pdf: preparedData.pdf,

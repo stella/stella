@@ -44,3 +44,13 @@ export const loadOrgAIConfig = async (
     return null;
   }
 };
+
+export const loadPromptCachingPreference = async (
+  organizationId: SafeId<"organization">,
+): Promise<boolean> => {
+  const row = await rootDb.query.organizationSettings.findFirst({
+    where: { organizationId: { eq: organizationId } },
+    columns: { promptCachingEnabled: true },
+  });
+  return row?.promptCachingEnabled ?? true;
+};

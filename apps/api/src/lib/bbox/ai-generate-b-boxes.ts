@@ -25,6 +25,7 @@ type GenerateBBoxDataProps = {
   pageNumber: number;
   workspaceId: SafeId<"workspace">;
   orgAIConfig?: OrgAIConfig | null;
+  promptCachingEnabled: boolean;
 };
 
 export const generateBBoxData = async ({
@@ -38,6 +39,7 @@ export const generateBBoxData = async ({
   pageNumber,
   workspaceId,
   orgAIConfig,
+  promptCachingEnabled,
 }: GenerateBBoxDataProps): Promise<
   Result<[number, number, number, number][], WorkflowIntegrationError>
 > => {
@@ -58,7 +60,10 @@ export const generateBBoxData = async ({
   return await Result.tryPromise({
     try: async () => {
       const result = await generateText({
-        model: getModelForRole("pdf", orgAIConfig),
+        model: getModelForRole("pdf", orgAIConfig, {
+          promptCachingEnabled,
+          scopeKey: justificationId,
+        }),
         temperature: getTemperatureForRole("pdf"),
         system: BBOX_SYSTEM_PROMPT,
         messages: [

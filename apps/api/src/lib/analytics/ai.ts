@@ -597,6 +597,13 @@ export const createAIAnalyticsCallbacks = ({
             : {}),
           tool_count_bucket: bucketCount(toolCalls.length),
           total_tokens_bucket: bucketTokenCount(usage.totalTokens),
+          ...(usage.inputTokenDetails.cacheReadTokens !== undefined
+            ? {
+                cached_input_tokens_bucket: bucketTokenCount(
+                  usage.inputTokenDetails.cacheReadTokens,
+                ),
+              }
+            : {}),
         },
       });
 
@@ -615,6 +622,11 @@ export const createAIAnalyticsCallbacks = ({
         }),
         $ai_input_tokens: usage.inputTokens,
         $ai_output_tokens: usage.outputTokens,
+        ...(usage.inputTokenDetails.cacheReadTokens !== undefined
+          ? {
+              $ai_cached_input_tokens: usage.inputTokenDetails.cacheReadTokens,
+            }
+          : {}),
         $ai_latency: latencySeconds,
         $ai_model: currentStep.modelId,
         $ai_provider: currentStep.provider,

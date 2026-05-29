@@ -1725,6 +1725,11 @@ type Messages = {
       "practiceJurisdictions": "Practice jurisdictions";
       "profile": "Profile";
       "profileDescription": "Update organization name";
+      "promptCaching": {
+        "description": "When on, stella adds cache markers so repeated AI requests over the same document or thread cost ~10x less and finish faster. Cached prompts live with the AI provider for up to 5 minutes, scoped to your organization. Turn off if your policy forbids any third-party retention of client data.";
+        "title": "Prompt caching";
+        "toggleLabel": "Allow prompt caching with AI providers";
+      };
       "renameAction": "Rename";
       "renameDescription": "Members will see the new name immediately.";
       "renameTitle": "Rename organization";
@@ -1751,6 +1756,7 @@ type Messages = {
     "otherSessionsRevoked": "Other sessions revoked";
     "partyAdded": "Party added";
     "partyRemoved": "Party removed";
+    "promptCachingUpdated": "Prompt caching preference updated";
     "roleUpdated": "Role updated";
     "sessionRevoked": "Session revoked";
     "taskCreated": "Task created";

@@ -97,6 +97,7 @@ const runGeneration = async (
     decisionType: string | null;
   },
   orgAIConfig: OrgAIConfig | null,
+  promptCachingEnabled: boolean,
 ) => {
   // audit: skip — background AI analysis output
   const systemPrompt = getSystemPrompt(decision.language);
@@ -108,7 +109,10 @@ Type: ${decision.decisionType ?? "unknown"}
 
 ${decisionText}`;
 
-  const model = getModelForRole("fast", orgAIConfig);
+  const model = getModelForRole("fast", orgAIConfig, {
+    promptCachingEnabled,
+    scopeKey: decisionId,
+  });
   const { modelId } = getModelInfoForRole("fast", orgAIConfig);
   const aiAnalytics = createAIAnalyticsCallbacks({
     feature: "case-law.analysis",
@@ -201,6 +205,7 @@ export const generateAnalysis = async (
   decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
   orgAIConfig: OrgAIConfig | null,
+  promptCachingEnabled: boolean,
 ): Promise<{
   status: "done" | "error" | "generating";
   analysis?: PersistedDecisionAnalysis;
@@ -277,7 +282,13 @@ export const generateAnalysis = async (
   }
 
   // Fire-and-forget generation
-  void runGeneration(decisionId, ast, decision, orgAIConfig);
+  void runGeneration(
+    decisionId,
+    ast,
+    decision,
+    orgAIConfig,
+    promptCachingEnabled,
+  );
 
   return { status: "generating" };
 };

@@ -22,6 +22,7 @@ const readOrganizationSettings = createSafeRootHandler(
             matterNumberPattern: true,
             matterNumberPadding: true,
             practiceJurisdictions: true,
+            promptCachingEnabled: true,
           },
         }),
       ),
@@ -33,6 +34,7 @@ const readOrganizationSettings = createSafeRootHandler(
       matterNumberPadding:
         row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
       practiceJurisdictions: row?.practiceJurisdictions ?? [],
+      promptCachingEnabled: row?.promptCachingEnabled ?? true,
     });
   },
 );

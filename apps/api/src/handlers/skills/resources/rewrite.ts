@@ -41,6 +41,7 @@ const rewriteSkillResource = createSafeRootHandler(
     body,
     memberRole,
     orgAIConfig,
+    promptCachingEnabled,
     params,
     safeDb,
     session,
@@ -134,7 +135,10 @@ const rewriteSkillResource = createSafeRootHandler(
         await generateText({
           abortSignal: AbortSignal.timeout(REWRITE_TIMEOUT_MS),
           maxOutputTokens: REWRITE_MAX_OUTPUT_TOKENS,
-          model: getModelForRole("fast", orgAIConfig),
+          model: getModelForRole("fast", orgAIConfig, {
+            promptCachingEnabled,
+            scopeKey: null,
+          }),
           prompt,
           temperature: getTemperatureForRole("fast"),
           ...aiAnalytics.stepCallbacks,

@@ -1722,6 +1722,11 @@
       "practiceJurisdictions": "Praxisjurisdiktionen",
       "profile": "Profile",
       "profileDescription": "Update name and slug",
+      "promptCaching": {
+        "description": "When on, stella adds cache markers so repeated AI requests over the same document or thread cost ~10x less and finish faster. Cached prompts live with the AI provider for up to 5 minutes, scoped to your organization. Turn off if your policy forbids any third-party retention of client data.",
+        "title": "Prompt caching",
+        "toggleLabel": "Allow prompt caching with AI providers"
+      },
       "renameAction": "Rename",
       "renameDescription": "Members will see the new name immediately.",
       "renameTitle": "Rename organization",
@@ -1748,6 +1753,7 @@
     "otherSessionsRevoked": "Andere Sitzungen beendet",
     "partyAdded": "Partei hinzugefügt",
     "partyRemoved": "Partei entfernt",
+    "promptCachingUpdated": "Prompt caching preference updated",
     "roleUpdated": "Rolle aktualisiert",
     "sessionRevoked": "Sitzung beendet",
     "taskCreated": "Aufgabe erstellt",
