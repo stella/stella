@@ -1723,7 +1723,7 @@
       "profile": "Profil",
       "profileDescription": "Upravte název organizace",
       "promptCaching": {
-        "description": "Pokud je zapnuto, stella přidává cache značky tak, aby opakované AI dotazy nad stejným dokumentem nebo vláknem stály ~10× méně a byly rychlejší. Cachované prompty zůstávají u poskytovatele AI až 5 minut a jsou omezené na vaši organizaci. Vypněte, pokud vaše pravidla zakazují jakékoli uchovávání klientských dat třetími stranami.",
+        "description": "Pokud je zapnuto, stella přidává cache značky tak, aby opakované AI dotazy nad stejným dokumentem nebo vláknem stály ~10× méně a byly rychlejší. Cachované prompty zůstávají u poskytovatele AI až 5 minut a jsou omezené na vaši organizaci. Vypnutí zastaví zasílání cache značek, ale poskytovatelé si mohou prompty stále cachovat oportunisticky — pouze smlouva Zero Data Retention s poskytovatelem zcela vypne cachování na straně serveru.",
         "title": "Cachování promptů",
         "toggleLabel": "Povolit cachování promptů u poskytovatelů AI"
       },
