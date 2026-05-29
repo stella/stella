@@ -1,10 +1,7 @@
 import type { Mark, Node as PMNode, Schema } from "prosemirror-model";
 import type { EditorState, Transaction } from "prosemirror-state";
 
-import {
-  getFolioParaIdFromBlockId,
-  type FolioBlockId,
-} from "../types/block-id";
+import { getFolioParaIdFromBlockId } from "../types/block-id";
 import { buildCleanBlockText } from "./clean-text";
 import { hashFolioAIBlockText, normalizeFolioAIBlockText } from "./snapshot";
 import type {
@@ -213,7 +210,7 @@ const findEnclosingTableBoundary = (
  */
 const ordinalAmongSameHash = (
   snapshot: FolioAIEditSnapshot,
-  blockId: FolioBlockId,
+  blockId: string,
 ): number => {
   const target = snapshot.anchors[blockId];
   if (!target) {

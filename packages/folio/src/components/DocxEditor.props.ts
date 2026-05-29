@@ -13,7 +13,6 @@ import type {
 import type { DocxCompatibility } from "../core/docx/compatibility";
 import type { SelectionState, TableContextInfo } from "../core/prosemirror";
 import type { AnonymizationMatch } from "../core/prosemirror/plugins/anonymizationDecorations";
-import type { FolioBlockId } from "../core/types/block-id";
 import type { Document, Theme, TabStop } from "../core/types/document";
 import type { DocxInput } from "../core/utils/docxInput";
 import type { PagedEditorRef } from "../paged-editor/PagedEditor";
@@ -261,10 +260,7 @@ export type DocxEditorRef = {
    * accept (insertAfterBlock / deleteBlock). Without `snapshot`, falls back to
    * a fresh-from-live-doc snapshot.
    */
-  scrollToBlock: (
-    blockId: FolioBlockId,
-    snapshot?: FolioAIEditSnapshot,
-  ) => boolean;
+  scrollToBlock: (blockId: string, snapshot?: FolioAIEditSnapshot) => boolean;
 };
 
 /** Aggregated internal state held by DocxEditor's top-level reducer slot. */

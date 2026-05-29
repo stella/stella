@@ -11,15 +11,12 @@ import type { Node as PMNode } from "prosemirror-model";
 import { createFolioAIEditSnapshot } from "../core/ai-edits/snapshot";
 import type { FolioAIEditSnapshot } from "../core/ai-edits/types";
 import { findParagraphByParaId } from "../core/prosemirror/utils/findParagraphByParaId";
-import {
-  getFolioParaIdFromBlockId,
-  type FolioBlockId,
-} from "../core/types/block-id";
+import { getFolioParaIdFromBlockId } from "../core/types/block-id";
 
 export type DocPositionRange = { from: number; to: number };
 
 type ResolveFolioAIBlockRangeOptions = {
-  blockId: FolioBlockId;
+  blockId: string;
   doc: PMNode;
   snapshot?: FolioAIEditSnapshot | null | undefined;
 };
