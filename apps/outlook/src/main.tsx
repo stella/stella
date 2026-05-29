@@ -6,7 +6,7 @@ import { panic } from "better-result";
 import "./styles.css";
 
 import { App } from "@/app";
-import { I18nProvider } from "@/i18n";
+import { OutlookIntlProvider } from "@/i18n";
 import { waitForOffice } from "@/outlook";
 
 const rootElement = document.querySelector("#root");
@@ -18,9 +18,9 @@ if (!rootElement) {
 const render = () => {
   createRoot(rootElement).render(
     <StrictMode>
-      <I18nProvider>
+      <OutlookIntlProvider>
         <App />
-      </I18nProvider>
+      </OutlookIntlProvider>
     </StrictMode>,
   );
 };

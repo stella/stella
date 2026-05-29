@@ -1,230 +1,104 @@
-import { env } from "@/env";
+import type { SafeId } from "@stll/api/types";
+import { toSafeId } from "@stll/api/types";
+
+import { api, withTimeout } from "@/lib/api";
+import { APIError, toAPIError } from "@/lib/errors";
 import type {
   AttachmentDownloadResult,
   MailSnapshot,
   WorkspaceSummary,
 } from "@/types";
 
-class StellaApiError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "StellaApiError";
-  }
-}
+const OUTLOOK_NAMESPACE = "Outlook · ";
+
+const PROPERTY_NAMES = {
+  attachments: `${OUTLOOK_NAMESPACE}Attachments`,
+  body: `${OUTLOOK_NAMESPACE}Body`,
+  cc: `${OUTLOOK_NAMESPACE}CC`,
+  conversationId: `${OUTLOOK_NAMESPACE}Conversation ID`,
+  from: `${OUTLOOK_NAMESPACE}From`,
+  internetMessageId: `${OUTLOOK_NAMESPACE}Internet message ID`,
+  itemId: `${OUTLOOK_NAMESPACE}Outlook item ID`,
+  sentAt: `${OUTLOOK_NAMESPACE}Sent at`,
+  to: `${OUTLOOK_NAMESPACE}To`,
+} as const;
+
+const FIELD_BODY_MAX_LENGTH = 20_000;
+
+const entitiesQueryKey = (workspaceId: string) => ["entities", workspaceId];
+const propertiesQueryKey = (workspaceId: string) => ["properties", workspaceId];
+
+type PropertyContentType = "file" | "text";
 
 type PropertySummary = {
-  content: {
-    type: string;
-  };
-  id: string;
+  id: SafeId<"property">;
   name: string;
+  contentType: PropertyContentType;
 };
 
-type JsonRequestOptions<T> = {
-  body?: unknown;
-  method: "GET" | "POST" | "PUT";
-  parse: (payload: unknown) => T;
-  path: string;
+const isManagedContentType = (
+  type: string | null | undefined,
+): type is PropertyContentType => type === "file" || type === "text";
+
+export const readWorkspaces = async (): Promise<WorkspaceSummary[]> => {
+  const response = await api.workspaces.get(withTimeout());
+  if (response.error) {
+    throw toAPIError(response.error);
+  }
+  return response.data.workspaces.map((workspace) => ({
+    clientName: workspace.client?.displayName ?? null,
+    id: workspace.id,
+    lastActivityAt: workspace.lastActivityAt,
+    name: workspace.name,
+    reference: workspace.reference,
+  }));
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
-const extractErrorMessage = (payload: unknown): string => {
-  if (!isRecord(payload)) {
-    return "Stella request failed";
-  }
-
-  const value = payload["value"];
-  if (isRecord(value)) {
-    const message = value["message"];
-    if (typeof message === "string") {
-      return message;
-    }
-  }
-
-  const error = payload["error"];
-  if (isRecord(error)) {
-    const message = error["message"];
-    if (typeof message === "string") {
-      return message;
-    }
-  }
-
-  const message = payload["message"];
-  return typeof message === "string" ? message : "Stella request failed";
-};
-
-const readPayload = async (response: Response): Promise<unknown> => {
-  const contentType = response.headers.get("content-type");
-  if (contentType?.includes("application/json")) {
-    return await response.json();
-  }
-  return await response.text();
-};
-
-const requestJson = async <T>({
-  body,
-  method,
-  parse,
-  path,
-}: JsonRequestOptions<T>): Promise<T> => {
-  const init: RequestInit = {
-    credentials: "include",
-    method,
-    signal: AbortSignal.timeout(10_000),
-  };
-  if (body !== undefined) {
-    init.body = JSON.stringify(body);
-    init.headers = { "Content-Type": "application/json" };
-  }
-
-  const response = await fetch(`${env.apiBaseUrl}${path}`, {
-    ...init,
-  });
-  const payload = await readPayload(response);
-  if (!response.ok) {
-    throw new StellaApiError(extractErrorMessage(payload));
-  }
-  return parse(payload);
-};
-
-const requestFormData = async <T>({
-  body,
-  parse,
-  path,
-}: {
-  body: FormData;
-  parse: (payload: unknown) => T;
-  path: string;
-}): Promise<T> => {
-  const response = await fetch(`${env.apiBaseUrl}${path}`, {
-    body,
-    credentials: "include",
-    method: "POST",
-    signal: AbortSignal.timeout(10_000),
-  });
-  const payload = await readPayload(response);
-  if (!response.ok) {
-    throw new StellaApiError(extractErrorMessage(payload));
-  }
-  return parse(payload);
-};
-
-const asString = (value: unknown): string | null =>
-  typeof value === "string" ? value : null;
-
-const parseWorkspaces = (payload: unknown): WorkspaceSummary[] => {
-  if (!isRecord(payload) || !Array.isArray(payload["workspaces"])) {
-    throw new StellaApiError("Stella returned an invalid workspace list");
-  }
-
-  const workspaces: WorkspaceSummary[] = [];
-  for (const item of payload["workspaces"]) {
-    if (!isRecord(item)) {
-      continue;
-    }
-    const id = asString(item["id"]);
-    const name = asString(item["name"]);
-    if (!id || !name) {
-      continue;
-    }
-    const client = item["client"];
-    const clientName = isRecord(client)
-      ? asString(client["displayName"])
-      : null;
-    workspaces.push({
-      clientName,
-      id,
-      lastActivityAt: asString(item["lastActivityAt"]),
-      name,
-      reference: asString(item["reference"]),
-    });
-  }
-
-  return workspaces;
-};
-
-const parseProperties = (payload: unknown): PropertySummary[] => {
-  if (!Array.isArray(payload)) {
-    throw new StellaApiError("Stella returned an invalid property list");
+const readManagedProperties = async (
+  workspaceId: SafeId<"workspace">,
+): Promise<PropertySummary[]> => {
+  const response = await api.properties({ workspaceId }).get(withTimeout());
+  if (response.error) {
+    throw toAPIError(response.error);
   }
 
   const properties: PropertySummary[] = [];
-  for (const item of payload) {
-    if (!isRecord(item) || !isRecord(item["content"])) {
-      continue;
-    }
-    const id = asString(item["id"]);
-    const name = asString(item["name"]);
-    const type = asString(item["content"]["type"]);
-    if (!id || !name || !type) {
+  for (const property of response.data) {
+    if (!isManagedContentType(property.content.type)) {
       continue;
     }
     properties.push({
-      content: { type },
-      id,
-      name,
+      contentType: property.content.type,
+      id: property.id,
+      name: property.name,
     });
   }
-
   return properties;
 };
-
-const parseIdResponse =
-  (key: "entityId" | "id") =>
-  (payload: unknown): string => {
-    if (!isRecord(payload)) {
-      throw new StellaApiError("Stella returned an invalid response");
-    }
-
-    const id = asString(payload[key]);
-    if (!id) {
-      throw new StellaApiError("Stella returned a response without an id");
-    }
-
-    return id;
-  };
-
-const parseEmptyResponse = () => undefined;
-
-const encodePathPart = (value: string) => encodeURIComponent(value);
-
-export const readWorkspaces = async (): Promise<WorkspaceSummary[]> =>
-  await requestJson({
-    method: "GET",
-    parse: parseWorkspaces,
-    path: "/v1/workspaces",
-  });
-
-const readProperties = async (
-  workspaceId: string,
-): Promise<PropertySummary[]> =>
-  await requestJson({
-    method: "GET",
-    parse: parseProperties,
-    path: `/v1/properties/${encodePathPart(workspaceId)}`,
-  });
 
 const createProperty = async ({
   contentType,
   name,
   workspaceId,
 }: {
-  contentType: "file" | "text";
+  contentType: PropertyContentType;
   name: string;
-  workspaceId: string;
-}): Promise<string> =>
-  await requestJson({
-    body: {
+  workspaceId: SafeId<"workspace">;
+}): Promise<SafeId<"property">> => {
+  const response = await api.properties({ workspaceId }).put(
+    {
       contentType,
       name,
+      queryKey: propertiesQueryKey(workspaceId),
       toolType: "manual-input",
     },
-    method: "PUT",
-    parse: parseIdResponse("id"),
-    path: `/v1/properties/${encodePathPart(workspaceId)}`,
-  });
+    withTimeout(),
+  );
+  if (response.error) {
+    throw toAPIError(response.error);
+  }
+  return response.data.id;
+};
 
 const ensureProperty = async ({
   contentType,
@@ -232,26 +106,21 @@ const ensureProperty = async ({
   properties,
   workspaceId,
 }: {
-  contentType: "file" | "text";
+  contentType: PropertyContentType;
   name: string;
   properties: PropertySummary[];
-  workspaceId: string;
-}): Promise<string> => {
+  workspaceId: SafeId<"workspace">;
+}): Promise<SafeId<"property">> => {
   const existing = properties.find(
     (property) =>
-      property.name === name && property.content.type === contentType,
+      property.name === name && property.contentType === contentType,
   );
-
   if (existing) {
     return existing.id;
   }
 
   const createdId = await createProperty({ contentType, name, workspaceId });
-  properties.push({
-    content: { type: contentType },
-    id: createdId,
-    name,
-  });
+  properties.push({ contentType, id: createdId, name });
   return createdId;
 };
 
@@ -261,25 +130,23 @@ const upsertTextField = async ({
   value,
   workspaceId,
 }: {
-  entityId: string;
-  propertyId: string;
+  entityId: SafeId<"entity">;
+  propertyId: SafeId<"property">;
   value: string;
-  workspaceId: string;
+  workspaceId: SafeId<"workspace">;
 }): Promise<void> => {
-  await requestJson({
-    body: {
-      content: {
-        type: "text",
-        value,
-        version: 1,
-      },
+  const response = await api.fields({ workspaceId }).post(
+    {
+      content: { type: "text", value, version: 1 },
       entityId,
       propertyId,
+      queryKey: entitiesQueryKey(workspaceId),
     },
-    method: "POST",
-    parse: parseEmptyResponse,
-    path: `/v1/fields/${encodePathPart(workspaceId)}`,
-  });
+    withTimeout(),
+  );
+  if (response.error) {
+    throw toAPIError(response.error);
+  }
 };
 
 const uploadAttachment = async ({
@@ -288,19 +155,42 @@ const uploadAttachment = async ({
   workspaceId,
 }: {
   file: File;
-  propertyId: string;
-  workspaceId: string;
+  propertyId: SafeId<"property">;
+  workspaceId: SafeId<"workspace">;
 }): Promise<void> => {
-  const formData = new FormData();
-  formData.set("file", file);
-  formData.set("name", file.name);
-  formData.set("propertyId", propertyId);
+  const response = await api.entities({ workspaceId }).upload.post(
+    {
+      file,
+      name: file.name,
+      propertyId,
+      queryKey: entitiesQueryKey(workspaceId),
+    },
+    withTimeout(),
+  );
+  if (response.error) {
+    throw toAPIError(response.error);
+  }
+};
 
-  await requestFormData({
-    body: formData,
-    parse: parseEmptyResponse,
-    path: `/v1/entities/${encodePathPart(workspaceId)}/upload`,
-  });
+const createMessageEntity = async ({
+  name,
+  workspaceId,
+}: {
+  name: string;
+  workspaceId: SafeId<"workspace">;
+}): Promise<SafeId<"entity">> => {
+  const response = await api.entities({ workspaceId }).put(
+    {
+      kind: "message",
+      name,
+      queryKey: entitiesQueryKey(workspaceId),
+    },
+    withTimeout(),
+  );
+  if (response.error) {
+    throw toAPIError(response.error);
+  }
+  return response.data.entityId;
 };
 
 const joinAddresses = (addresses: MailSnapshot["to"]) =>
@@ -311,57 +201,56 @@ const joinAddresses = (addresses: MailSnapshot["to"]) =>
     .join(", ");
 
 const truncateFieldValue = (value: string): string => {
-  const limit = 20_000;
-  if (value.length <= limit) {
+  if (value.length <= FIELD_BODY_MAX_LENGTH) {
     return value;
   }
-  return `${value.slice(0, limit)}\n\n[Truncated by Stella Outlook add-in]`;
+  return `${value.slice(0, FIELD_BODY_MAX_LENGTH)}\n\n[Truncated by Stella Outlook add-in]`;
 };
+
+const buildFieldEntries = (snapshot: MailSnapshot) => [
+  {
+    name: PROPERTY_NAMES.from,
+    value: snapshot.from ? joinAddresses([snapshot.from]) : "",
+  },
+  { name: PROPERTY_NAMES.to, value: joinAddresses(snapshot.to) },
+  { name: PROPERTY_NAMES.cc, value: joinAddresses(snapshot.cc) },
+  { name: PROPERTY_NAMES.sentAt, value: snapshot.sentAt ?? "" },
+  {
+    name: PROPERTY_NAMES.conversationId,
+    value: snapshot.conversationId ?? "",
+  },
+  { name: PROPERTY_NAMES.itemId, value: snapshot.itemId ?? "" },
+  {
+    name: PROPERTY_NAMES.internetMessageId,
+    value: snapshot.internetMessageId ?? "",
+  },
+  { name: PROPERTY_NAMES.body, value: truncateFieldValue(snapshot.bodyText) },
+];
 
 export type SaveEmailResult = {
   attachmentCount: number;
-  entityId: string;
+  entityId: SafeId<"entity">;
   skippedAttachments: string[];
 };
 
 export const saveEmailToMatter = async ({
   attachmentResults,
   snapshot,
-  workspaceId,
+  workspaceId: workspaceIdString,
 }: {
   attachmentResults: AttachmentDownloadResult[];
   snapshot: MailSnapshot;
   workspaceId: string;
 }): Promise<SaveEmailResult> => {
-  const properties = await readProperties(workspaceId);
-  const fieldEntries = [
-    {
-      name: "Outlook from",
-      value: snapshot.from ? joinAddresses([snapshot.from]) : "",
-    },
-    { name: "Outlook to", value: joinAddresses(snapshot.to) },
-    { name: "Outlook cc", value: joinAddresses(snapshot.cc) },
-    { name: "Outlook sent at", value: snapshot.sentAt ?? "" },
-    { name: "Outlook conversation id", value: snapshot.conversationId ?? "" },
-    { name: "Outlook item id", value: snapshot.itemId ?? "" },
-    {
-      name: "Outlook internet message id",
-      value: snapshot.internetMessageId ?? "",
-    },
-    { name: "Outlook body", value: truncateFieldValue(snapshot.bodyText) },
-  ];
+  const workspaceId = toSafeId<"workspace">(workspaceIdString);
+  const properties = await readManagedProperties(workspaceId);
 
-  const entityId = await requestJson({
-    body: {
-      kind: "message",
-      name: snapshot.subject || "(No subject)",
-    },
-    method: "PUT",
-    parse: parseIdResponse("entityId"),
-    path: `/v1/entities/${encodePathPart(workspaceId)}`,
+  const entityId = await createMessageEntity({
+    name: snapshot.subject || "(No subject)",
+    workspaceId,
   });
 
-  for (const entry of fieldEntries) {
+  for (const entry of buildFieldEntries(snapshot)) {
     if (entry.value.length === 0) {
       continue;
     }
@@ -386,17 +275,16 @@ export const saveEmailToMatter = async ({
       result.type === "downloaded",
   );
   if (downloaded.length > 0) {
-    const filePropertyId = await ensureProperty({
+    const attachmentPropertyId = await ensureProperty({
       contentType: "file",
-      name: "File",
+      name: PROPERTY_NAMES.attachments,
       properties,
       workspaceId,
     });
-
     for (const result of downloaded) {
       await uploadAttachment({
         file: result.file,
-        propertyId: filePropertyId,
+        propertyId: attachmentPropertyId,
         workspaceId,
       });
     }
@@ -410,3 +298,5 @@ export const saveEmailToMatter = async ({
       .map((result) => result.reason),
   };
 };
+
+export { APIError };
