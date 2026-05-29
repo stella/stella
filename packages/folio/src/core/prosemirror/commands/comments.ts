@@ -102,7 +102,7 @@ function resolveChange(
 
       state.doc.nodesBetween(from, to, (node, pos): boolean => {
         if (node.type.name === "paragraph") {
-          const op = collectPPrMarkOp(node, pos, mode, revisionSet);
+          const op = collectPPrMarkOp(node, pos, from, to, mode, revisionSet);
           if (op) {
             pPrMarkOps.push(op);
           }
@@ -181,11 +181,16 @@ type PPrMarkOp = {
 };
 
 function collectPPrMarkOp(
-  node: { attrs: Record<string, unknown> },
+  node: { attrs: Record<string, unknown>; nodeSize: number },
   pos: number,
+  from: number,
+  to: number,
   mode: "accept" | "reject",
   revisionSet: Set<number> | null,
 ): PPrMarkOp | null {
+  if (!rangeCoversParagraphBoundary(from, to, pos, node)) {
+    return null;
+  }
   const pPrMark = node.attrs["pPrMark"];
   if (!isPPrMarkAttr(pPrMark)) {
     return null;
@@ -198,6 +203,17 @@ function collectPPrMarkOp(
   const action: PPrMarkOp["action"] =
     (pPrMark.kind === "ins") === (mode === "accept") ? "clear" : "join";
   return { paragraphPos: pos, action };
+}
+
+function rangeCoversParagraphBoundary(
+  from: number,
+  to: number,
+  pos: number,
+  node: { nodeSize: number },
+): boolean {
+  const boundaryFrom = pos + node.nodeSize - 1;
+  const boundaryTo = pos + node.nodeSize;
+  return from <= boundaryFrom && to >= boundaryTo;
 }
 
 function isPPrMarkAttr(

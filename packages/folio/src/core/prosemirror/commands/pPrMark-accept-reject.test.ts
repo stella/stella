@@ -121,13 +121,47 @@ describe("pPrMark accept / reject — paragraph-mark resolution", () => {
     });
     const view = dispatcher(state);
 
-    // Range covers only the first paragraph (positions 0–3).
-    acceptChange(0, 3)(view.state, view.dispatch);
+    // Range covers only the first paragraph, including its closing boundary.
+    acceptChange(0, 4)(view.state, view.dispatch);
 
     expect(view.state.doc.child(0).attrs["pPrMark"]).toBeNull();
     expect(view.state.doc.child(1).attrs["pPrMark"]).toEqual(
       insMark({ id: 2 }),
     );
+  });
+
+  test("range-scoped acceptChange keeps pPrMark when only inline text is selected", () => {
+    const insertion = schema.marks["insertion"]!;
+    const pPrMark = insMark({ id: 1 });
+    const state = EditorState.create({
+      schema,
+      doc: schema.node("doc", null, [
+        schema.node("paragraph", { pPrMark }, [
+          schema.text("a"),
+          schema.text("b", [
+            insertion.create({
+              revisionId: 2,
+              author: "Alice",
+              date: "2026-05-01",
+            }),
+          ]),
+        ]),
+        schema.node("paragraph", null, schema.text("next")),
+      ]),
+    });
+    const view = dispatcher(state);
+
+    acceptChange(2, 3)(view.state, view.dispatch);
+
+    let hasInsertion = false;
+    view.state.doc.child(0).descendants((node) => {
+      if (node.isText && node.marks.some((mark) => mark.type === insertion)) {
+        hasInsertion = true;
+      }
+    });
+    expect(hasInsertion).toBe(false);
+    expect(view.state.doc.child(0).attrs["pPrMark"]).toEqual(pPrMark);
+    expect(view.state.doc.childCount).toBe(2);
   });
 
   test("acceptAll on a doc-terminal pPrMark='del' leaves the marker (no next sibling)", () => {
