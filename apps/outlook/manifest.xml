@@ -12,7 +12,7 @@
   <Description DefaultValue="Summarize, draft, check, and save Outlook email into stella matters." />
   <IconUrl DefaultValue="https://localhost:3002/assets/icon-32.svg" />
   <HighResolutionIconUrl DefaultValue="https://localhost:3002/assets/icon-80.svg" />
-  <SupportUrl DefaultValue="https://www.stella.legal" />
+  <SupportUrl DefaultValue="https://stll.app" />
   <AppDomains>
     <AppDomain>https://localhost:3002</AppDomain>
     <AppDomain>http://localhost:3000</AppDomain>
@@ -118,7 +118,7 @@
       </bt:Images>
       <bt:Urls>
         <bt:Url id="Commands.Url" DefaultValue="https://localhost:3002/commands.html" />
-        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://www.stella.legal" />
+        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://stll.app" />
         <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:3002/taskpane.html" />
       </bt:Urls>
       <bt:ShortStrings>
