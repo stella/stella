@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
+  CornerDownLeftIcon,
   LoaderCircleIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -437,8 +438,6 @@ export const DocumentAiSourceBar = ({
   );
 };
 
-const DOCX_SOURCE_PREVIEW_CHARS = 28;
-
 const SourceCitationChip = ({
   citation,
   onClick,
@@ -449,7 +448,7 @@ const SourceCitationChip = ({
   if (citation.kind === "pdf-bates") {
     return (
       <button
-        className="bg-primary/10 text-primary hover:bg-primary/20 inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium transition-colors"
+        className="text-foreground-strong-muted hover:bg-muted hover:text-foreground inline-flex shrink-0 items-center rounded px-1 py-0.5 align-middle text-[10px] font-medium transition-colors"
         onClick={onClick}
         type="button"
       >
@@ -458,20 +457,18 @@ const SourceCitationChip = ({
     );
   }
 
-  const trimmed = citation.text.trim();
-  const preview =
-    trimmed.length > DOCX_SOURCE_PREVIEW_CHARS
-      ? `${trimmed.slice(0, DOCX_SOURCE_PREVIEW_CHARS).trimEnd()}...`
-      : trimmed || "Text";
-
+  // DOCX has no page numbers; keep the marker minimal — a subtle
+  // jump-to-block affordance with the source quote behind a tooltip,
+  // not inline noise. The full quote is still scannable on hover.
   return (
     <button
-      className="bg-primary/10 text-primary hover:bg-primary/20 inline-flex max-w-36 shrink-0 items-center truncate rounded-md px-1.5 py-0.5 text-[11px] font-medium transition-colors"
+      aria-label={citation.text.trim() || undefined}
+      className="text-foreground-strong-muted hover:bg-muted hover:text-foreground inline-flex shrink-0 items-center justify-center rounded px-1 py-0.5 align-middle text-[10px] transition-colors"
       onClick={onClick}
-      title={trimmed || undefined}
+      title={citation.text.trim() || undefined}
       type="button"
     >
-      "{preview}"
+      <CornerDownLeftIcon className="size-2.5 rotate-90" />
     </button>
   );
 };
