@@ -1,15 +1,13 @@
 /**
  * Server-only entry for `@stll/folio`.
  *
- * Pure TYPE re-exports so server callers (the AI extraction
- * workflow, batch jobs) can share the chat editor's data shape
- * without importing the editor's DOM-dependent code. Runtime
- * exports stay on the main `@stll/folio` entry, which carries the
- * editor components' DOM globals through the type checker.
+ * Type re-exports (folio block data shapes) plus the small set of
+ * DOM-free runtime helpers servers need to PRODUCE ids that round-
+ * trip through the editor — sharing `deriveBlockId` here is what
+ * keeps the server DOCX parser and the in-browser snapshot from
+ * minting incompatible block ids.
  *
- * If a server caller needs to PRODUCE folio blocks from raw bytes,
- * implement that against the same types here — don't reach into
- * the editor entry from a Node/Bun process.
+ * Anything DOM-dependent stays on the main `@stll/folio` entry.
  */
 export type {
   FolioAIBlock,
@@ -18,3 +16,11 @@ export type {
   FolioAIBlockPreviewRun,
   FolioAIEditSnapshot,
 } from "./core/ai-edits/types";
+export {
+  deriveBlockId,
+  getFolioParaIdFromBlockId,
+  isFolioBlockId,
+  isSequentialFolioBlockId,
+  type DeriveBlockIdInput,
+  type FolioBlockId,
+} from "./core/types/block-id";

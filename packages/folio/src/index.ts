@@ -15,6 +15,14 @@ export {
 } from "./core/utils/createDocument";
 export type { Document } from "./core/types/document";
 export type { DocxCompatibility } from "./core/docx/compatibility";
+export {
+  deriveBlockId,
+  getFolioParaIdFromBlockId,
+  isFolioBlockId,
+  isSequentialFolioBlockId,
+  type DeriveBlockIdInput,
+  type FolioBlockId,
+} from "./core/types/block-id";
 
 // AI suggestion primitives — types, conflict resolution, apply, and
 // the prosemirror decoration plugin. The bar/panel UI itself lives in

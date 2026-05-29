@@ -1,3 +1,5 @@
+import type { FolioBlockId } from "../types/block-id";
+
 export type FolioAIBlockKind = "heading" | "listItem" | "paragraph";
 
 export type FolioAIBlockPreviewRun = {
@@ -12,7 +14,7 @@ export type FolioAIBlockPreviewRun = {
 };
 
 export type FolioAIBlock = {
-  id: string;
+  id: FolioBlockId;
   kind: FolioAIBlockKind;
   text: string;
   displayLabel?: string;
@@ -22,11 +24,11 @@ export type FolioAIBlock = {
 
 export type FolioAIEditSnapshot = {
   blocks: FolioAIBlock[];
-  anchors: Record<string, FolioAIBlockAnchor>;
+  anchors: Record<FolioBlockId, FolioAIBlockAnchor>;
 };
 
 export type FolioAIBlockAnchor = {
-  id: string;
+  id: FolioBlockId;
   from: number;
   to: number;
   text: string;
@@ -69,7 +71,7 @@ export type FolioAIEditOperation = FolioAIEditReviewMeta &
     | {
         id: string;
         type: "replaceInBlock";
-        blockId: string;
+        blockId: FolioBlockId;
         find: string;
         replace: string;
         comment?: FolioAIComment;
@@ -77,7 +79,7 @@ export type FolioAIEditOperation = FolioAIEditReviewMeta &
     | {
         id: string;
         type: "insertAfterBlock" | "insertBeforeBlock";
-        blockId: string;
+        blockId: FolioBlockId;
         text: string;
         inheritFormatting?: boolean;
         /**
@@ -98,7 +100,7 @@ export type FolioAIEditOperation = FolioAIEditReviewMeta &
     | {
         id: string;
         type: "replaceBlock";
-        blockId: string;
+        blockId: FolioBlockId;
         text: string;
         preserveFormatting?: boolean;
         styleId?: string;
@@ -107,20 +109,20 @@ export type FolioAIEditOperation = FolioAIEditReviewMeta &
     | {
         id: string;
         type: "deleteBlock";
-        blockId: string;
+        blockId: FolioBlockId;
         comment?: FolioAIComment;
       }
     | {
         id: string;
         type: "commentOnBlock";
-        blockId: string;
+        blockId: FolioBlockId;
         quote?: string;
         comment: FolioAIComment;
       }
     | {
         id: string;
         type: "insertSignatureTable";
-        blockId: string;
+        blockId: FolioBlockId;
         /**
          * Position the table after the anchor block (default) or
          * before it. Always inserts as a sibling at the document

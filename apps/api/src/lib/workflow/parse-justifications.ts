@@ -1,5 +1,8 @@
 import { Result } from "better-result";
 
+import { isFolioBlockId } from "@stll/folio/server";
+import type { FolioBlockId } from "@stll/folio/server";
+
 import type {
   DocxFolioJustificationBlock,
   JustificationBlock,
@@ -20,7 +23,7 @@ export type JustificationFilename = {
        *  AI citations AND to embed the quoted text in the saved
        *  justification so the frontend can render it without
        *  re-fetching/re-parsing the DOCX. */
-      blocksById: ReadonlyMap<string, string>;
+      blocksById: ReadonlyMap<FolioBlockId, string>;
     }
 );
 
@@ -104,24 +107,29 @@ const buildDocxBlock = (
       continue;
     }
 
-    // Citations on a DOCX file are folio block IDs (e.g. "b-0010").
-    // Drop ids we don't recognise (hallucinated) and dedupe; embed
-    // the literal block text alongside each id so the frontend can
-    // render the quote without a round-trip to the document.
-    const seen = new Set<string>();
+    // Citations on a DOCX file are folio block IDs minted by
+    // `deriveBlockId` (paraId verbatim, or `seq-NNNN` fallback).
+    // Drop ids the model invented or that don't structurally pass
+    // the runtime check, then dedupe; embed the literal block text
+    // alongside each id so the frontend can render the quote
+    // without a round-trip to the document.
+    const seen = new Set<FolioBlockId>();
     const citations: DocxFolioJustificationBlock["statements"][number]["citations"] =
       [];
     for (const raw of statement.citations) {
-      const blockId = raw.trim();
-      if (seen.has(blockId)) {
+      const trimmed = raw.trim();
+      if (!isFolioBlockId(trimmed)) {
         continue;
       }
-      const blockText = file.blocksById.get(blockId);
+      if (seen.has(trimmed)) {
+        continue;
+      }
+      const blockText = file.blocksById.get(trimmed);
       if (blockText === undefined) {
         continue;
       }
-      seen.add(blockId);
-      citations.push({ blockId, text: blockText });
+      seen.add(trimmed);
+      citations.push({ blockId: trimmed, text: blockText });
     }
 
     if (citations.length === 0) {

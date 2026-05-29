@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { isFolioBlockId } from "@stll/folio";
+import type { FolioBlockId } from "@stll/folio";
 import { cn } from "@stll/ui/lib/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
@@ -559,9 +561,16 @@ export const StreamdownMentionLink = ({
   }
 
   if (href.startsWith(FOLIO_BLOCK_PREFIX)) {
-    const blockId = href.slice(FOLIO_BLOCK_PREFIX.length);
+    const rawBlockId = href.slice(FOLIO_BLOCK_PREFIX.length);
+    // The AI rendered a `#folio:<id>` href into its answer; refuse
+    // anything that doesn't structurally match a folio id so a
+    // typo / hallucinated legacy `b-NNNN` doesn't get plumbed
+    // through `requestBlockScroll`.
+    if (!isFolioBlockId(rawBlockId)) {
+      return <span {...props}>{children}</span>;
+    }
     return (
-      <FolioBlockChip blockId={blockId} interactive={interactive}>
+      <FolioBlockChip blockId={rawBlockId} interactive={interactive}>
         {children}
       </FolioBlockChip>
     );
@@ -606,7 +615,7 @@ export const StreamdownMentionLink = ({
 };
 
 type FolioBlockChipProps = {
-  blockId: string;
+  blockId: FolioBlockId;
   interactive: boolean;
   children: React.ReactNode;
 };
@@ -665,14 +674,15 @@ const FolioBlockChip = ({
 
 const useFolioChipChildren = (
   children: React.ReactNode,
-  blockId: string,
+  blockId: FolioBlockId,
 ): React.ReactNode => {
   const t = useTranslations();
   const text = collectChipText(children).trim();
   if (text.length === 0 || text.toLowerCase().startsWith("#folio:")) {
-    // Strip the `b-` prefix and any leading zeros so the fallback
-    // reads as a clean ordinal — e.g. `b-0064` → `64` → "str. 64".
-    const numeric = blockId.replace(/^b-0*/u, "") || blockId;
+    // Strip the `seq-` prefix and any leading zeros so the fallback
+    // reads as a clean ordinal — e.g. `seq-0064` → `64` → "str. 64".
+    // ParaId-shaped ids surface verbatim.
+    const numeric = blockId.replace(/^seq-0*/u, "") || blockId;
     return t("chat.folioCitationFallback", { n: numeric });
   }
   return children;

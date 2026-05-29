@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { deriveBlockId } from "@stll/folio/server";
+
 import type { JustificationContent } from "@/api/db/schema";
 import { extractJustificationContent } from "@/api/lib/bbox/generate-b-boxes-shared";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -230,7 +232,16 @@ describe("justifications", () => {
           statements: [
             {
               text: "Docx fact.",
-              citations: [{ blockId: "b-0042", text: "quoted" }],
+              citations: [
+                {
+                  blockId: deriveBlockId({
+                    paraId: null,
+                    index: 42,
+                    taken: new Set(),
+                  }),
+                  text: "quoted",
+                },
+              ],
             },
           ],
         },

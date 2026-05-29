@@ -1,5 +1,6 @@
 import type { PersistedDecisionAnalysis } from "@stll/case-law/analysis";
 import type { DocumentAst } from "@stll/case-law/document-ast";
+import type { FolioBlockId } from "@stll/folio/server";
 import { panic } from "better-result";
 import { defineRelations, isNotNull, isNull, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
@@ -93,7 +94,7 @@ export type DocxFolioJustificationBlock = {
      *  `blockId` lets a folio editor (Phase 2b) scroll to the same
      *  paragraph the chat editor would. */
     citations: {
-      blockId: string;
+      blockId: FolioBlockId;
       text: string;
     }[];
   }[];

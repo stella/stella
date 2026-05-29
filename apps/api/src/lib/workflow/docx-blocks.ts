@@ -22,6 +22,7 @@
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
+import { deriveBlockId } from "@stll/folio/server";
 import type { FolioAIBlock } from "@stll/folio/server";
 
 import {
@@ -768,6 +769,7 @@ const extractBlocksFromXmlDocument = (
   document: slimdom.Document,
   comments: ReadonlyMap<string, DocxComment>,
   startBlockIndex: number,
+  taken: Set<string>,
 ): ExtractBlocksResult => {
   const paragraphs = elementsByLocalName(document, "p");
   const rangedCommentIds =
@@ -793,7 +795,18 @@ const extractBlocksFromXmlDocument = (
 
     const { kind, displayLabel } = detectKind(paragraph);
     const styleId = getStyleId(paragraph);
-    const id = `b-${String(++blockIndex).padStart(4, "0")}`;
+    blockIndex += 1;
+    const sourceParaId = readWordAttr(paragraph, "paraId") ?? null;
+    // Single source of truth shared with the in-browser snapshot —
+    // see packages/folio/src/core/types/block-id.ts. Any id minted
+    // here resolves in `createFolioAIEditSnapshot` without a mapping
+    // table because both paths derive ids the same way.
+    const id = deriveBlockId({
+      paraId: sourceParaId,
+      index: blockIndex,
+      taken,
+    });
+    taken.add(id);
     blocks.push({
       id,
       kind,
@@ -810,11 +823,13 @@ const extractBlocksFromZipEntry = async ({
   comments,
   path,
   startBlockIndex,
+  taken,
   zip,
 }: {
   comments: ReadonlyMap<string, DocxComment>;
   path: string;
   startBlockIndex: number;
+  taken: Set<string>;
   zip: JSZip;
 }): Promise<ExtractBlocksResult> => {
   const entry = zip.file(path);
@@ -824,7 +839,12 @@ const extractBlocksFromZipEntry = async ({
 
   const xml = await entry.async("text");
   const document = slimdom.parseXmlDocument(xml);
-  return extractBlocksFromXmlDocument(document, comments, startBlockIndex);
+  return extractBlocksFromXmlDocument(
+    document,
+    comments,
+    startBlockIndex,
+    taken,
+  );
 };
 
 const sortedDocxPartPaths = (zip: JSZip, pattern: RegExp): string[] =>
@@ -845,7 +865,7 @@ export const extractFolioBlocksFromDocxBuffer = async (
   const document = slimdom.parseXmlDocument(xml);
   const comments = await readComments(zip);
 
-  return extractBlocksFromXmlDocument(document, comments, 0).blocks;
+  return extractBlocksFromXmlDocument(document, comments, 0, new Set()).blocks;
 };
 
 export const extractFolioBlockTextFromDocxBuffer = async (
@@ -859,6 +879,7 @@ export const extractFolioBlockTextFromDocxBuffer = async (
 
   const comments = await readComments(zip);
   const blocks: FolioAIBlock[] = [];
+  const taken = new Set<string>();
   let blockIndex = 0;
 
   for (const path of sortedDocxPartPaths(zip, DOCX_HEADER_RE)) {
@@ -866,6 +887,7 @@ export const extractFolioBlockTextFromDocxBuffer = async (
       comments,
       path,
       startBlockIndex: blockIndex,
+      taken,
       zip,
     });
     blocks.push(...result.blocks);
@@ -878,6 +900,7 @@ export const extractFolioBlockTextFromDocxBuffer = async (
     bodyDocument,
     comments,
     blockIndex,
+    taken,
   );
   blocks.push(...bodyResult.blocks);
   blockIndex = bodyResult.nextBlockIndex;
@@ -887,6 +910,7 @@ export const extractFolioBlockTextFromDocxBuffer = async (
       comments,
       path,
       startBlockIndex: blockIndex,
+      taken,
       zip,
     });
     blocks.push(...result.blocks);
