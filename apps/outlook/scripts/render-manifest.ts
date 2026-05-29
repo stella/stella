@@ -1,0 +1,82 @@
+import { panic } from "better-result";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+const APP_ROOT = resolve(import.meta.dirname, "..");
+const TEMPLATE_PATH = resolve(APP_ROOT, "manifest.template.xml");
+
+export type ManifestEnv = "dev" | "prod";
+
+type ManifestPlaceholders = {
+  API_ORIGIN: string;
+  PROVIDER_NAME: string;
+  SUPPORT_URL: string;
+  TASKPANE_ORIGIN: string;
+  VERSION: string;
+  WEB_ORIGIN: string;
+};
+
+const PLACEHOLDER_DEFAULTS: Record<ManifestEnv, ManifestPlaceholders> = {
+  dev: {
+    API_ORIGIN: "http://localhost:3001",
+    PROVIDER_NAME: "stella (dev)",
+    SUPPORT_URL: "https://www.stella.legal",
+    TASKPANE_ORIGIN: "https://localhost:3002",
+    VERSION: "0.1.0.0",
+    WEB_ORIGIN: "http://localhost:3000",
+  },
+  prod: {
+    API_ORIGIN: "https://api.stll.app",
+    PROVIDER_NAME: "stella",
+    SUPPORT_URL: "https://www.stella.legal",
+    TASKPANE_ORIGIN: "https://outlook.stll.app",
+    VERSION: "0.1.0.0",
+    WEB_ORIGIN: "https://my.stll.app",
+  },
+};
+
+const PLACEHOLDER_ENV_VARS: Record<keyof ManifestPlaceholders, string> = {
+  API_ORIGIN: "STELLA_API_ORIGIN",
+  PROVIDER_NAME: "STELLA_PROVIDER_NAME",
+  SUPPORT_URL: "STELLA_SUPPORT_URL",
+  TASKPANE_ORIGIN: "STELLA_TASKPANE_ORIGIN",
+  VERSION: "STELLA_OUTLOOK_VERSION",
+  WEB_ORIGIN: "STELLA_WEB_ORIGIN",
+};
+
+const PLACEHOLDER_KEYS = [
+  "API_ORIGIN",
+  "PROVIDER_NAME",
+  "SUPPORT_URL",
+  "TASKPANE_ORIGIN",
+  "VERSION",
+  "WEB_ORIGIN",
+] as const satisfies readonly (keyof ManifestPlaceholders)[];
+
+const resolvePlaceholders = (env: ManifestEnv): ManifestPlaceholders => {
+  const defaults = PLACEHOLDER_DEFAULTS[env];
+  const result = { ...defaults };
+  for (const key of PLACEHOLDER_KEYS) {
+    const override = process.env[PLACEHOLDER_ENV_VARS[key]];
+    if (override) {
+      result[key] = override;
+    }
+  }
+  return result;
+};
+
+const UNRESOLVED_PATTERN = /\{\{[A-Z_]+\}\}/u;
+
+export const renderManifest = (env: ManifestEnv): string => {
+  const template = readFileSync(TEMPLATE_PATH, "utf-8");
+  const placeholders = resolvePlaceholders(env);
+  let output = template;
+  for (const [key, value] of Object.entries(placeholders)) {
+    output = output.replaceAll(`{{${key}}}`, value);
+  }
+  const unresolved = UNRESOLVED_PATTERN.exec(output);
+  if (unresolved) {
+    panic(`Unresolved manifest placeholder: ${unresolved[0]}`);
+  }
+  return output;
+};

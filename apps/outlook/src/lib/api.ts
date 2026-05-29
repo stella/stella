@@ -2,12 +2,19 @@ import { treaty } from "@elysiajs/eden";
 
 import type { API } from "@stll/api/types";
 
+import { env } from "@/env";
+import { getAuthToken } from "@/lib/auth";
+
 const REQUEST_TIMEOUT_MS = 10_000;
 
-const eden = treaty<API>(`${window.location.origin}/api`, {
+const eden = treaty<API>(env.apiBaseUrl, {
   parseDate: false,
   fetch: {
-    credentials: "include",
+    credentials: "omit",
+  },
+  headers: () => {
+    const token = getAuthToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
   },
 });
 

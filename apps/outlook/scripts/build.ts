@@ -8,10 +8,26 @@ import {
 } from "node:fs";
 import { resolve } from "node:path";
 
+import { type ManifestEnv, renderManifest } from "./render-manifest";
+
 const APP_ROOT = resolve(import.meta.dirname, "..");
 const DIST_DIR = resolve(APP_ROOT, "dist");
 const DIST_ASSETS_DIR = resolve(DIST_DIR, "assets");
 const PUBLIC_ASSETS_DIR = resolve(APP_ROOT, "public", "assets");
+
+const parseEnv = (): ManifestEnv => {
+  const flag = process.argv.find((arg) => arg.startsWith("--env="));
+  const value = flag?.slice("--env=".length);
+  if (value === "prod") {
+    return "prod";
+  }
+  if (value && value !== "dev") {
+    panic(`Unknown --env value: ${value}. Expected "dev" or "prod".`);
+  }
+  return "dev";
+};
+
+const targetEnv = parseEnv();
 
 const decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
 
@@ -34,6 +50,8 @@ const build = Bun.spawnSync(
     "[name].[ext]",
     "--asset-naming",
     "[name].[ext]",
+    "--define",
+    `globalThis.STELLA_BUILD_ENV=${JSON.stringify(targetEnv)}`,
   ],
   {
     cwd: APP_ROOT,
@@ -105,4 +123,10 @@ writeFileSync(
 `,
 );
 
-console.log("Built Outlook add-in to apps/outlook/dist");
+const manifest = renderManifest(targetEnv);
+writeFileSync(resolve(DIST_DIR, "manifest.xml"), manifest);
+if (targetEnv === "dev") {
+  writeFileSync(resolve(APP_ROOT, "manifest.xml"), manifest);
+}
+
+console.log(`Built Outlook add-in (${targetEnv}) to apps/outlook/dist`);
