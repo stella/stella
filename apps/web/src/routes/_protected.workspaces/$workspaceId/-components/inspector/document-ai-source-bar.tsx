@@ -505,17 +505,12 @@ const findFolioBlockPage = (blockId: string): number | null => {
     }
   }
 
-  // Direct fallback for `seq-NNNN` ids (current sequential format)
-  // and `b-NNNN` ids (legacy format used by the server-side parser
-  // before deriveBlockId unification). Both encode a 1-indexed
-  // document-order position that maps directly onto the layout's
-  // `block-N` sequence. Citations persisted under the legacy scheme
-  // — common in workspaces where extractions ran before the rename —
-  // still resolve via this path.
-  const numericMatch = /^(?:seq|b)-(\d+)$/u.exec(blockId);
-  if (numericMatch) {
+  // Direct fallback for `seq-NNNN` ids — those map to layout
+  // block ids by extracting the numeric suffix.
+  const seqMatch = /^seq-(\d+)$/u.exec(blockId);
+  if (seqMatch) {
     const direct = document.querySelector(
-      `.layout-page [data-block-id="block-${Number.parseInt(numericMatch[1] ?? "0", 10)}"]`,
+      `.layout-page [data-block-id="block-${Number.parseInt(seqMatch[1] ?? "0", 10)}"]`,
     );
     if (direct) {
       const page = getPageNumberFromElement(direct);
