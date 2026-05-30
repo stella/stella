@@ -10,7 +10,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 import {
-  hashBundledSkillPackage,
+  toParsedBundledSkillPackage,
   toParsedBundledSkillResources,
 } from "./bundled-skill-resources";
 
@@ -48,26 +48,20 @@ const installBundledSkill = createSafeRootHandler(
     if (Result.isError(resourcesResult)) {
       return Result.err(resourcesResult.error);
     }
-    const contentHash = hashBundledSkillPackage({
-      body: entry.body,
+
+    const packageResult = toParsedBundledSkillPackage({
+      expectedSlug: entry.slug,
       resources: resourcesResult.value,
+      source: entry.body,
     });
+    if (Result.isError(packageResult)) {
+      return Result.err(packageResult.error);
+    }
 
     const installResult = await installSkill({
       memberRole,
       origin: "bundled",
-      parsed: {
-        body: entry.body,
-        compatibility: null,
-        contentHash,
-        description: entry.description,
-        license: entry.license,
-        metadata: {},
-        name: entry.slug,
-        resources: resourcesResult.value,
-        sourceUrl: null,
-        version: null,
-      },
+      parsed: packageResult.value,
       recordAuditEvent,
       safeDb,
       scope: body.scope ?? "team",
@@ -78,7 +72,7 @@ const installBundledSkill = createSafeRootHandler(
       return yield* Result.err(installResult.error);
     }
 
-    return Result.ok({ slug: entry.slug });
+    return Result.ok({ slug: packageResult.value.name });
   },
 );
 
