@@ -919,7 +919,7 @@ export default defineConfig({
       // type-aware linting because the workspace package dist isn't
       // always available during local lint runs.
       files: [
-        "apps/api/src/handlers/contacts/ares-lookup.ts",
+        "apps/api/src/handlers/contacts/business-registries-lookup.ts",
         "apps/api/src/handlers/chat/tools/ares-tools.ts",
       ],
       rules: {

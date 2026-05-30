@@ -1,6 +1,6 @@
 import Elysia from "elysia";
 
-import aresLookup from "@/api/handlers/contacts/ares-lookup";
+import businessRegistriesLookup from "@/api/handlers/contacts/business-registries-lookup";
 import createContact from "@/api/handlers/contacts/create";
 import deleteContactById from "@/api/handlers/contacts/delete-by-id";
 import readContacts from "@/api/handlers/contacts/read";
@@ -25,9 +25,9 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
     permissions: searchContacts.config.permissions,
     query: searchContacts.config.query,
   })
-  .get("/ares", aresLookup.handler, {
-    permissions: aresLookup.config.permissions,
-    query: aresLookup.config.query,
+  .get("/business-registries", businessRegistriesLookup.handler, {
+    permissions: businessRegistriesLookup.config.permissions,
+    query: businessRegistriesLookup.config.query,
   })
   .put("/", createContact.handler, {
     body: createContact.config.body,
