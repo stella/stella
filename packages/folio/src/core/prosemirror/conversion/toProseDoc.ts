@@ -1692,7 +1692,7 @@ function convertInlineSdt(
         styleResolver,
       );
       inlineNodes.push(...runNodes);
-    } else {
+    } else if (content.type === "hyperlink") {
       const currentHyperlinkIndex = hyperlinkIndex;
       hyperlinkIndex += 1;
       const linkNodes = convertHyperlink(
@@ -1702,6 +1702,30 @@ function convertInlineSdt(
         currentHyperlinkIndex,
       );
       inlineNodes.push(...linkNodes);
+    } else if (
+      content.type === "simpleField" ||
+      content.type === "complexField"
+    ) {
+      const fieldNode = convertField(content, getInheritedRunFormatting);
+      if (fieldNode) {
+        inlineNodes.push(fieldNode);
+      }
+    } else if (content.type === "inlineSdt") {
+      const nestedSdt = convertInlineSdt(
+        content,
+        getInheritedRunFormatting,
+        styleResolver,
+      );
+      if (nestedSdt) {
+        inlineNodes.push(nestedSdt);
+      }
+    } else {
+      // content.type === "mathEquation" — narrowed by exhaustion of the
+      // InlineSdt['content'] union above.
+      const mathNode = convertMathEquation(content);
+      if (mathNode) {
+        inlineNodes.push(mathNode);
+      }
     }
   }
 

@@ -279,3 +279,87 @@ describe("parseParagraph spacing explicit flags", () => {
     expect(paragraph.formatting?.spacingExplicit).toBeUndefined();
   });
 });
+
+// Mirror of upstream eigenpal/docx-editor PR #482 parser tests
+// (see commit 29f95751d). OOXML allows simple/complex fields, nested
+// SDTs, and math equations directly inside `<w:sdtContent>`. The folio
+// fork previously split these out as siblings of the SDT wrapper, so
+// docProps-bound title fields (and similar template content) lost their
+// wrapper on parse.
+describe("parseParagraph SDT content preservation", () => {
+  test("keeps a simple field that lives inside an inline SDT", () => {
+    const paragraph = parseParagraphXml(`
+      <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:sdt>
+          <w:sdtPr><w:alias w:val="title-control"/></w:sdtPr>
+          <w:sdtContent>
+            <w:fldSimple w:instr="TITLE">
+              <w:r><w:t>Cached title</w:t></w:r>
+            </w:fldSimple>
+          </w:sdtContent>
+        </w:sdt>
+      </w:p>
+    `);
+
+    expect(paragraph.content).toHaveLength(1);
+    const sdt = paragraph.content[0];
+    expect(sdt.type).toBe("inlineSdt");
+    if (sdt.type !== "inlineSdt") {
+      return;
+    }
+    expect(sdt.content).toHaveLength(1);
+    expect(sdt.content[0].type).toBe("simpleField");
+  });
+
+  test("keeps a complex field that lives inside an inline SDT", () => {
+    const paragraph = parseParagraphXml(`
+      <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:sdt>
+          <w:sdtPr><w:alias w:val="page-ref"/></w:sdtPr>
+          <w:sdtContent>
+            <w:r><w:fldChar w:fldCharType="begin"/></w:r>
+            <w:r><w:instrText> PAGE </w:instrText></w:r>
+            <w:r><w:fldChar w:fldCharType="separate"/></w:r>
+            <w:r><w:t>3</w:t></w:r>
+            <w:r><w:fldChar w:fldCharType="end"/></w:r>
+          </w:sdtContent>
+        </w:sdt>
+      </w:p>
+    `);
+
+    expect(paragraph.content).toHaveLength(1);
+    const sdt = paragraph.content[0];
+    expect(sdt.type).toBe("inlineSdt");
+    if (sdt.type !== "inlineSdt") {
+      return;
+    }
+    expect(sdt.content).toHaveLength(1);
+    expect(sdt.content[0].type).toBe("complexField");
+  });
+
+  test("keeps a nested inline SDT inside an inline SDT", () => {
+    const paragraph = parseParagraphXml(`
+      <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:sdt>
+          <w:sdtPr><w:alias w:val="outer"/></w:sdtPr>
+          <w:sdtContent>
+            <w:sdt>
+              <w:sdtPr><w:alias w:val="inner"/></w:sdtPr>
+              <w:sdtContent>
+                <w:r><w:t>Nested text</w:t></w:r>
+              </w:sdtContent>
+            </w:sdt>
+          </w:sdtContent>
+        </w:sdt>
+      </w:p>
+    `);
+
+    const outer = paragraph.content[0];
+    expect(outer.type).toBe("inlineSdt");
+    if (outer.type !== "inlineSdt") {
+      return;
+    }
+    expect(outer.content).toHaveLength(1);
+    expect(outer.content[0].type).toBe("inlineSdt");
+  });
+});

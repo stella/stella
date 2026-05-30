@@ -27,6 +27,7 @@ import type {
   TabStop,
   RelationshipMap,
   MediaFile,
+  InlineSdt,
   SdtProperties,
   ParagraphMarkChange,
   ParagraphPropertyChange,
@@ -1122,6 +1123,25 @@ function isTrackedChangeWrapperChild(
   return content.type === "run" || content.type === "hyperlink";
 }
 
+// Mirror of upstream eigenpal/docx-editor PR #482 (commit 29f95751d):
+// OOXML allows runs, hyperlinks, simple/complex fields, nested SDTs,
+// and math equations directly inside `<w:sdtContent>`. Anything else
+// that the paragraph parser produced (bookmarks, comment markers,
+// tracked-change wrappers, ...) is lifted out as a sibling of the SDT
+// so the SDT wrapper itself stays valid for round-trip serialization.
+function isInlineSdtContent(
+  content: ParagraphContent,
+): content is InlineSdt["content"][number] {
+  return (
+    content.type === "run" ||
+    content.type === "hyperlink" ||
+    content.type === "simpleField" ||
+    content.type === "complexField" ||
+    content.type === "inlineSdt" ||
+    content.type === "mathEquation"
+  );
+}
+
 type PushTrackedChangeWrapperParams = {
   contents: ParagraphContent[];
   type: TrackedChangeWrapperType;
@@ -1211,7 +1231,7 @@ function pushInlineSdtSegments({
   properties,
   parsedContent,
 }: PushInlineSdtSegmentsParams): void {
-  if (!parsedContent.some(isTrackedChangeWrapperChild)) {
+  if (!parsedContent.some(isInlineSdtContent)) {
     contents.push({
       type: "inlineSdt",
       properties,
@@ -1221,7 +1241,7 @@ function pushInlineSdtSegments({
     return;
   }
 
-  const segment: (Run | Hyperlink)[] = [];
+  const segment: InlineSdt["content"] = [];
 
   const pushSegment = (): void => {
     if (segment.length === 0) {
@@ -1237,7 +1257,7 @@ function pushInlineSdtSegments({
   };
 
   for (const content of parsedContent) {
-    if (isTrackedChangeWrapperChild(content)) {
+    if (isInlineSdtContent(content)) {
       segment.push(content);
       continue;
     }
