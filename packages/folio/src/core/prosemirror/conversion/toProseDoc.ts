@@ -2646,7 +2646,9 @@ function paragraphPageBreakPosition(
       content.type === "fieldChar" ||
       content.type === "instrText" ||
       content.type === "footnoteRef" ||
-      content.type === "endnoteRef"
+      content.type === "endnoteRef" ||
+      content.type === "noBreakHyphen" ||
+      content.type === "softHyphen"
     );
   }
 
@@ -2662,19 +2664,41 @@ function paragraphPageBreakPosition(
     return false;
   }
 
+  // Walk a hyperlink's children — runs (which may carry the break) plus
+  // bookmark markers we ignore. Mirrors the inner shape of `Hyperlink`.
+  function visitHyperlinkChildren(hyperlink: Hyperlink): boolean {
+    for (const child of hyperlink.children) {
+      if (child.type === "run" && visitRun(child)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Walk a (Run | Hyperlink)[] list — the shared inner shape of tracked-change
+  // wrappers, simple fields, and inline SDTs. We rely on visitRun to set
+  // state.seenVisibleContent when (and only when) it encounters visible run
+  // content; an empty wrapper must not be treated as visible — an empty
+  // bookmark-only hyperlink before a page break should still classify the
+  // break as "before".
+  function visitRunOrHyperlinkList(children: (Run | Hyperlink)[]): boolean {
+    for (const child of children) {
+      if (child.type === "run" && visitRun(child)) {
+        return true;
+      }
+      if (child.type === "hyperlink" && visitHyperlinkChildren(child)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   function visitItem(item: Paragraph["content"][number]): boolean {
     if (item.type === "run") {
       return visitRun(item);
     }
     if (item.type === "hyperlink") {
-      for (const child of (item as Hyperlink).children) {
-        if (child.type === "run" && visitRun(child)) {
-          return true;
-        }
-      }
-      // Hyperlink with non-break content is visible context for any later break.
-      state.seenVisibleContent = true;
-      return false;
+      return visitHyperlinkChildren(item);
     }
     if (
       item.type === "insertion" ||
@@ -2682,46 +2706,24 @@ function paragraphPageBreakPosition(
       item.type === "moveFrom" ||
       item.type === "moveTo"
     ) {
-      // Tracked-change wrappers can themselves contain a page break.
-      const wrapper = item as Insertion | Deletion | MoveFrom | MoveTo;
-      for (const inner of wrapper.content) {
-        if (inner.type === "run" && visitRun(inner)) {
-          return true;
-        }
-        if (inner.type === "hyperlink") {
-          for (const child of inner.children) {
-            if (child.type === "run" && visitRun(child)) {
-              return true;
-            }
-          }
-        }
-      }
-      return false;
+      return visitRunOrHyperlinkList(item.content);
     }
     if (item.type === "simpleField") {
-      for (const inner of (item as SimpleField).content) {
-        if (inner.type === "run" && visitRun(inner)) {
-          return true;
-        }
-        if (inner.type === "hyperlink") {
-          for (const child of inner.children) {
-            if (child.type === "run" && visitRun(child)) {
-              return true;
-            }
-          }
-        }
-      }
-      // Field result (page number, date, etc.) is visible content.
-      state.seenVisibleContent = true;
-      return false;
+      return visitRunOrHyperlinkList(item.content);
     }
     if (item.type === "complexField") {
-      for (const run of (item as ComplexField).fieldResult) {
+      for (const run of item.fieldResult) {
         if (visitRun(run)) {
           return true;
         }
       }
-      // Field result is visible content.
+      return false;
+    }
+    if (item.type === "inlineSdt") {
+      return visitRunOrHyperlinkList(item.content);
+    }
+    if (item.type === "mathEquation") {
+      // OMML math is a visible inline node and cannot itself contain w:br.
       state.seenVisibleContent = true;
       return false;
     }
