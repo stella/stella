@@ -29,7 +29,7 @@ type CaseMark = {
 
 type InfoSoudDisplayValue = string | number | boolean | Date | null | undefined;
 
-type InfoSoudLookupResult = {
+export type InfoSoudLookupResult = {
   caseMark: string;
   court: string;
   courtCode: string;
@@ -164,7 +164,7 @@ type MapInfoSoudResultInput = {
   selectedCourtCode: string;
 };
 
-const mapInfoSoudResult = ({
+export const mapInfoSoudResult = ({
   lookupResult,
   selectedCourtCode,
 }: MapInfoSoudResultInput): InfoSoudLookupResult => {

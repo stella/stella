@@ -3,6 +3,7 @@ import { tool } from "ai";
 import * as v from "valibot";
 
 import { createInfoSoudClient } from "@/api/handlers/workspaces/infosoud-common";
+import { mapInfoSoudResult } from "@/api/handlers/workspaces/infosoud-lookup";
 
 export const createInfosoudTools = () => ({
   infosoud_lookup_case: tool({
@@ -26,7 +27,17 @@ export const createInfosoudTools = () => ({
     ),
     execute: async ({ courtCode, spisZn }) => {
       const client = createInfoSoudClient();
-      return await client.searchCaseWithHearings({ courtCode, spisZn });
+      const lookupResult = await client.searchCaseWithHearings({
+        courtCode,
+        spisZn,
+      });
+      // Reuse the bounded mapper from the REST handler so chat output
+      // respects the same event/hearing/related-case caps and never
+      // blows up the model context on long-running cases.
+      return mapInfoSoudResult({
+        lookupResult,
+        selectedCourtCode: courtCode,
+      });
     },
   }),
 });

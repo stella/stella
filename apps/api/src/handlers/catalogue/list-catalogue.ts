@@ -119,7 +119,14 @@ const listCatalogue = createSafeRootHandler(
 
     const response: CatalogueEntryResponse[] = [];
     for (const entry of entries) {
-      const isLocked = entry.kind === "native-tool" && entry.pinned;
+      // "Locked" means non-toggleable: pinned AND not in the
+      // implemented-toggleable slug set. Pinned + toggleable (today:
+      // web-search) still respects the org's enable/disable override
+      // via computeInstallState below.
+      const isLocked =
+        entry.kind === "native-tool" &&
+        entry.pinned &&
+        !nativeToolBackendSet.has(entry.backendSlug);
       const installState = isLocked
         ? ("installed" as const)
         : computeInstallState({
