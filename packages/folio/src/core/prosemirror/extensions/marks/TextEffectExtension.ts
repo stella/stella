@@ -30,8 +30,14 @@ export const TextEffectExtension = createMarkExtension({
     parseDOM: [
       {
         tag: "span[data-effect]",
+        // Use getAttribute (rather than HTMLElement.dataset) so this rule also
+        // works in XML/jsdom environments where `dataset` is not populated.
         getAttrs: (dom) => {
-          const value = dom.dataset["effect"] ?? null;
+          if (typeof dom === "string") {
+            return false;
+          }
+          // eslint-disable-next-line unicorn/prefer-dom-node-dataset -- getAttribute also works in XML/jsdom contexts where `dataset` may be absent.
+          const value = dom.getAttribute("data-effect");
           if (!isVariant(value)) {
             return false;
           }

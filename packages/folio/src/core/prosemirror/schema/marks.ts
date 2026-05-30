@@ -110,6 +110,7 @@ export type RunFormattingOverrideAttrs = {
     | "imprint"
     | "shadow"
     | "outline"
+    | "rtl"
   >]?: false;
 } & {
   underline?: "none";

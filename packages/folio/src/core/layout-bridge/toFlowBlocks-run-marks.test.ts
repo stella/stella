@@ -47,6 +47,10 @@ const schema = new Schema({
     highlight: {
       attrs: { color: {} },
     },
+    rtl: {},
+    textEffect: {
+      attrs: { effect: {} },
+    },
   },
 });
 
@@ -128,6 +132,25 @@ describe("toFlowBlocks run-level OOXML marks", () => {
     expect(run.positionPx).toBeUndefined();
     expect(run.horizontalScale).toBeUndefined();
     expect(run.kerningMinPt).toBeUndefined();
+  });
+
+  test("propagates rtl mark to run formatting", () => {
+    // eigenpal #424 (gap 10) — the painter needs `rtl` on the flow run to
+    // emit `dir="rtl"`; without this case the PM mark would survive the
+    // ProseMirror round-trip but mixed RTL runs would still paint LTR.
+    const blocks = toFlowBlocks(buildSingleRunDoc("שלום", "rtl"), {});
+    expect(firstRun(blocks).rtl).toBe(true);
+  });
+
+  test("propagates textEffect mark to run formatting", () => {
+    // eigenpal #424 (gap 11) — host CSS keys off `docx-text-effect-<name>`;
+    // the painter only emits those classes when the flow run carries the
+    // effect value.
+    const blocks = toFlowBlocks(
+      buildSingleRunDoc("animated", "textEffect", { effect: "shimmer" }),
+      {},
+    );
+    expect(firstRun(blocks).textEffect).toBe("shimmer");
   });
 
   test("propagates emphasis mark variants", () => {

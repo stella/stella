@@ -75,6 +75,16 @@ describe("rtl mark round-trip through ProseMirror", () => {
     expect(run.formatting?.rtl).toBe(true);
   });
 
+  test("preserves rtl=false override on a run", () => {
+    // An explicit <w:rtl w:val="0"/> override (rtl=false) must survive the
+    // PM round-trip; otherwise it would silently re-enable inherited RTL.
+    const input = wrap(runText("plain", { rtl: false }));
+    const pmDoc = toProseDoc(input);
+    const out = fromProseDoc(pmDoc, input);
+    const run = findRun(firstParagraph(out), "plain");
+    expect(run.formatting?.rtl).toBe(false);
+  });
+
   test("rtl mark renders with dir=rtl on the span", () => {
     const rtlType = schema.marks["rtl"];
     if (!rtlType) {
@@ -145,17 +155,19 @@ describe("textEffect mark round-trip through ProseMirror", () => {
     if (!rule || typeof rule.getAttrs !== "function") {
       throw new Error("expected getAttrs predicate on textEffect parseDOM");
     }
-    // Stub DOM element exposing the parts the predicate relies on. The empty
-    // dataset stands in for a span pasted without a textEffect marker.
-    const emptyDataset: Record<string, string> = {};
-    const fakeDom = { dataset: emptyDataset };
-    // SAFETY: getAttrs only reads `dataset.effect`; the cast keeps the test
-    // free of jsdom.
+    // Stub DOM element exposing the single accessor the predicate relies on.
+    // The first stub returns null for every attribute, standing in for a span
+    // pasted without a textEffect marker.
+    const fakeDom = { getAttribute: (_name: string) => null };
+    // SAFETY: getAttrs only calls `getAttribute("data-effect")`; the cast
+    // keeps the test free of jsdom.
     const result = rule.getAttrs(fakeDom as unknown as HTMLElement);
     expect(result).toBe(false);
 
-    const taggedDataset: Record<string, string> = { effect: "shimmer" };
-    const taggedDom = { dataset: taggedDataset };
+    const taggedDom = {
+      getAttribute: (name: string) =>
+        name === "data-effect" ? "shimmer" : null,
+    };
     const tagged = rule.getAttrs(taggedDom as unknown as HTMLElement);
     expect(tagged).toEqual({ effect: "shimmer" });
   });

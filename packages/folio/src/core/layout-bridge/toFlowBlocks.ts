@@ -55,6 +55,7 @@ import {
   expectTableRowAttrs,
   expectTextBoxAttrs,
   expectTextColorMarkAttrs,
+  expectTextEffectMarkAttrs,
   expectTrackedChangeMarkAttrs,
   expectUnderlineMarkAttrs,
 } from "../prosemirror/attrs";
@@ -491,6 +492,16 @@ function extractRunFormatting(
         formatting.textOutline = true;
         break;
 
+      case "rtl":
+        formatting.rtl = true;
+        break;
+
+      case "textEffect":
+        // The textEffect mark schema rejects "none"; only animated variants
+        // ever reach this branch.
+        formatting.textEffect = expectTextEffectMarkAttrs(mark).effect;
+        break;
+
       case "runFormattingOverride":
         applyRunFormattingOverrides(
           formatting,
@@ -645,6 +656,9 @@ function applyRunFormattingOverrides(
   }
   if (attrs.outline === false) {
     formatting.textOutline = false;
+  }
+  if (attrs.rtl === false) {
+    formatting.rtl = false;
   }
 }
 

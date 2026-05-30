@@ -241,6 +241,25 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
       }
     ).webkitTextFillColor = "transparent";
   }
+  // Per-run RTL direction (w:rtl). The browser's bidi algorithm reorders
+  // just this run, independent of the paragraph direction. `false` is an
+  // explicit override that disables inherited paragraph/style RTL.
+  if (run.rtl === true) {
+    element.dir = "rtl";
+  } else if (run.rtl === false) {
+    element.dir = "ltr";
+  }
+
+  // Text effect animation (w:effect). Host CSS opts in to the actual
+  // animation via the docx-text-effect-<name> class plus data-effect.
+  if (run.textEffect) {
+    element.classList.add(
+      "docx-text-effect",
+      `docx-text-effect-${run.textEffect}`,
+    );
+    element.dataset["effect"] = run.textEffect;
+  }
+
   if (run.emphasisMark) {
     let variant = "filled dot";
     if (run.emphasisMark === "comma") {

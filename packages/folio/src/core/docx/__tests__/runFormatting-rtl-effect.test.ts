@@ -40,6 +40,13 @@ describe("w:rtl run direction round-trip (eigenpal #424 gap 10)", () => {
     expect(serialized).toContain("<w:rtl/>");
   });
 
+  test('serializes rtl=false back to <w:rtl w:val="0"/>', () => {
+    // Explicit override of inherited paragraph/style RTL must survive a
+    // round-trip; dropping it would re-enable RTL on the next open.
+    const { serialized } = roundTrip('<w:rtl w:val="0"/>');
+    expect(serialized).toContain('<w:rtl w:val="0"/>');
+  });
+
   test("round-trips rtl combined with other formatting", () => {
     const { formatting, serialized } = roundTrip(
       '<w:b/><w:rtl/><w:color w:val="FF0000"/>',

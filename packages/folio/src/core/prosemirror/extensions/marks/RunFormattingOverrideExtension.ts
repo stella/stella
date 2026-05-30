@@ -59,6 +59,9 @@ export function buildRunFormattingOverrideAttrs(
   if (formatting.outline === false) {
     attrs["outline"] = false;
   }
+  if (formatting.rtl === false) {
+    attrs["rtl"] = false;
+  }
 
   return Object.keys(attrs).length > 0 ? attrs : undefined;
 }
@@ -104,6 +107,9 @@ export function applyRunFormattingOverrideMark(
   if (attrs.outline === false) {
     formatting.outline = false;
   }
+  if (attrs.rtl === false) {
+    formatting.rtl = false;
+  }
 }
 
 export const RunFormattingOverrideExtension = createMarkExtension({
@@ -123,6 +129,7 @@ export const RunFormattingOverrideExtension = createMarkExtension({
       imprint: { default: null },
       shadow: { default: null },
       outline: { default: null },
+      rtl: { default: null },
     },
     toDOM(mark) {
       const attrs = expectRunFormattingOverrideMarkAttrs(mark);

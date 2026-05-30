@@ -14,7 +14,13 @@ export const RtlExtension = createMarkExtension({
     parseDOM: [
       {
         tag: "span[dir=rtl]",
-        getAttrs: (dom) => (dom.getAttribute("dir") === "rtl" ? {} : false),
+        // HTML's `dir` attribute is case-insensitive; ProseMirror may also hand
+        // us a tag-string in some pipelines, so guard before reading attrs.
+        getAttrs: (dom) =>
+          typeof dom !== "string" &&
+          dom.getAttribute("dir")?.toLowerCase() === "rtl"
+            ? {}
+            : false,
       },
     ],
     toDOM() {

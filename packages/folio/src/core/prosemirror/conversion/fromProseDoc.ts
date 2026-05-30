@@ -1669,6 +1669,9 @@ function applyRunFormattingOverrideAttrs(
   if (attrs.outline === false) {
     formatting.outline = false;
   }
+  if (attrs.rtl === false) {
+    formatting.rtl = false;
+  }
 }
 
 // ============================================================================
