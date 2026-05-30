@@ -1,5 +1,6 @@
 import type { PersistedDecisionAnalysis } from "@stll/case-law/analysis";
 import type { DocumentAst } from "@stll/case-law/document-ast";
+import type { CountryCode } from "@stll/country-codes";
 import { panic } from "better-result";
 import { defineRelations, isNotNull, isNull, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
@@ -171,7 +172,7 @@ export type SchedulerSchedule =
 export type SchedulerPayload = Record<string, unknown>;
 
 export type PracticeJurisdiction = {
-  countryCode: string;
+  countryCode: CountryCode;
   isPrimary: boolean;
 };
 

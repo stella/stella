@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import type { CountryCode } from "@stll/country-codes";
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 import {
@@ -66,7 +67,7 @@ type McpConnector = {
   authType: "none" | "bearer" | "oauth2";
   isCurated: boolean;
   isRecommended: boolean;
-  recommendedJurisdictions: string[];
+  recommendedJurisdictions: readonly CountryCode[];
   documentationUrl: string | null;
   iconUrl: string | null;
   tokenHelpUrl: string | null;
@@ -89,7 +90,7 @@ type NativeToolCatalogItem = {
   documentationUrl: string | null;
   iconUrl: string | null;
   isRecommended: boolean;
-  recommendedJurisdictions: string[];
+  recommendedJurisdictions: readonly CountryCode[];
   enabled: boolean;
 };
 

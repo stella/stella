@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { CheckIcon, SearchIcon, StarIcon } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
 
+import type { CountryCode } from "@stll/country-codes";
 import { Input } from "@stll/ui/components/input";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -11,11 +12,11 @@ import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 
 export const MAX_SELECTED_JURISDICTIONS = 12;
 
-const NO_SUGGESTED_COUNTRY_CODES: readonly string[] = [];
+const NO_SUGGESTED_COUNTRY_CODES: readonly CountryCode[] = [];
 
 type JurisdictionPickerProps = {
   selected: readonly PracticeJurisdiction[];
-  suggestedCountryCodes?: readonly string[];
+  suggestedCountryCodes?: readonly CountryCode[];
   onChange: (jurisdictions: PracticeJurisdiction[]) => void;
 };
 
@@ -61,7 +62,7 @@ export const JurisdictionPicker = ({
     );
   }, [countryOptions, locale, query, suggestedSet]);
 
-  const toggleCountry = (countryCode: string) => {
+  const toggleCountry = (countryCode: CountryCode) => {
     if (selectedSet.has(countryCode)) {
       onChange(removeJurisdiction(selected, countryCode));
       return;
@@ -80,7 +81,7 @@ export const JurisdictionPicker = ({
     ]);
   };
 
-  const makePrimary = (countryCode: string) => {
+  const makePrimary = (countryCode: CountryCode) => {
     onChange(
       selected.map((jurisdiction) => ({
         ...jurisdiction,

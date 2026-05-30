@@ -1,9 +1,15 @@
+import type { CountryCode } from "@stll/country-codes";
+
 // ISO 3166-1 alpha-2 → approximate country centroid (lat, lon).
-// Includes XK (Kosovo) which is widely used (EU, IMF, World Bank, CLDR)
-// despite not yet being officially ISO-assigned.
+//
+// Keys are typed as `CountryCode` so adding (or removing) a code from
+// @stll/country-codes forces this table to stay in sync at typecheck
+// time. The canonical code list lives in @stll/country-codes; this
+// file is the visualisation layer that hangs latitudes / longitudes
+// off it.
 
 export const COUNTRY_CENTROIDS: Readonly<
-  Record<string, readonly [number, number]>
+  Record<CountryCode, readonly [number, number]>
 > = {
   AD: [42.55, 1.6],
   AE: [23.42, 53.85],
@@ -257,4 +263,5 @@ export const COUNTRY_CENTROIDS: Readonly<
   ZW: [-19.02, 29.15],
 };
 
-export const COUNTRY_CODES = Object.keys(COUNTRY_CENTROIDS);
+export { COUNTRY_CODES } from "@stll/country-codes";
+export type { CountryCode } from "@stll/country-codes";

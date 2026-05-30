@@ -13,11 +13,11 @@ import {
   countryName,
   removeJurisdiction,
 } from "@/lib/jurisdictions";
-import type { PracticeJurisdiction } from "@/lib/jurisdictions";
+import type { CountryCode, PracticeJurisdiction } from "@/lib/jurisdictions";
 
 type JurisdictionStepProps = {
   selected: readonly PracticeJurisdiction[];
-  suggestedCountryCodes: readonly string[];
+  suggestedCountryCodes: readonly CountryCode[];
   onChange: (jurisdictions: PracticeJurisdiction[]) => void;
   onNext: () => void;
   onSkip: () => void;

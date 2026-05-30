@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import type { CountryCode } from "@stll/country-codes";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import {
@@ -87,9 +88,9 @@ export const OnboardingWizard = () => {
     aiProviders: [createProviderCredentialDraft()],
     aiRoleModels: createDefaultRoleModels(),
   }));
-  const [suggestedCountryCodes, setSuggestedCountryCodes] = useState<string[]>(
-    [],
-  );
+  const [suggestedCountryCodes, setSuggestedCountryCodes] = useState<
+    CountryCode[]
+  >([]);
   const [jurisdictionSuggestionApplied, setJurisdictionSuggestionApplied] =
     useState(false);
 

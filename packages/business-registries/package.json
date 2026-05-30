@@ -66,6 +66,7 @@
     "prepack": "bun run build"
   },
   "dependencies": {
+    "@stll/country-codes": "workspace:*",
     "@stll/stdnum": "^1.0.0"
   },
   "devDependencies": {
