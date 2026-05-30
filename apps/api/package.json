@@ -85,7 +85,7 @@
     "jszip": "catalog:",
     "marked": "^18.0.4",
     "nodemailer": "^8.0.8",
-    "posthog-node": "^5.34.2",
+    "posthog-node": "^5.35.1",
     "quickjs-emscripten": "^0.32.0",
     "quickjs-emscripten-core": "^0.32.0",
     "slimdom": "^4.3.5",
