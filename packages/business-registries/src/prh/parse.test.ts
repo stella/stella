@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseAddress } from "./parse.js";
-import type { PrhRawAddress } from "./types.js";
+import { parseAddress, parseCompany, parseSearchEntry } from "./parse.js";
+import type { PrhRawAddress, PrhRawCompany } from "./types.js";
 
 const baseAddress: PrhRawAddress = {
   type: 1,
@@ -66,5 +66,38 @@ describe("parseAddress", () => {
       country: null,
       textAddress: null,
     });
+  });
+});
+
+describe("parseCompany / parseSearchEntry — defensive shape handling", () => {
+  // PRH's v3 schema declares `names` as optional; minimal / foreign
+  // records can omit it entirely. Both code paths must fall back to
+  // the business ID rather than throw, so the dispatch layer cannot
+  // surface a 500 for a valid upstream response.
+  const minimal: PrhRawCompany = {
+    businessId: { value: "0112038-9", source: "3" },
+    status: "2",
+  };
+
+  test("parseCompany tolerates a missing names array", () => {
+    const company = parseCompany(minimal);
+    expect(company.name).toBe("0112038-9");
+    expect(company.alternateNames).toEqual([]);
+  });
+
+  test("parseSearchEntry tolerates a missing names array", () => {
+    const result = parseSearchEntry(minimal);
+    expect(result.name).toBe("0112038-9");
+    expect(result.businessId).toBe("0112038-9");
+  });
+
+  test("parseCompany emits an AvoinData JSON URL as registryUrl", () => {
+    // The YTJ web portal cannot be deep-linked by business ID, so the
+    // registry URL points at the AvoinData REST endpoint for the same
+    // record. Lock this in so a future refactor does not silently
+    // regress the link to a non-resolving yavain URL.
+    expect(parseCompany(minimal).registryUrl).toBe(
+      "https://avoindata.prh.fi/opendata-ytj-api/v3/companies?businessId=0112038-9",
+    );
   });
 });

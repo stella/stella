@@ -94,7 +94,11 @@ export type PrhRawCompanySituation = {
 export type PrhRawCompany = {
   businessId: PrhRawSourcedValue;
   euId?: PrhRawSourcedValue;
-  names: PrhRawName[];
+  // Optional per the v3 schema even though every Finnish-registered
+  // entity we have observed populates it. Foreign / minimal entries
+  // can arrive without a names array; the parser falls back to the
+  // business ID so a missing list does not produce a 500.
+  names?: PrhRawName[];
   mainBusinessLine?: PrhRawBusinessLine;
   companyForms?: PrhRawCompanyForm[];
   companySituations?: PrhRawCompanySituation[];

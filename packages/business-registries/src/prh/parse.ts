@@ -13,8 +13,14 @@ import type {
   PrhSearchResult,
 } from "./types.js";
 
-// Public PRH disclosure pages use the unhyphenated business ID.
-const PRH_VIEW_URL = "https://tietopalvelu.ytj.fi/yritystiedot.aspx?yavain=";
+// PRH's public YTJ portal at `tietopalvelu.ytj.fi` resolves company
+// pages by an internal `yavain`/`tarkiste` key pair, NOT by Y-tunnus,
+// so we cannot construct a stable deep link from the business ID
+// alone. The AvoinData REST endpoint, in contrast, is a deterministic
+// per-entity URL that always returns the current record — useful as
+// a verifiable provenance link even though the response is JSON.
+const PRH_AVOINDATA_URL =
+  "https://avoindata.prh.fi/opendata-ytj-api/v3/companies?businessId=";
 
 // PRH language codes: "1" = Finnish, "2" = Swedish, "3" = English.
 // Stella's product UI is English-first with Finnish as the most
@@ -207,14 +213,15 @@ const parseStatus = (raw: PrhRawCompany): PrhCompanyStatus => {
 
 export const parseCompany = (raw: PrhRawCompany): PrhCompany => {
   const businessId = raw.businessId.value;
-  const primaryName = pickPrimaryName(raw.names) ?? businessId;
+  const names = raw.names ?? [];
+  const primaryName = pickPrimaryName(names) ?? businessId;
   const currentForm = pickCurrentCompanyForm(raw.companyForms);
   const street = pickActiveAddressByType(raw.addresses, STREET_ADDRESS_TYPE);
   const postal = pickActiveAddressByType(raw.addresses, POSTAL_ADDRESS_TYPE);
   return {
     businessId,
     name: primaryName,
-    alternateNames: collectAlternateNames(raw.names),
+    alternateNames: collectAlternateNames(names),
     legalForm: currentForm
       ? pickLocalizedDescription(
           currentForm.descriptions,
@@ -230,17 +237,18 @@ export const parseCompany = (raw: PrhRawCompany): PrhCompany => {
       raw.tradeRegisterStatus === TRADE_REGISTER_REGISTERED,
     registeredAt: raw.registrationDate ?? null,
     endedAt: raw.endDate ?? null,
-    registryUrl: `${PRH_VIEW_URL}${encodeURIComponent(businessId)}`,
+    registryUrl: `${PRH_AVOINDATA_URL}${encodeURIComponent(businessId)}`,
   };
 };
 
 export const parseSearchEntry = (raw: PrhRawCompany): PrhSearchResult => {
   const businessId = raw.businessId.value;
+  const names = raw.names ?? [];
   const street = pickActiveAddressByType(raw.addresses, STREET_ADDRESS_TYPE);
   const address = street ? parseAddress(street).textAddress : null;
   return {
     businessId,
-    name: pickPrimaryName(raw.names) ?? businessId,
+    name: pickPrimaryName(names) ?? businessId,
     address,
   };
 };

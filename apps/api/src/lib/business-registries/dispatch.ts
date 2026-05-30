@@ -400,7 +400,10 @@ const prhSearchResultToHit = (
         textAddress: result.address,
       }
     : null,
-  registryUrl: `https://tietopalvelu.ytj.fi/yritystiedot.aspx?yavain=${encodeURIComponent(result.businessId)}`,
+  // See parse.ts for why this points at the AvoinData JSON endpoint
+  // rather than the YTJ web portal: yavain/tarkiste is an internal
+  // record key, not the business ID.
+  registryUrl: `https://avoindata.prh.fi/opendata-ytj-api/v3/companies?businessId=${encodeURIComponent(result.businessId)}`,
 });
 
 const mapPrhError = (error: unknown): HandlerError | null => {
