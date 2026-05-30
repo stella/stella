@@ -128,13 +128,18 @@ const ANY_DECIMAL_IN_EMU_ATTR =
 const POSOFFSET_DECIMAL = /<wp:posOffset>-?\d+\.\d+<\/wp:posOffset>/u;
 
 describe("image EMU attributes are integer-only (issue #417)", () => {
-  test("inline image with float dimensions serializes integer cx/cy/distT/distB", () => {
+  test("inline image with float dimensions serializes integer cx/cy/effectExtent", () => {
     const xml = serializeRun(FLOAT_INLINE_IMAGE);
 
     expect(xml).not.toMatch(ANY_DECIMAL_IN_EMU_ATTR);
     expect(xml).toContain('<wp:extent cx="5610225" cy="495300"/>');
     expect(xml).toContain('<a:ext cx="5610225" cy="495300"/>');
-    expect(xml).toContain('distT="0" distB="1"');
+    // Per ECMA-376 §20.4.2.5 / §20.4.2.8, image.padding (shadow/glow
+    // reservation) belongs in <wp:effectExtent>; it no longer leaks into
+    // wp:inline distT/B/L/R. With padding {top: 0.4, bottom: 0.6},
+    // intAttr rounds → t="0" b="1" on the effectExtent element.
+    expect(xml).toContain('<wp:effectExtent l="0" t="0" r="0" b="1"/>');
+    expect(xml).toContain('distT="0" distB="0" distL="0" distR="0"');
   });
 
   test("floating image with float position/extent serializes integer attrs", () => {

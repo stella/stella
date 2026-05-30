@@ -771,6 +771,18 @@ function serializePicGraphic(image: Image, sharedId: string): string {
   const srcRectEl =
     cropAttrs.length > 0 ? `<a:srcRect ${cropAttrs.join(" ")}/>` : "";
 
+  // <a:blip> with optional <a:alphaModFix> child for image transparency.
+  // OOXML stores the alpha amount in 1/100000 units. Mirrors eigenpal #424.
+  // `image.opacity < 1` is guaranteed by the branch, so only clamp the
+  // lower bound.
+  const alphaChild =
+    image.opacity !== undefined && image.opacity < 1
+      ? `<a:alphaModFix amt="${Math.round(Math.max(0, image.opacity) * 100_000)}"/>`
+      : "";
+  const blipEl = alphaChild
+    ? `<a:blip r:embed="${rId}">${alphaChild}</a:blip>`
+    : `<a:blip r:embed="${rId}"/>`;
+
   return [
     '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">',
     '<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">',
@@ -780,7 +792,7 @@ function serializePicGraphic(image: Image, sharedId: string): string {
     "<pic:cNvPicPr/>",
     "</pic:nvPicPr>",
     "<pic:blipFill>",
-    `<a:blip r:embed="${rId}"/>`,
+    blipEl,
     srcRectEl,
     "<a:stretch><a:fillRect/></a:stretch>",
     "</pic:blipFill>",
@@ -806,10 +818,19 @@ function serializeDrawingContent(content: DrawingContent): string {
   const isFloating = image.wrap.type !== "inline";
   const cx = image.size.width;
   const cy = image.size.height;
-  const distT = image.padding?.top ?? image.wrap.distT ?? 0;
-  const distB = image.padding?.bottom ?? image.wrap.distB ?? 0;
-  const distL = image.padding?.left ?? image.wrap.distL ?? 0;
-  const distR = image.padding?.right ?? image.wrap.distR ?? 0;
+  // ECMA-376 §20.4.2.8: dist* on wp:inline / wp:anchor are text-wrap
+  // distances. Per §20.4.2.5, the visual-effect reservation lives on the
+  // separate <wp:effectExtent> element. Don't fold `image.padding`
+  // (effectExtent) into wrap dist* — that's the eigenpal #424 fix.
+  const distT = image.wrap.distT ?? 0;
+  const distB = image.wrap.distB ?? 0;
+  const distL = image.wrap.distL ?? 0;
+  const distR = image.wrap.distR ?? 0;
+  const effL = image.padding?.left ?? 0;
+  const effT = image.padding?.top ?? 0;
+  const effR = image.padding?.right ?? 0;
+  const effB = image.padding?.bottom ?? 0;
+  const effectExtentEl = `<wp:effectExtent l="${intAttr(effL)}" t="${intAttr(effT)}" r="${intAttr(effR)}" b="${intAttr(effB)}"/>`;
   const docPrId = getUniqueId(image.id);
   const docPrName = image.title || image.filename || `Picture ${docPrId}`;
 
@@ -821,7 +842,7 @@ function serializeDrawingContent(content: DrawingContent): string {
       "<w:drawing>",
       `<wp:inline distT="${intAttr(distT)}" distB="${intAttr(distB)}" distL="${intAttr(distL)}" distR="${intAttr(distR)}">`,
       `<wp:extent cx="${intAttr(cx)}" cy="${intAttr(cy)}"/>`,
-      '<wp:effectExtent l="0" t="0" r="0" b="0"/>',
+      effectExtentEl,
       `<wp:docPr id="${docPrId}" name="${escapeXml(docPrName)}"${image.alt ? ` descr="${escapeXml(image.alt)}"` : ""}${image.decorative ? ' hidden="1"' : ""}/>`,
       '<wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr>',
       graphic,
@@ -836,14 +857,18 @@ function serializeDrawingContent(content: DrawingContent): string {
     ? serializePosition(image.position)
     : '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>';
   const wrap = serializeWrap(image.wrap);
+  // Tri-state: explicit `false` → "0"; explicit `true` or absent →
+  // "1" (the OOXML default). Mirrors eigenpal #424.
+  const layoutInCellAttr = image.layoutInCell === false ? "0" : "1";
+  const allowOverlapAttr = image.allowOverlap === false ? "0" : "1";
 
   return [
     "<w:drawing>",
-    `<wp:anchor distT="${intAttr(distT)}" distB="${intAttr(distB)}" distL="${intAttr(distL)}" distR="${intAttr(distR)}" simplePos="0" relativeHeight="251658240" behindDoc="${behindDoc}" locked="0" layoutInCell="1" allowOverlap="1">`,
+    `<wp:anchor distT="${intAttr(distT)}" distB="${intAttr(distB)}" distL="${intAttr(distL)}" distR="${intAttr(distR)}" simplePos="0" relativeHeight="251658240" behindDoc="${behindDoc}" locked="0" layoutInCell="${layoutInCellAttr}" allowOverlap="${allowOverlapAttr}">`,
     '<wp:simplePos x="0" y="0"/>',
     position,
     `<wp:extent cx="${intAttr(cx)}" cy="${intAttr(cy)}"/>`,
-    '<wp:effectExtent l="0" t="0" r="0" b="0"/>',
+    effectExtentEl,
     wrap,
     `<wp:docPr id="${docPrId}" name="${escapeXml(docPrName)}"${image.alt ? ` descr="${escapeXml(image.alt)}"` : ""}/>`,
     '<wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr>',
