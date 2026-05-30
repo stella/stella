@@ -1,5 +1,4 @@
 import { Result, TaggedError } from "better-result";
-import { createHash, randomBytes } from "node:crypto";
 import * as v from "valibot";
 
 import type { McpOAuthRegistrationResponse } from "@/api/db/schema";
@@ -227,17 +226,22 @@ export const discoverOAuthMetadata = async (
   return Result.ok({ authorizationServer, protectedResource });
 };
 
+const randomBase64Url = (byteLength: number): string => {
+  const bytes = new Uint8Array(byteLength);
+  crypto.getRandomValues(bytes);
+  return Buffer.from(bytes).toString("base64url");
+};
+
 export const createPkce = () => {
-  const codeVerifier = randomBytes(PKCE_VERIFIER_BYTES).toString("base64url");
-  const codeChallenge = createHash("sha256")
+  const codeVerifier = randomBase64Url(PKCE_VERIFIER_BYTES);
+  const codeChallenge = new Bun.CryptoHasher("sha256")
     .update(codeVerifier)
     .digest("base64url");
 
   return { codeChallenge, codeVerifier };
 };
 
-export const createOAuthState = (): string =>
-  randomBytes(32).toString("base64url");
+export const createOAuthState = (): string => randomBase64Url(32);
 
 export const getMcpOAuthRedirectUri = (): string => {
   const publicUrl = env.PUBLIC_URL ?? env.BETTER_AUTH_URL;

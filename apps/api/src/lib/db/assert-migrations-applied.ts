@@ -1,7 +1,6 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
-import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import { rootDb } from "@/api/db/root";
@@ -13,17 +12,23 @@ const ESCAPE_HATCH_ENV = "SKIP_MIGRATION_CHECK";
 type LocalMigration = { name: string; hash: string };
 type AppliedMigrationRow = { hash: string };
 
-const hashMigrationFile = (path: string): string =>
-  createHash("sha256").update(readFileSync(path)).digest("hex");
+const hashMigrationFile = async (path: string): Promise<string> =>
+  new Bun.CryptoHasher("sha256")
+    .update(await Bun.file(path).bytes())
+    .digest("hex");
 
-const listLocalMigrations = (): LocalMigration[] =>
-  readdirSync(MIGRATIONS_DIR)
-    .filter((name) => existsSync(join(MIGRATIONS_DIR, name, "migration.sql")))
-    .sort()
-    .map((name) => ({
-      name,
-      hash: hashMigrationFile(join(MIGRATIONS_DIR, name, "migration.sql")),
-    }));
+const listLocalMigrations = async (): Promise<LocalMigration[]> =>
+  await Promise.all(
+    readdirSync(MIGRATIONS_DIR)
+      .filter((name) => existsSync(join(MIGRATIONS_DIR, name, "migration.sql")))
+      .sort()
+      .map(async (name) => ({
+        name,
+        hash: await hashMigrationFile(
+          join(MIGRATIONS_DIR, name, "migration.sql"),
+        ),
+      })),
+  );
 
 const queryAppliedHashes = async (): Promise<Set<string>> => {
   // Compare on `hash` (always populated) rather than `name` (NULL
@@ -44,7 +49,7 @@ export const assertMigrationsApplied = async (): Promise<void> => {
     return;
   }
 
-  const local = listLocalMigrations();
+  const local = await listLocalMigrations();
   if (local.length === 0) {
     panic(
       `[startup] No migration files at ${MIGRATIONS_DIR}; refusing to start. ` +

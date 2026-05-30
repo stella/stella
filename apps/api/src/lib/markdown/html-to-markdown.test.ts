@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { marked } from "marked";
 
 import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
 
@@ -144,18 +143,18 @@ describe("htmlToMarkdown", () => {
     );
   });
 
-  test("paragraph→link round-trips through marked back to the same HTML", () => {
+  test("paragraph→link round-trips through Bun.markdown back to the same HTML", () => {
     const html = '<p>see <a href="https://example.com">here</a> for more</p>';
     const md = htmlToMarkdown(html);
-    const reHtml = marked.parse(md, { async: false });
+    const reHtml = Bun.markdown.html(md);
     expect(reHtml).toContain('<a href="https://example.com">here</a>');
     expect(reHtml).toContain("see");
     expect(reHtml).toContain("for more");
   });
 
-  test("escaped specials round-trip through marked without becoming formatting", () => {
+  test("escaped specials round-trip through Bun.markdown without becoming formatting", () => {
     const md = htmlToMarkdown("<p>5 * 3 = 15</p>");
-    const reHtml = marked.parse(md, { async: false });
+    const reHtml = Bun.markdown.html(md);
     expect(reHtml).toContain("5 * 3 = 15");
     expect(reHtml).not.toContain("<em>");
     expect(reHtml).not.toContain("<strong>");
@@ -166,7 +165,7 @@ describe("htmlToMarkdown", () => {
       "literal \\~\\~text\\~\\~ here\n",
     );
     const md = htmlToMarkdown("<p>~~not strike~~</p>");
-    const reHtml = marked.parse(md, { async: false, gfm: true });
+    const reHtml = Bun.markdown.html(md);
     expect(reHtml).not.toContain("<del>");
     expect(reHtml).not.toContain("<s>");
   });
