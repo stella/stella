@@ -26,11 +26,10 @@ import { createGoogleGenerativeAI, google } from "@ai-sdk/google";
 import { createVertex } from "@ai-sdk/google-vertex";
 import { createMistral, mistral } from "@ai-sdk/mistral";
 import { createOpenAI, openai } from "@ai-sdk/openai";
+import type { JSONObject } from "@ai-sdk/provider";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { defaultSettingsMiddleware, wrapLanguageModel } from "ai";
 import type { LanguageModel, LanguageModelMiddleware } from "ai";
-
-import type { SafeId } from "@/api/lib/branded-types";
 import { panic, Result } from "better-result";
 
 import { env } from "@/api/env";
@@ -38,6 +37,7 @@ import {
   AZURE_FOUNDRY_DEFAULT_API_VERSION,
   normalizeAzureFoundryBaseURL,
 } from "@/api/lib/azure-foundry";
+import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 // -- Types ------------------------------------------------------
@@ -923,16 +923,7 @@ const hashOrgId = (orgId: SafeId<"organization">): string =>
  * summaries); raising the threshold avoids surprise refusals
  * while still blocking the worst categories at HIGH.
  */
-type JSONObject = { [k: string]: JSONValue };
-type JSONValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JSONValue[]
-  | { [k: string]: JSONValue };
-
-const GOOGLE_SAFETY_SETTINGS_BASELINE: JSONValue = [
+const GOOGLE_SAFETY_SETTINGS_BASELINE = [
   { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
   { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
   { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
@@ -965,26 +956,33 @@ export const defaultsForRole = (
   }
 
   if (provider === "anthropic") {
-    const anthropicOptions: JSONObject = {};
+    const anthropicOptions: Record<string, unknown> = {};
     if (orgId !== null) {
       anthropicOptions["metadata"] = { user_id: hashOrgId(orgId) };
     }
     if (role === "reasoning") {
-      anthropicOptions["thinking"] = {
-        type: "enabled",
-        budgetTokens: 10_000,
-      };
+      // Adaptive thinking is the supported mode on Claude 4.6+ models
+      // (sonnet-4-6, opus-4-6, opus-4-7). Earlier 4.5 / 3.x models
+      // expect the budget-based `type: "enabled"` form; passing
+      // `adaptive` to them is rejected. Stella's instance reasoning
+      // role defaults to sonnet-4-6, so adaptive is correct for the
+      // common case; BYOK orgs that pin a 4-5 model should override
+      // at the call site.
+      anthropicOptions["thinking"] = { type: "adaptive" };
     }
     if (Object.keys(anthropicOptions).length > 0) {
-      settings.providerOptions = { anthropic: anthropicOptions };
+      settings.providerOptions = { anthropic: anthropicOptions as JSONObject };
     }
     return settings;
   }
 
   if (provider === "openai" || provider === "azure_foundry") {
     if (role === "reasoning") {
+      // Azure's AI SDK provider registers under `azure.*` not
+      // `openai.*`, so its providerOptions key is `azure`.
+      const key = provider === "openai" ? "openai" : "azure";
       settings.providerOptions = {
-        openai: { reasoning_effort: "medium" },
+        [key]: { reasoningEffort: "medium" },
       };
     }
     return settings;

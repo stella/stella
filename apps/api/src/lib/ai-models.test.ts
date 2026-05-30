@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { OrgAIConfig } from "@/api/lib/ai-models";
+import { toSafeId } from "@/api/lib/branded-types";
 
 process.env["EMAIL_PROVIDER"] ??= "smtp";
 process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
@@ -295,7 +296,8 @@ describe("BYOK model overrides", () => {
       expect(() =>
         getModelForRole(role, orgConfig, {
           promptCachingEnabled: true,
-          scopeKey: null, organizationId: null,
+          scopeKey: null,
+          organizationId: null,
         }),
       ).not.toThrow();
     }
@@ -338,7 +340,8 @@ describe("BYOK model overrides", () => {
       expect(() =>
         getModelForRole(role, orgConfig, {
           promptCachingEnabled: true,
-          scopeKey: null, organizationId: null,
+          scopeKey: null,
+          organizationId: null,
         }),
       ).not.toThrow();
     }
@@ -363,7 +366,8 @@ describe("BYOK model overrides", () => {
     expect(() =>
       getModelForRole("reasoning", orgConfig, {
         promptCachingEnabled: true,
-        scopeKey: null, organizationId: null,
+        scopeKey: null,
+        organizationId: null,
       }),
     ).not.toThrow();
     expect(getModelInfoForRole("reasoning", orgConfig).modelId).toBe(
@@ -399,7 +403,8 @@ describe("BYOK model overrides", () => {
     expect(() =>
       getModelForRole("chat", orgConfig, {
         promptCachingEnabled: true,
-        scopeKey: null, organizationId: null,
+        scopeKey: null,
+        organizationId: null,
       }),
     ).not.toThrow();
   });
@@ -471,25 +476,25 @@ describe("defaultsForRole", () => {
   });
 
   test("google providerOptions include safetySettings baseline", () => {
-    const s = defaultsForRole("fast", "google", null);
-    const google = s.providerOptions?.["google"] as
+    const settings = defaultsForRole("fast", "google", null);
+    const google = settings.providerOptions?.["google"] as
       | { safetySettings?: { category: string; threshold: string }[] }
       | undefined;
     expect(google?.safetySettings).toBeDefined();
     expect(google?.safetySettings?.length).toBeGreaterThan(0);
     expect(
-      google?.safetySettings?.every((s) => s.threshold === "BLOCK_ONLY_HIGH"),
+      google?.safetySettings?.every(
+        (rule) => rule.threshold === "BLOCK_ONLY_HIGH",
+      ),
     ).toBe(true);
   });
 
   test("anthropic includes hashed metadata.user_id when orgId is given", () => {
-    // SAFETY: orgId is a SafeId<"organization"> brand; using a fake
-    // string for unit purposes (the helper only hashes the value).
-    const orgId = "org_test_abc123" as ReturnType<
-      typeof getModelInfoForRole
-    >["modelId"] as never;
-    const s = defaultsForRole("fast", "anthropic", orgId);
-    const anthropic = s.providerOptions?.["anthropic"] as
+    // SAFETY: SafeId is a branded string; the helper only hashes the
+    // value, so a raw string is sound at runtime for this unit test.
+    const orgId = toSafeId<"organization">("org_test_abc123");
+    const settings = defaultsForRole("fast", "anthropic", orgId);
+    const anthropic = settings.providerOptions?.["anthropic"] as
       | { metadata?: { user_id?: string } }
       | undefined;
     expect(anthropic?.metadata?.user_id).toBeDefined();
@@ -497,10 +502,10 @@ describe("defaultsForRole", () => {
     expect(anthropic?.metadata?.user_id?.length).toBe(16);
   });
 
-  test("anthropic reasoning enables thinking with a budget", () => {
-    const s = defaultsForRole("reasoning", "anthropic", null);
-    expect(s.providerOptions?.["anthropic"]).toMatchObject({
-      thinking: { type: "enabled" },
+  test("anthropic reasoning enables adaptive thinking", () => {
+    const settings = defaultsForRole("reasoning", "anthropic", null);
+    expect(settings.providerOptions?.["anthropic"]).toMatchObject({
+      thinking: { type: "adaptive" },
     });
   });
 
@@ -514,17 +519,25 @@ describe("defaultsForRole", () => {
     }
   });
 
-  test("openai reasoning sets reasoning_effort", () => {
-    const s = defaultsForRole("reasoning", "openai", null);
-    expect(s.providerOptions?.["openai"]).toMatchObject({
-      reasoning_effort: "medium",
+  test("openai reasoning sets reasoningEffort under openai key", () => {
+    const settings = defaultsForRole("reasoning", "openai", null);
+    expect(settings.providerOptions?.["openai"]).toMatchObject({
+      reasoningEffort: "medium",
     });
+  });
+
+  test("azure_foundry reasoning sets reasoningEffort under azure key", () => {
+    const settings = defaultsForRole("reasoning", "azure_foundry", null);
+    expect(settings.providerOptions?.["azure"]).toMatchObject({
+      reasoningEffort: "medium",
+    });
+    expect(settings.providerOptions?.["openai"]).toBeUndefined();
   });
 
   test("openai non-reasoning roles set no provider options", () => {
     for (const role of ["fast", "chat", "pdf"] as const) {
-      const s = defaultsForRole(role, "openai", null);
-      expect(s.providerOptions).toBeUndefined();
+      const settings = defaultsForRole(role, "openai", null);
+      expect(settings.providerOptions).toBeUndefined();
     }
   });
 });
