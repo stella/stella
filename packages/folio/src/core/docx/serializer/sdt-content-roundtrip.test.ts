@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import { fromProseDoc } from "../../prosemirror/conversion/fromProseDoc";
+import { toProseDoc } from "../../prosemirror/conversion/toProseDoc";
+import type { Document, InlineSdt, Paragraph } from "../../types/document";
 import { parseParagraph } from "../paragraphParser";
 import { parseXmlDocument } from "../xmlParser";
-import type { Document, InlineSdt, Paragraph } from "../../types/document";
-import { toProseDoc } from "../../prosemirror/conversion/toProseDoc";
-import { fromProseDoc } from "../../prosemirror/conversion/fromProseDoc";
 import { serializeParagraph } from "./paragraphSerializer";
 
 function parseParagraphXml(xml: string): Paragraph {
