@@ -7,7 +7,7 @@
 
 import { ommlToMathml } from "../docx/mathToMathml";
 import { parseXmlDocument } from "../docx/xmlParser";
-import { getListMarkerInlineWidth } from "../layout-bridge/measuring/listMarkerWidth";
+import { getListMarkerInlineWidth } from "../layout-engine/measure/listMarkerWidth";
 import type {
   ParagraphBlock,
   ParagraphMeasure,

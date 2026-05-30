@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ParagraphBlock } from "../../layout-engine/types";
+import type { ParagraphBlock } from "../types";
 import { measureParagraph } from "./measureParagraph";
 
 // Issue #391/#394 (eigenpal): Word renders an empty paragraph as a single

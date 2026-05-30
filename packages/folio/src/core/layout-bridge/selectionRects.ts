@@ -9,6 +9,8 @@
  */
 
 import { getHeaderRowsHeight } from "../layout-engine/index";
+import { measureRun } from "../layout-engine/measure/measureContainer";
+import type { FontStyle } from "../layout-engine/measure/measureContainer";
 import type {
   Layout,
   FlowBlock,
@@ -27,8 +29,6 @@ import type {
 } from "../layout-engine/types";
 import { inlineImageBoundingBox } from "../utils/rotationBoundingBox";
 import { getPageTop } from "./hitTest";
-import { measureRun } from "./measuring/measureContainer";
-import type { FontStyle } from "./measuring/measureContainer";
 
 // =============================================================================
 // TYPES

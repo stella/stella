@@ -1,14 +1,11 @@
 /**
- * Layout measurement — back-compat barrel.
+ * Layout measurement utilities.
  *
- * The implementation moved to `layout-engine/measure/` so the painter can
- * consume measurement helpers without importing across the layer boundary
- * (the painter is downstream of the engine; it was importing from the
- * bridge before this barrel was introduced). The bridge continues to expose
- * the same names so existing call sites need no change.
- *
- * See `__tests__/layer-boundaries.test.ts` and the `folio-layer-boundaries`
- * lint rule for the enforcement.
+ * Pure measurement helpers shared by the bridge (FlowBlock construction,
+ * footnote stack sizing) and the painter (in-render re-measurement when
+ * floating exclusion zones change line widths). None of the modules here
+ * depend on ProseMirror or the DOM; they read `FlowBlock` / `Run` shapes
+ * from `../types` and emit `Measure` / zone descriptors.
  */
 
 export {
@@ -31,7 +28,7 @@ export {
   type FontMetrics,
   type TextMeasurement,
   type RunMeasurement,
-} from "../../layout-engine/measure/measureContainer";
+} from "./measureContainer";
 
 export {
   measureParagraph,
@@ -40,7 +37,7 @@ export {
   clampFloatingWrapMargins,
   type FloatingImageZone,
   type MeasureParagraphOptions,
-} from "../../layout-engine/measure/measureParagraph";
+} from "./measureParagraph";
 
 export {
   rectsToFloatingZones,
@@ -50,7 +47,7 @@ export {
   type FloatingLineMargins,
   type FloatingLineSegmentZone,
   type WrapTextDirection,
-} from "../../layout-engine/measure/floatingZones";
+} from "./floatingZones";
 
 export {
   getCachedTextWidth,
@@ -71,4 +68,4 @@ export {
   getParagraphCacheSize,
   clearAllCaches,
   getTotalCacheSize,
-} from "../../layout-engine/measure/cache";
+} from "./cache";

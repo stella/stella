@@ -277,6 +277,7 @@ export default defineConfig({
     "./.oxlint-plugins/must-use-result.ts",
     "./.oxlint-plugins/no-any-casts.ts",
     "./.oxlint-plugins/no-dangerous-type-assertions.ts",
+    "./.oxlint-plugins/folio-layer-boundaries.ts",
   ],
 
   overrides: [
@@ -370,6 +371,21 @@ export default defineConfig({
       // this guardrail rollout on a broad folio rewrite.
       files: ["packages/folio/src/**/*.{ts,tsx}"],
       rules: { "sonarjs/cognitive-complexity": ["error", 200] },
+    },
+    {
+      // Folio render-pipeline layer boundaries. The painter is downstream of
+      // the engine and bridge and must not import upstream concerns; the
+      // bridge and engine must not pull from the painter. See
+      // `.oxlint-plugins/folio-layer-boundaries.ts` and the matching test at
+      // `packages/folio/src/core/__tests__/layer-boundaries.test.ts`.
+      files: [
+        "packages/folio/src/core/layout-bridge/**/*.{ts,tsx}",
+        "packages/folio/src/core/layout-engine/**/*.{ts,tsx}",
+        "packages/folio/src/core/layout-painter/**/*.{ts,tsx}",
+      ],
+      rules: {
+        "folio-layer-boundaries/no-upstream-import": "error",
+      },
     },
     {
       // Drizzle schema files are guarded by check-migrations.sh, which
@@ -821,6 +837,8 @@ export default defineConfig({
         "packages/folio/src/core/layout-painter/**/*.tsx",
         "packages/folio/src/core/layout-engine/**/*.ts",
         "packages/folio/src/core/layout-engine/**/*.tsx",
+        "packages/folio/src/core/__tests__/**/*.ts",
+        "packages/folio/src/core/__tests__/**/*.tsx",
         "packages/folio/src/core/prosemirror/conversion/**/*.ts",
         "packages/folio/src/core/prosemirror/conversion/**/*.tsx",
         "packages/folio/src/core/prosemirror/commands/**/*.ts",

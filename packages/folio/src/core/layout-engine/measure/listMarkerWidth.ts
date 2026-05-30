@@ -13,7 +13,7 @@
  * returned width as `min-width`; the measurer subtracts the same value from
  * the first line's available width.
  */
-import type { ParagraphBlock, TextRun } from "../../layout-engine/types";
+import type { ParagraphBlock, TextRun } from "../types";
 import { measureTextWidth, ptToPx } from "./measureContainer";
 import type { FontStyle } from "./measureContainer";
 

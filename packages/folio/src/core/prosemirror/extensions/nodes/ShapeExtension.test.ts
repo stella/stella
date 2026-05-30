@@ -10,6 +10,7 @@ import {
   sanitizeShapeDimension,
   sanitizeSvgId,
   sanitizeTransform,
+  strokeDashArrayForOutlineStyle,
 } from "./ShapeExtension";
 
 describe("ShapeExtension.sanitizeColor", () => {
@@ -117,6 +118,18 @@ describe("ShapeExtension.sanitizeShapeDimension", () => {
     expect(sanitizeShapeDimension(Number.NaN, 100)).toBe(100);
     expect(sanitizeShapeDimension(null, 100)).toBe(100);
     expect(sanitizeShapeDimension(undefined, 80)).toBe(80);
+  });
+});
+
+describe("ShapeExtension.strokeDashArrayForOutlineStyle", () => {
+  test("supports CSS and OOXML dash style tokens", () => {
+    expect(strokeDashArrayForOutlineStyle("dashed")).toBe("8 4");
+    expect(strokeDashArrayForOutlineStyle("dash")).toBe("8 4");
+    expect(strokeDashArrayForOutlineStyle("dotted")).toBe("2 2");
+    expect(strokeDashArrayForOutlineStyle("dot")).toBe("2 2");
+    expect(strokeDashArrayForOutlineStyle("dashDot")).toBe("8 4 2 4");
+    expect(strokeDashArrayForOutlineStyle("lgDashDotDot")).toBe("8 4 2 4 2 4");
+    expect(strokeDashArrayForOutlineStyle("solid")).toBeUndefined();
   });
 });
 

@@ -1039,3 +1039,129 @@ export type DocumentPosition = {
   /** ProseMirror position. */
   pmPos?: number;
 };
+
+// =============================================================================
+// SHARED CONSTANTS, PREDICATES, AND RENDER-INPUT CONTRACTS
+//
+// Symbols below are imported by both the bridge (which builds FlowBlocks /
+// Measures / footnote stacks) and the painter (which consumes them). They live
+// here, in the engine's shared-types module, so neither side has to reach
+// across the layer boundary. See `__tests__/layer-boundaries.test.ts` and the
+// `folio-layer-boundaries` lint rule for the enforcement.
+// =============================================================================
+
+/**
+ * Height of the horizontal separator line drawn above the footnote stack.
+ * Used by the paginator when reserving space and by the painter when laying
+ * out the stack at the bottom of the page.
+ */
+export const FOOTNOTE_SEPARATOR_HEIGHT = 12;
+
+/**
+ * Bottom margin applied to every rendered footnote entry, in CSS pixels.
+ * Counted by the bridge when computing the reserved footnote height and by
+ * the painter when stacking entries.
+ */
+export const FOOTNOTE_ENTRY_MARGIN_BOTTOM = 4;
+
+/**
+ * Line height used when a footnote entry has no measured line height yet.
+ * Conservative fallback so a missing measure does not collapse the entry.
+ */
+export const FOOTNOTE_FALLBACK_LINE_HEIGHT = 13;
+
+/**
+ * Header / footer content prepared by the bridge for the painter. Lives here
+ * because both layers reference the shape; the painter must not import it from
+ * the bridge and the bridge must not import it from the painter.
+ */
+export type HeaderFooterContent = {
+  /** Flow blocks for the header/footer content. */
+  blocks: FlowBlock[];
+  /** Measurements for the blocks. */
+  measures: Measure[];
+  /** Total height of the content. */
+  height: number;
+  /** Top-most visual extent relative to the nominal flow origin. */
+  visualTop?: number;
+  /** Bottom-most visual extent relative to the nominal flow origin. */
+  visualBottom?: number;
+  /**
+   * Flow-only bounds used by `computeHeaderFooterMarginExtender` to push
+   * body margins clear of HF overflow. Excludes `behindDoc` images that
+   * the renderer paints behind body content; including them would reserve
+   * a full-page letterhead as body push-down.
+   */
+  marginPushTop?: number;
+  marginPushBottom?: number;
+  /**
+   * Relationship id (`rId`) of the source HF part. Emitted as `data-rid`
+   * on the painted `.layout-page-header` / `.layout-page-footer` so the
+   * pointer pipeline can resolve clicks to the matching hidden HF
+   * EditorView.
+   */
+  rId?: string;
+  /**
+   * Cheap text fingerprint of the rendered blocks. Used to invalidate
+   * cached options hashes so same-height in-place HF edits force the
+   * painter to re-render shells.
+   */
+  textSig?: string;
+};
+
+/**
+ * `true` when the image run is anchored at page-level coordinates instead of
+ * participating in inline flow. Covers the OOXML floating wrap types
+ * (`square`, `tight`, `through`, `behind`, `inFront`) and the legacy
+ * `displayMode === "float"` escape hatch used by ProseMirror nodes that
+ * pre-date the wrap-type round-trip.
+ *
+ * Pure predicate over `ImageRun` — no DOM, no measurement state. Lives here
+ * so the bridge can call it without importing from the painter.
+ */
+export const isFloatingImageRun = (run: ImageRun): boolean => {
+  const wrapType = run.wrapType;
+  if (
+    wrapType === "square" ||
+    wrapType === "tight" ||
+    wrapType === "through" ||
+    wrapType === "behind" ||
+    wrapType === "inFront"
+  ) {
+    return true;
+  }
+  return run.displayMode === "float";
+};
+
+/**
+ * `true` when a floating image should also shrink surrounding line widths.
+ * `behind` / `inFront` (wrapNone) and `topAndBottom` do not — text either
+ * paints over/under them or flows above/below as a block — only
+ * `square` / `tight` / `through` carve a horizontal exclusion. The legacy
+ * `displayMode === "float"` path is treated as wrapping when a CSS float
+ * direction is set.
+ */
+export const isTextWrappingFloatingImageRun = (run: ImageRun): boolean => {
+  const wrapType = run.wrapType;
+  if (
+    wrapType === "behind" ||
+    wrapType === "inFront" ||
+    wrapType === "topAndBottom"
+  ) {
+    return false;
+  }
+  if (wrapType === "square" || wrapType === "tight" || wrapType === "through") {
+    return true;
+  }
+  return run.displayMode === "float" && run.cssFloat !== "none";
+};
+
+// `TextBoxFlowAttrs`, `isFloatingTextBoxBlock`, and `floatingTextBoxWrapsText`
+// are re-exported from `./textBoxFlow.ts` (where they live next to the
+// related wrap-type helpers in `../docx/wrapTypes`). Re-exporting here keeps
+// the painter on a single import surface — `layout-engine/types`.
+export type { TextBoxFlowAttrs } from "./textBoxFlow";
+export {
+  isFloatingTextBoxBlock,
+  floatingTextBoxWrapsText,
+} from "./textBoxFlow";

@@ -11,21 +11,19 @@
 
 import { describe, expect, test } from "bun:test";
 
-import {
-  FOOTNOTE_SEPARATOR_HEIGHT,
-  calculateFootnoteReservedHeights,
-} from "../layout-bridge/footnoteLayout";
+import { calculateFootnoteReservedHeights } from "../layout-bridge/footnoteLayout";
 import { FOOTNOTE_SEPARATOR_HEIGHT as PAGINATOR_FOOTNOTE_SEPARATOR_HEIGHT } from "../layout-engine/paginator";
 import type {
   Page,
   ParagraphBlock,
   ParagraphMeasure,
 } from "../layout-engine/types";
+import { FOOTNOTE_SEPARATOR_HEIGHT } from "../layout-engine/types";
 import {
   calculateFootnoteAreaRenderHeight,
   renderPage,
   type FootnoteRenderItem,
-} from "./renderPage";
+} from "../layout-painter/renderPage";
 
 class FakeElement {
   className = "";

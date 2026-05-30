@@ -11,8 +11,8 @@
 import {
   clampFloatingWrapMargins,
   measureParagraph,
-} from "../layout-bridge/measuring";
-import type { FloatingImageZone } from "../layout-bridge/measuring";
+} from "../layout-engine/measure";
+import type { FloatingImageZone } from "../layout-engine/measure";
 import type {
   TableFragment,
   TableBlock,

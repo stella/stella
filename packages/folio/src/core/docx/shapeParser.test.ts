@@ -197,6 +197,22 @@ describe("parseShapeFromDrawing — fill", () => {
     expect(root ? parseShapeFromDrawing(root) : null).toBeNull();
   });
 
+  test.each([
+    ["pattern", `<a:pattFill prst="pct5"/>`],
+    ["picture", `<a:blipFill><a:blip r:embed="rId9"/></a:blipFill>`],
+  ])("%s fills are preserved as raw drawings", (_name, fill) => {
+    const root = parseXmlDocument(
+      drawingWith(
+        buildSpPr({
+          prst: "rect",
+          fill,
+        }),
+      ),
+    );
+    expect(root ? shouldPreserveRawShapeDrawing(root) : false).toBe(true);
+    expect(root ? parseShapeFromDrawing(root) : null).toBeNull();
+  });
+
   test("recognises a:noFill as type=none", () => {
     const root = parseXmlDocument(
       drawingWith(buildSpPr({ prst: "ellipse", fill: `<a:noFill/>` })),

@@ -5,10 +5,7 @@
  * Improves performance by avoiding repeated measurements of identical content.
  */
 
-import type {
-  ParagraphBlock,
-  ParagraphMeasure,
-} from "../../layout-engine/types";
+import type { ParagraphBlock, ParagraphMeasure } from "../types";
 
 // =============================================================================
 // TEXT WIDTH CACHE

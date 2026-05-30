@@ -7,15 +7,15 @@
 
 import { panic } from "better-result";
 
-import { FOOTNOTE_SEPARATOR_HEIGHT } from "../layout-bridge/footnoteLayout";
 import type { Page, PageMargins, Fragment, ColumnLayout } from "./types";
+import { FOOTNOTE_SEPARATOR_HEIGHT } from "./types";
 
 /**
- * Re-export the canonical footnote separator height so engine call
- * sites do not have to know about the layout-bridge module. The single
- * source of truth lives in `layout-bridge/footnoteLayout.ts` and is
- * shared with the painter (`renderFootnoteArea`) and the per-page
- * reservation map. Mirrors eigenpal/docx-editor#485.
+ * Re-export the canonical footnote separator height so engine call sites can
+ * continue importing it from the paginator. The single source of truth lives
+ * in `layout-engine/types.ts` and is shared with the bridge (footnote stack
+ * height calc) and the painter (separator margins). Mirrors
+ * eigenpal/docx-editor#485.
  */
 export { FOOTNOTE_SEPARATOR_HEIGHT };
 

@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
+import { resetCanvasContext } from "../layout-engine/measure/measureContainer";
 import type { FlowBlock } from "../layout-engine/types";
 import type { Footnote } from "../types/document";
 import {
   applyFootnotePresentation,
   convertFootnoteToContent,
 } from "./footnoteLayout";
-import { resetCanvasContext } from "./measuring/measureContainer";
 
 const footnoteWithTable: Footnote = {
   type: "footnote",
