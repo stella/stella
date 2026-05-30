@@ -1586,6 +1586,12 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
         formatting.imprint = true;
         break;
 
+      case "hidden":
+        // eigenpal #424 (w:vanish gap 9): mark closes the round-trip so
+        // `<w:vanish/>` survives parse → PM → serialize.
+        formatting.hidden = true;
+        break;
+
       case "textShadow":
         formatting.shadow = true;
         break;

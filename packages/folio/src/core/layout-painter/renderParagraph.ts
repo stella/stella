@@ -257,6 +257,20 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
     ).webkitTextEmphasisPosition = position;
   }
 
+  // Hidden run (OOXML w:vanish, §17.3.2.41). Word's print/normal view
+  // suppresses hidden text entirely, but in editing view it draws the
+  // run dimmed with a dotted underline so the author can still navigate
+  // to and edit it. Mirror that: keep the run in flow and selectable —
+  // `display: none` would orphan PM positions and break cursor movement
+  // across hidden ranges. The `docx-hidden` class hook lets host CSS
+  // swap to print-style suppression when a future view-mode toggle ships.
+  // eigenpal #424 (w:vanish gap 9)
+  if (run.hidden) {
+    element.classList.add("docx-hidden");
+    element.style.opacity = "0.4";
+    element.style.textDecoration = "underline dotted";
+  }
+
   // Highlight (background color)
   if (run.highlight) {
     element.style.backgroundColor = run.highlight;

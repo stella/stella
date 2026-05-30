@@ -477,6 +477,12 @@ function extractRunFormatting(
         formatting.imprint = true;
         break;
 
+      case "hidden":
+        // eigenpal #424 (w:vanish gap 9): mark surfaces RunFormatting.hidden
+        // so the painter can apply the dimmed dotted-underline treatment.
+        formatting.hidden = true;
+        break;
+
       case "textShadow":
         formatting.textShadow = true;
         break;

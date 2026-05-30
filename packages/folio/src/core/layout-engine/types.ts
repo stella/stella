@@ -46,6 +46,13 @@ export type RunFormatting = {
   textShadow?: boolean;
   textOutline?: boolean;
   emphasisMark?: "dot" | "comma" | "circle" | "underDot";
+  /**
+   * Hidden run (OOXML w:vanish, §17.3.2.41). Word's print/normal view
+   * suppresses it entirely, but the editing view dims it with a dotted
+   * underline so the author can navigate to and edit it. The painter
+   * mirrors the editing-view treatment so PM cursor traversal works.
+   */
+  hidden?: boolean;
   /** Hyperlink info if this run is a link */
   hyperlink?: HyperlinkInfo;
   /** Footnote reference ID (if this run contains a footnote reference) */

@@ -34,6 +34,7 @@ import { CommentExtension } from "./marks/CommentExtension";
 import { FontFamilyExtension } from "./marks/FontFamilyExtension";
 import { FontSizeExtension } from "./marks/FontSizeExtension";
 import { FootnoteRefExtension } from "./marks/FootnoteRefExtension";
+import { HiddenTextExtension } from "./marks/HiddenTextExtension";
 import { HighlightExtension } from "./marks/HighlightExtension";
 import { HyperlinkExtension } from "./marks/HyperlinkExtension";
 import { ItalicExtension } from "./marks/ItalicExtension";
@@ -132,6 +133,7 @@ export function createStarterKit(
   add("characterSpacing", CharacterSpacingExtension());
   add("emboss", EmbossExtension());
   add("imprint", ImprintExtension());
+  add("hidden", HiddenTextExtension());
   add("textShadow", TextShadowExtension());
   add("emphasisMark", EmphasisMarkExtension());
   add("textOutline", TextOutlineExtension());
