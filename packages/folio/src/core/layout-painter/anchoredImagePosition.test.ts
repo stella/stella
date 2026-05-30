@@ -260,6 +260,135 @@ describe("resolveAnchoredImagePosition — vertical align (eigenpal #424)", () =
   });
 });
 
+describe("resolveAnchoredImagePosition — inside/outside margin mapping (eigenpal #424)", () => {
+  test("relativeFrom='insideMargin' align='left' anchors at the left margin strip (single-sided recto)", () => {
+    const run = baseRun({
+      horizontal: { relativeTo: "insideMargin", align: "left" },
+      vertical: { relativeTo: "paragraph" },
+    });
+    const result = resolveAnchoredImagePosition(run, fragmentY, {
+      contentWidth: CONTENT_WIDTH,
+      contentHeight: CONTENT_HEIGHT,
+      ...PAGE,
+    });
+    expect(result.x).toBe(-PAGE.marginLeft); // -96
+  });
+
+  test("relativeFrom='outsideMargin' align='right' anchors at the right margin strip (single-sided recto)", () => {
+    const run = baseRun({
+      horizontal: { relativeTo: "outsideMargin", align: "right" },
+      vertical: { relativeTo: "paragraph" },
+    });
+    const result = resolveAnchoredImagePosition(run, fragmentY, {
+      contentWidth: CONTENT_WIDTH,
+      contentHeight: CONTENT_HEIGHT,
+      ...PAGE,
+    });
+    expect(result.x).toBe(CONTENT_WIDTH + PAGE.marginRight - IMG_W); // 624 + 96 - 200 = 520
+    expect(result.side).toBe("right");
+  });
+
+  test("relativeFrom='insideMargin' with posOffset starts at the inside margin origin", () => {
+    const run = baseRun({
+      // 1 inch = 914400 EMU = 96 px shift from the inside margin origin
+      horizontal: { relativeTo: "insideMargin", posOffset: 914_400 },
+      vertical: { relativeTo: "paragraph" },
+    });
+    const result = resolveAnchoredImagePosition(run, fragmentY, {
+      contentWidth: CONTENT_WIDTH,
+      contentHeight: CONTENT_HEIGHT,
+      ...PAGE,
+    });
+    // baseX = -marginLeft = -96, +96 offset = 0
+    expect(result.x).toBe(0);
+  });
+});
+
+describe("resolveAnchoredImagePosition — zero-margin / zero-band edge cases (eigenpal #424)", () => {
+  const ZERO_MARGIN_PAGE = {
+    pageWidth: 816,
+    pageHeight: 1056,
+    marginLeft: 0,
+    marginTop: 0,
+    marginRight: 0,
+    marginBottom: 0,
+    contentWidth: 816,
+    contentHeight: 1056,
+  } as const;
+
+  test("align='top' relativeFrom='topMargin' with marginTop=0 anchors at the top edge (not paragraph)", () => {
+    const run = baseRun({
+      horizontal: { relativeTo: "margin" },
+      vertical: { relativeTo: "topMargin", align: "top" },
+    });
+    const result = resolveAnchoredImagePosition(
+      run,
+      fragmentY,
+      ZERO_MARGIN_PAGE,
+    );
+    // Previously a `bandHeight ? ... : fragmentY` ternary would have
+    // silently fallen back to `fragmentY` when `marginTop === 0`. We use
+    // `Math.abs` to normalize away signed-zero noise from `-marginTop`.
+    expect(Math.abs(result.y)).toBe(0);
+  });
+
+  test("align='bottom' relativeFrom='bottomMargin' with marginBottom=0 anchors at the content bottom (not paragraph)", () => {
+    const run = baseRun({
+      horizontal: { relativeTo: "margin" },
+      vertical: { relativeTo: "bottomMargin", align: "bottom" },
+    });
+    const result = resolveAnchoredImagePosition(
+      run,
+      fragmentY,
+      ZERO_MARGIN_PAGE,
+    );
+    // baseY = contentHeight = 1056, bandHeight = 0; bottom = 1056 + 0 - 150
+    expect(result.y).toBe(ZERO_MARGIN_PAGE.contentHeight - IMG_H);
+  });
+
+  test("align='center' relativeFrom='topMargin' with marginTop=0 still uses the (degenerate) band, not paragraph", () => {
+    const run = baseRun({
+      horizontal: { relativeTo: "margin" },
+      vertical: { relativeTo: "topMargin", align: "center" },
+    });
+    const result = resolveAnchoredImagePosition(
+      run,
+      fragmentY,
+      ZERO_MARGIN_PAGE,
+    );
+    // baseY = 0, bandHeight = 0 → center at (0 - IMG_H) / 2
+    expect(result.y).toBe(-IMG_H / 2);
+  });
+
+  test("align='right' relativeFrom='leftMargin' with marginLeft=0 anchors at the (degenerate) left strip's right edge", () => {
+    const run = baseRun({
+      horizontal: { relativeTo: "leftMargin", align: "right" },
+      vertical: { relativeTo: "paragraph" },
+    });
+    const result = resolveAnchoredImagePosition(
+      run,
+      fragmentY,
+      ZERO_MARGIN_PAGE,
+    );
+    // baseX = -marginLeft = 0, bandWidth = 0 → 0 + 0 - 200 = -200
+    expect(result.x).toBe(-IMG_W);
+    expect(result.side).toBe("right");
+  });
+
+  test("character anchor still produces x=0 (no band threading yet)", () => {
+    const run = baseRun({
+      horizontal: { relativeTo: "character", align: "center" },
+      vertical: { relativeTo: "paragraph" },
+    });
+    const result = resolveAnchoredImagePosition(run, fragmentY, {
+      contentWidth: CONTENT_WIDTH,
+      contentHeight: CONTENT_HEIGHT,
+      ...PAGE,
+    });
+    expect(result.x).toBe(0);
+  });
+});
+
 describe("resolveAnchoredImagePosition — back-compat with posOffset (eigenpal #424)", () => {
   test("horizontal posOffset against page is translated by -marginLeft", () => {
     const run = baseRun({

@@ -696,10 +696,9 @@ export type AnchoredImagePosition = {
 // eigenpal #424 (positionV/H align): ECMA-376 §20.4.3.2 (ST_RelFromH).
 // Maps the OOXML relativeFrom enum onto the painter's content-relative band.
 // `baseX` is the band origin; `bandWidth` is the band's extent — both feed
-// the align="left|center|right" / posOffset arithmetic below. The
-// `*Margin` variants are mirror-margins for facing pages; without facing-
-// page context we approximate as the content band, which matches Word's
-// single-sided render.
+// the align="left|center|right" / posOffset arithmetic below. We render
+// single-sided, so `insideMargin` is treated as `leftMargin` (recto inside)
+// and `outsideMargin` as `rightMargin` (recto outside).
 function resolveHorizontalBand(
   relativeTo: string | undefined,
   geometry: PageGeometry,
@@ -708,17 +707,17 @@ function resolveHorizontalBand(
     case "page":
       return { baseX: -geometry.marginLeft, bandWidth: geometry.pageWidth };
     case "leftMargin":
+    case "insideMargin":
       return { baseX: -geometry.marginLeft, bandWidth: geometry.marginLeft };
     case "rightMargin":
+    case "outsideMargin":
       return { baseX: geometry.contentWidth, bandWidth: geometry.marginRight };
     case "character":
       // `character` would need the originating run's x-position; we don't
       // thread that through the bridge yet. Anchor at the content origin.
       return { baseX: 0, bandWidth: 0 };
     default:
-      // `column`, `margin`, `insideMargin`, `outsideMargin`, and unknown
-      // values all resolve to the content band — `*Margin` are facing-page
-      // mirrors of `margin` and we render single-sided.
+      // `column`, `margin`, and unknown values resolve to the content band.
       return { baseX: 0, bandWidth: geometry.contentWidth };
   }
 }
@@ -726,8 +725,9 @@ function resolveHorizontalBand(
 // eigenpal #424 (positionV/H align): ECMA-376 §20.4.3.1 (ST_RelFromV).
 // Symmetric with the horizontal helper. `topMargin` is the strip above
 // the content area; `bottomMargin` is below it; `paragraph` / `line` fall
-// back to the running paragraph anchor (no band). `bandHeight === 0`
-// signals "no band, defer to paragraph anchor" to the resolver below.
+// back to the running paragraph anchor (no band). The resolver above
+// uses `relativeTo` (not `bandHeight`) to detect the no-band case so a
+// legitimately zero-sized margin still aligns correctly.
 function resolveVerticalBand(
   relativeTo: string | undefined,
   fragmentY: number,
@@ -748,8 +748,8 @@ function resolveVerticalBand(
       return { baseY: fragmentY, bandHeight: 0 };
     default:
       // `margin`, `insideMargin`, `outsideMargin`, and unknown values all
-      // resolve to the content band; the *Margin variants are facing-page
-      // mirrors of `margin` and we render single-sided.
+      // resolve to the content band; vertical `*Margin` variants degenerate
+      // to `margin` in a single-sided render.
       return { baseY: 0, bandHeight: geometry.contentHeight };
   }
 }
@@ -782,19 +782,25 @@ export function resolveAnchoredImagePosition(
   if (position?.horizontal) {
     const h = position.horizontal;
     const { baseX, bandWidth } = resolveHorizontalBand(h.relativeTo, geometry);
+    // `character` is the only horizontal anchor that intentionally carries
+    // no band (we don't yet thread the originating run's x); for every
+    // other relativeFrom variant the band is real and `bandWidth === 0`
+    // means the page legitimately has a zero-width strip (e.g. mirrored
+    // margins on a no-margin layout), which should still be honoured.
+    const horizontalHasBand = h.relativeTo !== "character";
 
     if (h.align === "right" || h.align === "outside") {
       // `outside` is the facing-page mirror of `right`. Without facing-page
       // context we treat it as the right edge of the band, matching Word's
       // single-sided render.
       side = "right";
-      x = bandWidth ? baseX + bandWidth - imgRun.width : 0;
+      x = horizontalHasBand ? baseX + bandWidth - imgRun.width : 0;
     } else if (h.align === "left" || h.align === "inside") {
       side = "left";
       x = baseX;
     } else if (h.align === "center") {
       side = "left";
-      x = bandWidth ? baseX + (bandWidth - imgRun.width) / 2 : 0;
+      x = horizontalHasBand ? baseX + (bandWidth - imgRun.width) / 2 : 0;
     } else if (h.posOffset !== undefined) {
       x = baseX + emuToPixels(h.posOffset);
       side = x > contentWidth / 2 ? "right" : "left";
@@ -816,22 +822,29 @@ export function resolveAnchoredImagePosition(
       fragmentY,
       geometry,
     );
+    // paragraph/line are the only vertical anchors without a band — they
+    // ride the running paragraph's y, so align/center against a non-existent
+    // band must defer to `fragmentY`. Every other relativeFrom variant has
+    // a real band, so `bandHeight === 0` (e.g. zero top/bottom margin)
+    // should still resolve via the band-relative math instead of falling
+    // back to `fragmentY`.
+    const verticalHasBand =
+      v.relativeTo !== "paragraph" && v.relativeTo !== "line";
 
     if (v.align === "top" || v.align === "inside") {
       y = baseY;
     } else if (v.align === "center") {
-      y = bandHeight ? baseY + (bandHeight - imgRun.height) / 2 : fragmentY;
+      y = verticalHasBand
+        ? baseY + (bandHeight - imgRun.height) / 2
+        : fragmentY;
     } else if (v.align === "bottom" || v.align === "outside") {
-      y = bandHeight ? baseY + bandHeight - imgRun.height : fragmentY;
+      y = verticalHasBand ? baseY + bandHeight - imgRun.height : fragmentY;
     } else if (v.posOffset !== undefined) {
       y = baseY + emuToPixels(v.posOffset);
     } else {
       // Bare positionV — for paragraph/line bands the image stays in flow;
       // for any other band, the spec means "anchor at the band origin".
-      y =
-        v.relativeTo === "paragraph" || v.relativeTo === "line"
-          ? fragmentY
-          : baseY;
+      y = verticalHasBand ? baseY : fragmentY;
     }
   } else {
     y = fragmentY;
