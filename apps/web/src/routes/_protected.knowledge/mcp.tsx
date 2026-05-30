@@ -67,7 +67,7 @@ type McpConnector = {
   authType: "none" | "bearer" | "oauth2";
   isCurated: boolean;
   isRecommended: boolean;
-  recommendedJurisdictions: readonly CountryCode[];
+  recommendedJurisdictions: readonly RecommendedJurisdictionCode[];
   documentationUrl: string | null;
   iconUrl: string | null;
   tokenHelpUrl: string | null;
@@ -82,6 +82,8 @@ type McpConnection = {
   updatedAt: Date;
 };
 
+type RecommendedJurisdictionCode = CountryCode | "EU";
+
 type NativeToolCatalogItem = {
   slug: string;
   displayName: string;
@@ -90,7 +92,7 @@ type NativeToolCatalogItem = {
   documentationUrl: string | null;
   iconUrl: string | null;
   isRecommended: boolean;
-  recommendedJurisdictions: readonly CountryCode[];
+  recommendedJurisdictions: readonly RecommendedJurisdictionCode[];
   enabled: boolean;
 };
 

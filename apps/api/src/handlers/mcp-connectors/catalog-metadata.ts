@@ -29,6 +29,11 @@ export type NativeToolCatalogItem = {
   recommendedJurisdictions: readonly RecommendedJurisdictionCode[];
 };
 
+const isRecommendedJurisdictionCode = (
+  jurisdiction: string,
+): jurisdiction is RecommendedJurisdictionCode =>
+  jurisdiction === "EU" || isCountryCode(jurisdiction);
+
 /**
  * Native-tool catalogue sourced from `@stll/catalogue`. Recommendation
  * lives in `packages/catalogue/entries/recommended.json` (maintainer-
@@ -100,11 +105,6 @@ const intersectsJurisdictions = (
     matchesPracticeCountryCode(countryCode, practiceCountryCodes),
   );
 };
-
-const isRecommendedJurisdictionCode = (
-  jurisdiction: string,
-): jurisdiction is RecommendedJurisdictionCode =>
-  jurisdiction === "EU" || isCountryCode(jurisdiction);
 
 const matchesPracticeCountryCode = (
   countryCode: RecommendedJurisdictionCode,
