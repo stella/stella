@@ -1125,7 +1125,7 @@ const RIGHT_EDGE_EPSILON_PX = 0.5;
 /**
  * Build a TextMeasureStyle from a TextRun or FieldRun's relevant fields.
  */
-function runMeasureStyle(run: TextRun | FieldRun): TextMeasureStyle {
+function runMeasureStyle(run: TextRun | FieldRun | MathRun): TextMeasureStyle {
   return {
     ...(run.bold !== undefined ? { bold: run.bold } : {}),
     ...(run.italic !== undefined ? { italic: run.italic } : {}),
@@ -1198,6 +1198,15 @@ function measureFollowingContentWidth(
       // occupy their axis-aligned bbox width, not the raw `run.width`, so
       // right-tab anchoring stays aligned with what the painter reserves.
       width += inlineImageBoundingBox(run).width || 0;
+    } else if (isMathRun(run)) {
+      width +=
+        measureText(
+          run.plainText,
+          run.fontSize ?? 11,
+          run.fontFamily ?? "Cambria Math",
+          runMeasureStyle(run),
+        ) *
+        (scale / 100);
     }
   }
   return width;
@@ -1258,6 +1267,8 @@ function getTextAfterTab(
     } else if (isTabRun(run) || isLineBreakRun(run)) {
       // Stop at next tab or line break
       break;
+    } else if (isMathRun(run)) {
+      text += run.plainText;
     }
   }
   return text;
@@ -1508,6 +1519,9 @@ export function renderLine(
           if (isTextRun(next) || isFieldRun(next)) {
             return next;
           }
+          if (isMathRun(next)) {
+            return next;
+          }
         }
         return undefined;
       })();
@@ -1744,6 +1758,17 @@ export function renderLine(
             : {}),
           ...(run.smallCaps !== undefined ? { smallCaps: run.smallCaps } : {}),
         },
+      );
+      reserveScaledAdvance(runEl, measuredWidth, run.horizontalScale);
+      currentX += measuredWidth * ((run.horizontalScale ?? 100) / 100);
+    } else if (isMathRun(run)) {
+      const runEl = renderMathRun(run, doc);
+      lineEl.append(runEl);
+      const measuredWidth = measureText(
+        run.plainText,
+        run.fontSize ?? 11,
+        run.fontFamily ?? "Cambria Math",
+        runMeasureStyle(run),
       );
       reserveScaledAdvance(runEl, measuredWidth, run.horizontalScale);
       currentX += measuredWidth * ((run.horizontalScale ?? 100) / 100);

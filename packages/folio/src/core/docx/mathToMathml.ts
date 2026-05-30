@@ -316,7 +316,9 @@ function classifyChar(ch: string): "letter" | "digit" | "operator" {
     (code >= 0x00_61 && code <= 0x00_7a) || // a-z
     (code >= 0x03_91 && code <= 0x03_a9) || // Greek capital
     (code >= 0x03_b1 && code <= 0x03_c9) || // Greek small
-    (code >= 0x05_d0 && code <= 0x05_ea) // Hebrew letters
+    (code >= 0x05_d0 && code <= 0x05_ea) || // Hebrew letters
+    (code >= 0x21_00 && code <= 0x21_4f) || // Letterlike Symbols
+    (code >= 0x01_d4_00 && code <= 0x01_d7_ff) // Mathematical Alphanumeric Symbols
   ) {
     return "letter";
   }
@@ -329,7 +331,11 @@ function renderFraction(el: XmlElement): string {
   const den = findChildByLocalName(el, "den");
   const numMml = num ? wrapMrow(renderChildren(num)) : "<mrow/>";
   const denMml = den ? wrapMrow(renderChildren(den)) : "<mrow/>";
-  return `<mfrac>${numMml}${denMml}</mfrac>`;
+  const fPr = findChildByLocalName(el, "fPr");
+  const typeEl = fPr ? findChildByLocalName(fPr, "type") : null;
+  const type = typeEl ? getAttrValue(typeEl, "val") : null;
+  const attrs = type === "noBar" ? ' linethickness="0"' : "";
+  return `<mfrac${attrs}>${numMml}${denMml}</mfrac>`;
 }
 
 function renderScript(el: XmlElement, tag: "msup" | "msub"): string {
@@ -471,10 +477,11 @@ function renderBar(el: XmlElement): string {
 
 function renderGroupChr(el: XmlElement): string {
   const groupChrPr = findChildByLocalName(el, "groupChrPr");
-  const chrEl = groupChrPr ? findChildByLocalName(groupChrPr, "chr") : null;
-  const chr = chrEl ? (getAttrValue(chrEl, "val") ?? "⏟") : "⏟";
   const posEl = groupChrPr ? findChildByLocalName(groupChrPr, "pos") : null;
   const pos = posEl ? (getAttrValue(posEl, "val") ?? "bot") : "bot";
+  const chrEl = groupChrPr ? findChildByLocalName(groupChrPr, "chr") : null;
+  const defaultChr = pos === "top" ? "⏞" : "⏟";
+  const chr = chrEl ? (getAttrValue(chrEl, "val") ?? defaultChr) : defaultChr;
   const base = findChildByLocalName(el, "e");
   const baseMml = base ? wrapMrow(renderChildren(base)) : "<mrow/>";
   const grouper = `<mo stretchy="true">${escapeXml(chr)}</mo>`;

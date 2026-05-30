@@ -90,6 +90,15 @@ describe("ommlToMathml — run tokenisation", () => {
     const omml = parse(`<m:oMath ${MATH_NS}><m:r><m:t>α</m:t></m:r></m:oMath>`);
     expect(ommlToMathml(omml)).toContain("<mi>α</mi>");
   });
+
+  test("handles Letterlike and Mathematical Alphanumeric Symbols as identifiers", () => {
+    const omml = parse(
+      `<m:oMath ${MATH_NS}><m:r><m:t>ℏ𝑥</m:t></m:r></m:oMath>`,
+    );
+    const mml = ommlToMathml(omml);
+    expect(mml).toContain("<mi>ℏ</mi>");
+    expect(mml).toContain("<mi>𝑥</mi>");
+  });
 });
 
 describe("ommlToMathml — fractions and scripts", () => {
@@ -106,6 +115,19 @@ describe("ommlToMathml — fractions and scripts", () => {
     expect(mml).toContain("<mfrac>");
     expect(mml).toContain("<mn>1</mn>");
     expect(mml).toContain("<mn>2</mn>");
+  });
+
+  test("converts no-bar fractions into mfrac linethickness=0", () => {
+    const omml = parse(`
+      <m:oMath ${MATH_NS}>
+        <m:f>
+          <m:fPr><m:type m:val="noBar"/></m:fPr>
+          <m:num><m:r><m:t>1</m:t></m:r></m:num>
+          <m:den><m:r><m:t>2</m:t></m:r></m:den>
+        </m:f>
+      </m:oMath>
+    `);
+    expect(ommlToMathml(omml)).toContain('<mfrac linethickness="0">');
   });
 
   test("converts <m:sSup> into <msup>", () => {
@@ -258,6 +280,20 @@ describe("ommlToMathml — delimiters, matrices, accents", () => {
     `);
     const mml = ommlToMathml(omml);
     expect(mml).toContain('<mover accent="true">');
+  });
+
+  test("defaults top group characters to the overbrace glyph", () => {
+    const omml = parse(`
+      <m:oMath ${MATH_NS}>
+        <m:groupChr>
+          <m:groupChrPr><m:pos m:val="top"/></m:groupChrPr>
+          <m:e><m:r><m:t>x</m:t></m:r></m:e>
+        </m:groupChr>
+      </m:oMath>
+    `);
+    const mml = ommlToMathml(omml);
+    expect(mml).toContain("<mover>");
+    expect(mml).toContain('<mo stretchy="true">⏞</mo>');
   });
 });
 

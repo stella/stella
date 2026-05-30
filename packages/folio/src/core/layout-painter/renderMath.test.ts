@@ -425,4 +425,43 @@ describe("painter — OMML math run", () => {
     const mathRoots = findAll(line, (el) => el.tagName === "MATH");
     expect(mathRoots.length).toBe(1);
   });
+
+  test("right tabs reserve width for following math runs", () => {
+    const block = {
+      kind: "paragraph",
+      runs: [
+        { kind: "tab" },
+        mathRun({
+          plainText: "ABCDE",
+          ommlXml: `<m:oMath ${MATH_NS}><m:r><m:t>ABCDE</m:t></m:r></m:oMath>`,
+        }),
+      ],
+      attrs: {},
+      styleId: undefined,
+    } as unknown as Parameters<typeof renderLine>[0];
+
+    const line = {
+      fromRun: 0,
+      toRun: 1,
+      fromChar: 0,
+      toChar: 1,
+      lineHeight: 16,
+      maxAscent: 12,
+      maxDescent: 4,
+      maxImageHeightPx: 0,
+    } as unknown as Parameters<typeof renderLine>[1];
+
+    const rendered = renderLine(block, line, "left", fakeDocument, {
+      availableWidth: 300,
+      isLastLine: true,
+      isFirstLine: true,
+      paragraphEndsWithLineBreak: false,
+      tabStops: [{ val: "end", pos: 4500 }],
+    }) as unknown as FakeElement;
+
+    const tab = findElement(rendered, (el) =>
+      el.className.includes("layout-run-tab"),
+    );
+    expect(tab?.style.width).toBe("265px");
+  });
 });
