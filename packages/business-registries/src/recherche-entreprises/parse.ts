@@ -119,13 +119,10 @@ const parseDirector = (
   if (raw.type_dirigeant === "personne physique") {
     const surname = trimToNull(raw.nom);
     const given = trimToNull(raw.prenoms);
-    const fullName =
-      [given, surname].filter((part): part is string => part !== null).join(" ")
-        .length > 0
-        ? [given, surname]
-            .filter((part): part is string => part !== null)
-            .join(" ")
-        : null;
+    const nameParts = [given, surname].filter(
+      (part): part is string => part !== null,
+    );
+    const fullName = nameParts.length > 0 ? nameParts.join(" ") : null;
     if (!fullName) {
       // Skip entries without any name on file rather than emit an
       // empty-string director — upstream occasionally returns rows

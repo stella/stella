@@ -72,8 +72,25 @@ const rechercheEntreprisesGet = async <T>(url: string): Promise<T> => {
   // SAFETY: recherche-entreprises is a stable, documented public API
   // and the shape is captured by `RechercheEntreprisesSearchResponse`.
   // Runtime validation adds little for well-typed JSON responses.
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    // A malformed body on an otherwise-200 response (the upstream
+    // very occasionally serves truncated JSON during peak load)
+    // would otherwise bubble out as a bare SyntaxError, bypass
+    // `mapRechercheEntreprisesError`, and surface as HTTP 500. Wrap
+    // it so the dispatch layer translates it to 502 like every other
+    // upstream failure.
+    throw new RechercheEntreprisesAPIError({
+      message: `recherche-entreprises returned an unparseable JSON body (HTTP ${response.status})`,
+      httpStatus: response.status,
+      upstreamMessage: null,
+      cause: error,
+    });
+  }
   // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-  return response.json() as Promise<T>;
+  return payload as T;
 };
 
 /**

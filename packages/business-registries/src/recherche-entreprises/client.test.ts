@@ -152,6 +152,23 @@ describe("lookupBySiren (fixture)", () => {
       upstreamMessage: "Service temporarily unavailable",
     });
   });
+
+  test("translates an unparseable 200 body into RechercheEntreprisesAPIError", async () => {
+    // A 200 with truncated JSON would otherwise bubble out as a bare
+    // SyntaxError, bypass dispatch.ts's mapRechercheEntreprisesError,
+    // and surface as HTTP 500. Translate it the same way 5xx is.
+    restore = installFetchStub(
+      async () =>
+        new Response("{ not json", {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    expect(lookupBySiren("780129987")).rejects.toMatchObject({
+      name: "RechercheEntreprisesAPIError",
+      httpStatus: 200,
+    });
+  });
 });
 
 describe("lookupBySiret (fixture)", () => {
