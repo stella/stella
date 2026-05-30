@@ -68,14 +68,22 @@ describe("onboarding catalogue setup plan", () => {
     expect(plan.nativeToolOptOuts).toEqual([]);
   });
 
-  test("ignores native tools that are not chat-toggleable yet", () => {
+  test("opts out of toggleable native tools the org skipped", () => {
+    // brreg is the only Norway-recommended adapter and is
+    // chat-toggleable, so a NO practice that skips selecting it
+    // should land in the opt-out list. (Earlier this test asserted
+    // the inverse — brreg was intentionally excluded from the
+    // toggleable backend slugs until the unified business_registry_lookup
+    // tool shipped.)
     const plan = createCatalogueSetupPlan({
       entries,
       practiceJurisdictions: [{ countryCode: "NO", isPrimary: true }],
       selectedSlugs: [],
     });
 
-    expect(plan.nativeToolOptOuts).toEqual([]);
+    expect(plan.nativeToolOptOuts).toEqual([
+      { backendSlug: "brreg", slug: "brreg" },
+    ]);
   });
 });
 
