@@ -666,13 +666,188 @@ function applyFragmentStyles(
 export { emuToPixels, isFloatingImageRun } from "./renderUtils";
 
 /**
+ * Page geometry needed to translate OOXML `relativeFrom` anchors into
+ * painter coordinates. All values are in CSS pixels. Mirrors the upstream
+ * (eigenpal docx-editor) `PageGeometry` shape introduced in #424 so the
+ * anchor math stays identical across the two codebases.
+ */
+export type PageGeometry = {
+  pageWidth: number;
+  pageHeight: number;
+  marginLeft: number;
+  marginTop: number;
+  marginRight: number;
+  marginBottom: number;
+  contentWidth: number;
+  contentHeight: number;
+};
+
+/**
+ * Resolved on-page coordinates for an anchored floating image.
+ * `x` / `y` are in content-area-relative pixels (content origin = (0, 0)).
+ * `side` feeds the text-wrap exclusion zone helper.
+ */
+export type AnchoredImagePosition = {
+  x: number;
+  y: number;
+  side: "left" | "right";
+};
+
+// eigenpal #424 (positionV/H align): ECMA-376 §20.4.3.2 (ST_RelFromH).
+// Maps the OOXML relativeFrom enum onto the painter's content-relative band.
+// `baseX` is the band origin; `bandWidth` is the band's extent — both feed
+// the align="left|center|right" / posOffset arithmetic below. The
+// `*Margin` variants are mirror-margins for facing pages; without facing-
+// page context we approximate as the content band, which matches Word's
+// single-sided render.
+function resolveHorizontalBand(
+  relativeTo: string | undefined,
+  geometry: PageGeometry,
+): { baseX: number; bandWidth: number } {
+  switch (relativeTo) {
+    case "page":
+      return { baseX: -geometry.marginLeft, bandWidth: geometry.pageWidth };
+    case "leftMargin":
+      return { baseX: -geometry.marginLeft, bandWidth: geometry.marginLeft };
+    case "rightMargin":
+      return { baseX: geometry.contentWidth, bandWidth: geometry.marginRight };
+    case "character":
+      // `character` would need the originating run's x-position; we don't
+      // thread that through the bridge yet. Anchor at the content origin.
+      return { baseX: 0, bandWidth: 0 };
+    default:
+      // `column`, `margin`, `insideMargin`, `outsideMargin`, and unknown
+      // values all resolve to the content band — `*Margin` are facing-page
+      // mirrors of `margin` and we render single-sided.
+      return { baseX: 0, bandWidth: geometry.contentWidth };
+  }
+}
+
+// eigenpal #424 (positionV/H align): ECMA-376 §20.4.3.1 (ST_RelFromV).
+// Symmetric with the horizontal helper. `topMargin` is the strip above
+// the content area; `bottomMargin` is below it; `paragraph` / `line` fall
+// back to the running paragraph anchor (no band). `bandHeight === 0`
+// signals "no band, defer to paragraph anchor" to the resolver below.
+function resolveVerticalBand(
+  relativeTo: string | undefined,
+  fragmentY: number,
+  geometry: PageGeometry,
+): { baseY: number; bandHeight: number } {
+  switch (relativeTo) {
+    case "page":
+      return { baseY: -geometry.marginTop, bandHeight: geometry.pageHeight };
+    case "topMargin":
+      return { baseY: -geometry.marginTop, bandHeight: geometry.marginTop };
+    case "bottomMargin":
+      return {
+        baseY: geometry.contentHeight,
+        bandHeight: geometry.marginBottom,
+      };
+    case "paragraph":
+    case "line":
+      return { baseY: fragmentY, bandHeight: 0 };
+    default:
+      // `margin`, `insideMargin`, `outsideMargin`, and unknown values all
+      // resolve to the content band; the *Margin variants are facing-page
+      // mirrors of `margin` and we render single-sided.
+      return { baseY: 0, bandHeight: geometry.contentHeight };
+  }
+}
+
+/**
+ * Resolve the on-page coordinates of an anchored floating image.
+ *
+ * Pure function — no DOM, no side effects — so the math is unit-testable
+ * without spinning up a full page render. Used by
+ * `extractFloatingImagesFromParagraph` for body anchors; mirrors the
+ * upstream painter helper introduced in eigenpal #424.
+ *
+ * The OOXML position is `posOffset` (EMUs from the relativeFrom origin)
+ * XOR `align` (symbolic top|center|bottom / left|center|right). When
+ * neither is present, the spec means "anchor at the band origin"; for
+ * paragraph/line that's the paragraph itself, otherwise the band origin
+ * picked by `relativeFrom`.
+ */
+export function resolveAnchoredImagePosition(
+  imgRun: ImageRun,
+  fragmentY: number,
+  geometry: PageGeometry,
+): AnchoredImagePosition {
+  const position = imgRun.position;
+  const contentWidth = geometry.contentWidth;
+
+  let side: "left" | "right" = "left";
+  let x = 0;
+
+  if (position?.horizontal) {
+    const h = position.horizontal;
+    const { baseX, bandWidth } = resolveHorizontalBand(h.relativeTo, geometry);
+
+    if (h.align === "right" || h.align === "outside") {
+      // `outside` is the facing-page mirror of `right`. Without facing-page
+      // context we treat it as the right edge of the band, matching Word's
+      // single-sided render.
+      side = "right";
+      x = bandWidth ? baseX + bandWidth - imgRun.width : 0;
+    } else if (h.align === "left" || h.align === "inside") {
+      side = "left";
+      x = baseX;
+    } else if (h.align === "center") {
+      side = "left";
+      x = bandWidth ? baseX + (bandWidth - imgRun.width) / 2 : 0;
+    } else if (h.posOffset !== undefined) {
+      x = baseX + emuToPixels(h.posOffset);
+      side = x > contentWidth / 2 ? "right" : "left";
+    } else {
+      // Bare positionH (no align, no offset) — anchor at the band origin.
+      x = baseX;
+    }
+  } else if (imgRun.cssFloat === "right") {
+    side = "right";
+    x = contentWidth - imgRun.width;
+  }
+
+  let y: number;
+
+  if (position?.vertical) {
+    const v = position.vertical;
+    const { baseY, bandHeight } = resolveVerticalBand(
+      v.relativeTo,
+      fragmentY,
+      geometry,
+    );
+
+    if (v.align === "top" || v.align === "inside") {
+      y = baseY;
+    } else if (v.align === "center") {
+      y = bandHeight ? baseY + (bandHeight - imgRun.height) / 2 : fragmentY;
+    } else if (v.align === "bottom" || v.align === "outside") {
+      y = bandHeight ? baseY + bandHeight - imgRun.height : fragmentY;
+    } else if (v.posOffset !== undefined) {
+      y = baseY + emuToPixels(v.posOffset);
+    } else {
+      // Bare positionV — for paragraph/line bands the image stays in flow;
+      // for any other band, the spec means "anchor at the band origin".
+      y =
+        v.relativeTo === "paragraph" || v.relativeTo === "line"
+          ? fragmentY
+          : baseY;
+    }
+  } else {
+    y = fragmentY;
+  }
+
+  return { x, y, side };
+}
+
+/**
  * Extract floating images from a paragraph block and determine their page-level positions.
  * Returns extracted images and info for the paragraph about space reserved.
  */
 function extractFloatingImagesFromParagraph(
   block: ParagraphBlock,
   fragmentY: number, // Y position of the paragraph fragment on the page (relative to content area)
-  contentWidth: number, // Width of the content area
+  geometry: PageGeometry,
 ): PageFloatingImage[] {
   const floatingImages: PageFloatingImage[] = [];
 
@@ -686,71 +861,16 @@ function extractFloatingImagesFromParagraph(
       continue;
     }
 
-    // Determine position based on image attributes
-    const position = imgRun.position;
     const distTop = imgRun.distTop ?? 0;
     const distBottom = imgRun.distBottom ?? 0;
     const distLeft = imgRun.distLeft ?? 12;
     const distRight = imgRun.distRight ?? 12;
 
-    // Determine horizontal position (left or right side)
-    let side: "left" | "right" = "left";
-    let x = 0;
-
-    if (position?.horizontal) {
-      const h = position.horizontal;
-      if (h.align === "right") {
-        side = "right";
-        // Position from right edge of content
-        x = contentWidth - imgRun.width;
-      } else if (h.align === "left") {
-        side = "left";
-        x = 0;
-      } else if (h.align === "center") {
-        side = "left"; // Treat centered as left-aligned for simplicity
-        x = (contentWidth - imgRun.width) / 2;
-      } else if (h.posOffset !== undefined) {
-        // Explicit offset from margin
-        x = emuToPixels(h.posOffset);
-        side = x > contentWidth / 2 ? "right" : "left";
-      }
-    } else if (imgRun.cssFloat === "right") {
-      side = "right";
-      x = contentWidth - imgRun.width;
-    }
-
-    // Determine vertical position
-    let y: number;
-
-    if (position?.vertical) {
-      const v = position.vertical;
-      if (v.align === "top") {
-        // Align to top of margin area
-        y = 0;
-      } else if (v.align === "bottom") {
-        // Would need page height - not supported, use paragraph position
-        y = fragmentY;
-      } else if (v.posOffset !== undefined) {
-        y = emuToPixels(v.posOffset);
-      } else {
-        // Default to paragraph position
-        y = fragmentY;
-      }
-
-      // Check relativeTo for positioning context
-      if (
-        v.relativeTo === "margin" &&
-        (v.align === "top" || v.posOffset !== undefined)
-      ) {
-        // Already in content-relative coordinates (margin = content area)
-      } else if (v.relativeTo === "paragraph") {
-        // Add fragment Y offset
-        y = fragmentY + y;
-      }
-    } else {
-      // Default: position at paragraph
-      y = fragmentY;
-    }
+    const { x, y, side } = resolveAnchoredImagePosition(
+      imgRun,
+      fragmentY,
+      geometry,
+    );
 
     // Derive wrapText from cssFloat:
     // cssFloat='left' → image floats left → text on right → wrapText='right'
@@ -1569,6 +1689,16 @@ export function renderPage(
   // PHASE 1: Extract all floating images from paragraphs on this page
   const allFloatingImages: PageFloatingImage[] = [];
   const floatingRects: FloatingExclusionRect[] = [];
+  const pageGeometry: PageGeometry = {
+    pageWidth: page.size.w,
+    pageHeight: page.size.h,
+    marginLeft: page.margins.left,
+    marginTop: page.margins.top,
+    marginRight: page.margins.right,
+    marginBottom: page.margins.bottom,
+    contentWidth,
+    contentHeight: page.size.h - page.margins.top - page.margins.bottom,
+  };
 
   for (const fragment of page.fragments) {
     if (fragment.kind === "paragraph" && options.blockLookup) {
@@ -1580,7 +1710,7 @@ export function renderPage(
         const extracted = extractFloatingImagesFromParagraph(
           paragraphBlock,
           contentRelativeY,
-          contentWidth,
+          pageGeometry,
         );
         allFloatingImages.push(...extracted);
 
