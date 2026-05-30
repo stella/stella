@@ -2561,10 +2561,8 @@ export function DocxEditor({
         // The tripwire observes the selective path independently from the
         // user-visible save mode. Only `useSelectiveForSave` is allowed to
         // choose the returned bytes.
-        const explicitSelectiveSave = options?.selective === true;
         const useSelectiveForSave =
-          (flags.selectiveSave || explicitSelectiveSave) &&
-          options?.selective !== false;
+          flags.selectiveSave && options?.selective !== false;
         const shouldAttemptSelective =
           useSelectiveForSave || flags.selectiveSaveTripwire;
         const view = pagedEditorRef.current?.getView();
