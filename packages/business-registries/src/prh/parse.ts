@@ -97,9 +97,14 @@ const formatStreetLine = (raw: PrhRawAddress): string | null => {
     return street ?? houseSegment;
   }
   // Foreign / opaque addresses arrive via `freeAddressLine` instead
-  // of structured atoms; surface that string verbatim so the address
-  // is not silently dropped from contact-form / chat results.
-  const free = raw.freeAddressLine?.trim();
+  // of structured atoms. PRH v3 encodes the spaces in this field as
+  // underscores (e.g. `Norgårdsvägen_3_SE-451_75_Uddevalla` for a
+  // Swedish branch address); decode them back and collapse runs of
+  // whitespace so the result reads as the address PRH meant to send.
+  const free = raw.freeAddressLine
+    ?.replaceAll("_", " ")
+    .replaceAll(/\s+/gu, " ")
+    .trim();
   return free && free.length > 0 ? free : null;
 };
 

@@ -58,6 +58,19 @@ describe("parseAddress", () => {
     );
   });
 
+  test("decodes PRH's underscore-encoded spaces in freeAddressLine", () => {
+    // PRH v3 encodes the spaces inside freeAddressLine as underscores;
+    // returning the value verbatim would surface "Norgårdsvägen_3" in
+    // the UI. The parser must decode the encoding and collapse runs
+    // of whitespace introduced by mixed underscore + space input.
+    const address = parseAddress({
+      ...baseAddress,
+      freeAddressLine: "Norgårdsvägen_3 _ SE-451_75 Uddevalla",
+      country: "SE",
+    });
+    expect(address.street).toBe("Norgårdsvägen 3 SE-451 75 Uddevalla");
+  });
+
   test("returns nulls when no address fields are populated", () => {
     expect(parseAddress(baseAddress)).toEqual({
       street: null,
