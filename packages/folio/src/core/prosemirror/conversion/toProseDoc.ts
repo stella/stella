@@ -2083,6 +2083,10 @@ function convertImage(image: Image, rawXml?: string): PMNode {
     displayMode,
     cssFloat,
     transform,
+    // eigenpal #424 (opacity render pipeline). PR #513 added Image.opacity
+    // on the model; thread it onto the PM node so the layout-bridge and
+    // painter can honor it.
+    opacity: image.opacity,
     distTop,
     distBottom,
     distLeft,

@@ -1297,6 +1297,12 @@ function createImageRun(node: PMNode): Run {
     }
   }
 
+  // eigenpal #424 (opacity render pipeline). PM schema default is `null`;
+  // use `!= null` so the model only carries an explicit opacity value.
+  if (attrs.opacity != null) {
+    image.opacity = attrs.opacity;
+  }
+
   // Round-trip floating image position (ImagePositionAttrs uses loose strings;
   // cast to the strict OOXML union types for the Document model)
   const horizontalPosition = attrs.position?.horizontal;

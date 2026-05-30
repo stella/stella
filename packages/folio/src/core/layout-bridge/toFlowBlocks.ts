@@ -797,6 +797,13 @@ function buildImageRun(
   if (attrs.transform !== undefined) {
     run.transform = attrs.transform;
   }
+  // eigenpal #424 (opacity render pipeline): copy opacity verbatim. PM
+  // schema defaults `opacity` to `null`, which survives the typed cast on
+  // ImageAttrs (`number | undefined`). Gate with `!= null` so the model
+  // never carries the schema sentinel.
+  if (attrs.opacity != null) {
+    run.opacity = attrs.opacity;
+  }
   if (attrs.wrapType !== undefined) {
     run.wrapType = attrs.wrapType;
   }
@@ -1764,6 +1771,11 @@ function convertImage(
   }
   if (attrs.transform) {
     imgBlock.transform = attrs.transform;
+  }
+  // eigenpal #424 (opacity render pipeline). `!= null` so PM's null schema
+  // default doesn't leak into ImageBlock.opacity (`number | undefined`).
+  if (attrs.opacity != null) {
+    imgBlock.opacity = attrs.opacity;
   }
   if (shouldAnchor) {
     const anchor: NonNullable<ImageBlock["anchor"]> = {

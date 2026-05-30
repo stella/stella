@@ -159,6 +159,12 @@ export type ImageRun = {
   alt?: string;
   /** CSS transform string (rotation, flip) */
   transform?: string;
+  /**
+   * Opacity in [0, 1] from `<a:alphaModFix amt>`. Undefined or `1` means
+   * fully opaque; the painter emits no CSS `opacity` in that case.
+   * eigenpal #424 (opacity render pipeline).
+   */
+  opacity?: number;
   /** Position for floating/anchored images */
   position?: ImageRunPosition;
   /** Wrap type from DOCX (inline, square, tight, through, topAndBottom, etc.) */
@@ -460,6 +466,12 @@ export type ImageBlock = {
   alt?: string;
   /** CSS transform string (rotation, flip) */
   transform?: string;
+  /**
+   * Opacity in [0, 1] from `<a:alphaModFix amt>`. Undefined or `1` means
+   * fully opaque; the painter emits no CSS `opacity` in that case.
+   * eigenpal #424 (opacity render pipeline).
+   */
+  opacity?: number;
   anchor?: {
     isAnchored?: boolean;
     offsetH?: number;

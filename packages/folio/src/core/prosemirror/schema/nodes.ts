@@ -218,6 +218,11 @@ export type ImageAttrs = {
   cssFloat?: "left" | "right" | "none";
   /** CSS transform string (rotation, flip) */
   transform?: string;
+  /**
+   * Opacity in [0, 1] from `<a:alphaModFix amt>`. Undefined / 1 means fully
+   * opaque (no CSS `opacity` emitted). eigenpal #424.
+   */
+  opacity?: number;
   /** Distance from text above (pixels) */
   distTop?: number;
   /** Distance from text below (pixels) */
