@@ -11,7 +11,6 @@ import { useTranslations } from "use-intl";
 
 import { ExternalDragInfoProvider } from "@/routes/_protected.workspaces/$workspaceId/-context/external-drag-info";
 import {
-  getLastCommittedActiveRowId,
   RowDropTargetProvider,
   useIsRowDropTargetActive,
 } from "@/routes/_protected.workspaces/$workspaceId/-context/row-drop-target-context";
@@ -54,13 +53,13 @@ const DropZoneInner = ({ workspaceId, children }: DropZoneProps) => {
       canDrop: ({ source }) => containsFiles({ source }),
       onDragEnter: () => setIsDropTarget(true),
       onDragLeave: () => setIsDropTarget(false),
-      onDrop: ({ source }) => {
+      onDrop: ({ source, location, self }) => {
         setIsDropTarget(false);
-        // Pragmatic DnD fires onDrop on every target in the chain
-        // synchronously, so if a row accepted the drop (set its id as
-        // the active row at the last committed render) the DropZone
-        // must not also create a duplicate file at the workspace root.
-        if (getLastCommittedActiveRowId() !== null) {
+        // Pragmatic DnD fires onDrop on every drop target in the chain
+        // (bubble-ordered, innermost first). If a row was the innermost
+        // target, it owns the drop; the DropZone must not also create a
+        // duplicate file at the workspace root.
+        if (location.current.dropTargets[0]?.element !== self.element) {
           return;
         }
         if (isPendingRef.current) {
