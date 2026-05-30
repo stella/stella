@@ -219,6 +219,9 @@ export const CatalogueStep = ({
       <h1 className="text-foreground text-3xl font-light tracking-tight">
         {t("onboarding.catalogueTitle")}
       </h1>
+      <p className="text-muted-foreground mt-2 text-sm">
+        {t("onboarding.catalogueSubtitle")}
+      </p>
 
       {/* Search input + jurisdiction filter inline on the same row.
           The dropdown trigger summarises the current selection;
@@ -406,6 +409,21 @@ export const CatalogueStep = ({
           </>
         )}
       </div>
+
+      <p className="text-muted-foreground mt-4 text-xs">
+        {t.rich("onboarding.catalogueFootnote", {
+          link: (chunks) => (
+            <a
+              className="hover:text-foreground underline"
+              href={PROPOSE_TOOL_URL}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {chunks}
+            </a>
+          ),
+        })}
+      </p>
 
       <div className="mt-auto flex items-center justify-between gap-3 pt-8">
         <Button onClick={onSkip} type="button" variant="ghost">

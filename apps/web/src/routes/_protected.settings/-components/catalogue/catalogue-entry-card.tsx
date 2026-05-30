@@ -87,11 +87,6 @@ export const CatalogueEntryCard = ({
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5">
-        {entry.isRecommendedForOrg && <RecommendedBadge />}
-        {isFirstParty && <FirstPartyBadge />}
-        <CostBadge cost={entry.cost} />
-        <SetupBadge setup={entry.setup} />
-        <LicenseBadge license={entry.license} />
         {entry.jurisdictions.map((code) => (
           <span
             className="bg-muted text-muted-foreground inline-flex items-center rounded-md px-1.5 py-0.5 text-xs"
@@ -100,6 +95,11 @@ export const CatalogueEntryCard = ({
             {code}
           </span>
         ))}
+        {entry.isRecommendedForOrg && <RecommendedBadge />}
+        {isFirstParty && <FirstPartyBadge />}
+        <CostBadge cost={entry.cost} />
+        <SetupBadge setup={entry.setup} />
+        <LicenseBadge license={entry.license} />
       </div>
 
       <div className="mt-auto flex items-center justify-between">
