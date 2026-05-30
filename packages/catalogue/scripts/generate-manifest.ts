@@ -81,11 +81,9 @@ const entries = CATALOGUE_KINDS.flatMap((kind) => {
         });
       }
 
-      // Icons are inlined as a string literal: data URL for binary
-      // (PNG/ICO) icons, the raw SVG text for SVG icons. Bundling
-      // locally means catalogue rendering never makes a network
-      // request at runtime — same trust model self-hosters expect for
-      // everything else.
+      // Icons are inlined as inert image data URLs. SVGs are encoded
+      // rather than injected as markup so contributor-provided icons
+      // cannot execute active content in the app context.
       const iconPng = path.join(folder, "icon.png");
       const iconSvg = path.join(folder, "icon.svg");
       let iconLiteral = "null";
@@ -93,7 +91,11 @@ const entries = CATALOGUE_KINDS.flatMap((kind) => {
         const base64 = readFileSync(iconPng).toString("base64");
         iconLiteral = JSON.stringify(`data:image/png;base64,${base64}`);
       } else if (existsSync(iconSvg)) {
-        iconLiteral = JSON.stringify(readFileSync(iconSvg, "utf-8"));
+        const base64 = Buffer.from(
+          readFileSync(iconSvg, "utf-8"),
+          "utf-8",
+        ).toString("base64");
+        iconLiteral = JSON.stringify(`data:image/svg+xml;base64,${base64}`);
       }
 
       return {

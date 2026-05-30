@@ -33,6 +33,7 @@ import { sessionOptions } from "@/routes/-queries";
 import { aiConfigKeys } from "@/routes/_protected.organization/-ai-config-queries";
 import { CatalogueDetailPreview } from "@/routes/onboarding/-components/catalogue-detail-preview";
 import { CatalogueStackPreview } from "@/routes/onboarding/-components/catalogue-stack-preview";
+import { createCatalogueSetupPlan } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
 import { OnboardingLayout } from "@/routes/onboarding/-components/onboarding-layout";
 import { PricesPanel } from "@/routes/onboarding/-components/prices-panel";
 import { SidebarPreview } from "@/routes/onboarding/-components/sidebar-preview";
@@ -228,55 +229,77 @@ export const OnboardingWizard = () => {
           }
         }
 
-        // Phase 1b: Install selected catalogue entries. Runs in
-        // parallel; partial failure surfaces as a toast but doesn't
+        // Phase 1b: Install selected catalogue entries and persist
+        // explicit opt-outs for omitted default-on native tools. Runs
+        // in parallel; partial failure surfaces as a toast but doesn't
         // block the rest of setup.
-        if (finalData.catalogueSlugs.length > 0) {
-          setCreatingProgress(55);
-          const entries = loadCatalogue();
-          const installResults = await Promise.allSettled(
-            finalData.catalogueSlugs.map(async (slug) => {
-              const entry = entries.find((e) => e.slug === slug);
-              if (!entry) {
-                return;
-              }
-              if (entry.kind === "skill") {
-                const { error } = await api.catalogue["install-skill"].post({
-                  slug: entry.slug,
-                  queryKey: ["skills"],
-                });
-                if (error) {
-                  throw toAPIError(error);
-                }
-                return;
-              }
-              if (entry.kind === "native-tool") {
-                const { error } = await api.mcp["native-tools"]({
-                  slug: entry.backendSlug,
-                }).patch({ enabled: true, queryKey: ["mcp"] });
-                if (error) {
-                  throw toAPIError(error);
-                }
-                return;
-              }
-              const { error } = await api.mcp.connectors.post({
-                displayName: entry.displayName,
-                description: entry.description,
-                url: entry.url,
-                queryKey: ["mcp"],
+        const catalogueEntries = loadCatalogue();
+        const catalogueSetupPlan = createCatalogueSetupPlan({
+          entries: catalogueEntries,
+          practiceJurisdictions: finalData.practiceJurisdictions,
+          selectedSlugs: finalData.catalogueSlugs,
+        });
+        const installTasks = catalogueSetupPlan.installSlugs.map(
+          async (slug) => {
+            const entry = catalogueEntries.find((e) => e.slug === slug);
+            if (!entry) {
+              return;
+            }
+            if (entry.kind === "skill") {
+              const { error } = await api.catalogue["install-skill"].post({
+                slug: entry.slug,
+                queryKey: ["skills"],
               });
               if (error) {
                 throw toAPIError(error);
               }
-            }),
-          );
-          const failed = installResults.filter(
+              return;
+            }
+            if (entry.kind === "native-tool") {
+              const { error } = await api.mcp["native-tools"]({
+                slug: entry.backendSlug,
+              }).patch({ enabled: true, queryKey: ["mcp"] });
+              if (error) {
+                throw toAPIError(error);
+              }
+              return;
+            }
+            const { error } = await api.mcp.connectors.post({
+              displayName: entry.displayName,
+              description: entry.description,
+              url: entry.url,
+              queryKey: ["mcp"],
+            });
+            if (error) {
+              throw toAPIError(error);
+            }
+          },
+        );
+        const optOutTasks = catalogueSetupPlan.nativeToolOptOuts.map(
+          async (entry) => {
+            const { error } = await api.mcp["native-tools"]({
+              slug: entry.backendSlug,
+            }).patch({ enabled: false, queryKey: ["mcp"] });
+            if (error) {
+              throw toAPIError(error);
+            }
+          },
+        );
+        const catalogueTasks = [...installTasks, ...optOutTasks];
+        if (catalogueTasks.length > 0) {
+          setCreatingProgress(55);
+          const catalogueResults = await Promise.allSettled(catalogueTasks);
+          const installResults = catalogueResults.slice(0, installTasks.length);
+          const failedInstallCount = installResults.filter(
+            (r) => r.status === "rejected",
+          ).length;
+          const failed = catalogueResults.filter(
             (r) => r.status === "rejected",
           ).length;
           if (failed > 0) {
             stellaToast.add({
               title: t("onboarding.cataloguePartial", {
-                installed: String(finalData.catalogueSlugs.length - failed),
+                installed: String(installTasks.length - failedInstallCount),
                 failed: String(failed),
               }),
               type: "warning",
