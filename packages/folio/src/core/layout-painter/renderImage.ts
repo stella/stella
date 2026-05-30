@@ -22,58 +22,19 @@ export const IMAGE_CLASS_NAMES = {
   imageAnchored: "layout-image-anchored",
 };
 
-// eigenpal #424 (opacity render pipeline): shared visual-attrs helper used by
-// the inline (`renderParagraph`), block, and floating (`renderPage`,
-// `renderImageFragment`) image render sites. Folio currently only honors
-// opacity; crop / effectExtent are future-proofing slots that mirror
-// upstream's `ImageVisualAttrs` shape so adding them later is structural,
-// not a new abstraction.
+// eigenpal #424: shared visual-attrs helper used by the inline
+// (`renderParagraph`), block, and floating (`renderPage`,
+// `renderImageFragment`) image render sites. Currently honours
+// `wp:srcRect` crop (image-crop subset) and `a:alphaModFix` opacity
+// (opacity render pipeline).
 
 /**
  * Structural shape required to apply Word's per-image visual attributes:
- * currently `a:alphaModFix` opacity. Crop fractions are tracked here for
- * symmetry with eigenpal docx-editor but are not yet emitted by folio.
+ * `wp:srcRect` crop fractions and `a:alphaModFix` opacity. `ImageRun` and
+ * `ImageBlock` both satisfy this, so callers don't need an adapter.
  */
 export type ImageVisualAttrs = {
   opacity?: number;
-};
-
-/**
- * True when any visual attribute is set. Cheap call-site guard so the no-op
- * common case skips the function call and template-literal allocations.
- *
- * IMPORTANT: ProseMirror schema attrs default to `null`, not `undefined`,
- * and that `null` survives the `as number | undefined` cast in the layout
- * bridge. Use `!= null` rather than `!== undefined` so a default-null
- * opacity isn't read as `0` (`null < 1` is `true`, `Math.max(0, null)` is
- * `0`) — that bug hid every plain image behind `opacity: 0`.
- */
-export function hasImageVisualAttrs(v: ImageVisualAttrs): boolean {
-  return v.opacity != null && v.opacity < 1;
-}
-
-/**
- * Apply visual attributes (opacity) to an `<img>` element. Caller should
- * gate with `hasImageVisualAttrs(v)` to avoid the function call for plain
- * images.
- */
-export function applyImageVisualAttrs(
-  img: HTMLImageElement,
-  v: ImageVisualAttrs,
-): void {
-  if (v.opacity != null && v.opacity < 1) {
-    img.style.opacity = String(Math.max(0, v.opacity));
-  }
-}
-
-/**
- * Structural shape required to apply Word's per-image visual attributes
- * (currently `wp:srcRect` crop fractions). `ImageRun` and `ImageBlock` both
- * satisfy this, so callers don't need an adapter.
- *
- * eigenpal #424 (image-crop subset).
- */
-export type ImageVisualAttrs = {
   cropTop?: number;
   cropRight?: number;
   cropBottom?: number;
@@ -86,10 +47,14 @@ export type ImageVisualAttrs = {
  *
  * IMPORTANT: ProseMirror schema attrs default to `null`, not `undefined`,
  * and a `null` survives `as number | undefined` casts in the layout bridge.
- * Use `!= null` rather than `!== undefined` so default-null crop fields are
- * not read as `0`.
+ * Use `!= null` rather than `!== undefined` so default-null opacity / crop
+ * fields are not read as `0` (`null < 1` is `true`, `Math.max(0, null)` is
+ * `0`) — that bug otherwise hides every plain image behind `opacity: 0`.
  */
 export function hasImageVisualAttrs(v: ImageVisualAttrs): boolean {
+  if (v.opacity != null && v.opacity < 1) {
+    return true;
+  }
   return Boolean(v.cropTop || v.cropRight || v.cropBottom || v.cropLeft);
 }
 
@@ -117,6 +82,9 @@ export function applyImageVisualAttrs(
   img: HTMLImageElement,
   v: ImageVisualAttrs,
 ): void {
+  if (v.opacity != null && v.opacity < 1) {
+    img.style.opacity = String(Math.max(0, v.opacity));
+  }
   const top = v.cropTop ?? 0;
   const right = v.cropRight ?? 0;
   const bottom = v.cropBottom ?? 0;

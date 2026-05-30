@@ -913,8 +913,9 @@ function extractFloatingImagesFromParagraph(
       ...(imgRun.transform !== undefined
         ? { transform: imgRun.transform }
         : {}),
-      // eigenpal #424 (opacity render pipeline)
-      ...(imgRun.opacity !== undefined ? { opacity: imgRun.opacity } : {}),
+      // eigenpal #424 (opacity render pipeline). `!= null` so a PM null
+      // schema default doesn't leak into PageFloatingImage.opacity.
+      ...(imgRun.opacity != null ? { opacity: imgRun.opacity } : {}),
       side,
       x,
       y,
@@ -1144,8 +1145,10 @@ function renderHeaderFooterContent(
             width: run.width,
             height: run.height,
             ...(run.alt !== undefined ? { alt: run.alt } : {}),
-            // eigenpal #424 (opacity render pipeline)
-            ...(run.opacity !== undefined ? { opacity: run.opacity } : {}),
+            // eigenpal #424 (opacity render pipeline). `!= null` so a PM
+            // null schema default doesn't leak into the HF floating-image
+            // collector.
+            ...(run.opacity != null ? { opacity: run.opacity } : {}),
             ...(run.pmStart !== undefined ? { pmStart: run.pmStart } : {}),
             ...(run.pmEnd !== undefined ? { pmEnd: run.pmEnd } : {}),
             paragraphY: paragraphStartY,

@@ -640,3 +640,61 @@ describe("toFlowBlocks list numbering", () => {
     expect(blocks.at(1)?.attrs?.listMarker).toBe("1.");
   });
 });
+
+// Regression guard for the eigenpal #424 opacity render pipeline. PR #517
+// review (gemini-code-assist) flagged that `attrs.opacity !== undefined` in
+// buildImageRun allowed the PM schema's null default to leak into
+// ImageRun.opacity (typed `number | undefined`). The bridge now gates with
+// `!= null`; these tests pin the contract for inline images, which is the
+// only path the schema permits (images are inline-only in PM).
+describe("toFlowBlocks image opacity null-default leak", () => {
+  test("drops PM null default for inline image opacity (ImageRun)", () => {
+    const doc = schema.node("doc", null, [
+      schema.node("paragraph", null, [
+        schema.nodes.image.create({
+          src: "media/image.png",
+          width: 100,
+          height: 100,
+        }),
+      ]),
+    ]);
+
+    const blocks = toFlowBlocks(doc);
+    const paragraph = blocks.at(0);
+    if (paragraph?.kind !== "paragraph") {
+      throw new Error("Expected paragraph block");
+    }
+    const imageRun = paragraph.runs.find((run) => run.kind === "image");
+    if (imageRun?.kind !== "image") {
+      throw new Error("Expected image run");
+    }
+    // Critical: must be `undefined`, not `null`. The PM schema default is
+    // `null` and the bridge must filter it so downstream consumers (the
+    // painter, the floating-image collector) see only valid numbers.
+    expect(imageRun.opacity).toBeUndefined();
+  });
+
+  test("preserves explicit inline image opacity (ImageRun)", () => {
+    const doc = schema.node("doc", null, [
+      schema.node("paragraph", null, [
+        schema.nodes.image.create({
+          src: "media/image.png",
+          width: 100,
+          height: 100,
+          opacity: 0.5,
+        }),
+      ]),
+    ]);
+
+    const blocks = toFlowBlocks(doc);
+    const paragraph = blocks.at(0);
+    if (paragraph?.kind !== "paragraph") {
+      throw new Error("Expected paragraph block");
+    }
+    const imageRun = paragraph.runs.find((run) => run.kind === "image");
+    if (imageRun?.kind !== "image") {
+      throw new Error("Expected image run");
+    }
+    expect(imageRun.opacity).toBe(0.5);
+  });
+});
