@@ -1,0 +1,561 @@
+{
+  "totalResults": 3,
+  "companies": [
+    {
+      "businessId": {
+        "value": "2336509-6",
+        "registrationDate": "2010-05-14",
+        "source": "3"
+      },
+      "euId": { "value": "FIFPRO.2336509-6", "source": "1" },
+      "names": [
+        {
+          "name": "Supercell Oy",
+          "type": "1",
+          "registrationDate": "2010-07-16",
+          "version": 1,
+          "source": "1"
+        },
+        {
+          "name": "Supercell Ltd",
+          "type": "2",
+          "registrationDate": "2016-07-25",
+          "version": 1,
+          "source": "1"
+        }
+      ],
+      "mainBusinessLine": {
+        "type": "62200",
+        "descriptions": [
+          {
+            "languageCode": "3",
+            "description": "Computer consultancy and computer facilities management activities"
+          },
+          {
+            "languageCode": "2",
+            "description": "Datakonsultverksamhet och datordrift"
+          },
+          {
+            "languageCode": "1",
+            "description": "Laitteistokonsultointi ja käyttö- ja hallintapalvelut"
+          }
+        ],
+        "typeCodeSet": "TOIMI4",
+        "registrationDate": "2026-01-01",
+        "source": "2"
+      },
+      "website": {
+        "url": "www.supercell.com",
+        "registrationDate": "2019-11-05",
+        "source": "0"
+      },
+      "companyForms": [
+        {
+          "type": "16",
+          "descriptions": [
+            { "languageCode": "2", "description": "Aktiebolag" },
+            { "languageCode": "3", "description": "Limited company" },
+            { "languageCode": "1", "description": "Osakeyhtiö" }
+          ],
+          "registrationDate": "2010-07-16",
+          "version": 1,
+          "source": "1"
+        }
+      ],
+      "companySituations": [],
+      "registeredEntries": [
+        {
+          "type": "0",
+          "descriptions": [
+            { "languageCode": "2", "description": "Oregistrerad" },
+            { "languageCode": "1", "description": "Rekisteröimätön" },
+            { "languageCode": "3", "description": "Unregistered" }
+          ],
+          "registrationDate": "2010-05-14",
+          "endDate": "2010-07-15",
+          "register": "1",
+          "authority": "2"
+        },
+        {
+          "type": "1",
+          "descriptions": [
+            { "languageCode": "3", "description": "Registered" },
+            { "languageCode": "2", "description": "Registrerad" },
+            { "languageCode": "1", "description": "Rekisterissä" }
+          ],
+          "registrationDate": "2010-07-16",
+          "register": "1",
+          "authority": "2"
+        },
+        {
+          "type": "1",
+          "descriptions": [
+            { "languageCode": "3", "description": "Registered" },
+            { "languageCode": "2", "description": "Registrerad" },
+            { "languageCode": "1", "description": "Rekisterissä" }
+          ],
+          "registrationDate": "2010-06-09",
+          "register": "4",
+          "authority": "1"
+        },
+        {
+          "type": "55",
+          "descriptions": [
+            { "languageCode": "3", "description": "Registered" },
+            { "languageCode": "2", "description": "Registrerad" },
+            { "languageCode": "1", "description": "Rekisterissä" }
+          ],
+          "registrationDate": "2010-06-01",
+          "register": "5",
+          "authority": "1"
+        },
+        {
+          "type": "80",
+          "descriptions": [
+            {
+              "languageCode": "1",
+              "description": "Liiketoiminnasta arvonlisäverovelvollinen"
+            },
+            {
+              "languageCode": "2",
+              "description": "Momsskyldig för rörelseverksamhet"
+            },
+            {
+              "languageCode": "3",
+              "description": "VAT-liable for business activity"
+            }
+          ],
+          "registrationDate": "2010-05-17",
+          "register": "6",
+          "authority": "1"
+        },
+        {
+          "type": "41",
+          "descriptions": [
+            { "languageCode": "3", "description": "Registered" },
+            { "languageCode": "2", "description": "Registrerad" },
+            { "languageCode": "1", "description": "Rekisterissä" }
+          ],
+          "registrationDate": "2010-06-01",
+          "register": "7",
+          "authority": "1"
+        }
+      ],
+      "addresses": [
+        {
+          "type": 1,
+          "street": "Jätkäsaarenlaituri",
+          "postCode": "00180",
+          "postOffices": [
+            {
+              "city": "HELSINGFORS",
+              "languageCode": "2",
+              "municipalityCode": "091"
+            },
+            {
+              "city": "HELSINKI",
+              "languageCode": "1",
+              "municipalityCode": "091"
+            }
+          ],
+          "buildingNumber": "1",
+          "entrance": "",
+          "apartmentNumber": "",
+          "apartmentIdSuffix": "",
+          "co": "",
+          "registrationDate": "2021-02-18",
+          "source": "0"
+        },
+        {
+          "type": 2,
+          "street": "Jätkäsaarenlaituri",
+          "postCode": "00180",
+          "postOffices": [
+            {
+              "city": "HELSINGFORS",
+              "languageCode": "2",
+              "municipalityCode": "091"
+            },
+            {
+              "city": "HELSINKI",
+              "languageCode": "1",
+              "municipalityCode": "091"
+            }
+          ],
+          "postOfficeBox": "",
+          "buildingNumber": "1",
+          "entrance": "",
+          "apartmentNumber": "",
+          "apartmentIdSuffix": "",
+          "co": "",
+          "registrationDate": "2021-02-18",
+          "source": "0"
+        }
+      ],
+      "tradeRegisterStatus": "1",
+      "status": "2",
+      "registrationDate": "2010-07-16",
+      "lastModified": "2026-05-11T07:53:22"
+    },
+    {
+      "businessId": {
+        "value": "2875167-4",
+        "registrationDate": "2017-12-08",
+        "source": "3"
+      },
+      "euId": { "value": "FIFPRO.2875167-4", "source": "1" },
+      "names": [
+        {
+          "name": "Supercell Ventures Oy",
+          "type": "1",
+          "registrationDate": "2017-12-22",
+          "version": 1,
+          "source": "1"
+        },
+        {
+          "name": "Supercell Ventures Ltd",
+          "type": "2",
+          "registrationDate": "2017-12-22",
+          "version": 1,
+          "source": "1"
+        }
+      ],
+      "mainBusinessLine": {
+        "type": "64990",
+        "descriptions": [
+          {
+            "languageCode": "2",
+            "description": "Diverse övrig finansiell verksamhet utom försäkrings- och pensionsfondsverksamhet"
+          },
+          {
+            "languageCode": "1",
+            "description": "Muualla luokittelematon muu rahoituspalvelutoiminta pois lukien vakuutus- ja eläkevakuutustoiminta"
+          },
+          {
+            "languageCode": "3",
+            "description": "Other financial service activities, except insurance and pension funding n.e.c."
+          }
+        ],
+        "typeCodeSet": "TOIMI4",
+        "registrationDate": "2026-01-01",
+        "source": "2"
+      },
+      "companyForms": [
+        {
+          "type": "16",
+          "descriptions": [
+            { "languageCode": "2", "description": "Aktiebolag" },
+            { "languageCode": "3", "description": "Limited company" },
+            { "languageCode": "1", "description": "Osakeyhtiö" }
+          ],
+          "registrationDate": "2017-12-22",
+          "version": 1,
+          "source": "1"
+        }
+      ],
+      "companySituations": [],
+      "registeredEntries": [
+        {
+          "type": "0",
+          "descriptions": [
+            { "languageCode": "2", "description": "Oregistrerad" },
+            { "languageCode": "1", "description": "Rekisteröimätön" },
+            { "languageCode": "3", "description": "Unregistered" }
+          ],
+          "registrationDate": "2017-12-08",
+          "endDate": "2017-12-21",
+          "register": "1",
+          "authority": "2"
+        },
+        {
+          "type": "1",
+          "descriptions": [
+            { "languageCode": "3", "description": "Registered" },
+            { "languageCode": "2", "description": "Registrerad" },
+            { "languageCode": "1", "description": "Rekisterissä" }
+          ],
+          "registrationDate": "2017-12-22",
+          "register": "1",
+          "authority": "2"
+        },
+        {
+          "type": "1",
+          "descriptions": [
+            { "languageCode": "3", "description": "Registered" },
+            { "languageCode": "2", "description": "Registrerad" },
+            { "languageCode": "1", "description": "Rekisterissä" }
+          ],
+          "registrationDate": "2018-01-09",
+          "register": "4",
+          "authority": "1"
+        },
+        {
+          "type": "55",
+          "descriptions": [
+            { "languageCode": "3", "description": "Registered" },
+            { "languageCode": "2", "description": "Registrerad" },
+            { "languageCode": "1", "description": "Rekisterissä" }
+          ],
+          "registrationDate": "2018-01-01",
+          "register": "5",
+          "authority": "1"
+        },
+        {
+          "type": "41",
+          "descriptions": [
+            { "languageCode": "3", "description": "Registered" },
+            { "languageCode": "2", "description": "Registrerad" },
+            { "languageCode": "1", "description": "Rekisterissä" }
+          ],
+          "registrationDate": "2018-01-01",
+          "endDate": "2020-12-31",
+          "register": "7",
+          "authority": "1"
+        }
+      ],
+      "addresses": [
+        {
+          "type": 1,
+          "street": "Jätkäsaarenlaituri",
+          "postCode": "00180",
+          "postOffices": [
+            {
+              "city": "HELSINGFORS",
+              "languageCode": "2",
+              "municipalityCode": "091"
+            },
+            {
+              "city": "HELSINKI",
+              "languageCode": "1",
+              "municipalityCode": "091"
+            }
+          ],
+          "buildingNumber": "1",
+          "entrance": "",
+          "apartmentNumber": "",
+          "apartmentIdSuffix": "",
+          "co": "",
+          "registrationDate": "2021-02-19",
+          "source": "0"
+        },
+        {
+          "type": 2,
+          "street": "Jätkäsaarenlaituri",
+          "postCode": "00180",
+          "postOffices": [
+            {
+              "city": "HELSINGFORS",
+              "languageCode": "2",
+              "municipalityCode": "091"
+            },
+            {
+              "city": "HELSINKI",
+              "languageCode": "1",
+              "municipalityCode": "091"
+            }
+          ],
+          "postOfficeBox": "",
+          "buildingNumber": "1",
+          "entrance": "",
+          "apartmentNumber": "",
+          "apartmentIdSuffix": "",
+          "co": "",
+          "registrationDate": "2021-02-19",
+          "source": "0"
+        }
+      ],
+      "tradeRegisterStatus": "1",
+      "status": "2",
+      "registrationDate": "2017-12-22",
+      "lastModified": "2026-05-20T16:12:24"
+    },
+    {
+      "businessId": {
+        "value": "3591688-7",
+        "registrationDate": "2026-01-08",
+        "source": "3"
+      },
+      "euId": { "value": "FIFPRO.3591688-7", "source": "1" },
+      "names": [
+        {
+          "name": "Supercell Next Oy",
+          "type": "1",
+          "registrationDate": "2026-01-13",
+          "version": 1,
+          "source": "1"
+        },
+        {
+          "name": "Supercell Next Ltd",
+          "type": "2",
+          "registrationDate": "2026-01-13",
+          "version": 1,
+          "source": "1"
+        }
+      ],
+      "mainBusinessLine": {
+        "type": "62100",
+        "descriptions": [
+          {
+            "languageCode": "3",
+            "description": "Computer programming activities"
+          },
+          { "languageCode": "2", "description": "Dataprogrammering" },
+          {
+            "languageCode": "1",
+            "description": "Ohjelmistojen suunnittelu ja valmistus"
+          }
+        ],
+        "typeCodeSet": "TOIMI4",
+        "registrationDate": "2026-01-01",
+        "source": "2"
+      },
+      "companyForms": [
+        {
+          "type": "16",
+          "descriptions": [
+            { "languageCode": "2", "description": "Aktiebolag" },
+            { "languageCode": "3", "description": "Limited company" },
+            { "languageCode": "1", "description": "Osakeyhtiö" }
+          ],
+          "registrationDate": "2026-01-13",
+          "version": 1,
+          "source": "1"
+        }
+      ],
+      "companySituations": [],
+      "registeredEntries": [
+        {
+          "type": "0",
+          "descriptions": [
+            { "languageCode": "2", "description": "Oregistrerad" },
+            { "languageCode": "1", "description": "Rekisteröimätön" },
+            { "languageCode": "3", "description": "Unregistered" }
+          ],
+          "registrationDate": "2026-01-08",
+          "endDate": "2026-01-12",
+          "register": "1",
+          "authority": "2"
+        },
+        {
+          "type": "1",
+          "descriptions": [
+            { "languageCode": "3", "description": "Registered" },
+            { "languageCode": "2", "description": "Registrerad" },
+            { "languageCode": "1", "description": "Rekisterissä" }
+          ],
+          "registrationDate": "2026-01-13",
+          "register": "1",
+          "authority": "2"
+        },
+        {
+          "type": "1",
+          "descriptions": [
+            { "languageCode": "3", "description": "Registered" },
+            { "languageCode": "2", "description": "Registrerad" },
+            { "languageCode": "1", "description": "Rekisterissä" }
+          ],
+          "registrationDate": "2026-01-13",
+          "register": "4",
+          "authority": "1"
+        },
+        {
+          "type": "55",
+          "descriptions": [
+            { "languageCode": "3", "description": "Registered" },
+            { "languageCode": "2", "description": "Registrerad" },
+            { "languageCode": "1", "description": "Rekisterissä" }
+          ],
+          "registrationDate": "2026-01-08",
+          "register": "5",
+          "authority": "1"
+        },
+        {
+          "type": "80",
+          "descriptions": [
+            {
+              "languageCode": "1",
+              "description": "Liiketoiminnasta arvonlisäverovelvollinen"
+            },
+            {
+              "languageCode": "2",
+              "description": "Momsskyldig för rörelseverksamhet"
+            },
+            {
+              "languageCode": "3",
+              "description": "VAT-liable for business activity"
+            }
+          ],
+          "registrationDate": "2026-01-01",
+          "register": "6",
+          "authority": "1"
+        },
+        {
+          "type": "41",
+          "descriptions": [
+            { "languageCode": "3", "description": "Registered" },
+            { "languageCode": "2", "description": "Registrerad" },
+            { "languageCode": "1", "description": "Rekisterissä" }
+          ],
+          "registrationDate": "2026-04-01",
+          "register": "7",
+          "authority": "1"
+        }
+      ],
+      "addresses": [
+        {
+          "type": 1,
+          "street": "Jätkäsaarenlaituri",
+          "postCode": "00180",
+          "postOffices": [
+            {
+              "city": "HELSINGFORS",
+              "languageCode": "2",
+              "municipalityCode": "091"
+            },
+            {
+              "city": "HELSINKI",
+              "languageCode": "1",
+              "municipalityCode": "091"
+            }
+          ],
+          "buildingNumber": "1",
+          "entrance": "",
+          "apartmentNumber": "",
+          "apartmentIdSuffix": "",
+          "co": "",
+          "registrationDate": "2026-01-08",
+          "source": "0"
+        },
+        {
+          "type": 2,
+          "street": "Jätkäsaarenlaituri",
+          "postCode": "00180",
+          "postOffices": [
+            {
+              "city": "HELSINGFORS",
+              "languageCode": "2",
+              "municipalityCode": "091"
+            },
+            {
+              "city": "HELSINKI",
+              "languageCode": "1",
+              "municipalityCode": "091"
+            }
+          ],
+          "postOfficeBox": "",
+          "buildingNumber": "1",
+          "entrance": "",
+          "apartmentNumber": "",
+          "apartmentIdSuffix": "",
+          "co": "c/o Supercell Oy",
+          "registrationDate": "2026-01-08",
+          "source": "0"
+        }
+      ],
+      "tradeRegisterStatus": "1",
+      "status": "2",
+      "registrationDate": "2026-01-13",
+      "lastModified": "2026-02-23T10:31:36"
+    }
+  ]
+}

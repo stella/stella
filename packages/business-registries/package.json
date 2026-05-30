@@ -50,6 +50,11 @@
       "types": "./src/brreg/index.ts",
       "import": "./dist/brreg/index.js"
     },
+    "./prh": {
+      "bun": "./src/prh/index.ts",
+      "types": "./src/prh/index.ts",
+      "import": "./dist/prh/index.js"
+    },
     "./shared": {
       "bun": "./src/shared/index.ts",
       "types": "./src/shared/index.ts",
