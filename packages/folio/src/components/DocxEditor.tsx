@@ -2556,8 +2556,10 @@ export function DocxEditor({
         // The tripwire observes the selective path independently from the
         // user-visible save mode. Only `useSelectiveForSave` is allowed to
         // choose the returned bytes.
+        const explicitSelectiveSave = options?.selective === true;
         const useSelectiveForSave =
-          flags.selectiveSave && options?.selective !== false;
+          (flags.selectiveSave || explicitSelectiveSave) &&
+          options?.selective !== false;
         const shouldAttemptSelective =
           useSelectiveForSave || flags.selectiveSaveTripwire;
         const view = pagedEditorRef.current?.getView();
@@ -2604,16 +2606,21 @@ export function DocxEditor({
         ) {
           // Tripwire compares selective vs full bytes but never blocks the save.
           // The host decides whether to log, alert, or fail CI.
+          let tripwireResult:
+            | Parameters<NonNullable<typeof onSelectiveSaveTripwire>>[0]
+            | null = null;
           try {
             const { compareSelectiveVsFull } =
               await import("../core/docx/selectiveSaveTripwire");
-            const result = await compareSelectiveVsFull(
+            tripwireResult = await compareSelectiveVsFull(
               selectiveBuffer,
               fullBuffer,
             );
-            onSelectiveSaveTripwire(result);
           } catch {
-            // Tripwire failures must never poison the save path.
+            // Comparison failures must never poison the save path.
+          }
+          if (tripwireResult) {
+            onSelectiveSaveTripwire(tripwireResult);
           }
         }
 
