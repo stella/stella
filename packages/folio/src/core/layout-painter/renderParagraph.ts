@@ -975,6 +975,7 @@ function renderMathRun(run: MathRun, doc: Document): HTMLElement {
     mathRoot.setAttribute("alttext", fallbackText);
   }
 
+  applyPmPositions(host, run.pmStart, run.pmEnd);
   return host;
 }
 
@@ -996,6 +997,7 @@ function renderMathFallback(
   span.style.fontFamily =
     '"Cambria Math", "Latin Modern Math", "STIX Two Math", serif';
   span.textContent = fallbackText;
+  applyPmPositions(span, run.pmStart, run.pmEnd);
   return span;
 }
 

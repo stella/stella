@@ -389,6 +389,36 @@ describe("painter — OMML math run", () => {
     expect(mathEl?.getAttribute("alttext")).toBe("the variable z");
   });
 
+  test("threads PM anchors onto MathML and fallback hosts", () => {
+    const mathLine = renderMathRunOnce(
+      mathRun({
+        ommlXml: `<m:oMath ${MATH_NS}><m:r><m:t>q</m:t></m:r></m:oMath>`,
+        pmStart: 4,
+        pmEnd: 5,
+      }),
+    );
+    const mathHost = findElement(mathLine, (el) =>
+      el.className.includes("docx-math-inline"),
+    );
+
+    const fallbackLine = renderMathRunOnce(
+      mathRun({
+        ommlXml: "<not-actually-omml>",
+        plainText: "broken",
+        pmStart: 8,
+        pmEnd: 9,
+      }),
+    );
+    const fallbackHost = findElement(fallbackLine, (el) =>
+      el.className.includes("docx-math-fallback"),
+    );
+
+    expect(mathHost?.dataset["pmStart"]).toBe("4");
+    expect(mathHost?.dataset["pmEnd"]).toBe("5");
+    expect(fallbackHost?.dataset["pmStart"]).toBe("8");
+    expect(fallbackHost?.dataset["pmEnd"]).toBe("9");
+  });
+
   test("renders the same MathML when the same OMML is rendered twice", () => {
     const run = mathRun({
       ommlXml: `<m:oMath ${MATH_NS}><m:f><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>2</m:t></m:r></m:den></m:f></m:oMath>`,
