@@ -64,8 +64,8 @@
         "@stll/anonymize-chat": "workspace:*",
         "@stll/anonymize-data": "catalog:",
         "@stll/anonymize-wasm": "catalog:",
-        "@stll/ares": "workspace:*",
         "@stll/boe": "workspace:*",
+        "@stll/business-registries": "workspace:*",
         "@stll/case-law": "workspace:*",
         "@stll/docx-core": "workspace:*",
         "@stll/docx-utils": "workspace:*",
@@ -319,21 +319,21 @@
         "typescript": "catalog:",
       },
     },
-    "packages/ares": {
-      "name": "@stll/ares",
+    "packages/boe": {
+      "name": "@stll/boe",
       "version": "0.1.0",
-      "dependencies": {
-        "@stll/stdnum": "^1.0.0",
-      },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
         "typescript": "catalog:",
       },
     },
-    "packages/boe": {
-      "name": "@stll/boe",
+    "packages/business-registries": {
+      "name": "@stll/business-registries",
       "version": "0.1.0",
+      "dependencies": {
+        "@stll/stdnum": "^1.0.0",
+      },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
@@ -1602,9 +1602,9 @@
 
     "@stll/api": ["@stll/api@workspace:apps/api"],
 
-    "@stll/ares": ["@stll/ares@workspace:packages/ares"],
-
     "@stll/boe": ["@stll/boe@workspace:packages/boe"],
+
+    "@stll/business-registries": ["@stll/business-registries@workspace:packages/business-registries"],
 
     "@stll/case-law": ["@stll/case-law@workspace:packages/case-law"],
 

@@ -5,7 +5,12 @@
     "paths": {
       "@/*": ["./src/*"],
       "@/api/*": ["../api/src/*"], // this is for eden to work https://elysiajs.com/eden/installation#path-alias-monorepo
-      "@stll/ares": ["../../packages/ares/src/index.ts"],
+      "@stll/business-registries": [
+        "../../packages/business-registries/src/index.ts"
+      ],
+      "@stll/business-registries/*": [
+        "../../packages/business-registries/src/*/index.ts"
+      ],
       "@stll/docx-core": ["../../packages/docx-core/src/index.ts"],
       "@stll/errors": ["../../packages/errors/src/index.ts"],
       "@stll/infosoud": ["../../packages/infosoud/src/index.ts"],

@@ -2,7 +2,7 @@ import { valibotSchema } from "@ai-sdk/valibot";
 import { tool } from "ai";
 import * as v from "valibot";
 
-import { lookupByIco, searchByName } from "@stll/ares";
+import { lookupByIco, searchByName } from "@stll/business-registries/ares";
 
 export const createAresTools = () => ({
   ares_lookup_company: tool({

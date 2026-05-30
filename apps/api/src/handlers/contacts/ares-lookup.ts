@@ -8,7 +8,7 @@ import {
   AresValidationError,
   lookupByIco,
   searchByName,
-} from "@stll/ares";
+} from "@stll/business-registries/ares";
 
 import { isNativeToolEnabledForOrg } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";

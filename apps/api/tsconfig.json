@@ -5,8 +5,13 @@
     "lib": ["ESNext"],
     "module": "ESNext",
     "paths": {
-      "@stll/ares": ["../../packages/ares/src/index.ts"],
       "@stll/boe": ["../../packages/boe/src/index.ts"],
+      "@stll/business-registries": [
+        "../../packages/business-registries/src/index.ts"
+      ],
+      "@stll/business-registries/*": [
+        "../../packages/business-registries/src/*/index.ts"
+      ],
       "@stll/docx-core": ["../../packages/docx-core/src/index.ts"],
       "@stll/errors": ["../../packages/errors/src/index.ts"],
       "@stll/infosoud": ["../../packages/infosoud/src/index.ts"],
