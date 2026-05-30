@@ -124,6 +124,37 @@ describe("parseEnhet", () => {
     });
     expect(out.businessAddress?.street).toBe("Havnegata 48");
   });
+
+  test("treats nedleggelsesdato as a deleted-status closure for sub-entities", () => {
+    const out = parseEnhet(
+      { ...baseRaw, nedleggelsesdato: "2024-08-12" },
+      "underenhet",
+    );
+    expect(out.status).toEqual({ type: "deleted", deletedAt: "2024-08-12" });
+  });
+
+  test("prefers slettedato over nedleggelsesdato when both are present", () => {
+    const out = parseEnhet({
+      ...baseRaw,
+      slettedato: "2024-01-15",
+      nedleggelsesdato: "2023-06-01",
+    });
+    expect(out.status).toEqual({ type: "deleted", deletedAt: "2024-01-15" });
+  });
+
+  test("routes sub-entities to the /underenheter/ registry URL", () => {
+    const out = parseEnhet(baseRaw, "underenhet");
+    expect(out.registryUrl).toBe(
+      "https://virksomhet.brreg.no/nb/oppslag/underenheter/974760673",
+    );
+  });
+
+  test("defaults to the /enheter/ registry URL when no kind is supplied", () => {
+    const out = parseEnhet(baseRaw);
+    expect(out.registryUrl).toBe(
+      "https://virksomhet.brreg.no/nb/oppslag/enheter/974760673",
+    );
+  });
 });
 
 describe("parseSearchEntry", () => {

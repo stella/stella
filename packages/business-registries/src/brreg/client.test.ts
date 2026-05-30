@@ -1,7 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 
 import { lookupByOrgnr, searchByName } from "./client.js";
-import { BrregValidationError } from "./errors.js";
+import { BrregTooBroadError, BrregValidationError } from "./errors.js";
 
 const SKIP_LIVE = process.env["SMOKE_TEST"] !== "1";
 
@@ -58,5 +58,27 @@ describe("searchByName validation", () => {
     expect(searchByName("a".repeat(181))).rejects.toBeInstanceOf(
       BrregValidationError,
     );
+  });
+});
+
+describe("searchByName upstream 400 handling", () => {
+  const originalFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test("translates Brreg's broad-query HTTP 400 into BrregTooBroadError", () => {
+    const stub = async () =>
+      new Response(
+        JSON.stringify({
+          feilmelding: "Spørringen returnerer for mange treff",
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+
+    expect(searchByName("a")).rejects.toBeInstanceOf(BrregTooBroadError);
   });
 });

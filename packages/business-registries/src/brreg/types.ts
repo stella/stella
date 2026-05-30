@@ -54,6 +54,12 @@ export type BrregRawEnhet = {
   underTvangsavviklingEllerTvangsopplosning?: boolean;
   slettedato?: string;
   stiftelsesdato?: string;
+  /**
+   * Closure date for sub-entities (returned by `/underenheter`).
+   * A populated `nedleggelsesdato` marks the sub-entity as closed even
+   * when the parent `slettedato` / `konkurs` flags are absent.
+   */
+  nedleggelsesdato?: string;
 };
 
 export type BrregSearchResponse = {

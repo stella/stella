@@ -128,7 +128,7 @@ export const lookupByOrgnr = async (
 
   const enhet = await brregGet<BrregRawEnhet>(`${ENHETER_URL}/${normalized}`);
   if (enhet) {
-    return parseEnhet(enhet);
+    return parseEnhet(enhet, "enhet");
   }
 
   if (options?.includeSubEntities ?? true) {
@@ -136,7 +136,7 @@ export const lookupByOrgnr = async (
       `${UNDERENHETER_URL}/${normalized}`,
     );
     if (sub) {
-      return parseEnhet(sub);
+      return parseEnhet(sub, "underenhet");
     }
   }
 
@@ -179,7 +179,22 @@ export const searchByName = async (
   });
   const url = `${ENHETER_URL}?${params.toString()}`;
 
-  const data = await brregGet<BrregSearchResponse>(url);
+  let data: BrregSearchResponse | null;
+  try {
+    data = await brregGet<BrregSearchResponse>(url);
+  } catch (error) {
+    // Brreg short-circuits queries that would exceed its 10k result
+    // cap with HTTP 400 — there is no page envelope to inspect — so
+    // we translate that 400 into the intended "refine your query"
+    // signal instead of letting the handler treat it as a 502.
+    // Other 400s (malformed query syntax etc.) propagate as-is; we
+    // construct the query ourselves so they should not happen in
+    // practice.
+    if (error instanceof BrregAPIError && error.httpStatus === 400) {
+      throw new BrregTooBroadError(trimmed);
+    }
+    throw error;
+  }
   if (!data) {
     return [];
   }

@@ -9,7 +9,14 @@ import type {
   BrregSearchResult,
 } from "./types.js";
 
-const BRREG_ENTITY_URL = "https://virksomhet.brreg.no/nb/oppslag/enheter/";
+const BRREG_ENHET_URL = "https://virksomhet.brreg.no/nb/oppslag/enheter/";
+const BRREG_UNDERENHET_URL =
+  "https://virksomhet.brreg.no/nb/oppslag/underenheter/";
+
+// Discriminator for which Brreg register a raw entity came from. The
+// public registry UI separates main entities and sub-entities under
+// different URL paths, so the parser needs to know which to link to.
+export type BrregEnhetKind = "enhet" | "underenhet";
 
 export const parseAddress = (raw: BrregRawAddress): BrregAddress => {
   const lines = raw.adresse?.filter(Boolean) ?? [];
@@ -61,8 +68,15 @@ const collectIndustryCodes = (raw: BrregRawEnhet): BrregIndustryCode[] => {
 };
 
 const parseStatus = (raw: BrregRawEnhet): BrregEntityStatus => {
-  if (raw.slettedato) {
-    return { type: "deleted", deletedAt: raw.slettedato };
+  // Brreg encodes "no longer operating" with two distinct fields:
+  //   * slettedato — the register removed the record entirely
+  //   * nedleggelsesdato — a sub-entity ceased operations but the
+  //     record itself is retained (sub-entities only)
+  // Both map to the "deleted" arm of our domain union; callers that
+  // need to tell them apart can look at the raw payload.
+  const removedAt = raw.slettedato ?? raw.nedleggelsesdato;
+  if (removedAt) {
+    return { type: "deleted", deletedAt: removedAt };
   }
   if (raw.konkurs === true) {
     return { type: "bankruptcy" };
@@ -76,11 +90,15 @@ const parseStatus = (raw: BrregRawEnhet): BrregEntityStatus => {
   return { type: "active" };
 };
 
-export const parseEnhet = (raw: BrregRawEnhet): BrregEntity => {
+export const parseEnhet = (
+  raw: BrregRawEnhet,
+  kind: BrregEnhetKind = "enhet",
+): BrregEntity => {
   // Parent entities (`/enheter`) carry the physical address as
   // `forretningsadresse`; sub-entities (`/underenheter`) use
   // `beliggenhetsadresse`. Same domain field, different upstream key.
   const physicalAddress = raw.forretningsadresse ?? raw.beliggenhetsadresse;
+  const base = kind === "underenhet" ? BRREG_UNDERENHET_URL : BRREG_ENHET_URL;
   return {
     orgnr: raw.organisasjonsnummer,
     name: raw.navn,
@@ -95,7 +113,7 @@ export const parseEnhet = (raw: BrregRawEnhet): BrregEntity => {
       typeof raw.antallAnsatte === "number" ? raw.antallAnsatte : null,
     status: parseStatus(raw),
     vatRegistered: raw.registrertIMvaregisteret === true,
-    registryUrl: `${BRREG_ENTITY_URL}${raw.organisasjonsnummer}`,
+    registryUrl: `${base}${raw.organisasjonsnummer}`,
   };
 };
 
