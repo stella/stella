@@ -2,12 +2,15 @@ export {
   EU_MEMBER_STATES,
   filterCatalogueByKind,
   findCatalogueEntry,
+  isToggleableNativeToolBackendSlug,
   loadCatalogue,
   loadRecommended,
   pinnedCatalogueEntries,
   recommendedSlugsForJurisdictions,
+  TOGGLEABLE_NATIVE_TOOL_BACKEND_SLUGS,
   type LoadedCatalogueEntry,
   type LoadedEntryByKind,
+  type ToggleableNativeToolBackendSlug,
 } from "./loader";
 export {
   CATALOGUE_COST,

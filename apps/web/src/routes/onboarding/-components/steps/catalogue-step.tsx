@@ -12,6 +12,7 @@ import { useTranslations } from "use-intl";
 
 import {
   EU_MEMBER_STATES,
+  isToggleableNativeToolBackendSlug,
   loadCatalogue,
   pinnedCatalogueEntries,
   recommendedSlugsForJurisdictions,
@@ -86,6 +87,15 @@ export const CatalogueStep = ({
   );
 
   const entries = useMemo(() => loadCatalogue(), []);
+  const selectableEntries = useMemo(
+    () =>
+      entries.filter(
+        (entry) =>
+          entry.kind !== "native-tool" ||
+          isToggleableNativeToolBackendSlug(entry.backendSlug),
+      ),
+    [entries],
+  );
   const pinnedEntries = useMemo(() => pinnedCatalogueEntries(), []);
   const pinnedSlugSet = useMemo(
     () => new Set(pinnedEntries.map((entry) => entry.slug)),
@@ -109,7 +119,7 @@ export const CatalogueStep = ({
 
   const recommendedEntries = useMemo(
     () =>
-      entries
+      selectableEntries
         .filter(
           (entry) =>
             recommendedSet.has(entry.slug) && !pinnedSlugSet.has(entry.slug),
@@ -117,16 +127,16 @@ export const CatalogueStep = ({
         .sort((left, right) =>
           left.displayName.localeCompare(right.displayName),
         ),
-    [entries, recommendedSet, pinnedSlugSet],
+    [selectableEntries, recommendedSet, pinnedSlugSet],
   );
 
   const otherEntries = useMemo(
     () =>
-      entries.filter(
+      selectableEntries.filter(
         (entry) =>
           !recommendedSet.has(entry.slug) && !pinnedSlugSet.has(entry.slug),
       ),
-    [entries, recommendedSet, pinnedSlugSet],
+    [selectableEntries, recommendedSet, pinnedSlugSet],
   );
 
   const matchesSearch = (entry: LoadedCatalogueEntry) => {

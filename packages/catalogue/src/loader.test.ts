@@ -5,6 +5,7 @@ import path from "node:path";
 import { loadCatalogueSkillInstallPayloads } from "./install-payloads";
 import {
   filterCatalogueByKind,
+  isToggleableNativeToolBackendSlug,
   loadCatalogue,
   loadRecommended,
   recommendedSlugsForJurisdictions,
@@ -70,6 +71,13 @@ describe("filterCatalogueByKind", () => {
       // backendSlug is only present on native-tool, narrowing must work
       expect(tool.backendSlug).toBeString();
     }
+  });
+});
+
+describe("isToggleableNativeToolBackendSlug", () => {
+  it("tracks only native tools that are currently exposed to chat toggles", () => {
+    expect(isToggleableNativeToolBackendSlug("ares")).toBe(true);
+    expect(isToggleableNativeToolBackendSlug("brreg")).toBe(false);
   });
 });
 

@@ -1,6 +1,7 @@
 import {
   EU_MEMBER_STATES,
   filterCatalogueByKind,
+  isToggleableNativeToolBackendSlug,
   loadRecommended,
 } from "@stll/catalogue";
 import { isCountryCode, type CountryCode } from "@stll/country-codes";
@@ -67,24 +68,9 @@ const NATIVE_TOOL_CATALOG: readonly NativeToolCatalogItem[] = (() => {
   }));
 })();
 
-/**
- * Slugs the backend actually implements as native tools. Source of
- * truth for "is this tool callable?" — separate from the catalogue,
- * which can list stubs (manifest landed before its handler). Update
- * this list when a new handler ships.
- */
-const IMPLEMENTED_NATIVE_TOOL_SLUGS = [
-  "ares",
-  "boe",
-  "brreg",
-  "infosoud",
-  "web-search",
-] as const;
-
 /** Authoritative slug list — independent of jurisdiction filtering. */
 export const NATIVE_TOOL_SLUGS: readonly string[] = NATIVE_TOOL_CATALOG.filter(
-  (tool) =>
-    (IMPLEMENTED_NATIVE_TOOL_SLUGS as readonly string[]).includes(tool.slug),
+  (tool) => isToggleableNativeToolBackendSlug(tool.slug),
 ).map((tool) => tool.slug);
 
 const toPracticeCountryCodeSet = (

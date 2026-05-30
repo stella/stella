@@ -49,6 +49,24 @@ export type LoadedEntryByKind<K extends CatalogueKind> = Extract<
   { kind: K }
 >;
 
+export const TOGGLEABLE_NATIVE_TOOL_BACKEND_SLUGS = [
+  "ares",
+  "boe",
+  "infosoud",
+  "web-search",
+] as const;
+export type ToggleableNativeToolBackendSlug =
+  (typeof TOGGLEABLE_NATIVE_TOOL_BACKEND_SLUGS)[number];
+
+const TOGGLEABLE_NATIVE_TOOL_BACKEND_SLUG_SET: ReadonlySet<string> = new Set(
+  TOGGLEABLE_NATIVE_TOOL_BACKEND_SLUGS,
+);
+
+export const isToggleableNativeToolBackendSlug = (
+  slug: string,
+): slug is ToggleableNativeToolBackendSlug =>
+  TOGGLEABLE_NATIVE_TOOL_BACKEND_SLUG_SET.has(slug);
+
 export const filterCatalogueByKind = <K extends CatalogueKind>(
   kind: K,
 ): readonly LoadedEntryByKind<K>[] =>

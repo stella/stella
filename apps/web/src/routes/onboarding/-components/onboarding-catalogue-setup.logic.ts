@@ -1,5 +1,6 @@
 import {
   EU_MEMBER_STATES,
+  isToggleableNativeToolBackendSlug,
   recommendedSlugsForJurisdictions,
 } from "@stll/catalogue";
 
@@ -167,6 +168,9 @@ export const createCatalogueSetupPlan = ({
 
   for (const entry of entries) {
     if (entry.kind !== "native-tool") {
+      continue;
+    }
+    if (!isToggleableNativeToolBackendSlug(entry.backendSlug)) {
       continue;
     }
     if (entry.pinned) {

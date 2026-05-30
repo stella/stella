@@ -86,18 +86,12 @@ describe("mcpConnectorCatalogMetadata", () => {
     );
   });
 
-  it("recommends built-in Brreg for Norwegian practice", () => {
+  it("does not expose Brreg as a chat-toggleable native tool yet", () => {
     const tools = getNativeToolCatalog({
       practiceJurisdictions: [{ countryCode: "NO", isPrimary: true }],
     });
 
-    expect(tools).toContainEqual(
-      expect.objectContaining({
-        slug: "brreg",
-        isRecommended: true,
-        recommendedJurisdictions: ["NO"],
-      }),
-    );
+    expect(tools.map((tool) => tool.slug)).not.toContain("brreg");
   });
 
   it("shows only native tools that the MCP settings page can toggle", () => {
@@ -107,6 +101,7 @@ describe("mcpConnectorCatalogMetadata", () => {
 
     expect(toolSlugs).toContain("web-search");
     expect(toolSlugs).not.toContain("anonymize");
+    expect(toolSlugs).not.toContain("brreg");
     expect(toolSlugs).not.toContain("create-docx");
   });
 });

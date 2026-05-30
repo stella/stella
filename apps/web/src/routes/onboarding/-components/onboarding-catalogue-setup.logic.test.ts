@@ -17,6 +17,7 @@ const entries = [
   nativeTool("ares"),
   nativeTool("infosoud"),
   nativeTool("boe"),
+  nativeTool("brreg"),
   nativeTool("create-docx", { pinned: true }),
   { kind: "skill" as const, slug: "summarise-contract" },
 ];
@@ -61,6 +62,16 @@ describe("onboarding catalogue setup plan", () => {
     const plan = createCatalogueSetupPlan({
       entries: [nativeTool("ares", { pinned: true })],
       practiceJurisdictions: [{ countryCode: "CZ", isPrimary: true }],
+      selectedSlugs: [],
+    });
+
+    expect(plan.nativeToolOptOuts).toEqual([]);
+  });
+
+  test("ignores native tools that are not chat-toggleable yet", () => {
+    const plan = createCatalogueSetupPlan({
+      entries,
+      practiceJurisdictions: [{ countryCode: "NO", isPrimary: true }],
       selectedSlugs: [],
     });
 
