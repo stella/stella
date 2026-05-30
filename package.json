@@ -6,8 +6,6 @@
   "resolutions": {
     "@emnapi/core": "1.9.1",
     "@emnapi/runtime": "1.9.1",
-    "drizzle-kit": "1.0.0-rc.3",
-    "drizzle-orm": "1.0.0-rc.3",
     "prosemirror-model": "1.25.7",
     "prosemirror-transform": "1.12.0",
     "prosemirror-view": "1.41.8"
@@ -97,8 +95,8 @@
     "better-auth": "1.6.11",
     "better-result": "2.9.2",
     "diff": "9.0.0",
-    "drizzle-kit": "1.0.0-rc.3",
-    "drizzle-orm": "1.0.0-rc.3",
+    "drizzle-kit": "1.0.0-rc.1",
+    "drizzle-orm": "1.0.0-rc.1",
     "elysia": "1.4.28",
     "eslint": "10.4.0",
     "eslint-plugin-drizzle": "0.2.3",
