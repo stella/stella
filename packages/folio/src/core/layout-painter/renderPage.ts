@@ -15,8 +15,12 @@ import {
 import {
   clampFloatingWrapMargins,
   measureParagraph,
+  rectsToFloatingZones,
 } from "../layout-bridge/measuring";
-import type { FloatingImageZone } from "../layout-bridge/measuring";
+import type {
+  FloatingExclusionRect,
+  FloatingImageZone,
+} from "../layout-bridge/measuring";
 import type {
   Page,
   Fragment,
@@ -107,30 +111,6 @@ type PageFloatingImage = {
    * above-text layer so wrapNone semantics survive in the DOM.
    */
   behindDoc: boolean;
-};
-
-/**
- * Floating object exclusion rectangle used for text wrapping.
- */
-type FloatingExclusionRect = {
-  /** Which side the IMAGE is on (for rendering): 'left' or 'right' */
-  side: "left" | "right";
-  /** X position relative to content area (0 = left edge of content) */
-  x: number;
-  /** Y position relative to content area (0 = top of content) */
-  y: number;
-  /** Object dimensions */
-  width: number;
-  height: number;
-  /** Wrap distances */
-  distTop: number;
-  distBottom: number;
-  distLeft: number;
-  distRight: number;
-  /** OOXML wrapText: which side(s) TEXT flows on */
-  wrapText?: "bothSides" | "left" | "right" | "largest";
-  /** Wrap type from DOCX (square, tight, through, topAndBottom) */
-  wrapType?: string;
 };
 
 /**
@@ -897,8 +877,10 @@ function extractFloatingImagesFromParagraph(
     // Derive wrapText from cssFloat:
     // cssFloat='left' → image floats left → text on right → wrapText='right'
     // cssFloat='right' → image floats right → text on left → wrapText='left'
-    // cssFloat='none' or undefined → wrapText='bothSides' (default)
-    let wrapText: "bothSides" | "left" | "right" | "largest" = "bothSides";
+    // cssFloat='none' or undefined → omit wrapText; rect.side drives the side
+    // (preserves pre-eigenpal-#474 image wrap behavior — text boxes opt in to
+    // the new bothSides splitting separately).
+    let wrapText: "bothSides" | "left" | "right" | "largest" | undefined;
     if (imgRun.cssFloat === "left") {
       wrapText = "right";
     } else if (imgRun.cssFloat === "right") {
@@ -925,7 +907,7 @@ function extractFloatingImagesFromParagraph(
       distRight,
       ...(imgRun.pmStart !== undefined ? { pmStart: imgRun.pmStart } : {}),
       ...(imgRun.pmEnd !== undefined ? { pmEnd: imgRun.pmEnd } : {}),
-      wrapText,
+      ...(wrapText !== undefined ? { wrapText } : {}),
       ...(imgRun.wrapType !== undefined ? { wrapType: imgRun.wrapType } : {}),
       affectsTextWrap: isTextWrappingFloatingImageRun(imgRun),
       behindDoc: imgRun.wrapType === "behind",
@@ -933,65 +915,6 @@ function extractFloatingImagesFromParagraph(
   }
 
   return floatingImages;
-}
-
-/**
- * Convert floating exclusion rectangles to per-image FloatingImageZone[]
- * for the measurement system. Each rect becomes its own zone so
- * lines at different Y positions get independently correct widths.
- *
- * wrapText controls which side(s) TEXT flows on:
- *   'right'    → text only on right → image blocks left side (leftMargin)
- *   'left'     → text only on left  → image blocks right side (rightMargin)
- *   'bothSides'→ text on right of left-side images, left of right-side images
- *   'largest'  → same as bothSides (simplified)
- *
- * topAndBottom → full-width exclusion (leftMargin = contentWidth → forces line skip)
- */
-function rectsToFloatingZones(
-  rects: FloatingExclusionRect[],
-  contentWidth: number,
-): FloatingImageZone[] {
-  return rects.map((rect) => {
-    const rectRight = rect.x + rect.width + rect.distRight;
-    const rectTop = rect.y - rect.distTop;
-    const rectBottom = rect.y + rect.height + rect.distBottom;
-
-    let leftMargin = 0;
-    let rightMargin = 0;
-
-    const wt = rect.wrapText ?? "bothSides";
-
-    if (wt === "right") {
-      // Text flows on RIGHT only → image blocks the left side
-      leftMargin = rectRight;
-    } else if (wt === "left") {
-      // Text flows on LEFT only → image blocks the right side
-      rightMargin = contentWidth - (rect.x - rect.distLeft);
-    } else {
-      // bothSides / largest: use image position to determine which side it blocks
-      if (rect.side === "left") {
-        leftMargin = rectRight;
-      } else {
-        rightMargin = contentWidth - (rect.x - rect.distLeft);
-      }
-    }
-
-    // Near-full-width floats can compute a wrap margin >= contentWidth; if we
-    // let that propagate, body text after the float collapses to ~1 glyph per
-    // line. Word falls back to full content width in that case.
-    const clamped = clampFloatingWrapMargins(
-      leftMargin,
-      rightMargin,
-      contentWidth,
-    );
-    return {
-      leftMargin: clamped.leftMargin,
-      rightMargin: clamped.rightMargin,
-      topY: rectTop,
-      bottomY: rectBottom,
-    };
-  });
 }
 
 /**

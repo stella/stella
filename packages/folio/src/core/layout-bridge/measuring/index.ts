@@ -40,6 +40,17 @@ export {
   type MeasureParagraphOptions,
 } from "./measureParagraph";
 
+// Floating exclusion zones (shared by images and anchored text boxes)
+export {
+  rectsToFloatingZones,
+  getFloatingMargins,
+  getFloatingAvailableWidth,
+  type FloatingExclusionRect,
+  type FloatingLineMargins,
+  type FloatingLineSegmentZone,
+  type WrapTextDirection,
+} from "./floatingZones";
+
 // Caching utilities
 export {
   // Text width cache
