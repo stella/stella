@@ -6,54 +6,13 @@
  */
 
 import { expectShapeAttrs } from "../../attrs";
+import type {
+  ImagePositionAttrs,
+  ShapeAttrs as SchemaShapeAttrs,
+} from "../../schema/nodes";
 import { createNodeExtension } from "../create";
 
-export type ShapeAttrs = {
-  /** Shape type preset */
-  shapeType?: string;
-  /** Unique identifier */
-  shapeId?: string;
-  /** Width in pixels */
-  width?: number;
-  /** Height in pixels */
-  height?: number;
-  /** Fill color as CSS color */
-  fillColor?: string;
-  /** Fill type: none, solid, gradient */
-  fillType?: string;
-  /** Gradient type: linear, radial, rectangular, path */
-  gradientType?: string;
-  /** Gradient angle in degrees (for linear) */
-  gradientAngle?: number;
-  /** Gradient stops as JSON string: [{position, color}] */
-  gradientStops?: string;
-  /** Outline width in pixels */
-  outlineWidth?: number;
-  /** Outline color as CSS color */
-  outlineColor?: string;
-  /** Outline style */
-  outlineStyle?: string;
-  /** CSS transform */
-  transform?: string;
-  /** Display mode */
-  displayMode?: "inline" | "float" | "block";
-  /** CSS float */
-  cssFloat?: "left" | "right" | "none";
-  /** Wrap type */
-  wrapType?: string;
-  /** Shadow color as CSS color */
-  shadowColor?: string;
-  /** Shadow blur radius in pixels */
-  shadowBlur?: number;
-  /** Shadow X offset in pixels */
-  shadowOffsetX?: number;
-  /** Shadow Y offset in pixels */
-  shadowOffsetY?: number;
-  /** Glow color as CSS color */
-  glowColor?: string;
-  /** Glow radius in pixels */
-  glowRadius?: number;
-};
+export type ShapeAttrs = SchemaShapeAttrs;
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -154,6 +113,23 @@ function sanitizeCssFloat(
 
 function finiteNumber(value: number | null | undefined): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function parseShapePosition(
+  raw: string | undefined,
+): ImagePositionAttrs | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== "object" || parsed === null) {
+      return undefined;
+    }
+    return parsed as ImagePositionAttrs;
+  } catch {
+    return undefined;
+  }
 }
 
 export function sanitizeSvgId(value: string | null | undefined): string | null {
@@ -439,10 +415,17 @@ export const ShapeExtension = createNodeExtension({
       outlineWidth: { default: 1 },
       outlineColor: { default: "var(--doc-shape-outline, #000000)" },
       outlineStyle: { default: "solid" },
+      outlineCap: { default: null },
       transform: { default: null },
       displayMode: { default: "inline" },
       cssFloat: { default: null },
       wrapType: { default: "inline" },
+      wrapText: { default: null },
+      distTop: { default: null },
+      distBottom: { default: null },
+      distLeft: { default: null },
+      distRight: { default: null },
+      position: { default: null },
       shadowColor: { default: null },
       shadowBlur: { default: null },
       shadowOffsetX: { default: null },
@@ -456,14 +439,23 @@ export const ShapeExtension = createNodeExtension({
         getAttrs(dom): ShapeAttrs {
           const el = dom;
           const d = el.dataset;
+          const position = parseShapePosition(d["position"]);
           return {
             shapeType: d["shapeType"] || "rect",
             ...(d["shapeId"] ? { shapeId: d["shapeId"] } : {}),
             ...(d["width"] ? { width: Number(d["width"]) } : {}),
             ...(d["height"] ? { height: Number(d["height"]) } : {}),
             ...(d["fillColor"] ? { fillColor: d["fillColor"] } : {}),
-            fillType: d["fillType"] || "solid",
-            ...(d["gradientType"] ? { gradientType: d["gradientType"] } : {}),
+            fillType: (d["fillType"] || "solid") as NonNullable<
+              ShapeAttrs["fillType"]
+            >,
+            ...(d["gradientType"]
+              ? {
+                  gradientType: d["gradientType"] as NonNullable<
+                    ShapeAttrs["gradientType"]
+                  >,
+                }
+              : {}),
             ...(d["gradientAngle"]
               ? { gradientAngle: Number(d["gradientAngle"]) }
               : {}),
@@ -475,6 +467,13 @@ export const ShapeExtension = createNodeExtension({
               : {}),
             ...(d["outlineColor"] ? { outlineColor: d["outlineColor"] } : {}),
             ...(d["outlineStyle"] ? { outlineStyle: d["outlineStyle"] } : {}),
+            ...(d["outlineCap"]
+              ? {
+                  outlineCap: d["outlineCap"] as NonNullable<
+                    ShapeAttrs["outlineCap"]
+                  >,
+                }
+              : {}),
             ...(d["transform"] ? { transform: d["transform"] } : {}),
             ...(d["displayMode"]
               ? {
@@ -490,7 +489,25 @@ export const ShapeExtension = createNodeExtension({
                   >,
                 }
               : {}),
-            ...(d["wrapType"] ? { wrapType: d["wrapType"] } : {}),
+            ...(d["wrapType"]
+              ? {
+                  wrapType: d["wrapType"] as NonNullable<
+                    ShapeAttrs["wrapType"]
+                  >,
+                }
+              : {}),
+            ...(d["wrapText"]
+              ? {
+                  wrapText: d["wrapText"] as NonNullable<
+                    ShapeAttrs["wrapText"]
+                  >,
+                }
+              : {}),
+            ...(d["distTop"] ? { distTop: Number(d["distTop"]) } : {}),
+            ...(d["distBottom"] ? { distBottom: Number(d["distBottom"]) } : {}),
+            ...(d["distLeft"] ? { distLeft: Number(d["distLeft"]) } : {}),
+            ...(d["distRight"] ? { distRight: Number(d["distRight"]) } : {}),
+            ...(position ? { position } : {}),
             ...(d["shadowColor"] ? { shadowColor: d["shadowColor"] } : {}),
             ...(d["shadowBlur"] ? { shadowBlur: Number(d["shadowBlur"]) } : {}),
             ...(d["shadowOffsetX"]
@@ -545,6 +562,9 @@ export const ShapeExtension = createNodeExtension({
       if (attrs.outlineStyle) {
         domAttrs["data-outline-style"] = attrs.outlineStyle;
       }
+      if (attrs.outlineCap) {
+        domAttrs["data-outline-cap"] = attrs.outlineCap;
+      }
       if (attrs.transform) {
         domAttrs["data-transform"] = attrs.transform;
       }
@@ -556,6 +576,24 @@ export const ShapeExtension = createNodeExtension({
       }
       if (attrs.wrapType) {
         domAttrs["data-wrap-type"] = attrs.wrapType;
+      }
+      if (attrs.wrapText) {
+        domAttrs["data-wrap-text"] = attrs.wrapText;
+      }
+      if (typeof attrs.distTop === "number") {
+        domAttrs["data-dist-top"] = String(attrs.distTop);
+      }
+      if (typeof attrs.distBottom === "number") {
+        domAttrs["data-dist-bottom"] = String(attrs.distBottom);
+      }
+      if (typeof attrs.distLeft === "number") {
+        domAttrs["data-dist-left"] = String(attrs.distLeft);
+      }
+      if (typeof attrs.distRight === "number") {
+        domAttrs["data-dist-right"] = String(attrs.distRight);
+      }
+      if (attrs.position) {
+        domAttrs["data-position"] = JSON.stringify(attrs.position);
       }
       if (attrs.shadowColor) {
         domAttrs["data-shadow-color"] = attrs.shadowColor;

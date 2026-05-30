@@ -52,7 +52,7 @@ import {
   UnderlineStyleSchema,
   narrowEnum,
 } from "./parserEnums";
-import { isShapeDrawing, parseShapeFromDrawing } from "./shapeParser";
+import { parseShapeFromDrawing } from "./shapeParser";
 import type { StyleMap } from "./styleParser";
 import { resolveThemeFontRef } from "./themeParser";
 import {
@@ -829,11 +829,9 @@ function parseDrawingContent(
   // Generic shapes (rect/ellipse/line/arrow/...) come in here as wps:wsp
   // with no text body. Text-box shapes are left for the block-content
   // post-pass; image drawings fall through to parseImage.
-  if (isShapeDrawing(element)) {
-    const shape = parseShapeFromDrawing(element);
-    if (shape) {
-      return { type: "shape", shape };
-    }
+  const shape = parseShapeFromDrawing(element);
+  if (shape) {
+    return { type: "shape", shape };
   }
 
   const image = parseImage(element, rels ?? undefined, media ?? undefined);

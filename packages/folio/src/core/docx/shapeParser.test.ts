@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  isShapeDrawing,
-  parseShape,
-  parseShapeFromDrawing,
-} from "./shapeParser";
+import { parseShape, parseShapeFromDrawing } from "./shapeParser";
 import { parseXmlDocument } from "./xmlParser";
 
 const NS = `xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"`;
@@ -57,14 +53,14 @@ function buildSpPr({
   </wps:spPr>`;
 }
 
-describe("isShapeDrawing", () => {
-  test("returns true for a wps:wsp drawing without txbx", () => {
+describe("parseShapeFromDrawing — drawing dispatch", () => {
+  test("returns a shape for a wps:wsp drawing without txbx", () => {
     const root = parseXmlDocument(drawingWith(buildSpPr({ prst: "rect" })));
     expect(root).not.toBeNull();
-    expect(root && isShapeDrawing(root)).toBe(true);
+    expect(root ? parseShapeFromDrawing(root) : null).not.toBeNull();
   });
 
-  test("returns false for a wps:wsp drawing that contains a text box", () => {
+  test("returns null for a wps:wsp drawing that contains a text box", () => {
     const xml = `<w:drawing ${NS}>
       <wp:inline>
         <wp:extent cx="914400" cy="457200"/>
@@ -81,10 +77,10 @@ describe("isShapeDrawing", () => {
       </wp:inline>
     </w:drawing>`;
     const root = parseXmlDocument(xml);
-    expect(root && isShapeDrawing(root)).toBe(false);
+    expect(root ? parseShapeFromDrawing(root) : null).toBeNull();
   });
 
-  test("returns false for picture drawings", () => {
+  test("returns null for picture drawings", () => {
     const xml = `<w:drawing ${NS}>
       <wp:inline>
         <wp:extent cx="100" cy="100"/>
@@ -101,7 +97,7 @@ describe("isShapeDrawing", () => {
       </wp:inline>
     </w:drawing>`;
     const root = parseXmlDocument(xml);
-    expect(root && isShapeDrawing(root)).toBe(false);
+    expect(root ? parseShapeFromDrawing(root) : null).toBeNull();
   });
 });
 

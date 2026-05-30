@@ -40,12 +40,15 @@ import {
   parseColorElement,
   parseFill as parseSpPrFill,
 } from "./drawingUtils";
-import { narrowEnum, ShapeTypeSchema } from "./parserEnums";
 import {
-  findByFullName,
+  narrowEnum,
+  ShapeOutlineStyleSchema,
+  ShapeTypeSchema,
+} from "./parserEnums";
+import {
+  findChildByLocalName,
   findChildrenByLocalName,
   getAttribute,
-  getChildElements,
   parseNumericAttribute,
 } from "./xmlParser";
 import type { XmlElement } from "./xmlParser";
@@ -73,8 +76,7 @@ function parseShapeFill(spPr: XmlElement | null): ShapeFill | undefined {
     return base;
   }
   // Re-parse gradients locally for stop-level detail.
-  const children = getChildElements(spPr);
-  const gradFill = children.find((el) => el.name === "a:gradFill");
+  const gradFill = findChildByLocalName(spPr, "gradFill");
   if (!gradFill) {
     return base;
   }
@@ -82,12 +84,10 @@ function parseShapeFill(spPr: XmlElement | null): ShapeFill | undefined {
 }
 
 function parseGradientFill(gradFill: XmlElement): ShapeFill {
-  const children = getChildElements(gradFill);
-
   let gradientType: "linear" | "radial" | "rectangular" | "path" = "linear";
   let angle: number | undefined;
 
-  const lin = children.find((el) => el.name === "a:lin");
+  const lin = findChildByLocalName(gradFill, "lin");
   if (lin) {
     gradientType = "linear";
     const ang = getAttribute(lin, null, "ang");
@@ -98,7 +98,7 @@ function parseGradientFill(gradFill: XmlElement): ShapeFill {
     }
   }
 
-  const path = children.find((el) => el.name === "a:path");
+  const path = findChildByLocalName(gradFill, "path");
   if (path) {
     const pathType = getAttribute(path, null, "path");
     if (pathType === "circle") {
@@ -111,7 +111,7 @@ function parseGradientFill(gradFill: XmlElement): ShapeFill {
   }
 
   const stops: { position: number; color: ColorValue }[] = [];
-  const gsLst = children.find((el) => el.name === "a:gsLst");
+  const gsLst = findChildByLocalName(gradFill, "gsLst");
   if (gsLst) {
     for (const gs of findChildrenByLocalName(gsLst, "gs")) {
       const pos = getAttribute(gs, null, "pos");
@@ -190,13 +190,12 @@ function parseLineEnd(
  * or no usable attributes.
  */
 function parseShapeOutline(spPr: XmlElement | null): ShapeOutline | undefined {
-  const ln = spPr ? findByFullName(spPr, "a:ln") : null;
+  const ln = findChildByLocalName(spPr, "ln");
   if (!ln) {
     return undefined;
   }
 
-  const children = getChildElements(ln);
-  if (children.some((el) => el.name === "a:noFill")) {
+  if (findChildByLocalName(ln, "noFill")) {
     return undefined;
   }
 
@@ -219,15 +218,15 @@ function parseShapeOutline(spPr: XmlElement | null): ShapeOutline | undefined {
     outline.cap = "square";
   }
 
-  if (children.some((el) => el.name === "a:bevel")) {
+  if (findChildByLocalName(ln, "bevel")) {
     outline.join = "bevel";
-  } else if (children.some((el) => el.name === "a:round")) {
+  } else if (findChildByLocalName(ln, "round")) {
     outline.join = "round";
-  } else if (children.some((el) => el.name === "a:miter")) {
+  } else if (findChildByLocalName(ln, "miter")) {
     outline.join = "miter";
   }
 
-  const solidFill = children.find((el) => el.name === "a:solidFill");
+  const solidFill = findChildByLocalName(ln, "solidFill");
   if (solidFill) {
     const color = parseColorElement(solidFill);
     if (color) {
@@ -235,20 +234,22 @@ function parseShapeOutline(spPr: XmlElement | null): ShapeOutline | undefined {
     }
   }
 
-  const prstDash = children.find((el) => el.name === "a:prstDash");
+  const prstDash = findChildByLocalName(ln, "prstDash");
   if (prstDash) {
-    const val = getAttribute(prstDash, null, "val");
-    const narrowed = narrowShapeOutlineStyle(val);
+    const narrowed = narrowEnum(
+      getAttribute(prstDash, null, "val"),
+      ShapeOutlineStyleSchema,
+    );
     if (narrowed !== undefined) {
       outline.style = narrowed;
     }
   }
 
-  const headEnd = children.find((el) => el.name === "a:headEnd");
+  const headEnd = findChildByLocalName(ln, "headEnd");
   if (headEnd) {
     outline.headEnd = parseLineEnd(headEnd);
   }
-  const tailEnd = children.find((el) => el.name === "a:tailEnd");
+  const tailEnd = findChildByLocalName(ln, "tailEnd");
   if (tailEnd) {
     outline.tailEnd = parseLineEnd(tailEnd);
   }
@@ -267,34 +268,6 @@ function parseShapeOutline(spPr: XmlElement | null): ShapeOutline | undefined {
   return outline;
 }
 
-const OUTLINE_STYLE_VALUES = new Set<NonNullable<ShapeOutline["style"]>>([
-  "solid",
-  "dot",
-  "dash",
-  "lgDash",
-  "dashDot",
-  "lgDashDot",
-  "lgDashDotDot",
-  "sysDot",
-  "sysDash",
-  "sysDashDot",
-  "sysDashDotDot",
-]);
-
-function narrowShapeOutlineStyle(
-  value: string | null | undefined,
-): NonNullable<ShapeOutline["style"]> | undefined {
-  if (value === null || value === undefined) {
-    return undefined;
-  }
-  for (const allowed of OUTLINE_STYLE_VALUES) {
-    if (allowed === value) {
-      return allowed;
-    }
-  }
-  return undefined;
-}
-
 // ---------------------------------------------------------------------------
 // TRANSFORM (a:xfrm)
 // ---------------------------------------------------------------------------
@@ -307,7 +280,7 @@ function parseTransform(xfrm: XmlElement | null): {
     return { size: { width: 0, height: 0 } };
   }
 
-  const ext = findByFullName(xfrm, "a:ext");
+  const ext = findChildByLocalName(xfrm, "ext");
   const cx = parseNumericAttribute(ext, null, "cx") ?? 0;
   const cy = parseNumericAttribute(ext, null, "cy") ?? 0;
   const size: ImageSize = { width: cx, height: cy };
@@ -346,7 +319,7 @@ function parseShapeType(spPr: XmlElement | null): Shape["shapeType"] {
   if (!spPr) {
     return "rect";
   }
-  const prstGeom = findByFullName(spPr, "a:prstGeom");
+  const prstGeom = findChildByLocalName(spPr, "prstGeom");
   if (prstGeom) {
     const prst = getAttribute(prstGeom, null, "prst");
     const narrowed = narrowEnum(prst, ShapeTypeSchema);
@@ -369,13 +342,11 @@ function parseShapeType(spPr: XmlElement | null): Shape["shapeType"] {
  * `<wp:inline>` / `<wp:anchor>` and are handled by `parseShapeFromDrawing`.
  */
 export function parseShape(node: XmlElement): Shape {
-  const children = getChildElements(node);
-
-  const cNvPr = children.find((el) => el.name === "wps:cNvPr");
-  const spPr = children.find((el) => el.name === "wps:spPr") ?? null;
+  const cNvPr = findChildByLocalName(node, "cNvPr");
+  const spPr = findChildByLocalName(node, "spPr");
 
   const shapeType = parseShapeType(spPr);
-  const xfrm = spPr ? findByFullName(spPr, "a:xfrm") : null;
+  const xfrm = findChildByLocalName(spPr, "xfrm");
   const { size, transform } = parseTransform(xfrm);
   const fill = parseShapeFill(spPr);
   const outline = parseShapeOutline(spPr);
@@ -415,43 +386,42 @@ export function parseShape(node: XmlElement): Shape {
  * `textBoxParser.parseTextBox`).
  */
 export function parseShapeFromDrawing(drawingEl: XmlElement): Shape | null {
-  const children = getChildElements(drawingEl);
-  const container = children.find(
-    (el) => el.name === "wp:inline" || el.name === "wp:anchor",
-  );
+  const inline = findChildByLocalName(drawingEl, "inline");
+  const anchor = findChildByLocalName(drawingEl, "anchor");
+  const container = inline ?? anchor;
   if (!container) {
     return null;
   }
 
-  const graphic = findByFullName(container, "a:graphic");
+  const graphic = findChildByLocalName(container, "graphic");
   if (!graphic) {
     return null;
   }
-  const graphicData = findByFullName(graphic, "a:graphicData");
+  const graphicData = findChildByLocalName(graphic, "graphicData");
   if (!graphicData) {
     return null;
   }
-  const wsp = findByFullName(graphicData, "wps:wsp");
+  const wsp = findChildByLocalName(graphicData, "wsp");
   if (!wsp) {
     return null;
   }
   // Text boxes go through textBoxParser, not here; they carry their own
   // content tree that the block parser threads through paragraphs.
-  if (findByFullName(wsp, "wps:txbx") !== null) {
+  if (findChildByLocalName(wsp, "txbx") !== null) {
     return null;
   }
 
   const shape = parseShape(wsp);
 
   // The container's wp:extent supersedes spPr's a:ext when both exist.
-  const extent = findByFullName(container, "wp:extent");
+  const extent = findChildByLocalName(container, "extent");
   if (extent) {
     const cx = parseNumericAttribute(extent, null, "cx") ?? shape.size.width;
     const cy = parseNumericAttribute(extent, null, "cy") ?? shape.size.height;
     shape.size = { width: cx, height: cy };
   }
 
-  const isAnchor = container.name === "wp:anchor";
+  const isAnchor = container === anchor;
   if (isAnchor) {
     const position = parseAnchorPosition(container);
     if (position) {
@@ -465,7 +435,7 @@ export function parseShapeFromDrawing(drawingEl: XmlElement): Shape | null {
     shape.wrap = { type: "inline" };
   }
 
-  const docPr = findByFullName(container, "wp:docPr");
+  const docPr = findChildByLocalName(container, "docPr");
   if (docPr) {
     const id = getAttribute(docPr, null, "id");
     const name = getAttribute(docPr, null, "name");
@@ -478,30 +448,4 @@ export function parseShapeFromDrawing(drawingEl: XmlElement): Shape | null {
   }
 
   return shape;
-}
-
-/**
- * True when the drawing element contains a non-text-box `<wps:wsp>` shape.
- */
-export function isShapeDrawing(drawingEl: XmlElement): boolean {
-  const children = getChildElements(drawingEl);
-  const container = children.find(
-    (el) => el.name === "wp:inline" || el.name === "wp:anchor",
-  );
-  if (!container) {
-    return false;
-  }
-  const graphic = findByFullName(container, "a:graphic");
-  if (!graphic) {
-    return false;
-  }
-  const graphicData = findByFullName(graphic, "a:graphicData");
-  if (!graphicData) {
-    return false;
-  }
-  const wsp = findByFullName(graphicData, "wps:wsp");
-  if (!wsp) {
-    return false;
-  }
-  return findByFullName(wsp, "wps:txbx") === null;
 }

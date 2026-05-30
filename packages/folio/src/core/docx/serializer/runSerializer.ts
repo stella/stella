@@ -642,6 +642,16 @@ function serializeFill(fill: ShapeFill | undefined): string {
 }
 
 /** Serialize shape outline to DrawingML a:ln */
+function serializeLineCap(cap: NonNullable<ShapeOutline["cap"]>): string {
+  if (cap === "round") {
+    return "rnd";
+  }
+  if (cap === "square") {
+    return "sq";
+  }
+  return "flat";
+}
+
 function serializeOutline(outline: ShapeOutline | undefined): string {
   if (!outline) {
     return "";
@@ -651,7 +661,7 @@ function serializeOutline(outline: ShapeOutline | undefined): string {
     attrs.push(`w="${outline.width}"`);
   }
   if (outline.cap) {
-    attrs.push(`cap="${outline.cap}"`);
+    attrs.push(`cap="${serializeLineCap(outline.cap)}"`);
   }
 
   const parts: string[] = [];
@@ -662,6 +672,13 @@ function serializeOutline(outline: ShapeOutline | undefined): string {
   }
   if (outline.style && outline.style !== "solid") {
     parts.push(`<a:prstDash val="${outline.style}"/>`);
+  }
+  if (outline.join === "bevel") {
+    parts.push("<a:bevel/>");
+  } else if (outline.join === "round") {
+    parts.push("<a:round/>");
+  } else if (outline.join === "miter") {
+    parts.push("<a:miter/>");
   }
   if (outline.headEnd) {
     parts.push(

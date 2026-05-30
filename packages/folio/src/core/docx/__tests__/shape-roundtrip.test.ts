@@ -120,4 +120,25 @@ describe("shape parse → serialize round-trip", () => {
     expect(xml).toContain("<wp:wrapSquare");
     expect(xml).toContain("<wp:anchor");
   });
+
+  test("serializes normalized line cap values as OOXML tokens", () => {
+    const root = parseXmlDocument(
+      shapeDrawingXml({
+        prst: "line",
+        fill: `<a:noFill/><a:ln w="9525" cap="rnd"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln>`,
+      }),
+    );
+    const shape = root ? parseShapeFromDrawing(root) : null;
+    expect(shape?.outline?.cap).toBe("round");
+    if (!shape) {
+      return;
+    }
+
+    const xml = serializeRun({
+      type: "run",
+      content: [{ type: "shape", shape }],
+    });
+    expect(xml).toContain('cap="rnd"');
+    expect(xml).not.toContain('cap="round"');
+  });
 });

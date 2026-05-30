@@ -107,6 +107,12 @@ const SHAPE_GRADIENT_TYPES = [
   "path",
 ] as const satisfies readonly NonNullable<ShapeAttrs["gradientType"]>[];
 
+const SHAPE_OUTLINE_CAPS = [
+  "flat",
+  "round",
+  "square",
+] as const satisfies readonly NonNullable<ShapeAttrs["outlineCap"]>[];
+
 const EMPHASIS_MARK_TYPES = [
   "dot",
   "comma",
@@ -747,6 +753,13 @@ export const readShapeAttrs = (
   optionalNumber(attrs, "outlineWidth", "shape.attrs.outlineWidth", issues);
   optionalString(attrs, "outlineColor", "shape.attrs.outlineColor", issues);
   optionalString(attrs, "outlineStyle", "shape.attrs.outlineStyle", issues);
+  optionalOneOf(
+    attrs,
+    "outlineCap",
+    "shape.attrs.outlineCap",
+    issues,
+    SHAPE_OUTLINE_CAPS,
+  );
   optionalString(attrs, "transform", "shape.attrs.transform", issues);
   optionalOneOf(
     attrs,
@@ -762,7 +775,25 @@ export const readShapeAttrs = (
     issues,
     IMAGE_CSS_FLOATS,
   );
-  optionalString(attrs, "wrapType", "shape.attrs.wrapType", issues);
+  optionalOneOf(
+    attrs,
+    "wrapType",
+    "shape.attrs.wrapType",
+    issues,
+    IMAGE_WRAP_TYPE_VALUES,
+  );
+  optionalOneOf(
+    attrs,
+    "wrapText",
+    "shape.attrs.wrapText",
+    issues,
+    IMAGE_WRAP_TEXT_VALUES,
+  );
+  optionalNumber(attrs, "distTop", "shape.attrs.distTop", issues);
+  optionalNumber(attrs, "distBottom", "shape.attrs.distBottom", issues);
+  optionalNumber(attrs, "distLeft", "shape.attrs.distLeft", issues);
+  optionalNumber(attrs, "distRight", "shape.attrs.distRight", issues);
+  optionalImagePosition(attrs, "position", "shape.attrs.position", issues);
   optionalString(attrs, "shadowColor", "shape.attrs.shadowColor", issues);
   optionalNumber(attrs, "shadowBlur", "shape.attrs.shadowBlur", issues);
   optionalNumber(attrs, "shadowOffsetX", "shape.attrs.shadowOffsetX", issues);

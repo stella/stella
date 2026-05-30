@@ -1430,6 +1430,50 @@ function createShapeRun(node: PMNode): Run {
     shape.id = attrs.shapeId;
   }
 
+  const wrap: ImageWrap = { type: attrs.wrapType || "inline" };
+  if (attrs.distTop !== undefined) {
+    wrap.distT = pixelsToEmu(attrs.distTop);
+  }
+  if (attrs.distBottom !== undefined) {
+    wrap.distB = pixelsToEmu(attrs.distBottom);
+  }
+  if (attrs.distLeft !== undefined) {
+    wrap.distL = pixelsToEmu(attrs.distLeft);
+  }
+  if (attrs.distRight !== undefined) {
+    wrap.distR = pixelsToEmu(attrs.distRight);
+  }
+  if (attrs.wrapText) {
+    wrap.wrapText = attrs.wrapText;
+  }
+  shape.wrap = wrap;
+
+  const horizontalPosition = attrs.position?.horizontal;
+  const verticalPosition = attrs.position?.vertical;
+  if (horizontalPosition && verticalPosition) {
+    const horizontal: ImagePosition["horizontal"] = {
+      relativeTo: horizontalPosition.relativeTo || "column",
+    };
+    if (horizontalPosition.align) {
+      horizontal.alignment = horizontalPosition.align;
+    }
+    if (horizontalPosition.posOffset !== undefined) {
+      horizontal.posOffset = horizontalPosition.posOffset;
+    }
+
+    const vertical: ImagePosition["vertical"] = {
+      relativeTo: verticalPosition.relativeTo || "paragraph",
+    };
+    if (verticalPosition.align) {
+      vertical.alignment = verticalPosition.align;
+    }
+    if (verticalPosition.posOffset !== undefined) {
+      vertical.posOffset = verticalPosition.posOffset;
+    }
+
+    shape.position = { horizontal, vertical };
+  }
+
   // Fill
   if (attrs.fillType === "gradient" && attrs.gradientStops) {
     // Round-trip gradient fill
@@ -1469,18 +1513,28 @@ function createShapeRun(node: PMNode): Run {
   }
 
   // Outline
-  if (attrs.outlineWidth && attrs.outlineWidth > 0) {
+  if (
+    (attrs.outlineWidth !== undefined && attrs.outlineWidth > 0) ||
+    attrs.outlineColor ||
+    attrs.outlineStyle ||
+    attrs.outlineCap
+  ) {
     const cssToOoxml: Record<string, string> = {
       solid: "solid",
       dotted: "dot",
       dashed: "dash",
     };
-    const shapeOutline: ShapeOutline = {
-      width: pixelsToEmu(attrs.outlineWidth),
-      style: attrs.outlineStyle
-        ? (cssToOoxml[attrs.outlineStyle] as ShapeOutline["style"]) || "solid"
-        : "solid",
-    };
+    const shapeOutline: ShapeOutline = {};
+    if (attrs.outlineWidth !== undefined && attrs.outlineWidth > 0) {
+      shapeOutline.width = pixelsToEmu(attrs.outlineWidth);
+    }
+    if (attrs.outlineStyle) {
+      shapeOutline.style =
+        (cssToOoxml[attrs.outlineStyle] as ShapeOutline["style"]) || "solid";
+    }
+    if (attrs.outlineCap) {
+      shapeOutline.cap = attrs.outlineCap;
+    }
     if (attrs.outlineColor) {
       shapeOutline.color = { rgb: attrs.outlineColor.replace("#", "") };
     }
