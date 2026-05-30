@@ -757,6 +757,31 @@ describe("fromProseDoc", () => {
     expect(firstShapeContent(block)?.shape.outline?.style).toBe("dash");
   });
 
+  test("preserves imported shape transform attrs on save", () => {
+    const pmDoc = schema.node("doc", null, [
+      schema.node("paragraph", null, [
+        schema.node("shape", {
+          width: 120,
+          height: 60,
+          transform: "rotate(45deg) scaleX(-1) scaleY(-1)",
+        }),
+      ]),
+    ]);
+
+    const document = fromProseDoc(pmDoc);
+    const block = document.package.document.content.at(0);
+
+    expect(block?.type).toBe("paragraph");
+    if (block?.type !== "paragraph") {
+      return;
+    }
+    expect(firstShapeContent(block)?.shape.transform).toEqual({
+      rotation: 45,
+      flipH: true,
+      flipV: true,
+    });
+  });
+
   test("reattaches imported mixed-paragraph text boxes to their source paragraph", () => {
     const document = documentWithTextBoxParagraph({ includeText: true });
     const pmDoc = toProseDoc(document);

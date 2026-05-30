@@ -106,6 +106,36 @@ function normalizeShapeOutlineStyle(
   return narrowEnum(cssToOoxml[style] ?? style, ShapeOutlineStyleSchema);
 }
 
+function parseTransformAttr(
+  transformStr: string | undefined,
+): ImageTransform | undefined {
+  if (!transformStr) {
+    return undefined;
+  }
+  const transform: ImageTransform = {};
+  const rotateMatch = /rotate\(([-\d.]+)deg\)/u.exec(transformStr);
+  if (rotateMatch) {
+    const rotation = Number.parseFloat(rotateMatch[1]!);
+    if (Number.isFinite(rotation)) {
+      transform.rotation = rotation;
+    }
+  }
+  if (transformStr.includes("scaleX(-1)")) {
+    transform.flipH = true;
+  }
+  if (transformStr.includes("scaleY(-1)")) {
+    transform.flipV = true;
+  }
+  if (
+    transform.rotation === undefined &&
+    !transform.flipH &&
+    !transform.flipV
+  ) {
+    return undefined;
+  }
+  return transform;
+}
+
 /**
  * Convert a ProseMirror document to our Document type
  */
@@ -1292,24 +1322,9 @@ function createImageRun(node: PMNode): Run {
     image.title = attrs.title;
   }
 
-  // Parse CSS transform string back to ImageTransform for round-trip
-  if (attrs.transform) {
-    const transformStr = attrs.transform;
-    const imgTransform: ImageTransform = {};
-    const rotateMatch = /rotate\(([-\d.]+)deg\)/u.exec(transformStr);
-    if (rotateMatch) {
-      // SAFETY: capture group [1] always present when regex matches
-      imgTransform.rotation = Number.parseFloat(rotateMatch[1]!);
-    }
-    if (transformStr.includes("scaleX(-1)")) {
-      imgTransform.flipH = true;
-    }
-    if (transformStr.includes("scaleY(-1)")) {
-      imgTransform.flipV = true;
-    }
-    if (imgTransform.rotation || imgTransform.flipH || imgTransform.flipV) {
-      image.transform = imgTransform;
-    }
+  const imageTransform = parseTransformAttr(attrs.transform);
+  if (imageTransform) {
+    image.transform = imageTransform;
   }
 
   // eigenpal #424 (opacity render pipeline). PM schema default is `null`;
@@ -1443,6 +1458,10 @@ function createShapeRun(node: PMNode): Run {
   };
   if (attrs.shapeId) {
     shape.id = attrs.shapeId;
+  }
+  const shapeTransform = parseTransformAttr(attrs.transform);
+  if (shapeTransform) {
+    shape.transform = shapeTransform;
   }
 
   const wrap: ImageWrap = { type: attrs.wrapType || "inline" };
