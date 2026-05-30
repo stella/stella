@@ -49,7 +49,7 @@ const toPublicCatalogueEntry = ({
 
 const listCatalogue = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session }) {
+  async function* ({ safeDb, session, user }) {
     const entries = loadCatalogue();
     const skillSlugs = entries
       .filter((entry) => entry.kind === "skill")
@@ -86,6 +86,10 @@ const listCatalogue = createSafeRootHandler(
                     ),
                     eq(agentSkills.origin, "bundled"),
                     inArray(agentSkills.slug, skillSlugs),
+                    or(
+                      eq(agentSkills.scope, "team"),
+                      eq(agentSkills.userId, user.id),
+                    ),
                   ),
                 ),
             ),
