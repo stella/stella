@@ -118,6 +118,7 @@ export const DeepLKeyCard = () => {
             </span>
           </div>
           <Button
+            aria-label={t("remove")}
             loading={deleteMutation.isPending}
             onClick={() => deleteMutation.mutate()}
             size="sm"

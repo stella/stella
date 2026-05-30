@@ -51,6 +51,7 @@ type CreateEntityFromBufferInput = {
   buffer: Uint8Array | ArrayBuffer;
   fileName: string;
   mimeType: string;
+  scanWarnings?: string[] | undefined;
 };
 
 class EntityLimitError extends TaggedError("EntityLimitError")<{
@@ -86,6 +87,7 @@ export const createEntityFromBuffer = async ({
   buffer,
   fileName: rawFileName,
   mimeType,
+  scanWarnings,
 }: CreateEntityFromBufferInput): Promise<CreateEntityFromBufferResult> => {
   const fileName = sanitizeFilenamePreservingExtension(rawFileName);
   const fileId = Bun.randomUUIDv7();
@@ -183,6 +185,7 @@ export const createEntityFromBuffer = async ({
             encrypted: false,
             mimeType,
           }),
+          ...(scanWarnings !== undefined && { scanWarnings }),
         },
       });
 

@@ -31,6 +31,7 @@ import {
   translateDocument,
 } from "@/api/lib/deepl";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import { getS3 } from "@/api/lib/s3";
 
 // Mime types DeepL's /v2/document endpoint accepts. Anything
@@ -281,6 +282,42 @@ const translateEntity = createSafeHandler(
     }
 
     const translation = translationResult.value;
+    const translatedFileName = buildTranslatedFileName(
+      sourceContent.fileName,
+      body.targetLang,
+    );
+    const scanResult = await scanFile({
+      buffer: translation.bytes,
+      declaredMimeType: sourceContent.mimeType,
+      fileName: translatedFileName,
+    });
+
+    if (Result.isError(scanResult)) {
+      captureError(scanResult.error, {
+        mimeType: sourceContent.mimeType,
+        source: "deepl-document-translation",
+      });
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          message: "Translated file security scan failed",
+        }),
+      );
+    }
+
+    if (scanResult.value.verdict === "reject") {
+      const reasons = scanResult.value.findings
+        .filter((finding) => finding.severity === "reject")
+        .map((finding) => finding.message);
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          message: `Translated file rejected: ${reasons.join("; ")}`,
+        }),
+      );
+    }
+
+    const scanWarnings = getScanWarnings(scanResult.value) ?? undefined;
 
     // 5. Write the result back as a new entity.
     const createResult = await createEntityFromBuffer({
@@ -290,11 +327,9 @@ const translateEntity = createSafeHandler(
       userId: user.id,
       recordAuditEvent,
       buffer: translation.bytes,
-      fileName: buildTranslatedFileName(
-        sourceContent.fileName,
-        body.targetLang,
-      ),
+      fileName: translatedFileName,
       mimeType: sourceContent.mimeType,
+      scanWarnings,
     });
 
     if (Result.isError(createResult)) {
