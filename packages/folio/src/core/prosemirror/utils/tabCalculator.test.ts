@@ -148,48 +148,41 @@ describe("calculateTabWidth", () => {
     expect(result.width).toBeGreaterThan(0);
   });
 
-  it("adjusts for center alignment with following text", () => {
-    const measureText = (text: string) => text.length * 10; // 10px per char
+  it("adjusts for center alignment with following content", () => {
     const result = calculateTabWidth(
       0,
       { explicitStops: [{ val: "center", pos: 1440 }] },
-      "test", // 4 chars = 40px
-      measureText,
+      { followingWidth: 40 }, // e.g. 'test' at 10px/char
     );
 
-    // Center alignment: tab width should account for half of text width
+    // Center alignment: tab width should account for half of the content width
     // 96px (1440 twips) - 0 - 20px (half of 40) = 76px
     expect(result.alignment).toBe("center");
     expect(result.width).toBe(76);
   });
 
-  it("adjusts for end alignment with following text", () => {
-    const measureText = (text: string) => text.length * 10;
+  it("adjusts for end alignment with following content", () => {
     const result = calculateTabWidth(
       0,
       { explicitStops: [{ val: "end", pos: 1440 }] },
-      "test",
-      measureText,
+      { followingWidth: 40 },
     );
 
-    // End alignment: tab width should account for full text width
+    // End alignment: tab width should account for the full content width
     // 96px - 0 - 40px = 56px
     expect(result.alignment).toBe("end");
     expect(result.width).toBe(56);
   });
 
   it("handles decimal alignment", () => {
-    const measureText = (text: string) => text.length * 10;
     const result = calculateTabWidth(
       0,
       { explicitStops: [{ val: "decimal", pos: 1440 }] },
-      "123.45",
-      measureText,
-      ".",
+      { decimalPrefixWidth: 30 }, // e.g. '123' before the separator
     );
 
     // Decimal alignment: aligns the decimal point
-    // Before decimal: "123" = 30px
+    // Before decimal: 30px
     // 96px - 0 - 30px = 66px
     expect(result.alignment).toBe("decimal");
     expect(result.width).toBe(66);

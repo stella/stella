@@ -1155,16 +1155,25 @@ export function renderLine(
     const run = runsForLine[i]!; // SAFETY: i < runsForLine.length
 
     if (isTabRun(run) && tabContext) {
-      // Get text following this tab for alignment calculations
-      const followingText = getTextAfterTab(runsForLine, i, options?.context);
-
-      // Calculate tab width based on current position
-      const tabResult = calculateTabWidth(
-        currentX,
-        tabContext,
-        followingText,
+      // Per-run measurement (not a single-font pass over the joined string)
+      // keeps the tab width accurate when trailing runs differ in font/size.
+      const followingWidth = measureFollowingContentWidth(
+        runsForLine,
+        i,
         measureText,
+        options?.context,
       );
+      const followingText = getTextAfterTab(runsForLine, i, options?.context);
+      const decimalIndex = followingText.indexOf(".");
+      const decimalPrefixWidth =
+        decimalIndex !== -1
+          ? measureText(followingText.slice(0, decimalIndex))
+          : 0;
+
+      const tabResult = calculateTabWidth(currentX, tabContext, {
+        followingWidth,
+        decimalPrefixWidth,
+      });
 
       // Right-tab anchor (TOC pattern): when an end-aligned tab's stop is at
       // (or past) the line's right edge AND no later tab follows on this
@@ -1172,15 +1181,7 @@ export function renderLine(
       // content flush right. This sidesteps canvas-vs-DOM measurement drift
       // that otherwise leaves the page number a pixel short of the margin.
       const lineRightEdgeX = options?.lineRightEdgePx;
-      const followingWidthForCheck =
-        lineRightEdgeX !== undefined
-          ? measureFollowingContentWidth(
-              runsForLine,
-              i,
-              measureText,
-              options?.context,
-            )
-          : 0;
+      const followingWidthForCheck = followingWidth;
       let hasFollowingTab = false;
       for (let j = i + 1; j < runsForLine.length; j++) {
         // SAFETY: j < runsForLine.length
