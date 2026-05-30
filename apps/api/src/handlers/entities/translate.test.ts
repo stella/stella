@@ -1,8 +1,8 @@
 import { Result } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { DOC_MIME_TYPE, DOCX_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -10,7 +10,14 @@ const translateDocumentMock = mock(async () => ({
   bytes: new Uint8Array([1, 2, 3]),
   billedCharacters: 3,
 }));
-const scanFileMock = mock(async () =>
+
+type ScanFileInput = {
+  buffer: Uint8Array;
+  declaredMimeType: string;
+  fileName: string;
+};
+
+const scanFileMock = mock(async (_input: ScanFileInput) =>
   Result.ok({
     verdict: "reject" as const,
     findings: [
@@ -23,13 +30,10 @@ const scanFileMock = mock(async () =>
     ],
   }),
 );
-const createEntityFromBufferMock = mock(async () =>
-  Result.ok({
-    entityId: toSafeId<"entity">("00000000-0000-0000-0000-000000000006"),
-    fieldId: toSafeId<"field">("00000000-0000-0000-0000-000000000007"),
-    fileName: "Translated.docx",
-  }),
-);
+const s3WriteMock = mock(async () => {});
+const s3DeleteMock = mock(async () => {});
+const processExtractionMock = mock(async () => {});
+const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
 const captureErrorMock = mock(() => {});
 
 void mock.module("@/api/lib/deepl/client", () => ({
@@ -48,6 +52,8 @@ void mock.module("@/api/lib/s3", () => ({
     file: () => ({
       arrayBuffer: async () => new Uint8Array([80, 75, 3, 4]).buffer,
     }),
+    write: s3WriteMock,
+    delete: s3DeleteMock,
   }),
 }));
 
@@ -56,8 +62,12 @@ void mock.module("@/api/lib/file-scan/scan", () => ({
   scanFile: scanFileMock,
 }));
 
-void mock.module("@/api/handlers/entities/create-from-buffer", () => ({
-  createEntityFromBuffer: createEntityFromBufferMock,
+void mock.module("@/api/lib/search/process-extraction", () => ({
+  processExtraction: processExtractionMock,
+}));
+
+void mock.module("@/api/lib/file-derivative-queue", () => ({
+  enqueuePdfDerivativeOrMarkFailed: enqueuePdfDerivativeOrMarkFailedMock,
 }));
 
 void mock.module("@/api/lib/analytics", () => ({
@@ -78,7 +88,15 @@ const workspaceId = toSafeId<"workspace">(
 const fieldId = toSafeId<"field">("00000000-0000-0000-0000-000000000003");
 const userId = toSafeId<"user">("00000000-0000-0000-0000-000000000004");
 
-const createContext = (): TranslateEntityCtx => {
+type CreateContextOptions = {
+  sourceFileName?: string | undefined;
+  sourceMimeType?: string | undefined;
+};
+
+const createContext = ({
+  sourceFileName = "Source.docx",
+  sourceMimeType = DOCX_MIME_TYPE,
+}: CreateContextOptions = {}): TranslateEntityCtx => {
   const tx = {
     query: {
       organizationSettings: {
@@ -99,8 +117,8 @@ const createContext = (): TranslateEntityCtx => {
                     type: "file" as const,
                     version: 1 as const,
                     id: "source-file-id",
-                    fileName: "Source.docx",
-                    mimeType: DOCX_MIME_TYPE,
+                    fileName: sourceFileName,
+                    mimeType: sourceMimeType,
                     sizeBytes: 4,
                     encrypted: false,
                     sha256Hex: "hash",
@@ -140,6 +158,15 @@ const createContext = (): TranslateEntityCtx => {
 };
 
 describe("translateEntity", () => {
+  beforeEach(() => {
+    translateDocumentMock.mockClear();
+    scanFileMock.mockClear();
+    s3WriteMock.mockClear();
+    s3DeleteMock.mockClear();
+    processExtractionMock.mockClear();
+    enqueuePdfDerivativeOrMarkFailedMock.mockClear();
+  });
+
   test("rejects translated provider output that fails the file security scan", async () => {
     const result = await translateEntity.handler(createContext());
 
@@ -152,6 +179,25 @@ describe("translateEntity", () => {
     });
     expect(translateDocumentMock).toHaveBeenCalledTimes(1);
     expect(scanFileMock).toHaveBeenCalledTimes(1);
-    expect(createEntityFromBufferMock).not.toHaveBeenCalled();
+    expect(s3WriteMock).not.toHaveBeenCalled();
+    expect(s3DeleteMock).not.toHaveBeenCalled();
+    expect(processExtractionMock).not.toHaveBeenCalled();
+    expect(enqueuePdfDerivativeOrMarkFailedMock).not.toHaveBeenCalled();
+  });
+
+  test("scans legacy DOC provider output as DOCX before persistence", async () => {
+    await translateEntity.handler(
+      createContext({
+        sourceFileName: "Source.doc",
+        sourceMimeType: DOC_MIME_TYPE,
+      }),
+    );
+
+    expect(scanFileMock.mock.calls).toHaveLength(1);
+    expect(scanFileMock.mock.calls.at(0)?.[0]).toMatchObject({
+      declaredMimeType: DOCX_MIME_TYPE,
+      fileName: "Source (DE).docx",
+    });
+    expect(s3WriteMock).not.toHaveBeenCalled();
   });
 });

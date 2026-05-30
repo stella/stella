@@ -15,6 +15,7 @@ import { t } from "elysia";
 
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
+import { resolveTranslatedOutput } from "@/api/handlers/entities/translate-output";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -33,15 +34,17 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import { getS3 } from "@/api/lib/s3";
+import { DOC_MIME_TYPE, DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 // Mime types DeepL's /v2/document endpoint accepts. Anything
 // outside this set is rejected before we waste an upload round
 // trip (and DeepL's 50k-char minimum bill).
 const DEEPL_SUPPORTED_MIME_TYPES = new Set<string>([
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  DOC_MIME_TYPE,
+  DOCX_MIME_TYPE,
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/pdf",
+  PDF_MIME_TYPE,
   "text/plain",
   "text/html",
   "application/xliff+xml",
@@ -66,22 +69,6 @@ const config = {
   permissions: { entity: ["create"] },
   body: translateBody,
 } satisfies HandlerConfig;
-
-/**
- * Append the target language to the filename while preserving
- * the original extension. "Contract.docx" + "DE" → "Contract (DE).docx".
- */
-const buildTranslatedFileName = (
-  sourceFileName: string,
-  targetLang: string,
-): string => {
-  const tag = ` (${targetLang.toUpperCase()})`;
-  const lastDot = sourceFileName.lastIndexOf(".");
-  if (lastDot === -1) {
-    return `${sourceFileName}${tag}`;
-  }
-  return `${sourceFileName.slice(0, lastDot)}${tag}${sourceFileName.slice(lastDot)}`;
-};
 
 const translateEntity = createSafeHandler(
   config,
@@ -282,19 +269,20 @@ const translateEntity = createSafeHandler(
     }
 
     const translation = translationResult.value;
-    const translatedFileName = buildTranslatedFileName(
-      sourceContent.fileName,
-      body.targetLang,
-    );
+    const translatedOutput = resolveTranslatedOutput({
+      sourceFileName: sourceContent.fileName,
+      sourceMimeType: sourceContent.mimeType,
+      targetLang: body.targetLang,
+    });
     const scanResult = await scanFile({
       buffer: translation.bytes,
-      declaredMimeType: sourceContent.mimeType,
-      fileName: translatedFileName,
+      declaredMimeType: translatedOutput.mimeType,
+      fileName: translatedOutput.fileName,
     });
 
     if (Result.isError(scanResult)) {
       captureError(scanResult.error, {
-        mimeType: sourceContent.mimeType,
+        mimeType: translatedOutput.mimeType,
         source: "deepl-document-translation",
       });
       return Result.err(
@@ -327,8 +315,8 @@ const translateEntity = createSafeHandler(
       userId: user.id,
       recordAuditEvent,
       buffer: translation.bytes,
-      fileName: translatedFileName,
-      mimeType: sourceContent.mimeType,
+      fileName: translatedOutput.fileName,
+      mimeType: translatedOutput.mimeType,
       scanWarnings,
     });
 
