@@ -81,6 +81,19 @@ export type BorderSpec = {
   shadow?: boolean;
   /** Frame effect */
   frame?: boolean;
+  /**
+   * Custom page-border art relationship id (`w:id` on `<w:pgBorders>` side
+   * children). Preserved for round-trip; folio does not paint art glyphs.
+   */
+  artRelationshipId?: string;
+  /** Custom page-border art relationship id for the top-left corner. */
+  topLeftArtRelationshipId?: string;
+  /** Custom page-border art relationship id for the top-right corner. */
+  topRightArtRelationshipId?: string;
+  /** Custom page-border art relationship id for the bottom-left corner. */
+  bottomLeftArtRelationshipId?: string;
+  /** Custom page-border art relationship id for the bottom-right corner. */
+  bottomRightArtRelationshipId?: string;
 };
 
 /**

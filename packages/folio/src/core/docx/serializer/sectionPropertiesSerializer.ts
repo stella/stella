@@ -48,6 +48,25 @@ function serializeBorder(
   if (border.frame) {
     attrs.push('w:frame="true"');
   }
+  if (border.artRelationshipId) {
+    attrs.push(`w:id="${escapeXml(border.artRelationshipId)}"`);
+  }
+  if (border.topLeftArtRelationshipId) {
+    attrs.push(`w:topLeft="${escapeXml(border.topLeftArtRelationshipId)}"`);
+  }
+  if (border.topRightArtRelationshipId) {
+    attrs.push(`w:topRight="${escapeXml(border.topRightArtRelationshipId)}"`);
+  }
+  if (border.bottomLeftArtRelationshipId) {
+    attrs.push(
+      `w:bottomLeft="${escapeXml(border.bottomLeftArtRelationshipId)}"`,
+    );
+  }
+  if (border.bottomRightArtRelationshipId) {
+    attrs.push(
+      `w:bottomRight="${escapeXml(border.bottomRightArtRelationshipId)}"`,
+    );
+  }
 
   return `<w:${elementName} ${attrs.join(" ")}/>`;
 }
@@ -280,11 +299,19 @@ function serializePageBorders(props: SectionProperties): string {
     }
   }
 
-  if (borderElements.length === 0) {
+  // Drop the element entirely when nothing meaningful would be emitted —
+  // an attribute-less, child-less `<w:pgBorders>` carries no information.
+  // Attributes alone (display/offsetFrom/zOrder) on a parsed pgBorders
+  // are still meaningful for round-trip fidelity, so keep the element in
+  // that case even when every side is `none`/`nil`.
+  if (borderElements.length === 0 && attrs.length === 0) {
     return "";
   }
 
   const attrsStr = attrs.length > 0 ? ` ${attrs.join(" ")}` : "";
+  if (borderElements.length === 0) {
+    return `<w:pgBorders${attrsStr}/>`;
+  }
   return `<w:pgBorders${attrsStr}>${borderElements.join("")}</w:pgBorders>`;
 }
 
