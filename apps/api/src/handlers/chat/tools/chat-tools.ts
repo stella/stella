@@ -8,9 +8,12 @@ import {
   APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME,
   createActiveDocxEditTool,
 } from "@/api/handlers/chat/tools/active-docx-edit-tool";
-import { createAresTools } from "@/api/handlers/chat/tools/ares-tools";
 import type { AuthorizedToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
+import {
+  BUSINESS_REGISTRY_LOOKUP_TOOL_NAME,
+  createBusinessRegistryTools,
+} from "@/api/handlers/chat/tools/business-registry-tools";
 import {
   CREATE_DOCUMENT_TOOL_NAME,
   createCreateDocumentTool,
@@ -31,6 +34,7 @@ import {
 } from "@/api/handlers/chat/tools/web-search-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
 import type { SafeId } from "@/api/lib/branded-types";
+import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import { isWebSearchDeployAvailable } from "@/api/lib/web-search/select-provider";
 
 export const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";
@@ -47,7 +51,7 @@ type WorkspaceTools = ReturnType<typeof createWorkspaceTools>;
 type OrgTools = ReturnType<typeof createOrgTools>;
 type ChatExecutionTools = ReturnType<typeof createChatExecutionTools>;
 type SkillTools = ReturnType<typeof createSkillTools>;
-type AresTools = ReturnType<typeof createAresTools>;
+type BusinessRegistryTools = ReturnType<typeof createBusinessRegistryTools>;
 type BoeTools = ReturnType<typeof createBoeTools>;
 type InfosoudTools = ReturnType<typeof createInfosoudTools>;
 type ActiveDocxEditTools = ReturnType<typeof createActiveDocxEditTools>;
@@ -57,7 +61,7 @@ type WebSearchTools = ReturnType<typeof createWebSearchTools>;
 type BuiltInChatTools = OrgTools &
   ChatExecutionTools &
   SkillTools &
-  AresTools &
+  BusinessRegistryTools &
   BoeTools &
   InfosoudTools &
   WorkspaceTools &
@@ -115,8 +119,6 @@ const createCreateDocumentTools = () => ({
 
 const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   [APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
-  ares_lookup_company: CHAT_TOOL_POLICY_KIND.publicOfficial,
-  ares_search_companies: CHAT_TOOL_POLICY_KIND.publicOfficial,
   "ask-user": CHAT_TOOL_POLICY_KIND.internal,
   boe_find_related_laws: CHAT_TOOL_POLICY_KIND.publicOfficial,
   boe_get_law: CHAT_TOOL_POLICY_KIND.publicOfficial,
@@ -124,6 +126,7 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   boe_get_law_structure: CHAT_TOOL_POLICY_KIND.publicOfficial,
   boe_search_legislation: CHAT_TOOL_POLICY_KIND.publicOfficial,
   borme_get_summary: CHAT_TOOL_POLICY_KIND.publicOfficial,
+  [BUSINESS_REGISTRY_LOOKUP_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
   "create-document": CHAT_TOOL_POLICY_KIND.internal,
   "describe-stella-api": CHAT_TOOL_POLICY_KIND.internal,
   // Per-thread `webSearchEnabled` already gates the tools; an
@@ -174,8 +177,23 @@ export const getChatTools = ({
     skills: skillMetadata ?? getChatSkillMetadata(),
     userId,
   });
-  const aresDisabled = disabledNativeToolSlugs?.includes("ares") ?? false;
-  const aresTools = aresDisabled ? {} : createAresTools();
+  // Unified business-registry tool: register once with a dynamic
+  // `jurisdiction` enum derived from the per-adapter native-tool
+  // enablement. Shipped adapters live in BUSINESS_REGISTRY_DISPATCH;
+  // a registry is enabled for this turn iff its `nativeToolSlug`
+  // does NOT appear in `disabledNativeToolSlugs`. Empty list means
+  // the tool isn't registered at all (no dead picker for the model).
+  const businessRegistryJurisdictions = Object.values(
+    BUSINESS_REGISTRY_DISPATCH,
+  )
+    .filter(
+      (handler) =>
+        !(disabledNativeToolSlugs?.includes(handler.nativeToolSlug) ?? false),
+    )
+    .map((handler) => handler.country);
+  const businessRegistryTools = createBusinessRegistryTools({
+    enabledJurisdictions: businessRegistryJurisdictions,
+  });
   const boeDisabled = disabledNativeToolSlugs?.includes("boe") ?? false;
   const boeTools = boeDisabled ? {} : createBoeTools();
   const infosoudDisabled =
@@ -214,7 +232,7 @@ export const getChatTools = ({
       ...orgTools,
       ...executionTools,
       ...skillTools,
-      ...aresTools,
+      ...businessRegistryTools,
       ...boeTools,
       ...infosoudTools,
       ...workspaceTools,

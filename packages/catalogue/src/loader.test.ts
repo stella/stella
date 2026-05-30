@@ -77,7 +77,8 @@ describe("filterCatalogueByKind", () => {
 describe("isToggleableNativeToolBackendSlug", () => {
   it("tracks only native tools that are currently exposed to chat toggles", () => {
     expect(isToggleableNativeToolBackendSlug("ares")).toBe(true);
-    expect(isToggleableNativeToolBackendSlug("brreg")).toBe(false);
+    expect(isToggleableNativeToolBackendSlug("brreg")).toBe(true);
+    expect(isToggleableNativeToolBackendSlug("not-a-real-slug")).toBe(false);
   });
 });
 

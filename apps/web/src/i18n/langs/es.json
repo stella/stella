@@ -510,6 +510,7 @@
       "boe_get_law_structure": "Estructura de norma BOE",
       "boe_search_legislation": "Búsqueda en BOE",
       "borme_get_summary": "Sumario BORME",
+      "business_registry_lookup": "Searching business registry",
       "create-document": "Preparando documento",
       "describe-stella-api": "Preparando búsqueda de datos",
       "describe-stella-function": "Preparando búsqueda de datos",

@@ -510,6 +510,7 @@
       "boe_get_law_structure": "BOE jogszabály struktúrája",
       "boe_search_legislation": "BOE jogszabálykeresés",
       "borme_get_summary": "BORME napi összefoglaló",
+      "business_registry_lookup": "Searching business registry",
       "create-document": "Dokumentum előkészítése",
       "describe-stella-api": "Adatlekérés előkészítése",
       "describe-stella-function": "Adatlekérés előkészítése",

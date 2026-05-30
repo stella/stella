@@ -1,0 +1,397 @@
+// Shared backend dispatch for business-registry lookups.
+//
+// Single source of truth for the per-registry "this is how you look
+// something up here" behaviour. Both the REST endpoint
+// (`/contacts/business-registries`) and the chat tool
+// (`business_registry_lookup`) drive their lookups through
+// `executeRegistryLookup` so the two surfaces never drift in error
+// mapping, normalisation, or shape detection.
+
+import { panic } from "better-result";
+
+import {
+  AresAPIError,
+  type AresAddress,
+  type AresCompany,
+  AresRequestError,
+  type AresSearchResult,
+  AresTooBroadError,
+  AresValidationError,
+  lookupByIco,
+  normalizeIco,
+  searchByName as searchAresByName,
+} from "@stll/business-registries/ares";
+import {
+  BrregAPIError,
+  type BrregEntity,
+  BrregRequestError,
+  type BrregSearchResult,
+  BrregTooBroadError,
+  BrregValidationError,
+  lookupByOrgnr,
+  normalizeOrgnr,
+  searchByName as searchBrregByName,
+} from "@stll/business-registries/brreg";
+import type { CountryCode } from "@stll/country-codes";
+
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+
+// ---------------------------------------------------------------------------
+// Normalised cross-registry shapes
+// ---------------------------------------------------------------------------
+
+export const BUSINESS_REGISTRY_SLUGS = ["ares", "brreg"] as const;
+export type BusinessRegistrySlug = (typeof BUSINESS_REGISTRY_SLUGS)[number];
+
+export type BusinessRegistryAddress = {
+  line1: string | null;
+  line2: string | null;
+  postalCode: string | null;
+  city: string | null;
+  region: string | null;
+  country: string | null;
+  textAddress: string | null;
+};
+
+export type BusinessRegistryHit = {
+  registry: BusinessRegistrySlug;
+  id: string;
+  name: string;
+  legalForm: string | null;
+  address: BusinessRegistryAddress | null;
+  registryUrl: string;
+};
+
+export type RegistryLookupResponse =
+  | {
+      type: "lookup";
+      registry: BusinessRegistrySlug;
+      hit: BusinessRegistryHit | null;
+    }
+  | {
+      type: "search";
+      registry: BusinessRegistrySlug;
+      hits: BusinessRegistryHit[];
+    };
+
+// ---------------------------------------------------------------------------
+// Per-registry handler shape
+// ---------------------------------------------------------------------------
+
+export type RegistryHandler = {
+  /** Slug as it appears in the catalogue + the REST `?registry=` param. */
+  slug: BusinessRegistrySlug;
+  /**
+   * ISO country code the registry covers. The chat tool uses this to
+   * route a user-supplied jurisdiction to the right adapter
+   * (CZ → ares, NO → brreg, ...).
+   */
+  country: CountryCode;
+  /** Catalog slug used by `isNativeToolEnabledForOrg`. */
+  nativeToolSlug: string;
+  /**
+   * True when the trimmed input has the *shape* of the registry's
+   * canonical ID — e.g. eight digits for a Czech IČO, nine digits for
+   * a Norwegian orgnr. Intentionally a cheap, permissive structural
+   * check, NOT a full validator. Semantic validation (checksums,
+   * country prefixes, etc.) belongs in `lookup`; bad-checksum inputs
+   * surface as a `*ValidationError` → mapped to HTTP 400 by `mapError`.
+   * Returning `false` here would fall through to `search`, which
+   * silently swallows malformed IDs as empty name-search results.
+   */
+  isCanonicalId: (input: string) => boolean;
+  /** Lookup by canonical ID. */
+  lookup: (input: string) => Promise<BusinessRegistryHit | null>;
+  /**
+   * Search by name. `null` when the upstream registry has no
+   * name-search endpoint (e.g. KRS). Callers attempting name search
+   * against such a registry get a 400.
+   */
+  search: ((input: string) => Promise<BusinessRegistryHit[]>) | null;
+  /** Translate per-registry tagged errors into HandlerError. */
+  mapError: (error: unknown) => HandlerError | null;
+};
+
+// ---------------------------------------------------------------------------
+// ARES (Czech Republic)
+// ---------------------------------------------------------------------------
+
+const aresAddressToHit = (
+  address: AresAddress | null,
+): BusinessRegistryAddress | null => {
+  if (!address) {
+    return null;
+  }
+  const houseSegment = [
+    address.houseNumber,
+    address.orientationNumber
+      ? `/${address.orientationNumber}${address.orientationLetter ?? ""}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join("");
+  // ARES sometimes returns the place name in `municipalityPart` and
+  // leaves `street` empty — typical for small municipalities without
+  // numbered street names. Falling back keeps the registered seat
+  // visible in the contact form's first address line.
+  const streetOrLocality = address.street ?? address.municipalityPart;
+  const lineParts = [streetOrLocality, houseSegment].filter(Boolean);
+  const line1 = lineParts.length > 0 ? lineParts.join(" ") : null;
+  // Avoid duplicating municipalityPart in line2 if we already
+  // promoted it to line1 above.
+  const line2 =
+    !address.street && address.municipalityPart
+      ? null
+      : address.municipalityPart;
+  return {
+    line1,
+    line2,
+    postalCode: address.postalCode,
+    city: address.municipality,
+    region: address.district,
+    country: address.country,
+    textAddress: address.textAddress,
+  };
+};
+
+const aresCompanyToHit = (company: AresCompany): BusinessRegistryHit => ({
+  registry: "ares",
+  id: company.ico,
+  name: company.name,
+  legalForm: company.legalForm,
+  address: aresAddressToHit(company.address),
+  registryUrl: company.registryUrl,
+});
+
+const aresSearchResultToHit = (
+  result: AresSearchResult,
+): BusinessRegistryHit => ({
+  registry: "ares",
+  id: result.ico,
+  name: result.name,
+  legalForm: null,
+  address: result.address
+    ? {
+        line1: null,
+        line2: null,
+        postalCode: null,
+        city: null,
+        region: null,
+        country: null,
+        textAddress: result.address,
+      }
+    : null,
+  registryUrl: `https://ares.gov.cz/ekonomicke-subjekty?ico=${result.ico}`,
+});
+
+const mapAresError = (error: unknown): HandlerError | null => {
+  if (error instanceof AresValidationError) {
+    return new HandlerError({ status: 400, message: error.message });
+  }
+  if (error instanceof AresTooBroadError) {
+    return new HandlerError({
+      status: 400,
+      message: "Search too broad. Please refine your query.",
+    });
+  }
+  if (error instanceof AresAPIError) {
+    return new HandlerError({
+      status: 502,
+      message: `ARES API error: ${error.message}`,
+    });
+  }
+  if (error instanceof AresRequestError) {
+    return new HandlerError({
+      status: 502,
+      message: `ARES request failed: ${error.message}`,
+    });
+  }
+  return null;
+};
+
+const ARES_HANDLER: RegistryHandler = {
+  slug: "ares",
+  country: "CZ",
+  nativeToolSlug: "ares",
+  isCanonicalId: (input) => /^\d{8}$/u.test(normalizeIco(input)),
+  lookup: async (input) => {
+    const company = await lookupByIco(input);
+    return company ? aresCompanyToHit(company) : null;
+  },
+  search: async (input) => {
+    const results = await searchAresByName(input);
+    return results.map(aresSearchResultToHit);
+  },
+  mapError: mapAresError,
+};
+
+// ---------------------------------------------------------------------------
+// Brreg (Norway)
+// ---------------------------------------------------------------------------
+
+const brregEntityToHit = (entity: BrregEntity): BusinessRegistryHit => ({
+  registry: "brreg",
+  id: entity.orgnr,
+  name: entity.name,
+  legalForm: entity.legalForm,
+  address: entity.businessAddress
+    ? {
+        line1: entity.businessAddress.street,
+        line2: null,
+        postalCode: entity.businessAddress.postalCode,
+        city: entity.businessAddress.city,
+        region: entity.businessAddress.municipality,
+        country: entity.businessAddress.country,
+        textAddress: entity.businessAddress.textAddress,
+      }
+    : null,
+  registryUrl: entity.registryUrl,
+});
+
+const brregSearchResultToHit = (
+  result: BrregSearchResult,
+): BusinessRegistryHit => ({
+  registry: "brreg",
+  id: result.orgnr,
+  name: result.name,
+  legalForm: null,
+  address: result.address
+    ? {
+        line1: null,
+        line2: null,
+        postalCode: null,
+        city: null,
+        region: null,
+        country: null,
+        textAddress: result.address,
+      }
+    : null,
+  registryUrl: `https://virksomhet.brreg.no/nb/oppslag/enheter/${result.orgnr}`,
+});
+
+const mapBrregError = (error: unknown): HandlerError | null => {
+  if (error instanceof BrregValidationError) {
+    return new HandlerError({ status: 400, message: error.message });
+  }
+  if (error instanceof BrregTooBroadError) {
+    return new HandlerError({
+      status: 400,
+      message: "Search too broad. Please refine your query.",
+    });
+  }
+  if (error instanceof BrregAPIError) {
+    return new HandlerError({
+      status: 502,
+      message: `Brreg API error: ${error.message}`,
+    });
+  }
+  if (error instanceof BrregRequestError) {
+    return new HandlerError({
+      status: 502,
+      message: `Brreg request failed: ${error.message}`,
+    });
+  }
+  return null;
+};
+
+const BRREG_HANDLER: RegistryHandler = {
+  slug: "brreg",
+  country: "NO",
+  nativeToolSlug: "brreg",
+  isCanonicalId: (input) => /^\d{9}$/u.test(normalizeOrgnr(input)),
+  lookup: async (input) => {
+    const entity = await lookupByOrgnr(input);
+    return entity ? brregEntityToHit(entity) : null;
+  },
+  search: async (input) => {
+    const results = await searchBrregByName(input);
+    return results.map(brregSearchResultToHit);
+  },
+  mapError: mapBrregError,
+};
+
+// ---------------------------------------------------------------------------
+// Registry table + lookups
+// ---------------------------------------------------------------------------
+
+export const BUSINESS_REGISTRY_DISPATCH: Record<
+  BusinessRegistrySlug,
+  RegistryHandler
+> = {
+  ares: ARES_HANDLER,
+  brreg: BRREG_HANDLER,
+};
+
+const HANDLERS_BY_COUNTRY: ReadonlyMap<CountryCode, RegistryHandler> = new Map(
+  Object.values(BUSINESS_REGISTRY_DISPATCH).map((handler) => [
+    handler.country,
+    handler,
+  ]),
+);
+
+/**
+ * Look up the registry handler for a given country code, if Stella
+ * has an adapter shipped for it. The chat tool uses this to dispatch
+ * from a user-facing jurisdiction (CZ, NO) to the underlying adapter.
+ */
+export const getRegistryHandlerByCountry = (
+  country: CountryCode,
+): RegistryHandler | undefined => HANDLERS_BY_COUNTRY.get(country);
+
+/**
+ * Run the dispatch flow for a registry handler: detect lookup vs.
+ * search by canonical-ID shape, run the upstream call, normalise the
+ * result onto `BusinessRegistryHit`. Returns either a
+ * `RegistryLookupResponse` or a `HandlerError` (rather than throwing)
+ * so callers can route the failure mode without their own try/catch
+ * boilerplate.
+ *
+ * @returns `RegistryLookupResponse` on success; `HandlerError` for
+ *   validation failures, unsupported name-search, or upstream errors.
+ */
+export const executeRegistryLookup = async ({
+  handler,
+  query,
+}: {
+  handler: RegistryHandler;
+  query: string;
+}): Promise<RegistryLookupResponse | HandlerError> => {
+  const trimmed = query.trim();
+  if (trimmed.length === 0) {
+    return new HandlerError({
+      status: 400,
+      message: "'query' must not be empty",
+    });
+  }
+
+  const isLookup = handler.isCanonicalId(trimmed);
+  const searchFn = handler.search;
+  if (!isLookup && !searchFn) {
+    return new HandlerError({
+      status: 400,
+      message: `Registry '${handler.slug}' does not support name search; provide a canonical identifier`,
+    });
+  }
+
+  try {
+    if (isLookup) {
+      const hit = await handler.lookup(trimmed);
+      return { type: "lookup", registry: handler.slug, hit };
+    }
+    if (!searchFn) {
+      panic("searchFn must be defined when !isLookup reaches here");
+    }
+    const hits = await searchFn(trimmed);
+    return { type: "search", registry: handler.slug, hits };
+  } catch (error) {
+    const mapped = handler.mapError(error);
+    if (mapped) {
+      return mapped;
+    }
+    return new HandlerError({
+      status: 500,
+      message: `Registry '${handler.slug}' lookup failed`,
+      cause: error,
+    });
+  }
+};
