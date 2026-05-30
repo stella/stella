@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { findCatalogueEntry } from "@stll/catalogue";
+import { findCatalogueSkillInstallPayload } from "@stll/catalogue/install-payloads";
 
 import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { installSkill } from "@/api/handlers/skills/install";
@@ -34,8 +34,8 @@ const installBundledSkill = createSafeRootHandler(
     session,
     user,
   }) {
-    const entry = findCatalogueEntry("skill", body.slug);
-    if (!entry || entry.kind !== "skill" || entry.body === null) {
+    const payload = findCatalogueSkillInstallPayload(body.slug);
+    if (!payload) {
       return Result.err(
         new HandlerError({
           status: 404,
@@ -44,15 +44,17 @@ const installBundledSkill = createSafeRootHandler(
       );
     }
 
-    const resourcesResult = toParsedBundledSkillResources(entry.resourceFiles);
+    const resourcesResult = toParsedBundledSkillResources(
+      payload.resourceFiles,
+    );
     if (Result.isError(resourcesResult)) {
       return Result.err(resourcesResult.error);
     }
 
     const packageResult = toParsedBundledSkillPackage({
-      expectedSlug: entry.slug,
+      expectedSlug: payload.slug,
       resources: resourcesResult.value,
-      source: entry.body,
+      source: payload.body,
     });
     if (Result.isError(packageResult)) {
       return Result.err(packageResult.error);

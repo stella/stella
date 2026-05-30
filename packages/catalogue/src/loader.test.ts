@@ -1,5 +1,8 @@
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
+import { loadCatalogueSkillInstallPayloads } from "./install-payloads";
 import {
   filterCatalogueByKind,
   loadCatalogue,
@@ -24,6 +27,36 @@ describe("loadCatalogue", () => {
       expect(entry.license).toBeString();
       expect(["free", "paid"]).toContain(entry.cost);
       expect(["none", "account", "api-key"]).toContain(entry.setup);
+    }
+  });
+
+  it("does not expose API-only skill payloads in the public catalogue", () => {
+    const entries = loadCatalogue();
+    for (const entry of entries) {
+      expect("body" in entry).toBe(false);
+      expect("resourceFiles" in entry).toBe(false);
+    }
+
+    const generated = readFileSync(
+      path.join(import.meta.dirname, "catalogue.gen.ts"),
+      "utf-8",
+    );
+    expect(generated).not.toContain("body:");
+    expect(generated).not.toContain("resourceFiles");
+  });
+});
+
+describe("loadCatalogueSkillInstallPayloads", () => {
+  it("keeps private skill install payloads separate from public entries", () => {
+    const payloadSlugs = new Set(
+      loadCatalogueSkillInstallPayloads().map((payload) => payload.slug),
+    );
+    const skillEntries = loadCatalogue().filter(
+      (entry) => entry.kind === "skill",
+    );
+
+    for (const entry of skillEntries) {
+      expect(payloadSlugs.has(entry.slug)).toBe(true);
     }
   });
 });

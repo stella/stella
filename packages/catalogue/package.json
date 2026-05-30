@@ -9,6 +9,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./install-payloads": {
+      "types": "./src/install-payloads.ts",
+      "import": "./src/install-payloads.ts"
     }
   },
   "scripts": {

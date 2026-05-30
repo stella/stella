@@ -10,18 +10,8 @@ import {
   type Recommended,
 } from "./schema";
 
-export type LoadedCatalogueResource = {
-  content: string;
-  path: string;
-  sizeBytes: number;
-};
-
 export type LoadedCatalogueEntry = CatalogueEntry & {
   icon: string | null;
-  /** Skill body, populated only for `kind === "skill"`. */
-  body: string | null;
-  /** Skill resources with contents, populated only for `kind === "skill"`. */
-  resourceFiles: readonly LoadedCatalogueResource[];
 };
 
 const formatIssues = (issues: readonly v.BaseIssue<unknown>[]): string =>
@@ -30,15 +20,13 @@ const formatIssues = (issues: readonly v.BaseIssue<unknown>[]): string =>
     .join("; ");
 
 const loaded: readonly LoadedCatalogueEntry[] = GENERATED_ENTRIES.map(
-  ({ manifest, icon, body, resourceFiles }) => {
+  ({ manifest, icon }) => {
     const parsed = v.safeParse(catalogueEntrySchema, manifest);
     if (!parsed.success) {
       panic(`Invalid catalogue entry: ${formatIssues(parsed.issues)}`);
     }
     const output: LoadedCatalogueEntry = Object.assign(parsed.output, {
       icon,
-      body,
-      resourceFiles,
     });
     return output;
   },

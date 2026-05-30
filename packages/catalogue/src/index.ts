@@ -7,7 +7,6 @@ export {
   pinnedCatalogueEntries,
   recommendedSlugsForJurisdictions,
   type LoadedCatalogueEntry,
-  type LoadedCatalogueResource,
   type LoadedEntryByKind,
 } from "./loader";
 export {

@@ -22,11 +22,7 @@ const config = {
   permissions: { workspace: ["read"] },
 } satisfies HandlerConfig;
 
-type PublicCatalogueEntry<
-  T extends LoadedCatalogueEntry = LoadedCatalogueEntry,
-> = T extends LoadedCatalogueEntry ? Omit<T, "body" | "resourceFiles"> : never;
-
-type CatalogueEntryResponse = PublicCatalogueEntry & {
+type CatalogueEntryResponse = LoadedCatalogueEntry & {
   isRecommendedForOrg: boolean;
   installState: CatalogueInstallState;
   /**
@@ -36,12 +32,6 @@ type CatalogueEntryResponse = PublicCatalogueEntry & {
    */
   isLocked: boolean;
 };
-
-const toPublicCatalogueEntry = ({
-  body: _body,
-  resourceFiles: _resourceFiles,
-  ...entry
-}: LoadedCatalogueEntry): PublicCatalogueEntry => entry;
 
 const listCatalogue = createSafeRootHandler(
   config,
@@ -149,9 +139,8 @@ const listCatalogue = createSafeRootHandler(
             practiceJurisdictions,
             webSearchDeployAvailable,
           });
-      const publicEntry = toPublicCatalogueEntry(entry);
       response.push({
-        ...publicEntry,
+        ...entry,
         isLocked,
         isRecommendedForOrg: recommendedSlugs.has(entry.slug),
         installState,

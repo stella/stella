@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import type { LoadedCatalogueResource } from "@stll/catalogue";
+import type { LoadedCatalogueResource } from "@stll/catalogue/install-payloads";
 import {
   getSkillResourceKind,
   isAllowedResourcePath,
