@@ -2473,7 +2473,7 @@ function runContentKey(run: Run): string {
     return `img:${run.src}|${run.width}x${run.height}${run.transform ? `|tr:${run.transform}` : ""}`;
   }
 
-  // Remaining kinds (text, tab, field) all carry RunFormatting.
+  // Remaining kinds (text, tab, field, math) all carry RunFormatting.
   const parts: string[] = [run.kind];
   if (run.kind === "text") {
     parts.push(`t:${run.text}`);
@@ -2481,6 +2481,11 @@ function runContentKey(run: Run): string {
     if (run.width !== undefined) {
       parts.push(`w:${run.width}`);
     }
+  } else if (run.kind === "math") {
+    // The OMML XML uniquely identifies the rendered MathML output;
+    // include `display` so swapping inline ↔ block also re-fingerprints.
+    parts.push(`md:${run.display}`);
+    parts.push(`mx:${run.ommlXml}`);
   } else {
     parts.push(`ft:${run.fieldType}`);
     if (run.fallback !== undefined) {

@@ -750,6 +750,11 @@ function blockSig(b: FlowBlock): string {
         text +=
           `[i${r.width}x${r.height}|${r.src}|` +
           `${r.transform ?? ""}|${r.wrapType ?? ""}];`;
+      } else if (r.kind === "math") {
+        // OMML XML uniquely identifies the rendered MathML output;
+        // changes to the equation must invalidate the HF cache so the
+        // painter re-injects the updated `<math>` element.
+        text += `M:${r.display}|${r.ommlXml};`;
       } else {
         // field run
         text += `F:${r.fieldType}|${serializeRunFmt(r)};`;

@@ -115,6 +115,49 @@ describe("measureParagraph — decimal tab stop (PR #512 gemini HIGH)", () => {
     });
   });
 
+  test("decimal prefix includes math runs after the tab", () => {
+    withFakeTextMeasure(() => {
+      const block = {
+        kind: "paragraph" as const,
+        id: "decimal-tab-math",
+        runs: [
+          { kind: "text" as const, text: "x", fontSize: 11 },
+          { kind: "tab" as const },
+          {
+            kind: "math" as const,
+            display: "inline" as const,
+            ommlXml: "<m:oMath />",
+            plainText: "12.34",
+            fontSize: 11,
+          },
+        ],
+        attrs: {
+          tabs: [{ val: "decimal" as const, pos: 3000 }],
+        },
+      };
+
+      const measure = measureParagraph(block, 400);
+      const line = measure.lines.at(0);
+      expect(line).toBeDefined();
+
+      const leadingWidth = 5;
+      const followingWidth = 25;
+      const decimalPrefixWidth = 10;
+      const tabContext: TabContext = {
+        explicitStops: [{ val: "decimal", pos: 3000 }],
+      };
+      const tabResult = calculateTabWidth(leadingWidth, tabContext, {
+        followingWidth,
+        decimalPrefixWidth,
+      });
+      const painterLineWidth = leadingWidth + tabResult.width + followingWidth;
+
+      expect(
+        Math.abs((line?.width ?? 0) - painterLineWidth),
+      ).toBeLessThanOrEqual(0.5);
+    });
+  });
+
   test("decimal tab without a decimal point falls back to left-tab math", () => {
     // No "." in the trailing content → `decimalPrefixWidth` is 0, so the
     // tab advances to the stop and the line width is leading + (stop -

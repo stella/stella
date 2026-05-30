@@ -22,6 +22,7 @@ import type {
   TableMeasure,
   TextRun,
   TabRun,
+  MathRun,
   BlockId,
 } from "../layout-engine/types";
 import { inlineImageBoundingBox } from "../utils/rotationBoundingBox";
@@ -81,6 +82,21 @@ function runToFontStyle(run: TextRun | TabRun): FontStyle {
       : {}),
     ...(run.allCaps ? { textTransform: "uppercase" as const } : {}),
     ...(run.smallCaps ? { fontVariant: "small-caps" as const } : {}),
+    ...(run.horizontalScale !== undefined
+      ? { horizontalScale: run.horizontalScale }
+      : {}),
+  };
+}
+
+function mathRunToFontStyle(run: MathRun): FontStyle {
+  return {
+    fontFamily: run.fontFamily ?? "Cambria Math",
+    fontSize: run.fontSize ?? 11,
+    ...(run.bold !== undefined ? { bold: run.bold } : {}),
+    ...(run.italic !== undefined ? { italic: run.italic } : {}),
+    ...(run.letterSpacing !== undefined
+      ? { letterSpacing: run.letterSpacing }
+      : {}),
     ...(run.horizontalScale !== undefined
       ? { horizontalScale: run.horizontalScale }
       : {}),
@@ -266,6 +282,22 @@ function charOffsetToX(
       if (charOffset <= charsProcessed) {
         return x;
       }
+      charsProcessed += 1;
+      continue;
+    }
+
+    if (run.kind === "math") {
+      const mathWidth = measureRun(
+        run.plainText,
+        mathRunToFontStyle(run),
+      ).width;
+      if (charsProcessed + 1 >= charOffset) {
+        if (charOffset <= charsProcessed) {
+          return x;
+        }
+        return x + mathWidth;
+      }
+      x += mathWidth;
       charsProcessed += 1;
       continue;
     }

@@ -222,9 +222,36 @@ export type FieldRun = RunFormatting & {
 };
 
 /**
+ * A native math equation run. The painter converts `ommlXml` to MathML
+ * and injects a `<math>` element inline; `plainText` is the screen-reader
+ * fallback and the measurer's width estimate.
+ *
+ * The raw OMML XML lives on the run so the painter can re-convert when
+ * markup changes; it is never modified on save (round-trip happens via
+ * the document model, not the layout layer).
+ */
+export type MathRun = RunFormatting & {
+  kind: "math";
+  /** `inline` = `<m:oMath>`, `block` = `<m:oMathPara>`. */
+  display: "inline" | "block";
+  /** Raw OMML XML for conversion + round-trip. */
+  ommlXml: string;
+  /** Plain-text fallback used when MathML rendering is unavailable. */
+  plainText: string;
+  pmStart?: number;
+  pmEnd?: number;
+};
+
+/**
  * Union of all run types.
  */
-export type Run = TextRun | TabRun | ImageRun | LineBreakRun | FieldRun;
+export type Run =
+  | TextRun
+  | TabRun
+  | ImageRun
+  | LineBreakRun
+  | FieldRun
+  | MathRun;
 
 /**
  * Paragraph spacing configuration.
