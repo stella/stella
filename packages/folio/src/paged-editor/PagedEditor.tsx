@@ -424,6 +424,13 @@ const TRANSACTION_LAYOUT_DEBOUNCE_MS = 32;
 const TRANSACTION_LAYOUT_MAX_DELAY_MS = 96;
 /** Keep the visual caret hidden briefly while typed content relayouts. */
 const SELECTION_REVEAL_AFTER_INPUT_DELAY = 120;
+/**
+ * Pseudo-infinite measurement width (px) used for `w:noWrap` table cells so
+ * the paragraph line breaker never inserts a soft break. Large enough to
+ * exceed any realistic single Word line; small enough to stay well clear of
+ * floating-point precision concerns when summed downstream.
+ */
+const NO_WRAP_MEASURE_WIDTH = 1_000_000;
 
 // Stable empty array to avoid re-creating on each render
 const EMPTY_PLUGINS: Plugin[] = [];
@@ -1867,8 +1874,18 @@ export function measureTableBlock(
         const padLeft = cell.padding?.left ?? DEFAULT_CELL_PADDING_X;
         const padRight = cell.padding?.right ?? DEFAULT_CELL_PADDING_X;
         const cellContentWidth = Math.max(1, cellWidth - padLeft - padRight);
+        // `w:noWrap` (§17.4.30): measure cell paragraphs against an effectively
+        // unbounded width so the line breaker never splits a single Word line
+        // into multiple MeasuredLines. The painter still constrains the cell
+        // box to `cellWidth`; `white-space: nowrap` keeps inline content on
+        // one line, and `overflow-x` lets it extend past the column. Without
+        // this, `renderTable.ts`'s nowrap style only prevents inline wrapping
+        // and the precomputed line splits would still render as stacked rows.
+        const measureWidth = cell.noWrap
+          ? NO_WRAP_MEASURE_WIDTH
+          : cellContentWidth;
         const cellMeasure: TableCellMeasure = {
-          blocks: cell.blocks.map((b) => measureBlock(b, cellContentWidth)),
+          blocks: cell.blocks.map((b) => measureBlock(b, measureWidth)),
           width: cellWidth,
           height: 0, // Calculated below
         };

@@ -357,6 +357,12 @@ export type TableCell = {
   borders?: CellBorders;
   /** Per-cell padding in pixels (from w:tcMar or table-level w:tblCellMar) */
   padding?: { top: number; right: number; bottom: number; left: number };
+  /**
+   * `w:noWrap` (§17.4.30): when true, the cell forbids soft-wrapping inside
+   * it. The painter emits `white-space: nowrap` on the cell box so content
+   * stays on a single line and the cell expands horizontally instead.
+   */
+  noWrap?: boolean;
 };
 
 /**

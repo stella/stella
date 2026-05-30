@@ -544,6 +544,17 @@ function renderTableCell(
     }
   }
 
+  // `w:noWrap` (§17.4.30): forbid soft-wrapping inside the cell. The
+  // measurement phase already collapses noWrap cell paragraphs to a single
+  // MeasuredLine (see NO_WRAP_MEASURE_WIDTH in PagedEditor.tsx), so each cell
+  // paints as one row. This style is the inline-content guard: it prevents
+  // the browser from re-wrapping inside a single line div if the painted
+  // content would overflow (e.g., user zoom, font fallback widening).
+  // eigenpal #424 (cell noWrap).
+  if (cell.noWrap) {
+    cellEl.style.whiteSpace = "nowrap";
+  }
+
   // Vertical alignment
   if (cell.verticalAlign) {
     cellEl.style.display = "flex";

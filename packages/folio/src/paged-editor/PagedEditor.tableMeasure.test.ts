@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { clearAllCaches } from "../core/layout-bridge/measuring/cache";
+import { resetCanvasContext } from "../core/layout-bridge/measuring/measureContainer";
 import type {
   FlowBlock,
   Measure,
@@ -10,6 +12,46 @@ import {
   measureTableBlock,
   measureTableCellBlockVisualHeight,
 } from "./PagedEditor";
+
+function withFakeTextMeasure(runTest: () => void): void {
+  const originalDocument = globalThis.document;
+  const fakeDocument = {
+    createElement() {
+      return {
+        getContext() {
+          return {
+            font: "",
+            measureText(text: string) {
+              return {
+                width: text.length * 5,
+                actualBoundingBoxAscent: 8,
+                actualBoundingBoxDescent: 2,
+              };
+            },
+          };
+        },
+      };
+    },
+  } as unknown as Document;
+
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: fakeDocument,
+  });
+  clearAllCaches();
+  resetCanvasContext();
+
+  try {
+    runTest();
+  } finally {
+    resetCanvasContext();
+    clearAllCaches();
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: originalDocument,
+    });
+  }
+}
 
 const imageOnlyParagraph: ParagraphBlock = {
   kind: "paragraph",
@@ -209,5 +251,88 @@ describe("measureTableBlock", () => {
     );
 
     expect(tableMeasure.rows[0]?.height).toBeCloseTo(36, 1);
+  });
+
+  // Regression eigenpal #424 gap 14: `w:noWrap` must be honored during the
+  // measurement phase, not only as a `white-space: nowrap` paint hint. The
+  // paragraph line breaker runs against the cell's pixel width and emits one
+  // MeasuredLine per visual line, which the painter renders as stacked divs.
+  // Without measure-time honoring of noWrap, a long case number in a narrow
+  // column still rendered on multiple rows even though the cell box had
+  // `white-space: nowrap` applied.
+  describe("w:noWrap cells (eigenpal #424 gap 14)", () => {
+    const longSentence: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p-long",
+      runs: [
+        {
+          kind: "text",
+          text: "This sentence is intentionally long enough to wrap across multiple lines inside a narrow column.",
+        },
+      ],
+    };
+
+    test("measures wrapping cells with multiple MeasuredLines", () => {
+      withFakeTextMeasure(() => {
+        const tableMeasure = measureTableBlock(
+          {
+            kind: "table",
+            id: "table",
+            rows: [
+              {
+                id: "row",
+                cells: [
+                  {
+                    id: "cell",
+                    blocks: [longSentence],
+                    padding: { top: 0, right: 0, bottom: 0, left: 0 },
+                  },
+                ],
+              },
+            ],
+            columnWidths: [80],
+          },
+          500,
+        );
+
+        const blockMeasure = tableMeasure.rows[0]?.cells[0]?.blocks[0];
+        if (blockMeasure?.kind !== "paragraph") {
+          throw new Error("Expected paragraph measure");
+        }
+        expect(blockMeasure.lines.length).toBeGreaterThan(1);
+      });
+    });
+
+    test("collapses noWrap cells to a single MeasuredLine even in a narrow column", () => {
+      withFakeTextMeasure(() => {
+        const tableMeasure = measureTableBlock(
+          {
+            kind: "table",
+            id: "table",
+            rows: [
+              {
+                id: "row",
+                cells: [
+                  {
+                    id: "cell",
+                    blocks: [longSentence],
+                    padding: { top: 0, right: 0, bottom: 0, left: 0 },
+                    noWrap: true,
+                  },
+                ],
+              },
+            ],
+            columnWidths: [80],
+          },
+          500,
+        );
+
+        const blockMeasure = tableMeasure.rows[0]?.cells[0]?.blocks[0];
+        if (blockMeasure?.kind !== "paragraph") {
+          throw new Error("Expected paragraph measure");
+        }
+        expect(blockMeasure.lines.length).toBe(1);
+      });
+    });
   });
 });
