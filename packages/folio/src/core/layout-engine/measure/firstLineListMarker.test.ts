@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ParagraphBlock } from "../../layout-engine/types";
+import type { ParagraphBlock } from "../types";
 import { resetCanvasContext } from "./measureContainer";
 import { measureParagraph } from "./measureParagraph";
 

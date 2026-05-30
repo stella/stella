@@ -5,6 +5,13 @@
  * Converts runs into measured lines with typography metrics.
  */
 
+import {
+  calculateTabWidth,
+  pixelsToTwips,
+} from "../../prosemirror/utils/tabCalculator";
+import type { TabContext } from "../../prosemirror/utils/tabCalculator";
+import { DEFAULT_SINGLE_LINE_RATIO } from "../../utils/fontResolver";
+import { inlineImageBoundingBox } from "../../utils/rotationBoundingBox";
 import type {
   ParagraphBlock,
   ParagraphMeasure,
@@ -17,15 +24,8 @@ import type {
   FieldRun,
   MathRun,
   ParagraphSpacing,
-} from "../../layout-engine/types";
-import { isFloatingImageRun } from "../../layout-painter/renderUtils";
-import {
-  calculateTabWidth,
-  pixelsToTwips,
-} from "../../prosemirror/utils/tabCalculator";
-import type { TabContext } from "../../prosemirror/utils/tabCalculator";
-import { DEFAULT_SINGLE_LINE_RATIO } from "../../utils/fontResolver";
-import { inlineImageBoundingBox } from "../../utils/rotationBoundingBox";
+} from "../types";
+import { isFloatingImageRun } from "../types";
 import {
   getFloatingAvailableWidth,
   getFloatingMargins,

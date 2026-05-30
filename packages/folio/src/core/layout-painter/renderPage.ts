@@ -8,22 +8,20 @@
 import { panic } from "better-result";
 
 import {
-  FOOTNOTE_ENTRY_MARGIN_BOTTOM,
-  FOOTNOTE_FALLBACK_LINE_HEIGHT,
-  FOOTNOTE_SEPARATOR_HEIGHT,
-} from "../layout-bridge/footnoteLayout";
-import {
   measureParagraph,
   rectsToFloatingZones,
-} from "../layout-bridge/measuring";
+} from "../layout-engine/measure";
 import type {
   FloatingExclusionRect,
   FloatingImageZone,
-} from "../layout-bridge/measuring";
+} from "../layout-engine/measure";
 import {
+  FOOTNOTE_ENTRY_MARGIN_BOTTOM,
+  FOOTNOTE_FALLBACK_LINE_HEIGHT,
+  FOOTNOTE_SEPARATOR_HEIGHT,
   floatingTextBoxWrapsText,
   isFloatingTextBoxBlock,
-} from "../layout-engine/textBoxFlow";
+} from "../layout-engine/types";
 import type {
   Page,
   Fragment,
@@ -47,6 +45,7 @@ import type {
   TextBoxMeasure,
   TextBoxFragment,
   FootnoteContent,
+  HeaderFooterContent,
 } from "../layout-engine/types";
 import type { BorderSpec, Theme } from "../types/document";
 import { resolveFontFamily } from "../utils/fontResolver";
@@ -132,44 +131,10 @@ export type { RenderContext } from "./renderUtils";
 export const getDefaultPageFontFamily = (): string =>
   resolveFontFamily("Calibri").cssFallback;
 
-/**
- * Header/footer content for rendering
- */
-export type HeaderFooterContent = {
-  /** Flow blocks for the header/footer content. */
-  blocks: FlowBlock[];
-  /** Measurements for the blocks. */
-  measures: Measure[];
-  /** Total height of the content. */
-  height: number;
-  /** Top-most visual extent relative to the nominal flow origin. */
-  visualTop?: number;
-  /** Bottom-most visual extent relative to the nominal flow origin. */
-  visualBottom?: number;
-  /**
-   * Flow-only bounds used by `computeHeaderFooterMarginExtender` to push
-   * body margins clear of HF overflow. Excludes `behindDoc` images that
-   * the renderer paints behind body content; including them would reserve
-   * a full-page letterhead as body push-down.
-   */
-  marginPushTop?: number;
-  marginPushBottom?: number;
-  /**
-   * Relationship id (`rId`) of the source HF part. Emitted as `data-rid`
-   * on the painted `.layout-page-header` / `.layout-page-footer` so the
-   * pointer pipeline can resolve clicks to the matching hidden HF
-   * EditorView (see `HiddenHeaderFooterPMs`).
-   */
-  rId?: string;
-  /**
-   * Cheap text fingerprint of the rendered blocks. Used by
-   * `computeOptionsHash` so same-height in-place HF edits (typing
-   * replacing the same number of chars, bold toggle, etc.) invalidate
-   * the cached options hash and force the painter to re-render shells
-   * (Codex #487 P1 follow-up: 21:02 review).
-   */
-  textSig?: string;
-};
+// HeaderFooterContent lives in `layout-engine/types` so the bridge can
+// build it without importing across the layer boundary. Re-exported here
+// for back-compat with callers that imported it from this module.
+export type { HeaderFooterContent } from "../layout-engine/types";
 
 /**
  * A single footnote item ready for rendering at page bottom.

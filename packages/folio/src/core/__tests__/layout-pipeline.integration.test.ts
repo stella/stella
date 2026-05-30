@@ -18,7 +18,7 @@ import {
   hitTestFragment,
   getPageTop,
 } from "../layout-bridge/hitTest";
-import { layoutDocument } from "./index";
+import { layoutDocument } from "../layout-engine/index";
 import type {
   ParagraphBlock,
   ParagraphMeasure,
@@ -27,7 +27,7 @@ import type {
   Measure,
   PageMargins,
   LayoutOptions,
-} from "./types";
+} from "../layout-engine/types";
 
 // =============================================================================
 // TEST HELPERS

@@ -19,39 +19,24 @@ import type {
   TextRun,
   FootnoteContent,
 } from "../layout-engine/types";
-import { DEFAULT_TEXTBOX_MARGINS as TEXTBOX_MARGINS } from "../layout-engine/types";
+import {
+  DEFAULT_TEXTBOX_MARGINS as TEXTBOX_MARGINS,
+  FOOTNOTE_ENTRY_MARGIN_BOTTOM,
+  FOOTNOTE_FALLBACK_LINE_HEIGHT,
+  FOOTNOTE_SEPARATOR_HEIGHT,
+} from "../layout-engine/types";
 import { footnoteToProseDoc } from "../prosemirror/conversion/toProseDoc";
 import type { Footnote, StyleDefinitions, Theme } from "../types/document";
 import { measureParagraph } from "./measuring";
 import { toFlowBlocks } from "./toFlowBlocks";
 
-/**
- * Footnote separator height in pixels: 0.5 px divider rule + symmetric
- * vertical margins. Single source of truth for the paginator's
- * reservation tick, the painter's separator margins, and the per-page
- * height returned by `calculateFootnoteReservedHeights`. Keeping all
- * three in lockstep ensures the painted area lands inside the slot the
- * paginator reserved.
- *
- * Mirrors eigenpal/docx-editor#485.
- */
-export const FOOTNOTE_SEPARATOR_HEIGHT = 12;
-
-/**
- * Per-footnote `marginBottom` painted by `renderFootnoteArea`. Shared
- * with the painter's clamp helper, the dynamic reservation in
- * `PagedEditor`, and the static `calculateFootnoteReservedHeights`
- * path so every reservation matches the painted stack.
- */
-export const FOOTNOTE_ENTRY_MARGIN_BOTTOM = 4;
-
-/**
- * Fallback footnote line height in pixels when a footnote has no
- * structured content (plain-text fallback rendered at `fontSize: 10px`
- * × `lineHeight: 1.3`). Shared with the painter so the clamp helper and
- * the painted fallback stay in lockstep.
- */
-export const FOOTNOTE_FALLBACK_LINE_HEIGHT = 13;
+// Re-exported for back-compat with existing callers that imported the
+// constants from this module before they moved to `layout-engine/types`.
+export {
+  FOOTNOTE_SEPARATOR_HEIGHT,
+  FOOTNOTE_ENTRY_MARGIN_BOTTOM,
+  FOOTNOTE_FALLBACK_LINE_HEIGHT,
+};
 
 /** Default footnote font size in points */
 const FOOTNOTE_FONT_SIZE = 8;

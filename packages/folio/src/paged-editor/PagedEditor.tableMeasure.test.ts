@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { clearAllCaches } from "../core/layout-bridge/measuring/cache";
-import { resetCanvasContext } from "../core/layout-bridge/measuring/measureContainer";
+import { clearAllCaches } from "../core/layout-engine/measure/cache";
+import { resetCanvasContext } from "../core/layout-engine/measure/measureContainer";
 import type {
   FlowBlock,
   Measure,

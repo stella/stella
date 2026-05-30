@@ -22,6 +22,7 @@ import type { Node as PMNode } from "prosemirror-model";
 import type {
   FlowBlock,
   FloatingTablePosition,
+  HeaderFooterContent,
   ImageRun,
   Measure,
   PageMargins,
@@ -29,8 +30,7 @@ import type {
   TableBlock,
   TableMeasure,
 } from "../layout-engine/types";
-import type { HeaderFooterContent } from "../layout-painter/renderPage";
-import { isFloatingImageRun } from "../layout-painter/renderUtils";
+import { isFloatingImageRun } from "../layout-engine/types";
 import { headerFooterToProseDoc } from "../prosemirror/conversion/toProseDoc";
 import type { HeaderFooter, StyleDefinitions, Theme } from "../types/document";
 import { emuToPixels } from "../utils/units";

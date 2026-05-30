@@ -8,6 +8,11 @@
  * coordinates and returns the PM position at the click point.
  */
 
+import {
+  measureRun,
+  findCharacterAtX as findCharAtX,
+} from "../layout-engine/measure/measureContainer";
+import type { FontStyle } from "../layout-engine/measure/measureContainer";
 import type {
   ParagraphBlock,
   ParagraphFragment,
@@ -19,11 +24,6 @@ import type {
 } from "../layout-engine/types";
 import { inlineImageBoundingBox } from "../utils/rotationBoundingBox";
 import type { FragmentHit, TableCellHit } from "./hitTest";
-import {
-  measureRun,
-  findCharacterAtX as findCharAtX,
-} from "./measuring/measureContainer";
-import type { FontStyle } from "./measuring/measureContainer";
 
 // =============================================================================
 // TYPES
