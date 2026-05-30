@@ -26,10 +26,10 @@ import {
 const XML_DECL = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
 
 const paraIdArb = fc
-  .stringMatching(/^[A-Z]{3}[0-9]{4}$/)
+  .stringMatching(/^[A-Z]{3}[0-9]{4}$/u)
   .map((id) => id.toUpperCase());
 
-const paraTextArb = fc.stringMatching(/^[A-Za-z0-9 ]{1,40}$/);
+const paraTextArb = fc.stringMatching(/^[A-Za-z0-9 ]{1,40}$/u);
 
 type Para = { id: string; text: string };
 

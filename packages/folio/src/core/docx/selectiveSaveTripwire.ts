@@ -13,6 +13,8 @@
  * `dcterms:modified` with the current wall clock and would always disagree.
  */
 
+import type JSZipType from "jszip";
+
 const IGNORED_PATHS = new Set<string>(["docProps/core.xml"]);
 
 export type TripwireResult =
@@ -30,17 +32,14 @@ export type TripwireResult =
       fullSize: number;
     };
 
-type ZipLike = {
-  files: Record<string, { dir: boolean }>;
-  file(path: string): { async(type: "uint8array"): Promise<Uint8Array> } | null;
+type LoadedEntries = {
+  zip: JSZipType;
+  paths: string[];
 };
 
-async function listEntries(buffer: ArrayBuffer): Promise<{
-  zip: ZipLike;
-  paths: string[];
-}> {
+async function listEntries(buffer: ArrayBuffer): Promise<LoadedEntries> {
   const JSZip = (await import("jszip")).default;
-  const zip = (await JSZip.loadAsync(buffer)) as unknown as ZipLike;
+  const zip = await JSZip.loadAsync(buffer);
   const paths: string[] = [];
   for (const [path, entry] of Object.entries(zip.files)) {
     if (entry.dir) {
