@@ -111,7 +111,11 @@ export function wrapImageWithCrop(
   img: HTMLImageElement,
   v: ImageVisualAttrs,
   doc: Document,
-  outerStyle: { display: "inline-block" | "block"; widthPx: number; heightPx: number },
+  outerStyle: {
+    display: "inline-block" | "block";
+    widthPx: number;
+    heightPx: number;
+  },
 ): HTMLElement {
   const wrapper = doc.createElement("span");
   wrapper.style.display = outerStyle.display;
