@@ -2583,11 +2583,17 @@ export function DocxEditor({
           : null;
         let fullBuffer: ArrayBuffer | null = null;
 
-        if (!buffer || flags.selectiveSaveTripwire) {
+        if (!buffer) {
           const repackDocx = await loadRepackDocx();
           fullBuffer = await repackDocx(doc);
-          if (!buffer) {
-            buffer = fullBuffer;
+          buffer = fullBuffer;
+        } else if (flags.selectiveSaveTripwire) {
+          try {
+            const repackDocx = await loadRepackDocx();
+            fullBuffer = await repackDocx(doc);
+          } catch {
+            // Tripwire-only full repack failures must never poison a
+            // successful selective save.
           }
         }
 
