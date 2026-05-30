@@ -2566,36 +2566,36 @@ export function DocxEditor({
         const shouldAttemptSelective =
           useSelectiveForSave || flags.selectiveSaveTripwire;
         const view = pagedEditorRef.current?.getView();
+        const baselineBuffer = originalBufferRef.current;
         let selectiveBuffer: ArrayBuffer | null = null;
 
-        if (shouldAttemptSelective && view && originalBufferRef.current) {
+        if (shouldAttemptSelective && view && baselineBuffer) {
           const editorState = view.state;
           const attemptSelectiveSave = await loadAttemptSelectiveSave();
-          selectiveBuffer = await attemptSelectiveSave(
-            doc,
-            originalBufferRef.current,
-            {
-              changedParaIds: getChangedParagraphIds(editorState),
-              structuralChange: hasStructuralChanges(editorState),
-              hasUntrackedChanges: hasUntrackedChanges(editorState),
-              maxBytes: flags.selectiveSaveMaxBytes,
-            },
-          );
+          selectiveBuffer = await attemptSelectiveSave(doc, baselineBuffer, {
+            changedParaIds: getChangedParagraphIds(editorState),
+            structuralChange: hasStructuralChanges(editorState),
+            hasUntrackedChanges: hasUntrackedChanges(editorState),
+            maxBytes: flags.selectiveSaveMaxBytes,
+          });
         }
 
         let buffer: ArrayBuffer | null = useSelectiveForSave
           ? selectiveBuffer
           : null;
         let fullBuffer: ArrayBuffer | null = null;
+        const repackSourceDoc = baselineBuffer
+          ? { ...doc, originalBuffer: baselineBuffer }
+          : doc;
 
         if (!buffer) {
           const repackDocx = await loadRepackDocx();
-          fullBuffer = await repackDocx(doc);
+          fullBuffer = await repackDocx(repackSourceDoc);
           buffer = fullBuffer;
         } else if (flags.selectiveSaveTripwire) {
           try {
             const repackDocx = await loadRepackDocx();
-            fullBuffer = await repackDocx(doc);
+            fullBuffer = await repackDocx(repackSourceDoc);
           } catch {
             // Tripwire-only full repack failures must never poison a
             // successful selective save.
