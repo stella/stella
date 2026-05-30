@@ -17,6 +17,7 @@ import type {
   TextRun,
   TabRun,
 } from "../layout-engine/types";
+import { inlineImageBoundingBox } from "../utils/rotationBoundingBox";
 import type { FragmentHit, TableCellHit } from "./hitTest";
 import {
   measureRun,
@@ -315,9 +316,10 @@ function findCharacterInLine(
       continue;
     }
 
-    // Handle image runs
+    // Handle image runs. Use the rotated axis-aligned bbox so cursor
+    // hit-testing matches the painter's currentX advance (eigenpal #424).
     if (run.kind === "image") {
-      const imageWidth = run.width;
+      const imageWidth = inlineImageBoundingBox(run).width;
       const runEndX = currentX + imageWidth;
 
       if (adjustedX <= runEndX) {
