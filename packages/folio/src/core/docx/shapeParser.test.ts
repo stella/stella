@@ -131,6 +131,22 @@ describe("parseShapeFromDrawing — preset geometry", () => {
     expect(root ? shouldPreserveRawShapeDrawing(root) : false).toBe(true);
   });
 
+  test("preset geometry adjustments are preserved as raw drawings", () => {
+    const root = parseXmlDocument(
+      drawingWith(`<wps:spPr>
+        <a:xfrm>
+          <a:off x="0" y="0"/>
+          <a:ext cx="914400" cy="457200"/>
+        </a:xfrm>
+        <a:prstGeom prst="roundRect">
+          <a:avLst><a:gd name="adj" fmla="val 25000"/></a:avLst>
+        </a:prstGeom>
+      </wps:spPr>`),
+    );
+    expect(root ? parseShapeFromDrawing(root) : null).toBeNull();
+    expect(root ? shouldPreserveRawShapeDrawing(root) : false).toBe(true);
+  });
+
   test("size derived from wp:extent overrides spPr a:ext", () => {
     const root = parseXmlDocument(drawingWith(buildSpPr({ prst: "rect" })));
     const shape = root ? parseShapeFromDrawing(root) : null;
@@ -161,6 +177,19 @@ describe("parseShapeFromDrawing — fill", () => {
         buildSpPr({
           prst: "rect",
           fill: `<a:solidFill><a:schemeClr val="accent1"/></a:solidFill>`,
+        }),
+      ),
+    );
+    expect(root ? shouldPreserveRawShapeDrawing(root) : false).toBe(true);
+    expect(root ? parseShapeFromDrawing(root) : null).toBeNull();
+  });
+
+  test("RGB colours with alpha modifiers are preserved as raw drawings", () => {
+    const root = parseXmlDocument(
+      drawingWith(
+        buildSpPr({
+          prst: "rect",
+          fill: `<a:solidFill><a:srgbClr val="5B9BD5"><a:alpha val="50000"/></a:srgbClr></a:solidFill>`,
         }),
       ),
     );

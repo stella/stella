@@ -12,6 +12,7 @@
 
 import type { Node as PMNode, Mark } from "prosemirror-model";
 
+import { narrowEnum, ShapeOutlineStyleSchema } from "../../docx/parserEnums";
 import type {
   ImageWrap,
   ImagePosition,
@@ -90,6 +91,20 @@ import type {
   TableCellAttrs,
 } from "../schema/nodes";
 import { assertValidProseMirrorDocument } from "../validation";
+
+function normalizeShapeOutlineStyle(
+  style: string | undefined,
+): ShapeOutline["style"] | undefined {
+  if (!style) {
+    return undefined;
+  }
+  const cssToOoxml: Record<string, NonNullable<ShapeOutline["style"]>> = {
+    solid: "solid",
+    dotted: "dot",
+    dashed: "dash",
+  };
+  return narrowEnum(cssToOoxml[style] ?? style, ShapeOutlineStyleSchema);
+}
 
 /**
  * Convert a ProseMirror document to our Document type
@@ -1522,18 +1537,13 @@ function createShapeRun(node: PMNode): Run {
       attrs.outlineHeadEnd ||
       attrs.outlineTailEnd)
   ) {
-    const cssToOoxml: Record<string, string> = {
-      solid: "solid",
-      dotted: "dot",
-      dashed: "dash",
-    };
     const shapeOutline: ShapeOutline = {};
     if (attrs.outlineWidth !== undefined && attrs.outlineWidth > 0) {
       shapeOutline.width = pixelsToEmu(attrs.outlineWidth);
     }
     if (attrs.outlineStyle) {
       shapeOutline.style =
-        (cssToOoxml[attrs.outlineStyle] as ShapeOutline["style"]) || "solid";
+        normalizeShapeOutlineStyle(attrs.outlineStyle) ?? "solid";
     }
     if (attrs.outlineCap) {
       shapeOutline.cap = attrs.outlineCap;
@@ -2378,17 +2388,9 @@ function convertPMTextBox(node: PMNode): Paragraph {
 
   // Convert outline back
   if (attrs.outlineWidth && attrs.outlineWidth > 0) {
-    const cssToOoxmlOutline: Record<string, string> = {
-      solid: "solid",
-      dotted: "dot",
-      dashed: "dash",
-    };
     const tbOutline: ShapeOutline = {
       width: pixelsToEmu(attrs.outlineWidth),
-      style: attrs.outlineStyle
-        ? (cssToOoxmlOutline[attrs.outlineStyle] as ShapeOutline["style"]) ||
-          "solid"
-        : "solid",
+      style: normalizeShapeOutlineStyle(attrs.outlineStyle) ?? "solid",
     };
     if (attrs.outlineColor) {
       tbOutline.color = { rgb: attrs.outlineColor.replace("#", "") };

@@ -46,6 +46,7 @@ import {
   ShapeTypeSchema,
 } from "./parserEnums";
 import {
+  findAllDeep,
   findChildByLocalName,
   findChildrenByLocalName,
   getAttribute,
@@ -337,8 +338,21 @@ function hasUnsupportedGeometry(spPr: XmlElement | null): boolean {
   if (!prstGeom) {
     return findChildByLocalName(spPr, "custGeom") !== null;
   }
+  const avLst = findChildByLocalName(prstGeom, "avLst");
+  if (avLst?.elements?.some((child) => child.type === "element")) {
+    return true;
+  }
   const prst = getAttribute(prstGeom, null, "prst");
   return narrowEnum(prst, ShapeTypeSchema) === undefined;
+}
+
+function hasUnsupportedRgbColorModifiers(spPr: XmlElement | null): boolean {
+  for (const color of findAllDeep(spPr, "a", "srgbClr")) {
+    if (color.elements?.some((child) => child.type === "element")) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function colorNeedsRawPreservation(color: ColorValue | undefined): boolean {
@@ -450,6 +464,7 @@ export function parseShapeFromDrawing(drawingEl: XmlElement): Shape | null {
   const spPr = findChildByLocalName(wsp, "spPr");
   if (
     hasUnsupportedGeometry(spPr) ||
+    hasUnsupportedRgbColorModifiers(spPr) ||
     fillNeedsRawPreservation(parseShapeFill(spPr)) ||
     outlineNeedsRawPreservation(parseShapeOutline(spPr))
   ) {
@@ -512,6 +527,9 @@ export function shouldPreserveRawShapeDrawing(drawingEl: XmlElement): boolean {
   }
   const spPr = findChildByLocalName(wsp, "spPr");
   if (hasUnsupportedGeometry(spPr)) {
+    return true;
+  }
+  if (hasUnsupportedRgbColorModifiers(spPr)) {
     return true;
   }
   return (

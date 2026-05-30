@@ -102,6 +102,32 @@ describe("shape parse → serialize round-trip", () => {
     expect(xml).toContain('<a:srgbClr val="5B9BD5"');
   });
 
+  test("preserves radial gradient path through round-trip", () => {
+    const root = parseXmlDocument(
+      shapeDrawingXml({
+        prst: "ellipse",
+        fill: `<a:gradFill>
+          <a:gsLst>
+            <a:gs pos="0"><a:srgbClr val="FFFFFF"/></a:gs>
+            <a:gs pos="100000"><a:srgbClr val="5B9BD5"/></a:gs>
+          </a:gsLst>
+          <a:path path="circle"/>
+        </a:gradFill>`,
+      }),
+    );
+    const shape = root ? parseShapeFromDrawing(root) : null;
+    expect(shape?.fill?.type).toBe("gradient");
+    expect(shape?.fill?.gradient?.type).toBe("radial");
+    if (!shape) {
+      return;
+    }
+    const xml = serializeRun({
+      type: "run",
+      content: [{ type: "shape", shape }],
+    });
+    expect(xml).toContain('<a:path path="circle"/>');
+  });
+
   test("preserves anchored wrap type", () => {
     const root = parseXmlDocument(
       shapeDrawingXml({ prst: "rightArrow", anchor: true }),
