@@ -14,19 +14,9 @@ import type {
   Fragment,
   FlowBlock,
   Measure,
-  ParagraphBlock,
-  ParagraphMeasure,
-  ParagraphFragment,
-  TableBlock,
-  TableMeasure,
-  TableFragment,
-  ImageBlock,
-  ImageMeasure,
-  ImageFragment,
-  TextBoxBlock,
-  TextBoxMeasure,
-  TextBoxFragment,
 } from "../layout-engine/types";
+import { createDefaultRegistry } from "./registry/modules";
+import type { FeatureRegistry } from "./registry/registry";
 import { renderFragment, FRAGMENT_CLASS_NAMES } from "./renderFragment";
 import { renderImageFragment, IMAGE_CLASS_NAMES } from "./renderImage";
 import { renderPage, renderPages } from "./renderPage";
@@ -57,6 +47,20 @@ export {
   type RenderContext,
 };
 
+// Re-export feature-module registry surface
+export { createFeatureRegistry } from "./registry/registry";
+export type { FeatureRegistry } from "./registry/registry";
+export { createDefaultRegistry } from "./registry/modules";
+export type {
+  FeatureModule,
+  FeatureRenderInput,
+  FeatureDispatchInput,
+  FeatureFallback,
+  BlockFor,
+  MeasureFor,
+  FragmentFor,
+} from "./registry/types";
+
 /**
  * Block lookup entry for painter
  */
@@ -85,6 +89,12 @@ export type PainterOptions = {
   pageBackground?: string;
   /** Container background color */
   containerBackground?: string;
+  /**
+   * Optional custom feature registry. Defaults to `createDefaultRegistry()`.
+   * Pass a custom registry to swap or extend renderers without subclassing
+   * `LayoutPainter`.
+   */
+  registry?: FeatureRegistry;
 };
 
 /**
@@ -109,10 +119,12 @@ export class LayoutPainter {
   private totalPages = 0;
   private options: PainterOptions;
   private doc: Document;
+  private registry: FeatureRegistry;
 
   constructor(options: PainterOptions = {}) {
     this.options = options;
     this.doc = options.document ?? document;
+    this.registry = options.registry ?? createDefaultRegistry();
   }
 
   /**
@@ -239,72 +251,23 @@ export class LayoutPainter {
   }
 
   /**
-   * Render a fragment using block lookup for full content rendering
+   * Render a fragment via the feature-module registry. Dispatch is O(1)
+   * keyed on `fragment.kind`; modules supply the actual render. Fragments
+   * without a resolved block/measure or with an unregistered kind fall
+   * back to the placeholder renderer (`renderFragment`).
    */
   private renderFragmentWithLookup(
     fragment: Fragment,
     context: RenderContext,
   ): HTMLElement {
     const lookup = this.blockLookup.get(String(fragment.blockId));
-
-    if (fragment.kind === "paragraph" && lookup) {
-      const block = lookup.block as ParagraphBlock;
-      const measure = lookup.measure as ParagraphMeasure;
-      return renderParagraphFragment(
-        fragment as ParagraphFragment,
-        block,
-        measure,
-        context,
-        {
-          document: this.doc,
-        },
-      );
-    }
-
-    if (fragment.kind === "table" && lookup) {
-      const block = lookup.block as TableBlock;
-      const measure = lookup.measure as TableMeasure;
-      return renderTableFragment(
-        fragment as TableFragment,
-        block,
-        measure,
-        context,
-        {
-          document: this.doc,
-        },
-      );
-    }
-
-    if (fragment.kind === "image" && lookup) {
-      const block = lookup.block as ImageBlock;
-      const measure = lookup.measure as ImageMeasure;
-      return renderImageFragment(
-        fragment as ImageFragment,
-        block,
-        measure,
-        context,
-        {
-          document: this.doc,
-        },
-      );
-    }
-
-    if (fragment.kind === "textBox" && lookup) {
-      const block = lookup.block as TextBoxBlock;
-      const measure = lookup.measure as TextBoxMeasure;
-      return renderTextBoxFragment(
-        fragment as TextBoxFragment,
-        block,
-        measure,
-        context,
-        {
-          document: this.doc,
-        },
-      );
-    }
-
-    // Fallback to placeholder for other fragment types
-    return renderFragment(fragment, context, { document: this.doc });
+    return this.registry.render({
+      fragment,
+      block: lookup?.block,
+      measure: lookup?.measure,
+      context,
+      doc: this.doc,
+    });
   }
 
   /**
