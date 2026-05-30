@@ -782,6 +782,15 @@ function buildImageRun(
   constrained: { width: number; height: number },
   pmStart: number,
   pmEnd: number,
+  // Tracked-change attrs lifted off the image node's PM marks. eigenpal #641.
+  trackedChange?: Pick<
+    RunFormatting,
+    | "isInsertion"
+    | "isDeletion"
+    | "changeAuthor"
+    | "changeDate"
+    | "changeRevisionId"
+  >,
 ): ImageRun {
   const run: ImageRun = {
     kind: "image",
@@ -841,6 +850,21 @@ function buildImageRun(
   }
   if (attrs.position !== undefined) {
     run.position = attrs.position;
+  }
+  if (trackedChange?.isInsertion) {
+    run.isInsertion = true;
+  }
+  if (trackedChange?.isDeletion) {
+    run.isDeletion = true;
+  }
+  if (trackedChange?.changeAuthor !== undefined) {
+    run.changeAuthor = trackedChange.changeAuthor;
+  }
+  if (trackedChange?.changeDate !== undefined) {
+    run.changeDate = trackedChange.changeDate;
+  }
+  if (trackedChange?.changeRevisionId !== undefined) {
+    run.changeRevisionId = trackedChange.changeRevisionId;
   }
   return run;
 }
@@ -935,11 +959,16 @@ function paragraphToRuns(
         attrs.height || 100,
         _options.pageContentHeight,
       );
+      // Lift tracked-change marks off the image node so an inserted/deleted
+      // picture paints in the revision colour and resolves with the rest of
+      // the change. eigenpal #641.
+      const trackedFmt = extractRunFormatting(child.marks, theme);
       const run = buildImageRun(
         attrs,
         constrained,
         childPos,
         childPos + child.nodeSize,
+        trackedFmt,
       );
       runs.push(run);
       return;

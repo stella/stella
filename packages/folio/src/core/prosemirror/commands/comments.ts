@@ -4,7 +4,7 @@
  * PM commands for adding/removing comments and accepting/rejecting tracked changes.
  */
 
-import type { Mark } from "prosemirror-model";
+import type { Mark, Node as PMNode } from "prosemirror-model";
 import type { Command, EditorState } from "prosemirror-state";
 
 /**
@@ -108,7 +108,10 @@ function resolveChange(
           }
           return true;
         }
-        if (!node.isText) {
+        // Text AND inline atoms (image, shape, hardBreak, tab) can carry
+        // tracked-change marks; widen the visitor so rejecting an inserted
+        // picture removes it like inserted text. eigenpal #641.
+        if (!node.isInline) {
           return true;
         }
         const nodeEnd = pos + node.nodeSize;
@@ -291,7 +294,9 @@ export function findAIEditRevisionRange(
   const range = { from: null as number | null, to: null as number | null };
 
   state.doc.descendants((node, pos) => {
-    if (!node.isText) {
+    // Widen from `isText` to `isInline` so an AI-edit revision on an inline
+    // atom (image, shape) shows up in the matched range. eigenpal #641.
+    if (!node.isInline) {
       return;
     }
     for (const mark of node.marks) {
@@ -477,25 +482,29 @@ function expandTrackedChangeRange(
   fromHint: number,
   toHint: number,
 ): { from: number; to: number } {
+  const carriesSameInlineMark = (node: PMNode | null): node is PMNode =>
+    node?.isInline === true && node.marks.some((m) => m.eq(mark));
+
   // Resolve the boundary positions and hop outward through `nodeBefore`
-  // / `nodeAfter` while the neighbouring text node still carries the
+  // / `nodeAfter` while the neighbouring inline node still carries the
   // same mark instance. O(K) in the number of text nodes that make up
   // the span — `nodesBetween`-based fixed-point expansion is O(K²) and
   // re-walks the same subtree on every iteration.
   let from = fromHint;
   let to = toHint;
   let $from = state.doc.resolve(from);
-  while (
-    $from.nodeBefore?.isText &&
-    $from.nodeBefore.marks.some((m) => m.eq(mark))
-  ) {
-    from -= $from.nodeBefore.nodeSize;
+  let nodeBefore = $from.nodeBefore;
+  while (carriesSameInlineMark(nodeBefore)) {
+    from -= nodeBefore.nodeSize;
     $from = state.doc.resolve(from);
+    nodeBefore = $from.nodeBefore;
   }
   let $to = state.doc.resolve(to);
-  while ($to.nodeAfter?.isText && $to.nodeAfter.marks.some((m) => m.eq(mark))) {
-    to += $to.nodeAfter.nodeSize;
+  let nodeAfter = $to.nodeAfter;
+  while (carriesSameInlineMark(nodeAfter)) {
+    to += nodeAfter.nodeSize;
     $to = state.doc.resolve(to);
+    nodeAfter = $to.nodeAfter;
   }
   return { from, to };
 }
@@ -521,7 +530,10 @@ export function findNextChange(
     if (result.value) {
       return false;
     }
-    if (!node.isText) {
+    // Widen from `isText` to `isInline` so an image-only insertion / deletion
+    // appears in the find-next walk (an atomic image carries the mark itself,
+    // not as a text-node sibling). eigenpal #641.
+    if (!node.isInline) {
       return;
     }
     if (pos + node.nodeSize <= startPos) {
@@ -586,7 +598,9 @@ export function findPreviousChange(
   let resultMark: Mark | null = null;
 
   state.doc.descendants((node, pos) => {
-    if (!node.isText) {
+    // Widen from `isText` to `isInline` so an image-only change appears in
+    // the find-previous walk. eigenpal #641.
+    if (!node.isInline) {
       return;
     }
     if (pos >= startPos) {

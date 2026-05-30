@@ -22,24 +22,30 @@ import { buildPatchedDocumentXml } from "./selectiveXmlPatch";
 import { serializeComments } from "./serializer/commentSerializer";
 import { serializeDocument } from "./serializer/documentSerializer";
 
+const SYNTHETIC_IMAGE_RID_PREFIX = "rId_img_";
+
 /**
  * Check if document content has new images (data: URL without rId) or
  * new hyperlinks (href without rId). Combined into a single traversal
  * to avoid walking the block tree twice.
  */
 function hasNewImagesOrHyperlinks(blocks: BlockContent[]): boolean {
+  const runHasNewImage = (run: {
+    content: { type: string; image?: { src?: string; rId?: string } }[];
+  }): boolean =>
+    run.content.some(
+      (c) =>
+        c.type === "drawing" &&
+        c.image?.src?.startsWith("data:") === true &&
+        (!c.image.rId || c.image.rId.startsWith(SYNTHETIC_IMAGE_RID_PREFIX)),
+    );
+
   for (const block of blocks) {
     if (block.type === "paragraph") {
       for (const item of block.content) {
         if (item.type === "run") {
-          for (const c of item.content) {
-            if (
-              c.type === "drawing" &&
-              c.image.src?.startsWith("data:") &&
-              !c.image.rId
-            ) {
-              return true;
-            }
+          if (runHasNewImage(item)) {
+            return true;
           }
         } else if (
           item.type === "hyperlink" &&
@@ -48,6 +54,21 @@ function hasNewImagesOrHyperlinks(blocks: BlockContent[]): boolean {
           !item.anchor
         ) {
           return true;
+        } else if (
+          // A picture inserted/deleted/moved under track changes lives inside
+          // an ins/del/moveFrom/moveTo wrapper. Without descending into them,
+          // a freshly tracked image gets no rId allocated and the saved DOCX
+          // references missing media. eigenpal #641.
+          item.type === "insertion" ||
+          item.type === "deletion" ||
+          item.type === "moveFrom" ||
+          item.type === "moveTo"
+        ) {
+          for (const sub of item.content) {
+            if (sub.type === "run" && runHasNewImage(sub)) {
+              return true;
+            }
+          }
         }
       }
     } else if (block.type === "table") {

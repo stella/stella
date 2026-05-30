@@ -186,6 +186,16 @@ export type ImageRun = {
   cropRight?: number;
   cropBottom?: number;
   cropLeft?: number;
+  /** Whether this picture is itself a tracked insertion (`<w:ins>`). eigenpal #641. */
+  isInsertion?: boolean;
+  /** Whether this picture is itself a tracked deletion (`<w:del>`). eigenpal #641. */
+  isDeletion?: boolean;
+  /** Author of the tracked change wrapping the picture. eigenpal #641. */
+  changeAuthor?: string;
+  /** Date of the tracked change wrapping the picture. eigenpal #641. */
+  changeDate?: string;
+  /** Revision id of the tracked change wrapping the picture. eigenpal #641. */
+  changeRevisionId?: number;
   pmStart?: number;
   pmEnd?: number;
 };

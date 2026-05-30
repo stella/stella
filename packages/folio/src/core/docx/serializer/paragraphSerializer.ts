@@ -914,6 +914,14 @@ function serializeMoveRangeStart(
 /**
  * Serialize a tracked change wrapper (ins/del/moveFrom/moveTo)
  */
+function rewriteRunTextAsDeleted(xml: string): string {
+  return xml
+    .replace(/<w:t\b/gu, "<w:delText")
+    .replace(/<\/w:t>/gu, "</w:delText>")
+    .replace(/<w:instrText\b/gu, "<w:delInstrText")
+    .replace(/<\/w:instrText>/gu, "</w:delInstrText>");
+}
+
 function serializeTrackedChange(
   tag: "ins" | "del" | "moveFrom" | "moveTo",
   change: Insertion | Deletion | MoveFrom | MoveTo,
@@ -934,15 +942,43 @@ function serializeTrackedChange(
     attrs.push(`w:date="${escapeXml(normalizedDate)}"`);
   }
 
+  const serializeDeletedRun = (run: Run): string => {
+    const xml = serializeRun(run);
+    const hasDrawingContent = run.content.some(
+      (c) => c.type === "drawing" || c.type === "shape",
+    );
+    if (!hasDrawingContent) {
+      return rewriteRunTextAsDeleted(xml);
+    }
+
+    const hasTextualContent = run.content.some(
+      (c) => c.type !== "drawing" && c.type !== "shape",
+    );
+    if (!hasTextualContent) {
+      return xml;
+    }
+
+    return run.content
+      .map((content) => {
+        const contentXml = serializeRun({ ...run, content: [content] });
+        if (content.type === "drawing" || content.type === "shape") {
+          return contentXml;
+        }
+        return rewriteRunTextAsDeleted(contentXml);
+      })
+      .join("");
+  };
+
   const contentXml = change.content
     .map((item) => {
       if (item.type === "run") {
+        // A deleted drawing/shape run keeps its content verbatim: a picture
+        // has no `<w:t>`, and a shape's nested textbox text
+        // (`<w:txbxContent><w:t>`) must NOT be rewritten to `<w:delText>` —
+        // that markup belongs only to a run's own deleted text, not to a
+        // nested textbox document. eigenpal #641.
         if (tag === "del" || tag === "moveFrom") {
-          return serializeRun(item)
-            .replace(/<w:t\b/gu, "<w:delText")
-            .replace(/<\/w:t>/gu, "</w:delText>")
-            .replace(/<w:instrText\b/gu, "<w:delInstrText")
-            .replace(/<\/w:instrText>/gu, "</w:delInstrText>");
+          return serializeDeletedRun(item);
         }
         return serializeRun(item);
       }
