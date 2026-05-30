@@ -11,6 +11,20 @@ const baseOptions = {
 };
 
 describe("catalogue install state", () => {
+  test("marks catalogue skills installed when any visible skill already uses the slug", () => {
+    expect(
+      computeCatalogueInstallState({
+        ...baseOptions,
+        entry: {
+          kind: "skill",
+          slug: "contract-review",
+        },
+        installedSkillSlugs: new Set(["contract-review"]),
+        webSearchDeployAvailable: false,
+      }),
+    ).toBe("installed");
+  });
+
   test("marks Web Search unavailable when the deployment has no provider", () => {
     expect(
       computeCatalogueInstallState({

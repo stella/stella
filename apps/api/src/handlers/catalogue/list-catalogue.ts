@@ -56,7 +56,7 @@ const listCatalogue = createSafeRootHandler(
       ),
     );
 
-    const installedSkills =
+    const visibleSkillRows =
       skillSlugs.length === 0
         ? []
         : yield* Result.await(
@@ -70,7 +70,6 @@ const listCatalogue = createSafeRootHandler(
                       agentSkills.organizationId,
                       session.activeOrganizationId,
                     ),
-                    eq(agentSkills.origin, "bundled"),
                     inArray(agentSkills.slug, skillSlugs),
                     or(
                       eq(agentSkills.scope, "team"),
@@ -113,7 +112,9 @@ const listCatalogue = createSafeRootHandler(
     );
     const recommendedSlugs =
       recommendedSlugsForJurisdictions(practiceCountryCodes);
-    const installedSkillSlugs = new Set(installedSkills.map((row) => row.slug));
+    const installedSkillSlugs = new Set(
+      visibleSkillRows.map((row) => row.slug),
+    );
     const installedMcpUrls = new Set(installedMcps.map((row) => row.url));
     const nativeToolBackendSet = new Set(NATIVE_TOOL_SLUGS);
     const webSearchDeployAvailable = isWebSearchDeployAvailable();
