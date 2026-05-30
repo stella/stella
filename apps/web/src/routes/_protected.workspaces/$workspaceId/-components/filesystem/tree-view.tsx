@@ -75,11 +75,8 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-cells";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
-import { VersionOrNewFileDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog";
-import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
-import { useExternalFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
-import { useUploadVersion } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-upload-version";
+import { useRowFileVersionDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-row-file-version-drop";
 import {
   useMoveEntity,
   useRenameEntity,
@@ -1193,61 +1190,8 @@ const FilesystemRow = ({
   const moveEntity = useMoveEntity();
   const [isFolderDropTarget, setIsFolderDropTarget] = useState(false);
 
-  // External file drop (upload new version vs. create new file).
-  // Only file entities accept the drop; folders fall through to the
-  // workspace-level DropZone, and tasks aren't files.
-  const isTask = node.kind === "task";
-  const canAcceptDrop = !isFolder && !isTask && file !== null;
-  const [versionDialogFile, setVersionDialogFile] = useState<File | null>(null);
-  const uploadVersion = useUploadVersion();
-  const [, createFileEntities] = useCreateFileEntities(workspaceId);
-
-  // The predicate below guarantees only a single file with a matching MIME
-  // reaches this handler; multi-file and mismatched drops fall through to
-  // the workspace DropZone overlay.
-  const handleFileDrop = (files: File[]) => {
-    const droppedFile = files[0];
-    if (droppedFile) {
-      setVersionDialogFile(droppedFile);
-    }
-  };
-
-  const expectedMimeType = file?.mimeType.toLowerCase() ?? null;
-  const { isDropTarget: isExternalDropTarget } = useExternalFileDrop({
-    id: node.entityId,
-    onDrop: handleFileDrop,
-    enabled: canAcceptDrop,
-    externalRef: rowRef,
-    accept: (info) =>
-      info.fileCount === 1 &&
-      expectedMimeType !== null &&
-      info.mimeTypes[0] === expectedMimeType,
-  });
-
-  const handleReplaceVersion = () => {
-    if (!versionDialogFile || !file) {
-      return;
-    }
-    uploadVersion.mutate(
-      {
-        workspaceId,
-        entityId: node.entityId,
-        entityFileName: file.fileName,
-        file: versionDialogFile,
-      },
-      {
-        onSettled: () => setVersionDialogFile(null),
-      },
-    );
-  };
-
-  const handleCreateNewFile = () => {
-    if (!versionDialogFile) {
-      return;
-    }
-    createFileEntities([versionDialogFile]);
-    setVersionDialogFile(null);
-  };
+  const { isDropTarget: isExternalDropTarget, dialog: versionDialog } =
+    useRowFileVersionDrop({ entity: node, workspaceId, rowRef });
 
   // Store volatile values in refs so the effect doesn't
   // re-register drag/drop handlers on every render.
@@ -1662,21 +1606,7 @@ const FilesystemRow = ({
           </div>
         )}
       </div>
-      {versionDialogFile && file && (
-        <VersionOrNewFileDialog
-          droppedFile={versionDialogFile}
-          entityFileName={file.fileName}
-          isReplacePending={uploadVersion.isPending}
-          onCreateNewFile={handleCreateNewFile}
-          onOpenChange={(open) => {
-            if (!open) {
-              setVersionDialogFile(null);
-            }
-          }}
-          onReplaceVersion={handleReplaceVersion}
-          open
-        />
-      )}
+      {versionDialog}
     </>
   );
 };

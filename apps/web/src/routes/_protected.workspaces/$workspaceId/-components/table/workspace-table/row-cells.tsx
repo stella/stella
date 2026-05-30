@@ -43,12 +43,9 @@ import {
   PinnedBoundary,
   selectColId,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
-import { VersionOrNewFileDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog";
 import type { TableContentMode } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
-import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
-import { useExternalFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
-import { useUploadVersion } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-upload-version";
+import { useRowFileVersionDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-row-file-version-drop";
 import {
   getEntityName,
   getFirstFile,
@@ -216,11 +213,6 @@ export const DraggableRow = ({
   const [contextPropertyId, setContextPropertyId] = useState<string | null>(
     null,
   );
-  // State for version-or-new-file dialog
-  const [versionDialogFile, setVersionDialogFile] = useState<File | null>(null);
-  const uploadVersion = useUploadVersion();
-  const [, createFileEntities] = useCreateFileEntities(workspaceId);
-
   const entity = row.original;
   const isFolder = entity.kind === "folder";
   const isTask = entity.kind === "task";
@@ -254,54 +246,11 @@ export const DraggableRow = ({
     visibleCells,
   });
 
-  // The predicate below guarantees only a single file with a matching MIME
-  // reaches this handler; multi-file and mismatched drops fall through to
-  // the workspace DropZone overlay.
-  const handleFileDrop = (files: File[]) => {
-    const droppedFile = files[0];
-    if (droppedFile) {
-      setVersionDialogFile(droppedFile);
-    }
-  };
-
-  // Only enable drop target for file entities (not folders, not tasks)
-  const canAcceptDrop = !isFolder && !isTask && file !== null;
-  const expectedMimeType = file?.mimeType.toLowerCase() ?? null;
-  const { isDropTarget } = useExternalFileDrop({
-    id: entity.entityId,
-    onDrop: handleFileDrop,
-    enabled: canAcceptDrop,
-    externalRef: rowRef,
-    accept: (info) =>
-      info.fileCount === 1 &&
-      expectedMimeType !== null &&
-      info.mimeTypes[0] === expectedMimeType,
+  const { isDropTarget, dialog: versionDialog } = useRowFileVersionDrop({
+    entity,
+    workspaceId,
+    rowRef,
   });
-
-  const handleReplaceVersion = () => {
-    if (!versionDialogFile || !file) {
-      return;
-    }
-    uploadVersion.mutate(
-      {
-        workspaceId,
-        entityId: entity.entityId,
-        entityFileName: file.fileName,
-        file: versionDialogFile,
-      },
-      {
-        onSettled: () => setVersionDialogFile(null),
-      },
-    );
-  };
-
-  const handleCreateNewFile = () => {
-    if (!versionDialogFile) {
-      return;
-    }
-    createFileEntities([versionDialogFile]);
-    setVersionDialogFile(null);
-  };
 
   const getBulkSelectedEntities = () => {
     const selectedRows = table.getSelectedRowModel().rows;
@@ -512,22 +461,7 @@ export const DraggableRow = ({
           selected={row.getIsSelected()}
         />
       </WorkspaceGridRow>
-      {versionDialogFile && (
-        <VersionOrNewFileDialog
-          droppedFile={versionDialogFile}
-          entityFileName={file?.fileName}
-          isCreatePending={false}
-          isReplacePending={uploadVersion.isPending}
-          onCreateNewFile={handleCreateNewFile}
-          onOpenChange={(open) => {
-            if (!open) {
-              setVersionDialogFile(null);
-            }
-          }}
-          onReplaceVersion={handleReplaceVersion}
-          open
-        />
-      )}
+      {versionDialog}
     </>
   );
 };
