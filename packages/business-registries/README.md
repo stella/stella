@@ -21,8 +21,8 @@ await ares.lookupByIco("27082440");
 
 ## Supported registries
 
-| Subpath | Jurisdiction | Registry |
-| ------- | ------------ | -------- |
+| Subpath | Jurisdiction   | Registry                                      |
+| ------- | -------------- | --------------------------------------------- |
 | `/ares` | Czech Republic | [ARES](https://ares.gov.cz) — public open API |
 
 More jurisdictions land per-PR; see the package README on the main branch for
