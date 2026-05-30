@@ -11,6 +11,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
+import { requireEditableSkillOrigin } from "../origin";
 import { RESOURCE_PATH_PATTERN, inferResourceKind } from "./resource-path";
 
 const createSkillResourceParamsSchema = t.Object({
@@ -61,6 +62,7 @@ const createSkillResource = createSafeRootHandler(
         tx
           .select({
             id: agentSkills.id,
+            origin: agentSkills.origin,
             scope: agentSkills.scope,
             userId: agentSkills.userId,
             slug: agentSkills.slug,
@@ -97,6 +99,10 @@ const createSkillResource = createSafeRootHandler(
       return Result.err(
         new HandlerError({ status: 403, message: "Forbidden" }),
       );
+    }
+    const editableOrigin = requireEditableSkillOrigin(skill.origin);
+    if (Result.isError(editableOrigin)) {
+      return Result.err(editableOrigin.error);
     }
 
     const existingCount = yield* Result.await(

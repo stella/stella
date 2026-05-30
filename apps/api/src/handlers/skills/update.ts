@@ -11,6 +11,8 @@ import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
+import { requireEditableSkillOrigin } from "./origin";
+
 const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/u;
 
 const updateSkillParamsSchema = t.Object({
@@ -144,18 +146,11 @@ const updateSkill = createSafeRootHandler(
       );
     }
 
-    // Defensive: built-in skills are not stored in the database today (their
-    // `origin` union is currently "upload" | "url"). If a future schema change
-    // ever persists built-ins with a third origin, this branch will start
-    // catching them before they can be mutated through this endpoint.
-    const editableOrigins: readonly string[] = ["upload", "url"];
-    if (hasMetadataEdit && !editableOrigins.includes(existing.origin)) {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          message: "Built-in skills cannot be edited",
-        }),
-      );
+    if (hasMetadataEdit) {
+      const editableOrigin = requireEditableSkillOrigin(existing.origin);
+      if (Result.isError(editableOrigin)) {
+        return Result.err(editableOrigin.error);
+      }
     }
 
     const updates: SkillUpdateFields = {};

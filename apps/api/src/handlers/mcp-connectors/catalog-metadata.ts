@@ -1,4 +1,8 @@
-import { filterCatalogueByKind, loadRecommended } from "@stll/catalogue";
+import {
+  EU_MEMBER_STATES,
+  filterCatalogueByKind,
+  loadRecommended,
+} from "@stll/catalogue";
 import { isCountryCode, type CountryCode } from "@stll/country-codes";
 
 import type { PracticeJurisdiction } from "@/api/db/schema";
@@ -10,8 +14,10 @@ type McpConnectorCatalogSource = {
 };
 
 type McpConnectorCatalogMetadata = {
-  recommendedJurisdictions: readonly CountryCode[];
+  recommendedJurisdictions: readonly RecommendedJurisdictionCode[];
 };
+
+type RecommendedJurisdictionCode = CountryCode | "EU";
 
 export type NativeToolCatalogItem = {
   slug: string;
@@ -20,7 +26,7 @@ export type NativeToolCatalogItem = {
   url: string;
   documentationUrl: string | null;
   iconUrl: string | null;
-  recommendedJurisdictions: readonly CountryCode[];
+  recommendedJurisdictions: readonly RecommendedJurisdictionCode[];
 };
 
 /**
@@ -33,9 +39,9 @@ export type NativeToolCatalogItem = {
  */
 const NATIVE_TOOL_CATALOG: readonly NativeToolCatalogItem[] = (() => {
   const recommended = loadRecommended();
-  const jurisdictionsBySlug = new Map<string, CountryCode[]>();
+  const jurisdictionsBySlug = new Map<string, RecommendedJurisdictionCode[]>();
   for (const [jurisdiction, slugs] of Object.entries(recommended)) {
-    if (!isCountryCode(jurisdiction)) {
+    if (!isRecommendedJurisdictionCode(jurisdiction)) {
       continue;
     }
     for (const slug of slugs) {
@@ -84,15 +90,37 @@ const toPracticeCountryCodeSet = (
   );
 
 const intersectsJurisdictions = (
-  recommendedJurisdictions: readonly CountryCode[],
+  recommendedJurisdictions: readonly RecommendedJurisdictionCode[],
   practiceCountryCodes: ReadonlySet<CountryCode>,
 ): boolean => {
   if (recommendedJurisdictions.length === 0) {
     return true;
   }
   return recommendedJurisdictions.some((countryCode) =>
-    practiceCountryCodes.has(countryCode),
+    matchesPracticeCountryCode(countryCode, practiceCountryCodes),
   );
+};
+
+const isRecommendedJurisdictionCode = (
+  jurisdiction: string,
+): jurisdiction is RecommendedJurisdictionCode =>
+  jurisdiction === "EU" || isCountryCode(jurisdiction);
+
+const matchesPracticeCountryCode = (
+  countryCode: RecommendedJurisdictionCode,
+  practiceCountryCodes: ReadonlySet<CountryCode>,
+): boolean => {
+  if (countryCode !== "EU") {
+    return practiceCountryCodes.has(countryCode);
+  }
+
+  for (const practiceCountryCode of practiceCountryCodes) {
+    if (EU_MEMBER_STATES.has(practiceCountryCode)) {
+      return true;
+    }
+  }
+
+  return false;
 };
 
 /**
@@ -155,8 +183,10 @@ export const getDisabledNativeToolSlugs = ({
   nativeToolOverrides: Readonly<Record<string, boolean>>;
 }): readonly string[] => {
   const practiceCountryCodes = toPracticeCountryCodeSet(practiceJurisdictions);
+  const implementedSlugs = new Set(NATIVE_TOOL_SLUGS);
   return NATIVE_TOOL_CATALOG.filter(
     (tool) =>
+      implementedSlugs.has(tool.slug) &&
       !isNativeToolEnabledForCodes(
         tool.slug,
         practiceCountryCodes,
@@ -184,7 +214,7 @@ export const isMcpConnectorRecommendedForPractice = ({
   const practiceCountryCodes = toPracticeCountryCodeSet(practiceJurisdictions);
 
   return metadata.recommendedJurisdictions.some((countryCode) =>
-    practiceCountryCodes.has(countryCode),
+    matchesPracticeCountryCode(countryCode, practiceCountryCodes),
   );
 };
 
@@ -207,7 +237,7 @@ export const getNativeToolCatalog = ({
       documentationUrl: tool.documentationUrl,
       iconUrl: tool.iconUrl,
       isRecommended: tool.recommendedJurisdictions.some((countryCode) =>
-        practiceCountryCodes.has(countryCode),
+        matchesPracticeCountryCode(countryCode, practiceCountryCodes),
       ),
       recommendedJurisdictions: tool.recommendedJurisdictions,
       slug: tool.slug,

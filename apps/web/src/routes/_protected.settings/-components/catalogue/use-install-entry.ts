@@ -9,10 +9,9 @@ import type { CatalogueEntry } from "./catalogue-types";
 /**
  * Installs a catalogue entry by routing to the right backend mutation
  * per kind:
- *   - mcp        → POST /mcp/connectors then /mcp/connections
+ *   - mcp        → POST /mcp/connectors
  *   - native-tool → PATCH /mcp/native-tools/:slug { enabled: true }
- *   - skill      → throws; bundled-skill install endpoint lands in a
- *                  follow-up alongside the first catalogue skill entry.
+ *   - skill      → POST /catalogue/install-skill
  */
 export const useInstallEntry = (organizationId: string) => {
   const queryClient = useQueryClient();
@@ -63,6 +62,7 @@ export const useInstallEntry = (organizationId: string) => {
         queryKey: catalogueKeys.list(organizationId),
       });
       void queryClient.invalidateQueries({ queryKey: ["mcp"] });
+      void queryClient.invalidateQueries({ queryKey: ["skills"] });
     },
   });
 };

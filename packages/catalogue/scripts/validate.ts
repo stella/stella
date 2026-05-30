@@ -2,7 +2,7 @@
  * Catalogue PR-time validator. Beyond schema parsing (handled by the
  * loader at import), this enforces:
  *   - per-entry folder size cap (10 MB; prevents PDF dumps in PRs)
- *   - slug uniqueness within a kind
+ *   - slug uniqueness across the whole catalogue
  *   - recommended.json references exist
  *   - manifest folder matches `entries/<kind>/<slug>/`
  * Runs in CI; failure blocks merge.
@@ -29,6 +29,7 @@ const seenSlugs = new Map<string, Set<string>>();
 for (const kind of CATALOGUE_KINDS) {
   seenSlugs.set(kind, new Set<string>());
 }
+const seenCatalogueSlugs = new Map<string, string>();
 
 for (const kind of CATALOGUE_KINDS) {
   const kindDir = path.join(entriesRoot, pluralize(kind));
@@ -84,6 +85,14 @@ for (const kind of CATALOGUE_KINDS) {
       errors.push(`${kind}/${slug}: duplicate slug within kind`);
     } else {
       seen?.add(slug);
+    }
+    const existingSlugKind = seenCatalogueSlugs.get(slug);
+    if (existingSlugKind) {
+      errors.push(
+        `${kind}/${slug}: duplicate slug already used by ${existingSlugKind}/${slug}`,
+      );
+    } else {
+      seenCatalogueSlugs.set(slug, kind);
     }
 
     const bytes = folderSize(folder);

@@ -188,7 +188,7 @@ individual items below.
   entries.
 - `packages/catalogue/scripts/validate.ts` — CI entry: parses all
   manifests, enforces license allowlist, enforces per-entry 10 MB
-  cap, checks slug uniqueness within a kind.
+  cap, checks slug uniqueness across the whole catalogue.
 - `packages/catalogue/recommended.json` — `{ [jurisdiction]: [slug] }`.
 - `packages/catalogue/MAINTAINERS` — handles authorised to edit
   `recommended.json`.
@@ -245,7 +245,7 @@ individual items below.
 ## Test Cases
 
 - Schema validator rejects unknown SPDX, copyleft licences,
-  duplicate slugs within a kind, missing icons, oversized folders.
+  duplicate slugs, unknown recommendations, oversized folders.
 - `GET /catalogue` returns `isRecommendedForOrg: true` only when
   `recommended.json` lists the slug under one of the org's
   jurisdictions.

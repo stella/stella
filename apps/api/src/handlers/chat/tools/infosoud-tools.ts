@@ -3,7 +3,7 @@ import { tool } from "ai";
 import * as v from "valibot";
 
 import { createInfoSoudClient } from "@/api/handlers/workspaces/infosoud-common";
-import { mapInfoSoudResult } from "@/api/handlers/workspaces/infosoud-lookup";
+import { mapInfoSoudResult } from "@/api/handlers/workspaces/infosoud-result";
 
 export const createInfosoudTools = () => ({
   infosoud_lookup_case: tool({

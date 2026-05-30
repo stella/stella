@@ -8,9 +8,9 @@ contributions via PR.
 
 1. Pick a `kind`: `skill`, `mcp`, or `native-tool`.
 2. Create a folder at `entries/<kind>s/<your-slug>/`. Slug is
-   kebab-case, 2–64 characters, unique within its kind.
-3. Add `manifest.json` (see schema below) and a square `icon.svg`
-   (≤32 KB recommended).
+   kebab-case, 2–64 characters, unique across the catalogue.
+3. Add `manifest.json` (see schema below). Add a square `icon.svg`
+   or `icon.png` when the entry has an official icon.
 4. For `skill` entries: add the skill body next to the manifest and
    reference it via `entryPath` (e.g. `"SKILL.md"`). Optional
    resources go under `entryPath`-relative paths in `resources`.
@@ -34,7 +34,8 @@ Common to all kinds:
 | `author`        | yes      | name or org                          |
 | `authorUrl`     | no       | author homepage                      |
 | `license`       | yes      | SPDX id; permissive only (see below) |
-| `pricing`       | yes      | `free` \| `paid` \| `freemium`       |
+| `cost`          | yes      | `free` \| `paid`                     |
+| `setup`         | yes      | `none` \| `account` \| `api-key`     |
 | `homepage`      | no       | project / docs URL                   |
 | `tags`          | no       | search keywords                      |
 | `jurisdictions` | no       | ISO 3166-1 alpha-2 codes (or `EU`)   |
@@ -59,7 +60,7 @@ The maintainer curates a small per-jurisdiction recommendation set
 in `entries/recommended.json`. The public criteria are:
 
 1. **Permissive licence.** Any in-tree entry qualifies by definition.
-2. **Free for the user.** `pricing: "free"` strongly preferred.
+2. **Free for the user.** `cost: "free"` strongly preferred.
 3. **Maintained.** Author responds to issues; manifest accurate.
 4. **Jurisdictionally relevant.** Tool is useful for actual legal
    practice in the listed jurisdiction.

@@ -99,6 +99,16 @@ describe("mcpConnectorCatalogMetadata", () => {
       }),
     );
   });
+
+  it("shows only native tools that the MCP settings page can toggle", () => {
+    const toolSlugs = getNativeToolCatalog({
+      practiceJurisdictions: [{ countryCode: "CZ", isPrimary: true }],
+    }).map((tool) => tool.slug);
+
+    expect(toolSlugs).toContain("web-search");
+    expect(toolSlugs).not.toContain("anonymize");
+    expect(toolSlugs).not.toContain("create-docx");
+  });
 });
 
 describe("isNativeToolEnabledForOrg", () => {
@@ -148,6 +158,16 @@ describe("isNativeToolEnabledForOrg", () => {
         slug: "nonexistent",
         practiceJurisdictions: [{ countryCode: "CZ", isPrimary: true }],
         nativeToolOverrides: {},
+      }),
+    ).toBe(false);
+  });
+
+  it("respects explicit disable overrides for globally defaulted Web Search", () => {
+    expect(
+      isNativeToolEnabledForOrg({
+        slug: "web-search",
+        practiceJurisdictions: [{ countryCode: "CZ", isPrimary: true }],
+        nativeToolOverrides: { "web-search": false },
       }),
     ).toBe(false);
   });

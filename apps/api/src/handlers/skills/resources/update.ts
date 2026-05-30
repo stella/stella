@@ -10,6 +10,8 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
+import { requireEditableSkillOrigin } from "../origin";
+
 const updateSkillResourceParamsSchema = t.Object({
   skillId: tSafeId("agentSkill"),
 });
@@ -63,12 +65,6 @@ const updateSkillResource = createSafeRootHandler(
       );
     }
 
-    // `agentSkills.origin` is currently `"upload" | "url"` — both
-    // are editable. Built-in skills live on disk, not in this table,
-    // so there's nothing to gate here. If a future origin value is
-    // added to the enum, TS will surface this site as non-exhaustive
-    // and the gate can be re-added.
-
     if (
       skill.scope === "team" &&
       !["admin", "owner"].includes(memberRole.role)
@@ -84,6 +80,10 @@ const updateSkillResource = createSafeRootHandler(
       return Result.err(
         new HandlerError({ status: 403, message: "Forbidden" }),
       );
+    }
+    const editableOrigin = requireEditableSkillOrigin(skill.origin);
+    if (Result.isError(editableOrigin)) {
+      return Result.err(editableOrigin.error);
     }
 
     const existingResourceRows = yield* Result.await(

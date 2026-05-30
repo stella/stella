@@ -65,10 +65,7 @@ const installBundledSkill = createSafeRootHandler(
       user,
     });
     if (installResult.isErr()) {
-      // Yield the propagated error so the safe handler captures it,
-      // then return early so we don't fall through to Result.ok.
-      yield Result.err(installResult.error);
-      return Result.err(installResult.error);
+      return yield* Result.err(installResult.error);
     }
 
     return Result.ok({ slug: entry.slug });

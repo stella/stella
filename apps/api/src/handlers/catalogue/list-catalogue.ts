@@ -26,16 +26,25 @@ const config = {
 
 type InstallState = "installed" | "available" | "unavailable";
 
-type CatalogueEntryResponse = LoadedCatalogueEntry & {
+type PublicCatalogueEntry<
+  T extends LoadedCatalogueEntry = LoadedCatalogueEntry,
+> = T extends LoadedCatalogueEntry ? Omit<T, "body"> : never;
+
+type CatalogueEntryResponse = PublicCatalogueEntry & {
   isRecommendedForOrg: boolean;
   installState: InstallState;
   /**
    * True when the entry is a system capability the user cannot toggle
-   * (pinned native-tools). UI hides install/uninstall controls and
-   * renders the entry in the "Baseline" section.
+   * (non-toggleable pinned native-tools). UI hides install/uninstall
+   * controls and renders the entry in the "Baseline" section.
    */
   isLocked: boolean;
 };
+
+const toPublicCatalogueEntry = ({
+  body: _body,
+  ...entry
+}: LoadedCatalogueEntry): PublicCatalogueEntry => entry;
 
 const listCatalogue = createSafeRootHandler(
   config,
@@ -137,8 +146,9 @@ const listCatalogue = createSafeRootHandler(
             nativeToolOverrides,
             practiceJurisdictions,
           });
+      const publicEntry = toPublicCatalogueEntry(entry);
       response.push({
-        ...entry,
+        ...publicEntry,
         isLocked,
         isRecommendedForOrg: recommendedSlugs.has(entry.slug),
         installState,
