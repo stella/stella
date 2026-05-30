@@ -105,9 +105,16 @@ export type RegistryHandler = {
   /**
    * Search by name. `null` when the upstream registry has no
    * name-search endpoint (e.g. KRS). Callers attempting name search
-   * against such a registry get a 400.
+   * against such a registry get a 400. The optional `limit` is
+   * forwarded to the underlying adapter so the same value
+   * controls both the upstream page size and the returned slice.
    */
-  search: ((input: string) => Promise<BusinessRegistryHit[]>) | null;
+  search:
+    | ((
+        input: string,
+        options?: { limit?: number },
+      ) => Promise<BusinessRegistryHit[]>)
+    | null;
   /** Translate per-registry tagged errors into HandlerError. */
   mapError: (error: unknown) => HandlerError | null;
 };
@@ -218,8 +225,8 @@ const ARES_HANDLER: RegistryHandler = {
     const company = await lookupByIco(input);
     return company ? aresCompanyToHit(company) : null;
   },
-  search: async (input) => {
-    const results = await searchAresByName(input);
+  search: async (input, options) => {
+    const results = await searchAresByName(input, options);
     return results.map(aresSearchResultToHit);
   },
   mapError: mapAresError,
@@ -303,8 +310,8 @@ const BRREG_HANDLER: RegistryHandler = {
     const entity = await lookupByOrgnr(input);
     return entity ? brregEntityToHit(entity) : null;
   },
-  search: async (input) => {
-    const results = await searchBrregByName(input);
+  search: async (input, options) => {
+    const results = await searchBrregByName(input, options);
     return results.map(brregSearchResultToHit);
   },
   mapError: mapBrregError,
@@ -352,9 +359,18 @@ export const getRegistryHandlerByCountry = (
 export const executeRegistryLookup = async ({
   handler,
   query,
+  limit,
 }: {
   handler: RegistryHandler;
   query: string;
+  /**
+   * Forwarded to the adapter's name-search call. Ignored on the
+   * lookup path (canonical-ID resolution always returns at most one
+   * hit). Per-adapter clamps still apply (e.g. Brreg caps each page
+   * at 100); a passed value larger than the adapter's max is
+   * silently clamped to the adapter's max.
+   */
+  limit?: number;
 }): Promise<RegistryLookupResponse | HandlerError> => {
   const trimmed = query.trim();
   if (trimmed.length === 0) {
@@ -381,7 +397,10 @@ export const executeRegistryLookup = async ({
     if (!searchFn) {
       panic("searchFn must be defined when !isLookup reaches here");
     }
-    const hits = await searchFn(trimmed);
+    const hits = await searchFn(
+      trimmed,
+      limit === undefined ? undefined : { limit },
+    );
     return { type: "search", registry: handler.slug, hits };
   } catch (error) {
     const mapped = handler.mapError(error);

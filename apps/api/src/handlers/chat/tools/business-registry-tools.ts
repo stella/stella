@@ -89,7 +89,7 @@ export const createBusinessRegistryTools = ({
     [BUSINESS_REGISTRY_LOOKUP_TOOL_NAME]: tool({
       description: TOOL_DESCRIPTION,
       inputSchema: valibotSchema(inputSchema),
-      execute: async ({ jurisdiction, query }) => {
+      execute: async ({ jurisdiction, limit, query }) => {
         const handler = getRegistryHandlerByCountry(jurisdiction);
         if (!handler) {
           // `enabledJurisdictions` should always be a subset of the
@@ -99,7 +99,11 @@ export const createBusinessRegistryTools = ({
             error: `No business registry adapter is shipped for jurisdiction ${jurisdiction}`,
           };
         }
-        const result = await executeRegistryLookup({ handler, query });
+        const result = await executeRegistryLookup({
+          handler,
+          query,
+          ...(limit === undefined ? {} : { limit }),
+        });
         // executeRegistryLookup returns a HandlerError instance for
         // validation / upstream failures; surface those to the model
         // as structured strings rather than throwing — the model can
