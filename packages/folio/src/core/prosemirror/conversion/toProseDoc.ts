@@ -2609,27 +2609,130 @@ export function footnoteToProseDoc(
 /**
  * Determine where a page break appears inside a paragraph.
  *
+ * Per ECMA-376 §17.3.3.1, `<w:br w:type="page"/>` is always a forced break,
+ * including in a paragraph whose only content is the break itself. We previously
+ * searched only top-level runs and missed breaks nested in hyperlinks, tracked
+ * changes, or fields — so those paragraphs silently dropped their forced break
+ * and the following content collapsed onto the previous page (common on legal
+ * signature pages and exhibit covers).
+ * See eigenpal docx-editor #409 (break-only page break sub-fix).
+ *
  * Returns:
- *   "before" — the break is at the very start (before any text); the
- *              paragraph's text belongs on the NEXT page.
- *   "after"  — the break is after some text (or the paragraph is empty);
- *              the paragraph stays on the current page.
+ *   "before" — the break appears before any visible content; the paragraph's
+ *              content belongs on the NEXT page.
+ *   "after"  — the break follows some visible content; the paragraph stays
+ *              on the current page and the next block starts a new page.
  *   null     — no page break found.
  */
 function paragraphPageBreakPosition(
   paragraph: Paragraph,
 ): "before" | "after" | null {
-  let seenText = false;
-  for (const item of paragraph.content) {
+  // Mutated by visitRun during traversal. oxlint flow analysis can't see
+  // closure mutations, so a plain `let` here trips no-unnecessary-condition;
+  // wrap in an object to keep the flag genuinely opaque to the linter.
+  const state = { seenVisibleContent: false };
+
+  function isPageBreak(content: RunContent): boolean {
+    return content.type === "break" && content.breakType === "page";
+  }
+
+  function isVisibleRunContent(content: RunContent): boolean {
+    return (
+      (content.type === "text" && content.text.length > 0) ||
+      content.type === "tab" ||
+      content.type === "drawing" ||
+      content.type === "shape" ||
+      content.type === "symbol" ||
+      content.type === "fieldChar" ||
+      content.type === "instrText" ||
+      content.type === "footnoteRef" ||
+      content.type === "endnoteRef" ||
+      content.type === "noBreakHyphen" ||
+      content.type === "softHyphen"
+    );
+  }
+
+  function visitRun(run: Run): boolean {
+    for (const content of run.content) {
+      if (isPageBreak(content)) {
+        return true;
+      }
+      if (isVisibleRunContent(content)) {
+        state.seenVisibleContent = true;
+      }
+    }
+    return false;
+  }
+
+  // Walk a hyperlink's children — runs (which may carry the break) plus
+  // bookmark markers we ignore. Mirrors the inner shape of `Hyperlink`.
+  function visitHyperlinkChildren(hyperlink: Hyperlink): boolean {
+    for (const child of hyperlink.children) {
+      if (child.type === "run" && visitRun(child)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Walk a (Run | Hyperlink)[] list — the shared inner shape of tracked-change
+  // wrappers, simple fields, and inline SDTs. We rely on visitRun to set
+  // state.seenVisibleContent when (and only when) it encounters visible run
+  // content; an empty wrapper must not be treated as visible — an empty
+  // bookmark-only hyperlink before a page break should still classify the
+  // break as "before".
+  function visitRunOrHyperlinkList(children: (Run | Hyperlink)[]): boolean {
+    for (const child of children) {
+      if (child.type === "run" && visitRun(child)) {
+        return true;
+      }
+      if (child.type === "hyperlink" && visitHyperlinkChildren(child)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function visitItem(item: Paragraph["content"][number]): boolean {
     if (item.type === "run") {
-      for (const content of (item as Run).content) {
-        if (content.type === "break" && content.breakType === "page") {
-          return seenText ? "after" : "before";
-        }
-        if (content.type === "text" && content.text) {
-          seenText = true;
+      return visitRun(item);
+    }
+    if (item.type === "hyperlink") {
+      return visitHyperlinkChildren(item);
+    }
+    if (
+      item.type === "insertion" ||
+      item.type === "deletion" ||
+      item.type === "moveFrom" ||
+      item.type === "moveTo"
+    ) {
+      return visitRunOrHyperlinkList(item.content);
+    }
+    if (item.type === "simpleField") {
+      return visitRunOrHyperlinkList(item.content);
+    }
+    if (item.type === "complexField") {
+      for (const run of item.fieldResult) {
+        if (visitRun(run)) {
+          return true;
         }
       }
+      return false;
+    }
+    if (item.type === "inlineSdt") {
+      return visitRunOrHyperlinkList(item.content);
+    }
+    if (item.type === "mathEquation") {
+      // OMML math is a visible inline node and cannot itself contain w:br.
+      state.seenVisibleContent = true;
+      return false;
+    }
+    return false;
+  }
+
+  for (const item of paragraph.content) {
+    if (visitItem(item)) {
+      return state.seenVisibleContent ? "after" : "before";
     }
   }
   return null;
