@@ -818,6 +818,20 @@ function buildImageRun(
   if (attrs.distRight !== undefined) {
     run.distRight = attrs.distRight;
   }
+  // eigenpal #424: pass crop fractions through to the painter so it can
+  // emit CSS clip-path. PM defaults are `null`; treat null as "not set".
+  if (attrs.cropTop != null) {
+    run.cropTop = attrs.cropTop;
+  }
+  if (attrs.cropRight != null) {
+    run.cropRight = attrs.cropRight;
+  }
+  if (attrs.cropBottom != null) {
+    run.cropBottom = attrs.cropBottom;
+  }
+  if (attrs.cropLeft != null) {
+    run.cropLeft = attrs.cropLeft;
+  }
   if (attrs.position !== undefined) {
     run.position = attrs.position;
   }
@@ -1766,6 +1780,20 @@ function convertImage(
   }
   if (attrs.hlinkHref) {
     imgBlock.hlinkHref = attrs.hlinkHref;
+  }
+  // eigenpal #424: thread wp:srcRect crop fractions to the floating-image
+  // block so renderers can apply clip-path consistently across paths.
+  if (attrs.cropTop != null) {
+    imgBlock.cropTop = attrs.cropTop;
+  }
+  if (attrs.cropRight != null) {
+    imgBlock.cropRight = attrs.cropRight;
+  }
+  if (attrs.cropBottom != null) {
+    imgBlock.cropBottom = attrs.cropBottom;
+  }
+  if (attrs.cropLeft != null) {
+    imgBlock.cropLeft = attrs.cropLeft;
   }
   return imgBlock;
 }

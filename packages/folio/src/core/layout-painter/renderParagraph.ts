@@ -35,6 +35,7 @@ import {
   rotatedBoundingBox,
 } from "../utils/rotationBoundingBox";
 import { getAutomaticTextColorForBackground } from "./documentColors";
+import { applyImageVisualAttrs, hasImageVisualAttrs } from "./renderImage";
 import { isFloatingImageRun } from "./renderUtils";
 import type { RenderContext } from "./renderUtils";
 
@@ -633,6 +634,9 @@ function renderInlineImageRun(run: ImageRun, doc: Document): HTMLElement {
     wrapper.append(img);
     return wrapper;
   }
+  if (hasImageVisualAttrs(run)) {
+    applyImageVisualAttrs(img, run);
+  }
 
   // Inline images should flow with text
   img.style.display = "inline";
@@ -712,6 +716,9 @@ function renderBlockImage(run: ImageRun, doc: Document): HTMLElement {
     img.style.marginLeft = "0";
     img.style.marginRight = "0";
     img.style.marginTop = "0";
+  }
+  if (hasImageVisualAttrs(run)) {
+    applyImageVisualAttrs(img, run);
   }
 
   applyPmPositions(container, run.pmStart, run.pmEnd);

@@ -69,6 +69,7 @@ export type {
   ImagePosition,
   ImageTransform,
   ImagePadding,
+  ImageCrop,
   Image,
 
   // Shapes & Text Boxes

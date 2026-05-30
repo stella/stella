@@ -226,6 +226,15 @@ export type ImageAttrs = {
   distLeft?: number;
   /** Distance from text right (pixels) */
   distRight?: number;
+  /**
+   * wp:srcRect crop fractions in [0, 1]. Carried through the editor so a
+   * cropped image survives parse → edit → serialize. eigenpal #424
+   * (image-crop subset).
+   */
+  cropTop?: number;
+  cropRight?: number;
+  cropBottom?: number;
+  cropLeft?: number;
   /** Position for floating images (horizontal and vertical alignment) */
   position?: ImagePositionAttrs;
   /** Border width in pixels */

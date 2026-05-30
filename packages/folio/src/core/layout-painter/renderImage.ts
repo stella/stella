@@ -23,6 +23,50 @@ export const IMAGE_CLASS_NAMES = {
 };
 
 /**
+ * Structural shape required to apply Word's per-image visual attributes
+ * (currently `wp:srcRect` crop fractions). `ImageRun` and `ImageBlock` both
+ * satisfy this, so callers don't need an adapter.
+ *
+ * eigenpal #424 (image-crop subset).
+ */
+export type ImageVisualAttrs = {
+  cropTop?: number;
+  cropRight?: number;
+  cropBottom?: number;
+  cropLeft?: number;
+};
+
+/**
+ * True when any visual attribute is set. Cheap call-site guard so the no-op
+ * common case skips the helper call.
+ *
+ * IMPORTANT: ProseMirror schema attrs default to `null`, not `undefined`,
+ * and a `null` survives `as number | undefined` casts in the layout bridge.
+ * Use `!= null` rather than `!== undefined` so default-null crop fields are
+ * not read as `0`.
+ */
+export function hasImageVisualAttrs(v: ImageVisualAttrs): boolean {
+  return Boolean(v.cropTop || v.cropRight || v.cropBottom || v.cropLeft);
+}
+
+/**
+ * Apply crop to an `<img>` element. Caller should gate with
+ * `hasImageVisualAttrs(v)` to avoid the function call for plain images.
+ */
+export function applyImageVisualAttrs(
+  img: HTMLImageElement,
+  v: ImageVisualAttrs,
+): void {
+  const top = v.cropTop ?? 0;
+  const right = v.cropRight ?? 0;
+  const bottom = v.cropBottom ?? 0;
+  const left = v.cropLeft ?? 0;
+  if (top || right || bottom || left) {
+    img.style.clipPath = `inset(${top * 100}% ${right * 100}% ${bottom * 100}% ${left * 100}%)`;
+  }
+}
+
+/**
  * Options for rendering an image fragment
  */
 export type RenderImageFragmentOptions = {
@@ -96,6 +140,11 @@ export function renderImageFragment(
   // Apply transform if present (rotation, flip)
   if (block.transform) {
     imgEl.style.transform = block.transform;
+  }
+
+  // eigenpal #424: apply wp:srcRect crop as CSS clip-path on floating images.
+  if (hasImageVisualAttrs(block)) {
+    applyImageVisualAttrs(imgEl, block);
   }
 
   // Prevent dragging

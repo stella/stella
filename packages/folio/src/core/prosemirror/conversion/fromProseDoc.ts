@@ -1355,6 +1355,43 @@ function createImageRun(node: PMNode): Run {
     image.hlinkHref = attrs.hlinkHref;
   }
 
+  // eigenpal #424: fold crop fractions back into Image.crop. PM defaults are
+  // `null`, so `!= null` catches both null and undefined; zero sides are
+  // omitted to keep the serialized <a:srcRect/> terse.
+  const cropTop =
+    attrs.cropTop != null && attrs.cropTop > 0 ? attrs.cropTop : undefined;
+  const cropRight =
+    attrs.cropRight != null && attrs.cropRight > 0
+      ? attrs.cropRight
+      : undefined;
+  const cropBottom =
+    attrs.cropBottom != null && attrs.cropBottom > 0
+      ? attrs.cropBottom
+      : undefined;
+  const cropLeft =
+    attrs.cropLeft != null && attrs.cropLeft > 0 ? attrs.cropLeft : undefined;
+  if (
+    cropTop !== undefined ||
+    cropRight !== undefined ||
+    cropBottom !== undefined ||
+    cropLeft !== undefined
+  ) {
+    const crop: NonNullable<Image["crop"]> = {};
+    if (cropTop !== undefined) {
+      crop.top = cropTop;
+    }
+    if (cropRight !== undefined) {
+      crop.right = cropRight;
+    }
+    if (cropBottom !== undefined) {
+      crop.bottom = cropBottom;
+    }
+    if (cropLeft !== undefined) {
+      crop.left = cropLeft;
+    }
+    image.crop = crop;
+  }
+
   const drawingContent: DrawingContent = {
     type: "drawing",
     image,

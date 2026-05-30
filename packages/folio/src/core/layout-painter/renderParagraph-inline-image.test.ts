@@ -107,6 +107,79 @@ describe("renderLine inline image handling", () => {
     expect(imageEl?.style.height).toBe("29px");
   });
 
+  // eigenpal #424 (image-crop subset): an inline image with crop fractions
+  // must paint a CSS clip-path inset so the visible region matches Word's
+  // crop. Without this the image rendered at full bitmap regardless of crop.
+  test("applies clip-path inset for an inline image with crop fractions", () => {
+    const imageRun: ImageRun = {
+      kind: "image",
+      src: "data:image/png;base64,",
+      width: 100,
+      height: 100,
+      cropTop: 0.1,
+      cropRight: 0.2,
+      cropBottom: 0.05,
+      cropLeft: 0.15,
+      pmStart: 1,
+      pmEnd: 2,
+    };
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p-crop",
+      runs: [imageRun],
+      pmStart: 0,
+      pmEnd: 3,
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 1,
+      width: 100,
+      ascent: 32,
+      descent: 3,
+      lineHeight: 35,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const imageEl = lineEl.children[0] as HTMLElement | undefined;
+
+    expect(imageEl?.style.clipPath).toBe("inset(10% 20% 5% 15%)");
+  });
+
+  test("does not apply clip-path when no crop is set", () => {
+    const imageRun: ImageRun = {
+      kind: "image",
+      src: "data:image/png;base64,",
+      width: 100,
+      height: 100,
+      pmStart: 1,
+      pmEnd: 2,
+    };
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p-nocrop",
+      runs: [imageRun],
+      pmStart: 0,
+      pmEnd: 3,
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 1,
+      width: 100,
+      ascent: 32,
+      descent: 3,
+      lineHeight: 35,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const imageEl = lineEl.children[0] as HTMLElement | undefined;
+
+    expect(imageEl?.style.clipPath).toBeFalsy();
+  });
+
   // Regression chatgpt-codex on #410: the image+text flex branch fired on
   // `runsForLine.some(isImageRun)`, which also matched FLOATING images. Those
   // render in a page-level layer and `continue` in the main loop, so a line
