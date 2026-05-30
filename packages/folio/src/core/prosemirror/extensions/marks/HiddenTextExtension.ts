@@ -7,6 +7,12 @@
  * traversal stays correct across hidden ranges. The `docx-hidden` class
  * hook lets host CSS opt into print-style suppression independently.
  *
+ * The dotted-underline visual is delivered via `editor.css` (`.docx-hidden`
+ * rule), NOT inline `text-decoration`. Inline `text-decoration: underline`
+ * would be picked up by `UnderlineExtension`'s `style: "text-decoration"`
+ * parser on DOM/clipboard reparse and add a spurious `<w:u>` alongside
+ * `<w:vanish/>` on export.
+ *
  * eigenpal #424 (w:vanish gap 9).
  */
 
@@ -18,14 +24,7 @@ export const HiddenTextExtension = createMarkExtension({
   markSpec: {
     parseDOM: [{ tag: "span.docx-hidden" }],
     toDOM() {
-      return [
-        "span",
-        {
-          class: "docx-hidden",
-          style: "opacity: 0.4; text-decoration: underline dotted",
-        },
-        0,
-      ];
+      return ["span", { class: "docx-hidden" }, 0];
     },
   },
 });

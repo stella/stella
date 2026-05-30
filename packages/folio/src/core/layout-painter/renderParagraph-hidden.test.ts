@@ -129,9 +129,14 @@ describe("renderParagraph w:vanish (hidden text) — eigenpal #424 gap 9", () =>
     expect(visibleEl.style["textDecoration"]).toBeUndefined();
 
     // Hidden run: dimmed with dotted underline, class hook present.
+    // Longhand properties (not the `text-decoration` shorthand) so a later
+    // `textDecorationLine` assignment can't reset color/thickness, and so
+    // combining `w:vanish` with `w:strike` keeps both decorations visible.
     expect(hiddenEl.className).toContain("docx-hidden");
     expect(hiddenEl.style["opacity"]).toBe("0.4");
-    expect(hiddenEl.style["textDecoration"]).toBe("underline dotted");
+    expect(hiddenEl.style["textDecoration"]).toBeUndefined();
+    expect(hiddenEl.style["textDecorationLine"]).toBe("underline");
+    expect(hiddenEl.style["textDecorationStyle"]).toBe("dotted");
     // Text content is preserved so the cursor has something to land on.
     expect(hiddenEl.textContent).toBe("secret");
   });
@@ -153,5 +158,60 @@ describe("renderParagraph w:vanish (hidden text) — eigenpal #424 gap 9", () =>
     expect(textEl.className).not.toContain("docx-hidden");
     expect(textEl.style["opacity"]).toBeUndefined();
     expect(textEl.style["textDecoration"]).toBeUndefined();
+    expect(textEl.style["textDecorationLine"]).toBeUndefined();
+    expect(textEl.style["textDecorationStyle"]).toBeUndefined();
+  });
+
+  test("hidden + strike keeps both line-through and underline (longhand)", () => {
+    // Regression: the previous `element.style.textDecoration = "underline dotted"`
+    // shorthand was overwritten by the later `textDecorationLine` assignment
+    // once `decorations` contained anything (e.g. line-through from w:strike),
+    // silently dropping the hidden underline. Longhand keeps both visible.
+    const { block, line } = buildLine([
+      { kind: "text", text: "gone", hidden: true, strike: true },
+    ]);
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument, {
+      availableWidth: 600,
+      isLastLine: true,
+      isFirstLine: true,
+      paragraphEndsWithLineBreak: false,
+      tabStops: [],
+      leftIndentPx: 0,
+      lineRightEdgePx: 600,
+    }) as unknown as FakeElement;
+
+    const [textEl] = findTextRunEls(lineEl) as [FakeElement];
+    const line_ = textEl.style["textDecorationLine"] ?? "";
+    expect(line_).toContain("underline");
+    expect(line_).toContain("line-through");
+    expect(textEl.style["textDecorationStyle"]).toBe("dotted");
+  });
+
+  test("hidden + explicit underline mark preserves the underline style", () => {
+    // When a run is both hidden and carries an explicit `w:u w:val="double"`,
+    // the explicit style must win over the hidden-run dotted default.
+    const { block, line } = buildLine([
+      {
+        kind: "text",
+        text: "both",
+        hidden: true,
+        underline: { style: "double" },
+      },
+    ]);
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument, {
+      availableWidth: 600,
+      isLastLine: true,
+      isFirstLine: true,
+      paragraphEndsWithLineBreak: false,
+      tabStops: [],
+      leftIndentPx: 0,
+      lineRightEdgePx: 600,
+    }) as unknown as FakeElement;
+
+    const [textEl] = findTextRunEls(lineEl) as [FakeElement];
+    expect(textEl.style["textDecorationLine"]).toBe("underline");
+    expect(textEl.style["textDecorationStyle"]).toBe("double");
   });
 });
