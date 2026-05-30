@@ -1,9 +1,8 @@
-import type { GoogleGenerativeAIProviderOptions } from "@ai-sdk/google";
 import { valibotSchema } from "@ai-sdk/valibot";
 import { generateText, Output } from "ai";
 import { Result } from "better-result";
 
-import { getModelForRole, getTemperatureForRole } from "@/api/lib/ai-models";
+import { getModelForRole } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import {
@@ -63,8 +62,8 @@ export const generateBBoxData = async ({
         model: getModelForRole("pdf", orgAIConfig, {
           promptCachingEnabled,
           scopeKey: justificationId,
+          organizationId,
         }),
-        temperature: getTemperatureForRole("pdf"),
         system: BBOX_SYSTEM_PROMPT,
         messages: [
           {
@@ -87,14 +86,6 @@ export const generateBBoxData = async ({
           },
         ],
         output: Output.object({ schema: valibotSchema(bboxSchema) }),
-        providerOptions: {
-          google: {
-            thinkingConfig: {
-              thinkingLevel: "minimal",
-              includeThoughts: false,
-            },
-          } satisfies GoogleGenerativeAIProviderOptions,
-        },
         abortSignal,
         ...aiAnalytics.stepCallbacks,
       });

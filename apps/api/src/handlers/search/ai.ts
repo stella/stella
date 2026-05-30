@@ -1,4 +1,3 @@
-import type { GoogleGenerativeAIProviderOptions } from "@ai-sdk/google";
 import { valibotSchema } from "@ai-sdk/valibot";
 import { generateText, Output } from "ai";
 import { Result } from "better-result";
@@ -19,11 +18,7 @@ import {
 import { resolveSelectedWorkspaceIds } from "@/api/handlers/search/search";
 import { aiErrorStatusBody } from "@/api/lib/ai-error";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
-import {
-  getModelForRole,
-  getTemperatureForRole,
-  requireAIAvailable,
-} from "@/api/lib/ai-models";
+import { getModelForRole, requireAIAvailable } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -218,19 +213,11 @@ const compactContent = (value: unknown): string => {
 const truncate = (text: string, maxLength: number): string =>
   text.length <= maxLength ? text : `${text.slice(0, maxLength - 1)}…`;
 
-const googleMinimalThinking = () => ({
-  google: {
-    thinkingConfig: {
-      thinkingLevel: "minimal",
-      includeThoughts: false,
-    },
-  } satisfies GoogleGenerativeAIProviderOptions,
-});
-
 type GenerateRefinedSearchQueryOptions = {
   attempt: number;
   body: RefineSearchBody;
   lastValidationError: string | null;
+  organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   promptCachingEnabled: boolean;
   stepCallbacks: ReturnType<typeof createAIAnalyticsCallbacks>["stepCallbacks"];
@@ -256,6 +243,7 @@ const generateRefinedSearchQuery = async ({
   attempt,
   body,
   lastValidationError,
+  organizationId,
   orgAIConfig,
   promptCachingEnabled,
   stepCallbacks,
@@ -266,8 +254,8 @@ const generateRefinedSearchQuery = async ({
         model: getModelForRole("fast", orgAIConfig, {
           promptCachingEnabled,
           scopeKey: null,
+          organizationId,
         }),
-        temperature: getTemperatureForRole("fast"),
         system: SEARCH_REFINE_SYSTEM,
         prompt: JSON.stringify({
           attempt,
@@ -279,7 +267,6 @@ const generateRefinedSearchQuery = async ({
           schema: valibotSchema(refineSearchOutputSchema),
         }),
         maxOutputTokens: 180,
-        providerOptions: googleMinimalThinking(),
         abortSignal: AbortSignal.timeout(20_000),
         ...stepCallbacks,
       }),
@@ -315,6 +302,7 @@ export const refineSearchQuery = async ({
       attempt,
       body,
       lastValidationError,
+      organizationId,
       orgAIConfig,
       promptCachingEnabled,
       stepCallbacks: aiAnalytics.stepCallbacks,
@@ -424,8 +412,8 @@ export const summarizeSearchResults = async ({
         model: getModelForRole("fast", orgAIConfig, {
           promptCachingEnabled,
           scopeKey: null,
+          organizationId,
         }),
-        temperature: getTemperatureForRole("fast"),
         system: SEARCH_SUMMARY_SYSTEM,
         prompt: JSON.stringify({
           locale: body.locale ?? "en",
@@ -437,7 +425,6 @@ export const summarizeSearchResults = async ({
           schema: valibotSchema(searchSummaryOutputSchema),
         }),
         maxOutputTokens: 700,
-        providerOptions: googleMinimalThinking(),
         abortSignal: AbortSignal.timeout(30_000),
         ...aiAnalytics.stepCallbacks,
       }),

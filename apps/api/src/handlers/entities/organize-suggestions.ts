@@ -1,4 +1,3 @@
-import type { GoogleGenerativeAIProviderOptions } from "@ai-sdk/google";
 import { valibotSchema } from "@ai-sdk/valibot";
 import { generateText, Output } from "ai";
 import { Result } from "better-result";
@@ -17,7 +16,6 @@ import { aiHandlerError } from "@/api/lib/ai-error";
 import {
   getModelForRole,
   getModelInfoForRole,
-  getTemperatureForRole,
   requireAIAvailable,
 } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
@@ -251,8 +249,8 @@ const organizeSuggestionsHandler = async function* ({
         model: getModelForRole("fast", orgAIConfig, {
           promptCachingEnabled,
           scopeKey: `${organizationId}:${workspaceId}:organize`,
+          organizationId,
         }),
-        temperature: getTemperatureForRole("fast"),
         system: ORGANIZE_SYSTEM_PROMPT,
         prompt: JSON.stringify({
           locale: locale || null,
@@ -277,7 +275,6 @@ const organizeSuggestionsHandler = async function* ({
         // wrapping). Capped at 24 000 so a 100-file batch (~20 200) has
         // headroom for the model's slightly variable output sizes.
         maxOutputTokens: Math.min(24_000, 200 + body.files.length * 200),
-        providerOptions: googleMinimalThinking(),
         abortSignal: AbortSignal.timeout(60_000),
         ...aiAnalytics.stepCallbacks,
       }),
@@ -685,8 +682,8 @@ const generateMissingSummaries = async ({
         model: getModelForRole("fast", orgAIConfig, {
           promptCachingEnabled,
           scopeKey: `${organizationId}:${workspaceId}:summaries`,
+          organizationId,
         }),
-        temperature: getTemperatureForRole("fast"),
         system: SUMMARY_SYSTEM_PROMPT,
         prompt: JSON.stringify({
           files: contexts.map((context) => ({
@@ -703,7 +700,6 @@ const generateMissingSummaries = async ({
         // bigger budget here. ~120 tokens per summary at 100 files puts
         // us around 12 200 tokens.
         maxOutputTokens: Math.min(24_000, 200 + contexts.length * 300),
-        providerOptions: googleMinimalThinking(),
         abortSignal: AbortSignal.timeout(60_000),
         ...aiAnalytics.stepCallbacks,
       }),
@@ -994,15 +990,6 @@ const hashSummarySource = ({
   hasher.update(searchDocumentUpdatedAt?.toISOString() ?? "");
   return hasher.digest("hex");
 };
-
-const googleMinimalThinking = () => ({
-  google: {
-    thinkingConfig: {
-      thinkingLevel: "minimal",
-      includeThoughts: false,
-    },
-  } satisfies GoogleGenerativeAIProviderOptions,
-});
 
 const config = {
   permissions: { workspace: ["read"] },

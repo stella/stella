@@ -42,7 +42,6 @@ import {
   getModelInfoById,
   getModelForRole,
   getModelInfoForRole,
-  getTemperatureForRole,
 } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -172,7 +171,6 @@ const runChatStream = async ({
   const result = streamText({
     abortSignal,
     model,
-    temperature: getTemperatureForRole("chat"),
     system,
     tools,
     experimental_repairToolCall: async ({ toolCall }) =>
@@ -255,6 +253,7 @@ type StreamChatProps = {
   devModelId?: string | undefined;
   messages: ChatMessage[];
   onFinish: UIMessageStreamOnFinishCallback<ChatMessage>;
+  organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   promptCacheKey: string;
   promptCachingEnabled: boolean;
@@ -283,6 +282,7 @@ export const streamChat = async ({
   devModelId,
   messages: rawMessages,
   onFinish,
+  organizationId,
   orgAIConfig,
   promptCacheKey,
   promptCachingEnabled,
@@ -389,10 +389,12 @@ export const streamChat = async ({
             promptCachingEnabled,
             scopeKey: promptCacheKey,
             role: "chat",
+            organizationId,
           })
         : getModelForRole("chat", orgAIConfig, {
             promptCachingEnabled,
             scopeKey: promptCacheKey,
+            organizationId,
           });
       // Eligible fallback: a *different* model on the same orgAI
       // config. Skip when the user has pinned a specific dev
@@ -434,6 +436,7 @@ export const streamChat = async ({
         const fallbackModel = getModelForRole("reasoning", orgAIConfig, {
           promptCachingEnabled,
           scopeKey: promptCacheKey,
+          organizationId,
         });
         await runChatStream({
           writer,

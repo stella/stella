@@ -33,11 +33,7 @@ import type { ScopedDb } from "@/api/db";
 // eslint-disable-next-line no-restricted-imports
 import { rootDb } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
-import {
-  getModelForRole,
-  getModelInfoForRole,
-  getTemperatureForRole,
-} from "@/api/lib/ai-models";
+import { getModelForRole, getModelInfoForRole } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
@@ -96,6 +92,7 @@ const runGeneration = async (
     language: string;
     decisionType: string | null;
   },
+  organizationId: SafeId<"organization">,
   orgAIConfig: OrgAIConfig | null,
   promptCachingEnabled: boolean,
 ) => {
@@ -112,6 +109,7 @@ ${decisionText}`;
   const model = getModelForRole("fast", orgAIConfig, {
     promptCachingEnabled,
     scopeKey: decisionId,
+    organizationId,
   });
   const { modelId } = getModelInfoForRole("fast", orgAIConfig);
   const aiAnalytics = createAIAnalyticsCallbacks({
@@ -128,7 +126,6 @@ ${decisionText}`;
   try {
     const result = streamText({
       model,
-      temperature: getTemperatureForRole("fast"),
       output: Output.array({
         element: valibotSchema(analysisHeadingSchema),
       }),
@@ -204,6 +201,7 @@ ${decisionText}`;
 export const generateAnalysis = async (
   decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
+  organizationId: SafeId<"organization">,
   orgAIConfig: OrgAIConfig | null,
   promptCachingEnabled: boolean,
 ): Promise<{
@@ -286,6 +284,7 @@ export const generateAnalysis = async (
     decisionId,
     ast,
     decision,
+    organizationId,
     orgAIConfig,
     promptCachingEnabled,
   );

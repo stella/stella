@@ -14,6 +14,7 @@ process.env["SMTP_HOST"] ??= "localhost";
 process.env["SMTP_PORT"] ??= "1025";
 
 const {
+  defaultsForRole,
   getModelForRole,
   getModelInfoById,
   getModelInfoForRole,
@@ -294,7 +295,7 @@ describe("BYOK model overrides", () => {
       expect(() =>
         getModelForRole(role, orgConfig, {
           promptCachingEnabled: true,
-          scopeKey: null,
+          scopeKey: null, organizationId: null,
         }),
       ).not.toThrow();
     }
@@ -337,7 +338,7 @@ describe("BYOK model overrides", () => {
       expect(() =>
         getModelForRole(role, orgConfig, {
           promptCachingEnabled: true,
-          scopeKey: null,
+          scopeKey: null, organizationId: null,
         }),
       ).not.toThrow();
     }
@@ -362,7 +363,7 @@ describe("BYOK model overrides", () => {
     expect(() =>
       getModelForRole("reasoning", orgConfig, {
         promptCachingEnabled: true,
-        scopeKey: null,
+        scopeKey: null, organizationId: null,
       }),
     ).not.toThrow();
     expect(getModelInfoForRole("reasoning", orgConfig).modelId).toBe(
@@ -398,7 +399,7 @@ describe("BYOK model overrides", () => {
     expect(() =>
       getModelForRole("chat", orgConfig, {
         promptCachingEnabled: true,
-        scopeKey: null,
+        scopeKey: null, organizationId: null,
       }),
     ).not.toThrow();
   });
@@ -437,5 +438,93 @@ describe("resolveCaching", () => {
       scopeKey: null,
     });
     expect(decision).toMatchObject({ enabled: true, scopeKey: null });
+  });
+});
+
+describe("defaultsForRole", () => {
+  test("temperature is 0 for every role", () => {
+    for (const role of ["fast", "chat", "reasoning", "pdf"] as const) {
+      for (const provider of [
+        "google",
+        "anthropic",
+        "openai",
+        "mistral",
+      ] as const) {
+        expect(defaultsForRole(role, provider, null)).toMatchObject({
+          temperature: 0,
+        });
+      }
+    }
+  });
+
+  test("google fast/chat/pdf use minimal thinking; reasoning uses high", () => {
+    for (const role of ["fast", "chat", "pdf"] as const) {
+      const s = defaultsForRole(role, "google", null);
+      expect(s.providerOptions?.["google"]).toMatchObject({
+        thinkingConfig: { thinkingLevel: "minimal", includeThoughts: false },
+      });
+    }
+    const reasoning = defaultsForRole("reasoning", "google", null);
+    expect(reasoning.providerOptions?.["google"]).toMatchObject({
+      thinkingConfig: { thinkingLevel: "high", includeThoughts: false },
+    });
+  });
+
+  test("google providerOptions include safetySettings baseline", () => {
+    const s = defaultsForRole("fast", "google", null);
+    const google = s.providerOptions?.["google"] as
+      | { safetySettings?: { category: string; threshold: string }[] }
+      | undefined;
+    expect(google?.safetySettings).toBeDefined();
+    expect(google?.safetySettings?.length).toBeGreaterThan(0);
+    expect(
+      google?.safetySettings?.every((s) => s.threshold === "BLOCK_ONLY_HIGH"),
+    ).toBe(true);
+  });
+
+  test("anthropic includes hashed metadata.user_id when orgId is given", () => {
+    // SAFETY: orgId is a SafeId<"organization"> brand; using a fake
+    // string for unit purposes (the helper only hashes the value).
+    const orgId = "org_test_abc123" as ReturnType<
+      typeof getModelInfoForRole
+    >["modelId"] as never;
+    const s = defaultsForRole("fast", "anthropic", orgId);
+    const anthropic = s.providerOptions?.["anthropic"] as
+      | { metadata?: { user_id?: string } }
+      | undefined;
+    expect(anthropic?.metadata?.user_id).toBeDefined();
+    expect(anthropic?.metadata?.user_id).not.toBe("org_test_abc123");
+    expect(anthropic?.metadata?.user_id?.length).toBe(16);
+  });
+
+  test("anthropic reasoning enables thinking with a budget", () => {
+    const s = defaultsForRole("reasoning", "anthropic", null);
+    expect(s.providerOptions?.["anthropic"]).toMatchObject({
+      thinking: { type: "enabled" },
+    });
+  });
+
+  test("anthropic fast/chat/pdf do not enable thinking", () => {
+    for (const role of ["fast", "chat", "pdf"] as const) {
+      const s = defaultsForRole(role, "anthropic", null);
+      const anthropic = s.providerOptions?.["anthropic"] as
+        | { thinking?: unknown }
+        | undefined;
+      expect(anthropic?.thinking).toBeUndefined();
+    }
+  });
+
+  test("openai reasoning sets reasoning_effort", () => {
+    const s = defaultsForRole("reasoning", "openai", null);
+    expect(s.providerOptions?.["openai"]).toMatchObject({
+      reasoning_effort: "medium",
+    });
+  });
+
+  test("openai non-reasoning roles set no provider options", () => {
+    for (const role of ["fast", "chat", "pdf"] as const) {
+      const s = defaultsForRole(role, "openai", null);
+      expect(s.providerOptions).toBeUndefined();
+    }
   });
 });

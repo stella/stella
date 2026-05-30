@@ -7,7 +7,7 @@ import {
   loadPromptCachingPreference,
 } from "@/api/lib/ai-config-loader";
 import { aiHandlerError } from "@/api/lib/ai-error";
-import { getModelForRole, getTemperatureForRole } from "@/api/lib/ai-models";
+import { getModelForRole } from "@/api/lib/ai-models";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -155,8 +155,8 @@ const suggestPrompt = createSafeHandler(
           model: getModelForRole("fast", orgAIConfig, {
             promptCachingEnabled,
             scopeKey: null,
+            organizationId: session.activeOrganizationId,
           }),
-          temperature: getTemperatureForRole("fast"),
           system: SYSTEM_PROMPT,
           messages: [{ role: "user", content: userMessage }],
           abortSignal: AbortSignal.any([

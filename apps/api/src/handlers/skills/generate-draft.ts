@@ -4,11 +4,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 import * as v from "valibot";
 
-import {
-  getModelForRole,
-  getTemperatureForRole,
-  requireAIAvailable,
-} from "@/api/lib/ai-models";
+import { getModelForRole, requireAIAvailable } from "@/api/lib/ai-models";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -100,10 +96,10 @@ const generateSkillDraft = createSafeRootHandler(
           model: getModelForRole("fast", orgAIConfig, {
             promptCachingEnabled,
             scopeKey: null,
+            organizationId: session.activeOrganizationId,
           }),
           output: Output.object({ schema: valibotSchema(aiGenerationSchema) }),
           prompt,
-          temperature: getTemperatureForRole("fast"),
           ...aiAnalytics.stepCallbacks,
         }),
       catch: (cause) => {

@@ -27,8 +27,10 @@ import { createVertex } from "@ai-sdk/google-vertex";
 import { createMistral, mistral } from "@ai-sdk/mistral";
 import { createOpenAI, openai } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { wrapLanguageModel } from "ai";
+import { defaultSettingsMiddleware, wrapLanguageModel } from "ai";
 import type { LanguageModel, LanguageModelMiddleware } from "ai";
+
+import type { SafeId } from "@/api/lib/branded-types";
 import { panic, Result } from "better-result";
 
 import { env } from "@/api/env";
@@ -904,11 +906,106 @@ const cachingMiddleware = (
     await Promise.resolve(computeCachingParams(params, provider, decision)),
 });
 
+// -- Default settings -------------------------------------------
+
+/**
+ * Anthropic recommends an opaque hash for `metadata.user_id`
+ * rather than the raw organisation id. Truncated SHA-256 keeps
+ * the value stable per org without leaking the safe id verbatim.
+ */
+const hashOrgId = (orgId: SafeId<"organization">): string =>
+  new Bun.CryptoHasher("sha256").update(orgId).digest("hex").slice(0, 16);
+
+/**
+ * Sensible Google `safetySettings` baseline for legal-document
+ * workloads. The default Gemini thresholds occasionally refuse
+ * benign legal content (defamation discussions, criminal-case
+ * summaries); raising the threshold avoids surprise refusals
+ * while still blocking the worst categories at HIGH.
+ */
+type JSONObject = { [k: string]: JSONValue };
+type JSONValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JSONValue[]
+  | { [k: string]: JSONValue };
+
+const GOOGLE_SAFETY_SETTINGS_BASELINE: JSONValue = [
+  { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+  { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+  { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+  { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
+];
+
+type Settings = Parameters<typeof defaultSettingsMiddleware>[0]["settings"];
+
+export const defaultsForRole = (
+  role: ModelRole,
+  provider: AIProvider,
+  orgId: SafeId<"organization"> | null,
+): Settings => {
+  const settings: Settings = {
+    temperature: TEMPERATURE_PER_ROLE[role],
+  };
+
+  if (provider === "google") {
+    const thinkingLevel = role === "reasoning" ? "high" : "minimal";
+    settings.providerOptions = {
+      google: {
+        thinkingConfig: {
+          thinkingLevel,
+          includeThoughts: false,
+        },
+        safetySettings: GOOGLE_SAFETY_SETTINGS_BASELINE,
+      },
+    };
+    return settings;
+  }
+
+  if (provider === "anthropic") {
+    const anthropicOptions: JSONObject = {};
+    if (orgId !== null) {
+      anthropicOptions["metadata"] = { user_id: hashOrgId(orgId) };
+    }
+    if (role === "reasoning") {
+      anthropicOptions["thinking"] = {
+        type: "enabled",
+        budgetTokens: 10_000,
+      };
+    }
+    if (Object.keys(anthropicOptions).length > 0) {
+      settings.providerOptions = { anthropic: anthropicOptions };
+    }
+    return settings;
+  }
+
+  if (provider === "openai" || provider === "azure_foundry") {
+    if (role === "reasoning") {
+      settings.providerOptions = {
+        openai: { reasoning_effort: "medium" },
+      };
+    }
+    return settings;
+  }
+
+  return settings;
+};
+
 const withInstrumentation = (
   model: WrappableLanguageModel,
-  ctx: { provider: AIProvider; decision: CachingDecision },
+  ctx: {
+    provider: AIProvider;
+    decision: CachingDecision;
+    role: ModelRole;
+    organizationId: SafeId<"organization"> | null;
+  },
 ): LanguageModel => {
   const middlewares: SingleMiddleware[] = [
+    defaultSettingsMiddleware({
+      settings: defaultsForRole(ctx.role, ctx.provider, ctx.organizationId),
+    }),
     cachingMiddleware(ctx.provider, ctx.decision),
   ];
   if (isAIDevToolsEnabled()) {
@@ -989,9 +1086,13 @@ export const validateDevModelOverride = (
 export const getModelForRole = (
   role: ModelRole,
   orgConfig: OrgAIConfig | null | undefined,
-  options: { promptCachingEnabled: boolean; scopeKey: string | null },
+  options: {
+    promptCachingEnabled: boolean;
+    scopeKey: string | null;
+    organizationId: SafeId<"organization"> | null;
+  },
 ): LanguageModel => {
-  const { promptCachingEnabled, scopeKey } = options;
+  const { promptCachingEnabled, scopeKey, organizationId } = options;
   // BYOK path: org selects a model for each role through
   // one of its configured provider credentials.
   if (orgConfig) {
@@ -1002,6 +1103,8 @@ export const getModelForRole = (
     return withInstrumentation(factory(selection.modelId), {
       provider: providerConfig.provider,
       decision,
+      role,
+      organizationId,
     });
   }
 
@@ -1023,6 +1126,8 @@ export const getModelForRole = (
   return withInstrumentation(getInstanceFactory()(modelId), {
     provider,
     decision,
+    role,
+    organizationId,
   });
 };
 
@@ -1103,10 +1208,11 @@ export const getModelById = (
     promptCachingEnabled: boolean;
     scopeKey: string | null;
     role: ModelRole;
+    organizationId: SafeId<"organization"> | null;
   },
 ): LanguageModel => {
   const override = decodeModelOverride(modelId);
-  const { promptCachingEnabled, scopeKey, role } = options;
+  const { promptCachingEnabled, scopeKey, role, organizationId } = options;
   const decision = resolveCaching({ promptCachingEnabled, role, scopeKey });
   if (orgConfig) {
     const providerConfig = override.provider
@@ -1114,17 +1220,29 @@ export const getModelById = (
       : getPrimaryOrgProvider(orgConfig);
     return withInstrumentation(
       getCachedFactory(providerConfig)(override.modelId),
-      { provider: providerConfig.provider, decision },
+      {
+        provider: providerConfig.provider,
+        decision,
+        role,
+        organizationId,
+      },
     );
   }
   if (override.provider) {
     return withInstrumentation(
       createModelFactory({ provider: override.provider })(override.modelId),
-      { provider: override.provider, decision },
+      {
+        provider: override.provider,
+        decision,
+        role,
+        organizationId,
+      },
     );
   }
   return withInstrumentation(getInstanceFactory()(override.modelId), {
     provider: getActiveProvider(),
     decision,
+    role,
+    organizationId,
   });
 };
