@@ -66,9 +66,7 @@ describe("wp:effectExtent stays separate from wp:inline/wp:anchor dist*", () => 
       // image.padding is OOXML's wp:effectExtent reservation (EMUs).
       padding: { top: 100, bottom: 200, left: 300, right: 400 },
     });
-    expect(xml).toContain(
-      '<wp:effectExtent l="300" t="100" r="400" b="200"/>',
-    );
+    expect(xml).toContain('<wp:effectExtent l="300" t="100" r="400" b="200"/>');
     // No wrap distances were set, so dist* on wp:inline must be zero.
     expect(xml).toContain('distT="0" distB="0" distL="0" distR="0"');
   });
@@ -153,6 +151,22 @@ describe("a:alphaModFix opacity round-trip", () => {
     expect(img?.opacity).toBeUndefined();
   });
 
+  test('non-numeric amt (e.g. amt="oops") parses as undefined, not NaN', () => {
+    const img = parseDrawingFromXml(`
+      <wp:inline>
+        <wp:extent cx="100" cy="100"/>
+        <wp:docPr id="1" name="img"/>
+        <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+          <pic:pic>
+            <pic:nvPicPr><pic:cNvPr id="1" name="img"/><pic:cNvPicPr/></pic:nvPicPr>
+            <pic:blipFill><a:blip r:embed="rId1"><a:alphaModFix amt="oops"/></a:blip></pic:blipFill>
+            <pic:spPr><a:xfrm><a:ext cx="100" cy="100"/></a:xfrm></pic:spPr>
+          </pic:pic>
+        </a:graphicData></a:graphic>
+      </wp:inline>`);
+    expect(img?.opacity).toBeUndefined();
+  });
+
   test("serialize opacity < 1 emits a:alphaModFix; opacity 1 omits it", () => {
     const opaque = serializeImage({
       type: "image",
@@ -208,6 +222,50 @@ describe("wp:anchor layoutInCell / allowOverlap tri-state round-trip", () => {
       </wp:anchor>`);
     expect(img?.layoutInCell).toBe(false);
     expect(img?.allowOverlap).toBe(false);
+  });
+
+  test('parse "true"/"false" literals (OOXML ST_OnOff full set)', () => {
+    const trueImg = parseDrawingFromXml(`
+      <wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0"
+                 relativeHeight="0" behindDoc="0" locked="0"
+                 layoutInCell="true" allowOverlap="true">
+        <wp:simplePos x="0" y="0"/>
+        <wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>
+        <wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>
+        <wp:extent cx="100" cy="100"/>
+        <wp:wrapNone/>
+        <wp:docPr id="1" name="img"/>
+        <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+          <pic:pic>
+            <pic:nvPicPr><pic:cNvPr id="1" name="img"/><pic:cNvPicPr/></pic:nvPicPr>
+            <pic:blipFill><a:blip r:embed="rId1"/></pic:blipFill>
+            <pic:spPr><a:xfrm><a:ext cx="100" cy="100"/></a:xfrm></pic:spPr>
+          </pic:pic>
+        </a:graphicData></a:graphic>
+      </wp:anchor>`);
+    expect(trueImg?.layoutInCell).toBe(true);
+    expect(trueImg?.allowOverlap).toBe(true);
+
+    const falseImg = parseDrawingFromXml(`
+      <wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0"
+                 relativeHeight="0" behindDoc="0" locked="0"
+                 layoutInCell="false" allowOverlap="false">
+        <wp:simplePos x="0" y="0"/>
+        <wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>
+        <wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>
+        <wp:extent cx="100" cy="100"/>
+        <wp:wrapNone/>
+        <wp:docPr id="1" name="img"/>
+        <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+          <pic:pic>
+            <pic:nvPicPr><pic:cNvPr id="1" name="img"/><pic:cNvPicPr/></pic:nvPicPr>
+            <pic:blipFill><a:blip r:embed="rId1"/></pic:blipFill>
+            <pic:spPr><a:xfrm><a:ext cx="100" cy="100"/></a:xfrm></pic:spPr>
+          </pic:pic>
+        </a:graphicData></a:graphic>
+      </wp:anchor>`);
+    expect(falseImg?.layoutInCell).toBe(false);
+    expect(falseImg?.allowOverlap).toBe(false);
   });
 
   test("parse absent attrs → undefined (omit the field entirely)", () => {

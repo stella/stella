@@ -307,10 +307,37 @@ function parseImageCrop(blipFill: XmlElement | null): ImageCrop | undefined {
 }
 
 /**
+ * Parse an OOXML `ST_OnOff` attribute on an element. Accepts the full
+ * set of literals the spec allows (`"1"`/`"true"`/`"on"` and
+ * `"0"`/`"false"`/`"off"`); anything else (including an absent
+ * attribute) folds back to `undefined` so callers can apply the
+ * spec-defined default.
+ */
+function parseOnOffAttr(
+  element: XmlElement,
+  name: string,
+): boolean | undefined {
+  const raw = getAttribute(element, null, name);
+  if (raw === null) {
+    return undefined;
+  }
+  if (raw === "1" || raw === "true" || raw === "on") {
+    return true;
+  }
+  if (raw === "0" || raw === "false" || raw === "off") {
+    return false;
+  }
+  return undefined;
+}
+
+/**
  * Parse `<a:alphaModFix amt="..."/>` inside the `a:blip` element. The
  * `amt` value is in 1/100000; convert to a fraction in [0, 1] for CSS
  * `opacity`. Returns undefined when no alpha modifier is present (fully
- * opaque) or when `amt` >= 100000 (also fully opaque).
+ * opaque), when `amt` is missing or non-numeric, or when `amt` >= 100000
+ * (also fully opaque). `parseNumericAttribute` already returns
+ * `undefined` (not `NaN`) for non-numeric values, so a downstream NaN
+ * is impossible here.
  *
  * Mirrors eigenpal docx-editor #424.
  */
@@ -326,7 +353,9 @@ function parseImageOpacity(blip: XmlElement | null): number | undefined {
   if (amt === undefined || amt >= 100_000) {
     return undefined;
   }
-  return Math.max(0, Math.min(1, amt / 100_000));
+  // `amt < 100_000` is guaranteed above, so the result is < 1; only
+  // clamp the lower bound.
+  return Math.max(0, amt / 100_000);
 }
 
 /**
@@ -673,12 +702,11 @@ function parseAnchor(
   // attributes are absent. We only record the value when the document
   // deviates from the default so the round-trip preserves author intent
   // without bloating the serialized XML. Mirrors eigenpal #424.
-  const layoutInCellAttr = getAttribute(anchorEl, null, "layoutInCell");
-  const layoutInCell =
-    layoutInCellAttr === null ? undefined : layoutInCellAttr === "1";
-  const allowOverlapAttr = getAttribute(anchorEl, null, "allowOverlap");
-  const allowOverlap =
-    allowOverlapAttr === null ? undefined : allowOverlapAttr === "1";
+  //
+  // `ST_OnOff` accepts "1"/"true"/"on" and "0"/"false"/"off"; anything
+  // unrecognized folds back to `undefined` (default).
+  const layoutInCell = parseOnOffAttr(anchorEl, "layoutInCell");
+  const allowOverlap = parseOnOffAttr(anchorEl, "allowOverlap");
 
   // Read distance attributes from the wp:anchor element itself (fallback values)
   const anchorDistT = parseNumericAttribute(anchorEl, null, "distT");

@@ -773,9 +773,11 @@ function serializePicGraphic(image: Image, sharedId: string): string {
 
   // <a:blip> with optional <a:alphaModFix> child for image transparency.
   // OOXML stores the alpha amount in 1/100000 units. Mirrors eigenpal #424.
+  // `image.opacity < 1` is guaranteed by the branch, so only clamp the
+  // lower bound.
   const alphaChild =
     image.opacity !== undefined && image.opacity < 1
-      ? `<a:alphaModFix amt="${Math.round(Math.max(0, Math.min(1, image.opacity)) * 100_000)}"/>`
+      ? `<a:alphaModFix amt="${Math.round(Math.max(0, image.opacity) * 100_000)}"/>`
       : "";
   const blipEl = alphaChild
     ? `<a:blip r:embed="${rId}">${alphaChild}</a:blip>`
