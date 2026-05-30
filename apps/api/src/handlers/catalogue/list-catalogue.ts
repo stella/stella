@@ -8,23 +8,19 @@ import {
   type LoadedCatalogueEntry,
 } from "@stll/catalogue";
 
+import { agentSkills, mcpConnectors } from "@/api/db/schema";
 import {
-  agentSkills,
-  mcpConnectors,
-  type PracticeJurisdiction,
-} from "@/api/db/schema";
-import {
-  isNativeToolEnabledForOrg,
-  NATIVE_TOOL_SLUGS,
-} from "@/api/handlers/mcp-connectors/catalog-metadata";
+  computeCatalogueInstallState,
+  type CatalogueInstallState,
+} from "@/api/handlers/catalogue/install-state";
+import { NATIVE_TOOL_SLUGS } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { isWebSearchDeployAvailable } from "@/api/lib/web-search/select-provider";
 
 const config = {
   permissions: { workspace: ["read"] },
 } satisfies HandlerConfig;
-
-type InstallState = "installed" | "available" | "unavailable";
 
 type PublicCatalogueEntry<
   T extends LoadedCatalogueEntry = LoadedCatalogueEntry,
@@ -32,7 +28,7 @@ type PublicCatalogueEntry<
 
 type CatalogueEntryResponse = PublicCatalogueEntry & {
   isRecommendedForOrg: boolean;
-  installState: InstallState;
+  installState: CatalogueInstallState;
   /**
    * True when the entry is a system capability the user cannot toggle
    * (non-toggleable pinned native-tools). UI hides install/uninstall
@@ -130,6 +126,7 @@ const listCatalogue = createSafeRootHandler(
     const installedSkillSlugs = new Set(installedSkills.map((row) => row.slug));
     const installedMcpUrls = new Set(installedMcps.map((row) => row.url));
     const nativeToolBackendSet = new Set(NATIVE_TOOL_SLUGS);
+    const webSearchDeployAvailable = isWebSearchDeployAvailable();
 
     const response: CatalogueEntryResponse[] = [];
     for (const entry of entries) {
@@ -143,13 +140,14 @@ const listCatalogue = createSafeRootHandler(
         !nativeToolBackendSet.has(entry.backendSlug);
       const installState = isLocked
         ? ("installed" as const)
-        : computeInstallState({
+        : computeCatalogueInstallState({
             entry,
             installedSkillSlugs,
             installedMcpUrls,
             nativeToolBackendSet,
             nativeToolOverrides,
             practiceJurisdictions,
+            webSearchDeployAvailable,
           });
       const publicEntry = toPublicCatalogueEntry(entry);
       response.push({
@@ -166,43 +164,5 @@ const listCatalogue = createSafeRootHandler(
     });
   },
 );
-
-const computeInstallState = ({
-  entry,
-  installedSkillSlugs,
-  installedMcpUrls,
-  nativeToolBackendSet,
-  nativeToolOverrides,
-  practiceJurisdictions,
-}: {
-  entry: LoadedCatalogueEntry;
-  installedSkillSlugs: ReadonlySet<string>;
-  installedMcpUrls: ReadonlySet<string>;
-  nativeToolBackendSet: ReadonlySet<string>;
-  nativeToolOverrides: Readonly<Record<string, boolean>>;
-  practiceJurisdictions: readonly PracticeJurisdiction[];
-}): InstallState => {
-  if (entry.kind === "skill") {
-    return installedSkillSlugs.has(entry.slug) ? "installed" : "available";
-  }
-  if (entry.kind === "mcp") {
-    return installedMcpUrls.has(entry.url) ? "installed" : "available";
-  }
-  if (!nativeToolBackendSet.has(entry.backendSlug)) {
-    return "unavailable";
-  }
-  // Use the same effective-enabled rule as the chat runtime: an
-  // explicit override wins, otherwise the jurisdiction default
-  // decides. Without this, jurisdiction-defaulted tools (e.g. ARES
-  // for a CZ practice) would falsely show as "available" until the
-  // user writes a redundant override.
-  return isNativeToolEnabledForOrg({
-    slug: entry.backendSlug,
-    practiceJurisdictions,
-    nativeToolOverrides,
-  })
-    ? "installed"
-    : "available";
-};
 
 export default listCatalogue;

@@ -34,6 +34,9 @@ export const getWebSearchProvider = (): WebSearchProvider | null => {
   return webSearchProviderSingleton;
 };
 
+export const isWebSearchDeployAvailable = (): boolean =>
+  env.FEATURE_WEB_SEARCH && getWebSearchProvider() !== null;
+
 export const getUrlFetcher = (): UrlFetcher | null => {
   if (urlFetcherSingleton === undefined) {
     urlFetcherSingleton = buildUrlFetcher();

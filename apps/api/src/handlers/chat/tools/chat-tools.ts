@@ -3,7 +3,6 @@ import type { ToolSet } from "ai";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, ScopedDb } from "@/api/db";
-import { env } from "@/api/env";
 import { getChatSkillMetadata } from "@/api/handlers/chat/skills";
 import {
   APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME,
@@ -32,7 +31,7 @@ import {
 } from "@/api/handlers/chat/tools/web-search-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
 import type { SafeId } from "@/api/lib/branded-types";
-import { getWebSearchProvider } from "@/api/lib/web-search/select-provider";
+import { isWebSearchDeployAvailable } from "@/api/lib/web-search/select-provider";
 
 export const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";
 
@@ -41,11 +40,7 @@ export const isWebSearchAvailable = (
 ): boolean => {
   const webSearchOrgDisabled =
     disabledNativeToolSlugs?.includes(WEB_SEARCH_NATIVE_TOOL_SLUG) ?? false;
-  return (
-    env.FEATURE_WEB_SEARCH &&
-    !webSearchOrgDisabled &&
-    getWebSearchProvider() !== null
-  );
+  return isWebSearchDeployAvailable() && !webSearchOrgDisabled;
 };
 
 type WorkspaceTools = ReturnType<typeof createWorkspaceTools>;
