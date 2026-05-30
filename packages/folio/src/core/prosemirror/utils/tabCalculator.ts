@@ -190,24 +190,43 @@ export function computeTabStops(context: TabContext): TabStop[] {
 }
 
 /**
- * Calculate the width of a tab character
+ * Pixel widths of the content after a tab, needed to position non-left stops.
  *
- * Finds the next tab stop after the current position and computes
- * the width needed to reach it.
+ * Caller measures its own runs (the painter and the layout measurer have
+ * different run models and measurement paths) and passes the result here, so
+ * this module owns the stop grid + alignment math without owning measurement.
+ */
+export type TabFollowingContent = {
+  /** Total width of the runs after the tab. Used for `end` and `center` stops. */
+  followingWidth?: number;
+  /** Width of the content before the decimal separator. Used for `decimal` stops. */
+  decimalPrefixWidth?: number;
+};
+
+// eigenpal #576: `calculateTabWidth` previously took a `followingText` string
+// plus a `measureText` callback, which forced both call sites to share one
+// measurement path. The painter and the measurer have different run models
+// (DOM-styled spans vs. layout `Run`s) and different font-resolution paths,
+// so each caller now measures its own runs and passes the result via
+// `TabFollowingContent` — this module owns only the stop grid + alignment.
+/**
+ * Calculate the width of a tab character.
  *
- * @param currentXPx - Current horizontal position in pixels
+ * Finds the next tab stop after the current position and computes the width
+ * needed to reach it. For `end`/`center`/`decimal` stops the content after the
+ * tab is anchored against the stop, so the caller supplies its measured width
+ * via {@link TabFollowingContent}.
+ *
+ * @param currentXPx - Current horizontal position in pixels (from the content
+ *   area's left edge — the same origin tab stop positions are measured from)
  * @param context - Tab context with stops and settings
- * @param followingText - Text immediately after the tab (for center/end/decimal alignment)
- * @param measureText - Function to measure text width in pixels
- * @param decimalSeparator - Character used for decimal alignment (default: '.')
+ * @param following - Measured widths of the content after the tab
  * @returns Tab width result with width in pixels
  */
 export function calculateTabWidth(
   currentXPx: number,
   context: TabContext,
-  followingText = "",
-  measureText?: (text: string) => number,
-  decimalSeparator = ".",
+  following: TabFollowingContent = {},
 ): TabWidthResult {
   const { defaultTabInterval = DEFAULT_TAB_INTERVAL_TWIPS } = context;
 
@@ -237,21 +256,14 @@ export function calculateTabWidth(
   const nextStopPx = twipsToPixels(nextStop.pos);
   let width = nextStopPx - currentXPx;
 
-  // Adjust for alignment types
-  if (nextStop.val === "center" || nextStop.val === "end") {
-    const textWidth = measureText ? measureText(followingText) : 0;
-    if (nextStop.val === "center") {
-      width -= textWidth / 2;
-    } else {
-      width -= textWidth;
-    }
+  // Adjust for alignment types — the content after the tab is anchored to the
+  // stop, so the tab only spans the room left of that content.
+  if (nextStop.val === "center") {
+    width -= (following.followingWidth ?? 0) / 2;
+  } else if (nextStop.val === "end") {
+    width -= following.followingWidth ?? 0;
   } else if (nextStop.val === "decimal") {
-    const decimalIndex = followingText.indexOf(decimalSeparator);
-    if (decimalIndex !== -1 && measureText) {
-      const before = followingText.slice(0, decimalIndex);
-      const beforeWidth = measureText(before);
-      width -= beforeWidth;
-    }
+    width -= following.decimalPrefixWidth ?? 0;
   } else if (nextStop.val === "bar") {
     // Bar tabs have zero width but render a vertical line
     return {

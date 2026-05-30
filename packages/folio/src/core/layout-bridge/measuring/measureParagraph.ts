@@ -17,6 +17,12 @@ import type {
   FieldRun,
   ParagraphSpacing,
 } from "../../layout-engine/types";
+import { isFloatingImageRun } from "../../layout-painter/renderUtils";
+import {
+  calculateTabWidth,
+  pixelsToTwips,
+} from "../../prosemirror/utils/tabCalculator";
+import type { TabContext } from "../../prosemirror/utils/tabCalculator";
 import { DEFAULT_SINGLE_LINE_RATIO } from "../../utils/fontResolver";
 import { getListMarkerInlineWidth } from "./listMarkerWidth";
 import {
@@ -24,7 +30,6 @@ import {
   measureRun,
   getFontMetrics,
   ptToPx,
-  twipsToPx,
 } from "./measureContainer";
 import type { FontStyle, FontMetrics } from "./measureContainer";
 
@@ -36,29 +41,6 @@ const DEFAULT_LINE_HEIGHT_MULTIPLIER = 1; // OOXML spec default: single spacing 
 // Floating-point tolerance for line breaking (0.5px)
 // Prevents premature line breaks due to measurement rounding
 const WIDTH_TOLERANCE = 0.5;
-
-/**
- * Compute the width a tab character should advance to reach the next tab stop.
- */
-function computeTabWidth(
-  currentPos: number,
-  tabStops: { pos: number; val: string }[] | undefined,
-): number {
-  if (tabStops && tabStops.length > 0) {
-    for (const stop of tabStops) {
-      const stopPx = twipsToPx(stop.pos);
-      if (stopPx > currentPos + 0.5) {
-        return Math.max(1, stopPx - currentPos);
-      }
-    }
-  }
-  // No matching stop — advance to next default interval
-  const remainder = currentPos % DEFAULT_TAB_WIDTH;
-  return Math.max(
-    1,
-    remainder < 0.5 ? DEFAULT_TAB_WIDTH : DEFAULT_TAB_WIDTH - remainder,
-  );
-}
 
 /**
  * Find the longest prefix of `text` that fits within `maxWidth` pixels.
@@ -140,9 +122,12 @@ type LineState = {
 };
 
 /**
- * Extract FontStyle from a text run for measurement
+ * Extract FontStyle from a run that carries RunFormatting (text, tab, or
+ * field). All three share the same formatting shape, so they measure the
+ * same way; widening the parameter keeps tab-following measurement
+ * (FieldRun page numbers, etc.) consistent with TextRun handling.
  */
-function runToFontStyle(run: TextRun | TabRun): FontStyle {
+function runToFontStyle(run: TextRun | TabRun | FieldRun): FontStyle {
   return {
     fontFamily: run.fontFamily ?? DEFAULT_FONT_FAMILY,
     fontSize: run.fontSize ?? DEFAULT_FONT_SIZE,
@@ -299,6 +284,73 @@ function isEmptyTextRun(run: TextRun): boolean {
 }
 
 /**
+ * Sum the inline pixel widths of runs after a tab, up to (but not including)
+ * the next tab or line break. Measured per-run so widths reserved match what
+ * the painter draws even when trailing runs use different fonts/sizes.
+ *
+ * Floating/anchored images are skipped — the painter lifts them out of the
+ * paragraph flow (see `isFloatingImageRun`) and `measureFollowingContentWidth`
+ * in the painter already excludes them, so counting their width here would
+ * desync measurer and painter on tab advance for paragraphs with a tab
+ * preceding a floating image.
+ */
+function measureInlineWidthAfterTab(runs: Run[], tabIndex: number): number {
+  let width = 0;
+  for (let i = tabIndex + 1; i < runs.length; i++) {
+    const next = runs[i];
+    if (!next || isTabRun(next) || isLineBreakRun(next)) {
+      break;
+    }
+    if (isTextRun(next)) {
+      width += measureTextWidth(next.text || "", runToFontStyle(next));
+    } else if (isFieldRun(next)) {
+      width += measureTextWidth(next.fallback || "1", runToFontStyle(next));
+    } else if (isImageRun(next) && !isFloatingImageRun(next)) {
+      width += next.width || 0;
+    }
+  }
+  return width;
+}
+
+/**
+ * Width of the inline content preceding the first `.` in the runs that follow
+ * a tab, used to anchor `decimal` tab stops. Mirrors `getTextAfterTab` +
+ * decimal-prefix measurement in the painter (`renderParagraph.ts`) so the
+ * measurer and painter agree on tab advance for decimal stops.
+ *
+ * Returns 0 when no decimal separator appears before the next tab / line
+ * break — `calculateTabWidth` treats that as "no anchor adjustment".
+ */
+function measureDecimalPrefixWidthAfterTab(
+  runs: Run[],
+  tabIndex: number,
+): number {
+  let text = "";
+  let firstRun: TextRun | FieldRun | undefined;
+  for (let i = tabIndex + 1; i < runs.length; i++) {
+    const next = runs[i];
+    if (!next || isTabRun(next) || isLineBreakRun(next)) {
+      break;
+    }
+    if (isTextRun(next)) {
+      text += next.text || "";
+      firstRun ??= next;
+    } else if (isFieldRun(next)) {
+      text += next.fallback || "1";
+      firstRun ??= next;
+    }
+  }
+  const decimalIndex = text.indexOf(".");
+  if (decimalIndex === -1 || !firstRun) {
+    return 0;
+  }
+  return measureTextWidth(
+    text.slice(0, decimalIndex),
+    runToFontStyle(firstRun),
+  );
+}
+
+/**
  * Find word break points in text
  * Returns array of indices where words end (after space/punctuation)
  */
@@ -315,11 +367,6 @@ function findWordBreaks(text: string): number[] {
 
   return breaks;
 }
-
-/**
- * Default tab width in pixels (0.5 inch at 96 DPI)
- */
-const DEFAULT_TAB_WIDTH = 48;
 
 /**
  * When a float's wrap margins consume the entire content width (or more),
@@ -803,14 +850,32 @@ export function measureParagraph(
     }
 
     if (isTabRun(run)) {
-      // Handle tab run — compute width from paragraph tab stops
       const style = runToFontStyle(run);
       updateMaxFont(style);
 
-      // Compute tab width: advance to the next tab stop position.
-      const tabStops = attrs?.tabs;
-      const currentPos = currentLine.width + currentLine.leftOffset;
-      const tabWidth = computeTabWidth(currentPos, tabStops);
+      const followingWidth = measureInlineWidthAfterTab(runs, runIndex);
+      const decimalPrefixWidth = measureDecimalPrefixWidthAfterTab(
+        runs,
+        runIndex,
+      );
+
+      // Tab width comes from the shared tab-stop model (`calculateTabWidth` —
+      // computeTabStops + alignment) that the painter also uses, so measurer
+      // and painter agree on line widths. `calculateTabWidth` works in
+      // content-area coordinates (tab stops are measured from the
+      // content-area left edge), so the indent and any first-line offset are
+      // folded in here; the line-wrap math further down stays indent-relative.
+      const lineX = currentLine.width + currentLine.leftOffset;
+      const isFirstLine = lines.length === 0;
+      const contentX = indentLeft + (isFirstLine ? firstLineOffset : 0) + lineX;
+      const tabContext: TabContext = {
+        ...(attrs?.tabs !== undefined ? { explicitStops: attrs.tabs } : {}),
+        leftIndent: pixelsToTwips(indentLeft),
+      };
+      const tabWidth = calculateTabWidth(contentX, tabContext, {
+        followingWidth,
+        decimalPrefixWidth,
+      }).width;
 
       if (
         currentLine.width + tabWidth >
