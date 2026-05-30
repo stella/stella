@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   CheckIcon,
@@ -34,10 +34,12 @@ import {
   SetupBadge,
 } from "@/routes/_protected.settings/-components/catalogue/catalogue-badges";
 import { CatalogueEntryIcon } from "@/routes/_protected.settings/-components/catalogue/catalogue-entry-icon";
+import { createCatalogueAutoSelectionPlan } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
 
 type CatalogueStepProps = {
   practiceJurisdictions: readonly PracticeJurisdiction[];
   selectedSlugs: readonly string[];
+  removedSlugs: readonly string[];
   focusedSlug: string | null;
   onFocusChange: (slug: string | null) => void;
   onChange: (slugs: readonly string[]) => void;
@@ -51,6 +53,7 @@ const PROPOSE_TOOL_URL =
 export const CatalogueStep = ({
   practiceJurisdictions,
   selectedSlugs,
+  removedSlugs,
   focusedSlug,
   onFocusChange,
   onChange,
@@ -189,30 +192,19 @@ export const CatalogueStep = ({
   // Auto-select first-party recommended entries on first reach of
   // this step. Third-party entries always require the per-entry
   // acknowledgement via the detail panel and are never auto-added.
-  // Runs once per mount; if the user backs out and deselects entries,
-  // they aren't re-added.
-  const didAutoSelectRef = useRef(false);
+  // Explicit removals are tracked by the parent wizard so remounting
+  // this step cannot re-add a recommendation the user removed.
   useEffect(() => {
-    if (didAutoSelectRef.current) {
-      return;
+    const autoSelectionPlan = createCatalogueAutoSelectionPlan({
+      recommendedEntries,
+      removedSlugs,
+      selectedSlugs,
+    });
+
+    if (autoSelectionPlan.addedSlugs.length > 0) {
+      onChange(autoSelectionPlan.selectedSlugs);
     }
-    if (recommendedEntries.length === 0) {
-      return;
-    }
-    didAutoSelectRef.current = true;
-    const next = new Set(selectedSet);
-    let added = false;
-    for (const entry of recommendedEntries) {
-      if (entry.author === "stella" && !next.has(entry.slug)) {
-        next.add(entry.slug);
-        added = true;
-      }
-    }
-    if (added) {
-      onChange([...next]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recommendedEntries.length]);
+  }, [onChange, recommendedEntries, removedSlugs, selectedSlugs]);
 
   return (
     <>

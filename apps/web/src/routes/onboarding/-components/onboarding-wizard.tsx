@@ -94,6 +94,9 @@ export const OnboardingWizard = () => {
   const [catalogueFocusedSlug, setCatalogueFocusedSlug] = useState<
     string | null
   >(null);
+  const [catalogueRemovedSlugs, setCatalogueRemovedSlugs] = useState<
+    readonly string[]
+  >([]);
   const [data, setData] = useState<WizardData>(() => ({
     orgName: "",
     orgSlug: "",
@@ -171,6 +174,37 @@ export const OnboardingWizard = () => {
     }));
     setCatalogueFocusedSlug(null);
     setStep("catalogue");
+  };
+
+  const setCatalogueSlugRemoved = (slug: string, removed: boolean) => {
+    setCatalogueRemovedSlugs((currentSlugs) => {
+      const next = new Set(currentSlugs);
+      if (removed) {
+        next.add(slug);
+      } else {
+        next.delete(slug);
+      }
+      if (next.size === currentSlugs.length) {
+        return currentSlugs;
+      }
+      return [...next];
+    });
+  };
+
+  const markCatalogueSlugsRemoved = (slugs: readonly string[]) => {
+    if (slugs.length === 0) {
+      return;
+    }
+    setCatalogueRemovedSlugs((currentSlugs) => {
+      const next = new Set(currentSlugs);
+      for (const slug of slugs) {
+        next.add(slug);
+      }
+      if (next.size === currentSlugs.length) {
+        return currentSlugs;
+      }
+      return [...next];
+    });
   };
 
   const executeSetup = useCallback(
@@ -481,8 +515,10 @@ export const OnboardingWizard = () => {
             const next = new Set(data.catalogueSlugs);
             if (installed) {
               next.delete(focusedEntry.slug);
+              setCatalogueSlugRemoved(focusedEntry.slug, true);
             } else {
               next.add(focusedEntry.slug);
+              setCatalogueSlugRemoved(focusedEntry.slug, false);
             }
             setData((d) => ({ ...d, catalogueSlugs: [...next] }));
             setCatalogueFocusedSlug(null);
@@ -588,10 +624,12 @@ export const OnboardingWizard = () => {
             onFocusChange={setCatalogueFocusedSlug}
             onNext={() => setStep("ai")}
             onSkip={() => {
+              markCatalogueSlugsRemoved(data.catalogueSlugs);
               setData((d) => ({ ...d, catalogueSlugs: [] }));
               setStep("ai");
             }}
             practiceJurisdictions={data.practiceJurisdictions}
+            removedSlugs={catalogueRemovedSlugs}
             selectedSlugs={data.catalogueSlugs}
           />
         </OnboardingLayout>

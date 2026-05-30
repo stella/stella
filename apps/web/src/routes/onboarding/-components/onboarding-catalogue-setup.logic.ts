@@ -44,6 +44,22 @@ type ReconcileCatalogueSlugsOptions = {
   selectedSlugs: readonly string[];
 };
 
+type CatalogueAutoSelectionEntry = {
+  author: string;
+  slug: string;
+};
+
+export type CatalogueAutoSelectionPlan = {
+  addedSlugs: readonly string[];
+  selectedSlugs: readonly string[];
+};
+
+type CreateCatalogueAutoSelectionPlanOptions = {
+  recommendedEntries: readonly CatalogueAutoSelectionEntry[];
+  removedSlugs: readonly string[];
+  selectedSlugs: readonly string[];
+};
+
 const jurisdictionFilterForPractice = (
   practiceJurisdictions: readonly PracticeJurisdiction[],
 ): ReadonlySet<string> => {
@@ -104,6 +120,33 @@ export const reconcileCatalogueSlugsForJurisdictions = ({
   }
 
   return reconciled;
+};
+
+export const createCatalogueAutoSelectionPlan = ({
+  recommendedEntries,
+  removedSlugs,
+  selectedSlugs,
+}: CreateCatalogueAutoSelectionPlanOptions): CatalogueAutoSelectionPlan => {
+  const removedSet = new Set(removedSlugs);
+  const selectedSet = new Set(selectedSlugs);
+  const addedSlugs: string[] = [];
+
+  for (const entry of recommendedEntries) {
+    if (entry.author !== "stella") {
+      continue;
+    }
+    if (removedSet.has(entry.slug) || selectedSet.has(entry.slug)) {
+      continue;
+    }
+
+    selectedSet.add(entry.slug);
+    addedSlugs.push(entry.slug);
+  }
+
+  return {
+    addedSlugs,
+    selectedSlugs: addedSlugs.length === 0 ? selectedSlugs : [...selectedSet],
+  };
 };
 
 export const createCatalogueSetupPlan = ({

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  createCatalogueAutoSelectionPlan,
   createCatalogueSetupPlan,
   reconcileCatalogueSlugsForJurisdictions,
 } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
@@ -93,5 +94,37 @@ describe("onboarding catalogue selection reconciliation", () => {
     });
 
     expect(slugs).toEqual(["summarise-contract"]);
+  });
+});
+
+describe("onboarding catalogue auto-selection", () => {
+  test("adds first-party recommendations that have not been removed", () => {
+    const plan = createCatalogueAutoSelectionPlan({
+      recommendedEntries: [
+        { author: "stella", slug: "ares" },
+        { author: "community", slug: "third-party-tool" },
+        { author: "stella", slug: "infosoud" },
+      ],
+      removedSlugs: ["infosoud"],
+      selectedSlugs: ["summarise-contract"],
+    });
+
+    expect(plan).toEqual({
+      addedSlugs: ["ares"],
+      selectedSlugs: ["summarise-contract", "ares"],
+    });
+  });
+
+  test("does not re-add a removed recommendation after remount", () => {
+    const plan = createCatalogueAutoSelectionPlan({
+      recommendedEntries: [{ author: "stella", slug: "ares" }],
+      removedSlugs: ["ares"],
+      selectedSlugs: [],
+    });
+
+    expect(plan).toEqual({
+      addedSlugs: [],
+      selectedSlugs: [],
+    });
   });
 });
