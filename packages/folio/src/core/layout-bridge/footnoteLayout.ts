@@ -25,8 +25,17 @@ import type { Footnote, StyleDefinitions, Theme } from "../types/document";
 import { measureParagraph } from "./measuring";
 import { toFlowBlocks } from "./toFlowBlocks";
 
-/** Separator line height + padding in pixels */
-const SEPARATOR_HEIGHT = 12;
+/**
+ * Footnote separator height in pixels: 0.5 px divider rule + symmetric
+ * vertical margins. Single source of truth for the paginator's
+ * reservation tick, the painter's separator margins, and the per-page
+ * height returned by `calculateFootnoteReservedHeights`. Keeping all
+ * three in lockstep ensures the painted area lands inside the slot the
+ * paginator reserved.
+ *
+ * Mirrors eigenpal/docx-editor#485.
+ */
+export const FOOTNOTE_SEPARATOR_HEIGHT = 12;
 
 /** Default footnote font size in points */
 const FOOTNOTE_FONT_SIZE = 8;
@@ -573,7 +582,7 @@ export function calculateFootnoteReservedHeights(
 
     if (totalHeight > 0) {
       // Add separator height
-      totalHeight += SEPARATOR_HEIGHT;
+      totalHeight += FOOTNOTE_SEPARATOR_HEIGHT;
       reserved.set(pageNumber, totalHeight);
     }
   }

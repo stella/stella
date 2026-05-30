@@ -7,6 +7,7 @@
 
 import { panic } from "better-result";
 
+import { FOOTNOTE_SEPARATOR_HEIGHT } from "../layout-bridge/footnoteLayout";
 import {
   clampFloatingWrapMargins,
   measureParagraph,
@@ -1187,6 +1188,25 @@ function renderHeaderFooterContent(
 }
 
 /**
+ * Calculate the painter's actual footnote-area height in pixels:
+ * separator slot + the sum of each footnote's measured content height.
+ * Used to clamp the paginator's reservation if it under-estimated, so
+ * dense stacks never overflow past the page bottom. Mirrors the
+ * upstream helper from eigenpal/docx-editor#485.
+ */
+export function calculateFootnoteAreaRenderHeight(
+  footnotes: FootnoteRenderItem[],
+): number {
+  let height = FOOTNOTE_SEPARATOR_HEIGHT;
+  for (const fn of footnotes) {
+    if (fn.content) {
+      height += fn.content.height;
+    }
+  }
+  return height;
+}
+
+/**
  * Render the footnote area at the bottom of a page.
  * Includes a separator line (33% width) and footnote entries.
  */
@@ -1200,13 +1220,17 @@ export function renderFootnoteArea(
   container.className = "layout-footnote-area";
   container.style.width = `${contentWidth}px`;
 
-  // Separator line (33% width, Google Docs style)
+  // Separator line (33% width, Google Docs style). Margins derive from
+  // FOOTNOTE_SEPARATOR_HEIGHT so the painted separator slot matches the
+  // paginator's reservation byte-for-byte. eigenpal/docx-editor#485.
   const separator = doc.createElement("div");
+  const separatorRuleHeight = 0.5;
+  const separatorMargin = (FOOTNOTE_SEPARATOR_HEIGHT - separatorRuleHeight) / 2;
   separator.style.width = "33%";
-  separator.style.height = "0.5px";
+  separator.style.height = `${separatorRuleHeight}px`;
   separator.style.backgroundColor = "var(--doc-canvas-text, #000)";
-  separator.style.marginBottom = "6px";
-  separator.style.marginTop = "6px";
+  separator.style.marginTop = `${separatorMargin}px`;
+  separator.style.marginBottom = `${separatorMargin}px`;
   container.append(separator);
 
   // Render each footnote
@@ -1819,12 +1843,20 @@ export function renderPage(
       context,
     );
     fnAreaEl.style.position = "absolute";
-    // Position at page bottom minus bottom margin (bottom of content area)
-    // The reserved height includes separator + all footnotes
-    const reservedHeight = page.footnoteReservedHeight ?? 0;
+    // Position at page bottom minus bottom margin (bottom of content
+    // area). Clamp the reservation upward to the painter's calculated
+    // area height so a dense stack of footnotes that under-reserved by
+    // a few pixels still ends at the page bottom rather than spilling
+    // past it; clamp the resulting top to `-page.margins.top` so an
+    // oversized area cannot escape above the page entirely.
+    // eigenpal/docx-editor#485.
+    const reservedHeight = Math.max(
+      page.footnoteReservedHeight ?? 0,
+      calculateFootnoteAreaRenderHeight(options.footnoteArea),
+    );
     const contentAreaBottom =
       page.size.h - page.margins.bottom - page.margins.top;
-    fnAreaEl.style.top = `${contentAreaBottom - reservedHeight}px`;
+    fnAreaEl.style.top = `${Math.max(-page.margins.top, contentAreaBottom - reservedHeight)}px`;
     fnAreaEl.style.left = "0";
     fnAreaEl.style.right = "0";
     contentEl.append(fnAreaEl);
