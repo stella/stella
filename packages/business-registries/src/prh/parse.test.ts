@@ -80,6 +80,31 @@ describe("parseAddress", () => {
       textAddress: null,
     });
   });
+
+  test("preserves the c/o recipient on structured street addresses", () => {
+    // PRH attaches the care-of recipient via `co`; dropping it loses
+    // the only way to address registered mail for entities held under
+    // an agent (common for foreign-owned Finnish branches).
+    const address = parseAddress({
+      ...baseAddress,
+      co: "Asianajotoimisto Acme Oy",
+      street: "Mannerheimintie",
+      buildingNumber: "1",
+    });
+    expect(address.street).toBe(
+      "c/o Asianajotoimisto Acme Oy, Mannerheimintie 1",
+    );
+  });
+
+  test("preserves the c/o recipient with PO box addresses", () => {
+    const address = parseAddress({
+      ...baseAddress,
+      type: 2,
+      co: "Tilitoimisto Beta",
+      postOfficeBox: "1000",
+    });
+    expect(address.street).toBe("c/o Tilitoimisto Beta, PL 1000");
+  });
 });
 
 describe("parseCompany / parseSearchEntry — defensive shape handling", () => {

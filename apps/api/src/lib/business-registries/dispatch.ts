@@ -359,28 +359,36 @@ const BRREG_HANDLER: RegistryHandler = {
 // PRH (Finland)
 // ---------------------------------------------------------------------------
 
-const prhCompanyToHit = (company: PrhCompany): BusinessRegistryHit => ({
-  registry: "prh",
-  id: company.businessId,
-  name: company.name,
-  legalForm: company.legalForm,
-  address: company.streetAddress
-    ? {
-        line1: company.streetAddress.street,
-        line2: null,
-        postalCode: company.streetAddress.postalCode,
-        city: company.streetAddress.city,
-        region: null,
-        country: company.streetAddress.country,
-        textAddress: company.streetAddress.textAddress,
-      }
-    : null,
-  registryUrl: company.registryUrl,
-  // Surface trade-register membership, status, business line, etc. —
-  // the unified chat tool needs more than name+address to answer
-  // questions about Finnish entities.
-  details: { registry: "prh", company },
-});
+const prhCompanyToHit = (company: PrhCompany): BusinessRegistryHit => {
+  // PRH separates the legal street address (type 1) from the postal
+  // address (type 2). Entities that only file a postal address (PO
+  // boxes, agent-held mail) leave streetAddress null. Fall back to
+  // postalAddress so REST / chat consumers that only read the
+  // baseline `address` field do not lose all address information.
+  const source = company.streetAddress ?? company.postalAddress;
+  return {
+    registry: "prh",
+    id: company.businessId,
+    name: company.name,
+    legalForm: company.legalForm,
+    address: source
+      ? {
+          line1: source.street,
+          line2: null,
+          postalCode: source.postalCode,
+          city: source.city,
+          region: null,
+          country: source.country,
+          textAddress: source.textAddress,
+        }
+      : null,
+    registryUrl: company.registryUrl,
+    // Surface trade-register membership, status, business line, etc.
+    // — the unified chat tool needs more than name+address to answer
+    // questions about Finnish entities.
+    details: { registry: "prh", company },
+  };
+};
 
 const prhSearchResultToHit = (
   result: PrhSearchResult,

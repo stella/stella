@@ -82,19 +82,22 @@ const formatStreetLine = (raw: PrhRawAddress): string | null => {
   // PRH splits address atoms: street + buildingNumber + entrance +
   // apartmentNumber. Most consumers want the human "Mannerheimintie
   // 1 A 5" rendering, not the atoms.
+  const co = raw.co?.trim();
+  const coPrefix = co ? `c/o ${co}` : null;
   if (raw.postOfficeBox) {
-    return `PL ${raw.postOfficeBox}`;
+    return [coPrefix, `PL ${raw.postOfficeBox}`].filter(Boolean).join(", ");
   }
   const houseSegment = [raw.buildingNumber, raw.entrance, raw.apartmentNumber]
     .map((segment) => segment?.trim() ?? "")
     .filter(Boolean)
     .join(" ");
   const street = raw.street?.trim();
-  if (street && houseSegment) {
-    return `${street} ${houseSegment}`;
-  }
-  if (street || houseSegment) {
-    return street ?? houseSegment;
+  const structured =
+    street && houseSegment
+      ? `${street} ${houseSegment}`
+      : (street ?? houseSegment);
+  if (structured) {
+    return [coPrefix, structured].filter(Boolean).join(", ");
   }
   // Foreign / opaque addresses arrive via `freeAddressLine` instead
   // of structured atoms. PRH v3 encodes the spaces in this field as
@@ -105,7 +108,10 @@ const formatStreetLine = (raw: PrhRawAddress): string | null => {
     ?.replaceAll("_", " ")
     .replaceAll(/\s+/gu, " ")
     .trim();
-  return free && free.length > 0 ? free : null;
+  if (free && free.length > 0) {
+    return [coPrefix, free].filter(Boolean).join(", ");
+  }
+  return coPrefix;
 };
 
 export const parseAddress = (raw: PrhRawAddress): PrhAddress => {
