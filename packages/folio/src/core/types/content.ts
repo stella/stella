@@ -28,6 +28,7 @@ export type {
   HeaderReference,
   Hyperlink,
   Image,
+  ImageCrop,
   ImagePadding,
   ImagePosition,
   ImageSize,

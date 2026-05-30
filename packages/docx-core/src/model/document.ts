@@ -94,6 +94,7 @@ export type {
   ImagePosition,
   ImageTransform,
   ImagePadding,
+  ImageCrop,
   Image,
   ShapeType,
   ShapeFill,

@@ -172,6 +172,14 @@ export type ImageRun = {
   distBottom?: number;
   distLeft?: number;
   distRight?: number;
+  /**
+   * wp:srcRect crop fractions in [0, 1]; emit as CSS `clip-path: inset(...)`
+   * to match Word's visible region. eigenpal #424 (image-crop subset).
+   */
+  cropTop?: number;
+  cropRight?: number;
+  cropBottom?: number;
+  cropLeft?: number;
   pmStart?: number;
   pmEnd?: number;
 };
@@ -460,6 +468,14 @@ export type ImageBlock = {
   };
   /** Hyperlink URL for clickable image */
   hlinkHref?: string;
+  /**
+   * wp:srcRect crop fractions in [0, 1]; emit as CSS `clip-path: inset(...)`.
+   * eigenpal #424 (image-crop subset).
+   */
+  cropTop?: number;
+  cropRight?: number;
+  cropBottom?: number;
+  cropLeft?: number;
   pmStart?: number;
   pmEnd?: number;
 };

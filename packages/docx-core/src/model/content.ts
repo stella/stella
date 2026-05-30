@@ -400,6 +400,20 @@ export type ImagePadding = {
 };
 
 /**
+ * Image crop fractions in [0, 1] applied to each side of the source bitmap.
+ * Mirrors the four `<a:srcRect>` attributes (`l`, `t`, `r`, `b`) defined in
+ * ECMA-376 §20.1.8.55, stored in 1/100000 units on the wire.
+ *
+ * eigenpal #424 (image-crop subset).
+ */
+export type ImageCrop = {
+  left?: number;
+  top?: number;
+  right?: number;
+  bottom?: number;
+};
+
+/**
  * Embedded image (w:drawing)
  */
 export type Image = {
@@ -430,6 +444,8 @@ export type Image = {
   transform?: ImageTransform;
   /** Padding around image */
   padding?: ImagePadding;
+  /** Source-bitmap crop (wp:srcRect), eigenpal #424 */
+  crop?: ImageCrop;
   /** Whether this is a decorative image */
   decorative?: boolean;
   /** Hyperlink URL for clickable image */

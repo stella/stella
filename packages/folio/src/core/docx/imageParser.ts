@@ -28,6 +28,7 @@
 
 import type {
   Image,
+  ImageCrop,
   ImageSize,
   ImageWrap,
   ImagePosition,
@@ -229,38 +230,80 @@ function parseTransform(xfrm: XmlElement | null): ImageTransform | undefined {
 // ============================================================================
 
 /**
- * Find the a:blip element and extract the relationship ID
+ * Find the pic:blipFill element in a w:drawing container.
  *
- * Path: a:graphic > a:graphicData > pic:pic > pic:blipFill > a:blip
+ * Path: a:graphic > a:graphicData > pic:pic > pic:blipFill
+ *
+ * The blipFill carries both `a:blip` (the relationship ID) and the optional
+ * `a:srcRect` crop element, so callers that need either share this walk.
  */
-function findBlipElement(container: XmlElement): XmlElement | null {
-  // Find a:graphic
+function findBlipFillElement(container: XmlElement): XmlElement | null {
   const graphic = findByFullName(container, "a:graphic");
   if (!graphic) {
     return null;
   }
 
-  // Find a:graphicData
   const graphicData = findByFullName(graphic, "a:graphicData");
   if (!graphicData) {
     return null;
   }
 
-  // Find pic:pic
   const pic = findByFullName(graphicData, "pic:pic");
   if (!pic) {
     return null;
   }
 
-  // Find pic:blipFill
-  const blipFill = findByFullName(pic, "pic:blipFill");
-  if (!blipFill) {
-    return null;
-  }
+  return findByFullName(pic, "pic:blipFill");
+}
 
-  // Find a:blip
-  const blip = findByFullName(blipFill, "a:blip");
-  return blip;
+/**
+ * Parse `<a:srcRect l="..." t="..." r="..." b="..."/>` inside `pic:blipFill`.
+ * Values are in 1/100000 of the source image dimension; converted to fractions
+ * in [0, 1] so the renderer can apply them as CSS clip-path percentages.
+ *
+ * eigenpal #424 (image-crop subset).
+ */
+function parseImageCrop(blipFill: XmlElement | null): ImageCrop | undefined {
+  if (!blipFill) {
+    return undefined;
+  }
+  const srcRect = findByFullName(blipFill, "a:srcRect");
+  if (!srcRect) {
+    return undefined;
+  }
+  const toFraction = (attr: string): number | undefined => {
+    const raw = parseNumericAttribute(srcRect, null, attr);
+    if (raw === undefined || raw === 0) {
+      return undefined;
+    }
+    return raw / 100_000;
+  };
+  const left = toFraction("l");
+  const top = toFraction("t");
+  const right = toFraction("r");
+  const bottom = toFraction("b");
+  if (
+    left === undefined &&
+    top === undefined &&
+    right === undefined &&
+    bottom === undefined
+  ) {
+    return undefined;
+  }
+  const crop: ImageCrop = {};
+  if (left !== undefined) {
+    crop.left = left;
+  }
+  if (top !== undefined) {
+    crop.top = top;
+  }
+  if (right !== undefined) {
+    crop.right = right;
+  }
+  if (bottom !== undefined) {
+    crop.bottom = bottom;
+  }
+  return crop;
 }
 
 /**
@@ -489,8 +532,10 @@ function parseInline(
   const props = parseDocProps(docPr);
 
   // Find blip and extract rId
-  const blip = findBlipElement(inlineEl);
+  const blipFill = findBlipFillElement(inlineEl);
+  const blip = blipFill ? findByFullName(blipFill, "a:blip") : null;
   const rId = extractBlipRId(blip);
+  const crop = parseImageCrop(blipFill);
 
   // Resolve image data
   const imageData = resolveImageData(rId, rels, media);
@@ -553,6 +598,9 @@ function parseInline(
   }
   if (transform) {
     image.transform = transform;
+  }
+  if (crop) {
+    image.crop = crop;
   }
 
   // Resolve image hyperlink (a:hlinkClick)
@@ -625,8 +673,10 @@ function parseAnchor(
   }
 
   // Find blip and extract rId
-  const blip = findBlipElement(anchorEl);
+  const blipFill = findBlipFillElement(anchorEl);
+  const blip = blipFill ? findByFullName(blipFill, "a:blip") : null;
   const rId = extractBlipRId(blip);
+  const crop = parseImageCrop(blipFill);
 
   // Resolve image data
   const imageData = resolveImageData(rId, rels, media);
@@ -672,6 +722,9 @@ function parseAnchor(
   }
   if (transform) {
     image.transform = transform;
+  }
+  if (crop) {
+    image.crop = crop;
   }
 
   // Resolve image hyperlink (a:hlinkClick)

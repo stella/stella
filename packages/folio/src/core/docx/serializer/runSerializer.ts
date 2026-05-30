@@ -752,6 +752,25 @@ function serializePicGraphic(image: Image, sharedId: string): string {
     xfrmAttrs += ' flipV="1"';
   }
 
+  // eigenpal #424: emit <a:srcRect/> for wp:srcRect crop. Each side is a
+  // fraction in [0, 1]; OOXML expects 1/100000 units. Zero sides are
+  // omitted so the element stays terse for the common case.
+  const cropAttrs: string[] = [];
+  if (image.crop?.left) {
+    cropAttrs.push(`l="${Math.round(image.crop.left * 100_000)}"`);
+  }
+  if (image.crop?.top) {
+    cropAttrs.push(`t="${Math.round(image.crop.top * 100_000)}"`);
+  }
+  if (image.crop?.right) {
+    cropAttrs.push(`r="${Math.round(image.crop.right * 100_000)}"`);
+  }
+  if (image.crop?.bottom) {
+    cropAttrs.push(`b="${Math.round(image.crop.bottom * 100_000)}"`);
+  }
+  const srcRectEl =
+    cropAttrs.length > 0 ? `<a:srcRect ${cropAttrs.join(" ")}/>` : "";
+
   return [
     '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">',
     '<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">',
@@ -762,6 +781,7 @@ function serializePicGraphic(image: Image, sharedId: string): string {
     "</pic:nvPicPr>",
     "<pic:blipFill>",
     `<a:blip r:embed="${rId}"/>`,
+    srcRectEl,
     "<a:stretch><a:fillRect/></a:stretch>",
     "</pic:blipFill>",
     "<pic:spPr>",

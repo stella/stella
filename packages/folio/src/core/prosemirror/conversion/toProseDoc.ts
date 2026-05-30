@@ -2087,6 +2087,11 @@ function convertImage(image: Image, rawXml?: string): PMNode {
     distBottom,
     distLeft,
     distRight,
+    // eigenpal #424: thread wp:srcRect crop fractions through PM attrs.
+    cropTop: image.crop?.top,
+    cropRight: image.crop?.right,
+    cropBottom: image.crop?.bottom,
+    cropLeft: image.crop?.left,
     position,
     borderWidth,
     borderColor,
