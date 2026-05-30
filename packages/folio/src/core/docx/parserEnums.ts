@@ -46,6 +46,7 @@ import {
   SDT_LOCK_VALUES,
   SHADING_PATTERN_VALUES,
   SHAPE_OUTLINE_STYLE_VALUES,
+  SHAPE_TYPE_VALUES,
   STYLE_TYPE_VALUES,
   TABLE_CELL_TEXT_DIRECTION_VALUES,
   TABLE_ROW_HEIGHT_RULE_VALUES,
@@ -195,6 +196,8 @@ export const ImageWrapTextSchema = v.picklist(IMAGE_WRAP_TEXT_VALUES);
 // ---------------------------------------------------------------------------
 
 export const ShapeOutlineStyleSchema = v.picklist(SHAPE_OUTLINE_STYLE_VALUES);
+
+export const ShapeTypeSchema = v.picklist(SHAPE_TYPE_VALUES);
 
 // ---------------------------------------------------------------------------
 // Numbering enums

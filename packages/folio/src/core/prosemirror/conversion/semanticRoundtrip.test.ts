@@ -156,7 +156,32 @@ const buildSemanticFixture = (): Document => ({
                     outline: {
                       width: pixelsToEmu(1),
                       style: "solid",
+                      cap: "round",
                       color: { rgb: "000000" },
+                      headEnd: { type: "none" },
+                      tailEnd: {
+                        type: "triangle",
+                        width: "med",
+                        length: "lg",
+                      },
+                    },
+                    wrap: {
+                      type: "square",
+                      wrapText: "bothSides",
+                      distT: pixelsToEmu(3),
+                      distB: pixelsToEmu(4),
+                      distL: pixelsToEmu(5),
+                      distR: pixelsToEmu(6),
+                    },
+                    position: {
+                      horizontal: {
+                        relativeTo: "column",
+                        posOffset: 100_000,
+                      },
+                      vertical: {
+                        relativeTo: "paragraph",
+                        posOffset: 200_000,
+                      },
                     },
                   },
                 },
@@ -261,6 +286,23 @@ describe("semantic ProseMirror round-trip fixture", () => {
       shapeType: "rect",
       id: "shape-1",
       fill: { type: "solid", color: { rgb: "FFAA00" } },
+      outline: {
+        cap: "round",
+        headEnd: { type: "none" },
+        tailEnd: { type: "triangle", width: "med", length: "lg" },
+      },
+      wrap: {
+        type: "square",
+        wrapText: "bothSides",
+        distT: pixelsToEmu(3),
+        distB: pixelsToEmu(4),
+        distL: pixelsToEmu(5),
+        distR: pixelsToEmu(6),
+      },
+      position: {
+        horizontal: { relativeTo: "column", posOffset: 100_000 },
+        vertical: { relativeTo: "paragraph", posOffset: 200_000 },
+      },
     });
 
     const textBoxShape = firstShapeContent(paragraphAt(roundtripped, 1)).shape;
@@ -282,5 +324,6 @@ describe("semantic ProseMirror round-trip fixture", () => {
         ],
       },
     });
+    expect(textBoxShape.outline).toBeUndefined();
   });
 });

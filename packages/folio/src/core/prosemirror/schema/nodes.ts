@@ -29,6 +29,7 @@ import type {
   TableWidthType,
   SectionProperties,
   ShapeFill,
+  ShapeOutline,
   SdtProperties,
   SdtType,
 } from "../../types/document";
@@ -338,6 +339,12 @@ export type ShapeAttrs = {
   outlineColor?: string;
   /** Outline style */
   outlineStyle?: string;
+  /** Line cap */
+  outlineCap?: NonNullable<ShapeOutline["cap"]>;
+  /** Head arrow/end marker */
+  outlineHeadEnd?: NonNullable<ShapeOutline["headEnd"]>;
+  /** Tail arrow/end marker */
+  outlineTailEnd?: NonNullable<ShapeOutline["tailEnd"]>;
   /** CSS transform */
   transform?: string;
   /** Display mode */
@@ -345,7 +352,19 @@ export type ShapeAttrs = {
   /** CSS float */
   cssFloat?: "left" | "right" | "none";
   /** Wrap type */
-  wrapType?: string;
+  wrapType?: ImageWrap["type"];
+  /** Wrap text setting from DOCX (left, right, bothSides, largest) for round-trip */
+  wrapText?: NonNullable<ImageWrap["wrapText"]>;
+  /** Distance from text above (pixels) */
+  distTop?: number;
+  /** Distance from text below (pixels) */
+  distBottom?: number;
+  /** Distance from text left (pixels) */
+  distLeft?: number;
+  /** Distance from text right (pixels) */
+  distRight?: number;
+  /** Position for floating shapes (horizontal and vertical alignment) */
+  position?: ImagePositionAttrs;
   /** Shadow color as CSS color */
   shadowColor?: string;
   /** Shadow blur radius in pixels */

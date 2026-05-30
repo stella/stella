@@ -49,6 +49,7 @@ import { emuToPixels } from "../../utils/units";
 import { buildRunFormattingOverrideAttrs } from "../extensions/marks/RunFormattingOverrideExtension";
 import { schema } from "../schema";
 import type {
+  ImagePositionAttrs,
   ParagraphAttrs,
   TableAttrs,
   TableRowAttrs,
@@ -2375,7 +2376,10 @@ function convertShape(shape: Shape): PMNode {
 
   let outlineWidth: number | undefined;
   let outlineColor: string | undefined;
-  let outlineStyle: string | undefined;
+  let outlineStyle: string | undefined = "none";
+  let outlineCap: NonNullable<Shape["outline"]>["cap"] | undefined;
+  let outlineHeadEnd: NonNullable<Shape["outline"]>["headEnd"] | undefined;
+  let outlineTailEnd: NonNullable<Shape["outline"]>["tailEnd"] | undefined;
   if (shape.outline) {
     if (shape.outline.width) {
       outlineWidth =
@@ -2385,6 +2389,11 @@ function convertShape(shape: Shape): PMNode {
       outlineColor = `#${shape.outline.color.rgb}`;
     }
     outlineStyle = shape.outline.style || "solid";
+    outlineCap = shape.outline.cap;
+    outlineHeadEnd = shape.outline.headEnd;
+    outlineTailEnd = shape.outline.tailEnd;
+  } else {
+    outlineWidth = 0;
   }
 
   let transform: string | undefined;
@@ -2404,6 +2413,39 @@ function convertShape(shape: Shape): PMNode {
     }
   }
 
+  const wrapType = shape.wrap?.type ?? "inline";
+  const displayMode = wrapType === "inline" ? "inline" : "float";
+  let cssFloat: "left" | "right" | "none" = "none";
+  if (shape.wrap?.wrapText === "left") {
+    cssFloat = "right";
+  } else if (shape.wrap?.wrapText === "right") {
+    cssFloat = "left";
+  }
+
+  let position: ImagePositionAttrs | undefined;
+  if (shape.position) {
+    position = {
+      horizontal: {
+        relativeTo: shape.position.horizontal.relativeTo,
+        ...(shape.position.horizontal.posOffset !== undefined
+          ? { posOffset: shape.position.horizontal.posOffset }
+          : {}),
+        ...(shape.position.horizontal.alignment
+          ? { align: shape.position.horizontal.alignment }
+          : {}),
+      },
+      vertical: {
+        relativeTo: shape.position.vertical.relativeTo,
+        ...(shape.position.vertical.posOffset !== undefined
+          ? { posOffset: shape.position.vertical.posOffset }
+          : {}),
+        ...(shape.position.vertical.alignment
+          ? { align: shape.position.vertical.alignment }
+          : {}),
+      },
+    };
+  }
+
   return schema.node("shape", {
     shapeType: shapeAttrs.shapeType ?? "rect",
     shapeId: shape.id,
@@ -2417,7 +2459,31 @@ function convertShape(shape: Shape): PMNode {
     outlineWidth,
     outlineColor,
     outlineStyle,
+    outlineCap,
+    outlineHeadEnd,
+    outlineTailEnd,
     transform,
+    displayMode,
+    cssFloat,
+    wrapType,
+    wrapText: shape.wrap?.wrapText,
+    distTop:
+      shape.wrap?.distT !== undefined
+        ? emuToPixels(shape.wrap.distT)
+        : undefined,
+    distBottom:
+      shape.wrap?.distB !== undefined
+        ? emuToPixels(shape.wrap.distB)
+        : undefined,
+    distLeft:
+      shape.wrap?.distL !== undefined
+        ? emuToPixels(shape.wrap.distL)
+        : undefined,
+    distRight:
+      shape.wrap?.distR !== undefined
+        ? emuToPixels(shape.wrap.distR)
+        : undefined,
+    position,
   });
 }
 

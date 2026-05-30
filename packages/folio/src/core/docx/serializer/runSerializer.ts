@@ -632,16 +632,34 @@ function serializeFill(fill: ShapeFill | undefined): string {
           `<a:gs pos="${s.position}">${serializeDrawingColor(s.color)}</a:gs>`,
       )
       .join("");
-    const direction =
-      g.type === "linear"
-        ? `<a:lin ang="${(g.angle ?? 0) * 60_000}" scaled="1"/>`
-        : "";
+    const direction = (() => {
+      if (g.type === "linear") {
+        return `<a:lin ang="${(g.angle ?? 0) * 60_000}" scaled="1"/>`;
+      }
+      let path = "shape";
+      if (g.type === "radial") {
+        path = "circle";
+      } else if (g.type === "rectangular") {
+        path = "rect";
+      }
+      return `<a:path path="${path}"/>`;
+    })();
     return `<a:gradFill><a:gsLst>${stops}</a:gsLst>${direction}</a:gradFill>`;
   }
   return "";
 }
 
 /** Serialize shape outline to DrawingML a:ln */
+function serializeLineCap(cap: NonNullable<ShapeOutline["cap"]>): string {
+  if (cap === "round") {
+    return "rnd";
+  }
+  if (cap === "square") {
+    return "sq";
+  }
+  return "flat";
+}
+
 function serializeOutline(outline: ShapeOutline | undefined): string {
   if (!outline) {
     return "";
@@ -651,7 +669,7 @@ function serializeOutline(outline: ShapeOutline | undefined): string {
     attrs.push(`w="${outline.width}"`);
   }
   if (outline.cap) {
-    attrs.push(`cap="${outline.cap}"`);
+    attrs.push(`cap="${serializeLineCap(outline.cap)}"`);
   }
 
   const parts: string[] = [];
@@ -662,6 +680,13 @@ function serializeOutline(outline: ShapeOutline | undefined): string {
   }
   if (outline.style && outline.style !== "solid") {
     parts.push(`<a:prstDash val="${outline.style}"/>`);
+  }
+  if (outline.join === "bevel") {
+    parts.push("<a:bevel/>");
+  } else if (outline.join === "round") {
+    parts.push("<a:round/>");
+  } else if (outline.join === "miter") {
+    parts.push("<a:miter/>");
   }
   if (outline.headEnd) {
     parts.push(

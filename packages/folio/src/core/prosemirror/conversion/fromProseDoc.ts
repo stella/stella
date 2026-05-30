@@ -12,6 +12,7 @@
 
 import type { Node as PMNode, Mark } from "prosemirror-model";
 
+import { narrowEnum, ShapeOutlineStyleSchema } from "../../docx/parserEnums";
 import type {
   ImageWrap,
   ImagePosition,
@@ -90,6 +91,50 @@ import type {
   TableCellAttrs,
 } from "../schema/nodes";
 import { assertValidProseMirrorDocument } from "../validation";
+
+function normalizeShapeOutlineStyle(
+  style: string | undefined,
+): ShapeOutline["style"] | undefined {
+  if (!style) {
+    return undefined;
+  }
+  const cssToOoxml: Record<string, NonNullable<ShapeOutline["style"]>> = {
+    solid: "solid",
+    dotted: "dot",
+    dashed: "dash",
+  };
+  return narrowEnum(cssToOoxml[style] ?? style, ShapeOutlineStyleSchema);
+}
+
+function parseTransformAttr(
+  transformStr: string | undefined,
+): ImageTransform | undefined {
+  if (!transformStr) {
+    return undefined;
+  }
+  const transform: ImageTransform = {};
+  const rotateMatch = /rotate\(([-\d.]+)deg\)/u.exec(transformStr);
+  if (rotateMatch) {
+    const rotation = Number.parseFloat(rotateMatch[1]!);
+    if (Number.isFinite(rotation)) {
+      transform.rotation = rotation;
+    }
+  }
+  if (transformStr.includes("scaleX(-1)")) {
+    transform.flipH = true;
+  }
+  if (transformStr.includes("scaleY(-1)")) {
+    transform.flipV = true;
+  }
+  if (
+    transform.rotation === undefined &&
+    !transform.flipH &&
+    !transform.flipV
+  ) {
+    return undefined;
+  }
+  return transform;
+}
 
 /**
  * Convert a ProseMirror document to our Document type
@@ -1277,24 +1322,9 @@ function createImageRun(node: PMNode): Run {
     image.title = attrs.title;
   }
 
-  // Parse CSS transform string back to ImageTransform for round-trip
-  if (attrs.transform) {
-    const transformStr = attrs.transform;
-    const imgTransform: ImageTransform = {};
-    const rotateMatch = /rotate\(([-\d.]+)deg\)/u.exec(transformStr);
-    if (rotateMatch) {
-      // SAFETY: capture group [1] always present when regex matches
-      imgTransform.rotation = Number.parseFloat(rotateMatch[1]!);
-    }
-    if (transformStr.includes("scaleX(-1)")) {
-      imgTransform.flipH = true;
-    }
-    if (transformStr.includes("scaleY(-1)")) {
-      imgTransform.flipV = true;
-    }
-    if (imgTransform.rotation || imgTransform.flipH || imgTransform.flipV) {
-      image.transform = imgTransform;
-    }
+  const imageTransform = parseTransformAttr(attrs.transform);
+  if (imageTransform) {
+    image.transform = imageTransform;
   }
 
   // eigenpal #424 (opacity render pipeline). PM schema default is `null`;
@@ -1429,6 +1459,54 @@ function createShapeRun(node: PMNode): Run {
   if (attrs.shapeId) {
     shape.id = attrs.shapeId;
   }
+  const shapeTransform = parseTransformAttr(attrs.transform);
+  if (shapeTransform) {
+    shape.transform = shapeTransform;
+  }
+
+  const wrap: ImageWrap = { type: attrs.wrapType || "inline" };
+  if (attrs.distTop !== undefined) {
+    wrap.distT = pixelsToEmu(attrs.distTop);
+  }
+  if (attrs.distBottom !== undefined) {
+    wrap.distB = pixelsToEmu(attrs.distBottom);
+  }
+  if (attrs.distLeft !== undefined) {
+    wrap.distL = pixelsToEmu(attrs.distLeft);
+  }
+  if (attrs.distRight !== undefined) {
+    wrap.distR = pixelsToEmu(attrs.distRight);
+  }
+  if (attrs.wrapText) {
+    wrap.wrapText = attrs.wrapText;
+  }
+  shape.wrap = wrap;
+
+  const horizontalPosition = attrs.position?.horizontal;
+  const verticalPosition = attrs.position?.vertical;
+  if (horizontalPosition && verticalPosition) {
+    const horizontal: ImagePosition["horizontal"] = {
+      relativeTo: horizontalPosition.relativeTo || "column",
+    };
+    if (horizontalPosition.align) {
+      horizontal.alignment = horizontalPosition.align;
+    }
+    if (horizontalPosition.posOffset !== undefined) {
+      horizontal.posOffset = horizontalPosition.posOffset;
+    }
+
+    const vertical: ImagePosition["vertical"] = {
+      relativeTo: verticalPosition.relativeTo || "paragraph",
+    };
+    if (verticalPosition.align) {
+      vertical.alignment = verticalPosition.align;
+    }
+    if (verticalPosition.posOffset !== undefined) {
+      vertical.posOffset = verticalPosition.posOffset;
+    }
+
+    shape.position = { horizontal, vertical };
+  }
 
   // Fill
   if (attrs.fillType === "gradient" && attrs.gradientStops) {
@@ -1469,18 +1547,32 @@ function createShapeRun(node: PMNode): Run {
   }
 
   // Outline
-  if (attrs.outlineWidth && attrs.outlineWidth > 0) {
-    const cssToOoxml: Record<string, string> = {
-      solid: "solid",
-      dotted: "dot",
-      dashed: "dash",
-    };
-    const shapeOutline: ShapeOutline = {
-      width: pixelsToEmu(attrs.outlineWidth),
-      style: attrs.outlineStyle
-        ? (cssToOoxml[attrs.outlineStyle] as ShapeOutline["style"]) || "solid"
-        : "solid",
-    };
+  if (
+    attrs.outlineStyle !== "none" &&
+    ((attrs.outlineWidth !== undefined && attrs.outlineWidth > 0) ||
+      attrs.outlineColor ||
+      attrs.outlineStyle ||
+      attrs.outlineCap ||
+      attrs.outlineHeadEnd ||
+      attrs.outlineTailEnd)
+  ) {
+    const shapeOutline: ShapeOutline = {};
+    if (attrs.outlineWidth !== undefined && attrs.outlineWidth > 0) {
+      shapeOutline.width = pixelsToEmu(attrs.outlineWidth);
+    }
+    if (attrs.outlineStyle) {
+      shapeOutline.style =
+        normalizeShapeOutlineStyle(attrs.outlineStyle) ?? "solid";
+    }
+    if (attrs.outlineCap) {
+      shapeOutline.cap = attrs.outlineCap;
+    }
+    if (attrs.outlineHeadEnd) {
+      shapeOutline.headEnd = attrs.outlineHeadEnd;
+    }
+    if (attrs.outlineTailEnd) {
+      shapeOutline.tailEnd = attrs.outlineTailEnd;
+    }
     if (attrs.outlineColor) {
       shapeOutline.color = { rgb: attrs.outlineColor.replace("#", "") };
     }
@@ -2315,17 +2407,9 @@ function convertPMTextBox(node: PMNode): Paragraph {
 
   // Convert outline back
   if (attrs.outlineWidth && attrs.outlineWidth > 0) {
-    const cssToOoxmlOutline: Record<string, string> = {
-      solid: "solid",
-      dotted: "dot",
-      dashed: "dash",
-    };
     const tbOutline: ShapeOutline = {
       width: pixelsToEmu(attrs.outlineWidth),
-      style: attrs.outlineStyle
-        ? (cssToOoxmlOutline[attrs.outlineStyle] as ShapeOutline["style"]) ||
-          "solid"
-        : "solid",
+      style: normalizeShapeOutlineStyle(attrs.outlineStyle) ?? "solid",
     };
     if (attrs.outlineColor) {
       tbOutline.color = { rgb: attrs.outlineColor.replace("#", "") };

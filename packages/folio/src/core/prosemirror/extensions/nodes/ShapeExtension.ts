@@ -6,54 +6,13 @@
  */
 
 import { expectShapeAttrs } from "../../attrs";
+import type {
+  ImagePositionAttrs,
+  ShapeAttrs as SchemaShapeAttrs,
+} from "../../schema/nodes";
 import { createNodeExtension } from "../create";
 
-export type ShapeAttrs = {
-  /** Shape type preset */
-  shapeType?: string;
-  /** Unique identifier */
-  shapeId?: string;
-  /** Width in pixels */
-  width?: number;
-  /** Height in pixels */
-  height?: number;
-  /** Fill color as CSS color */
-  fillColor?: string;
-  /** Fill type: none, solid, gradient */
-  fillType?: string;
-  /** Gradient type: linear, radial, rectangular, path */
-  gradientType?: string;
-  /** Gradient angle in degrees (for linear) */
-  gradientAngle?: number;
-  /** Gradient stops as JSON string: [{position, color}] */
-  gradientStops?: string;
-  /** Outline width in pixels */
-  outlineWidth?: number;
-  /** Outline color as CSS color */
-  outlineColor?: string;
-  /** Outline style */
-  outlineStyle?: string;
-  /** CSS transform */
-  transform?: string;
-  /** Display mode */
-  displayMode?: "inline" | "float" | "block";
-  /** CSS float */
-  cssFloat?: "left" | "right" | "none";
-  /** Wrap type */
-  wrapType?: string;
-  /** Shadow color as CSS color */
-  shadowColor?: string;
-  /** Shadow blur radius in pixels */
-  shadowBlur?: number;
-  /** Shadow X offset in pixels */
-  shadowOffsetX?: number;
-  /** Shadow Y offset in pixels */
-  shadowOffsetY?: number;
-  /** Glow color as CSS color */
-  glowColor?: string;
-  /** Glow radius in pixels */
-  glowRadius?: number;
-};
+export type ShapeAttrs = SchemaShapeAttrs;
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -156,6 +115,40 @@ function finiteNumber(value: number | null | undefined): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function parseShapePosition(
+  raw: string | undefined,
+): ImagePositionAttrs | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== "object" || parsed === null) {
+      return undefined;
+    }
+    return parsed as ImagePositionAttrs;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseShapeLineEnd(
+  raw: string | undefined,
+): NonNullable<ShapeAttrs["outlineHeadEnd"]> | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== "object" || parsed === null) {
+      return undefined;
+    }
+    return parsed as NonNullable<ShapeAttrs["outlineHeadEnd"]>;
+  } catch {
+    return undefined;
+  }
+}
+
 export function sanitizeSvgId(value: string | null | undefined): string | null {
   if (!value) {
     return null;
@@ -176,7 +169,112 @@ function setNum(el: Element, name: string, value: number): void {
 }
 
 /**
+ * Format a number for SVG attribute output: keeps integers as integers and
+ * trims floating-point noise (e.g., `0.30000000000000004` → `0.3`).
+ */
+function fmt(n: number): string {
+  return Number.isInteger(n) ? String(n) : Number(n.toFixed(3)).toString();
+}
+
+/**
+ * Build the `points` string for a polygon-based shape preset.
+ *
+ * Phase-1 arrow proportions use Word's default `<a:avLst/>` percentages:
+ *   - Stem thickness: 40% of the cross-axis extent.
+ *   - Head depth: 40% of the main-axis extent.
+ *   - Head width spans the full cross-axis extent.
+ *
+ * Pure and DOM-free so it can be unit tested without a happy-dom / jsdom
+ * setup; `createShapeElement` wraps the result in an `<svg:polygon>` node.
+ */
+export function buildShapePolygonPoints(
+  type: string,
+  w: number,
+  h: number,
+): string | null {
+  switch (type) {
+    case "triangle":
+    case "isosTriangle":
+      return `${fmt(w / 2)},0 ${fmt(w)},${fmt(h)} 0,${fmt(h)}`;
+    case "diamond":
+      return `${fmt(w / 2)},0 ${fmt(w)},${fmt(h / 2)} ${fmt(w / 2)},${fmt(h)} 0,${fmt(h / 2)}`;
+    case "rightArrow":
+      return [
+        `0,${fmt(h * 0.3)}`,
+        `${fmt(w * 0.6)},${fmt(h * 0.3)}`,
+        `${fmt(w * 0.6)},0`,
+        `${fmt(w)},${fmt(h / 2)}`,
+        `${fmt(w * 0.6)},${fmt(h)}`,
+        `${fmt(w * 0.6)},${fmt(h * 0.7)}`,
+        `0,${fmt(h * 0.7)}`,
+      ].join(" ");
+    case "leftArrow":
+      return [
+        `0,${fmt(h / 2)}`,
+        `${fmt(w * 0.4)},0`,
+        `${fmt(w * 0.4)},${fmt(h * 0.3)}`,
+        `${fmt(w)},${fmt(h * 0.3)}`,
+        `${fmt(w)},${fmt(h * 0.7)}`,
+        `${fmt(w * 0.4)},${fmt(h * 0.7)}`,
+        `${fmt(w * 0.4)},${fmt(h)}`,
+      ].join(" ");
+    case "upArrow":
+      return [
+        `${fmt(w / 2)},0`,
+        `${fmt(w)},${fmt(h * 0.4)}`,
+        `${fmt(w * 0.7)},${fmt(h * 0.4)}`,
+        `${fmt(w * 0.7)},${fmt(h)}`,
+        `${fmt(w * 0.3)},${fmt(h)}`,
+        `${fmt(w * 0.3)},${fmt(h * 0.4)}`,
+        `0,${fmt(h * 0.4)}`,
+      ].join(" ");
+    case "downArrow":
+      return [
+        `${fmt(w * 0.3)},0`,
+        `${fmt(w * 0.7)},0`,
+        `${fmt(w * 0.7)},${fmt(h * 0.6)}`,
+        `${fmt(w)},${fmt(h * 0.6)}`,
+        `${fmt(w / 2)},${fmt(h)}`,
+        `0,${fmt(h * 0.6)}`,
+        `${fmt(w * 0.3)},${fmt(h * 0.6)}`,
+      ].join(" ");
+    case "leftRightArrow":
+      return [
+        `0,${fmt(h / 2)}`,
+        `${fmt(w * 0.25)},0`,
+        `${fmt(w * 0.25)},${fmt(h * 0.3)}`,
+        `${fmt(w * 0.75)},${fmt(h * 0.3)}`,
+        `${fmt(w * 0.75)},0`,
+        `${fmt(w)},${fmt(h / 2)}`,
+        `${fmt(w * 0.75)},${fmt(h)}`,
+        `${fmt(w * 0.75)},${fmt(h * 0.7)}`,
+        `${fmt(w * 0.25)},${fmt(h * 0.7)}`,
+        `${fmt(w * 0.25)},${fmt(h)}`,
+      ].join(" ");
+    case "upDownArrow":
+      return [
+        `${fmt(w / 2)},0`,
+        `${fmt(w)},${fmt(h * 0.25)}`,
+        `${fmt(w * 0.7)},${fmt(h * 0.25)}`,
+        `${fmt(w * 0.7)},${fmt(h * 0.75)}`,
+        `${fmt(w)},${fmt(h * 0.75)}`,
+        `${fmt(w / 2)},${fmt(h)}`,
+        `0,${fmt(h * 0.75)}`,
+        `${fmt(w * 0.3)},${fmt(h * 0.75)}`,
+        `${fmt(w * 0.3)},${fmt(h * 0.25)}`,
+        `0,${fmt(h * 0.25)}`,
+      ].join(" ");
+    default:
+      return null;
+  }
+}
+
+/**
  * Build the inner shape element (rect/ellipse/etc) for the given shape type.
+ *
+ * Unknown / phase-2+ presets fall back to a rectangle so the document still
+ * displays. The original `<a:prstGeom prst>` value round-trips through the
+ * model regardless of what the renderer chooses to draw.
  */
 function createShapeElement(type: string, w: number, h: number): SVGElement {
   switch (type) {
@@ -198,20 +296,6 @@ function createShapeElement(type: string, w: number, h: number): SVGElement {
       setNum(el, "rx", Math.min(w, h) * 0.1);
       return el;
     }
-    case "triangle":
-    case "isosTriangle": {
-      const el = document.createElementNS(SVG_NS, "polygon");
-      el.setAttribute("points", `${w / 2},0 ${w},${h} 0,${h}`);
-      return el;
-    }
-    case "diamond": {
-      const el = document.createElementNS(SVG_NS, "polygon");
-      el.setAttribute(
-        "points",
-        `${w / 2},0 ${w},${h / 2} ${w / 2},${h} 0,${h / 2}`,
-      );
-      return el;
-    }
     case "line":
     case "straightConnector1": {
       const el = document.createElementNS(SVG_NS, "line");
@@ -222,6 +306,12 @@ function createShapeElement(type: string, w: number, h: number): SVGElement {
       return el;
     }
     default: {
+      const points = buildShapePolygonPoints(type, w, h);
+      if (points !== null) {
+        const el = document.createElementNS(SVG_NS, "polygon");
+        el.setAttribute("points", points);
+        return el;
+      }
       const el = document.createElementNS(SVG_NS, "rect");
       setNum(el, "x", 0);
       setNum(el, "y", 0);
@@ -342,10 +432,19 @@ export const ShapeExtension = createNodeExtension({
       outlineWidth: { default: 1 },
       outlineColor: { default: "var(--doc-shape-outline, #000000)" },
       outlineStyle: { default: "solid" },
+      outlineCap: { default: null },
+      outlineHeadEnd: { default: null },
+      outlineTailEnd: { default: null },
       transform: { default: null },
       displayMode: { default: "inline" },
       cssFloat: { default: null },
       wrapType: { default: "inline" },
+      wrapText: { default: null },
+      distTop: { default: null },
+      distBottom: { default: null },
+      distLeft: { default: null },
+      distRight: { default: null },
+      position: { default: null },
       shadowColor: { default: null },
       shadowBlur: { default: null },
       shadowOffsetX: { default: null },
@@ -359,14 +458,25 @@ export const ShapeExtension = createNodeExtension({
         getAttrs(dom): ShapeAttrs {
           const el = dom;
           const d = el.dataset;
+          const position = parseShapePosition(d["position"]);
+          const outlineHeadEnd = parseShapeLineEnd(d["outlineHeadEnd"]);
+          const outlineTailEnd = parseShapeLineEnd(d["outlineTailEnd"]);
           return {
             shapeType: d["shapeType"] || "rect",
             ...(d["shapeId"] ? { shapeId: d["shapeId"] } : {}),
             ...(d["width"] ? { width: Number(d["width"]) } : {}),
             ...(d["height"] ? { height: Number(d["height"]) } : {}),
             ...(d["fillColor"] ? { fillColor: d["fillColor"] } : {}),
-            fillType: d["fillType"] || "solid",
-            ...(d["gradientType"] ? { gradientType: d["gradientType"] } : {}),
+            fillType: (d["fillType"] || "solid") as NonNullable<
+              ShapeAttrs["fillType"]
+            >,
+            ...(d["gradientType"]
+              ? {
+                  gradientType: d["gradientType"] as NonNullable<
+                    ShapeAttrs["gradientType"]
+                  >,
+                }
+              : {}),
             ...(d["gradientAngle"]
               ? { gradientAngle: Number(d["gradientAngle"]) }
               : {}),
@@ -378,6 +488,15 @@ export const ShapeExtension = createNodeExtension({
               : {}),
             ...(d["outlineColor"] ? { outlineColor: d["outlineColor"] } : {}),
             ...(d["outlineStyle"] ? { outlineStyle: d["outlineStyle"] } : {}),
+            ...(d["outlineCap"]
+              ? {
+                  outlineCap: d["outlineCap"] as NonNullable<
+                    ShapeAttrs["outlineCap"]
+                  >,
+                }
+              : {}),
+            ...(outlineHeadEnd ? { outlineHeadEnd } : {}),
+            ...(outlineTailEnd ? { outlineTailEnd } : {}),
             ...(d["transform"] ? { transform: d["transform"] } : {}),
             ...(d["displayMode"]
               ? {
@@ -393,7 +512,25 @@ export const ShapeExtension = createNodeExtension({
                   >,
                 }
               : {}),
-            ...(d["wrapType"] ? { wrapType: d["wrapType"] } : {}),
+            ...(d["wrapType"]
+              ? {
+                  wrapType: d["wrapType"] as NonNullable<
+                    ShapeAttrs["wrapType"]
+                  >,
+                }
+              : {}),
+            ...(d["wrapText"]
+              ? {
+                  wrapText: d["wrapText"] as NonNullable<
+                    ShapeAttrs["wrapText"]
+                  >,
+                }
+              : {}),
+            ...(d["distTop"] ? { distTop: Number(d["distTop"]) } : {}),
+            ...(d["distBottom"] ? { distBottom: Number(d["distBottom"]) } : {}),
+            ...(d["distLeft"] ? { distLeft: Number(d["distLeft"]) } : {}),
+            ...(d["distRight"] ? { distRight: Number(d["distRight"]) } : {}),
+            ...(position ? { position } : {}),
             ...(d["shadowColor"] ? { shadowColor: d["shadowColor"] } : {}),
             ...(d["shadowBlur"] ? { shadowBlur: Number(d["shadowBlur"]) } : {}),
             ...(d["shadowOffsetX"]
@@ -448,6 +585,19 @@ export const ShapeExtension = createNodeExtension({
       if (attrs.outlineStyle) {
         domAttrs["data-outline-style"] = attrs.outlineStyle;
       }
+      if (attrs.outlineCap) {
+        domAttrs["data-outline-cap"] = attrs.outlineCap;
+      }
+      if (attrs.outlineHeadEnd) {
+        domAttrs["data-outline-head-end"] = JSON.stringify(
+          attrs.outlineHeadEnd,
+        );
+      }
+      if (attrs.outlineTailEnd) {
+        domAttrs["data-outline-tail-end"] = JSON.stringify(
+          attrs.outlineTailEnd,
+        );
+      }
       if (attrs.transform) {
         domAttrs["data-transform"] = attrs.transform;
       }
@@ -459,6 +609,24 @@ export const ShapeExtension = createNodeExtension({
       }
       if (attrs.wrapType) {
         domAttrs["data-wrap-type"] = attrs.wrapType;
+      }
+      if (attrs.wrapText) {
+        domAttrs["data-wrap-text"] = attrs.wrapText;
+      }
+      if (typeof attrs.distTop === "number") {
+        domAttrs["data-dist-top"] = String(attrs.distTop);
+      }
+      if (typeof attrs.distBottom === "number") {
+        domAttrs["data-dist-bottom"] = String(attrs.distBottom);
+      }
+      if (typeof attrs.distLeft === "number") {
+        domAttrs["data-dist-left"] = String(attrs.distLeft);
+      }
+      if (typeof attrs.distRight === "number") {
+        domAttrs["data-dist-right"] = String(attrs.distRight);
+      }
+      if (attrs.position) {
+        domAttrs["data-position"] = JSON.stringify(attrs.position);
       }
       if (attrs.shadowColor) {
         domAttrs["data-shadow-color"] = attrs.shadowColor;
