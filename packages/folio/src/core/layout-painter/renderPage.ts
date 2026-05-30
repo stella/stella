@@ -1188,20 +1188,36 @@ function renderHeaderFooterContent(
 }
 
 /**
+ * Per-footnote `marginBottom` painted in `renderFootnoteArea`. Shared so the
+ * clamp helper accounts for the same DOM spacing the painter actually draws.
+ */
+const FOOTNOTE_ENTRY_MARGIN_BOTTOM = 4;
+
+/**
+ * Fallback footnote line height when no measured structured content is
+ * provided. Mirrors `fontSize: 10px` × `lineHeight: 1.3` applied in
+ * `renderFootnoteArea` to single-line plain-text footnotes.
+ */
+const FOOTNOTE_FALLBACK_LINE_HEIGHT = 13;
+
+/**
  * Calculate the painter's actual footnote-area height in pixels:
- * separator slot + the sum of each footnote's measured content height.
- * Used to clamp the paginator's reservation if it under-estimated, so
- * dense stacks never overflow past the page bottom. Mirrors the
- * upstream helper from eigenpal/docx-editor#485.
+ * separator slot + per-footnote content (or fallback line) + per-footnote
+ * `marginBottom` spacing the painter applies in `renderFootnoteArea`. Used
+ * to clamp the paginator's reservation if it under-estimated, so dense
+ * stacks never overflow past the page bottom. Mirrors the upstream helper
+ * from eigenpal/docx-editor#485, extended for folio's fallback rendering
+ * and inter-footnote margin so the helper matches the painted stack.
  */
 export function calculateFootnoteAreaRenderHeight(
   footnotes: FootnoteRenderItem[],
 ): number {
   let height = FOOTNOTE_SEPARATOR_HEIGHT;
   for (const fn of footnotes) {
-    if (fn.content) {
-      height += fn.content.height;
-    }
+    const entryHeight = fn.content
+      ? fn.content.height
+      : FOOTNOTE_FALLBACK_LINE_HEIGHT;
+    height += entryHeight + FOOTNOTE_ENTRY_MARGIN_BOTTOM;
   }
   return height;
 }
@@ -1236,7 +1252,7 @@ export function renderFootnoteArea(
   // Render each footnote
   for (const fn of footnotes) {
     const fnEl = doc.createElement("div");
-    fnEl.style.marginBottom = "4px";
+    fnEl.style.marginBottom = `${FOOTNOTE_ENTRY_MARGIN_BOTTOM}px`;
     fnEl.style.color = "var(--doc-canvas-text, #000)";
 
     if (fn.content) {
@@ -1244,7 +1260,7 @@ export function renderFootnoteArea(
       fnEl.append(contentEl);
     } else {
       fnEl.style.fontSize = "10px";
-      fnEl.style.lineHeight = "1.3";
+      fnEl.style.lineHeight = `${FOOTNOTE_FALLBACK_LINE_HEIGHT / 10}`;
 
       const sup = doc.createElement("sup");
       sup.textContent = fn.displayNumber;

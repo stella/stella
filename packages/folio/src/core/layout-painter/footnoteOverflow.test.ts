@@ -123,29 +123,42 @@ const basePage: Page = {
   fragments: [],
 };
 
+// Painter constants mirrored in `calculateFootnoteAreaRenderHeight`. Kept
+// local to the test so a drift between painter/helper fails here before it
+// fails in production. See `renderPage.ts` for the source values.
+const PAINTER_FOOTNOTE_ENTRY_MARGIN_BOTTOM = 4;
+const PAINTER_FOOTNOTE_FALLBACK_LINE_HEIGHT = 13;
+
 describe("calculateFootnoteAreaRenderHeight", () => {
   test("returns separator height when no footnote has measured content", () => {
     expect(calculateFootnoteAreaRenderHeight([])).toBe(FOOTNOTE_SEPARATOR_HEIGHT);
   });
 
-  test("sums each footnote content height plus a single separator", () => {
+  test("sums each footnote content height plus per-entry margin and a single separator", () => {
     const footnotes: FootnoteRenderItem[] = [
       makeParagraphFootnote(20),
       makeParagraphFootnote(35),
       makeParagraphFootnote(15),
     ];
     expect(calculateFootnoteAreaRenderHeight(footnotes)).toBe(
-      FOOTNOTE_SEPARATOR_HEIGHT + 20 + 35 + 15,
+      FOOTNOTE_SEPARATOR_HEIGHT +
+        20 +
+        35 +
+        15 +
+        3 * PAINTER_FOOTNOTE_ENTRY_MARGIN_BOTTOM,
     );
   });
 
-  test("ignores footnotes without measured content", () => {
+  test("counts fallback line height for footnotes without measured content", () => {
     const footnotes: FootnoteRenderItem[] = [
       { displayNumber: "1", text: "plain" },
       makeParagraphFootnote(40),
     ];
     expect(calculateFootnoteAreaRenderHeight(footnotes)).toBe(
-      FOOTNOTE_SEPARATOR_HEIGHT + 40,
+      FOOTNOTE_SEPARATOR_HEIGHT +
+        PAINTER_FOOTNOTE_FALLBACK_LINE_HEIGHT +
+        40 +
+        2 * PAINTER_FOOTNOTE_ENTRY_MARGIN_BOTTOM,
     );
   });
 });
@@ -216,7 +229,10 @@ describe("renderFootnoteArea overflow clamp", () => {
 });
 
 describe("footnote separator height parity", () => {
-  test("paginator reservation matches painter render height for 1, 3, and 10 footnotes", () => {
+  test("painter render height covers paginator reservation plus per-entry margin for 1, 3, and 10 footnotes", () => {
+    // Paginator reserves separator + sum(content). Painter additionally
+    // draws a `marginBottom` between entries, so the clamp helper must
+    // exceed the paginator reservation by exactly `count * margin`.
     for (const count of [1, 3, 10]) {
       const heights = Array.from({ length: count }, (_, index) => 10 + index);
       const footnotes = heights.map(makeParagraphFootnote);
@@ -224,7 +240,9 @@ describe("footnote separator height parity", () => {
       const paginatorHeight =
         heights.reduce((sum, height) => sum + height, 0) +
         PAGINATOR_FOOTNOTE_SEPARATOR_HEIGHT;
-      expect(painterHeight).toBe(paginatorHeight);
+      expect(painterHeight).toBe(
+        paginatorHeight + count * PAINTER_FOOTNOTE_ENTRY_MARGIN_BOTTOM,
+      );
     }
   });
 
