@@ -21,7 +21,7 @@ export class DeepLRateLimitError extends TaggedError("DeepLRateLimitError")<{
 /** DeepL refused the document (unsupported format, too large, parse failure). */
 export class DeepLDocumentError extends TaggedError("DeepLDocumentError")<{
   message: string;
-  /** DeepL's `error_message` when the job ends in status="error". */
+  /** DeepL's provider detail when the job ends in status="error". */
   detail?: string | undefined;
   cause?: unknown;
 }>() {}

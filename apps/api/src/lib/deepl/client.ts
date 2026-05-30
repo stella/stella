@@ -103,6 +103,7 @@ const statusResponseSchema = v.object({
   seconds_remaining: v.optional(v.number()),
   billed_characters: v.optional(v.number()),
   error_message: v.optional(v.string()),
+  message: v.optional(v.string()),
 });
 
 const languagesResponseSchema = v.array(
@@ -165,6 +166,28 @@ const readDeepLJson = async (response: Response): Promise<unknown> => {
       cause: error,
     });
   }
+};
+
+type ParseDeepLJsonOptions<TSchema extends v.GenericSchema> = {
+  body: unknown;
+  responseName: string;
+  schema: TSchema;
+};
+
+const parseDeepLJson = <TSchema extends v.GenericSchema>({
+  body,
+  responseName,
+  schema,
+}: ParseDeepLJsonOptions<TSchema>): v.InferOutput<TSchema> => {
+  const result = v.safeParse(schema, body);
+  if (result.success) {
+    return result.output;
+  }
+
+  throw new DeepLUpstreamError({
+    message: `DeepL returned a malformed ${responseName} response`,
+    cause: result.issues,
+  });
 };
 
 const readDeepLBytes = async (response: Response): Promise<Uint8Array> => {
@@ -273,7 +296,11 @@ const uploadDocument = async (
     mapHttpError(response.status, await readDeepLText(response));
   }
 
-  const json = v.parse(uploadResponseSchema, await readDeepLJson(response));
+  const json = parseDeepLJson({
+    body: await readDeepLJson(response),
+    responseName: "document upload",
+    schema: uploadResponseSchema,
+  });
   return { documentId: json.document_id, documentKey: json.document_key };
 };
 
@@ -299,14 +326,18 @@ const fetchStatus = async (
     mapHttpError(response.status, await readDeepLText(response));
   }
 
-  const json = v.parse(statusResponseSchema, await readDeepLJson(response));
+  const json = parseDeepLJson({
+    body: await readDeepLJson(response),
+    responseName: "document status",
+    schema: statusResponseSchema,
+  });
 
   return {
     documentId: json.document_id,
     status: json.status,
     secondsRemaining: json.seconds_remaining,
     billedCharacters: json.billed_characters,
-    errorMessage: json.error_message,
+    errorMessage: json.error_message ?? json.message,
   };
 };
 
@@ -403,7 +434,11 @@ export const fetchTargetLanguages = async (
     mapHttpError(response.status, await readDeepLText(response));
   }
 
-  const json = v.parse(languagesResponseSchema, await readDeepLJson(response));
+  const json = parseDeepLJson({
+    body: await readDeepLJson(response),
+    responseName: "target languages",
+    schema: languagesResponseSchema,
+  });
 
   return json.map((lang) => ({
     code: lang.language,
