@@ -87,14 +87,14 @@
     "jszip": "catalog:",
     "marked": "^18.0.4",
     "nodemailer": "^8.0.8",
-    "posthog-node": "^5.35.1",
+    "posthog-node": "^5.35.2",
     "quickjs-emscripten": "^0.32.0",
     "quickjs-emscripten-core": "^0.32.0",
     "slimdom": "^4.3.5",
     "valibot": "catalog:"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.4.5",
+    "@electric-sql/pglite": "^0.4.6",
     "@faker-js/faker": "^10.3.0",
     "@stll/typescript-config": "workspace:*",
     "@types/bun": "catalog:",
