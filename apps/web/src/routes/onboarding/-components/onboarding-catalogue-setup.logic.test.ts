@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { createCatalogueSetupPlan } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
+import {
+  createCatalogueSetupPlan,
+  reconcileCatalogueSlugsForJurisdictions,
+} from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
 
 const nativeTool = (slug: string, options: { pinned?: boolean } = {}) => ({
   backendSlug: slug,
@@ -15,6 +18,14 @@ const entries = [
   nativeTool("boe"),
   nativeTool("create-docx", { pinned: true }),
   { kind: "skill" as const, slug: "summarise-contract" },
+];
+
+const selectionEntries = [
+  { jurisdictions: ["CZ"], slug: "ares" },
+  { jurisdictions: ["CZ"], slug: "infosoud" },
+  { jurisdictions: ["ES"], slug: "boe" },
+  { jurisdictions: ["EU"], slug: "eur-lex" },
+  { jurisdictions: [], slug: "summarise-contract" },
 ];
 
 describe("onboarding catalogue setup plan", () => {
@@ -53,5 +64,34 @@ describe("onboarding catalogue setup plan", () => {
     });
 
     expect(plan.nativeToolOptOuts).toEqual([]);
+  });
+});
+
+describe("onboarding catalogue selection reconciliation", () => {
+  test("drops stale jurisdiction picks after switching practice country", () => {
+    const slugs = reconcileCatalogueSlugsForJurisdictions({
+      entries: selectionEntries,
+      practiceJurisdictions: [{ countryCode: "ES", isPrimary: true }],
+      selectedSlugs: [
+        "ares",
+        "infosoud",
+        "boe",
+        "eur-lex",
+        "summarise-contract",
+        "ares",
+      ],
+    });
+
+    expect(slugs).toEqual(["boe", "eur-lex", "summarise-contract"]);
+  });
+
+  test("clears jurisdiction-specific picks when practice countries are skipped", () => {
+    const slugs = reconcileCatalogueSlugsForJurisdictions({
+      entries: selectionEntries,
+      practiceJurisdictions: [],
+      selectedSlugs: ["ares", "summarise-contract"],
+    });
+
+    expect(slugs).toEqual(["summarise-contract"]);
   });
 });

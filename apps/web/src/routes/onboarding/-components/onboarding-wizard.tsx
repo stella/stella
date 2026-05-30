@@ -33,7 +33,10 @@ import { sessionOptions } from "@/routes/-queries";
 import { aiConfigKeys } from "@/routes/_protected.organization/-ai-config-queries";
 import { CatalogueDetailPreview } from "@/routes/onboarding/-components/catalogue-detail-preview";
 import { CatalogueStackPreview } from "@/routes/onboarding/-components/catalogue-stack-preview";
-import { createCatalogueSetupPlan } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
+import {
+  createCatalogueSetupPlan,
+  reconcileCatalogueSlugsForJurisdictions,
+} from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
 import { OnboardingLayout } from "@/routes/onboarding/-components/onboarding-layout";
 import { PricesPanel } from "@/routes/onboarding/-components/prices-panel";
 import { SidebarPreview } from "@/routes/onboarding/-components/sidebar-preview";
@@ -153,6 +156,22 @@ export const OnboardingWizard = () => {
     jurisdictionSuggestionApplied,
     suggestedCountryCodes,
   ]);
+
+  const continueFromJurisdiction = () => {
+    const catalogueEntries = loadCatalogue();
+    setData((currentData) => ({
+      ...currentData,
+      catalogueSlugs: [
+        ...reconcileCatalogueSlugsForJurisdictions({
+          entries: catalogueEntries,
+          practiceJurisdictions: currentData.practiceJurisdictions,
+          selectedSlugs: currentData.catalogueSlugs,
+        }),
+      ],
+    }));
+    setCatalogueFocusedSlug(null);
+    setStep("catalogue");
+  };
 
   const executeSetup = useCallback(
     async (finalData: WizardData) => {
@@ -537,10 +556,15 @@ export const OnboardingWizard = () => {
               setData((d) => ({ ...d, practiceJurisdictions }));
               setJurisdictionSuggestionApplied(true);
             }}
-            onNext={() => setStep("catalogue")}
+            onNext={continueFromJurisdiction}
             onSkip={() => {
-              setData((d) => ({ ...d, practiceJurisdictions: [] }));
+              setData((d) => ({
+                ...d,
+                catalogueSlugs: [],
+                practiceJurisdictions: [],
+              }));
               setJurisdictionSuggestionApplied(true);
+              setCatalogueFocusedSlug(null);
               setStep("catalogue");
             }}
           />
