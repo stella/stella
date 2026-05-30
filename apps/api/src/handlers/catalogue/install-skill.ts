@@ -9,6 +9,11 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
+import {
+  hashBundledSkillPackage,
+  toParsedBundledSkillResources,
+} from "./bundled-skill-resources";
+
 const installSkillBody = t.Object({
   slug: t.String({ minLength: 1, maxLength: 64 }),
   scope: t.Optional(t.UnionEnum(AGENT_SKILL_SCOPES)),
@@ -39,9 +44,14 @@ const installBundledSkill = createSafeRootHandler(
       );
     }
 
-    const bodyHasher = new Bun.CryptoHasher("sha256");
-    bodyHasher.update(entry.body);
-    const contentHash = bodyHasher.digest("hex");
+    const resourcesResult = toParsedBundledSkillResources(entry.resourceFiles);
+    if (Result.isError(resourcesResult)) {
+      return Result.err(resourcesResult.error);
+    }
+    const contentHash = hashBundledSkillPackage({
+      body: entry.body,
+      resources: resourcesResult.value,
+    });
 
     const installResult = await installSkill({
       memberRole,
@@ -54,7 +64,7 @@ const installBundledSkill = createSafeRootHandler(
         license: entry.license,
         metadata: {},
         name: entry.slug,
-        resources: [],
+        resources: resourcesResult.value,
         sourceUrl: null,
         version: null,
       },

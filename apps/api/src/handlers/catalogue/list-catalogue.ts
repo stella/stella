@@ -28,7 +28,7 @@ type InstallState = "installed" | "available" | "unavailable";
 
 type PublicCatalogueEntry<
   T extends LoadedCatalogueEntry = LoadedCatalogueEntry,
-> = T extends LoadedCatalogueEntry ? Omit<T, "body"> : never;
+> = T extends LoadedCatalogueEntry ? Omit<T, "body" | "resourceFiles"> : never;
 
 type CatalogueEntryResponse = PublicCatalogueEntry & {
   isRecommendedForOrg: boolean;
@@ -43,6 +43,7 @@ type CatalogueEntryResponse = PublicCatalogueEntry & {
 
 const toPublicCatalogueEntry = ({
   body: _body,
+  resourceFiles: _resourceFiles,
   ...entry
 }: LoadedCatalogueEntry): PublicCatalogueEntry => entry;
 

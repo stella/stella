@@ -79,6 +79,35 @@ for (const kind of CATALOGUE_KINDS) {
         `${kind}/${slug}: manifest slug "${parsed.output.slug}" does not match folder name`,
       );
     }
+    if (parsed.output.kind === "skill") {
+      const entryPath = normalizeCataloguePath(parsed.output.entryPath);
+      if (entryPath === null) {
+        errors.push(`${kind}/${slug}: entryPath escapes the entry folder`);
+      } else {
+        const bodyFile = path.join(folder, entryPath);
+        if (!existsSync(bodyFile)) {
+          errors.push(`${kind}/${slug}: entryPath file not found`);
+        }
+        const entryDirectory = path.dirname(entryPath);
+        const resourceRoot =
+          entryDirectory === "." ? folder : path.join(folder, entryDirectory);
+        for (const resourcePath of parsed.output.resources) {
+          const normalizedResourcePath = normalizeCataloguePath(resourcePath);
+          if (normalizedResourcePath === null) {
+            errors.push(
+              `${kind}/${slug}: resource path escapes the entry folder: ${resourcePath}`,
+            );
+            continue;
+          }
+          const resourceFile = path.join(resourceRoot, normalizedResourcePath);
+          if (!existsSync(resourceFile)) {
+            errors.push(
+              `${kind}/${slug}: resource file not found: ${normalizedResourcePath}`,
+            );
+          }
+        }
+      }
+    }
 
     const seen = seenSlugs.get(kind);
     if (seen?.has(slug)) {
@@ -182,4 +211,21 @@ function formatBytes(bytes: number): string {
     return `${(bytes / 1024).toFixed(1)} KB`;
   }
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function normalizeCataloguePath(rawPath: string): string | null {
+  if (rawPath.startsWith("/")) {
+    return null;
+  }
+
+  const normalized = path.posix.normalize(rawPath.replaceAll("\\", "/"));
+  if (
+    normalized === "." ||
+    normalized === ".." ||
+    normalized.startsWith("../")
+  ) {
+    return null;
+  }
+
+  return normalized;
 }
