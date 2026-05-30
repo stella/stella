@@ -54,6 +54,17 @@ export type PrhRawPostOffice = {
 
 // `type` on addresses is a number (1 = street, 2 = postal), unlike the
 // rest of the payload where discriminators are stringified digits.
+//
+// PRH supplies street addresses via two mutually exclusive shapes:
+//
+//   * structured atoms (`street` + `buildingNumber` + `entrance` + ...),
+//     used for the vast majority of Finnish-registered entities; and
+//   * a free-form `freeAddressLine`, used for foreign addresses and
+//     for entries the registrar received as opaque strings (most
+//     visible on overseas branches).
+//
+// Both surfaces feed the same `PrhAddress.textAddress` field — the
+// raw schema keeps both arms typed so the parser can fall back.
 export type PrhRawAddress = {
   type: number;
   street?: string;
@@ -66,6 +77,7 @@ export type PrhRawAddress = {
   apartmentIdSuffix?: string;
   co?: string;
   country?: string;
+  freeAddressLine?: string;
   registrationDate?: string;
   endDate?: string;
   source: string;

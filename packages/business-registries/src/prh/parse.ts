@@ -84,13 +84,17 @@ const formatStreetLine = (raw: PrhRawAddress): string | null => {
     .filter(Boolean)
     .join(" ");
   const street = raw.street?.trim();
-  if (!street && !houseSegment) {
-    return null;
-  }
   if (street && houseSegment) {
     return `${street} ${houseSegment}`;
   }
-  return street ?? houseSegment;
+  if (street || houseSegment) {
+    return street ?? houseSegment;
+  }
+  // Foreign / opaque addresses arrive via `freeAddressLine` instead
+  // of structured atoms; surface that string verbatim so the address
+  // is not silently dropped from contact-form / chat results.
+  const free = raw.freeAddressLine?.trim();
+  return free && free.length > 0 ? free : null;
 };
 
 export const parseAddress = (raw: PrhRawAddress): PrhAddress => {
