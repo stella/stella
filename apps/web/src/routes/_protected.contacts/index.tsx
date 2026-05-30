@@ -426,46 +426,31 @@ type BillingAddress = {
   country?: string;
 };
 
-type AresAddress = {
-  street: string | null;
-  houseNumber: string | null;
-  orientationNumber: string | null;
-  orientationLetter: string | null;
-  municipalityPart: string | null;
-  municipality: string | null;
+type BusinessRegistryAddress = {
+  line1: string | null;
+  line2: string | null;
   postalCode: string | null;
-  district: string | null;
+  city: string | null;
+  region: string | null;
   country: string | null;
   textAddress: string | null;
 };
 
 const normalizeIcoInput = (value: string) => value.replaceAll(/\D/gu, "");
 
-const formatStreetLine = (address: AresAddress) => {
-  const street = address.street ?? address.municipalityPart ?? "";
-  const houseNumber = address.houseNumber ?? "";
-  const orientationNumber = address.orientationNumber
-    ? `/${address.orientationNumber}${address.orientationLetter ?? ""}`
-    : "";
-
-  return [street, `${houseNumber}${orientationNumber}`.trim()]
-    .filter(Boolean)
-    .join(" ");
-};
-
 const toBillingAddress = (
-  address: AresAddress | null,
+  address: BusinessRegistryAddress | null,
 ): BillingAddress | null => {
   if (!address) {
     return null;
   }
 
-  const line1 = formatStreetLine(address) || address.textAddress || undefined;
+  const line1 = address.line1 ?? address.textAddress ?? undefined;
 
   return {
     ...(line1 && { line1 }),
-    ...(address.municipality && { city: address.municipality }),
-    ...(address.district && { state: address.district }),
+    ...(address.city && { city: address.city }),
+    ...(address.region && { state: address.region }),
     ...(address.postalCode && { postalCode: address.postalCode }),
     ...(address.country && { country: address.country }),
   };
@@ -574,15 +559,16 @@ const CreateContactDialog = ({
 
     setIsAresLoading(true);
     try {
-      const response = await api.contacts.ares.get({ query: { ico } });
+      const response = await api.contacts["business-registries"].get({
+        query: { registry: "ares", q: ico },
+      });
       if (response.error) {
         throw toAPIError(response.error);
       }
 
-      const company =
-        response.data.type === "lookup" ? response.data.company : null;
+      const hit = response.data.type === "lookup" ? response.data.hit : null;
 
-      if (!company) {
+      if (!hit) {
         stellaToast.add({
           title: t("contacts.create.aresNotFound"),
           type: "error",
@@ -590,10 +576,10 @@ const CreateContactDialog = ({
         return;
       }
 
-      form.setFieldValue("registrationNumber", company.ico);
-      form.setFieldValue("organizationName", company.name);
-      form.setFieldValue("displayName", company.name);
-      setAresBillingAddress(toBillingAddress(company.address));
+      form.setFieldValue("registrationNumber", hit.id);
+      form.setFieldValue("organizationName", hit.name);
+      form.setFieldValue("displayName", hit.name);
+      setAresBillingAddress(toBillingAddress(hit.address));
 
       stellaToast.add({
         title: t("contacts.create.aresApplied"),
