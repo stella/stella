@@ -7,7 +7,9 @@
 
 import type {
   BlockContent,
+  Hyperlink,
   Paragraph,
+  ParagraphContent,
   Table,
   TableCell,
   TableRow,
@@ -274,21 +276,61 @@ function getRunText(run: Run): string {
   return text;
 }
 
+function getHyperlinkText(hyperlink: Hyperlink): string {
+  let text = "";
+  for (const child of hyperlink.children) {
+    if (child.type === "run") {
+      text += getRunText(child);
+    }
+  }
+  return text;
+}
+
+// Mirrors the set of children that paragraphParser keeps inside an inline SDT
+// (run, hyperlink, simple/complex field, nested inlineSdt, math equation).
+// Math equations carry no extractable plain text, so they contribute "".
+function getParagraphContentText(content: ParagraphContent): string {
+  if (content.type === "run") {
+    return getRunText(content);
+  }
+  if (content.type === "hyperlink") {
+    return getHyperlinkText(content);
+  }
+  if (content.type === "inlineSdt") {
+    let text = "";
+    for (const child of content.content) {
+      text += getParagraphContentText(child);
+    }
+    return text;
+  }
+  if (content.type === "simpleField") {
+    let text = "";
+    for (const child of content.content) {
+      if (child.type === "run") {
+        text += getRunText(child);
+        continue;
+      }
+      text += getHyperlinkText(child);
+    }
+    return text;
+  }
+  if (content.type === "complexField") {
+    let text = "";
+    for (const run of content.fieldResult) {
+      text += getRunText(run);
+    }
+    return text;
+  }
+  return "";
+}
+
 /**
  * Get plain text from a paragraph
  */
 function getParagraphPlainText(paragraph: Paragraph): string {
   let text = "";
   for (const item of paragraph.content) {
-    if (item.type === "run") {
-      text += getRunText(item);
-    } else if (item.type === "hyperlink") {
-      for (const child of item.children) {
-        if (child.type === "run") {
-          text += getRunText(child);
-        }
-      }
-    }
+    text += getParagraphContentText(item);
   }
   return text;
 }
@@ -453,19 +495,7 @@ function findContentAtOffset(
   let contentIndex = 0;
 
   for (const item of paragraph.content) {
-    let itemText = "";
-
-    if (item.type === "run") {
-      itemText = getRunText(item);
-    } else if (item.type === "hyperlink") {
-      for (const child of item.children) {
-        if (child.type === "run") {
-          itemText += getRunText(child);
-        }
-      }
-    }
-
-    const itemLength = itemText.length;
+    const itemLength = getParagraphContentText(item).length;
 
     if (currentOffset + itemLength > offset) {
       return {

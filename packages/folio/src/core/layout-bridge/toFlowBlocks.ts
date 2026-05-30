@@ -25,7 +25,6 @@ import type {
   TextRun,
   TabRun,
   ImageRun,
-  LineBreakRun,
   FieldRun,
   RunFormatting,
   ParagraphAttrs,
@@ -867,12 +866,14 @@ function paragraphToRuns(
   const inTocParagraph =
     typeof paragraphStyleId === "string" && TOC_STYLE_ID.test(paragraphStyleId);
 
-  // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
-  node.forEach((child, childOffset) => {
-    const childPos = offset + childOffset;
-
+  // Single dispatcher for one inline PM child. Recurses on `sdt` so nested
+  // content controls keep contributing runs at the right pmStart/pmEnd.
+  // Used for both the top-level paragraph iteration and the descent into
+  // SDT children — the previous SDT branch only handled text/hardBreak/
+  // tab/image and silently dropped fields, math, and nested SDTs even
+  // when the parser preserved them (see eigenpal #482).
+  function pushRunsForChild(child: PMNode, childPos: number): void {
     if (child.isText && child.text) {
-      // Text node - create text run
       const formatting = extractRunFormatting(child.marks, theme);
       if (inTocParagraph) {
         stripTocHyperlinkStyle(formatting);
@@ -885,16 +886,17 @@ function paragraphToRuns(
         pmEnd: childPos + child.nodeSize,
       };
       runs.push(run);
-    } else if (child.type.name === "hardBreak") {
-      // Line break
-      const run: LineBreakRun = {
+      return;
+    }
+    if (child.type.name === "hardBreak") {
+      runs.push({
         kind: "lineBreak",
         pmStart: childPos,
         pmEnd: childPos + child.nodeSize,
-      };
-      runs.push(run);
-    } else if (child.type.name === "tab") {
-      // Tab character
+      });
+      return;
+    }
+    if (child.type.name === "tab") {
       const formatting = extractRunFormatting(child.marks, theme);
       const run: TabRun = {
         kind: "tab",
@@ -903,8 +905,9 @@ function paragraphToRuns(
         pmEnd: childPos + child.nodeSize,
       };
       runs.push(run);
-    } else if (child.type.name === "image") {
-      // Image within paragraph
+      return;
+    }
+    if (child.type.name === "image") {
       const attrs = expectImageAttrs(child);
       const constrained = constrainImageToPage(
         attrs.width || 100,
@@ -918,15 +921,16 @@ function paragraphToRuns(
         childPos + child.nodeSize,
       );
       runs.push(run);
-    } else if (child.type.name === "field") {
-      // Field node — convert to FieldRun for render-time substitution.
-      //
-      // Marks on the field node (bold/italic/underline applied to the field
-      // result inside `<w:fldChar separate>...</w:fldChar end>`) must
-      // propagate to the run formatting, otherwise complex REF fields whose
-      // visible text was authored as underlined (e.g. cross-references like
-      // "Exhibit A" / "Section 1.3" in NVCA-style templates) render with no
-      // underline. Reuse the same extractor text runs use.
+      return;
+    }
+    if (child.type.name === "field") {
+      // Marks on the field node (bold/italic/underline applied to the
+      // field result inside `<w:fldChar separate>...</w:fldChar end>`)
+      // must propagate to the run formatting, otherwise complex REF
+      // fields whose visible text was authored as underlined (e.g.
+      // cross-references like "Exhibit A" / "Section 1.3" in NVCA-style
+      // templates) render with no underline. Reuse the same extractor
+      // text runs use.
       const attrs = expectFieldAttrs(child);
       const ft = attrs.fieldType;
       let mappedType: FieldRun["fieldType"] = "OTHER";
@@ -956,68 +960,32 @@ function paragraphToRuns(
         ...fieldFormatting,
       };
       runs.push(run);
-    } else if (child.type.name === "math") {
-      // Math node — render as plain text fallback in layout
+      return;
+    }
+    if (child.type.name === "math") {
       const text = expectMathAttrs(child).plainText || "[equation]";
-      const run: TextRun = {
+      runs.push({
         kind: "text",
         text,
         italic: true,
         fontFamily: "Cambria Math",
         pmStart: childPos,
         pmEnd: childPos + child.nodeSize,
-      };
-      runs.push(run);
-    } else if (child.type.name === "sdt") {
-      // SDT (Structured Document Tag / content control) — inline wrapper node.
-      // Descend into its children to extract the actual text runs.
+      });
+      return;
+    }
+    if (child.type.name === "sdt") {
       const sdtInnerOffset = childPos + 1; // +1 for opening tag
       // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
       child.forEach((sdtChild, sdtChildOffset) => {
-        const sdtChildPos = sdtInnerOffset + sdtChildOffset;
-        if (sdtChild.isText && sdtChild.text) {
-          const formatting = extractRunFormatting(sdtChild.marks, theme);
-          const run: TextRun = {
-            kind: "text",
-            text: sdtChild.text,
-            ...mergeRunFormatting(paraDefaults, formatting),
-            pmStart: sdtChildPos,
-            pmEnd: sdtChildPos + sdtChild.nodeSize,
-          };
-          runs.push(run);
-        } else if (sdtChild.type.name === "hardBreak") {
-          const run: LineBreakRun = {
-            kind: "lineBreak",
-            pmStart: sdtChildPos,
-            pmEnd: sdtChildPos + sdtChild.nodeSize,
-          };
-          runs.push(run);
-        } else if (sdtChild.type.name === "tab") {
-          const formatting = extractRunFormatting(sdtChild.marks, theme);
-          const run: TabRun = {
-            kind: "tab",
-            ...mergeRunFormatting(paraDefaults, formatting),
-            pmStart: sdtChildPos,
-            pmEnd: sdtChildPos + sdtChild.nodeSize,
-          };
-          runs.push(run);
-        } else if (sdtChild.type.name === "image") {
-          const attrs = expectImageAttrs(sdtChild);
-          const sdtConstrained = constrainImageToPage(
-            attrs.width || 100,
-            attrs.height || 100,
-            _options.pageContentHeight,
-          );
-          const run = buildImageRun(
-            attrs,
-            sdtConstrained,
-            sdtChildPos,
-            sdtChildPos + sdtChild.nodeSize,
-          );
-          runs.push(run);
-        }
+        pushRunsForChild(sdtChild, sdtInnerOffset + sdtChildOffset);
       });
     }
+  }
+
+  // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
+  node.forEach((child, childOffset) => {
+    pushRunsForChild(child, offset + childOffset);
   });
 
   return runs;

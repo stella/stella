@@ -1692,7 +1692,7 @@ function convertInlineSdt(
         styleResolver,
       );
       inlineNodes.push(...runNodes);
-    } else {
+    } else if (content.type === "hyperlink") {
       const currentHyperlinkIndex = hyperlinkIndex;
       hyperlinkIndex += 1;
       const linkNodes = convertHyperlink(
@@ -1702,6 +1702,30 @@ function convertInlineSdt(
         currentHyperlinkIndex,
       );
       inlineNodes.push(...linkNodes);
+    } else if (
+      content.type === "simpleField" ||
+      content.type === "complexField"
+    ) {
+      const fieldNode = convertField(content, getInheritedRunFormatting);
+      if (fieldNode) {
+        inlineNodes.push(fieldNode);
+      }
+    } else if (content.type === "inlineSdt") {
+      const nestedSdt = convertInlineSdt(
+        content,
+        getInheritedRunFormatting,
+        styleResolver,
+      );
+      if (nestedSdt) {
+        inlineNodes.push(nestedSdt);
+      }
+    } else {
+      // content.type === "mathEquation" — narrowed by exhaustion of the
+      // InlineSdt['content'] union above.
+      const mathNode = convertMathEquation(content);
+      if (mathNode) {
+        inlineNodes.push(mathNode);
+      }
     }
   }
 
@@ -2735,7 +2759,14 @@ function paragraphPageBreakPosition(
       return false;
     }
     if (item.type === "inlineSdt") {
-      return visitRunOrHyperlinkList(item.content);
+      // SDT.content was widened in PR #508 to carry fields/math/nested SDTs;
+      // recurse via visitItem so each child uses its own visibility rule.
+      for (const child of item.content) {
+        if (visitItem(child)) {
+          return true;
+        }
+      }
+      return false;
     }
     if (item.type === "mathEquation") {
       // OMML math is a visible inline node and cannot itself contain w:br.

@@ -127,6 +127,95 @@ describe("Folio find and replace", () => {
     ).toHaveLength(1);
   });
 
+  test("finds run text wrapped inside an inline SDT", () => {
+    const document: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  type: "run",
+                  content: [{ type: "text", text: "Before " }],
+                },
+                {
+                  type: "inlineSdt",
+                  properties: {},
+                  content: [
+                    {
+                      type: "run",
+                      content: [{ type: "text", text: "tagged" }],
+                    },
+                  ],
+                },
+                {
+                  type: "run",
+                  content: [{ type: "text", text: " after" }],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const matches = findInDocument(
+      document,
+      "tagged",
+      createDefaultFindOptions(),
+    );
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.startOffset).toBe(7);
+    expect(matches[0]?.endOffset).toBe(13);
+    // The inline SDT is the top-level container at index 1.
+    expect(matches[0]?.contentIndex).toBe(1);
+  });
+
+  test("finds visible text inside a simple field wrapped in an inline SDT", () => {
+    const document: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  type: "inlineSdt",
+                  properties: {},
+                  content: [
+                    {
+                      type: "simpleField",
+                      instruction: "TITLE",
+                      fieldType: "TITLE",
+                      content: [
+                        {
+                          type: "run",
+                          content: [{ type: "text", text: "Doc Title" }],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const matches = findInDocument(
+      document,
+      "Title",
+      createDefaultFindOptions(),
+    );
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.startOffset).toBe(4);
+    expect(matches[0]?.endOffset).toBe(9);
+  });
+
   test("scrolls to rendered layout paragraphs when legacy paragraph indexes are absent", () => {
     let scrolled = false;
     const second = {

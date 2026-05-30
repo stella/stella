@@ -83,13 +83,22 @@ export const visitDocxParagraphs = (
     }
     if (
       content.type === "simpleField" ||
-      content.type === "inlineSdt" ||
       content.type === "insertion" ||
       content.type === "deletion" ||
       content.type === "moveFrom" ||
       content.type === "moveTo"
     ) {
       visitInlineContent(content.content);
+      return;
+    }
+    if (content.type === "inlineSdt") {
+      // Inline SDT children include simple/complex fields, nested SDTs,
+      // and math equations alongside runs/hyperlinks. Recurse through
+      // the regular paragraph-content visitor so each child is dispatched
+      // to its existing handler instead of being narrowed to Run|Hyperlink.
+      for (const child of content.content) {
+        visitParagraphContent(child);
+      }
       return;
     }
     if (content.type === "complexField") {

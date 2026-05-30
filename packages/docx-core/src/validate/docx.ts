@@ -332,8 +332,12 @@ const validateParagraphContent = (
   }
 
   if (content.type === "inlineSdt") {
+    // Inline SDT children are a subset of ParagraphContent (runs,
+    // hyperlinks, fields, nested SDTs, math) — defer to the regular
+    // paragraph-content validator so each child is checked against its
+    // own rules rather than narrowed to (Run | Hyperlink).
     for (const [index, child] of content.content.entries()) {
-      validateFieldChild(child, `${path}.content[${index}]`, ctx);
+      validateParagraphContent(child, `${path}.content[${index}]`, ctx);
     }
     return;
   }
