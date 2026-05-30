@@ -1,16 +1,21 @@
 {
-  "name": "@stll/ares",
+  "name": "@stll/business-registries",
   "version": "0.1.0",
-  "description": "Typed client for the Czech ARES business registry API",
+  "description": "Typed clients for national business / commercial registries (Czech ARES, Norwegian Brreg, Finnish PRH, Polish KRS, UK Companies House, French INSEE Sirene, ...)",
   "keywords": [
     "ares",
-    "company",
-    "czech",
-    "ico",
+    "brreg",
+    "business-register",
+    "commercial-register",
+    "companies-house",
+    "company-lookup",
+    "krs",
     "legal",
-    "registry"
+    "prh",
+    "registry",
+    "sirene"
   ],
-  "homepage": "https://github.com/stella/stella/tree/main/packages/ares",
+  "homepage": "https://github.com/stella/stella/tree/main/packages/business-registries",
   "bugs": {
     "url": "https://github.com/stella/stella/issues"
   },
@@ -18,7 +23,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/stella/stella.git",
-    "directory": "packages/ares"
+    "directory": "packages/business-registries"
   },
   "files": [
     "dist",
@@ -34,6 +39,11 @@
       "bun": "./src/index.ts",
       "types": "./src/index.ts",
       "import": "./dist/index.js"
+    },
+    "./ares": {
+      "bun": "./src/ares/index.ts",
+      "types": "./src/ares/index.ts",
+      "import": "./dist/ares/index.js"
     }
   },
   "publishConfig": {
@@ -45,8 +55,8 @@
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
     "typecheck": "tsgo --noEmit",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/ares",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/ares",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/business-registries",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/business-registries",
     "format": "oxfmt .",
     "prepack": "bun run build"
   },

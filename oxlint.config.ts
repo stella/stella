@@ -915,10 +915,13 @@ export default defineConfig({
       },
     },
     {
-      // @stll/ares types resolve as error in type-aware linting
-      // because the workspace package dist isn't always available
-      // during local lint runs.
-      files: ["apps/api/src/handlers/contacts/ares-lookup.ts"],
+      // @stll/business-registries subpath types resolve as error in
+      // type-aware linting because the workspace package dist isn't
+      // always available during local lint runs.
+      files: [
+        "apps/api/src/handlers/contacts/ares-lookup.ts",
+        "apps/api/src/handlers/chat/tools/ares-tools.ts",
+      ],
       rules: {
         "typescript/no-unsafe-assignment": "off",
         "typescript/no-unsafe-member-access": "off",
