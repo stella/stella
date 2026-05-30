@@ -24,6 +24,7 @@ import {
 } from "../../prosemirror/utils/tabCalculator";
 import type { TabContext } from "../../prosemirror/utils/tabCalculator";
 import { DEFAULT_SINGLE_LINE_RATIO } from "../../utils/fontResolver";
+import { inlineImageBoundingBox } from "../../utils/rotationBoundingBox";
 import { getListMarkerInlineWidth } from "./listMarkerWidth";
 import {
   measureTextWidth,
@@ -978,9 +979,13 @@ export function measureParagraph(
         continue;
       }
 
-      // Handle inline image
-      const imageWidth = run.width;
-      const imageHeight = run.height;
+      // Handle inline image. Rotated images occupy their axis-aligned bbox,
+      // not the raw `run.width × run.height`; the painter wraps them in a
+      // bbox-sized span (eigenpal #424). The measurer must reserve the same
+      // dims so line-break and line-height match what gets painted.
+      const inlineBbox = inlineImageBoundingBox(run);
+      const imageWidth = inlineBbox.width;
+      const imageHeight = inlineBbox.height;
 
       // The image's vertical footprint in the line includes its wp:inline
       // distT/distB wrap distances. These default to 0 for inline images

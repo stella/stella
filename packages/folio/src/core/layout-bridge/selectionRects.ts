@@ -24,6 +24,7 @@ import type {
   TabRun,
   BlockId,
 } from "../layout-engine/types";
+import { inlineImageBoundingBox } from "../utils/rotationBoundingBox";
 import { getPageTop } from "./hitTest";
 import { measureRun } from "./measuring/measureContainer";
 import type { FontStyle } from "./measuring/measureContainer";
@@ -246,7 +247,10 @@ function charOffsetToX(
     }
 
     if (run.kind === "image") {
-      const imageWidth = run.width;
+      // Rotated inline images occupy their axis-aligned bbox width — use
+      // the same advance the painter does so selection rects line up with
+      // what the user sees (eigenpal #424).
+      const imageWidth = inlineImageBoundingBox(run).width;
       if (charsProcessed + 1 >= charOffset) {
         if (charOffset <= charsProcessed) {
           return x;

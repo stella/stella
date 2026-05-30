@@ -14,6 +14,10 @@ import type {
   MeasuredLine,
   ParagraphBlock,
 } from "../layout-engine/types";
+import {
+  inlineImageBoundingBox,
+  parseRotationDegrees,
+} from "../utils/rotationBoundingBox";
 import { renderLine } from "./renderParagraph";
 
 class FakeElement {
@@ -231,6 +235,36 @@ describe("inline image rotation bbox wrapper", () => {
     expect(direct.tagName).toBe("img");
     expect(direct.style["transform"]).toBe("scaleX(-1) scaleY(-1)");
     expect(direct.style["position"]).not.toBe("absolute");
+  });
+
+  // CSS function and unit names are case-insensitive per spec — a serializer
+  // or upstream layer might emit `ROTATE(90DEG)`. The painter must still
+  // produce a bbox wrapper (gemini review on PR 518).
+  test("parses ROTATE/DEG case-insensitively", () => {
+    expect(parseRotationDegrees("ROTATE(90DEG)")).toBe(90);
+    expect(parseRotationDegrees("Rotate(45Deg) scaleX(-1)")).toBe(45);
+    expect(parseRotationDegrees("rotate(-90DEG)")).toBe(270);
+  });
+
+  test("inlineImageBoundingBox falls back to raw dims for un-rotated images", () => {
+    const run: ImageRun = {
+      kind: "image",
+      src: "data:image/png;base64,",
+      width: 100,
+      height: 200,
+    };
+    expect(inlineImageBoundingBox(run)).toEqual({ width: 100, height: 200 });
+  });
+
+  test("inlineImageBoundingBox swaps dims for 90deg rotation", () => {
+    const run: ImageRun = {
+      kind: "image",
+      src: "data:image/png;base64,",
+      width: 100,
+      height: 200,
+      transform: "rotate(90deg)",
+    };
+    expect(inlineImageBoundingBox(run)).toEqual({ width: 200, height: 100 });
   });
 
   test("threads pmStart/pmEnd onto the wrapper so PM positions stay attached", () => {

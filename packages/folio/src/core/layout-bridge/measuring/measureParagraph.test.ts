@@ -418,6 +418,117 @@ describe("inline image paragraph measurement", () => {
       );
     });
   });
+
+  // Regression: a 100×200 inline image rotated 90° should reserve a 200×100
+  // axis-aligned bbox in the measurer, matching the painter's wrapper span
+  // (eigenpal #424 follow-up; gemini/codex review on PR 518). Without this,
+  // following text wrapped too early horizontally and the next line could
+  // overlap vertically.
+  test("rotated inline image reserves its bbox width on the line", () => {
+    const measure = measureParagraph(
+      {
+        kind: "paragraph",
+        id: "img-rot-w",
+        runs: [
+          {
+            kind: "image",
+            src: "data:image/png;base64,",
+            width: 100,
+            height: 200,
+            transform: "rotate(90deg)",
+          },
+        ],
+      },
+      600,
+    );
+
+    const line = measure.lines.at(0);
+    expect(line).toBeDefined();
+    // bbox width = 200 (swapped from 100×200). The raw run.width would be 100.
+    expect(line?.width).toBe(200);
+  });
+
+  test("rotated inline image reserves its bbox height on the line", () => {
+    const imageWidth = 200;
+    const imageHeight = 100;
+    const measure = measureParagraph(
+      {
+        kind: "paragraph",
+        id: "img-rot-h",
+        runs: [
+          {
+            kind: "image",
+            src: "data:image/png;base64,",
+            width: imageWidth,
+            height: imageHeight,
+            transform: "rotate(90deg)",
+          },
+        ],
+        attrs: {
+          defaultFontSize: 11,
+          defaultFontFamily: "Calibri",
+        },
+      },
+      600,
+    );
+
+    const line = measure.lines.at(0);
+    expect(line).toBeDefined();
+    // bbox height = imageWidth (swapped). With the previous bug the line
+    // would reserve `imageHeight` (100), which is shorter than the painted
+    // bbox (200) and would let the next line overlap the rotated picture.
+    expect(line?.ascent).toBeGreaterThanOrEqual(imageWidth);
+  });
+
+  test("rotated portrait→landscape inline image wraps onto a new line when bbox exceeds availableWidth", () => {
+    withFakeTextMeasure(() => {
+      // Container width 150; raw run.width = 100 would fit, but the rotated
+      // bbox width = 200 should force a wrap onto its own line.
+      const measure = measureParagraph(
+        {
+          kind: "paragraph",
+          id: "img-rot-wrap",
+          runs: [
+            { kind: "text", text: "x" },
+            {
+              kind: "image",
+              src: "data:image/png;base64,",
+              width: 100,
+              height: 200,
+              transform: "rotate(90deg)",
+            },
+          ],
+        },
+        150,
+      );
+
+      // Two lines: leading text on one, the rotated image alone on the next.
+      expect(measure.lines.length).toBeGreaterThanOrEqual(2);
+      expect(measure.lines.at(-1)?.width).toBe(200);
+    });
+  });
+
+  test("inline image with no rotation keeps raw width on the line", () => {
+    const measure = measureParagraph(
+      {
+        kind: "paragraph",
+        id: "img-no-rot",
+        runs: [
+          {
+            kind: "image",
+            src: "data:image/png;base64,",
+            width: 100,
+            height: 200,
+          },
+        ],
+      },
+      600,
+    );
+
+    const line = measure.lines.at(0);
+    expect(line).toBeDefined();
+    expect(line?.width).toBe(100);
+  });
 });
 
 describe("block image rotation measurement", () => {

@@ -29,6 +29,11 @@ import type {
 import { getAuthorColorIdx, AUTHOR_COLORS } from "../utils/authorColors";
 import { resolveFontFamily } from "../utils/fontResolver";
 import { DOCX_BOLD_FONT_WEIGHT } from "../utils/fontWeights";
+import {
+  inlineImageBoundingBox,
+  parseRotationDegrees,
+  rotatedBoundingBox,
+} from "../utils/rotationBoundingBox";
 import { getAutomaticTextColorForBackground } from "./documentColors";
 import { isFloatingImageRun } from "./renderUtils";
 import type { RenderContext } from "./renderUtils";
@@ -557,47 +562,6 @@ function getLeaderChar(leader: string): string | null {
   }
 }
 
-// Parse the rotation angle (degrees, normalized to [0, 360)) from a CSS
-// `transform` string like `"rotate(90deg) scaleX(-1)"`. Returns 0 when no
-// `rotate()` term is present. eigenpal #424 (rotation bbox gap 8 follow-up).
-function parseRotationDegrees(transform: string | undefined): number {
-  if (!transform) {
-    return 0;
-  }
-  // Whitespace inside `rotate(...)` is valid CSS; folio never emits it, but
-  // accept it defensively so hand-authored / sanitized transforms don't
-  // silently fall through to the un-rotated path.
-  const match = /rotate\(\s*([-\d.]+)\s*deg\s*\)/u.exec(transform);
-  if (!match) {
-    return 0;
-  }
-  const raw = Number.parseFloat(match[1]!);
-  if (!Number.isFinite(raw)) {
-    return 0;
-  }
-  return ((raw % 360) + 360) % 360;
-}
-
-// Axis-aligned bounding box of a `w × h` rectangle rotated by `deg` degrees.
-// 90°/270° swap the dims exactly (no FP drift); 0°/180° keep them; arbitrary
-// angles use the standard |cos θ|·w + |sin θ|·h formula. eigenpal #424.
-function rotatedBoundingBox(
-  w: number,
-  h: number,
-  deg: number,
-): { width: number; height: number } {
-  if (deg === 0 || deg === 180) {
-    return { width: w, height: h };
-  }
-  if (deg === 90 || deg === 270) {
-    return { width: h, height: w };
-  }
-  const rad = (deg * Math.PI) / 180;
-  const sinA = Math.abs(Math.sin(rad));
-  const cosA = Math.abs(Math.cos(rad));
-  return { width: w * cosA + h * sinA, height: w * sinA + h * cosA };
-}
-
 /**
  * Render an inline image run (flows with text)
  */
@@ -1005,8 +969,10 @@ function measureFollowingContentWidth(
         (scale / 100);
     } else if (isImageRun(run) && !isFloatingImageRun(run)) {
       // Inline images aren't horizontally scaled by w:w on the surrounding
-      // text run; their own width attribute is authoritative.
-      width += run.width || 0;
+      // text run; their own width attribute is authoritative. Rotated images
+      // occupy their axis-aligned bbox width, not the raw `run.width`, so
+      // right-tab anchoring stays aligned with what the painter reserves.
+      width += inlineImageBoundingBox(run).width || 0;
     }
   }
   return width;
@@ -1518,9 +1484,12 @@ export function renderLine(
       // Inline or block image - render in the text flow
       const runEl = renderImageRun(run, doc);
       lineEl.append(runEl);
-      // Block images don't contribute to horizontal position
+      // Block images don't contribute to horizontal position. Rotated inline
+      // images advance by their axis-aligned bbox width — the wrapper span
+      // the painter emits has that width, so currentX must agree to keep
+      // following tab/text positions in sync.
       if (run.displayMode !== "block" && run.wrapType !== "topAndBottom") {
-        currentX += run.width;
+        currentX += inlineImageBoundingBox(run).width;
       }
     } else if (isLineBreakRun(run)) {
       const runEl = renderLineBreakRun(run, doc);
