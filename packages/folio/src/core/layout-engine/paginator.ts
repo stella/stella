@@ -7,15 +7,17 @@
 
 import { panic } from "better-result";
 
+import { FOOTNOTE_SEPARATOR_HEIGHT } from "../layout-bridge/footnoteLayout";
 import type { Page, PageMargins, Fragment, ColumnLayout } from "./types";
 
 /**
- * Height of the footnote separator (a 0.5 px divider line + 6 px top
- * + 6 px bottom margin = 12.5 px, rounded up). Reserved once per
- * footnote-bearing page above the fn content. Must match the painter
- * (`renderFootnoteArea`).
+ * Re-export the canonical footnote separator height so engine call
+ * sites do not have to know about the layout-bridge module. The single
+ * source of truth lives in `layout-bridge/footnoteLayout.ts` and is
+ * shared with the painter (`renderFootnoteArea`) and the per-page
+ * reservation map. Mirrors eigenpal/docx-editor#485.
  */
-export const FOOTNOTE_SEPARATOR_HEIGHT = 13;
+export { FOOTNOTE_SEPARATOR_HEIGHT };
 
 /**
  * Current state of a page being laid out.

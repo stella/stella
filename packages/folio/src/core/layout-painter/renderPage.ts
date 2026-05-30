@@ -8,6 +8,11 @@
 import { panic } from "better-result";
 
 import {
+  FOOTNOTE_ENTRY_MARGIN_BOTTOM,
+  FOOTNOTE_FALLBACK_LINE_HEIGHT,
+  FOOTNOTE_SEPARATOR_HEIGHT,
+} from "../layout-bridge/footnoteLayout";
+import {
   clampFloatingWrapMargins,
   measureParagraph,
 } from "../layout-bridge/measuring";
@@ -1187,6 +1192,28 @@ function renderHeaderFooterContent(
 }
 
 /**
+ * Calculate the painter's actual footnote-area height in pixels:
+ * separator slot + per-footnote content (or fallback line) + per-footnote
+ * `marginBottom` spacing the painter applies in `renderFootnoteArea`. Used
+ * to clamp the paginator's reservation if it under-estimated, so dense
+ * stacks never overflow past the page bottom. Mirrors the upstream helper
+ * from eigenpal/docx-editor#485, extended for folio's fallback rendering
+ * and inter-footnote margin so the helper matches the painted stack.
+ */
+export function calculateFootnoteAreaRenderHeight(
+  footnotes: FootnoteRenderItem[],
+): number {
+  let height = FOOTNOTE_SEPARATOR_HEIGHT;
+  for (const fn of footnotes) {
+    const entryHeight = fn.content
+      ? fn.content.height
+      : FOOTNOTE_FALLBACK_LINE_HEIGHT;
+    height += entryHeight + FOOTNOTE_ENTRY_MARGIN_BOTTOM;
+  }
+  return height;
+}
+
+/**
  * Render the footnote area at the bottom of a page.
  * Includes a separator line (33% width) and footnote entries.
  */
@@ -1200,19 +1227,23 @@ export function renderFootnoteArea(
   container.className = "layout-footnote-area";
   container.style.width = `${contentWidth}px`;
 
-  // Separator line (33% width, Google Docs style)
+  // Separator line (33% width, Google Docs style). Margins derive from
+  // FOOTNOTE_SEPARATOR_HEIGHT so the painted separator slot matches the
+  // paginator's reservation byte-for-byte. eigenpal/docx-editor#485.
   const separator = doc.createElement("div");
+  const separatorRuleHeight = 0.5;
+  const separatorMargin = (FOOTNOTE_SEPARATOR_HEIGHT - separatorRuleHeight) / 2;
   separator.style.width = "33%";
-  separator.style.height = "0.5px";
+  separator.style.height = `${separatorRuleHeight}px`;
   separator.style.backgroundColor = "var(--doc-canvas-text, #000)";
-  separator.style.marginBottom = "6px";
-  separator.style.marginTop = "6px";
+  separator.style.marginTop = `${separatorMargin}px`;
+  separator.style.marginBottom = `${separatorMargin}px`;
   container.append(separator);
 
   // Render each footnote
   for (const fn of footnotes) {
     const fnEl = doc.createElement("div");
-    fnEl.style.marginBottom = "4px";
+    fnEl.style.marginBottom = `${FOOTNOTE_ENTRY_MARGIN_BOTTOM}px`;
     fnEl.style.color = "var(--doc-canvas-text, #000)";
 
     if (fn.content) {
@@ -1220,7 +1251,7 @@ export function renderFootnoteArea(
       fnEl.append(contentEl);
     } else {
       fnEl.style.fontSize = "10px";
-      fnEl.style.lineHeight = "1.3";
+      fnEl.style.lineHeight = `${FOOTNOTE_FALLBACK_LINE_HEIGHT / 10}`;
 
       const sup = doc.createElement("sup");
       sup.textContent = fn.displayNumber;
@@ -1819,12 +1850,20 @@ export function renderPage(
       context,
     );
     fnAreaEl.style.position = "absolute";
-    // Position at page bottom minus bottom margin (bottom of content area)
-    // The reserved height includes separator + all footnotes
-    const reservedHeight = page.footnoteReservedHeight ?? 0;
+    // Position at page bottom minus bottom margin (bottom of content
+    // area). Clamp the reservation upward to the painter's calculated
+    // area height so a dense stack of footnotes that under-reserved by
+    // a few pixels still ends at the page bottom rather than spilling
+    // past it; clamp the resulting top to `-page.margins.top` so an
+    // oversized area cannot escape above the page entirely.
+    // eigenpal/docx-editor#485.
+    const reservedHeight = Math.max(
+      page.footnoteReservedHeight ?? 0,
+      calculateFootnoteAreaRenderHeight(options.footnoteArea),
+    );
     const contentAreaBottom =
       page.size.h - page.margins.bottom - page.margins.top;
-    fnAreaEl.style.top = `${contentAreaBottom - reservedHeight}px`;
+    fnAreaEl.style.top = `${Math.max(-page.margins.top, contentAreaBottom - reservedHeight)}px`;
     fnAreaEl.style.left = "0";
     fnAreaEl.style.right = "0";
     contentEl.append(fnAreaEl);
