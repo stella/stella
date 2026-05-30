@@ -204,12 +204,44 @@ function parseBorderSpec(element: XmlElement | null): BorderSpec | undefined {
     border.frame = true;
   }
 
-  // Art-border ID (`w:id` on a <w:CT_Border> inside <w:pgBorders>).
-  // Preserved through the round-trip so Word can re-paint the art glyphs
-  // even though folio renders the underlying line style instead.
-  const artId = parseNumericAttribute(element, "w", "id");
-  if (artId !== undefined) {
-    border.artId = artId;
+  // Custom page-border art relationship ids. Preserved through the
+  // round-trip so Word can re-paint art glyphs and corner images even
+  // though folio renders the underlying line style instead.
+  const artRelationshipId = getAttribute(element, "w", "id")?.trim();
+  if (artRelationshipId) {
+    border.artRelationshipId = artRelationshipId;
+  }
+  const topLeftArtRelationshipId = getAttribute(
+    element,
+    "w",
+    "topLeft",
+  )?.trim();
+  if (topLeftArtRelationshipId) {
+    border.topLeftArtRelationshipId = topLeftArtRelationshipId;
+  }
+  const topRightArtRelationshipId = getAttribute(
+    element,
+    "w",
+    "topRight",
+  )?.trim();
+  if (topRightArtRelationshipId) {
+    border.topRightArtRelationshipId = topRightArtRelationshipId;
+  }
+  const bottomLeftArtRelationshipId = getAttribute(
+    element,
+    "w",
+    "bottomLeft",
+  )?.trim();
+  if (bottomLeftArtRelationshipId) {
+    border.bottomLeftArtRelationshipId = bottomLeftArtRelationshipId;
+  }
+  const bottomRightArtRelationshipId = getAttribute(
+    element,
+    "w",
+    "bottomRight",
+  )?.trim();
+  if (bottomRightArtRelationshipId) {
+    border.bottomRightArtRelationshipId = bottomRightArtRelationshipId;
   }
 
   return border;

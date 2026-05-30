@@ -4,9 +4,9 @@
  * symmetry. Companion to the painter tests in
  * `layout-painter/renderPage-pageBorders.test.ts`.
  *
- * Art borders (`w:id` on a side) are preserved through the round-trip
- * even though folio does not paint art glyphs; see the design doc at
- * `/tmp/folio-page-borders-design.md`.
+ * Custom art-border relationship ids (`w:id` and corner ids on a side) are
+ * preserved through the round-trip even though folio does not paint art
+ * glyphs; see the design doc at `/tmp/folio-page-borders-design.md`.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -110,14 +110,17 @@ describe("pgBorders parser coverage", () => {
     expect(section.pageBorders?.bottom?.frame).toBe(true);
   });
 
-  test("preserves art-border id attribute for round-trip", () => {
+  test("preserves custom art-border relationship ids for round-trip", () => {
     const section = parseSectPr(`
       <w:pgBorders>
-        <w:top w:val="single" w:sz="20" w:space="24" w:color="auto" w:id="11"/>
+        <w:top w:val="single" w:sz="20" w:space="24" w:color="auto"
+               w:id="rId5" w:topLeft="rId6" w:topRight="rId7"/>
       </w:pgBorders>
     `);
 
-    expect(section.pageBorders?.top?.artId).toBe(11);
+    expect(section.pageBorders?.top?.artRelationshipId).toBe("rId5");
+    expect(section.pageBorders?.top?.topLeftArtRelationshipId).toBe("rId6");
+    expect(section.pageBorders?.top?.topRightArtRelationshipId).toBe("rId7");
   });
 
   test("preserves an unknown style as the raw string", () => {
@@ -199,15 +202,23 @@ describe("pgBorders serializer round-trip", () => {
     expect(xml).not.toContain("<w:right");
   });
 
-  test("round-trips the art-border id", () => {
+  test("round-trips custom art-border relationship ids", () => {
     const section = parseSectPr(`
       <w:pgBorders w:offsetFrom="page">
-        <w:top w:val="single" w:sz="20" w:space="24" w:color="auto" w:id="11"/>
+        <w:top w:val="single" w:sz="20" w:space="24" w:color="auto"
+               w:id="rId5" w:topLeft="rId6" w:topRight="rId7"/>
+        <w:bottom w:val="single" w:id="rId8" w:bottomLeft="rId9"
+                  w:bottomRight="rId10"/>
       </w:pgBorders>
     `);
 
     const xml = serializeSectionProperties(section);
-    expect(xml).toContain('w:id="11"');
+    expect(xml).toContain('w:id="rId5"');
+    expect(xml).toContain('w:topLeft="rId6"');
+    expect(xml).toContain('w:topRight="rId7"');
+    expect(xml).toContain('w:id="rId8"');
+    expect(xml).toContain('w:bottomLeft="rId9"');
+    expect(xml).toContain('w:bottomRight="rId10"');
   });
 
   test("round-trips auto color and theme-color attributes", () => {

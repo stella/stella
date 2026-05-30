@@ -48,8 +48,24 @@ function serializeBorder(
   if (border.frame) {
     attrs.push('w:frame="true"');
   }
-  if (border.artId !== undefined) {
-    attrs.push(`w:id="${intAttr(border.artId)}"`);
+  if (border.artRelationshipId) {
+    attrs.push(`w:id="${escapeXml(border.artRelationshipId)}"`);
+  }
+  if (border.topLeftArtRelationshipId) {
+    attrs.push(`w:topLeft="${escapeXml(border.topLeftArtRelationshipId)}"`);
+  }
+  if (border.topRightArtRelationshipId) {
+    attrs.push(`w:topRight="${escapeXml(border.topRightArtRelationshipId)}"`);
+  }
+  if (border.bottomLeftArtRelationshipId) {
+    attrs.push(
+      `w:bottomLeft="${escapeXml(border.bottomLeftArtRelationshipId)}"`,
+    );
+  }
+  if (border.bottomRightArtRelationshipId) {
+    attrs.push(
+      `w:bottomRight="${escapeXml(border.bottomRightArtRelationshipId)}"`,
+    );
   }
 
   return `<w:${elementName} ${attrs.join(" ")}/>`;

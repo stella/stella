@@ -98,7 +98,10 @@ const findByClass = (
   className: string,
 ): FakeElement | null => {
   for (const child of root.children) {
-    if (child.className.split(/\s+/u).includes(className)) {
+    if (
+      child.className.split(/\s+/u).includes(className) ||
+      child.tagName === className
+    ) {
       return child;
     }
     const inner = findByClass(child, className);
@@ -115,7 +118,10 @@ const collectByClass = (
   out: FakeElement[],
 ): void => {
   for (const child of root.children) {
-    if (child.className.split(/\s+/u).includes(className)) {
+    if (
+      child.className.split(/\s+/u).includes(className) ||
+      child.tagName === className
+    ) {
       out.push(child);
     }
     collectByClass(child, className, out);
