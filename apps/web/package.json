@@ -37,6 +37,7 @@
     "@stll/anonymize-wasm": "catalog:",
     "@stll/api": "workspace:*",
     "@stll/case-law": "workspace:*",
+    "@stll/country-codes": "workspace:*",
     "@stll/errors": "workspace:*",
     "@stll/folio": "workspace:*",
     "@stll/money": "workspace:*",

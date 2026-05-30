@@ -1,15 +1,18 @@
+import { type CountryCode, isCountryCode } from "@stll/country-codes";
+
 import { COUNTRY_CENTROIDS, COUNTRY_CODES } from "@/lib/country-centroids";
 
 export { COUNTRY_CODES };
+export type { CountryCode };
 
 export type PracticeJurisdiction = {
-  countryCode: string;
+  countryCode: CountryCode;
   isPrimary: boolean;
 };
 
 export const removeJurisdiction = (
   selected: readonly PracticeJurisdiction[],
-  countryCode: string,
+  countryCode: CountryCode,
 ): PracticeJurisdiction[] => {
   const remaining = selected.filter(
     (jurisdiction) => jurisdiction.countryCode !== countryCode,
@@ -32,26 +35,27 @@ export const removeJurisdiction = (
 };
 
 export type CountryOption = {
-  code: string;
+  code: CountryCode;
   name: string;
 };
 
 export type CountryPoint = {
-  code: string;
+  code: CountryCode;
   lat: number;
   lon: number;
 };
 
-export const COUNTRY_POINTS: readonly CountryPoint[] = Object.entries(
-  COUNTRY_CENTROIDS,
-).map(([code, [lat, lon]]) => ({ code, lat, lon }));
+export const COUNTRY_POINTS: readonly CountryPoint[] = COUNTRY_CODES.map(
+  (code) => {
+    const [lat, lon] = COUNTRY_CENTROIDS[code];
+    return { code, lat, lon };
+  },
+);
 
-const COUNTRY_CODE_BY_EMAIL_TLD = new Map<string, string>(
+const COUNTRY_CODE_BY_EMAIL_TLD = new Map<string, CountryCode>(
   COUNTRY_CODES.map((code) => [code.toLowerCase(), code]),
 );
 COUNTRY_CODE_BY_EMAIL_TLD.set("uk", "GB");
-
-const COUNTRY_CODE_SET = new Set<string>(COUNTRY_CODES);
 
 const LOCALE_REGION_PATTERN = /[-_]([A-Za-z]{2})\b/u;
 
@@ -64,7 +68,10 @@ export const createCountryOptions = (locale: string): CountryOption[] => {
   })).sort((a, b) => a.name.localeCompare(b.name, locale));
 };
 
-export const countryName = (countryCode: string, locale: string): string => {
+export const countryName = (
+  countryCode: CountryCode,
+  locale: string,
+): string => {
   const names = new Intl.DisplayNames([locale], { type: "region" });
 
   return names.of(countryCode) ?? countryCode;
@@ -76,7 +83,7 @@ export const suggestedCountryCodes = ({
 }: {
   email: string;
   locale: string;
-}): string[] => {
+}): CountryCode[] => {
   const suggestions: string[] = [];
   const regionFromLocale = LOCALE_REGION_PATTERN.exec(locale)?.at(1);
   const emailTld = email.split(".").at(-1)?.toLowerCase();
@@ -93,7 +100,5 @@ export const suggestedCountryCodes = ({
     suggestions.push(countryCodeFromEmail);
   }
 
-  return Array.from(
-    new Set(suggestions.filter((code) => COUNTRY_CODE_SET.has(code))),
-  );
+  return Array.from(new Set(suggestions.filter(isCountryCode)));
 };

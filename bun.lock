@@ -67,6 +67,7 @@
         "@stll/boe": "workspace:*",
         "@stll/business-registries": "workspace:*",
         "@stll/case-law": "workspace:*",
+        "@stll/country-codes": "workspace:*",
         "@stll/docx-core": "workspace:*",
         "@stll/docx-utils": "workspace:*",
         "@stll/errors": "workspace:*",
@@ -226,6 +227,7 @@
         "@stll/anonymize-wasm": "catalog:",
         "@stll/api": "workspace:*",
         "@stll/case-law": "workspace:*",
+        "@stll/country-codes": "workspace:*",
         "@stll/errors": "workspace:*",
         "@stll/folio": "workspace:*",
         "@stll/money": "workspace:*",
@@ -332,6 +334,7 @@
       "name": "@stll/business-registries",
       "version": "0.1.0",
       "dependencies": {
+        "@stll/country-codes": "workspace:*",
         "@stll/stdnum": "^1.0.0",
       },
       "devDependencies": {
@@ -346,6 +349,15 @@
       "dependencies": {
         "valibot": "catalog:",
       },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/country-codes": {
+      "name": "@stll/country-codes",
+      "version": "0.1.0",
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
@@ -1609,6 +1621,8 @@
     "@stll/case-law": ["@stll/case-law@workspace:packages/case-law"],
 
     "@stll/collab": ["@stll/collab@workspace:apps/collab"],
+
+    "@stll/country-codes": ["@stll/country-codes@workspace:packages/country-codes"],
 
     "@stll/desktop": ["@stll/desktop@workspace:apps/desktop"],
 

@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { isCountryCode } from "@stll/country-codes";
+
 import { organizationSettings } from "@/api/db/schema";
 import type { PracticeJurisdiction } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -28,8 +30,16 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
+type RawJurisdictionInput = {
+  countryCode: string;
+  isPrimary: boolean;
+};
+
+// Drops entries whose countryCode is not in @stll/country-codes, deduplicates
+// by canonical (uppercased) code, and ensures at most one entry is primary —
+// promoting the first item if none was flagged.
 const normalizePracticeJurisdictions = (
-  jurisdictions: PracticeJurisdiction[],
+  jurisdictions: readonly RawJurisdictionInput[],
 ): PracticeJurisdiction[] => {
   const normalized: PracticeJurisdiction[] = [];
   const seen = new Set<string>();
@@ -38,7 +48,7 @@ const normalizePracticeJurisdictions = (
   for (const jurisdiction of jurisdictions) {
     const countryCode = jurisdiction.countryCode.toUpperCase();
 
-    if (seen.has(countryCode)) {
+    if (!isCountryCode(countryCode) || seen.has(countryCode)) {
       continue;
     }
 

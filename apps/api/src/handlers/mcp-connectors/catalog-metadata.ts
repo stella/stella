@@ -1,3 +1,5 @@
+import type { CountryCode } from "@stll/country-codes";
+
 import type { PracticeJurisdiction } from "@/api/db/schema";
 
 type McpConnectorCatalogSource = {
@@ -7,7 +9,7 @@ type McpConnectorCatalogSource = {
 };
 
 type McpConnectorCatalogMetadata = {
-  recommendedJurisdictions: string[];
+  recommendedJurisdictions: readonly CountryCode[];
 };
 
 export type NativeToolCatalogItem = {
@@ -17,12 +19,18 @@ export type NativeToolCatalogItem = {
   url: string;
   documentationUrl: string | null;
   iconUrl: string | null;
-  recommendedJurisdictions: string[];
+  recommendedJurisdictions: readonly CountryCode[];
 };
 
-const ARES_RECOMMENDED_JURISDICTIONS = ["CZ"] as const;
-const BOE_RECOMMENDED_JURISDICTIONS = ["ES"] as const;
-const BRREG_RECOMMENDED_JURISDICTIONS = ["NO"] as const;
+const ARES_RECOMMENDED_JURISDICTIONS = [
+  "CZ",
+] as const satisfies readonly CountryCode[];
+const BOE_RECOMMENDED_JURISDICTIONS = [
+  "ES",
+] as const satisfies readonly CountryCode[];
+const BRREG_RECOMMENDED_JURISDICTIONS = [
+  "NO",
+] as const satisfies readonly CountryCode[];
 const NATIVE_TOOL_CATALOG = [
   {
     slug: "ares",

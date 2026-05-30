@@ -12,6 +12,7 @@
       "@stll/business-registries/*": [
         "../../packages/business-registries/src/*/index.ts"
       ],
+      "@stll/country-codes": ["../../packages/country-codes/src/index.ts"],
       "@stll/docx-core": ["../../packages/docx-core/src/index.ts"],
       "@stll/errors": ["../../packages/errors/src/index.ts"],
       "@stll/infosoud": ["../../packages/infosoud/src/index.ts"],
