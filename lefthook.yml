@@ -32,9 +32,15 @@ pre-push:
   parallel: false
   commands:
     typecheck:
+      # Project-wide. tsgo/tsc can't be scoped per file and the type
+      # graph spans the whole monorepo (eden, shared packages), so the
+      # full run is the only honest pre-push gate for type errors.
       run: bun run typecheck --concurrency=2
-    lint:
-      run: bun run lint --concurrency=2 -- --threads=2
+    # Lint runs in CI on every push (~10-15 min full-monorepo). Keeping
+    # it on pre-push too added another ~15-18 min of waiting that
+    # duplicated the CI signal, so the local hook drops it. The
+    # pre-commit hook still lints staged files inline for fast feedback
+    # on the most common class of mistakes.
     format:
       run: bun run format --concurrency=2 -- --check
     i18n:
