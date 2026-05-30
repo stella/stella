@@ -220,6 +220,30 @@ describe("block image rotation bbox container", () => {
     expect(imgEl.style["marginRight"]).toBe("auto");
   });
 
+  test("applies tracked-change outline to the block image, not the full-width container", () => {
+    const imageRun: ImageRun = {
+      kind: "image",
+      src: "data:image/png;base64,",
+      width: 100,
+      height: 200,
+      displayMode: "block",
+      isInsertion: true,
+      changeAuthor: "Reviewer",
+      changeRevisionId: 321,
+    };
+    const { block, line } = makeBlockImageLine(imageRun);
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const container = lineEl.children[0] as unknown as FakeElement;
+    const imgEl = container.children[0] as unknown as FakeElement;
+
+    expect(container.className).toContain("layout-block-image");
+    expect(container.style["outline"]).toBeUndefined();
+    expect(imgEl.style["outline"]).toBe("2px solid #2e7d32");
+    expect(imgEl.dataset["changeAuthor"]).toBe("Reviewer");
+    expect(imgEl.dataset["revisionId"]).toBe("321");
+  });
+
   test("does NOT add bbox container styles to a 0deg rotated block image", () => {
     const imageRun: ImageRun = {
       kind: "image",

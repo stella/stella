@@ -67,6 +67,36 @@ function deletedTextParagraph(): Paragraph {
   return { type: "paragraph", content: [deletion] };
 }
 
+function deletedMixedTextAndDrawingParagraph(): Paragraph {
+  const deletion: Deletion = {
+    type: "deletion",
+    info: {
+      id: 4,
+      author: "Reviewer",
+      date: "2026-05-30T00:00:00Z",
+    },
+    content: [
+      {
+        type: "run",
+        content: [
+          { type: "text", text: "gone" },
+          {
+            type: "drawing",
+            image: {
+              type: "image",
+              rId: "rIdImg3",
+              src: PNG_DATA_URL,
+              size: { width: 914_400, height: 457_200 },
+              wrap: { type: "inline" },
+            },
+          },
+        ],
+      },
+    ],
+  };
+  return { type: "paragraph", content: [deletion] };
+}
+
 function insertedDrawingParagraph(): Paragraph {
   const insertion: Insertion = {
     type: "insertion",
@@ -112,6 +142,15 @@ describe("serializeParagraph — tracked image (eigenpal #641)", () => {
     expect(xml).toContain("<w:del ");
     expect(xml).toContain("<w:delText");
     expect(xml).toContain("gone</w:delText>");
+  });
+
+  test("deleted mixed text and drawing run rewrites only the top-level text", () => {
+    const xml = serializeParagraph(deletedMixedTextAndDrawingParagraph());
+    expect(xml).toContain("<w:del ");
+    expect(xml).toContain("<w:delText");
+    expect(xml).toContain("gone</w:delText>");
+    expect(xml).toContain("<w:drawing>");
+    expect(xml).not.toContain("gone</w:t>");
   });
 
   test("inserted drawing run serializes inside <w:ins> with a <w:drawing>", () => {

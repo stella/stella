@@ -798,7 +798,26 @@ function renderImageRun(run: ImageRun, doc: Document): HTMLElement {
   } else {
     el = renderInlineImageRun(run, doc);
   }
-  applyImageRevisionStyle(el, run);
+  applyImageRevisionStyle(getImageRevisionStyleTarget(el), run);
+  return el;
+}
+
+function isStyleableHTMLElement(
+  value: Element | undefined,
+): value is HTMLElement {
+  return typeof value === "object" && "style" in value;
+}
+
+function getImageRevisionStyleTarget(el: HTMLElement): HTMLElement {
+  if (!el.className.split(/\s+/u).includes("layout-block-image")) {
+    return el;
+  }
+
+  const firstChild = el.children[0];
+  if (isStyleableHTMLElement(firstChild)) {
+    return firstChild;
+  }
+
   return el;
 }
 

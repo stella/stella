@@ -22,6 +22,8 @@ import { buildPatchedDocumentXml } from "./selectiveXmlPatch";
 import { serializeComments } from "./serializer/commentSerializer";
 import { serializeDocument } from "./serializer/documentSerializer";
 
+const SYNTHETIC_IMAGE_RID_PREFIX = "rId_img_";
+
 /**
  * Check if document content has new images (data: URL without rId) or
  * new hyperlinks (href without rId). Combined into a single traversal
@@ -35,7 +37,7 @@ function hasNewImagesOrHyperlinks(blocks: BlockContent[]): boolean {
       (c) =>
         c.type === "drawing" &&
         c.image?.src?.startsWith("data:") === true &&
-        !c.image.rId,
+        (!c.image.rId || c.image.rId.startsWith(SYNTHETIC_IMAGE_RID_PREFIX)),
     );
 
   for (const block of blocks) {

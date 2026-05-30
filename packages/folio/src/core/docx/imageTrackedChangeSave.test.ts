@@ -15,8 +15,9 @@ import type { Insertion, Paragraph } from "../types/document";
 import { attemptSelectiveSave } from "./selectiveSave";
 
 const PNG_DATA_URL = "data:image/png;base64,AA==";
+const SYNTHETIC_RID = "rId_img_123";
 
-function trackedNewImageParagraph(): Paragraph {
+function trackedNewImageParagraph(rId?: string): Paragraph {
   const insertion: Insertion = {
     type: "insertion",
     info: {
@@ -32,7 +33,9 @@ function trackedNewImageParagraph(): Paragraph {
             type: "drawing",
             image: {
               type: "image",
-              // No rId → this is a fresh image needing media write.
+              // No rId or a synthetic editor rId means this is a fresh image
+              // needing media write.
+              rId,
               src: PNG_DATA_URL,
               size: { width: 914_400, height: 457_200 },
               wrap: { type: "inline" },
@@ -59,6 +62,22 @@ describe("selectiveSave bails out on a tracked-new image (eigenpal #641)", () =>
     };
     // Buffer content isn't read on the bail path — selectiveSave checks the
     // model first and returns null on detection.
+    const result = await attemptSelectiveSave(doc, new ArrayBuffer(0), {
+      changedParaIds: new Set(),
+      structuralChange: false,
+      hasUntrackedChanges: false,
+    });
+    expect(result).toBeNull();
+  });
+
+  test("returns null for a tracked image with a synthetic editor rId", async () => {
+    const doc = {
+      package: {
+        document: {
+          content: [trackedNewImageParagraph(SYNTHETIC_RID)],
+        },
+      },
+    };
     const result = await attemptSelectiveSave(doc, new ArrayBuffer(0), {
       changedParaIds: new Set(),
       structuralChange: false,
