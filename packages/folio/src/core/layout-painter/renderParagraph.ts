@@ -557,6 +557,44 @@ function getLeaderChar(leader: string): string | null {
   }
 }
 
+// Parse the rotation angle (degrees, normalized to [0, 360)) from a CSS
+// `transform` string like `"rotate(90deg) scaleX(-1)"`. Returns 0 when no
+// `rotate()` term is present. eigenpal #424 (rotation bbox gap 8 follow-up).
+function parseRotationDegrees(transform: string | undefined): number {
+  if (!transform) {
+    return 0;
+  }
+  const match = /rotate\(([-\d.]+)deg\)/u.exec(transform);
+  if (!match) {
+    return 0;
+  }
+  const raw = Number.parseFloat(match[1]!);
+  if (!Number.isFinite(raw)) {
+    return 0;
+  }
+  return ((raw % 360) + 360) % 360;
+}
+
+// Axis-aligned bounding box of a `w × h` rectangle rotated by `deg` degrees.
+// 90°/270° swap the dims exactly (no FP drift); 0°/180° keep them; arbitrary
+// angles use the standard |cos θ|·w + |sin θ|·h formula. eigenpal #424.
+function rotatedBoundingBox(
+  w: number,
+  h: number,
+  deg: number,
+): { width: number; height: number } {
+  if (deg === 0 || deg === 180) {
+    return { width: w, height: h };
+  }
+  if (deg === 90 || deg === 270) {
+    return { width: h, height: w };
+  }
+  const rad = (deg * Math.PI) / 180;
+  const sinA = Math.abs(Math.sin(rad));
+  const cosA = Math.abs(Math.cos(rad));
+  return { width: w * cosA + h * sinA, height: w * sinA + h * cosA };
+}
+
 /**
  * Render an inline image run (flows with text)
  */
@@ -620,6 +658,30 @@ function renderBlockImage(run: ImageRun, doc: Document): HTMLElement {
   }
   if (run.transform) {
     img.style.transform = run.transform;
+    // Word rotates around the picture's geometric centre; be explicit so
+    // future stacked transforms can't drift. eigenpal #424.
+    img.style.transformOrigin = "center center";
+  }
+
+  // Reserve the rotated bbox height on the container so a rotated block
+  // image doesn't bleed into the next paragraph. The container height is
+  // sized to the rotated bbox; the inner `<img>` positions absolutely at
+  // the container's centre and rotates around its own centre, which now
+  // lands inside the wrapper. Non-rotated images keep the fast path (auto
+  // margins for horizontal centering). Mirrors the inline path that PR
+  // #518 added in `renderInlineImageRun`.
+  // eigenpal #424 (rotation bbox gap 8 follow-up).
+  const rotation = parseRotationDegrees(run.transform);
+  if (rotation !== 0) {
+    const bbox = rotatedBoundingBox(run.width, run.height, rotation);
+    container.style.height = `${bbox.height}px`;
+    container.style.position = "relative";
+    img.style.position = "absolute";
+    img.style.left = "50%";
+    img.style.top = "50%";
+    img.style.marginLeft = `${-run.width / 2}px`;
+    img.style.marginRight = "0";
+    img.style.marginTop = `${-run.height / 2}px`;
   }
 
   applyPmPositions(container, run.pmStart, run.pmEnd);
