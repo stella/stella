@@ -1137,7 +1137,14 @@ export type InlineSdt = {
   /** SDT properties */
   properties: SdtProperties;
   /** Inline content held inside the control */
-  content: (Run | Hyperlink | SimpleField | ComplexField | InlineSdt | MathEquation)[];
+  content: (
+    | Run
+    | Hyperlink
+    | SimpleField
+    | ComplexField
+    | InlineSdt
+    | MathEquation
+  )[];
 };
 
 /**
