@@ -18,8 +18,8 @@ describe.skipIf(SKIP_LIVE)("lookupByOrgnr live", () => {
   });
 
   test("returns null for a checksum-valid but non-existent orgnr", async () => {
-    // 100000007: nine digits, MOD-11 valid, not registered.
-    const result = await lookupByOrgnr("100000007");
+    // 100000008: nine digits, MOD-11 valid, not registered.
+    const result = await lookupByOrgnr("100000008");
     expect(result).toBeNull();
   });
 });
