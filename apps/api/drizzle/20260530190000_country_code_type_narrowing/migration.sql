@@ -1,0 +1,7 @@
+-- No SQL change: PracticeJurisdiction.countryCode is stored inside a
+-- jsonb column (organization_settings.practice_jurisdictions). The
+-- TypeScript narrowing from `string` to `CountryCode` (literal union
+-- from @stll/country-codes) only tightens compile-time call-site
+-- types; the on-disk JSON shape is unchanged. This migration records
+-- the schema.ts type change so the migration coverage guard sees an
+-- intentional schema input change.
