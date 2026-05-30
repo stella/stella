@@ -25,6 +25,12 @@ import {
 import type { TabContext } from "../../prosemirror/utils/tabCalculator";
 import { DEFAULT_SINGLE_LINE_RATIO } from "../../utils/fontResolver";
 import { inlineImageBoundingBox } from "../../utils/rotationBoundingBox";
+import {
+  getFloatingAvailableWidth,
+  getFloatingMargins,
+  type FloatingImageZone,
+  type FloatingLineSegmentZone,
+} from "./floatingZones";
 import { getListMarkerInlineWidth } from "./listMarkerWidth";
 import {
   measureTextWidth,
@@ -33,12 +39,6 @@ import {
   ptToPx,
 } from "./measureContainer";
 import type { FontStyle, FontMetrics } from "./measureContainer";
-import {
-  getFloatingAvailableWidth,
-  getFloatingMargins,
-  type FloatingImageZone,
-  type FloatingLineSegmentZone,
-} from "./floatingZones";
 
 export { clampFloatingWrapMargins } from "./clampFloatingWrapMargins";
 export type { FloatingImageZone } from "./floatingZones";
@@ -439,7 +439,10 @@ export function findClearLineY(
   // happy path O(zones).
   for (let i = 0; i < zones.length + 2; i++) {
     const margins = getFloatingMargins(y, lineHeight, zones, 0);
-    const available = Math.max(0, getFloatingAvailableWidth(margins, contentWidth));
+    const available = Math.max(
+      0,
+      getFloatingAvailableWidth(margins, contentWidth),
+    );
     if (available >= minWidth) {
       return y;
     }

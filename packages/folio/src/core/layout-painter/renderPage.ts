@@ -21,6 +21,10 @@ import type {
   FloatingExclusionRect,
   FloatingImageZone,
 } from "../layout-bridge/measuring";
+import {
+  floatingTextBoxWrapsText,
+  isFloatingTextBoxBlock,
+} from "../layout-engine/textBoxFlow";
 import type {
   Page,
   Fragment,
@@ -1745,6 +1749,67 @@ export function renderPage(
         distLeft,
         distRight,
       });
+    }
+  }
+
+  // Collect floating text-box exclusion rectangles (eigenpal #474).
+  // The text-box paint already exists; this only adds the measurement-side
+  // contribution so body text wraps around anchored boxes instead of
+  // running underneath them.
+  if (options.blockLookup) {
+    for (const fragment of page.fragments) {
+      if (fragment.kind !== "textBox") {
+        continue;
+      }
+      const blockData = options.blockLookup.get(String(fragment.blockId));
+      if (blockData?.block.kind !== "textBox") {
+        continue;
+      }
+      const textBoxBlock = blockData.block as TextBoxBlock;
+      if (!isFloatingTextBoxBlock(textBoxBlock)) {
+        continue;
+      }
+      if (!floatingTextBoxWrapsText(textBoxBlock)) {
+        continue;
+      }
+
+      const contentX = fragment.x - page.margins.left;
+      const contentY = fragment.y - page.margins.top;
+
+      const distTop = textBoxBlock.distTop ?? 0;
+      const distBottom = textBoxBlock.distBottom ?? 0;
+      const distLeft = textBoxBlock.distLeft ?? 12;
+      const distRight = textBoxBlock.distRight ?? 12;
+
+      // Side hints which margin the rect blocks when `wrapText` falls back to
+      // `rect.side`. Prefer the explicit cssFloat over the X heuristic so a
+      // right-floated box hugging the centre still produces a right-side rect.
+      let side: "left" | "right" =
+        contentX < contentWidth / 2 ? "left" : "right";
+      if (textBoxBlock.cssFloat === "left") {
+        side = "left";
+      } else if (textBoxBlock.cssFloat === "right") {
+        side = "right";
+      }
+
+      const rect: FloatingExclusionRect = {
+        side,
+        x: contentX,
+        y: contentY,
+        width: fragment.width,
+        height: fragment.height,
+        distTop,
+        distBottom,
+        distLeft,
+        distRight,
+      };
+      if (textBoxBlock.wrapText !== undefined) {
+        rect.wrapText = textBoxBlock.wrapText;
+      }
+      if (textBoxBlock.wrapType !== undefined) {
+        rect.wrapType = textBoxBlock.wrapType;
+      }
+      floatingRects.push(rect);
     }
   }
 
