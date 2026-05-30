@@ -48,10 +48,14 @@ const ALLOWED_PAINTER_TO_ENGINE_SEAMS = [
 
 const LAYER_ORDER: readonly Layer[] = ["painter", "bridge", "engine"];
 
+const matchesLayerDir = (normalizedPath: string, layerDir: string): boolean =>
+  normalizedPath.includes(`/core/${layerDir}/`) ||
+  normalizedPath.endsWith(`/core/${layerDir}`);
+
 const layerOfPath = (absolutePath: string): Layer | null => {
   const normalized = absolutePath.replaceAll("\\", "/");
   for (const name of LAYER_ORDER) {
-    if (normalized.includes(`/core/${LAYER_DIRS[name]}/`)) {
+    if (matchesLayerDir(normalized, LAYER_DIRS[name])) {
       return name;
     }
   }
@@ -220,6 +224,14 @@ describe("folio layer-boundaries — synthetic violation fixtures", () => {
     ).toBe("layout-painter must not import from layout-bridge");
   });
 
+  test("painter -> bridge barrel is rejected", () => {
+    const target = resolve(CORE_DIR, "layout-bridge");
+    expect(layerOfPath(target)).toBe("bridge");
+    expect(
+      classifyEdge("painter", layerOfPath(target) ?? "bridge", target),
+    ).toBe("layout-painter must not import from layout-bridge");
+  });
+
   test("painter -> engine internals (non-seam) is rejected", () => {
     const target = resolve(CORE_DIR, "layout-engine/paginator.ts");
     const reason = classifyEdge(
@@ -256,6 +268,14 @@ describe("folio layer-boundaries — synthetic violation fixtures", () => {
 
   test("engine -> bridge is rejected", () => {
     const target = resolve(CORE_DIR, "layout-bridge/footnoteLayout.ts");
+    expect(
+      classifyEdge("engine", layerOfPath(target) ?? "bridge", target),
+    ).toBe("layout-engine must not import from layout-bridge");
+  });
+
+  test("engine -> bridge barrel is rejected", () => {
+    const target = resolve(CORE_DIR, "layout-bridge");
+    expect(layerOfPath(target)).toBe("bridge");
     expect(
       classifyEdge("engine", layerOfPath(target) ?? "bridge", target),
     ).toBe("layout-engine must not import from layout-bridge");

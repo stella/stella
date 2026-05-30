@@ -35,15 +35,19 @@ const ENGINE_PREFIX = "packages/folio/src/core/layout-engine/";
 
 type Layer = "painter" | "bridge" | "engine";
 
+const matchesLayerPrefix = (normalizedPath: string, prefix: string): boolean =>
+  normalizedPath.includes(prefix) ||
+  normalizedPath.endsWith(prefix.slice(0, -1));
+
 const layerOf = (absolutePath: string): Layer | null => {
   const normalized = absolutePath.replaceAll("\\", "/");
-  if (normalized.includes(PAINTER_PREFIX)) {
+  if (matchesLayerPrefix(normalized, PAINTER_PREFIX)) {
     return "painter";
   }
-  if (normalized.includes(BRIDGE_PREFIX)) {
+  if (matchesLayerPrefix(normalized, BRIDGE_PREFIX)) {
     return "bridge";
   }
-  if (normalized.includes(ENGINE_PREFIX)) {
+  if (matchesLayerPrefix(normalized, ENGINE_PREFIX)) {
     return "engine";
   }
   return null;
@@ -106,10 +110,7 @@ const isAllowedPainterToEngine = (resolvedTarget: string): boolean => {
     if (stripped.endsWith(`/${suffix}`) || stripped.endsWith(suffix)) {
       return true;
     }
-    if (
-      stripped.includes(`/${suffix}/`) ||
-      stripped.startsWith(`${suffix}/`)
-    ) {
+    if (stripped.includes(`/${suffix}/`) || stripped.startsWith(`${suffix}/`)) {
       return true;
     }
   }
