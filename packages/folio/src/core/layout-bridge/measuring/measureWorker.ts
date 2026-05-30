@@ -144,7 +144,7 @@ function createTransport(): MeasureWorkerTransport | null {
     // URL at build time. We cast to the transport shape so this file
     // does not depend on the global `Worker` type at module load.
     const worker = new Worker(
-      new URL("./font-metrics.worker.ts", import.meta.url),
+      new URL("font-metrics.worker.ts", import.meta.url),
       { type: "module" },
     );
     return worker as unknown as MeasureWorkerTransport;
@@ -231,6 +231,9 @@ function flush(current: ProxyState): void {
   const id = current.nextRequestId;
   current.nextRequestId += 1;
   try {
+    // The unicorn `targetOrigin` lint targets `window.postMessage`;
+    // `Worker.postMessage` does not accept that argument.
+    // eslint-disable-next-line unicorn/require-post-message-target-origin
     current.transport.postMessage({ type: "measure", id, entries });
   } catch {
     disposeProxy();
@@ -242,9 +245,6 @@ function flush(current: ProxyState): void {
 }
 
 function handleResponse(message: MeasureWorkerResponse): void {
-  if (message.type !== "measure-result") {
-    return;
-  }
   if (!message.ok) {
     // Worker self-diagnosed an unrecoverable problem. Disable for the
     // session — main thread continues to handle everything.

@@ -307,9 +307,13 @@ export function measureTextWidth(text: string, style: FontStyle): number {
   const scaledWidth = width * horizontalScale;
   setCachedTextWidth(measuredText, fontCacheKey, letterSpacing, scaledWidth);
   // Cache miss just cost a main-thread `measureText`. Ask the worker to
-  // pre-warm this entry for future layout passes (font-ready, page
-  // resize, suggestion-mode toggles, etc.) so the *next* time the same
-  // run is measured it lands on a worker-filled cache slot.
+  // pre-warm:
+  //   1) this exact entry (helps future re-layouts after font-ready,
+  //      page-resize, suggestion-mode toggles)
+  //   2) the next few binary-search probe points the line-break loop
+  //      is about to make (helps the *current* layout pass — the
+  //      worker races the main thread and lands hits ahead of the
+  //      probes).
   //
   // No-op when the worker flag is OFF or the host lacks
   // `OffscreenCanvas`/`Worker`. See `measureWorker.ts`.
@@ -319,7 +323,50 @@ export function measureTextWidth(text: string, style: FontStyle): number {
     letterSpacing,
     horizontalScale,
   );
+  prefetchBinarySearchProbes(
+    measuredText,
+    fontCacheKey,
+    letterSpacing,
+    horizontalScale,
+  );
   return scaledWidth;
+}
+
+/**
+ * Speculatively enqueue the slice lengths that a subsequent
+ * `findMaxFittingLength` binary search is likely to probe. We pick the
+ * geometric series (full, half, quarter, eighth) which covers the
+ * majority of probe points the binary search uses, without flooding
+ * the worker for runs that will never trigger a line break.
+ *
+ * The worker is racing the main thread here: if the main thread asks
+ * for slice(0, n/2) before the worker has answered, the cache miss
+ * pays the main-thread cost as usual. When the worker wins, that probe
+ * lands on a hit.
+ */
+function prefetchBinarySearchProbes(
+  text: string,
+  font: string,
+  letterSpacing: number,
+  horizontalScale: number,
+): void {
+  if (text.length < 4) {
+    return;
+  }
+  // Skip the full-length entry — we just filled it. Probe the
+  // half/quarter/eighth slice lengths.
+  for (let denom = 2; denom <= 8; denom *= 2) {
+    const len = Math.floor(text.length / denom);
+    if (len < 2) {
+      break;
+    }
+    prefetchMeasurement(
+      text.slice(0, len),
+      font,
+      letterSpacing,
+      horizontalScale,
+    );
+  }
 }
 
 /**

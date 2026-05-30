@@ -15,12 +15,18 @@
  * deliberately dependency-free.
  */
 
+import { TaggedError } from "better-result";
+
 import type {
   MeasureRequestEntry,
   MeasureResponseEntry,
   MeasureWorkerRequest,
   MeasureWorkerResponse,
 } from "./measureWorkerProtocol";
+
+class WorkerInitError extends TaggedError("WorkerInitError")<{
+  message: string;
+}>() {}
 
 type WorkerCanvasContext = {
   font: string;
@@ -35,11 +41,11 @@ function getCtx(): WorkerCanvasContext {
     return ctx;
   }
   if (initError !== null) {
-    throw new Error(initError);
+    throw new WorkerInitError({ message: initError });
   }
   if (typeof OffscreenCanvas === "undefined") {
     initError = "OffscreenCanvas not available in worker scope";
-    throw new Error(initError);
+    throw new WorkerInitError({ message: initError });
   }
   const canvas = new OffscreenCanvas(1, 1);
   // `OffscreenCanvasRenderingContext2D` from the worker DOM lib has the
@@ -48,7 +54,7 @@ function getCtx(): WorkerCanvasContext {
   const next = canvas.getContext("2d") as unknown as WorkerCanvasContext | null;
   if (next === null) {
     initError = "Failed to acquire OffscreenCanvas 2D context";
-    throw new Error(initError);
+    throw new WorkerInitError({ message: initError });
   }
   ctx = next;
   return ctx;
@@ -102,15 +108,16 @@ export function handleMeasureRequest(
 // contexts (e.g., type-check passes in apps/web that bundle it, or unit
 // tests that exercise `handleMeasureRequest` directly).
 if (typeof self !== "undefined" && typeof addEventListener === "function") {
+  // SAFETY: `postMessage` exists in worker scope; this file is only
+  // wired up via `new Worker(...)` from `measureWorker.ts`. The
+  // unicorn `targetOrigin` lint targets `window.postMessage`; the
+  // worker variant does not accept that argument.
+  const workerScope = self as unknown as {
+    postMessage: (m: MeasureWorkerResponse) => void;
+  };
   addEventListener("message", (event: MessageEvent<MeasureWorkerRequest>) => {
-    const data = event.data;
-    if (data.type !== "measure") {
-      return;
-    }
-    const reply = handleMeasureRequest(data);
-    // SAFETY: `postMessage` exists in worker scope; this file is only
-    // wired up via `new Worker(...)` from `measureWorker.ts`.
-    (self as unknown as { postMessage: (m: MeasureWorkerResponse) => void })
-      .postMessage(reply);
+    const reply = handleMeasureRequest(event.data);
+    // eslint-disable-next-line unicorn/require-post-message-target-origin
+    workerScope.postMessage(reply);
   });
 }

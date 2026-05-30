@@ -8,11 +8,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import {
-  clearAllCaches,
-  getCachedTextWidth,
-  setCachedTextWidth,
-} from "./cache";
+import { clearAllCaches, getCachedTextWidth } from "./cache";
 import { setFolioMeasurementFlags } from "./featureFlags";
 import { measureTextWidth, resetCanvasContext } from "./measureContainer";
 import {

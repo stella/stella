@@ -20,8 +20,7 @@ import type { MeasureWorkerRequest } from "./measureWorkerProtocol";
 
 type CanvasStub = { font: string; measureText(text: string): { width: number } };
 
-const FakeOffscreenCanvas = class {
-  constructor(_width: number, _height: number) {}
+class FakeOffscreenCanvas {
   getContext(type: string): CanvasStub | null {
     if (type !== "2d") {
       return null;
@@ -33,7 +32,7 @@ const FakeOffscreenCanvas = class {
       },
     };
   }
-};
+}
 
 beforeEach(() => {
   __resetWorkerCtxForTests();

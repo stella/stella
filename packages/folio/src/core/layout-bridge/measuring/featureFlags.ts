@@ -27,7 +27,6 @@ export type FolioMeasurementFeatureFlags = {
 };
 
 declare global {
-  // eslint-disable-next-line no-var
   var __folioFeatureFlags: FolioMeasurementFeatureFlags | undefined;
 }
 
