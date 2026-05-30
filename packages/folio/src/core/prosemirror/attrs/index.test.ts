@@ -377,6 +377,7 @@ describe("ProseMirror attr readers", () => {
       fillType: "custom",
       gradientStops: JSON.stringify([{ position: "0", color: 7 }]),
       displayMode: "sideways",
+      outlineHeadEnd: { type: "hook", width: "wide" },
     });
     const textBox = schema.nodes.textBox.create({
       width: "wide",
@@ -396,6 +397,12 @@ describe("ProseMirror attr readers", () => {
       );
       expect(shapeResult.issues.map((issue) => issue.path)).toContain(
         "shape.attrs.displayMode",
+      );
+      expect(shapeResult.issues.map((issue) => issue.path)).toContain(
+        "shape.attrs.outlineHeadEnd.type",
+      );
+      expect(shapeResult.issues.map((issue) => issue.path)).toContain(
+        "shape.attrs.outlineHeadEnd.width",
       );
     }
     expect(textBoxResult.ok).toBe(false);

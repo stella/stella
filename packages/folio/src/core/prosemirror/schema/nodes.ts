@@ -341,6 +341,10 @@ export type ShapeAttrs = {
   outlineStyle?: string;
   /** Line cap */
   outlineCap?: NonNullable<ShapeOutline["cap"]>;
+  /** Head arrow/end marker */
+  outlineHeadEnd?: NonNullable<ShapeOutline["headEnd"]>;
+  /** Tail arrow/end marker */
+  outlineTailEnd?: NonNullable<ShapeOutline["tailEnd"]>;
   /** CSS transform */
   transform?: string;
   /** Display mode */

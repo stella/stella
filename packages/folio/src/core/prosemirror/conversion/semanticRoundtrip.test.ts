@@ -158,6 +158,12 @@ const buildSemanticFixture = (): Document => ({
                       style: "solid",
                       cap: "round",
                       color: { rgb: "000000" },
+                      headEnd: { type: "none" },
+                      tailEnd: {
+                        type: "triangle",
+                        width: "med",
+                        length: "lg",
+                      },
                     },
                     wrap: {
                       type: "square",
@@ -280,7 +286,11 @@ describe("semantic ProseMirror round-trip fixture", () => {
       shapeType: "rect",
       id: "shape-1",
       fill: { type: "solid", color: { rgb: "FFAA00" } },
-      outline: { cap: "round" },
+      outline: {
+        cap: "round",
+        headEnd: { type: "none" },
+        tailEnd: { type: "triangle", width: "med", length: "lg" },
+      },
       wrap: {
         type: "square",
         wrapText: "bothSides",
@@ -314,5 +324,6 @@ describe("semantic ProseMirror round-trip fixture", () => {
         ],
       },
     });
+    expect(textBoxShape.outline).toBeUndefined();
   });
 });

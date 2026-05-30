@@ -132,6 +132,23 @@ function parseShapePosition(
   }
 }
 
+function parseShapeLineEnd(
+  raw: string | undefined,
+): NonNullable<ShapeAttrs["outlineHeadEnd"]> | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== "object" || parsed === null) {
+      return undefined;
+    }
+    return parsed as NonNullable<ShapeAttrs["outlineHeadEnd"]>;
+  } catch {
+    return undefined;
+  }
+}
+
 export function sanitizeSvgId(value: string | null | undefined): string | null {
   if (!value) {
     return null;
@@ -416,6 +433,8 @@ export const ShapeExtension = createNodeExtension({
       outlineColor: { default: "var(--doc-shape-outline, #000000)" },
       outlineStyle: { default: "solid" },
       outlineCap: { default: null },
+      outlineHeadEnd: { default: null },
+      outlineTailEnd: { default: null },
       transform: { default: null },
       displayMode: { default: "inline" },
       cssFloat: { default: null },
@@ -440,6 +459,8 @@ export const ShapeExtension = createNodeExtension({
           const el = dom;
           const d = el.dataset;
           const position = parseShapePosition(d["position"]);
+          const outlineHeadEnd = parseShapeLineEnd(d["outlineHeadEnd"]);
+          const outlineTailEnd = parseShapeLineEnd(d["outlineTailEnd"]);
           return {
             shapeType: d["shapeType"] || "rect",
             ...(d["shapeId"] ? { shapeId: d["shapeId"] } : {}),
@@ -474,6 +495,8 @@ export const ShapeExtension = createNodeExtension({
                   >,
                 }
               : {}),
+            ...(outlineHeadEnd ? { outlineHeadEnd } : {}),
+            ...(outlineTailEnd ? { outlineTailEnd } : {}),
             ...(d["transform"] ? { transform: d["transform"] } : {}),
             ...(d["displayMode"]
               ? {
@@ -564,6 +587,16 @@ export const ShapeExtension = createNodeExtension({
       }
       if (attrs.outlineCap) {
         domAttrs["data-outline-cap"] = attrs.outlineCap;
+      }
+      if (attrs.outlineHeadEnd) {
+        domAttrs["data-outline-head-end"] = JSON.stringify(
+          attrs.outlineHeadEnd,
+        );
+      }
+      if (attrs.outlineTailEnd) {
+        domAttrs["data-outline-tail-end"] = JSON.stringify(
+          attrs.outlineTailEnd,
+        );
       }
       if (attrs.transform) {
         domAttrs["data-transform"] = attrs.transform;

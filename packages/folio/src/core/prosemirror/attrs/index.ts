@@ -113,6 +113,25 @@ const SHAPE_OUTLINE_CAPS = [
   "square",
 ] as const satisfies readonly NonNullable<ShapeAttrs["outlineCap"]>[];
 
+const SHAPE_LINE_END_TYPES = [
+  "none",
+  "triangle",
+  "stealth",
+  "diamond",
+  "oval",
+  "arrow",
+] as const satisfies readonly NonNullable<
+  ShapeAttrs["outlineHeadEnd"]
+>["type"][];
+
+const SHAPE_LINE_END_SIZES = [
+  "sm",
+  "med",
+  "lg",
+] as const satisfies readonly NonNullable<
+  ShapeAttrs["outlineHeadEnd"]
+>["width"][];
+
 const EMPHASIS_MARK_TYPES = [
   "dot",
   "comma",
@@ -759,6 +778,18 @@ export const readShapeAttrs = (
     "shape.attrs.outlineCap",
     issues,
     SHAPE_OUTLINE_CAPS,
+  );
+  optionalShapeLineEnd(
+    attrs,
+    "outlineHeadEnd",
+    "shape.attrs.outlineHeadEnd",
+    issues,
+  );
+  optionalShapeLineEnd(
+    attrs,
+    "outlineTailEnd",
+    "shape.attrs.outlineTailEnd",
+    issues,
   );
   optionalString(attrs, "transform", "shape.attrs.transform", issues);
   optionalOneOf(
@@ -1603,6 +1634,33 @@ const optionalOneOf = (
       message: `Expected one of ${allowed.join(", ")}.`,
     });
   }
+};
+
+const optionalShapeLineEnd = (
+  attrs: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: ProseMirrorAttrIssue[],
+): void => {
+  const value = attrs[key];
+  if (value === undefined || value === null) {
+    return;
+  }
+
+  if (!isRecord(value)) {
+    issues.push({ path, message: "Expected an object." });
+    return;
+  }
+
+  optionalOneOf(value, "type", `${path}.type`, issues, SHAPE_LINE_END_TYPES);
+  optionalOneOf(value, "width", `${path}.width`, issues, SHAPE_LINE_END_SIZES);
+  optionalOneOf(
+    value,
+    "length",
+    `${path}.length`,
+    issues,
+    SHAPE_LINE_END_SIZES,
+  );
 };
 
 const requiredOneOf = (

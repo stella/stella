@@ -1514,10 +1514,13 @@ function createShapeRun(node: PMNode): Run {
 
   // Outline
   if (
-    (attrs.outlineWidth !== undefined && attrs.outlineWidth > 0) ||
-    attrs.outlineColor ||
-    attrs.outlineStyle ||
-    attrs.outlineCap
+    attrs.outlineStyle !== "none" &&
+    ((attrs.outlineWidth !== undefined && attrs.outlineWidth > 0) ||
+      attrs.outlineColor ||
+      attrs.outlineStyle ||
+      attrs.outlineCap ||
+      attrs.outlineHeadEnd ||
+      attrs.outlineTailEnd)
   ) {
     const cssToOoxml: Record<string, string> = {
       solid: "solid",
@@ -1534,6 +1537,12 @@ function createShapeRun(node: PMNode): Run {
     }
     if (attrs.outlineCap) {
       shapeOutline.cap = attrs.outlineCap;
+    }
+    if (attrs.outlineHeadEnd) {
+      shapeOutline.headEnd = attrs.outlineHeadEnd;
+    }
+    if (attrs.outlineTailEnd) {
+      shapeOutline.tailEnd = attrs.outlineTailEnd;
     }
     if (attrs.outlineColor) {
       shapeOutline.color = { rgb: attrs.outlineColor.replace("#", "") };

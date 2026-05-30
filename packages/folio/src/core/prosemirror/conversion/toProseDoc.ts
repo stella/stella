@@ -2376,8 +2376,10 @@ function convertShape(shape: Shape): PMNode {
 
   let outlineWidth: number | undefined;
   let outlineColor: string | undefined;
-  let outlineStyle: string | undefined;
+  let outlineStyle: string | undefined = "none";
   let outlineCap: NonNullable<Shape["outline"]>["cap"] | undefined;
+  let outlineHeadEnd: NonNullable<Shape["outline"]>["headEnd"] | undefined;
+  let outlineTailEnd: NonNullable<Shape["outline"]>["tailEnd"] | undefined;
   if (shape.outline) {
     if (shape.outline.width) {
       outlineWidth =
@@ -2388,6 +2390,10 @@ function convertShape(shape: Shape): PMNode {
     }
     outlineStyle = shape.outline.style || "solid";
     outlineCap = shape.outline.cap;
+    outlineHeadEnd = shape.outline.headEnd;
+    outlineTailEnd = shape.outline.tailEnd;
+  } else {
+    outlineWidth = 0;
   }
 
   let transform: string | undefined;
@@ -2454,6 +2460,8 @@ function convertShape(shape: Shape): PMNode {
     outlineColor,
     outlineStyle,
     outlineCap,
+    outlineHeadEnd,
+    outlineTailEnd,
     transform,
     displayMode,
     cssFloat,
