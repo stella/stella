@@ -115,19 +115,29 @@ describe("block image rotation bbox container", () => {
     expect(container.tagName).toBe("div");
     expect(container.className).toContain("layout-block-image");
     expect(container.style["position"]).toBe("relative");
-    // 90deg swaps the dims exactly (no FP drift): bboxH = original width.
-    expect(container.style["height"]).toBe("100px");
+    // 90deg swaps the dims exactly (no FP drift): bbox = (h, w).
+    expect(container.style["width"]).toBe(`${imageRun.height}px`);
+    expect(container.style["height"]).toBe(`${imageRun.width}px`);
 
     const imgEl = container.children[0] as unknown as FakeElement;
     expect(imgEl.tagName).toBe("img");
     expect(imgEl.style["transform"]).toBe("rotate(90deg)");
     expect(imgEl.style["transformOrigin"]).toBe("center center");
     expect(imgEl.style["position"]).toBe("absolute");
-    expect(imgEl.style["left"]).toBe("50%");
-    expect(imgEl.style["top"]).toBe("50%");
-    expect(imgEl.style["marginLeft"]).toBe(`${-imageRun.width / 2}px`);
-    expect(imgEl.style["marginTop"]).toBe(`${-imageRun.height / 2}px`);
+    // Centred inside the bbox: (bboxW - w) / 2, (bboxH - h) / 2.
+    expect(imgEl.style["left"]).toBe(
+      `${(imageRun.height - imageRun.width) / 2}px`,
+    );
+    expect(imgEl.style["top"]).toBe(
+      `${(imageRun.width - imageRun.height) / 2}px`,
+    );
+    // Tailwind preflight needs explicit dims on an absolute <img>.
+    expect(imgEl.style["width"]).toBe(`${imageRun.width}px`);
+    expect(imgEl.style["height"]).toBe(`${imageRun.height}px`);
+    // Auto-margin fast path is cleared in the rotated branch.
+    expect(imgEl.style["marginLeft"]).toBe("0");
     expect(imgEl.style["marginRight"]).toBe("0");
+    expect(imgEl.style["marginTop"]).toBe("0");
   });
 
   test("wraps a 270deg rotated block image with the height set to original width", () => {
@@ -145,6 +155,8 @@ describe("block image rotation bbox container", () => {
     const container = lineEl.children[0] as unknown as FakeElement;
 
     expect(container.tagName).toBe("div");
+    // 270deg swaps the dims: bbox = (h, w) = (60, 120).
+    expect(container.style["width"]).toBe("60px");
     expect(container.style["height"]).toBe("120px");
     expect(container.style["position"]).toBe("relative");
   });
@@ -163,18 +175,22 @@ describe("block image rotation bbox container", () => {
     const lineEl = renderLine(block, line, undefined, fakeDocument);
     const container = lineEl.children[0] as unknown as FakeElement;
 
-    // At 45deg, |sin| = |cos|. bboxH = w*|sin| + h*|cos|.
+    // At 45deg, |sin| = |cos|. bboxW = w*|cos| + h*|sin|, bboxH symmetric.
     // Compute via the same trig calls the implementation uses to avoid FP
     // drift between `Math.sin(pi/4) + Math.cos(pi/4)` and `Math.SQRT2`.
     const rad = (45 * Math.PI) / 180;
     const sinA = Math.abs(Math.sin(rad));
     const cosA = Math.abs(Math.cos(rad));
+    const expectedW = 100 * cosA + 200 * sinA;
     const expectedH = 100 * sinA + 200 * cosA;
+    expect(container.style["width"]).toBe(`${expectedW}px`);
     expect(container.style["height"]).toBe(`${expectedH}px`);
     expect(container.style["position"]).toBe("relative");
 
     const imgEl = container.children[0] as unknown as FakeElement;
     expect(imgEl.style["position"]).toBe("absolute");
+    expect(imgEl.style["left"]).toBe(`${(expectedW - 100) / 2}px`);
+    expect(imgEl.style["top"]).toBe(`${(expectedH - 200) / 2}px`);
   });
 
   test("does NOT add bbox container styles to an un-rotated block image", () => {
@@ -281,5 +297,68 @@ describe("block image rotation bbox container", () => {
 
     expect(container.dataset["pmStart"]).toBe("7");
     expect(container.dataset["pmEnd"]).toBe("8");
+  });
+
+  test("tolerates whitespace inside rotate(...) when computing the bbox", () => {
+    const imageRun: ImageRun = {
+      kind: "image",
+      src: "data:image/png;base64,",
+      width: 100,
+      height: 200,
+      displayMode: "block",
+      // CSS permits whitespace around the argument; folio doesn't emit it,
+      // but the regex must still match (gemini PR #521 review).
+      transform: "rotate( 90deg )",
+    };
+    const { block, line } = makeBlockImageLine(imageRun);
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const container = lineEl.children[0] as unknown as FakeElement;
+
+    expect(container.style["position"]).toBe("relative");
+    expect(container.style["width"]).toBe(`${imageRun.height}px`);
+    expect(container.style["height"]).toBe(`${imageRun.width}px`);
+  });
+
+  test("rotated bbox container has an explicit width so the flex line doesn't collapse it", () => {
+    // `renderLine` switches single-image lines to `display: flex; alignItems:
+    // center`; with `position: absolute` on the <img>, the container would
+    // get 0 width without an explicit one, and centering would land at the
+    // line start (codex PR #521 review).
+    const imageRun: ImageRun = {
+      kind: "image",
+      src: "data:image/png;base64,",
+      width: 80,
+      height: 40,
+      displayMode: "block",
+      transform: "rotate(90deg)",
+    };
+    const { block, line } = makeBlockImageLine(imageRun);
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const container = lineEl.children[0] as unknown as FakeElement;
+
+    expect(container.style["width"]).toBe(`${imageRun.height}px`);
+  });
+
+  test("rotated <img> has explicit width/height so Tailwind preflight can't shrink it", () => {
+    // Tailwind's `img { max-width: 100%; height: auto }` would distort an
+    // absolutely-positioned <img> (gemini PR #521 review).
+    const imageRun: ImageRun = {
+      kind: "image",
+      src: "data:image/png;base64,",
+      width: 100,
+      height: 200,
+      displayMode: "block",
+      transform: "rotate(90deg)",
+    };
+    const { block, line } = makeBlockImageLine(imageRun);
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const imgEl = (lineEl.children[0] as unknown as FakeElement)
+      .children[0] as unknown as FakeElement;
+
+    expect(imgEl.style["width"]).toBe(`${imageRun.width}px`);
+    expect(imgEl.style["height"]).toBe(`${imageRun.height}px`);
   });
 });

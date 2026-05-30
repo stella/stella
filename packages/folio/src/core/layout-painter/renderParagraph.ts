@@ -564,7 +564,10 @@ function parseRotationDegrees(transform: string | undefined): number {
   if (!transform) {
     return 0;
   }
-  const match = /rotate\(([-\d.]+)deg\)/u.exec(transform);
+  // Whitespace inside `rotate(...)` is valid CSS; folio never emits it, but
+  // accept it defensively so hand-authored / sanitized transforms don't
+  // silently fall through to the un-rotated path.
+  const match = /rotate\(\s*([-\d.]+)\s*deg\s*\)/u.exec(transform);
   if (!match) {
     return 0;
   }
@@ -663,25 +666,35 @@ function renderBlockImage(run: ImageRun, doc: Document): HTMLElement {
     img.style.transformOrigin = "center center";
   }
 
-  // Reserve the rotated bbox height on the container so a rotated block
-  // image doesn't bleed into the next paragraph. The container height is
-  // sized to the rotated bbox; the inner `<img>` positions absolutely at
-  // the container's centre and rotates around its own centre, which now
-  // lands inside the wrapper. Non-rotated images keep the fast path (auto
-  // margins for horizontal centering). Mirrors the inline path that PR
-  // #518 added in `renderInlineImageRun`.
+  // Reserve the rotated bbox on the container so a rotated block image
+  // doesn't bleed into the next paragraph. The container is sized to the
+  // rotated bbox; the inner `<img>` positions absolutely at the offset
+  // that centres it inside the wrapper, then rotates around its own
+  // centre. Non-rotated images keep the fast path (auto margins for
+  // horizontal centering). Mirrors the inline path that PR #518 added in
+  // `renderInlineImageRun` — keep the two in sync until they dedupe.
   // eigenpal #424 (rotation bbox gap 8 follow-up).
   const rotation = parseRotationDegrees(run.transform);
   if (rotation !== 0) {
     const bbox = rotatedBoundingBox(run.width, run.height, rotation);
+    // Width must be explicit: `renderLine` wraps a single-image line in a
+    // flex container, and an absolutely-positioned `<img>` provides no
+    // in-flow width, so the wrapper would collapse to 0 and break
+    // centering.
+    container.style.width = `${bbox.width}px`;
     container.style.height = `${bbox.height}px`;
     container.style.position = "relative";
     img.style.position = "absolute";
-    img.style.left = "50%";
-    img.style.top = "50%";
-    img.style.marginLeft = `${-run.width / 2}px`;
+    img.style.left = `${(bbox.width - run.width) / 2}px`;
+    img.style.top = `${(bbox.height - run.height) / 2}px`;
+    // Tailwind preflight applies `img { max-width: 100%; height: auto }`,
+    // which would shrink an absolutely-positioned `<img>`. Pin the
+    // intrinsic dims explicitly, same as the inline path.
+    img.style.width = `${run.width}px`;
+    img.style.height = `${run.height}px`;
+    img.style.marginLeft = "0";
     img.style.marginRight = "0";
-    img.style.marginTop = `${-run.height / 2}px`;
+    img.style.marginTop = "0";
   }
 
   applyPmPositions(container, run.pmStart, run.pmEnd);
