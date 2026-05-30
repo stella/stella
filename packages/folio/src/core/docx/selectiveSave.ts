@@ -18,6 +18,7 @@ import {
   collectHeaderFooterUpdates,
   COMMENTS_CONTENT_TYPE,
 } from "./rezip";
+import { DEFAULT_SELECTIVE_SAVE_MAX_BYTES } from "./selectiveSaveFlags";
 import { buildPatchedDocumentXml } from "./selectiveXmlPatch";
 import { serializeComments } from "./serializer/commentSerializer";
 import { serializeDocument } from "./serializer/documentSerializer";
@@ -91,6 +92,12 @@ export type SelectiveSaveOptions = {
   structuralChange: boolean;
   /** Whether any changes affected paragraphs without paraId */
   hasUntrackedChanges: boolean;
+  /**
+   * Maximum allowed `originalBuffer.byteLength` for the selective path. Above
+   * this size the function returns null and the caller falls back to full
+   * repack. Defaults to {@link DEFAULT_SELECTIVE_SAVE_MAX_BYTES}.
+   */
+  maxBytes?: number;
 };
 
 /**
@@ -107,12 +114,18 @@ export async function attemptSelectiveSave(
   options: SelectiveSaveOptions,
 ): Promise<ArrayBuffer | null> {
   const { changedParaIds, structuralChange, hasUntrackedChanges } = options;
+  const maxBytes = options.maxBytes ?? DEFAULT_SELECTIVE_SAVE_MAX_BYTES;
 
   // Bail out conditions — fall back to full repack
   if (structuralChange) {
     return null;
   }
   if (hasUntrackedChanges) {
+    return null;
+  }
+  // Refuse very large inputs: the JSZip overhead on top of the original buffer
+  // dominates memory cost, and full repack is the safer path at that scale.
+  if (originalBuffer.byteLength > maxBytes) {
     return null;
   }
   // Check for new images/hyperlinks that need relationship management

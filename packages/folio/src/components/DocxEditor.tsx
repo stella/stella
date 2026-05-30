@@ -456,6 +456,8 @@ export function DocxEditor({
   selectedAnonymizationCanonical = null,
   anonymizationSelectionSeq,
   collaboration,
+  featureFlags,
+  onSelectiveSaveTripwire,
 }: DocxEditorProps & { ref?: Ref<DocxEditorRef> }) {
   const t = useTranslations("folio");
 
@@ -2540,6 +2542,11 @@ export function DocxEditor({
   // Handle save
   const handleSave = useCallback(
     async (options?: { selective?: boolean }): Promise<ArrayBuffer | null> => {
+      let tripwireResult:
+        | Parameters<NonNullable<typeof onSelectiveSaveTripwire>>[0]
+        | null = null;
+      let savedBuffer: ArrayBuffer | null = null;
+
       try {
         // Build current document from PM editor state
         const doc = buildCurrentDocument();
@@ -2547,26 +2554,72 @@ export function DocxEditor({
           return null;
         }
 
-        // Try selective save first (patches only changed paragraphs). If the
-        // edit cannot be patched, fall back to guarded repack: repackDocx now
-        // validates section/header/footer references before returning bytes.
-        const useSelective = options?.selective !== false;
-        const view = pagedEditorRef.current?.getView();
-        let buffer: ArrayBuffer | null = null;
+        const { resolveSelectiveSaveFlags } =
+          await import("../core/docx/selectiveSaveFlags");
+        const flags = resolveSelectiveSaveFlags(featureFlags);
 
-        if (useSelective && view && originalBufferRef.current) {
+        // The tripwire observes the selective path independently from the
+        // user-visible save mode. Only `useSelectiveForSave` is allowed to
+        // choose the returned bytes.
+        const useSelectiveForSave =
+          flags.selectiveSave && options?.selective !== false;
+        const shouldAttemptSelective =
+          useSelectiveForSave || flags.selectiveSaveTripwire;
+        const view = pagedEditorRef.current?.getView();
+        const baselineBuffer = originalBufferRef.current;
+        let selectiveBuffer: ArrayBuffer | null = null;
+
+        if (shouldAttemptSelective && view && baselineBuffer) {
           const editorState = view.state;
           const attemptSelectiveSave = await loadAttemptSelectiveSave();
-          buffer = await attemptSelectiveSave(doc, originalBufferRef.current, {
+          selectiveBuffer = await attemptSelectiveSave(doc, baselineBuffer, {
             changedParaIds: getChangedParagraphIds(editorState),
             structuralChange: hasStructuralChanges(editorState),
             hasUntrackedChanges: hasUntrackedChanges(editorState),
+            maxBytes: flags.selectiveSaveMaxBytes,
           });
         }
 
+        let buffer: ArrayBuffer | null = useSelectiveForSave
+          ? selectiveBuffer
+          : null;
+        let fullBuffer: ArrayBuffer | null = null;
+        const repackSourceDoc = baselineBuffer
+          ? { ...doc, originalBuffer: baselineBuffer }
+          : doc;
+
         if (!buffer) {
           const repackDocx = await loadRepackDocx();
-          buffer = await repackDocx(doc);
+          fullBuffer = await repackDocx(repackSourceDoc);
+          buffer = fullBuffer;
+        } else if (flags.selectiveSaveTripwire) {
+          try {
+            const repackDocx = await loadRepackDocx();
+            fullBuffer = await repackDocx(repackSourceDoc);
+          } catch {
+            // Tripwire-only full repack failures must never poison a
+            // successful selective save.
+          }
+        }
+
+        if (
+          flags.selectiveSaveTripwire &&
+          fullBuffer &&
+          onSelectiveSaveTripwire
+        ) {
+          // The comparison itself never blocks the save path. The host
+          // callback runs after the save try/catch so test harnesses may fail
+          // on mismatches by throwing.
+          try {
+            const { compareSelectiveVsFull } =
+              await import("../core/docx/selectiveSaveTripwire");
+            tripwireResult = await compareSelectiveVsFull(
+              selectiveBuffer,
+              fullBuffer,
+            );
+          } catch {
+            // Comparison failures must never poison the save path.
+          }
         }
 
         // Clear change tracker after successful save
@@ -2577,15 +2630,27 @@ export function DocxEditor({
         commentsDirtyRef.current = false;
 
         onSave?.(buffer);
-        return buffer;
+        savedBuffer = buffer;
       } catch (error) {
         onError?.(
           error instanceof Error ? error : new Error("Failed to save document"),
         );
         return null;
       }
+
+      if (tripwireResult && onSelectiveSaveTripwire) {
+        onSelectiveSaveTripwire(tripwireResult);
+      }
+      return savedBuffer;
     },
-    [buildCurrentDocument, onSave, onError, originalBufferRef],
+    [
+      buildCurrentDocument,
+      onSave,
+      onError,
+      originalBufferRef,
+      featureFlags,
+      onSelectiveSaveTripwire,
+    ],
   );
 
   // Handle error from editor
