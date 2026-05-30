@@ -2609,27 +2609,128 @@ export function footnoteToProseDoc(
 /**
  * Determine where a page break appears inside a paragraph.
  *
+ * Per ECMA-376 §17.3.3.1, `<w:br w:type="page"/>` is always a forced break,
+ * including in a paragraph whose only content is the break itself. We previously
+ * searched only top-level runs and missed breaks nested in hyperlinks, tracked
+ * changes, or fields — so those paragraphs silently dropped their forced break
+ * and the following content collapsed onto the previous page (common on legal
+ * signature pages and exhibit covers).
+ * See eigenpal docx-editor #409 (break-only page break sub-fix).
+ *
  * Returns:
- *   "before" — the break is at the very start (before any text); the
- *              paragraph's text belongs on the NEXT page.
- *   "after"  — the break is after some text (or the paragraph is empty);
- *              the paragraph stays on the current page.
+ *   "before" — the break appears before any visible content; the paragraph's
+ *              content belongs on the NEXT page.
+ *   "after"  — the break follows some visible content; the paragraph stays
+ *              on the current page and the next block starts a new page.
  *   null     — no page break found.
  */
 function paragraphPageBreakPosition(
   paragraph: Paragraph,
 ): "before" | "after" | null {
-  let seenText = false;
-  for (const item of paragraph.content) {
+  // Mutated by visitRun during traversal. oxlint flow analysis can't see
+  // closure mutations, so a plain `let` here trips no-unnecessary-condition;
+  // wrap in an object to keep the flag genuinely opaque to the linter.
+  const state = { seenVisibleContent: false };
+
+  function isPageBreak(content: RunContent): boolean {
+    return content.type === "break" && content.breakType === "page";
+  }
+
+  function isVisibleRunContent(content: RunContent): boolean {
+    return (
+      (content.type === "text" && content.text.length > 0) ||
+      content.type === "tab" ||
+      content.type === "drawing" ||
+      content.type === "shape" ||
+      content.type === "symbol" ||
+      content.type === "fieldChar" ||
+      content.type === "instrText" ||
+      content.type === "footnoteRef" ||
+      content.type === "endnoteRef"
+    );
+  }
+
+  function visitRun(run: Run): boolean {
+    for (const content of run.content) {
+      if (isPageBreak(content)) {
+        return true;
+      }
+      if (isVisibleRunContent(content)) {
+        state.seenVisibleContent = true;
+      }
+    }
+    return false;
+  }
+
+  function visitItem(item: Paragraph["content"][number]): boolean {
     if (item.type === "run") {
-      for (const content of (item as Run).content) {
-        if (content.type === "break" && content.breakType === "page") {
-          return seenText ? "after" : "before";
-        }
-        if (content.type === "text" && content.text) {
-          seenText = true;
+      return visitRun(item);
+    }
+    if (item.type === "hyperlink") {
+      for (const child of (item as Hyperlink).children) {
+        if (child.type === "run" && visitRun(child)) {
+          return true;
         }
       }
+      // Hyperlink with non-break content is visible context for any later break.
+      state.seenVisibleContent = true;
+      return false;
+    }
+    if (
+      item.type === "insertion" ||
+      item.type === "deletion" ||
+      item.type === "moveFrom" ||
+      item.type === "moveTo"
+    ) {
+      // Tracked-change wrappers can themselves contain a page break.
+      const wrapper = item as Insertion | Deletion | MoveFrom | MoveTo;
+      for (const inner of wrapper.content) {
+        if (inner.type === "run" && visitRun(inner)) {
+          return true;
+        }
+        if (inner.type === "hyperlink") {
+          for (const child of inner.children) {
+            if (child.type === "run" && visitRun(child)) {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
+    }
+    if (item.type === "simpleField") {
+      for (const inner of (item as SimpleField).content) {
+        if (inner.type === "run" && visitRun(inner)) {
+          return true;
+        }
+        if (inner.type === "hyperlink") {
+          for (const child of inner.children) {
+            if (child.type === "run" && visitRun(child)) {
+              return true;
+            }
+          }
+        }
+      }
+      // Field result (page number, date, etc.) is visible content.
+      state.seenVisibleContent = true;
+      return false;
+    }
+    if (item.type === "complexField") {
+      for (const run of (item as ComplexField).fieldResult) {
+        if (visitRun(run)) {
+          return true;
+        }
+      }
+      // Field result is visible content.
+      state.seenVisibleContent = true;
+      return false;
+    }
+    return false;
+  }
+
+  for (const item of paragraph.content) {
+    if (visitItem(item)) {
+      return state.seenVisibleContent ? "after" : "before";
     }
   }
   return null;
