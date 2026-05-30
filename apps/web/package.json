@@ -74,7 +74,7 @@
     "@tiptap/pm": "^3.23.6",
     "@tiptap/react": "^3.23.6",
     "@tiptap/suggestion": "^3.23.6",
-    "ai": "^6.0.183",
+    "ai": "^6.0.191",
     "better-auth": "catalog:",
     "better-result": "catalog:",
     "class-variance-authority": "^0.7.1",
