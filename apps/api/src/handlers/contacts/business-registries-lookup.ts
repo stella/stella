@@ -12,8 +12,18 @@ import {
   lookupByIco,
   normalizeIco,
   searchByName as searchAresByName,
-  validateIco,
 } from "@stll/business-registries/ares";
+import {
+  BrregAPIError,
+  type BrregEntity,
+  BrregRequestError,
+  type BrregSearchResult,
+  BrregTooBroadError,
+  BrregValidationError,
+  lookupByOrgnr,
+  normalizeOrgnr,
+  searchByName as searchBrregByName,
+} from "@stll/business-registries/brreg";
 
 import { isNativeToolEnabledForOrg } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -23,7 +33,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 // Normalised cross-registry shapes
 // ---------------------------------------------------------------------------
 
-const BUSINESS_REGISTRY_SLUGS = ["ares"] as const;
+const BUSINESS_REGISTRY_SLUGS = ["ares", "brreg"] as const;
 type BusinessRegistrySlug = (typeof BUSINESS_REGISTRY_SLUGS)[number];
 
 type BusinessRegistryAddress = {
@@ -64,7 +74,17 @@ type LookupResponse =
 type RegistryHandler = {
   /** Catalog slug used by `isNativeToolEnabledForOrg`. */
   nativeToolSlug: string;
-  /** True when the trimmed input looks like the registry's canonical ID. */
+  /**
+   * True when the trimmed input has the *shape* of the registry's
+   * canonical ID — e.g. eight digits for a Czech IČO, nine digits for
+   * a Norwegian orgnr. This is intentionally a cheap, permissive
+   * structural check, NOT a full validator. Semantic validation
+   * (checksums, country prefixes, etc.) belongs in the `lookup`
+   * function; bad-checksum inputs surface as a `*ValidationError` →
+   * mapped to HTTP 400 by `mapError`. Returning `false` here would
+   * fall through to `search`, which silently swallows malformed IDs
+   * as empty name-search results — exactly the UX we want to avoid.
+   */
   isCanonicalId: (input: string) => boolean;
   /** Lookup by canonical ID. */
   lookup: (input: string) => Promise<BusinessRegistryHit | null>;
@@ -173,7 +193,9 @@ const mapAresError = (error: unknown): HandlerError | null => {
 
 const ARES_HANDLER: RegistryHandler = {
   nativeToolSlug: "ares",
-  isCanonicalId: (input) => validateIco(normalizeIco(input)),
+  // Shape-only: 8 digits after normalisation. Bad checksums route
+  // through lookup and surface as AresValidationError → 400.
+  isCanonicalId: (input) => /^\d{8}$/u.test(normalizeIco(input)),
   lookup: async (input) => {
     const company = await lookupByIco(input);
     return company ? aresCompanyToHit(company) : null;
@@ -185,8 +207,94 @@ const ARES_HANDLER: RegistryHandler = {
   mapError: mapAresError,
 };
 
+// ---------------------------------------------------------------------------
+// Brreg (Norway)
+// ---------------------------------------------------------------------------
+
+const brregEntityToHit = (entity: BrregEntity): BusinessRegistryHit => ({
+  registry: "brreg",
+  id: entity.orgnr,
+  name: entity.name,
+  legalForm: entity.legalForm,
+  address: entity.businessAddress
+    ? {
+        line1: entity.businessAddress.street,
+        line2: null,
+        postalCode: entity.businessAddress.postalCode,
+        city: entity.businessAddress.city,
+        region: entity.businessAddress.municipality,
+        country: entity.businessAddress.country,
+        textAddress: entity.businessAddress.textAddress,
+      }
+    : null,
+  registryUrl: entity.registryUrl,
+});
+
+const brregSearchResultToHit = (
+  result: BrregSearchResult,
+): BusinessRegistryHit => ({
+  registry: "brreg",
+  id: result.orgnr,
+  name: result.name,
+  legalForm: null,
+  address: result.address
+    ? {
+        line1: null,
+        line2: null,
+        postalCode: null,
+        city: null,
+        region: null,
+        country: null,
+        textAddress: result.address,
+      }
+    : null,
+  registryUrl: `https://virksomhet.brreg.no/nb/oppslag/enheter/${result.orgnr}`,
+});
+
+const mapBrregError = (error: unknown): HandlerError | null => {
+  if (error instanceof BrregValidationError) {
+    return new HandlerError({ status: 400, message: error.message });
+  }
+  if (error instanceof BrregTooBroadError) {
+    return new HandlerError({
+      status: 400,
+      message: "Search too broad. Please refine your query.",
+    });
+  }
+  if (error instanceof BrregAPIError) {
+    return new HandlerError({
+      status: 502,
+      message: `Brreg API error: ${error.message}`,
+    });
+  }
+  if (error instanceof BrregRequestError) {
+    return new HandlerError({
+      status: 502,
+      message: `Brreg request failed: ${error.message}`,
+    });
+  }
+  return null;
+};
+
+const BRREG_HANDLER: RegistryHandler = {
+  nativeToolSlug: "brreg",
+  // Shape-only: 9 digits after normalisation. MOD-11 violations
+  // route through lookup and surface as BrregValidationError → 400.
+  isCanonicalId: (input) => /^\d{9}$/u.test(normalizeOrgnr(input)),
+  lookup: async (input) => {
+    const entity = await lookupByOrgnr(input);
+    return entity ? brregEntityToHit(entity) : null;
+  },
+  search: async (input) => {
+    const results = await searchBrregByName(input);
+    return results.map(brregSearchResultToHit);
+  },
+  mapError: mapBrregError,
+};
+
 const DISPATCH: Record<BusinessRegistrySlug, RegistryHandler> = {
   ares: ARES_HANDLER,
+  brreg: BRREG_HANDLER,
 };
 
 // ---------------------------------------------------------------------------

@@ -22,6 +22,7 @@ export type NativeToolCatalogItem = {
 
 const ARES_RECOMMENDED_JURISDICTIONS = ["CZ"] as const;
 const BOE_RECOMMENDED_JURISDICTIONS = ["ES"] as const;
+const BRREG_RECOMMENDED_JURISDICTIONS = ["NO"] as const;
 const NATIVE_TOOL_CATALOG = [
   {
     slug: "ares",
@@ -42,6 +43,17 @@ const NATIVE_TOOL_CATALOG = [
     documentationUrl: "https://www.boe.es/datosabiertos/",
     iconUrl: null,
     recommendedJurisdictions: [...BOE_RECOMMENDED_JURISDICTIONS],
+  },
+  {
+    slug: "brreg",
+    displayName: "Brønnøysundregistrene",
+    description:
+      "Norwegian company lookup by organisasjonsnummer or company name from the public Brreg Enhetsregisteret open API.",
+    url: "https://www.brreg.no",
+    documentationUrl:
+      "https://data.brreg.no/enhetsregisteret/api/docs/index.html",
+    iconUrl: null,
+    recommendedJurisdictions: [...BRREG_RECOMMENDED_JURISDICTIONS],
   },
   {
     slug: "web-search",
