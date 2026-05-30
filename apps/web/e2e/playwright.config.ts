@@ -21,7 +21,10 @@ export default defineConfig({
   reporter: IS_CI
     ? [["github"], ["html", { open: "never" }], ["list"]]
     : [["list"], ["html", { open: "never" }]],
-  timeout: 30_000,
+  // Cold Vite + folio editor compile on a fresh CI runner can use 25-30s
+  // before the first locator runs, leaving no headroom for in-spec
+  // toBeVisible waits and killing tests that would otherwise pass.
+  timeout: 60_000,
   expect: { timeout: 10_000 },
 
   use: {
