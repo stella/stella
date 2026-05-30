@@ -72,6 +72,16 @@ function measureEntry(entry: MeasureRequestEntry): MeasureResponseEntry {
 }
 
 /**
+ * Test-only: reset the cached OffscreenCanvas context. Used by unit
+ * tests that toggle the global `OffscreenCanvas` between cases. The
+ * worker itself never needs this — its lifetime is one tab.
+ */
+export function __resetWorkerCtxForTests(): void {
+  ctx = null;
+  initError = null;
+}
+
+/**
  * Pure-function entry point. Exported so tests can exercise the worker
  * contract without spawning a real `Worker`. Production code only
  * reaches this via `postMessage`.

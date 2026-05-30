@@ -72,3 +72,13 @@ export {
   clearAllCaches,
   getTotalCacheSize,
 } from "../../layout-engine/measure/cache";
+
+// Feature-flag accessors for the measurement subsystem. Host apps
+// install the bag before mounting `DocxEditor`; measurement code reads
+// it on demand. All flags default OFF, so callers who never set the
+// bag see identical behaviour to before any of this code existed.
+export {
+  isWorkerFontMetricsEnabled,
+  setFolioMeasurementFlags,
+  type FolioMeasurementFeatureFlags,
+} from "./featureFlags";

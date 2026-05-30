@@ -21,6 +21,7 @@ import {
   setCachedFontMetrics,
   setCachedTextWidth,
 } from "./cache";
+import { prefetchMeasurement } from "./measureWorker";
 
 // Constants for OOXML unit conversions
 const TWIPS_PER_INCH = 1440;
@@ -305,6 +306,19 @@ export function measureTextWidth(text: string, style: FontStyle): number {
 
   const scaledWidth = width * horizontalScale;
   setCachedTextWidth(measuredText, fontCacheKey, letterSpacing, scaledWidth);
+  // Cache miss just cost a main-thread `measureText`. Ask the worker to
+  // pre-warm this entry for future layout passes (font-ready, page
+  // resize, suggestion-mode toggles, etc.) so the *next* time the same
+  // run is measured it lands on a worker-filled cache slot.
+  //
+  // No-op when the worker flag is OFF or the host lacks
+  // `OffscreenCanvas`/`Worker`. See `measureWorker.ts`.
+  prefetchMeasurement(
+    measuredText,
+    fontCacheKey,
+    letterSpacing,
+    horizontalScale,
+  );
   return scaledWidth;
 }
 
