@@ -311,9 +311,8 @@ function parseTransform(xfrm: XmlElement | null): {
 
 /**
  * Read `<a:prstGeom prst="…">` and narrow to the typed `ShapeType` union.
- * Unknown values fall back to `rect`, matching Word's degenerate behaviour;
- * `<a:custGeom>` also falls back to `rect` for phase-1 rendering while the
- * original XML survives the round-trip via the rezip path.
+ * Unsupported geometry is not consumed as an editable shape because
+ * `ShapeContent` currently serializes fresh preset geometry.
  */
 function parseShapeType(spPr: XmlElement | null): Shape["shapeType"] {
   if (!spPr) {
@@ -327,9 +326,46 @@ function parseShapeType(spPr: XmlElement | null): Shape["shapeType"] {
       return narrowed;
     }
   }
-  // Custom geometry: phase-3 will replay <a:pathLst>. Phase-1 falls back to
-  // rect for display while preserving the XML via rawXml at the run level.
   return "rect";
+}
+
+function hasUnsupportedGeometry(spPr: XmlElement | null): boolean {
+  if (!spPr) {
+    return false;
+  }
+  const prstGeom = findChildByLocalName(spPr, "prstGeom");
+  if (!prstGeom) {
+    return findChildByLocalName(spPr, "custGeom") !== null;
+  }
+  const prst = getAttribute(prstGeom, null, "prst");
+  return narrowEnum(prst, ShapeTypeSchema) === undefined;
+}
+
+function colorNeedsRawPreservation(color: ColorValue | undefined): boolean {
+  return color !== undefined && color.rgb === undefined;
+}
+
+function fillNeedsRawPreservation(fill: ShapeFill | undefined): boolean {
+  if (!fill) {
+    return false;
+  }
+  if (fill.type === "solid") {
+    return colorNeedsRawPreservation(fill.color);
+  }
+  if (fill.type === "gradient") {
+    return (
+      fill.gradient?.stops.some((stop) =>
+        colorNeedsRawPreservation(stop.color),
+      ) ?? false
+    );
+  }
+  return false;
+}
+
+function outlineNeedsRawPreservation(
+  outline: ShapeOutline | undefined,
+): boolean {
+  return colorNeedsRawPreservation(outline?.color);
 }
 
 // ---------------------------------------------------------------------------
@@ -411,6 +447,15 @@ export function parseShapeFromDrawing(drawingEl: XmlElement): Shape | null {
     return null;
   }
 
+  const spPr = findChildByLocalName(wsp, "spPr");
+  if (
+    hasUnsupportedGeometry(spPr) ||
+    fillNeedsRawPreservation(parseShapeFill(spPr)) ||
+    outlineNeedsRawPreservation(parseShapeOutline(spPr))
+  ) {
+    return null;
+  }
+
   const shape = parseShape(wsp);
 
   // The container's wp:extent supersedes spPr's a:ext when both exist.
@@ -448,4 +493,29 @@ export function parseShapeFromDrawing(drawingEl: XmlElement): Shape | null {
   }
 
   return shape;
+}
+
+export function shouldPreserveRawShapeDrawing(drawingEl: XmlElement): boolean {
+  const inline = findChildByLocalName(drawingEl, "inline");
+  const anchor = findChildByLocalName(drawingEl, "anchor");
+  const container = inline ?? anchor;
+  if (!container) {
+    return false;
+  }
+  const graphic = findChildByLocalName(container, "graphic");
+  const graphicData = graphic
+    ? findChildByLocalName(graphic, "graphicData")
+    : null;
+  const wsp = graphicData ? findChildByLocalName(graphicData, "wsp") : null;
+  if (!wsp || findChildByLocalName(wsp, "txbx") !== null) {
+    return false;
+  }
+  const spPr = findChildByLocalName(wsp, "spPr");
+  if (hasUnsupportedGeometry(spPr)) {
+    return true;
+  }
+  return (
+    fillNeedsRawPreservation(parseShapeFill(spPr)) ||
+    outlineNeedsRawPreservation(parseShapeOutline(spPr))
+  );
 }

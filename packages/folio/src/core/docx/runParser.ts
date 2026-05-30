@@ -52,7 +52,10 @@ import {
   UnderlineStyleSchema,
   narrowEnum,
 } from "./parserEnums";
-import { parseShapeFromDrawing } from "./shapeParser";
+import {
+  parseShapeFromDrawing,
+  shouldPreserveRawShapeDrawing,
+} from "./shapeParser";
 import type { StyleMap } from "./styleParser";
 import { resolveThemeFontRef } from "./themeParser";
 import {
@@ -826,6 +829,19 @@ function parseDrawingContent(
   rels: RelationshipMap | null,
   media: Map<string, MediaFile> | null,
 ): DrawingContent | ShapeContent | null {
+  if (shouldPreserveRawShapeDrawing(element)) {
+    return {
+      type: "drawing",
+      image: {
+        type: "image",
+        rId: "",
+        size: { width: 0, height: 0 },
+        wrap: { type: "inline" },
+      },
+      rawXml: elementToXml(element),
+    };
+  }
+
   // Generic shapes (rect/ellipse/line/arrow/...) come in here as wps:wsp
   // with no text body. Text-box shapes are left for the block-content
   // post-pass; image drawings fall through to parseImage.

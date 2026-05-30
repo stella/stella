@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseShape, parseShapeFromDrawing } from "./shapeParser";
+import {
+  parseShape,
+  parseShapeFromDrawing,
+  shouldPreserveRawShapeDrawing,
+} from "./shapeParser";
 import { parseXmlDocument } from "./xmlParser";
 
 const NS = `xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"`;
@@ -118,12 +122,13 @@ describe("parseShapeFromDrawing — preset geometry", () => {
     expect(shape?.shapeType).toBe(expected);
   });
 
-  test("unknown presets fall back to rect (round-trip handled at serializer)", () => {
+  test("unknown presets are preserved as raw drawings instead of editable rectangles", () => {
     const root = parseXmlDocument(
       drawingWith(buildSpPr({ prst: "completelyUnknownShapeXYZ" })),
     );
     const shape = root ? parseShapeFromDrawing(root) : null;
-    expect(shape?.shapeType).toBe("rect");
+    expect(shape).toBeNull();
+    expect(root ? shouldPreserveRawShapeDrawing(root) : false).toBe(true);
   });
 
   test("size derived from wp:extent overrides spPr a:ext", () => {
@@ -148,6 +153,19 @@ describe("parseShapeFromDrawing — fill", () => {
       type: "solid",
       color: { rgb: "5B9BD5" },
     });
+  });
+
+  test("theme-colour shapes are preserved as raw drawings until attrs carry ColorValue", () => {
+    const root = parseXmlDocument(
+      drawingWith(
+        buildSpPr({
+          prst: "rect",
+          fill: `<a:solidFill><a:schemeClr val="accent1"/></a:solidFill>`,
+        }),
+      ),
+    );
+    expect(root ? shouldPreserveRawShapeDrawing(root) : false).toBe(true);
+    expect(root ? parseShapeFromDrawing(root) : null).toBeNull();
   });
 
   test("recognises a:noFill as type=none", () => {
