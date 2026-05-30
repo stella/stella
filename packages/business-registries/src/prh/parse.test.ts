@@ -105,6 +105,29 @@ describe("parseAddress", () => {
     });
     expect(address.street).toBe("c/o Tilitoimisto Beta, PL 1000");
   });
+
+  test("does not double-prefix when PRH already includes c/o", () => {
+    // PRH inconsistently ships `co` — the captured Supercell fixture
+    // arrives with `"co": "c/o Supercell Oy"`. Re-prefixing would
+    // render `c/o c/o Supercell Oy, …`; the parser must detect the
+    // existing prefix in any case.
+    expect(
+      parseAddress({
+        ...baseAddress,
+        co: "c/o Supercell Oy",
+        street: "Jätkäsaarenlaituri",
+        buildingNumber: "1",
+      }).street,
+    ).toBe("c/o Supercell Oy, Jätkäsaarenlaituri 1");
+    expect(
+      parseAddress({
+        ...baseAddress,
+        co: "C/O Acme Oy",
+        street: "Mannerheimintie",
+        buildingNumber: "1",
+      }).street,
+    ).toBe("C/O Acme Oy, Mannerheimintie 1");
+  });
 });
 
 describe("parseCompany / parseSearchEntry — defensive shape handling", () => {

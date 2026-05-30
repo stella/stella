@@ -78,12 +78,25 @@ const pickCity = (raw: PrhRawAddress): string | null => {
 
 const isAddressActive = (raw: PrhRawAddress): boolean => !raw.endDate;
 
+// PRH inconsistently ships the `co` field — sometimes a bare
+// recipient ("Acme Oy"), sometimes already prefixed ("c/o Acme Oy",
+// "C/O Acme Oy", "C/o Acme Oy"). Detect any case-insensitive `c/o`
+// at the start so the formatter renders one prefix, not two.
+const CO_PREFIX_PATTERN = /^c\/o\s+/iu;
+
+const formatCoPrefix = (co: string | undefined): string | null => {
+  const trimmed = co?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return CO_PREFIX_PATTERN.test(trimmed) ? trimmed : `c/o ${trimmed}`;
+};
+
 const formatStreetLine = (raw: PrhRawAddress): string | null => {
   // PRH splits address atoms: street + buildingNumber + entrance +
   // apartmentNumber. Most consumers want the human "Mannerheimintie
   // 1 A 5" rendering, not the atoms.
-  const co = raw.co?.trim();
-  const coPrefix = co ? `c/o ${co}` : null;
+  const coPrefix = formatCoPrefix(raw.co);
   if (raw.postOfficeBox) {
     return [coPrefix, `PL ${raw.postOfficeBox}`].filter(Boolean).join(", ");
   }
