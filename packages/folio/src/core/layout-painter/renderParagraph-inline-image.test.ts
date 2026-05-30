@@ -108,14 +108,20 @@ describe("renderLine inline image handling", () => {
   });
 
   // eigenpal #424 (image-crop subset): an inline image with crop fractions
-  // must paint a CSS clip-path inset so the visible region matches Word's
-  // crop. Without this the image rendered at full bitmap regardless of crop.
-  test("applies clip-path inset for an inline image with crop fractions", () => {
+  // must render the cropped slice scaled to the visible extent (wp:extent),
+  // not just clipped. A naive `clip-path: inset(...)` leaves the bitmap at
+  // extent size, so the wrong region shows surrounded by blank bands. The
+  // painter wraps the `<img>` in an overflow-hidden inline-block sized to
+  // the visible extent and upscales the inner `<img>` by 1/(1-l-r) × 1/(1-t-b).
+  // Regression: gemini-code-assist + chatgpt-codex review on PR #510.
+  test("wraps a cropped inline image and scales the inner <img>", () => {
     const imageRun: ImageRun = {
       kind: "image",
       src: "data:image/png;base64,",
       width: 100,
       height: 100,
+      // Remaining fractions: width 1 - 0.15 - 0.2 = 0.65 → fw ≈ 1.5384615
+      // height 1 - 0.1 - 0.05 = 0.85 → fh ≈ 1.1764706
       cropTop: 0.1,
       cropRight: 0.2,
       cropBottom: 0.05,
@@ -142,12 +148,84 @@ describe("renderLine inline image handling", () => {
     };
 
     const lineEl = renderLine(block, line, undefined, fakeDocument);
-    const imageEl = lineEl.children[0] as HTMLElement | undefined;
+    const wrapperEl = lineEl.children[0] as FakeElement | undefined;
 
-    expect(imageEl?.style.clipPath).toBe("inset(10% 20% 5% 15%)");
+    // Wrapper: sized to visible extent, overflow-hidden, inline-block so it
+    // flows with text and clips the upscaled inner bitmap.
+    expect(wrapperEl?.tagName).toBe("span");
+    expect(wrapperEl?.style.display).toBe("inline-block");
+    expect(wrapperEl?.style.overflow).toBe("hidden");
+    expect(wrapperEl?.style.width).toBe("100px");
+    expect(wrapperEl?.style.height).toBe("100px");
+
+    const imgEl = wrapperEl?.children[0] as FakeElement | undefined;
+    expect(imgEl?.tagName).toBe("img");
+    // The inner <img> is enlarged so the cropped region exactly covers the
+    // wrapper, with negative margins shifting the bitmap so the cropped
+    // top-left lands at the wrapper's origin. `object-fit: fill` keeps the
+    // bitmap stretched (no contain letterboxing) inside the enlarged box.
+    // FP precision: the painter computes 1/(1-l-r) where l+r is FP-noisy, so
+    // assert with a numeric tolerance on the parsed percent rather than the
+    // exact decimal expansion.
+    const widthPct = Number.parseFloat(imgEl?.style.width ?? "");
+    const heightPct = Number.parseFloat(imgEl?.style.height ?? "");
+    const marginLeftPct = Number.parseFloat(imgEl?.style.marginLeft ?? "");
+    const marginTopPct = Number.parseFloat(imgEl?.style.marginTop ?? "");
+    expect(widthPct).toBeCloseTo((1 / 0.65) * 100, 6);
+    expect(heightPct).toBeCloseTo((1 / 0.85) * 100, 6);
+    expect(marginLeftPct).toBeCloseTo((-0.15 / 0.65) * 100, 6);
+    expect(marginTopPct).toBeCloseTo((-0.1 / 0.85) * 100, 6);
+    expect(imgEl?.style.objectFit).toBe("fill");
+    // The legacy clip-path approach must not be used.
+    expect(imgEl?.style.clipPath).toBeFalsy();
+    expect(wrapperEl?.style.clipPath).toBeFalsy();
   });
 
-  test("does not apply clip-path when no crop is set", () => {
+  // Pathological crops (e.g. cropLeft + cropRight ≥ 1) would otherwise divide
+  // by zero or render a negatively-sized image. The painter falls back to no
+  // crop transform so the bitmap is at least visible.
+  test("falls back to unscaled image when crop leaves no visible area", () => {
+    const imageRun: ImageRun = {
+      kind: "image",
+      src: "data:image/png;base64,",
+      width: 80,
+      height: 80,
+      cropLeft: 0.6,
+      cropRight: 0.6,
+      pmStart: 1,
+      pmEnd: 2,
+    };
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p-degenerate",
+      runs: [imageRun],
+      pmStart: 0,
+      pmEnd: 3,
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 1,
+      width: 80,
+      ascent: 32,
+      descent: 3,
+      lineHeight: 35,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const wrapperEl = lineEl.children[0] as FakeElement | undefined;
+    const imgEl = wrapperEl?.children[0] as FakeElement | undefined;
+
+    // Wrapper still exists (hasImageVisualAttrs was truthy), but the inner
+    // <img> keeps its 100%/100% sizing instead of an upscale-by-infinity.
+    expect(imgEl?.style.width).toBe("100%");
+    expect(imgEl?.style.height).toBe("100%");
+    expect(imgEl?.style.marginLeft).toBeFalsy();
+    expect(imgEl?.style.marginTop).toBeFalsy();
+  });
+
+  test("does not wrap or transform when no crop is set", () => {
     const imageRun: ImageRun = {
       kind: "image",
       src: "data:image/png;base64,",
@@ -175,8 +253,11 @@ describe("renderLine inline image handling", () => {
     };
 
     const lineEl = renderLine(block, line, undefined, fakeDocument);
-    const imageEl = lineEl.children[0] as HTMLElement | undefined;
+    const imageEl = lineEl.children[0] as FakeElement | undefined;
 
+    // Without crop the painter inserts the raw `<img>` directly into the
+    // line, with no wrapper and no clip-path / transform leakage.
+    expect(imageEl?.tagName).toBe("img");
     expect(imageEl?.style.clipPath).toBeFalsy();
   });
 

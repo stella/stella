@@ -50,8 +50,24 @@ export function hasImageVisualAttrs(v: ImageVisualAttrs): boolean {
 }
 
 /**
- * Apply crop to an `<img>` element. Caller should gate with
- * `hasImageVisualAttrs(v)` to avoid the function call for plain images.
+ * Apply Word's `<a:srcRect>` crop to an `<img>` whose parent already has
+ * `overflow: hidden` and is sized to the *visible* (cropped) dimensions
+ * (this matches `wp:extent` semantics: in Word the extent is the cropped
+ * frame, with `<a:stretch><a:fillRect/>` stretching the cropped source to
+ * fill it).
+ *
+ * Implementation: scale the `<img>` up so the visible region fills the
+ * parent, then shift it by the negative crop offsets so only that region
+ * remains in view. A naive `clip-path: inset(...)` is wrong here — it would
+ * leave the bitmap rendered at full extent size (so the wrong region shows)
+ * and only mask the rest, producing a squished image with blank bands.
+ *
+ * `fw = 1/(1-left-right)` and `fh = 1/(1-top-bottom)` are the inverse
+ * remaining-fractions; multiplying by 100% gives the upscaled width/height
+ * so the cropped slice exactly covers the parent.
+ *
+ * Caller should gate with `hasImageVisualAttrs(v)` to avoid the function
+ * call for plain images.
  */
 export function applyImageVisualAttrs(
   img: HTMLImageElement,
@@ -61,9 +77,54 @@ export function applyImageVisualAttrs(
   const right = v.cropRight ?? 0;
   const bottom = v.cropBottom ?? 0;
   const left = v.cropLeft ?? 0;
-  if (top || right || bottom || left) {
-    img.style.clipPath = `inset(${top * 100}% ${right * 100}% ${bottom * 100}% ${left * 100}%)`;
+  if (!(top || right || bottom || left)) {
+    return;
   }
+  const remainingW = 1 - left - right;
+  const remainingH = 1 - top - bottom;
+  // Guard against pathological crops that leave nothing visible; fall back
+  // to the original sizing rather than dividing by zero.
+  if (remainingW <= 0 || remainingH <= 0) {
+    return;
+  }
+  const fw = 1 / remainingW;
+  const fh = 1 / remainingH;
+  img.style.width = `${fw * 100}%`;
+  img.style.height = `${fh * 100}%`;
+  img.style.marginLeft = `${-left * fw * 100}%`;
+  img.style.marginTop = `${-top * fh * 100}%`;
+  // Object-fit on the upscaled `<img>` would re-letterbox inside the
+  // enlarged box; force fill so the bitmap stretches to fw×fh as Word does.
+  img.style.objectFit = "fill";
+}
+
+/**
+ * Create an inline-block `<span>` wrapper sized to the visible (cropped)
+ * dimensions with `overflow: hidden`, then size+scale+shift the `<img>`
+ * inside it so only the cropped region of the bitmap is visible. See
+ * `applyImageVisualAttrs` for the geometry rationale.
+ *
+ * Use this for inline runs and block images where the painter does not
+ * already provide an overflow-clipped container.
+ */
+export function wrapImageWithCrop(
+  img: HTMLImageElement,
+  v: ImageVisualAttrs,
+  doc: Document,
+  outerStyle: { display: "inline-block" | "block"; widthPx: number; heightPx: number },
+): HTMLElement {
+  const wrapper = doc.createElement("span");
+  wrapper.style.display = outerStyle.display;
+  wrapper.style.overflow = "hidden";
+  wrapper.style.width = `${outerStyle.widthPx}px`;
+  wrapper.style.height = `${outerStyle.heightPx}px`;
+  // The inner `<img>` is scaled relative to the wrapper, so swap its pixel
+  // sizing for percentages and let applyImageVisualAttrs do the math.
+  img.style.width = "100%";
+  img.style.height = "100%";
+  applyImageVisualAttrs(img, v);
+  wrapper.append(img);
+  return wrapper;
 }
 
 /**
@@ -142,7 +203,8 @@ export function renderImageFragment(
     imgEl.style.transform = block.transform;
   }
 
-  // eigenpal #424: apply wp:srcRect crop as CSS clip-path on floating images.
+  // eigenpal #424: scale/shift `<img>` so the cropped slice fills the
+  // overflow-hidden container (already sized to the visible extent above).
   if (hasImageVisualAttrs(block)) {
     applyImageVisualAttrs(imgEl, block);
   }

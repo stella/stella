@@ -35,7 +35,7 @@ import {
   rotatedBoundingBox,
 } from "../utils/rotationBoundingBox";
 import { getAutomaticTextColorForBackground } from "./documentColors";
-import { applyImageVisualAttrs, hasImageVisualAttrs } from "./renderImage";
+import { hasImageVisualAttrs, wrapImageWithCrop } from "./renderImage";
 import { isFloatingImageRun } from "./renderUtils";
 import type { RenderContext } from "./renderUtils";
 
@@ -634,8 +634,29 @@ function renderInlineImageRun(run: ImageRun, doc: Document): HTMLElement {
     wrapper.append(img);
     return wrapper;
   }
+
+  // eigenpal #424: a cropped inline image needs an overflow-clipped wrapper
+  // sized to the visible (extent) box, with the inner `<img>` scaled up so
+  // the cropped region fills it. See applyImageVisualAttrs for the geometry.
   if (hasImageVisualAttrs(run)) {
-    applyImageVisualAttrs(img, run);
+    const wrapper = wrapImageWithCrop(img, run, doc, {
+      display: "inline-block",
+      widthPx: run.width,
+      heightPx: run.height,
+    });
+    wrapper.className = `${PARAGRAPH_CLASS_NAMES.run} ${PARAGRAPH_CLASS_NAMES.image}`;
+    wrapper.style.verticalAlign = "middle";
+    // wp:inline distT/distB: the measurer folds these into maxImageHeightPx;
+    // applying them as margins on the wrapper keeps the margin-box footprint
+    // consistent with the line height the measurer reserved.
+    if (run.distTop) {
+      wrapper.style.marginTop = `${run.distTop}px`;
+    }
+    if (run.distBottom) {
+      wrapper.style.marginBottom = `${run.distBottom}px`;
+    }
+    applyPmPositions(wrapper, run.pmStart, run.pmEnd);
+    return wrapper;
   }
 
   // Inline images should flow with text
@@ -672,11 +693,6 @@ function renderBlockImage(run: ImageRun, doc: Document): HTMLElement {
   img.src = run.src;
   img.width = run.width;
   img.height = run.height;
-  // Global CSS reset (Tailwind preflight) sets img { display: block },
-  // which makes text-align: center on the container ineffective.
-  // Use margin: auto on the img itself to center it.
-  img.style.marginLeft = "auto";
-  img.style.marginRight = "auto";
   if (run.alt) {
     img.alt = run.alt;
   }
@@ -717,9 +733,28 @@ function renderBlockImage(run: ImageRun, doc: Document): HTMLElement {
     img.style.marginRight = "0";
     img.style.marginTop = "0";
   }
+
+  // eigenpal #424: cropped block images need an overflow-clipped wrapper
+  // sized to the visible (extent) box; see applyImageVisualAttrs.
   if (hasImageVisualAttrs(run)) {
-    applyImageVisualAttrs(img, run);
+    const wrapper = wrapImageWithCrop(img, run, doc, {
+      display: "inline-block",
+      widthPx: run.width,
+      heightPx: run.height,
+    });
+    // Tailwind preflight sets img { display: block }, which would defeat
+    // text-align centring on the container. The inline-block wrapper
+    // restores centring via the container's text-align: center.
+    applyPmPositions(container, run.pmStart, run.pmEnd);
+    container.append(wrapper);
+    return container;
   }
+
+  // Global CSS reset (Tailwind preflight) sets img { display: block },
+  // which makes text-align: center on the container ineffective.
+  // Use margin: auto on the img itself to center it.
+  img.style.marginLeft = "auto";
+  img.style.marginRight = "auto";
 
   applyPmPositions(container, run.pmStart, run.pmEnd);
   container.append(img);
