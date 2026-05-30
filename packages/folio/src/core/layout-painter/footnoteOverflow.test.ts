@@ -13,7 +13,11 @@ import { describe, expect, test } from "bun:test";
 
 import { FOOTNOTE_SEPARATOR_HEIGHT } from "../layout-bridge/footnoteLayout";
 import { FOOTNOTE_SEPARATOR_HEIGHT as PAGINATOR_FOOTNOTE_SEPARATOR_HEIGHT } from "../layout-engine/paginator";
-import type { Page, ParagraphBlock, ParagraphMeasure } from "../layout-engine/types";
+import type {
+  Page,
+  ParagraphBlock,
+  ParagraphMeasure,
+} from "../layout-engine/types";
 import {
   calculateFootnoteAreaRenderHeight,
   renderPage,
@@ -131,7 +135,9 @@ const PAINTER_FOOTNOTE_FALLBACK_LINE_HEIGHT = 13;
 
 describe("calculateFootnoteAreaRenderHeight", () => {
   test("returns separator height when no footnote has measured content", () => {
-    expect(calculateFootnoteAreaRenderHeight([])).toBe(FOOTNOTE_SEPARATOR_HEIGHT);
+    expect(calculateFootnoteAreaRenderHeight([])).toBe(
+      FOOTNOTE_SEPARATOR_HEIGHT,
+    );
   });
 
   test("sums each footnote content height plus per-entry margin and a single separator", () => {
