@@ -797,6 +797,12 @@ function buildImageRun(
   if (attrs.transform !== undefined) {
     run.transform = attrs.transform;
   }
+  // eigenpal #424 (opacity render pipeline): copy opacity verbatim. The
+  // painter gates the actual CSS write with `!= null` so PM's null defaults
+  // don't paint plain images at opacity 0.
+  if (attrs.opacity !== undefined) {
+    run.opacity = attrs.opacity;
+  }
   if (attrs.wrapType !== undefined) {
     run.wrapType = attrs.wrapType;
   }
@@ -1764,6 +1770,10 @@ function convertImage(
   }
   if (attrs.transform) {
     imgBlock.transform = attrs.transform;
+  }
+  // eigenpal #424 (opacity render pipeline)
+  if (attrs.opacity !== undefined) {
+    imgBlock.opacity = attrs.opacity;
   }
   if (shouldAnchor) {
     const anchor: NonNullable<ImageBlock["anchor"]> = {

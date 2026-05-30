@@ -47,7 +47,11 @@ import { borderToStyle } from "../utils/formatToStyle";
 import { eighthsToPixels, pointsToPixels } from "../utils/units";
 import type { BlockLookup } from "./index";
 import { renderFragment } from "./renderFragment";
-import { renderImageFragment } from "./renderImage";
+import {
+  applyImageVisualAttrs,
+  hasImageVisualAttrs,
+  renderImageFragment,
+} from "./renderImage";
 import { renderParagraphFragment } from "./renderParagraph";
 import { renderTableFragment } from "./renderTable";
 import { renderTextBoxFragment } from "./renderTextBox";
@@ -68,6 +72,11 @@ type PageFloatingImage = {
   height: number;
   alt?: string;
   transform?: string;
+  /**
+   * Opacity in [0, 1] from `<a:alphaModFix amt>`. Undefined / 1 means fully
+   * opaque. eigenpal #424 (opacity render pipeline).
+   */
+  opacity?: number;
   /** Which side: 'left' for left margin, 'right' for right margin */
   side: "left" | "right";
   /** X position relative to content area (0 = left edge of content) */
@@ -904,6 +913,8 @@ function extractFloatingImagesFromParagraph(
       ...(imgRun.transform !== undefined
         ? { transform: imgRun.transform }
         : {}),
+      // eigenpal #424 (opacity render pipeline)
+      ...(imgRun.opacity !== undefined ? { opacity: imgRun.opacity } : {}),
       side,
       x,
       y,
@@ -1036,6 +1047,10 @@ function renderFloatingImagesLayer(
     if (floatImg.transform) {
       img.style.transform = floatImg.transform;
     }
+    // eigenpal #424 (opacity render pipeline)
+    if (hasImageVisualAttrs(floatImg)) {
+      applyImageVisualAttrs(img, floatImg);
+    }
 
     container.append(img);
     layer.append(container);
@@ -1066,6 +1081,11 @@ function renderHeaderFooterContent(
     width: number;
     height: number;
     alt?: string;
+    /**
+     * Opacity in [0, 1] from `<a:alphaModFix amt>`. Undefined / 1 means
+     * fully opaque. eigenpal #424 (opacity render pipeline).
+     */
+    opacity?: number;
     /** Run-level PM position so the pointer pipeline can NodeSelect HF images. */
     pmStart?: number;
     pmEnd?: number;
@@ -1124,6 +1144,8 @@ function renderHeaderFooterContent(
             width: run.width,
             height: run.height,
             ...(run.alt !== undefined ? { alt: run.alt } : {}),
+            // eigenpal #424 (opacity render pipeline)
+            ...(run.opacity !== undefined ? { opacity: run.opacity } : {}),
             ...(run.pmStart !== undefined ? { pmStart: run.pmStart } : {}),
             ...(run.pmEnd !== undefined ? { pmEnd: run.pmEnd } : {}),
             paragraphY: paragraphStartY,
@@ -1313,6 +1335,10 @@ function renderHeaderFooterContent(
     // behindDoc images render behind text (full-page letterhead backgrounds)
     if (floatImg.behindDoc) {
       img.style.zIndex = "-1";
+    }
+    // eigenpal #424 (opacity render pipeline)
+    if (hasImageVisualAttrs(floatImg)) {
+      applyImageVisualAttrs(img, floatImg);
     }
 
     applyHeaderFooterFloatHorizontalPosition(img, floatImg, layout);

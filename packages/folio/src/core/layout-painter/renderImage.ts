@@ -22,6 +22,50 @@ export const IMAGE_CLASS_NAMES = {
   imageAnchored: "layout-image-anchored",
 };
 
+// eigenpal #424 (opacity render pipeline): shared visual-attrs helper used by
+// the inline (`renderParagraph`), block, and floating (`renderPage`,
+// `renderImageFragment`) image render sites. Folio currently only honors
+// opacity; crop / effectExtent are future-proofing slots that mirror
+// upstream's `ImageVisualAttrs` shape so adding them later is structural,
+// not a new abstraction.
+
+/**
+ * Structural shape required to apply Word's per-image visual attributes:
+ * currently `a:alphaModFix` opacity. Crop fractions are tracked here for
+ * symmetry with eigenpal docx-editor but are not yet emitted by folio.
+ */
+export type ImageVisualAttrs = {
+  opacity?: number;
+};
+
+/**
+ * True when any visual attribute is set. Cheap call-site guard so the no-op
+ * common case skips the function call and template-literal allocations.
+ *
+ * IMPORTANT: ProseMirror schema attrs default to `null`, not `undefined`,
+ * and that `null` survives the `as number | undefined` cast in the layout
+ * bridge. Use `!= null` rather than `!== undefined` so a default-null
+ * opacity isn't read as `0` (`null < 1` is `true`, `Math.max(0, null)` is
+ * `0`) — that bug hid every plain image behind `opacity: 0`.
+ */
+export function hasImageVisualAttrs(v: ImageVisualAttrs): boolean {
+  return v.opacity != null && v.opacity < 1;
+}
+
+/**
+ * Apply visual attributes (opacity) to an `<img>` element. Caller should
+ * gate with `hasImageVisualAttrs(v)` to avoid the function call for plain
+ * images.
+ */
+export function applyImageVisualAttrs(
+  img: HTMLImageElement,
+  v: ImageVisualAttrs,
+): void {
+  if (v.opacity != null && v.opacity < 1) {
+    img.style.opacity = String(Math.max(0, v.opacity));
+  }
+}
+
 /**
  * Structural shape required to apply Word's per-image visual attributes
  * (currently `wp:srcRect` crop fractions). `ImageRun` and `ImageBlock` both
@@ -208,7 +252,8 @@ export function renderImageFragment(
   }
 
   // eigenpal #424: scale/shift `<img>` so the cropped slice fills the
-  // overflow-hidden container (already sized to the visible extent above).
+  // overflow-hidden container (already sized to the visible extent above),
+  // plus emit `opacity` when set via `<a:alphaModFix>` (PR #517 follow-up).
   if (hasImageVisualAttrs(block)) {
     applyImageVisualAttrs(imgEl, block);
   }
