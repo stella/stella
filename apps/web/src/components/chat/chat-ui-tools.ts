@@ -45,14 +45,13 @@ export type ActiveDocxEditApprovalPart = Extract<
 export type AskUserInput = SharedChatUITools["ask-user"]["input"];
 type PublicOfficialToolName = Extract<
   BuiltInApprovalToolName,
-  | "ares_lookup_company"
-  | "ares_search_companies"
   | "boe_find_related_laws"
   | "boe_get_law"
   | "boe_get_law_block"
   | "boe_get_law_structure"
   | "boe_search_legislation"
   | "borme_get_summary"
+  | "business_registry_lookup"
   | "infosoud_lookup_case"
 >;
 const RUNNING_TOOL_STATES = {
@@ -66,8 +65,6 @@ const USER_INPUT_TOOL_TYPES = {
 
 const CHAT_TOOL_TITLE_KEYS = {
   "apply-active-docx-edits": "chat.tool.apply-active-docx-edits",
-  ares_lookup_company: "chat.tool.ares_lookup_company",
-  ares_search_companies: "chat.tool.ares_search_companies",
   "ask-user": "chat.tool.ask-user",
   boe_find_related_laws: "chat.tool.boe_find_related_laws",
   boe_get_law: "chat.tool.boe_get_law",
@@ -75,6 +72,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   boe_get_law_structure: "chat.tool.boe_get_law_structure",
   boe_search_legislation: "chat.tool.boe_search_legislation",
   borme_get_summary: "chat.tool.borme_get_summary",
+  business_registry_lookup: "chat.tool.business_registry_lookup",
   "create-document": "chat.tool.create-document",
   "describe-stella-api": "chat.tool.describe-stella-api",
   fetch_url: "chat.tool.fetch_url",
@@ -86,7 +84,13 @@ const CHAT_TOOL_TITLE_KEYS = {
   web_search: "chat.tool.web_search",
 } as const satisfies Record<keyof ChatUITools, TranslationKey>;
 
+// Tools that used to be registered but were replaced by the unified
+// `business_registry_lookup` (or removed for other reasons). Keep
+// title keys around so historical chat history still renders with a
+// recognisable label rather than the generic "unknown" fallback.
 const LEGACY_CHAT_TOOL_TITLE_KEYS = {
+  ares_lookup_company: "chat.tool.ares_lookup_company",
+  ares_search_companies: "chat.tool.ares_search_companies",
   "describe-stella-function": "chat.tool.describe-stella-function",
   "execute-typescript": "chat.tool.execute-typescript",
   "read-contact": "chat.tool.read-contact",
@@ -103,14 +107,13 @@ const UNKNOWN_CHAT_TOOL_TITLE_KEY =
   "chat.tool.unknown" satisfies TranslationKey;
 
 const PUBLIC_OFFICIAL_CHAT_TOOL_NAMES = {
-  ares_lookup_company: true,
-  ares_search_companies: true,
   boe_find_related_laws: true,
   boe_get_law: true,
   boe_get_law_block: true,
   boe_get_law_structure: true,
   boe_search_legislation: true,
   borme_get_summary: true,
+  business_registry_lookup: true,
   infosoud_lookup_case: true,
 } as const satisfies Record<PublicOfficialToolName, true>;
 

@@ -513,6 +513,7 @@ type Messages = {
       "boe_get_law_structure": "BOE law structure";
       "boe_search_legislation": "BOE legislation search";
       "borme_get_summary": "BORME daily summary";
+      "business_registry_lookup": "Searching business registry";
       "create-document": "Preparing document";
       "describe-stella-api": "Preparing data lookup";
       "describe-stella-function": "Preparing data lookup";

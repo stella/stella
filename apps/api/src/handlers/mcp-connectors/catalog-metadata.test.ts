@@ -86,12 +86,17 @@ describe("mcpConnectorCatalogMetadata", () => {
     );
   });
 
-  it("does not expose Brreg as a chat-toggleable native tool yet", () => {
+  it("exposes Brreg as a chat-toggleable native tool", () => {
     const tools = getNativeToolCatalog({
       practiceJurisdictions: [{ countryCode: "NO", isPrimary: true }],
     });
 
-    expect(tools.map((tool) => tool.slug)).not.toContain("brreg");
+    expect(tools).toContainEqual(
+      expect.objectContaining({
+        slug: "brreg",
+        isRecommended: true,
+      }),
+    );
   });
 
   it("shows only native tools that the MCP settings page can toggle", () => {
@@ -100,8 +105,8 @@ describe("mcpConnectorCatalogMetadata", () => {
     }).map((tool) => tool.slug);
 
     expect(toolSlugs).toContain("web-search");
+    expect(toolSlugs).toContain("brreg");
     expect(toolSlugs).not.toContain("anonymize");
-    expect(toolSlugs).not.toContain("brreg");
     expect(toolSlugs).not.toContain("create-docx");
   });
 });

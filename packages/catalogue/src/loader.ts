@@ -52,6 +52,7 @@ export type LoadedEntryByKind<K extends CatalogueKind> = Extract<
 export const TOGGLEABLE_NATIVE_TOOL_BACKEND_SLUGS = [
   "ares",
   "boe",
+  "brreg",
   "infosoud",
   "web-search",
 ] as const;

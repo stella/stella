@@ -214,6 +214,10 @@ const getMcpToolInfo = (toolName: string): McpToolInfo | null => {
 };
 
 const NATIVE_TOOL_BRANDS: Record<string, { slug: string; brand: string }> = {
+  // Historical aliases for chat history that predates the unified
+  // `business_registry_lookup` tool. New turns route through the
+  // unified tool; the per-jurisdiction brand is resolved at render
+  // time from the call input rather than from the tool name.
   ares_lookup_company: { slug: "ares", brand: "ARES" },
   ares_search_companies: { slug: "ares", brand: "ARES" },
 };
