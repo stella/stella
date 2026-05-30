@@ -5,7 +5,11 @@ monorepo, with a derived TypeScript literal-union type so country codes can
 be branded at compile time rather than passed around as bare strings.
 
 ```ts
-import { COUNTRY_CODES, type CountryCode, isCountryCode } from "@stll/country-codes";
+import {
+  COUNTRY_CODES,
+  type CountryCode,
+  isCountryCode,
+} from "@stll/country-codes";
 
 // `CountryCode` is a literal union of every code in `COUNTRY_CODES`:
 const cz: CountryCode = "CZ"; // ok
