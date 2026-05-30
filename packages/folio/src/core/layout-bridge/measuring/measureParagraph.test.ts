@@ -531,6 +531,50 @@ describe("inline image paragraph measurement", () => {
   });
 });
 
+describe("math paragraph measurement", () => {
+  test("stacked inline math reserves extra line height", () => {
+    withFakeTextMeasure(() => {
+      const inlineMeasure = measureParagraph(
+        {
+          kind: "paragraph",
+          id: "math-inline",
+          runs: [
+            {
+              kind: "math",
+              display: "inline",
+              ommlXml: "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>",
+              plainText: "x",
+              fontSize: 11,
+            },
+          ],
+        },
+        600,
+      );
+      const stackedMeasure = measureParagraph(
+        {
+          kind: "paragraph",
+          id: "math-stacked",
+          runs: [
+            {
+              kind: "math",
+              display: "inline",
+              ommlXml:
+                "<m:oMath><m:f><m:num><m:r><m:t>a</m:t></m:r></m:num><m:den><m:r><m:t>b</m:t></m:r></m:den></m:f></m:oMath>",
+              plainText: "a/b",
+              fontSize: 11,
+            },
+          ],
+        },
+        600,
+      );
+
+      const inlineLineHeight = inlineMeasure.lines.at(0)?.lineHeight ?? 0;
+      const stackedLineHeight = stackedMeasure.lines.at(0)?.lineHeight ?? 0;
+      expect(stackedLineHeight).toBeGreaterThan(inlineLineHeight + 10);
+    });
+  });
+});
+
 describe("block image rotation measurement", () => {
   // The painter wraps a rotated block image in an axis-aligned bbox
   // (`renderBlockImage`, eigenpal #424). The measurer has to reserve the

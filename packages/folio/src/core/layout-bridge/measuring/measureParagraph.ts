@@ -110,6 +110,8 @@ type LineState = {
   maxFontMetrics: FontMetrics | null;
   /** Maximum inline image height in pixels (already in px, not points) */
   maxImageHeightPx: number;
+  /** Maximum inline math height in pixels (already in px, not points) */
+  maxMathHeightPx: number;
   availableWidth: number;
   /** Left offset from floating images (pixels from content left edge) */
   leftOffset: number;
@@ -313,6 +315,51 @@ function isMathRun(run: Run): run is MathRun {
   return run.kind === "math";
 }
 
+function isStackedMathLocalName(localName: string): boolean {
+  switch (localName) {
+    case "bar":
+    case "d":
+    case "eqArr":
+    case "f":
+    case "groupChr":
+    case "limLow":
+    case "limUpp":
+    case "m":
+    case "nary":
+    case "rad":
+    case "sPre":
+    case "sSubSup":
+      return true;
+    default:
+      return false;
+  }
+}
+
+function hasStackedMathLayout(run: MathRun): boolean {
+  if (run.display === "block") {
+    return true;
+  }
+  const tagPattern = /<([A-Za-z_][\w.-]*(?::[A-Za-z_][\w.-]*)?)(?:\s|\/|>)/gu;
+  for (const match of run.ommlXml.matchAll(tagPattern)) {
+    const tagName = match[1];
+    if (!tagName) {
+      continue;
+    }
+    const colonIndex = tagName.indexOf(":");
+    const localName =
+      colonIndex === -1 ? tagName : tagName.slice(colonIndex + 1);
+    if (isStackedMathLocalName(localName)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function estimateMathFootprintPx(run: MathRun): number {
+  const fontSizePx = ptToPx(run.fontSize ?? DEFAULT_FONT_SIZE);
+  return fontSizePx * (hasStackedMathLayout(run) ? 2.4 : 1.25);
+}
+
 /**
  * Check if text run is empty (only whitespace or no text)
  */
@@ -368,7 +415,7 @@ function measureDecimalPrefixWidthAfterTab(
   tabIndex: number,
 ): number {
   let text = "";
-  let firstRun: TextRun | FieldRun | undefined;
+  let firstRun: TextRun | FieldRun | MathRun | undefined;
   for (let i = tabIndex + 1; i < runs.length; i++) {
     const next = runs[i];
     if (!next || isTabRun(next) || isLineBreakRun(next)) {
@@ -379,6 +426,9 @@ function measureDecimalPrefixWidthAfterTab(
       firstRun ??= next;
     } else if (isFieldRun(next)) {
       text += next.fallback || "1";
+      firstRun ??= next;
+    } else if (isMathRun(next)) {
+      text += next.plainText || "[equation]";
       firstRun ??= next;
     }
   }
@@ -689,6 +739,7 @@ export function measureParagraph(
     maxFontSize: DEFAULT_FONT_SIZE,
     maxFontMetrics: null,
     maxImageHeightPx: 0,
+    maxMathHeightPx: 0,
     availableWidth: firstLineWidth,
     leftOffset: firstLineFloatingMargins.leftMargin,
     rightOffset: firstLineFloatingMargins.rightMargin,
@@ -707,33 +758,36 @@ export function measureParagraph(
       currentLine.maxFontMetrics,
     );
 
-    // If an inline image is taller than the text-based line height, the line
-    // grows to fit the image. Word seats an inline image as a tall glyph on
-    // the text baseline.
+    // If an inline image or stacked equation is taller than the text-based
+    // line height, the line grows to fit it. Word seats these inline objects
+    // as tall glyphs on the text baseline.
     const finalTypography = { ...typography };
-    if (currentLine.maxImageHeightPx > finalTypography.lineHeight) {
-      const imageHeight = currentLine.maxImageHeightPx;
+    const inlineObjectHeight = Math.max(
+      currentLine.maxImageHeightPx,
+      currentLine.maxMathHeightPx,
+    );
+    if (inlineObjectHeight > finalTypography.lineHeight) {
+      const objectHeight = inlineObjectHeight;
       const buffer = finalTypography.descent;
-      // `fromRun === toRun` with a tall image present means the line holds
-      // exactly that one image (no flowing text/tabs). Must stay paired with
-      // the painter's image-only `runsForLine.length === 1 && isImageRun(...)`
+      // `fromRun === toRun` with a tall inline object present means the line
+      // holds exactly that one object (no flowing text/tabs). Must stay paired
+      // with the painter's image-only `runsForLine.length === 1 && isImageRun(...)`
       // test in renderLine — the two pick paired line-height + alignment
       // strategies and disagreeing reintroduces the floating-label bug.
       if (currentLine.fromRun === currentLine.toRun) {
-        // Image alone on the line: grow to the image height plus the parent
-        // font's descent on BOTH sides so the row has visible breathing room
-        // above and below the image (Word's render gives a few px of cell
-        // padding even with tcMar=0).
-        finalTypography.lineHeight = imageHeight + buffer * 2;
-        finalTypography.ascent = imageHeight + buffer;
+        // Object alone on the line: grow to the object height plus the
+        // parent font's descent on BOTH sides so the row has visible
+        // breathing room above and below it.
+        finalTypography.lineHeight = objectHeight + buffer * 2;
+        finalTypography.ascent = objectHeight + buffer;
       } else {
-        // Image flowing with text/tabs (e.g. a logo + label header line):
-        // the full image height sits above the baseline and only the text
-        // descent is reserved below — no extra leading above the image. The
-        // painter baseline-aligns the row so the image bottom lands on the
-        // text baseline.
-        finalTypography.lineHeight = imageHeight + buffer;
-        finalTypography.ascent = imageHeight;
+        // Object flowing with text/tabs (e.g. a logo + label header line):
+        // the full object height sits above the baseline and only the text
+        // descent is reserved below — no extra leading above it. The painter
+        // baseline-aligns the row so the object bottom lands on the text
+        // baseline.
+        finalTypography.lineHeight = objectHeight + buffer;
+        finalTypography.ascent = objectHeight;
       }
     }
 
@@ -800,6 +854,7 @@ export function measureParagraph(
       maxFontSize: DEFAULT_FONT_SIZE,
       maxFontMetrics: null,
       maxImageHeightPx: 0,
+      maxMathHeightPx: 0,
       availableWidth: adjustedWidth,
       leftOffset: floatingMargins.leftMargin,
       rightOffset: floatingMargins.rightMargin,
@@ -1016,6 +1071,7 @@ export function measureParagraph(
       };
       updateMaxFont(style);
       const mathWidth = measureTextWidth(run.plainText || "[equation]", style);
+      const mathFootprintPx = estimateMathFootprintPx(run);
       if (
         currentLine.width > 0 &&
         currentLine.width + mathWidth >
@@ -1023,6 +1079,9 @@ export function measureParagraph(
       ) {
         startNewLine(runIndex, 0);
         updateMaxFont(style);
+      }
+      if (mathFootprintPx > currentLine.maxMathHeightPx) {
+        currentLine.maxMathHeightPx = mathFootprintPx;
       }
       currentLine.width += mathWidth;
       currentLine.toRun = runIndex;
