@@ -2759,7 +2759,14 @@ function paragraphPageBreakPosition(
       return false;
     }
     if (item.type === "inlineSdt") {
-      return visitRunOrHyperlinkList(item.content);
+      // SDT.content was widened in PR #508 to carry fields/math/nested SDTs;
+      // recurse via visitItem so each child uses its own visibility rule.
+      for (const child of item.content) {
+        if (visitItem(child)) {
+          return true;
+        }
+      }
+      return false;
     }
     if (item.type === "mathEquation") {
       // OMML math is a visible inline node and cannot itself contain w:br.
