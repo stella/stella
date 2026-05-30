@@ -78,7 +78,7 @@
     "@typescript/native-preview-win32-arm64": "7.0.0-dev.20260525.1",
     "@typescript/native-preview-win32-x64": "7.0.0-dev.20260525.1"
   },
-  "packageManager": "bun@1.3.13",
+  "packageManager": "bun@1.3.14",
   "catalog": {
     "@base-ui/react": "1.5.0",
     "@better-auth/oauth-provider": "1.6.11",

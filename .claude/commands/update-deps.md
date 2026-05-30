@@ -7,9 +7,9 @@ validate whether a release looks suspicious before bumping it.
 
 ## Scope
 
-Default to Bun packages and Docker base images. Expand to
-GitHub Actions when the request mentions them or the affected
-files live in `.github/`.
+Default to Bun packages, Cargo crates (Tauri desktop), and
+Docker base images. Expand to GitHub Actions when the request
+mentions them or the affected files live in `.github/`.
 
 Stella already has automated controls:
 
@@ -48,12 +48,20 @@ If the request is vague, default to:
    - root `package.json` `catalog`, `catalogs`, and `resolutions`
    - workspace `package.json` files
    - `bun.lock`
+   - `apps/desktop/src-tauri/Cargo.toml` and `Cargo.lock`
    - `.github/dependabot.yml` for grouping expectations
    - `.github/workflows/*.yml` for GitHub Action pins
    - `apps/api/Dockerfile` for the base image digest
 
 2. **Inventory outdated candidates**:
    - run `bun outdated --recursive` for Bun packages
+   - run `cargo outdated --root-deps-only` in
+     `apps/desktop/src-tauri` for Cargo crates. If `cargo-outdated`
+     is missing, prefer `cargo binstall cargo-outdated` (prebuilt
+     binary, seconds) over `cargo install cargo-outdated` (compiles
+     from source, several minutes). As a fallback, use
+     `cargo update --dry-run` plus targeted `cargo search` /
+     `cargo info` checks
    - inspect open dependency PRs if the request is about
      triage rather than local edits
    - include GitHub Actions only when the request covers them
@@ -131,11 +139,17 @@ If the request is vague, default to:
      updates over per-workspace drift
    - update GitHub Actions by commit SHA, not floating tags
    - keep Docker images pinned by digest
+   - for Cargo, prefer `cargo update -p <crate>` when the
+     existing semver range already covers the new version;
+     edit `Cargo.toml` only when bumping past the range
    - after each batch passes validation, commit that batch
      before moving to the next one
 
 9. **Review the lockfile delta**:
    - use `bun update`, or edit manifests and run `bun install`
+   - for Cargo, run `cargo update` and read the `Cargo.lock`
+     diff the same way (unexpected transitive additions or
+     replacements)
    - read the `bun.lock` diff for unexpected transitive
      additions, dependency replacement, or new script-bearing
      packages
@@ -148,6 +162,9 @@ If the request is vague, default to:
     - then run repo checks relevant to the touched surfaces
     - for Bun package updates, default to `bun run lint`,
       `bun run typecheck`, and the relevant tests
+    - for Cargo updates, run `cargo check` (and `cargo test`
+      when crates touch logic, not just deps) in
+      `apps/desktop/src-tauri`
     - verify generated artifacts or migrations explicitly when
       the upgraded dependency affects them
 
