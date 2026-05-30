@@ -59,6 +59,7 @@ import {
   expectCharacterSpacingMarkAttrs,
   expectCommentMarkAttrs,
   expectEmphasisMarkAttrs,
+  expectTextEffectMarkAttrs,
   expectFieldAttrs,
   expectFontFamilyMarkAttrs,
   expectFontSizeMarkAttrs,
@@ -1604,6 +1605,14 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
         formatting.outline = true;
         break;
 
+      case "rtl":
+        formatting.rtl = true;
+        break;
+
+      case "textEffect":
+        formatting.effect = expectTextEffectMarkAttrs(mark).effect;
+        break;
+
       case "runFormattingOverride":
         applyRunFormattingOverrideAttrs(
           formatting,
@@ -1659,6 +1668,9 @@ function applyRunFormattingOverrideAttrs(
   }
   if (attrs.outline === false) {
     formatting.outline = false;
+  }
+  if (attrs.rtl === false) {
+    formatting.rtl = false;
   }
 }
 

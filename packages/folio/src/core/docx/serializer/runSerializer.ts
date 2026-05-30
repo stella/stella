@@ -404,8 +404,12 @@ export function serializeTextFormatting(
   }
 
   // RTL and CS
-  if (formatting.rtl) {
+  if (formatting.rtl === true) {
     parts.push("<w:rtl/>");
+  } else if (formatting.rtl === false) {
+    // Preserve explicit overrides like <w:rtl w:val="0"/> that disable
+    // inherited paragraph/style RTL.
+    parts.push('<w:rtl w:val="0"/>');
   }
 
   if (formatting.cs) {

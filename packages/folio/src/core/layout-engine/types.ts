@@ -53,6 +53,25 @@ export type RunFormatting = {
    * mirrors the editing-view treatment so PM cursor traversal works.
    */
   hidden?: boolean;
+  /**
+   * Per-run right-to-left direction (w:rtl). When true the painter sets
+   * `dir="rtl"` on the run span; the browser's bidi algorithm handles
+   * reordering. `false` means an explicit override that disables inherited
+   * RTL; the painter sets `dir="ltr"` so style/paragraph RTL does not leak in.
+   */
+  rtl?: boolean;
+  /**
+   * Text effect animation hint (w:effect). Word 2013+ no longer animates,
+   * but the painter emits `docx-text-effect-<name>` plus `data-effect` so
+   * host CSS can opt in.
+   */
+  textEffect?:
+    | "blinkBackground"
+    | "lights"
+    | "antsBlack"
+    | "antsRed"
+    | "shimmer"
+    | "sparkle";
   /** Hyperlink info if this run is a link */
   hyperlink?: HyperlinkInfo;
   /** Footnote reference ID (if this run contains a footnote reference) */

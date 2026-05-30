@@ -34,6 +34,7 @@ export type {
   HighlightAttrs,
   CharacterSpacingAttrs,
   EmphasisMarkAttrs,
+  TextEffectAttrs,
   FootnoteRefAttrs,
   CommentAttrs,
   TrackedChangeMarkAttrs,

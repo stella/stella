@@ -24,6 +24,7 @@ import {
   readTableRowAttrs,
   readTextBoxAttrs,
   readTextColorMarkAttrs,
+  readTextEffectMarkAttrs,
   readTrackedChangeMarkAttrs,
   readUnderlineMarkAttrs,
 } from "./attrs";
@@ -204,6 +205,11 @@ const validateMarks = (
       case "hidden":
       case "textShadow":
       case "textOutline":
+      case "rtl":
+        continue;
+
+      case "textEffect":
+        appendAttrIssues(markPath, readTextEffectMarkAttrs(mark), issues);
         continue;
 
       case "underline":

@@ -8,6 +8,7 @@
 
 import type {
   EmphasisMark,
+  TextEffect,
   TextFormatting,
   ThemeColorSlot,
   UnderlineStyle,
@@ -71,6 +72,14 @@ export type EmphasisMarkAttrs = {
   type?: Exclude<EmphasisMark, "none">;
 };
 
+/**
+ * Text effect mark attributes (w:effect). The "none" sentinel is never marked;
+ * absence of the mark is the no-effect state.
+ */
+export type TextEffectAttrs = {
+  effect: Exclude<TextEffect, "none">;
+};
+
 export type FootnoteRefAttrs = {
   id: string | number;
   noteType?: "footnote" | "endnote";
@@ -101,6 +110,7 @@ export type RunFormattingOverrideAttrs = {
     | "imprint"
     | "shadow"
     | "outline"
+    | "rtl"
   >]?: false;
 } & {
   underline?: "none";

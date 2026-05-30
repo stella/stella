@@ -38,12 +38,14 @@ import { HiddenTextExtension } from "./marks/HiddenTextExtension";
 import { HighlightExtension } from "./marks/HighlightExtension";
 import { HyperlinkExtension } from "./marks/HyperlinkExtension";
 import { ItalicExtension } from "./marks/ItalicExtension";
+import { RtlExtension } from "./marks/RtlExtension";
 import { RunFormattingOverrideExtension } from "./marks/RunFormattingOverrideExtension";
 import { SmallCapsExtension } from "./marks/SmallCapsExtension";
 import { StrikeExtension } from "./marks/StrikeExtension";
 import { SubscriptExtension } from "./marks/SubscriptExtension";
 import { SuperscriptExtension } from "./marks/SuperscriptExtension";
 import { TextColorExtension } from "./marks/TextColorExtension";
+import { TextEffectExtension } from "./marks/TextEffectExtension";
 import {
   EmbossExtension,
   ImprintExtension,
@@ -137,6 +139,8 @@ export function createStarterKit(
   add("textShadow", TextShadowExtension());
   add("emphasisMark", EmphasisMarkExtension());
   add("textOutline", TextOutlineExtension());
+  add("rtl", RtlExtension());
+  add("textEffect", TextEffectExtension());
   add("runFormattingOverride", RunFormattingOverrideExtension());
   add("comment", CommentExtension());
   add("insertion", InsertionExtension());

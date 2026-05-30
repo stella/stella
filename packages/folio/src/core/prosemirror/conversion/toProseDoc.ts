@@ -2288,6 +2288,16 @@ function textFormattingToMarks(
     marks.push(schema.mark("textOutline"));
   }
 
+  // eigenpal #424 (gap 10) — per-run RTL direction (w:rtl)
+  if (formatting.rtl) {
+    marks.push(schema.mark("rtl"));
+  }
+
+  // eigenpal #424 (gap 11) — text effect animation (w:effect)
+  if (formatting.effect && formatting.effect !== "none") {
+    marks.push(schema.mark("textEffect", { effect: formatting.effect }));
+  }
+
   return marks;
 }
 
