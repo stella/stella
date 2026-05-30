@@ -39,6 +39,7 @@ import type {
   Image,
   RelationshipMap,
   MediaFile,
+  ShapeContent,
 } from "../types/document";
 import { parseImage } from "./imageParser";
 import {
@@ -51,6 +52,7 @@ import {
   UnderlineStyleSchema,
   narrowEnum,
 } from "./parserEnums";
+import { isShapeDrawing, parseShapeFromDrawing } from "./shapeParser";
 import type { StyleMap } from "./styleParser";
 import { resolveThemeFontRef } from "./themeParser";
 import {
@@ -808,23 +810,36 @@ function parseInstrText(element: XmlElement): InstrTextContent {
 }
 
 /**
- * Parse drawing content (w:drawing)
+ * Parse drawing content (w:drawing).
  *
- * Uses imageParser to fully parse the drawing element including
- * image data resolution from relationships and media files.
+ * Dispatches by graphicData payload:
+ * - `pic:pic` → image (handled by imageParser).
+ * - `wps:wsp` with `<wps:txbx>` → text-box; returns null so
+ *   `blockContentParser.enrichParagraphTextBoxes` can rebuild the shape
+ *   with its inner paragraph content (it needs the style/numbering/theme
+ *   context that is only available at the block parser level).
+ * - `wps:wsp` without text body → generic shape; parsed via
+ *   `shapeParser.parseShapeFromDrawing` into a `ShapeContent`.
  */
 function parseDrawingContent(
   element: XmlElement,
   rels: RelationshipMap | null,
   media: Map<string, MediaFile> | null,
-): DrawingContent | null {
-  // Use the full imageParser to parse the drawing
-  const image = parseImage(element, rels ?? undefined, media ?? undefined);
+): DrawingContent | ShapeContent | null {
+  // Generic shapes (rect/ellipse/line/arrow/...) come in here as wps:wsp
+  // with no text body. Text-box shapes are left for the block-content
+  // post-pass; image drawings fall through to parseImage.
+  if (isShapeDrawing(element)) {
+    const shape = parseShapeFromDrawing(element);
+    if (shape) {
+      return { type: "shape", shape };
+    }
+  }
 
+  const image = parseImage(element, rels ?? undefined, media ?? undefined);
   if (!image) {
     return null;
   }
-
   const drawing: DrawingContent = {
     type: "drawing",
     image,
@@ -832,7 +847,6 @@ function parseDrawingContent(
   if (!image.src) {
     drawing.rawXml = elementToXml(element);
   }
-
   return drawing;
 }
 
@@ -961,7 +975,10 @@ function parseRunContents(
               // Keep package-referenced drawings even when the browser cannot render
               // the media. The serializer must preserve the relationship reference.
               if (innerDrawing) {
-                if (!innerDrawing.image.src) {
+                if (
+                  innerDrawing.type === "drawing" &&
+                  !innerDrawing.image.src
+                ) {
                   innerDrawing.rawXml = elementToXml(child);
                 }
                 contents.push(innerDrawing);

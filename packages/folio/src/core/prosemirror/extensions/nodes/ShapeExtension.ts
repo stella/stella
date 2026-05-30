@@ -176,7 +176,112 @@ function setNum(el: Element, name: string, value: number): void {
 }
 
 /**
+ * Format a number for SVG attribute output: keeps integers as integers and
+ * trims floating-point noise (e.g., `0.30000000000000004` → `0.3`).
+ */
+function fmt(n: number): string {
+  return Number.isInteger(n) ? String(n) : Number(n.toFixed(3)).toString();
+}
+
+/**
+ * Build the `points` string for a polygon-based shape preset.
+ *
+ * Phase-1 arrow proportions use Word's default `<a:avLst/>` percentages:
+ *   - Stem thickness: 40% of the cross-axis extent.
+ *   - Head depth: 40% of the main-axis extent.
+ *   - Head width spans the full cross-axis extent.
+ *
+ * Pure and DOM-free so it can be unit tested without a happy-dom / jsdom
+ * setup; `createShapeElement` wraps the result in an `<svg:polygon>` node.
+ */
+export function buildShapePolygonPoints(
+  type: string,
+  w: number,
+  h: number,
+): string | null {
+  switch (type) {
+    case "triangle":
+    case "isosTriangle":
+      return `${fmt(w / 2)},0 ${fmt(w)},${fmt(h)} 0,${fmt(h)}`;
+    case "diamond":
+      return `${fmt(w / 2)},0 ${fmt(w)},${fmt(h / 2)} ${fmt(w / 2)},${fmt(h)} 0,${fmt(h / 2)}`;
+    case "rightArrow":
+      return [
+        `0,${fmt(h * 0.3)}`,
+        `${fmt(w * 0.6)},${fmt(h * 0.3)}`,
+        `${fmt(w * 0.6)},0`,
+        `${fmt(w)},${fmt(h / 2)}`,
+        `${fmt(w * 0.6)},${fmt(h)}`,
+        `${fmt(w * 0.6)},${fmt(h * 0.7)}`,
+        `0,${fmt(h * 0.7)}`,
+      ].join(" ");
+    case "leftArrow":
+      return [
+        `0,${fmt(h / 2)}`,
+        `${fmt(w * 0.4)},0`,
+        `${fmt(w * 0.4)},${fmt(h * 0.3)}`,
+        `${fmt(w)},${fmt(h * 0.3)}`,
+        `${fmt(w)},${fmt(h * 0.7)}`,
+        `${fmt(w * 0.4)},${fmt(h * 0.7)}`,
+        `${fmt(w * 0.4)},${fmt(h)}`,
+      ].join(" ");
+    case "upArrow":
+      return [
+        `${fmt(w / 2)},0`,
+        `${fmt(w)},${fmt(h * 0.4)}`,
+        `${fmt(w * 0.7)},${fmt(h * 0.4)}`,
+        `${fmt(w * 0.7)},${fmt(h)}`,
+        `${fmt(w * 0.3)},${fmt(h)}`,
+        `${fmt(w * 0.3)},${fmt(h * 0.4)}`,
+        `0,${fmt(h * 0.4)}`,
+      ].join(" ");
+    case "downArrow":
+      return [
+        `${fmt(w * 0.3)},0`,
+        `${fmt(w * 0.7)},0`,
+        `${fmt(w * 0.7)},${fmt(h * 0.6)}`,
+        `${fmt(w)},${fmt(h * 0.6)}`,
+        `${fmt(w / 2)},${fmt(h)}`,
+        `0,${fmt(h * 0.6)}`,
+        `${fmt(w * 0.3)},${fmt(h * 0.6)}`,
+      ].join(" ");
+    case "leftRightArrow":
+      return [
+        `0,${fmt(h / 2)}`,
+        `${fmt(w * 0.25)},0`,
+        `${fmt(w * 0.25)},${fmt(h * 0.3)}`,
+        `${fmt(w * 0.75)},${fmt(h * 0.3)}`,
+        `${fmt(w * 0.75)},0`,
+        `${fmt(w)},${fmt(h / 2)}`,
+        `${fmt(w * 0.75)},${fmt(h)}`,
+        `${fmt(w * 0.75)},${fmt(h * 0.7)}`,
+        `${fmt(w * 0.25)},${fmt(h * 0.7)}`,
+        `${fmt(w * 0.25)},${fmt(h)}`,
+      ].join(" ");
+    case "upDownArrow":
+      return [
+        `${fmt(w / 2)},0`,
+        `${fmt(w)},${fmt(h * 0.25)}`,
+        `${fmt(w * 0.7)},${fmt(h * 0.25)}`,
+        `${fmt(w * 0.7)},${fmt(h * 0.75)}`,
+        `${fmt(w)},${fmt(h * 0.75)}`,
+        `${fmt(w / 2)},${fmt(h)}`,
+        `0,${fmt(h * 0.75)}`,
+        `${fmt(w * 0.3)},${fmt(h * 0.75)}`,
+        `${fmt(w * 0.3)},${fmt(h * 0.25)}`,
+        `0,${fmt(h * 0.25)}`,
+      ].join(" ");
+    default:
+      return null;
+  }
+}
+
+/**
  * Build the inner shape element (rect/ellipse/etc) for the given shape type.
+ *
+ * Unknown / phase-2+ presets fall back to a rectangle so the document still
+ * displays. The original `<a:prstGeom prst>` value round-trips through the
+ * model regardless of what the renderer chooses to draw.
  */
 function createShapeElement(type: string, w: number, h: number): SVGElement {
   switch (type) {
@@ -198,20 +303,6 @@ function createShapeElement(type: string, w: number, h: number): SVGElement {
       setNum(el, "rx", Math.min(w, h) * 0.1);
       return el;
     }
-    case "triangle":
-    case "isosTriangle": {
-      const el = document.createElementNS(SVG_NS, "polygon");
-      el.setAttribute("points", `${w / 2},0 ${w},${h} 0,${h}`);
-      return el;
-    }
-    case "diamond": {
-      const el = document.createElementNS(SVG_NS, "polygon");
-      el.setAttribute(
-        "points",
-        `${w / 2},0 ${w},${h / 2} ${w / 2},${h} 0,${h / 2}`,
-      );
-      return el;
-    }
     case "line":
     case "straightConnector1": {
       const el = document.createElementNS(SVG_NS, "line");
@@ -222,6 +313,12 @@ function createShapeElement(type: string, w: number, h: number): SVGElement {
       return el;
     }
     default: {
+      const points = buildShapePolygonPoints(type, w, h);
+      if (points !== null) {
+        const el = document.createElementNS(SVG_NS, "polygon");
+        el.setAttribute("points", points);
+        return el;
+      }
       const el = document.createElementNS(SVG_NS, "rect");
       setNum(el, "x", 0);
       setNum(el, "y", 0);
