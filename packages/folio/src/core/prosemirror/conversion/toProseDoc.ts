@@ -14,6 +14,8 @@
 
 import type { MarkType, Node as PMNode } from "prosemirror-model";
 
+import { createStyleEngine } from "../../style-engine";
+import type { StyleEngine } from "../../style-engine";
 import type {
   Document,
   Paragraph,
@@ -52,8 +54,6 @@ import type {
   TableRowAttrs,
   TableCellAttrs,
 } from "../schema/nodes";
-import { createStyleResolver } from "../styles";
-import type { StyleResolver } from "../styles";
 import { assertValidProseMirrorDocument } from "../validation";
 
 /**
@@ -83,7 +83,7 @@ export function toProseDoc(
   const paragraphs = document.package.document.content;
   const nodes: PMNode[] = [];
 
-  const styleResolver = createStyleResolver(options?.styles);
+  const styleResolver = createStyleEngine(options?.styles);
   const theme = options?.theme ?? document.package.theme ?? null;
   let textBoxGroupIndex = 0;
 
@@ -135,7 +135,7 @@ export function toProseDoc(
  */
 function convertParagraph(
   paragraph: Paragraph,
-  styleResolver: StyleResolver | null,
+  styleResolver: StyleEngine | null,
   activeCommentIds?: Set<number>,
   extraRunFormatting?: TextFormatting,
 ): PMNode {
@@ -336,7 +336,7 @@ function convertTrackedChange(
   change: Insertion | Deletion | MoveFrom | MoveTo,
   markType: "insertion" | "deletion",
   getInheritedRunFormatting: RunFormattingResolver,
-  styleResolver?: StyleResolver | null,
+  styleResolver?: StyleEngine | null,
   moveKind: "moveFrom" | "moveTo" | null = null,
 ): PMNode[] {
   const nodes: PMNode[] = [];
@@ -400,7 +400,7 @@ function canCarryTrackedRunMark(node: PMNode, markType: MarkType): boolean {
  */
 function paragraphFormattingToAttrs(
   paragraph: Paragraph,
-  styleResolver: StyleResolver | null,
+  styleResolver: StyleEngine | null,
 ): ParagraphAttrs {
   const formatting = paragraph.formatting;
   const styleId = formatting?.styleId;
@@ -601,7 +601,7 @@ function paragraphFormattingToAttrs(
  * Resolve table style conditional formatting
  */
 function resolveTableStyleConditional(
-  styleResolver: StyleResolver | null,
+  styleResolver: StyleEngine | null,
   tableStyleId: string | undefined,
   conditionType: string,
 ): { tcPr?: TableCellFormatting; rPr?: TextFormatting } | undefined {
@@ -638,7 +638,7 @@ function resolveTableStyleConditional(
 }
 
 function resolveTableBaseStyle(
-  styleResolver: StyleResolver | null,
+  styleResolver: StyleEngine | null,
   tableStyleId: string | undefined,
 ): { tcPr?: TableCellFormatting; rPr?: TextFormatting } | undefined {
   if (!styleResolver || !tableStyleId) {
@@ -739,7 +739,7 @@ function hasDirectRunFormatting(
 
 function resolveTextFormatting(
   formatting: TextFormatting | undefined,
-  styleResolver: StyleResolver | null,
+  styleResolver: StyleEngine | null,
 ): TextFormatting | undefined {
   if (!formatting) {
     return styleResolver?.resolveRunStyle(null);
@@ -755,7 +755,7 @@ function resolveTextFormatting(
 function resolveParagraphDefaultTextFormatting(
   styleId: string | undefined,
   formatting: Paragraph["formatting"] | undefined,
-  styleResolver: StyleResolver,
+  styleResolver: StyleEngine,
 ): TextFormatting | undefined {
   const style = styleId
     ? (styleResolver.getStyle(styleId) ??
@@ -936,7 +936,7 @@ function paragraphContentHasMeaningfulContent(
 
 function convertTable(
   table: Table,
-  styleResolver: StyleResolver | null,
+  styleResolver: StyleEngine | null,
   theme: Theme | null | undefined,
 ): PMNode {
   // Calculate rowSpan values from vMerge
@@ -1136,7 +1136,7 @@ function countTableColumns(rows: TableRow[]): number {
  */
 function convertTableRow(
   row: TableRow,
-  styleResolver: StyleResolver | null,
+  styleResolver: StyleEngine | null,
   isHeaderRow: boolean,
   columnWidths?: number[],
   totalWidth?: number,
@@ -1448,7 +1448,7 @@ function resolveThemedBorderColors(
  */
 function convertTableCell(
   cell: TableCell,
-  styleResolver: StyleResolver | null,
+  styleResolver: StyleEngine | null,
   isHeader: boolean,
   gridWidthPercent?: number,
   conditionalStyle?: { tcPr?: TableCellFormatting; rPr?: TextFormatting },
@@ -1678,7 +1678,7 @@ function convertMathEquation(math: MathEquation): PMNode | null {
 function convertInlineSdt(
   sdt: InlineSdt,
   getInheritedRunFormatting: RunFormattingResolver,
-  styleResolver?: StyleResolver | null,
+  styleResolver?: StyleEngine | null,
 ): PMNode | null {
   const props = sdt.properties;
   const inlineNodes: PMNode[] = [];
@@ -1755,7 +1755,7 @@ function convertInlineSdt(
 function convertRun(
   run: Run,
   styleFormatting?: TextFormatting,
-  styleResolver?: StyleResolver | null,
+  styleResolver?: StyleEngine | null,
 ): PMNode[] {
   const nodes: PMNode[] = [];
 
@@ -2115,7 +2115,7 @@ function convertImage(image: Image, rawXml?: string): PMNode {
 function convertHyperlink(
   hyperlink: Hyperlink,
   getInheritedRunFormatting: RunFormattingResolver,
-  styleResolver?: StyleResolver | null,
+  styleResolver?: StyleEngine | null,
   hyperlinkIndex?: number,
 ): PMNode[] {
   const nodes: PMNode[] = [];
@@ -2431,7 +2431,7 @@ function convertShape(shape: Shape): PMNode {
  */
 function convertParagraphWithTextBoxes(
   block: Paragraph,
-  styleResolver: StyleResolver | null,
+  styleResolver: StyleEngine | null,
   textBoxGroupId: string,
 ): PMNode[] {
   const textBoxes = extractTextBoxesFromParagraph(block);
@@ -2523,7 +2523,7 @@ function extractTextBoxesFromParagraph(paragraph: Paragraph): TextBox[] {
  */
 function convertTextBox(
   textBox: TextBox,
-  styleResolver: StyleResolver | null,
+  styleResolver: StyleEngine | null,
   options: {
     placement?: "standalone" | "inlineWithPrevious";
     groupId?: string;
@@ -2681,7 +2681,7 @@ export function headerFooterToProseDoc(
 ): PMNode {
   const nodes: PMNode[] = [];
   const styleResolver = options?.styles
-    ? createStyleResolver(options.styles)
+    ? createStyleEngine(options.styles)
     : null;
   const theme = options?.theme ?? null;
   let textBoxGroupIndex = 0;
