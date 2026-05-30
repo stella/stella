@@ -1,4 +1,8 @@
-export class BrregError extends Error {
+import { EntityNotFoundError, RegistryError } from "../shared/errors.js";
+
+const BRREG_REGISTRY_SLUG = "no-brreg";
+
+export class BrregError extends RegistryError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = "BrregError";
@@ -27,11 +31,15 @@ export class BrregAPIError extends BrregError {
   }
 }
 
-export class BrregNotFoundError extends BrregError {
+export class BrregNotFoundError extends EntityNotFoundError {
   readonly orgnr: string;
 
   constructor(orgnr: string) {
-    super(`Norwegian entity not found: ${orgnr}`);
+    super({
+      canonicalId: orgnr,
+      registrySlug: BRREG_REGISTRY_SLUG,
+      message: `Norwegian entity not found: ${orgnr}`,
+    });
     this.name = "BrregNotFoundError";
     this.orgnr = orgnr;
   }

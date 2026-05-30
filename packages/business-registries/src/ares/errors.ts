@@ -1,4 +1,8 @@
-export class AresError extends Error {
+import { EntityNotFoundError, RegistryError } from "../shared/errors.js";
+
+const ARES_REGISTRY_SLUG = "cz-ares";
+
+export class AresError extends RegistryError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = "AresError";
@@ -31,11 +35,15 @@ export class AresAPIError extends AresError {
   }
 }
 
-export class AresNotFoundError extends AresError {
+export class AresNotFoundError extends EntityNotFoundError {
   readonly ico: string;
 
   constructor(ico: string) {
-    super(`Economic subject not found: ${ico}`);
+    super({
+      canonicalId: ico,
+      registrySlug: ARES_REGISTRY_SLUG,
+      message: `Economic subject not found: ${ico}`,
+    });
     this.name = "AresNotFoundError";
     this.ico = ico;
   }
