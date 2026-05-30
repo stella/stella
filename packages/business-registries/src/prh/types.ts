@@ -104,10 +104,12 @@ export type PrhRawCompany = {
   companySituations?: PrhRawCompanySituation[];
   addresses?: PrhRawAddress[];
   // Top-level `status` values: "1" = unregistered, "2" = registered,
-  // "3" = ended. `tradeRegisterStatus` mirrors the trade-register
-  // membership: "1" = registered, "2" = not. Both surfaced separately
-  // because they answer different questions.
-  status: string;
+  // "3" = ended. Optional in the v3 schema, so the parser must treat
+  // an absent value as "unknown" rather than assuming "ended".
+  // `tradeRegisterStatus` mirrors the trade-register membership:
+  // "1" = registered, "2" = not. Surfaced separately because they
+  // answer different questions.
+  status?: string;
   tradeRegisterStatus?: string;
   registrationDate?: string;
   endDate?: string;
@@ -142,15 +144,18 @@ export type PrhBusinessLine = {
   description: string | null;
 };
 
-// Status discriminated union — same shape as Brreg's, mapped from
-// PRH's numeric `status` field plus optional `endDate`. PRH does not
-// expose a dedicated bankruptcy flag in v3 (it lives in
-// `companySituations`), so we leave that to a future enrichment pass
-// rather than fake it here.
+// Status discriminated union — mapped from PRH's optional numeric
+// `status` field plus optional `endDate`. PRH does not expose a
+// dedicated bankruptcy flag in v3 (it lives in `companySituations`),
+// so we leave that to a future enrichment pass rather than fake it
+// here. The `unknown` arm covers two cases that must NOT be coerced
+// to "ended": the upstream payload omits `status` entirely, or it
+// carries a value outside the documented "1"/"2"/"3" set.
 export type PrhCompanyStatus =
   | { type: "registered" }
   | { type: "unregistered" }
-  | { type: "ended"; endedAt: string | null };
+  | { type: "ended"; endedAt: string | null }
+  | { type: "unknown" };
 
 export type PrhCompanyName = {
   name: string;

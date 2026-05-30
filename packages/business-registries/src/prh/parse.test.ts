@@ -79,6 +79,30 @@ describe("parseCompany / parseSearchEntry — defensive shape handling", () => {
     status: "2",
   };
 
+  test("parseCompany returns status `unknown` when PRH omits the field", () => {
+    const { status, ...rest } = minimal;
+    void status;
+    expect(parseCompany(rest).status).toEqual({ type: "unknown" });
+  });
+
+  test("parseCompany returns status `unknown` for undocumented values", () => {
+    expect(parseCompany({ ...minimal, status: "9" }).status).toEqual({
+      type: "unknown",
+    });
+  });
+
+  test("parseCompany still maps documented status codes", () => {
+    expect(parseCompany({ ...minimal, status: "1" }).status).toEqual({
+      type: "unregistered",
+    });
+    expect(parseCompany({ ...minimal, status: "2" }).status).toEqual({
+      type: "registered",
+    });
+    expect(
+      parseCompany({ ...minimal, status: "3", endDate: "2020-01-01" }).status,
+    ).toEqual({ type: "ended", endedAt: "2020-01-01" });
+  });
+
   test("parseCompany tolerates a missing names array", () => {
     const company = parseCompany(minimal);
     expect(company.name).toBe("0112038-9");

@@ -205,10 +205,12 @@ const parseStatus = (raw: PrhRawCompany): PrhCompanyStatus => {
   if (raw.status === STATUS_ENDED) {
     return { type: "ended", endedAt: raw.endDate ?? null };
   }
-  // Unknown numeric status from PRH — treat as ended so callers stay
-  // on the safe side rather than displaying an unknown entity as
-  // active.
-  return { type: "ended", endedAt: raw.endDate ?? null };
+  // PRH may omit `status` entirely or return an undocumented value.
+  // Coercing either to "ended" would misreport valid live entities;
+  // surface "unknown" so consumers can render an honest status badge
+  // (or skip rendering one at all) rather than claim the company is
+  // dissolved.
+  return { type: "unknown" };
 };
 
 export const parseCompany = (raw: PrhRawCompany): PrhCompany => {
