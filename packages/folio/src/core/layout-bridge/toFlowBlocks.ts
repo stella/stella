@@ -1541,6 +1541,9 @@ function convertTableCell(
   if (cellBorders) {
     cell.borders = cellBorders;
   }
+  if (attrs.noWrap) {
+    cell.noWrap = true;
+  }
   return cell;
 }
 

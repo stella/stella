@@ -387,6 +387,39 @@ describe("toFlowBlocks TOC hyperlink style strip", () => {
   });
 });
 
+describe("toFlowBlocks table cell formatting", () => {
+  // Regression eigenpal #424 gap 14: the parser captured w:noWrap and the PM
+  // schema carried it, but convertTableCell dropped the field, so cells like
+  // case numbers / citations wrapped where Word kept them on one line.
+  test("threads the cell noWrap attribute into the engine TableCell", () => {
+    const doc = schema.node("doc", null, [
+      schema.node("table", null, [
+        schema.node("tableRow", null, [
+          schema.node("tableCell", { noWrap: true }, [
+            schema.node("paragraph", null, [schema.text("CASE 123-456")]),
+          ]),
+          schema.node("tableCell", null, [
+            schema.node("paragraph", null, [schema.text("default")]),
+          ]),
+        ]),
+      ]),
+    ]);
+
+    const blocks = toFlowBlocks(doc);
+    const table = blocks.at(0);
+    if (table?.kind !== "table") {
+      throw new Error("Expected table block");
+    }
+    const row = table.rows.at(0);
+    if (!row) {
+      throw new Error("Expected table row");
+    }
+
+    expect(row.cells.at(0)?.noWrap).toBe(true);
+    expect(row.cells.at(1)?.noWrap).toBeUndefined();
+  });
+});
+
 describe("toFlowBlocks list numbering", () => {
   test("normalizes Symbol-family bullet markers during flow conversion", () => {
     const doc = schema.node("doc", null, [

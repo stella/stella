@@ -544,6 +544,14 @@ function renderTableCell(
     }
   }
 
+  // `w:noWrap` (§17.4.30): forbid soft-wrapping inside the cell. Applied on
+  // the cell box so descendants pick it up by inheritance — paragraph lines
+  // stay on a single visual line and the cell expands horizontally past its
+  // measured content width. eigenpal #424 (cell noWrap).
+  if (cell.noWrap) {
+    cellEl.style.whiteSpace = "nowrap";
+  }
+
   // Vertical alignment
   if (cell.verticalAlign) {
     cellEl.style.display = "flex";
