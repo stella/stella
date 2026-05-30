@@ -117,7 +117,16 @@ function markRangeAsDeleted(
   const ranges: { from: number; to: number; isOwnInsert: boolean }[] = [];
 
   doc.nodesBetween(from, to, (node, pos) => {
-    if (!node.isText) {
+    // Text AND inline atoms (image, shape) that accept the deletion mark go
+    // through the strike-through path so a selection that includes a picture
+    // marks it as deleted (or retracts an own-insert) like text. The text
+    // short-circuit stays because a leaf text node's own `markSet` is empty —
+    // `allowsMarkType` is false even though the paragraph permits the mark.
+    // eigenpal #641.
+    if (
+      !node.isText &&
+      !(node.isInline && node.type.allowsMarkType(deletionType))
+    ) {
       return;
     }
     const start = Math.max(pos, from);
@@ -449,8 +458,17 @@ function handleSuggestionDelete(
   const $deletePos = state.doc.resolve(deletePos);
   const nodeAfter = $deletePos.nodeAfter;
 
-  // At block boundary — let default behavior handle (e.g. join paragraphs)
-  if (!nodeAfter?.isText) {
+  // At a block boundary — let default behavior handle (e.g. join paragraphs).
+  // Text and inline atoms (image, shape) that accept the deletion mark fall
+  // through to the strike-through path; other inline nodes use the default
+  // delete. eigenpal #641.
+  if (
+    !nodeAfter ||
+    !(
+      nodeAfter.isText ||
+      (nodeAfter.isInline && nodeAfter.type.allowsMarkType(deletionType))
+    )
+  ) {
     return false;
   }
 
@@ -608,10 +626,21 @@ export function createSuggestionModePlugin(
         // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror StepMap.forEach
         stepMap.forEach((_oldFrom, _oldTo, newFrom, newTo) => {
           if (newTo > newFrom) {
-            // Only mark text nodes that don't already have tracked change marks.
-            // Marking the entire range would overwrite existing marks from other authors.
+            // Mark text AND inline atoms (image, shape) that accept the
+            // insertion mark and don't already carry a tracked-change mark,
+            // so a pasted/dropped picture becomes a tracked insertion just
+            // like typed text. Marking the entire range would overwrite
+            // other authors' marks, so we go node by node and skip any the
+            // schema disallows marks on. eigenpal #641.
             newState.doc.nodesBetween(newFrom, newTo, (node, pos) => {
-              if (!node.isText) {
+              // Text is the short-circuit: a leaf text node's own `markSet`
+              // is empty, so `allowsMarkType` is false even though the
+              // paragraph permits the mark — dropping the `isText` arm
+              // would silently stop tracking pasted text.
+              if (
+                !node.isText &&
+                !(node.isInline && node.type.allowsMarkType(insertionType))
+              ) {
                 return;
               }
               const hasTrackedMark = node.marks.some(

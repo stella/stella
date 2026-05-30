@@ -788,15 +788,48 @@ function renderBlockImage(run: ImageRun, doc: Document): HTMLElement {
 function renderImageRun(run: ImageRun, doc: Document): HTMLElement {
   // Floating images should be handled at paragraph level, not here
   // If they reach here (e.g., inside table cells), render as block
+  let el: HTMLElement;
   if (
     isFloatingImageRun(run) ||
     run.displayMode === "block" ||
     run.wrapType === "topAndBottom"
   ) {
-    return renderBlockImage(run, doc);
+    el = renderBlockImage(run, doc);
+  } else {
+    el = renderInlineImageRun(run, doc);
   }
-  // Default: inline
-  return renderInlineImageRun(run, doc);
+  applyImageRevisionStyle(el, run);
+  return el;
+}
+
+/**
+ * A picture that is itself a tracked change gets a coloured outline (green for
+ * an insertion, red + faded for a deletion), mirroring the text-run treatment.
+ * `outline` is used over `border` so the image's box size is unchanged and
+ * line metrics stay stable. eigenpal #641.
+ */
+function applyImageRevisionStyle(el: HTMLElement, run: ImageRun): void {
+  if (run.isInsertion) {
+    el.style.outline = "2px solid #2e7d32";
+    el.style.outlineOffset = "1px";
+    el.classList.add("docx-insertion");
+  } else if (run.isDeletion) {
+    el.style.outline = "2px solid #c62828";
+    el.style.outlineOffset = "1px";
+    el.style.opacity = "0.6";
+    el.classList.add("docx-deletion");
+  } else {
+    return;
+  }
+  if (run.changeAuthor !== undefined) {
+    el.dataset["changeAuthor"] = run.changeAuthor;
+  }
+  if (run.changeDate !== undefined) {
+    el.dataset["changeDate"] = run.changeDate;
+  }
+  if (run.changeRevisionId !== undefined) {
+    el.dataset["revisionId"] = String(run.changeRevisionId);
+  }
 }
 
 /**

@@ -219,6 +219,10 @@ describe("semantic ProseMirror round-trip fixture", () => {
     const paragraph = firstParagraph(roundtripped);
 
     expect(pmValidation.valid).toBe(true);
+    // The shape now carries marks (eigenpal #641 — `Shape.nodeSpec.marks = "_"`
+    // so a tracked or commented shape survives the round-trip), so the
+    // comment range correctly re-opens around the shape-bearing run too. The
+    // mid-paragraph atom inserts split it from `mathEquation`.
     expect(paragraph.content.map((content) => content.type)).toEqual([
       "commentRangeStart",
       "run",
@@ -228,7 +232,9 @@ describe("semantic ProseMirror round-trip fixture", () => {
       "inlineSdt",
       "commentRangeEnd",
       "mathEquation",
+      "commentRangeStart",
       "run",
+      "commentRangeEnd",
     ]);
     expect(findRunText(paragraph, "Clause ").formatting).toMatchObject({
       bold: true,

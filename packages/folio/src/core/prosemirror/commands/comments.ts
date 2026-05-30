@@ -108,7 +108,10 @@ function resolveChange(
           }
           return true;
         }
-        if (!node.isText) {
+        // Text AND inline atoms (image, shape, hardBreak, tab) can carry
+        // tracked-change marks; widen the visitor so rejecting an inserted
+        // picture removes it like inserted text. eigenpal #641.
+        if (!node.isInline) {
           return true;
         }
         const nodeEnd = pos + node.nodeSize;
@@ -291,7 +294,9 @@ export function findAIEditRevisionRange(
   const range = { from: null as number | null, to: null as number | null };
 
   state.doc.descendants((node, pos) => {
-    if (!node.isText) {
+    // Widen from `isText` to `isInline` so an AI-edit revision on an inline
+    // atom (image, shape) shows up in the matched range. eigenpal #641.
+    if (!node.isInline) {
       return;
     }
     for (const mark of node.marks) {
@@ -521,7 +526,10 @@ export function findNextChange(
     if (result.value) {
       return false;
     }
-    if (!node.isText) {
+    // Widen from `isText` to `isInline` so an image-only insertion / deletion
+    // appears in the find-next walk (an atomic image carries the mark itself,
+    // not as a text-node sibling). eigenpal #641.
+    if (!node.isInline) {
       return;
     }
     if (pos + node.nodeSize <= startPos) {
@@ -586,7 +594,9 @@ export function findPreviousChange(
   let resultMark: Mark | null = null;
 
   state.doc.descendants((node, pos) => {
-    if (!node.isText) {
+    // Widen from `isText` to `isInline` so an image-only change appears in
+    // the find-previous walk. eigenpal #641.
+    if (!node.isInline) {
       return;
     }
     if (pos >= startPos) {
