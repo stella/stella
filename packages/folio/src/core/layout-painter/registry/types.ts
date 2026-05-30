@@ -46,7 +46,7 @@ export type BlockFor<TKind extends Fragment["kind"]> = TKind extends "paragraph"
       ? ImageBlock
       : TKind extends "textBox"
         ? TextBoxBlock
-        : never;
+        : FlowBlock;
 
 /**
  * Maps Fragment kind -> concrete Measure subtype. Same intent as `BlockFor`.
@@ -60,7 +60,7 @@ export type MeasureFor<TKind extends Fragment["kind"]> =
         ? ImageMeasure
         : TKind extends "textBox"
           ? TextBoxMeasure
-          : never;
+          : Measure;
 
 /**
  * Inputs handed to a feature module's render function.

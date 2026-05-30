@@ -12,13 +12,15 @@ import { createDefaultRegistry } from "./modules";
 describe("createDefaultRegistry", () => {
   test("registers a module for every Fragment kind", () => {
     const registry = createDefaultRegistry();
-    const expectedKinds: readonly Fragment["kind"][] = [
-      "paragraph",
-      "table",
-      "image",
-      "textBox",
-    ];
-    for (const kind of expectedKinds) {
+    const expectedKinds = {
+      paragraph: true,
+      table: true,
+      image: true,
+      textBox: true,
+    } satisfies Record<Fragment["kind"], true>;
+
+    for (const kind of ["paragraph", "table", "image", "textBox"] as const) {
+      expect(expectedKinds[kind]).toBe(true);
       expect(registry.has(kind)).toBe(true);
     }
   });
