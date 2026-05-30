@@ -615,6 +615,40 @@ function renderInlineImageRun(run: ImageRun, doc: Document): HTMLElement {
   }
   if (run.transform) {
     img.style.transform = run.transform;
+    // Word rotates around the picture's geometric centre; the CSS default
+    // happens to match, but be explicit so future transforms can't drift.
+    img.style.transformOrigin = "center center";
+  }
+
+  // Rotated images extend past `run.width × run.height`, so without a bbox
+  // wrapper the inline line box reserves too little space and the rotated
+  // picture clips into the line above/below. Wrap the `<img>` in an
+  // inline-block span sized to the rotated bbox; the img positions
+  // absolutely at the wrapper centre and rotates around it. Matches Word,
+  // where `wp:extent` carries the post-rotation bbox.
+  // eigenpal #424 (rotation bbox gap 8 follow-up).
+  const rotation = parseRotationDegrees(run.transform);
+  if (rotation !== 0) {
+    const bbox = rotatedBoundingBox(run.width, run.height, rotation);
+    const wrapper = doc.createElement("span");
+    wrapper.className = PARAGRAPH_CLASS_NAMES.run;
+    wrapper.style.display = "inline-block";
+    wrapper.style.position = "relative";
+    wrapper.style.width = `${bbox.width}px`;
+    wrapper.style.height = `${bbox.height}px`;
+    wrapper.style.verticalAlign = "middle";
+    if (run.distTop) {
+      wrapper.style.marginTop = `${run.distTop}px`;
+    }
+    if (run.distBottom) {
+      wrapper.style.marginBottom = `${run.distBottom}px`;
+    }
+    img.style.position = "absolute";
+    img.style.left = `${(bbox.width - run.width) / 2}px`;
+    img.style.top = `${(bbox.height - run.height) / 2}px`;
+    applyPmPositions(wrapper, run.pmStart, run.pmEnd);
+    wrapper.append(img);
+    return wrapper;
   }
 
   // Inline images should flow with text
