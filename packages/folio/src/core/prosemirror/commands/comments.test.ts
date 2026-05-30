@@ -14,8 +14,15 @@ import {
 const schema = new Schema({
   nodes: {
     doc: { content: "block+" },
-    paragraph: { content: "text*", group: "block" },
-    text: { marks: "_" },
+    paragraph: { content: "inline*", group: "block" },
+    text: { group: "inline", marks: "_" },
+    image: {
+      group: "inline",
+      inline: true,
+      atom: true,
+      marks: "_",
+      toDOM: () => ["img"],
+    },
   },
   marks: {
     // `bold` is here so a single tracked-change span can be split into
@@ -315,6 +322,27 @@ describe("tracked change navigation", () => {
     expect(findNextChange(state, 8)).toMatchObject({
       from: 6,
       to: 15,
+      type: "insertion",
+    });
+  });
+
+  test("findNextChange expands across marked inline atoms in the same revision", () => {
+    const insertion = schema.marks["insertion"]!.create(REV_A_ATTRS);
+    const image = schema.nodes["image"]!.create(null, null, [insertion]);
+    const state = EditorState.create({
+      schema,
+      doc: schema.node("doc", null, [
+        schema.node("paragraph", null, [
+          schema.text("text", [insertion]),
+          image,
+          schema.text("tail", [insertion]),
+        ]),
+      ]),
+    });
+
+    expect(findNextChange(state, 0)).toMatchObject({
+      from: 1,
+      to: 10,
       type: "insertion",
     });
   });
