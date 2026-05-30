@@ -61,8 +61,12 @@ If the request is vague, default to:
 2. **Inventory outdated candidates**:
    - run `bun outdated --recursive` for Bun packages
    - run `cargo outdated --root-deps-only` in
-     `apps/desktop/src-tauri` for Cargo crates (install with
-     `cargo install cargo-outdated` if missing)
+     `apps/desktop/src-tauri` for Cargo crates. If `cargo-outdated`
+     is missing, prefer `cargo binstall cargo-outdated` (prebuilt
+     binary, seconds) over `cargo install cargo-outdated` (compiles
+     from source, several minutes). As a fallback, use
+     `cargo update --dry-run` plus targeted `cargo search` /
+     `cargo info` checks
    - inspect open dependency PRs if the request is about
      triage rather than local edits
    - include GitHub Actions only when the request covers them
