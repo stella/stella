@@ -82,7 +82,6 @@
     "drizzle-orm": "catalog:",
     "elysia": "catalog:",
     "elysia-rate-limit": "^4.6.2",
-    "ioredis": "^5.10.1",
     "jose": "^6.2.3",
     "jszip": "catalog:",
     "nodemailer": "^8.0.8",

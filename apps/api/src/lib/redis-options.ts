@@ -11,7 +11,7 @@
  * small enough that a MITM would already be inside the VPC.
  */
 
-import type { RedisOptions } from "ioredis";
+import type { RedisOptions } from "bun";
 
 import { env } from "@/api/env";
 

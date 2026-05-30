@@ -1,8 +1,8 @@
 import { matchError, panic, Result } from "better-result";
 import { Queue, Worker } from "bullmq";
+import type { RedisClient } from "bun";
 import { sleep } from "bun";
 import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
-import Redis from "ioredis";
 
 import { isMockAI } from "@/api/consts";
 import type { ScopedDb } from "@/api/db";
@@ -15,7 +15,6 @@ import {
   properties,
 } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
-import { env } from "@/api/env";
 import {
   loadOrgAIConfig,
   loadPromptCachingPreference,
@@ -27,7 +26,10 @@ import { acquireCellLocks } from "@/api/lib/cell-lock";
 import { errorTag } from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
-import { redisConnectionOptions } from "@/api/lib/redis-options";
+import {
+  createBullMqConnection,
+  createRedisClient,
+} from "@/api/lib/redis-client";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
   brandPersistedEntityId,
@@ -102,19 +104,22 @@ type EntityJobData = {
 // ── Public API ─────────────────────────────────────────
 
 let queue: Queue | null = null;
-let redisClient: Redis | null = null;
+let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
+let redisClient: RedisClient | null = null;
 
-const getRedis = (): Redis => {
-  redisClient ??= new Redis(env.REDIS_URL, {
-    ...redisConnectionOptions(),
-    maxRetriesPerRequest: null,
-  });
+const getQueueConnection = () => {
+  queueConnection ??= createBullMqConnection();
+  return queueConnection;
+};
+
+const getRedis = (): RedisClient => {
+  redisClient ??= createRedisClient();
   return redisClient;
 };
 
 const getQueue = (): Queue => {
   queue ??= new Queue(QUEUE_NAME, {
-    connection: getRedis(),
+    connection: getQueueConnection(),
     defaultJobOptions: {
       removeOnComplete: 100,
       removeOnFail: 500,
@@ -129,7 +134,7 @@ const getQueue = (): Queue => {
 };
 
 const clearWorkflowRunState = async (
-  redis: Redis,
+  redis: RedisClient,
   workspaceId: SafeId<"workspace">,
 ): Promise<void> => {
   await redis.del(
@@ -491,7 +496,7 @@ export const startWorkflow = async ({
     workflowKey(workspaceId, "running"),
     "1",
     "EX",
-    RUNNING_LOCK_TTL_SEC,
+    String(RUNNING_LOCK_TTL_SEC),
     "NX",
   );
   if (!wasSet) {
@@ -672,10 +677,7 @@ export const startWorkflow = async ({
 export const initWorkflowWorker = () => {
   // BullMQ Worker uses blocking commands (BRPOPLPUSH) so it
   // needs a dedicated Redis connection, not the shared one.
-  const workerConnection = new Redis(env.REDIS_URL, {
-    ...redisConnectionOptions(),
-    maxRetriesPerRequest: null,
-  });
+  const workerConnection = createBullMqConnection();
 
   const worker = new Worker<EntityJobData>(
     QUEUE_NAME,

@@ -1,10 +1,7 @@
-import Redis from "ioredis";
-
-import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
-import { redisConnectionOptions } from "@/api/lib/redis-options";
+import { createRedisClient } from "@/api/lib/redis-client";
 import {
   brandPersistedDesktopEditSessionId,
   brandPersistedOrganizationId,
@@ -186,48 +183,43 @@ const parseRedisPayload = (raw: string): RedisPayload | null => {
   };
 };
 
-const publisher = new Redis(env.REDIS_URL, {
-  ...redisConnectionOptions(),
-  lazyConnect: true,
-});
-const subscriber = new Redis(env.REDIS_URL, {
-  ...redisConnectionOptions(),
-  lazyConnect: true,
-});
+// Bun's pub/sub puts a connection into a subscribed mode that monopolises
+// it, so the subscriber must be a separate client from the publisher.
+const publisher = createRedisClient();
+
+const handleMessage = (message: string) => {
+  try {
+    const parsed = parseRedisPayload(message);
+    if (!parsed) {
+      return;
+    }
+    if (parsed.scope === "workspace") {
+      broadcastLocal(brandPersistedWorkspaceId(parsed.id), parsed.event);
+    } else if (parsed.scope === "organization") {
+      broadcastLocalToOrganization(
+        brandPersistedOrganizationId(parsed.id),
+        parsed.event,
+      );
+    } else if (parsed.originInstanceId !== INSTANCE_ID) {
+      sessionDeliveryHandler?.(
+        brandPersistedDesktopEditSessionId(parsed.id),
+        parsed.event,
+      );
+    }
+  } catch (error) {
+    logger.warn("sse.invalid_redis_message", {
+      "error.type": errorTag(error),
+      "payload.bytes": message.length,
+    });
+  }
+};
 
 const initRedis = async () => {
   try {
-    await Promise.all([publisher.connect(), subscriber.connect()]);
-
-    await subscriber.subscribe(REDIS_CHANNEL);
-
-    subscriber.on("message", (_channel: string, message: string) => {
-      try {
-        const parsed = parseRedisPayload(message);
-        if (!parsed) {
-          return;
-        }
-        if (parsed.scope === "workspace") {
-          broadcastLocal(brandPersistedWorkspaceId(parsed.id), parsed.event);
-        } else if (parsed.scope === "organization") {
-          broadcastLocalToOrganization(
-            brandPersistedOrganizationId(parsed.id),
-            parsed.event,
-          );
-        } else if (parsed.originInstanceId !== INSTANCE_ID) {
-          sessionDeliveryHandler?.(
-            brandPersistedDesktopEditSessionId(parsed.id),
-            parsed.event,
-          );
-        }
-      } catch (error) {
-        logger.warn("sse.invalid_redis_message", {
-          "error.type": errorTag(error),
-          "payload.bytes": message.length,
-        });
-      }
+    const subscriber = await publisher.duplicate();
+    await subscriber.subscribe(REDIS_CHANNEL, (message) => {
+      handleMessage(message);
     });
-
     logger.info("sse.redis_connected", { channel: REDIS_CHANNEL });
   } catch (error: unknown) {
     logger.error("sse.redis_connection_failed", {

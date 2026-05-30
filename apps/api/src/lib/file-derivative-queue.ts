@@ -1,11 +1,9 @@
 import { Result } from "better-result";
 import { Queue, Worker } from "bullmq";
 import { and, eq, sql } from "drizzle-orm";
-import Redis from "ioredis";
 
 import { fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import { env } from "@/api/env";
 import {
   convertToPdf,
   shouldGeneratePdfDerivative,
@@ -15,7 +13,7 @@ import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
-import { redisConnectionOptions } from "@/api/lib/redis-options";
+import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { getS3 } from "@/api/lib/s3";
 import {
@@ -52,19 +50,16 @@ type EnqueuePdfDerivativeArgs = {
 };
 
 let queue: Queue<PdfDerivativeJobData> | null = null;
-let redisClient: Redis | null = null;
+let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
 
-const getRedis = (): Redis => {
-  redisClient ??= new Redis(env.REDIS_URL, {
-    ...redisConnectionOptions(),
-    maxRetriesPerRequest: null,
-  });
-  return redisClient;
+const getQueueConnection = () => {
+  queueConnection ??= createBullMqConnection();
+  return queueConnection;
 };
 
 const getQueue = (): Queue<PdfDerivativeJobData> => {
   queue ??= new Queue<PdfDerivativeJobData>(QUEUE_NAME, {
-    connection: getRedis(),
+    connection: getQueueConnection(),
     defaultJobOptions: {
       attempts: DEFAULT_JOB_ATTEMPTS,
       backoff: { type: "exponential", delay: 30_000 },
@@ -131,10 +126,9 @@ export const enqueuePdfDerivativeOrMarkFailed = async (
 };
 
 export const initFileDerivativeWorker = () => {
-  const workerConnection = new Redis(env.REDIS_URL, {
-    ...redisConnectionOptions(),
-    maxRetriesPerRequest: null,
-  });
+  // BullMQ workers use blocking commands and need a dedicated connection
+  // separate from the queue's. Create a fresh raw client per worker init.
+  const workerConnection = createBullMqConnection();
 
   const worker = new Worker<PdfDerivativeJobData>(
     QUEUE_NAME,
