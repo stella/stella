@@ -1,4 +1,8 @@
-export class AresError extends Error {
+import { RegistryError } from "../shared/errors.js";
+
+const ARES_REGISTRY_SLUG = "cz-ares";
+
+export class AresError extends RegistryError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = "AresError";
@@ -33,11 +37,16 @@ export class AresAPIError extends AresError {
 
 export class AresNotFoundError extends AresError {
   readonly ico: string;
+  readonly canonicalId: string;
+  readonly registrySlug: string = ARES_REGISTRY_SLUG;
 
   constructor(ico: string) {
     super(`Economic subject not found: ${ico}`);
     this.name = "AresNotFoundError";
     this.ico = ico;
+    // Also expose as canonicalId so the shared `isEntityNotFound`
+    // predicate picks this up alongside `error instanceof AresError`.
+    this.canonicalId = ico;
   }
 }
 

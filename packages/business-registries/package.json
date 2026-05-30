@@ -49,6 +49,11 @@
       "bun": "./src/brreg/index.ts",
       "types": "./src/brreg/index.ts",
       "import": "./dist/brreg/index.js"
+    },
+    "./shared": {
+      "bun": "./src/shared/index.ts",
+      "types": "./src/shared/index.ts",
+      "import": "./dist/shared/index.js"
     }
   },
   "publishConfig": {

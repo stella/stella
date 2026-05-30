@@ -1,4 +1,8 @@
-export class BrregError extends Error {
+import { RegistryError } from "../shared/errors.js";
+
+const BRREG_REGISTRY_SLUG = "no-brreg";
+
+export class BrregError extends RegistryError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = "BrregError";
@@ -29,11 +33,16 @@ export class BrregAPIError extends BrregError {
 
 export class BrregNotFoundError extends BrregError {
   readonly orgnr: string;
+  readonly canonicalId: string;
+  readonly registrySlug: string = BRREG_REGISTRY_SLUG;
 
   constructor(orgnr: string) {
     super(`Norwegian entity not found: ${orgnr}`);
     this.name = "BrregNotFoundError";
     this.orgnr = orgnr;
+    // Also expose as canonicalId so the shared `isEntityNotFound`
+    // predicate picks this up alongside `error instanceof BrregError`.
+    this.canonicalId = orgnr;
   }
 }
 

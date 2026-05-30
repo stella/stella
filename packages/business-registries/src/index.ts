@@ -11,3 +11,4 @@
 //   await ares.lookupByIco("27082440");
 export * as ares from "./ares/index.js";
 export * as brreg from "./brreg/index.js";
+export * as shared from "./shared/index.js";
