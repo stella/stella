@@ -60,7 +60,26 @@ export type BusinessRegistryHit = {
   legalForm: string | null;
   address: BusinessRegistryAddress | null;
   registryUrl: string;
+  /**
+   * Adapter-specific enrichment beyond the cross-registry baseline.
+   * Present on canonical-ID lookups (where the upstream returns the
+   * full entity) and absent on name-search hits (where the upstream
+   * only returns a thin row). The chat tool surfaces `details` to the
+   * model so it can answer questions about statutory bodies, court
+   * files, industry codes, etc. — the cross-registry top-level fields
+   * stay stable for callers that only need the baseline.
+   *
+   * Discriminated on `registry` so per-adapter narrowing yields the
+   * typed upstream payload. Add a new branch each time a registry
+   * adapter lands; the `BusinessRegistrySlug` union forces the
+   * compiler to flag the missing case.
+   */
+  details?: BusinessRegistryHitDetails;
 };
+
+export type BusinessRegistryHitDetails =
+  | { registry: "ares"; company: AresCompany }
+  | { registry: "brreg"; entity: BrregEntity };
 
 export type RegistryLookupResponse =
   | {
@@ -168,6 +187,11 @@ const aresCompanyToHit = (company: AresCompany): BusinessRegistryHit => ({
   legalForm: company.legalForm,
   address: aresAddressToHit(company.address),
   registryUrl: company.registryUrl,
+  // Carry the VR-enriched payload (court file, statutory bodies,
+  // acting clause, NACE, …) so chat callers can answer questions the
+  // baseline shape cannot — the legacy `ares_lookup_company` tool
+  // exposed these directly and the dispatch path must not regress.
+  details: { registry: "ares", company },
 });
 
 const aresSearchResultToHit = (
@@ -253,6 +277,9 @@ const brregEntityToHit = (entity: BrregEntity): BusinessRegistryHit => ({
       }
     : null,
   registryUrl: entity.registryUrl,
+  // Carry postal address, industry codes, employee count, status
+  // discriminator, etc. — same rationale as ARES.
+  details: { registry: "brreg", entity },
 });
 
 const brregSearchResultToHit = (
