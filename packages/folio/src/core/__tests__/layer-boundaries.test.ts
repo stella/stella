@@ -62,12 +62,12 @@ const layerOfPath = (absolutePath: string): Layer | null => {
   return null;
 };
 
-// Match the specifier of every `from "…"` clause. Both `import … from "x"`
-// and `export … from "x"` produce a `from "x"` tail. The literal `from `
-// elsewhere in the file (e.g. inside comments) is filtered later by the
+// Match the specifier of every static import/export, including bare
+// side-effect imports (`import "../setup"`). The literal `from ` elsewhere in
+// the file (e.g. inside comments) is filtered later by the
 // `specifier.startsWith(".")` check — only relative paths are checked. The
 // regex itself uses bounded character classes to keep matching linear.
-const IMPORT_REGEX = /\bfrom\s*["']([^"']+)["']/gu;
+const IMPORT_REGEX = /\bfrom\s*["']([^"']+)["']|\bimport\s*["']([^"']+)["']/gu;
 
 type EdgeViolation = {
   importer: string;
@@ -78,15 +78,20 @@ type EdgeViolation = {
   reason: string;
 };
 
-const violationsForFile = (filePath: string): EdgeViolation[] => {
+const violationsForFile = (filePath: string): EdgeViolation[] =>
+  violationsForSource(filePath, readFileSync(filePath, "utf-8"));
+
+const violationsForSource = (
+  filePath: string,
+  source: string,
+): EdgeViolation[] => {
   const fromLayer = layerOfPath(filePath);
   if (fromLayer === null) {
     return [];
   }
-  const source = readFileSync(filePath, "utf-8");
   const violations: EdgeViolation[] = [];
   for (const match of source.matchAll(IMPORT_REGEX)) {
-    const specifier = match[1];
+    const specifier = match[1] ?? match[2];
     if (specifier === undefined || !specifier.startsWith(".")) {
       continue;
     }
@@ -222,6 +227,18 @@ describe("folio layer-boundaries — synthetic violation fixtures", () => {
     expect(
       classifyEdge("painter", layerOfPath(target) ?? "bridge", target),
     ).toBe("layout-painter must not import from layout-bridge");
+  });
+
+  test("painter -> bridge side-effect import is rejected", () => {
+    const importer = resolve(CORE_DIR, "layout-painter/renderPage.ts");
+    const violations = violationsForSource(
+      importer,
+      'import "../layout-bridge/setup";',
+    );
+    expect(violations).toHaveLength(1);
+    expect(violations[0]?.reason).toBe(
+      "layout-painter must not import from layout-bridge",
+    );
   });
 
   test("painter -> bridge barrel is rejected", () => {
