@@ -9,7 +9,9 @@ import {
 import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { ExternalDragInfoProvider } from "@/routes/_protected.workspaces/$workspaceId/-context/external-drag-info";
 import {
+  getLastCommittedActiveRowId,
   RowDropTargetProvider,
   useIsRowDropTargetActive,
 } from "@/routes/_protected.workspaces/$workspaceId/-context/row-drop-target-context";
@@ -20,9 +22,11 @@ type DropZoneProps = PropsWithChildren<{
 }>;
 
 export const DropZone = ({ workspaceId, children }: DropZoneProps) => (
-  <RowDropTargetProvider>
-    <DropZoneInner workspaceId={workspaceId}>{children}</DropZoneInner>
-  </RowDropTargetProvider>
+  <ExternalDragInfoProvider>
+    <RowDropTargetProvider>
+      <DropZoneInner workspaceId={workspaceId}>{children}</DropZoneInner>
+    </RowDropTargetProvider>
+  </ExternalDragInfoProvider>
 );
 
 const DropZoneInner = ({ workspaceId, children }: DropZoneProps) => {
@@ -47,11 +51,18 @@ const DropZoneInner = ({ workspaceId, children }: DropZoneProps) => {
     }
     return dropTargetForExternal({
       element: el,
-      canDrop: containsFiles,
+      canDrop: ({ source }) => containsFiles({ source }),
       onDragEnter: () => setIsDropTarget(true),
       onDragLeave: () => setIsDropTarget(false),
       onDrop: ({ source }) => {
         setIsDropTarget(false);
+        // Pragmatic DnD fires onDrop on every target in the chain
+        // synchronously, so if a row accepted the drop (set its id as
+        // the active row at the last committed render) the DropZone
+        // must not also create a duplicate file at the workspace root.
+        if (getLastCommittedActiveRowId() !== null) {
+          return;
+        }
         if (isPendingRef.current) {
           return;
         }

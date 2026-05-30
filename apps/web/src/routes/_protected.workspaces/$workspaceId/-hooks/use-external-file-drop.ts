@@ -6,6 +6,8 @@ import {
   getFiles,
 } from "@atlaskit/pragmatic-drag-and-drop/external/file";
 
+import type { ExternalDragInfo } from "@/routes/_protected.workspaces/$workspaceId/-context/external-drag-info";
+import { getCurrentExternalDrag } from "@/routes/_protected.workspaces/$workspaceId/-context/external-drag-info";
 import { useRowDropTarget } from "@/routes/_protected.workspaces/$workspaceId/-context/row-drop-target-context";
 
 type ExternalFileDropOptions = {
@@ -18,16 +20,18 @@ type ExternalFileDropOptions = {
   /** Optional external ref to use instead of creating a new one */
   externalRef?: React.RefObject<HTMLDivElement | null>;
   /**
-   * MIME type of the row's underlying file. When provided, the row only
-   * activates as a drop target for a single-file drag whose MIME type
-   * matches. Multi-file drags and mismatched single-file drags fall
-   * through to the parent DropZone.
+   * Optional pre-drop filter. Called inside Pragmatic DnD's `canDrop`,
+   * which fires outside React's render cycle. The drag info is read
+   * synchronously from `ExternalDragInfoProvider`. Returning false makes
+   * Pragmatic skip this drop target so the drop falls through to the
+   * parent DropZone instead.
    *
-   * Filenames aren't exposed during `dragover` (browser security), so MIME
-   * is the only mid-drag signal we have. It's a heuristic — the on-drop
-   * extension check in the dialog remains the source of truth.
+   * If omitted, defaults to accepting any external file drag. When info
+   * is unavailable (listener hasn't fired yet) the predicate is treated
+   * as rejecting — better to fall through to the workspace overlay than
+   * to highlight a row that may not match.
    */
-  expectedMimeType?: string | null | undefined;
+  accept?: (info: ExternalDragInfo) => boolean;
 };
 
 type ExternalFileDropResult = {
@@ -46,7 +50,7 @@ export const useExternalFileDrop = ({
   onDrop,
   enabled = true,
   externalRef,
-  expectedMimeType,
+  accept,
 }: ExternalFileDropOptions): ExternalFileDropResult => {
   const internalRef = useRef<HTMLDivElement>(null);
   const ref = externalRef ?? internalRef;
@@ -56,11 +60,8 @@ export const useExternalFileDrop = ({
   // Store callbacks in refs to avoid re-registering the drop target
   const onDropRef = useRef(onDrop);
   onDropRef.current = onDrop;
-  // expectedMimeType is read inside canDrop, which fires per drag. Holding
-  // it in a ref avoids tearing down the drop target mid-drag if the value
-  // changes between renders.
-  const expectedMimeTypeRef = useRef(expectedMimeType);
-  expectedMimeTypeRef.current = expectedMimeType;
+  const acceptRef = useRef(accept);
+  acceptRef.current = accept;
 
   const handleDragEnter = useCallback(() => {
     setIsDropTarget(true);
@@ -95,26 +96,20 @@ export const useExternalFileDrop = ({
         if (!containsFiles({ source })) {
           return false;
         }
-        const fileItems = source.items.filter((item) => item.kind === "file");
-        // Multi-file drags fall through to the parent DropZone (batch
-        // upload intent, not version replacement).
-        if (fileItems.length !== 1) {
+        const acceptFn = acceptRef.current;
+        if (!acceptFn) {
+          return true;
+        }
+        const info = getCurrentExternalDrag();
+        if (!info) {
           return false;
         }
-        const expected = expectedMimeTypeRef.current;
-        if (expected !== null && expected !== undefined) {
-          const dragged = fileItems[0]?.type.toLowerCase() ?? "";
-          if (dragged !== expected.toLowerCase()) {
-            return false;
-          }
-        }
-        return true;
+        return acceptFn(info);
       },
       onDragEnter: handleDragEnter,
       onDragLeave: handleDragLeave,
       onDrop: ({ source }) => {
-        const files = getFiles({ source });
-        handleDrop(files);
+        handleDrop(getFiles({ source }));
       },
     });
   }, [enabled, handleDragEnter, handleDragLeave, handleDrop, ref]);
