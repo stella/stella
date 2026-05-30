@@ -19,27 +19,31 @@ export class RegistryUnavailableError extends RegistryError {
   }
 }
 
-export class EntityNotFoundError extends RegistryError {
+// Not-found is intentionally NOT a class. JavaScript single inheritance
+// means a per-adapter class can extend either its adapter base
+// (AresError / BrregError, preserving `error instanceof AresError`
+// checks across consumers) OR a shared NotFound base — not both. The
+// adapter chain is the older, established expectation; the structural
+// type + predicate below give the shared layer the cross-adapter
+// detection it needs without forcing adapter classes off their base.
+//
+// Per-adapter NotFound classes declare `readonly canonicalId: string`
+// and `readonly registrySlug: string` to satisfy this contract.
+export type EntityNotFound = RegistryError & {
   readonly canonicalId: string;
   readonly registrySlug: string;
+};
 
-  constructor({
-    canonicalId,
-    registrySlug,
-    message,
-    cause,
-  }: {
-    canonicalId: string;
-    registrySlug: string;
-    message: string;
-    cause?: unknown;
-  }) {
-    super(message, { cause });
-    this.name = "EntityNotFoundError";
-    this.canonicalId = canonicalId;
-    this.registrySlug = registrySlug;
+export const isEntityNotFound = (error: unknown): error is EntityNotFound => {
+  if (!(error instanceof RegistryError)) {
+    return false;
   }
-}
+  const maybe = error as Partial<EntityNotFound>;
+  return (
+    typeof maybe.canonicalId === "string" &&
+    typeof maybe.registrySlug === "string"
+  );
+};
 
 export class RegistryRateLimitedError extends RegistryError {
   readonly retryAfterMs: number | null;

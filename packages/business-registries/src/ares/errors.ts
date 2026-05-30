@@ -1,4 +1,4 @@
-import { EntityNotFoundError, RegistryError } from "../shared/errors.js";
+import { RegistryError } from "../shared/errors.js";
 
 const ARES_REGISTRY_SLUG = "cz-ares";
 
@@ -35,17 +35,18 @@ export class AresAPIError extends AresError {
   }
 }
 
-export class AresNotFoundError extends EntityNotFoundError {
+export class AresNotFoundError extends AresError {
   readonly ico: string;
+  readonly canonicalId: string;
+  readonly registrySlug: string = ARES_REGISTRY_SLUG;
 
   constructor(ico: string) {
-    super({
-      canonicalId: ico,
-      registrySlug: ARES_REGISTRY_SLUG,
-      message: `Economic subject not found: ${ico}`,
-    });
+    super(`Economic subject not found: ${ico}`);
     this.name = "AresNotFoundError";
     this.ico = ico;
+    // Also expose as canonicalId so the shared `isEntityNotFound`
+    // predicate picks this up alongside `error instanceof AresError`.
+    this.canonicalId = ico;
   }
 }
 

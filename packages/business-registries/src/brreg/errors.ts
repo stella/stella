@@ -1,4 +1,4 @@
-import { EntityNotFoundError, RegistryError } from "../shared/errors.js";
+import { RegistryError } from "../shared/errors.js";
 
 const BRREG_REGISTRY_SLUG = "no-brreg";
 
@@ -31,17 +31,18 @@ export class BrregAPIError extends BrregError {
   }
 }
 
-export class BrregNotFoundError extends EntityNotFoundError {
+export class BrregNotFoundError extends BrregError {
   readonly orgnr: string;
+  readonly canonicalId: string;
+  readonly registrySlug: string = BRREG_REGISTRY_SLUG;
 
   constructor(orgnr: string) {
-    super({
-      canonicalId: orgnr,
-      registrySlug: BRREG_REGISTRY_SLUG,
-      message: `Norwegian entity not found: ${orgnr}`,
-    });
+    super(`Norwegian entity not found: ${orgnr}`);
     this.name = "BrregNotFoundError";
     this.orgnr = orgnr;
+    // Also expose as canonicalId so the shared `isEntityNotFound`
+    // predicate picks this up alongside `error instanceof BrregError`.
+    this.canonicalId = orgnr;
   }
 }
 
