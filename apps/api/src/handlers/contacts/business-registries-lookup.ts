@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { t } from "elysia";
 
 import {
@@ -92,11 +92,22 @@ const aresAddressToHit = (
   ]
     .filter(Boolean)
     .join("");
-  const lineParts = [address.street, houseSegment].filter(Boolean);
+  // ARES sometimes returns the place name in `municipalityPart` and
+  // leaves `street` empty — typical for small municipalities without
+  // numbered street names. Falling back keeps the registered seat
+  // visible in the contact form's first address line.
+  const streetOrLocality = address.street ?? address.municipalityPart;
+  const lineParts = [streetOrLocality, houseSegment].filter(Boolean);
   const line1 = lineParts.length > 0 ? lineParts.join(" ") : null;
+  // Avoid duplicating municipalityPart in line2 if we already
+  // promoted it to line1 above.
+  const line2 =
+    !address.street && address.municipalityPart
+      ? null
+      : address.municipalityPart;
   return {
     line1,
-    line2: address.municipalityPart,
+    line2,
     postalCode: address.postalCode,
     city: address.municipality,
     region: address.district,
@@ -232,7 +243,8 @@ const businessRegistriesLookup = createSafeRootHandler(
     }
 
     const isLookup = config.isCanonicalId(trimmed);
-    if (!isLookup && !config.search) {
+    const searchFn = config.search;
+    if (!isLookup && !searchFn) {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -248,10 +260,12 @@ const businessRegistriesLookup = createSafeRootHandler(
             const hit = await config.lookup(trimmed);
             return { type: "lookup", registry, hit };
           }
-          // SAFETY: `config.search` non-nullness was checked above; the
-          // narrowing does not survive the closure capture.
-          // eslint-disable-next-line typescript-eslint/no-non-null-assertion
-          const hits = await config.search!(trimmed);
+          // The `!isLookup && !searchFn` branch above returns early, so
+          // by the time we get here `searchFn` is guaranteed defined.
+          if (!searchFn) {
+            panic("searchFn must be defined when !isLookup reaches here");
+          }
+          const hits = await searchFn(trimmed);
           return { type: "search", registry, hits };
         },
         catch: (error): HandlerError => {
