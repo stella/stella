@@ -420,6 +420,76 @@ describe("inline image paragraph measurement", () => {
   });
 });
 
+describe("block image rotation measurement", () => {
+  // The painter wraps a rotated block image in an axis-aligned bbox
+  // (`renderBlockImage`, eigenpal #424). The measurer has to reserve the
+  // same rotated bbox height; otherwise the painter's container overflows
+  // the line box and the next paragraph paints on top of the rotated
+  // landscape image (codex PR #521 review).
+  test("rotated block image reserves the rotated bbox height (270deg landscape)", () => {
+    const measure = measureParagraph(
+      {
+        kind: "paragraph",
+        id: "rot-block",
+        pmStart: 0,
+        pmEnd: 1,
+        runs: [
+          {
+            kind: "image",
+            src: "data:image/png;base64,",
+            width: 120,
+            height: 60,
+            displayMode: "block",
+            transform: "rotate(270deg)",
+            distTop: 6,
+            distBottom: 6,
+          },
+        ],
+        attrs: {
+          defaultFontSize: 11,
+          defaultFontFamily: "Calibri",
+        },
+      },
+      600,
+    );
+
+    // Rotated bbox of 120x60 at 270deg is 60x120: reserve the 120px
+    // rotated height plus the default 6+6 margins, not the intrinsic
+    // 60px height the un-rotated path used.
+    expect(measure.lines[0]?.lineHeight).toBeGreaterThanOrEqual(120 + 12);
+  });
+
+  test("un-rotated block image still reserves the intrinsic height", () => {
+    const measure = measureParagraph(
+      {
+        kind: "paragraph",
+        id: "noop-block",
+        pmStart: 0,
+        pmEnd: 1,
+        runs: [
+          {
+            kind: "image",
+            src: "data:image/png;base64,",
+            width: 120,
+            height: 60,
+            displayMode: "block",
+            distTop: 6,
+            distBottom: 6,
+          },
+        ],
+        attrs: {
+          defaultFontSize: 11,
+          defaultFontFamily: "Calibri",
+        },
+      },
+      600,
+    );
+
+    expect(measure.lines[0]?.lineHeight).toBeGreaterThanOrEqual(60 + 12);
+    expect(measure.lines[0]?.lineHeight).toBeLessThan(120);
+  });
+});
+
 describe("paragraph indentation measurement", () => {
   test("negative side indents widen the measured line box", () => {
     withFakeTextMeasure(() => {

@@ -262,6 +262,38 @@ function isImageRun(run: Run): run is ImageRun {
   return run.kind === "image";
 }
 
+// Local copies of the painter's rotation helpers (eigenpal #424). Kept in
+// sync with `renderParagraph.parseRotationDegrees` /
+// `rotatedBoundingBox`; will dedupe once PR #518 + PR #521 land.
+function parseRotationDegrees(transform: string | undefined): number {
+  if (!transform) {
+    return 0;
+  }
+  const match = /rotate\(\s*([-\d.]+)\s*deg\s*\)/u.exec(transform);
+  if (!match) {
+    return 0;
+  }
+  const raw = Number.parseFloat(match[1]!);
+  if (!Number.isFinite(raw)) {
+    return 0;
+  }
+  return ((raw % 360) + 360) % 360;
+}
+
+function rotatedBlockImageHeight(run: ImageRun): number {
+  const deg = parseRotationDegrees(run.transform);
+  if (deg === 0 || deg === 180) {
+    return run.height;
+  }
+  if (deg === 90 || deg === 270) {
+    return run.width;
+  }
+  const rad = (deg * Math.PI) / 180;
+  const sinA = Math.abs(Math.sin(rad));
+  const cosA = Math.abs(Math.cos(rad));
+  return run.width * sinA + run.height * cosA;
+}
+
 /**
  * Check if a run is a line break run
  */
@@ -925,8 +957,13 @@ export function measureParagraph(
           startNewLine(runIndex, 0);
         }
 
-        // The image gets its own line with full image height
-        const imageHeight = run.height;
+        // The image gets its own line. For rotated images, reserve the
+        // axis-aligned bounding-box height so the painter's bbox wrapper
+        // (`renderBlockImage`, eigenpal #424) doesn't overflow the line
+        // and bleed into the next paragraph. Non-rotated images keep
+        // their intrinsic height. Helpers duplicated from the painter
+        // until cross-PR dedupe with #518 lands.
+        const imageHeight = rotatedBlockImageHeight(run);
         const distTop = run.distTop ?? 6;
         const distBottom = run.distBottom ?? 6;
 
