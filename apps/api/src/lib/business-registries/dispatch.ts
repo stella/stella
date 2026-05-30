@@ -32,6 +32,16 @@ import {
   normalizeOrgnr,
   searchByName as searchBrregByName,
 } from "@stll/business-registries/brreg";
+import {
+  RpoAPIError,
+  type RpoCompany,
+  RpoRequestError,
+  type RpoSearchResult,
+  RpoValidationError,
+  lookupByIco as lookupRpoByIco,
+  normalizeIco as normalizeRpoIco,
+  searchByName as searchRpoByName,
+} from "@stll/business-registries/rpo";
 import type { CountryCode } from "@stll/country-codes";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -40,7 +50,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 // Normalised cross-registry shapes
 // ---------------------------------------------------------------------------
 
-export const BUSINESS_REGISTRY_SLUGS = ["ares", "brreg"] as const;
+export const BUSINESS_REGISTRY_SLUGS = ["ares", "brreg", "rpo"] as const;
 export type BusinessRegistrySlug = (typeof BUSINESS_REGISTRY_SLUGS)[number];
 
 export type BusinessRegistryAddress = {
@@ -79,7 +89,8 @@ export type BusinessRegistryHit = {
 
 export type BusinessRegistryHitDetails =
   | { registry: "ares"; company: AresCompany }
-  | { registry: "brreg"; entity: BrregEntity };
+  | { registry: "brreg"; entity: BrregEntity }
+  | { registry: "rpo"; company: RpoCompany };
 
 export type RegistryLookupResponse =
   | {
@@ -345,6 +356,99 @@ const BRREG_HANDLER: RegistryHandler = {
 };
 
 // ---------------------------------------------------------------------------
+// RPO (Slovakia)
+// ---------------------------------------------------------------------------
+
+const rpoCompanyToHit = (company: RpoCompany): BusinessRegistryHit => ({
+  registry: "rpo",
+  id: company.ico,
+  name: company.name,
+  legalForm: company.legalForm,
+  address: company.address
+    ? {
+        line1: company.address.street,
+        line2: null,
+        postalCode: company.address.postalCode,
+        city: company.address.city,
+        region: null,
+        country: company.address.country,
+        textAddress: company.address.textAddress,
+      }
+    : null,
+  registryUrl: company.registryUrl,
+  // Carry trade-register court file, statutory bodies, NACE main
+  // activity, registered activities — Slovak ICP lawyers rely on the
+  // same fields ARES exposes for Czech entities, and the unified chat
+  // tool needs the enriched payload to answer corporate-law questions
+  // beyond name + address.
+  details: { registry: "rpo", company },
+});
+
+const rpoSearchResultToHit = (
+  result: RpoSearchResult,
+): BusinessRegistryHit => ({
+  registry: "rpo",
+  id: result.ico,
+  name: result.name,
+  legalForm: null,
+  address: result.address
+    ? {
+        line1: null,
+        line2: null,
+        postalCode: null,
+        city: null,
+        region: null,
+        country: null,
+        textAddress: result.address,
+      }
+    : null,
+  // Search hits do not return the internal numeric `id` to callers,
+  // so we deep-link via the public IČO search page instead of the
+  // entity portal — the lookup path (which has the id) uses the
+  // entity URL via `RpoCompany.registryUrl`.
+  registryUrl: `https://rpo.statistics.sk/rpo/v1/search?identifier=${encodeURIComponent(result.ico)}`,
+});
+
+const mapRpoError = (error: unknown): HandlerError | null => {
+  if (error instanceof RpoValidationError) {
+    return new HandlerError({ status: 400, message: error.message });
+  }
+  if (error instanceof RpoAPIError) {
+    return new HandlerError({
+      status: 502,
+      message: `RPO API error: ${error.message}`,
+    });
+  }
+  if (error instanceof RpoRequestError) {
+    return new HandlerError({
+      status: 502,
+      message: `RPO request failed: ${error.message}`,
+    });
+  }
+  return null;
+};
+
+const RPO_HANDLER: RegistryHandler = {
+  slug: "rpo",
+  country: "SK",
+  nativeToolSlug: "rpo",
+  // Shape check only — full MOD-11 validation happens in lookupByIco
+  // and surfaces as RpoValidationError → HTTP 400 via mapRpoError.
+  // Falling through to search would silently turn a bad-checksum IČO
+  // into an empty name-search result.
+  isCanonicalId: (input) => /^\d{8}$/u.test(normalizeRpoIco(input)),
+  lookup: async (input) => {
+    const company = await lookupRpoByIco(input);
+    return company ? rpoCompanyToHit(company) : null;
+  },
+  search: async (input, options) => {
+    const results = await searchRpoByName(input, options);
+    return results.map(rpoSearchResultToHit);
+  },
+  mapError: mapRpoError,
+};
+
+// ---------------------------------------------------------------------------
 // Registry table + lookups
 // ---------------------------------------------------------------------------
 
@@ -354,6 +458,7 @@ export const BUSINESS_REGISTRY_DISPATCH: Record<
 > = {
   ares: ARES_HANDLER,
   brreg: BRREG_HANDLER,
+  rpo: RPO_HANDLER,
 };
 
 const HANDLERS_BY_COUNTRY: ReadonlyMap<CountryCode, RegistryHandler> = new Map(

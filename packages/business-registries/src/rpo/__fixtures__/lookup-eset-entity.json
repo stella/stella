@@ -1,0 +1,651 @@
+{
+  "id": 937053,
+  "dbModificationDate": "2025-07-07",
+  "identifiers": [{ "value": "31333532", "validFrom": "1992-09-17" }],
+  "fullNames": [{ "value": "ESET, spol. s r.o.", "validFrom": "1992-09-17" }],
+  "addresses": [
+    {
+      "validFrom": "2009-07-23",
+      "street": "Einsteinova",
+      "regNumber": 0,
+      "buildingNumber": "24",
+      "postalCodes": ["85101"],
+      "municipality": { "value": "Bratislava" },
+      "country": {
+        "value": "Slovenská republika",
+        "code": "703",
+        "codelistCode": "CL000086"
+      }
+    }
+  ],
+  "legalForms": [
+    {
+      "value": {
+        "value": "Spoločnosť s ručením obmedzeným",
+        "code": "112",
+        "codelistCode": "CL000056"
+      },
+      "validFrom": "1992-09-17"
+    }
+  ],
+  "establishment": "1992-09-17",
+  "activities": [
+    {
+      "economicActivityDescription": "nákup a predaj výpočtovej techniky, elektroniky, kancelárskej techniky a kancelárskych potrieb,",
+      "validFrom": "1992-09-17"
+    },
+    {
+      "economicActivityDescription": "poskytovanie softwaru /predaj hotových programov na základe zmluvy s autormi alebo vyhotovovanie programov na zákazku/,",
+      "validFrom": "1992-09-17"
+    },
+    {
+      "economicActivityDescription": "poradenstvo v oblasti výpočtovej techniky a automatizovaných systémov riadenia,",
+      "validFrom": "1992-09-17"
+    },
+    {
+      "economicActivityDescription": "kúpa rozličného tovaru za účelom jeho ďalšieho predaja a predaj v rozsahu voľnej živnosti,",
+      "validFrom": "1992-09-17"
+    },
+    {
+      "economicActivityDescription": "reklamná a inzertná činnosť,",
+      "validFrom": "1992-09-17"
+    },
+    {
+      "economicActivityDescription": "grafická úprava textov pomocou výpočtovej techniky,",
+      "validFrom": "1992-09-17"
+    },
+    {
+      "economicActivityDescription": "vykonávanie mimoškolskej vzdelávacej činnosti",
+      "validFrom": "2013-03-14"
+    },
+    {
+      "economicActivityDescription": "Prenájom nehnuteľností spojený s poskytovaním iných než základných služieb spojených s prenájmom",
+      "validFrom": "2018-02-08"
+    },
+    {
+      "economicActivityDescription": "Prenájom hnuteľných vecí",
+      "validFrom": "2018-02-08"
+    },
+    {
+      "economicActivityDescription": "Sprostredkovateľská činnosť v oblasti obchodu, služieb, výroby",
+      "validFrom": "2018-02-08"
+    },
+    {
+      "economicActivityDescription": "(l) prenájom nehnuteľností spojený s poskytovaním základných služieb spojených s prenájmom",
+      "validFrom": "2018-02-08"
+    },
+    {
+      "economicActivityDescription": "počítačové služby a služby súvisiace s počítačovým spracovaním údajov",
+      "validFrom": "2022-02-16"
+    },
+    {
+      "economicActivityDescription": "Konzultačné, poradenské, tréningové a koučovacie služby v oblasti rozvoja ľudských zdrojov",
+      "validFrom": "2022-09-28"
+    },
+    {
+      "economicActivityDescription": "Organizovanie športových, kultúrnych a iných spoločenských podujatí",
+      "validFrom": "2022-09-28"
+    },
+    {
+      "economicActivityDescription": "Vydavateľská činnosť",
+      "validFrom": "2022-09-28"
+    },
+    {
+      "economicActivityDescription": "Vedenie účtovníctva",
+      "validFrom": "2022-09-28"
+    },
+    {
+      "economicActivityDescription": "Certifikovaný audítor kybernetickej bezpečnosti",
+      "validFrom": "2025-02-19"
+    },
+    {
+      "economicActivityDescription": "Činnosť podnikateľských, organizačných a ekonomických poradcov",
+      "validFrom": "2025-02-19"
+    },
+    {
+      "economicActivityDescription": "Služby v oblasti administratívnej správy a služby organizačno-hospodárskej povahy",
+      "validFrom": "2025-02-19"
+    }
+  ],
+  "statutoryBodies": [
+    {
+      "stakeholderType": {
+        "value": "Konateľ",
+        "code": "3",
+        "codelistCode": "CL010113"
+      },
+      "validFrom": "1992-09-17",
+      "address": {
+        "street": "Záhradnícka",
+        "regNumber": 0,
+        "buildingNumber": "60",
+        "postalCodes": ["82108"],
+        "municipality": {
+          "value": "Bratislava - mestská časť Ružinov",
+          "code": "SK0102529320",
+          "codelistCode": "CL000025"
+        },
+        "country": {
+          "value": "Slovenská republika",
+          "code": "703",
+          "codelistCode": "CL000086"
+        }
+      },
+      "personName": {
+        "formatedName": "Ing. Miroslav Trnka",
+        "familyNames": ["Trnka"],
+        "givenNames": ["Miroslav"]
+      }
+    },
+    {
+      "stakeholderType": {
+        "value": "Konateľ",
+        "code": "3",
+        "codelistCode": "CL010113"
+      },
+      "validFrom": "1992-09-17",
+      "address": {
+        "street": "Bajkalská",
+        "regNumber": 0,
+        "buildingNumber": "5/C",
+        "postalCodes": ["83104"],
+        "municipality": {
+          "value": "Bratislava - mestská časť Nové Mesto",
+          "code": "SK0103529346",
+          "codelistCode": "CL000025"
+        },
+        "country": {
+          "value": "Slovenská republika",
+          "code": "703",
+          "codelistCode": "CL000086"
+        }
+      },
+      "personName": {
+        "formatedName": "Ing. Peter Paško",
+        "familyNames": ["Paško"],
+        "givenNames": ["Peter"]
+      }
+    },
+    {
+      "stakeholderType": {
+        "value": "Konateľ",
+        "code": "3",
+        "codelistCode": "CL010113"
+      },
+      "validFrom": "2023-12-16",
+      "address": {
+        "street": "Stará Klenová",
+        "regNumber": 0,
+        "buildingNumber": "13250/28D",
+        "postalCodes": ["831 01"],
+        "municipality": {
+          "value": "Bratislava - mestská časť Nové Mesto",
+          "code": "SK0103529346",
+          "codelistCode": "CL000025"
+        },
+        "country": {
+          "value": "Slovenská republika",
+          "code": "703",
+          "codelistCode": "CL000086"
+        }
+      },
+      "personName": {
+        "formatedName": "Ing. Richard Marko",
+        "familyNames": ["Marko"],
+        "givenNames": ["Richard"]
+      }
+    }
+  ],
+  "stakeholders": [
+    {
+      "stakeholderType": {
+        "value": "Spoločník v.o.s. / s.r.o.",
+        "code": "99",
+        "codelistCode": "CL010109"
+      },
+      "validFrom": "2022-02-16",
+      "address": {
+        "street": "Stará Klenová",
+        "regNumber": 0,
+        "buildingNumber": "13250/28D",
+        "postalCodes": ["831 01"],
+        "municipality": {
+          "value": "Bratislava - mestská časť Nové Mesto",
+          "code": "SK0103529346",
+          "codelistCode": "CL000025"
+        },
+        "country": {
+          "value": "Slovenská republika",
+          "code": "703",
+          "codelistCode": "CL000086"
+        }
+      },
+      "personName": {
+        "formatedName": "Ing. Richard Marko",
+        "familyNames": ["Marko"],
+        "givenNames": ["Richard"]
+      }
+    },
+    {
+      "stakeholderType": {
+        "value": "Člen dozorného orgánu",
+        "code": "98",
+        "codelistCode": "CL010109"
+      },
+      "validFrom": "2022-01-01",
+      "address": {
+        "street": "Tajovského",
+        "regNumber": 0,
+        "buildingNumber": "7813/22",
+        "postalCodes": ["811 04"],
+        "municipality": {
+          "value": "Bratislava - mestská časť Staré Mesto",
+          "code": "SK0101528595",
+          "codelistCode": "CL000025"
+        },
+        "country": {
+          "value": "Slovenská republika",
+          "code": "703",
+          "codelistCode": "CL000086"
+        }
+      },
+      "personName": {
+        "formatedName": "Ing. Maroš Grund",
+        "familyNames": ["Grund"],
+        "givenNames": ["Maroš"]
+      }
+    },
+    {
+      "stakeholderType": {
+        "value": "Člen dozorného orgánu",
+        "code": "98",
+        "codelistCode": "CL010109"
+      },
+      "validFrom": "2022-01-01",
+      "address": {
+        "street": "Kmeťova",
+        "regNumber": 0,
+        "buildingNumber": "13",
+        "postalCodes": ["900 28"],
+        "municipality": {
+          "value": "Ivanka pri Dunaji",
+          "code": "SK0108507938",
+          "codelistCode": "CL000025"
+        },
+        "country": {
+          "value": "Slovenská republika",
+          "code": "703",
+          "codelistCode": "CL000086"
+        }
+      },
+      "personName": {
+        "formatedName": "Ing. Matej Bošňák, - predseda",
+        "familyNames": ["Bošňák"],
+        "givenNames": ["Matej"]
+      }
+    },
+    {
+      "stakeholderType": {
+        "value": "Člen dozorného orgánu",
+        "code": "98",
+        "codelistCode": "CL010109"
+      },
+      "validFrom": "2022-01-01",
+      "address": {
+        "street": "Bajkalská",
+        "regNumber": 0,
+        "buildingNumber": "5/C",
+        "postalCodes": ["831 04"],
+        "municipality": {
+          "value": "Bratislava - mestská časť Nové Mesto",
+          "code": "SK0103529346",
+          "codelistCode": "CL000025"
+        },
+        "country": {
+          "value": "Slovenská republika",
+          "code": "703",
+          "codelistCode": "CL000086"
+        }
+      },
+      "personName": {
+        "formatedName": "RNDr. Anton Zajac",
+        "familyNames": ["Zajac"],
+        "givenNames": ["Anton"]
+      }
+    },
+    {
+      "stakeholderType": {
+        "value": "Spoločník v.o.s. / s.r.o.",
+        "code": "99",
+        "codelistCode": "CL010109"
+      },
+      "validFrom": "2021-01-30",
+      "address": {
+        "street": "Tajovského",
+        "regNumber": 0,
+        "buildingNumber": "7813/22",
+        "postalCodes": ["81104"],
+        "municipality": { "value": "Bratislava - mestská časť Staré mesto" },
+        "country": {
+          "value": "Slovenská republika",
+          "code": "703",
+          "codelistCode": "CL000086"
+        }
+      },
+      "personName": {
+        "formatedName": "Ing. Maroš Grund",
+        "familyNames": ["Grund"],
+        "givenNames": ["Maroš"]
+      }
+    },
+    {
+      "stakeholderType": {
+        "value": "Spoločník v.o.s. / s.r.o.",
+        "code": "99",
+        "codelistCode": "CL010109"
+      },
+      "validFrom": "2022-02-16",
+      "address": {
+        "street": "Záhradnícka",
+        "regNumber": 0,
+        "buildingNumber": "60",
+        "postalCodes": ["821 08"],
+        "municipality": {
+          "value": "Bratislava - mestská časť Ružinov",
+          "code": "SK0102529320",
+          "codelistCode": "CL000025"
+        },
+        "country": {
+          "value": "Slovenská republika",
+          "code": "703",
+          "codelistCode": "CL000086"
+        }
+      },
+      "personName": {
+        "formatedName": "Ing. Miroslav Trnka",
+        "familyNames": ["Trnka"],
+        "givenNames": ["Miroslav"]
+      }
+    },
+    {
+      "stakeholderType": {
+        "value": "Spoločník v.o.s. / s.r.o.",
+        "code": "99",
+        "codelistCode": "CL010109"
+      },
+      "validFrom": "2022-02-16",
+      "address": {
+        "street": "Bajkalská",
+        "regNumber": 0,
+        "buildingNumber": "5/C",
+        "postalCodes": ["831 04"],
+        "municipality": {
+          "value": "Bratislava - mestská časť Nové Mesto",
+          "code": "SK0103529346",
+          "codelistCode": "CL000025"
+        },
+        "country": {
+          "value": "Slovenská republika",
+          "code": "703",
+          "codelistCode": "CL000086"
+        }
+      },
+      "personName": {
+        "formatedName": "Ing. Peter Paško",
+        "familyNames": ["Paško"],
+        "givenNames": ["Peter"]
+      }
+    },
+    {
+      "stakeholderType": {
+        "value": "Spoločník v.o.s. / s.r.o.",
+        "code": "99",
+        "codelistCode": "CL010109"
+      },
+      "validFrom": "2025-02-15",
+      "address": {
+        "street": "Pribinova",
+        "regNumber": 0,
+        "buildingNumber": "17130/30",
+        "postalCodes": ["811 09"],
+        "municipality": {
+          "value": "Bratislava - mestská časť Ružinov",
+          "code": "SK0102529320",
+          "codelistCode": "CL000025"
+        },
+        "country": {
+          "value": "Slovenská republika",
+          "code": "703",
+          "codelistCode": "CL000086"
+        }
+      },
+      "personName": {
+        "formatedName": "Ján Hrubý",
+        "familyNames": ["Hrubý"],
+        "givenNames": ["Ján"]
+      }
+    },
+    {
+      "stakeholderType": {
+        "value": "Spoločník v.o.s. / s.r.o.",
+        "code": "99",
+        "codelistCode": "CL010109"
+      },
+      "validFrom": "2022-02-16",
+      "address": {
+        "street": "Bajkalská",
+        "regNumber": 0,
+        "buildingNumber": "5/C",
+        "postalCodes": ["831 04"],
+        "municipality": {
+          "value": "Bratislava - mestská časť Nové Mesto",
+          "code": "SK0103529346",
+          "codelistCode": "CL000025"
+        },
+        "country": {
+          "value": "Slovenská republika",
+          "code": "703",
+          "codelistCode": "CL000086"
+        }
+      },
+      "personName": {
+        "formatedName": "RNDr. Anton Zajac",
+        "familyNames": ["Zajac"],
+        "givenNames": ["Anton"]
+      }
+    }
+  ],
+  "otherLegalFacts": [
+    {
+      "value": "Zápisnica z mimoriadneho valného zhromaždenia konaného dňa 29.10.2015. Zmluva o zlúčení zo dňa 09.11.2015 vo forme notárskej zápisnice č. N 1953/2015, Nz 41576/2015, NCRls 42480/2015.",
+      "validFrom": "2015-11-15"
+    },
+    {
+      "value": "Zápisnica z valného zhromaždenia zo dňa 30.01.2013.",
+      "validFrom": "2013-03-14"
+    },
+    {
+      "value": "Rozhodnutie jediného spoločníka zo dňa 24.05.2010 o zlúčení so spoločnosťou COMDOM Software, s.r.o., so sídlom Komenského 11/A, 040 01 Košice, IČO: 35889691, zapísanej v obchodnom registri Okresného súdu Košice I, Oddiel Sro, Vložka č. 20164/V, ktorá bola zrušená bez likvidácie a jej zlučení so spoločnosťou ESET, spol. s r.o., so sídlom Einsteinova 24, 851 01 Bratislava, IČO: 31333532, zapísanou v obchodnom registri Okresného súdu Bratislava I, Oddiel Sro, Vložka č. 3586/B, ktorá sa na základe zmluvy o zlúčení zo dňa 24.05.2010, spísanej vo forme notárskej zápisnice N 91/2010, Nz 18316/2010 notárkou JUDr. Lucianou Rebrovou, stáva právnym nástupcom COMDOM Software, s.r.o. a preberá všetky jej práva a záväzky.",
+      "validFrom": "2010-06-01"
+    },
+    {
+      "value": "Zápisnica z valného zhromaždenia zo dňa 21.10.2009.",
+      "validFrom": "2010-02-19"
+    },
+    {
+      "value": "Zápisnica z valného zhromaždenia zo dňa 21.2.2005. Dodatok č. 1 k spoločenskej zmluve zo dňa 2.3.2005.",
+      "validFrom": "2005-03-22"
+    },
+    {
+      "value": "Zápisnica z mimoriadneho valného zhromaždenia konaného dňa 16.4.2008.",
+      "validFrom": "2008-04-26"
+    },
+    {
+      "value": "Zápisnica z valného zhromaždenia zo dňa 06.04.2009.",
+      "validFrom": "2009-07-23"
+    },
+    {
+      "value": "Zvýšenie základného imania schválené na valnom zhromaždení dňa 3.4.1998. Spoločenská zmluva - úplné znenie zo dňa 28.6.1999.",
+      "validFrom": "2000-02-07"
+    },
+    {
+      "value": "Spoločnosť s ručením obmedzeným bola založená spoločenskou zmluvou zo dňa 26. 6. 1992 v zmysle Zákona č. 513/91 Zb. Stary spis: S.r.o. 7326",
+      "validFrom": "1992-09-17"
+    }
+  ],
+  "authorizations": [
+    {
+      "value": "V mene spoločnosti voči tretím osobám konajú a podpisujú vždy dvaja konatelia spoločne. V mene spoločnosti konatelia podpisujú tak, že k napísanému alebo vytlačenému obchodnému menu spoločnosti pripoja dvaja konatelia svoj podpis, pričom pri podpise musí byť vždy uvedené slovo „konateľ“.",
+      "validFrom": "2022-02-16"
+    }
+  ],
+  "equities": [
+    {
+      "validFrom": "2009-07-23",
+      "value": 140000.0,
+      "currency": { "value": "euro", "code": "EUR", "codelistCode": "CL000083" }
+    },
+    {
+      "validFrom": "2009-07-23",
+      "valuePaid": 140000.0,
+      "currency": { "value": "euro", "code": "EUR", "codelistCode": "CL000083" }
+    }
+  ],
+  "deposits": [
+    {
+      "validFrom": "2009-07-23",
+      "personName": {
+        "formatedName": "Ing. Richard Marko",
+        "familyNames": ["Marko"],
+        "givenNames": ["Richard"]
+      },
+      "amount": 16975.0,
+      "currency": { "value": "euro", "code": "EUR", "codelistCode": "CL000083" }
+    },
+    {
+      "validFrom": "2009-07-23",
+      "personName": {
+        "formatedName": "Ing. Maroš Grund",
+        "familyNames": ["Grund"],
+        "givenNames": ["Maroš"]
+      },
+      "amount": 16975.0,
+      "currency": { "value": "euro", "code": "EUR", "codelistCode": "CL000083" }
+    },
+    {
+      "validFrom": "2009-07-23",
+      "personName": {
+        "formatedName": "Ing. Miroslav Trnka",
+        "familyNames": ["Trnka"],
+        "givenNames": ["Miroslav"]
+      },
+      "amount": 31850.0,
+      "currency": { "value": "euro", "code": "EUR", "codelistCode": "CL000083" }
+    },
+    {
+      "validFrom": "2009-07-23",
+      "personName": {
+        "formatedName": "Ing. Peter Paško",
+        "familyNames": ["Paško"],
+        "givenNames": ["Peter"]
+      },
+      "amount": 30800.0,
+      "currency": { "value": "euro", "code": "EUR", "codelistCode": "CL000083" }
+    },
+    {
+      "validFrom": "2009-07-23",
+      "personName": {
+        "formatedName": "Ing. Peter Paško",
+        "familyNames": ["Paško"],
+        "givenNames": ["Peter"]
+      },
+      "amount": 30800.0,
+      "currency": { "value": "euro", "code": "EUR", "codelistCode": "CL000083" }
+    },
+    {
+      "validFrom": "2025-02-15",
+      "personName": {
+        "formatedName": "Ján Hrubý",
+        "familyNames": ["Hrubý"],
+        "givenNames": ["Ján"]
+      },
+      "amount": 30800.0,
+      "currency": { "value": "euro", "code": "EUR", "codelistCode": "CL000083" }
+    },
+    {
+      "validFrom": "2009-07-23",
+      "personName": {
+        "formatedName": "RNDr. Anton Zajac",
+        "familyNames": ["Zajac"],
+        "givenNames": ["Anton"]
+      },
+      "amount": 12600.0,
+      "currency": { "value": "euro", "code": "EUR", "codelistCode": "CL000083" }
+    }
+  ],
+  "sourceRegister": {
+    "value": {
+      "value": "Obchodný register",
+      "code": "1",
+      "codelistCode": "CL010112"
+    },
+    "registrationOffices": [
+      { "value": "Mestský súd Bratislava III", "validFrom": "1992-09-17" }
+    ],
+    "registrationNumbers": [
+      { "value": "Sro/3586/B", "validFrom": "1992-09-17" }
+    ]
+  },
+  "predecessors": [
+    {
+      "identifier": "35889691",
+      "fullName": "COMDOM Software s.r.o.",
+      "address": {
+        "street": "Komenského",
+        "regNumber": 0,
+        "buildingNumber": "11/A",
+        "municipality": { "value": "Košice" },
+        "country": {
+          "value": "Slovenská republika",
+          "code": "703",
+          "codelistCode": "CL000086"
+        }
+      },
+      "validFrom": "2010-06-01"
+    },
+    {
+      "identifier": "46498940",
+      "fullName": "ESET Authentication Technologies s. r. o.",
+      "address": {
+        "street": "Einsteinova",
+        "regNumber": 0,
+        "buildingNumber": "24",
+        "municipality": {
+          "value": "Bratislava - mestská časť Petržalka",
+          "code": "SK0105529460",
+          "codelistCode": "CL000025"
+        },
+        "country": {
+          "value": "Slovenská republika",
+          "code": "703",
+          "codelistCode": "CL000086"
+        }
+      },
+      "validFrom": "2015-11-15"
+    }
+  ],
+  "statisticalCodes": {
+    "statCodesActualization": "2026-01-01",
+    "mainActivity": {
+      "value": "Ostatné služby týkajúce sa informačných technológií a počítačov",
+      "code": "6290",
+      "codelistCode": "CL010579"
+    },
+    "esa2010": {
+      "value": "Národné súkromné nefinančné korporácie",
+      "code": "11002",
+      "codelistCode": "CL010010"
+    }
+  },
+  "license": "1. ŠÚ SR ako správca informačného systému RPO uplatňuje na použitie sprístupnených údajov z RPO uvedených v § 7 ods. 2 a § 7a ods. 4 zákona č. 272/2015 Z. z. o registri právnických osôb, podnikateľov a orgánov verejnej moci a o zmene a doplnení niektorých zákonov (ďalej len „zákon o registri právnických osôb“) medzinárodnú verejnú licenciu Creative Commons Attribution License (cc-by) 4.0 (ďalej len „verejná licencia“).\n2. Predmetom verejnej licencie sú sprístupnené údaje z RPO prostredníctvom webového sídla ŠÚ SR v zmysle § 7 ods. 2 a § 7a ods. 4 zákona o registri právnických osôb.\n3. ŠÚ SR udeľuje súhlas na použitie predmetu verejnej licencie a výkon licencovaných práv („licencia“) podľa vyššie citovanej verejnej licencie."
+}

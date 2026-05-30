@@ -1,7 +1,7 @@
 {
   "name": "@stll/business-registries",
   "version": "0.1.0",
-  "description": "Typed clients for national business / commercial registries (Czech ARES, Norwegian Brreg, Finnish PRH, Polish KRS, UK Companies House, French INSEE Sirene, ...)",
+  "description": "Typed clients for national business / commercial registries (Czech ARES, Norwegian Brreg, Slovak RPO, Finnish PRH, Polish KRS, UK Companies House, French INSEE Sirene, ...)",
   "keywords": [
     "ares",
     "brreg",
@@ -9,10 +9,12 @@
     "commercial-register",
     "companies-house",
     "company-lookup",
+    "ico",
     "krs",
     "legal",
     "prh",
     "registry",
+    "rpo",
     "sirene"
   ],
   "homepage": "https://github.com/stella/stella/tree/main/packages/business-registries",
@@ -49,6 +51,11 @@
       "bun": "./src/brreg/index.ts",
       "types": "./src/brreg/index.ts",
       "import": "./dist/brreg/index.js"
+    },
+    "./rpo": {
+      "bun": "./src/rpo/index.ts",
+      "types": "./src/rpo/index.ts",
+      "import": "./dist/rpo/index.js"
     },
     "./shared": {
       "bun": "./src/shared/index.ts",

@@ -1,0 +1,18 @@
+{
+  "$schema": "../../../schema.json",
+  "kind": "native-tool",
+  "slug": "rpo",
+  "displayName": "RPO Štatistický úrad SR",
+  "description": "Slovak company lookup by IČO or company name from the Register právnických osôb (RPO) public REST API operated by the Statistical Office of the Slovak Republic.",
+  "author": "stella",
+  "authorUrl": "https://github.com/stella",
+  "license": "Apache-2.0",
+  "cost": "free",
+  "setup": "none",
+  "homepage": "https://slovak.statistics.sk",
+  "tags": ["corporate", "regulatory"],
+  "jurisdictions": ["SK"],
+  "backendSlug": "rpo",
+  "url": "https://rpo.statistics.sk",
+  "documentationUrl": "https://susrrpo.docs.apiary.io"
+}

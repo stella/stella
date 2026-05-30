@@ -1,0 +1,121 @@
+{
+  "results": [
+    {
+      "id": 1013242,
+      "dbModificationDate": "2026-01-15",
+      "identifiers": [{ "value": "35763469", "validFrom": "1999-04-01" }],
+      "fullNames": [
+        {
+          "value": "Slovenské telekomunikácie, a.s.",
+          "validFrom": "1999-04-01",
+          "validTo": "2004-01-14"
+        },
+        {
+          "value": "Slovak Telecom, a.s.",
+          "validFrom": "2004-01-15",
+          "validTo": "2006-03-07"
+        },
+        { "value": "Slovak Telekom, a.s.", "validFrom": "2006-03-08" }
+      ],
+      "addresses": [
+        {
+          "validFrom": "2013-07-01",
+          "street": "Bajkalská",
+          "regNumber": 0,
+          "buildingNumber": "28",
+          "postalCodes": ["81762"],
+          "municipality": { "value": "Bratislava" },
+          "country": {
+            "value": "Slovenská republika",
+            "code": "703",
+            "codelistCode": "CL000086"
+          }
+        },
+        {
+          "validFrom": "2007-06-01",
+          "validTo": "2013-06-30",
+          "street": "Karadžičova",
+          "regNumber": 0,
+          "buildingNumber": "10",
+          "postalCodes": ["82513"],
+          "municipality": { "value": "Bratislava" },
+          "country": {
+            "value": "Slovenská republika",
+            "code": "703",
+            "codelistCode": "CL000086"
+          }
+        },
+        {
+          "validFrom": "1999-04-01",
+          "validTo": "2007-05-31",
+          "street": "Námestie slobody",
+          "regNumber": 0,
+          "buildingNumber": "6",
+          "postalCodes": ["81762"],
+          "municipality": { "value": "Bratislava" },
+          "country": {
+            "value": "Slovenská republika",
+            "code": "703",
+            "codelistCode": "CL000086"
+          }
+        }
+      ],
+      "establishment": "1999-04-01",
+      "sourceRegister": {
+        "value": {
+          "value": "Obchodný register",
+          "code": "1",
+          "codelistCode": "CL010112"
+        },
+        "registrationOffices": [
+          { "value": "Mestský súd Bratislava III", "validFrom": "1999-04-01" }
+        ],
+        "registrationNumbers": [
+          { "value": "Sa/2081/B", "validFrom": "1999-04-01" }
+        ]
+      }
+    },
+    {
+      "id": 17575408,
+      "dbModificationDate": "2026-03-03",
+      "identifiers": [{ "value": "56072431", "validFrom": "2024-02-10" }],
+      "fullNames": [
+        { "value": "Slovak Telekom Infra, a.s.", "validFrom": "2024-02-10" }
+      ],
+      "addresses": [
+        {
+          "validFrom": "2024-02-10",
+          "street": "Bajkalská",
+          "regNumber": 0,
+          "buildingNumber": "28",
+          "postalCodes": ["82109"],
+          "municipality": {
+            "value": "Bratislava - mestská časť Ružinov",
+            "code": "SK0102529320",
+            "codelistCode": "CL000025"
+          },
+          "country": {
+            "value": "Slovenská republika",
+            "code": "703",
+            "codelistCode": "CL000086"
+          }
+        }
+      ],
+      "establishment": "2024-02-10",
+      "sourceRegister": {
+        "value": {
+          "value": "Obchodný register",
+          "code": "1",
+          "codelistCode": "CL010112"
+        },
+        "registrationOffices": [
+          { "value": "Mestský súd Bratislava III", "validFrom": "2024-02-10" }
+        ],
+        "registrationNumbers": [
+          { "value": "Sa/7651/B", "validFrom": "2024-02-10" }
+        ]
+      }
+    }
+  ],
+  "license": "1. ŠÚ SR ako správca informačného systému RPO uplatňuje na použitie sprístupnených údajov z RPO uvedených v § 7 ods. 2 a § 7a ods. 4 zákona č. 272/2015 Z. z. o registri právnických osôb, podnikateľov a orgánov verejnej moci a o zmene a doplnení niektorých zákonov (ďalej len „zákon o registri právnických osôb“) medzinárodnú verejnú licenciu Creative Commons Attribution License (cc-by) 4.0 (ďalej len „verejná licencia“).\n2. Predmetom verejnej licencie sú sprístupnené údaje z RPO prostredníctvom webového sídla ŠÚ SR v zmysle § 7 ods. 2 a § 7a ods. 4 zákona o registri právnických osôb.\n3. ŠÚ SR udeľuje súhlas na použitie predmetu verejnej licencie a výkon licencovaných práv („licencia“) podľa vyššie citovanej verejnej licencie."
+}
