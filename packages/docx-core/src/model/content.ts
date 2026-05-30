@@ -446,6 +446,25 @@ export type Image = {
   padding?: ImagePadding;
   /** Source-bitmap crop (wp:srcRect), eigenpal #424 */
   crop?: ImageCrop;
+  /**
+   * Opacity in [0, 1] (OOXML `a:alphaModFix amt`). Undefined or `1` means
+   * fully opaque. Mirrors eigenpal docx-editor #424.
+   */
+  opacity?: number;
+  /**
+   * `wp:anchor layoutInCell` — when true (OOXML default), an anchored image
+   * inside a table cell is constrained to the cell. When false, the image
+   * escapes the cell into the page area. Round-tripped on save so the
+   * author's intent survives; undefined means "use the spec default".
+   */
+  layoutInCell?: boolean;
+  /**
+   * `wp:anchor allowOverlap` — when true (OOXML default), anchored objects
+   * may overlap; when false, Word repositions them to avoid collisions. We
+   * don't currently reposition, but we round-trip the flag so saving
+   * preserves the author's intent; undefined means "use the spec default".
+   */
+  allowOverlap?: boolean;
   /** Whether this is a decorative image */
   decorative?: boolean;
   /** Hyperlink URL for clickable image */

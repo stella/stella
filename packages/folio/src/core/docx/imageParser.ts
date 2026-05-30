@@ -307,6 +307,29 @@ function parseImageCrop(blipFill: XmlElement | null): ImageCrop | undefined {
 }
 
 /**
+ * Parse `<a:alphaModFix amt="..."/>` inside the `a:blip` element. The
+ * `amt` value is in 1/100000; convert to a fraction in [0, 1] for CSS
+ * `opacity`. Returns undefined when no alpha modifier is present (fully
+ * opaque) or when `amt` >= 100000 (also fully opaque).
+ *
+ * Mirrors eigenpal docx-editor #424.
+ */
+function parseImageOpacity(blip: XmlElement | null): number | undefined {
+  if (!blip) {
+    return undefined;
+  }
+  const alpha = findByFullName(blip, "a:alphaModFix");
+  if (!alpha) {
+    return undefined;
+  }
+  const amt = parseNumericAttribute(alpha, null, "amt");
+  if (amt === undefined || amt >= 100_000) {
+    return undefined;
+  }
+  return Math.max(0, Math.min(1, amt / 100_000));
+}
+
+/**
  * Extract rId from a:blip element
  */
 function extractBlipRId(blip: XmlElement | null): string {
@@ -536,6 +559,7 @@ function parseInline(
   const blip = blipFill ? findByFullName(blipFill, "a:blip") : null;
   const rId = extractBlipRId(blip);
   const crop = parseImageCrop(blipFill);
+  const opacity = parseImageOpacity(blip);
 
   // Resolve image data
   const imageData = resolveImageData(rId, rels, media);
@@ -602,6 +626,9 @@ function parseInline(
   if (crop) {
     image.crop = crop;
   }
+  if (opacity !== undefined) {
+    image.opacity = opacity;
+  }
 
   // Resolve image hyperlink (a:hlinkClick)
   if (props.hlinkRId && rels) {
@@ -642,6 +669,17 @@ function parseAnchor(
   // Check behindDoc attribute
   const behindDoc = getAttribute(anchorEl, null, "behindDoc") === "1";
 
+  // OOXML defaults `layoutInCell` and `allowOverlap` to "1" (true) when the
+  // attributes are absent. We only record the value when the document
+  // deviates from the default so the round-trip preserves author intent
+  // without bloating the serialized XML. Mirrors eigenpal #424.
+  const layoutInCellAttr = getAttribute(anchorEl, null, "layoutInCell");
+  const layoutInCell =
+    layoutInCellAttr === null ? undefined : layoutInCellAttr === "1";
+  const allowOverlapAttr = getAttribute(anchorEl, null, "allowOverlap");
+  const allowOverlap =
+    allowOverlapAttr === null ? undefined : allowOverlapAttr === "1";
+
   // Read distance attributes from the wp:anchor element itself (fallback values)
   const anchorDistT = parseNumericAttribute(anchorEl, null, "distT");
   const anchorDistB = parseNumericAttribute(anchorEl, null, "distB");
@@ -677,6 +715,7 @@ function parseAnchor(
   const blip = blipFill ? findByFullName(blipFill, "a:blip") : null;
   const rId = extractBlipRId(blip);
   const crop = parseImageCrop(blipFill);
+  const opacity = parseImageOpacity(blip);
 
   // Resolve image data
   const imageData = resolveImageData(rId, rels, media);
@@ -725,6 +764,15 @@ function parseAnchor(
   }
   if (crop) {
     image.crop = crop;
+  }
+  if (opacity !== undefined) {
+    image.opacity = opacity;
+  }
+  if (layoutInCell !== undefined) {
+    image.layoutInCell = layoutInCell;
+  }
+  if (allowOverlap !== undefined) {
+    image.allowOverlap = allowOverlap;
   }
 
   // Resolve image hyperlink (a:hlinkClick)
