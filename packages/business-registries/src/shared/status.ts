@@ -12,7 +12,15 @@ export type EntityStatus =
   | { type: "deleted"; at: string | null }
   | { type: "unknown" };
 
+// Accept any runtime string for `internal` so undocumented or newly-added
+// upstream status codes fall through to `{ type: "unknown" }` instead of
+// landing in the return value as `undefined`. The mapping keys still drive
+// `TInternal` inference, so call sites get autocomplete on documented codes
+// without giving up runtime resilience to upstream drift.
 export const mapEntityStatus = <TInternal extends string>(
-  internal: TInternal,
+  internal: string,
   mapping: Record<TInternal, EntityStatus>,
-): EntityStatus => mapping[internal];
+): EntityStatus =>
+  (mapping as Record<string, EntityStatus | undefined>)[internal] ?? {
+    type: "unknown",
+  };
