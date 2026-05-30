@@ -2553,15 +2553,17 @@ export function DocxEditor({
           await import("../core/docx/selectiveSaveFlags");
         const flags = resolveSelectiveSaveFlags(featureFlags);
 
-        // Selective save runs only when the feature flag is on AND the
-        // per-call override hasn't disabled it. Otherwise the full repack is
-        // the single, documented save path.
-        const useSelective =
+        // The tripwire observes the selective path independently from the
+        // user-visible save mode. Only `useSelectiveForSave` is allowed to
+        // choose the returned bytes.
+        const useSelectiveForSave =
           flags.selectiveSave && options?.selective !== false;
+        const shouldAttemptSelective =
+          useSelectiveForSave || flags.selectiveSaveTripwire;
         const view = pagedEditorRef.current?.getView();
         let selectiveBuffer: ArrayBuffer | null = null;
 
-        if (useSelective && view && originalBufferRef.current) {
+        if (shouldAttemptSelective && view && originalBufferRef.current) {
           const editorState = view.state;
           const attemptSelectiveSave = await loadAttemptSelectiveSave();
           selectiveBuffer = await attemptSelectiveSave(
@@ -2576,7 +2578,9 @@ export function DocxEditor({
           );
         }
 
-        let buffer: ArrayBuffer | null = selectiveBuffer;
+        let buffer: ArrayBuffer | null = useSelectiveForSave
+          ? selectiveBuffer
+          : null;
         let fullBuffer: ArrayBuffer | null = null;
 
         if (!buffer || flags.selectiveSaveTripwire) {

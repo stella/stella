@@ -13,6 +13,7 @@
  * `dcterms:modified` with the current wall clock and would always disagree.
  */
 
+import { panic } from "better-result";
 import type JSZipType from "jszip";
 
 const IGNORED_PATHS = new Set<string>(["docProps/core.xml"]);
@@ -35,6 +36,12 @@ export type TripwireResult =
 type LoadedEntries = {
   zip: JSZipType;
   paths: string[];
+};
+
+type EntryBytes = {
+  path: string;
+  selective: Uint8Array;
+  full: Uint8Array;
 };
 
 async function listEntries(buffer: ArrayBuffer): Promise<LoadedEntries> {
@@ -64,6 +71,33 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
     }
   }
   return true;
+}
+
+function readEntryBytes(
+  zip: JSZipType,
+  path: string,
+  side: "selective" | "full",
+): Promise<Uint8Array> {
+  const entry = zip.file(path);
+  if (!entry) {
+    panic(`Missing ${side} zip entry: ${path}`);
+  }
+  return entry.async("uint8array");
+}
+
+function readCommonEntryBytes(
+  selectiveZip: LoadedEntries,
+  fullZip: LoadedEntries,
+): Promise<EntryBytes[]> {
+  return Promise.all(
+    selectiveZip.paths.map(async (path) => {
+      const [selective, full] = await Promise.all([
+        readEntryBytes(selectiveZip.zip, path, "selective"),
+        readEntryBytes(fullZip.zip, path, "full"),
+      ]);
+      return { path, selective, full };
+    }),
+  );
 }
 
 export async function compareSelectiveVsFull(
@@ -99,18 +133,15 @@ export async function compareSelectiveVsFull(
     return { kind: "entry-set-diff", onlyInSelective, onlyInFull };
   }
 
-  for (const path of selectiveZip.paths) {
-    const a = await selectiveZip.zip.file(path)?.async("uint8array");
-    const b = await fullZip.zip.file(path)?.async("uint8array");
-    if (!a || !b) {
-      continue;
-    }
-    if (!bytesEqual(a, b)) {
+  const entries = await readCommonEntryBytes(selectiveZip, fullZip);
+
+  for (const { path, selective: selectiveBytes, full: fullBytes } of entries) {
+    if (!bytesEqual(selectiveBytes, fullBytes)) {
       return {
         kind: "entry-byte-diff",
         path,
-        selectiveSize: a.length,
-        fullSize: b.length,
+        selectiveSize: selectiveBytes.length,
+        fullSize: fullBytes.length,
       };
     }
   }
