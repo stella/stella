@@ -2258,6 +2258,11 @@ function textFormattingToMarks(
     );
   }
 
+  // Hidden text (w:vanish). eigenpal #424 (gap 9).
+  if (formatting.hidden === true) {
+    marks.push(schema.mark("hidden"));
+  }
+
   // Emboss (w:emboss)
   if (formatting.emboss) {
     marks.push(schema.mark("emboss"));

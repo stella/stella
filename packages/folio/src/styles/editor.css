@@ -453,6 +453,21 @@
   --tc-color: #bf8f00;
 }
 
+/* Hidden text (OOXML w:vanish, §17.3.2.41) — mirrors Word's editing-view
+ * treatment: dim the run with a dotted underline so the author can still
+ * navigate to and edit it. The mark is applied by HiddenTextExtension
+ * (PM layer) and the painter applies the same `.docx-hidden` class on
+ * its output. Host apps can override this rule to suppress hidden text
+ * entirely (Word's print/normal view) without touching the editor.
+ *
+ * Styling lives here (not inline on the span) so the underline isn't
+ * re-parsed as an underline mark on DOM/clipboard reparse. eigenpal #424. */
+.docx-hidden {
+  opacity: 0.4;
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+}
+
 .docx-insertion {
   color: var(--tc-color, #c00000);
   text-decoration: underline;

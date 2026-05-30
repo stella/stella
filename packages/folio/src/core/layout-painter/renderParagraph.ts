@@ -257,6 +257,19 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
     ).webkitTextEmphasisPosition = position;
   }
 
+  // Hidden run (OOXML w:vanish, §17.3.2.41). Word's print/normal view
+  // suppresses hidden text entirely, but in editing view it draws the
+  // run dimmed with a dotted underline so the author can still navigate
+  // to and edit it. Mirror that: keep the run in flow and selectable —
+  // `display: none` would orphan PM positions and break cursor movement
+  // across hidden ranges. The `docx-hidden` class hook lets host CSS
+  // swap to print-style suppression when a future view-mode toggle ships.
+  // eigenpal #424 (w:vanish gap 9)
+  if (run.hidden) {
+    element.classList.add("docx-hidden");
+    element.style.opacity = "0.4";
+  }
+
   // Highlight (background color)
   if (run.highlight) {
     element.style.backgroundColor = run.highlight;
@@ -274,12 +287,14 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
 
   // Text decorations
   const decorations: string[] = [];
+  let explicitDecorationStyle = false;
 
   if (run.underline) {
     decorations.push("underline");
     if (typeof run.underline === "object") {
       if (run.underline.style) {
         element.style.textDecorationStyle = run.underline.style;
+        explicitDecorationStyle = true;
       }
       if (run.underline.color) {
         element.style.textDecorationColor = run.underline.color;
@@ -289,6 +304,21 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
 
   if (run.strike) {
     decorations.push("line-through");
+  }
+
+  // Hidden runs need a dotted underline alongside any explicit underline/strike.
+  // Push into the shared `decorations` array (consumed at the end of this
+  // function) so the line 376 longhand assignment doesn't clobber it. The
+  // `textDecorationStyle` longhand is set only when no explicit underline
+  // style has already won — that keeps `w:u w:val="double"` visible if a
+  // hidden run also carries an underline mark.
+  if (run.hidden) {
+    if (!decorations.includes("underline")) {
+      decorations.push("underline");
+    }
+    if (!explicitDecorationStyle) {
+      element.style.textDecorationStyle = "dotted";
+    }
   }
 
   // Comment highlight

@@ -201,6 +201,7 @@ const validateMarks = (
       case "smallCaps":
       case "emboss":
       case "imprint":
+      case "hidden":
       case "textShadow":
       case "textOutline":
         continue;

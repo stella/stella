@@ -22,6 +22,7 @@ const schema = new Schema({
     smallCaps: {},
     emboss: {},
     imprint: {},
+    hidden: {},
     textShadow: {},
     textOutline: {},
     emphasisMark: {
@@ -83,6 +84,14 @@ describe("toFlowBlocks run-level OOXML marks", () => {
       const blocks = toFlowBlocks(buildSingleRunDoc("text", markName), {});
       expect(firstRun(blocks)[markName]).toBe(true);
     }
+  });
+
+  // eigenpal #424 (w:vanish gap 9): the `hidden` PM mark must surface as
+  // RunFormatting.hidden so the painter applies the dimmed dotted-underline
+  // treatment for the editing view.
+  test("propagates the hidden mark (w:vanish) to RunFormatting.hidden", () => {
+    const blocks = toFlowBlocks(buildSingleRunDoc("text", "hidden"), {});
+    expect(firstRun(blocks).hidden).toBe(true);
   });
 
   test("propagates character spacing position, scale, and kerning", () => {
