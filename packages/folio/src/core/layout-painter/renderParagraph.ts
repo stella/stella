@@ -5,6 +5,8 @@
  * Handles text formatting, alignment, and positioning.
  */
 
+import { ommlToMathml } from "../docx/mathToMathml";
+import { parseXmlDocument } from "../docx/xmlParser";
 import { getListMarkerInlineWidth } from "../layout-bridge/measuring/listMarkerWidth";
 import type {
   ParagraphBlock,
@@ -19,6 +21,7 @@ import type {
   ImageRun,
   LineBreakRun,
   FieldRun,
+  MathRun,
   TabStop,
 } from "../layout-engine/types";
 import { calculateTabWidth } from "../prosemirror/utils/tabCalculator";
@@ -109,6 +112,13 @@ function isLineBreakRun(run: Run): run is LineBreakRun {
  */
 function isFieldRun(run: Run): run is FieldRun {
   return run.kind === "field";
+}
+
+/**
+ * Check if run is a math equation run
+ */
+function isMathRun(run: Run): run is MathRun {
+  return run.kind === "math";
 }
 
 const AUTOMATIC_TEXT_COLOR_VALUES = new Set(["auto", "windowtext"]);
@@ -909,6 +919,87 @@ function renderFieldRun(
 }
 
 /**
+ * Render an OMML math run by converting it to MathML and injecting a
+ * native `<math>` element. Browsers (Firefox, Safari, Chromium ≥ 109)
+ * render MathML Core natively, so no JS typesetting engine is required.
+ *
+ * The raw OMML XML stays on the model — only the rendered DOM is derived
+ * from it. If conversion fails we fall back to the existing italic
+ * plain-text span so the user always sees something and the underlying
+ * OMML is preserved for save.
+ */
+function renderMathRun(run: MathRun, doc: Document): HTMLElement {
+  const fallbackText = run.plainText || "[equation]";
+
+  let mathml: string | null = null;
+  try {
+    const ommlEl = parseXmlDocument(run.ommlXml);
+    if (ommlEl) {
+      mathml = ommlToMathml(ommlEl);
+    }
+  } catch {
+    // Conversion-time errors land on the fallback span below.
+  }
+
+  if (!mathml) {
+    return renderMathFallback(run, doc, fallbackText, "1");
+  }
+
+  // Inject the MathML via a sandbox span (`innerHTML` parses MathML in
+  // HTML documents per the HTML spec). Browsers without MathML support
+  // still render the inner `<mtext>` text content, so layout is preserved.
+  const host = doc.createElement("span");
+  host.className = `${PARAGRAPH_CLASS_NAMES.run} docx-math docx-math-${run.display}`;
+  host.dataset["display"] = run.display;
+  host.dataset["ommlRender"] = "mathml";
+
+  if (run.display === "block") {
+    host.style.display = "inline-block";
+    host.style.verticalAlign = "middle";
+  }
+
+  // Cambria Math fallback chain for browsers that don't ship a math font.
+  host.style.fontFamily =
+    '"Cambria Math", "Latin Modern Math", "STIX Two Math", serif';
+
+  try {
+    host.innerHTML = mathml;
+  } catch {
+    return renderMathFallback(run, doc, fallbackText, "1");
+  }
+
+  // Add an `alttext` attribute on the <math> root for screen-reader
+  // resilience even when the engine ignores MathML structure.
+  const mathRoot = host.firstElementChild;
+  if (mathRoot && mathRoot.tagName.toLowerCase() === "math") {
+    mathRoot.setAttribute("alttext", fallbackText);
+  }
+
+  return host;
+}
+
+function renderMathFallback(
+  run: MathRun,
+  doc: Document,
+  fallbackText: string,
+  errorFlag: "1" | "0",
+): HTMLElement {
+  const span = doc.createElement("span");
+  span.className = `${PARAGRAPH_CLASS_NAMES.run} docx-math docx-math-${run.display} docx-math-fallback`;
+  span.dataset["display"] = run.display;
+  span.dataset["ommlRender"] = "fallback";
+  if (errorFlag === "1") {
+    span.dataset["ommlRenderError"] = "1";
+    span.title = "[equation render failed]";
+  }
+  span.style.fontStyle = "italic";
+  span.style.fontFamily =
+    '"Cambria Math", "Latin Modern Math", "STIX Two Math", serif';
+  span.textContent = fallbackText;
+  return span;
+}
+
+/**
  * Render a single run (for non-tab runs)
  */
 function renderRun(
@@ -932,6 +1023,9 @@ function renderRun(
   }
   if (isFieldRun(run) && context) {
     return renderFieldRun(run, doc, context);
+  }
+  if (isMathRun(run)) {
+    return renderMathRun(run, doc);
   }
 
   // Fallback for unknown run types

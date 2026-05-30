@@ -1013,10 +1013,13 @@ function paragraphToRuns(
       return;
     }
     if (child.type.name === "math") {
-      const text = expectMathAttrs(child).plainText || "[equation]";
+      const attrs = expectMathAttrs(child);
+      const plainText = attrs.plainText || "[equation]";
       runs.push({
-        kind: "text",
-        text,
+        kind: "math",
+        display: attrs.display ?? "inline",
+        ommlXml: attrs.ommlXml,
+        plainText,
         italic: true,
         fontFamily: "Cambria Math",
         pmStart: childPos,

@@ -15,6 +15,7 @@ import type {
   ImageRun,
   LineBreakRun,
   FieldRun,
+  MathRun,
   ParagraphSpacing,
 } from "../../layout-engine/types";
 import { isFloatingImageRun } from "../../layout-painter/renderUtils";
@@ -124,7 +125,7 @@ type LineState = {
  * same way; widening the parameter keeps tab-following measurement
  * (FieldRun page numbers, etc.) consistent with TextRun handling.
  */
-function runToFontStyle(run: TextRun | TabRun | FieldRun): FontStyle {
+function runToFontStyle(run: TextRun | TabRun | FieldRun | MathRun): FontStyle {
   return {
     fontFamily: run.fontFamily ?? DEFAULT_FONT_FAMILY,
     fontSize: run.fontSize ?? DEFAULT_FONT_SIZE,
@@ -306,6 +307,13 @@ function isFieldRun(run: Run): run is FieldRun {
 }
 
 /**
+ * Check if a run is a math equation run
+ */
+function isMathRun(run: Run): run is MathRun {
+  return run.kind === "math";
+}
+
+/**
  * Check if text run is empty (only whitespace or no text)
  */
 function isEmptyTextRun(run: TextRun): boolean {
@@ -336,6 +344,11 @@ function measureInlineWidthAfterTab(runs: Run[], tabIndex: number): number {
       width += measureTextWidth(next.fallback || "1", runToFontStyle(next));
     } else if (isImageRun(next) && !isFloatingImageRun(next)) {
       width += next.width || 0;
+    } else if (isMathRun(next)) {
+      width += measureTextWidth(
+        next.plainText || "[equation]",
+        runToFontStyle(next),
+      );
     }
   }
   return width;
@@ -983,6 +996,35 @@ export function measureParagraph(
       }
 
       currentLine.width += fieldWidth;
+      currentLine.toRun = runIndex;
+      currentLine.toChar = 1;
+      continue;
+    }
+
+    if (isMathRun(run)) {
+      // Math is opaque to the line breaker: it can't wrap mid-equation.
+      // Reserve the rendered MathML's approximate inline width using the
+      // plain-text fallback measured in Cambria Math at the run's font
+      // size — this matches what the browser actually puts on screen
+      // closely enough for line-wrap decisions. The painter then injects
+      // the real `<math>` element, which the browser sizes natively.
+      const style: FontStyle = {
+        fontFamily: run.fontFamily ?? "Cambria Math",
+        fontSize: run.fontSize ?? DEFAULT_FONT_SIZE,
+        ...(run.bold !== undefined ? { bold: run.bold } : {}),
+        ...(run.italic !== undefined ? { italic: run.italic } : {}),
+      };
+      updateMaxFont(style);
+      const mathWidth = measureTextWidth(run.plainText || "[equation]", style);
+      if (
+        currentLine.width > 0 &&
+        currentLine.width + mathWidth >
+          currentLine.availableWidth + WIDTH_TOLERANCE
+      ) {
+        startNewLine(runIndex, 0);
+        updateMaxFont(style);
+      }
+      currentLine.width += mathWidth;
       currentLine.toRun = runIndex;
       currentLine.toChar = 1;
       continue;
