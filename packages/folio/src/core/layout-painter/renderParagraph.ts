@@ -1165,9 +1165,31 @@ export function renderLine(
       );
       const followingText = getTextAfterTab(runsForLine, i, options?.context);
       const decimalIndex = followingText.indexOf(".");
+      // Resolve the first text/field run after the tab and measure the
+      // decimal prefix in *its* font/style. Defaulting to 11px Calibri
+      // (the `measureText` fallback) drifts on sized/bold/italic runs and
+      // breaks decimal alignment — eigenpal #576 gemini review on PR #512.
+      const firstFollowingRun = (() => {
+        for (let j = i + 1; j < runsForLine.length; j++) {
+          const next = runsForLine[j];
+          if (!next || isTabRun(next) || isLineBreakRun(next)) {
+            return undefined;
+          }
+          if (isTextRun(next) || isFieldRun(next)) {
+            return next;
+          }
+        }
+        return undefined;
+      })();
       const decimalPrefixWidth =
         decimalIndex !== -1
-          ? measureText(followingText.slice(0, decimalIndex))
+          ? measureText(
+              followingText.slice(0, decimalIndex),
+              firstFollowingRun?.fontSize,
+              firstFollowingRun?.fontFamily,
+              firstFollowingRun ? runMeasureStyle(firstFollowingRun) : {},
+            ) *
+            ((firstFollowingRun?.horizontalScale ?? 100) / 100)
           : 0;
 
       const tabResult = calculateTabWidth(currentX, tabContext, {

@@ -17,6 +17,7 @@ import type {
   FieldRun,
   ParagraphSpacing,
 } from "../../layout-engine/types";
+import { isFloatingImageRun } from "../../layout-painter/renderUtils";
 import {
   calculateTabWidth,
   pixelsToTwips,
@@ -121,9 +122,12 @@ type LineState = {
 };
 
 /**
- * Extract FontStyle from a text run for measurement
+ * Extract FontStyle from a run that carries RunFormatting (text, tab, or
+ * field). All three share the same formatting shape, so they measure the
+ * same way; widening the parameter keeps tab-following measurement
+ * (FieldRun page numbers, etc.) consistent with TextRun handling.
  */
-function runToFontStyle(run: TextRun | TabRun): FontStyle {
+function runToFontStyle(run: TextRun | TabRun | FieldRun): FontStyle {
   return {
     fontFamily: run.fontFamily ?? DEFAULT_FONT_FAMILY,
     fontSize: run.fontSize ?? DEFAULT_FONT_SIZE,
@@ -283,6 +287,12 @@ function isEmptyTextRun(run: TextRun): boolean {
  * Sum the inline pixel widths of runs after a tab, up to (but not including)
  * the next tab or line break. Measured per-run so widths reserved match what
  * the painter draws even when trailing runs use different fonts/sizes.
+ *
+ * Floating/anchored images are skipped — the painter lifts them out of the
+ * paragraph flow (see `isFloatingImageRun`) and `measureFollowingContentWidth`
+ * in the painter already excludes them, so counting their width here would
+ * desync measurer and painter on tab advance for paragraphs with a tab
+ * preceding a floating image.
  */
 function measureInlineWidthAfterTab(runs: Run[], tabIndex: number): number {
   let width = 0;
@@ -294,18 +304,50 @@ function measureInlineWidthAfterTab(runs: Run[], tabIndex: number): number {
     if (isTextRun(next)) {
       width += measureTextWidth(next.text || "", runToFontStyle(next));
     } else if (isFieldRun(next)) {
-      const style: FontStyle = {
-        fontFamily: next.fontFamily ?? DEFAULT_FONT_FAMILY,
-        fontSize: next.fontSize ?? DEFAULT_FONT_SIZE,
-        ...(next.bold !== undefined ? { bold: next.bold } : {}),
-        ...(next.italic !== undefined ? { italic: next.italic } : {}),
-      };
-      width += measureTextWidth(next.fallback || "1", style);
-    } else if (isImageRun(next)) {
+      width += measureTextWidth(next.fallback || "1", runToFontStyle(next));
+    } else if (isImageRun(next) && !isFloatingImageRun(next)) {
       width += next.width || 0;
     }
   }
   return width;
+}
+
+/**
+ * Width of the inline content preceding the first `.` in the runs that follow
+ * a tab, used to anchor `decimal` tab stops. Mirrors `getTextAfterTab` +
+ * decimal-prefix measurement in the painter (`renderParagraph.ts`) so the
+ * measurer and painter agree on tab advance for decimal stops.
+ *
+ * Returns 0 when no decimal separator appears before the next tab / line
+ * break — `calculateTabWidth` treats that as "no anchor adjustment".
+ */
+function measureDecimalPrefixWidthAfterTab(
+  runs: Run[],
+  tabIndex: number,
+): number {
+  let text = "";
+  let firstRun: TextRun | FieldRun | undefined;
+  for (let i = tabIndex + 1; i < runs.length; i++) {
+    const next = runs[i];
+    if (!next || isTabRun(next) || isLineBreakRun(next)) {
+      break;
+    }
+    if (isTextRun(next)) {
+      text += next.text || "";
+      firstRun ??= next;
+    } else if (isFieldRun(next)) {
+      text += next.fallback || "1";
+      firstRun ??= next;
+    }
+  }
+  const decimalIndex = text.indexOf(".");
+  if (decimalIndex === -1 || !firstRun) {
+    return 0;
+  }
+  return measureTextWidth(
+    text.slice(0, decimalIndex),
+    runToFontStyle(firstRun),
+  );
 }
 
 /**
@@ -812,6 +854,10 @@ export function measureParagraph(
       updateMaxFont(style);
 
       const followingWidth = measureInlineWidthAfterTab(runs, runIndex);
+      const decimalPrefixWidth = measureDecimalPrefixWidthAfterTab(
+        runs,
+        runIndex,
+      );
 
       // Tab width comes from the shared tab-stop model (`calculateTabWidth` —
       // computeTabStops + alignment) that the painter also uses, so measurer
@@ -828,6 +874,7 @@ export function measureParagraph(
       };
       const tabWidth = calculateTabWidth(contentX, tabContext, {
         followingWidth,
+        decimalPrefixWidth,
       }).width;
 
       if (
