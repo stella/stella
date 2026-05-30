@@ -355,6 +355,14 @@ function hasUnsupportedRgbColorModifiers(spPr: XmlElement | null): boolean {
   return false;
 }
 
+function hasUnmodeledFill(spPr: XmlElement | null): boolean {
+  return (
+    findChildByLocalName(spPr, "pattFill") !== null ||
+    findChildByLocalName(spPr, "blipFill") !== null ||
+    findChildByLocalName(spPr, "grpFill") !== null
+  );
+}
+
 function colorNeedsRawPreservation(color: ColorValue | undefined): boolean {
   return color !== undefined && color.rgb === undefined;
 }
@@ -465,6 +473,7 @@ export function parseShapeFromDrawing(drawingEl: XmlElement): Shape | null {
   if (
     hasUnsupportedGeometry(spPr) ||
     hasUnsupportedRgbColorModifiers(spPr) ||
+    hasUnmodeledFill(spPr) ||
     fillNeedsRawPreservation(parseShapeFill(spPr)) ||
     outlineNeedsRawPreservation(parseShapeOutline(spPr))
   ) {
@@ -530,6 +539,9 @@ export function shouldPreserveRawShapeDrawing(drawingEl: XmlElement): boolean {
     return true;
   }
   if (hasUnsupportedRgbColorModifiers(spPr)) {
+    return true;
+  }
+  if (hasUnmodeledFill(spPr)) {
     return true;
   }
   return (

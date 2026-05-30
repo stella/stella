@@ -164,6 +164,31 @@ export function sanitizeShapeDimension(
   return typeof value === "number" && !Number.isNaN(value) ? value : fallback;
 }
 
+export function strokeDashArrayForOutlineStyle(
+  outlineStyle: string | undefined,
+): string | undefined {
+  switch (outlineStyle) {
+    case "dashed":
+    case "dash":
+    case "lgDash":
+    case "sysDash":
+      return "8 4";
+    case "dotted":
+    case "dot":
+    case "sysDot":
+      return "2 2";
+    case "dashDot":
+    case "lgDashDot":
+    case "sysDashDot":
+      return "8 4 2 4";
+    case "lgDashDotDot":
+    case "sysDashDotDot":
+      return "8 4 2 4 2 4";
+    default:
+      return undefined;
+  }
+}
+
 function setNum(el: Element, name: string, value: number): void {
   el.setAttribute(name, String(value));
 }
@@ -739,10 +764,11 @@ export const ShapeExtension = createNodeExtension({
       }
 
       const shapeEl = createShapeElement(attrs.shapeType || "rect", w, h);
-      if (attrs.outlineStyle === "dashed") {
-        shapeEl.setAttribute("stroke-dasharray", "8 4");
-      } else if (attrs.outlineStyle === "dotted") {
-        shapeEl.setAttribute("stroke-dasharray", "2 2");
+      const strokeDasharray = strokeDashArrayForOutlineStyle(
+        attrs.outlineStyle,
+      );
+      if (strokeDasharray) {
+        shapeEl.setAttribute("stroke-dasharray", strokeDasharray);
       }
       svg.append(shapeEl);
 

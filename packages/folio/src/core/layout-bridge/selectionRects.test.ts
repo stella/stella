@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { resetCanvasContext } from "../layout-engine/measure/measureContainer";
 import type { Layout, Measure, ParagraphBlock } from "../layout-engine/types";
-import { resetCanvasContext } from "./measuring/measureContainer";
 import { getCaretPosition } from "./selectionRects";
 
 const originalDocument = globalThis.document;
