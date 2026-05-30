@@ -59,6 +59,7 @@ import {
   expectCharacterSpacingMarkAttrs,
   expectCommentMarkAttrs,
   expectEmphasisMarkAttrs,
+  expectTextEffectMarkAttrs,
   expectFieldAttrs,
   expectFontFamilyMarkAttrs,
   expectFontSizeMarkAttrs,
@@ -1602,6 +1603,14 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
 
       case "textOutline":
         formatting.outline = true;
+        break;
+
+      case "rtl":
+        formatting.rtl = true;
+        break;
+
+      case "textEffect":
+        formatting.effect = expectTextEffectMarkAttrs(mark).effect;
         break;
 
       case "runFormattingOverride":

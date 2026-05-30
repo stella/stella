@@ -22,6 +22,7 @@ import {
   TABLE_WIDTH_TYPE_VALUES,
   TAB_LEADER_VALUES,
   TAB_STOP_ALIGNMENT_VALUES,
+  TEXT_EFFECT_VALUES,
   THEME_COLOR_SLOT_VALUES,
   UNDERLINE_STYLE_VALUES,
 } from "../../types/documentEnumValues";
@@ -48,6 +49,7 @@ import type {
   TableRowAttrs,
   TextBoxAttrs,
   TextColorAttrs,
+  TextEffectAttrs,
   TrackedChangeMarkAttrs,
   UnderlineAttrs,
 } from "../schema";
@@ -111,6 +113,12 @@ const EMPHASIS_MARK_TYPES = [
   "circle",
   "underDot",
 ] as const satisfies readonly NonNullable<EmphasisMarkAttrs["type"]>[];
+
+// eigenpal #424 (gap 11) — w:effect values minus the no-op "none" sentinel.
+// The mark is only minted when there is an actual animation to round-trip.
+const TEXT_EFFECT_NON_NONE_VALUES = TEXT_EFFECT_VALUES.filter(
+  (value): value is TextEffectAttrs["effect"] => value !== "none",
+);
 
 const NOTE_TYPES = [
   "footnote",
@@ -196,6 +204,7 @@ const fontSizeAttrsCache = new WeakMap<Mark, FontSizeAttrs>();
 const fontFamilyAttrsCache = new WeakMap<Mark, FontFamilyAttrs>();
 const characterSpacingAttrsCache = new WeakMap<Mark, CharacterSpacingAttrs>();
 const emphasisMarkAttrsCache = new WeakMap<Mark, EmphasisMarkAttrs>();
+const textEffectAttrsCache = new WeakMap<Mark, TextEffectAttrs>();
 const footnoteRefAttrsCache = new WeakMap<Mark, FootnoteRefAttrs>();
 const commentAttrsCache = new WeakMap<Mark, CommentAttrs>();
 const trackedChangeAttrsCache = new WeakMap<Mark, TrackedChangeMarkAttrs>();
@@ -1015,6 +1024,32 @@ export const expectEmphasisMarkAttrs = (mark: Mark): EmphasisMarkAttrs =>
     emphasisMarkAttrsCache,
     readEmphasisMarkAttrs,
     "emphasis mark attrs",
+  );
+
+export const readTextEffectMarkAttrs = (
+  mark: Mark,
+): ReadProseMirrorAttrsResult<TextEffectAttrs> => {
+  const attrs = attrsRecord(mark.attrs);
+  const issues: ProseMirrorAttrIssue[] = [];
+  expectMarkType(mark, "textEffect", issues);
+
+  requiredOneOf(
+    attrs,
+    "effect",
+    "textEffect.attrs.effect",
+    issues,
+    TEXT_EFFECT_NON_NONE_VALUES,
+  );
+
+  return attrsResult(attrs, issues);
+};
+
+export const expectTextEffectMarkAttrs = (mark: Mark): TextEffectAttrs =>
+  expectCachedMarkAttrs(
+    mark,
+    textEffectAttrsCache,
+    readTextEffectMarkAttrs,
+    "text effect attrs",
   );
 
 export const readFootnoteRefMarkAttrs = (
