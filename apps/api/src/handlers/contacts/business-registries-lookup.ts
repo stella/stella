@@ -12,7 +12,6 @@ import {
   lookupByIco,
   normalizeIco,
   searchByName as searchAresByName,
-  validateIco,
 } from "@stll/business-registries/ares";
 import {
   BrregAPIError,
@@ -24,7 +23,6 @@ import {
   lookupByOrgnr,
   normalizeOrgnr,
   searchByName as searchBrregByName,
-  validateOrgnr,
 } from "@stll/business-registries/brreg";
 
 import { isNativeToolEnabledForOrg } from "@/api/handlers/mcp-connectors/catalog-metadata";
@@ -76,7 +74,17 @@ type LookupResponse =
 type RegistryHandler = {
   /** Catalog slug used by `isNativeToolEnabledForOrg`. */
   nativeToolSlug: string;
-  /** True when the trimmed input looks like the registry's canonical ID. */
+  /**
+   * True when the trimmed input has the *shape* of the registry's
+   * canonical ID — e.g. eight digits for a Czech IČO, nine digits for
+   * a Norwegian orgnr. This is intentionally a cheap, permissive
+   * structural check, NOT a full validator. Semantic validation
+   * (checksums, country prefixes, etc.) belongs in the `lookup`
+   * function; bad-checksum inputs surface as a `*ValidationError` →
+   * mapped to HTTP 400 by `mapError`. Returning `false` here would
+   * fall through to `search`, which silently swallows malformed IDs
+   * as empty name-search results — exactly the UX we want to avoid.
+   */
   isCanonicalId: (input: string) => boolean;
   /** Lookup by canonical ID. */
   lookup: (input: string) => Promise<BusinessRegistryHit | null>;
@@ -185,7 +193,9 @@ const mapAresError = (error: unknown): HandlerError | null => {
 
 const ARES_HANDLER: RegistryHandler = {
   nativeToolSlug: "ares",
-  isCanonicalId: (input) => validateIco(normalizeIco(input)),
+  // Shape-only: 8 digits after normalisation. Bad checksums route
+  // through lookup and surface as AresValidationError → 400.
+  isCanonicalId: (input) => /^\d{8}$/u.test(normalizeIco(input)),
   lookup: async (input) => {
     const company = await lookupByIco(input);
     return company ? aresCompanyToHit(company) : null;
@@ -268,7 +278,9 @@ const mapBrregError = (error: unknown): HandlerError | null => {
 
 const BRREG_HANDLER: RegistryHandler = {
   nativeToolSlug: "brreg",
-  isCanonicalId: (input) => validateOrgnr(normalizeOrgnr(input)),
+  // Shape-only: 9 digits after normalisation. MOD-11 violations
+  // route through lookup and surface as BrregValidationError → 400.
+  isCanonicalId: (input) => /^\d{9}$/u.test(normalizeOrgnr(input)),
   lookup: async (input) => {
     const entity = await lookupByOrgnr(input);
     return entity ? brregEntityToHit(entity) : null;
