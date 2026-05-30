@@ -25,3 +25,7 @@ bun.lock                                @jan-kubica
 # Authentication + session logic.
 apps/api/src/lib/auth.ts                @jan-kubica
 apps/api/src/db/auth-schema.ts          @jan-kubica
+
+# Catalogue curation — only maintainers flip recommendations.
+packages/catalogue/entries/recommended.json   @jan-kubica
+packages/catalogue/MAINTAINERS                @jan-kubica

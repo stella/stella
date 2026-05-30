@@ -53,6 +53,7 @@ type PublicOfficialToolName = Extract<
   | "boe_get_law_structure"
   | "boe_search_legislation"
   | "borme_get_summary"
+  | "infosoud_lookup_case"
 >;
 const RUNNING_TOOL_STATES = {
   "input-available": true,
@@ -77,6 +78,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   "create-document": "chat.tool.create-document",
   "describe-stella-api": "chat.tool.describe-stella-api",
   fetch_url: "chat.tool.fetch_url",
+  infosoud_lookup_case: "chat.tool.infosoud_lookup_case",
   "run-stella-query": "chat.tool.run-stella-query",
   "load-skill": "chat.tool.load-skill",
   "read-skill-resource": "chat.tool.read-skill-resource",
@@ -109,6 +111,7 @@ const PUBLIC_OFFICIAL_CHAT_TOOL_NAMES = {
   boe_get_law_structure: true,
   boe_search_legislation: true,
   borme_get_summary: true,
+  infosoud_lookup_case: true,
 } as const satisfies Record<PublicOfficialToolName, true>;
 
 export const isExternalMcpToolName = (

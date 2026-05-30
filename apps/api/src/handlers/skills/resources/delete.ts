@@ -9,6 +9,8 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
+import { requireEditableSkillOrigin } from "../origin";
+
 const deleteSkillResourceParamsSchema = t.Object({
   skillId: tSafeId("agentSkill"),
 });
@@ -39,6 +41,7 @@ const deleteSkillResource = createSafeRootHandler(
         tx
           .select({
             id: agentSkills.id,
+            origin: agentSkills.origin,
             scope: agentSkills.scope,
             userId: agentSkills.userId,
             slug: agentSkills.slug,
@@ -75,6 +78,10 @@ const deleteSkillResource = createSafeRootHandler(
       return Result.err(
         new HandlerError({ status: 403, message: "Forbidden" }),
       );
+    }
+    const editableOrigin = requireEditableSkillOrigin(skill.origin);
+    if (Result.isError(editableOrigin)) {
+      return Result.err(editableOrigin.error);
     }
 
     const existingRows = yield* Result.await(

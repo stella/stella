@@ -1,0 +1,18 @@
+{
+  "$schema": "../../../schema.json",
+  "kind": "native-tool",
+  "slug": "boe",
+  "displayName": "BOE",
+  "description": "Spanish consolidated legislation, daily gazette, and BORME (commercial registry gazette) from the official Boletín Oficial del Estado open-data API.",
+  "author": "stella",
+  "authorUrl": "https://github.com/stella",
+  "license": "Apache-2.0",
+  "cost": "free",
+  "setup": "none",
+  "homepage": "https://www.boe.es",
+  "tags": ["regulatory", "corporate"],
+  "jurisdictions": ["ES"],
+  "backendSlug": "boe",
+  "url": "https://www.boe.es",
+  "documentationUrl": "https://www.boe.es/datosabiertos/"
+}

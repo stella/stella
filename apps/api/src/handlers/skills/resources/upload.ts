@@ -12,6 +12,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { extractFileText } from "@/api/lib/search/extract-content";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
+import { requireEditableSkillOrigin } from "../origin";
 import { RESOURCE_PATH_PATTERN, inferResourceKind } from "./resource-path";
 
 const UPLOAD_MAX_SIZE = "5m" as const;
@@ -77,6 +78,7 @@ const uploadSkillResource = createSafeRootHandler(
         tx
           .select({
             id: agentSkills.id,
+            origin: agentSkills.origin,
             scope: agentSkills.scope,
             userId: agentSkills.userId,
             slug: agentSkills.slug,
@@ -113,6 +115,10 @@ const uploadSkillResource = createSafeRootHandler(
       return Result.err(
         new HandlerError({ status: 403, message: "Forbidden" }),
       );
+    }
+    const editableOrigin = requireEditableSkillOrigin(skill.origin);
+    if (Result.isError(editableOrigin)) {
+      return Result.err(editableOrigin.error);
     }
 
     const existingCount = yield* Result.await(

@@ -1,0 +1,16 @@
+{
+  "$schema": "../../../schema.json",
+  "kind": "native-tool",
+  "slug": "web-search",
+  "displayName": "Web Search",
+  "description": "Search the public web and read individual pages. Queries hit primary sources first (courts, legislation portals) when a jurisdiction is set; falls back to the open web otherwise. Per-thread opt-in.",
+  "author": "stella",
+  "authorUrl": "https://github.com/stella",
+  "license": "Apache-2.0",
+  "cost": "paid",
+  "setup": "api-key",
+  "homepage": "https://tavily.com",
+  "tags": [],
+  "backendSlug": "web-search",
+  "pinned": true
+}

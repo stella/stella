@@ -1,0 +1,18 @@
+{
+  "$schema": "../../../schema.json",
+  "kind": "native-tool",
+  "slug": "brreg",
+  "displayName": "Brønnøysundregistrene",
+  "description": "Norwegian company lookup by organisasjonsnummer or company name from the public Brreg Enhetsregisteret open API.",
+  "author": "stella",
+  "authorUrl": "https://github.com/stella",
+  "license": "Apache-2.0",
+  "cost": "free",
+  "setup": "none",
+  "homepage": "https://www.brreg.no",
+  "tags": ["corporate", "regulatory"],
+  "jurisdictions": ["NO"],
+  "backendSlug": "brreg",
+  "url": "https://www.brreg.no",
+  "documentationUrl": "https://data.brreg.no/enhetsregisteret/api/docs/index.html"
+}

@@ -138,14 +138,14 @@ export const JurisdictionPicker = ({
                   {isSelected && <CheckIcon className="size-3" />}
                 </span>
                 <span className="min-w-0 flex-1 truncate">{country.name}</span>
-                <span className="text-muted-foreground text-xs">
-                  {country.code}
-                </span>
                 {isSuggested && (
                   <span className="bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 text-[10px]">
                     {t("onboarding.jurisdictionSuggested")}
                   </span>
                 )}
+                <span className="text-muted-foreground text-xs">
+                  {country.code}
+                </span>
               </button>
               {isSelected && selected.length > 1 && (
                 <button

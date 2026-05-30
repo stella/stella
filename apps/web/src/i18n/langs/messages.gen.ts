@@ -302,6 +302,43 @@ type Messages = {
       "viewOriginal": "View source";
     };
   };
+  "catalogue": {
+    "by": "By {author}";
+    "cost": {
+      "free": "Free";
+      "paid": "Paid";
+    };
+    "empty": "No entries match the current filter.";
+    "filter": {
+      "all": "All";
+      "mcps": "MCP servers";
+      "nativeTools": "Built-in tools";
+      "skills": "Skills";
+    };
+    "firstParty": "First-party";
+    "install": "Install";
+    "installFailed": "Install failed";
+    "installPack": "Install {count, plural, one {# tool} other {# tools}}";
+    "installed": "Installed {name}";
+    "installedShort": "Installed";
+    "onboarding": {
+      "packTitle": "Recommended for your jurisdiction";
+    };
+    "openHomepage": "Open homepage";
+    "packDescription": "{count, plural, one {# tool} other {# tools}} curated for your practice. One-click install or pick individually below.";
+    "packInstalled": "{count, plural, one {# tool installed} other {# tools installed}}";
+    "packPartial": "Installed {installed}, {failed} failed";
+    "recommended": "Recommended";
+    "settings": {
+      "packTitle": "Recommended pack";
+    };
+    "setup": {
+      "account": "Account";
+      "apiKey": "API key";
+      "none": "No setup";
+    };
+    "unavailable": "Not available yet";
+  };
   "chat": {
     "acceptAllCount": "Accept all ({count})";
     "actionExpand": {
@@ -490,6 +527,7 @@ type Messages = {
       "docxSignatureTableSummary": "Insert signature table near {blockId}";
       "execute-typescript": "Reading workspace data";
       "fetch_url": "Reading page";
+      "infosoud_lookup_case": "InfoSoud case lookup";
       "load-skill": "Reading guidance";
       "read-contact": "Reading contact";
       "read-content-across-matters": "Reading content across matters";
@@ -1448,7 +1486,36 @@ type Messages = {
     "aiConfigFailed": "Couldn't save your AI configuration. You can finish it from settings.";
     "aiSubtitle": "Bring your own API key. You can change providers and models anytime.";
     "aiTitle": "Connect your AI provider";
+    "catalogueAlwaysOn": "Always on";
+    "catalogueClearSearch": "Clear search";
+    "catalogueCommunityHeading": "Others";
+    "catalogueContinueWithCount": "Continue with {count, plural, one {# tool} other {# tools}}";
+    "catalogueDetailAbout": "About";
+    "catalogueDetailAccess": "Access";
+    "catalogueDetailAdd": "Add to stack";
+    "catalogueDetailAuthor": "Author";
+    "catalogueDetailCost": "Cost";
+    "catalogueDetailCoverage": "Coverage";
+    "catalogueDetailFirstParty": "stella (first-party)";
+    "catalogueDetailJurisdictions": "Jurisdictions";
+    "catalogueDetailLicense": "License";
+    "catalogueDetailProvenance": "Provenance";
+    "catalogueDetailRemove": "Remove from stack";
+    "catalogueDetailSetup": "Setup";
+    "catalogueFootnote": "You can write your own skills later in the app, or <link>request a third-party integration on GitHub</link>.";
+    "cataloguePartial": "Installed {installed}, {failed} failed";
+    "cataloguePreviewBaseline": "Built-in";
+    "cataloguePreviewCount": "{count, plural, =0 {No capabilities} one {# capability} other {# capabilities}}";
+    "cataloguePreviewEmpty": "Pick from the recommended pack or discover more below.";
+    "cataloguePreviewYourStack": "Your stack";
+    "catalogueProposeTool": "Propose a new tool";
+    "catalogueSearchPlaceholder": "Search skills and tools";
+    "catalogueSubtitle": "stella can call these tools when answering. Pick the ones that match your practice; you can change this anytime in settings.";
+    "catalogueThirdPartyConfirm": "Add anyway";
+    "catalogueThirdPartyDisclaimer": "This is third-party code contributed by {author}. stella has not reviewed, endorsed, or maintained it. You are solely responsible for verifying it is suitable for your practice and compliant with your firm's policies. By adding it, you accept that you use it at your own risk.";
+    "catalogueTitle": "Customize your AI";
     "changeAnytime": "You can change this anytime in settings.";
+    "continue": "Continue";
     "creating": {
       "ai": "Saving AI configuration...";
       "done": "Finishing up...";
@@ -1481,6 +1548,7 @@ type Messages = {
     "skipStep": "Skip this step";
     "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}";
     "stepAi": "AI";
+    "stepCatalogue": "Catalogue";
     "stepDesktop": "Desktop";
     "stepJurisdiction": "Jurisdiction";
     "stepOrganization": "Team";
@@ -1718,6 +1786,8 @@ type Messages = {
         "termAddedToast": "Added \"{value}\" to the firm-wide deny list.";
         "title": "Anonymization";
       };
+      "catalogue": "Catalogue";
+      "catalogueDescription": "Browse and install skills, MCP servers, and first-party tools for your jurisdiction";
       "matterNumbering": "Matter numbering";
       "matterNumberingDescription": "Configure how new matter reference numbers are generated";
       "membersDescription": "Manage who has access to this organization and any pending invitations";

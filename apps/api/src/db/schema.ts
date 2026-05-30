@@ -3271,7 +3271,7 @@ export const promptShortcuts = p.pgTable(
 export const AGENT_SKILL_SCOPES = ["team", "private"] as const;
 export type AgentSkillScope = (typeof AGENT_SKILL_SCOPES)[number];
 
-export const AGENT_SKILL_ORIGINS = ["upload", "url"] as const;
+export const AGENT_SKILL_ORIGINS = ["bundled", "upload", "url"] as const;
 export type AgentSkillOrigin = (typeof AGENT_SKILL_ORIGINS)[number];
 
 export const AGENT_SKILL_RESOURCE_KINDS = [

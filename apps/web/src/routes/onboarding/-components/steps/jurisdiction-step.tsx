@@ -41,25 +41,21 @@ export const JurisdictionStep = ({
         {t("onboarding.jurisdictionSubtitle")}
       </p>
 
-      <div className="mt-7 flex flex-col gap-4">
+      <div className="mt-7 flex min-h-0 flex-1 flex-col gap-4">
         <JurisdictionPicker
           onChange={onChange}
           selected={selected}
           suggestedCountryCodes={suggestedCountryCodes}
         />
+      </div>
 
-        <div className="mt-2 flex justify-between gap-2">
-          <Button onClick={onSkip} type="button" variant="ghost">
-            {t("onboarding.skipStep")}
-          </Button>
-          <Button
-            disabled={selected.length === 0}
-            onClick={onNext}
-            type="button"
-          >
-            {t("common.next")}
-          </Button>
-        </div>
+      <div className="mt-auto flex items-center justify-between gap-3 pt-8">
+        <Button onClick={onSkip} type="button" variant="ghost">
+          {t("onboarding.skipStep")}
+        </Button>
+        <Button disabled={selected.length === 0} onClick={onNext} type="button">
+          {t("common.next")}
+        </Button>
       </div>
     </>
   );

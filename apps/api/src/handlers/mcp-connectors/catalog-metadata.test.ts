@@ -57,7 +57,6 @@ describe("mcpConnectorCatalogMetadata", () => {
       expect.objectContaining({
         slug: "ares",
         isRecommended: true,
-        iconUrl: "https://ares.gov.cz/logo-ares-new.ico",
         recommendedJurisdictions: ["CZ"],
       }),
     );
@@ -87,18 +86,23 @@ describe("mcpConnectorCatalogMetadata", () => {
     );
   });
 
-  it("recommends built-in Brreg for Norwegian practice", () => {
+  it("does not expose Brreg as a chat-toggleable native tool yet", () => {
     const tools = getNativeToolCatalog({
       practiceJurisdictions: [{ countryCode: "NO", isPrimary: true }],
     });
 
-    expect(tools).toContainEqual(
-      expect.objectContaining({
-        slug: "brreg",
-        isRecommended: true,
-        recommendedJurisdictions: ["NO"],
-      }),
-    );
+    expect(tools.map((tool) => tool.slug)).not.toContain("brreg");
+  });
+
+  it("shows only native tools that the MCP settings page can toggle", () => {
+    const toolSlugs = getNativeToolCatalog({
+      practiceJurisdictions: [{ countryCode: "CZ", isPrimary: true }],
+    }).map((tool) => tool.slug);
+
+    expect(toolSlugs).toContain("web-search");
+    expect(toolSlugs).not.toContain("anonymize");
+    expect(toolSlugs).not.toContain("brreg");
+    expect(toolSlugs).not.toContain("create-docx");
   });
 });
 
@@ -149,6 +153,16 @@ describe("isNativeToolEnabledForOrg", () => {
         slug: "nonexistent",
         practiceJurisdictions: [{ countryCode: "CZ", isPrimary: true }],
         nativeToolOverrides: {},
+      }),
+    ).toBe(false);
+  });
+
+  it("respects explicit disable overrides for globally defaulted Web Search", () => {
+    expect(
+      isNativeToolEnabledForOrg({
+        slug: "web-search",
+        practiceJurisdictions: [{ countryCode: "CZ", isPrimary: true }],
+        nativeToolOverrides: { "web-search": false },
       }),
     ).toBe(false);
   });

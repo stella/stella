@@ -1,0 +1,15 @@
+{
+  "$schema": "../../../schema.json",
+  "kind": "native-tool",
+  "slug": "anonymize",
+  "displayName": "Anonymise",
+  "description": "Mask client names, account numbers, addresses, and other PII before sharing matter content with AI providers. Reversible on the client side; cleartext never leaves your workspace.",
+  "author": "stella",
+  "authorUrl": "https://github.com/stella",
+  "license": "Apache-2.0",
+  "cost": "free",
+  "setup": "none",
+  "tags": ["data-protection"],
+  "backendSlug": "anonymize",
+  "pinned": true
+}

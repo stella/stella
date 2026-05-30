@@ -299,6 +299,43 @@
       "viewOriginal": "Ver fonte"
     }
   },
+  "catalogue": {
+    "by": "Por {author}",
+    "cost": {
+      "free": "Grátis",
+      "paid": "Pago"
+    },
+    "empty": "Nenhuma entrada corresponde ao filtro atual.",
+    "filter": {
+      "all": "Todos",
+      "mcps": "Servidores MCP",
+      "nativeTools": "Ferramentas integradas",
+      "skills": "Habilidades"
+    },
+    "firstParty": "Primeira parte",
+    "install": "Instalar",
+    "installFailed": "Falha na instalação",
+    "installPack": "{count, plural, one {Instalar # ferramenta} other {Instalar # ferramentas}}",
+    "installed": "{name} instalado",
+    "installedShort": "Instalado",
+    "onboarding": {
+      "packTitle": "Recomendado para sua jurisdição"
+    },
+    "openHomepage": "Abrir página inicial",
+    "packDescription": "{count, plural, one {# ferramenta} other {# ferramentas}} selecionadas para sua prática. Instale com um clique ou escolha individualmente abaixo.",
+    "packInstalled": "{count, plural, one {# ferramenta instalada} other {# ferramentas instaladas}}",
+    "packPartial": "{installed} instaladas, {failed} com falha",
+    "recommended": "Recomendado",
+    "settings": {
+      "packTitle": "Pacote recomendado"
+    },
+    "setup": {
+      "account": "Conta",
+      "apiKey": "Chave de API",
+      "none": "Sem configuração"
+    },
+    "unavailable": "Ainda não disponível"
+  },
   "chat": {
     "acceptAllCount": "Aceitar tudo ({count})",
     "actionExpand": {
@@ -487,6 +524,7 @@
       "docxSignatureTableSummary": "Insert signature table near {blockId}",
       "execute-typescript": "Lendo dados do caso",
       "fetch_url": "Lendo página",
+      "infosoud_lookup_case": "Busca de processo no InfoSoud",
       "load-skill": "Lendo orientações",
       "read-contact": "Lendo contato",
       "read-content-across-matters": "Lendo conteúdo em casos",
@@ -1445,7 +1483,36 @@
     "aiConfigFailed": "Não foi possível salvar sua configuração de IA. Você pode terminar nas configurações.",
     "aiSubtitle": "Traga sua própria chave de API. Você pode mudar de fornecedor e modelo a qualquer momento.",
     "aiTitle": "Conecte seu provedor de IA",
+    "catalogueAlwaysOn": "Sempre ativo",
+    "catalogueClearSearch": "Limpar busca",
+    "catalogueCommunityHeading": "Outros",
+    "catalogueContinueWithCount": "{count, plural, one {Continuar com # ferramenta} other {Continuar com # ferramentas}}",
+    "catalogueDetailAbout": "Sobre",
+    "catalogueDetailAccess": "Acesso",
+    "catalogueDetailAdd": "Adicionar à seleção",
+    "catalogueDetailAuthor": "Autor",
+    "catalogueDetailCost": "Custo",
+    "catalogueDetailCoverage": "Cobertura",
+    "catalogueDetailFirstParty": "stella (próprio)",
+    "catalogueDetailJurisdictions": "Jurisdições",
+    "catalogueDetailLicense": "Licença",
+    "catalogueDetailProvenance": "Origem",
+    "catalogueDetailRemove": "Remover da seleção",
+    "catalogueDetailSetup": "Configuração",
+    "catalogueFootnote": "Você pode criar suas próprias skills mais tarde dentro do app ou <link>solicitar uma integração de terceiros no GitHub</link>.",
+    "cataloguePartial": "{installed} instaladas, {failed} falharam",
+    "cataloguePreviewBaseline": "Integradas",
+    "cataloguePreviewCount": "{count, plural, =0 {Nenhum recurso} one {# recurso} other {# recursos}}",
+    "cataloguePreviewEmpty": "Escolha no pacote recomendado ou descubra mais ferramentas abaixo.",
+    "cataloguePreviewYourStack": "Sua seleção",
+    "catalogueProposeTool": "Propor nova ferramenta",
+    "catalogueSearchPlaceholder": "Buscar skills e ferramentas",
+    "catalogueSubtitle": "stella pode usar essas ferramentas ao responder. Escolha as que se encaixam na sua prática; você pode mudar isso a qualquer momento nas configurações.",
+    "catalogueThirdPartyConfirm": "Adicionar mesmo assim",
+    "catalogueThirdPartyDisclaimer": "Este é código de terceiros contribuído por {author}. stella não o revisou, endossou nem mantém. Você é responsável por verificar se ele é adequado à sua prática e compatível com as políticas da sua firma. Ao adicioná-lo, você aceita usá-lo por sua conta e risco.",
+    "catalogueTitle": "Personalize sua IA",
     "changeAnytime": "Você pode alterar isso a qualquer momento nas configurações.",
+    "continue": "Continuar",
     "creating": {
       "ai": "Salvando configuração de IA...",
       "done": "Terminando...",
@@ -1478,6 +1545,7 @@
     "skipStep": "Pule esta etapa",
     "someInvitesFailed": "{count, plural, one {# convite falhou} many {# convites falharam} other {# convites falharam}}",
     "stepAi": "IA",
+    "stepCatalogue": "Catálogo",
     "stepDesktop": "Área de trabalho",
     "stepJurisdiction": "Jurisdição",
     "stepOrganization": "Equipe",
@@ -1715,6 +1783,8 @@
         "termAddedToast": "“{value}” foi adicionado à lista do escritório.",
         "title": "Anonimização"
       },
+      "catalogue": "Catálogo",
+      "catalogueDescription": "Explore e instale skills, servidores MCP e ferramentas próprias para sua jurisdição",
       "matterNumbering": "Numeração de casos",
       "matterNumberingDescription": "Configure como os novos números de referência de casos são gerados",
       "membersDescription": "Gerenciar quem tem acesso a esta organização e quaisquer convites pendentes",

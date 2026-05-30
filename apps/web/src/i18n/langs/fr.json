@@ -299,6 +299,43 @@
       "viewOriginal": "Voir la source"
     }
   },
+  "catalogue": {
+    "by": "Par {author}",
+    "cost": {
+      "free": "Gratuit",
+      "paid": "Payant"
+    },
+    "empty": "Aucune entrée ne correspond au filtre actuel.",
+    "filter": {
+      "all": "Tout",
+      "mcps": "Serveurs MCP",
+      "nativeTools": "Outils intégrés",
+      "skills": "Compétences"
+    },
+    "firstParty": "Première partie",
+    "install": "Installer",
+    "installFailed": "Échec de l'installation",
+    "installPack": "{count, plural, one {Installer # outil} other {Installer # outils}}",
+    "installed": "{name} installé",
+    "installedShort": "Installé",
+    "onboarding": {
+      "packTitle": "Recommandé pour votre juridiction"
+    },
+    "openHomepage": "Ouvrir la page d'accueil",
+    "packDescription": "{count, plural, one {# outil} other {# outils}} sélectionnés pour votre pratique. Installation en un clic ou choix individuel ci-dessous.",
+    "packInstalled": "{count, plural, one {# outil installé} other {# outils installés}}",
+    "packPartial": "{installed} installés, {failed} en échec",
+    "recommended": "Recommandé",
+    "settings": {
+      "packTitle": "Pack recommandé"
+    },
+    "setup": {
+      "account": "Compte",
+      "apiKey": "Clé API",
+      "none": "Aucune configuration"
+    },
+    "unavailable": "Pas encore disponible"
+  },
   "chat": {
     "acceptAllCount": "Tout accepter ({count})",
     "actionExpand": {
@@ -487,6 +524,7 @@
       "docxSignatureTableSummary": "Insert signature table near {blockId}",
       "execute-typescript": "Lecture des données du dossier",
       "fetch_url": "Lecture de la page",
+      "infosoud_lookup_case": "Recherche d'affaire InfoSoud",
       "load-skill": "Lecture des consignes",
       "read-contact": "Lecture du contact",
       "read-content-across-matters": "Lecture du contenu dans tous les dossiers",
@@ -1445,7 +1483,36 @@
     "aiConfigFailed": "Impossible d'enregistrer votre configuration IA. Vous pouvez la finaliser dans les paramètres.",
     "aiSubtitle": "Utilisez votre propre clé API. Vous pouvez changer de fournisseur et de modèle à tout moment.",
     "aiTitle": "Connectez votre fournisseur d'IA",
+    "catalogueAlwaysOn": "Toujours actif",
+    "catalogueClearSearch": "Effacer la recherche",
+    "catalogueCommunityHeading": "Autres",
+    "catalogueContinueWithCount": "{count, plural, one {Continuer avec # outil} other {Continuer avec # outils}}",
+    "catalogueDetailAbout": "À propos",
+    "catalogueDetailAccess": "Accès",
+    "catalogueDetailAdd": "Ajouter à la sélection",
+    "catalogueDetailAuthor": "Auteur",
+    "catalogueDetailCost": "Coût",
+    "catalogueDetailCoverage": "Couverture",
+    "catalogueDetailFirstParty": "stella (interne)",
+    "catalogueDetailJurisdictions": "Juridictions",
+    "catalogueDetailLicense": "Licence",
+    "catalogueDetailProvenance": "Origine",
+    "catalogueDetailRemove": "Retirer de la sélection",
+    "catalogueDetailSetup": "Configuration",
+    "catalogueFootnote": "Vous pourrez créer vos propres compétences plus tard dans l'application, ou <link>demander une intégration tierce sur GitHub</link>.",
+    "cataloguePartial": "{installed} installés, {failed} en échec",
+    "cataloguePreviewBaseline": "Intégrés",
+    "cataloguePreviewCount": "{count, plural, =0 {Aucune capacité} one {# capacité} other {# capacités}}",
+    "cataloguePreviewEmpty": "Choisissez dans le pack recommandé ou découvrez d’autres outils ci-dessous.",
+    "cataloguePreviewYourStack": "Votre sélection",
+    "catalogueProposeTool": "Proposer un nouvel outil",
+    "catalogueSearchPlaceholder": "Rechercher des skills et outils",
+    "catalogueSubtitle": "stella peut faire appel à ces outils dans ses réponses. Choisissez ceux qui correspondent à votre pratique ; vous pouvez modifier ce choix à tout moment dans les paramètres.",
+    "catalogueThirdPartyConfirm": "Ajouter quand même",
+    "catalogueThirdPartyDisclaimer": "Ce code tiers a été contribué par {author}. stella ne l’a pas examiné, approuvé ni maintenu. Vous êtes seul responsable de vérifier qu’il convient à votre pratique et respecte les politiques de votre cabinet. En l’ajoutant, vous acceptez de l’utiliser à vos propres risques.",
+    "catalogueTitle": "Personnalisez votre IA",
     "changeAnytime": "Vous pourrez modifier cela à tout moment.",
+    "continue": "Continuer",
     "creating": {
       "ai": "Enregistrement de la configuration IA...",
       "done": "Finalisation...",
@@ -1478,6 +1545,7 @@
     "skipStep": "Passer",
     "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}",
     "stepAi": "IA",
+    "stepCatalogue": "Catalogue d’outils",
     "stepDesktop": "Bureau",
     "stepJurisdiction": "Juridiction",
     "stepOrganization": "Équipe",
@@ -1715,6 +1783,8 @@
         "termAddedToast": "« {value} » a été ajouté à la liste de blocage du cabinet.",
         "title": "Anonymisation"
       },
+      "catalogue": "Catalogue d’outils",
+      "catalogueDescription": "Parcourez et installez des skills, serveurs MCP et outils internes adaptés à votre juridiction",
       "matterNumbering": "Matter numbering",
       "matterNumberingDescription": "Configure how new matter reference numbers are generated",
       "membersDescription": "Manage who has access to this organization",

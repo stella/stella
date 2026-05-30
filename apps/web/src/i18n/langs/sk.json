@@ -299,6 +299,43 @@
       "viewOriginal": "Zobraziť zdroj"
     }
   },
+  "catalogue": {
+    "by": "Od {author}",
+    "cost": {
+      "free": "Zadarmo",
+      "paid": "Platené"
+    },
+    "empty": "Žiadne položky nezodpovedajú aktuálnemu filtru.",
+    "filter": {
+      "all": "Všetko",
+      "mcps": "MCP servery",
+      "nativeTools": "Vstavané nástroje",
+      "skills": "Zručnosti"
+    },
+    "firstParty": "Vlastné",
+    "install": "Nainštalovať",
+    "installFailed": "Inštalácia zlyhala",
+    "installPack": "Nainštalovať {count, plural, one {# nástroj} few {# nástroje} other {# nástrojov}}",
+    "installed": "Nainštalované: {name}",
+    "installedShort": "Nainštalované",
+    "onboarding": {
+      "packTitle": "Odporúčané pre vašu jurisdikciu"
+    },
+    "openHomepage": "Otvoriť domovskú stránku",
+    "packDescription": "{count, plural, one {# nástroj} few {# nástroje} other {# nástrojov}} vybraných pre vašu prax. Nainštalujte jedným kliknutím alebo vyberte nižšie.",
+    "packInstalled": "{count, plural, one {# nástroj nainštalovaný} few {# nástroje nainštalované} other {# nástrojov nainštalovaných}}",
+    "packPartial": "Nainštalované {installed}, {failed} zlyhalo",
+    "recommended": "Odporúčané",
+    "settings": {
+      "packTitle": "Odporúčaný balík"
+    },
+    "setup": {
+      "account": "Účet",
+      "apiKey": "API kľúč",
+      "none": "Bez nastavenia"
+    },
+    "unavailable": "Zatiaľ nedostupné"
+  },
   "chat": {
     "acceptAllCount": "Prijať všetko ({count})",
     "actionExpand": {
@@ -487,6 +524,7 @@
       "docxSignatureTableSummary": "Insert signature table near {blockId}",
       "execute-typescript": "Čítam dáta veci",
       "fetch_url": "Čítanie stránky",
+      "infosoud_lookup_case": "Vyhľadanie spisu v InfoSoude",
       "load-skill": "Čítam pokyny",
       "read-contact": "Čítanie kontaktu",
       "read-content-across-matters": "Čítanie obsahu naprieč vecami",
@@ -1445,7 +1483,36 @@
     "aiConfigFailed": "Nastavenie AI sa nepodarilo uložiť. Môžete ho dokončiť v nastaveniach.",
     "aiSubtitle": "Prineste si vlastný API kľúč. Poskytovateľov aj modely môžete kedykoľvek zmeniť.",
     "aiTitle": "Pripojte svojho poskytovateľa AI",
+    "catalogueAlwaysOn": "Vždy zapnuté",
+    "catalogueClearSearch": "Vymazať hľadanie",
+    "catalogueCommunityHeading": "Ostatné",
+    "catalogueContinueWithCount": "{count, plural, one {Pokračovať s # nástrojom} few {Pokračovať s # nástrojmi} other {Pokračovať s # nástrojmi}}",
+    "catalogueDetailAbout": "O nástroji",
+    "catalogueDetailAccess": "Prístup",
+    "catalogueDetailAdd": "Pridať do sady",
+    "catalogueDetailAuthor": "Autor",
+    "catalogueDetailCost": "Cena",
+    "catalogueDetailCoverage": "Pokrytie",
+    "catalogueDetailFirstParty": "stella (prvá strana)",
+    "catalogueDetailJurisdictions": "Jurisdikcie",
+    "catalogueDetailLicense": "Licencia",
+    "catalogueDetailProvenance": "Pôvod",
+    "catalogueDetailRemove": "Odstrániť zo sady",
+    "catalogueDetailSetup": "Nastavenie",
+    "catalogueFootnote": "Vlastné zručnosti môžete vytvoriť neskôr priamo v aplikácii, alebo si <link>vyžiadať integráciu tretej strany na GitHube</link>.",
+    "cataloguePartial": "Nainštalované {installed}, zlyhalo {failed}",
+    "cataloguePreviewBaseline": "Vstavané",
+    "cataloguePreviewCount": "{count, plural, =0 {Žiadne schopnosti} one {# schopnosť} few {# schopnosti} other {# schopností}}",
+    "cataloguePreviewEmpty": "Vyberte z odporúčaného balíka alebo objavte ďalšie nástroje nižšie.",
+    "cataloguePreviewYourStack": "Vaša sada",
+    "catalogueProposeTool": "Navrhnúť nový nástroj",
+    "catalogueSearchPlaceholder": "Hľadať zručnosti a nástroje",
+    "catalogueSubtitle": "stella tieto nástroje môže používať pri odpovedaní. Vyberte tie, ktoré zodpovedajú vašej praxi; zmeniť ich môžete kedykoľvek v nastaveniach.",
+    "catalogueThirdPartyConfirm": "Aj tak pridať",
+    "catalogueThirdPartyDisclaimer": "Toto je kód tretej strany od {author}. stella ho nereviduje, neschvaľuje ani neudržiava. Sami zodpovedáte za overenie, že je vhodný pre vašu prax a v súlade s pravidlami vašej kancelárie. Pridaním prijímate používanie na vlastné riziko.",
+    "catalogueTitle": "Prispôsobte si AI",
     "changeAnytime": "Toto nastavenie môžete zmeniť aj kedykoľvek neskôr.",
+    "continue": "Pokračovať",
     "creating": {
       "ai": "Ukladáme nastavenie AI...",
       "done": "Dokončujeme nastavenie...",
@@ -1478,6 +1545,7 @@
     "skipStep": "Preskočiť",
     "someInvitesFailed": "{count, plural, one {# pozvánka zlyhala} few {# pozvánky zlyhali} other {# pozvánok zlyhalo}}",
     "stepAi": "AI",
+    "stepCatalogue": "Katalóg",
     "stepDesktop": "Aplikácia",
     "stepJurisdiction": "Jurisdikcia",
     "stepOrganization": "Tím",
@@ -1715,6 +1783,8 @@
         "termAddedToast": "Pojem „{value}“ bol pridaný do firemného zoznamu.",
         "title": "Anonymizácia"
       },
+      "catalogue": "Katalóg",
+      "catalogueDescription": "Prehliadajte a inštalujte zručnosti, MCP servery a nástroje prvej strany pre svoju jurisdikciu",
       "matterNumbering": "Číslovanie spisov",
       "matterNumberingDescription": "Nakonfigurujte, ako sa generujú referenčné čísla nových spisov",
       "membersDescription": "Spravujte, kto má prístup k tejto organizácii a všetky čakajúce pozvánky",

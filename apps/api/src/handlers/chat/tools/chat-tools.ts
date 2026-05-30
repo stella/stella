@@ -3,7 +3,6 @@ import type { ToolSet } from "ai";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, ScopedDb } from "@/api/db";
-import { env } from "@/api/env";
 import { getChatSkillMetadata } from "@/api/handlers/chat/skills";
 import {
   APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME,
@@ -18,6 +17,7 @@ import {
 } from "@/api/handlers/chat/tools/create-document-tool";
 import { createChatExecutionTools } from "@/api/handlers/chat/tools/execute/chat-execution-tools";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
+import { createInfosoudTools } from "@/api/handlers/chat/tools/infosoud-tools";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import { createSkillTools } from "@/api/handlers/chat/tools/skill-tools";
 import {
@@ -31,7 +31,7 @@ import {
 } from "@/api/handlers/chat/tools/web-search-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
 import type { SafeId } from "@/api/lib/branded-types";
-import { getWebSearchProvider } from "@/api/lib/web-search/select-provider";
+import { isWebSearchDeployAvailable } from "@/api/lib/web-search/select-provider";
 
 export const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";
 
@@ -40,11 +40,7 @@ export const isWebSearchAvailable = (
 ): boolean => {
   const webSearchOrgDisabled =
     disabledNativeToolSlugs?.includes(WEB_SEARCH_NATIVE_TOOL_SLUG) ?? false;
-  return (
-    env.FEATURE_WEB_SEARCH &&
-    !webSearchOrgDisabled &&
-    getWebSearchProvider() !== null
-  );
+  return isWebSearchDeployAvailable() && !webSearchOrgDisabled;
 };
 
 type WorkspaceTools = ReturnType<typeof createWorkspaceTools>;
@@ -53,6 +49,7 @@ type ChatExecutionTools = ReturnType<typeof createChatExecutionTools>;
 type SkillTools = ReturnType<typeof createSkillTools>;
 type AresTools = ReturnType<typeof createAresTools>;
 type BoeTools = ReturnType<typeof createBoeTools>;
+type InfosoudTools = ReturnType<typeof createInfosoudTools>;
 type ActiveDocxEditTools = ReturnType<typeof createActiveDocxEditTools>;
 type CreateDocumentTools = ReturnType<typeof createCreateDocumentTools>;
 type WebSearchTools = ReturnType<typeof createWebSearchTools>;
@@ -62,6 +59,7 @@ type BuiltInChatTools = OrgTools &
   SkillTools &
   AresTools &
   BoeTools &
+  InfosoudTools &
   WorkspaceTools &
   ActiveDocxEditTools &
   CreateDocumentTools &
@@ -134,6 +132,7 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   // official-registry lookups so the model executes immediately
   // once the toggle is on.
   [FETCH_URL_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
+  infosoud_lookup_case: CHAT_TOOL_POLICY_KIND.publicOfficial,
   "load-skill": CHAT_TOOL_POLICY_KIND.internal,
   "read-skill-resource": CHAT_TOOL_POLICY_KIND.internal,
   "run-stella-query": CHAT_TOOL_POLICY_KIND.internal,
@@ -179,6 +178,9 @@ export const getChatTools = ({
   const aresTools = aresDisabled ? {} : createAresTools();
   const boeDisabled = disabledNativeToolSlugs?.includes("boe") ?? false;
   const boeTools = boeDisabled ? {} : createBoeTools();
+  const infosoudDisabled =
+    disabledNativeToolSlugs?.includes("infosoud") ?? false;
+  const infosoudTools = infosoudDisabled ? {} : createInfosoudTools();
   const webSearchTools =
     webSearchEnabled && isWebSearchAvailable(disabledNativeToolSlugs)
       ? createWebSearchTools()
@@ -214,6 +216,7 @@ export const getChatTools = ({
       ...skillTools,
       ...aresTools,
       ...boeTools,
+      ...infosoudTools,
       ...workspaceTools,
       ...createDocumentTools,
       ...activeDocxEditTools,

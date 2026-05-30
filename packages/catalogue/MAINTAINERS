@@ -1,0 +1,5 @@
+# GitHub handles authorised to edit packages/catalogue/entries/recommended.json.
+# Enforced via .github/CODEOWNERS. The recommendation policy
+# (permissive licence + free preference) lives in CONTRIBUTING.md.
+
+@jan-kubica

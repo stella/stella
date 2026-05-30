@@ -299,6 +299,43 @@
       "viewOriginal": "Forrás megtekintése"
     }
   },
+  "catalogue": {
+    "by": "Készítette: {author}",
+    "cost": {
+      "free": "Ingyenes",
+      "paid": "Fizetős"
+    },
+    "empty": "Nincs az aktuális szűrőnek megfelelő bejegyzés.",
+    "filter": {
+      "all": "Összes",
+      "mcps": "MCP-szerverek",
+      "nativeTools": "Beépített eszközök",
+      "skills": "Skillek"
+    },
+    "firstParty": "Saját",
+    "install": "Telepítés",
+    "installFailed": "Telepítés sikertelen",
+    "installPack": "{count, plural, one {# eszköz telepítése} other {# eszköz telepítése}}",
+    "installed": "{name} telepítve",
+    "installedShort": "Telepítve",
+    "onboarding": {
+      "packTitle": "Az Ön joghatóságához ajánlott"
+    },
+    "openHomepage": "Kezdőlap megnyitása",
+    "packDescription": "{count, plural, one {# eszköz} other {# eszköz}} a praxisához válogatva. Egy kattintással telepíthető vagy alább egyenként kiválasztható.",
+    "packInstalled": "{count, plural, one {# eszköz telepítve} other {# eszköz telepítve}}",
+    "packPartial": "{installed} telepítve, {failed} sikertelen",
+    "recommended": "Ajánlott",
+    "settings": {
+      "packTitle": "Ajánlott csomag"
+    },
+    "setup": {
+      "account": "Fiók",
+      "apiKey": "API-kulcs",
+      "none": "Nincs beállítás"
+    },
+    "unavailable": "Még nem elérhető"
+  },
   "chat": {
     "acceptAllCount": "Összes elfogadása ({count})",
     "actionExpand": {
@@ -487,6 +524,7 @@
       "docxSignatureTableSummary": "Insert signature table near {blockId}",
       "execute-typescript": "Ügyadatok olvasása",
       "fetch_url": "Oldal olvasása",
+      "infosoud_lookup_case": "InfoSoud ügykeresés",
       "load-skill": "Útmutató olvasása",
       "read-contact": "Kapcsolat olvasása",
       "read-content-across-matters": "Tartalom olvasása az ügyek között",
@@ -1445,7 +1483,36 @@
     "aiConfigFailed": "Az MI-konfigurációt nem sikerült menteni. A beállításokban befejezheti.",
     "aiSubtitle": "Hozza el saját API-kulcsát. A szolgáltatókat és modelleket bármikor módosíthatja.",
     "aiTitle": "Kapcsolja össze MI-szolgáltatóját",
+    "catalogueAlwaysOn": "Mindig aktív",
+    "catalogueClearSearch": "Keresés törlése",
+    "catalogueCommunityHeading": "Egyebek",
+    "catalogueContinueWithCount": "{count, plural, one {Folytatás # eszközzel} other {Folytatás # eszközzel}}",
+    "catalogueDetailAbout": "Leírás",
+    "catalogueDetailAccess": "Hozzáférés",
+    "catalogueDetailAdd": "Hozzáadás a csomaghoz",
+    "catalogueDetailAuthor": "Szerző",
+    "catalogueDetailCost": "Költség",
+    "catalogueDetailCoverage": "Lefedettség",
+    "catalogueDetailFirstParty": "stella (saját)",
+    "catalogueDetailJurisdictions": "Joghatóságok",
+    "catalogueDetailLicense": "Licenc",
+    "catalogueDetailProvenance": "Eredet",
+    "catalogueDetailRemove": "Eltávolítás a csomagból",
+    "catalogueDetailSetup": "Beállítás",
+    "catalogueFootnote": "Saját készségeket később közvetlenül az alkalmazásban hozhat létre, vagy <link>külső integrációt kérhet a GitHubon</link>.",
+    "cataloguePartial": "{installed} telepítve, {failed} sikertelen",
+    "cataloguePreviewBaseline": "Beépített",
+    "cataloguePreviewCount": "{count, plural, =0 {Nincs képesség} one {# képesség} other {# képesség}}",
+    "cataloguePreviewEmpty": "Válasszon az ajánlott csomagból, vagy fedezzen fel további eszközöket lent.",
+    "cataloguePreviewYourStack": "Az Ön csomagja",
+    "catalogueProposeTool": "Új eszköz javaslata",
+    "catalogueSearchPlaceholder": "Skillek és eszközök keresése",
+    "catalogueSubtitle": "A stella ezeket az eszközöket felhasználhatja a válaszadáshoz. Válassza ki azokat, amelyek illenek a praxisához; bármikor módosíthatja a beállításokban.",
+    "catalogueThirdPartyConfirm": "Hozzáadás így is",
+    "catalogueThirdPartyDisclaimer": "Ez harmadik féltől származó kód, amelyet {author} adott hozzá. A stella nem vizsgálta át, nem ajánlja és nem tartja karban. Ön felel azért, hogy ellenőrizze: megfelel-e a praxisának és az irodai szabályzatoknak. Hozzáadásával elfogadja, hogy saját felelősségére használja.",
+    "catalogueTitle": "Szabja testre az AI-t",
     "changeAnytime": "Ezt bármikor módosíthatja később.",
+    "continue": "Folytatás",
     "creating": {
       "ai": "MI-beállítások mentése...",
       "done": "Befejezés...",
@@ -1478,6 +1545,7 @@
     "skipStep": "Kihagyás",
     "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}",
     "stepAi": "MI",
+    "stepCatalogue": "Katalógus",
     "stepDesktop": "Asztali",
     "stepJurisdiction": "Joghatóság",
     "stepOrganization": "Csapat",
@@ -1715,6 +1783,8 @@
         "termAddedToast": "„{value}” hozzáadva az iroda tiltólistájához.",
         "title": "Anonimizálás"
       },
+      "catalogue": "Katalógus",
+      "catalogueDescription": "Böngésszen és telepítsen a joghatóságához illő skilleket, MCP-szervereket és saját eszközöket",
       "matterNumbering": "Matter numbering",
       "matterNumberingDescription": "Configure how new matter reference numbers are generated",
       "membersDescription": "Manage who has access to this organization",

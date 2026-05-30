@@ -57,6 +57,7 @@
     "@stll/boe": "workspace:*",
     "@stll/business-registries": "workspace:*",
     "@stll/case-law": "workspace:*",
+    "@stll/catalogue": "workspace:*",
     "@stll/country-codes": "workspace:*",
     "@stll/docx-core": "workspace:*",
     "@stll/docx-utils": "workspace:*",

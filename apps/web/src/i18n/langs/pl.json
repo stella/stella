@@ -299,6 +299,43 @@
       "viewOriginal": "Zobacz źródło"
     }
   },
+  "catalogue": {
+    "by": "Autor: {author}",
+    "cost": {
+      "free": "Bezpłatne",
+      "paid": "Płatne"
+    },
+    "empty": "Żadne wpisy nie odpowiadają bieżącemu filtrowi.",
+    "filter": {
+      "all": "Wszystkie",
+      "mcps": "Serwery MCP",
+      "nativeTools": "Wbudowane narzędzia",
+      "skills": "Umiejętności"
+    },
+    "firstParty": "Wbudowane",
+    "install": "Zainstaluj",
+    "installFailed": "Instalacja nie powiodła się",
+    "installPack": "{count, plural, one {Zainstaluj # narzędzie} few {Zainstaluj # narzędzia} other {Zainstaluj # narzędzi}}",
+    "installed": "Zainstalowano: {name}",
+    "installedShort": "Zainstalowano",
+    "onboarding": {
+      "packTitle": "Polecane dla Twojej jurysdykcji"
+    },
+    "openHomepage": "Otwórz stronę główną",
+    "packDescription": "{count, plural, one {# narzędzie} few {# narzędzia} other {# narzędzi}} wybranych dla Twojej praktyki. Zainstaluj jednym kliknięciem lub wybierz poniżej.",
+    "packInstalled": "{count, plural, one {Zainstalowano # narzędzie} few {Zainstalowano # narzędzia} other {Zainstalowano # narzędzi}}",
+    "packPartial": "Zainstalowano {installed}, {failed} nieudane",
+    "recommended": "Polecane",
+    "settings": {
+      "packTitle": "Polecany pakiet"
+    },
+    "setup": {
+      "account": "Konto",
+      "apiKey": "Klucz API",
+      "none": "Bez konfiguracji"
+    },
+    "unavailable": "Jeszcze niedostępne"
+  },
   "chat": {
     "acceptAllCount": "Zaakceptuj wszystkie ({count})",
     "actionExpand": {
@@ -487,6 +524,7 @@
       "docxSignatureTableSummary": "Insert signature table near {blockId}",
       "execute-typescript": "Odczytywanie danych sprawy",
       "fetch_url": "Czytanie strony",
+      "infosoud_lookup_case": "Wyszukiwanie sprawy w InfoSoud",
       "load-skill": "Odczytywanie wskazówek",
       "read-contact": "Odczyt kontaktu",
       "read-content-across-matters": "Odczyt treści w różnych sprawach",
@@ -1445,7 +1483,36 @@
     "aiConfigFailed": "Nie udało się zapisać konfiguracji AI. Możesz ją dokończyć w ustawieniach.",
     "aiSubtitle": "Użyj własnego klucza API. Dostawców i modele możesz zmienić w dowolnym momencie.",
     "aiTitle": "Połącz swojego dostawcę AI",
+    "catalogueAlwaysOn": "Zawsze włączone",
+    "catalogueClearSearch": "Wyczyść wyszukiwanie",
+    "catalogueCommunityHeading": "Pozostałe",
+    "catalogueContinueWithCount": "{count, plural, one {Kontynuuj z # narzędziem} few {Kontynuuj z # narzędziami} many {Kontynuuj z # narzędziami} other {Kontynuuj z # narzędziami}}",
+    "catalogueDetailAbout": "Opis",
+    "catalogueDetailAccess": "Dostęp",
+    "catalogueDetailAdd": "Dodaj do zestawu",
+    "catalogueDetailAuthor": "Autor",
+    "catalogueDetailCost": "Koszt",
+    "catalogueDetailCoverage": "Zakres",
+    "catalogueDetailFirstParty": "stella (własne)",
+    "catalogueDetailJurisdictions": "Jurysdykcje",
+    "catalogueDetailLicense": "Licencja",
+    "catalogueDetailProvenance": "Pochodzenie",
+    "catalogueDetailRemove": "Usuń z zestawu",
+    "catalogueDetailSetup": "Konfiguracja",
+    "catalogueFootnote": "Własne umiejętności możesz utworzyć później bezpośrednio w aplikacji lub <link>poprosić o integrację zewnętrzną na GitHubie</link>.",
+    "cataloguePartial": "Zainstalowano {installed}, niepowodzenia: {failed}",
+    "cataloguePreviewBaseline": "Wbudowane",
+    "cataloguePreviewCount": "{count, plural, =0 {Brak funkcji} one {# funkcja} few {# funkcje} many {# funkcji} other {# funkcji}}",
+    "cataloguePreviewEmpty": "Wybierz z polecanego pakietu albo odkryj więcej narzędzi poniżej.",
+    "cataloguePreviewYourStack": "Twój zestaw",
+    "catalogueProposeTool": "Zaproponuj nowe narzędzie",
+    "catalogueSearchPlaceholder": "Szukaj umiejętności i narzędzi",
+    "catalogueSubtitle": "stella może korzystać z tych narzędzi podczas odpowiadania. Wybierz te, które pasują do Twojej praktyki; możesz to zmienić w dowolnym momencie w ustawieniach.",
+    "catalogueThirdPartyConfirm": "Dodaj mimo to",
+    "catalogueThirdPartyDisclaimer": "To kod strony trzeciej dodany przez {author}. stella go nie sprawdzała, nie rekomenduje i nie utrzymuje. Odpowiadasz za sprawdzenie, czy nadaje się do Twojej praktyki i jest zgodny z zasadami kancelarii. Dodając go, akceptujesz użycie na własne ryzyko.",
+    "catalogueTitle": "Dostosuj AI",
     "changeAnytime": "To ustawienie możesz zmienić w dowolnym momencie.",
+    "continue": "Kontynuuj",
     "creating": {
       "ai": "Zapisywanie konfiguracji AI...",
       "done": "Kończenie...",
@@ -1478,6 +1545,7 @@
     "skipStep": "Pomiń",
     "someInvitesFailed": "{count, plural, one {# zaproszenie nie zostało wysłane} few {# zaproszenia nie zostały wysłane} many {# zaproszeń nie zostało wysłanych} other {# zaproszeń nie zostało wysłanych}}",
     "stepAi": "AI",
+    "stepCatalogue": "Katalog",
     "stepDesktop": "Aplikacja",
     "stepJurisdiction": "Jurysdykcja",
     "stepOrganization": "Zespół",
@@ -1715,6 +1783,8 @@
         "termAddedToast": "Dodano „{value}” do firmowej listy.",
         "title": "Anonimizacja"
       },
+      "catalogue": "Katalog",
+      "catalogueDescription": "Przeglądaj i instaluj umiejętności, serwery MCP oraz narzędzia własne dla swojej jurysdykcji",
       "matterNumbering": "Matter numbering",
       "matterNumberingDescription": "Configure how new matter reference numbers are generated",
       "membersDescription": "Manage who has access to this organization",

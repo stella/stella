@@ -299,6 +299,43 @@
       "viewOriginal": "Quelle anzeigen"
     }
   },
+  "catalogue": {
+    "by": "Von {author}",
+    "cost": {
+      "free": "Kostenlos",
+      "paid": "Kostenpflichtig"
+    },
+    "empty": "Keine Einträge entsprechen dem aktuellen Filter.",
+    "filter": {
+      "all": "Alle",
+      "mcps": "MCP-Server",
+      "nativeTools": "Integrierte Tools",
+      "skills": "Fähigkeiten"
+    },
+    "firstParty": "Erstanbieter",
+    "install": "Installieren",
+    "installFailed": "Installation fehlgeschlagen",
+    "installPack": "{count, plural, one {# Tool installieren} other {# Tools installieren}}",
+    "installed": "{name} installiert",
+    "installedShort": "Installiert",
+    "onboarding": {
+      "packTitle": "Für Ihre Jurisdiktion empfohlen"
+    },
+    "openHomepage": "Startseite öffnen",
+    "packDescription": "{count, plural, one {# Tool} other {# Tools}}, ausgewählt für Ihre Praxis. Mit einem Klick installieren oder unten einzeln auswählen.",
+    "packInstalled": "{count, plural, one {# Tool installiert} other {# Tools installiert}}",
+    "packPartial": "{installed} installiert, {failed} fehlgeschlagen",
+    "recommended": "Empfohlen",
+    "settings": {
+      "packTitle": "Empfohlenes Paket"
+    },
+    "setup": {
+      "account": "Konto",
+      "apiKey": "API-Schlüssel",
+      "none": "Keine Einrichtung"
+    },
+    "unavailable": "Noch nicht verfügbar"
+  },
   "chat": {
     "acceptAllCount": "Alle übernehmen ({count})",
     "actionExpand": {
@@ -487,6 +524,7 @@
       "docxSignatureTableSummary": "Insert signature table near {blockId}",
       "execute-typescript": "Mandatsdaten lesen",
       "fetch_url": "Seite lesen",
+      "infosoud_lookup_case": "InfoSoud Aktensuche",
       "load-skill": "Hinweise lesen",
       "read-contact": "Kontakt lesen",
       "read-content-across-matters": "Inhalte in allen Mandaten lesen",
@@ -1445,7 +1483,36 @@
     "aiConfigFailed": "Ihre KI-Konfiguration konnte nicht gespeichert werden. Sie können sie in den Einstellungen abschließen.",
     "aiSubtitle": "Verwenden Sie Ihren eigenen API-Schlüssel. Anbieter und Modelle können Sie jederzeit ändern.",
     "aiTitle": "Verbinden Sie Ihren KI-Anbieter",
+    "catalogueAlwaysOn": "Immer aktiv",
+    "catalogueClearSearch": "Suche löschen",
+    "catalogueCommunityHeading": "Weitere",
+    "catalogueContinueWithCount": "{count, plural, one {Mit # Tool fortfahren} other {Mit # Tools fortfahren}}",
+    "catalogueDetailAbout": "Überblick",
+    "catalogueDetailAccess": "Zugriff",
+    "catalogueDetailAdd": "Zur Auswahl hinzufügen",
+    "catalogueDetailAuthor": "Autor",
+    "catalogueDetailCost": "Kosten",
+    "catalogueDetailCoverage": "Abdeckung",
+    "catalogueDetailFirstParty": "stella (Erstanbieter)",
+    "catalogueDetailJurisdictions": "Jurisdiktionen",
+    "catalogueDetailLicense": "Lizenz",
+    "catalogueDetailProvenance": "Herkunft",
+    "catalogueDetailRemove": "Aus Auswahl entfernen",
+    "catalogueDetailSetup": "Einrichtung",
+    "catalogueFootnote": "Eigene Skills können Sie später in der App erstellen oder <link>eine Drittanbieter-Integration auf GitHub anfragen</link>.",
+    "cataloguePartial": "{installed} installiert, {failed} fehlgeschlagen",
+    "cataloguePreviewBaseline": "Integriert",
+    "cataloguePreviewCount": "{count, plural, =0 {Keine Funktionen} one {# Funktion} other {# Funktionen}}",
+    "cataloguePreviewEmpty": "Wählen Sie aus dem empfohlenen Paket oder entdecken Sie unten weitere Tools.",
+    "cataloguePreviewYourStack": "Ihre Auswahl",
+    "catalogueProposeTool": "Neues Tool vorschlagen",
+    "catalogueSearchPlaceholder": "Skills und Tools suchen",
+    "catalogueSubtitle": "stella kann diese Tools beim Antworten nutzen. Wählen Sie die für Ihre Praxis passenden aus; Sie können dies jederzeit in den Einstellungen ändern.",
+    "catalogueThirdPartyConfirm": "Trotzdem hinzufügen",
+    "catalogueThirdPartyDisclaimer": "Dies ist Drittanbieter-Code von {author}. stella hat ihn nicht geprüft, empfohlen oder gewartet. Sie sind selbst dafür verantwortlich zu prüfen, ob er für Ihre Praxis geeignet ist und den Richtlinien Ihrer Kanzlei entspricht. Mit dem Hinzufügen akzeptieren Sie die Nutzung auf eigenes Risiko.",
+    "catalogueTitle": "KI anpassen",
     "changeAnytime": "Diese Einstellung können Sie jederzeit später ändern.",
+    "continue": "Fortfahren",
     "creating": {
       "ai": "KI-Konfiguration wird gespeichert...",
       "done": "Wird abgeschlossen...",
@@ -1478,6 +1545,7 @@
     "skipStep": "Überspringen",
     "someInvitesFailed": "{count, plural, one {# Einladung fehlgeschlagen} other {# Einladungen fehlgeschlagen}}",
     "stepAi": "KI",
+    "stepCatalogue": "Katalog",
     "stepDesktop": "Desktop",
     "stepJurisdiction": "Jurisdiktion",
     "stepOrganization": "Team",
@@ -1715,6 +1783,8 @@
         "termAddedToast": "„{value}“ wurde zur kanzleiweiten Sperrliste hinzugefügt.",
         "title": "Anonymisierung"
       },
+      "catalogue": "Katalog",
+      "catalogueDescription": "Skills, MCP-Server und Erstanbieter-Tools für Ihre Jurisdiktion durchsuchen und installieren",
       "matterNumbering": "Matter numbering",
       "matterNumberingDescription": "Configure how new matter reference numbers are generated",
       "membersDescription": "Manage who has access to this organization",

@@ -299,6 +299,43 @@
       "viewOriginal": "Žiūrėti šaltinį"
     }
   },
+  "catalogue": {
+    "by": "Autorius: {author}",
+    "cost": {
+      "free": "Nemokama",
+      "paid": "Mokama"
+    },
+    "empty": "Pagal dabartinį filtrą nėra įrašų.",
+    "filter": {
+      "all": "Visi",
+      "mcps": "MCP serveriai",
+      "nativeTools": "Integruoti įrankiai",
+      "skills": "Įgūdžiai"
+    },
+    "firstParty": "Pirmosios šalies",
+    "install": "Įdiegti",
+    "installFailed": "Įdiegti nepavyko",
+    "installPack": "{count, plural, one {Įdiegti # įrankį} few {Įdiegti # įrankius} other {Įdiegti # įrankių}}",
+    "installed": "{name} įdiegta",
+    "installedShort": "Įdiegta",
+    "onboarding": {
+      "packTitle": "Rekomenduojama jūsų jurisdikcijai"
+    },
+    "openHomepage": "Atidaryti pagrindinį puslapį",
+    "packDescription": "{count, plural, one {# įrankis} few {# įrankiai} other {# įrankių}} parinkta jūsų praktikai. Įdiekite vienu paspaudimu arba pasirinkite žemiau.",
+    "packInstalled": "{count, plural, one {Įdiegta # įrankis} few {Įdiegti # įrankiai} other {Įdiegta # įrankių}}",
+    "packPartial": "Įdiegta {installed}, {failed} nepavyko",
+    "recommended": "Rekomenduojama",
+    "settings": {
+      "packTitle": "Rekomenduojamas paketas"
+    },
+    "setup": {
+      "account": "Paskyra",
+      "apiKey": "API raktas",
+      "none": "Nereikia nustatyti"
+    },
+    "unavailable": "Dar neprieinama"
+  },
   "chat": {
     "acceptAllCount": "Priimti viską ({count})",
     "actionExpand": {
@@ -487,6 +524,7 @@
       "docxSignatureTableSummary": "Insert signature table near {blockId}",
       "execute-typescript": "Skaitomi bylos duomenys",
       "fetch_url": "Skaitomas puslapis",
+      "infosoud_lookup_case": "InfoSoud bylos paieška",
       "load-skill": "Skaitomos gairės",
       "read-contact": "Skaitomas kontaktas",
       "read-content-across-matters": "Skaitomas turinys keliose bylose",
@@ -1445,7 +1483,36 @@
     "aiConfigFailed": "Nepavyko išsaugoti dirbtinio intelekto konfigūracijos. Galite ją užbaigti nustatymuose.",
     "aiSubtitle": "Naudokite savo API raktą. Tiekėjus ir modelius galite keisti bet kada.",
     "aiTitle": "Prijunkite savo AI tiekėją",
+    "catalogueAlwaysOn": "Visada įjungta",
+    "catalogueClearSearch": "Išvalyti paiešką",
+    "catalogueCommunityHeading": "Kiti",
+    "catalogueContinueWithCount": "{count, plural, one {Tęsti su # įrankiu} few {Tęsti su # įrankiais} other {Tęsti su # įrankių}}",
+    "catalogueDetailAbout": "Apie",
+    "catalogueDetailAccess": "Prieiga",
+    "catalogueDetailAdd": "Pridėti prie rinkinio",
+    "catalogueDetailAuthor": "Autorius",
+    "catalogueDetailCost": "Kaina",
+    "catalogueDetailCoverage": "Aprėptis",
+    "catalogueDetailFirstParty": "stella (pirmosios šalies)",
+    "catalogueDetailJurisdictions": "Jurisdikcijos",
+    "catalogueDetailLicense": "Licencija",
+    "catalogueDetailProvenance": "Kilmė",
+    "catalogueDetailRemove": "Pašalinti iš rinkinio",
+    "catalogueDetailSetup": "Nustatymas",
+    "catalogueFootnote": "Savo įgūdžius galite sukurti vėliau pačioje programoje arba <link>paprašyti trečiosios šalies integracijos GitHub</link>.",
+    "cataloguePartial": "Įdiegta {installed}, nepavyko {failed}",
+    "cataloguePreviewBaseline": "Integruota",
+    "cataloguePreviewCount": "{count, plural, =0 {Nėra galimybių} one {# galimybė} few {# galimybės} other {# galimybių}}",
+    "cataloguePreviewEmpty": "Rinkitės iš rekomenduojamo paketo arba atraskite daugiau įrankių žemiau.",
+    "cataloguePreviewYourStack": "Jūsų rinkinys",
+    "catalogueProposeTool": "Pasiūlyti naują įrankį",
+    "catalogueSearchPlaceholder": "Ieškoti įgūdžių ir įrankių",
+    "catalogueSubtitle": "stella gali naudoti šiuos įrankius atsakydama. Pasirinkite tuos, kurie atitinka jūsų praktiką; tai bet kada galite pakeisti nustatymuose.",
+    "catalogueThirdPartyConfirm": "Vis tiek pridėti",
+    "catalogueThirdPartyDisclaimer": "Tai trečiosios šalies kodas, kurį pateikė {author}. stella jo neperžiūrėjo, nerekomenduoja ir neprižiūri. Jūs atsakote už patikrinimą, ar jis tinka jūsų praktikai ir atitinka jūsų įmonės taisykles. Pridėdami sutinkate naudoti jį savo rizika.",
+    "catalogueTitle": "Pritaikykite savo DI",
     "changeAnytime": "Šį nustatymą galėsite pakeisti bet kada vėliau.",
+    "continue": "Tęsti",
     "creating": {
       "ai": "Išsaugoma AI konfigūracija...",
       "done": "Baigiama...",
@@ -1478,6 +1545,7 @@
     "skipStep": "Praleisti",
     "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}",
     "stepAi": "AI",
+    "stepCatalogue": "Katalogas",
     "stepDesktop": "Kompiuteris",
     "stepJurisdiction": "Jurisdikcija",
     "stepOrganization": "Komanda",
@@ -1715,6 +1783,8 @@
         "termAddedToast": "„{value}“ pridėtas į kontoros sąrašą.",
         "title": "Anonimizavimas"
       },
+      "catalogue": "Katalogas",
+      "catalogueDescription": "Naršykite ir diekite jūsų jurisdikcijai skirtus įgūdžius, MCP serverius ir pirmosios šalies įrankius",
       "matterNumbering": "Matter numbering",
       "matterNumberingDescription": "Configure how new matter reference numbers are generated",
       "membersDescription": "Manage who has access to this organization",

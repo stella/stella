@@ -299,6 +299,43 @@
       "viewOriginal": "Skatīt avotu"
     }
   },
+  "catalogue": {
+    "by": "Autors: {author}",
+    "cost": {
+      "free": "Bezmaksas",
+      "paid": "Maksas"
+    },
+    "empty": "Nav neviena ieraksta, kas atbilstu pašreizējam filtram.",
+    "filter": {
+      "all": "Visi",
+      "mcps": "MCP serveri",
+      "nativeTools": "Iebūvētie rīki",
+      "skills": "Prasmes"
+    },
+    "firstParty": "Pirmā puse",
+    "install": "Instalēt",
+    "installFailed": "Instalēšana neizdevās",
+    "installPack": "{count, plural, one {Instalēt # rīku} other {Instalēt # rīkus}}",
+    "installed": "{name} instalēts",
+    "installedShort": "Instalēts",
+    "onboarding": {
+      "packTitle": "Ieteikts jūsu jurisdikcijai"
+    },
+    "openHomepage": "Atvērt sākumlapu",
+    "packDescription": "{count, plural, one {# rīks} other {# rīki}} jūsu praksei. Instalējiet ar vienu klikšķi vai izvēlieties zemāk individuāli.",
+    "packInstalled": "{count, plural, one {# rīks instalēts} other {# rīki instalēti}}",
+    "packPartial": "{installed} instalēti, {failed} neizdevās",
+    "recommended": "Ieteicams",
+    "settings": {
+      "packTitle": "Ieteicamā paka"
+    },
+    "setup": {
+      "account": "Konts",
+      "apiKey": "API atslēga",
+      "none": "Nav jāiestata"
+    },
+    "unavailable": "Vēl nav pieejams"
+  },
   "chat": {
     "acceptAllCount": "Pieņemt visu ({count})",
     "actionExpand": {
@@ -487,6 +524,7 @@
       "docxSignatureTableSummary": "Insert signature table near {blockId}",
       "execute-typescript": "Lietas datu lasīšana",
       "fetch_url": "Lapas lasīšana",
+      "infosoud_lookup_case": "InfoSoud lietas meklēšana",
       "load-skill": "Norādījumu lasīšana",
       "read-contact": "Kontaktpersonas lasīšana",
       "read-content-across-matters": "Satura lasīšana vairākās lietās",
@@ -1445,7 +1483,36 @@
     "aiConfigFailed": "Neizdevās saglabāt mākslīgā intelekta konfigurāciju. To var pabeigt iestatījumos.",
     "aiSubtitle": "Izmantojiet savu API atslēgu. Pakalpojumu sniedzējus un modeļus varat mainīt jebkurā laikā.",
     "aiTitle": "Pievienojiet savu MI pakalpojumu sniedzēju",
+    "catalogueAlwaysOn": "Vienmēr ieslēgts",
+    "catalogueClearSearch": "Notīrīt meklēšanu",
+    "catalogueCommunityHeading": "Citi",
+    "catalogueContinueWithCount": "{count, plural, one {Turpināt ar # rīku} other {Turpināt ar # rīkiem}}",
+    "catalogueDetailAbout": "Par rīku",
+    "catalogueDetailAccess": "Piekļuve",
+    "catalogueDetailAdd": "Pievienot kopai",
+    "catalogueDetailAuthor": "Autors",
+    "catalogueDetailCost": "Izmaksas",
+    "catalogueDetailCoverage": "Tvērums",
+    "catalogueDetailFirstParty": "stella (pirmās puses)",
+    "catalogueDetailJurisdictions": "Jurisdikcijas",
+    "catalogueDetailLicense": "Licence",
+    "catalogueDetailProvenance": "Izcelsme",
+    "catalogueDetailRemove": "Noņemt no kopas",
+    "catalogueDetailSetup": "Iestatīšana",
+    "catalogueFootnote": "Savas prasmes vēlāk varat izveidot tieši lietotnē vai <link>pieprasīt trešās puses integrāciju GitHub</link>.",
+    "cataloguePartial": "Instalēti {installed}, neizdevās {failed}",
+    "cataloguePreviewBaseline": "Iebūvēti",
+    "cataloguePreviewCount": "{count, plural, =0 {Nav iespēju} one {# iespēja} other {# iespējas}}",
+    "cataloguePreviewEmpty": "Izvēlieties no ieteicamās pakas vai atrodiet citus rīkus zemāk.",
+    "cataloguePreviewYourStack": "Jūsu kopa",
+    "catalogueProposeTool": "Ieteikt jaunu rīku",
+    "catalogueSearchPlaceholder": "Meklēt prasmes un rīkus",
+    "catalogueSubtitle": "stella var izmantot šos rīkus, atbildot uz jautājumiem. Izvēlieties tos, kas atbilst jūsu praksei; to vienmēr varat mainīt iestatījumos.",
+    "catalogueThirdPartyConfirm": "Tomēr pievienot",
+    "catalogueThirdPartyDisclaimer": "Šis ir trešās puses kods, ko pievienoja {author}. stella to nav pārskatījusi, apstiprinājusi vai uzturējusi. Jūs esat atbildīgs par pārbaudi, vai tas ir piemērots jūsu praksei un atbilst jūsu biroja politikām. Pievienojot to, jūs piekrītat lietot to uz savu risku.",
+    "catalogueTitle": "Pielāgojiet savu MI",
     "changeAnytime": "Šo iestatījumu varat mainīt jebkurā laikā vēlāk.",
+    "continue": "Turpināt",
     "creating": {
       "ai": "Saglabājam MI konfigurāciju...",
       "done": "Pabeigšana...",
@@ -1478,6 +1545,7 @@
     "skipStep": "Izlaist",
     "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}",
     "stepAi": "MI",
+    "stepCatalogue": "Katalogs",
     "stepDesktop": "Datora",
     "stepJurisdiction": "Jurisdikcija",
     "stepOrganization": "Komanda",
@@ -1715,6 +1783,8 @@
         "termAddedToast": "„{value}” pievienots biroja sarakstam.",
         "title": "Anonimizācija"
       },
+      "catalogue": "Katalogs",
+      "catalogueDescription": "Pārlūkojiet un instalējiet prasmes, MCP serverus un pirmās puses rīkus savai jurisdikcijai",
       "matterNumbering": "Matter numbering",
       "matterNumberingDescription": "Configure how new matter reference numbers are generated",
       "membersDescription": "Manage who has access to this organization",

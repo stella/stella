@@ -3,6 +3,7 @@ import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import {
   HashIcon,
   MonitorIcon,
+  PackageIcon,
   ShieldIcon,
   SparklesIcon,
   UserIcon,
@@ -31,7 +32,8 @@ type NavTo =
   | "/settings/organization/members"
   | "/settings/organization/matter-numbering"
   | "/settings/organization/ai"
-  | "/settings/organization/anonymization";
+  | "/settings/organization/anonymization"
+  | "/settings/organization/catalogue";
 
 type NavItem = {
   readonly to: NavTo;
@@ -85,6 +87,11 @@ const ORGANIZATION_SECTION = {
       to: "/settings/organization/anonymization",
       labelKey: "settings.organization.anonymization.title",
       icon: ShieldIcon,
+    },
+    {
+      to: "/settings/organization/catalogue",
+      labelKey: "settings.organization.catalogue",
+      icon: PackageIcon,
     },
   ],
 } as const satisfies Section;

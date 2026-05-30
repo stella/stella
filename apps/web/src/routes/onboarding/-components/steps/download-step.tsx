@@ -72,7 +72,7 @@ export const DownloadStep = ({ onNext, onSkip }: DownloadStepProps) => {
         {t("onboarding.desktopHint")}
       </p>
 
-      <div className="mt-8 flex items-center justify-end gap-3">
+      <div className="mt-auto flex items-center justify-between gap-3 pt-8">
         <Button onClick={onSkip} type="button" variant="ghost">
           {t("onboarding.skipStep")}
         </Button>

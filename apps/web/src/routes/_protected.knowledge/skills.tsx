@@ -72,7 +72,7 @@ type InstalledSkill = {
   id: string;
   license: string | null;
   name: string;
-  origin: "upload" | "url";
+  origin: "bundled" | "upload" | "url";
   scope: SkillScope;
   slug: string;
   sourceUrl: string | null;
@@ -223,7 +223,7 @@ function SkillsPage() {
           {teamSkills.map((skill) => (
             <InstalledSkillCard
               canDelete={canManageTeam}
-              canEdit={canManageTeam}
+              canEdit={canManageTeam && isEditableInstalledSkill(skill)}
               canToggle={canManageTeam}
               key={skill.id}
               onDelete={setDeleteTarget}
@@ -242,7 +242,7 @@ function SkillsPage() {
           {privateSkills.map((skill) => (
             <InstalledSkillCard
               canDelete
-              canEdit
+              canEdit={isEditableInstalledSkill(skill)}
               canToggle
               key={skill.id}
               onDelete={setDeleteTarget}
@@ -326,6 +326,9 @@ type SkillSectionProps = {
   children: React.ReactNode;
   title: string;
 };
+
+const isEditableInstalledSkill = (skill: InstalledSkill): boolean =>
+  skill.origin !== "bundled";
 
 function SkillSection({ children, title }: SkillSectionProps) {
   return (
