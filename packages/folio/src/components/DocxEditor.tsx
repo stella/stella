@@ -2549,9 +2549,8 @@ export function DocxEditor({
           return null;
         }
 
-        const { resolveSelectiveSaveFlags } = await import(
-          "../core/docx/selectiveSaveFlags"
-        );
+        const { resolveSelectiveSaveFlags } =
+          await import("../core/docx/selectiveSaveFlags");
         const flags = resolveSelectiveSaveFlags(featureFlags);
 
         // Selective save runs only when the feature flag is on AND the
@@ -2596,9 +2595,8 @@ export function DocxEditor({
           // Tripwire compares selective vs full bytes but never blocks the save.
           // The host decides whether to log, alert, or fail CI.
           try {
-            const { compareSelectiveVsFull } = await import(
-              "../core/docx/selectiveSaveTripwire"
-            );
+            const { compareSelectiveVsFull } =
+              await import("../core/docx/selectiveSaveTripwire");
             const result = await compareSelectiveVsFull(
               selectiveBuffer,
               fullBuffer,
