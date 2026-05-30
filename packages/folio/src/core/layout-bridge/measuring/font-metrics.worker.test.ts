@@ -18,7 +18,10 @@ import {
 } from "./font-metrics.worker";
 import type { MeasureWorkerRequest } from "./measureWorkerProtocol";
 
-type CanvasStub = { font: string; measureText(text: string): { width: number } };
+type CanvasStub = {
+  font: string;
+  measureText(text: string): { width: number };
+};
 
 class FakeOffscreenCanvas {
   getContext(type: string): CanvasStub | null {
@@ -56,7 +59,12 @@ describe("handleMeasureRequest", () => {
   test("returns widths from the stubbed OffscreenCanvas", () => {
     const reply = handleMeasureRequest(
       req([
-        { text: "hello", font: "11px Arial", letterSpacing: 0, horizontalScale: 1 },
+        {
+          text: "hello",
+          font: "11px Arial",
+          letterSpacing: 0,
+          horizontalScale: 1,
+        },
       ]),
     );
 
@@ -71,7 +79,12 @@ describe("handleMeasureRequest", () => {
   test("applies letterSpacing for multi-char text", () => {
     const reply = handleMeasureRequest(
       req([
-        { text: "abcd", font: "11px Arial", letterSpacing: 2, horizontalScale: 1 },
+        {
+          text: "abcd",
+          font: "11px Arial",
+          letterSpacing: 2,
+          horizontalScale: 1,
+        },
       ]),
     );
 
@@ -82,7 +95,12 @@ describe("handleMeasureRequest", () => {
   test("does not apply letterSpacing for single-char text", () => {
     const reply = handleMeasureRequest(
       req([
-        { text: "a", font: "11px Arial", letterSpacing: 99, horizontalScale: 1 },
+        {
+          text: "a",
+          font: "11px Arial",
+          letterSpacing: 99,
+          horizontalScale: 1,
+        },
       ]),
     );
 
@@ -92,7 +110,12 @@ describe("handleMeasureRequest", () => {
   test("applies horizontalScale multiplicatively", () => {
     const reply = handleMeasureRequest(
       req([
-        { text: "abc", font: "11px Arial", letterSpacing: 0, horizontalScale: 2 },
+        {
+          text: "abc",
+          font: "11px Arial",
+          letterSpacing: 0,
+          horizontalScale: 2,
+        },
       ]),
     );
 
@@ -121,7 +144,12 @@ describe("handleMeasureRequest", () => {
     const reply = handleMeasureRequest(
       req(
         [
-          { text: "x", font: "11px Arial", letterSpacing: 0, horizontalScale: 1 },
+          {
+            text: "x",
+            font: "11px Arial",
+            letterSpacing: 0,
+            horizontalScale: 1,
+          },
         ],
         42,
       ),
@@ -134,8 +162,18 @@ describe("handleMeasureRequest", () => {
     const reply = handleMeasureRequest(
       req([
         { text: "a", font: "11px Arial", letterSpacing: 0, horizontalScale: 1 },
-        { text: "bb", font: "11px Arial", letterSpacing: 0, horizontalScale: 1 },
-        { text: "ccc", font: "11px Arial", letterSpacing: 0, horizontalScale: 1 },
+        {
+          text: "bb",
+          font: "11px Arial",
+          letterSpacing: 0,
+          horizontalScale: 1,
+        },
+        {
+          text: "ccc",
+          font: "11px Arial",
+          letterSpacing: 0,
+          horizontalScale: 1,
+        },
       ]),
     );
 

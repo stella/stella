@@ -31,12 +31,9 @@ type FakeTransport = MeasureWorkerTransport & {
   terminated: boolean;
 };
 
-function makeFakeTransport(options?: {
-  throwOnPost?: boolean;
-}): FakeTransport {
-  const messageListeners: ((event: {
-    data: MeasureWorkerResponse;
-  }) => void)[] = [];
+function makeFakeTransport(options?: { throwOnPost?: boolean }): FakeTransport {
+  const messageListeners: ((event: { data: MeasureWorkerResponse }) => void)[] =
+    [];
   const errorListeners: ((event: unknown) => void)[] = [];
   const posted: MeasureWorkerRequest[] = [];
   const transport = {

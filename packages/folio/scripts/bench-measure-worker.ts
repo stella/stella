@@ -33,6 +33,7 @@ import {
   setFolioMeasurementFlags,
   setTextCacheSize,
 } from "../src/core/layout-bridge/measuring";
+import { handleMeasureRequest } from "../src/core/layout-bridge/measuring/font-metrics.worker";
 import {
   measureTextWidth,
   resetCanvasContext,
@@ -43,7 +44,6 @@ import {
   __setMeasureWorkerTransport,
   type MeasureWorkerTransport,
 } from "../src/core/layout-bridge/measuring/measureWorker";
-import { handleMeasureRequest } from "../src/core/layout-bridge/measuring/font-metrics.worker";
 import type {
   MeasureWorkerRequest,
   MeasureWorkerResponse,
@@ -51,7 +51,9 @@ import type {
 
 // --- Synthetic OffscreenCanvas for the in-process "worker" -----------
 class BenchOffscreenCanvas {
-  getContext(type: string): { font: string; measureText: (t: string) => { width: number } } | null {
+  getContext(
+    type: string,
+  ): { font: string; measureText: (t: string) => { width: number } } | null {
     if (type !== "2d") {
       return null;
     }
@@ -119,9 +121,8 @@ type DeferredBatch = {
 const deferredQueue: DeferredBatch[] = [];
 
 function deferredTransport(): MeasureWorkerTransport {
-  const messageListeners: ((event: {
-    data: MeasureWorkerResponse;
-  }) => void)[] = [];
+  const messageListeners: ((event: { data: MeasureWorkerResponse }) => void)[] =
+    [];
   return {
     postMessage(req: MeasureWorkerRequest) {
       // Queue the request for off-band processing. In production this
@@ -171,10 +172,37 @@ function buildFixture(): string[] {
   // We synthesise as discrete runs so the binary-search slice keys
   // are realistic.
   const words = [
-    "the", "quick", "brown", "fox", "jumps", "over", "lazy", "dog",
-    "lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing",
-    "elit", "sed", "do", "eiusmod", "tempor", "incididunt", "ut", "labore",
-    "et", "dolore", "magna", "aliqua", "ut", "enim", "ad", "minim",
+    "the",
+    "quick",
+    "brown",
+    "fox",
+    "jumps",
+    "over",
+    "lazy",
+    "dog",
+    "lorem",
+    "ipsum",
+    "dolor",
+    "sit",
+    "amet",
+    "consectetur",
+    "adipiscing",
+    "elit",
+    "sed",
+    "do",
+    "eiusmod",
+    "tempor",
+    "incididunt",
+    "ut",
+    "labore",
+    "et",
+    "dolore",
+    "magna",
+    "aliqua",
+    "ut",
+    "enim",
+    "ad",
+    "minim",
   ];
   const runs: string[] = [];
   for (let p = 0; p < 500; p += 1) {
@@ -259,9 +287,7 @@ console.log("cache:   5000 entries (smaller than fixture; triggers LRU)");
 console.log(
   "note:    in-process bench cannot model true parallelism between the",
 );
-console.log(
-  "         main thread and the worker; production wall-time win is",
-);
+console.log("         main thread and the worker; production wall-time win is");
 console.log("         strictly larger than what this bench reports.");
 
 const N_RUNS = 3;

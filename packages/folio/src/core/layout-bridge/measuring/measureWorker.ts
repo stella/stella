@@ -226,7 +226,9 @@ function flush(current: ProxyState): void {
     }
   }
   for (const entry of entries) {
-    current.pending.delete(makeKey(entry.text, entry.font, entry.letterSpacing));
+    current.pending.delete(
+      makeKey(entry.text, entry.font, entry.letterSpacing),
+    );
   }
   const id = current.nextRequestId;
   current.nextRequestId += 1;
@@ -252,7 +254,12 @@ function handleResponse(message: MeasureWorkerResponse): void {
     return;
   }
   for (const entry of message.entries) {
-    setCachedTextWidth(entry.text, entry.font, entry.letterSpacing, entry.width);
+    setCachedTextWidth(
+      entry.text,
+      entry.font,
+      entry.letterSpacing,
+      entry.width,
+    );
   }
 }
 
