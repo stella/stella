@@ -752,9 +752,13 @@ function renderBlockImage(run: ImageRun, doc: Document): HTMLElement {
 
   // Global CSS reset (Tailwind preflight) sets img { display: block },
   // which makes text-align: center on the container ineffective.
-  // Use margin: auto on the img itself to center it.
-  img.style.marginLeft = "auto";
-  img.style.marginRight = "auto";
+  // Use margin: auto on the img itself to center it. Skip for rotated
+  // images — they are already centred via absolute positioning inside
+  // the bbox container above.
+  if (rotation === 0) {
+    img.style.marginLeft = "auto";
+    img.style.marginRight = "auto";
+  }
 
   applyPmPositions(container, run.pmStart, run.pmEnd);
   container.append(img);
