@@ -204,6 +204,14 @@ function parseBorderSpec(element: XmlElement | null): BorderSpec | undefined {
     border.frame = true;
   }
 
+  // Art-border ID (`w:id` on a <w:CT_Border> inside <w:pgBorders>).
+  // Preserved through the round-trip so Word can re-paint the art glyphs
+  // even though folio renders the underlying line style instead.
+  const artId = parseNumericAttribute(element, "w", "id");
+  if (artId !== undefined) {
+    border.artId = artId;
+  }
+
   return border;
 }
 

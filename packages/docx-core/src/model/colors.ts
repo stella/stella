@@ -81,6 +81,12 @@ export type BorderSpec = {
   shadow?: boolean;
   /** Frame effect */
   frame?: boolean;
+  /**
+   * Page-border art ID (`w:id` on `<w:CT_Border>` children of `<w:pgBorders>`).
+   * Numeric token from ECMA-376 §17.18.2 `ST_BorderArt`. Preserved for
+   * round-trip; folio does not paint art-border glyphs.
+   */
+  artId?: number;
 };
 
 /**
