@@ -2542,6 +2542,11 @@ export function DocxEditor({
   // Handle save
   const handleSave = useCallback(
     async (options?: { selective?: boolean }): Promise<ArrayBuffer | null> => {
+      let tripwireResult:
+        | Parameters<NonNullable<typeof onSelectiveSaveTripwire>>[0]
+        | null = null;
+      let savedBuffer: ArrayBuffer | null = null;
+
       try {
         // Build current document from PM editor state
         const doc = buildCurrentDocument();
@@ -2604,11 +2609,9 @@ export function DocxEditor({
           fullBuffer &&
           onSelectiveSaveTripwire
         ) {
-          // Tripwire compares selective vs full bytes but never blocks the save.
-          // The host decides whether to log, alert, or fail CI.
-          let tripwireResult:
-            | Parameters<NonNullable<typeof onSelectiveSaveTripwire>>[0]
-            | null = null;
+          // The comparison itself never blocks the save path. The host
+          // callback runs after the save try/catch so test harnesses may fail
+          // on mismatches by throwing.
           try {
             const { compareSelectiveVsFull } =
               await import("../core/docx/selectiveSaveTripwire");
@@ -2618,9 +2621,6 @@ export function DocxEditor({
             );
           } catch {
             // Comparison failures must never poison the save path.
-          }
-          if (tripwireResult) {
-            onSelectiveSaveTripwire(tripwireResult);
           }
         }
 
@@ -2632,13 +2632,18 @@ export function DocxEditor({
         commentsDirtyRef.current = false;
 
         onSave?.(buffer);
-        return buffer;
+        savedBuffer = buffer;
       } catch (error) {
         onError?.(
           error instanceof Error ? error : new Error("Failed to save document"),
         );
         return null;
       }
+
+      if (tripwireResult && onSelectiveSaveTripwire) {
+        onSelectiveSaveTripwire(tripwireResult);
+      }
+      return savedBuffer;
     },
     [
       buildCurrentDocument,
