@@ -7,7 +7,11 @@ import { describe, expect, test } from "bun:test";
 import { rectsToFloatingZones } from "./floatingZones";
 
 describe("rectsToFloatingZones", () => {
-  test("splits centered both-sides objects into left and right line segments", () => {
+  test("centered both-sides object falls back to the wider side (split rendering is not yet supported)", () => {
+    // Split-segment rendering requires painter support not yet wired
+    // through `MeasuredLine`. Until then, a centered both-sides box
+    // collapses to the largest single side so text never paints
+    // through the excluded region.
     const [zone] = rectsToFloatingZones(
       [
         {
@@ -26,11 +30,10 @@ describe("rectsToFloatingZones", () => {
       500,
     );
 
-    expect(zone?.segments).toEqual([
-      { leftOffset: 0, availableWidth: 200 },
-      { leftOffset: 300, availableWidth: 200 },
-    ]);
-    expect(zone?.leftMargin).toBe(0);
+    expect(zone?.segments).toBeUndefined();
+    // leftWidth (200) === rightWidth (200) → tied; largestSideMargins
+    // picks the right path, blocking the left side with leftMargin = rectRight.
+    expect(zone?.leftMargin).toBe(300);
     expect(zone?.rightMargin).toBe(0);
   });
 

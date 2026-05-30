@@ -13,7 +13,6 @@ import {
   FOOTNOTE_SEPARATOR_HEIGHT,
 } from "../layout-bridge/footnoteLayout";
 import {
-  clampFloatingWrapMargins,
   measureParagraph,
   rectsToFloatingZones,
 } from "../layout-bridge/measuring";

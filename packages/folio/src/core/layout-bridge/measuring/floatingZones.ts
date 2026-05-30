@@ -71,9 +71,11 @@ export type FloatingLineMargins = {
  * `wrapText` controls which side(s) text flows on:
  *   - `right`     → text only on right → object blocks left side (leftMargin)
  *   - `left`      → text only on left  → object blocks right side (rightMargin)
- *   - `bothSides` → split the line into two segments when the object is
- *                   centered in the column; otherwise pick a single side
- *                   based on `rect.side`.
+ *   - `bothSides` → ideally splits the line into two segments when the
+ *                   object is centered in the column; folio currently falls
+ *                   back to the wider side because split-segment rendering
+ *                   is not yet plumbed through the painter (see comment in
+ *                   the function body).
  *   - `largest`   → pick whichever side has more remaining room and reduce
  *                   the line to that single side (no split).
  */
@@ -89,28 +91,30 @@ export function rectsToFloatingZones(
 
     let leftMargin = 0;
     let rightMargin = 0;
-    let segments: FloatingLineSegmentZone[] | undefined;
 
     if (rect.wrapText === "right") {
       leftMargin = leftObjectMargin(rectRight);
     } else if (rect.wrapText === "left") {
       rightMargin = rightObjectMargin(rectLeft, contentWidth);
-    } else if (rect.wrapText === "largest") {
+    } else if (
+      rect.wrapText === "largest" ||
+      (rect.wrapText === "bothSides" &&
+        canSplitCenteredBothSidesWrap(rectLeft, rectRight, contentWidth))
+    ) {
+      // `largest` always picks the wider side.
+      //
+      // `bothSides` + centered would split the line into two segments per
+      // eigenpal #474, but split-segment rendering is not yet plumbed
+      // through the painter — `MeasuredLine` carries only
+      // `leftOffset`/`rightOffset`, so a two-segment line would paint as
+      // one contiguous strip through the excluded object. Until the
+      // painter can render two physical line fragments at different x
+      // offsets, fall back to the wider side here too.
       ({ leftMargin, rightMargin } = largestSideMargins(
         rectLeft,
         rectRight,
         contentWidth,
       ));
-    } else if (
-      rect.wrapText === "bothSides" &&
-      canSplitCenteredBothSidesWrap(rectLeft, rectRight, contentWidth)
-    ) {
-      // Eigenpal #474: a centered both-sides object splits the line into two
-      // segments instead of carving a single side. Only applied when the
-      // caller explicitly opts in via `wrapText: 'bothSides'` so legacy
-      // callers (images relying on `rect.side`-driven single-side wrap) keep
-      // their existing behavior.
-      segments = centeredWrapSegments(rectLeft, rectRight, contentWidth);
     } else if (rect.side === "left") {
       leftMargin = leftObjectMargin(rectRight);
     } else {
@@ -126,33 +130,41 @@ export function rectsToFloatingZones(
       contentWidth,
     );
 
-    const zone: FloatingImageZone = {
+    return {
       leftMargin: clamped.leftMargin,
       rightMargin: clamped.rightMargin,
       topY: rectTop,
       bottomY: rectBottom,
     };
-    if (segments) {
-      zone.segments = segments;
-    }
-    return zone;
   });
 }
 
 /**
  * Effective horizontal text width for a line under the given margins.
- * Uses the sum of segment widths when the zone provides split segments;
- * otherwise falls back to `baseWidth - leftMargin - rightMargin`.
+ * When the zone provides split segments (centered both-sides wrap), each
+ * segment is clipped against `leftMargin`/`rightMargin` so a side float
+ * overlapping vertically with the centered float still reduces the budget.
+ * Otherwise falls back to `baseWidth - leftMargin - rightMargin`.
  */
 export function getFloatingAvailableWidth(
   margins: FloatingLineMargins,
   baseWidth: number,
 ): number {
-  const segmentWidth = margins.segments?.reduce(
-    (sum, segment) => sum + segment.availableWidth,
-    0,
-  );
-  return segmentWidth ?? baseWidth - margins.leftMargin - margins.rightMargin;
+  if (margins.segments?.length) {
+    const leftLimit = margins.leftMargin;
+    const rightLimit = baseWidth - margins.rightMargin;
+    let total = 0;
+    for (const segment of margins.segments) {
+      const start = Math.max(segment.leftOffset, leftLimit);
+      const end = Math.min(
+        segment.leftOffset + segment.availableWidth,
+        rightLimit,
+      );
+      total += Math.max(0, end - start);
+    }
+    return total;
+  }
+  return baseWidth - margins.leftMargin - margins.rightMargin;
 }
 
 /**
@@ -223,20 +235,6 @@ function canSplitCenteredBothSidesWrap(
   contentWidth: number,
 ): boolean {
   return rectLeft > 0 && rectRight < contentWidth;
-}
-
-function centeredWrapSegments(
-  rectLeft: number,
-  rectRight: number,
-  contentWidth: number,
-): FloatingLineSegmentZone[] {
-  return [
-    { leftOffset: 0, availableWidth: Math.max(0, rectLeft) },
-    {
-      leftOffset: Math.max(0, rectRight),
-      availableWidth: Math.max(0, contentWidth - rectRight),
-    },
-  ].filter((segment) => segment.availableWidth > 1);
 }
 
 function largestSideMargins(

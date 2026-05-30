@@ -398,11 +398,6 @@ function findWordBreaks(text: string): number[] {
 }
 
 /**
- * Default tab width in pixels (0.5 inch at 96 DPI)
- */
-const DEFAULT_TAB_WIDTH = 48;
-
-/**
  * Minimum horizontal room a line must offer before we treat it as usable for
  * body text. Below this threshold the line is bumped past obstructing floats
  * via `findClearLineY` instead of being rendered into the unusable sliver.
