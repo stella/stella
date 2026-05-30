@@ -55,6 +55,7 @@ export const TOGGLEABLE_NATIVE_TOOL_BACKEND_SLUGS = [
   "brreg",
   "infosoud",
   "prh",
+  "recherche-entreprises",
   "web-search",
 ] as const;
 export type ToggleableNativeToolBackendSlug =

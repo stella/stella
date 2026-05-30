@@ -1,0 +1,18 @@
+{
+  "$schema": "../../../schema.json",
+  "kind": "native-tool",
+  "slug": "recherche-entreprises",
+  "displayName": "Recherche d'entreprises",
+  "description": "French company lookup by SIREN, SIRET, or company name from the recherche-entreprises.api.gouv.fr open API (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+  "author": "stella",
+  "authorUrl": "https://github.com/stella",
+  "license": "Apache-2.0",
+  "cost": "free",
+  "setup": "none",
+  "homepage": "https://annuaire-entreprises.data.gouv.fr",
+  "tags": ["corporate", "regulatory"],
+  "jurisdictions": ["FR"],
+  "backendSlug": "recherche-entreprises",
+  "url": "https://annuaire-entreprises.data.gouv.fr",
+  "documentationUrl": "https://recherche-entreprises.api.gouv.fr/docs"
+}
