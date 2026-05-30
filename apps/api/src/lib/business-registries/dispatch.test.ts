@@ -1,10 +1,28 @@
 import { describe, expect, test } from "bun:test";
 
+import type { AresCompany } from "@stll/business-registries/ares";
+
 import {
   BUSINESS_REGISTRY_DISPATCH,
   executeRegistryLookup,
   type RegistryHandler,
 } from "@/api/lib/business-registries/dispatch";
+
+const ARES_COMPANY_FIXTURE: AresCompany = {
+  ico: "27082440",
+  name: "Alza.cz a.s.",
+  legalForm: "Akciová společnost",
+  address: null,
+  dateEstablished: null,
+  dateRegistered: null,
+  czNace: [],
+  registryUrl: "https://example.invalid/27082440",
+  status: null,
+  courtFile: null,
+  shareCapital: null,
+  statutoryBodies: [{ organName: "Představenstvo", members: [] }],
+  actingClause: null,
+};
 
 const stubHandler = (
   override: Partial<RegistryHandler> = {},
@@ -24,19 +42,7 @@ describe("executeRegistryLookup — details channel", () => {
         legalForm: "Akciová společnost",
         address: null,
         registryUrl: "https://example.invalid/27082440",
-        details: {
-          registry: "ares",
-          // Cast: this is a stubbed minimal AresCompany shape sufficient
-          // to verify the dispatch propagates `details`. The full type
-          // is exercised by the adapter package's own tests.
-          // SAFETY: stub-only — narrower than AresCompany on purpose,
-          // we only care that the field round-trips through dispatch.
-          company: {
-            ico: "27082440",
-            name: "Alza.cz a.s.",
-            statutoryBodies: [{ organName: "Představenstvo", members: [] }],
-          } as never,
-        },
+        details: { registry: "ares", company: ARES_COMPANY_FIXTURE },
       }),
     });
 
@@ -53,11 +59,7 @@ describe("executeRegistryLookup — details channel", () => {
     }
     expect(result.hit?.details).toEqual({
       registry: "ares",
-      company: {
-        ico: "27082440",
-        name: "Alza.cz a.s.",
-        statutoryBodies: [{ organName: "Představenstvo", members: [] }],
-      } as never,
+      company: ARES_COMPANY_FIXTURE,
     });
   });
 
