@@ -140,8 +140,9 @@ const isAstNode = (value: unknown): value is AstNode =>
   typeof (value as { type: unknown }).type === "string";
 
 // Pull the import specifier (the string literal after `from`) from an
-// ImportDeclaration / ExportNamedDeclaration / ExportAllDeclaration node.
-// Returns null when the node has no `source` (e.g. `export const x = 1`).
+// ImportDeclaration / ExportNamedDeclaration / ExportAllDeclaration /
+// ImportExpression node. Returns null when the node has no `source`
+// (e.g. `export const x = 1`).
 const importSpecifierOf = (node: AstNode): string | null => {
   const source = node.source;
   if (!isAstNode(source)) {
@@ -248,6 +249,7 @@ export default {
         };
         return {
           ImportDeclaration: handle,
+          ImportExpression: handle,
           ExportNamedDeclaration: handle,
           ExportAllDeclaration: handle,
         };

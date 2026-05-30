@@ -62,12 +62,14 @@ const layerOfPath = (absolutePath: string): Layer | null => {
   return null;
 };
 
-// Match the specifier of every static import/export, including bare
-// side-effect imports (`import "../setup"`). The literal `from ` elsewhere in
-// the file (e.g. inside comments) is filtered later by the
+// Match the specifier of every static import/export, bare side-effect import
+// (`import "../setup"`), and dynamic import (`import("../setup")`). The
+// literal `from ` elsewhere in the file (e.g. inside comments) is filtered
+// later by the
 // `specifier.startsWith(".")` check — only relative paths are checked. The
 // regex itself uses bounded character classes to keep matching linear.
-const IMPORT_REGEX = /\bfrom\s*["']([^"']+)["']|\bimport\s*["']([^"']+)["']/gu;
+const IMPORT_REGEX =
+  /\bfrom\s*["']([^"']+)["']|\bimport\s*["']([^"']+)["']|\bimport\s*\(\s*["']([^"']+)["']\s*\)/gu;
 
 type EdgeViolation = {
   importer: string;
@@ -91,7 +93,7 @@ const violationsForSource = (
   }
   const violations: EdgeViolation[] = [];
   for (const match of source.matchAll(IMPORT_REGEX)) {
-    const specifier = match[1] ?? match[2];
+    const specifier = match[1] ?? match[2] ?? match[3];
     if (specifier === undefined || !specifier.startsWith(".")) {
       continue;
     }
@@ -234,6 +236,18 @@ describe("folio layer-boundaries — synthetic violation fixtures", () => {
     const violations = violationsForSource(
       importer,
       'import "../layout-bridge/setup";',
+    );
+    expect(violations).toHaveLength(1);
+    expect(violations[0]?.reason).toBe(
+      "layout-painter must not import from layout-bridge",
+    );
+  });
+
+  test("painter -> bridge dynamic import is rejected", () => {
+    const importer = resolve(CORE_DIR, "layout-painter/renderPage.ts");
+    const violations = violationsForSource(
+      importer,
+      'const module = await import("../layout-bridge/measuring");',
     );
     expect(violations).toHaveLength(1);
     expect(violations[0]?.reason).toBe(
