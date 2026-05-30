@@ -48,6 +48,7 @@ import {
   findHfSlotForTarget,
 } from "../core/layout-bridge/findHfPmSpans";
 import {
+  FOOTNOTE_ENTRY_MARGIN_BOTTOM,
   collectFootnoteRefs,
   buildFootnoteContentMap,
 } from "../core/layout-bridge/footnoteLayout";
@@ -3066,12 +3067,16 @@ export function PagedEditor(
 
           const footnoteHeightById = new Map<number, number>();
           // Per-fn vertical margin applied by the painter
-          // (`renderFootnoteArea` sets `marginBottom: 4px` on each
-          // fn entry). Reserved alongside content height so the page
-          // accounts for inter-fn whitespace.
-          const FOOTNOTE_ENTRY_MARGIN = 4;
+          // (`renderFootnoteArea` sets `marginBottom` on each fn
+          // entry). Reserved alongside content height so the page
+          // accounts for inter-fn whitespace; constant is owned by
+          // `footnoteLayout` so painter, dynamic, and static paths
+          // stay in lockstep.
           for (const [id, content] of footnoteContentMap) {
-            footnoteHeightById.set(id, content.height + FOOTNOTE_ENTRY_MARGIN);
+            footnoteHeightById.set(
+              id,
+              content.height + FOOTNOTE_ENTRY_MARGIN_BOTTOM,
+            );
           }
           // Note: the layout engine adds the divider's height once
           // per fn-bearing page (in paginator.addFootnoteHeight); we

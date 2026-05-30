@@ -11,7 +11,10 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { FOOTNOTE_SEPARATOR_HEIGHT } from "../layout-bridge/footnoteLayout";
+import {
+  FOOTNOTE_SEPARATOR_HEIGHT,
+  calculateFootnoteReservedHeights,
+} from "../layout-bridge/footnoteLayout";
 import { FOOTNOTE_SEPARATOR_HEIGHT as PAGINATOR_FOOTNOTE_SEPARATOR_HEIGHT } from "../layout-engine/paginator";
 import type {
   Page,
@@ -249,6 +252,30 @@ describe("footnote separator height parity", () => {
       expect(painterHeight).toBe(
         paginatorHeight + count * PAINTER_FOOTNOTE_ENTRY_MARGIN_BOTTOM,
       );
+    }
+  });
+
+  test("static `calculateFootnoteReservedHeights` matches painter render height", () => {
+    // Bot raised: the static reservation path under-counted by
+    // `count × marginBottom`, so the painter's clamp would shift the
+    // area upward and overlap body lines. Assert the static helper
+    // now matches the painter for 1, 3, and 10 dense footnotes.
+    for (const count of [1, 3, 10]) {
+      const heights = Array.from({ length: count }, (_, index) => 10 + index);
+      const footnoteIds = heights.map((_, index) => index + 1);
+      const footnotes: FootnoteRenderItem[] = heights.map(
+        makeParagraphFootnote,
+      );
+      const pageFootnoteMap = new Map<number, number[]>([[1, footnoteIds]]);
+      const contentMap = new Map(
+        footnoteIds.map((id, index) => [id, { height: heights[index] ?? 0 }]),
+      );
+
+      const reserved =
+        calculateFootnoteReservedHeights(pageFootnoteMap, contentMap).get(1) ??
+        0;
+      const painterHeight = calculateFootnoteAreaRenderHeight(footnotes);
+      expect(reserved).toBe(painterHeight);
     }
   });
 

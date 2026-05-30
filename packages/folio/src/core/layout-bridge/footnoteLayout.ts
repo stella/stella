@@ -37,6 +37,22 @@ import { toFlowBlocks } from "./toFlowBlocks";
  */
 export const FOOTNOTE_SEPARATOR_HEIGHT = 12;
 
+/**
+ * Per-footnote `marginBottom` painted by `renderFootnoteArea`. Shared
+ * with the painter's clamp helper, the dynamic reservation in
+ * `PagedEditor`, and the static `calculateFootnoteReservedHeights`
+ * path so every reservation matches the painted stack.
+ */
+export const FOOTNOTE_ENTRY_MARGIN_BOTTOM = 4;
+
+/**
+ * Fallback footnote line height in pixels when a footnote has no
+ * structured content (plain-text fallback rendered at `fontSize: 10px`
+ * × `lineHeight: 1.3`). Shared with the painter so the clamp helper and
+ * the painted fallback stay in lockstep.
+ */
+export const FOOTNOTE_FALLBACK_LINE_HEIGHT = 13;
+
 /** Default footnote font size in points */
 const FOOTNOTE_FONT_SIZE = 8;
 
@@ -581,8 +597,14 @@ export function calculateFootnoteReservedHeights(
     }
 
     if (totalHeight > 0) {
-      // Add separator height
+      // Add separator + per-entry margin so the static reservation
+      // matches what `renderFootnoteArea` actually paints (4px
+      // `marginBottom` per fn wrapper). Without this, the painter's
+      // clamp would shift the area upward by `count × margin` and
+      // overlap the body lines the engine laid out against the
+      // smaller reservation.
       totalHeight += FOOTNOTE_SEPARATOR_HEIGHT;
+      totalHeight += footnoteIds.length * FOOTNOTE_ENTRY_MARGIN_BOTTOM;
       reserved.set(pageNumber, totalHeight);
     }
   }

@@ -7,7 +7,11 @@
 
 import { panic } from "better-result";
 
-import { FOOTNOTE_SEPARATOR_HEIGHT } from "../layout-bridge/footnoteLayout";
+import {
+  FOOTNOTE_ENTRY_MARGIN_BOTTOM,
+  FOOTNOTE_FALLBACK_LINE_HEIGHT,
+  FOOTNOTE_SEPARATOR_HEIGHT,
+} from "../layout-bridge/footnoteLayout";
 import {
   clampFloatingWrapMargins,
   measureParagraph,
@@ -1186,19 +1190,6 @@ function renderHeaderFooterContent(
 
   return containerEl;
 }
-
-/**
- * Per-footnote `marginBottom` painted in `renderFootnoteArea`. Shared so the
- * clamp helper accounts for the same DOM spacing the painter actually draws.
- */
-const FOOTNOTE_ENTRY_MARGIN_BOTTOM = 4;
-
-/**
- * Fallback footnote line height when no measured structured content is
- * provided. Mirrors `fontSize: 10px` × `lineHeight: 1.3` applied in
- * `renderFootnoteArea` to single-line plain-text footnotes.
- */
-const FOOTNOTE_FALLBACK_LINE_HEIGHT = 13;
 
 /**
  * Calculate the painter's actual footnote-area height in pixels:
