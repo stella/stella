@@ -257,7 +257,13 @@ export const parseCompany = (raw: PrhRawCompany): PrhCompany => {
 export const parseSearchEntry = (raw: PrhRawCompany): PrhSearchResult => {
   const businessId = raw.businessId.value;
   const names = raw.names ?? [];
-  const street = pickActiveAddressByType(raw.addresses, STREET_ADDRESS_TYPE);
+  // Same street → postal fallback as the lookup path: PO-box-only /
+  // agent-mailing entities would otherwise surface with a null address
+  // in name-search results even though the payload carries enough to
+  // render one.
+  const street =
+    pickActiveAddressByType(raw.addresses, STREET_ADDRESS_TYPE) ??
+    pickActiveAddressByType(raw.addresses, POSTAL_ADDRESS_TYPE);
   const address = street ? parseAddress(street).textAddress : null;
   return {
     businessId,

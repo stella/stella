@@ -153,6 +153,28 @@ describe("parseCompany / parseSearchEntry — defensive shape handling", () => {
     expect(result.businessId).toBe("0112038-9");
   });
 
+  test("parseSearchEntry falls back to the postal address when type-1 is absent", () => {
+    // PO-box-only / agent-mailing Finnish entities only file a type-2
+    // address. The search path must mirror the lookup-side fallback or
+    // their hits surface as `address: null` in chat / contact-form
+    // results despite the payload carrying enough to render one.
+    const result = parseSearchEntry({
+      ...minimal,
+      addresses: [
+        {
+          type: 2,
+          postOfficeBox: "1000",
+          postCode: "00101",
+          postOffices: [
+            { city: "HELSINKI", languageCode: "1", municipalityCode: "091" },
+          ],
+          source: "0",
+        },
+      ],
+    });
+    expect(result.address).toBe("PL 1000, 00101 HELSINKI");
+  });
+
   test("parseCompany emits an AvoinData JSON URL as registryUrl", () => {
     // The YTJ web portal cannot be deep-linked by business ID, so the
     // registry URL points at the AvoinData REST endpoint for the same
