@@ -108,7 +108,6 @@ export const CatalogueStackPreview = ({
                 entry={entry}
                 index={index}
                 key={entry.slug}
-                onClick={() => handleRowClick(entry.slug)}
                 tone="baseline"
               />
             ))}
@@ -163,18 +162,14 @@ const Row = ({
   entry: LoadedCatalogueEntry;
   index: number;
   tone: "baseline" | "stack";
-  onClick: () => void;
+  /** Baseline rows are always-on and read-only — omit onClick there. */
+  onClick?: () => void;
 }) => {
   const t = useTranslations();
   const delay = Math.min(index, STAGGER_CAP) * STAGGER_MS;
 
-  return (
-    <button
-      className="catalogue-row-in hover:bg-muted/40 -mx-1 flex items-center gap-2.5 rounded-md px-1 py-1 text-start transition-colors"
-      onClick={onClick}
-      style={{ animationDelay: `${delay}ms` }}
-      type="button"
-    >
+  const content = (
+    <>
       <CatalogueEntryIcon
         className={
           tone === "baseline" ? "text-foreground" : "text-muted-foreground"
@@ -199,6 +194,28 @@ const Row = ({
           {t("onboarding.catalogueAlwaysOn")}
         </span>
       )}
+    </>
+  );
+
+  if (!onClick) {
+    return (
+      <div
+        className="catalogue-row-in -mx-1 flex items-center gap-2.5 rounded-md px-1 py-1 text-start"
+        style={{ animationDelay: `${delay}ms` }}
+      >
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      className="catalogue-row-in hover:bg-muted/40 -mx-1 flex items-center gap-2.5 rounded-md px-1 py-1 text-start transition-colors"
+      onClick={onClick}
+      style={{ animationDelay: `${delay}ms` }}
+      type="button"
+    >
+      {content}
     </button>
   );
 };

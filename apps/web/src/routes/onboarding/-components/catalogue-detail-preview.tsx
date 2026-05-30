@@ -14,6 +14,7 @@ import { useTranslations } from "use-intl";
 import type { LoadedCatalogueEntry } from "@stll/catalogue";
 import { Button } from "@stll/ui/components/button";
 
+import { sanitizeHref } from "@/lib/sanitize-href";
 import { CatalogueEntryIcon } from "@/routes/_protected.settings/-components/catalogue/catalogue-entry-icon";
 
 /**
@@ -224,6 +225,7 @@ const AuthorField = ({
   isFirstParty: boolean;
   value: string;
 }) => {
+  const safeAuthorUrl = sanitizeHref(authorUrl);
   const inner = (
     <>
       <UserIcon
@@ -233,7 +235,7 @@ const AuthorField = ({
       <span className="text-foreground truncate text-sm font-medium">
         {value}
       </span>
-      {authorUrl && (
+      {safeAuthorUrl && (
         <ExternalLinkIcon
           aria-hidden="true"
           className="text-muted-foreground size-3 shrink-0"
@@ -242,12 +244,12 @@ const AuthorField = ({
     </>
   );
 
-  if (authorUrl) {
+  if (safeAuthorUrl) {
     return (
       <a
         aria-label={ariaLabel}
         className="hover:bg-muted -mx-1 flex items-center gap-2 rounded-md px-1 py-0.5 transition-colors"
-        href={authorUrl}
+        href={safeAuthorUrl}
         onClick={(e) => e.stopPropagation()}
         rel="noreferrer"
         target="_blank"

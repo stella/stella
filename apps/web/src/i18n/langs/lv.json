@@ -300,32 +300,32 @@
     }
   },
   "catalogue": {
-    "by": "By {author}",
+    "by": "Autors: {author}",
     "cost": {
       "free": "Free",
       "paid": "Paid"
     },
-    "empty": "No entries match the current filter.",
+    "empty": "Nav neviena ieraksta, kas atbilstu pašreizējam filtram.",
     "filter": {
       "all": "All",
       "mcps": "MCP servers",
       "nativeTools": "Built-in tools",
       "skills": "Skills"
     },
-    "firstParty": "First-party",
-    "install": "Install",
-    "installFailed": "Install failed",
-    "installPack": "Install {count, plural, one {# tool} other {# tools}}",
-    "installed": "Installed {name}",
-    "installedShort": "Installed",
+    "firstParty": "Pirmā puse",
+    "install": "Instalēt",
+    "installFailed": "Instalēšana neizdevās",
+    "installPack": "{count, plural, one {Instalēt # rīku} other {Instalēt # rīkus}}",
+    "installed": "{name} instalēts",
+    "installedShort": "Instalēts",
     "onboarding": {
       "packTitle": "Recommended for your jurisdiction"
     },
-    "openHomepage": "Open homepage",
-    "packDescription": "{count, plural, one {# tool} other {# tools}} curated for your practice. One-click install or pick individually below.",
-    "packInstalled": "{count, plural, one {# tool installed} other {# tools installed}}",
-    "packPartial": "Installed {installed}, {failed} failed",
-    "recommended": "Recommended",
+    "openHomepage": "Atvērt sākumlapu",
+    "packDescription": "{count, plural, one {# rīks} other {# rīki}} jūsu praksei. Instalējiet ar vienu klikšķi vai izvēlieties zemāk individuāli.",
+    "packInstalled": "{count, plural, one {# rīks instalēts} other {# rīki instalēti}}",
+    "packPartial": "{installed} instalēti, {failed} neizdevās",
+    "recommended": "Ieteicams",
     "settings": {
       "packTitle": "Recommended pack"
     },
@@ -334,7 +334,7 @@
       "apiKey": "API key",
       "none": "No setup"
     },
-    "unavailable": "Not available yet"
+    "unavailable": "Vēl nav pieejams"
   },
   "chat": {
     "acceptAllCount": "Pieņemt visu ({count})",

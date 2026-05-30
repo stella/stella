@@ -2,13 +2,21 @@ import { Result } from "better-result";
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 
 import {
+  filterCatalogueByKind,
   loadCatalogue,
   recommendedSlugsForJurisdictions,
   type LoadedCatalogueEntry,
 } from "@stll/catalogue";
 
-import { agentSkills, mcpConnectors } from "@/api/db/schema";
-import { NATIVE_TOOL_SLUGS } from "@/api/handlers/mcp-connectors/catalog-metadata";
+import {
+  agentSkills,
+  mcpConnectors,
+  type PracticeJurisdiction,
+} from "@/api/db/schema";
+import {
+  isNativeToolEnabledForOrg,
+  NATIVE_TOOL_SLUGS,
+} from "@/api/handlers/mcp-connectors/catalog-metadata";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 
@@ -36,9 +44,7 @@ const listCatalogue = createSafeRootHandler(
     const skillSlugs = entries
       .filter((entry) => entry.kind === "skill")
       .map((entry) => entry.slug);
-    const mcpUrls = entries
-      .filter((entry) => entry.kind === "mcp")
-      .map((entry) => entry.url);
+    const mcpUrls = filterCatalogueByKind("mcp").map((entry) => entry.url);
 
     const settings = yield* Result.await(
       safeDb((tx) =>
@@ -122,6 +128,7 @@ const listCatalogue = createSafeRootHandler(
             installedMcpUrls,
             nativeToolBackendSet,
             nativeToolOverrides,
+            practiceJurisdictions,
           });
       response.push({
         ...entry,
@@ -144,12 +151,14 @@ const computeInstallState = ({
   installedMcpUrls,
   nativeToolBackendSet,
   nativeToolOverrides,
+  practiceJurisdictions,
 }: {
   entry: LoadedCatalogueEntry;
   installedSkillSlugs: ReadonlySet<string>;
   installedMcpUrls: ReadonlySet<string>;
   nativeToolBackendSet: ReadonlySet<string>;
   nativeToolOverrides: Readonly<Record<string, boolean>>;
+  practiceJurisdictions: readonly PracticeJurisdiction[];
 }): InstallState => {
   if (entry.kind === "skill") {
     return installedSkillSlugs.has(entry.slug) ? "installed" : "available";
@@ -160,7 +169,16 @@ const computeInstallState = ({
   if (!nativeToolBackendSet.has(entry.backendSlug)) {
     return "unavailable";
   }
-  return nativeToolOverrides[entry.backendSlug] === true
+  // Use the same effective-enabled rule as the chat runtime: an
+  // explicit override wins, otherwise the jurisdiction default
+  // decides. Without this, jurisdiction-defaulted tools (e.g. ARES
+  // for a CZ practice) would falsely show as "available" until the
+  // user writes a redundant override.
+  return isNativeToolEnabledForOrg({
+    slug: entry.backendSlug,
+    practiceJurisdictions,
+    nativeToolOverrides,
+  })
     ? "installed"
     : "available";
 };

@@ -300,32 +300,32 @@
     }
   },
   "catalogue": {
-    "by": "By {author}",
+    "by": "Od {author}",
     "cost": {
       "free": "Zdarma",
       "paid": "Placené"
     },
-    "empty": "No entries match the current filter.",
+    "empty": "Žádné položky neodpovídají aktuálnímu filtru.",
     "filter": {
       "all": "Vše",
       "mcps": "MCP servery",
       "nativeTools": "Vestavěné nástroje",
       "skills": "Dovednosti"
     },
-    "firstParty": "First-party",
-    "install": "Install",
-    "installFailed": "Install failed",
-    "installPack": "Install {count, plural, one {# tool} other {# tools}}",
-    "installed": "Installed {name}",
-    "installedShort": "Installed",
+    "firstParty": "Vlastní",
+    "install": "Nainstalovat",
+    "installFailed": "Instalace selhala",
+    "installPack": "Nainstalovat {count, plural, one {# nástroj} few {# nástroje} other {# nástrojů}}",
+    "installed": "Nainstalováno: {name}",
+    "installedShort": "Nainstalováno",
     "onboarding": {
       "packTitle": "Recommended for your jurisdiction"
     },
-    "openHomepage": "Open homepage",
-    "packDescription": "{count, plural, one {# tool} other {# tools}} curated for your practice. One-click install or pick individually below.",
-    "packInstalled": "{count, plural, one {# tool installed} other {# tools installed}}",
-    "packPartial": "Installed {installed}, {failed} failed",
-    "recommended": "Recommended",
+    "openHomepage": "Otevřít domovskou stránku",
+    "packDescription": "{count, plural, one {# nástroj} few {# nástroje} other {# nástrojů}} vybraných pro vaši praxi. Nainstalujte jedním kliknutím nebo vyberte níže.",
+    "packInstalled": "{count, plural, one {# nástroj nainstalován} few {# nástroje nainstalovány} other {# nástrojů nainstalováno}}",
+    "packPartial": "Nainstalováno {installed}, {failed} selhalo",
+    "recommended": "Doporučeno",
     "settings": {
       "packTitle": "Recommended pack"
     },
@@ -334,7 +334,7 @@
       "apiKey": "API klíč",
       "none": "Bez nastavení"
     },
-    "unavailable": "Not available yet"
+    "unavailable": "Zatím nedostupné"
   },
   "chat": {
     "acceptAllCount": "Přijmout vše ({count})",

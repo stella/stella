@@ -46,7 +46,7 @@ type CatalogueStepProps = {
 };
 
 const PROPOSE_TOOL_URL =
-  "https://github.com/stella/stella/blob/main/packages/catalogue/CONTRIBUTING.md";
+  "https://github.com/stella/stella/issues/new?template=feature-request.yml";
 
 export const CatalogueStep = ({
   practiceJurisdictions,

@@ -300,32 +300,32 @@
     }
   },
   "catalogue": {
-    "by": "By {author}",
+    "by": "Autorius: {author}",
     "cost": {
       "free": "Free",
       "paid": "Paid"
     },
-    "empty": "No entries match the current filter.",
+    "empty": "Pagal dabartinį filtrą nėra įrašų.",
     "filter": {
       "all": "All",
       "mcps": "MCP servers",
       "nativeTools": "Built-in tools",
       "skills": "Skills"
     },
-    "firstParty": "First-party",
-    "install": "Install",
-    "installFailed": "Install failed",
-    "installPack": "Install {count, plural, one {# tool} other {# tools}}",
-    "installed": "Installed {name}",
-    "installedShort": "Installed",
+    "firstParty": "Pirmosios šalies",
+    "install": "Įdiegti",
+    "installFailed": "Įdiegti nepavyko",
+    "installPack": "{count, plural, one {Įdiegti # įrankį} few {Įdiegti # įrankius} other {Įdiegti # įrankių}}",
+    "installed": "{name} įdiegta",
+    "installedShort": "Įdiegta",
     "onboarding": {
       "packTitle": "Recommended for your jurisdiction"
     },
-    "openHomepage": "Open homepage",
-    "packDescription": "{count, plural, one {# tool} other {# tools}} curated for your practice. One-click install or pick individually below.",
-    "packInstalled": "{count, plural, one {# tool installed} other {# tools installed}}",
-    "packPartial": "Installed {installed}, {failed} failed",
-    "recommended": "Recommended",
+    "openHomepage": "Atidaryti pagrindinį puslapį",
+    "packDescription": "{count, plural, one {# įrankis} few {# įrankiai} other {# įrankių}} parinkta jūsų praktikai. Įdiekite vienu paspaudimu arba pasirinkite žemiau.",
+    "packInstalled": "{count, plural, one {Įdiegta # įrankis} few {Įdiegti # įrankiai} other {Įdiegta # įrankių}}",
+    "packPartial": "Įdiegta {installed}, {failed} nepavyko",
+    "recommended": "Rekomenduojama",
     "settings": {
       "packTitle": "Recommended pack"
     },
@@ -334,7 +334,7 @@
       "apiKey": "API key",
       "none": "No setup"
     },
-    "unavailable": "Not available yet"
+    "unavailable": "Dar neprieinama"
   },
   "chat": {
     "acceptAllCount": "Priimti viską ({count})",

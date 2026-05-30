@@ -300,32 +300,32 @@
     }
   },
   "catalogue": {
-    "by": "By {author}",
+    "by": "Autor: {author}",
     "cost": {
       "free": "Free",
       "paid": "Paid"
     },
-    "empty": "No entries match the current filter.",
+    "empty": "Praegusele filtrile ei vasta ükski kirje.",
     "filter": {
       "all": "All",
       "mcps": "MCP servers",
       "nativeTools": "Built-in tools",
       "skills": "Skills"
     },
-    "firstParty": "First-party",
-    "install": "Install",
-    "installFailed": "Install failed",
-    "installPack": "Install {count, plural, one {# tool} other {# tools}}",
-    "installed": "Installed {name}",
-    "installedShort": "Installed",
+    "firstParty": "Esimene osapool",
+    "install": "Installi",
+    "installFailed": "Installimine ebaõnnestus",
+    "installPack": "{count, plural, one {Installi # tööriist} other {Installi # tööriista}}",
+    "installed": "{name} installitud",
+    "installedShort": "Installitud",
     "onboarding": {
       "packTitle": "Recommended for your jurisdiction"
     },
-    "openHomepage": "Open homepage",
-    "packDescription": "{count, plural, one {# tool} other {# tools}} curated for your practice. One-click install or pick individually below.",
-    "packInstalled": "{count, plural, one {# tool installed} other {# tools installed}}",
-    "packPartial": "Installed {installed}, {failed} failed",
-    "recommended": "Recommended",
+    "openHomepage": "Ava avaleht",
+    "packDescription": "{count, plural, one {# tööriist} other {# tööriista}} teie praksiseks valitud. Installige ühe klõpsuga või valige allpool eraldi.",
+    "packInstalled": "{count, plural, one {# tööriist installitud} other {# tööriista installitud}}",
+    "packPartial": "{installed} installitud, {failed} ebaõnnestus",
+    "recommended": "Soovitatud",
     "settings": {
       "packTitle": "Recommended pack"
     },
@@ -334,7 +334,7 @@
       "apiKey": "API key",
       "none": "No setup"
     },
-    "unavailable": "Not available yet"
+    "unavailable": "Veel pole saadaval"
   },
   "chat": {
     "acceptAllCount": "Nõustu kõigiga ({count})",

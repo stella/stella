@@ -300,32 +300,32 @@
     }
   },
   "catalogue": {
-    "by": "By {author}",
+    "by": "Par {author}",
     "cost": {
       "free": "Free",
       "paid": "Paid"
     },
-    "empty": "No entries match the current filter.",
+    "empty": "Aucune entrée ne correspond au filtre actuel.",
     "filter": {
       "all": "All",
       "mcps": "MCP servers",
       "nativeTools": "Built-in tools",
       "skills": "Skills"
     },
-    "firstParty": "First-party",
-    "install": "Install",
-    "installFailed": "Install failed",
-    "installPack": "Install {count, plural, one {# tool} other {# tools}}",
-    "installed": "Installed {name}",
-    "installedShort": "Installed",
+    "firstParty": "Première partie",
+    "install": "Installer",
+    "installFailed": "Échec de l'installation",
+    "installPack": "{count, plural, one {Installer # outil} other {Installer # outils}}",
+    "installed": "{name} installé",
+    "installedShort": "Installé",
     "onboarding": {
       "packTitle": "Recommended for your jurisdiction"
     },
-    "openHomepage": "Open homepage",
-    "packDescription": "{count, plural, one {# tool} other {# tools}} curated for your practice. One-click install or pick individually below.",
-    "packInstalled": "{count, plural, one {# tool installed} other {# tools installed}}",
-    "packPartial": "Installed {installed}, {failed} failed",
-    "recommended": "Recommended",
+    "openHomepage": "Ouvrir la page d'accueil",
+    "packDescription": "{count, plural, one {# outil} other {# outils}} sélectionnés pour votre pratique. Installation en un clic ou choix individuel ci-dessous.",
+    "packInstalled": "{count, plural, one {# outil installé} other {# outils installés}}",
+    "packPartial": "{installed} installés, {failed} en échec",
+    "recommended": "Recommandé",
     "settings": {
       "packTitle": "Recommended pack"
     },
@@ -334,7 +334,7 @@
       "apiKey": "API key",
       "none": "No setup"
     },
-    "unavailable": "Not available yet"
+    "unavailable": "Pas encore disponible"
   },
   "chat": {
     "acceptAllCount": "Tout accepter ({count})",

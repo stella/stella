@@ -300,32 +300,32 @@
     }
   },
   "catalogue": {
-    "by": "By {author}",
+    "by": "Por {author}",
     "cost": {
       "free": "Free",
       "paid": "Paid"
     },
-    "empty": "No entries match the current filter.",
+    "empty": "Ninguna entrada coincide con el filtro actual.",
     "filter": {
       "all": "All",
       "mcps": "MCP servers",
       "nativeTools": "Built-in tools",
       "skills": "Skills"
     },
-    "firstParty": "First-party",
-    "install": "Install",
-    "installFailed": "Install failed",
-    "installPack": "Install {count, plural, one {# tool} other {# tools}}",
-    "installed": "Installed {name}",
-    "installedShort": "Installed",
+    "firstParty": "Primera parte",
+    "install": "Instalar",
+    "installFailed": "Instalación fallida",
+    "installPack": "{count, plural, one {Instalar # herramienta} other {Instalar # herramientas}}",
+    "installed": "{name} instalado",
+    "installedShort": "Instalado",
     "onboarding": {
       "packTitle": "Recommended for your jurisdiction"
     },
-    "openHomepage": "Open homepage",
-    "packDescription": "{count, plural, one {# tool} other {# tools}} curated for your practice. One-click install or pick individually below.",
-    "packInstalled": "{count, plural, one {# tool installed} other {# tools installed}}",
-    "packPartial": "Installed {installed}, {failed} failed",
-    "recommended": "Recommended",
+    "openHomepage": "Abrir página principal",
+    "packDescription": "{count, plural, one {# herramienta} other {# herramientas}} seleccionadas para su práctica. Instale con un clic o elija individualmente abajo.",
+    "packInstalled": "{count, plural, one {# herramienta instalada} other {# herramientas instaladas}}",
+    "packPartial": "{installed} instaladas, {failed} con error",
+    "recommended": "Recomendado",
     "settings": {
       "packTitle": "Recommended pack"
     },
@@ -334,7 +334,7 @@
       "apiKey": "API key",
       "none": "No setup"
     },
-    "unavailable": "Not available yet"
+    "unavailable": "Aún no disponible"
   },
   "chat": {
     "acceptAllCount": "Aceptar todo ({count})",

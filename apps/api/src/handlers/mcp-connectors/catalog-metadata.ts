@@ -194,17 +194,24 @@ export const getNativeToolCatalog = ({
   practiceJurisdictions: readonly PracticeJurisdiction[];
 }) => {
   const practiceCountryCodes = toPracticeCountryCodeSet(practiceJurisdictions);
+  // Surface only implemented + toggleable tools. Pinned entries
+  // (e.g. anonymize, create-docx) live in the catalogue but aren't
+  // user-toggleable, so they must not appear in the MCP settings
+  // toggle list — the PATCH endpoint would 404 on them.
+  const toggleable = new Set(NATIVE_TOOL_SLUGS);
 
-  return NATIVE_TOOL_CATALOG.map((tool) => ({
-    description: tool.description,
-    displayName: tool.displayName,
-    documentationUrl: tool.documentationUrl,
-    iconUrl: tool.iconUrl,
-    isRecommended: tool.recommendedJurisdictions.some((countryCode) =>
-      practiceCountryCodes.has(countryCode),
-    ),
-    recommendedJurisdictions: tool.recommendedJurisdictions,
-    slug: tool.slug,
-    url: tool.url,
-  }));
+  return NATIVE_TOOL_CATALOG.filter((tool) => toggleable.has(tool.slug)).map(
+    (tool) => ({
+      description: tool.description,
+      displayName: tool.displayName,
+      documentationUrl: tool.documentationUrl,
+      iconUrl: tool.iconUrl,
+      isRecommended: tool.recommendedJurisdictions.some((countryCode) =>
+        practiceCountryCodes.has(countryCode),
+      ),
+      recommendedJurisdictions: tool.recommendedJurisdictions,
+      slug: tool.slug,
+      url: tool.url,
+    }),
+  );
 };

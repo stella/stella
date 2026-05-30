@@ -4,6 +4,8 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { sanitizeHref } from "@/lib/sanitize-href";
+
 import {
   FirstPartyBadge,
   LicenseBadge,
@@ -49,7 +51,7 @@ export const CatalogueEntryCard = ({
 
   const installable = entry.installState === "available";
 
-  const homepageUrl = entry.homepage ?? entry.authorUrl;
+  const homepageUrl = sanitizeHref(entry.homepage ?? entry.authorUrl);
   const isFirstParty = entry.author === "stella";
 
   return (

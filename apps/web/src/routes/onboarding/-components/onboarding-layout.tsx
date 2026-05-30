@@ -32,8 +32,10 @@ export const OnboardingLayout = ({
 
   return (
     <div className="flex h-dvh overflow-hidden">
-      {/* Left: form */}
-      <div className="flex w-full flex-col px-6 pt-[8vh] pb-10 md:w-1/2 md:px-12 md:pt-[10vh] lg:px-20">
+      {/* Left: form. overflow-y-auto so tall steps (AI provider/model
+          picker, invite form) stay scrollable on short viewports
+          instead of clipping the footer controls. */}
+      <div className="flex w-full flex-col overflow-y-auto px-6 pt-[8vh] pb-10 md:w-1/2 md:px-12 md:pt-[10vh] lg:px-20">
         <div
           className="relative mx-auto flex min-h-0 w-full flex-1 flex-col"
           style={{ maxWidth: contentMaxWidth }}
