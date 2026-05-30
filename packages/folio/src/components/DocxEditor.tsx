@@ -456,6 +456,8 @@ export function DocxEditor({
   selectedAnonymizationCanonical = null,
   anonymizationSelectionSeq,
   collaboration,
+  featureFlags,
+  onSelectiveSaveTripwire,
 }: DocxEditorProps & { ref?: Ref<DocxEditorRef> }) {
   const t = useTranslations("folio");
 
@@ -2547,26 +2549,64 @@ export function DocxEditor({
           return null;
         }
 
-        // Try selective save first (patches only changed paragraphs). If the
-        // edit cannot be patched, fall back to guarded repack: repackDocx now
-        // validates section/header/footer references before returning bytes.
-        const useSelective = options?.selective !== false;
+        const { resolveSelectiveSaveFlags } = await import(
+          "../core/docx/selectiveSaveFlags"
+        );
+        const flags = resolveSelectiveSaveFlags(featureFlags);
+
+        // Selective save runs only when the feature flag is on AND the
+        // per-call override hasn't disabled it. Otherwise the full repack is
+        // the single, documented save path.
+        const useSelective =
+          flags.selectiveSave && options?.selective !== false;
         const view = pagedEditorRef.current?.getView();
-        let buffer: ArrayBuffer | null = null;
+        let selectiveBuffer: ArrayBuffer | null = null;
 
         if (useSelective && view && originalBufferRef.current) {
           const editorState = view.state;
           const attemptSelectiveSave = await loadAttemptSelectiveSave();
-          buffer = await attemptSelectiveSave(doc, originalBufferRef.current, {
-            changedParaIds: getChangedParagraphIds(editorState),
-            structuralChange: hasStructuralChanges(editorState),
-            hasUntrackedChanges: hasUntrackedChanges(editorState),
-          });
+          selectiveBuffer = await attemptSelectiveSave(
+            doc,
+            originalBufferRef.current,
+            {
+              changedParaIds: getChangedParagraphIds(editorState),
+              structuralChange: hasStructuralChanges(editorState),
+              hasUntrackedChanges: hasUntrackedChanges(editorState),
+              maxBytes: flags.selectiveSaveMaxBytes,
+            },
+          );
         }
 
-        if (!buffer) {
+        let buffer: ArrayBuffer | null = selectiveBuffer;
+        let fullBuffer: ArrayBuffer | null = null;
+
+        if (!buffer || flags.selectiveSaveTripwire) {
           const repackDocx = await loadRepackDocx();
-          buffer = await repackDocx(doc);
+          fullBuffer = await repackDocx(doc);
+          if (!buffer) {
+            buffer = fullBuffer;
+          }
+        }
+
+        if (
+          flags.selectiveSaveTripwire &&
+          fullBuffer &&
+          onSelectiveSaveTripwire
+        ) {
+          // Tripwire compares selective vs full bytes but never blocks the save.
+          // The host decides whether to log, alert, or fail CI.
+          try {
+            const { compareSelectiveVsFull } = await import(
+              "../core/docx/selectiveSaveTripwire"
+            );
+            const result = await compareSelectiveVsFull(
+              selectiveBuffer,
+              fullBuffer,
+            );
+            onSelectiveSaveTripwire(result);
+          } catch {
+            // Tripwire failures must never poison the save path.
+          }
         }
 
         // Clear change tracker after successful save
@@ -2585,7 +2625,14 @@ export function DocxEditor({
         return null;
       }
     },
-    [buildCurrentDocument, onSave, onError, originalBufferRef],
+    [
+      buildCurrentDocument,
+      onSave,
+      onError,
+      originalBufferRef,
+      featureFlags,
+      onSelectiveSaveTripwire,
+    ],
   );
 
   // Handle error from editor

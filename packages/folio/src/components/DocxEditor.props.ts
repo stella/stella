@@ -11,6 +11,8 @@ import type {
   FolioAIEditSnapshot,
 } from "../core/ai-edits";
 import type { DocxCompatibility } from "../core/docx/compatibility";
+import type { FolioSelectiveSaveFlags } from "../core/docx/selectiveSaveFlags";
+import type { TripwireResult } from "../core/docx/selectiveSaveTripwire";
 import type { SelectionState, TableContextInfo } from "../core/prosemirror";
 import type { AnonymizationMatch } from "../core/prosemirror/plugins/anonymizationDecorations";
 import type { Document, Theme, TabStop } from "../core/types/document";
@@ -164,7 +166,20 @@ export type DocxEditorProps = {
   selectedAnonymizationCanonical?: string | null | undefined;
   /** Monotonic counter from the bridge store; drives the re-scroll. */
   anonymizationSelectionSeq?: number | undefined;
+  /**
+   * Operational flags for save-path features. Selective save and its tripwire
+   * mode are OFF by default; hosts opt in once their rollout pipeline is ready.
+   */
+  featureFlags?: FolioSelectiveSaveFlags;
+  /**
+   * Receives the structured comparison between selective save and full repack
+   * whenever {@link FolioSelectiveSaveFlags.selectiveSaveTripwire} is enabled.
+   * Saves are never blocked by the tripwire; this is observability only.
+   */
+  onSelectiveSaveTripwire?: (result: TripwireResult) => void;
 };
+
+export type { FolioSelectiveSaveFlags, TripwireResult };
 
 export type DocxEditorCollaboration = {
   awareness?:
