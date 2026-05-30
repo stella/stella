@@ -14,6 +14,18 @@ import {
   searchByName as searchAresByName,
   validateIco,
 } from "@stll/business-registries/ares";
+import {
+  BrregAPIError,
+  type BrregEntity,
+  BrregRequestError,
+  type BrregSearchResult,
+  BrregTooBroadError,
+  BrregValidationError,
+  lookupByOrgnr,
+  normalizeOrgnr,
+  searchByName as searchBrregByName,
+  validateOrgnr,
+} from "@stll/business-registries/brreg";
 
 import { isNativeToolEnabledForOrg } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -23,7 +35,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 // Normalised cross-registry shapes
 // ---------------------------------------------------------------------------
 
-const BUSINESS_REGISTRY_SLUGS = ["ares"] as const;
+const BUSINESS_REGISTRY_SLUGS = ["ares", "brreg"] as const;
 type BusinessRegistrySlug = (typeof BUSINESS_REGISTRY_SLUGS)[number];
 
 type BusinessRegistryAddress = {
@@ -185,8 +197,92 @@ const ARES_HANDLER: RegistryHandler = {
   mapError: mapAresError,
 };
 
+// ---------------------------------------------------------------------------
+// Brreg (Norway)
+// ---------------------------------------------------------------------------
+
+const brregEntityToHit = (entity: BrregEntity): BusinessRegistryHit => ({
+  registry: "brreg",
+  id: entity.orgnr,
+  name: entity.name,
+  legalForm: entity.legalForm,
+  address: entity.businessAddress
+    ? {
+        line1: entity.businessAddress.street,
+        line2: null,
+        postalCode: entity.businessAddress.postalCode,
+        city: entity.businessAddress.city,
+        region: entity.businessAddress.municipality,
+        country: entity.businessAddress.country,
+        textAddress: entity.businessAddress.textAddress,
+      }
+    : null,
+  registryUrl: entity.registryUrl,
+});
+
+const brregSearchResultToHit = (
+  result: BrregSearchResult,
+): BusinessRegistryHit => ({
+  registry: "brreg",
+  id: result.orgnr,
+  name: result.name,
+  legalForm: null,
+  address: result.address
+    ? {
+        line1: null,
+        line2: null,
+        postalCode: null,
+        city: null,
+        region: null,
+        country: null,
+        textAddress: result.address,
+      }
+    : null,
+  registryUrl: `https://virksomhet.brreg.no/nb/oppslag/enheter/${result.orgnr}`,
+});
+
+const mapBrregError = (error: unknown): HandlerError | null => {
+  if (error instanceof BrregValidationError) {
+    return new HandlerError({ status: 400, message: error.message });
+  }
+  if (error instanceof BrregTooBroadError) {
+    return new HandlerError({
+      status: 400,
+      message: "Search too broad. Please refine your query.",
+    });
+  }
+  if (error instanceof BrregAPIError) {
+    return new HandlerError({
+      status: 502,
+      message: `Brreg API error: ${error.message}`,
+    });
+  }
+  if (error instanceof BrregRequestError) {
+    return new HandlerError({
+      status: 502,
+      message: `Brreg request failed: ${error.message}`,
+    });
+  }
+  return null;
+};
+
+const BRREG_HANDLER: RegistryHandler = {
+  nativeToolSlug: "brreg",
+  isCanonicalId: (input) => validateOrgnr(normalizeOrgnr(input)),
+  lookup: async (input) => {
+    const entity = await lookupByOrgnr(input);
+    return entity ? brregEntityToHit(entity) : null;
+  },
+  search: async (input) => {
+    const results = await searchBrregByName(input);
+    return results.map(brregSearchResultToHit);
+  },
+  mapError: mapBrregError,
+};
+
 const DISPATCH: Record<BusinessRegistrySlug, RegistryHandler> = {
   ares: ARES_HANDLER,
+  brreg: BRREG_HANDLER,
 };
 
 // ---------------------------------------------------------------------------

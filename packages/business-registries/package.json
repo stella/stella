@@ -44,6 +44,11 @@
       "bun": "./src/ares/index.ts",
       "types": "./src/ares/index.ts",
       "import": "./dist/ares/index.js"
+    },
+    "./brreg": {
+      "bun": "./src/brreg/index.ts",
+      "types": "./src/brreg/index.ts",
+      "import": "./dist/brreg/index.js"
     }
   },
   "publishConfig": {

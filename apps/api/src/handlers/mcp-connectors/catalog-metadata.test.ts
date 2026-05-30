@@ -86,6 +86,20 @@ describe("mcpConnectorCatalogMetadata", () => {
       expect.objectContaining({ slug: "boe", isRecommended: false }),
     );
   });
+
+  it("recommends built-in Brreg for Norwegian practice", () => {
+    const tools = getNativeToolCatalog({
+      practiceJurisdictions: [{ countryCode: "NO", isPrimary: true }],
+    });
+
+    expect(tools).toContainEqual(
+      expect.objectContaining({
+        slug: "brreg",
+        isRecommended: true,
+        recommendedJurisdictions: ["NO"],
+      }),
+    );
+  });
 });
 
 describe("isNativeToolEnabledForOrg", () => {
