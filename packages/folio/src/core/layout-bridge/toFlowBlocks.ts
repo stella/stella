@@ -1859,6 +1859,32 @@ function convertTextBoxNode(
   if (attrs.outlineStyle !== undefined) {
     textBox.outlineStyle = attrs.outlineStyle;
   }
+  // Carry anchored-textbox wrap attributes through so the page renderer can
+  // build exclusion rects (eigenpal #474).
+  if (attrs.displayMode !== undefined) {
+    textBox.displayMode = attrs.displayMode;
+  }
+  if (attrs.cssFloat !== undefined) {
+    textBox.cssFloat = attrs.cssFloat;
+  }
+  if (attrs.wrapType !== undefined) {
+    textBox.wrapType = attrs.wrapType;
+  }
+  if (attrs.wrapText !== undefined) {
+    textBox.wrapText = attrs.wrapText;
+  }
+  if (attrs.distTop !== undefined) {
+    textBox.distTop = attrs.distTop;
+  }
+  if (attrs.distBottom !== undefined) {
+    textBox.distBottom = attrs.distBottom;
+  }
+  if (attrs.distLeft !== undefined) {
+    textBox.distLeft = attrs.distLeft;
+  }
+  if (attrs.distRight !== undefined) {
+    textBox.distRight = attrs.distRight;
+  }
   return textBox;
 }
 

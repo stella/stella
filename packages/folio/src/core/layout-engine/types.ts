@@ -553,6 +553,21 @@ export type TextBoxBlock = {
   margins?: { top: number; bottom: number; left: number; right: number };
   /** Paragraph blocks inside the text box */
   content: ParagraphBlock[];
+  /** Display mode copied from the ProseMirror text box node. */
+  displayMode?: "inline" | "float" | "block";
+  /** CSS float direction copied from the ProseMirror text box node. */
+  cssFloat?: "left" | "right" | "none";
+  /** OOXML wrap type for anchored text boxes. */
+  wrapType?: string;
+  /** OOXML wrapText direction for anchored text boxes. */
+  wrapText?: "bothSides" | "left" | "right" | "largest";
+  /** Position for floating/anchored text boxes (pixel-converted EMU). */
+  position?: ImageRunPosition;
+  /** Wrap distances in pixels. */
+  distTop?: number;
+  distBottom?: number;
+  distLeft?: number;
+  distRight?: number;
   pmStart?: number;
   pmEnd?: number;
 };

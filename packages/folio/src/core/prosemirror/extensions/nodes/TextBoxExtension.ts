@@ -40,6 +40,16 @@ export type TextBoxAttrs = {
   cssFloat?: "left" | "right" | "none";
   /** Wrap type */
   wrapType?: string;
+  /** OOXML wrapText direction for anchored text boxes (eigenpal #474). */
+  wrapText?: "bothSides" | "left" | "right" | "largest";
+  /** Wrap distance from top edge, in pixels (OOXML distT, EMU-converted). */
+  distTop?: number;
+  /** Wrap distance from bottom edge, in pixels. */
+  distBottom?: number;
+  /** Wrap distance from left edge, in pixels. */
+  distLeft?: number;
+  /** Wrap distance from right edge, in pixels. */
+  distRight?: number;
   /** Original DOCX placement hint for save-path reconstruction. */
   _docxPlacement?: "standalone" | "inlineWithPrevious";
   /** Original DOCX paragraph group for standalone text-box reconstruction. */
@@ -70,6 +80,11 @@ export const TextBoxExtension = createNodeExtension({
       displayMode: { default: "inline" },
       cssFloat: { default: null },
       wrapType: { default: "inline" },
+      wrapText: { default: null },
+      distTop: { default: null },
+      distBottom: { default: null },
+      distLeft: { default: null },
+      distRight: { default: null },
       _docxPlacement: { default: null },
       _docxGroupId: { default: null },
     },
@@ -118,6 +133,17 @@ export const TextBoxExtension = createNodeExtension({
                 }
               : {}),
             ...(d["wrapType"] ? { wrapType: d["wrapType"] } : {}),
+            ...(d["wrapText"]
+              ? {
+                  wrapText: d["wrapText"] as NonNullable<
+                    TextBoxAttrs["wrapText"]
+                  >,
+                }
+              : {}),
+            ...(d["distTop"] ? { distTop: Number(d["distTop"]) } : {}),
+            ...(d["distBottom"] ? { distBottom: Number(d["distBottom"]) } : {}),
+            ...(d["distLeft"] ? { distLeft: Number(d["distLeft"]) } : {}),
+            ...(d["distRight"] ? { distRight: Number(d["distRight"]) } : {}),
           };
         },
       },
@@ -173,6 +199,21 @@ export const TextBoxExtension = createNodeExtension({
       }
       if (attrs.wrapType) {
         domAttrs["data-wrap-type"] = attrs.wrapType;
+      }
+      if (attrs.wrapText) {
+        domAttrs["data-wrap-text"] = attrs.wrapText;
+      }
+      if (typeof attrs.distTop === "number") {
+        domAttrs["data-dist-top"] = String(attrs.distTop);
+      }
+      if (typeof attrs.distBottom === "number") {
+        domAttrs["data-dist-bottom"] = String(attrs.distBottom);
+      }
+      if (typeof attrs.distLeft === "number") {
+        domAttrs["data-dist-left"] = String(attrs.distLeft);
+      }
+      if (typeof attrs.distRight === "number") {
+        domAttrs["data-dist-right"] = String(attrs.distRight);
       }
 
       // Build inline styles

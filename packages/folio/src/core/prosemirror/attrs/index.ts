@@ -812,6 +812,17 @@ export const readTextBoxAttrs = (
   optionalString(attrs, "wrapType", "textBox.attrs.wrapType", issues);
   optionalOneOf(
     attrs,
+    "wrapText",
+    "textBox.attrs.wrapText",
+    issues,
+    IMAGE_WRAP_TEXT_VALUES,
+  );
+  optionalNumber(attrs, "distTop", "textBox.attrs.distTop", issues);
+  optionalNumber(attrs, "distBottom", "textBox.attrs.distBottom", issues);
+  optionalNumber(attrs, "distLeft", "textBox.attrs.distLeft", issues);
+  optionalNumber(attrs, "distRight", "textBox.attrs.distRight", issues);
+  optionalOneOf(
+    attrs,
     "_docxPlacement",
     "textBox.attrs._docxPlacement",
     issues,

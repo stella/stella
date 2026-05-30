@@ -2580,6 +2580,64 @@ function convertTextBox(
     contentNodes.push(schema.node("paragraph", {}, []));
   }
 
+  // Map wrap settings into the PM textBox attrs so the page renderer can
+  // build floating exclusion rects for body text wrapping (eigenpal #474).
+  // Mirrors the float/displayMode derivation used by `convertImage` above.
+  const wrapType = textBox.wrap?.type;
+  const wrapText = textBox.wrap?.wrapText;
+  const hAlign = textBox.position?.horizontal.alignment;
+
+  let cssFloat: "left" | "right" | "none" | undefined;
+  if (wrapType === undefined || wrapType === "inline") {
+    cssFloat = "none";
+  } else if (wrapType === "topAndBottom") {
+    cssFloat = "none";
+  } else if (
+    wrapType === "square" ||
+    wrapType === "tight" ||
+    wrapType === "through"
+  ) {
+    if (wrapText === "left") {
+      cssFloat = "right";
+    } else if (wrapText === "right") {
+      cssFloat = "left";
+    } else if (hAlign === "left") {
+      cssFloat = "left";
+    } else if (hAlign === "right") {
+      cssFloat = "right";
+    } else {
+      cssFloat = "none";
+    }
+  } else {
+    cssFloat = "none";
+  }
+
+  let displayMode: "inline" | "block" | "float";
+  if (wrapType === undefined || wrapType === "inline") {
+    displayMode = "inline";
+  } else if (wrapType === "topAndBottom") {
+    displayMode = "block";
+  } else if (wrapType === "behind" || wrapType === "inFront") {
+    displayMode = "float";
+  } else if (cssFloat !== "none") {
+    displayMode = "float";
+  } else {
+    displayMode = "block";
+  }
+
+  const distTop = textBox.wrap?.distT
+    ? emuToPixels(textBox.wrap.distT)
+    : undefined;
+  const distBottom = textBox.wrap?.distB
+    ? emuToPixels(textBox.wrap.distB)
+    : undefined;
+  const distLeft = textBox.wrap?.distL
+    ? emuToPixels(textBox.wrap.distL)
+    : undefined;
+  const distRight = textBox.wrap?.distR
+    ? emuToPixels(textBox.wrap.distR)
+    : undefined;
+
   return schema.node(
     "textBox",
     {
@@ -2594,6 +2652,14 @@ function convertTextBox(
       marginBottom,
       marginLeft,
       marginRight,
+      displayMode,
+      cssFloat,
+      wrapType: wrapType ?? "inline",
+      wrapText,
+      distTop,
+      distBottom,
+      distLeft,
+      distRight,
       _docxPlacement: options.placement,
       _docxGroupId: options.groupId,
     },

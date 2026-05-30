@@ -394,6 +394,16 @@ export type TextBoxAttrs = {
   cssFloat?: "left" | "right" | "none";
   /** Wrap type */
   wrapType?: string;
+  /** OOXML wrapText direction for anchored text boxes (eigenpal #474). */
+  wrapText?: "bothSides" | "left" | "right" | "largest";
+  /** Wrap distance from top edge, in pixels (OOXML distT, EMU-converted). */
+  distTop?: number;
+  /** Wrap distance from bottom edge, in pixels. */
+  distBottom?: number;
+  /** Wrap distance from left edge, in pixels. */
+  distLeft?: number;
+  /** Wrap distance from right edge, in pixels. */
+  distRight?: number;
   /** Original DOCX placement hint for save-path reconstruction. */
   _docxPlacement?: "standalone" | "inlineWithPrevious";
   /** Original DOCX paragraph group for standalone text-box reconstruction. */

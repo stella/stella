@@ -25,6 +25,12 @@ import {
 import type { TabContext } from "../../prosemirror/utils/tabCalculator";
 import { DEFAULT_SINGLE_LINE_RATIO } from "../../utils/fontResolver";
 import { inlineImageBoundingBox } from "../../utils/rotationBoundingBox";
+import {
+  getFloatingAvailableWidth,
+  getFloatingMargins,
+  type FloatingImageZone,
+  type FloatingLineSegmentZone,
+} from "./floatingZones";
 import { getListMarkerInlineWidth } from "./listMarkerWidth";
 import {
   measureTextWidth,
@@ -33,6 +39,9 @@ import {
   ptToPx,
 } from "./measureContainer";
 import type { FontStyle, FontMetrics } from "./measureContainer";
+
+export { clampFloatingWrapMargins } from "./clampFloatingWrapMargins";
+export type { FloatingImageZone } from "./floatingZones";
 
 // Default values - match OOXML spec defaults
 const DEFAULT_FONT_SIZE = 11; // 11pt (Word 2007+ default)
@@ -67,21 +76,6 @@ function findMaxFittingLength(
   }
   return forceMin && best === 0 ? 1 : best;
 }
-
-/**
- * Floating image exclusion zone - describes an area where text cannot flow.
- * Used to calculate reduced line widths for text wrapping around floating images.
- */
-export type FloatingImageZone = {
-  /** Left margin reduction (pixels from left edge) */
-  leftMargin: number;
-  /** Right margin reduction (pixels from right edge) */
-  rightMargin: number;
-  /** Top Y coordinate of the exclusion zone (pixels from paragraph start) */
-  topY: number;
-  /** Bottom Y coordinate of the exclusion zone (pixels from paragraph start) */
-  bottomY: number;
-};
 
 /**
  * Options for paragraph measurement
@@ -120,6 +114,8 @@ type LineState = {
   leftOffset: number;
   /** Right offset from floating images (pixels from content right edge) */
   rightOffset: number;
+  /** Optional split segment zones from centered floating exclusions */
+  segmentZones?: FloatingLineSegmentZone[];
 };
 
 /**
@@ -402,31 +398,6 @@ function findWordBreaks(text: string): number[] {
 }
 
 /**
- * When a float's wrap margins consume the entire content width (or more),
- * there is no horizontal strip beside it for body text. Word renders the
- * following lines at full content width instead of collapsing them to a
- * 1-glyph column. Unchecked margins from near-full-width tables/images can
- * exceed contentWidth and collapse every wrap line to ~1 character.
- *
- * Returned margins are zeroed when either side alone is >= contentWidth or
- * their sum is >= contentWidth. Otherwise the original (non-negative) values
- * pass through unchanged.
- */
-export function clampFloatingWrapMargins(
-  leftMargin: number,
-  rightMargin: number,
-  contentWidth: number,
-): { leftMargin: number; rightMargin: number } {
-  const cw = Math.max(1, contentWidth);
-  const lm = Math.max(0, leftMargin);
-  const rm = Math.max(0, rightMargin);
-  if (lm >= cw || rm >= cw || lm + rm >= cw) {
-    return { leftMargin: 0, rightMargin: 0 };
-  }
-  return { leftMargin: lm, rightMargin: rm };
-}
-
-/**
  * Minimum horizontal room a line must offer before we treat it as usable for
  * body text. Below this threshold the line is bumped past obstructing floats
  * via `findClearLineY` instead of being rendered into the unusable sliver.
@@ -465,7 +436,7 @@ export function findClearLineY(
     const margins = getFloatingMargins(y, lineHeight, zones, 0);
     const available = Math.max(
       0,
-      contentWidth - margins.leftMargin - margins.rightMargin,
+      getFloatingAvailableWidth(margins, contentWidth),
     );
     if (available >= minWidth) {
       return y;
@@ -488,38 +459,6 @@ export function findClearLineY(
     y = nextY;
   }
   return y;
-}
-
-/**
- * Calculate width reduction for a line based on floating image zones.
- * Returns the left and right margins that need to be applied.
- */
-function getFloatingMargins(
-  lineY: number,
-  lineHeight: number,
-  zones: FloatingImageZone[] | undefined,
-  paragraphYOffset: number,
-): { leftMargin: number; rightMargin: number } {
-  if (!zones || zones.length === 0) {
-    return { leftMargin: 0, rightMargin: 0 };
-  }
-
-  let leftMargin = 0;
-  let rightMargin = 0;
-
-  // Line position relative to exclusion zones
-  const absoluteLineTop = paragraphYOffset + lineY;
-  const absoluteLineBottom = absoluteLineTop + lineHeight;
-
-  for (const zone of zones) {
-    // Check if this line overlaps vertically with the exclusion zone
-    if (absoluteLineBottom > zone.topY && absoluteLineTop < zone.bottomY) {
-      leftMargin = Math.max(leftMargin, zone.leftMargin);
-      rightMargin = Math.max(rightMargin, zone.rightMargin);
-    }
-  }
-
-  return { leftMargin, rightMargin };
 }
 
 /**
@@ -628,9 +567,7 @@ export function measureParagraph(
   );
   const firstLineWidth = Math.max(
     1,
-    baseFirstLineWidth -
-      firstLineFloatingMargins.leftMargin -
-      firstLineFloatingMargins.rightMargin,
+    getFloatingAvailableWidth(firstLineFloatingMargins, baseFirstLineWidth),
   );
 
   const lines: MeasuredLine[] = [];
@@ -742,6 +679,9 @@ export function measureParagraph(
     availableWidth: firstLineWidth,
     leftOffset: firstLineFloatingMargins.leftMargin,
     rightOffset: firstLineFloatingMargins.rightMargin,
+    ...(firstLineFloatingMargins.segments?.length
+      ? { segmentZones: firstLineFloatingMargins.segments }
+      : {}),
   };
 
   /**
@@ -835,9 +775,7 @@ export function measureParagraph(
     // Body content width minus floating image margins
     const adjustedWidth = Math.max(
       1,
-      bodyContentWidth -
-        floatingMargins.leftMargin -
-        floatingMargins.rightMargin,
+      getFloatingAvailableWidth(floatingMargins, bodyContentWidth),
     );
 
     currentLine = {
@@ -852,6 +790,9 @@ export function measureParagraph(
       availableWidth: adjustedWidth,
       leftOffset: floatingMargins.leftMargin,
       rightOffset: floatingMargins.rightMargin,
+      ...(floatingMargins.segments?.length
+        ? { segmentZones: floatingMargins.segments }
+        : {}),
     };
   };
 
