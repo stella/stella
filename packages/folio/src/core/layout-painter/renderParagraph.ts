@@ -548,7 +548,10 @@ function renderInlineImageRun(run: ImageRun, doc: Document): HTMLElement {
 
   // Inline images should flow with text
   img.style.display = "inline";
-  img.style.verticalAlign = "middle";
+  // Anchor at line top regardless of CSS reset (Tailwind preflight sets
+  // `img { vertical-align: middle }`, which clips against paragraph
+  // borders when the image overflows the baseline) — eigenpal #409.
+  img.style.verticalAlign = "top";
 
   // wp:inline distT/distB: the measurer folds these into maxImageHeightPx;
   // applying them as margins here keeps the margin-box footprint consistent

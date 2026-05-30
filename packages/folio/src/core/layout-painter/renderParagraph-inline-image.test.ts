@@ -107,6 +107,45 @@ describe("renderLine inline image handling", () => {
     expect(imageEl?.style.height).toBe("29px");
   });
 
+  // Regression for eigenpal #409 inline-image clipping sub-fix. Tailwind
+  // preflight sets `img { vertical-align: middle }` globally; the JS literal
+  // must explicitly anchor inline images at line top so they don't sit
+  // half above / half below the baseline (which clips against paragraph
+  // borders or following lines).
+  test("anchors inline images at line top", () => {
+    const imageRun: ImageRun = {
+      kind: "image",
+      src: "data:image/png;base64,",
+      width: 120,
+      height: 40,
+      pmStart: 1,
+      pmEnd: 2,
+    };
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p-inline-img",
+      runs: [{ kind: "text", text: "Logo: " }, imageRun],
+      pmStart: 0,
+      pmEnd: 8,
+    };
+    const line: MeasuredLine = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 1,
+      toChar: 1,
+      width: 162,
+      ascent: 32,
+      descent: 8,
+      lineHeight: 40,
+    };
+
+    const lineEl = renderLine(block, line, undefined, fakeDocument);
+    const imageEl = lineEl.children[1] as HTMLElement | undefined;
+
+    expect(imageEl?.tagName).toBe("img");
+    expect(imageEl?.style.verticalAlign).toBe("top");
+  });
+
   // Regression chatgpt-codex on #410: the image+text flex branch fired on
   // `runsForLine.some(isImageRun)`, which also matched FLOATING images. Those
   // render in a page-level layer and `continue` in the main loop, so a line
