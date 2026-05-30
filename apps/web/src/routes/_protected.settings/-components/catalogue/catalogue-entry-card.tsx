@@ -95,11 +95,11 @@ export const CatalogueEntryCard = ({
             {code}
           </span>
         ))}
-        {entry.isRecommendedForOrg && <RecommendedBadge />}
         {isFirstParty && <FirstPartyBadge />}
         <CostBadge cost={entry.cost} />
         <SetupBadge setup={entry.setup} />
         <LicenseBadge license={entry.license} />
+        {entry.isRecommendedForOrg && <RecommendedBadge />}
       </div>
 
       <div className="mt-auto flex items-center justify-between">
