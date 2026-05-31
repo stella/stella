@@ -10,21 +10,16 @@
  * per-process Map (the previous behaviour) instead of blocking auth. A
  * Redis outage must never hard-lock sign-in.
  */
-import Redis from "ioredis";
-
-import { env } from "@/api/env";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
-import { redisConnectionOptions } from "@/api/lib/redis-options";
+import { createRedisClient } from "@/api/lib/redis-client";
 
-/** Value better-auth persists per rate-limit key. */
 type RateLimitValue = {
   key: string;
   count: number;
   lastRequest: number;
 };
 
-/** The get/set contract better-auth's `customStorage` option expects. */
 type AuthRateLimitStorage = {
   get: (key: string) => Promise<RateLimitValue | null>;
   set: (key: string, value: RateLimitValue) => Promise<void>;
@@ -32,6 +27,13 @@ type AuthRateLimitStorage = {
 
 const REDIS_KEY_PREFIX = "auth:ratelimit:";
 const FALLBACK_CLEANUP_INTERVAL_MS = 60_000;
+/**
+ * Bound every Redis command so a slow or unreachable Redis cannot stall
+ * an auth request. Bun's RedisClient has no built-in commandTimeout, so
+ * we race the command against a timer and degrade to the fallback Map
+ * if it does not resolve in time.
+ */
+const COMMAND_TIMEOUT_MS = 500;
 
 const isRateLimitValue = (value: unknown): value is RateLimitValue =>
   typeof value === "object" &&
@@ -51,6 +53,21 @@ const isStricterRateLimitValue = (
   (candidate.count === current.count &&
     candidate.lastRequest > current.lastRequest);
 
+const withCommandTimeout = async <T>(promise: Promise<T>): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error("redis command timeout")),
+      COMMAND_TIMEOUT_MS,
+    );
+  });
+  return await Promise.race([promise, timeout]).finally(() => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  });
+};
+
 /**
  * Build the better-auth rate-limit storage. `ttlMs` is the longest
  * rate-limit window; it expires both Redis keys and fallback entries.
@@ -58,21 +75,13 @@ const isStricterRateLimitValue = (
 export const createAuthRateLimitStorage = (
   ttlMs: number,
 ): AuthRateLimitStorage => {
-  const redis = new Redis(env.REDIS_URL, {
-    ...redisConnectionOptions(),
-    lazyConnect: true,
-    // Bound every command so a slow or unreachable Redis cannot stall
-    // an auth request; a timed-out command rejects and falls back.
-    connectTimeout: 500,
-    commandTimeout: 500,
+  const redis = createRedisClient({
+    connectionTimeout: COMMAND_TIMEOUT_MS,
     enableOfflineQueue: false,
-    maxRetriesPerRequest: 1,
   });
-  redis.on("error", () => {
-    // Connection errors are handled per-command below (fail-open to the
-    // fallback Map). This listener only exists so an unhandled 'error'
-    // event cannot crash the process.
-  });
+  // Bun's RedisClient surfaces connection loss via the onclose callback
+  // and exposes errors through rejected commands. Leaving onclose unset
+  // is safe; per-command rejections drive the fail-open path below.
 
   type FallbackEntry = { value: RateLimitValue; expiresAt: number };
   const fallback = new Map<string, FallbackEntry>();
@@ -95,11 +104,13 @@ export const createAuthRateLimitStorage = (
   };
 
   const writeRedis = async (key: string, value: RateLimitValue) => {
-    await redis.set(
-      `${REDIS_KEY_PREFIX}${key}`,
-      JSON.stringify(value),
-      "PX",
-      ttlMs,
+    await withCommandTimeout(
+      redis.set(
+        `${REDIS_KEY_PREFIX}${key}`,
+        JSON.stringify(value),
+        "PX",
+        ttlMs,
+      ),
     );
   };
 
@@ -107,7 +118,9 @@ export const createAuthRateLimitStorage = (
     get: async (key) => {
       try {
         const fallbackValue = readFallback(key);
-        const raw = await redis.get(`${REDIS_KEY_PREFIX}${key}`);
+        const raw = await withCommandTimeout(
+          redis.get(`${REDIS_KEY_PREFIX}${key}`),
+        );
         if (raw === null) {
           return fallbackValue;
         }

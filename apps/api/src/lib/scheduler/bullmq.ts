@@ -1,12 +1,11 @@
 import { Queue } from "bullmq";
-import Redis from "ioredis";
 
-import { env } from "@/api/env";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
+import { createBullMqConnection } from "@/api/lib/redis-client";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 type QueueCache = {
-  redis: Redis | null;
+  connection: ReturnType<typeof createBullMqConnection> | null;
   queues: Map<string, Queue>;
 };
 
@@ -17,7 +16,7 @@ type BullMqSchedulerPayload = {
 };
 
 const cache: QueueCache = {
-  redis: null,
+  connection: null,
   queues: new Map(),
 };
 
@@ -38,9 +37,9 @@ export const createBullMqDispatchTask =
     });
   };
 
-const getRedis = (): Redis => {
-  cache.redis ??= new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
-  return cache.redis;
+const getConnection = () => {
+  cache.connection ??= createBullMqConnection();
+  return cache.connection;
 };
 
 const getSchedulerQueue = (queueName: string): Queue => {
@@ -50,7 +49,7 @@ const getSchedulerQueue = (queueName: string): Queue => {
   }
 
   const queue = new Queue(queueName, {
-    connection: getRedis(),
+    connection: getConnection(),
     defaultJobOptions: {
       attempts: 3,
       backoff: { type: "exponential", delay: 30_000 },

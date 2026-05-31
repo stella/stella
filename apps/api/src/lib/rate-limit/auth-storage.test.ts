@@ -1,37 +1,47 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test, vi } from "bun:test";
 
-// A controllable fake of ioredis: `redisDown` toggles whether get/set
-// reject, simulating an unreachable Redis without real I/O.
+// A controllable fake of Bun's RedisClient: `redisDown` toggles whether
+// get/set reject, simulating an unreachable Redis without real I/O.
+// `commandLatencyMs` makes commands hang for the test, exercising the
+// per-command timeout that auth-storage layers on top of the client.
 let redisDown = false;
+let commandLatencyMs = 0;
 const redisStore = new Map<string, string>();
-const redisConstructorOptions: unknown[] = [];
 
-class FakeRedis {
-  constructor(_url: string, options: unknown) {
-    redisConstructorOptions.push(options);
-  }
+class FakeRedisClient {
+  onclose: ((error: Error) => void) | null = null;
+  onconnect: (() => void) | null = null;
 
-  on(): this {
-    return this;
+  private async maybeDelay<T>(value: T): Promise<T> {
+    if (commandLatencyMs > 0) {
+      return new Promise<T>((resolve) => {
+        setTimeout(() => {
+          resolve(value);
+        }, commandLatencyMs);
+      });
+    }
+    return value;
   }
 
   async get(key: string): Promise<string | null> {
     if (redisDown) {
       throw new Error("redis unreachable");
     }
-    return redisStore.get(key) ?? null;
+    return this.maybeDelay(redisStore.get(key) ?? null);
   }
 
-  async set(key: string, value: string): Promise<string> {
+  async set(key: string, value: string): Promise<"OK"> {
     if (redisDown) {
       throw new Error("redis unreachable");
     }
     redisStore.set(key, value);
-    return "OK";
+    return this.maybeDelay("OK" as const);
   }
 }
 
-void mock.module("ioredis", () => ({ default: FakeRedis }));
+void mock.module("@/api/lib/redis-client", () => ({
+  createRedisClient: () => new FakeRedisClient(),
+}));
 
 const { createAuthRateLimitStorage } =
   await import("@/api/lib/rate-limit/auth-storage");
@@ -45,8 +55,8 @@ const value = (count: number, lastRequest = 1000) => ({
 describe("auth rate-limit storage", () => {
   beforeEach(() => {
     redisDown = false;
+    commandLatencyMs = 0;
     redisStore.clear();
-    redisConstructorOptions.length = 0;
   });
 
   test("round-trips through Redis when it is reachable", async () => {
@@ -61,18 +71,6 @@ describe("auth rate-limit storage", () => {
     const storage = createAuthRateLimitStorage(60_000);
 
     expect(await storage.get("ip:9.9.9.9")).toBeNull();
-  });
-
-  test("configures Redis commands to fail fast", () => {
-    createAuthRateLimitStorage(60_000);
-
-    expect(redisConstructorOptions.at(0)).toMatchObject({
-      commandTimeout: 500,
-      connectTimeout: 500,
-      enableOfflineQueue: false,
-      lazyConnect: true,
-      maxRetriesPerRequest: 1,
-    });
   });
 
   test("fails open: a get after Redis goes down reads the fallback", async () => {
@@ -131,5 +129,40 @@ describe("auth rate-limit storage", () => {
     expect(redisStore.get("auth:ratelimit:ip:1.2.3.4")).toBe(
       JSON.stringify(value(6, 2000)),
     );
+  });
+
+  test("fails open when a Redis command hangs past the timeout", async () => {
+    const storage = createAuthRateLimitStorage(60_000);
+
+    // Warm the fallback.
+    await storage.set("ip:1.2.3.4", value(8));
+
+    // Now make Redis "hang" — get() will not resolve. The per-command
+    // timeout must reject internally and the storage must surface the
+    // fallback value within a bounded window.
+    commandLatencyMs = 5000;
+    const start = Date.now();
+    const result = await storage.get("ip:1.2.3.4");
+    const elapsed = Date.now() - start;
+
+    expect(result).toEqual(value(8));
+    // 500ms timeout + scheduler slack. If this fails, the timeout
+    // wrapper has regressed and auth could hang on a slow Redis.
+    expect(elapsed).toBeLessThan(1500);
+  });
+
+  test("clears command timeout timers after Redis resolves", async () => {
+    vi.useFakeTimers();
+    try {
+      const storage = createAuthRateLimitStorage(60_000);
+      const baselineTimers = vi.getTimerCount();
+
+      await storage.set("ip:1.2.3.4", value(9));
+
+      expect(vi.getTimerCount()).toBe(baselineTimers);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
   });
 });
