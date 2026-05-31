@@ -4,15 +4,14 @@ import * as v from "valibot";
 
 import {
   executeRegistryLookup,
+  getRegistryHandlerDefinitionByCountry,
   getRegistryHandlerByCountry,
   type RegistryJurisdictionCode,
 } from "@/api/lib/business-registries/dispatch";
 
 const BUSINESS_REGISTRY_LOOKUP_TOOL_NAME = "business_registry_lookup" as const;
 
-// Static description for the model. The dynamic part — which
-// jurisdictions are actually allowed — lives in the input schema.
-const TOOL_DESCRIPTION =
+const TOOL_DESCRIPTION_BASE =
   "Look up companies in official national business registries. " +
   "Use jurisdiction for the country whose registry should be searched, " +
   "for example CZ for the Czech ARES register or NO for " +
@@ -20,8 +19,15 @@ const TOOL_DESCRIPTION =
   "number against VIES (the VAT Information Exchange System); the " +
   "query must then be a fully-qualified VAT number including the " +
   "2-letter country prefix, e.g. DE143593636. Search by company " +
-  "registration number or company name; name search is not supported " +
-  "for VIES.";
+  "registration number or company name where the selected registry " +
+  "supports name search.";
+
+const QUERY_DESCRIPTION_BASE =
+  "Company registration number (e.g. Czech IČO, Norwegian orgnr, " +
+  "fully-qualified EU VAT such as DE143593636) or company name. " +
+  "Numeric inputs that match the registry's canonical ID format " +
+  "route to a direct lookup; everything else is treated as a " +
+  "name search where the selected registry supports name search.";
 
 type CreateBusinessRegistryToolsArgs = {
   /**
@@ -67,6 +73,17 @@ export const createBusinessRegistryTools = ({
     RegistryJurisdictionCode,
     ...RegistryJurisdictionCode[],
   ];
+  const canonicalOnlyJurisdictions = enabledJurisdictions.filter(
+    (jurisdiction) =>
+      getRegistryHandlerDefinitionByCountry(jurisdiction)?.search === null,
+  );
+  const canonicalOnlyGuidance = canonicalOnlyJurisdictions
+    .map(canonicalOnlyQueryGuidanceFor)
+    .join("; ");
+  const canonicalOnlySuffix =
+    canonicalOnlyGuidance.length > 0
+      ? ` Name search is not supported for these enabled registries: ${canonicalOnlyGuidance}. Ask the user for the canonical identifier instead of passing a company name.`
+      : "";
 
   const inputSchema = v.strictObject({
     jurisdiction: v.pipe(
@@ -79,13 +96,7 @@ export const createBusinessRegistryTools = ({
     ),
     query: v.pipe(
       v.string(),
-      v.description(
-        "Company registration number (e.g. Czech IČO, Norwegian orgnr, " +
-          "fully-qualified EU VAT such as DE143593636) or company name. " +
-          "Numeric inputs that match the registry's canonical ID format " +
-          "route to a direct lookup; everything else is treated as a " +
-          "name search (where supported).",
-      ),
+      v.description(QUERY_DESCRIPTION_BASE + canonicalOnlySuffix),
     ),
     limit: v.optional(
       v.pipe(
@@ -100,7 +111,7 @@ export const createBusinessRegistryTools = ({
 
   return {
     [BUSINESS_REGISTRY_LOOKUP_TOOL_NAME]: tool({
-      description: TOOL_DESCRIPTION,
+      description: TOOL_DESCRIPTION_BASE + canonicalOnlySuffix,
       inputSchema: valibotSchema(inputSchema),
       execute: async ({ jurisdiction, limit, query }) => {
         const handler = getRegistryHandlerByCountry(jurisdiction);
@@ -129,6 +140,21 @@ export const createBusinessRegistryTools = ({
       },
     }),
   };
+};
+
+const canonicalOnlyQueryGuidanceFor = (
+  jurisdiction: RegistryJurisdictionCode,
+): string => {
+  if (jurisdiction === "EU") {
+    return "EU/VIES requires a fully-qualified VAT number with the 2-letter country prefix";
+  }
+  if (jurisdiction === "PL") {
+    return "PL/KRS requires the KRS number";
+  }
+  if (jurisdiction === "US") {
+    return "US/EDGAR requires the SEC CIK";
+  }
+  return `${jurisdiction} requires its registry canonical identifier`;
 };
 
 export { BUSINESS_REGISTRY_LOOKUP_TOOL_NAME };

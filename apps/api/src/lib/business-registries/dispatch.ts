@@ -1192,12 +1192,16 @@ const HANDLERS_BY_JURISDICTION: ReadonlyMap<
 export const getRegistryHandlerByCountry = (
   country: RegistryJurisdictionCode,
 ): RegistryHandler | undefined => {
-  const handler = HANDLERS_BY_JURISDICTION.get(country);
+  const handler = getRegistryHandlerDefinitionByCountry(country);
   if (!handler?.isDeployAvailable()) {
     return undefined;
   }
   return handler;
 };
+
+export const getRegistryHandlerDefinitionByCountry = (
+  country: RegistryJurisdictionCode,
+): RegistryHandler | undefined => HANDLERS_BY_JURISDICTION.get(country);
 
 /**
  * Run the dispatch flow for a registry handler: detect lookup vs.
