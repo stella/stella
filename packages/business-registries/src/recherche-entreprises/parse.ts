@@ -19,7 +19,8 @@ import type {
 const ANNUAIRE_BASE = "https://annuaire-entreprises.data.gouv.fr/entreprise/";
 
 const STATUS_ACTIVE = "A";
-const STATUS_CEASED = "C";
+const LEGAL_ENTITY_STATUS_CEASED = "C";
+const ESTABLISHMENT_STATUS_CLOSED = "F";
 
 const trimToNull = (value: string | null | undefined): string | null => {
   if (typeof value !== "string") {
@@ -82,7 +83,7 @@ const parseEstablishmentStatus = (
   if (etat === STATUS_ACTIVE) {
     return { type: "open" };
   }
-  if (etat === STATUS_CEASED) {
+  if (etat === ESTABLISHMENT_STATUS_CLOSED) {
     return { type: "closed", closedAt: trimToNull(raw.date_fermeture) };
   }
   return { type: "unknown" };
@@ -95,7 +96,7 @@ const parseLegalEntityStatus = (
   if (etat === STATUS_ACTIVE) {
     return { type: "active" };
   }
-  if (etat === STATUS_CEASED) {
+  if (etat === LEGAL_ENTITY_STATUS_CEASED) {
     return { type: "ceased", ceasedAt: trimToNull(raw.date_fermeture) };
   }
   return { type: "unknown" };

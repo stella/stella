@@ -3,7 +3,6 @@ export type { SearchOptions } from "./client.js";
 export {
   RechercheEntreprisesAPIError,
   RechercheEntreprisesError,
-  RechercheEntreprisesNotFoundError,
   RechercheEntreprisesRequestError,
   RechercheEntreprisesValidationError,
 } from "./errors.js";

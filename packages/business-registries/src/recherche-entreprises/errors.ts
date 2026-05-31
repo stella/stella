@@ -1,7 +1,5 @@
 import { RegistryError } from "../shared/errors.js";
 
-const RECHERCHE_ENTREPRISES_REGISTRY_SLUG = "fr-recherche-entreprises";
-
 export class RechercheEntreprisesError extends RegistryError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
@@ -28,17 +26,6 @@ export class RechercheEntreprisesAPIError extends RechercheEntreprisesError {
     this.name = "RechercheEntreprisesAPIError";
     this.httpStatus = httpStatus;
     this.upstreamMessage = upstreamMessage ?? null;
-  }
-}
-
-export class RechercheEntreprisesNotFoundError extends RechercheEntreprisesError {
-  readonly canonicalId: string;
-  readonly registrySlug: string = RECHERCHE_ENTREPRISES_REGISTRY_SLUG;
-
-  constructor(canonicalId: string) {
-    super(`French entity not found: ${canonicalId}`);
-    this.name = "RechercheEntreprisesNotFoundError";
-    this.canonicalId = canonicalId;
   }
 }
 

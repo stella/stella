@@ -10,7 +10,7 @@
 
 export type RechercheEntreprisesRawEtablissement = {
   // Etablissement-level identifiers and status. `etat_administratif`
-  // is "A" (active) or "C" (ceased/closed); upstream may surface other
+  // is "A" (active) or "F" (closed); upstream may surface other
   // values for partial records, so consumers must treat anything else
   // as "unknown" rather than coerce to "active".
   siret: string;
@@ -116,7 +116,7 @@ export type RechercheEntreprisesAddress = {
   country: string | null;
 };
 
-// Etablissement-level status: "A" = ouvert, "C" = fermé.
+// Etablissement-level status: "A" = ouvert, "F" = fermé.
 export type RechercheEntreprisesEstablishmentStatus =
   | { type: "open" }
   | { type: "closed"; closedAt: string | null }

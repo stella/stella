@@ -78,11 +78,11 @@ describe("parseEstablishment status", () => {
     ).toEqual({ type: "open" });
   });
 
-  test("maps etat_administratif=C → closed with closedAt", () => {
+  test("maps etat_administratif=F → closed with closedAt", () => {
     expect(
       parseEstablishment({
         ...baseEtablissement,
-        etat_administratif: "C",
+        etat_administratif: "F",
         date_fermeture: "2020-06-30",
       }).status,
     ).toEqual({ type: "closed", closedAt: "2020-06-30" });
@@ -94,6 +94,10 @@ describe("parseEstablishment status", () => {
     });
     expect(
       parseEstablishment({ ...baseEtablissement, etat_administratif: "X" })
+        .status,
+    ).toEqual({ type: "unknown" });
+    expect(
+      parseEstablishment({ ...baseEtablissement, etat_administratif: "C" })
         .status,
     ).toEqual({ type: "unknown" });
   });
