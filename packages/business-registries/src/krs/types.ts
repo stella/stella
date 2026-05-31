@@ -233,7 +233,7 @@ export type KrsEntity = {
   registeredAt: string | null;
   /** Last entry filed against the entity. */
   lastEntryAt: string | null;
-  /** Deep-link to the public KRS web viewer (no API auth required). */
+  /** Stable public KRS API URL for the current-register JSON extract. */
   registryUrl: string;
 };
 

@@ -288,8 +288,8 @@ describe("parseEntity (fixture-driven)", () => {
     expect(entity.website).toBe("WWW.CDPROJEKT.COM");
     expect(entity.status).toEqual({ type: "active" });
     expect(entity.registeredAt).toBe("06.04.2001");
-    expect(entity.registryUrl).toContain("krs=0000006865");
     expect(entity.registryUrl).toContain("rejestr=P");
+    expect(entity.registryUrl).toContain("/OdpisAktualny/0000006865");
   });
 
   test("parses the Caritas association (RejS) fixture", async () => {
@@ -338,7 +338,7 @@ describe("parseEntity (fixture-driven)", () => {
     };
     const entity = parseEntity(minimal, "0000198645");
     expect(entity.registryUrl).toBe(
-      "https://wyszukiwarka-krs.ms.gov.pl/podmiot/wyszukiwanieSzczegoloweWynik?krs=0000198645&rejestr=S",
+      "https://api-krs.ms.gov.pl/api/krs/OdpisAktualny/0000198645?rejestr=S&format=json",
     );
   });
 });

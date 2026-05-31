@@ -12,11 +12,10 @@ import type {
   KrsRegisteredSeat,
 } from "./types.js";
 
-// The KRS public web viewer accepts the same canonical ID and the
-// `rejestr` discriminator the API uses, so we can construct a stable
-// deep link from a successful lookup payload.
-const KRS_WEB_BASE =
-  "https://wyszukiwarka-krs.ms.gov.pl/podmiot/wyszukiwanieSzczegoloweWynik";
+// KRS' public HTML viewer currently requires an opaque token that the
+// open-data API does not return. The documented JSON lookup URL is
+// therefore the only stable URL constructible from a KRS number.
+const KRS_API_BASE = "https://api-krs.ms.gov.pl/api/krs";
 
 // KRS suffixes the formal name with "W UPADŁOŚCI" (in bankruptcy)
 // or "W LIKWIDACJI" (in liquidation) for the duration of the
@@ -195,17 +194,14 @@ const buildRegistryUrl = (
   krsNumber: string,
   register: KrsRegisterCode,
 ): string => {
-  // The web viewer URL is the canonical citizen-facing surface for a
-  // KRS record (the JSON endpoint is not human-browsable). The
-  // viewer keys on the KRS number + a `rejestr` short code (`P` /
-  // `S`) — translate the API's `RejP` / `RejS` to the short form
-  // the viewer expects.
+  // `rejestr` carries the API short code (`P` / `S`); the API does
+  // not accept the long form (`RejP` / `RejS`) here.
   const shortCode = register === "RejP" ? "P" : "S";
   const params = new URLSearchParams({
-    krs: krsNumber,
     rejestr: shortCode,
+    format: "json",
   });
-  return `${KRS_WEB_BASE}?${params.toString()}`;
+  return `${KRS_API_BASE}/OdpisAktualny/${krsNumber}?${params.toString()}`;
 };
 
 export const parseEntity = (
