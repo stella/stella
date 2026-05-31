@@ -169,7 +169,10 @@ const parseAccounts = (
     nonEmpty(raw.last_accounts?.made_up_to);
   const nextMadeUpTo =
     nonEmpty(raw.next_accounts?.period_end_on) ?? nonEmpty(raw.next_made_up_to);
-  const nextDue = nonEmpty(raw.next_due) ?? nonEmpty(raw.next_accounts?.due_on);
+  // Same deprecation: `accounts.next_due` and `accounts.overdue` are
+  // legacy aliases of `next_accounts.due_on` and `next_accounts.overdue`.
+  // Read the current field first.
+  const nextDue = nonEmpty(raw.next_accounts?.due_on) ?? nonEmpty(raw.next_due);
   const overdue = raw.next_accounts?.overdue ?? raw.overdue ?? false;
   if (
     lastMadeUpTo === null &&
