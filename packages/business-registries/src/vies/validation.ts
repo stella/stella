@@ -54,7 +54,12 @@ export const VAT_FORMAT_RULES: Readonly<Record<string, VatFormatRule>> = {
   LU: { pattern: /^\d{8}$/u },
   LV: { pattern: /^\d{11}$/u },
   MT: { pattern: /^\d{8}$/u },
-  NL: { pattern: /^[A-Z0-9+*]{10}\d{2}$/u },
+  // Netherlands: 9 digits, the literal `B`, then 2 digits
+  // (e.g. `123456789B01`). The Belastingdienst's published format is
+  // strict — the `B` separator is mandatory and not an arbitrary
+  // alphanumeric, so the catch-all `{10}` pattern would have leaked
+  // malformed inputs to VIES.
+  NL: { pattern: /^\d{9}B\d{2}$/u },
   PL: { pattern: /^\d{10}$/u },
   PT: { pattern: /^\d{9}$/u },
   RO: { pattern: /^\d{2,10}$/u },
