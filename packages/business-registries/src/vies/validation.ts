@@ -43,7 +43,12 @@ export const VAT_FORMAT_RULES: Readonly<Record<string, VatFormatRule>> = {
   FR: { pattern: /^[A-HJ-NP-Z0-9]{2}\d{9}$/u },
   HR: { pattern: /^\d{11}$/u },
   HU: { pattern: /^\d{8}$/u },
-  IE: { pattern: /^(?:\d[A-Z0-9*+]\d{5}[A-W]|\d{7}[A-W][A-I])$/u },
+  // Ireland: legacy 8-char `\d[A-Z0-9*+]\d{5}[A-W]` plus the
+  // 7-digit-then-letter format that Revenue issues at either 8 or 9
+  // chars (the trailing letter is optional). Without the `?`, the
+  // second alternative rejects every 8-char number that doesn't
+  // happen to overlap with the first.
+  IE: { pattern: /^(?:\d[A-Z0-9*+]\d{5}[A-W]|\d{7}[A-W][A-I]?)$/u },
   IT: { pattern: /^\d{11}$/u },
   LT: { pattern: /^(?:\d{9}|\d{12})$/u },
   LU: { pattern: /^\d{8}$/u },

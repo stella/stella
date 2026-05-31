@@ -878,7 +878,8 @@ const VIES_HANDLER: RegistryHandler = {
   nativeToolSlug: "vies",
   // Shape check only — accept inputs whose prefix matches a known
   // VAT country (`isKnownVatCountry` includes historical members
-  // like GB) followed by ≥2 alphanumerics. Without the prefix
+  // like GB) followed by ≥2 alphanumerics (Romanian VAT numbers can
+  // be as short as 2 digits, e.g. `RO12`). Without the prefix
   // whitelist a plain name like `Acme Corp` would parse as prefix
   // `AC` + VAT `MECORP` and route to the lookup path, surfacing a
   // confusing "unknown country" error instead of the intended
