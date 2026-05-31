@@ -83,7 +83,77 @@ describe("parseStatus", () => {
     ).toEqual({ type: "bankruptcy" });
   });
 
-  test("maps the long restructuring/liquidation array to `liquidating`", () => {
+  test("maps an explicit liquidation proceeding to `liquidating`", () => {
+    expect(
+      parseStatus(
+        {
+          postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja:
+            [{ rodzajPostepowania: "POSTĘPOWANIE LIKWIDACYJNE" }],
+        },
+        "ACME SP. Z O.O.",
+      ),
+    ).toEqual({ type: "liquidating" });
+  });
+
+  test("maps an orderly-liquidation proceeding to `liquidating`", () => {
+    expect(
+      parseStatus(
+        {
+          postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja:
+            [{ rodzajPostepowania: "UPORZĄDKOWANA LIKWIDACJA" }],
+        },
+        "ACME SP. Z O.O.",
+      ),
+    ).toEqual({ type: "liquidating" });
+  });
+
+  test("maps a restructuring proceeding to `restructuring`, NOT `liquidating`", () => {
+    // The combined dzial6 array conflates restructuring with
+    // liquidation. Collapsing every entry to `liquidating` would
+    // misstate live restructurings as dissolutions — the bot caught
+    // this against the committed Getin Noble fixture, which carries
+    // `rodzajPostepowania: "PRZYMUSOWA RESTRUKTURYZACJA"`.
+    expect(
+      parseStatus(
+        {
+          postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja:
+            [{ rodzajPostepowania: "PRZYMUSOWA RESTRUKTURYZACJA" }],
+        },
+        "ACME SP. Z O.O.",
+      ),
+    ).toEqual({ type: "restructuring" });
+  });
+
+  test("maps a repair (naprawcze) proceeding to `restructuring`", () => {
+    expect(
+      parseStatus(
+        {
+          postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja:
+            [{ rodzajPostepowania: "POSTĘPOWANIE NAPRAWCZE" }],
+        },
+        "ACME SP. Z O.O.",
+      ),
+    ).toEqual({ type: "restructuring" });
+  });
+
+  test("ANY liquidation entry wins when proceedings are mixed", () => {
+    expect(
+      parseStatus(
+        {
+          postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja:
+            [
+              { rodzajPostepowania: "PRZYMUSOWA RESTRUKTURYZACJA" },
+              { rodzajPostepowania: "POSTĘPOWANIE LIKWIDACYJNE" },
+            ],
+        },
+        "ACME SP. Z O.O.",
+      ),
+    ).toEqual({ type: "liquidating" });
+  });
+
+  test("an unlabelled proceeding defaults to `restructuring`", () => {
+    // Safer default than `liquidating` — KRS omits the kind on older
+    // records but we should not assert dissolution without evidence.
     expect(
       parseStatus(
         {
@@ -92,7 +162,7 @@ describe("parseStatus", () => {
         },
         "ACME SP. Z O.O.",
       ),
-    ).toEqual({ type: "liquidating" });
+    ).toEqual({ type: "restructuring" });
   });
 
   test("maps `wykreslenia` to `dissolved` even when other arrays are present", () => {

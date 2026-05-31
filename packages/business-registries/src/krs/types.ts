@@ -68,6 +68,22 @@ export type KrsRawDzial1 = {
   // emisjeAkcji, …); not surfaced yet.
 };
 
+// Each entry in the combined restructuring/liquidation dzial6 array
+// carries a free-form `rodzajPostepowania` (proceeding kind) field
+// — values observed in the wild include:
+//   "PRZYMUSOWA RESTRUKTURYZACJA"           → compulsory restructuring
+//   "POSTĘPOWANIE NAPRAWCZE"                → repair proceedings
+//   "POSTĘPOWANIE RESTRUKTURYZACYJNE"       → restructuring
+//   "POSTĘPOWANIE UKŁADOWE"                 → arrangement (a restructuring variant)
+//   "UPORZĄDKOWANA LIKWIDACJA"              → orderly liquidation
+//   "LIKWIDACJA" / "POSTĘPOWANIE LIKWIDACYJNE"  → liquidation
+// Only entries containing the Polish stem `LIKWIDAC` map to the
+// `liquidating` status; everything else is restructuring.
+export type KrsRawProceeding = {
+  rodzajPostepowania?: string;
+  [key: string]: unknown;
+};
+
 // Dzial 6 carries the lifecycle events we map onto the status union.
 // Each sub-array is present only when the corresponding event has
 // been recorded against the entity.
@@ -78,11 +94,13 @@ export type KrsRawDzial6 = {
   // Bankruptcy proceedings (upadłość). Present arrays here flip the
   // status to `bankruptcy`.
   postepowanieUpadlosciowe?: unknown[];
-  // Restructuring / compulsory restructuring / orderly liquidation —
-  // single combined array in the upstream schema. Present arrays
-  // here flip the status to `liquidating` unless `wykreslenia` is
-  // also present (which would imply `dissolved`).
-  postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja?: unknown[];
+  // Restructuring / repair / compulsory restructuring / orderly
+  // liquidation — single combined array in the upstream schema, but
+  // semantically distinct. The parser inspects each entry's
+  // `rodzajPostepowania` to decide between `restructuring` and
+  // `liquidating`; mislabelling a live restructuring as liquidation
+  // would materially misstate the entity's lifecycle.
+  postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja?: KrsRawProceeding[];
   // Removal from the register (wykreślenie) — flips to `dissolved`.
   // The `OdpisAktualny` endpoint in practice does not return removed
   // entities at all (it 404s), so this is defensive — present here
@@ -171,6 +189,13 @@ export type KrsIdentifiers = {
 export type KrsEntityStatus =
   | { type: "active" }
   | { type: "bankruptcy" }
+  // A live restructuring proceeding (postępowanie restrukturyzacyjne /
+  // naprawcze / przymusowa restrukturyzacja) — the company is being
+  // re-organised but is NOT in liquidation. KRS lumps these together
+  // with orderly liquidation in one combined dzial6 array, so the
+  // parser inspects each entry's `rodzajPostepowania` to tell them
+  // apart.
+  | { type: "restructuring" }
   | { type: "liquidating" }
   | { type: "dissolved" }
   | { type: "unknown" };

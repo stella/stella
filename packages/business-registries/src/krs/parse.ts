@@ -41,6 +41,14 @@ const trimToNull = (value: string | undefined): string | null => {
 const hasEntries = (value: unknown[] | undefined): boolean =>
   Array.isArray(value) && value.length > 0;
 
+// Matches the Polish stem `LIKWIDAC` (case- and diacritic-insensitive
+// via toUpperCase + RegExp; values come uppercased from KRS) so both
+// `LIKWIDACJA`, `POSTĘPOWANIE LIKWIDACYJNE`, and `UPORZĄDKOWANA
+// LIKWIDACJA` resolve to liquidation. Anything without this stem
+// (restructuring, repair, compulsory restructuring, arrangement) is
+// restructuring.
+const LIQUIDATION_PROCEEDING_PATTERN = /LIKWIDAC/u;
+
 export const parseStatus = (
   dzial6: KrsRawDzial6 | undefined,
   name: string,
@@ -51,12 +59,21 @@ export const parseStatus = (
   if (hasEntries(dzial6?.postepowanieUpadlosciowe)) {
     return { type: "bankruptcy" };
   }
-  if (
-    hasEntries(
-      dzial6?.postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja,
-    )
-  ) {
-    return { type: "liquidating" };
+  const proceedings =
+    dzial6?.postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja;
+  if (hasEntries(proceedings)) {
+    // Inspect each entry's `rodzajPostepowania`. If ANY entry names a
+    // liquidation, the entity is liquidating (a more terminal state
+    // than restructuring); otherwise it is restructuring. Entries
+    // without a `rodzajPostepowania` count as restructuring rather
+    // than liquidation — KRS' default for the unlabelled case is the
+    // less terminal arm.
+    const anyLiquidation = proceedings.some((entry) =>
+      LIQUIDATION_PROCEEDING_PATTERN.test(
+        (entry.rodzajPostepowania ?? "").toUpperCase(),
+      ),
+    );
+    return { type: anyLiquidation ? "liquidating" : "restructuring" };
   }
   // Fallback: KRS sometimes suffixes the formal name with the
   // proceedings marker before / without the dzial6 entry catching up
