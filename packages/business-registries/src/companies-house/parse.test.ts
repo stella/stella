@@ -289,4 +289,49 @@ describe("parseOfficersResponse", () => {
   test("returns an empty array when items is absent", () => {
     expect(parseOfficersResponse({})).toEqual([]);
   });
+
+  test("preserves appointed_before for pre-1992 officer rows", () => {
+    // Long-serving directors of old companies surface with
+    // `appointed_before` + `is_pre_1992_appointment` instead of
+    // `appointed_on`. Dropping the field would falsely imply
+    // Companies House had no appointment data on file.
+    const [officer] = parseOfficersResponse({
+      items: [
+        {
+          name: "OLD, Director",
+          officer_role: "director",
+          appointed_before: "1992-03-01",
+          is_pre_1992_appointment: true,
+        },
+      ],
+    });
+    expect(officer?.appointedOn).toBeNull();
+    expect(officer?.appointedBefore).toBe("1992-03-01");
+  });
+
+  test("falls back to principal_office_address for corporate officers", () => {
+    // Registered-overseas corporate / managing officers ship their
+    // location via `principal_office_address` rather than the
+    // correspondence `address` slot. Without the fallback the
+    // officer roster surfaces with `address: null` despite upstream
+    // carrying the address.
+    const [officer] = parseOfficersResponse({
+      items: [
+        {
+          name: "ACME HOLDINGS LIMITED",
+          officer_role: "corporate-director",
+          principal_office_address: {
+            premises: "1",
+            address_line_1: "Capitol Hill",
+            locality: "Wilmington",
+            postal_code: "19801",
+            country: "United States",
+          },
+        },
+      ],
+    });
+    expect(officer?.address?.locality).toBe("Wilmington");
+    expect(officer?.address?.postalCode).toBe("19801");
+    expect(officer?.address?.country).toBe("United States");
+  });
 });

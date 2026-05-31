@@ -274,6 +274,18 @@ export const parseSearchResponse = (
 // Officer parsing
 // ---------------------------------------------------------------------------
 
+const pickOfficerAddress = (
+  raw: CompaniesHouseRawOfficer,
+): CompaniesHouseAddress | null => {
+  if (raw.address) {
+    return parseAddress(raw.address);
+  }
+  if (raw.principal_office_address) {
+    return parseAddress(raw.principal_office_address);
+  }
+  return null;
+};
+
 export const parseOfficer = (
   raw: CompaniesHouseRawOfficer,
 ): CompaniesHouseOfficer => {
@@ -298,12 +310,21 @@ export const parseOfficer = (
       title: null,
     },
     appointedOn: nonEmpty(raw.appointed_on),
+    // Pre-1992 officers carry their appointment as a bound date rather
+    // than an exact day (`is_pre_1992_appointment: true`). Surfacing
+    // `appointedOn` as null without `appointedBefore` would falsely
+    // imply Companies House had no appointment data on file.
+    appointedBefore: nonEmpty(raw.appointed_before),
     resignedOn: nonEmpty(raw.resigned_on),
     isResigned: Boolean(nonEmpty(raw.resigned_on)),
     occupation: nonEmpty(raw.occupation),
     nationality: nonEmpty(raw.nationality),
     countryOfResidence: nonEmpty(raw.country_of_residence),
-    address: raw.address ? parseAddress(raw.address) : null,
+    // Corporate / managing officers for registered-overseas entities
+    // ship their location as `principal_office_address` instead of
+    // the usual correspondence `address` — both are documented and
+    // mutually exclusive in practice.
+    address: pickOfficerAddress(raw),
     dateOfBirth,
     identification: ident
       ? {

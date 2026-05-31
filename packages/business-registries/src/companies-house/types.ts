@@ -135,6 +135,12 @@ export type CompaniesHouseRawOfficer = {
   name: string;
   officer_role: string;
   appointed_on?: string;
+  // Companies House paired pre-1992 officer appointments to an earlier
+  // date format: `appointed_before` (a date the officer was appointed
+  // before, not on) plus `is_pre_1992_appointment: true`. Long-serving
+  // directors of old companies surface this instead of `appointed_on`.
+  appointed_before?: string;
+  is_pre_1992_appointment?: boolean;
   resigned_on?: string;
   occupation?: string;
   nationality?: string;
@@ -258,6 +264,13 @@ export type CompaniesHouseOfficer = {
   name: string;
   role: { code: string; title: string | null };
   appointedOn: string | null;
+  /**
+   * "Appointed before" date for pre-1992 officers — Companies House
+   * historically only recorded a bound date, not the exact appointment
+   * day. When `appointedOn` is null but the officer was already in
+   * post by this date, `appointedBefore` carries that bound.
+   */
+  appointedBefore: string | null;
   resignedOn: string | null;
   isResigned: boolean;
   occupation: string | null;
