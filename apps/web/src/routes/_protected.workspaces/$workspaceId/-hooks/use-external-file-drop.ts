@@ -10,17 +10,16 @@ import type { ExternalDragInfo } from "@/routes/_protected.workspaces/$workspace
 import { getCurrentExternalDrag } from "@/routes/_protected.workspaces/$workspaceId/-context/external-drag-info";
 
 type ExternalFileDropOptions = {
-  /** Called when files are dropped. Receives the dropped files. */
   onDrop: (files: File[]) => void;
-  /** Whether this drop target is enabled */
   enabled?: boolean;
-  /** Optional external ref to use instead of creating a new one */
+  /**
+   * Optional caller-provided DOM ref; can be used when the target element
+   * already has an existing ref. If omitted, the hook creates one.
+   */
   externalRef?: React.RefObject<HTMLDivElement | null>;
   /**
-   * Optional filter on the drag info (mime types, file count). Return
-   * false to skip this target so the drop falls through to an outer
-   * container. Omit to accept any external file. If drag info isn't
-   * available yet, the target rejects.
+   * Filter on the drag info. Return false to skip this target so the
+   * drop falls through; omit to accept any external file.
    */
   accept?: (info: ExternalDragInfo) => boolean;
 };
@@ -32,7 +31,7 @@ type ExternalFileDropResult = {
   isDropTarget: boolean;
   /**
    * True while a descendant drop target is the innermost. Use this on
-   * container zones to suppress overlays while a row/column claims the
+   * container zones to suppress overlays while a row claims the
    * drag.
    */
   isInnerActive: boolean;
