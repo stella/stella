@@ -1,0 +1,1940 @@
+{
+  "createDateTime": "2026-05-31T06:32:59.8373472+02:00",
+  "dataSyncDate": "2026-05-28T19:22:28.647",
+  "fileReference": {
+    "section": "Sro",
+    "insertNumber": 3586,
+    "court": "B",
+    "formattedValueSpaced": "Sro 3586/B",
+    "formattedValueUrlSafe": "Sro 3586 B"
+  },
+  "legalForm": "SpolocnostsRucenimObmedzenym",
+  "courtName": "Mestský súd Bratislava III",
+  "legalPerson": {
+    "corporateBody": {
+      "corporateBodyFullName": [
+        {
+          "current": true,
+          "effectiveFrom": "1992-09-17T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "value": "ESET, spol. s r.o."
+        }
+      ],
+      "legalForm": [
+        {
+          "current": true,
+          "effectiveFrom": "1992-09-17T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "item": {
+            "codelistCode": "Corwin-CL000056",
+            "codelistItem": {
+              "itemCode": "3",
+              "itemName": "Spoločnosť s ručením obmedzeným"
+            }
+          }
+        }
+      ],
+      "organizationUnit": [],
+      "establishment": "1992-09-17T00:00:00",
+      "termination": null,
+      "activities": [
+        {
+          "current": true,
+          "effectiveFrom": "1992-09-17T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "economicActivityDescription": "nákup a predaj výpočtovej techniky, elektroniky, kancelárskej techniky a kancelárskych potrieb",
+          "economicActivityClassification": null
+        },
+        {
+          "current": true,
+          "effectiveFrom": "1992-09-17T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "economicActivityDescription": "poskytovanie softwaru /predaj hotových programov na základe zmluvy s autormi alebo vyhotovovanie programov na zákazku/",
+          "economicActivityClassification": null
+        },
+        {
+          "current": true,
+          "effectiveFrom": "1992-09-17T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "economicActivityDescription": "poradenstvo v oblasti výpočtovej techniky a automatizovaných systémov riadenia",
+          "economicActivityClassification": null
+        },
+        {
+          "current": true,
+          "effectiveFrom": "1992-09-17T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "economicActivityDescription": "kúpa rozličného tovaru za účelom jeho ďalšieho predaja a predaj v rozsahu voľnej živnosti",
+          "economicActivityClassification": null
+        },
+        {
+          "current": true,
+          "effectiveFrom": "1992-09-17T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "economicActivityDescription": "reklamná a inzertná činnosť",
+          "economicActivityClassification": null
+        },
+        {
+          "current": true,
+          "effectiveFrom": "1992-09-17T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "economicActivityDescription": "grafická úprava textov pomocou výpočtovej techniky",
+          "economicActivityClassification": null
+        },
+        {
+          "current": true,
+          "effectiveFrom": "2013-03-14T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "economicActivityDescription": "vykonávanie mimoškolskej vzdelávacej činnosti",
+          "economicActivityClassification": null
+        },
+        {
+          "current": true,
+          "effectiveFrom": "2018-02-08T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "economicActivityDescription": "Prenájom nehnuteľností spojený s poskytovaním iných než základných služieb spojených s prenájmom",
+          "economicActivityClassification": null
+        },
+        {
+          "current": true,
+          "effectiveFrom": "2018-02-08T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "economicActivityDescription": "Prenájom hnuteľných vecí",
+          "economicActivityClassification": null
+        },
+        {
+          "current": true,
+          "effectiveFrom": "2018-02-08T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "economicActivityDescription": "Sprostredkovateľská činnosť v oblasti obchodu, služieb, výroby",
+          "economicActivityClassification": null
+        },
+        {
+          "current": true,
+          "effectiveFrom": "2018-02-08T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "economicActivityDescription": "(l)\tprenájom nehnuteľností spojený s poskytovaním základných služieb spojených s prenájmom",
+          "economicActivityClassification": null
+        },
+        {
+          "current": true,
+          "effectiveFrom": "2022-02-16T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "economicActivityDescription": "počítačové služby a služby súvisiace s počítačovým spracovaním údajov",
+          "economicActivityClassification": null
+        },
+        {
+          "current": true,
+          "effectiveFrom": "2022-09-28T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "economicActivityDescription": "Konzultačné, poradenské, tréningové a koučovacie služby v oblasti rozvoja ľudských zdrojov",
+          "economicActivityClassification": null
+        },
+        {
+          "current": true,
+          "effectiveFrom": "2022-09-28T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "economicActivityDescription": "Organizovanie športových, kultúrnych a iných spoločenských podujatí",
+          "economicActivityClassification": null
+        },
+        {
+          "current": true,
+          "effectiveFrom": "2022-09-28T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "economicActivityDescription": "Vydavateľská činnosť",
+          "economicActivityClassification": null
+        },
+        {
+          "current": true,
+          "effectiveFrom": "2022-09-28T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "economicActivityDescription": "Vedenie účtovníctva",
+          "economicActivityClassification": null
+        },
+        {
+          "current": true,
+          "effectiveFrom": "2025-02-19T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "economicActivityDescription": "Certifikovaný audítor kybernetickej bezpečnosti",
+          "economicActivityClassification": null
+        },
+        {
+          "current": true,
+          "effectiveFrom": "2025-02-19T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "economicActivityDescription": "Činnosť podnikateľských, organizačných a ekonomických poradcov",
+          "economicActivityClassification": null
+        },
+        {
+          "current": true,
+          "effectiveFrom": "2025-02-19T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "economicActivityDescription": "Služby v oblasti administratívnej správy a služby organizačno-hospodárskej povahy",
+          "economicActivityClassification": null
+        }
+      ],
+      "otherLegalFacts": [
+        {
+          "current": true,
+          "effectiveFrom": "1992-09-17T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "value": "Spoločnosť s ručením obmedzeným bola založená spoločenskou zmluvou zo dňa 26. 6. 1992 v zmysle Zákona č. 513/91 Zb. \r\nStary spis: S.r.o.   7326 "
+        },
+        {
+          "current": true,
+          "effectiveFrom": "2000-02-07T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "value": "Zvýšenie základného imania schválené na valnom zhromaždení dňa 3.4.1998.\r\nSpoločenská zmluva - úplné znenie zo dňa 28.6.1999."
+        },
+        {
+          "current": true,
+          "effectiveFrom": "2005-03-22T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "value": "Zápisnica z valného zhromaždenia zo dňa 21.2.2005. Dodatok č. 1 k spoločenskej zmluve zo dňa 2.3.2005."
+        },
+        {
+          "current": true,
+          "effectiveFrom": "2008-04-26T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "value": "Zápisnica z mimoriadneho valného zhromaždenia konaného dňa 16.4.2008."
+        },
+        {
+          "current": true,
+          "effectiveFrom": "2009-07-23T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "value": "Zápisnica z valného zhromaždenia zo dňa 06.04.2009."
+        },
+        {
+          "current": true,
+          "effectiveFrom": "2010-02-19T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "value": "Zápisnica z valného zhromaždenia zo dňa 21.10.2009."
+        },
+        {
+          "current": true,
+          "effectiveFrom": "2010-06-01T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "value": "Rozhodnutie jediného spoločníka zo dňa 24.05.2010 o zlúčení so spoločnosťou COMDOM Software, s.r.o., so sídlom Komenského 11/A, 040 01 Košice,  IČO: 35889691, zapísanej v obchodnom registri Okresného súdu Košice I, Oddiel Sro, Vložka č. 20164/V, ktorá bola zrušená bez likvidácie a jej zlučení so spoločnosťou ESET, spol.  s r.o., so sídlom Einsteinova 24, 851 01 Bratislava,  IČO: 31333532, zapísanou v obchodnom registri Okresného súdu Bratislava I, Oddiel Sro, Vložka č. 3586/B, ktorá sa na základe zmluvy o zlúčení zo dňa 24.05.2010, spísanej vo forme notárskej zápisnice N 91/2010, Nz 18316/2010 notárkou JUDr. Lucianou Rebrovou, stáva právnym nástupcom COMDOM Software, s.r.o. a preberá všetky jej práva a záväzky. "
+        },
+        {
+          "current": true,
+          "effectiveFrom": "2013-03-14T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "value": "Zápisnica z valného zhromaždenia zo dňa 30.01.2013."
+        },
+        {
+          "current": true,
+          "effectiveFrom": "2015-11-15T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "value": "Zápisnica z mimoriadneho valného zhromaždenia konaného dňa 29.10.2015. Zmluva o zlúčení zo dňa 09.11.2015 vo forme notárskej zápisnice č. N 1953/2015, Nz 41576/2015, NCRls 42480/2015."
+        }
+      ],
+      "equity": [
+        {
+          "current": true,
+          "effectiveFrom": "2009-07-23T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "currency": {
+            "item": "EUR"
+          },
+          "equityValue": 140000.0,
+          "equityValueSpecified": true,
+          "equityValuePaid": 140000.0,
+          "equityValuePaidSpecified": true,
+          "equityValueApproved": 0,
+          "equityValueApprovedSpecified": false
+        }
+      ],
+      "shares": [],
+      "deposits": [
+        {
+          "stakeholder": [
+            {
+              "current": true,
+              "effectiveFrom": "2022-02-16T00:00:00",
+              "effectiveTo": "0001-01-01T00:00:00",
+              "effectiveToSpecified": false,
+              "value": "Ing. Peter Paško"
+            }
+          ],
+          "shareholder": [],
+          "depositPayedValue": 30800.0,
+          "depositType2": null,
+          "depositValue2": null,
+          "depositPayedValue2": null,
+          "lien": null,
+          "lienDatas": [],
+          "depositType": null,
+          "depositValue": 30800.0,
+          "currency": {
+            "item": {
+              "codelistCode": "Corwin-CL010076",
+              "codelistItem": {
+                "itemCode": "6",
+                "itemName": "EUR"
+              }
+            }
+          },
+          "depositDueDate": "0001-01-01T00:00:00",
+          "depositDueDateSpecified": false,
+          "current": true,
+          "effectiveFrom": "2009-07-23T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false
+        },
+        {
+          "stakeholder": [
+            {
+              "current": true,
+              "effectiveFrom": "2022-02-16T00:00:00",
+              "effectiveTo": "0001-01-01T00:00:00",
+              "effectiveToSpecified": false,
+              "value": "Ing. Miroslav Trnka"
+            }
+          ],
+          "shareholder": [],
+          "depositPayedValue": 31850.0,
+          "depositType2": null,
+          "depositValue2": null,
+          "depositPayedValue2": null,
+          "lien": null,
+          "lienDatas": [],
+          "depositType": null,
+          "depositValue": 31850.0,
+          "currency": {
+            "item": {
+              "codelistCode": "Corwin-CL010076",
+              "codelistItem": {
+                "itemCode": "6",
+                "itemName": "EUR"
+              }
+            }
+          },
+          "depositDueDate": "0001-01-01T00:00:00",
+          "depositDueDateSpecified": false,
+          "current": true,
+          "effectiveFrom": "2009-07-23T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false
+        },
+        {
+          "stakeholder": [
+            {
+              "current": true,
+              "effectiveFrom": "2022-02-16T00:00:00",
+              "effectiveTo": "0001-01-01T00:00:00",
+              "effectiveToSpecified": false,
+              "value": "Ing. Richard Marko"
+            }
+          ],
+          "shareholder": [],
+          "depositPayedValue": 16975.0,
+          "depositType2": null,
+          "depositValue2": null,
+          "depositPayedValue2": null,
+          "lien": null,
+          "lienDatas": [],
+          "depositType": null,
+          "depositValue": 16975.0,
+          "currency": {
+            "item": {
+              "codelistCode": "Corwin-CL010076",
+              "codelistItem": {
+                "itemCode": "6",
+                "itemName": "EUR"
+              }
+            }
+          },
+          "depositDueDate": "0001-01-01T00:00:00",
+          "depositDueDateSpecified": false,
+          "current": true,
+          "effectiveFrom": "2009-07-23T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false
+        },
+        {
+          "stakeholder": [
+            {
+              "current": true,
+              "effectiveFrom": "2021-01-30T00:00:00",
+              "effectiveTo": "0001-01-01T00:00:00",
+              "effectiveToSpecified": false,
+              "value": "Ing. Maroš Grund"
+            }
+          ],
+          "shareholder": [],
+          "depositPayedValue": 16975.0,
+          "depositType2": null,
+          "depositValue2": null,
+          "depositPayedValue2": null,
+          "lien": null,
+          "lienDatas": [],
+          "depositType": null,
+          "depositValue": 16975.0,
+          "currency": {
+            "item": {
+              "codelistCode": "Corwin-CL010076",
+              "codelistItem": {
+                "itemCode": "6",
+                "itemName": "EUR"
+              }
+            }
+          },
+          "depositDueDate": "0001-01-01T00:00:00",
+          "depositDueDateSpecified": false,
+          "current": true,
+          "effectiveFrom": "2009-07-23T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false
+        },
+        {
+          "stakeholder": [
+            {
+              "current": true,
+              "effectiveFrom": "2022-02-16T00:00:00",
+              "effectiveTo": "0001-01-01T00:00:00",
+              "effectiveToSpecified": false,
+              "value": "RNDr. Anton Zajac"
+            }
+          ],
+          "shareholder": [],
+          "depositPayedValue": 12600.0,
+          "depositType2": null,
+          "depositValue2": null,
+          "depositPayedValue2": null,
+          "lien": null,
+          "lienDatas": [],
+          "depositType": null,
+          "depositValue": 12600.0,
+          "currency": {
+            "item": {
+              "codelistCode": "Corwin-CL010076",
+              "codelistItem": {
+                "itemCode": "6",
+                "itemName": "EUR"
+              }
+            }
+          },
+          "depositDueDate": "0001-01-01T00:00:00",
+          "depositDueDateSpecified": false,
+          "current": true,
+          "effectiveFrom": "2009-07-23T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false
+        },
+        {
+          "stakeholder": [
+            {
+              "current": true,
+              "effectiveFrom": "2025-02-15T00:00:00",
+              "effectiveTo": "0001-01-01T00:00:00",
+              "effectiveToSpecified": false,
+              "value": "Ján Hrubý"
+            }
+          ],
+          "shareholder": [],
+          "depositPayedValue": 30800.0,
+          "depositType2": null,
+          "depositValue2": null,
+          "depositPayedValue2": null,
+          "lien": null,
+          "lienDatas": [],
+          "depositType": null,
+          "depositValue": 30800.0,
+          "currency": {
+            "item": {
+              "codelistCode": "Corwin-CL010076",
+              "codelistItem": {
+                "itemCode": "6",
+                "itemName": "EUR"
+              }
+            }
+          },
+          "depositDueDate": "0001-01-01T00:00:00",
+          "depositDueDateSpecified": false,
+          "current": true,
+          "effectiveFrom": "2025-02-15T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false
+        }
+      ],
+      "legalStatus": null,
+      "legalStatusEvents": [],
+      "statutoryBodyType": [
+        {
+          "current": true,
+          "effectiveFrom": "1992-09-17T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "value": "konatelia"
+        }
+      ],
+      "statutoryBody": [
+        {
+          "statutoryBodyType": null,
+          "personData": {
+            "physicalPerson": {
+              "id": null,
+              "personName": {
+                "formattedName": "Ing. Peter Paško",
+                "legalName": null,
+                "givenName": ["Peter"],
+                "preferredGivenName": null,
+                "otherName": null,
+                "familyName": [
+                  {
+                    "primary": null,
+                    "prefix": null,
+                    "value": "Paško"
+                  }
+                ],
+                "givenFamilyName": null,
+                "affix": null
+              },
+              "alternativeName": null,
+              "maritalStatus": null,
+              "sex": null,
+              "birth": null,
+              "death": null,
+              "citizenship": null,
+              "confession": null,
+              "occupation": null,
+              "relatedPerson": null,
+              "bankConnection": null,
+              "nationality": null,
+              "civilDisability": null,
+              "residenceBan": null,
+              "occupationBan": null
+            },
+            "corporateBody": null,
+            "physicalAddress": [
+              {
+                "addressLine": null,
+                "country": {
+                  "item": "Slovenská republika"
+                },
+                "region": null,
+                "county": null,
+                "municipality": {
+                  "item": "Bratislava - mestská časť Nové Mesto"
+                },
+                "district": null,
+                "streetName": "Bajkalská",
+                "additionalStreetData": null,
+                "buildingNumber": "5/C",
+                "propertyRegistrationNumber": null,
+                "addressPoint": null,
+                "buildingIndex": null,
+                "deliveryAddress": {
+                  "postalCode": "83104",
+                  "postOfficeBox": null,
+                  "recipient": null
+                },
+                "building": null,
+                "addressType": {
+                  "addressClass": {
+                    "item": {
+                      "codelistCode": "CL010139",
+                      "codelistItem": {
+                        "itemCode": "100001",
+                        "itemName": "Trvalý pobyt"
+                      }
+                    }
+                  },
+                  "addressRecordDate": "0001-01-01T00:00:00",
+                  "addressRecordDateSpecified": false,
+                  "addressRecordDateTermination": "0001-01-01T00:00:00",
+                  "addressRecordDateTerminationSpecified": false
+                },
+                "buildingUnit": null
+              }
+            ],
+            "id": []
+          },
+          "function": null,
+          "functionCreationDate": "1992-09-17T00:00:00",
+          "functionTerminationDate": null,
+          "isIdentifiedWithRFO": true,
+          "hasRegisteredIdentifiers": true,
+          "current": true,
+          "effectiveFrom": "2022-04-21T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false
+        },
+        {
+          "statutoryBodyType": null,
+          "personData": {
+            "physicalPerson": {
+              "id": null,
+              "personName": {
+                "formattedName": "Ing. Miroslav Trnka",
+                "legalName": null,
+                "givenName": ["Miroslav"],
+                "preferredGivenName": null,
+                "otherName": null,
+                "familyName": [
+                  {
+                    "primary": null,
+                    "prefix": null,
+                    "value": "Trnka"
+                  }
+                ],
+                "givenFamilyName": null,
+                "affix": null
+              },
+              "alternativeName": null,
+              "maritalStatus": null,
+              "sex": null,
+              "birth": null,
+              "death": null,
+              "citizenship": null,
+              "confession": null,
+              "occupation": null,
+              "relatedPerson": null,
+              "bankConnection": null,
+              "nationality": null,
+              "civilDisability": null,
+              "residenceBan": null,
+              "occupationBan": null
+            },
+            "corporateBody": null,
+            "physicalAddress": [
+              {
+                "addressLine": null,
+                "country": {
+                  "item": "Slovenská republika"
+                },
+                "region": null,
+                "county": null,
+                "municipality": {
+                  "item": "Bratislava - mestská časť Ružinov"
+                },
+                "district": null,
+                "streetName": "Záhradnícka",
+                "additionalStreetData": null,
+                "buildingNumber": "60",
+                "propertyRegistrationNumber": null,
+                "addressPoint": null,
+                "buildingIndex": null,
+                "deliveryAddress": {
+                  "postalCode": "82108",
+                  "postOfficeBox": null,
+                  "recipient": null
+                },
+                "building": null,
+                "addressType": {
+                  "addressClass": {
+                    "item": {
+                      "codelistCode": "CL010139",
+                      "codelistItem": {
+                        "itemCode": "100001",
+                        "itemName": "Trvalý pobyt"
+                      }
+                    }
+                  },
+                  "addressRecordDate": "0001-01-01T00:00:00",
+                  "addressRecordDateSpecified": false,
+                  "addressRecordDateTermination": "0001-01-01T00:00:00",
+                  "addressRecordDateTerminationSpecified": false
+                },
+                "buildingUnit": null
+              }
+            ],
+            "id": []
+          },
+          "function": null,
+          "functionCreationDate": "1992-09-17T00:00:00",
+          "functionTerminationDate": null,
+          "isIdentifiedWithRFO": true,
+          "hasRegisteredIdentifiers": true,
+          "current": true,
+          "effectiveFrom": "2022-04-21T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false
+        },
+        {
+          "statutoryBodyType": null,
+          "personData": {
+            "physicalPerson": {
+              "id": null,
+              "personName": {
+                "formattedName": "Ing. Richard Marko",
+                "legalName": null,
+                "givenName": ["Richard"],
+                "preferredGivenName": null,
+                "otherName": null,
+                "familyName": [
+                  {
+                    "primary": null,
+                    "prefix": null,
+                    "value": "Marko"
+                  }
+                ],
+                "givenFamilyName": null,
+                "affix": null
+              },
+              "alternativeName": null,
+              "maritalStatus": null,
+              "sex": null,
+              "birth": null,
+              "death": null,
+              "citizenship": null,
+              "confession": null,
+              "occupation": null,
+              "relatedPerson": null,
+              "bankConnection": null,
+              "nationality": null,
+              "civilDisability": null,
+              "residenceBan": null,
+              "occupationBan": null
+            },
+            "corporateBody": null,
+            "physicalAddress": [
+              {
+                "addressLine": null,
+                "country": {
+                  "item": "Slovenská republika"
+                },
+                "region": null,
+                "county": null,
+                "municipality": {
+                  "item": "Bratislava - mestská časť Nové Mesto"
+                },
+                "district": null,
+                "streetName": "Stará Klenová",
+                "additionalStreetData": null,
+                "buildingNumber": "13250/28D",
+                "propertyRegistrationNumber": null,
+                "addressPoint": null,
+                "buildingIndex": null,
+                "deliveryAddress": {
+                  "postalCode": "831 01",
+                  "postOfficeBox": null,
+                  "recipient": null
+                },
+                "building": null,
+                "addressType": {
+                  "addressClass": {
+                    "item": {
+                      "codelistCode": "CL010139",
+                      "codelistItem": {
+                        "itemCode": "100001",
+                        "itemName": "Trvalý pobyt"
+                      }
+                    }
+                  },
+                  "addressRecordDate": "0001-01-01T00:00:00",
+                  "addressRecordDateSpecified": false,
+                  "addressRecordDateTermination": "0001-01-01T00:00:00",
+                  "addressRecordDateTerminationSpecified": false
+                },
+                "buildingUnit": null
+              }
+            ],
+            "id": []
+          },
+          "function": null,
+          "functionCreationDate": "2023-12-16T00:00:00",
+          "functionTerminationDate": null,
+          "isIdentifiedWithRFO": true,
+          "hasRegisteredIdentifiers": true,
+          "current": true,
+          "effectiveFrom": "2024-01-04T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false
+        }
+      ],
+      "authorizationToExecute": [
+        {
+          "current": true,
+          "effectiveFrom": "2022-02-16T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "value": "V mene spoločnosti voči tretím osobám konajú a podpisujú vždy dvaja konatelia spoločne. V mene spoločnosti konatelia podpisujú tak, že k napísanému alebo vytlačenému obchodnému menu spoločnosti pripoja dvaja konatelia svoj podpis, pričom pri podpise musí byť vždy uvedené slovo „konateľ“."
+        }
+      ],
+      "stakeholder": [
+        {
+          "stakeholderType": {
+            "item": {
+              "codelistCode": "CORWIN-CL010109",
+              "codelistItem": {
+                "itemCode": "Predchodca",
+                "itemName": "Predchodca"
+              }
+            }
+          },
+          "personData": {
+            "physicalPerson": null,
+            "corporateBody": {
+              "corporateBodyFullName": "COMDOM Software s.r.o.",
+              "legalForm": null,
+              "activities": null,
+              "otherLegalFacts": null,
+              "equity": null,
+              "legalStatus": null,
+              "legalStatusEvents": null,
+              "statutoryBodyType": null,
+              "statutoryBody": [],
+              "authorizationToExecute": null,
+              "stakeholder": null,
+              "proxyHolderAuthorizationToExecute": null,
+              "liquidatorAuthorizationToExecute": null,
+              "source": null,
+              "stateLaw": null
+            },
+            "physicalAddress": [
+              {
+                "addressLine": null,
+                "country": {
+                  "item": "Slovenská republika"
+                },
+                "region": null,
+                "county": null,
+                "municipality": {
+                  "item": "Košice"
+                },
+                "district": null,
+                "streetName": "Komenského",
+                "additionalStreetData": null,
+                "buildingNumber": "11/A",
+                "propertyRegistrationNumber": null,
+                "addressPoint": null,
+                "buildingIndex": null,
+                "deliveryAddress": {
+                  "postalCode": "04001",
+                  "postOfficeBox": null,
+                  "recipient": null
+                },
+                "building": null,
+                "addressType": {
+                  "addressClass": {
+                    "item": {
+                      "codelistCode": "CL010139",
+                      "codelistItem": {
+                        "itemCode": "100101",
+                        "itemName": "Sídlo právnickej osoby"
+                      }
+                    }
+                  },
+                  "addressRecordDate": "0001-01-01T00:00:00",
+                  "addressRecordDateSpecified": false,
+                  "addressRecordDateTermination": "0001-01-01T00:00:00",
+                  "addressRecordDateTerminationSpecified": false
+                },
+                "buildingUnit": null
+              }
+            ],
+            "id": [
+              {
+                "identifierType": {
+                  "item": {
+                    "codelistCode": "CL004001",
+                    "codelistItem": {
+                      "itemCode": "7",
+                      "itemName": "IČO (Identifikačné číslo organizácie)"
+                    }
+                  }
+                },
+                "identifierValue": "35889691"
+              }
+            ]
+          },
+          "function": null,
+          "functionCreationDate": null,
+          "functionTerminationDate": null,
+          "isIdentifiedWithRFO": null,
+          "hasRegisteredIdentifiers": true,
+          "current": true,
+          "effectiveFrom": "2010-06-01T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false
+        },
+        {
+          "stakeholderType": {
+            "item": {
+              "codelistCode": "CORWIN-CL010109",
+              "codelistItem": {
+                "itemCode": "Predchodca",
+                "itemName": "Predchodca"
+              }
+            }
+          },
+          "personData": {
+            "physicalPerson": null,
+            "corporateBody": {
+              "corporateBodyFullName": "ESET Authentication Technologies s. r. o.",
+              "legalForm": null,
+              "activities": null,
+              "otherLegalFacts": null,
+              "equity": null,
+              "legalStatus": null,
+              "legalStatusEvents": null,
+              "statutoryBodyType": null,
+              "statutoryBody": [],
+              "authorizationToExecute": null,
+              "stakeholder": null,
+              "proxyHolderAuthorizationToExecute": null,
+              "liquidatorAuthorizationToExecute": null,
+              "source": null,
+              "stateLaw": null
+            },
+            "physicalAddress": [
+              {
+                "addressLine": null,
+                "country": {
+                  "item": "Slovenská republika"
+                },
+                "region": null,
+                "county": null,
+                "municipality": {
+                  "item": "Bratislava - mestská časť Petržalka"
+                },
+                "district": null,
+                "streetName": "Einsteinova",
+                "additionalStreetData": null,
+                "buildingNumber": "24",
+                "propertyRegistrationNumber": null,
+                "addressPoint": null,
+                "buildingIndex": null,
+                "deliveryAddress": {
+                  "postalCode": "85101",
+                  "postOfficeBox": null,
+                  "recipient": null
+                },
+                "building": null,
+                "addressType": {
+                  "addressClass": {
+                    "item": {
+                      "codelistCode": "CL010139",
+                      "codelistItem": {
+                        "itemCode": "100101",
+                        "itemName": "Sídlo právnickej osoby"
+                      }
+                    }
+                  },
+                  "addressRecordDate": "0001-01-01T00:00:00",
+                  "addressRecordDateSpecified": false,
+                  "addressRecordDateTermination": "0001-01-01T00:00:00",
+                  "addressRecordDateTerminationSpecified": false
+                },
+                "buildingUnit": null
+              }
+            ],
+            "id": [
+              {
+                "identifierType": {
+                  "item": {
+                    "codelistCode": "CL004001",
+                    "codelistItem": {
+                      "itemCode": "7",
+                      "itemName": "IČO (Identifikačné číslo organizácie)"
+                    }
+                  }
+                },
+                "identifierValue": "46 498 940"
+              }
+            ]
+          },
+          "function": null,
+          "functionCreationDate": null,
+          "functionTerminationDate": null,
+          "isIdentifiedWithRFO": null,
+          "hasRegisteredIdentifiers": true,
+          "current": true,
+          "effectiveFrom": "2015-11-15T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false
+        },
+        {
+          "stakeholderType": {
+            "item": {
+              "codelistCode": "CORWIN-CL010109",
+              "codelistItem": {
+                "itemCode": "Spolocnik",
+                "itemName": "spoločník"
+              }
+            }
+          },
+          "personData": {
+            "physicalPerson": {
+              "id": null,
+              "personName": {
+                "formattedName": "Ing. Maroš Grund",
+                "legalName": null,
+                "givenName": ["Maroš"],
+                "preferredGivenName": null,
+                "otherName": null,
+                "familyName": [
+                  {
+                    "primary": null,
+                    "prefix": null,
+                    "value": "Grund"
+                  }
+                ],
+                "givenFamilyName": null,
+                "affix": null
+              },
+              "alternativeName": null,
+              "maritalStatus": null,
+              "sex": null,
+              "birth": null,
+              "death": null,
+              "citizenship": null,
+              "confession": null,
+              "occupation": null,
+              "relatedPerson": null,
+              "bankConnection": null,
+              "nationality": null,
+              "civilDisability": null,
+              "residenceBan": null,
+              "occupationBan": null
+            },
+            "corporateBody": null,
+            "physicalAddress": [
+              {
+                "addressLine": null,
+                "country": {
+                  "item": "Slovenská republika"
+                },
+                "region": null,
+                "county": null,
+                "municipality": {
+                  "item": "Bratislava - mestská časť Staré mesto"
+                },
+                "district": null,
+                "streetName": "Tajovského",
+                "additionalStreetData": null,
+                "buildingNumber": "7813/22",
+                "propertyRegistrationNumber": null,
+                "addressPoint": null,
+                "buildingIndex": null,
+                "deliveryAddress": {
+                  "postalCode": "81104",
+                  "postOfficeBox": null,
+                  "recipient": null
+                },
+                "building": null,
+                "addressType": {
+                  "addressClass": {
+                    "item": {
+                      "codelistCode": "CL010139",
+                      "codelistItem": {
+                        "itemCode": "100001",
+                        "itemName": "Trvalý pobyt"
+                      }
+                    }
+                  },
+                  "addressRecordDate": "0001-01-01T00:00:00",
+                  "addressRecordDateSpecified": false,
+                  "addressRecordDateTermination": "0001-01-01T00:00:00",
+                  "addressRecordDateTerminationSpecified": false
+                },
+                "buildingUnit": null
+              }
+            ],
+            "id": []
+          },
+          "function": null,
+          "functionCreationDate": null,
+          "functionTerminationDate": null,
+          "isIdentifiedWithRFO": true,
+          "hasRegisteredIdentifiers": true,
+          "current": true,
+          "effectiveFrom": "2021-01-30T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false
+        },
+        {
+          "stakeholderType": {
+            "item": {
+              "codelistCode": "CORWIN-CL010109",
+              "codelistItem": {
+                "itemCode": "Spolocnik",
+                "itemName": "spoločník"
+              }
+            }
+          },
+          "personData": {
+            "physicalPerson": {
+              "id": null,
+              "personName": {
+                "formattedName": "Ing. Peter Paško",
+                "legalName": null,
+                "givenName": ["Peter"],
+                "preferredGivenName": null,
+                "otherName": null,
+                "familyName": [
+                  {
+                    "primary": null,
+                    "prefix": null,
+                    "value": "Paško"
+                  }
+                ],
+                "givenFamilyName": null,
+                "affix": null
+              },
+              "alternativeName": null,
+              "maritalStatus": null,
+              "sex": null,
+              "birth": null,
+              "death": null,
+              "citizenship": null,
+              "confession": null,
+              "occupation": null,
+              "relatedPerson": null,
+              "bankConnection": null,
+              "nationality": null,
+              "civilDisability": null,
+              "residenceBan": null,
+              "occupationBan": null
+            },
+            "corporateBody": null,
+            "physicalAddress": [
+              {
+                "addressLine": null,
+                "country": {
+                  "item": "Slovenská republika"
+                },
+                "region": null,
+                "county": null,
+                "municipality": {
+                  "item": "Bratislava - mestská časť Nové Mesto"
+                },
+                "district": null,
+                "streetName": "Bajkalská",
+                "additionalStreetData": null,
+                "buildingNumber": "5/C",
+                "propertyRegistrationNumber": null,
+                "addressPoint": null,
+                "buildingIndex": null,
+                "deliveryAddress": {
+                  "postalCode": "831 04",
+                  "postOfficeBox": null,
+                  "recipient": null
+                },
+                "building": null,
+                "addressType": {
+                  "addressClass": {
+                    "item": {
+                      "codelistCode": "CL010139",
+                      "codelistItem": {
+                        "itemCode": "100001",
+                        "itemName": "Trvalý pobyt"
+                      }
+                    }
+                  },
+                  "addressRecordDate": "0001-01-01T00:00:00",
+                  "addressRecordDateSpecified": false,
+                  "addressRecordDateTermination": "0001-01-01T00:00:00",
+                  "addressRecordDateTerminationSpecified": false
+                },
+                "buildingUnit": null
+              }
+            ],
+            "id": []
+          },
+          "function": null,
+          "functionCreationDate": null,
+          "functionTerminationDate": null,
+          "isIdentifiedWithRFO": true,
+          "hasRegisteredIdentifiers": true,
+          "current": true,
+          "effectiveFrom": "2022-02-16T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false
+        },
+        {
+          "stakeholderType": {
+            "item": {
+              "codelistCode": "CORWIN-CL010109",
+              "codelistItem": {
+                "itemCode": "Spolocnik",
+                "itemName": "spoločník"
+              }
+            }
+          },
+          "personData": {
+            "physicalPerson": {
+              "id": null,
+              "personName": {
+                "formattedName": "Ing. Miroslav Trnka",
+                "legalName": null,
+                "givenName": ["Miroslav"],
+                "preferredGivenName": null,
+                "otherName": null,
+                "familyName": [
+                  {
+                    "primary": null,
+                    "prefix": null,
+                    "value": "Trnka"
+                  }
+                ],
+                "givenFamilyName": null,
+                "affix": null
+              },
+              "alternativeName": null,
+              "maritalStatus": null,
+              "sex": null,
+              "birth": null,
+              "death": null,
+              "citizenship": null,
+              "confession": null,
+              "occupation": null,
+              "relatedPerson": null,
+              "bankConnection": null,
+              "nationality": null,
+              "civilDisability": null,
+              "residenceBan": null,
+              "occupationBan": null
+            },
+            "corporateBody": null,
+            "physicalAddress": [
+              {
+                "addressLine": null,
+                "country": {
+                  "item": "Slovenská republika"
+                },
+                "region": null,
+                "county": null,
+                "municipality": {
+                  "item": "Bratislava - mestská časť Ružinov"
+                },
+                "district": null,
+                "streetName": "Záhradnícka",
+                "additionalStreetData": null,
+                "buildingNumber": "60",
+                "propertyRegistrationNumber": null,
+                "addressPoint": null,
+                "buildingIndex": null,
+                "deliveryAddress": {
+                  "postalCode": "821 08",
+                  "postOfficeBox": null,
+                  "recipient": null
+                },
+                "building": null,
+                "addressType": {
+                  "addressClass": {
+                    "item": {
+                      "codelistCode": "CL010139",
+                      "codelistItem": {
+                        "itemCode": "100001",
+                        "itemName": "Trvalý pobyt"
+                      }
+                    }
+                  },
+                  "addressRecordDate": "0001-01-01T00:00:00",
+                  "addressRecordDateSpecified": false,
+                  "addressRecordDateTermination": "0001-01-01T00:00:00",
+                  "addressRecordDateTerminationSpecified": false
+                },
+                "buildingUnit": null
+              }
+            ],
+            "id": []
+          },
+          "function": null,
+          "functionCreationDate": null,
+          "functionTerminationDate": null,
+          "isIdentifiedWithRFO": true,
+          "hasRegisteredIdentifiers": true,
+          "current": true,
+          "effectiveFrom": "2022-02-16T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false
+        },
+        {
+          "stakeholderType": {
+            "item": {
+              "codelistCode": "CORWIN-CL010109",
+              "codelistItem": {
+                "itemCode": "Spolocnik",
+                "itemName": "spoločník"
+              }
+            }
+          },
+          "personData": {
+            "physicalPerson": {
+              "id": null,
+              "personName": {
+                "formattedName": "Ing. Richard Marko",
+                "legalName": null,
+                "givenName": ["Richard"],
+                "preferredGivenName": null,
+                "otherName": null,
+                "familyName": [
+                  {
+                    "primary": null,
+                    "prefix": null,
+                    "value": "Marko"
+                  }
+                ],
+                "givenFamilyName": null,
+                "affix": null
+              },
+              "alternativeName": null,
+              "maritalStatus": null,
+              "sex": null,
+              "birth": null,
+              "death": null,
+              "citizenship": null,
+              "confession": null,
+              "occupation": null,
+              "relatedPerson": null,
+              "bankConnection": null,
+              "nationality": null,
+              "civilDisability": null,
+              "residenceBan": null,
+              "occupationBan": null
+            },
+            "corporateBody": null,
+            "physicalAddress": [
+              {
+                "addressLine": null,
+                "country": {
+                  "item": "Slovenská republika"
+                },
+                "region": null,
+                "county": null,
+                "municipality": {
+                  "item": "Bratislava - mestská časť Nové Mesto"
+                },
+                "district": null,
+                "streetName": "Stará Klenová",
+                "additionalStreetData": null,
+                "buildingNumber": "13250/28D",
+                "propertyRegistrationNumber": null,
+                "addressPoint": null,
+                "buildingIndex": null,
+                "deliveryAddress": {
+                  "postalCode": "831 01",
+                  "postOfficeBox": null,
+                  "recipient": null
+                },
+                "building": null,
+                "addressType": {
+                  "addressClass": {
+                    "item": {
+                      "codelistCode": "CL010139",
+                      "codelistItem": {
+                        "itemCode": "100001",
+                        "itemName": "Trvalý pobyt"
+                      }
+                    }
+                  },
+                  "addressRecordDate": "0001-01-01T00:00:00",
+                  "addressRecordDateSpecified": false,
+                  "addressRecordDateTermination": "0001-01-01T00:00:00",
+                  "addressRecordDateTerminationSpecified": false
+                },
+                "buildingUnit": null
+              }
+            ],
+            "id": []
+          },
+          "function": null,
+          "functionCreationDate": null,
+          "functionTerminationDate": null,
+          "isIdentifiedWithRFO": true,
+          "hasRegisteredIdentifiers": true,
+          "current": true,
+          "effectiveFrom": "2022-02-16T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false
+        },
+        {
+          "stakeholderType": {
+            "item": {
+              "codelistCode": "CORWIN-CL010109",
+              "codelistItem": {
+                "itemCode": "Spolocnik",
+                "itemName": "spoločník"
+              }
+            }
+          },
+          "personData": {
+            "physicalPerson": {
+              "id": null,
+              "personName": {
+                "formattedName": "RNDr. Anton Zajac",
+                "legalName": null,
+                "givenName": ["Anton"],
+                "preferredGivenName": null,
+                "otherName": null,
+                "familyName": [
+                  {
+                    "primary": null,
+                    "prefix": null,
+                    "value": "Zajac"
+                  }
+                ],
+                "givenFamilyName": null,
+                "affix": null
+              },
+              "alternativeName": null,
+              "maritalStatus": null,
+              "sex": null,
+              "birth": null,
+              "death": null,
+              "citizenship": null,
+              "confession": null,
+              "occupation": null,
+              "relatedPerson": null,
+              "bankConnection": null,
+              "nationality": null,
+              "civilDisability": null,
+              "residenceBan": null,
+              "occupationBan": null
+            },
+            "corporateBody": null,
+            "physicalAddress": [
+              {
+                "addressLine": null,
+                "country": {
+                  "item": "Slovenská republika"
+                },
+                "region": null,
+                "county": null,
+                "municipality": {
+                  "item": "Bratislava - mestská časť Nové Mesto"
+                },
+                "district": null,
+                "streetName": "Bajkalská",
+                "additionalStreetData": null,
+                "buildingNumber": "5/C",
+                "propertyRegistrationNumber": null,
+                "addressPoint": null,
+                "buildingIndex": null,
+                "deliveryAddress": {
+                  "postalCode": "831 04",
+                  "postOfficeBox": null,
+                  "recipient": null
+                },
+                "building": null,
+                "addressType": {
+                  "addressClass": {
+                    "item": {
+                      "codelistCode": "CL010139",
+                      "codelistItem": {
+                        "itemCode": "100001",
+                        "itemName": "Trvalý pobyt"
+                      }
+                    }
+                  },
+                  "addressRecordDate": "0001-01-01T00:00:00",
+                  "addressRecordDateSpecified": false,
+                  "addressRecordDateTermination": "0001-01-01T00:00:00",
+                  "addressRecordDateTerminationSpecified": false
+                },
+                "buildingUnit": null
+              }
+            ],
+            "id": []
+          },
+          "function": null,
+          "functionCreationDate": null,
+          "functionTerminationDate": null,
+          "isIdentifiedWithRFO": true,
+          "hasRegisteredIdentifiers": true,
+          "current": true,
+          "effectiveFrom": "2022-02-16T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false
+        },
+        {
+          "stakeholderType": {
+            "item": {
+              "codelistCode": "CORWIN-CL010109",
+              "codelistItem": {
+                "itemCode": "ClenDozornehoOrganu",
+                "itemName": "člen dozorného orgánu"
+              }
+            }
+          },
+          "personData": {
+            "physicalPerson": {
+              "id": null,
+              "personName": {
+                "formattedName": "Ing. Matej Bošňák - predseda",
+                "legalName": null,
+                "givenName": ["Matej"],
+                "preferredGivenName": null,
+                "otherName": null,
+                "familyName": [
+                  {
+                    "primary": null,
+                    "prefix": null,
+                    "value": "Bošňák"
+                  }
+                ],
+                "givenFamilyName": null,
+                "affix": null
+              },
+              "alternativeName": null,
+              "maritalStatus": null,
+              "sex": null,
+              "birth": null,
+              "death": null,
+              "citizenship": null,
+              "confession": null,
+              "occupation": null,
+              "relatedPerson": null,
+              "bankConnection": null,
+              "nationality": null,
+              "civilDisability": null,
+              "residenceBan": null,
+              "occupationBan": null
+            },
+            "corporateBody": null,
+            "physicalAddress": [
+              {
+                "addressLine": null,
+                "country": {
+                  "item": "Slovenská republika"
+                },
+                "region": null,
+                "county": null,
+                "municipality": {
+                  "item": "Ivanka pri Dunaji"
+                },
+                "district": null,
+                "streetName": "Kmeťova",
+                "additionalStreetData": null,
+                "buildingNumber": "13",
+                "propertyRegistrationNumber": null,
+                "addressPoint": null,
+                "buildingIndex": null,
+                "deliveryAddress": {
+                  "postalCode": "900 28",
+                  "postOfficeBox": null,
+                  "recipient": null
+                },
+                "building": null,
+                "addressType": {
+                  "addressClass": {
+                    "item": {
+                      "codelistCode": "CL010139",
+                      "codelistItem": {
+                        "itemCode": "100001",
+                        "itemName": "Trvalý pobyt"
+                      }
+                    }
+                  },
+                  "addressRecordDate": "0001-01-01T00:00:00",
+                  "addressRecordDateSpecified": false,
+                  "addressRecordDateTermination": "0001-01-01T00:00:00",
+                  "addressRecordDateTerminationSpecified": false
+                },
+                "buildingUnit": null
+              }
+            ],
+            "id": []
+          },
+          "function": null,
+          "functionCreationDate": "2022-01-01T00:00:00",
+          "functionTerminationDate": null,
+          "isIdentifiedWithRFO": true,
+          "hasRegisteredIdentifiers": true,
+          "current": true,
+          "effectiveFrom": "2022-02-16T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false
+        },
+        {
+          "stakeholderType": {
+            "item": {
+              "codelistCode": "CORWIN-CL010109",
+              "codelistItem": {
+                "itemCode": "ClenDozornehoOrganu",
+                "itemName": "člen dozorného orgánu"
+              }
+            }
+          },
+          "personData": {
+            "physicalPerson": {
+              "id": null,
+              "personName": {
+                "formattedName": "Ing. Maroš Grund",
+                "legalName": null,
+                "givenName": ["Maroš"],
+                "preferredGivenName": null,
+                "otherName": null,
+                "familyName": [
+                  {
+                    "primary": null,
+                    "prefix": null,
+                    "value": "Grund"
+                  }
+                ],
+                "givenFamilyName": null,
+                "affix": null
+              },
+              "alternativeName": null,
+              "maritalStatus": null,
+              "sex": null,
+              "birth": null,
+              "death": null,
+              "citizenship": null,
+              "confession": null,
+              "occupation": null,
+              "relatedPerson": null,
+              "bankConnection": null,
+              "nationality": null,
+              "civilDisability": null,
+              "residenceBan": null,
+              "occupationBan": null
+            },
+            "corporateBody": null,
+            "physicalAddress": [
+              {
+                "addressLine": null,
+                "country": {
+                  "item": "Slovenská republika"
+                },
+                "region": null,
+                "county": null,
+                "municipality": {
+                  "item": "Bratislava - mestská časť Staré Mesto"
+                },
+                "district": null,
+                "streetName": "Tajovského",
+                "additionalStreetData": null,
+                "buildingNumber": "7813/22",
+                "propertyRegistrationNumber": null,
+                "addressPoint": null,
+                "buildingIndex": null,
+                "deliveryAddress": {
+                  "postalCode": "811 04",
+                  "postOfficeBox": null,
+                  "recipient": null
+                },
+                "building": null,
+                "addressType": {
+                  "addressClass": {
+                    "item": {
+                      "codelistCode": "CL010139",
+                      "codelistItem": {
+                        "itemCode": "100001",
+                        "itemName": "Trvalý pobyt"
+                      }
+                    }
+                  },
+                  "addressRecordDate": "0001-01-01T00:00:00",
+                  "addressRecordDateSpecified": false,
+                  "addressRecordDateTermination": "0001-01-01T00:00:00",
+                  "addressRecordDateTerminationSpecified": false
+                },
+                "buildingUnit": null
+              }
+            ],
+            "id": []
+          },
+          "function": null,
+          "functionCreationDate": "2022-01-01T00:00:00",
+          "functionTerminationDate": null,
+          "isIdentifiedWithRFO": true,
+          "hasRegisteredIdentifiers": true,
+          "current": true,
+          "effectiveFrom": "2022-02-16T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false
+        },
+        {
+          "stakeholderType": {
+            "item": {
+              "codelistCode": "CORWIN-CL010109",
+              "codelistItem": {
+                "itemCode": "ClenDozornehoOrganu",
+                "itemName": "člen dozorného orgánu"
+              }
+            }
+          },
+          "personData": {
+            "physicalPerson": {
+              "id": null,
+              "personName": {
+                "formattedName": "RNDr. Anton Zajac",
+                "legalName": null,
+                "givenName": ["Anton"],
+                "preferredGivenName": null,
+                "otherName": null,
+                "familyName": [
+                  {
+                    "primary": null,
+                    "prefix": null,
+                    "value": "Zajac"
+                  }
+                ],
+                "givenFamilyName": null,
+                "affix": null
+              },
+              "alternativeName": null,
+              "maritalStatus": null,
+              "sex": null,
+              "birth": null,
+              "death": null,
+              "citizenship": null,
+              "confession": null,
+              "occupation": null,
+              "relatedPerson": null,
+              "bankConnection": null,
+              "nationality": null,
+              "civilDisability": null,
+              "residenceBan": null,
+              "occupationBan": null
+            },
+            "corporateBody": null,
+            "physicalAddress": [
+              {
+                "addressLine": null,
+                "country": {
+                  "item": "Slovenská republika"
+                },
+                "region": null,
+                "county": null,
+                "municipality": {
+                  "item": "Bratislava - mestská časť Nové Mesto"
+                },
+                "district": null,
+                "streetName": "Bajkalská",
+                "additionalStreetData": null,
+                "buildingNumber": "5/C",
+                "propertyRegistrationNumber": null,
+                "addressPoint": null,
+                "buildingIndex": null,
+                "deliveryAddress": {
+                  "postalCode": "831 04",
+                  "postOfficeBox": null,
+                  "recipient": null
+                },
+                "building": null,
+                "addressType": {
+                  "addressClass": {
+                    "item": {
+                      "codelistCode": "CL010139",
+                      "codelistItem": {
+                        "itemCode": "100001",
+                        "itemName": "Trvalý pobyt"
+                      }
+                    }
+                  },
+                  "addressRecordDate": "0001-01-01T00:00:00",
+                  "addressRecordDateSpecified": false,
+                  "addressRecordDateTermination": "0001-01-01T00:00:00",
+                  "addressRecordDateTerminationSpecified": false
+                },
+                "buildingUnit": null
+              }
+            ],
+            "id": []
+          },
+          "function": null,
+          "functionCreationDate": "2022-01-01T00:00:00",
+          "functionTerminationDate": null,
+          "isIdentifiedWithRFO": true,
+          "hasRegisteredIdentifiers": true,
+          "current": true,
+          "effectiveFrom": "2022-02-16T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false
+        },
+        {
+          "stakeholderType": {
+            "item": {
+              "codelistCode": "CORWIN-CL010109",
+              "codelistItem": {
+                "itemCode": "Spolocnik",
+                "itemName": "spoločník"
+              }
+            }
+          },
+          "personData": {
+            "physicalPerson": {
+              "id": null,
+              "personName": {
+                "formattedName": "Ján Hrubý",
+                "legalName": null,
+                "givenName": ["Ján"],
+                "preferredGivenName": null,
+                "otherName": null,
+                "familyName": [
+                  {
+                    "primary": null,
+                    "prefix": null,
+                    "value": "Hrubý"
+                  }
+                ],
+                "givenFamilyName": null,
+                "affix": null
+              },
+              "alternativeName": null,
+              "maritalStatus": null,
+              "sex": null,
+              "birth": null,
+              "death": null,
+              "citizenship": null,
+              "confession": null,
+              "occupation": null,
+              "relatedPerson": null,
+              "bankConnection": null,
+              "nationality": null,
+              "civilDisability": null,
+              "residenceBan": null,
+              "occupationBan": null
+            },
+            "corporateBody": null,
+            "physicalAddress": [
+              {
+                "addressLine": null,
+                "country": {
+                  "item": "Slovenská republika"
+                },
+                "region": null,
+                "county": null,
+                "municipality": {
+                  "item": "Bratislava - mestská časť Ružinov"
+                },
+                "district": null,
+                "streetName": "Pribinova",
+                "additionalStreetData": null,
+                "buildingNumber": "17130/30",
+                "propertyRegistrationNumber": null,
+                "addressPoint": null,
+                "buildingIndex": null,
+                "deliveryAddress": {
+                  "postalCode": "811 09",
+                  "postOfficeBox": null,
+                  "recipient": null
+                },
+                "building": null,
+                "addressType": {
+                  "addressClass": {
+                    "item": {
+                      "codelistCode": "CL010139",
+                      "codelistItem": {
+                        "itemCode": "100001",
+                        "itemName": "Trvalý pobyt"
+                      }
+                    }
+                  },
+                  "addressRecordDate": "0001-01-01T00:00:00",
+                  "addressRecordDateSpecified": false,
+                  "addressRecordDateTermination": "0001-01-01T00:00:00",
+                  "addressRecordDateTerminationSpecified": false
+                },
+                "buildingUnit": null
+              }
+            ],
+            "id": []
+          },
+          "function": null,
+          "functionCreationDate": null,
+          "functionTerminationDate": null,
+          "isIdentifiedWithRFO": true,
+          "hasRegisteredIdentifiers": true,
+          "current": true,
+          "effectiveFrom": "2025-02-15T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false
+        }
+      ],
+      "founder": [],
+      "proxyHolderAuthorizationToExecute": [],
+      "liquidatorAuthorizationToExecute": [],
+      "sales": []
+    },
+    "physicalAddress": [
+      {
+        "current": true,
+        "effectiveFrom": "2009-07-23T00:00:00",
+        "effectiveTo": "0001-01-01T00:00:00",
+        "effectiveToSpecified": false,
+        "addressLine": null,
+        "country": null,
+        "region": null,
+        "county": null,
+        "municipality": {
+          "item": "Bratislava"
+        },
+        "district": null,
+        "streetName": "Einsteinova",
+        "additionalStreetData": null,
+        "buildingNumber": "24",
+        "propertyRegistrationNumber": null,
+        "addressPoint": null,
+        "buildingIndex": null,
+        "deliveryAddress": {
+          "postalCode": "85101",
+          "postOfficeBox": null,
+          "recipient": null
+        },
+        "building": null,
+        "addressType": {
+          "addressClass": {
+            "item": {
+              "codelistCode": "CL010139",
+              "codelistItem": {
+                "itemCode": "100101",
+                "itemName": "Sídlo právnickej osoby"
+              }
+            }
+          },
+          "addressRecordDate": "0001-01-01T00:00:00",
+          "addressRecordDateSpecified": false,
+          "addressRecordDateTermination": "0001-01-01T00:00:00",
+          "addressRecordDateTerminationSpecified": false
+        },
+        "buildingUnit": null
+      }
+    ],
+    "id": [
+      {
+        "current": true,
+        "effectiveFrom": "1992-09-17T00:00:00",
+        "effectiveTo": "0001-01-01T00:00:00",
+        "effectiveToSpecified": false,
+        "identifierType": {
+          "item": {
+            "codelistCode": "CL004001",
+            "codelistItem": {
+              "itemCode": "7",
+              "itemName": "IČO (Identifikačné číslo organizácie)"
+            }
+          }
+        },
+        "identifierValue": "31333532"
+      }
+    ]
+  },
+  "fileChange": null
+}

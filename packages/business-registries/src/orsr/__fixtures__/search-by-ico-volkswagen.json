@@ -1,0 +1,26 @@
+{
+  "filteredCount": 1,
+  "data": [
+    {
+      "id": 23042,
+      "section": 2,
+      "insertNumber": 1973,
+      "court": 2,
+      "fileReference": {
+        "section": "Sa",
+        "insertNumber": 1973,
+        "court": "B",
+        "formattedValueSpaced": "Sa 1973/B",
+        "formattedValueUrlSafe": "Sa 1973 B"
+      },
+      "corporateBodyFullName": "VOLKSWAGEN SLOVAKIA, a.s.",
+      "corporateBodyFullNames": ["VOLKSWAGEN SLOVAKIA a.s."],
+      "registrationNumber": "35757442",
+      "physicalAddress": null,
+      "physicalAddressLine1": "J. Jonáša 1",
+      "physicalAddressLine2": "843 02 Bratislava",
+      "documentsCount": 215,
+      "physicalPersonName": null
+    }
+  ]
+}

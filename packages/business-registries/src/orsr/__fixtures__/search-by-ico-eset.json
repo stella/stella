@@ -1,0 +1,26 @@
+{
+  "filteredCount": 1,
+  "data": [
+    {
+      "id": 5994,
+      "section": 3,
+      "insertNumber": 3586,
+      "court": 2,
+      "fileReference": {
+        "section": "Sro",
+        "insertNumber": 3586,
+        "court": "B",
+        "formattedValueSpaced": "Sro 3586/B",
+        "formattedValueUrlSafe": "Sro 3586 B"
+      },
+      "corporateBodyFullName": "ESET, spol. s r.o.",
+      "corporateBodyFullNames": [],
+      "registrationNumber": "31333532",
+      "physicalAddress": null,
+      "physicalAddressLine1": "Einsteinova 24",
+      "physicalAddressLine2": "851 01 Bratislava",
+      "documentsCount": 147,
+      "physicalPersonName": null
+    }
+  ]
+}
