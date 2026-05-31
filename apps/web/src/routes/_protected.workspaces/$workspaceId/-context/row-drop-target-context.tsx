@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useState } from "react";
 import type { PropsWithChildren } from "react";
 
 import { panic } from "better-result";
@@ -14,10 +14,8 @@ const RowDropTargetContext = createContext<RowDropTargetState | null>(null);
 export const RowDropTargetProvider = ({ children }: PropsWithChildren) => {
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
 
-  const value = useMemo(() => ({ activeRowId, setActiveRowId }), [activeRowId]);
-
   return (
-    <RowDropTargetContext.Provider value={value}>
+    <RowDropTargetContext.Provider value={{ activeRowId, setActiveRowId }}>
       {children}
     </RowDropTargetContext.Provider>
   );
