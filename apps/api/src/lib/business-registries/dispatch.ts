@@ -33,6 +33,16 @@ import {
   searchByName as searchBrregByName,
 } from "@stll/business-registries/brreg";
 import {
+  GcisAPIError,
+  type GcisCompany,
+  GcisRequestError,
+  type GcisSearchResult,
+  GcisValidationError,
+  lookupByTaxId,
+  normalizeTaxId,
+  searchByName as searchGcisByName,
+} from "@stll/business-registries/gcis";
+import {
   KrsAPIError,
   type KrsEntity,
   KrsRequestError,
@@ -84,6 +94,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 export const BUSINESS_REGISTRY_SLUGS = [
   "ares",
   "brreg",
+  "gcis",
   "krs",
   "orsr",
   "prh",
@@ -128,6 +139,7 @@ export type BusinessRegistryHit = {
 export type BusinessRegistryHitDetails =
   | { registry: "ares"; company: AresCompany }
   | { registry: "brreg"; entity: BrregEntity }
+  | { registry: "gcis"; company: GcisCompany }
   | { registry: "krs"; entity: KrsEntity }
   | { registry: "orsr"; company: OrsrCompany }
   | { registry: "prh"; company: PrhCompany }
@@ -394,6 +406,104 @@ const BRREG_HANDLER: RegistryHandler = {
     return results.map(brregSearchResultToHit);
   },
   mapError: mapBrregError,
+};
+
+// ---------------------------------------------------------------------------
+// GCIS (Taiwan)
+// ---------------------------------------------------------------------------
+
+const gcisCompanyToHit = (company: GcisCompany): BusinessRegistryHit => ({
+  registry: "gcis",
+  id: company.taxId,
+  name: company.name,
+  // GCIS exposes the registering authority (e.g. 商業發展署 / city
+  // government) rather than a legal-form descriptor; we leave
+  // legalForm null at the cross-registry surface and surface the
+  // registering authority via the `details.company` payload.
+  legalForm: null,
+  // GCIS reports the registered seat as a single free-form Chinese
+  // string with no structured atoms (no separate postal code, city,
+  // or region fields). Mirror that to `textAddress` instead of
+  // guessing structure that the upstream does not provide.
+  address: company.location
+    ? {
+        line1: null,
+        line2: null,
+        postalCode: null,
+        city: null,
+        region: null,
+        country: "TW",
+        textAddress: company.location,
+      }
+    : null,
+  registryUrl: company.registryUrl,
+  // Carry capital, responsible person, suspension lifecycle, ROC +
+  // Gregorian dates so chat callers can answer the questions the
+  // baseline shape cannot — same rationale as ARES / Brreg.
+  details: { registry: "gcis", company },
+});
+
+const gcisSearchResultToHit = (
+  result: GcisSearchResult,
+): BusinessRegistryHit => ({
+  registry: "gcis",
+  id: result.taxId,
+  name: result.name,
+  legalForm: null,
+  address: result.location
+    ? {
+        line1: null,
+        line2: null,
+        postalCode: null,
+        city: null,
+        region: null,
+        country: "TW",
+        textAddress: result.location,
+      }
+    : null,
+  // See gcis/parse.ts for why this points at the dataset API call:
+  // GCIS does not host a stable per-entity HTML page; findbiz.nat.gov.tw
+  // uses session-bound keys that 404 once the session expires.
+  registryUrl: `https://data.gcis.nat.gov.tw/od/data/api/5F64D864-61CB-4D0D-8AD9-492047CC1EA6?$format=json&$filter=Business_Accounting_NO%20eq%20%27${encodeURIComponent(result.taxId)}%27`,
+});
+
+const mapGcisError = (error: unknown): HandlerError | null => {
+  if (error instanceof GcisValidationError) {
+    return new HandlerError({ status: 400, message: error.message });
+  }
+  if (error instanceof GcisAPIError) {
+    return new HandlerError({
+      status: 502,
+      message: `GCIS API error: ${error.message}`,
+    });
+  }
+  if (error instanceof GcisRequestError) {
+    return new HandlerError({
+      status: 502,
+      message: `GCIS request failed: ${error.message}`,
+    });
+  }
+  return null;
+};
+
+const GCIS_HANDLER: RegistryHandler = {
+  slug: "gcis",
+  country: "TW",
+  nativeToolSlug: "gcis",
+  // Shape check only — full MoF-checksum validation runs in
+  // lookupByTaxId and surfaces as GcisValidationError → HTTP 400.
+  // Falling through to search would silently turn a bad-checksum
+  // tongbian into an empty name-search result.
+  isCanonicalId: (input) => /^\d{8}$/u.test(normalizeTaxId(input)),
+  lookup: async (input) => {
+    const company = await lookupByTaxId(input);
+    return company ? gcisCompanyToHit(company) : null;
+  },
+  search: async (input, options) => {
+    const results = await searchGcisByName(input, options);
+    return results.map(gcisSearchResultToHit);
+  },
+  mapError: mapGcisError,
 };
 
 // ---------------------------------------------------------------------------
@@ -780,6 +890,7 @@ export const BUSINESS_REGISTRY_DISPATCH: Record<
 > = {
   ares: ARES_HANDLER,
   brreg: BRREG_HANDLER,
+  gcis: GCIS_HANDLER,
   krs: KRS_HANDLER,
   orsr: ORSR_HANDLER,
   prh: PRH_HANDLER,

@@ -1,0 +1,30 @@
+[
+  {
+    "Business_Accounting_NO": "54900838",
+    "Company_Name": "台積電機有限公司",
+    "Company_Status": "01",
+    "Company_Status_Desc": "核准設立",
+    "Capital_Stock_Amount": 2000000,
+    "Paid_In_Capital_Amount": 0,
+    "Responsible_Name": "王志聰",
+    "Register_Organization": "17",
+    "Register_Organization_Desc": "臺中市政府",
+    "Company_Location": "臺中市南屯區春社里中台路61之3號",
+    "Company_Setup_Date": "1040706",
+    "Change_Of_Approval_Data": "1091216"
+  },
+  {
+    "Business_Accounting_NO": "90312187",
+    "Company_Name": "台積電梯有限公司",
+    "Company_Status": "01",
+    "Company_Status_Desc": "核准設立",
+    "Capital_Stock_Amount": 6000000,
+    "Paid_In_Capital_Amount": 0,
+    "Responsible_Name": "余湧筠",
+    "Register_Organization": "32",
+    "Register_Organization_Desc": "桃園市政府",
+    "Company_Location": "桃園市桃園區文中里益壽二街11巷6號(1樓)",
+    "Company_Setup_Date": "1110829",
+    "Change_Of_Approval_Data": "1140818"
+  }
+]

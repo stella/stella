@@ -1,0 +1,18 @@
+{
+  "$schema": "../../../schema.json",
+  "kind": "native-tool",
+  "slug": "gcis",
+  "displayName": "GCIS Company Registry",
+  "description": "Taiwanese company lookup by 統一編號 (tongbian / tax ID) or company name from the Ministry of Economic Affairs (MoEA) Commerce Industrial Services Portal open data API.",
+  "author": "stella",
+  "authorUrl": "https://github.com/stella",
+  "license": "Apache-2.0",
+  "cost": "free",
+  "setup": "none",
+  "homepage": "https://data.gcis.nat.gov.tw",
+  "tags": ["corporate", "regulatory"],
+  "jurisdictions": ["TW"],
+  "backendSlug": "gcis",
+  "url": "https://data.gcis.nat.gov.tw",
+  "documentationUrl": "https://data.gcis.nat.gov.tw/main/index"
+}
