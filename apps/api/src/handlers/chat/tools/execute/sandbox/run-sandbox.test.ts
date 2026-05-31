@@ -570,6 +570,7 @@ describe("runSandbox", () => {
   });
 
   it("serializes runs for the same concurrency key", async () => {
+    const concurrencyKey = nextSandboxConcurrencyKey();
     const startedLabels: string[] = [];
     const holds = new Map<string, DeferredPromise>();
     const hold = createToolFunction(
@@ -592,7 +593,7 @@ describe("runSandbox", () => {
     const firstPromise = runSandbox({
       source: `return await read.hold({ label: "first" });`,
       registry,
-      concurrencyKey: "user-a",
+      concurrencyKey,
     });
     await waitForCondition({
       condition: () => startedLabels.length === 1,
@@ -601,7 +602,7 @@ describe("runSandbox", () => {
     const secondPromise = runSandbox({
       source: `return await read.hold({ label: "second" });`,
       registry,
-      concurrencyKey: "user-a",
+      concurrencyKey,
     });
 
     await new Promise<void>((resolve) => {
@@ -623,6 +624,7 @@ describe("runSandbox", () => {
   });
 
   it("allows different concurrency keys to run concurrently up to the global cap", async () => {
+    const concurrencyKeyPrefix = nextSandboxConcurrencyKey();
     const startedLabels: string[] = [];
     const holds = new Map<string, DeferredPromise>();
     const hold = createToolFunction(
@@ -647,7 +649,7 @@ describe("runSandbox", () => {
         await runSandbox({
           source: `return await read.hold({ label: "${label}" });`,
           registry,
-          concurrencyKey: `user-${label}`,
+          concurrencyKey: `${concurrencyKeyPrefix}-${label}`,
         }),
     );
 
@@ -665,6 +667,7 @@ describe("runSandbox", () => {
   });
 
   it("queues a fifth distinct key until a global slot opens", async () => {
+    const concurrencyKeyPrefix = nextSandboxConcurrencyKey();
     const startedLabels: string[] = [];
     const holds = new Map<string, DeferredPromise>();
     const hold = createToolFunction(
@@ -689,7 +692,7 @@ describe("runSandbox", () => {
         await runSandbox({
           source: `return await read.hold({ label: "${label}" });`,
           registry,
-          concurrencyKey: `user-${label}`,
+          concurrencyKey: `${concurrencyKeyPrefix}-${label}`,
         }),
     );
 
@@ -714,6 +717,7 @@ describe("runSandbox", () => {
   });
 
   it("does not count queue wait time against maxDurationMs", async () => {
+    const concurrencyKey = nextSandboxConcurrencyKey();
     const holds = new Map<string, DeferredPromise>();
     const hold = createToolFunction(
       {
@@ -734,7 +738,7 @@ describe("runSandbox", () => {
     const firstPromise = runSandbox({
       source: `return await read.hold({ label: "first" });`,
       registry,
-      concurrencyKey: "user-a",
+      concurrencyKey,
       limits: { maxDurationMs: 2000 },
     });
     await waitForCondition({
@@ -744,7 +748,7 @@ describe("runSandbox", () => {
     const secondPromise = runSandbox({
       source: `return 42;`,
       registry,
-      concurrencyKey: "user-a",
+      concurrencyKey,
       limits: { maxDurationMs: 1000 },
     });
 
@@ -763,10 +767,11 @@ describe("runSandbox", () => {
   });
 
   it("releases keyed and global slots after a timeout", async () => {
+    const concurrencyKey = nextSandboxConcurrencyKey();
     const firstPromise = runSandbox({
       source: `await read.slow({ ms: 150 }); return "late";`,
       registry: baseRegistry,
-      concurrencyKey: "user-a",
+      concurrencyKey,
       limits: { maxDurationMs: 50 },
     });
 
@@ -777,7 +782,7 @@ describe("runSandbox", () => {
     const secondPromise = runSandbox({
       source: `return 42;`,
       registry: baseRegistry,
-      concurrencyKey: "user-a",
+      concurrencyKey,
     });
 
     const [first, second] = await Promise.all([firstPromise, secondPromise]);
@@ -792,6 +797,7 @@ describe("runSandbox", () => {
   });
 
   it("releases keyed and global slots after a runtime failure", async () => {
+    const concurrencyKey = nextSandboxConcurrencyKey();
     const holds = new Map<string, DeferredPromise>();
     const hold = createToolFunction(
       {
@@ -815,7 +821,7 @@ describe("runSandbox", () => {
         throw new Error("boom");
       `,
       registry,
-      concurrencyKey: "user-a",
+      concurrencyKey,
     });
     await waitForCondition({
       condition: () => holds.has("first"),
@@ -824,7 +830,7 @@ describe("runSandbox", () => {
     const secondPromise = runSandbox({
       source: `return 42;`,
       registry,
-      concurrencyKey: "user-a",
+      concurrencyKey,
     });
 
     holds.get("first")?.resolve();
