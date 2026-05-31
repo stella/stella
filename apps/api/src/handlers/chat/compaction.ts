@@ -79,7 +79,8 @@ export const planChatCompaction = ({
     const messageTokens = estimateMessageTokens(message);
     if (
       recentMessages.length > 0 &&
-      preservedTokens + messageTokens > preserveTokens
+      preservedTokens + messageTokens > preserveTokens &&
+      startsWithUserMessage(recentMessages)
     ) {
       break;
     }
@@ -131,7 +132,8 @@ export const planModelCompaction = ({
     const messageTokens = estimateModelMessageTokens(message);
     if (
       recentMessages.length > 0 &&
-      preservedTokens + messageTokens > preserveTokens
+      preservedTokens + messageTokens > preserveTokens &&
+      startsWithUserMessage(recentMessages)
     ) {
       break;
     }
@@ -388,7 +390,7 @@ const createCompactionSummaryMessage = ({
   summary: string;
 }): ChatMessage => ({
   id: COMPACTION_SUMMARY_MESSAGE_ID,
-  role: "system",
+  role: "user",
   parts: [
     {
       type: "text",
@@ -407,7 +409,7 @@ const createModelCompactionSummaryMessage = ({
   summarizedMessageCount: number;
   summary: string;
 }): ModelMessage => ({
-  role: "system",
+  role: "user",
   content: [
     `Earlier model-step history compacted from ${summarizedMessageCount} message(s).`,
     summary,
@@ -440,6 +442,10 @@ const estimatePartTokens = (part: ChatMessage["parts"][number]): number => {
 
 const estimateTextTokens = (text: string): number =>
   Math.ceil(text.length / ESTIMATED_CHARS_PER_TOKEN);
+
+const startsWithUserMessage = (
+  messages: readonly { role: string }[],
+): boolean => messages.at(0)?.role === "user";
 
 const estimateModelMessagesTokens = (
   messages: readonly ModelMessage[],
@@ -510,5 +516,10 @@ const safeStringify = (value: unknown): string => {
     return value;
   }
 
-  return JSON.stringify(value);
+  try {
+    const serialized: unknown = JSON.stringify(value);
+    return typeof serialized === "string" ? serialized : "[unserializable]";
+  } catch {
+    return "[unserializable]";
+  }
 };

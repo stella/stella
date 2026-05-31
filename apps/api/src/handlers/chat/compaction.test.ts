@@ -10,6 +10,7 @@ import {
   planChatCompaction,
   planModelCompaction,
   renderChatMessagesForCompaction,
+  renderModelMessagesForCompaction,
 } from "./compaction";
 
 const textMessage = ({
@@ -70,12 +71,49 @@ describe("chat history compaction", () => {
     }
 
     expect(compacted.value).toHaveLength(2);
-    expect(compacted.value.at(0)?.role).toBe("system");
+    expect(compacted.value.at(0)?.role).toBe("user");
     expect(compacted.value.at(0)?.parts.at(0)).toEqual({
       type: "text",
       text: "Earlier conversation compacted from 2 message(s).\n\nold work summary",
     });
     expect(compacted.value.at(1)?.id).toBe("msg_3");
+  });
+
+  test("preserves chat history from the latest user turn boundary", () => {
+    const messages = [
+      textMessage({ id: "msg_1", role: "user", text: "old fact ".repeat(80) }),
+      textMessage({
+        id: "msg_2",
+        role: "assistant",
+        text: "old answer ".repeat(80),
+      }),
+      textMessage({
+        id: "msg_3",
+        role: "user",
+        text: "latest question ".repeat(20),
+      }),
+      textMessage({ id: "msg_4", role: "assistant", text: "working on it" }),
+    ];
+
+    const plan = planChatCompaction({
+      messages,
+      preserveTokens: 20,
+      triggerTokens: 50,
+    });
+
+    expect(plan.type).toBe("compact");
+    if (plan.type === "none") {
+      return;
+    }
+
+    expect(plan.messagesToSummarize.map((message) => message.id)).toEqual([
+      "msg_1",
+      "msg_2",
+    ]);
+    expect(plan.recentMessages.map((message) => message.id)).toEqual([
+      "msg_3",
+      "msg_4",
+    ]);
   });
 
   test("anonymizes the compaction transcript before summarizing", async () => {
@@ -184,11 +222,62 @@ describe("chat history compaction", () => {
 
     expect(compacted.value).toEqual([
       {
-        role: "system",
+        role: "user",
         content:
           "Earlier model-step history compacted from 2 message(s).\n\nstep summary",
       },
       { role: "user", content: "latest request" },
+    ]);
+  });
+
+  test("preserves model history from the latest user turn boundary", () => {
+    const messages: ModelMessage[] = [
+      { role: "user", content: "old request ".repeat(80) },
+      { role: "assistant", content: "old answer ".repeat(80) },
+      { role: "user", content: "latest request ".repeat(20) },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "tool-call",
+            toolCallId: "call_1",
+            toolName: "searchMatter",
+            input: { query: "termination" },
+          },
+        ],
+      },
+      {
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolCallId: "call_1",
+            toolName: "searchMatter",
+            output: { type: "json", value: { finding: "survives" } },
+          },
+        ],
+      },
+    ];
+
+    const plan = planModelCompaction({
+      messages,
+      preserveTokens: 20,
+      triggerTokens: 50,
+    });
+
+    expect(plan.type).toBe("compact");
+    if (plan.type === "none") {
+      return;
+    }
+
+    expect(plan.messagesToSummarize.map((message) => message.role)).toEqual([
+      "user",
+      "assistant",
+    ]);
+    expect(plan.recentMessages.map((message) => message.role)).toEqual([
+      "user",
+      "assistant",
+      "tool",
     ]);
   });
 
@@ -199,5 +288,23 @@ describe("chat history compaction", () => {
     });
 
     expect(plan.type).toBe("none");
+  });
+
+  test("renders non-json structured parts without failing compaction", () => {
+    const transcript = renderModelMessagesForCompaction([
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "tool-call",
+            toolCallId: "call_1",
+            toolName: "searchMatter",
+            input: { value: 1n },
+          },
+        ],
+      },
+    ]);
+
+    expect(transcript).toContain("[unserializable]");
   });
 });
