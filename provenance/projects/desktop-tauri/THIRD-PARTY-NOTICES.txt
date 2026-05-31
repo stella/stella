@@ -374,7 +374,7 @@ Project: desktop-tauri
 - regex 1.12.3 — Apache-2.0 OR MIT
 - regex-automata 0.4.14 — Apache-2.0 OR MIT
 - regex-syntax 0.8.10 — Apache-2.0 OR MIT
-- reqwest 0.13.3 — Apache-2.0 OR MIT
+- reqwest 0.13.4 — Apache-2.0 OR MIT
 - ring 0.17.14 — Apache-2.0 AND ISC
 - rust-ini 0.21.3 — MIT
 - rustc-hash 2.1.2 — Apache-2.0 OR MIT
@@ -405,7 +405,7 @@ Project: desktop-tauri
 - serde_core 1.0.228 — Apache-2.0 OR MIT
 - serde_derive 1.0.228 — Apache-2.0 OR MIT
 - serde_derive_internals 0.29.1 — Apache-2.0 OR MIT
-- serde_json 1.0.149 — Apache-2.0 OR MIT
+- serde_json 1.0.150 — Apache-2.0 OR MIT
 - serde_path_to_error 0.1.20 — Apache-2.0 OR MIT
 - serde_repr 0.1.20 — Apache-2.0 OR MIT
 - serde_spanned 0.6.9 — Apache-2.0 OR MIT
@@ -498,7 +498,7 @@ Project: desktop-tauri
 - toml_parser 1.1.2+spec-1.1.0 — Apache-2.0 OR MIT
 - toml_writer 1.1.1+spec-1.1.0 — Apache-2.0 OR MIT
 - tower 0.5.3 — MIT
-- tower-http 0.6.10 — MIT
+- tower-http 0.6.11 — MIT
 - tower-layer 0.3.3 — MIT
 - tower-service 0.3.3 — MIT
 - tracing 0.1.44 — MIT
@@ -526,7 +526,7 @@ Project: desktop-tauri
 - urlpattern 0.3.0 — MIT
 - utf-8 0.7.6 — Apache-2.0 OR MIT
 - utf8_iter 1.0.4 — Apache-2.0 OR MIT
-- uuid 1.23.1 — Apache-2.0 OR MIT
+- uuid 1.23.2 — Apache-2.0 OR MIT
 - valuable 0.1.1 — MIT
 - version-compare 0.2.1 — MIT
 - version_check 0.9.5 — MIT/Apache-2.0
@@ -576,10 +576,9 @@ Project: desktop-tauri
 - windows-interface 0.59.3 — Apache-2.0 OR MIT
 - windows-link 0.1.3 — Apache-2.0 OR MIT
 - windows-link 0.2.1 — Apache-2.0 OR MIT
-- windows-native-keyring-store 1.0.0 — Apache-2.0 OR MIT
+- windows-native-keyring-store 1.1.0 — Apache-2.0 OR MIT
 - windows-numerics 0.2.0 — Apache-2.0 OR MIT
 - windows-registry 0.5.3 — Apache-2.0 OR MIT
-- windows-registry 0.6.1 — Apache-2.0 OR MIT
 - windows-result 0.3.4 — Apache-2.0 OR MIT
 - windows-result 0.4.1 — Apache-2.0 OR MIT
 - windows-strings 0.4.2 — Apache-2.0 OR MIT
