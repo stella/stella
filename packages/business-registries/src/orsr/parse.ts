@@ -372,10 +372,11 @@ const buildShareSummary = (
 //   * Terminated entity: every member who was STILL IN OFFICE at the
 //     point of dissolution. The upstream stops marking anything as
 //     `current` once the entity terminates, so the parser instead
-//     identifies "still in office" as `functionTerminationDate`
-//     being absent or the 0001 sentinel — rows where the person
-//     explicitly resigned before the company closed have a real
-//     termination date and are excluded.
+//     identifies "still in office" by the absence of any end-date
+//     signal — both `functionTerminationDate` (explicit role end)
+//     and the temporal `effectiveTo` (record validity window). Rows
+//     with either populated represent a member who exited before
+//     the company closed and are excluded.
 const includeRosterRow = (
   member: OrsrRawStatutoryBodyMember | OrsrRawStakeholderMember,
   terminated: boolean,
@@ -383,7 +384,10 @@ const includeRosterRow = (
   if (!terminated) {
     return member.current === true;
   }
-  return sentinelToNull(member.functionTerminationDate ?? null) === null;
+  const functionEnded =
+    sentinelToNull(member.functionTerminationDate ?? null) !== null;
+  const rowEnded = sentinelToNull(member.effectiveTo ?? null) !== null;
+  return !functionEnded && !rowEnded;
 };
 
 const parseStatutoryBodies = (

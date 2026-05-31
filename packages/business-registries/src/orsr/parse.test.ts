@@ -217,6 +217,27 @@ describe("parseExtract status branches", () => {
     expect(positions.every((position) => position !== null)).toBe(true);
   });
 
+  test("excludes terminated-roster rows whose temporal effectiveTo has elapsed", async () => {
+    // ORSR roster rows carry their validity window in `effectiveTo`
+    // independently of `functionTerminationDate`. A shareholder /
+    // supervisory-board member whose row was superseded leaves
+    // `functionTerminationDate` empty but populates `effectiveTo`.
+    // Without checking it, the terminated fallback surfaces every
+    // historical row as part of the final roster.
+    const raw = await readFixture<OrsrRawExtractResponse>("extract-eset.json");
+    if (raw.legalPerson?.corporateBody) {
+      raw.legalPerson.corporateBody.termination = "2020-01-15T00:00:00";
+      for (const member of raw.legalPerson.corporateBody.stakeholder ?? []) {
+        member.current = false;
+        member.functionTerminationDate = undefined;
+        member.effectiveTo = "2018-06-01T00:00:00";
+      }
+    }
+    const company = parseExtract(raw);
+    // Every stakeholder row has a real effectiveTo → all excluded.
+    expect(company?.stakeholders).toEqual([]);
+  });
+
   test("excludes former officers/shareholders who left before dissolution", async () => {
     // A row with an explicit `functionTerminationDate` represents
     // someone who resigned / divested while the company was still
