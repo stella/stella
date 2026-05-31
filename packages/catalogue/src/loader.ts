@@ -53,6 +53,7 @@ export const TOGGLEABLE_NATIVE_TOOL_BACKEND_SLUGS = [
   "ares",
   "boe",
   "brreg",
+  "gcis",
   "infosoud",
   "krs",
   "orsr",
