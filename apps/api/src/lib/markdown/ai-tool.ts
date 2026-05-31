@@ -1,11 +1,10 @@
 import * as cheerio from "cheerio";
-import { marked } from "marked";
 
 import type { PropertyCondition } from "@/api/db/schema-validators";
 import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
 
 /**
- * Allowlist-based HTML sanitizer using cheerio.
+ * Allowlist-based HTML sanitizer using HTMLRewriter.
  * Strips all tags and attributes not explicitly listed.
  */
 const ALLOWED_TAGS = new Set([
@@ -52,49 +51,59 @@ const ALLOWED_ATTRS: Record<string, Set<string>> = {
   th: new Set(["colspan", "rowspan"]),
 };
 
+const REMOVE_ENTIRELY = new Set([
+  "script",
+  "style",
+  "iframe",
+  "object",
+  "embed",
+  "form",
+  "textarea",
+]);
+
 const ALLOWED_HREF_SCHEMES = new Set(["http:", "https:", "mailto:", "tel:"]);
 
-const sanitizeHtml = (html: string): string => {
-  const $ = cheerio.load(html, undefined, false);
-
-  $("script, style, iframe, object, embed, form, textarea").remove();
-
-  // Walk bottom-up so that unwrapping a disallowed parent
-  // never leaves unvisited disallowed children behind.
-  // `$("*").get().reverse()` gives us a leaf-first order.
-  for (const el of $("*").get().toReversed()) {
-    if (!("tagName" in el)) {
-      continue;
-    }
-    const tagName = el.tagName.toLowerCase();
-
-    if (!ALLOWED_TAGS.has(tagName)) {
-      $(el).replaceWith($(el).contents());
-      continue;
-    }
-
-    const allowed = ALLOWED_ATTRS[tagName];
-    for (const attr of Object.keys(el.attribs)) {
-      if (!allowed?.has(attr)) {
-        $(el).removeAttr(attr);
-      }
-    }
-
-    if (tagName === "a" && el.attribs["href"]) {
-      if (!URL.canParse(el.attribs["href"], "https://placeholder.invalid")) {
-        $(el).removeAttr("href");
-        continue;
-      }
-
-      const url = new URL(el.attribs["href"], "https://placeholder.invalid");
-      if (!ALLOWED_HREF_SCHEMES.has(url.protocol)) {
-        $(el).removeAttr("href");
-      }
-    }
-  }
-
-  return $.html();
-};
+const sanitizeHtml = (html: string): string =>
+  new HTMLRewriter()
+    .on("*", {
+      element(el) {
+        const tagName = el.tagName;
+        if (REMOVE_ENTIRELY.has(tagName)) {
+          el.remove();
+          return;
+        }
+        if (!ALLOWED_TAGS.has(tagName)) {
+          el.removeAndKeepContent();
+          return;
+        }
+        const allowed = ALLOWED_ATTRS[tagName];
+        const toRemove: string[] = [];
+        for (const [name] of el.attributes) {
+          if (!allowed?.has(name)) {
+            toRemove.push(name);
+          }
+        }
+        for (const name of toRemove) {
+          el.removeAttribute(name);
+        }
+        if (tagName !== "a") {
+          return;
+        }
+        const href = el.getAttribute("href");
+        if (!href) {
+          return;
+        }
+        if (!URL.canParse(href, "https://placeholder.invalid")) {
+          el.removeAttribute("href");
+          return;
+        }
+        const url = new URL(href, "https://placeholder.invalid");
+        if (!ALLOWED_HREF_SCHEMES.has(url.protocol)) {
+          el.removeAttribute("href");
+        }
+      },
+    })
+    .transform(html);
 
 export type AITool = {
   version: 1;
@@ -121,7 +130,10 @@ const replaceMentionsWithAnchors = (html: string): string => {
         if (!id || !label || !char) {
           return;
         }
-        el.replace(`<a href="${id}">${char}${label}</a>`, { html: true });
+        el.replace(
+          `<a href="${Bun.escapeHTML(id)}">${Bun.escapeHTML(`${char}${label}`)}</a>`,
+          { html: true },
+        );
       },
     })
     .transform(html);
@@ -144,19 +156,27 @@ export const deserializeAITool = (data: AITool): AITool => {
     data.dependencies.map((d) => d.dependsOnPropertyId),
   );
 
-  const renderer = new marked.Renderer();
-  renderer.link = ({ href, text, tokens }) => {
+  const html = Bun.markdown.html(data.prompt);
+  const $ = cheerio.load(html, undefined, false);
+
+  $("a").each((_, el) => {
+    const href = $(el).attr("href") ?? "";
     if (!dependencyIds.has(href)) {
-      return renderer.parser.parseInline(tokens);
+      // Non-dependency links render as inline content (no anchor wrapper),
+      // mirroring marked's parseInline fallback.
+      $(el).replaceWith($(el).contents());
+      return;
     }
 
+    const text = $(el).text();
     const mentionChar = text.charAt(0);
     const label = text.slice(1);
+    const mention = $(`<${MENTION_TAG}></${MENTION_TAG}>`)
+      .attr(ATTR_ID, href)
+      .attr(ATTR_LABEL, label)
+      .attr(ATTR_SUGGESTION_CHAR, mentionChar);
+    $(el).replaceWith(mention);
+  });
 
-    return `<${MENTION_TAG} ${ATTR_ID}="${href}" ${ATTR_LABEL}="${label}" ${ATTR_SUGGESTION_CHAR}="${mentionChar}"></${MENTION_TAG}>`;
-  };
-
-  const html = marked.parse(data.prompt, { renderer, async: false });
-
-  return { ...data, prompt: html.trimEnd() };
+  return { ...data, prompt: $.html().trimEnd() };
 };

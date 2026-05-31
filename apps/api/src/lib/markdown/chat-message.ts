@@ -48,55 +48,64 @@ const ALLOWED_ATTRS: Record<string, Set<string>> = {
 const ALLOWED_HREF_SCHEMES = new Set(["https:", "mailto:", "tel:"]);
 const SKILL_REF_HREF_PREFIX = "#stella-skill-ref=";
 
+const REMOVE_ENTIRELY = new Set([
+  "script",
+  "style",
+  "iframe",
+  "object",
+  "embed",
+  "form",
+  "textarea",
+]);
+
 const isAllowedLocalHref = (href: string): boolean =>
   href.startsWith(SKILL_REF_HREF_PREFIX) &&
   href.length > SKILL_REF_HREF_PREFIX.length;
 
-const sanitizeHtml = (html: string): string => {
-  const $ = cheerio.load(html, undefined, false);
-
-  $("script, style, iframe, object, embed, form, textarea").remove();
-
-  for (const el of $("*").get().toReversed()) {
-    if (!("tagName" in el)) {
-      continue;
-    }
-
-    const tagName = el.tagName.toLowerCase();
-    if (!ALLOWED_TAGS.has(tagName)) {
-      $(el).replaceWith($(el).contents());
-      continue;
-    }
-
-    const allowed = ALLOWED_ATTRS[tagName];
-    for (const attr of Object.keys(el.attribs)) {
-      if (!allowed?.has(attr)) {
-        $(el).removeAttr(attr);
-      }
-    }
-
-    if (tagName !== "a" || !el.attribs["href"]) {
-      continue;
-    }
-
-    const href = el.attribs["href"];
-    if (isAllowedLocalHref(href)) {
-      continue;
-    }
-
-    if (!URL.canParse(href, "https://placeholder.invalid")) {
-      $(el).removeAttr("href");
-      continue;
-    }
-
-    const url = new URL(href, "https://placeholder.invalid");
-    if (!ALLOWED_HREF_SCHEMES.has(url.protocol)) {
-      $(el).removeAttr("href");
-    }
-  }
-
-  return $.html();
-};
+const sanitizeHtml = (html: string): string =>
+  new HTMLRewriter()
+    .on("*", {
+      element(el) {
+        const tagName = el.tagName;
+        if (REMOVE_ENTIRELY.has(tagName)) {
+          el.remove();
+          return;
+        }
+        if (!ALLOWED_TAGS.has(tagName)) {
+          el.removeAndKeepContent();
+          return;
+        }
+        const allowed = ALLOWED_ATTRS[tagName];
+        const toRemove: string[] = [];
+        for (const [name] of el.attributes) {
+          if (!allowed?.has(name)) {
+            toRemove.push(name);
+          }
+        }
+        for (const name of toRemove) {
+          el.removeAttribute(name);
+        }
+        if (tagName !== "a") {
+          return;
+        }
+        const href = el.getAttribute("href");
+        if (!href) {
+          return;
+        }
+        if (isAllowedLocalHref(href)) {
+          return;
+        }
+        if (!URL.canParse(href, "https://placeholder.invalid")) {
+          el.removeAttribute("href");
+          return;
+        }
+        const url = new URL(href, "https://placeholder.invalid");
+        if (!ALLOWED_HREF_SCHEMES.has(url.protocol)) {
+          el.removeAttribute("href");
+        }
+      },
+    })
+    .transform(html);
 
 const parseMentionCategory = (value: string): ChatMentionCategory | null => {
   for (const [category] of typedEntries(CHAT_MENTION_HREF_PREFIXES)) {

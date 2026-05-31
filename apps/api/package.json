@@ -85,7 +85,6 @@
     "ioredis": "^5.10.1",
     "jose": "^6.2.3",
     "jszip": "catalog:",
-    "marked": "^18.0.4",
     "nodemailer": "^8.0.8",
     "posthog-node": "^5.35.2",
     "quickjs-emscripten": "^0.32.0",
