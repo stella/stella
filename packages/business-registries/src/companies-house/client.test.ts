@@ -29,6 +29,16 @@ type StubResult = {
   restore: () => void;
 };
 
+const readRequestUrl = (input: URL | RequestInfo): string => {
+  if (typeof input === "string") {
+    return input;
+  }
+  if (input instanceof URL) {
+    return input.href;
+  }
+  return input.url;
+};
+
 const captureRequest = (
   status: number,
   body: BodyInit | null,
@@ -36,20 +46,11 @@ const captureRequest = (
 ): StubResult => {
   const captured: FetchCapture = { url: "", authorization: "" };
   const originalFetch = globalThis.fetch;
-  const readUrl = (input: URL | RequestInfo): string => {
-    if (typeof input === "string") {
-      return input;
-    }
-    if (input instanceof URL) {
-      return input.href;
-    }
-    return input.url;
-  };
   const stub = async (
     input: URL | RequestInfo,
     init?: RequestInit,
   ): Promise<Response> => {
-    captured.url = readUrl(input);
+    captured.url = readRequestUrl(input);
     const headers = new Headers(init?.headers);
     captured.authorization = headers.get("Authorization") ?? "";
     return new Response(body, {
@@ -232,9 +233,11 @@ describe("lookupOfficersByCompanyNumber mocked", () => {
     });
     expect(result).toHaveLength(4);
     expect(result[0]?.name).toBe("MURPHY, Kenneth Anthony");
-    expect(ctx.captured.url).toBe(
-      "https://api.company-information.service.gov.uk/company/00445790/officers",
+    expect(ctx.captured.url).toContain(
+      "https://api.company-information.service.gov.uk/company/00445790/officers?",
     );
+    expect(ctx.captured.url).toContain("items_per_page=100");
+    expect(ctx.captured.url).toContain("start_index=0");
   });
 
   test("returns [] on 404", async () => {
@@ -245,6 +248,86 @@ describe("lookupOfficersByCompanyNumber mocked", () => {
       apiKey: TEST_API_KEY,
     });
     expect(result).toEqual([]);
+  });
+
+  test("pages through multiple officer pages when total_results exceeds the page size", async () => {
+    // Companies House caps a page at 100 officers; large boards
+    // (FTSE 100, complex liquidations) exceed that. Without paging
+    // we'd silently truncate the roster.
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    const buildItems = (count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        name: `Officer ${index}`,
+        officer_role: "director",
+      }));
+    const stub = async (input: URL | RequestInfo): Promise<Response> => {
+      const url = readRequestUrl(input);
+      calls.push(url);
+      const startIndex = Number(new URL(url).searchParams.get("start_index"));
+      const total = 215;
+      const remaining = Math.max(total - startIndex, 0);
+      const pageItems = Math.min(remaining, 100);
+      return new Response(
+        JSON.stringify({
+          items: buildItems(pageItems),
+          items_per_page: 100,
+          start_index: startIndex,
+          total_results: total,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+    restore = (): void => {
+      globalThis.fetch = originalFetch;
+    };
+
+    const result = await lookupOfficersByCompanyNumber("00000001", {
+      apiKey: TEST_API_KEY,
+    });
+    expect(result).toHaveLength(215);
+    expect(calls).toHaveLength(3);
+    expect(calls[0]).toContain("start_index=0");
+    expect(calls[1]).toContain("start_index=100");
+    expect(calls[2]).toContain("start_index=200");
+  });
+
+  test("respects an explicit limit option and stops paging early", async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    const stub = async (input: URL | RequestInfo): Promise<Response> => {
+      const url = readRequestUrl(input);
+      calls.push(url);
+      return new Response(
+        JSON.stringify({
+          items: Array.from({ length: 100 }, (_, index) => ({
+            name: `Officer ${index}`,
+            officer_role: "director",
+          })),
+          items_per_page: 100,
+          start_index: 0,
+          total_results: 500,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+    restore = (): void => {
+      globalThis.fetch = originalFetch;
+    };
+
+    const result = await lookupOfficersByCompanyNumber(
+      "00000001",
+      { apiKey: TEST_API_KEY },
+      { limit: 50 },
+    );
+    expect(result).toHaveLength(50);
+    expect(calls).toHaveLength(1);
   });
 });
 

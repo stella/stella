@@ -2,12 +2,14 @@
   "active_count": 8,
   "inactive_count": 0,
   "resigned_count": 117,
-  "items_per_page": 35,
+  "items_per_page": 4,
   "start_index": 0,
-  "total_results": 125,
+  "total_results": 4,
   "kind": "officer-list",
   "etag": "officers-etag-0123456789abcdef",
-  "links": { "self": "/company/00445790/officers" },
+  "links": {
+    "self": "/company/00445790/officers"
+  },
   "items": [
     {
       "name": "MURPHY, Kenneth Anthony",
@@ -16,7 +18,10 @@
       "occupation": "Chief Executive Officer",
       "nationality": "Irish",
       "country_of_residence": "England",
-      "date_of_birth": { "month": "8", "year": "1966" },
+      "date_of_birth": {
+        "month": "8",
+        "year": "1966"
+      },
       "address": {
         "premises": "Tesco House",
         "address_line_1": "Shire Park",
@@ -26,7 +31,9 @@
         "country": "England"
       },
       "links": {
-        "officer": { "appointments": "/officers/abc123/appointments" }
+        "officer": {
+          "appointments": "/officers/abc123/appointments"
+        }
       }
     },
     {
@@ -36,7 +43,10 @@
       "occupation": "Chief Financial Officer",
       "nationality": "British",
       "country_of_residence": "England",
-      "date_of_birth": { "month": "3", "year": "1973" },
+      "date_of_birth": {
+        "month": "3",
+        "year": "1973"
+      },
       "address": {
         "premises": "Tesco House",
         "address_line_1": "Shire Park",
@@ -45,7 +55,9 @@
         "country": "England"
       },
       "links": {
-        "officer": { "appointments": "/officers/def456/appointments" }
+        "officer": {
+          "appointments": "/officers/def456/appointments"
+        }
       }
     },
     {
@@ -56,7 +68,10 @@
       "occupation": "Non-Executive Director",
       "nationality": "British",
       "country_of_residence": "England",
-      "date_of_birth": { "month": "12", "year": "1956" },
+      "date_of_birth": {
+        "month": "12",
+        "year": "1956"
+      },
       "address": {
         "premises": "Tesco House",
         "address_line_1": "Shire Park",
@@ -65,7 +80,9 @@
         "country": "England"
       },
       "links": {
-        "officer": { "appointments": "/officers/ghi789/appointments" }
+        "officer": {
+          "appointments": "/officers/ghi789/appointments"
+        }
       }
     },
     {
@@ -87,7 +104,9 @@
         "registration_number": "01234567"
       },
       "links": {
-        "officer": { "appointments": "/officers/jkl012/appointments" }
+        "officer": {
+          "appointments": "/officers/jkl012/appointments"
+        }
       }
     }
   ]

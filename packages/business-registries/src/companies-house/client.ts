@@ -272,9 +272,27 @@ export const searchByName = async (
  * @throws {CompaniesHouseAPIError} on other API errors.
  * @throws {CompaniesHouseRequestError} on network failures.
  */
+// Companies House paginates the officer list. The default page size
+// is 35 and the maximum is 100; large boards (FTSE 100, insolvent
+// estates with many liquidators) routinely exceed either. Cap the
+// total pages we'll walk so a pathological company can't pin us
+// against the 600 req / 5 min rate limit on a single call.
+const OFFICERS_PAGE_SIZE = 100;
+const OFFICERS_MAX_PAGES = 10;
+
+export type OfficersOptions = {
+  /**
+   * Maximum number of officers to return across all pages. Defaults
+   * to `OFFICERS_MAX_PAGES * OFFICERS_PAGE_SIZE`; callers that only
+   * need a top-N can request fewer to skip later pages entirely.
+   */
+  limit?: number;
+};
+
 export const lookupOfficersByCompanyNumber = async (
   input: string,
   config: CompaniesHouseClientConfig,
+  options?: OfficersOptions,
 ): Promise<CompaniesHouseOfficer[]> => {
   assertApiKey(config.apiKey);
   const normalized = normalizeCompanyNumber(input);
@@ -283,13 +301,34 @@ export const lookupOfficersByCompanyNumber = async (
       `Invalid UK company number: ${input}`,
     );
   }
-  const url = `${COMPANIES_HOUSE_BASE}/company/${encodeURIComponent(normalized)}/officers`;
-  const raw = await companiesHouseGet<CompaniesHouseRawOfficersResponse>(
-    url,
-    config.apiKey,
+  const limit = Math.max(
+    options?.limit ?? OFFICERS_PAGE_SIZE * OFFICERS_MAX_PAGES,
+    1,
   );
-  if (!raw) {
-    return [];
+  const collected: CompaniesHouseOfficer[] = [];
+  for (let page = 0; page < OFFICERS_MAX_PAGES; page++) {
+    const params = new URLSearchParams({
+      items_per_page: String(OFFICERS_PAGE_SIZE),
+      start_index: String(page * OFFICERS_PAGE_SIZE),
+    });
+    const url = `${COMPANIES_HOUSE_BASE}/company/${encodeURIComponent(normalized)}/officers?${params.toString()}`;
+    const raw = await companiesHouseGet<CompaniesHouseRawOfficersResponse>(
+      url,
+      config.apiKey,
+    );
+    if (!raw) {
+      return collected;
+    }
+    const parsed = parseOfficersResponse(raw);
+    collected.push(...parsed);
+    if (collected.length >= limit) {
+      return collected.slice(0, limit);
+    }
+    const fetched = (page + 1) * OFFICERS_PAGE_SIZE;
+    const totalResults = raw.total_results ?? collected.length;
+    if (fetched >= totalResults || parsed.length === 0) {
+      return collected;
+    }
   }
-  return parseOfficersResponse(raw);
+  return collected.slice(0, limit);
 };

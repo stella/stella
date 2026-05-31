@@ -72,4 +72,19 @@ describe("validateCompanyNumber", () => {
     expect(validateCompanyNumber("00000000")).toBe(false);
     expect(validateCompanyNumber("0")).toBe(false);
   });
+
+  test("accepts the R0 prefix (pre-partition Northern Ireland companies)", () => {
+    // Companies House's URI guide lists `R0` as a valid CRN prefix
+    // — the `0` is part of the prefix code, not a digit of the
+    // sequence number. Other letter+digit prefixes stay rejected.
+    expect(validateCompanyNumber("R0123456")).toBe(true);
+    expect(validateCompanyNumber("r0123456")).toBe(true);
+    expect(validateCompanyNumber("R01234")).toBe(true);
+    expect(validateCompanyNumber("Q9123456")).toBe(false);
+  });
+
+  test("normalises the R0 prefix with zero-padding like other prefixes", () => {
+    expect(normalizeCompanyNumber("R01234")).toBe("R0001234");
+    expect(normalizeCompanyNumber("r01")).toBe("R0000001");
+  });
 });

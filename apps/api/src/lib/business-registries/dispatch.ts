@@ -578,12 +578,13 @@ const COMPANIES_HOUSE_HANDLER: RegistryHandler = {
   slug: "companies-house",
   country: "GB",
   nativeToolSlug: "companies-house",
-  // SHAPE-only: matches both two-letter-prefix CRNs (e.g. SC012345,
-  // OC123456) and 6-8 digit numeric CRNs after stripping the optional
-  // padding. Full structural validation runs in lookupByCompanyNumber
-  // and surfaces as CompaniesHouseValidationError → HTTP 400.
+  // SHAPE-only: matches numeric CRNs (E&W), two-letter-prefix CRNs
+  // (SC, OC, NI, FC, …), and the pre-partition NI `R0` outlier where
+  // the `0` is part of the prefix code rather than the sequence. Full
+  // structural validation runs in lookupByCompanyNumber and surfaces
+  // as CompaniesHouseValidationError → HTTP 400.
   isCanonicalId: (input) =>
-    /^[A-Z]{0,2}\d{6,8}$/u.test(normalizeCompanyNumber(input)),
+    /^(?:R0\d{6}|[A-Z]{2}\d{6}|\d{8})$/u.test(normalizeCompanyNumber(input)),
   lookup: async (input) => {
     const company = await lookupByCompanyNumber(input, {
       apiKey: requireCompaniesHouseApiKey(),

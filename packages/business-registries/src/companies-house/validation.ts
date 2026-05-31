@@ -23,7 +23,10 @@
 //
 // See: https://developer.company-information.service.gov.uk/
 
-const TWO_LETTER_PREFIX_PATTERN = /^([A-Z]{2})(\d{1,6})$/u;
+// Either a real two-letter prefix or the special-case `R0` (the only
+// prefix where the second character is a digit — see the
+// `CANONICAL_PATTERN` note below).
+const TWO_LETTER_PREFIX_PATTERN = /^(R0|[A-Z]{2})(\d{1,6})$/u;
 const ALL_DIGITS_PATTERN = /^\d{1,8}$/u;
 
 export const normalizeCompanyNumber = (input: string): string => {
@@ -42,7 +45,14 @@ export const normalizeCompanyNumber = (input: string): string => {
   return upper;
 };
 
-const CANONICAL_PATTERN = /^([A-Z]{2}\d{6}|\d{8})$/u;
+// Most jurisdiction prefixes are two letters (`SC`, `NI`, `OC`, ...).
+// `R0` is the one outlier — Companies House's URI guide reserves it
+// for pre-partition Northern Ireland companies (pre-1922) and the
+// `0` is part of the prefix code, not a digit of the sequence
+// number. Treat it as a fixed alternative rather than broadening to
+// `[A-Z][A-Z0-9]` (which would silently admit invented prefixes like
+// `Q9`).
+const CANONICAL_PATTERN = /^(?:R0\d{6}|[A-Z]{2}\d{6}|\d{8})$/u;
 
 export const validateCompanyNumber = (input: string): boolean => {
   const normalized = normalizeCompanyNumber(input);
