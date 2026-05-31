@@ -49,6 +49,16 @@ const hasEntries = (value: unknown[] | undefined): boolean =>
 // restructuring.
 const LIQUIDATION_PROCEEDING_PATTERN = /LIKWIDAC/u;
 
+const parseNameSuffixStatus = (name: string): KrsEntityStatus | null => {
+  if (BANKRUPTCY_NAME_PATTERN.test(name)) {
+    return { type: "bankruptcy" };
+  }
+  if (LIQUIDATION_NAME_PATTERN.test(name)) {
+    return { type: "liquidating" };
+  }
+  return null;
+};
+
 export const parseStatus = (
   dzial6: KrsRawDzial6 | undefined,
   name: string,
@@ -86,7 +96,11 @@ export const parseStatus = (
         ).toUpperCase(),
       ),
     );
-    return { type: anyLiquidation ? "liquidating" : "restructuring" };
+    if (anyLiquidation) {
+      return { type: "liquidating" };
+    }
+    const suffixStatus = parseNameSuffixStatus(name);
+    return suffixStatus ?? { type: "restructuring" };
   }
   // Fallback: KRS sometimes suffixes the formal name with the
   // proceedings marker before / without the dzial6 entry catching up
@@ -94,11 +108,9 @@ export const parseStatus = (
   // derived status field). Use the name as a secondary signal so a
   // company filed as "ACME SP. Z O.O. W UPADŁOŚCI" surfaces as
   // bankrupt even when dzial6 happens to be empty in the snapshot.
-  if (BANKRUPTCY_NAME_PATTERN.test(name)) {
-    return { type: "bankruptcy" };
-  }
-  if (LIQUIDATION_NAME_PATTERN.test(name)) {
-    return { type: "liquidating" };
+  const suffixStatus = parseNameSuffixStatus(name);
+  if (suffixStatus) {
+    return suffixStatus;
   }
   // `OdpisAktualny` only returns currently filed entities, so the
   // absence of every lifecycle marker means the entity is operating

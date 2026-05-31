@@ -1,7 +1,5 @@
 import { RegistryError } from "../shared/errors.js";
 
-const KRS_REGISTRY_SLUG = "pl-krs";
-
 export class KrsError extends RegistryError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
@@ -32,21 +30,6 @@ export class KrsAPIError extends KrsError {
     this.httpStatus = httpStatus;
     this.upstreamTitle = upstreamTitle ?? null;
     this.upstreamDetail = upstreamDetail ?? null;
-  }
-}
-
-export class KrsNotFoundError extends KrsError {
-  readonly krsNumber: string;
-  readonly canonicalId: string;
-  readonly registrySlug: string = KRS_REGISTRY_SLUG;
-
-  constructor(krsNumber: string) {
-    super(`Polish entity not found: ${krsNumber}`);
-    this.name = "KrsNotFoundError";
-    this.krsNumber = krsNumber;
-    // Mirror the field so the shared `isEntityNotFound` predicate
-    // detects KRS not-found alongside `instanceof KrsError`.
-    this.canonicalId = krsNumber;
   }
 }
 

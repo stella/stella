@@ -210,6 +210,27 @@ describe("parseStatus", () => {
     ).toEqual({ type: "restructuring" });
   });
 
+  test("name suffix wins when proceedings are unlabelled", () => {
+    expect(
+      parseStatus(
+        {
+          postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja:
+            [{}],
+        },
+        "ACME SPÓŁKA AKCYJNA W LIKWIDACJI",
+      ),
+    ).toEqual({ type: "liquidating" });
+    expect(
+      parseStatus(
+        {
+          postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja:
+            [{}],
+        },
+        "ACME SPÓŁKA AKCYJNA W UPADŁOŚCI",
+      ),
+    ).toEqual({ type: "bankruptcy" });
+  });
+
   test("maps `wykreslenia` to `dissolved` even when other arrays are present", () => {
     expect(
       parseStatus(

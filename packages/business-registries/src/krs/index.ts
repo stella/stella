@@ -3,7 +3,6 @@ export type { LookupOptions } from "./client.js";
 export {
   KrsAPIError,
   KrsError,
-  KrsNotFoundError,
   KrsRequestError,
   KrsValidationError,
 } from "./errors.js";
