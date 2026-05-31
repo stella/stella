@@ -1,0 +1,143 @@
+{
+  "rollegrupper": [
+    {
+      "type": {
+        "kode": "DAGL",
+        "beskrivelse": "Daglig leder",
+        "_links": {
+          "self": {
+            "href": "https://data.brreg.no/enhetsregisteret/api/roller/rollegruppetyper/DAGL"
+          }
+        }
+      },
+      "sistEndret": "2026-04-13",
+      "roller": [
+        {
+          "type": {
+            "kode": "DAGL",
+            "beskrivelse": "Daglig leder",
+            "_links": {
+              "self": {
+                "href": "https://data.brreg.no/enhetsregisteret/api/roller/rolletyper/DAGL"
+              }
+            }
+          },
+          "person": {
+            "fodselsdato": "1971-05-11",
+            "navn": {
+              "fornavn": "Inger Lise",
+              "etternavn": "Str\u00f8m"
+            },
+            "erDoed": false
+          },
+          "fratraadt": false,
+          "avregistrert": false,
+          "rekkefolge": 0
+        }
+      ]
+    },
+    {
+      "type": {
+        "kode": "REVI",
+        "beskrivelse": "Revisor",
+        "_links": {
+          "self": {
+            "href": "https://data.brreg.no/enhetsregisteret/api/roller/rollegruppetyper/REVI"
+          }
+        }
+      },
+      "sistEndret": "2020-02-26",
+      "roller": [
+        {
+          "type": {
+            "kode": "REVI",
+            "beskrivelse": "Revisor",
+            "_links": {
+              "self": {
+                "href": "https://data.brreg.no/enhetsregisteret/api/roller/rolletyper/REVI"
+              }
+            }
+          },
+          "enhet": {
+            "organisasjonsnummer": "974760843",
+            "organisasjonsform": {
+              "kode": "ORGL",
+              "beskrivelse": "Organisasjonsledd",
+              "_links": {
+                "self": {
+                  "href": "https://data.brreg.no/enhetsregisteret/api/organisasjonsformer/ORGL"
+                }
+              }
+            },
+            "navn": ["RIKSREVISJONEN"],
+            "godkjenningsstatus": "Godkjent revisjonsforetak",
+            "erSlettet": false,
+            "_links": {
+              "self": {
+                "href": "https://data.brreg.no/enhetsregisteret/api/enheter/974760843"
+              }
+            }
+          },
+          "fratraadt": false,
+          "avregistrert": false,
+          "rekkefolge": 0
+        }
+      ]
+    },
+    {
+      "type": {
+        "kode": "ORGL",
+        "beskrivelse": "Org.ledd i offentlig sektor",
+        "_links": {
+          "self": {
+            "href": "https://data.brreg.no/enhetsregisteret/api/roller/rollegruppetyper/ORGL"
+          }
+        }
+      },
+      "sistEndret": "2014-01-14",
+      "roller": [
+        {
+          "type": {
+            "kode": "ORGL",
+            "beskrivelse": "Org.ledd i offentlig sektor",
+            "_links": {
+              "self": {
+                "href": "https://data.brreg.no/enhetsregisteret/api/roller/rolletyper/ORGL"
+              }
+            }
+          },
+          "enhet": {
+            "organisasjonsnummer": "912660680",
+            "organisasjonsform": {
+              "kode": "STAT",
+              "beskrivelse": "Staten",
+              "_links": {
+                "self": {
+                  "href": "https://data.brreg.no/enhetsregisteret/api/organisasjonsformer/STAT"
+                }
+              }
+            },
+            "navn": ["N\u00c6RINGS- OG FISKERIDEPARTEMENTET"],
+            "erSlettet": false,
+            "_links": {
+              "self": {
+                "href": "https://data.brreg.no/enhetsregisteret/api/enheter/912660680"
+              }
+            }
+          },
+          "fratraadt": false,
+          "avregistrert": false,
+          "rekkefolge": 0
+        }
+      ]
+    }
+  ],
+  "_links": {
+    "self": {
+      "href": "https://data.brreg.no/enhetsregisteret/api/enheter/974760673/roller"
+    },
+    "enhet": {
+      "href": "https://data.brreg.no/enhetsregisteret/api/enheter/974760673"
+    }
+  }
+}
