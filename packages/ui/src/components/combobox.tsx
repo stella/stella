@@ -74,7 +74,7 @@ function ComboboxInput({
   const sizeValue = size ?? "default";
 
   return (
-    <div className="text-foreground relative w-full not-has-[>*.w-full]:w-fit has-disabled:opacity-64">
+    <ComboboxPrimitive.InputGroup className="text-foreground relative w-full not-has-[>*.w-full]:w-fit has-disabled:opacity-64">
       {Boolean(startAddon) && (
         <div
           aria-hidden="true"
@@ -123,7 +123,7 @@ function ComboboxInput({
           <XIcon />
         </ComboboxClear>
       )}
-    </div>
+    </ComboboxPrimitive.InputGroup>
   );
 }
 
