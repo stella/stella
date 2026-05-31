@@ -1,8 +1,5 @@
 {
-  "errors": [
-    {
-      "error": "company-profile-not-found",
-      "type": "ch:service"
-    }
-  ]
+  "timestamp": "2026-05-31T16:38:37.447596832",
+  "message": "404 NOT_FOUND \"Resource not found for company profile 99999999\"",
+  "request_id": "9Bco368C58p0v0_-r4Gy66ax6QEL"
 }

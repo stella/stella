@@ -1,25 +1,40 @@
 {
-  "company_name": "MAPLIN ELECTRONICS LIMITED",
-  "company_number": "01264512",
+  "accounts": {
+    "accounting_reference_date": { "day": "31", "month": "12" },
+    "last_accounts": { "made_up_to": "2013-12-31", "type": "dormant" }
+  },
+  "annual_return": { "last_made_up_to": "2013-10-05" },
+  "can_file": false,
+  "company_name": "PHONES 4U DIRECT LIMITED",
+  "company_number": "05956860",
   "company_status": "dissolved",
-  "date_of_creation": "1976-04-21",
-  "date_of_cessation": "2018-09-04",
+  "date_of_cessation": "2015-05-05",
+  "date_of_creation": "2006-10-05",
+  "etag": "82c55d367e00224503db05a6ed7f43edd66be93d",
+  "has_charges": false,
+  "has_insolvency_history": false,
   "jurisdiction": "england-wales",
-  "type": "ltd",
-  "has_charges": true,
-  "has_insolvency_history": true,
-  "has_been_liquidated": true,
-  "sic_codes": ["47410"],
-  "registered_office_address": {
-    "address_line_1": "Brook Road",
-    "locality": "Rayleigh",
-    "region": "Essex",
-    "postal_code": "SS6 7XJ",
-    "country": "England"
-  },
+  "last_full_members_list_date": "2013-10-05",
   "links": {
-    "self": "/company/01264512",
-    "filing_history": "/company/01264512/filing-history"
+    "self": "/company/05956860",
+    "filing_history": "/company/05956860/filing-history",
+    "officers": "/company/05956860/officers"
   },
-  "etag": "feedfacecafebeefdeadbeef0123456789abcdef"
+  "previous_company_names": [
+    {
+      "ceased_on": "2006-10-24",
+      "effective_from": "2006-10-05",
+      "name": "GREENSTACK 4 LIMITED"
+    }
+  ],
+  "registered_office_address": {
+    "address_line_1": "Osprey House Ore Close",
+    "address_line_2": "Lymedale Business Park",
+    "locality": "Newcastle-Under-Lyme",
+    "postal_code": "ST5 9QD",
+    "region": "Staffordshire"
+  },
+  "sic_codes": ["47421"],
+  "type": "ltd",
+  "undeliverable_registered_office_address": false
 }

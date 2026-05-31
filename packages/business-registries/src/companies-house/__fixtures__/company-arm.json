@@ -1,60 +1,67 @@
 {
-  "company_name": "ARM HOLDINGS LIMITED",
+  "accounts": {
+    "accounting_reference_date": { "day": "31", "month": "03" },
+    "last_accounts": {
+      "made_up_to": "2025-03-31",
+      "period_end_on": "2025-03-31",
+      "period_start_on": "2024-04-01",
+      "type": "full"
+    },
+    "next_accounts": {
+      "due_on": "2026-12-31",
+      "overdue": false,
+      "period_end_on": "2026-03-31",
+      "period_start_on": "2025-04-01"
+    },
+    "next_due": "2026-12-31",
+    "next_made_up_to": "2026-03-31",
+    "overdue": false
+  },
+  "can_file": true,
+  "company_name": "ARM LIMITED",
   "company_number": "02557590",
   "company_status": "active",
-  "date_of_creation": "1990-10-16",
-  "jurisdiction": "england-wales",
-  "type": "ltd",
+  "confirmation_statement": {
+    "last_made_up_to": "2025-11-14",
+    "next_due": "2026-11-28",
+    "next_made_up_to": "2026-11-14",
+    "overdue": false
+  },
+  "date_of_creation": "1990-11-12",
+  "etag": "1cf1c2f7e317428340578a96272246e429ab7640",
+  "has_been_liquidated": false,
   "has_charges": false,
   "has_insolvency_history": false,
-  "sic_codes": ["62012", "70100"],
+  "jurisdiction": "england-wales",
+  "last_full_members_list_date": "2015-11-12",
+  "links": {
+    "persons_with_significant_control": "/company/02557590/persons-with-significant-control",
+    "self": "/company/02557590",
+    "charges": "/company/02557590/charges",
+    "filing_history": "/company/02557590/filing-history",
+    "officers": "/company/02557590/officers"
+  },
   "previous_company_names": [
     {
-      "name": "ARM HOLDINGS PLC",
-      "effective_from": "1998-03-17",
-      "ceased_on": "2016-09-05"
+      "ceased_on": "1998-05-21",
+      "effective_from": "1990-12-03",
+      "name": "ADVANCED RISC MACHINES LIMITED"
     },
     {
-      "name": "ADVANCED RISC MACHINES HOLDINGS LIMITED",
-      "effective_from": "1990-10-16",
-      "ceased_on": "1998-03-17"
+      "ceased_on": "1990-12-03",
+      "effective_from": "1990-11-12",
+      "name": "WIDELOGIC LIMITED"
     }
   ],
   "registered_office_address": {
     "address_line_1": "110 Fulbourn Road",
-    "locality": "Cherry Hinton",
-    "region": "Cambridge",
-    "postal_code": "CB1 9NJ",
-    "country": "England"
+    "address_line_2": "Cambridge",
+    "locality": "Cambridgeshire",
+    "postal_code": "CB1 9NJ"
   },
-  "service_address": {
-    "address_line_1": "110 Fulbourn Road",
-    "locality": "Cambridge",
-    "postal_code": "CB1 9NJ",
-    "country": "England"
-  },
-  "accounts": {
-    "next_due": "2026-12-31",
-    "next_made_up_to": "2026-03-31",
-    "last_accounts": {
-      "made_up_to": "2025-03-31",
-      "type": "group"
-    },
-    "next_accounts": {
-      "due_on": "2026-12-31",
-      "overdue": false
-    }
-  },
-  "confirmation_statement": {
-    "last_made_up_to": "2025-10-15",
-    "next_due": "2026-10-29",
-    "next_made_up_to": "2026-10-15",
-    "overdue": false
-  },
-  "links": {
-    "self": "/company/02557590",
-    "filing_history": "/company/02557590/filing-history",
-    "officers": "/company/02557590/officers"
-  },
-  "etag": "0123456789abcdef0123456789abcdef01234567"
+  "registered_office_is_in_dispute": false,
+  "sic_codes": ["82990"],
+  "type": "ltd",
+  "undeliverable_registered_office_address": false,
+  "has_super_secure_pscs": false
 }
