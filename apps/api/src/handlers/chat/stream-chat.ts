@@ -24,6 +24,11 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { getUserFileIdFromPart } from "@/api/handlers/chat/attachment-validation";
 import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
+import {
+  createLoopRecoveryMessage,
+  detectModelLoop,
+  shouldInjectLoopRecovery,
+} from "@/api/handlers/chat/loop-detector";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {
   deanonymizeFromBoundary,
@@ -52,7 +57,7 @@ import {
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 
-const MAX_TOOL_STEPS = 8;
+const MAX_TOOL_STEPS = 100;
 const CHAT_TOOL_ERROR_UNWRAP_DEPTH = 8;
 
 const unwrapChatToolError = (error: unknown): ChatToolError | null => {
@@ -177,9 +182,13 @@ const runChatStream = async ({
     experimental_repairToolCall: async ({ toolCall }) =>
       await Promise.resolve(repairActiveDocxEditToolCall(toolCall)),
     prepareStep: async ({ messages }) => {
+      const loopDetection = detectModelLoop(messages);
+      const messagesWithLoopRecovery = shouldInjectLoopRecovery(loopDetection)
+        ? [...messages, createLoopRecoveryMessage(loopDetection)]
+        : messages;
       const compactedMessages = await compactModelMessagesForModel({
         abortSignal,
-        messages,
+        messages: messagesWithLoopRecovery,
         model,
         onSummaryError: (error) => {
           captureError(error, {
