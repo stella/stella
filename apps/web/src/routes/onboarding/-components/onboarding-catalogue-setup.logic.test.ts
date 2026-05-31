@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createCatalogueAutoSelectionPlan,
   createCatalogueSetupPlan,
+  isCatalogueEntryAvailableDuringOnboarding,
   reconcileCatalogueSlugsForJurisdictions,
 } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
 
@@ -18,6 +19,7 @@ const entries = [
   nativeTool("infosoud"),
   nativeTool("boe"),
   nativeTool("brreg"),
+  nativeTool("edgar"),
   nativeTool("create-docx", { pinned: true }),
   { kind: "skill" as const, slug: "summarise-contract" },
 ];
@@ -84,6 +86,25 @@ describe("onboarding catalogue setup plan", () => {
     expect(plan.nativeToolOptOuts).toEqual([
       { backendSlug: "brreg", slug: "brreg" },
     ]);
+  });
+
+  test("does not opt out of deploy-gated tools hidden during onboarding", () => {
+    const plan = createCatalogueSetupPlan({
+      entries,
+      practiceJurisdictions: [{ countryCode: "US", isPrimary: true }],
+      selectedSlugs: [],
+    });
+
+    expect(plan.nativeToolOptOuts).toEqual([]);
+  });
+
+  test("hides deploy-gated native tools during onboarding", () => {
+    expect(isCatalogueEntryAvailableDuringOnboarding(nativeTool("edgar"))).toBe(
+      false,
+    );
+    expect(isCatalogueEntryAvailableDuringOnboarding(nativeTool("ares"))).toBe(
+      true,
+    );
   });
 });
 

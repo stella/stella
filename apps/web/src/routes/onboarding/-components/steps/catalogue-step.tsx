@@ -35,7 +35,10 @@ import {
   SetupBadge,
 } from "@/routes/_protected.settings/-components/catalogue/catalogue-badges";
 import { CatalogueEntryIcon } from "@/routes/_protected.settings/-components/catalogue/catalogue-entry-icon";
-import { createCatalogueAutoSelectionPlan } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
+import {
+  createCatalogueAutoSelectionPlan,
+  isCatalogueEntryAvailableDuringOnboarding,
+} from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
 
 type CatalogueStepProps = {
   practiceJurisdictions: readonly PracticeJurisdiction[];
@@ -86,7 +89,10 @@ export const CatalogueStep = ({
     },
   );
 
-  const entries = useMemo(() => loadCatalogue(), []);
+  const entries = useMemo(
+    () => loadCatalogue().filter(isCatalogueEntryAvailableDuringOnboarding),
+    [],
+  );
   const selectableEntries = useMemo(
     () =>
       entries.filter(

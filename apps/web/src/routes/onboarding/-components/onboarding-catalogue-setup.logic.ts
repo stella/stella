@@ -50,6 +50,16 @@ type CatalogueAutoSelectionEntry = {
   slug: string;
 };
 
+// Onboarding reads the static catalogue before it can ask the API
+// which server-config-gated tools are available for this deployment.
+const ONBOARDING_HIDDEN_NATIVE_TOOL_BACKEND_SLUGS = new Set(["edgar"]);
+
+export const isCatalogueEntryAvailableDuringOnboarding = (
+  entry: CatalogueSetupEntry,
+): boolean =>
+  entry.kind !== "native-tool" ||
+  !ONBOARDING_HIDDEN_NATIVE_TOOL_BACKEND_SLUGS.has(entry.backendSlug);
+
 export type CatalogueAutoSelectionPlan = {
   addedSlugs: readonly string[];
   selectedSlugs: readonly string[];
@@ -168,6 +178,9 @@ export const createCatalogueSetupPlan = ({
 
   for (const entry of entries) {
     if (entry.kind !== "native-tool") {
+      continue;
+    }
+    if (!isCatalogueEntryAvailableDuringOnboarding(entry)) {
       continue;
     }
     if (!isToggleableNativeToolBackendSlug(entry.backendSlug)) {

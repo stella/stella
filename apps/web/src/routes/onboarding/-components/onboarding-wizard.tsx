@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -36,6 +36,7 @@ import { CatalogueDetailPreview } from "@/routes/onboarding/-components/catalogu
 import { CatalogueStackPreview } from "@/routes/onboarding/-components/catalogue-stack-preview";
 import {
   createCatalogueSetupPlan,
+  isCatalogueEntryAvailableDuringOnboarding,
   reconcileCatalogueSlugsForJurisdictions,
 } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
 import { OnboardingLayout } from "@/routes/onboarding/-components/onboarding-layout";
@@ -124,6 +125,10 @@ export const OnboardingWizard = () => {
     readonly ProviderPreview[]
   >([]);
   const [aiPhase, setAiPhase] = useState<"providers" | "models">("providers");
+  const onboardingCatalogueEntries = useMemo(
+    () => loadCatalogue().filter(isCatalogueEntryAvailableDuringOnboarding),
+    [],
+  );
 
   useEffect(() => {
     const locale =
@@ -162,12 +167,11 @@ export const OnboardingWizard = () => {
   ]);
 
   const continueFromJurisdiction = () => {
-    const catalogueEntries = loadCatalogue();
     setData((currentData) => ({
       ...currentData,
       catalogueSlugs: [
         ...reconcileCatalogueSlugsForJurisdictions({
-          entries: catalogueEntries,
+          entries: onboardingCatalogueEntries,
           practiceJurisdictions: currentData.practiceJurisdictions,
           selectedSlugs: currentData.catalogueSlugs,
         }),
@@ -287,15 +291,16 @@ export const OnboardingWizard = () => {
         // explicit opt-outs for omitted default-on native tools. Runs
         // in parallel; partial failure surfaces as a toast but doesn't
         // block the rest of setup.
-        const catalogueEntries = loadCatalogue();
         const catalogueSetupPlan = createCatalogueSetupPlan({
-          entries: catalogueEntries,
+          entries: onboardingCatalogueEntries,
           practiceJurisdictions: finalData.practiceJurisdictions,
           selectedSlugs: finalData.catalogueSlugs,
         });
         const installTasks = catalogueSetupPlan.installSlugs.map(
           async (slug) => {
-            const entry = catalogueEntries.find((e) => e.slug === slug);
+            const entry = onboardingCatalogueEntries.find(
+              (e) => e.slug === slug,
+            );
             if (!entry) {
               return;
             }
@@ -464,7 +469,14 @@ export const OnboardingWizard = () => {
         replace: true,
       });
     },
-    [analytics, invalidateSession, navigate, queryClient, t],
+    [
+      analytics,
+      invalidateSession,
+      navigate,
+      onboardingCatalogueEntries,
+      queryClient,
+      t,
+    ],
   );
 
   const showPrices = step === "ai" && aiPhase === "models";
@@ -489,7 +501,9 @@ export const OnboardingWizard = () => {
     );
   } else if (step === "catalogue") {
     const focusedEntry = catalogueFocusedSlug
-      ? loadCatalogue().find((entry) => entry.slug === catalogueFocusedSlug)
+      ? onboardingCatalogueEntries.find(
+          (entry) => entry.slug === catalogueFocusedSlug,
+        )
       : undefined;
     if (focusedEntry) {
       const installed = data.catalogueSlugs.includes(focusedEntry.slug);
@@ -515,7 +529,7 @@ export const OnboardingWizard = () => {
     } else {
       preview = (
         <CatalogueStackPreview
-          entries={loadCatalogue()}
+          entries={onboardingCatalogueEntries}
           onFocus={setCatalogueFocusedSlug}
           selectedSlugs={data.catalogueSlugs}
         />
