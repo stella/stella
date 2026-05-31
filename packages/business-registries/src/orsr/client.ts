@@ -68,12 +68,21 @@ const orsrGet = async <T>(url: string): Promise<T> => {
     });
   }
 
-  // SAFETY: `sluzby.orsr.sk` is a stable, documented Ministry of
-  // Justice surface backed by a published XSD. Runtime validation
-  // adds little for well-typed JSON; the parser tolerates absent
-  // fields so upstream drift surfaces as `null` rather than a throw.
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-  return response.json() as Promise<T>;
+  try {
+    // SAFETY: `sluzby.orsr.sk` is a stable, documented Ministry of
+    // Justice surface backed by a published XSD. Runtime validation
+    // adds little for well-typed JSON; the parser tolerates absent
+    // fields so upstream drift surfaces as `null` rather than a throw.
+    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+    return (await response.json()) as T;
+  } catch (error) {
+    throw new OrsrAPIError({
+      message: `ORSR ${response.status}: invalid JSON payload`,
+      httpStatus: response.status,
+      upstreamMessage: null,
+      cause: error,
+    });
+  }
 };
 
 const buildSearchUrl = (filterValue: string, take?: number): string => {
@@ -179,5 +188,5 @@ export const searchByName = async (
   const data = await orsrGet<OrsrRawSearchResponse>(
     buildSearchUrl(trimmed, take),
   );
-  return (data.data ?? []).map(parseSearchHit);
+  return (data.data ?? []).slice(0, take).map(parseSearchHit);
 };

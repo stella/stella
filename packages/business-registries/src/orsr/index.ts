@@ -3,7 +3,6 @@ export type { SearchOptions } from "./client.js";
 export {
   OrsrAPIError,
   OrsrError,
-  OrsrNotFoundError,
   OrsrRequestError,
   OrsrValidationError,
 } from "./errors.js";

@@ -205,6 +205,21 @@ describe("lookupByIco (fixture)", () => {
       upstreamMessage: "Bad request",
     });
   });
+
+  test("surfaces malformed 200 JSON as OrsrAPIError", async () => {
+    restore = installFetchStub(
+      async () =>
+        new Response("{", {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    expect(lookupByIco("31333532")).rejects.toMatchObject({
+      name: "OrsrAPIError",
+      httpStatus: 200,
+      upstreamMessage: null,
+    });
+  });
 });
 
 describe("searchByName (fixture)", () => {
@@ -245,6 +260,20 @@ describe("searchByName (fixture)", () => {
     });
     await searchByName("Telekom", { limit: 5000 });
     expect(lastUrl).toContain("Take=100");
+  });
+
+  test("applies the limit client-side when upstream over-returns", async () => {
+    restore = installFetchStub(async () =>
+      jsonResponse({
+        data: Array.from({ length: 3 }, (_, index) => ({
+          id: index + 1,
+          corporateBodyFullName: `Telekom ${index + 1}`,
+          registrationNumber: `1234567${index}`,
+        })),
+      }),
+    );
+    const results = await searchByName("Telekom", { limit: 2 });
+    expect(results).toHaveLength(2);
   });
 });
 

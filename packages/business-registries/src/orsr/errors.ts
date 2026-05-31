@@ -1,7 +1,5 @@
 import { RegistryError } from "../shared/errors.js";
 
-const ORSR_REGISTRY_SLUG = "sk-orsr";
-
 export class OrsrError extends RegistryError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
@@ -28,17 +26,6 @@ export class OrsrAPIError extends OrsrError {
     this.name = "OrsrAPIError";
     this.httpStatus = httpStatus;
     this.upstreamMessage = upstreamMessage ?? null;
-  }
-}
-
-export class OrsrNotFoundError extends OrsrError {
-  readonly canonicalId: string;
-  readonly registrySlug: string = ORSR_REGISTRY_SLUG;
-
-  constructor(ico: string) {
-    super(`Slovak entity not found: ${ico}`);
-    this.name = "OrsrNotFoundError";
-    this.canonicalId = ico;
   }
 }
 
