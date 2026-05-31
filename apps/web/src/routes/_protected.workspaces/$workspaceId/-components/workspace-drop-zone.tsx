@@ -43,7 +43,8 @@ const WorkspaceDropZoneInner = ({
   const [isDropTarget, setIsDropTarget] = useState(false);
   const isRowDropTargetActive = useIsRowDropTargetActive();
 
-  // Store isPending in a ref so the effect always sees the latest value.
+  // Store isPending in a ref so the effect closure always
+  // sees the latest value without re-registering.
   const isPendingRef = useRef(isPending);
   isPendingRef.current = isPending;
 
