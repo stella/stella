@@ -79,13 +79,29 @@ const parseStatus = (raw: BrregRawEnhet): BrregEntityStatus => {
     return { type: "deleted", deletedAt: removedAt };
   }
   if (raw.konkurs === true) {
-    return { type: "bankruptcy" };
+    return { type: "bankruptcy", openedAt: raw.konkursdato ?? null };
   }
-  if (
-    raw.underAvvikling === true ||
-    raw.underTvangsavviklingEllerTvangsopplosning === true
-  ) {
-    return { type: "winding_up" };
+  // Compulsory liquidation precedes voluntary liquidation on purpose:
+  // Brreg can set both flags during a transition, and the compulsory
+  // proceeding is the more material legal regime.
+  if (raw.underTvangsavviklingEllerTvangsopplosning === true) {
+    // Brreg has no single "compulsory liquidation date" field; the
+    // opening date lives on whichever reason-specific column applies
+    // (failure to file accounts, missing auditor, defective board,
+    // failure to delete). Pick the first populated one.
+    const openedAt =
+      raw.tvangsopplostPgaManglendeRegnskapDato ??
+      raw.tvangsopplostPgaManglendeRevisorDato ??
+      raw.tvangsopplostPgaMangelfulltStyreDato ??
+      raw.tvangsavvikletPgaManglendeSlettingDato ??
+      null;
+    return { type: "compulsory_liquidation", openedAt };
+  }
+  if (raw.underAvvikling === true) {
+    return {
+      type: "voluntary_liquidation",
+      openedAt: raw.underAvviklingDato ?? null,
+    };
   }
   return { type: "active" };
 };

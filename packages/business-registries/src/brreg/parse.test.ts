@@ -60,21 +60,65 @@ describe("parseEnhet", () => {
     );
   });
 
-  test("flags bankruptcy", () => {
-    const out = parseEnhet({ ...baseRaw, konkurs: true });
-    expect(out.status).toEqual({ type: "bankruptcy" });
+  test("flags bankruptcy with opening date when present", () => {
+    const out = parseEnhet({
+      ...baseRaw,
+      konkurs: true,
+      konkursdato: "2026-05-05",
+    });
+    expect(out.status).toEqual({ type: "bankruptcy", openedAt: "2026-05-05" });
   });
 
-  test("flags winding-up", () => {
-    expect(parseEnhet({ ...baseRaw, underAvvikling: true }).status).toEqual({
-      type: "winding_up",
-    });
+  test("flags bankruptcy with null openedAt when date is missing", () => {
+    const out = parseEnhet({ ...baseRaw, konkurs: true });
+    expect(out.status).toEqual({ type: "bankruptcy", openedAt: null });
+  });
+
+  test("flags voluntary liquidation with opening date", () => {
+    expect(
+      parseEnhet({
+        ...baseRaw,
+        underAvvikling: true,
+        underAvviklingDato: "2025-08-08",
+      }).status,
+    ).toEqual({ type: "voluntary_liquidation", openedAt: "2025-08-08" });
+  });
+
+  test("flags compulsory liquidation and selects the first populated date field", () => {
+    expect(
+      parseEnhet({
+        ...baseRaw,
+        underTvangsavviklingEllerTvangsopplosning: true,
+        tvangsopplostPgaManglendeRegnskapDato: "2026-05-11",
+      }).status,
+    ).toEqual({ type: "compulsory_liquidation", openedAt: "2026-05-11" });
+    expect(
+      parseEnhet({
+        ...baseRaw,
+        underTvangsavviklingEllerTvangsopplosning: true,
+        tvangsopplostPgaMangelfulltStyreDato: "2026-04-07",
+      }).status,
+    ).toEqual({ type: "compulsory_liquidation", openedAt: "2026-04-07" });
     expect(
       parseEnhet({
         ...baseRaw,
         underTvangsavviklingEllerTvangsopplosning: true,
       }).status,
-    ).toEqual({ type: "winding_up" });
+    ).toEqual({ type: "compulsory_liquidation", openedAt: null });
+  });
+
+  test("prefers compulsory liquidation over voluntary when both flags are set", () => {
+    const out = parseEnhet({
+      ...baseRaw,
+      underAvvikling: true,
+      underAvviklingDato: "2025-08-08",
+      underTvangsavviklingEllerTvangsopplosning: true,
+      tvangsopplostPgaManglendeRegnskapDato: "2026-05-11",
+    });
+    expect(out.status).toEqual({
+      type: "compulsory_liquidation",
+      openedAt: "2026-05-11",
+    });
   });
 
   test("prefers deleted status over other flags", () => {

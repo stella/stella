@@ -9,6 +9,18 @@ export {
   BrregValidationError,
 } from "./errors.js";
 export { parseAddress, parseEnhet, parseSearchEntry } from "./parse.js";
+export {
+  lookupOfficersByOrgnr,
+  parseOfficer,
+  parseRolesResponse,
+} from "./roles.js";
+export type {
+  BrregOfficer,
+  BrregOfficerEntity,
+  BrregOfficerPerson,
+  BrregOfficerTrustee,
+  BrregRawRolesResponse,
+} from "./roles.js";
 export type {
   BrregAddress,
   BrregEntity,

@@ -50,8 +50,17 @@ export type BrregRawEnhet = {
   institusjonellSektorkode?: BrregRawInstitusjonellSektor;
   antallAnsatte?: number;
   konkurs?: boolean;
+  konkursdato?: string;
   underAvvikling?: boolean;
+  underAvviklingDato?: string;
   underTvangsavviklingEllerTvangsopplosning?: boolean;
+  // Brreg splits "compulsory liquidation" into four reason-specific
+  // date fields rather than a single `tvangsopplosningDato`. We treat
+  // the first populated one as the opening date of the proceeding.
+  tvangsopplostPgaManglendeRegnskapDato?: string;
+  tvangsopplostPgaManglendeRevisorDato?: string;
+  tvangsopplostPgaMangelfulltStyreDato?: string;
+  tvangsavvikletPgaManglendeSlettingDato?: string;
   slettedato?: string;
   stiftelsesdato?: string;
   /**
@@ -100,12 +109,23 @@ export type BrregIndustryCode = {
 };
 
 // Whether the entity is currently active. Modelled as a discriminated
-// union so consumers exhaustively handle the "winding-up" and
-// "deleted" states instead of relying on a soup of boolean flags.
+// union so consumers exhaustively handle the wind-down states instead
+// of relying on a soup of boolean flags.
+//
+// Brreg differentiates voluntary liquidation (`underAvvikling`,
+// initiated by the shareholders) from compulsory liquidation
+// (`underTvangsavviklingEllerTvangsopplosning`, initiated by the
+// register or a court for failure-to-file accounts / missing auditor
+// / etc.) — both surfaces as separate union arms so legal callers can
+// tell the two regimes apart. `openedAt` carries the proceeding's
+// start date when the upstream payload includes one (Brreg has no
+// dedicated `/konkursdetaljer` endpoint; the date lives on the entity
+// payload itself).
 export type BrregEntityStatus =
   | { type: "active" }
-  | { type: "bankruptcy" }
-  | { type: "winding_up" }
+  | { type: "bankruptcy"; openedAt: string | null }
+  | { type: "voluntary_liquidation"; openedAt: string | null }
+  | { type: "compulsory_liquidation"; openedAt: string | null }
   | { type: "deleted"; deletedAt: string };
 
 export type BrregEntity = {
