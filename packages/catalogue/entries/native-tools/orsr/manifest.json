@@ -1,0 +1,18 @@
+{
+  "$schema": "../../../schema.json",
+  "kind": "native-tool",
+  "slug": "orsr",
+  "displayName": "Obchodný register SR",
+  "description": "Slovak company lookup by IČO or company name from the Obchodný register Slovenskej republiky JSON API operated by the Ministry of Justice.",
+  "author": "stella",
+  "authorUrl": "https://github.com/stella",
+  "license": "Apache-2.0",
+  "cost": "free",
+  "setup": "none",
+  "homepage": "https://sluzby.orsr.sk",
+  "tags": ["corporate", "regulatory"],
+  "jurisdictions": ["SK"],
+  "backendSlug": "orsr",
+  "url": "https://sluzby.orsr.sk",
+  "documentationUrl": "https://sluzby.orsr.sk"
+}

@@ -1,7 +1,7 @@
 {
   "name": "@stll/business-registries",
   "version": "0.1.0",
-  "description": "Typed clients for national business / commercial registries (Czech ARES, Norwegian Brreg, Finnish PRH, Polish KRS, UK Companies House, French INSEE Sirene, ...)",
+  "description": "Typed clients for national business / commercial registries (Czech ARES, Norwegian Brreg, Slovak ORSR, Finnish PRH, Polish KRS, UK Companies House, French INSEE Sirene, ...)",
   "keywords": [
     "ares",
     "brreg",
@@ -11,6 +11,8 @@
     "company-lookup",
     "krs",
     "legal",
+    "obchodny-register",
+    "orsr",
     "prh",
     "registry",
     "sirene"
@@ -54,6 +56,11 @@
       "bun": "./src/krs/index.ts",
       "types": "./src/krs/index.ts",
       "import": "./dist/krs/index.js"
+    },
+    "./orsr": {
+      "bun": "./src/orsr/index.ts",
+      "types": "./src/orsr/index.ts",
+      "import": "./dist/orsr/index.js"
     },
     "./prh": {
       "bun": "./src/prh/index.ts",

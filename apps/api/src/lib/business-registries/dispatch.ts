@@ -41,6 +41,17 @@ import {
   normalizeKrsNumber,
 } from "@stll/business-registries/krs";
 import {
+  OrsrAPIError,
+  type OrsrAddress,
+  type OrsrCompany,
+  OrsrRequestError,
+  type OrsrSearchResult,
+  OrsrValidationError,
+  lookupByIco as lookupOrsrByIco,
+  normalizeIco as normalizeOrsrIco,
+  searchByName as searchOrsrByName,
+} from "@stll/business-registries/orsr";
+import {
   PrhAPIError,
   type PrhCompany,
   PrhRequestError,
@@ -74,6 +85,7 @@ export const BUSINESS_REGISTRY_SLUGS = [
   "ares",
   "brreg",
   "krs",
+  "orsr",
   "prh",
   "recherche-entreprises",
 ] as const;
@@ -117,6 +129,7 @@ export type BusinessRegistryHitDetails =
   | { registry: "ares"; company: AresCompany }
   | { registry: "brreg"; entity: BrregEntity }
   | { registry: "krs"; entity: KrsEntity }
+  | { registry: "orsr"; company: OrsrCompany }
   | { registry: "prh"; company: PrhCompany }
   | { registry: "recherche-entreprises"; company: RechercheEntreprisesCompany };
 
@@ -381,6 +394,104 @@ const BRREG_HANDLER: RegistryHandler = {
     return results.map(brregSearchResultToHit);
   },
   mapError: mapBrregError,
+};
+
+// ---------------------------------------------------------------------------
+// ORSR (Slovakia)
+// ---------------------------------------------------------------------------
+
+const orsrAddressToHit = (
+  address: OrsrAddress | null,
+): BusinessRegistryAddress | null => {
+  if (!address) {
+    return null;
+  }
+  return {
+    line1: address.street,
+    line2: null,
+    postalCode: address.postalCode,
+    city: address.city,
+    region: null,
+    country: address.country,
+    textAddress: address.textAddress,
+  };
+};
+
+const orsrCompanyToHit = (company: OrsrCompany): BusinessRegistryHit => ({
+  registry: "orsr",
+  id: company.ico,
+  name: company.name,
+  legalForm: company.legalForm,
+  address: orsrAddressToHit(company.address),
+  registryUrl: company.registryUrl,
+  // Carry the full extract payload — Slovak corporate-law work needs
+  // statutory bodies, stakeholders, court file, and acting clause; the
+  // baseline cross-registry shape only surfaces name + address.
+  details: { registry: "orsr", company },
+});
+
+const orsrSearchResultToHit = (
+  result: OrsrSearchResult,
+): BusinessRegistryHit => ({
+  registry: "orsr",
+  id: result.ico,
+  name: result.name,
+  legalForm: null,
+  address: result.address
+    ? {
+        line1: null,
+        line2: null,
+        postalCode: null,
+        city: null,
+        region: null,
+        country: null,
+        textAddress: result.address,
+      }
+    : null,
+  // The search row omits the trade-register file reference needed to
+  // construct the canonical Subjekt deep link. Fall back to the
+  // public-search page keyed on the IČO so the user still has a
+  // verifiable link to the registry.
+  registryUrl: `https://sluzby.orsr.sk/vyhladavanie-podla-ico.aspx?lan=sk&ico=${encodeURIComponent(result.ico)}`,
+});
+
+const mapOrsrError = (error: unknown): HandlerError | null => {
+  if (error instanceof OrsrValidationError) {
+    return new HandlerError({ status: 400, message: error.message });
+  }
+  if (error instanceof OrsrAPIError) {
+    return new HandlerError({
+      status: 502,
+      message: `ORSR API error: ${error.message}`,
+    });
+  }
+  if (error instanceof OrsrRequestError) {
+    return new HandlerError({
+      status: 502,
+      message: `ORSR request failed: ${error.message}`,
+    });
+  }
+  return null;
+};
+
+const ORSR_HANDLER: RegistryHandler = {
+  slug: "orsr",
+  country: "SK",
+  nativeToolSlug: "orsr",
+  // Shape check only — full MOD-11 validation happens in lookupByIco
+  // and surfaces as OrsrValidationError → HTTP 400 via mapOrsrError.
+  // Falling through to search would silently turn a bad-checksum IČO
+  // into an empty name-search result.
+  isCanonicalId: (input) => /^\d{8}$/u.test(normalizeOrsrIco(input)),
+  lookup: async (input) => {
+    const company = await lookupOrsrByIco(input);
+    return company ? orsrCompanyToHit(company) : null;
+  },
+  search: async (input, options) => {
+    const results = await searchOrsrByName(input, options);
+    return results.map(orsrSearchResultToHit);
+  },
+  mapError: mapOrsrError,
 };
 
 // ---------------------------------------------------------------------------
@@ -670,6 +781,7 @@ export const BUSINESS_REGISTRY_DISPATCH: Record<
   ares: ARES_HANDLER,
   brreg: BRREG_HANDLER,
   krs: KRS_HANDLER,
+  orsr: ORSR_HANDLER,
   prh: PRH_HANDLER,
   "recherche-entreprises": RECHERCHE_ENTREPRISES_HANDLER,
 };

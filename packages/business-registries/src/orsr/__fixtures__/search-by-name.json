@@ -1,0 +1,385 @@
+{
+  "filteredCount": 18,
+  "data": [
+    {
+      "id": 609758,
+      "section": 3,
+      "insertNumber": 56319,
+      "court": 9,
+      "fileReference": {
+        "section": "Sro",
+        "insertNumber": 56319,
+        "court": "N",
+        "formattedValueSpaced": "Sro 56319/N",
+        "formattedValueUrlSafe": "Sro 56319 N"
+      },
+      "corporateBodyFullName": "Telekom s. r. o.",
+      "corporateBodyFullNames": [],
+      "registrationNumber": "54303346",
+      "physicalAddress": null,
+      "physicalAddressLine1": "Dunajská 7893/58A",
+      "physicalAddressLine2": "811 08 Bratislava - mestská časť Staré Mesto",
+      "documentsCount": 6,
+      "physicalPersonName": null
+    },
+    {
+      "id": 616272,
+      "section": 3,
+      "insertNumber": 159501,
+      "court": 2,
+      "fileReference": {
+        "section": "Sro",
+        "insertNumber": 159501,
+        "court": "B",
+        "formattedValueSpaced": "Sro 159501/B",
+        "formattedValueUrlSafe": "Sro 159501 B"
+      },
+      "corporateBodyFullName": "Telekom s. r. o.",
+      "corporateBodyFullNames": [],
+      "registrationNumber": "54303346",
+      "physicalAddress": null,
+      "physicalAddressLine1": "Dunajská 7893/58A",
+      "physicalAddressLine2": "811 08 Bratislava - mestská časť Staré Mesto",
+      "documentsCount": 14,
+      "physicalPersonName": null
+    },
+    {
+      "id": 84922,
+      "section": 3,
+      "insertNumber": 42889,
+      "court": 2,
+      "fileReference": {
+        "section": "Sro",
+        "insertNumber": 42889,
+        "court": "B",
+        "formattedValueSpaced": "Sro 42889/B",
+        "formattedValueUrlSafe": "Sro 42889 B"
+      },
+      "corporateBodyFullName": "Telekom Sec, s.r.o.",
+      "corporateBodyFullNames": [],
+      "registrationNumber": "36691143",
+      "physicalAddress": null,
+      "physicalAddressLine1": "Bajkalská 28",
+      "physicalAddressLine2": "817 62 Bratislava",
+      "documentsCount": 57,
+      "physicalPersonName": null
+    },
+    {
+      "id": 33948,
+      "section": 2,
+      "insertNumber": 2886,
+      "court": 2,
+      "fileReference": {
+        "section": "Sa",
+        "insertNumber": 2886,
+        "court": "B",
+        "formattedValueSpaced": "Sa 2886/B",
+        "formattedValueUrlSafe": "Sa 2886 B"
+      },
+      "corporateBodyFullName": "JIML, a.s. \"v likvidácii\"",
+      "corporateBodyFullNames": ["TELEKOM SERVIS SK, a.s."],
+      "registrationNumber": "35827718",
+      "physicalAddress": null,
+      "physicalAddressLine1": "Vajnorská 137",
+      "physicalAddressLine2": "831 04 Bratislava",
+      "documentsCount": 11,
+      "physicalPersonName": null
+    },
+    {
+      "id": 14744,
+      "section": 3,
+      "insertNumber": 12784,
+      "court": 2,
+      "fileReference": {
+        "section": "Sro",
+        "insertNumber": 12784,
+        "court": "B",
+        "formattedValueSpaced": "Sro 12784/B",
+        "formattedValueUrlSafe": "Sro 12784 B"
+      },
+      "corporateBodyFullName": "TELEKOM SERVIS, s.r.o.",
+      "corporateBodyFullNames": [],
+      "registrationNumber": "35705477",
+      "physicalAddress": null,
+      "physicalAddressLine1": "Pluhová 1A",
+      "physicalAddressLine2": "900 28 Ivanka pri Dunaji",
+      "documentsCount": 51,
+      "physicalPersonName": null
+    },
+    {
+      "id": 503636,
+      "section": 3,
+      "insertNumber": 143005,
+      "court": 2,
+      "fileReference": {
+        "section": "Sro",
+        "insertNumber": 143005,
+        "court": "B",
+        "formattedValueSpaced": "Sro 143005/B",
+        "formattedValueUrlSafe": "Sro 143005 B"
+      },
+      "corporateBodyFullName": "K.S.trans s.r.o.",
+      "corporateBodyFullNames": ["Telekom služby s.r.o."],
+      "registrationNumber": "52650073",
+      "physicalAddress": null,
+      "physicalAddressLine1": "Priemyselná 2",
+      "physicalAddressLine2": "040 01 Košice - mestská časť Staré Mesto",
+      "documentsCount": 13,
+      "physicalPersonName": null
+    },
+    {
+      "id": 682544,
+      "section": 3,
+      "insertNumber": 58700,
+      "court": 4,
+      "fileReference": {
+        "section": "Sro",
+        "insertNumber": 58700,
+        "court": "V",
+        "formattedValueSpaced": "Sro 58700/V",
+        "formattedValueUrlSafe": "Sro 58700 V"
+      },
+      "corporateBodyFullName": "K.S.trans s.r.o.",
+      "corporateBodyFullNames": ["Telekom služby s.r.o."],
+      "registrationNumber": "52650073",
+      "physicalAddress": null,
+      "physicalAddressLine1": "Priemyselná 2",
+      "physicalAddressLine2": "040 01 Košice - mestská časť Staré Mesto",
+      "documentsCount": 17,
+      "physicalPersonName": null
+    },
+    {
+      "id": 187071,
+      "section": 3,
+      "insertNumber": 23403,
+      "court": 8,
+      "fileReference": {
+        "section": "Sro",
+        "insertNumber": 23403,
+        "court": "P",
+        "formattedValueSpaced": "Sro 23403/P",
+        "formattedValueUrlSafe": "Sro 23403 P"
+      },
+      "corporateBodyFullName": "TELEKOM-MONT s.r.o.",
+      "corporateBodyFullNames": [],
+      "registrationNumber": "45571562",
+      "physicalAddress": null,
+      "physicalAddressLine1": "Rastislavova 3489/24",
+      "physicalAddressLine2": "058 01 Poprad",
+      "documentsCount": 32,
+      "physicalPersonName": null
+    },
+    {
+      "id": 4416,
+      "section": 3,
+      "insertNumber": 11036,
+      "court": 5,
+      "fileReference": {
+        "section": "Sro",
+        "insertNumber": 11036,
+        "court": "L",
+        "formattedValueSpaced": "Sro 11036/L",
+        "formattedValueUrlSafe": "Sro 11036 L"
+      },
+      "corporateBodyFullName": "Komplex s.r.o.",
+      "corporateBodyFullNames": ["TELEKOMPLEX, s.r.o."],
+      "registrationNumber": "36379107",
+      "physicalAddress": null,
+      "physicalAddressLine1": "ul.Pusté 861",
+      "physicalAddressLine2": "013 22 Rosina",
+      "documentsCount": 47,
+      "physicalPersonName": null
+    },
+    {
+      "id": 31206,
+      "section": 3,
+      "insertNumber": 23518,
+      "court": 2,
+      "fileReference": {
+        "section": "Sro",
+        "insertNumber": 23518,
+        "court": "B",
+        "formattedValueSpaced": "Sro 23518/B",
+        "formattedValueUrlSafe": "Sro 23518 B"
+      },
+      "corporateBodyFullName": "MAYORS s. r. o. ",
+      "corporateBodyFullNames": ["TELEKOMPROJEKT - M, s.r.o."],
+      "registrationNumber": "35806354",
+      "physicalAddress": null,
+      "physicalAddressLine1": "Magurská 37",
+      "physicalAddressLine2": "974 11 Banská Bystrica",
+      "documentsCount": 16,
+      "physicalPersonName": null
+    },
+    {
+      "id": 321776,
+      "section": 3,
+      "insertNumber": 27767,
+      "court": 3,
+      "fileReference": {
+        "section": "Sro",
+        "insertNumber": 27767,
+        "court": "S",
+        "formattedValueSpaced": "Sro 27767/S",
+        "formattedValueUrlSafe": "Sro 27767 S"
+      },
+      "corporateBodyFullName": "MAYORS s. r. o.",
+      "corporateBodyFullNames": ["TELEKOMPROJEKT - M, s.r.o."],
+      "registrationNumber": "35806354",
+      "physicalAddress": null,
+      "physicalAddressLine1": "Magurská 37",
+      "physicalAddressLine2": "974 11 Banská Bystrica",
+      "documentsCount": 19,
+      "physicalPersonName": null
+    },
+    {
+      "id": 7730,
+      "section": 3,
+      "insertNumber": 9181,
+      "court": 4,
+      "fileReference": {
+        "section": "Sro",
+        "insertNumber": 9181,
+        "court": "V",
+        "formattedValueSpaced": "Sro 9181/V",
+        "formattedValueUrlSafe": "Sro 9181 V"
+      },
+      "corporateBodyFullName": "Telekomunik, s.r.o.",
+      "corporateBodyFullNames": [],
+      "registrationNumber": "36171786",
+      "physicalAddress": null,
+      "physicalAddressLine1": "Klimkovičova 12",
+      "physicalAddressLine2": "040 23 Košice",
+      "documentsCount": 40,
+      "physicalPersonName": null
+    },
+    {
+      "id": 2321,
+      "section": 2,
+      "insertNumber": 304,
+      "court": 4,
+      "fileReference": {
+        "section": "Sa",
+        "insertNumber": 304,
+        "court": "V",
+        "formattedValueSpaced": "Sa 304/V",
+        "formattedValueUrlSafe": "Sa 304 V"
+      },
+      "corporateBodyFullName": "VSŽ TELEKOMUNIKÁCIE a.s. Košice",
+      "corporateBodyFullNames": ["TELEKOMUNIKÁCIE a.s. Košice"],
+      "registrationNumber": "31654983",
+      "physicalAddress": null,
+      "physicalAddressLine1": "Vstupný areál VSŽ",
+      "physicalAddressLine2": "044 54 Košice",
+      "documentsCount": 2,
+      "physicalPersonName": null
+    },
+    {
+      "id": 4115,
+      "section": 3,
+      "insertNumber": 1553,
+      "court": 2,
+      "fileReference": {
+        "section": "Sro",
+        "insertNumber": 1553,
+        "court": "B",
+        "formattedValueSpaced": "Sro 1553/B",
+        "formattedValueUrlSafe": "Sro 1553 B"
+      },
+      "corporateBodyFullName": "TAKT el. s.r.o.",
+      "corporateBodyFullNames": [
+        "Telekomunikačná a komputerová technika,      spol. s r.o.  skrátene : TAKT, spol. s.r.o."
+      ],
+      "registrationNumber": "17330220",
+      "physicalAddress": null,
+      "physicalAddressLine1": "Nám. Hraničiarov 14",
+      "physicalAddressLine2": "851 03 Bratislava",
+      "documentsCount": 16,
+      "physicalPersonName": null
+    },
+    {
+      "id": 564588,
+      "section": 3,
+      "insertNumber": 41787,
+      "court": 8,
+      "fileReference": {
+        "section": "Sro",
+        "insertNumber": 41787,
+        "court": "P",
+        "formattedValueSpaced": "Sro 41787/P",
+        "formattedValueUrlSafe": "Sro 41787 P"
+      },
+      "corporateBodyFullName": "Telekomunikačná správa bytov a domov spol. s r.o.",
+      "corporateBodyFullNames": [],
+      "registrationNumber": "53611161",
+      "physicalAddress": null,
+      "physicalAddressLine1": "Lipová 1",
+      "physicalAddressLine2": "080 01 Prešov",
+      "documentsCount": 14,
+      "physicalPersonName": null
+    },
+    {
+      "id": 243434,
+      "section": 2,
+      "insertNumber": 1575,
+      "court": 4,
+      "fileReference": {
+        "section": "Sa",
+        "insertNumber": 1575,
+        "court": "V",
+        "formattedValueSpaced": "Sa 1575/V",
+        "formattedValueUrlSafe": "Sa 1575 V"
+      },
+      "corporateBodyFullName": "Telekomunikačné a elektrotechnické riešenia, a.s.",
+      "corporateBodyFullNames": [],
+      "registrationNumber": "46744983",
+      "physicalAddress": null,
+      "physicalAddressLine1": "Družstevná 1723/9",
+      "physicalAddressLine2": "091 01 Stropkov",
+      "documentsCount": 32,
+      "physicalPersonName": null
+    },
+    {
+      "id": 545111,
+      "section": 2,
+      "insertNumber": 10564,
+      "court": 8,
+      "fileReference": {
+        "section": "Sa",
+        "insertNumber": 10564,
+        "court": "P",
+        "formattedValueSpaced": "Sa 10564/P",
+        "formattedValueUrlSafe": "Sa 10564 P"
+      },
+      "corporateBodyFullName": "Telekomunikačné a elektrotechnické riešenia, a.s.",
+      "corporateBodyFullNames": [],
+      "registrationNumber": "46744983",
+      "physicalAddress": null,
+      "physicalAddressLine1": "Družstevná 1723/9",
+      "physicalAddressLine2": "091 01 Stropkov",
+      "documentsCount": 62,
+      "physicalPersonName": null
+    },
+    {
+      "id": 160480,
+      "section": 3,
+      "insertNumber": 24218,
+      "court": 7,
+      "fileReference": {
+        "section": "Sro",
+        "insertNumber": 24218,
+        "court": "T",
+        "formattedValueSpaced": "Sro 24218/T",
+        "formattedValueUrlSafe": "Sro 24218 T"
+      },
+      "corporateBodyFullName": "TELEKOMUNIKATION & MORE  s.r.o.",
+      "corporateBodyFullNames": [],
+      "registrationNumber": "44927631",
+      "physicalAddress": null,
+      "physicalAddressLine1": "Fučíkova 120",
+      "physicalAddressLine2": "925 21 Sládkovičovo",
+      "documentsCount": 21,
+      "physicalPersonName": null
+    }
+  ]
+}
