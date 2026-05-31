@@ -315,12 +315,24 @@ const pickPersonIdentifier = (
 
 const buildSharesByName = (
   deposits: OrsrRawDeposit[] | undefined,
+  terminated: boolean,
 ): Map<string, OrsrRawDeposit> => {
   const result = new Map<string, OrsrRawDeposit>();
   if (!deposits) {
     return result;
   }
+  // Deposits are temporal records — a shareholder who has reduced
+  // their stake leaves multiple rows on file, only the most recent
+  // of which is `current: true`. Stakeholder rows themselves are
+  // filtered to `current === true` for live entities, so the share
+  // map must match or it pairs a current shareholder against a
+  // stale deposit amount. Terminated entities use the same
+  // historical fallback as the body/stakeholder parsers — accept
+  // every row, since the upstream stops marking anything as current.
   for (const deposit of deposits) {
+    if (!terminated && deposit.current !== true) {
+      continue;
+    }
     const stakeholder = deposit.stakeholder?.at(0);
     const name = stakeholder?.value;
     if (name && !result.has(name)) {
@@ -395,7 +407,7 @@ const parseStakeholders = (
   body: OrsrRawCorporateBody,
   terminated: boolean,
 ): OrsrStakeholder[] => {
-  const shares = buildSharesByName(body.deposits);
+  const shares = buildSharesByName(body.deposits, terminated);
   const result: OrsrStakeholder[] = [];
   for (const member of body.stakeholder ?? []) {
     // Same rationale as parseStatutoryBodies: terminated entities lose
