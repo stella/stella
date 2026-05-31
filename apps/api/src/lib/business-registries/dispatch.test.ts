@@ -6,6 +6,7 @@ import {
   BUSINESS_REGISTRY_DISPATCH,
   executeRegistryLookup,
   getRegistryHandlerByCountry,
+  isBusinessRegistryNativeToolDeployAvailable,
   type RegistryHandler,
 } from "@/api/lib/business-registries/dispatch";
 
@@ -148,6 +149,38 @@ describe("VIES handler wiring", () => {
     expect(result).toBeInstanceOf(Error);
     if (result instanceof Error) {
       expect(result.message).toContain("does not support name search");
+    }
+  });
+});
+
+describe("EDGAR deployment gating", () => {
+  test("does not expose the US handler when EDGAR_USER_AGENT is missing", () => {
+    const previous = process.env["EDGAR_USER_AGENT"];
+    delete process.env["EDGAR_USER_AGENT"];
+    try {
+      expect(getRegistryHandlerByCountry("US")).toBeUndefined();
+      expect(isBusinessRegistryNativeToolDeployAvailable("edgar")).toBe(false);
+    } finally {
+      if (previous === undefined) {
+        delete process.env["EDGAR_USER_AGENT"];
+      } else {
+        process.env["EDGAR_USER_AGENT"] = previous;
+      }
+    }
+  });
+
+  test("exposes the US handler when EDGAR_USER_AGENT is configured", () => {
+    const previous = process.env["EDGAR_USER_AGENT"];
+    process.env["EDGAR_USER_AGENT"] = "Stella stella@example.com";
+    try {
+      expect(getRegistryHandlerByCountry("US")?.slug).toBe("edgar");
+      expect(isBusinessRegistryNativeToolDeployAvailable("edgar")).toBe(true);
+    } finally {
+      if (previous === undefined) {
+        delete process.env["EDGAR_USER_AGENT"];
+      } else {
+        process.env["EDGAR_USER_AGENT"] = previous;
+      }
     }
   });
 });

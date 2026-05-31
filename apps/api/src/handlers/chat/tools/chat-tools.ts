@@ -34,7 +34,7 @@ import {
 } from "@/api/handlers/chat/tools/web-search-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
 import type { SafeId } from "@/api/lib/branded-types";
-import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
+import { getDeployAvailableRegistryHandlers } from "@/api/lib/business-registries/dispatch";
 import { isWebSearchDeployAvailable } from "@/api/lib/web-search/select-provider";
 
 export const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";
@@ -179,13 +179,11 @@ export const getChatTools = ({
   });
   // Unified business-registry tool: register once with a dynamic
   // `jurisdiction` enum derived from the per-adapter native-tool
-  // enablement. Shipped adapters live in BUSINESS_REGISTRY_DISPATCH;
-  // a registry is enabled for this turn iff its `nativeToolSlug`
-  // does NOT appear in `disabledNativeToolSlugs`. Empty list means
-  // the tool isn't registered at all (no dead picker for the model).
-  const businessRegistryJurisdictions = Object.values(
-    BUSINESS_REGISTRY_DISPATCH,
-  )
+  // enablement. Shipped adapters are filtered by deployment config
+  // first (e.g. EDGAR requires EDGAR_USER_AGENT), then by org-level
+  // native-tool enablement. Empty list means the tool isn't
+  // registered at all (no dead picker for the model).
+  const businessRegistryJurisdictions = getDeployAvailableRegistryHandlers()
     .filter(
       (handler) =>
         !(disabledNativeToolSlugs?.includes(handler.nativeToolSlug) ?? false),

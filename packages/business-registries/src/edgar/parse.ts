@@ -81,9 +81,12 @@ const parseRecentFilings = (
     return [];
   }
   const accession = raw.accessionNumber ?? [];
-  const limit = Math.min(accession.length, RECENT_FILINGS_LIMIT);
   const filings: EdgarFiling[] = [];
-  for (let i = 0; i < limit; i++) {
+  for (
+    let i = 0;
+    i < accession.length && filings.length < RECENT_FILINGS_LIMIT;
+    i++
+  ) {
     const accessionNumber = accession[i];
     const form = raw.form?.[i];
     const filingDate = raw.filingDate?.[i];

@@ -95,6 +95,47 @@ describe("parseSubmission (Apple fixture)", () => {
     expect(first?.filingDate).toBe("2026-05-29");
   });
 
+  test("skips incomplete recent filing rows without counting them against the limit", () => {
+    const out = parseSubmission(
+      {
+        cik: "0000000123",
+        name: "Sparse Filings Inc.",
+        entityType: "operating",
+        filings: {
+          recent: {
+            accessionNumber: [
+              "missing-form",
+              "valid-1",
+              "valid-2",
+              "valid-3",
+              "valid-4",
+              "valid-5",
+            ],
+            form: ["", "8-K", "10-Q", "10-K", "4", "DEF 14A"],
+            filingDate: [
+              "2026-05-30",
+              "2026-05-29",
+              "2026-05-28",
+              "2026-05-27",
+              "2026-05-26",
+              "2026-05-25",
+            ],
+          },
+        },
+      },
+      { now: APPLE_FIXTURE_NOW },
+    );
+
+    expect(out.recentFilings).toHaveLength(5);
+    expect(out.recentFilings.map((filing) => filing.accessionNumber)).toEqual([
+      "valid-1",
+      "valid-2",
+      "valid-3",
+      "valid-4",
+      "valid-5",
+    ]);
+  });
+
   test("derives active status from a recent filing + operating entityType", () => {
     const out = parseSubmission(apple, { now: APPLE_FIXTURE_NOW });
     expect(out.status).toEqual({ type: "active" });

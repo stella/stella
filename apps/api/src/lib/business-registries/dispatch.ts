@@ -238,9 +238,13 @@ export type RegistryHandler = {
         options?: { limit?: number },
       ) => Promise<BusinessRegistryHit[]>)
     | null;
+  /** Deployment-level gate for adapters that require server config. */
+  isDeployAvailable: () => boolean;
   /** Translate per-registry tagged errors into HandlerError. */
   mapError: (error: unknown) => HandlerError | null;
 };
+
+const isAlwaysDeployAvailable = (): boolean => true;
 
 // ---------------------------------------------------------------------------
 // ARES (Czech Republic)
@@ -357,6 +361,7 @@ const ARES_HANDLER: RegistryHandler = {
     const results = await searchAresByName(input, options);
     return results.map(aresSearchResultToHit);
   },
+  isDeployAvailable: isAlwaysDeployAvailable,
   mapError: mapAresError,
 };
 
@@ -445,6 +450,7 @@ const BRREG_HANDLER: RegistryHandler = {
     const results = await searchBrregByName(input, options);
     return results.map(brregSearchResultToHit);
   },
+  isDeployAvailable: isAlwaysDeployAvailable,
   mapError: mapBrregError,
 };
 
@@ -517,6 +523,9 @@ const mapEdgarError = (error: unknown): HandlerError | null => {
 // API server boot path validates it like the rest of config.
 const EDGAR_USER_AGENT_ENV_VAR = "EDGAR_USER_AGENT";
 
+export const isEdgarDeployAvailable = (): boolean =>
+  Boolean(process.env[EDGAR_USER_AGENT_ENV_VAR]?.trim());
+
 const requireEdgarUserAgent = (): string => {
   const userAgent = process.env[EDGAR_USER_AGENT_ENV_VAR]?.trim();
   if (!userAgent) {
@@ -545,6 +554,7 @@ const EDGAR_HANDLER: RegistryHandler = {
   // parse for the first slice. Surface "canonical-ID only" cleanly
   // via the existing null-search path; name search lands in a follow-up.
   search: null,
+  isDeployAvailable: isEdgarDeployAvailable,
   mapError: mapEdgarError,
 };
 
@@ -643,6 +653,7 @@ const GCIS_HANDLER: RegistryHandler = {
     const results = await searchGcisByName(input, options);
     return results.map(gcisSearchResultToHit);
   },
+  isDeployAvailable: isAlwaysDeployAvailable,
   mapError: mapGcisError,
 };
 
@@ -741,6 +752,7 @@ const ORSR_HANDLER: RegistryHandler = {
     const results = await searchOrsrByName(input, options);
     return results.map(orsrSearchResultToHit);
   },
+  isDeployAvailable: isAlwaysDeployAvailable,
   mapError: mapOrsrError,
 };
 
@@ -815,6 +827,7 @@ const KRS_HANDLER: RegistryHandler = {
   // is a separate REGON BIR1 / Biała Lista slice slated for a
   // follow-up PR.
   search: null,
+  isDeployAvailable: isAlwaysDeployAvailable,
   mapError: mapKrsError,
 };
 
@@ -979,6 +992,7 @@ const PRH_HANDLER: RegistryHandler = {
     const results = await searchPrhByName(input, options);
     return results.map(prhSearchResultToHit);
   },
+  isDeployAvailable: isAlwaysDeployAvailable,
   mapError: mapPrhError,
 };
 
@@ -1014,6 +1028,7 @@ const VIES_HANDLER: RegistryHandler = {
   // `null` lets `executeRegistryLookup` produce the standard
   // "name-search not supported" 400 instead of guessing.
   search: null,
+  isDeployAvailable: isAlwaysDeployAvailable,
   mapError: mapViesError,
 };
 
@@ -1118,6 +1133,7 @@ const RECHERCHE_ENTREPRISES_HANDLER: RegistryHandler = {
     const results = await searchRechercheEntreprisesByName(input, options);
     return results.map(rechercheEntreprisesSearchResultToHit);
   },
+  isDeployAvailable: isAlwaysDeployAvailable,
   mapError: mapRechercheEntreprisesError,
 };
 
@@ -1138,6 +1154,20 @@ export const BUSINESS_REGISTRY_DISPATCH: Record<
   prh: PRH_HANDLER,
   "recherche-entreprises": RECHERCHE_ENTREPRISES_HANDLER,
   vies: VIES_HANDLER,
+};
+
+export const getDeployAvailableRegistryHandlers = (): RegistryHandler[] =>
+  Object.values(BUSINESS_REGISTRY_DISPATCH).filter((handler) =>
+    handler.isDeployAvailable(),
+  );
+
+export const isBusinessRegistryNativeToolDeployAvailable = (
+  nativeToolSlug: string,
+): boolean => {
+  const handler = Object.values(BUSINESS_REGISTRY_DISPATCH).find(
+    (candidate) => candidate.nativeToolSlug === nativeToolSlug,
+  );
+  return handler?.isDeployAvailable() ?? true;
 };
 
 const HANDLERS_BY_JURISDICTION: ReadonlyMap<
@@ -1161,7 +1191,13 @@ const HANDLERS_BY_JURISDICTION: ReadonlyMap<
  */
 export const getRegistryHandlerByCountry = (
   country: RegistryJurisdictionCode,
-): RegistryHandler | undefined => HANDLERS_BY_JURISDICTION.get(country);
+): RegistryHandler | undefined => {
+  const handler = HANDLERS_BY_JURISDICTION.get(country);
+  if (!handler?.isDeployAvailable()) {
+    return undefined;
+  }
+  return handler;
+};
 
 /**
  * Run the dispatch flow for a registry handler: detect lookup vs.

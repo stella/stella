@@ -176,8 +176,8 @@ const envApi = createEnv({
      * SEC mandates a real contact string (e.g. "<App name>
      * <contact@email>") on every request to data.sec.gov; without it
      * the API returns 403. Required whenever the EDGAR business
-     * registry adapter is exposed; the adapter itself refuses to
-     * launch with an empty value.
+     * registry adapter is exposed; without it the runtime marks the
+     * adapter unavailable instead of surfacing a tool that will fail.
      */
     EDGAR_USER_AGENT: v.optional(
       v.pipe(
