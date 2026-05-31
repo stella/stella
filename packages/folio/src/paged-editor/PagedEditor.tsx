@@ -4678,6 +4678,20 @@ export function PagedEditor(
         return;
       }
 
+      // Don't process clicks that originated in portaled descendants
+      // (Dialog popup, Combobox popup, dropdowns, etc.). React bubbles
+      // synthetic events through the parent React tree even when the
+      // descendant is rendered via createPortal, so a click on a popup
+      // outside the editor DOM still reaches this handler. Without the
+      // guard, selection/focus logic below steals focus and dismisses
+      // the popup.
+      if (
+        pagesContainerRef.current &&
+        !pagesContainerRef.current.contains(target)
+      ) {
+        return;
+      }
+
       // Prevent default browser navigation for hyperlink clicks,
       // but let the rest of the handler run for cursor placement and drag selection.
       // The popup is shown in handlePagesClick (on mouseup) instead.
@@ -5726,6 +5740,14 @@ export function PagedEditor(
       if (!target) {
         return;
       }
+      // Skip clicks from portaled descendants (Dialog, Combobox popups
+      // etc.) — see handlePagesMouseDown for rationale.
+      if (
+        pagesContainerRef.current &&
+        !pagesContainerRef.current.contains(target)
+      ) {
+        return;
+      }
       // Handle hyperlink clicks (single-click only, not drag-to-select)
       const anchorClosest = target.closest("a[href]");
       const anchorEl =
@@ -6116,6 +6138,18 @@ export function PagedEditor(
       ) {
         return;
       }
+      // Don't steal focus from portaled popups (Dialog, Combobox, etc.).
+      // React bubbles synthetic events through the parent React tree even
+      // when descendants are rendered via createPortal; checking DOM
+      // containment against containerRef catches every portaled child,
+      // not just specific data-slot allowlists.
+      if (
+        e.target instanceof HTMLElement &&
+        containerRef.current &&
+        !containerRef.current.contains(e.target)
+      ) {
+        return;
+      }
       focusHiddenEditor();
     },
     [focusHiddenEditor],
@@ -6453,6 +6487,20 @@ export function PagedEditor(
       if (
         e.target instanceof HTMLElement &&
         e.target.closest("[data-hf-r-id]")
+      ) {
+        return;
+      }
+      // Don't steal focus from portaled popups (Dialog, Combobox, etc.).
+      // React bubbles synthetic events through the parent React tree even
+      // when descendants are rendered via createPortal; checking DOM
+      // containment against containerRef catches every portaled child,
+      // not just specific data-slot allowlists. Without this guard,
+      // focusHiddenEditor() snaps focus to the hidden PM and dismisses
+      // any open popup.
+      if (
+        e.target instanceof HTMLElement &&
+        containerRef.current &&
+        !containerRef.current.contains(e.target)
       ) {
         return;
       }
