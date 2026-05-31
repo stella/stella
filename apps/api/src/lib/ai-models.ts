@@ -932,12 +932,15 @@ const GOOGLE_SAFETY_SETTINGS_BASELINE = [
 
 type Settings = Parameters<typeof defaultSettingsMiddleware>[0]["settings"];
 
-type DefaultsBuilder = (
-  role: ModelRole,
-  orgId: SafeId<"organization"> | null,
-) => Settings;
+type DefaultsBuilderParams = {
+  role: ModelRole;
+  orgId: SafeId<"organization"> | null;
+  modelId: string;
+};
 
-const googleDefaults: DefaultsBuilder = (role) => ({
+type DefaultsBuilder = (params: DefaultsBuilderParams) => Settings;
+
+const googleDefaults: DefaultsBuilder = ({ role }) => ({
   temperature: TEMPERATURE_PER_ROLE[role],
   providerOptions: {
     google: {
@@ -964,18 +967,37 @@ type AnthropicReasoningSettings = Omit<Settings, "temperature"> & {
   temperature?: never;
 };
 
+const ANTHROPIC_LEGACY_THINKING_BUDGET_TOKENS = 10_000;
+
+const ANTHROPIC_ADAPTIVE_THINKING_MODELS = [
+  "claude-sonnet-4-6",
+  "claude-opus-4-6",
+  "claude-opus-4-7",
+] as const;
+
+const supportsAnthropicAdaptiveThinking = (modelId: string): boolean =>
+  ANTHROPIC_ADAPTIVE_THINKING_MODELS.some((supportedModelId) =>
+    modelId.includes(supportedModelId),
+  );
+
+const anthropicThinkingForModel = (modelId: string): JSONObject =>
+  supportsAnthropicAdaptiveThinking(modelId)
+    ? { type: "adaptive" }
+    : {
+        type: "enabled",
+        budgetTokens: ANTHROPIC_LEGACY_THINKING_BUDGET_TOKENS,
+      };
+
 const anthropicReasoningDefaults = (
   orgId: SafeId<"organization"> | null,
+  modelId: string,
 ): AnthropicReasoningSettings => {
-  // Adaptive thinking is supported on Claude 4.6+ (sonnet-4-6,
-  // opus-4-6, opus-4-7); earlier 4.5/3.x models expect the
-  // budget-based `type: "enabled"` form. Stella's reasoning role
-  // defaults to sonnet-4-6, so adaptive is correct for the common
-  // case; BYOK orgs that pin a 4-5 model should override at the
-  // call site.
+  // AI SDK source: adaptive thinking is supported on Claude
+  // sonnet-4-6, opus-4-6, opus-4-7; earlier 4.5 models use the
+  // budget-based `type: "enabled"` form.
   const anthropicOptions: JSONObject = {
     ...buildAnthropicMetadata(orgId),
-    thinking: { type: "adaptive" },
+    thinking: anthropicThinkingForModel(modelId),
   };
   return { providerOptions: { anthropic: anthropicOptions } };
 };
@@ -992,12 +1014,12 @@ const anthropicNonReasoningDefaults = (
   return settings;
 };
 
-const anthropicDefaults: DefaultsBuilder = (role, orgId) =>
+const anthropicDefaults: DefaultsBuilder = ({ role, orgId, modelId }) =>
   role === "reasoning"
-    ? anthropicReasoningDefaults(orgId)
+    ? anthropicReasoningDefaults(orgId, modelId)
     : anthropicNonReasoningDefaults(role, orgId);
 
-const openaiDefaults: DefaultsBuilder = (role) => {
+const openaiDefaults: DefaultsBuilder = ({ role }) => {
   const settings: Settings = { temperature: TEMPERATURE_PER_ROLE[role] };
   if (role === "reasoning") {
     settings.providerOptions = { openai: { reasoningEffort: "medium" } };
@@ -1007,7 +1029,7 @@ const openaiDefaults: DefaultsBuilder = (role) => {
 
 // Azure's AI SDK provider registers under `azure.*` (not `openai.*`),
 // and the property name is `reasoningEffort` (camelCase, not snake).
-const azureFoundryDefaults: DefaultsBuilder = (role) => {
+const azureFoundryDefaults: DefaultsBuilder = ({ role }) => {
   const settings: Settings = { temperature: TEMPERATURE_PER_ROLE[role] };
   if (role === "reasoning") {
     settings.providerOptions = { azure: { reasoningEffort: "medium" } };
@@ -1015,7 +1037,7 @@ const azureFoundryDefaults: DefaultsBuilder = (role) => {
   return settings;
 };
 
-const bareTemperatureDefaults: DefaultsBuilder = (role) => ({
+const bareTemperatureDefaults: DefaultsBuilder = ({ role }) => ({
   temperature: TEMPERATURE_PER_ROLE[role],
 });
 
@@ -1032,11 +1054,17 @@ const DEFAULTS_BUILDERS = {
   openai_compatible: bareTemperatureDefaults,
 } as const satisfies Record<AIProvider, DefaultsBuilder>;
 
-export const defaultsForRole = (
-  role: ModelRole,
-  provider: AIProvider,
-  orgId: SafeId<"organization"> | null,
-): Settings => DEFAULTS_BUILDERS[provider](role, orgId);
+type DefaultsForRoleParams = DefaultsBuilderParams & {
+  provider: AIProvider;
+};
+
+export const defaultsForRole = ({
+  role,
+  provider,
+  orgId,
+  modelId,
+}: DefaultsForRoleParams): Settings =>
+  DEFAULTS_BUILDERS[provider]({ role, orgId, modelId });
 
 const withInstrumentation = (
   model: WrappableLanguageModel,
@@ -1044,12 +1072,18 @@ const withInstrumentation = (
     provider: AIProvider;
     decision: CachingDecision;
     role: ModelRole;
+    modelId: string;
     organizationId: SafeId<"organization"> | null;
   },
 ): LanguageModel => {
   const middlewares: SingleMiddleware[] = [
     defaultSettingsMiddleware({
-      settings: defaultsForRole(ctx.role, ctx.provider, ctx.organizationId),
+      settings: defaultsForRole({
+        role: ctx.role,
+        provider: ctx.provider,
+        orgId: ctx.organizationId,
+        modelId: ctx.modelId,
+      }),
     }),
     cachingMiddleware(ctx.provider, ctx.decision),
   ];
@@ -1149,6 +1183,7 @@ export const getModelForRole = (
       provider: providerConfig.provider,
       decision,
       role,
+      modelId: selection.modelId,
       organizationId,
     });
   }
@@ -1172,6 +1207,7 @@ export const getModelForRole = (
     provider,
     decision,
     role,
+    modelId,
     organizationId,
   });
 };
@@ -1269,6 +1305,7 @@ export const getModelById = (
         provider: providerConfig.provider,
         decision,
         role,
+        modelId: override.modelId,
         organizationId,
       },
     );
@@ -1280,6 +1317,7 @@ export const getModelById = (
         provider: override.provider,
         decision,
         role,
+        modelId: override.modelId,
         organizationId,
       },
     );
@@ -1288,6 +1326,7 @@ export const getModelById = (
     provider: getActiveProvider(),
     decision,
     role,
+    modelId: override.modelId,
     organizationId,
   });
 };

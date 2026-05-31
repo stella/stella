@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import type { OrgAIConfig } from "@/api/lib/ai-models";
-import { toSafeId } from "@/api/lib/branded-types";
+import type { ModelRole, OrgAIConfig } from "@/api/lib/ai-models";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 
 process.env["EMAIL_PROVIDER"] ??= "smtp";
 process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
@@ -15,6 +15,7 @@ process.env["SMTP_HOST"] ??= "localhost";
 process.env["SMTP_PORT"] ??= "1025";
 
 const {
+  DEFAULT_MODELS,
   defaultsForRole,
   getModelForRole,
   getModelInfoById,
@@ -34,6 +35,19 @@ type AIProvider =
   | "anthropic"
   | "mistral"
   | "openai_compatible";
+
+const settingsForRole = (
+  role: ModelRole,
+  provider: AIProvider,
+  orgId: SafeId<"organization"> | null = null,
+  modelId: string = DEFAULT_MODELS[provider][role],
+) =>
+  defaultsForRole({
+    role,
+    provider,
+    orgId,
+    modelId,
+  });
 
 describe("supportsRegion", () => {
   test("google supports regional routing", () => {
@@ -460,7 +474,7 @@ describe("defaultsForRole", () => {
         if (provider === "anthropic" && role === "reasoning") {
           continue;
         }
-        expect(defaultsForRole(role, provider, null)).toMatchObject({
+        expect(settingsForRole(role, provider)).toMatchObject({
           temperature: 0,
         });
       }
@@ -468,25 +482,25 @@ describe("defaultsForRole", () => {
   });
 
   test("anthropic reasoning omits temperature", () => {
-    const settings = defaultsForRole("reasoning", "anthropic", null);
+    const settings = settingsForRole("reasoning", "anthropic");
     expect(settings.temperature).toBeUndefined();
   });
 
   test("google fast/chat/pdf use minimal thinking; reasoning uses high", () => {
     for (const role of ["fast", "chat", "pdf"] as const) {
-      const s = defaultsForRole(role, "google", null);
+      const s = settingsForRole(role, "google");
       expect(s.providerOptions?.["google"]).toMatchObject({
         thinkingConfig: { thinkingLevel: "minimal", includeThoughts: false },
       });
     }
-    const reasoning = defaultsForRole("reasoning", "google", null);
+    const reasoning = settingsForRole("reasoning", "google");
     expect(reasoning.providerOptions?.["google"]).toMatchObject({
       thinkingConfig: { thinkingLevel: "high", includeThoughts: false },
     });
   });
 
   test("google providerOptions include safetySettings baseline", () => {
-    const settings = defaultsForRole("fast", "google", null);
+    const settings = settingsForRole("fast", "google");
     const google = settings.providerOptions?.["google"] as
       | { safetySettings?: { category: string; threshold: string }[] }
       | undefined;
@@ -503,7 +517,7 @@ describe("defaultsForRole", () => {
     // SAFETY: SafeId is a branded string; the helper only hashes the
     // value, so a raw string is sound at runtime for this unit test.
     const orgId = toSafeId<"organization">("org_test_abc123");
-    const settings = defaultsForRole("fast", "anthropic", orgId);
+    const settings = settingsForRole("fast", "anthropic", orgId);
     const anthropic = settings.providerOptions?.["anthropic"] as
       | { metadata?: { userId?: string } & Record<string, unknown> }
       | undefined;
@@ -515,15 +529,28 @@ describe("defaultsForRole", () => {
   });
 
   test("anthropic reasoning enables adaptive thinking", () => {
-    const settings = defaultsForRole("reasoning", "anthropic", null);
+    const settings = settingsForRole("reasoning", "anthropic");
     expect(settings.providerOptions?.["anthropic"]).toMatchObject({
       thinking: { type: "adaptive" },
     });
   });
 
+  test("anthropic reasoning uses budget thinking for Claude 4.5", () => {
+    const settings = settingsForRole(
+      "reasoning",
+      "anthropic",
+      null,
+      "claude-haiku-4-5-20251001",
+    );
+    expect(settings.temperature).toBeUndefined();
+    expect(settings.providerOptions?.["anthropic"]).toMatchObject({
+      thinking: { type: "enabled", budgetTokens: 10_000 },
+    });
+  });
+
   test("anthropic fast/chat/pdf do not enable thinking", () => {
     for (const role of ["fast", "chat", "pdf"] as const) {
-      const s = defaultsForRole(role, "anthropic", null);
+      const s = settingsForRole(role, "anthropic");
       const anthropic = s.providerOptions?.["anthropic"] as
         | { thinking?: unknown }
         | undefined;
@@ -532,14 +559,14 @@ describe("defaultsForRole", () => {
   });
 
   test("openai reasoning sets reasoningEffort under openai key", () => {
-    const settings = defaultsForRole("reasoning", "openai", null);
+    const settings = settingsForRole("reasoning", "openai");
     expect(settings.providerOptions?.["openai"]).toMatchObject({
       reasoningEffort: "medium",
     });
   });
 
   test("azure_foundry reasoning sets reasoningEffort under azure key", () => {
-    const settings = defaultsForRole("reasoning", "azure_foundry", null);
+    const settings = settingsForRole("reasoning", "azure_foundry");
     expect(settings.providerOptions?.["azure"]).toMatchObject({
       reasoningEffort: "medium",
     });
@@ -548,7 +575,7 @@ describe("defaultsForRole", () => {
 
   test("openai non-reasoning roles set no provider options", () => {
     for (const role of ["fast", "chat", "pdf"] as const) {
-      const settings = defaultsForRole(role, "openai", null);
+      const settings = settingsForRole(role, "openai");
       expect(settings.providerOptions).toBeUndefined();
     }
   });
