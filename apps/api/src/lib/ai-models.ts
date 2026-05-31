@@ -26,8 +26,9 @@ import { createGoogleGenerativeAI, google } from "@ai-sdk/google";
 import { createVertex } from "@ai-sdk/google-vertex";
 import { createMistral, mistral } from "@ai-sdk/mistral";
 import { createOpenAI, openai } from "@ai-sdk/openai";
+import type { JSONObject } from "@ai-sdk/provider";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { wrapLanguageModel } from "ai";
+import { defaultSettingsMiddleware, wrapLanguageModel } from "ai";
 import type { LanguageModel, LanguageModelMiddleware } from "ai";
 import { panic, Result } from "better-result";
 
@@ -36,6 +37,7 @@ import {
   AZURE_FOUNDRY_DEFAULT_API_VERSION,
   normalizeAzureFoundryBaseURL,
 } from "@/api/lib/azure-foundry";
+import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 // -- Types ------------------------------------------------------
@@ -904,11 +906,185 @@ const cachingMiddleware = (
     await Promise.resolve(computeCachingParams(params, provider, decision)),
 });
 
+// -- Default settings -------------------------------------------
+
+/**
+ * Anthropic recommends an opaque hash for `metadata.user_id`
+ * rather than the raw organisation id. Truncated SHA-256 keeps
+ * the value stable per org without leaking the safe id verbatim.
+ */
+const hashOrgId = (orgId: SafeId<"organization">): string =>
+  new Bun.CryptoHasher("sha256").update(orgId).digest("hex").slice(0, 16);
+
+/**
+ * Sensible Google `safetySettings` baseline for legal-document
+ * workloads. The default Gemini thresholds occasionally refuse
+ * benign legal content (defamation discussions, criminal-case
+ * summaries); raising the threshold avoids surprise refusals
+ * while still blocking the worst categories at HIGH.
+ */
+const GOOGLE_SAFETY_SETTINGS_BASELINE = [
+  { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+  { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+  { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+  { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
+];
+
+type Settings = Parameters<typeof defaultSettingsMiddleware>[0]["settings"];
+
+type DefaultsBuilderParams = {
+  role: ModelRole;
+  orgId: SafeId<"organization"> | null;
+  modelId: string;
+};
+
+type DefaultsBuilder = (params: DefaultsBuilderParams) => Settings;
+
+const googleDefaults: DefaultsBuilder = ({ role }) => ({
+  temperature: TEMPERATURE_PER_ROLE[role],
+  providerOptions: {
+    google: {
+      thinkingConfig: {
+        thinkingLevel: role === "reasoning" ? "high" : "minimal",
+        includeThoughts: false,
+      },
+      safetySettings: GOOGLE_SAFETY_SETTINGS_BASELINE,
+    },
+  },
+});
+
+const buildAnthropicMetadata = (
+  orgId: SafeId<"organization"> | null,
+): { metadata: { userId: string } } | Record<string, never> =>
+  orgId === null ? {} : { metadata: { userId: hashOrgId(orgId) } };
+
+// `temperature?: never` makes it a compile error to set temperature
+// here. Anthropic rejects custom temperature when extended thinking
+// is enabled on Claude pre-Opus-4.7 (incl. stella's default
+// sonnet-4-6 for the reasoning role); the provider's built-in
+// default (1) is what the API requires when thinking is on.
+type AnthropicReasoningSettings = Omit<Settings, "temperature"> & {
+  temperature?: never;
+};
+
+const ANTHROPIC_LEGACY_THINKING_BUDGET_TOKENS = 10_000;
+
+const ANTHROPIC_ADAPTIVE_THINKING_MODELS = [
+  "claude-sonnet-4-6",
+  "claude-opus-4-6",
+  "claude-opus-4-7",
+] as const;
+
+const supportsAnthropicAdaptiveThinking = (modelId: string): boolean =>
+  ANTHROPIC_ADAPTIVE_THINKING_MODELS.some((supportedModelId) =>
+    modelId.includes(supportedModelId),
+  );
+
+const anthropicThinkingForModel = (modelId: string): JSONObject =>
+  supportsAnthropicAdaptiveThinking(modelId)
+    ? { type: "adaptive" }
+    : {
+        type: "enabled",
+        budgetTokens: ANTHROPIC_LEGACY_THINKING_BUDGET_TOKENS,
+      };
+
+const anthropicReasoningDefaults = (
+  orgId: SafeId<"organization"> | null,
+  modelId: string,
+): AnthropicReasoningSettings => {
+  // AI SDK source: adaptive thinking is supported on Claude
+  // sonnet-4-6, opus-4-6, opus-4-7; earlier 4.5 models use the
+  // budget-based `type: "enabled"` form.
+  const anthropicOptions: JSONObject = {
+    ...buildAnthropicMetadata(orgId),
+    thinking: anthropicThinkingForModel(modelId),
+  };
+  return { providerOptions: { anthropic: anthropicOptions } };
+};
+
+const anthropicNonReasoningDefaults = (
+  role: Exclude<ModelRole, "reasoning">,
+  orgId: SafeId<"organization"> | null,
+): Settings => {
+  const settings: Settings = { temperature: TEMPERATURE_PER_ROLE[role] };
+  if (orgId !== null) {
+    const anthropicOptions: JSONObject = buildAnthropicMetadata(orgId);
+    settings.providerOptions = { anthropic: anthropicOptions };
+  }
+  return settings;
+};
+
+const anthropicDefaults: DefaultsBuilder = ({ role, orgId, modelId }) =>
+  role === "reasoning"
+    ? anthropicReasoningDefaults(orgId, modelId)
+    : anthropicNonReasoningDefaults(role, orgId);
+
+const openaiDefaults: DefaultsBuilder = ({ role }) => {
+  const settings: Settings = { temperature: TEMPERATURE_PER_ROLE[role] };
+  if (role === "reasoning") {
+    settings.providerOptions = { openai: { reasoningEffort: "medium" } };
+  }
+  return settings;
+};
+
+// Azure's AI SDK provider registers under `azure.*` (not `openai.*`),
+// and the property name is `reasoningEffort` (camelCase, not snake).
+const azureFoundryDefaults: DefaultsBuilder = ({ role }) => {
+  const settings: Settings = { temperature: TEMPERATURE_PER_ROLE[role] };
+  if (role === "reasoning") {
+    settings.providerOptions = { azure: { reasoningEffort: "medium" } };
+  }
+  return settings;
+};
+
+const bareTemperatureDefaults: DefaultsBuilder = ({ role }) => ({
+  temperature: TEMPERATURE_PER_ROLE[role],
+});
+
+// `satisfies Record<AIProvider, ...>` makes adding a new provider to
+// AI_PROVIDERS a compile error here, so no provider can silently
+// fall through to a generic default that ignores its own knobs.
+const DEFAULTS_BUILDERS = {
+  google: googleDefaults,
+  anthropic: anthropicDefaults,
+  openai: openaiDefaults,
+  azure_foundry: azureFoundryDefaults,
+  openrouter: bareTemperatureDefaults,
+  mistral: bareTemperatureDefaults,
+  openai_compatible: bareTemperatureDefaults,
+} as const satisfies Record<AIProvider, DefaultsBuilder>;
+
+type DefaultsForRoleParams = DefaultsBuilderParams & {
+  provider: AIProvider;
+};
+
+export const defaultsForRole = ({
+  role,
+  provider,
+  orgId,
+  modelId,
+}: DefaultsForRoleParams): Settings =>
+  DEFAULTS_BUILDERS[provider]({ role, orgId, modelId });
+
 const withInstrumentation = (
   model: WrappableLanguageModel,
-  ctx: { provider: AIProvider; decision: CachingDecision },
+  ctx: {
+    provider: AIProvider;
+    decision: CachingDecision;
+    role: ModelRole;
+    modelId: string;
+    organizationId: SafeId<"organization"> | null;
+  },
 ): LanguageModel => {
   const middlewares: SingleMiddleware[] = [
+    defaultSettingsMiddleware({
+      settings: defaultsForRole({
+        role: ctx.role,
+        provider: ctx.provider,
+        orgId: ctx.organizationId,
+        modelId: ctx.modelId,
+      }),
+    }),
     cachingMiddleware(ctx.provider, ctx.decision),
   ];
   if (isAIDevToolsEnabled()) {
@@ -989,9 +1165,13 @@ export const validateDevModelOverride = (
 export const getModelForRole = (
   role: ModelRole,
   orgConfig: OrgAIConfig | null | undefined,
-  options: { promptCachingEnabled: boolean; scopeKey: string | null },
+  options: {
+    promptCachingEnabled: boolean;
+    scopeKey: string | null;
+    organizationId: SafeId<"organization"> | null;
+  },
 ): LanguageModel => {
-  const { promptCachingEnabled, scopeKey } = options;
+  const { promptCachingEnabled, scopeKey, organizationId } = options;
   // BYOK path: org selects a model for each role through
   // one of its configured provider credentials.
   if (orgConfig) {
@@ -1002,6 +1182,9 @@ export const getModelForRole = (
     return withInstrumentation(factory(selection.modelId), {
       provider: providerConfig.provider,
       decision,
+      role,
+      modelId: selection.modelId,
+      organizationId,
     });
   }
 
@@ -1023,6 +1206,9 @@ export const getModelForRole = (
   return withInstrumentation(getInstanceFactory()(modelId), {
     provider,
     decision,
+    role,
+    modelId,
+    organizationId,
   });
 };
 
@@ -1103,10 +1289,11 @@ export const getModelById = (
     promptCachingEnabled: boolean;
     scopeKey: string | null;
     role: ModelRole;
+    organizationId: SafeId<"organization"> | null;
   },
 ): LanguageModel => {
   const override = decodeModelOverride(modelId);
-  const { promptCachingEnabled, scopeKey, role } = options;
+  const { promptCachingEnabled, scopeKey, role, organizationId } = options;
   const decision = resolveCaching({ promptCachingEnabled, role, scopeKey });
   if (orgConfig) {
     const providerConfig = override.provider
@@ -1114,17 +1301,32 @@ export const getModelById = (
       : getPrimaryOrgProvider(orgConfig);
     return withInstrumentation(
       getCachedFactory(providerConfig)(override.modelId),
-      { provider: providerConfig.provider, decision },
+      {
+        provider: providerConfig.provider,
+        decision,
+        role,
+        modelId: override.modelId,
+        organizationId,
+      },
     );
   }
   if (override.provider) {
     return withInstrumentation(
       createModelFactory({ provider: override.provider })(override.modelId),
-      { provider: override.provider, decision },
+      {
+        provider: override.provider,
+        decision,
+        role,
+        modelId: override.modelId,
+        organizationId,
+      },
     );
   }
   return withInstrumentation(getInstanceFactory()(override.modelId), {
     provider: getActiveProvider(),
     decision,
+    role,
+    modelId: override.modelId,
+    organizationId,
   });
 };

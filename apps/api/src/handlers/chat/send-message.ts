@@ -596,6 +596,7 @@ const sendMessage = createSafeRootHandler(
                         parsedMessage.message,
                         resolvedResponseMessage,
                       ],
+                      organizationId: session.activeOrganizationId,
                       orgAIConfig,
                       promptCachingEnabled,
                       recordAuditEvent,
@@ -609,6 +610,7 @@ const sendMessage = createSafeRootHandler(
                 }
               },
               orgAIConfig,
+              organizationId: session.activeOrganizationId,
               devModelId: body.devModelId,
               promptCacheKey: chatContext.promptCacheKey,
               promptCachingEnabled,

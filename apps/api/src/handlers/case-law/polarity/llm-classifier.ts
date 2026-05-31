@@ -7,13 +7,12 @@
  * for potential rule generation.
  */
 
-import type { GoogleGenerativeAIProviderOptions } from "@ai-sdk/google";
 import { valibotSchema } from "@ai-sdk/valibot";
 import { generateText, Output } from "ai";
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { getModelForRole, getTemperatureForRole } from "@/api/lib/ai-models";
+import { getModelForRole } from "@/api/lib/ai-models";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 
@@ -84,8 +83,8 @@ export const classifyWithLLM = async (
         model: getModelForRole("fast", null, {
           promptCachingEnabled: true,
           scopeKey: `polarity:${language}`,
+          organizationId: null,
         }),
-        temperature: getTemperatureForRole("fast"),
         system: SYSTEM_PROMPT,
         messages: [
           {
@@ -99,14 +98,6 @@ ${context}`,
         output: Output.object({
           schema: valibotSchema(classificationSchema),
         }),
-        providerOptions: {
-          google: {
-            thinkingConfig: {
-              thinkingLevel: "minimal",
-              includeThoughts: false,
-            },
-          } satisfies GoogleGenerativeAIProviderOptions,
-        },
         abortSignal: abortSignal
           ? AbortSignal.any([abortSignal, AbortSignal.timeout(15_000)])
           : AbortSignal.timeout(15_000),

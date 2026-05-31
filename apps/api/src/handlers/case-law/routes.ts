@@ -87,6 +87,7 @@ const generateDecisionAnalysis = createSafeRootHandler(
   } satisfies HandlerConfig,
   async function* ({
     params: { decisionId },
+    session,
     scopedDb,
     orgAIConfig,
     promptCachingEnabled,
@@ -99,6 +100,7 @@ const generateDecisionAnalysis = createSafeRootHandler(
           await generateAnalysis(
             decisionId,
             scopedDb,
+            session.activeOrganizationId,
             orgAIConfig,
             promptCachingEnabled,
           ),

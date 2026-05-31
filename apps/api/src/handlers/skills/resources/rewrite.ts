@@ -4,11 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
-import {
-  getModelForRole,
-  getTemperatureForRole,
-  requireAIAvailable,
-} from "@/api/lib/ai-models";
+import { getModelForRole, requireAIAvailable } from "@/api/lib/ai-models";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -138,9 +134,9 @@ const rewriteSkillResource = createSafeRootHandler(
           model: getModelForRole("fast", orgAIConfig, {
             promptCachingEnabled,
             scopeKey: null,
+            organizationId: session.activeOrganizationId,
           }),
           prompt,
-          temperature: getTemperatureForRole("fast"),
           ...aiAnalytics.stepCallbacks,
         }),
       catch: (cause) => {

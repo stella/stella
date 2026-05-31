@@ -1,7 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import type { OrgAIConfig } from "@/api/lib/ai-models";
+import type { ModelRole, OrgAIConfig } from "@/api/lib/ai-models";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 
 process.env["EMAIL_PROVIDER"] ??= "smtp";
 process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
@@ -14,6 +15,8 @@ process.env["SMTP_HOST"] ??= "localhost";
 process.env["SMTP_PORT"] ??= "1025";
 
 const {
+  DEFAULT_MODELS,
+  defaultsForRole,
   getModelForRole,
   getModelInfoById,
   getModelInfoForRole,
@@ -32,6 +35,19 @@ type AIProvider =
   | "anthropic"
   | "mistral"
   | "openai_compatible";
+
+const settingsForRole = (
+  role: ModelRole,
+  provider: AIProvider,
+  orgId: SafeId<"organization"> | null = null,
+  modelId: string = DEFAULT_MODELS[provider][role],
+) =>
+  defaultsForRole({
+    role,
+    provider,
+    orgId,
+    modelId,
+  });
 
 describe("supportsRegion", () => {
   test("google supports regional routing", () => {
@@ -295,6 +311,7 @@ describe("BYOK model overrides", () => {
         getModelForRole(role, orgConfig, {
           promptCachingEnabled: true,
           scopeKey: null,
+          organizationId: null,
         }),
       ).not.toThrow();
     }
@@ -338,6 +355,7 @@ describe("BYOK model overrides", () => {
         getModelForRole(role, orgConfig, {
           promptCachingEnabled: true,
           scopeKey: null,
+          organizationId: null,
         }),
       ).not.toThrow();
     }
@@ -363,6 +381,7 @@ describe("BYOK model overrides", () => {
       getModelForRole("reasoning", orgConfig, {
         promptCachingEnabled: true,
         scopeKey: null,
+        organizationId: null,
       }),
     ).not.toThrow();
     expect(getModelInfoForRole("reasoning", orgConfig).modelId).toBe(
@@ -399,6 +418,7 @@ describe("BYOK model overrides", () => {
       getModelForRole("chat", orgConfig, {
         promptCachingEnabled: true,
         scopeKey: null,
+        organizationId: null,
       }),
     ).not.toThrow();
   });
@@ -437,5 +457,126 @@ describe("resolveCaching", () => {
       scopeKey: null,
     });
     expect(decision).toMatchObject({ enabled: true, scopeKey: null });
+  });
+});
+
+describe("defaultsForRole", () => {
+  test("temperature is 0 for every role", () => {
+    for (const role of ["fast", "chat", "reasoning", "pdf"] as const) {
+      for (const provider of [
+        "google",
+        "anthropic",
+        "openai",
+        "mistral",
+      ] as const) {
+        // Anthropic + reasoning intentionally omits temperature
+        // (incompatible with extended thinking on Claude pre-Opus-4.7).
+        if (provider === "anthropic" && role === "reasoning") {
+          continue;
+        }
+        expect(settingsForRole(role, provider)).toMatchObject({
+          temperature: 0,
+        });
+      }
+    }
+  });
+
+  test("anthropic reasoning omits temperature", () => {
+    const settings = settingsForRole("reasoning", "anthropic");
+    expect(settings.temperature).toBeUndefined();
+  });
+
+  test("google fast/chat/pdf use minimal thinking; reasoning uses high", () => {
+    for (const role of ["fast", "chat", "pdf"] as const) {
+      const s = settingsForRole(role, "google");
+      expect(s.providerOptions?.["google"]).toMatchObject({
+        thinkingConfig: { thinkingLevel: "minimal", includeThoughts: false },
+      });
+    }
+    const reasoning = settingsForRole("reasoning", "google");
+    expect(reasoning.providerOptions?.["google"]).toMatchObject({
+      thinkingConfig: { thinkingLevel: "high", includeThoughts: false },
+    });
+  });
+
+  test("google providerOptions include safetySettings baseline", () => {
+    const settings = settingsForRole("fast", "google");
+    const google = settings.providerOptions?.["google"] as
+      | { safetySettings?: { category: string; threshold: string }[] }
+      | undefined;
+    expect(google?.safetySettings).toBeDefined();
+    expect(google?.safetySettings?.length).toBeGreaterThan(0);
+    expect(
+      google?.safetySettings?.every(
+        (rule) => rule.threshold === "BLOCK_ONLY_HIGH",
+      ),
+    ).toBe(true);
+  });
+
+  test("anthropic includes hashed metadata.userId when orgId is given", () => {
+    // SAFETY: SafeId is a branded string; the helper only hashes the
+    // value, so a raw string is sound at runtime for this unit test.
+    const orgId = toSafeId<"organization">("org_test_abc123");
+    const settings = settingsForRole("fast", "anthropic", orgId);
+    const anthropic = settings.providerOptions?.["anthropic"] as
+      | { metadata?: { userId?: string } & Record<string, unknown> }
+      | undefined;
+    const metadata = anthropic?.metadata;
+    expect(metadata?.userId).toBeDefined();
+    expect(metadata?.userId).not.toBe("org_test_abc123");
+    expect(metadata?.userId?.length).toBe(16);
+    expect("user_id" in (metadata ?? {})).toBe(false);
+  });
+
+  test("anthropic reasoning enables adaptive thinking", () => {
+    const settings = settingsForRole("reasoning", "anthropic");
+    expect(settings.providerOptions?.["anthropic"]).toMatchObject({
+      thinking: { type: "adaptive" },
+    });
+  });
+
+  test("anthropic reasoning uses budget thinking for Claude 4.5", () => {
+    const settings = settingsForRole(
+      "reasoning",
+      "anthropic",
+      null,
+      "claude-haiku-4-5-20251001",
+    );
+    expect(settings.temperature).toBeUndefined();
+    expect(settings.providerOptions?.["anthropic"]).toMatchObject({
+      thinking: { type: "enabled", budgetTokens: 10_000 },
+    });
+  });
+
+  test("anthropic fast/chat/pdf do not enable thinking", () => {
+    for (const role of ["fast", "chat", "pdf"] as const) {
+      const s = settingsForRole(role, "anthropic");
+      const anthropic = s.providerOptions?.["anthropic"] as
+        | { thinking?: unknown }
+        | undefined;
+      expect(anthropic?.thinking).toBeUndefined();
+    }
+  });
+
+  test("openai reasoning sets reasoningEffort under openai key", () => {
+    const settings = settingsForRole("reasoning", "openai");
+    expect(settings.providerOptions?.["openai"]).toMatchObject({
+      reasoningEffort: "medium",
+    });
+  });
+
+  test("azure_foundry reasoning sets reasoningEffort under azure key", () => {
+    const settings = settingsForRole("reasoning", "azure_foundry");
+    expect(settings.providerOptions?.["azure"]).toMatchObject({
+      reasoningEffort: "medium",
+    });
+    expect(settings.providerOptions?.["openai"]).toBeUndefined();
+  });
+
+  test("openai non-reasoning roles set no provider options", () => {
+    for (const role of ["fast", "chat", "pdf"] as const) {
+      const settings = settingsForRole(role, "openai");
+      expect(settings.providerOptions).toBeUndefined();
+    }
   });
 });

@@ -6,7 +6,7 @@ import type { SafeDb } from "@/api/db";
 import { chatThreads } from "@/api/db/schema";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
-import { getModelForRole, getTemperatureForRole } from "@/api/lib/ai-models";
+import { getModelForRole } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -20,6 +20,7 @@ const TITLE_GENERATION_TIMEOUT_MS = 10_000;
 
 type GenerateThreadTitleProps = {
   messages: [ChatMessage, ChatMessage]; // [userMessage, AIMessage]
+  organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   promptCachingEnabled: boolean;
   recordAuditEvent: AuditRecorder;
@@ -30,6 +31,7 @@ type GenerateThreadTitleProps = {
 
 export const generateThreadTitle = async ({
   messages,
+  organizationId,
   orgAIConfig,
   promptCachingEnabled,
   recordAuditEvent,
@@ -56,12 +58,12 @@ export const generateThreadTitle = async ({
       model: getModelForRole("fast", orgAIConfig, {
         promptCachingEnabled,
         scopeKey: threadId,
+        organizationId,
       }),
       prompt: `Given this conversation, reply with a short thread title (max 6 words). Reply with the title only, nothing else.
 
 User: ${userText}
 Assistant: ${assistantText}`,
-      temperature: getTemperatureForRole("fast"),
       ...aiAnalytics.stepCallbacks,
     });
 

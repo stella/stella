@@ -303,6 +303,7 @@ const getBenchModel = async (): Promise<BenchModel | null> => {
         promptCachingEnabled: true,
         scopeKey: null,
         role: "fast",
+        organizationId: null,
       }),
       provider: info.provider,
     };
@@ -314,6 +315,7 @@ const getBenchModel = async (): Promise<BenchModel | null> => {
     model: getModelForRole("fast", null, {
       promptCachingEnabled: true,
       scopeKey: null,
+      organizationId: null,
     }),
     provider: info.provider,
   };

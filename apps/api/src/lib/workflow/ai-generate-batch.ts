@@ -4,11 +4,7 @@ import type { FilePart, TextPart } from "ai";
 import { Result } from "better-result";
 
 import { markCacheBreakpoint } from "@/api/lib/ai-caching";
-import {
-  getModelForRole,
-  getTemperatureForRole,
-  resolveCaching,
-} from "@/api/lib/ai-models";
+import { getModelForRole, resolveCaching } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -138,8 +134,8 @@ export const generateWorkflowData = async ({
         model: getModelForRole("pdf", orgAIConfig, {
           promptCachingEnabled,
           scopeKey: entityVersionId,
+          organizationId,
         }),
-        temperature: getTemperatureForRole("pdf"),
         messages: [{ role: "user", content: messageContent }],
         output: Output.object({ schema: valibotSchema(schema) }),
         system: WORKFLOW_SYSTEM_PROMPT,
