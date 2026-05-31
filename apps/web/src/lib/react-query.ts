@@ -60,10 +60,13 @@ export const ensureCriticalQueryData = async <
       queryClient.ensureQueryData(options),
       new Promise<never>((_resolve, reject) => {
         timeoutId = setTimeout(() => {
-          void queryClient.cancelQueries({
-            exact: true,
-            queryKey: options.queryKey,
-          });
+          void queryClient.cancelQueries(
+            {
+              exact: true,
+              queryKey: options.queryKey,
+            },
+            { revert: false },
+          );
           reject(
             new CriticalQueryTimeoutError({
               message: `Critical query timed out after ${timeoutMs}ms: ${formatQueryKey(options.queryKey)}`,

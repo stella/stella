@@ -8,7 +8,9 @@ import {
 } from "@/lib/react-query";
 
 const wait = async (ms: number) =>
-  await new Promise((resolve) => setTimeout(resolve, ms));
+  await new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 describe("ensureCriticalQueryData", () => {
   test("cancels timed-out critical queries and reports the query key", async () => {
@@ -28,7 +30,7 @@ describe("ensureCriticalQueryData", () => {
               "abort",
               () => {
                 abortReceived = true;
-                reject(signal.reason);
+                reject(new Error("Query aborted", { cause: signal.reason }));
               },
               { once: true },
             );
@@ -57,9 +59,12 @@ describe("ensureCriticalQueryData", () => {
     await wait(0);
 
     expect(abortReceived).toBe(true);
-    expect(
-      queryClient.getQueryCache().find({ queryKey })?.state.fetchStatus,
-    ).toBe("idle");
+    expect(queryClient.getQueryCache().find({ queryKey })?.state).toMatchObject(
+      {
+        fetchStatus: "idle",
+        status: "error",
+      },
+    );
   });
 
   test("does not cancel queries that resolve before the timeout", async () => {
