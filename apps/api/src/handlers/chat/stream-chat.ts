@@ -23,6 +23,7 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { getUserFileIdFromPart } from "@/api/handlers/chat/attachment-validation";
+import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {
   deanonymizeFromBoundary,
@@ -175,6 +176,29 @@ const runChatStream = async ({
     tools,
     experimental_repairToolCall: async ({ toolCall }) =>
       await Promise.resolve(repairActiveDocxEditToolCall(toolCall)),
+    prepareStep: async ({ messages }) => {
+      const compactedMessages = await compactModelMessagesForModel({
+        abortSignal,
+        messages,
+        model,
+        onSummaryError: (error) => {
+          captureError(error, {
+            threadId,
+            provider: modelInfo.provider,
+            modelId: modelInfo.modelId,
+            feature: "chat.step-compaction",
+          });
+        },
+      });
+      if (Result.isError(compactedMessages)) {
+        throw compactedMessages.error;
+      }
+      if (compactedMessages.value === messages) {
+        return undefined;
+      }
+
+      return { messages: compactedMessages.value };
+    },
     stopWhen: [stepCountIs(MAX_TOOL_STEPS), hasToolCall("ask-user")],
     messages: modelMessages,
     onFinish: ({ finishReason, totalUsage }) => {
