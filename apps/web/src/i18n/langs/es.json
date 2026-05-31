@@ -475,6 +475,7 @@
     "sendError": "Hubo un problema al enviar tu mensaje. Contacta con soporte si el error persiste.",
     "sendErrorAnonymizationBlocked": "stella no pudo anonimizar un archivo adjunto, así que no se envió nada. Quita el archivo o envía este mensaje sin anonimización.",
     "sendErrorInsufficientCredits": "El proveedor de IA necesita más créditos. Pídele al administrador del espacio de trabajo que recargue la cuenta.",
+    "sendErrorLoopDetected": "La respuesta de IA se repitió demasiadas veces. Inténtalo de nuevo con una solicitud más concreta.",
     "sendErrorProviderUnavailable": "El proveedor de IA no está disponible temporalmente. Inténtalo de nuevo en un momento.",
     "sendErrorQuotaExhausted": "Se ha agotado la cuota del proveedor de IA. Inténtalo de nuevo en un minuto o pídele al administrador del espacio de trabajo que mejore el plan.",
     "sendPrompt": "Enviar mensaje",

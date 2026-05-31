@@ -2,9 +2,11 @@ import type { ModelMessage } from "ai";
 import { describe, expect, test } from "bun:test";
 
 import {
-  createLoopRecoveryMessage,
+  createLoopRecoverySystemPrompt,
   detectModelLoop,
+  getLoopRecoveryKey,
   shouldInjectLoopRecovery,
+  shouldSurfaceFinalContentLoop,
   shouldStopLoopRecovery,
 } from "./loop-detector";
 
@@ -34,11 +36,12 @@ describe("model loop detection", () => {
 
     const detection = detectModelLoop(messages);
 
-    expect(detection).toEqual({
-      repetitionCount: 5,
-      toolName: "searchMatter",
-      type: "tool-call-loop",
-    });
+    expect(detection.type).toBe("tool-call-loop");
+    if (detection.type === "tool-call-loop") {
+      expect(detection.repetitionCount).toBe(5);
+      expect(detection.signature).toHaveLength(64);
+      expect(detection.toolName).toBe("searchMatter");
+    }
     expect(shouldInjectLoopRecovery(detection)).toBe(true);
   });
 
@@ -64,6 +67,21 @@ describe("model loop detection", () => {
     expect(detectModelLoop(messages).type).toBe("tool-call-loop");
   });
 
+  test("handles structured values that JSON.stringify cannot serialize", () => {
+    const messages = Array.from({ length: 5 }, () =>
+      toolCallMessage({ input: { amount: 10n } }),
+    );
+
+    const detection = detectModelLoop(messages);
+
+    expect(detection.type).toBe("tool-call-loop");
+    if (detection.type === "tool-call-loop") {
+      expect(detection.repetitionCount).toBe(5);
+      expect(detection.signature).toHaveLength(64);
+      expect(detection.toolName).toBe("searchMatter");
+    }
+  });
+
   test("does not flag batch work with different tool inputs", () => {
     const messages = Array.from({ length: 8 }, (_, index) =>
       toolCallMessage({ input: { documentId: `doc_${index}` } }),
@@ -81,11 +99,37 @@ describe("model loop detection", () => {
       toolCallMessage({ input: { query: "termination" } }),
     ]).flat();
 
-    expect(detectModelLoop(messages)).toEqual({
-      repetitionCount: 5,
-      toolName: "searchMatter",
-      type: "tool-call-loop",
-    });
+    const detection = detectModelLoop(messages);
+
+    expect(detection.type).toBe("tool-call-loop");
+    if (detection.type === "tool-call-loop") {
+      expect(detection.repetitionCount).toBe(5);
+      expect(detection.signature).toHaveLength(64);
+      expect(detection.toolName).toBe("searchMatter");
+    }
+  });
+
+  test("uses tool input identity in the internal recovery key", () => {
+    const firstDetection = detectModelLoop(
+      Array.from({ length: 5 }, () =>
+        toolCallMessage({ input: { query: "termination" } }),
+      ),
+    );
+    const nextDetection = detectModelLoop(
+      Array.from({ length: 5 }, () =>
+        toolCallMessage({ input: { query: "force majeure" } }),
+      ),
+    );
+    if (firstDetection.type !== "tool-call-loop") {
+      throw new Error("Expected first tool loop detection");
+    }
+    if (nextDetection.type !== "tool-call-loop") {
+      throw new Error("Expected next tool loop detection");
+    }
+
+    expect(getLoopRecoveryKey(nextDetection)).not.toBe(
+      getLoopRecoveryKey(firstDetection),
+    );
   });
 
   test("does not count repeated tool calls across separate user turns", () => {
@@ -132,7 +176,116 @@ describe("model loop detection", () => {
     ]);
 
     expect(detection.type).toBe("content-loop");
+    if (detection.type === "content-loop") {
+      expect(detection.repetitionCount).toBeGreaterThanOrEqual(10);
+      expect(detection.signature).toHaveLength(64);
+    }
+  });
+
+  test("hard-stops content loops that keep repeating past recovery", () => {
+    const repeated = "No progress was made on this exact same line. ";
+    const detection = detectModelLoop([
+      {
+        role: "assistant",
+        content: repeated.repeat(24),
+      },
+    ]);
+
+    expect(detection.type).toBe("content-loop");
+    expect(shouldStopLoopRecovery(detection)).toBe(true);
+  });
+
+  test("surfaces final content loops without treating tool loops as final text", () => {
+    const contentLoop = detectModelLoop([
+      {
+        role: "assistant",
+        content: "No progress was made on this exact same line. ".repeat(14),
+      },
+    ]);
+    const toolLoop = detectModelLoop(
+      Array.from({ length: 5 }, () =>
+        toolCallMessage({ input: { query: "termination" } }),
+      ),
+    );
+
+    expect(shouldSurfaceFinalContentLoop(contentLoop)).toBe(true);
+    expect(shouldSurfaceFinalContentLoop(toolLoop)).toBe(false);
+  });
+
+  test("uses repeated content identity in the internal recovery key", () => {
+    const firstDetection = detectModelLoop([
+      {
+        role: "assistant",
+        content: "No progress was made on this exact same line. ".repeat(14),
+      },
+    ]);
+    const nextDetection = detectModelLoop([
+      {
+        role: "assistant",
+        content: "Still repeating a different exact same line. ".repeat(14),
+      },
+    ]);
+    if (firstDetection.type !== "content-loop") {
+      throw new Error("Expected first content loop detection");
+    }
+    if (nextDetection.type !== "content-loop") {
+      throw new Error("Expected next content loop detection");
+    }
+
+    expect(getLoopRecoveryKey(nextDetection)).not.toBe(
+      getLoopRecoveryKey(firstDetection),
+    );
+  });
+
+  test("prefers the active content loop over stale repeated text", () => {
+    const staleChunk = "Earlier repeated text ".padEnd(50, "s");
+    const activeChunk = "New repeated text ".padEnd(50, "n");
+    const staleDetection = detectModelLoop([
+      {
+        role: "assistant",
+        content: staleChunk.repeat(20),
+      },
+    ]);
+    const detection = detectModelLoop([
+      {
+        role: "assistant",
+        content: `${staleChunk.repeat(20)}\n${activeChunk.repeat(10)}`,
+      },
+    ]);
+
+    expect(staleDetection.type).toBe("content-loop");
+    expect(detection.type).toBe("content-loop");
+    if (staleDetection.type === "none" || detection.type === "none") {
+      throw new Error("Expected content loop detection");
+    }
+
+    expect(detection.signature).not.toBe(staleDetection.signature);
+    expect(detection.repetitionCount).toBe(10);
     expect(shouldInjectLoopRecovery(detection)).toBe(true);
+  });
+
+  test("keeps the same recovery key when stale repeated text has not changed", () => {
+    const repeated = "No progress was made on this exact same line. ";
+    const firstDetection = detectModelLoop([
+      {
+        role: "assistant",
+        content: repeated.repeat(14),
+      },
+    ]);
+    const nextDetection = detectModelLoop([
+      {
+        role: "assistant",
+        content: repeated.repeat(14),
+      },
+      toolCallMessage({ input: { documentId: "doc_1" } }),
+    ]);
+    if (firstDetection.type === "none" || nextDetection.type === "none") {
+      throw new Error("Expected loop detection");
+    }
+
+    expect(getLoopRecoveryKey(nextDetection)).toBe(
+      getLoopRecoveryKey(firstDetection),
+    );
   });
 
   test("recovery message does not echo sensitive tool arguments", () => {
@@ -147,10 +300,14 @@ describe("model loop detection", () => {
       throw new Error("Expected loop detection");
     }
 
-    const recovery = createLoopRecoveryMessage(detection);
+    const recovery = createLoopRecoverySystemPrompt({
+      baseSystem: "Base system prompt.",
+      detection,
+    });
 
-    expect(recovery.content).not.toContain("Jan Novak");
-    expect(recovery.content).not.toContain("confidential dispute");
-    expect(recovery.content).toContain("searchMatter");
+    expect(recovery).not.toContain("Jan Novak");
+    expect(recovery).not.toContain("confidential dispute");
+    expect(recovery).toContain("Base system prompt.");
+    expect(recovery).toContain("searchMatter");
   });
 });

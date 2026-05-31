@@ -8,13 +8,17 @@
  */
 import { APICallError, RetryError } from "ai";
 
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  ChatLoopDetectedError,
+  HandlerError,
+} from "@/api/lib/errors/tagged-errors";
 import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
 
 export const AI_ERROR_KINDS = [
   "quota_exhausted",
   "insufficient_credits",
   "provider_unavailable",
+  "loop_detected",
   "unknown",
 ] as const;
 
@@ -23,6 +27,9 @@ export type AIErrorKind = (typeof AI_ERROR_KINDS)[number];
 export const classifyAIError = (error: unknown): AIErrorKind => {
   if (RetryError.isInstance(error)) {
     return classifyAIError(error.lastError);
+  }
+  if (ChatLoopDetectedError.is(error)) {
+    return "loop_detected";
   }
   if (APICallError.isInstance(error)) {
     if (error.statusCode === 429) {
@@ -89,6 +96,13 @@ export const aiHandlerError = (
         status: 502,
         message:
           "The AI provider is temporarily unavailable. Please try again in a moment.",
+        cause: error,
+      });
+    case "loop_detected":
+      return new HandlerError({
+        status: 502,
+        message:
+          "The AI model repeated the same work and could not recover. Please try again with a narrower request.",
         cause: error,
       });
     case "unknown":

@@ -117,6 +117,13 @@ export class ChatEmptyCompletionError extends TaggedError(
   message: string;
 }>() {}
 
+/** Chat agent looped past the recovery budget. */
+export class ChatLoopDetectedError extends TaggedError(
+  "ChatLoopDetectedError",
+)<{
+  message: string;
+}>() {}
+
 /** Sandbox execution failure: transpile, runtime, limit, or marshalling. */
 export class SandboxError extends TaggedError("SandboxError")<{
   reason:

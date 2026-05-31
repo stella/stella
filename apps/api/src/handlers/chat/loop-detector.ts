@@ -28,13 +28,21 @@ type ToolCallPart = Extract<AssistantContentPart, { type: "tool-call" }>;
 
 type ToolCallLoopDetection = {
   repetitionCount: number;
+  signature: string;
   toolName: string;
   type: "tool-call-loop";
 };
 
 type ContentLoopDetection = {
   repetitionCount: number;
+  signature: string;
   type: "content-loop";
+};
+
+type ContentLoopCandidate = {
+  lastIndex: number;
+  repetitionCount: number;
+  signature: string;
 };
 
 export type ModelLoopDetection =
@@ -76,16 +84,34 @@ export const shouldStopLoopRecovery = (
   return detection.repetitionCount >= PERSISTENT_LOOP_REPETITION_LIMIT;
 };
 
-export const createLoopRecoveryMessage = (
-  detection: Exclude<ModelLoopDetection, { type: "none" }>,
-): ModelMessage => ({
-  role: "system",
-  content: [
-    "System: Potential loop detected.",
+export const shouldSurfaceFinalContentLoop = (
+  detection: ModelLoopDetection,
+): detection is ContentLoopDetection => detection.type === "content-loop";
+
+export const createLoopRecoverySystemPrompt = ({
+  baseSystem,
+  detection,
+}: {
+  baseSystem: string;
+  detection: Exclude<ModelLoopDetection, { type: "none" }>;
+}): string =>
+  [
+    baseSystem,
+    "",
+    "Potential loop detected.",
     `Signal: ${describeLoopDetection(detection)}.`,
     "Take a step back before continuing. Confirm what has changed, choose a different approach, or ask the user a focused clarification if you are blocked. Do not repeat the same tool call or response without new information.",
-  ].join("\n"),
-});
+  ].join("\n");
+
+export const getLoopRecoveryKey = (
+  detection: Exclude<ModelLoopDetection, { type: "none" }>,
+): string => {
+  if (detection.type === "tool-call-loop") {
+    return `${detection.type}:${detection.signature}:${detection.repetitionCount}`;
+  }
+
+  return `${detection.type}:${detection.signature}:${detection.repetitionCount}`;
+};
 
 const detectToolCallLoop = (
   messages: readonly ModelMessage[],
@@ -109,6 +135,7 @@ const detectToolCallLoop = (
 
   return {
     repetitionCount,
+    signature: latest.key,
     toolName: latest.toolName,
     type: "tool-call-loop",
   };
@@ -164,6 +191,7 @@ const detectContentLoop = (
   }
 
   const chunkIndices = new Map<string, number[]>();
+  let candidate: ContentLoopCandidate | null = null;
   for (
     let index = 0;
     index + CONTENT_CHUNK_SIZE <= assistantText.length;
@@ -182,18 +210,46 @@ const detectContentLoop = (
 
     indices.push(index);
     const recent = indices.slice(-CONTENT_LOOP_THRESHOLD);
+    const lastIndex = recent.at(-1);
     if (
+      lastIndex !== undefined &&
       recent.length >= CONTENT_LOOP_THRESHOLD &&
       isClusteredContentLoop(assistantText, recent)
     ) {
-      return {
+      const nextCandidate = {
+        lastIndex,
         repetitionCount: indices.length,
-        type: "content-loop",
+        signature: hashString(chunk),
       };
+      if (isPreferredContentLoopCandidate(candidate, nextCandidate)) {
+        candidate = nextCandidate;
+      }
     }
   }
 
-  return { type: "none" };
+  if (!candidate) {
+    return { type: "none" };
+  }
+
+  return {
+    repetitionCount: candidate.repetitionCount,
+    signature: candidate.signature,
+    type: "content-loop",
+  };
+};
+
+const isPreferredContentLoopCandidate = (
+  current: ContentLoopCandidate | null,
+  next: ContentLoopCandidate,
+): boolean => {
+  if (!current) {
+    return true;
+  }
+  if (next.lastIndex !== current.lastIndex) {
+    return next.lastIndex > current.lastIndex;
+  }
+
+  return next.repetitionCount > current.repetitionCount;
 };
 
 const collectAssistantText = (
@@ -349,16 +405,46 @@ const describeLoopDetection = (
   return `${detection.repetitionCount} repeated assistant text chunks`;
 };
 
-const stableStringify = (value: unknown): string => {
+const stableStringify = (
+  value: unknown,
+  seen = new WeakSet<object>(),
+): string => {
+  if (value === null) {
+    return "null";
+  }
+
+  if (
+    typeof value === "boolean" ||
+    typeof value === "number" ||
+    typeof value === "string"
+  ) {
+    const serialized = JSON.stringify(value);
+    return typeof serialized === "string" ? serialized : String(value);
+  }
+
+  if (typeof value === "bigint") {
+    return `${value.toString()}n`;
+  }
+
   if (value === undefined) {
     return "undefined";
   }
-  if (value === null || typeof value !== "object") {
-    const serialized = JSON.stringify(value);
-    return typeof serialized === "string" ? serialized : "undefined";
+
+  if (typeof value === "symbol") {
+    return value.toString();
   }
+
+  if (typeof value === "function") {
+    return `[function ${value.name || "anonymous"}]`;
+  }
+
+  if (seen.has(value)) {
+    return "[circular]";
+  }
+
+  seen.add(value);
   if (Array.isArray(value)) {
-    return `[${value.map((item) => stableStringify(item)).join(",")}]`;
+    return `[${value.map((item) => stableStringify(item, seen)).join(",")}]`;
   }
 
   const serializedEntries: string[] = [];
@@ -366,7 +452,7 @@ const stableStringify = (value: unknown): string => {
     ([left], [right]) => left.localeCompare(right),
   )) {
     serializedEntries.push(
-      `${JSON.stringify(key)}:${stableStringify(entryValue)}`,
+      `${JSON.stringify(key)}:${stableStringify(entryValue, seen)}`,
     );
   }
 

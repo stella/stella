@@ -475,6 +475,7 @@
     "sendError": "Sõnumi saatmisel tekkis probleem. Kui viga püsib, võta ühendust toega.",
     "sendErrorAnonymizationBlocked": "stella ei saanud üht manust anonüümida, seega midagi ei saadetud. Eemalda fail või saada see sõnum anonüümimiseta.",
     "sendErrorInsufficientCredits": "AI-teenusepakkujal on vaja rohkem krediiti. Palu töökoha administraatoril kontot täiendada.",
+    "sendErrorLoopDetected": "AI vastus kordus liiga palju. Proovi uuesti kitsama päringuga.",
     "sendErrorProviderUnavailable": "AI-teenusepakkuja pole hetkel saadaval. Proovi hetke pärast uuesti.",
     "sendErrorQuotaExhausted": "AI-teenusepakkuja kvoot on otsas. Proovi minuti pärast uuesti või palu töökoha administraatoril paketti uuendada.",
     "sendPrompt": "Saada sõnum",
