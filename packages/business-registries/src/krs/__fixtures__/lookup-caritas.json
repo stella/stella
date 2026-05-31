@@ -1,0 +1,253 @@
+{
+  "odpis": {
+    "rodzaj": "Aktualny",
+    "naglowekA": {
+      "rejestr": "RejS",
+      "numerKRS": "0000198645",
+      "dataCzasOdpisu": "31.05.2026 06:14:00",
+      "stanZDnia": "19.03.2026",
+      "dataRejestracjiWKRS": "05.03.2004",
+      "numerOstatniegoWpisu": 44,
+      "dataOstatniegoWpisu": "19.03.2026",
+      "sygnaturaAktSprawyDotyczacejOstatniegoWpisu": "WA.XIII NS-REJ.KRS/13645/26/135",
+      "oznaczenieSaduDokonujacegoOstatniegoWpisu": "SĄD REJONOWY DLA M.ST. WARSZAWY W WARSZAWIE, XIII WYDZIAŁ GOSPODARCZY KRAJOWEGO REJESTRU SĄDOWEGO",
+      "stanPozycji": 3
+    },
+    "dane": {
+      "dzial1": {
+        "danePodmiotu": {
+          "formaPrawna": "KOŚCIELNA OSOBA PRAWNA BĘDĄCA ORGANIZACJĄ POŻYTKU PUBLICZNEGO",
+          "identyfikatory": {
+            "regon": "01206414300000",
+            "nip": "5271006655"
+          },
+          "nazwa": "CARITAS POLSKA",
+          "daneOWczesniejszejRejestracji": {
+            "sadProwadzacyRejestr": "NAZWA ORGANU PROWADZĄCEGO REJESTR - MINISTER SPRAW WEWNĘTRZNYCH I ADMINISTRACJI - W TRYBIE ART. 13 UST. 1 I 2 PKT 1 I UST. 5 NA PODSTAWIE ART. 7 UST. 2 PKT 2 USTAWY Z DNIA 17 MAJA 1989R. O STOSUNKU PAŃSTWA DO KOŚCIOŁA KATOLICKIEGO W RZECZYPOSPOLITEJ POLSKIEJ (DZ. U. NR 29, POZ. 154 Z PÓŹN. ZM.)"
+          },
+          "czyPosiadaStatusOPP": true
+        },
+        "siedzibaIAdres": {
+          "siedziba": {
+            "kraj": "POLSKA",
+            "wojewodztwo": "MAZOWIECKIE",
+            "powiat": "M. ST. WARSZAWA",
+            "gmina": "M. ST. WARSZAWA",
+            "miejscowosc": "WARSZAWA"
+          },
+          "adres": {
+            "ulica": "OKOPOWA",
+            "nrDomu": "55",
+            "miejscowosc": "WARSZAWA",
+            "kodPocztowy": "01-043",
+            "poczta": "WARSZAWA",
+            "kraj": "POLSKA"
+          },
+          "adresStronyInternetowej": "WWW.CARITAS.PL",
+          "adresDoDoreczenElektronicznychWpisanyDoBAE": "AE:PL-21170-38927-HIJFT-27"
+        },
+        "umowaStatut": {
+          "informacjaOZawarciuZmianieUmowyStatutu": [
+            {
+              "zawarcieZmianaUmowyStatutu": "DATA SPORZĄDZENIA STATUTU 10.10.1990 R."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "26-28 WRZEŚNIA 2008 R.\nZMIENIONO BRZMIENIE I OZNACZENIE DOTYCHCZASOWYCH §1-§33 NA §1 - §32"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "15 MARCA 2011 ROKU\nDODANO: W §16 PKT 4, W §16 PKT 5\nZMIENIONO: §28 PKT 1, §28 PKT 4"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "09.10.2013 R., ZMIENIONO BRZMIENIE I OZNACZENIE DOTYCHCZASOWYCH §1-§32 NA §1-§34"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "09.06.2015 R.\nDODANIE DO § 7 PKT. 10"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "04.10.2016R., ZMIANA BRZEMIENIA §28 UST. 1-2"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "25.09.2018 R., ZMIANA: §5, §6 UST. 1, §7, §11 UST. 4, §12 UST. 3, §24, §26, §27, USUNIĘCIE: §34"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "11 CZERWCA 2021 R., ZMIANA TREŚCI § 7 UST. 3 PKT 29, § 12 UST. 2 I UST. 3 STATUTU, DODANIE UST. 5 W § 12 ORAZ UST. 2 W § 26 STATUTU"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "13.03.2023 R. - DODANO § 7 UST. 1 PKT 14, § 7 UST. 3 PKT 30, ZMIENIONO § 7 UST. 3 PKT 29, PRZYJĘTO TEKST JEDNOLITY."
+            }
+          ]
+        },
+        "pozostaleInformacje": {
+          "czasNaJakiUtworzonyZostalPodmiot": "NIEOZNACZONY"
+        },
+        "organSprawujacyNadzor": {
+          "nazwa": "KONFERENCJA EPISKOPATU POLSKI"
+        }
+      },
+      "dzial2": {
+        "reprezentacja": {
+          "nazwaOrganu": "DYREKTOR",
+          "sposobReprezentacji": "- DYREKTOR REPREZENTUJE JEDNOOSOBOWO CARITAS POLSKA I WYSTĘPUJE W JEJ IMIENIU ZGODNIE Z PRZEPISAMI PRAWA [§12 UST.1 PKT 2) W ZW. Z §10 STATUTU];\n- REPREZENTOWANIE CARITAS POLSKA PRZEZ ZASTĘPCĘ DYREKTORA MOŻLIWE JEST WYŁĄCZNIE NA PODSTAWIE I W ZAKRESIE PEŁNOMOCNICTWA UDZIELONEGO PRZEZ DYREKTORA W IMIENIU CARITAS POLSKA [§13 UST.2 W ZW. Z §10 STATUTU]",
+          "sklad": [
+            {
+              "nazwisko": {
+                "nazwiskoICzlon": "M****"
+              },
+              "imiona": {
+                "imie": "J*****",
+                "imieDrugie": "A******"
+              },
+              "identyfikator": {
+                "pesel": "6**********"
+              },
+              "funkcjaWOrganie": "DYREKTOR"
+            }
+          ]
+        },
+        "organNadzoru": [
+          {
+            "nazwa": "KOMISJA NADZORCZA",
+            "sklad": [
+              {
+                "nazwisko": {
+                  "nazwiskoICzlon": "M****"
+                },
+                "imiona": {
+                  "imie": "J****"
+                },
+                "identyfikator": {
+                  "pesel": "5**********"
+                }
+              },
+              {
+                "nazwisko": {
+                  "nazwiskoICzlon": "W*********"
+                },
+                "imiona": {
+                  "imie": "K********",
+                  "imieDrugie": "S*****"
+                },
+                "identyfikator": {
+                  "pesel": "6**********"
+                }
+              },
+              {
+                "nazwisko": {
+                  "nazwiskoICzlon": "C******"
+                },
+                "imiona": {
+                  "imie": "K********",
+                  "imieDrugie": "P****"
+                },
+                "identyfikator": {
+                  "pesel": "6**********"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "dzial3": {
+        "wzmiankiOZlozonychDokumentach": {
+          "wzmiankaOZlozeniuRocznegoSprawozdaniaFinansowego": [
+            {
+              "dataZlozenia": "26.06.2006",
+              "zaOkresOdDo": "01.01.2005-31.12.2005"
+            },
+            {
+              "dataZlozenia": "03.04.2007",
+              "zaOkresOdDo": "01.01.2006 - 31.12.2006"
+            },
+            {
+              "dataZlozenia": "16.07.2008",
+              "zaOkresOdDo": "01.01.2007 - 31.12.2007"
+            },
+            {
+              "dataZlozenia": "13.07.2009",
+              "zaOkresOdDo": "01.01.2008 R. -  31.12.2008 R."
+            }
+          ],
+          "wzmiankaOZlozeniuSprawozdaniaZDzialalnosci": [
+            {
+              "zaOkresOdDo": "SPRAWOZDANIE MERYTORYCZNE Z DZIAŁALNOŚCI 01.01.2005-31.12.2005"
+            },
+            {
+              "zaOkresOdDo": "01.01.2006 - 31.12.2006 SPRAWOZDANIE Z DZIAŁALNOŚCI ORGANIZACJI POŻYTKU PUBLICZNEGO"
+            },
+            {
+              "zaOkresOdDo": "01.01.2007 - 31.12.2007 MERYTORYCZNE SPRAWOZDANIE Z DZIAŁALNOŚCI ORGANIZACJI POŻYTKU PUBLICZNEGO"
+            },
+            {
+              "zaOkresOdDo": "01.01.2008 R.-31.12.2008 R. MERYTORYCZNE SPRAWOZDANIE Z DZIAŁALNOŚCI ORGANIZACJI POŻYTKU PUBLICZNEGO"
+            }
+          ]
+        },
+        "celDzialaniaOrganizacji": {
+          "celDzialania": "CELEM CARITAS JEST KOŚCIELNA DZIAŁALNOŚĆ MIŁOSIERDZIA REALIZOWANA W ZAKRESIE POTRZEB DUCHOWYCH I MATERIALNYCH CZŁOWIEKA ORAZ DZIAŁALNOŚĆ POŻYTKU PUBLICZNEGO W SFERZE ZADAŃ OKREŚLONYCH W STATUCIE, W TYM DZIAŁALNOŚĆ CHARYTATYWNA I HUMANITARNA PEŁNIONA W DUCHU POSZANOWANIA OSOBY LUDZKIEJ BEZ WZGLĘDU NA WYZNANIE, ŚWIATOPOGLĄD, NARODOWOŚĆ, RASĘ I PRZEKONANIE."
+        },
+        "przedmiotDzialalnosciOPP": {
+          "odplatnyPkd": [],
+          "nieodplatnyPkd": [
+            {
+              "opis": "DZIAŁALNOŚĆ POZOSTAŁYCH ORGANIZACJI CZŁONKOWSKICH,GDZIE INDZIEJ NIESKLASYFIKOWANA",
+              "kodDzial": "94",
+              "kodKlasa": "99",
+              "kodPodklasa": "Z"
+            },
+            {
+              "opis": "POZOSTAŁA POMOC SPOŁECZNA BEZ ZAKWATEROWANIA, GDZIE INDZIEJ NIESKLASYFIKOWANA",
+              "kodDzial": "88",
+              "kodKlasa": "99",
+              "kodPodklasa": "Z"
+            },
+            {
+              "opis": "WYDAWANIE KSIĄŻEK",
+              "kodDzial": "58",
+              "kodKlasa": "11",
+              "kodPodklasa": "Z"
+            },
+            {
+              "opis": "DZIAŁALNOŚĆ ZWIĄZANA Z ORGANIZACJĄ TARGÓW, WYSTAW I KONGRESÓW",
+              "kodDzial": "82",
+              "kodKlasa": "30",
+              "kodPodklasa": "Z"
+            },
+            {
+              "opis": "DZIAŁALNOŚĆ WSPOMAGAJĄCA EDUKACJĘ, GDZIE INDZIEJ NIESKLASYFIKOWANA",
+              "kodDzial": "85",
+              "kodKlasa": "69",
+              "kodPodklasa": "Z"
+            },
+            {
+              "opis": "POMOC SPOŁECZNA Z ZAKWATEROWANIEM DLA OSÓB Z ZABURZENIAMI PSYCHICZNYMI LUB UZALEŻNIENIAMI",
+              "kodDzial": "87",
+              "kodKlasa": "20",
+              "kodPodklasa": "Z"
+            },
+            {
+              "opis": "POMOC SPOŁECZNA Z ZAKWATEROWANIEM ZAPEWNIAJĄCA OPIEKĘ PIELĘGNIARSKĄ",
+              "kodDzial": "87",
+              "kodKlasa": "10",
+              "kodPodklasa": "Z"
+            },
+            {
+              "opis": "POZOSTAŁA POMOC SPOŁECZNA Z ZAKWATEROWANIEM, GDZIE INDZIEJ NIESKLASYFIKOWANA",
+              "kodDzial": "87",
+              "kodKlasa": "99",
+              "kodPodklasa": "Z"
+            },
+            {
+              "opis": "POMOC SPOŁECZNA BEZ ZAKWATEROWANIA DLA OSÓB STARSZYCH LUB OSÓB Z NIEPEŁNOSPRAWNOŚCIAMI",
+              "kodDzial": "88",
+              "kodKlasa": "10",
+              "kodPodklasa": "Z"
+            }
+          ]
+        }
+      },
+      "dzial4": {},
+      "dzial5": {},
+      "dzial6": {}
+    }
+  }
+}

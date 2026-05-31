@@ -33,6 +33,14 @@ import {
   searchByName as searchBrregByName,
 } from "@stll/business-registries/brreg";
 import {
+  KrsAPIError,
+  type KrsEntity,
+  KrsRequestError,
+  KrsValidationError,
+  lookupByKrsNumber,
+  normalizeKrsNumber,
+} from "@stll/business-registries/krs";
+import {
   PrhAPIError,
   type PrhCompany,
   PrhRequestError,
@@ -65,6 +73,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 export const BUSINESS_REGISTRY_SLUGS = [
   "ares",
   "brreg",
+  "krs",
   "prh",
   "recherche-entreprises",
 ] as const;
@@ -107,6 +116,7 @@ export type BusinessRegistryHit = {
 export type BusinessRegistryHitDetails =
   | { registry: "ares"; company: AresCompany }
   | { registry: "brreg"; entity: BrregEntity }
+  | { registry: "krs"; entity: KrsEntity }
   | { registry: "prh"; company: PrhCompany }
   | { registry: "recherche-entreprises"; company: RechercheEntreprisesCompany };
 
@@ -374,6 +384,80 @@ const BRREG_HANDLER: RegistryHandler = {
 };
 
 // ---------------------------------------------------------------------------
+// KRS (Poland)
+// ---------------------------------------------------------------------------
+
+const krsEntityToHit = (entity: KrsEntity): BusinessRegistryHit => ({
+  registry: "krs",
+  id: entity.krsNumber,
+  name: entity.name,
+  legalForm: entity.legalForm,
+  address: entity.address
+    ? {
+        line1: entity.address.street,
+        line2: null,
+        postalCode: entity.address.postalCode,
+        city: entity.address.city,
+        // KRS files an administrative seat (wojewodztwo / powiat /
+        // gmina) separately from the postal address. We surface the
+        // voivodeship here because it's the cross-cutting region
+        // identifier callers expect; the full seat travels inside
+        // `details` for chat callers that need finer granularity.
+        region: entity.registeredSeat?.voivodeship ?? null,
+        country: entity.address.country,
+        textAddress: entity.address.textAddress,
+      }
+    : null,
+  registryUrl: entity.registryUrl,
+  // Surface identifiers (NIP / REGON), registered seat, lifecycle
+  // status, and contact channels — the chat tool needs more than
+  // name + address to answer questions about Polish entities.
+  details: { registry: "krs", entity },
+});
+
+const mapKrsError = (error: unknown): HandlerError | null => {
+  if (error instanceof KrsValidationError) {
+    return new HandlerError({ status: 400, message: error.message });
+  }
+  if (error instanceof KrsAPIError) {
+    return new HandlerError({
+      status: 502,
+      message: `KRS API error: ${error.message}`,
+    });
+  }
+  if (error instanceof KrsRequestError) {
+    return new HandlerError({
+      status: 502,
+      message: `KRS request failed: ${error.message}`,
+    });
+  }
+  return null;
+};
+
+const KRS_HANDLER: RegistryHandler = {
+  slug: "krs",
+  country: "PL",
+  nativeToolSlug: "krs",
+  // Shape check only — full 10-digit validation happens in
+  // lookupByKrsNumber and surfaces as KrsValidationError → HTTP 400
+  // via mapKrsError. Falling through to search would silently turn a
+  // malformed KRS number into "unsupported name search" (KRS has no
+  // name endpoint), which is a worse error message for the user.
+  isCanonicalId: (input) => /^\d{10}$/u.test(normalizeKrsNumber(input)),
+  lookup: async (input) => {
+    const entity = await lookupByKrsNumber(input);
+    return entity ? krsEntityToHit(entity) : null;
+  },
+  // KRS has no public name-search endpoint. Callers attempting a
+  // name search get the "Registry 'krs' does not support name
+  // search" 400 from `executeRegistryLookup`. Name → KRS resolution
+  // is a separate REGON BIR1 / Biała Lista slice slated for a
+  // follow-up PR.
+  search: null,
+  mapError: mapKrsError,
+};
+
+// ---------------------------------------------------------------------------
 // PRH (Finland)
 // ---------------------------------------------------------------------------
 
@@ -585,6 +669,7 @@ export const BUSINESS_REGISTRY_DISPATCH: Record<
 > = {
   ares: ARES_HANDLER,
   brreg: BRREG_HANDLER,
+  krs: KRS_HANDLER,
   prh: PRH_HANDLER,
   "recherche-entreprises": RECHERCHE_ENTREPRISES_HANDLER,
 };

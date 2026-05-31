@@ -54,6 +54,7 @@ export const TOGGLEABLE_NATIVE_TOOL_BACKEND_SLUGS = [
   "boe",
   "brreg",
   "infosoud",
+  "krs",
   "prh",
   "recherche-entreprises",
   "web-search",
