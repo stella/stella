@@ -44,7 +44,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { toAPIError } from "@/lib/errors";
+import { ClientOperationError, toAPIError } from "@/lib/errors";
 import {
   PDFProvider,
   getPDFPageIdByNumber,
@@ -242,9 +242,10 @@ function RouteComponentInner({
   const { data: entity } = useSuspenseQuery(
     entityOptions(workspaceId, entityId),
   );
-  const { data: versionData } = useQuery(
+  const versionDataQuery = useQuery(
     entityVersionsOptions({ workspaceId, entityId }),
   );
+  const versionData = versionDataQuery.data;
   const setActiveJustification = useWorkspaceStore(
     (s) => s.setActiveJustification,
   );
@@ -338,6 +339,18 @@ function RouteComponentInner({
     hasFilePropertyId: filePropertyId !== undefined,
     isComparing,
   });
+  const filePreviewState = (() => {
+    if (activeMimeType !== undefined) {
+      return "ready";
+    }
+    if (versionDataQuery.isError) {
+      return "error";
+    }
+    if (versionDataQuery.isPending) {
+      return "loading";
+    }
+    return "missing";
+  })();
   const shouldRenderDocxBrowserShell =
     isDocxFile &&
     filePropertyId !== undefined &&
@@ -452,6 +465,31 @@ function RouteComponentInner({
           )}
           <div className="relative min-h-0 flex-1">
             {(() => {
+              if (filePreviewState === "error") {
+                const error = versionDataQuery.error;
+                if (error instanceof Error) {
+                  throw error;
+                }
+                throw new ClientOperationError({
+                  action: "load_document_version_metadata",
+                  message: "Failed to load document version metadata",
+                  cause: error,
+                });
+              }
+
+              if (filePreviewState === "loading") {
+                return <DocxLoadingShell scaleOffset={scaleOffset} />;
+              }
+
+              if (filePreviewState === "missing") {
+                return (
+                  <Navigate
+                    params={{ workspaceId }}
+                    to="/workspaces/$workspaceId"
+                  />
+                );
+              }
+
               if (shouldRenderDocxBrowserShell && filePropertyId) {
                 return (
                   <VersionDropZone
