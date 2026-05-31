@@ -1,5 +1,30 @@
-import { useEffect, useSyncExternalStore } from "react";
+/**
+ * Tracks external file drags (from Finder, Explorer, or another app) into
+ * the page, exposing two pieces of info: how many files are being dragged
+ * (fileCount), and their MIME types in order (mimeTypes).
+ *
+ * Two consumers read it:
+ *   1. React components call `useExternalDragInfo()`, a `useSyncExternalStore`
+ *      hook that re-renders them when the drag payload changes.
+ *   2. Pragmatic DnD's `canDrop` callbacks call `getCurrentExternalDrag()`, a
+ *      plain synchronous getter. `canDrop` runs outside React's render cycle
+ *      and must return synchronously, so it cannot use a hook.
+ *
+ * How it works:
+ *   - Window listeners (dragenter, dragend, drop) update the `current` value.
+ *     `dragenter` bubbles up from every nested element during a drag, so
+ *     `sameDrag()` short-circuits to avoid re-render storms when the payload
+ *     has not actually changed.
+ *   - `ExternalDragInfoProvider` does not store state in React; it just owns
+ *     the listener lifecycle via `attach` / `detach`. `mountCount`
+ *     reference-counts providers so listeners attach once on first mount and
+ *     detach on last unmount (safe even if the provider is mounted in
+ *     multiple places, e.g. under StrictMode's double-invoke).
+ *   - `subscribe` + `getSnapshot` are the `useSyncExternalStore` contract;
+ *     that is what makes hook consumers re-render when `notify()` fires.
+ */
 import type { PropsWithChildren } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 export type ExternalDragInfo = {
   fileCount: number;
@@ -7,10 +32,17 @@ export type ExternalDragInfo = {
   mimeTypes: string[];
 };
 
-// Module-scoped singleton. Pragmatic DnD's `canDrop` runs outside React's
-// render cycle and must return synchronously, so per-row hooks read this
-// directly via `getCurrentExternalDrag()`. The Provider only manages the
-// window listener lifecycle and re-renders for hook consumers.
+// Module-scoped singleton.
+//
+// What that means: this state lives as top-level variables in the module,
+// not inside a React component or Context value. There is exactly one
+// instance per browser tab; the first import evaluates the module, and
+// every subsequent import gets the same variables.
+//
+// Why we need it: Pragmatic DnD's `canDrop` runs outside React's render
+// cycle and must return synchronously, so per-row hooks read it directly
+// via `getCurrentExternalDrag()`. React state or a Context value could
+// not be read synchronously from outside React.
 let current: ExternalDragInfo | null = null;
 const subscribers = new Set<() => void>();
 let mountCount = 0;
@@ -72,11 +104,11 @@ const attach = () => {
     window.addEventListener("dragend", reset);
     window.addEventListener("drop", reset);
   }
-  mountCount += 1;
+  mountCount++;
 };
 
 const detach = () => {
-  mountCount -= 1;
+  mountCount--;
   if (mountCount === 0) {
     window.removeEventListener("dragenter", onDragEnter);
     window.removeEventListener("dragend", reset);
