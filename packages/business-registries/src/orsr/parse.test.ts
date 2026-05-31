@@ -229,7 +229,7 @@ describe("parseExtract status branches", () => {
       raw.legalPerson.corporateBody.termination = "2020-01-15T00:00:00";
       for (const member of raw.legalPerson.corporateBody.stakeholder ?? []) {
         member.current = false;
-        member.functionTerminationDate = undefined;
+        member.functionTerminationDate = null;
         member.effectiveTo = "2018-06-01T00:00:00";
       }
     }
