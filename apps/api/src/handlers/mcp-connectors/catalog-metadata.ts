@@ -205,8 +205,10 @@ export const isMcpConnectorRecommendedForPractice = ({
 };
 
 export const getNativeToolCatalog = ({
+  nativeToolDeployAvailable = () => true,
   practiceJurisdictions,
 }: {
+  nativeToolDeployAvailable?: (backendSlug: string) => boolean;
   practiceJurisdictions: readonly PracticeJurisdiction[];
 }) => {
   const practiceCountryCodes = toPracticeCountryCodeSet(practiceJurisdictions);
@@ -216,18 +218,18 @@ export const getNativeToolCatalog = ({
   // toggle list — the PATCH endpoint would 404 on them.
   const toggleable = new Set(NATIVE_TOOL_SLUGS);
 
-  return NATIVE_TOOL_CATALOG.filter((tool) => toggleable.has(tool.slug)).map(
-    (tool) => ({
-      description: tool.description,
-      displayName: tool.displayName,
-      documentationUrl: tool.documentationUrl,
-      iconUrl: tool.iconUrl,
-      isRecommended: tool.recommendedJurisdictions.some((countryCode) =>
-        matchesPracticeCountryCode(countryCode, practiceCountryCodes),
-      ),
-      recommendedJurisdictions: tool.recommendedJurisdictions,
-      slug: tool.slug,
-      url: tool.url,
-    }),
-  );
+  return NATIVE_TOOL_CATALOG.filter(
+    (tool) => toggleable.has(tool.slug) && nativeToolDeployAvailable(tool.slug),
+  ).map((tool) => ({
+    description: tool.description,
+    displayName: tool.displayName,
+    documentationUrl: tool.documentationUrl,
+    iconUrl: tool.iconUrl,
+    isRecommended: tool.recommendedJurisdictions.some((countryCode) =>
+      matchesPracticeCountryCode(countryCode, practiceCountryCodes),
+    ),
+    recommendedJurisdictions: tool.recommendedJurisdictions,
+    slug: tool.slug,
+    url: tool.url,
+  }));
 };

@@ -11,6 +11,7 @@ import {
 import { mcpConnectorUrlIdentity } from "@/api/handlers/mcp-connectors/url-normalization";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { isBusinessRegistryNativeToolDeployAvailable } from "@/api/lib/business-registries/dispatch";
 
 const config = {
   permissions: { workspace: ["read"] },
@@ -90,26 +91,27 @@ const listMcpConnectors = createSafeRootHandler(
           recommendedJurisdictions: metadata.recommendedJurisdictions,
         };
       }),
-      nativeTools: getNativeToolCatalog({ practiceJurisdictions }).map(
-        (tool) => {
-          const enabled = isNativeToolEnabledForOrg({
-            slug: tool.slug,
-            practiceJurisdictions,
-            nativeToolOverrides,
-          });
-          return {
-            description: tool.description,
-            displayName: tool.displayName,
-            documentationUrl: tool.documentationUrl,
-            enabled,
-            iconUrl: tool.iconUrl,
-            isRecommended: tool.isRecommended,
-            recommendedJurisdictions: tool.recommendedJurisdictions,
-            slug: tool.slug,
-            url: tool.url,
-          };
-        },
-      ),
+      nativeTools: getNativeToolCatalog({
+        nativeToolDeployAvailable: isBusinessRegistryNativeToolDeployAvailable,
+        practiceJurisdictions,
+      }).map((tool) => {
+        const enabled = isNativeToolEnabledForOrg({
+          slug: tool.slug,
+          practiceJurisdictions,
+          nativeToolOverrides,
+        });
+        return {
+          description: tool.description,
+          displayName: tool.displayName,
+          documentationUrl: tool.documentationUrl,
+          enabled,
+          iconUrl: tool.iconUrl,
+          isRecommended: tool.isRecommended,
+          recommendedJurisdictions: tool.recommendedJurisdictions,
+          slug: tool.slug,
+          url: tool.url,
+        };
+      }),
     });
   },
 );
