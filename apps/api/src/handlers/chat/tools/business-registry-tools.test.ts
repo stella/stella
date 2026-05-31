@@ -24,4 +24,11 @@ describe("createBusinessRegistryTools", () => {
     });
     expect(tools[BUSINESS_REGISTRY_LOOKUP_TOOL_NAME]).toBeDefined();
   });
+
+  test("accepts the EU pseudo-jurisdiction (VIES)", () => {
+    const tools = createBusinessRegistryTools({
+      enabledJurisdictions: ["EU"],
+    });
+    expect(tools[BUSINESS_REGISTRY_LOOKUP_TOOL_NAME]).toBeDefined();
+  });
 });

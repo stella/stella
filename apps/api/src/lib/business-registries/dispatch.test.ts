@@ -5,6 +5,7 @@ import type { AresCompany } from "@stll/business-registries/ares";
 import {
   BUSINESS_REGISTRY_DISPATCH,
   executeRegistryLookup,
+  getRegistryHandlerByCountry,
   type RegistryHandler,
 } from "@/api/lib/business-registries/dispatch";
 
@@ -90,5 +91,63 @@ describe("executeRegistryLookup — details channel", () => {
       throw new Error(`expected search result, got ${result.type}`);
     }
     expect(result.hits[0]?.details).toBeUndefined();
+  });
+});
+
+describe("VIES handler wiring", () => {
+  test("is registered under the EU pseudo-jurisdiction", () => {
+    const handler = getRegistryHandlerByCountry("EU");
+    expect(handler).toBeDefined();
+    expect(handler?.slug).toBe("vies");
+  });
+
+  test("isCanonicalId accepts well-formed EU VAT numbers", () => {
+    const handler = BUSINESS_REGISTRY_DISPATCH.vies;
+    expect(handler.isCanonicalId("DE143593636")).toBe(true);
+    expect(handler.isCanonicalId(" ie 6388047v ")).toBe(true);
+    expect(handler.isCanonicalId("IT00159560366")).toBe(true);
+    expect(handler.isCanonicalId("RO12")).toBe(true);
+  });
+
+  test("isCanonicalId rejects inputs without a known VAT prefix", () => {
+    const handler = BUSINESS_REGISTRY_DISPATCH.vies;
+    expect(handler.isCanonicalId("143593636")).toBe(false);
+    expect(handler.isCanonicalId("ZZ12345")).toBe(false);
+  });
+
+  test("isCanonicalId rejects ordinary names that start with VAT prefixes", () => {
+    const handler = BUSINESS_REGISTRY_DISPATCH.vies;
+    expect(handler.isCanonicalId("Deutsche Bank")).toBe(false);
+  });
+
+  test("isCanonicalId routes malformed numeric VATs to validation", () => {
+    const handler = BUSINESS_REGISTRY_DISPATCH.vies;
+    expect(handler.isCanonicalId("DE123")).toBe(true);
+  });
+
+  test("isCanonicalId accepts removed prefixes so lookup can give a tailored error", () => {
+    // GB was removed from VIES after Brexit, but the prefix is still
+    // a known VAT country — `isCanonicalId` must let it through to the
+    // lookup path so `validateVat()` can raise the dedicated
+    // "removed after Brexit" ViesValidationError. Returning false
+    // here would instead surface the generic "name search not
+    // supported" 400.
+    const handler = BUSINESS_REGISTRY_DISPATCH.vies;
+    expect(handler.isCanonicalId("GB123456789")).toBe(true);
+  });
+
+  test("search is null — VIES has no name-search endpoint", () => {
+    expect(BUSINESS_REGISTRY_DISPATCH.vies.search).toBeNull();
+  });
+
+  test("name search is rejected with a useful error", async () => {
+    const result = await executeRegistryLookup({
+      handler: BUSINESS_REGISTRY_DISPATCH.vies,
+      query: "Acme Corp",
+    });
+    expect(result).toBeInstanceOf(Error);
+    if (result instanceof Error) {
+      expect(result.message).toContain("does not support name search");
+    }
   });
 });

@@ -11,6 +11,7 @@ import nativeToolKrs from "../entries/native-tools/krs/manifest.json" with { typ
 import nativeToolOrsr from "../entries/native-tools/orsr/manifest.json" with { type: "json" };
 import nativeToolPrh from "../entries/native-tools/prh/manifest.json" with { type: "json" };
 import nativeToolRechercheEntreprises from "../entries/native-tools/recherche-entreprises/manifest.json" with { type: "json" };
+import nativeToolVies from "../entries/native-tools/vies/manifest.json" with { type: "json" };
 import nativeToolWebSearch from "../entries/native-tools/web-search/manifest.json" with { type: "json" };
 import recommended from "../entries/recommended.json" with { type: "json" };
 
@@ -26,6 +27,7 @@ export const GENERATED_ENTRIES = [
   { manifest: nativeToolOrsr, icon: null },
   { manifest: nativeToolPrh, icon: null },
   { manifest: nativeToolRechercheEntreprises, icon: null },
+  { manifest: nativeToolVies, icon: null },
   { manifest: nativeToolWebSearch, icon: null },
 ] as const;
 
