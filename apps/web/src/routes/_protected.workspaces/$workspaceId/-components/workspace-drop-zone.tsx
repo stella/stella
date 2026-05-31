@@ -3,7 +3,6 @@ import type { PropsWithChildren } from "react";
 import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { ExternalDragInfoProvider } from "@/routes/_protected.workspaces/$workspaceId/-context/external-drag-info";
 import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 import { useExternalFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-external-file-drop";
 
@@ -12,17 +11,6 @@ type WorkspaceDropZoneProps = PropsWithChildren<{
 }>;
 
 export const WorkspaceDropZone = ({
-  workspaceId,
-  children,
-}: WorkspaceDropZoneProps) => (
-  <ExternalDragInfoProvider>
-    <WorkspaceDropZoneInner workspaceId={workspaceId}>
-      {children}
-    </WorkspaceDropZoneInner>
-  </ExternalDragInfoProvider>
-);
-
-const WorkspaceDropZoneInner = ({
   workspaceId,
   children,
 }: WorkspaceDropZoneProps) => {

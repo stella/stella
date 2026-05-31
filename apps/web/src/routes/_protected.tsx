@@ -70,6 +70,7 @@ import {
   useInspectorStore,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import type { InspectorTab } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { ExternalDragInfoProvider } from "@/routes/_protected.workspaces/$workspaceId/-context/external-drag-info";
 import { CreateMatterDialog } from "@/routes/_protected.workspaces/-components/create-matter-dialog";
 import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
 
@@ -246,12 +247,14 @@ function ProtectedComponent() {
       <ChatMentionProviders>
         <AIAvailabilityProvider>
           <ChatEditorProvider>
-            <GlobalChatMentionRegistration />
-            <AppSidebar />
-            <CreateMatterDialog />
-            <ProtectedContent decisionId={activeDecisionId} />
-            <WorkspaceInspectorSidePanel />
-            <ShortcutHintsOverlay />
+            <ExternalDragInfoProvider>
+              <GlobalChatMentionRegistration />
+              <AppSidebar />
+              <CreateMatterDialog />
+              <ProtectedContent decisionId={activeDecisionId} />
+              <WorkspaceInspectorSidePanel />
+              <ShortcutHintsOverlay />
+            </ExternalDragInfoProvider>
           </ChatEditorProvider>
         </AIAvailabilityProvider>
       </ChatMentionProviders>
