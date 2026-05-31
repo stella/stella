@@ -27,8 +27,6 @@ type VersionOrNewFileDialogProps = {
   onCreateNewFile: () => void;
   /** Whether the replace version action is in progress */
   isReplacePending?: boolean;
-  /** Whether the create new file action is in progress */
-  isCreatePending?: boolean;
 };
 
 export const VersionOrNewFileDialog = ({
@@ -39,7 +37,6 @@ export const VersionOrNewFileDialog = ({
   onReplaceVersion,
   onCreateNewFile,
   isReplacePending = false,
-  isCreatePending = false,
 }: VersionOrNewFileDialogProps) => {
   const canReplace = extensionMatches({
     entityFileName,
@@ -56,7 +53,6 @@ export const VersionOrNewFileDialog = ({
           canReplace={canReplace}
           droppedFileName={droppedFile.name}
           entityExt={entityExt}
-          isCreatePending={isCreatePending}
           isReplacePending={isReplacePending}
           onCancel={() => onOpenChange(false)}
           onCreateNewFile={onCreateNewFile}
@@ -77,7 +73,6 @@ type VersionOrNewFileDialogBodyProps = {
   onCreateNewFile: () => void;
   onCancel: () => void;
   isReplacePending: boolean;
-  isCreatePending: boolean;
 };
 
 const VersionOrNewFileDialogBody = ({
@@ -89,10 +84,8 @@ const VersionOrNewFileDialogBody = ({
   onCreateNewFile,
   onCancel,
   isReplacePending,
-  isCreatePending,
 }: VersionOrNewFileDialogBodyProps) => {
   const t = useTranslations();
-  const isPending = isReplacePending || isCreatePending;
 
   return (
     <DialogPopup className="max-w-md">
@@ -115,7 +108,7 @@ const VersionOrNewFileDialogBody = ({
             !canReplace && "cursor-not-allowed opacity-50",
             canReplace && "hover:border-primary",
           )}
-          disabled={!canReplace || isPending}
+          disabled={!canReplace || isReplacePending}
           onClick={onReplaceVersion}
           type="button"
         >
@@ -135,7 +128,7 @@ const VersionOrNewFileDialogBody = ({
         {/* Create new file option */}
         <button
           className="hover:bg-accent hover:border-primary w-full rounded-lg border p-3 text-start transition-colors"
-          disabled={isPending}
+          disabled={isReplacePending}
           onClick={onCreateNewFile}
           type="button"
         >
@@ -149,7 +142,7 @@ const VersionOrNewFileDialogBody = ({
       </DialogPanel>
 
       <DialogFooter>
-        <Button disabled={isPending} onClick={onCancel} variant="ghost">
+        <Button disabled={isReplacePending} onClick={onCancel} variant="ghost">
           {t("common.cancel")}
         </Button>
       </DialogFooter>
