@@ -45,7 +45,7 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
 import type { TableContentMode } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
-import { useRowFileVersionDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-row-file-version-drop";
+import { useRowExternalFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-row-external-file-drop";
 import {
   getEntityName,
   getFirstFile,
@@ -246,7 +246,7 @@ export const DraggableRow = ({
     visibleCells,
   });
 
-  const { isDropTarget, dialog: versionDialog } = useRowFileVersionDrop({
+  const { isDropTarget, dialog: rowDropDialog } = useRowExternalFileDrop({
     entity,
     workspaceId,
     rowRef,
@@ -461,7 +461,7 @@ export const DraggableRow = ({
           selected={row.getIsSelected()}
         />
       </WorkspaceGridRow>
-      {versionDialog}
+      {rowDropDialog}
     </>
   );
 };

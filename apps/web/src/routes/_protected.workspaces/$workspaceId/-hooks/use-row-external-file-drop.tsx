@@ -8,28 +8,30 @@ import { useExternalFileDrop } from "@/routes/_protected.workspaces/$workspaceId
 import { useUploadVersion } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-upload-version";
 import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
-type UseRowFileVersionDropOptions = {
+type UseRowExternalFileDropOptions = {
   entity: TableTreeNode;
   workspaceId: string;
   rowRef: React.RefObject<HTMLDivElement | null>;
 };
 
-type UseRowFileVersionDropResult = {
+type UseRowExternalFileDropResult = {
   isDropTarget: boolean;
   dialog: React.ReactNode;
 };
 
 /**
  * Wires external single-file drops on a row to the
- * version-or-new-file dialog. Disabled for folders, tasks, and
- * entities without a file; mismatched MIME types and multi-file
- * drops fall through to the `WorkspaceDropZone`.
+ * version-or-new-file dialog. The dialog routes to either a version
+ * replace or a new-file upload, so this hook covers both outcomes.
+ * Disabled for folders, tasks, and entities without a file;
+ * mismatched MIME types and multi-file drops fall through to the
+ * `WorkspaceDropZone`.
  */
-export const useRowFileVersionDrop = ({
+export const useRowExternalFileDrop = ({
   entity,
   workspaceId,
   rowRef,
-}: UseRowFileVersionDropOptions): UseRowFileVersionDropResult => {
+}: UseRowExternalFileDropOptions): UseRowExternalFileDropResult => {
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
   const uploadVersion = useUploadVersion();
   const [, createFileEntities] = useCreateFileEntities(workspaceId);

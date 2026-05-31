@@ -76,7 +76,7 @@ import {
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
-import { useRowFileVersionDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-row-file-version-drop";
+import { useRowExternalFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-row-external-file-drop";
 import {
   useMoveEntity,
   useRenameEntity,
@@ -1190,8 +1190,8 @@ const FilesystemRow = ({
   const moveEntity = useMoveEntity();
   const [isFolderDropTarget, setIsFolderDropTarget] = useState(false);
 
-  const { isDropTarget: isExternalDropTarget, dialog: versionDialog } =
-    useRowFileVersionDrop({ entity: node, workspaceId, rowRef });
+  const { isDropTarget: isExternalDropTarget, dialog: rowDropDialog } =
+    useRowExternalFileDrop({ entity: node, workspaceId, rowRef });
 
   // Store volatile values in refs so the effect doesn't
   // re-register drag/drop handlers on every render.
@@ -1606,7 +1606,7 @@ const FilesystemRow = ({
           </div>
         )}
       </div>
-      {versionDialog}
+      {rowDropDialog}
     </>
   );
 };
