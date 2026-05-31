@@ -12,6 +12,7 @@ import {
   AZURE_FOUNDRY_DEFAULT_API_VERSION,
   normalizeAzureFoundryBaseURL,
 } from "@/api/lib/azure-foundry";
+import { normalizeHuggingFaceBaseURL } from "@/api/lib/huggingface";
 import type { SafeOutboundFetchResponse } from "@/api/lib/safe-outbound-fetch";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
@@ -25,6 +26,7 @@ export const PROVIDER_PROBE_VALUES = [
   "azure_foundry",
   "anthropic",
   "mistral",
+  "huggingface",
 ] as const;
 
 export type ProviderProbeValue = (typeof PROVIDER_PROBE_VALUES)[number];
@@ -39,7 +41,7 @@ type ProbeTarget = {
 };
 
 const PROBE_TARGETS: Record<
-  Exclude<ProviderProbeValue, "azure_foundry">,
+  Exclude<ProviderProbeValue, "azure_foundry" | "huggingface">,
   (apiKey: string) => ProbeTarget
 > = {
   google: (apiKey) => ({
@@ -75,6 +77,7 @@ const PROVIDER_LABELS: Record<ProviderProbeValue, string> = {
   azure_foundry: "Azure Foundry",
   openrouter: "OpenRouter",
   mistral: "Mistral",
+  huggingface: "Hugging Face",
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -129,6 +132,10 @@ export const probeProvider = async (
     );
   }
 
+  if (provider === "huggingface") {
+    return await probeHuggingFace(apiKey, endpoint, timeoutMs);
+  }
+
   const target = PROBE_TARGETS[provider](apiKey);
   const response = await safeOutboundFetchBytes({
     url: target.url,
@@ -153,6 +160,50 @@ export const probeProvider = async (
     error: detail
       ? `${label} rejected the key (HTTP ${response.value.status}): ${detail}`
       : `${label} rejected the key (HTTP ${response.value.status})`,
+  };
+};
+
+const probeHuggingFace = async (
+  apiKey: string,
+  endpoint: string | undefined,
+  timeoutMs: number,
+): Promise<ProviderProbeResult> => {
+  const trimmed = endpoint?.trim();
+  if (!trimmed) {
+    return {
+      valid: false,
+      error: "Hugging Face endpoint is required",
+    };
+  }
+
+  const normalized = normalizeHuggingFaceBaseURL(trimmed);
+  if (!normalized.ok) {
+    return { valid: false, error: normalized.error };
+  }
+  const url = new URL(`${normalized.baseURL}/models`);
+
+  const response = await safeOutboundFetchBytes({
+    url,
+    headers: { Authorization: `Bearer ${apiKey}` },
+    maxBytes: PROBE_MAX_BYTES,
+    method: "GET",
+    timeoutMs,
+  });
+
+  if (Result.isError(response)) {
+    throw response.error;
+  }
+
+  if (response.value.ok) {
+    return { valid: true };
+  }
+
+  const detail = extractDetail(response.value);
+  return {
+    valid: false,
+    error: detail
+      ? `Hugging Face rejected the key or endpoint (HTTP ${response.value.status}): ${detail}`
+      : `Hugging Face rejected the key or endpoint (HTTP ${response.value.status})`,
   };
 };
 

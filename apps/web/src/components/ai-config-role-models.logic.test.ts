@@ -15,6 +15,7 @@ import {
   providerDraftsFromStoredProviders,
   roleModelsFromOverrideModels,
   serializeOverrideModels,
+  serializeProviderDrafts,
 } from "@/components/ai-config-role-models.logic";
 import type { RoleModelSelections } from "@/components/ai-config-role-models.logic";
 
@@ -325,6 +326,68 @@ describe("BYOK provider and model configuration", () => {
         },
       ]),
     ).toBe(true);
+  });
+
+  test("requires an endpoint for Hugging Face drafts", () => {
+    expect(
+      hasUsableProviderDrafts([
+        {
+          ...createProviderCredentialDraft("huggingface"),
+          apiKey: "hf-test",
+        },
+      ]),
+    ).toBe(false);
+    expect(
+      hasUsableProviderDrafts([
+        {
+          ...createProviderCredentialDraft("huggingface"),
+          apiKey: "hf-test",
+          endpoint: "https://router.huggingface.co/v1",
+        },
+      ]),
+    ).toBe(true);
+  });
+
+  test("serializes endpoint-backed provider drafts for save payloads", () => {
+    expect(
+      serializeProviderDrafts([
+        {
+          ...createProviderCredentialDraft("azure_foundry"),
+          apiKey: " azure-test ",
+          endpoint: " https://example.openai.azure.com/openai/v1 ",
+          apiVersion: "2024-06-01",
+        },
+        {
+          ...createProviderCredentialDraft("huggingface"),
+          apiKey: " hf-test ",
+          endpoint: " https://router.huggingface.co/v1 ",
+          apiVersion: "ignored-for-huggingface",
+        },
+        {
+          ...createProviderCredentialDraft("openai"),
+          apiKeyMasked: "sk-proj****",
+          replacingKey: false,
+        },
+      ]),
+    ).toEqual([
+      {
+        provider: "azure_foundry",
+        apiKey: "azure-test",
+        endpoint: "https://example.openai.azure.com/openai/v1",
+        apiVersion: "2024-06-01",
+        region: "global",
+      },
+      {
+        provider: "huggingface",
+        apiKey: "hf-test",
+        endpoint: "https://router.huggingface.co/v1",
+        region: "global",
+      },
+      {
+        provider: "openai",
+        region: "global",
+      },
+    ]);
   });
 
   test("creates Mistral role defaults", () => {

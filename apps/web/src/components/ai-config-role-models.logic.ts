@@ -5,6 +5,7 @@ export const PROVIDER_KEYS = [
   "openai",
   "azure_foundry",
   "openrouter",
+  "huggingface",
 ] as const;
 
 export const PROVIDER_LABELS = {
@@ -14,6 +15,7 @@ export const PROVIDER_LABELS = {
   openai: "OpenAI",
   azure_foundry: "Azure Foundry",
   openrouter: "OpenRouter",
+  huggingface: "Hugging Face",
 } as const satisfies Record<(typeof PROVIDER_KEYS)[number], string>;
 
 export const REGION_KEYS = ["global", "eu", "ch"] as const;
@@ -71,6 +73,14 @@ export type StoredOverrideModels =
   | null
   | undefined;
 
+export type SerializedProviderConfig = {
+  provider: ProviderValue;
+  apiKey?: string;
+  endpoint?: string;
+  apiVersion?: string;
+  region: RegionValue;
+};
+
 const PROVIDER_VALUES = new Set<string>(PROVIDER_KEYS);
 const REGION_VALUES = new Set<string>(REGION_KEYS);
 const ROLE_VALUES = new Set<string>(ROLE_KEYS);
@@ -78,6 +88,11 @@ const ROLE_VALUES = new Set<string>(ROLE_KEYS);
 export const REGIONAL_PROVIDERS = new Set<ProviderValue>(["google"]);
 export const CUSTOM_MODEL_ID_PROVIDERS = new Set<ProviderValue>([
   "azure_foundry",
+  "huggingface",
+]);
+export const ENDPOINT_REQUIRED_PROVIDERS = new Set<ProviderValue>([
+  "azure_foundry",
+  "huggingface",
 ]);
 
 export const DEFAULT_MODELS_BY_PROVIDER = {
@@ -134,6 +149,7 @@ export const MODEL_OPTIONS_BY_PROVIDER = {
   ],
   openai: ["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.2"],
   azure_foundry: [],
+  huggingface: [],
   openrouter: [
     "google/gemini-3.1-pro-preview",
     "google/gemini-3.5-flash",
@@ -399,6 +415,29 @@ export const getProviderValues = (
   providers: readonly ProviderCredentialDraft[],
 ): ProviderValue[] => providers.map((providerDraft) => providerDraft.provider);
 
+export const serializeProviderDrafts = (
+  providers: readonly ProviderCredentialDraft[],
+): SerializedProviderConfig[] => {
+  const serializedProviders: SerializedProviderConfig[] = [];
+
+  for (const providerDraft of providers) {
+    const apiKey = providerDraft.apiKey.trim();
+    serializedProviders.push({
+      provider: providerDraft.provider,
+      ...(apiKey ? { apiKey } : {}),
+      ...(ENDPOINT_REQUIRED_PROVIDERS.has(providerDraft.provider)
+        ? { endpoint: providerDraft.endpoint.trim() }
+        : {}),
+      ...(providerDraft.provider === "azure_foundry" && providerDraft.apiVersion
+        ? { apiVersion: providerDraft.apiVersion }
+        : {}),
+      region: providerDraft.region,
+    });
+  }
+
+  return serializedProviders;
+};
+
 export const getNextAvailableProvider = (
   providers: readonly ProviderCredentialDraft[],
 ): ProviderValue | null =>
@@ -429,7 +468,7 @@ export const hasUsableProviderDrafts = (
       return false;
     }
     if (
-      providerDraft.provider === "azure_foundry" &&
+      ENDPOINT_REQUIRED_PROVIDERS.has(providerDraft.provider) &&
       !providerDraft.endpoint.trim()
     ) {
       return false;
@@ -446,7 +485,7 @@ export const getDefaultModelSelection = (
   if (!provider) {
     return null;
   }
-  if (provider === "azure_foundry") {
+  if (provider === "azure_foundry" || provider === "huggingface") {
     return null;
   }
   const defaults = DEFAULT_MODELS_BY_PROVIDER[provider];

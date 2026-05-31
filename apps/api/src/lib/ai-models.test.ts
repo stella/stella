@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import type { ModelRole, OrgAIConfig } from "@/api/lib/ai-models";
+import type { AIProvider, ModelRole, OrgAIConfig } from "@/api/lib/ai-models";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 
 process.env["EMAIL_PROVIDER"] ??= "smtp";
@@ -26,15 +26,6 @@ const {
   supportsRegion,
   validateDevModelOverride,
 } = await import("@/api/lib/ai-models");
-
-type AIProvider =
-  | "google"
-  | "openrouter"
-  | "openai"
-  | "azure_foundry"
-  | "anthropic"
-  | "mistral"
-  | "openai_compatible";
 
 const settingsForRole = (
   role: ModelRole,
@@ -62,6 +53,7 @@ describe("supportsRegion", () => {
       "anthropic",
       "mistral",
       "openai_compatible",
+      "huggingface",
     ];
 
     for (const provider of nonRegional) {
@@ -85,6 +77,7 @@ describe("isAllowedBYOKModel", () => {
     expect(isAllowedBYOKModel("mistral", "mistral-large-latest")).toBe(true);
     expect(isAllowedBYOKModel("openai", "gpt-5.4")).toBe(true);
     expect(isAllowedBYOKModel("azure_foundry", "customer-gpt-5")).toBe(true);
+    expect(isAllowedBYOKModel("huggingface", "customer-model")).toBe(true);
     expect(isAllowedBYOKModel("openrouter", "anthropic/claude-opus-4.5")).toBe(
       true,
     );
@@ -98,6 +91,8 @@ describe("isAllowedBYOKModel", () => {
     expect(isAllowedBYOKModel("mistral", "mistral-tiny")).toBe(false);
     expect(isAllowedBYOKModel("openai", "gpt-4o")).toBe(false);
     expect(isAllowedBYOKModel("azure_foundry", "")).toBe(false);
+    expect(isAllowedBYOKModel("huggingface", "")).toBe(false);
+    expect(isAllowedBYOKModel("huggingface", "   ")).toBe(false);
   });
 
   test("rejects every model id for openai_compatible", () => {
@@ -467,7 +462,11 @@ describe("defaultsForRole", () => {
         "google",
         "anthropic",
         "openai",
+        "azure_foundry",
+        "openrouter",
         "mistral",
+        "openai_compatible",
+        "huggingface",
       ] as const) {
         // Anthropic + reasoning intentionally omits temperature
         // (incompatible with extended thinking on Claude pre-Opus-4.7).

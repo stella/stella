@@ -14,6 +14,7 @@ import {
   getProviderValues,
   hasUsableProviderDrafts,
   serializeOverrideModels,
+  serializeProviderDrafts,
 } from "@/components/ai-config-role-models.logic";
 import type {
   ProviderCredentialDraft,
@@ -376,21 +377,7 @@ export const OnboardingWizard = () => {
           const { error: aiConfigError } = await api["organization-settings"][
             "ai-config"
           ].post({
-            providers: finalData.aiProviders.map((providerDraft) => ({
-              provider: providerDraft.provider,
-              ...(providerDraft.apiKey.trim()
-                ? { apiKey: providerDraft.apiKey.trim() }
-                : {}),
-              ...(providerDraft.provider === "azure_foundry"
-                ? {
-                    endpoint: providerDraft.endpoint.trim(),
-                    ...(providerDraft.apiVersion
-                      ? { apiVersion: providerDraft.apiVersion }
-                      : {}),
-                  }
-                : {}),
-              region: providerDraft.region,
-            })),
+            providers: serializeProviderDrafts(finalData.aiProviders),
             overrideModels: aiOverrideModels,
           });
 

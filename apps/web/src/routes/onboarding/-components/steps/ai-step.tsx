@@ -49,7 +49,7 @@ const fingerprintDraft = (draft: ProviderCredentialDraft): string | null => {
     return null;
   }
   const keyFingerprint = fingerprintKey(apiKey);
-  if (draft.provider !== "azure_foundry") {
+  if (draft.provider !== "azure_foundry" && draft.provider !== "huggingface") {
     return keyFingerprint;
   }
   return `${keyFingerprint}:${draft.endpoint.trim()}`;
@@ -72,6 +72,7 @@ const INITIAL_ROW_STATES: RowStateMap = {
   openai: { status: "idle" },
   azure_foundry: { status: "idle" },
   openrouter: { status: "idle" },
+  huggingface: { status: "idle" },
 };
 
 export const AIStep = ({
@@ -182,6 +183,9 @@ export const AIStep = ({
               ...(draft.apiVersion ? { apiVersion: draft.apiVersion } : {}),
             }
           : {}),
+        ...(draft.provider === "huggingface"
+          ? { endpoint: draft.endpoint.trim() }
+          : {}),
         ...(draft.provider === "google" ? { region: draft.region } : {}),
       });
 
@@ -283,6 +287,9 @@ export const AIStep = ({
         : { status: "idle" },
       openrouter: stillPresent.has("openrouter")
         ? prev.openrouter
+        : { status: "idle" },
+      huggingface: stillPresent.has("huggingface")
+        ? prev.huggingface
         : { status: "idle" },
     }));
   };

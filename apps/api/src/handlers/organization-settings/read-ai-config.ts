@@ -1,6 +1,10 @@
 import { Result } from "better-result";
 
 import { decryptAIConfig, maskApiKey } from "@/api/lib/ai-config-crypto";
+import {
+  providerResponseExtras,
+  providerResponseRegion,
+} from "@/api/lib/ai-config-response";
 import { hasInstanceProvider } from "@/api/lib/ai-models";
 import type { DataRegion, OrgAIConfig } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
@@ -83,16 +87,8 @@ const readAIConfig = createSafeRootHandler(
           providers: aiConfig.providers.map((providerConfig) => ({
             provider: providerConfig.provider,
             apiKeyMasked: maskApiKey(providerConfig.apiKey),
-            region:
-              providerConfig.provider === "azure_foundry"
-                ? "global"
-                : (providerConfig.region ?? "global"),
-            ...(providerConfig.provider === "azure_foundry"
-              ? {
-                  endpoint: providerConfig.baseURL,
-                  apiVersion: providerConfig.apiVersion,
-                }
-              : {}),
+            region: providerResponseRegion(providerConfig),
+            ...providerResponseExtras(providerConfig),
           })),
           overrideModels: aiConfig.overrideModels,
           instanceProvisioned,

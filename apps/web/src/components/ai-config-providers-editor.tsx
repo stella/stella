@@ -14,6 +14,7 @@ import {
 
 import {
   createProviderCredentialDraft,
+  ENDPOINT_REQUIRED_PROVIDERS,
   getAvailableProviderKeys,
   getNextAvailableProvider,
   isProviderValue,
@@ -35,9 +36,20 @@ const API_KEY_PLACEHOLDER = {
   openai: "sk-proj-...",
   azure_foundry: "0123456789abcdef...",
   openrouter: "sk-or-v1-...",
+  huggingface: "hf_...",
 } as const satisfies Record<ProviderValue, string>;
 
-const ENDPOINT_PLACEHOLDER = "https://<resource>.openai.azure.com/openai/v1";
+const ENDPOINT_PLACEHOLDER = {
+  azure_foundry: "https://<resource>.openai.azure.com/openai/v1",
+  huggingface: "https://<id>.endpoints.huggingface.cloud/v1",
+} as const;
+
+const getEndpointPlaceholder = (provider: ProviderValue): string => {
+  if (provider === "azure_foundry" || provider === "huggingface") {
+    return ENDPOINT_PLACEHOLDER[provider];
+  }
+  return "";
+};
 
 export type ProviderRowStatus =
   | "idle"
@@ -124,7 +136,9 @@ export const AIConfigProvidersEditor = ({
           const supportsRegionalRouting = REGIONAL_PROVIDERS.has(
             providerDraft.provider,
           );
-          const needsEndpoint = providerDraft.provider === "azure_foundry";
+          const needsEndpoint = ENDPOINT_REQUIRED_PROVIDERS.has(
+            providerDraft.provider,
+          );
           const providerOptions = getAvailableProviderKeys({
             currentProvider: providerDraft.provider,
             providers,
@@ -271,7 +285,7 @@ export const AIConfigProvidersEditor = ({
                         endpoint: event.target.value,
                       })
                     }
-                    placeholder={ENDPOINT_PLACEHOLDER}
+                    placeholder={getEndpointPlaceholder(providerDraft.provider)}
                     value={providerDraft.endpoint}
                   />
                 )}
@@ -412,7 +426,9 @@ export const AIConfigProvidersEditor = ({
                           endpoint: event.target.value,
                         })
                       }
-                      placeholder={ENDPOINT_PLACEHOLDER}
+                      placeholder={getEndpointPlaceholder(
+                        providerDraft.provider,
+                      )}
                       type="url"
                       value={providerDraft.endpoint}
                     />

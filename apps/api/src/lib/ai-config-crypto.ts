@@ -30,6 +30,7 @@ const modelSelectionSchema = v.strictObject({
     "azure_foundry",
     "anthropic",
     "mistral",
+    "huggingface",
   ]),
   modelId: v.pipe(v.string(), v.minLength(1)),
 });
@@ -45,6 +46,11 @@ const providerSchema = v.variant("provider", [
     apiKey: v.pipe(v.string(), v.minLength(1)),
     baseURL: v.pipe(v.string(), v.url()),
     apiVersion: v.optional(v.pipe(v.string(), v.minLength(1))),
+  }),
+  v.strictObject({
+    provider: v.literal("huggingface"),
+    apiKey: v.pipe(v.string(), v.minLength(1)),
+    baseURL: v.pipe(v.string(), v.url()),
   }),
 ]);
 
