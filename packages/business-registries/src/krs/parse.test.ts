@@ -194,6 +194,25 @@ describe("parseStatus", () => {
     ).toEqual({ type: "active" });
   });
 
+  test("treats empty combined close placeholders as still open", () => {
+    expect(
+      parseStatus(
+        {
+          postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja:
+            [
+              {
+                otwarciePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji:
+                  { rodzajPostepowania: "PRZYMUSOWA RESTRUKTURYZACJA" },
+                zakonczeniePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji:
+                  {},
+              },
+            ],
+        },
+        "ACME SP. Z O.O.",
+      ),
+    ).toEqual({ type: "restructuring" });
+  });
+
   test("ignores closed bankruptcy proceedings before setting status", () => {
     expect(
       parseStatus(
@@ -205,6 +224,17 @@ describe("parseStatus", () => {
         "ACME SP. Z O.O.",
       ),
     ).toEqual({ type: "active" });
+  });
+
+  test("treats empty bankruptcy close placeholders as still open", () => {
+    expect(
+      parseStatus(
+        {
+          postepowanieUpadlosciowe: [{ opisZakonczeniaProcesuUpadlosci: {} }],
+        },
+        "ACME SP. Z O.O.",
+      ),
+    ).toEqual({ type: "bankruptcy" });
   });
 
   test("an unlabelled proceeding defaults to `restructuring`", () => {

@@ -43,16 +43,21 @@ const hasEntries = (value: unknown[] | undefined): boolean =>
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const hasRecordFields = (value: unknown): value is Record<string, unknown> =>
+  isRecord(value) && Object.keys(value).length > 0;
+
 const isOpenBankruptcyProceeding = (entry: unknown): boolean =>
-  !isRecord(entry) || !isRecord(entry["opisZakonczeniaProcesuUpadlosci"]);
+  !isRecord(entry) ||
+  !hasRecordFields(entry["opisZakonczeniaProcesuUpadlosci"]);
 
 const isOpenCombinedProceeding = (
   entry: NonNullable<
     KrsRawDzial6["postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja"]
   >[number],
 ): boolean =>
-  entry.zakonczeniePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji ===
-  undefined;
+  !hasRecordFields(
+    entry.zakonczeniePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji,
+  );
 
 // Matches the Polish stem `LIKWIDAC` (case- and diacritic-insensitive
 // via toUpperCase + RegExp; values come uppercased from KRS) so both
