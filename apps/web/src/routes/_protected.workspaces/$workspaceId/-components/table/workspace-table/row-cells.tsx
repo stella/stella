@@ -43,9 +43,10 @@ import {
   PinnedBoundary,
   selectColId,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
+import { VersionOrNewFileDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog";
 import type { TableContentMode } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
-import { useRowExternalFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-row-external-file-drop";
+import { useVersionOrNewFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-version-or-new-file-drop";
 import {
   getEntityName,
   getFirstFile,
@@ -246,7 +247,7 @@ export const DraggableRow = ({
     visibleCells,
   });
 
-  const { isDropTarget, dialog: rowDropDialog } = useRowExternalFileDrop({
+  const { isDropTarget, pendingDrop } = useVersionOrNewFileDrop({
     entity,
     workspaceId,
     rowRef,
@@ -461,7 +462,21 @@ export const DraggableRow = ({
           selected={row.getIsSelected()}
         />
       </WorkspaceGridRow>
-      {rowDropDialog}
+      {pendingDrop && (
+        <VersionOrNewFileDialog
+          droppedFile={pendingDrop.droppedFile}
+          entityFileName={pendingDrop.entityFileName}
+          isReplacePending={pendingDrop.isReplacePending}
+          onCreateNewFile={pendingDrop.onCreateNewFile}
+          onOpenChange={(open) => {
+            if (!open) {
+              pendingDrop.onDismiss();
+            }
+          }}
+          onReplaceVersion={pendingDrop.onReplaceVersion}
+          open
+        />
+      )}
     </>
   );
 };

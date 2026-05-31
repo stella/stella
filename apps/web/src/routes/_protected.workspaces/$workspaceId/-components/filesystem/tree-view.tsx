@@ -75,8 +75,9 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-cells";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+import { VersionOrNewFileDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
-import { useRowExternalFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-row-external-file-drop";
+import { useVersionOrNewFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-version-or-new-file-drop";
 import {
   useMoveEntity,
   useRenameEntity,
@@ -1190,8 +1191,8 @@ const FilesystemRow = ({
   const moveEntity = useMoveEntity();
   const [isFolderDropTarget, setIsFolderDropTarget] = useState(false);
 
-  const { isDropTarget: isExternalDropTarget, dialog: rowDropDialog } =
-    useRowExternalFileDrop({ entity: node, workspaceId, rowRef });
+  const { isDropTarget: isExternalDropTarget, pendingDrop } =
+    useVersionOrNewFileDrop({ entity: node, workspaceId, rowRef });
 
   // Store volatile values in refs so the effect doesn't
   // re-register drag/drop handlers on every render.
@@ -1606,7 +1607,21 @@ const FilesystemRow = ({
           </div>
         )}
       </div>
-      {rowDropDialog}
+      {pendingDrop && (
+        <VersionOrNewFileDialog
+          droppedFile={pendingDrop.droppedFile}
+          entityFileName={pendingDrop.entityFileName}
+          isReplacePending={pendingDrop.isReplacePending}
+          onCreateNewFile={pendingDrop.onCreateNewFile}
+          onOpenChange={(open) => {
+            if (!open) {
+              pendingDrop.onDismiss();
+            }
+          }}
+          onReplaceVersion={pendingDrop.onReplaceVersion}
+          open
+        />
+      )}
     </>
   );
 };
