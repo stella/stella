@@ -62,15 +62,28 @@ export const parseStatus = (
   const proceedings =
     dzial6?.postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja;
   if (proceedings && proceedings.length > 0) {
-    // Inspect each entry's `rodzajPostepowania`. If ANY entry names a
-    // liquidation, the entity is liquidating (a more terminal state
-    // than restructuring); otherwise it is restructuring. Entries
-    // without a `rodzajPostepowania` count as restructuring rather
-    // than liquidation — KRS' default for the unlabelled case is the
-    // less terminal arm.
+    // `rodzajPostepowania` lives one level down, on the
+    // `otwarciePostepowania…` (opening) sub-object — KRS does not
+    // put it on the proceeding entry itself. Reading from the wrong
+    // level silently turns every real liquidation into an
+    // unlabelled record that defaults to restructuring.
+    //
+    // If ANY entry names a liquidation, the entity is liquidating
+    // (a more terminal state than restructuring); otherwise it is
+    // restructuring. Entries without a `rodzajPostepowania` count
+    // as restructuring rather than liquidation — KRS' default for
+    // the unlabelled case is the less terminal arm.
     const anyLiquidation = proceedings.some((entry) =>
       LIQUIDATION_PROCEEDING_PATTERN.test(
-        (entry.rodzajPostepowania ?? "").toUpperCase(),
+        (
+          entry
+            .otwarciePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji
+            ?.rodzajPostepowania ??
+          entry
+            .zakonczeniePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji
+            ?.rodzajPostepowania ??
+          ""
+        ).toUpperCase(),
       ),
     );
     return { type: anyLiquidation ? "liquidating" : "restructuring" };

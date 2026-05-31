@@ -88,7 +88,12 @@ describe("parseStatus", () => {
       parseStatus(
         {
           postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja:
-            [{ rodzajPostepowania: "POSTĘPOWANIE LIKWIDACYJNE" }],
+            [
+              {
+                otwarciePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji:
+                  { rodzajPostepowania: "POSTĘPOWANIE LIKWIDACYJNE" },
+              },
+            ],
         },
         "ACME SP. Z O.O.",
       ),
@@ -100,7 +105,12 @@ describe("parseStatus", () => {
       parseStatus(
         {
           postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja:
-            [{ rodzajPostepowania: "UPORZĄDKOWANA LIKWIDACJA" }],
+            [
+              {
+                otwarciePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji:
+                  { rodzajPostepowania: "UPORZĄDKOWANA LIKWIDACJA" },
+              },
+            ],
         },
         "ACME SP. Z O.O.",
       ),
@@ -117,7 +127,12 @@ describe("parseStatus", () => {
       parseStatus(
         {
           postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja:
-            [{ rodzajPostepowania: "PRZYMUSOWA RESTRUKTURYZACJA" }],
+            [
+              {
+                otwarciePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji:
+                  { rodzajPostepowania: "PRZYMUSOWA RESTRUKTURYZACJA" },
+              },
+            ],
         },
         "ACME SP. Z O.O.",
       ),
@@ -129,7 +144,12 @@ describe("parseStatus", () => {
       parseStatus(
         {
           postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja:
-            [{ rodzajPostepowania: "POSTĘPOWANIE NAPRAWCZE" }],
+            [
+              {
+                otwarciePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji:
+                  { rodzajPostepowania: "POSTĘPOWANIE NAPRAWCZE" },
+              },
+            ],
         },
         "ACME SP. Z O.O.",
       ),
@@ -142,8 +162,33 @@ describe("parseStatus", () => {
         {
           postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja:
             [
-              { rodzajPostepowania: "PRZYMUSOWA RESTRUKTURYZACJA" },
-              { rodzajPostepowania: "POSTĘPOWANIE LIKWIDACYJNE" },
+              {
+                otwarciePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji:
+                  { rodzajPostepowania: "PRZYMUSOWA RESTRUKTURYZACJA" },
+              },
+              {
+                otwarciePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji:
+                  { rodzajPostepowania: "POSTĘPOWANIE LIKWIDACYJNE" },
+              },
+            ],
+        },
+        "ACME SP. Z O.O.",
+      ),
+    ).toEqual({ type: "liquidating" });
+  });
+
+  test("reads `rodzajPostepowania` from the closing sub-object as a fallback", () => {
+    // Ended proceedings carry the kind under the `zakonczenie…`
+    // sub-object instead of `otwarcie…`. Either should resolve.
+    expect(
+      parseStatus(
+        {
+          postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja:
+            [
+              {
+                zakonczeniePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji:
+                  { rodzajPostepowania: "POSTĘPOWANIE LIKWIDACYJNE" },
+              },
             ],
         },
         "ACME SP. Z O.O.",
@@ -158,7 +203,7 @@ describe("parseStatus", () => {
       parseStatus(
         {
           postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja:
-            [{ data: "01.01.2026" }],
+            [{}],
         },
         "ACME SP. Z O.O.",
       ),

@@ -69,19 +69,29 @@ export type KrsRawDzial1 = {
 };
 
 // Each entry in the combined restructuring/liquidation dzial6 array
-// carries a free-form `rodzajPostepowania` (proceeding kind) field
-// — values observed in the wild include:
+// nests its `rodzajPostepowania` (proceeding kind) under the opening
+// sub-object (the closing sub-object would carry it too, but only on
+// proceedings that have ended). The opening sub-object name is the
+// full noun phrase — the upstream schema does not abbreviate.
+//
+// Observed `rodzajPostepowania` values in the wild:
 //   "PRZYMUSOWA RESTRUKTURYZACJA"           → compulsory restructuring
 //   "POSTĘPOWANIE NAPRAWCZE"                → repair proceedings
 //   "POSTĘPOWANIE RESTRUKTURYZACYJNE"       → restructuring
 //   "POSTĘPOWANIE UKŁADOWE"                 → arrangement (a restructuring variant)
 //   "UPORZĄDKOWANA LIKWIDACJA"              → orderly liquidation
 //   "LIKWIDACJA" / "POSTĘPOWANIE LIKWIDACYJNE"  → liquidation
-// Only entries containing the Polish stem `LIKWIDAC` map to the
+// Only values containing the Polish stem `LIKWIDAC` map to the
 // `liquidating` status; everything else is restructuring.
-export type KrsRawProceeding = {
+export type KrsRawProceedingDetail = {
   rodzajPostepowania?: string;
-  [key: string]: unknown;
+  organWydajacy?: string;
+  sygnatura?: string;
+};
+
+export type KrsRawProceeding = {
+  otwarciePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji?: KrsRawProceedingDetail;
+  zakonczeniePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji?: KrsRawProceedingDetail;
 };
 
 // Dzial 6 carries the lifecycle events we map onto the status union.
