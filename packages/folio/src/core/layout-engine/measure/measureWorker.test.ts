@@ -8,7 +8,11 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { clearAllCaches, getCachedTextWidth } from "./cache";
+import {
+  clearAllCaches,
+  clearTextWidthCache,
+  getCachedTextWidth,
+} from "./cache";
 import { setFolioMeasurementFlags } from "./featureFlags";
 import { measureTextWidth, resetCanvasContext } from "./measureContainer";
 import {
@@ -269,6 +273,53 @@ describe("response handling (cache fills)", () => {
     });
 
     expect(getCachedTextWidth("world", "11px Arial|scale:1", 0)).toBe(99);
+  });
+
+  test("drops worker responses measured before a text-cache reset", () => {
+    const transport = makeFakeTransport();
+    __setMeasureWorkerTransport(() => transport);
+
+    prefetchForTest("stale", "11px Arial", 0, 1);
+    __flushMeasureQueueForTests();
+    const staleId = transport.posted[0]?.id ?? -1;
+
+    clearTextWidthCache();
+
+    transport.emit({
+      type: "measure-result",
+      id: staleId,
+      ok: true,
+      entries: [
+        {
+          text: "stale",
+          fontCacheKey: "11px Arial|scale:1",
+          letterSpacing: 0,
+          width: 99,
+        },
+      ],
+    });
+
+    expect(getCachedTextWidth("stale", "11px Arial|scale:1", 0)).toBe(
+      undefined,
+    );
+
+    prefetchForTest("fresh", "11px Arial", 0, 1);
+    __flushMeasureQueueForTests();
+    transport.emit({
+      type: "measure-result",
+      id: transport.posted[1]?.id ?? -1,
+      ok: true,
+      entries: [
+        {
+          text: "fresh",
+          fontCacheKey: "11px Arial|scale:1",
+          letterSpacing: 0,
+          width: 101,
+        },
+      ],
+    });
+
+    expect(getCachedTextWidth("fresh", "11px Arial|scale:1", 0)).toBe(101);
   });
 
   test("disables the proxy on an ok:false response", () => {

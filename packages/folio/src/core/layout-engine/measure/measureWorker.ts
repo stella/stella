@@ -29,7 +29,7 @@
  * constructed on demand.
  */
 
-import { setCachedTextWidth } from "./cache";
+import { getTextWidthCacheGeneration, setCachedTextWidth } from "./cache";
 import { isWorkerFontMetricsEnabled } from "./featureFlags";
 import type {
   MeasureRequestEntry,
@@ -102,6 +102,7 @@ function isWorkerMeasurementSupported(): boolean {
 type ProxyState = {
   transport: MeasureWorkerTransport;
   pending: Map<string, MeasureRequestEntry>;
+  inFlightGenerations: Map<number, number>;
   flushTimer: ReturnType<typeof setTimeout> | null;
   nextRequestId: number;
   dead: boolean;
@@ -185,12 +186,13 @@ function ensureProxy(): ProxyState | null {
   const next: ProxyState = {
     transport,
     pending: new Map(),
+    inFlightGenerations: new Map(),
     flushTimer: null,
     nextRequestId: 0,
     dead: false,
   };
   transport.addEventListener("message", (event) => {
-    handleResponse(event.data);
+    handleResponse(next, event.data);
   });
   transport.addEventListener("error", () => {
     // Hard error: drop the proxy. Nothing in-flight needs explicit
@@ -250,12 +252,14 @@ function flush(current: ProxyState): void {
   }
   const id = current.nextRequestId;
   current.nextRequestId += 1;
+  current.inFlightGenerations.set(id, getTextWidthCacheGeneration());
   try {
     // The unicorn `targetOrigin` lint targets `window.postMessage`;
     // `Worker.postMessage` does not accept that argument.
     // eslint-disable-next-line unicorn/require-post-message-target-origin
     current.transport.postMessage({ type: "measure", id, entries });
   } catch {
+    current.inFlightGenerations.delete(id);
     disposeProxy(true);
     return;
   }
@@ -264,11 +268,25 @@ function flush(current: ProxyState): void {
   }
 }
 
-function handleResponse(message: MeasureWorkerResponse): void {
+function handleResponse(
+  current: ProxyState,
+  message: MeasureWorkerResponse,
+): void {
+  if (state !== current || current.dead) {
+    return;
+  }
+  const requestGeneration = current.inFlightGenerations.get(message.id);
+  current.inFlightGenerations.delete(message.id);
+  if (requestGeneration === undefined) {
+    return;
+  }
   if (!message.ok) {
     // Worker self-diagnosed an unrecoverable problem. Disable for the
     // session — main thread continues to handle everything.
     disposeProxy(true);
+    return;
+  }
+  if (requestGeneration !== getTextWidthCacheGeneration()) {
     return;
   }
   for (const entry of message.entries) {
