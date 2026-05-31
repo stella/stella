@@ -18,9 +18,12 @@ import { DOCX_BOLD_FONT_WEIGHT } from "../../utils/fontWeights";
 import {
   getCachedFontMetrics,
   getCachedTextWidth,
+  getTextWidthCacheGeneration,
   setCachedFontMetrics,
   setCachedTextWidth,
 } from "./cache";
+import { canPrefetchMeasurement, prefetchMeasurement } from "./measureWorker";
+import { WORKER_FONT_FINGERPRINT_TEXT } from "./measureWorkerProtocol";
 
 // Constants for OOXML unit conversions
 const TWIPS_PER_INCH = 1440;
@@ -83,6 +86,11 @@ export type RunMeasurement = {
 // Cached canvas context for text measurement
 let canvasContext: CanvasRenderingContext2D | null = null;
 
+const workerFontFingerprintCache = new Map<
+  string,
+  { generation: number; width: number }
+>();
+
 /**
  * Get or create a canvas 2D context for text measurement
  */
@@ -110,6 +118,22 @@ export function getCanvasContext(): CanvasRenderingContext2D {
  */
 export function resetCanvasContext(): void {
   canvasContext = null;
+}
+
+function getWorkerFontFingerprintWidth(
+  ctx: CanvasRenderingContext2D,
+  font: string,
+): number {
+  const generation = getTextWidthCacheGeneration();
+  const cached = workerFontFingerprintCache.get(font);
+  if (cached?.generation === generation) {
+    return cached.width;
+  }
+
+  ctx.font = font;
+  const width = ctx.measureText(WORKER_FONT_FINGERPRINT_TEXT).width;
+  workerFontFingerprintCache.set(font, { generation, width });
+  return width;
 }
 
 /** Cached resolved font data (CSS fallback + single-line ratio) */
@@ -305,7 +329,80 @@ export function measureTextWidth(text: string, style: FontStyle): number {
 
   const scaledWidth = width * horizontalScale;
   setCachedTextWidth(measuredText, fontCacheKey, letterSpacing, scaledWidth);
+  if (!canPrefetchMeasurement()) {
+    return scaledWidth;
+  }
+
+  const fontFingerprintWidth = getWorkerFontFingerprintWidth(ctx, font);
+  // Cache miss just cost a main-thread `measureText`. Ask the worker to
+  // pre-warm:
+  //   1) this exact entry (helps future re-layouts after font-ready,
+  //      page-resize, suggestion-mode toggles)
+  //   2) the next few binary-search probe points the line-break loop
+  //      is about to make (helps the *current* layout pass — the
+  //      worker races the main thread and lands hits ahead of the
+  //      probes).
+  //
+  // No-op when the worker flag is OFF or the host lacks
+  // `OffscreenCanvas`/`Worker`. See `measureWorker.ts`.
+  prefetchMeasurement(
+    measuredText,
+    font,
+    letterSpacing,
+    horizontalScale,
+    fontCacheKey,
+    fontFingerprintWidth,
+  );
+  prefetchBinarySearchProbes(
+    measuredText,
+    font,
+    fontCacheKey,
+    fontFingerprintWidth,
+    letterSpacing,
+    horizontalScale,
+  );
   return scaledWidth;
+}
+
+/**
+ * Speculatively enqueue the slice lengths that a subsequent
+ * `findMaxFittingLength` binary search is likely to probe. We pick the
+ * geometric series (full, half, quarter, eighth) which covers the
+ * majority of probe points the binary search uses, without flooding
+ * the worker for runs that will never trigger a line break.
+ *
+ * The worker is racing the main thread here: if the main thread asks
+ * for slice(0, n/2) before the worker has answered, the cache miss
+ * pays the main-thread cost as usual. When the worker wins, that probe
+ * lands on a hit.
+ */
+function prefetchBinarySearchProbes(
+  text: string,
+  font: string,
+  fontCacheKey: string,
+  fontFingerprintWidth: number,
+  letterSpacing: number,
+  horizontalScale: number,
+): void {
+  if (text.length < 4) {
+    return;
+  }
+  // Skip the full-length entry — we just filled it. Probe the
+  // half/quarter/eighth slice lengths.
+  for (let denom = 2; denom <= 8; denom *= 2) {
+    const len = Math.floor(text.length / denom);
+    if (len < 2) {
+      break;
+    }
+    prefetchMeasurement(
+      text.slice(0, len),
+      font,
+      letterSpacing,
+      horizontalScale,
+      fontCacheKey,
+      fontFingerprintWidth,
+    );
+  }
 }
 
 /**

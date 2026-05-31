@@ -35,6 +35,7 @@ let textCacheMaxSize = DEFAULT_TEXT_CACHE_SIZE;
  * Key format: "text|font|letterSpacing"
  */
 const textWidthCache = new Map<string, TextWidthEntry>();
+let textWidthCacheGeneration = 0;
 
 /**
  * Create a cache key for text width lookup
@@ -100,6 +101,15 @@ export function setCachedTextWidth(
  */
 export function clearTextWidthCache(): void {
   textWidthCache.clear();
+  textWidthCacheGeneration += 1;
+}
+
+/**
+ * Monotonic generation used by async measurement workers to drop
+ * responses that were measured before a cache reset.
+ */
+export function getTextWidthCacheGeneration(): number {
+  return textWidthCacheGeneration;
 }
 
 /**
