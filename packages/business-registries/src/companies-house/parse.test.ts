@@ -72,6 +72,29 @@ describe("parseAddress", () => {
     expect(out.postalCode).toBeNull();
     expect(out.textAddress).toBeNull();
   });
+
+  test("includes care_of and PO box in the composed textAddress", () => {
+    // Agent-held / PO-box-only filings have no structured street; if
+    // the formatter ignores care_of + po_box the dispatch layer
+    // surfaces such addresses as effectively empty.
+    const out = parseAddress({
+      care_of: "Acme Secretaries Limited",
+      po_box: "5000",
+      locality: "London",
+      postal_code: "EC1A 1AA",
+      country: "England",
+    });
+    expect(out.careOf).toBe("Acme Secretaries Limited");
+    expect(out.poBox).toBe("5000");
+    expect(out.textAddress).toBe(
+      "c/o Acme Secretaries Limited, PO Box 5000, London, EC1A 1AA, England",
+    );
+  });
+
+  test("renders PO-box-only addresses with no structured street", () => {
+    const out = parseAddress({ po_box: "42", postal_code: "SW1A 1AA" });
+    expect(out.textAddress).toBe("PO Box 42, SW1A 1AA");
+  });
 });
 
 describe("parseCompanyProfile (Tesco PLC fixture)", () => {

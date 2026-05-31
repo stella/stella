@@ -60,12 +60,17 @@ export const parseAddress = (
   const careOf = nonEmpty(raw.care_of);
 
   // Compose a single-line address in UK postal order:
-  //   premises + address_line_1, address_line_2, locality, region,
-  //   postal_code, country.
+  //   care_of, po_box, premises + address_line_1, address_line_2,
+  //   locality, region, postal_code, country.
   // Companies House does not always set every field — small companies
-  // routinely file just a single address line + postcode.
+  // routinely file just a single address line + postcode, and
+  // agent / PO-box-only filings can omit the structured street
+  // entirely, so the c/o + po_box prefixes are the only delivery
+  // identifier in those cases.
   const streetParts = [premises, addressLine1].filter(Boolean);
   const composite = [
+    careOf ? `c/o ${careOf}` : null,
+    poBox ? `PO Box ${poBox}` : null,
     streetParts.length > 0 ? streetParts.join(" ") : null,
     addressLine2,
     locality,
