@@ -12,10 +12,7 @@ import {
 } from "@stll/ui/components/dialog";
 import { cn } from "@stll/ui/lib/utils";
 
-import {
-  extensionMatches,
-  getExtension,
-} from "./version-or-new-file-dialog.logic";
+import { extensionMatches, getExtension } from "./file-extension";
 
 type VersionOrNewFileDialogProps = {
   open: boolean;

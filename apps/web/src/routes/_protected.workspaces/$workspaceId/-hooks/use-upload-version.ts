@@ -7,7 +7,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { ClientOperationError, toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
-import { extensionMatches } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog.logic";
+import { extensionMatches } from "@/routes/_protected.workspaces/$workspaceId/-components/file-extension";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 type UploadVersionVars = {
