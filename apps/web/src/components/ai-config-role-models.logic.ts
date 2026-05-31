@@ -73,6 +73,14 @@ export type StoredOverrideModels =
   | null
   | undefined;
 
+export type SerializedProviderConfig = {
+  provider: ProviderValue;
+  apiKey?: string;
+  endpoint?: string;
+  apiVersion?: string;
+  region: RegionValue;
+};
+
 const PROVIDER_VALUES = new Set<string>(PROVIDER_KEYS);
 const REGION_VALUES = new Set<string>(REGION_KEYS);
 const ROLE_VALUES = new Set<string>(ROLE_KEYS);
@@ -406,6 +414,29 @@ export const getAvailableProviderKeys = ({
 export const getProviderValues = (
   providers: readonly ProviderCredentialDraft[],
 ): ProviderValue[] => providers.map((providerDraft) => providerDraft.provider);
+
+export const serializeProviderDrafts = (
+  providers: readonly ProviderCredentialDraft[],
+): SerializedProviderConfig[] => {
+  const serializedProviders: SerializedProviderConfig[] = [];
+
+  for (const providerDraft of providers) {
+    const apiKey = providerDraft.apiKey.trim();
+    serializedProviders.push({
+      provider: providerDraft.provider,
+      ...(apiKey ? { apiKey } : {}),
+      ...(ENDPOINT_REQUIRED_PROVIDERS.has(providerDraft.provider)
+        ? { endpoint: providerDraft.endpoint.trim() }
+        : {}),
+      ...(providerDraft.provider === "azure_foundry" && providerDraft.apiVersion
+        ? { apiVersion: providerDraft.apiVersion }
+        : {}),
+      region: providerDraft.region,
+    });
+  }
+
+  return serializedProviders;
+};
 
 export const getNextAvailableProvider = (
   providers: readonly ProviderCredentialDraft[],

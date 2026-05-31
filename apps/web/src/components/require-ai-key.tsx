@@ -36,6 +36,7 @@ import {
   providerDraftsFromStoredProviders,
   roleModelsFromOverrideModels,
   serializeOverrideModels,
+  serializeProviderDrafts,
 } from "@/components/ai-config-role-models.logic";
 import type {
   ModelSelection,
@@ -291,21 +292,7 @@ export function AIKeyRequiredDialog({
       }
 
       const response = await api["organization-settings"]["ai-config"].post({
-        providers: providers.map((providerDraft) => ({
-          provider: providerDraft.provider,
-          ...(providerDraft.apiKey.trim()
-            ? { apiKey: providerDraft.apiKey.trim() }
-            : {}),
-          ...(providerDraft.provider === "azure_foundry"
-            ? {
-                endpoint: providerDraft.endpoint.trim(),
-                ...(providerDraft.apiVersion
-                  ? { apiVersion: providerDraft.apiVersion }
-                  : {}),
-              }
-            : {}),
-          region: providerDraft.region,
-        })),
+        providers: serializeProviderDrafts(providers),
         overrideModels,
       });
 
