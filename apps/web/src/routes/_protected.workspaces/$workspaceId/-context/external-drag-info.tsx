@@ -2,11 +2,6 @@
  * Tracks external file drags into the page, exposing how many files are
  * being dragged and their MIME types.
  *
- * Pragmatic DnD's `canDrop` callbacks read this via
- * `getCurrentExternalDrag()`, a plain synchronous getter. `canDrop` runs
- * outside React's render cycle and must return synchronously, so it
- * cannot use a hook.
- *
  * Notes:
  *   - Window listeners (dragenter, dragend, drop) update `current`.
  *     `dragenter` bubbles up from every nested element, so it rewrites
@@ -81,6 +76,8 @@ export const ExternalDragInfoProvider = ({ children }: PropsWithChildren) => {
 
 /**
  * Synchronous read of the current external drag info. Intended for use
- * inside Pragmatic DnD `canDrop` callbacks.
+ * inside Pragmatic DnD `canDrop` callbacks: `canDrop` runs outside
+ * React's render cycle and must return synchronously, so it cannot use
+ * a hook.
  */
 export const getCurrentExternalDrag = (): ExternalDragInfo | null => current;
