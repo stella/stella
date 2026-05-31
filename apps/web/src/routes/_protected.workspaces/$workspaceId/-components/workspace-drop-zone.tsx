@@ -10,10 +10,6 @@ import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { ExternalDragInfoProvider } from "@/routes/_protected.workspaces/$workspaceId/-context/external-drag-info";
-import {
-  RowDropTargetProvider,
-  useIsRowDropTargetActive,
-} from "@/routes/_protected.workspaces/$workspaceId/-context/row-drop-target-context";
 import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 
 type WorkspaceDropZoneProps = PropsWithChildren<{
@@ -25,11 +21,9 @@ export const WorkspaceDropZone = ({
   children,
 }: WorkspaceDropZoneProps) => (
   <ExternalDragInfoProvider>
-    <RowDropTargetProvider>
-      <WorkspaceDropZoneInner workspaceId={workspaceId}>
-        {children}
-      </WorkspaceDropZoneInner>
-    </RowDropTargetProvider>
+    <WorkspaceDropZoneInner workspaceId={workspaceId}>
+      {children}
+    </WorkspaceDropZoneInner>
   </ExternalDragInfoProvider>
 );
 
@@ -41,7 +35,7 @@ const WorkspaceDropZoneInner = ({
   const dropRef = useRef<HTMLDivElement>(null);
   const [isPending, createFileEntities] = useCreateFileEntities(workspaceId);
   const [isDropTarget, setIsDropTarget] = useState(false);
-  const isRowDropTargetActive = useIsRowDropTargetActive();
+  const [isRowActive, setIsRowActive] = useState(false);
 
   // Store isPending in a ref so the effect closure always
   // sees the latest value without re-registering.
@@ -60,9 +54,21 @@ const WorkspaceDropZoneInner = ({
       element: el,
       canDrop: ({ source }) => containsFiles({ source }),
       onDragEnter: () => setIsDropTarget(true),
-      onDragLeave: () => setIsDropTarget(false),
+      onDragLeave: () => {
+        setIsDropTarget(false);
+        setIsRowActive(false);
+      },
+      // Fires whenever the drop-target hierarchy changes while the pointer
+      // is over this zone (e.g. entering or leaving a nested row target).
+      // A row is "active" when the innermost drop target is something
+      // other than ourselves — that is the signal to suppress our overlay.
+      onDropTargetChange: ({ location, self }) => {
+        const innermost = location.current.dropTargets[0];
+        setIsRowActive(!!innermost && innermost.element !== self.element);
+      },
       onDrop: ({ source, location, self }) => {
         setIsDropTarget(false);
+        setIsRowActive(false);
         // Pragmatic DnD calls `onDrop` on every drop target the pointer is
         // over. `location.current.dropTargets` is innermost-first, so bail
         // unless we are the innermost; otherwise a file dropped on a row
@@ -83,7 +89,7 @@ const WorkspaceDropZoneInner = ({
   }, []);
 
   // Suppress the WorkspaceDropZone overlay when a row-level drop target is active
-  const showOverlay = isDropTarget && !isRowDropTargetActive;
+  const showOverlay = isDropTarget && !isRowActive;
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col" ref={dropRef}>

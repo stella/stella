@@ -42,7 +42,6 @@ export const useRowExternalFileDrop = ({
   const expectedMimeType = file?.mimeType.toLowerCase() ?? null;
 
   const { isDropTarget } = useExternalFileDrop({
-    id: entity.entityId,
     enabled: canAcceptDrop,
     externalRef: rowRef,
     accept: (info) =>

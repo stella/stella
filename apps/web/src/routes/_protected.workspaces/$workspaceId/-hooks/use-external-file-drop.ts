@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { dropTargetForExternal } from "@atlaskit/pragmatic-drag-and-drop/external/adapter";
 import {
@@ -8,11 +8,8 @@ import {
 
 import type { ExternalDragInfo } from "@/routes/_protected.workspaces/$workspaceId/-context/external-drag-info";
 import { getCurrentExternalDrag } from "@/routes/_protected.workspaces/$workspaceId/-context/external-drag-info";
-import { useRowDropTarget } from "@/routes/_protected.workspaces/$workspaceId/-context/row-drop-target-context";
 
 type ExternalFileDropOptions = {
-  /** Unique identifier for this drop target (typically entityId) */
-  id: string;
   /** Called when files are dropped. Receives the dropped files. */
   onDrop: (files: File[]) => void;
   /** Whether this drop target is enabled */
@@ -42,11 +39,12 @@ type ExternalFileDropResult = {
 };
 
 /**
- * Hook for handling external file drops on row elements.
- * Coordinates with RowDropTargetContext to suppress the WorkspaceDropZone overlay.
+ * Hook for handling external file drops on row elements. The parent
+ * `WorkspaceDropZone` observes its own `onDropTargetChange` to suppress
+ * its overlay while a row is the innermost target, so this hook only
+ * has to register the per-row drop target.
  */
 export const useExternalFileDrop = ({
-  id,
   onDrop,
   enabled = true,
   externalRef,
@@ -55,34 +53,12 @@ export const useExternalFileDrop = ({
   const internalRef = useRef<HTMLDivElement>(null);
   const ref = externalRef ?? internalRef;
   const [isDropTarget, setIsDropTarget] = useState(false);
-  const { setActiveRowId } = useRowDropTarget();
 
   // Store callbacks in refs to avoid re-registering the drop target
   const onDropRef = useRef(onDrop);
   onDropRef.current = onDrop;
   const acceptRef = useRef(accept);
   acceptRef.current = accept;
-
-  const handleDragEnter = useCallback(() => {
-    setIsDropTarget(true);
-    setActiveRowId(id);
-  }, [id, setActiveRowId]);
-
-  const handleDragLeave = useCallback(() => {
-    setIsDropTarget(false);
-    setActiveRowId(null);
-  }, [setActiveRowId]);
-
-  const handleDrop = useCallback(
-    (files: File[]) => {
-      setIsDropTarget(false);
-      setActiveRowId(null);
-      if (files.length > 0) {
-        onDropRef.current(files);
-      }
-    },
-    [setActiveRowId],
-  );
 
   useEffect(() => {
     const el = ref.current;
@@ -106,13 +82,17 @@ export const useExternalFileDrop = ({
         }
         return acceptFn(info);
       },
-      onDragEnter: handleDragEnter,
-      onDragLeave: handleDragLeave,
+      onDragEnter: () => setIsDropTarget(true),
+      onDragLeave: () => setIsDropTarget(false),
       onDrop: ({ source }) => {
-        handleDrop(getFiles({ source }));
+        setIsDropTarget(false);
+        const files = getFiles({ source });
+        if (files.length > 0) {
+          onDropRef.current(files);
+        }
       },
     });
-  }, [enabled, handleDragEnter, handleDragLeave, handleDrop, ref]);
+  }, [enabled, ref]);
 
   return { ref, isDropTarget };
 };
