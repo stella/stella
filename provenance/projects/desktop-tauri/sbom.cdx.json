@@ -17044,7 +17044,7 @@
       "version": "0.8.10"
     },
     {
-      "bom-ref": "pkg:cargo/reqwest@0.13.3",
+      "bom-ref": "pkg:cargo/reqwest@0.13.4",
       "evidence": {
         "identity": [
           {
@@ -17065,7 +17065,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "62e0021ea2c22aed41653bc7e1419abb2c97e038ff2c33d0e1309e49a97deec0"
+          "content": "219c5811de6525e5416c7d5d53bb656d3afdbc6c5af816e0802bcfa42dbdc1c3"
         }
       ],
       "licenses": [
@@ -17087,9 +17087,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/reqwest@0.13.3",
+      "purl": "pkg:cargo/reqwest@0.13.4",
       "type": "library",
-      "version": "0.13.3"
+      "version": "0.13.4"
     },
     {
       "bom-ref": "pkg:cargo/ring@0.17.14",
@@ -18486,7 +18486,7 @@
       "version": "0.29.1"
     },
     {
-      "bom-ref": "pkg:cargo/serde_json@1.0.149",
+      "bom-ref": "pkg:cargo/serde_json@1.0.150",
       "evidence": {
         "identity": [
           {
@@ -18507,7 +18507,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "83fc039473c5595ace860d8c4fafa220ff474b3fc6bfdb4293327f1a37e94d86"
+          "content": "e8014e44b4736ed0538adeecded0fce2a272f22dc9578a7eb6b2d9993c74cfb9"
         }
       ],
       "licenses": [
@@ -18529,9 +18529,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/serde_json@1.0.149",
+      "purl": "pkg:cargo/serde_json@1.0.150",
       "type": "library",
-      "version": "1.0.149"
+      "version": "1.0.150"
     },
     {
       "bom-ref": "pkg:cargo/serde_path_to_error@0.1.20",
@@ -22802,7 +22802,7 @@
       "version": "0.5.3"
     },
     {
-      "bom-ref": "pkg:cargo/tower-http@0.6.10",
+      "bom-ref": "pkg:cargo/tower-http@0.6.11",
       "evidence": {
         "identity": [
           {
@@ -22823,7 +22823,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "68d6fdd9f81c2819c9a8b0e0cd91660e7746a8e6ea2ba7c6b2b057985f6bcb51"
+          "content": "4cfcf7e2740e6fc6d4d688b4ef00650406bb94adf4731e43c096c3a19fe40840"
         }
       ],
       "licenses": [
@@ -22840,9 +22840,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tower-http@0.6.10",
+      "purl": "pkg:cargo/tower-http@0.6.11",
       "type": "library",
-      "version": "0.6.10"
+      "version": "0.6.11"
     },
     {
       "bom-ref": "pkg:cargo/tower-layer@0.3.3",
@@ -24049,7 +24049,7 @@
       "version": "1.0.4"
     },
     {
-      "bom-ref": "pkg:cargo/uuid@1.23.1",
+      "bom-ref": "pkg:cargo/uuid@1.23.2",
       "evidence": {
         "identity": [
           {
@@ -24070,7 +24070,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "ddd74a9687298c6858e9b88ec8935ec45d22e8fd5e6394fa1bd4e99a87789c76"
+          "content": "d258b83ceec21034727ecee8c382cfa6c3e133699b0742c64571814fb420c9f7"
         }
       ],
       "licenses": [
@@ -24092,9 +24092,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/uuid@1.23.1",
+      "purl": "pkg:cargo/uuid@1.23.2",
       "type": "library",
-      "version": "1.23.1"
+      "version": "1.23.2"
     },
     {
       "bom-ref": "pkg:cargo/valuable@0.1.1",
@@ -26285,7 +26285,7 @@
       "version": "0.2.1"
     },
     {
-      "bom-ref": "pkg:cargo/windows-native-keyring-store@1.0.0",
+      "bom-ref": "pkg:cargo/windows-native-keyring-store@1.1.0",
       "evidence": {
         "identity": [
           {
@@ -26306,7 +26306,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "b5fd986f648459dd29aa252ed3a5ad11a60c0b1251bf81625fb03a86c69d274e"
+          "content": "063426e76fdec7438d56bb777f67e318a84a25c707b07e575cb8b78e10c028f8"
         }
       ],
       "licenses": [
@@ -26328,12 +26328,12 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/windows-native-keyring-store@1.0.0",
+      "purl": "pkg:cargo/windows-native-keyring-store@1.1.0",
       "tags": [
         "native"
       ],
       "type": "library",
-      "version": "1.0.0"
+      "version": "1.1.0"
     },
     {
       "bom-ref": "pkg:cargo/windows-numerics@0.2.0",
@@ -26430,54 +26430,6 @@
       "purl": "pkg:cargo/windows-registry@0.5.3",
       "type": "library",
       "version": "0.5.3"
-    },
-    {
-      "bom-ref": "pkg:cargo/windows-registry@0.6.1",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "Cargo.lock",
-            "confidence": 0.6,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.6,
-                "technique": "manifest-analysis",
-                "value": "Cargo.lock"
-              }
-            ]
-          }
-        ]
-      },
-      "group": "",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "02752bf7fbdcce7f2a27a742f798510f3e5ad88dbe84871e5168e2120c3d5720"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0"
-          }
-        },
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "name": "windows-registry",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "Cargo.lock"
-        }
-      ],
-      "purl": "pkg:cargo/windows-registry@0.6.1",
-      "type": "library",
-      "version": "0.6.1"
     },
     {
       "bom-ref": "pkg:cargo/windows-result@0.3.4",
@@ -30143,7 +30095,7 @@
         "pkg:cargo/objc2@0.6.4",
         "pkg:cargo/parking_lot@0.12.5",
         "pkg:cargo/percent-encoding@2.3.2",
-        "pkg:cargo/windows-sys@0.60.2",
+        "pkg:cargo/windows-sys@0.59.0",
         "pkg:cargo/wl-clipboard-rs@0.9.3",
         "pkg:cargo/x11rb@0.13.2"
       ],
@@ -30318,7 +30270,7 @@
         "pkg:cargo/percent-encoding@2.3.2",
         "pkg:cargo/pin-project-lite@0.2.17",
         "pkg:cargo/serde_core@1.0.228",
-        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/serde_path_to_error@0.1.20",
         "pkg:cargo/serde_urlencoded@0.7.1",
         "pkg:cargo/sync_wrapper@1.0.2",
@@ -30476,7 +30428,7 @@
         "pkg:cargo/cargo-platform@0.1.9",
         "pkg:cargo/semver@1.0.28",
         "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/thiserror@2.0.18"
       ],
       "ref": "pkg:cargo/cargo_metadata@0.19.2"
@@ -30511,7 +30463,7 @@
       "dependsOn": [
         "pkg:cargo/byteorder@1.5.0",
         "pkg:cargo/fnv@1.0.7",
-        "pkg:cargo/uuid@1.23.1"
+        "pkg:cargo/uuid@1.23.2"
       ],
       "ref": "pkg:cargo/cfb@0.7.3"
     },
@@ -30773,7 +30725,7 @@
         "pkg:cargo/libc@0.2.186",
         "pkg:cargo/option-ext@0.2.0",
         "pkg:cargo/redox_users@0.5.2",
-        "pkg:cargo/windows-sys@0.61.2"
+        "pkg:cargo/windows-sys@0.59.0"
       ],
       "ref": "pkg:cargo/dirs-sys@0.5.0"
     },
@@ -30922,7 +30874,7 @@
     {
       "dependsOn": [
         "pkg:cargo/libc@0.2.186",
-        "pkg:cargo/windows-sys@0.61.2"
+        "pkg:cargo/windows-sys@0.59.0"
       ],
       "ref": "pkg:cargo/errno@0.3.14"
     },
@@ -31460,7 +31412,7 @@
         "pkg:cargo/tokio@1.52.3",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/tracing@0.1.44",
-        "pkg:cargo/windows-registry@0.6.1"
+        "pkg:cargo/windows-registry@0.5.3"
       ],
       "ref": "pkg:cargo/hyper-util@0.1.20"
     },
@@ -31717,7 +31669,7 @@
       "dependsOn": [
         "pkg:cargo/jsonptr@0.6.3",
         "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/thiserror@1.0.69"
       ],
       "ref": "pkg:cargo/json-patch@3.0.1"
@@ -31725,7 +31677,7 @@
     {
       "dependsOn": [
         "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.149"
+        "pkg:cargo/serde_json@1.0.150"
       ],
       "ref": "pkg:cargo/jsonptr@0.6.3"
     },
@@ -31992,7 +31944,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/windows-sys@0.61.2"
+        "pkg:cargo/windows-sys@0.59.0"
       ],
       "ref": "pkg:cargo/nu-ansi-term@0.50.3"
     },
@@ -32270,7 +32222,7 @@
     {
       "dependsOn": [
         "pkg:cargo/libc@0.2.186",
-        "pkg:cargo/windows-sys@0.61.2"
+        "pkg:cargo/windows-sys@0.45.0"
       ],
       "ref": "pkg:cargo/os_pipe@1.2.3"
     },
@@ -32280,7 +32232,7 @@
         "pkg:cargo/objc2-osa-kit@0.3.2",
         "pkg:cargo/objc2@0.6.4",
         "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/thiserror@2.0.18"
       ],
       "ref": "pkg:cargo/osakit@0.3.1"
@@ -32544,7 +32496,7 @@
         "pkg:cargo/once_cell@1.21.4",
         "pkg:cargo/socket2@0.6.3",
         "pkg:cargo/tracing@0.1.44",
-        "pkg:cargo/windows-sys@0.60.2"
+        "pkg:cargo/windows-sys@0.59.0"
       ],
       "ref": "pkg:cargo/quinn-udp@0.5.14"
     },
@@ -32656,12 +32608,12 @@
         "pkg:cargo/rustls-platform-verifier@0.7.0",
         "pkg:cargo/rustls@0.23.40",
         "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/sync_wrapper@1.0.2",
         "pkg:cargo/tokio-rustls@0.26.4",
         "pkg:cargo/tokio-util@0.7.18",
         "pkg:cargo/tokio@1.52.3",
-        "pkg:cargo/tower-http@0.6.10",
+        "pkg:cargo/tower-http@0.6.11",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/tower@0.5.3",
         "pkg:cargo/url@2.5.8",
@@ -32670,7 +32622,7 @@
         "pkg:cargo/wasm-streams@0.5.0",
         "pkg:cargo/web-sys@0.3.97"
       ],
-      "ref": "pkg:cargo/reqwest@0.13.3"
+      "ref": "pkg:cargo/reqwest@0.13.4"
     },
     {
       "dependsOn": [
@@ -32706,7 +32658,7 @@
         "pkg:cargo/errno@0.3.14",
         "pkg:cargo/libc@0.2.186",
         "pkg:cargo/linux-raw-sys@0.12.1",
-        "pkg:cargo/windows-sys@0.61.2"
+        "pkg:cargo/windows-sys@0.59.0"
       ],
       "ref": "pkg:cargo/rustix@1.1.4"
     },
@@ -32752,7 +32704,7 @@
         "pkg:cargo/security-framework-sys@2.17.0",
         "pkg:cargo/security-framework@3.7.0",
         "pkg:cargo/webpki-root-certs@1.0.7",
-        "pkg:cargo/windows-sys@0.61.2"
+        "pkg:cargo/windows-sys@0.59.0"
       ],
       "ref": "pkg:cargo/rustls-platform-verifier@0.7.0"
     },
@@ -32794,7 +32746,7 @@
         "pkg:cargo/dyn-clone@1.0.20",
         "pkg:cargo/ref-cast@1.0.25",
         "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.149"
+        "pkg:cargo/serde_json@1.0.150"
       ],
       "ref": "pkg:cargo/schemars@1.2.1"
     },
@@ -32913,7 +32865,7 @@
         "pkg:cargo/serde_core@1.0.228",
         "pkg:cargo/zmij@1.0.21"
       ],
-      "ref": "pkg:cargo/serde_json@1.0.149"
+      "ref": "pkg:cargo/serde_json@1.0.150"
     },
     {
       "dependsOn": [
@@ -32956,7 +32908,7 @@
         "pkg:cargo/schemars@0.9.0",
         "pkg:cargo/schemars@1.2.1",
         "pkg:cargo/serde_core@1.0.228",
-        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/serde_with_macros@3.19.0",
         "pkg:cargo/time@0.3.47"
       ],
@@ -32974,7 +32926,7 @@
     {
       "dependsOn": [
         "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/serialize-to-javascript-impl@0.1.2"
       ],
       "ref": "pkg:cargo/serialize-to-javascript@0.1.2"
@@ -33106,9 +33058,9 @@
         "pkg:cargo/keyring-core@1.0.0",
         "pkg:cargo/notify@8.2.0",
         "pkg:cargo/opener@0.8.4",
-        "pkg:cargo/reqwest@0.13.3",
+        "pkg:cargo/reqwest@0.13.4",
         "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/sha2@0.11.0",
         "pkg:cargo/sys-locale@0.3.2",
         "pkg:cargo/tauri-build@2.6.2",
@@ -33122,12 +33074,12 @@
         "pkg:cargo/tauri-plugin-updater@2.10.1",
         "pkg:cargo/tauri@2.11.2",
         "pkg:cargo/tokio@1.52.3",
-        "pkg:cargo/tower-http@0.6.10",
+        "pkg:cargo/tower-http@0.6.11",
         "pkg:cargo/tower@0.5.3",
         "pkg:cargo/tracing-subscriber@0.3.23",
         "pkg:cargo/tracing@0.1.44",
-        "pkg:cargo/uuid@1.23.1",
-        "pkg:cargo/windows-native-keyring-store@1.0.0",
+        "pkg:cargo/uuid@1.23.2",
+        "pkg:cargo/windows-native-keyring-store@1.1.0",
         "pkg:cargo/zbus-secret-service-keyring-store@1.0.0"
       ],
       "ref": "pkg:cargo/stella-desktop@0.0.1"
@@ -33162,7 +33114,7 @@
       "dependsOn": [
         "pkg:cargo/base64@0.21.7",
         "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.149"
+        "pkg:cargo/serde_json@1.0.150"
       ],
       "ref": "pkg:cargo/swift-rs@1.0.7"
     },
@@ -33303,9 +33255,9 @@
         "pkg:cargo/percent-encoding@2.3.2",
         "pkg:cargo/plist@1.9.0",
         "pkg:cargo/raw-window-handle@0.6.2",
-        "pkg:cargo/reqwest@0.13.3",
+        "pkg:cargo/reqwest@0.13.4",
         "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/serde_repr@0.1.20",
         "pkg:cargo/serialize-to-javascript@0.1.2",
         "pkg:cargo/swift-rs@1.0.7",
@@ -33336,7 +33288,7 @@
         "pkg:cargo/schemars@0.8.22",
         "pkg:cargo/semver@1.0.28",
         "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/tauri-utils@2.9.2",
         "pkg:cargo/tauri-winres@0.3.6",
         "pkg:cargo/walkdir@2.5.0"
@@ -33355,14 +33307,14 @@
         "pkg:cargo/quote@1.0.45",
         "pkg:cargo/semver@1.0.28",
         "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/sha2@0.10.9",
         "pkg:cargo/syn@2.0.117",
         "pkg:cargo/tauri-utils@2.9.2",
         "pkg:cargo/thiserror@2.0.18",
         "pkg:cargo/time@0.3.47",
         "pkg:cargo/url@2.5.8",
-        "pkg:cargo/uuid@1.23.1",
+        "pkg:cargo/uuid@1.23.2",
         "pkg:cargo/walkdir@2.5.0"
       ],
       "ref": "pkg:cargo/tauri-codegen@2.6.2"
@@ -33385,7 +33337,7 @@
         "pkg:cargo/plist@1.9.0",
         "pkg:cargo/schemars@0.8.22",
         "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/tauri-utils@2.9.2",
         "pkg:cargo/walkdir@2.5.0"
       ],
@@ -33395,7 +33347,7 @@
       "dependsOn": [
         "pkg:cargo/auto-launch@0.5.0",
         "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/tauri-plugin@2.6.1",
         "pkg:cargo/tauri@2.11.2",
         "pkg:cargo/thiserror@2.0.18"
@@ -33407,7 +33359,7 @@
         "pkg:cargo/arboard@3.6.1",
         "pkg:cargo/log@0.4.29",
         "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/tauri-plugin@2.6.1",
         "pkg:cargo/tauri@2.11.2",
         "pkg:cargo/thiserror@2.0.18"
@@ -33420,7 +33372,7 @@
         "pkg:cargo/plist@1.9.0",
         "pkg:cargo/rust-ini@0.21.3",
         "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/tauri-plugin@2.6.1",
         "pkg:cargo/tauri-utils@2.9.2",
         "pkg:cargo/tauri@2.11.2",
@@ -33438,7 +33390,7 @@
         "pkg:cargo/notify-rust@4.17.0",
         "pkg:cargo/rand@0.9.4",
         "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/serde_repr@0.1.20",
         "pkg:cargo/tauri-plugin@2.6.1",
         "pkg:cargo/tauri@2.11.2",
@@ -33457,7 +33409,7 @@
         "pkg:cargo/open@5.3.4",
         "pkg:cargo/schemars@0.8.22",
         "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/tauri-plugin@2.6.1",
         "pkg:cargo/tauri@2.11.2",
         "pkg:cargo/thiserror@2.0.18",
@@ -33477,7 +33429,7 @@
     {
       "dependsOn": [
         "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/tauri-plugin-deep-link@2.4.9",
         "pkg:cargo/tauri@2.11.2",
         "pkg:cargo/thiserror@2.0.18",
@@ -33499,11 +33451,11 @@
         "pkg:cargo/minisign-verify@0.2.5",
         "pkg:cargo/osakit@0.3.1",
         "pkg:cargo/percent-encoding@2.3.2",
-        "pkg:cargo/reqwest@0.13.3",
+        "pkg:cargo/reqwest@0.13.4",
         "pkg:cargo/rustls@0.23.40",
         "pkg:cargo/semver@1.0.28",
         "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/tar@0.4.45",
         "pkg:cargo/tauri-plugin@2.6.1",
         "pkg:cargo/tauri@2.11.2",
@@ -33529,7 +33481,7 @@
         "pkg:cargo/objc2@0.6.4",
         "pkg:cargo/raw-window-handle@0.6.2",
         "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/tauri-utils@2.9.2",
         "pkg:cargo/thiserror@2.0.18",
         "pkg:cargo/url@2.5.8",
@@ -33585,14 +33537,14 @@
         "pkg:cargo/semver@1.0.28",
         "pkg:cargo/serde-untagged@0.1.9",
         "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/serde_with@3.19.0",
         "pkg:cargo/swift-rs@1.0.7",
         "pkg:cargo/thiserror@2.0.18",
         "pkg:cargo/toml@1.1.2+spec-1.1.0",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/urlpattern@0.3.0",
-        "pkg:cargo/uuid@1.23.1",
+        "pkg:cargo/uuid@1.23.2",
         "pkg:cargo/walkdir@2.5.0"
       ],
       "ref": "pkg:cargo/tauri-utils@2.9.2"
@@ -33620,7 +33572,7 @@
         "pkg:cargo/getrandom@0.4.2",
         "pkg:cargo/once_cell@1.21.4",
         "pkg:cargo/rustix@1.1.4",
-        "pkg:cargo/windows-sys@0.61.2"
+        "pkg:cargo/windows-sys@0.59.0"
       ],
       "ref": "pkg:cargo/tempfile@3.27.0"
     },
@@ -33810,7 +33762,7 @@
         "pkg:cargo/tower@0.5.3",
         "pkg:cargo/url@2.5.8"
       ],
-      "ref": "pkg:cargo/tower-http@0.6.10"
+      "ref": "pkg:cargo/tower-http@0.6.11"
     },
     {
       "dependsOn": [],
@@ -33996,7 +33948,7 @@
         "pkg:cargo/serde_core@1.0.228",
         "pkg:cargo/wasm-bindgen@0.2.120"
       ],
-      "ref": "pkg:cargo/uuid@1.23.1"
+      "ref": "pkg:cargo/uuid@1.23.2"
     },
     {
       "dependsOn": [],
@@ -34291,7 +34243,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/windows-sys@0.61.2"
+        "pkg:cargo/windows-sys@0.59.0"
       ],
       "ref": "pkg:cargo/winapi-util@0.1.11"
     },
@@ -34373,7 +34325,7 @@
         "pkg:cargo/windows-sys@0.61.2",
         "pkg:cargo/zeroize@1.8.2"
       ],
-      "ref": "pkg:cargo/windows-native-keyring-store@1.0.0"
+      "ref": "pkg:cargo/windows-native-keyring-store@1.1.0"
     },
     {
       "dependsOn": [
@@ -34384,11 +34336,11 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/windows-link@0.2.1",
-        "pkg:cargo/windows-result@0.4.1",
-        "pkg:cargo/windows-strings@0.5.1"
+        "pkg:cargo/windows-link@0.1.3",
+        "pkg:cargo/windows-result@0.3.4",
+        "pkg:cargo/windows-strings@0.4.2"
       ],
-      "ref": "pkg:cargo/windows-registry@0.6.1"
+      "ref": "pkg:cargo/windows-registry@0.5.3"
     },
     {
       "dependsOn": [
@@ -34524,7 +34476,7 @@
         "pkg:cargo/log@0.4.29",
         "pkg:cargo/serde@1.0.228",
         "pkg:cargo/serde_derive@1.0.228",
-        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/wasm-encoder@0.244.0",
         "pkg:cargo/wasm-metadata@0.244.0",
         "pkg:cargo/wasmparser@0.244.0",
@@ -34541,7 +34493,7 @@
         "pkg:cargo/semver@1.0.28",
         "pkg:cargo/serde@1.0.228",
         "pkg:cargo/serde_derive@1.0.228",
-        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/serde_json@1.0.150",
         "pkg:cargo/unicode-xid@0.2.6",
         "pkg:cargo/wasmparser@0.244.0"
       ],
@@ -34681,7 +34633,7 @@
         "pkg:cargo/serde_repr@0.1.20",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/uds_windows@1.2.1",
-        "pkg:cargo/uuid@1.23.1",
+        "pkg:cargo/uuid@1.23.2",
         "pkg:cargo/windows-sys@0.61.2",
         "pkg:cargo/winnow@1.0.2",
         "pkg:cargo/zbus_macros@5.15.0",

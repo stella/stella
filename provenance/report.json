@@ -10,7 +10,7 @@
       ],
       "sbom": "projects/root/sbom.cdx.json",
       "notice": "projects/root/THIRD-PARTY-NOTICES.txt",
-      "dependencies_with_licenses": 154
+      "dependencies_with_licenses": 156
     },
     {
       "id": "desktop-tauri",
@@ -20,7 +20,7 @@
       ],
       "sbom": "projects/desktop-tauri/sbom.cdx.json",
       "notice": "projects/desktop-tauri/THIRD-PARTY-NOTICES.txt",
-      "dependencies_with_licenses": 651
+      "dependencies_with_licenses": 650
     }
   ],
   "containers": []
