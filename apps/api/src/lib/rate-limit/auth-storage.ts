@@ -54,13 +54,18 @@ const isStricterRateLimitValue = (
     candidate.lastRequest > current.lastRequest);
 
 const withCommandTimeout = async <T>(promise: Promise<T>): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
-    setTimeout(
+    timeoutId = setTimeout(
       () => reject(new Error("redis command timeout")),
       COMMAND_TIMEOUT_MS,
     );
   });
-  return await Promise.race([promise, timeout]);
+  return await Promise.race([promise, timeout]).finally(() => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  });
 };
 
 /**

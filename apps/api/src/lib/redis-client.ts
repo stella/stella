@@ -4,8 +4,22 @@ import { type RedisOptions, RedisClient } from "bun";
 import { env } from "@/api/env";
 import { redisConnectionOptions } from "@/api/lib/redis-options";
 
-export const createRedisClient = (overrides?: RedisOptions): RedisClient =>
-  new RedisClient(env.REDIS_URL, { ...redisConnectionOptions(), ...overrides });
+type StellaRedisClient = RedisClient & {
+  readonly url: string;
+};
+
+class ConfiguredRedisClient extends RedisClient {
+  readonly url: string;
+
+  constructor(url = env.REDIS_URL, overrides?: RedisOptions) {
+    super(url, { ...redisConnectionOptions(url), ...overrides });
+    this.url = url;
+  }
+}
+
+export const createRedisClient = (
+  overrides?: RedisOptions,
+): StellaRedisClient => new ConfiguredRedisClient(env.REDIS_URL, overrides);
 
 /**
  * Build a BullMQ connection wrapped around a freshly-constructed Bun
@@ -18,11 +32,11 @@ export const createBullMqConnection = (): ReturnType<
 > => {
   const raw = createRedisClient();
   // SAFETY: structural mismatch between BullMQ's BunRedisRawClient
-  // (onconnect/onclose typed as non-nullable functions) and Bun's
-  // RedisClient (typed as nullable). At runtime Bun's client satisfies
-  // the interface — BullMQ's adapter only assigns these callbacks, it
-  // never invokes them as non-null functions, so the looser Bun typing
-  // is sound.
+  // (callback properties are optional functions) and Bun's RedisClient
+  // (callback properties may be null). ConfiguredRedisClient also
+  // exposes `url`, which BullMQ's Bun adapter uses when duplicating or
+  // reconnecting raw clients, so TLS/options from redisConnectionOptions
+  // are preserved by the subclass constructor.
   // eslint-disable-next-line typescript/no-unsafe-type-assertion
   return createBunRedisClient(raw as unknown as BunRedisRawClient);
 };

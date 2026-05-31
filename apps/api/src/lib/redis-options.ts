@@ -15,7 +15,7 @@ import type { RedisOptions } from "bun";
 
 import { env } from "@/api/env";
 
-export const redisConnectionOptions = (): RedisOptions => {
-  const useTls = env.REDIS_URL.toLowerCase().startsWith("rediss://");
+export const redisConnectionOptions = (url = env.REDIS_URL): RedisOptions => {
+  const useTls = url.toLowerCase().startsWith("rediss://");
   return useTls ? { tls: { rejectUnauthorized: false } } : {};
 };

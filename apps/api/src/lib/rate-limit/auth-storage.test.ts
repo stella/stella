@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test, vi } from "bun:test";
 
 // A controllable fake of Bun's RedisClient: `redisDown` toggles whether
 // get/set reject, simulating an unreachable Redis without real I/O.
@@ -149,5 +149,20 @@ describe("auth rate-limit storage", () => {
     // 500ms timeout + scheduler slack. If this fails, the timeout
     // wrapper has regressed and auth could hang on a slow Redis.
     expect(elapsed).toBeLessThan(1500);
+  });
+
+  test("clears command timeout timers after Redis resolves", async () => {
+    vi.useFakeTimers();
+    try {
+      const storage = createAuthRateLimitStorage(60_000);
+      const baselineTimers = vi.getTimerCount();
+
+      await storage.set("ip:1.2.3.4", value(9));
+
+      expect(vi.getTimerCount()).toBe(baselineTimers);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
   });
 });
