@@ -65,8 +65,9 @@ const parseStatus = (
   if (startsOn && startsOn <= today && (!endsOn || today <= endsOn)) {
     return { type: "suspended" };
   }
-  if (raw.Company_Status) {
-    const mapped = STATUS_CODE_MAP[raw.Company_Status];
+  const statusCode = raw.Company_Status?.trim();
+  if (statusCode) {
+    const mapped = STATUS_CODE_MAP[statusCode];
     if (mapped) {
       return mapped;
     }
@@ -112,6 +113,14 @@ const parseRocDate = (input: string | undefined): string | null => {
     return null;
   }
   const gregorianYear = rocYear + 1911;
+  const parsed = new Date(Date.UTC(gregorianYear, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== gregorianYear ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
   return `${String(gregorianYear).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 };
 
@@ -132,7 +141,7 @@ export const parseCompany = (raw: GcisRawCompany, now?: Date): GcisCompany => {
   const taxId = raw.Business_Accounting_NO;
   return {
     taxId,
-    name: raw.Company_Name?.trim() ?? taxId,
+    name: emptyToNull(raw.Company_Name) ?? taxId,
     capitalAmount: numberOrNull(raw.Capital_Stock_Amount),
     paidInCapitalAmount: numberOrNull(raw.Paid_In_Capital_Amount),
     responsibleName: emptyToNull(raw.Responsible_Name),
@@ -153,7 +162,7 @@ export const parseSearchEntry = (
   now?: Date,
 ): GcisSearchResult => ({
   taxId: raw.Business_Accounting_NO,
-  name: raw.Company_Name?.trim() ?? raw.Business_Accounting_NO,
+  name: emptyToNull(raw.Company_Name) ?? raw.Business_Accounting_NO,
   location: emptyToNull(raw.Company_Location),
   status: parseStatus(raw, now),
 });

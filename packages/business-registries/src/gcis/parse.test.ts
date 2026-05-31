@@ -41,6 +41,11 @@ describe("parseCompany", () => {
     expect(company.name).toBe("22099131");
   });
 
+  test("falls back to taxId when Company_Name is blank", () => {
+    const company = parseCompany({ ...baseRaw, Company_Name: "  " });
+    expect(company.name).toBe("22099131");
+  });
+
   test("treats empty-string fields as null", () => {
     const company = parseCompany({
       ...baseRaw,
@@ -99,6 +104,12 @@ describe("parseStatus (via parseCompany)", () => {
     expect(
       parseCompany({ ...baseRaw, Company_Status_Desc: "停業" }).status,
     ).toEqual({ type: "suspended" });
+  });
+
+  test("trims Company_Status codes before mapping", () => {
+    expect(parseCompany({ ...baseRaw, Company_Status: " 01 " }).status).toEqual(
+      { type: "active" },
+    );
   });
 
   test("treats unknown codes / descriptions as unknown, not active", () => {
@@ -183,6 +194,9 @@ describe("ROC date parsing (via parseCompany)", () => {
     expect(
       parseCompany({ ...baseRaw, Company_Setup_Date: "1151301" }).setupDate,
     ).toBeNull();
+    expect(
+      parseCompany({ ...baseRaw, Company_Setup_Date: "1150231" }).setupDate,
+    ).toBeNull();
   });
 });
 
@@ -204,6 +218,14 @@ describe("parseSearchEntry", () => {
       location: "臺中市南屯區春社里中台路61之3號",
       status: { type: "active" },
     });
+  });
+
+  test("falls back to taxId when search result name is blank", () => {
+    const entry = parseSearchEntry({
+      Business_Accounting_NO: "54900838",
+      Company_Name: "  ",
+    });
+    expect(entry.name).toBe("54900838");
   });
 
   test("uses the same suspension-window parser as full company rows", () => {
