@@ -29,6 +29,14 @@ type ExternalFileDropOptions = {
    * to highlight a row that may not match.
    */
   accept?: (info: ExternalDragInfo) => boolean;
+  /**
+   * When true, `onDrop` only fires if this element is the innermost
+   * drop target. Use this on catch-all container zones (e.g. the
+   * workspace zone) so a drop on a nested leaf target (row, column)
+   * doesn't double-fire — Pragmatic delivers `onDrop` to every target
+   * in the stack, innermost first.
+   */
+  onlyIfInnermost?: boolean;
 };
 
 type ExternalFileDropResult = {
@@ -36,29 +44,41 @@ type ExternalFileDropResult = {
   ref: React.RefObject<HTMLDivElement | null>;
   /** Whether this element is currently a drop target */
   isDropTarget: boolean;
+  /**
+   * True while a descendant drop target is the innermost. Use this on
+   * container zones to suppress overlays while a row/column claims the
+   * drag.
+   */
+  isInnerActive: boolean;
 };
 
 /**
- * Hook for handling external file drops on row elements. The parent
- * `WorkspaceDropZone` observes its own `onDropTargetChange` to suppress
- * its overlay while a row is the innermost target, so this hook only
- * has to register the per-row drop target.
+ * Hook for handling external file drops. Used at three layers:
+ * - Leaves (rows) that claim drops unconditionally.
+ * - Inner containers (kanban columns) that claim drops within their
+ *   scope.
+ * - Outer catch-all zones (workspace) that use `onlyIfInnermost` to
+ *   defer to inner targets and `isInnerActive` to suppress overlays.
  */
 export const useExternalFileDrop = ({
   onDrop,
   enabled = true,
   externalRef,
   accept,
+  onlyIfInnermost = false,
 }: ExternalFileDropOptions): ExternalFileDropResult => {
   const internalRef = useRef<HTMLDivElement>(null);
   const ref = externalRef ?? internalRef;
   const [isDropTarget, setIsDropTarget] = useState(false);
+  const [isInnerActive, setIsInnerActive] = useState(false);
 
-  // Store callbacks in refs to avoid re-registering the drop target
+  // Store callbacks/flags in refs to avoid re-registering the drop target
   const onDropRef = useRef(onDrop);
   onDropRef.current = onDrop;
   const acceptRef = useRef(accept);
   acceptRef.current = accept;
+  const onlyIfInnermostRef = useRef(onlyIfInnermost);
+  onlyIfInnermostRef.current = onlyIfInnermost;
 
   useEffect(() => {
     const el = ref.current;
@@ -83,9 +103,23 @@ export const useExternalFileDrop = ({
         return acceptFn(info);
       },
       onDragEnter: () => setIsDropTarget(true),
-      onDragLeave: () => setIsDropTarget(false),
-      onDrop: ({ source }) => {
+      onDragLeave: () => {
         setIsDropTarget(false);
+        setIsInnerActive(false);
+      },
+      onDropTargetChange: ({ location, self }) => {
+        const innermost = location.current.dropTargets[0];
+        setIsInnerActive(!!innermost && innermost.element !== self.element);
+      },
+      onDrop: ({ source, location, self }) => {
+        setIsDropTarget(false);
+        setIsInnerActive(false);
+        if (
+          onlyIfInnermostRef.current &&
+          location.current.dropTargets[0]?.element !== self.element
+        ) {
+          return;
+        }
         const files = getFiles({ source });
         if (files.length > 0) {
           onDropRef.current(files);
@@ -94,5 +128,5 @@ export const useExternalFileDrop = ({
     });
   }, [enabled, ref]);
 
-  return { ref, isDropTarget };
+  return { ref, isDropTarget, isInnerActive };
 };
