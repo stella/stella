@@ -19,6 +19,7 @@ import { StellaMark } from "@/components/stella-mark";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { isMemberError, isUnauthorizedError } from "@/lib/errors";
+import { CriticalQueryTimeoutError } from "@/lib/react-query";
 
 type DefaultErrorComponentProps = ErrorComponentProps & {
   className?: string;
@@ -37,7 +38,8 @@ const NETWORK_ERROR_MESSAGES = new Set([
 ]);
 
 const isNetworkError = (error: unknown): boolean =>
-  error instanceof TypeError && NETWORK_ERROR_MESSAGES.has(error.message);
+  CriticalQueryTimeoutError.is(error) ||
+  (error instanceof TypeError && NETWORK_ERROR_MESSAGES.has(error.message));
 
 /** Max number of automatic recovery attempts before
  *  falling back to the manual "Try again" button.
