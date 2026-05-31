@@ -27,6 +27,7 @@ import {
   validateMessage,
 } from "@/api/handlers/chat/chat-schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
+import { compactChatMessagesForModel } from "@/api/handlers/chat/compaction";
 import {
   expandThreadDataScope,
   extractAssistantWorkspaceIds,
@@ -70,9 +71,12 @@ import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { getDisabledNativeToolSlugs } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import {
+  getModelById,
+  getModelForRole,
   requireAIAvailable,
   validateDevModelOverride,
 } from "@/api/lib/ai-models";
+import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -90,8 +94,6 @@ const config = {
   permissions: { chat: ["create"] },
   body: sendMessageBodySchema,
 } satisfies HandlerConfig;
-
-const MESSAGE_WINDOW = 20;
 
 const sendMessage = createSafeRootHandler(
   config,
@@ -361,13 +363,40 @@ const sendMessage = createSafeRootHandler(
           })
         : null;
 
-    const messageWindow = latestMessagePlan.messages.slice(-MESSAGE_WINDOW);
+    const messagesForContextResult = await compactMessagesForContext({
+      abortSignal: request.signal,
+      boundary: thirdPartyBoundary,
+      devModelId: body.devModelId,
+      messages: latestMessagePlan.messages,
+      organizationId: session.activeOrganizationId,
+      orgAIConfig,
+      threadId: body.threadId,
+    });
+    if (Result.isError(messagesForContextResult)) {
+      const rollbackResult = await rollbackUnpersistedChatSideEffects({
+        recordAuditEvent,
+        safeDb,
+        threadId: body.threadId,
+        threadState: thread,
+        uploadedFiles: uploadResult.uploadedFiles,
+        userId: user.id,
+      });
+      if (Result.isError(rollbackResult)) {
+        captureError(messagesForContextResult.error, {
+          threadId: body.threadId,
+        });
+        return yield* Result.err(rollbackResult.error);
+      }
+
+      return yield* Result.err(messagesForContextResult.error);
+    }
+
     const chatContextResult = await prepareChatContext({
       activeDecision: body.activeDecision,
       activeExternal: body.activeExternal,
       activeFile: body.activeFile,
       contextMatterIds: effectiveContextMatterIds,
-      messageWindow,
+      messageWindow: messagesForContextResult.value,
       organizationId: session.activeOrganizationId,
       safeDb,
       sendMode: body.sendMode,
@@ -647,6 +676,82 @@ const sendMessage = createSafeRootHandler(
 );
 
 export default sendMessage;
+
+type ResolveChatCompactionModelProps = {
+  devModelId: string | undefined;
+  organizationId: SafeId<"organization">;
+  orgAIConfig: OrgAIConfig | null;
+};
+
+type CompactMessagesForContextProps = ResolveChatCompactionModelProps & {
+  abortSignal: AbortSignal;
+  boundary: ReturnType<typeof createChatThirdPartyBoundary>;
+  messages: ChatMessage[];
+  threadId: SafeId<"chatThread">;
+};
+
+const compactMessagesForContext = async ({
+  abortSignal,
+  boundary,
+  devModelId,
+  messages,
+  organizationId,
+  orgAIConfig,
+  threadId,
+}: CompactMessagesForContextProps): Promise<
+  Result<ChatMessage[], HandlerError>
+> => {
+  const modelResult = resolveChatCompactionModel({
+    devModelId,
+    organizationId,
+    orgAIConfig,
+  });
+  if (Result.isError(modelResult)) {
+    return Result.err(modelResult.error);
+  }
+
+  return await compactChatMessagesForModel({
+    abortSignal,
+    boundary,
+    messages,
+    model: modelResult.value,
+    onSummaryError: (error) => {
+      captureError(error, {
+        threadId,
+        feature: "chat.compaction",
+      });
+    },
+  });
+};
+
+const resolveChatCompactionModel = ({
+  devModelId,
+  organizationId,
+  orgAIConfig,
+}: ResolveChatCompactionModelProps) =>
+  Result.try({
+    try: () =>
+      devModelId
+        ? getModelById(devModelId, orgAIConfig, {
+            organizationId,
+            promptCachingEnabled: false,
+            role: "chat",
+            scopeKey: null,
+          })
+        : getModelForRole("chat", orgAIConfig, {
+            organizationId,
+            promptCachingEnabled: false,
+            scopeKey: null,
+          }),
+    catch: (cause) =>
+      HandlerError.is(cause)
+        ? cause
+        : new HandlerError({
+            status: 500,
+            message: "Failed to initialize chat compaction model",
+            cause,
+          }),
+  });
 
 const isChatStreamResponse = (response: Response): boolean => {
   const contentType = response.headers.get("content-type");
