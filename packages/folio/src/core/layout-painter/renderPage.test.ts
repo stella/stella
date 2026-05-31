@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type {
   Page,
+  HeaderFooterContent,
   ParagraphBlock,
   ParagraphMeasure,
   TableBlock,
@@ -9,6 +10,7 @@ import type {
 } from "../layout-engine/types";
 import type { BlockLookup } from "./index";
 import {
+  applySectionHeaderFooterOptions,
   computePageFingerprint,
   getDefaultPageFontFamily,
   renderPage,
@@ -143,6 +145,35 @@ function lookup(block: ParagraphBlock): BlockLookup {
   ]);
 }
 
+function headerFooterTextContent(text: string): HeaderFooterContent {
+  const block: ParagraphBlock = {
+    kind: "paragraph",
+    id: `hf-${text}`,
+    runs: [{ kind: "text", text }],
+  };
+  const measure: ParagraphMeasure = {
+    kind: "paragraph",
+    lines: [
+      {
+        fromRun: 0,
+        fromChar: 0,
+        toRun: 0,
+        toChar: text.length,
+        width: text.length * 5,
+        ascent: 8,
+        descent: 2,
+        lineHeight: 12,
+      },
+    ],
+    totalHeight: 12,
+  };
+  return {
+    blocks: [block],
+    measures: [measure],
+    height: 12,
+  };
+}
+
 describe("render page fingerprint", () => {
   test("changes when comment annotations change without layout geometry changing", () => {
     expect(computePageFingerprint(page, lookup(blockWithComment()))).not.toBe(
@@ -207,6 +238,34 @@ describe("header and footer rendering", () => {
       findByClass(pageElement as unknown as FakeElement, "layout-page-footer")
         ?.style.opacity,
     ).toBe("0.62");
+  });
+
+  test("resolves even headers and footers from the section page number", () => {
+    const pageOptions = {};
+    const applied = applySectionHeaderFooterOptions(
+      {
+        ...page,
+        number: 2,
+        sectionPageNumber: 1,
+        headerFooterRefs: {
+          footerDefault: "default-footer",
+          footerEven: "even-footer",
+        },
+        fragments: [],
+      },
+      pageOptions,
+      {
+        footerContentByRId: new Map([
+          ["default-footer", headerFooterTextContent("Default footer")],
+          ["even-footer", headerFooterTextContent("Even footer")],
+        ]),
+      },
+    );
+
+    expect(applied).toBe(true);
+    expect(pageOptions).toEqual({
+      footerContent: headerFooterTextContent("Default footer"),
+    });
   });
 });
 

@@ -295,4 +295,70 @@ describe("footnote layout", () => {
     expect(paragraph.runs.at(0)?.fontSize).toBe(8);
     expect(paragraph.runs.at(1)?.fontSize).toBe(8);
   });
+
+  test("matches footnote number typography to the first footnote text run", () => {
+    const blocks: FlowBlock[] = [
+      {
+        kind: "paragraph",
+        id: "footnote-text",
+        runs: [
+          {
+            kind: "text",
+            text: " Insert the name of the legal entity.",
+            fontFamily: "Times New Roman",
+            fontSize: 10,
+          },
+        ],
+        attrs: {
+          defaultFontFamily: "Times New Roman",
+          defaultFontSize: 10,
+        },
+      },
+    ];
+
+    const paragraph = applyFootnotePresentation(blocks, 8).at(0);
+    expect(paragraph?.kind).toBe("paragraph");
+    if (paragraph?.kind !== "paragraph") {
+      throw new Error("Expected a paragraph block");
+    }
+
+    expect(paragraph.runs.at(0)).toMatchObject({
+      kind: "text",
+      text: "8",
+      fontFamily: "Times New Roman",
+      fontSize: 10,
+      superscript: true,
+    });
+  });
+
+  test("adds one separator space when footnote text has no leading space", () => {
+    const blocks: FlowBlock[] = [
+      {
+        kind: "paragraph",
+        id: "footnote-text",
+        runs: [
+          {
+            kind: "text",
+            text: "Footnote text",
+            fontFamily: "Times New Roman",
+            fontSize: 10,
+          },
+        ],
+      },
+    ];
+
+    const paragraph = applyFootnotePresentation(blocks, 8).at(0);
+    expect(paragraph?.kind).toBe("paragraph");
+    if (paragraph?.kind !== "paragraph") {
+      throw new Error("Expected a paragraph block");
+    }
+
+    expect(paragraph.runs.at(0)).toMatchObject({
+      kind: "text",
+      text: "8 ",
+      fontFamily: "Times New Roman",
+      fontSize: 10,
+      superscript: true,
+    });
+  });
 });

@@ -166,6 +166,10 @@ export type RenderPageOptions = {
   headerContent?: HeaderFooterContent;
   /** Footer content to render (used for all pages, or pages 2+ when titlePg is set). */
   footerContent?: HeaderFooterContent;
+  /** Header content by part relationship id, used for section-scoped rendering. */
+  headerContentByRId?: ReadonlyMap<string, HeaderFooterContent>;
+  /** Footer content by part relationship id, used for section-scoped rendering. */
+  footerContentByRId?: ReadonlyMap<string, HeaderFooterContent>;
   /** Header content for the first page only (when titlePg is set). */
   firstPageHeaderContent?: HeaderFooterContent;
   /** Footer content for the first page only (when titlePg is set). */
@@ -1251,7 +1255,7 @@ function renderHeaderFooterContent(
  * to clamp the paginator's reservation if it under-estimated, so dense
  * stacks never overflow past the page bottom. Mirrors the upstream helper
  * from eigenpal/docx-editor#485, extended for folio's fallback rendering
- * and inter-footnote margin so the helper matches the painted stack.
+ * and any wrapper margin so the helper matches the painted stack.
  */
 export function calculateFootnoteAreaRenderHeight(
   footnotes: FootnoteRenderItem[],
@@ -2171,6 +2175,65 @@ type FullPageOptions = RenderPageOptions & {
   footnotesByPage?: Map<number, FootnoteRenderItem[]>;
 };
 
+export function applySectionHeaderFooterOptions(
+  page: Page,
+  pageOptions: RenderPageOptions,
+  options: RenderPageOptions,
+): boolean {
+  const refs = page.headerFooterRefs;
+  if (!refs) {
+    return false;
+  }
+
+  const isFirstSectionPage = page.sectionPageNumber === 1;
+  const useFirst = refs.titlePg === true && isFirstSectionPage;
+  const sectionPageNumber = page.sectionPageNumber ?? page.number;
+  const useEven = sectionPageNumber % 2 === 0;
+
+  const headerRId = (() => {
+    if (useFirst) {
+      return refs.headerFirst;
+    }
+    if (useEven && refs.headerEven) {
+      return refs.headerEven;
+    }
+    return refs.headerDefault;
+  })();
+  const footerRId = (() => {
+    if (useFirst) {
+      return refs.footerFirst;
+    }
+    if (useEven && refs.footerEven) {
+      return refs.footerEven;
+    }
+    return refs.footerDefault;
+  })();
+
+  if (headerRId) {
+    const content = options.headerContentByRId?.get(headerRId);
+    if (content) {
+      pageOptions.headerContent = content;
+    } else {
+      delete pageOptions.headerContent;
+    }
+  } else {
+    delete pageOptions.headerContent;
+  }
+
+  if (footerRId) {
+    const content = options.footerContentByRId?.get(footerRId);
+    if (content) {
+      pageOptions.footerContent = content;
+    } else {
+      delete pageOptions.footerContent;
+    }
+  } else {
+    delete pageOptions.footerContent;
+  }
+
+  return true;
+}
+
 /**
  * Build a RenderContext and resolved page options (with footnotes) for a page.
  * Centralises logic shared by populatePageShell, repopulatePageContent, and the eager render path.
@@ -2186,8 +2249,13 @@ function buildPageRenderArgs(
     section: "body",
   };
   const pageOptions: RenderPageOptions = { ...options };
+  const hasSectionHeaderFooter = applySectionHeaderFooterOptions(
+    page,
+    pageOptions,
+    options,
+  );
   // Per-page header/footer selection when titlePg is enabled
-  if (options.titlePg && page.number === 1) {
+  if (!hasSectionHeaderFooter && options.titlePg && page.number === 1) {
     if (options.firstPageHeaderContent !== undefined) {
       pageOptions.headerContent = options.firstPageHeaderContent;
     } else {
@@ -2279,6 +2347,15 @@ function computePageFingerprintInternal(
     `m:${page.margins.top},${page.margins.right},${page.margins.bottom},${page.margins.left}`,
   );
   parts.push(`n:${page.number}`);
+  if (page.sectionIndex !== undefined) {
+    parts.push(`si:${page.sectionIndex}`);
+  }
+  if (page.sectionPageNumber !== undefined) {
+    parts.push(`sp:${page.sectionPageNumber}`);
+  }
+  if (page.headerFooterRefs) {
+    parts.push(`hf:${JSON.stringify(page.headerFooterRefs)}`);
+  }
   if (page.footnoteReservedHeight) {
     parts.push(`fn:${page.footnoteReservedHeight}`);
   }
@@ -2530,6 +2607,23 @@ function runContentKey(run: Run): string {
   return parts.join("|");
 }
 
+function headerFooterContentFingerprint(
+  prefix: string,
+  entries: ReadonlyMap<string, HeaderFooterContent> | undefined,
+): string[] {
+  if (!entries) {
+    return [];
+  }
+  return Array.from(entries.entries())
+    .toSorted(([left], [right]) => left.localeCompare(right))
+    .map(
+      ([rId, content]) =>
+        `${prefix}:${rId},${content.blocks.length},${content.height},${
+          content.visualTop ?? 0
+        },${content.visualBottom ?? content.height},${content.textSig ?? ""}`,
+    );
+}
+
 /**
  * Compute a hash for render options that affect all pages globally.
  * When this changes, all pages need a full re-render.
@@ -2562,6 +2656,12 @@ function computeOptionsHash(options: RenderPageOptions): string {
       },${options.footerContent.textSig ?? ""}`,
     );
   }
+  parts.push(
+    ...headerFooterContentFingerprint("hdr-map", options.headerContentByRId),
+  );
+  parts.push(
+    ...headerFooterContentFingerprint("ftr-map", options.footerContentByRId),
+  );
 
   if (options.firstPageHeaderContent) {
     parts.push(

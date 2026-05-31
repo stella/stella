@@ -542,6 +542,16 @@ export type SectionBreakBlock = {
   columns?: ColumnLayout;
 };
 
+export type PageHeaderFooterRefs = {
+  titlePg?: boolean;
+  headerDefault?: string;
+  headerFirst?: string;
+  headerEven?: string;
+  footerDefault?: string;
+  footerFirst?: string;
+  footerEven?: string;
+};
+
 /**
  * Explicit page break block.
  */
@@ -876,15 +886,10 @@ export type Page = {
   orientation?: "portrait" | "landscape";
   /** Section index this page belongs to. */
   sectionIndex?: number;
+  /** 1-based page number within the active section. */
+  sectionPageNumber?: number;
   /** Header/footer references for this page. */
-  headerFooterRefs?: {
-    headerDefault?: string;
-    headerFirst?: string;
-    headerEven?: string;
-    footerDefault?: string;
-    footerFirst?: string;
-    footerEven?: string;
-  };
+  headerFooterRefs?: PageHeaderFooterRefs;
   /** Footnote IDs that appear on this page (for rendering). */
   footnoteIds?: number[];
   /** Height reserved for the footnote area at page bottom (pixels). */
@@ -1006,6 +1011,8 @@ export type LayoutOptions = {
   footnoteHeightById?: Map<number, number>;
   /** Section break type for the body-level (final) section (for section transition logic). */
   bodyBreakType?: "continuous" | "nextPage" | "evenPage" | "oddPage";
+  /** Header/footer references for each document section, by section index. */
+  sectionHeaderFooterRefs?: PageHeaderFooterRefs[];
 };
 
 // =============================================================================
@@ -1058,11 +1065,14 @@ export type DocumentPosition = {
 export const FOOTNOTE_SEPARATOR_HEIGHT = 12;
 
 /**
- * Bottom margin applied to every rendered footnote entry, in CSS pixels.
- * Counted by the bridge when computing the reserved footnote height and by
- * the painter when stacking entries.
+ * Extra bottom margin applied to every rendered footnote entry, in CSS pixels.
+ *
+ * Word footnotes are separate paragraphs in the footnote story, so their
+ * own paragraph spacing already describes the vertical gap between notes.
+ * Keep the wrapper margin at zero to avoid adding whitespace that is not
+ * present in the source DOCX.
  */
-export const FOOTNOTE_ENTRY_MARGIN_BOTTOM = 4;
+export const FOOTNOTE_ENTRY_MARGIN_BOTTOM = 0;
 
 /**
  * Line height used when a footnote entry has no measured line height yet.

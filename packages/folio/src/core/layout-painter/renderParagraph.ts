@@ -123,6 +123,7 @@ function isMathRun(run: Run): run is MathRun {
 
 const AUTOMATIC_TEXT_COLOR_VALUES = new Set(["auto", "windowtext"]);
 const DEFAULT_BLACK_TEXT_COLOR_VALUES = new Set(["000000", "000"]);
+const DOCX_SUPERSCRIPT_SCALE = 0.75;
 
 function normalizeTextColorValue(color: string): string {
   return color.trim().toLowerCase().replace(/^#/u, "");
@@ -180,6 +181,17 @@ function getHyperlinkTextColor(run: TextRun, inheritedColor: string): string {
   return getRenderableTextColor(run) || inheritedColor || "#0563c1";
 }
 
+function fontSizePtToPx(fontSizePt: number): number {
+  return (fontSizePt * 96) / 72;
+}
+
+function getRaisedRunFontSize(run: TextRun | TabRun): string {
+  if (run.fontSize) {
+    return `${fontSizePtToPx(run.fontSize) * DOCX_SUPERSCRIPT_SCALE}px`;
+  }
+  return `${DOCX_SUPERSCRIPT_SCALE}em`;
+}
+
 /**
  * Apply text run styles to an element
  */
@@ -194,8 +206,7 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
     // fontSize is in points - convert to pixels to match Canvas measurement
     // (1pt = 96/72 px at standard web DPI)
     // Using px ensures consistent rendering with Canvas-based measurements
-    const fontSizePx = (run.fontSize * 96) / 72;
-    element.style.fontSize = `${fontSizePx}px`;
+    element.style.fontSize = `${fontSizePtToPx(run.fontSize)}px`;
   }
   if (run.bold) {
     element.style.fontWeight = DOCX_BOLD_FONT_WEIGHT;
@@ -329,7 +340,9 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
   let explicitDecorationStyle = false;
 
   if (run.underline) {
-    decorations.push("underline");
+    if (!isNoteReferenceRun(run)) {
+      decorations.push("underline");
+    }
     if (typeof run.underline === "object") {
       if (run.underline.style) {
         element.style.textDecorationStyle = run.underline.style;
@@ -434,11 +447,11 @@ function applyRunStyles(element: HTMLElement, run: TextRun | TabRun): void {
   // Superscript/subscript
   if (run.superscript) {
     element.style.verticalAlign = "super";
-    element.style.fontSize = "0.75em";
+    element.style.fontSize = getRaisedRunFontSize(run);
   }
   if (run.subscript) {
     element.style.verticalAlign = "sub";
-    element.style.fontSize = "0.75em";
+    element.style.fontSize = getRaisedRunFontSize(run);
   }
 }
 
@@ -510,8 +523,31 @@ function renderTextRun(run: TextRun, doc: Document): HTMLElement {
     // Set text content
     span.textContent = run.text;
   }
+  applyWhitespaceUnderline(span, run);
 
   return span;
+}
+
+function isNoteReferenceRun(run: TextRun | TabRun): boolean {
+  return run.footnoteRefId !== undefined || run.endnoteRefId !== undefined;
+}
+
+function removeUnderlineTextDecoration(element: HTMLElement): void {
+  const textDecorationLines = (element.style.textDecorationLine || "")
+    .split(/\s+/u)
+    .filter((line) => line && line !== "underline");
+  element.style.textDecorationLine = textDecorationLines.join(" ");
+}
+
+function applyWhitespaceUnderline(element: HTMLElement, run: TextRun): void {
+  if (!run.underline || run.text.trim().length > 0) {
+    return;
+  }
+  removeUnderlineTextDecoration(element);
+  element.style.borderBottom = "1px solid currentColor";
+  if (typeof run.underline === "object" && run.underline.color) {
+    element.style.borderBottomColor = run.underline.color;
+  }
 }
 
 /**
@@ -545,6 +581,8 @@ function renderTabRun(
 
   span.style.display = "inline-block";
   span.style.width = `${width}px`;
+  applyRunStyles(span, run);
+  applyTabUnderline(span, run);
 
   applyPmPositions(span, run.pmStart, run.pmEnd);
 
@@ -574,6 +612,17 @@ function renderTabRun(
   }
 
   return span;
+}
+
+function applyTabUnderline(element: HTMLElement, run: TabRun): void {
+  if (!run.underline) {
+    return;
+  }
+  removeUnderlineTextDecoration(element);
+  element.style.borderBottom = "1px solid currentColor";
+  if (typeof run.underline === "object" && run.underline.color) {
+    element.style.borderBottomColor = run.underline.color;
+  }
 }
 
 /**
@@ -1367,6 +1416,7 @@ export function renderLine(
 ): HTMLElement {
   const lineEl = doc.createElement("div");
   lineEl.className = PARAGRAPH_CLASS_NAMES.line;
+  lineEl.style.boxSizing = "content-box";
 
   // Apply line height
   lineEl.style.height = `${line.lineHeight}px`;
@@ -1442,10 +1492,7 @@ export function renderLine(
   // are rendered visually (unlike 'nowrap' which collapses them).
   lineEl.style.whiteSpace = "pre";
 
-  // Check if any run in this line has a highlight. If so, we need overflow:hidden
-  // to prevent the padding-extended background from bleeding into adjacent lines.
-  const hasHighlight = runsForLine.some((r) => isTextRun(r) && r.highlight);
-  lineEl.style.overflow = hasHighlight ? "hidden" : "visible";
+  lineEl.style.overflow = "visible";
 
   // Per-line floating margins (leftOffset/rightOffset) are now applied by
   // renderParagraphFragment via MeasuredLine offsets from re-measurement.
@@ -1673,21 +1720,6 @@ export function renderLine(
       currentX += tabWidth;
     } else if (isTextRun(run)) {
       const runEl = renderTextRun(run, doc);
-
-      // For highlighted runs, extend background to fill the full line height.
-      // Inline elements' background only covers the content area (font ascent+descent),
-      // which differs by font size. Vertical padding on inline elements extends the
-      // background without affecting line box calculations.
-      if (run.highlight) {
-        const fontSizePx = run.fontSize ? (run.fontSize * 96) / 72 : 14.67;
-        const contentHeight = fontSizePx * 1.2; // approximate content area
-        const gap = Math.max(0, line.lineHeight - contentHeight);
-        if (gap > 0) {
-          const pad = gap / 2;
-          runEl.style.paddingTop = `${pad}px`;
-          runEl.style.paddingBottom = `${pad}px`;
-        }
-      }
 
       lineEl.append(runEl);
 
