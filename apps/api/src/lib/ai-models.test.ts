@@ -455,11 +455,21 @@ describe("defaultsForRole", () => {
         "openai",
         "mistral",
       ] as const) {
+        // Anthropic + reasoning intentionally omits temperature
+        // (incompatible with extended thinking on Claude pre-Opus-4.7).
+        if (provider === "anthropic" && role === "reasoning") {
+          continue;
+        }
         expect(defaultsForRole(role, provider, null)).toMatchObject({
           temperature: 0,
         });
       }
     }
+  });
+
+  test("anthropic reasoning omits temperature", () => {
+    const settings = defaultsForRole("reasoning", "anthropic", null);
+    expect(settings.temperature).toBeUndefined();
   });
 
   test("google fast/chat/pdf use minimal thinking; reasoning uses high", () => {

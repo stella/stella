@@ -932,64 +932,111 @@ const GOOGLE_SAFETY_SETTINGS_BASELINE = [
 
 type Settings = Parameters<typeof defaultSettingsMiddleware>[0]["settings"];
 
+type DefaultsBuilder = (
+  role: ModelRole,
+  orgId: SafeId<"organization"> | null,
+) => Settings;
+
+const googleDefaults: DefaultsBuilder = (role) => ({
+  temperature: TEMPERATURE_PER_ROLE[role],
+  providerOptions: {
+    google: {
+      thinkingConfig: {
+        thinkingLevel: role === "reasoning" ? "high" : "minimal",
+        includeThoughts: false,
+      },
+      safetySettings: GOOGLE_SAFETY_SETTINGS_BASELINE,
+    },
+  },
+});
+
+const buildAnthropicMetadata = (
+  orgId: SafeId<"organization"> | null,
+): { metadata: { user_id: string } } | Record<string, never> =>
+  orgId === null ? {} : { metadata: { user_id: hashOrgId(orgId) } };
+
+// `temperature?: never` makes it a compile error to set temperature
+// here. Anthropic rejects custom temperature when extended thinking
+// is enabled on Claude pre-Opus-4.7 (incl. stella's default
+// sonnet-4-6 for the reasoning role); the provider's built-in
+// default (1) is what the API requires when thinking is on.
+type AnthropicReasoningSettings = Omit<Settings, "temperature"> & {
+  temperature?: never;
+};
+
+const anthropicReasoningDefaults = (
+  orgId: SafeId<"organization"> | null,
+): AnthropicReasoningSettings => {
+  // Adaptive thinking is supported on Claude 4.6+ (sonnet-4-6,
+  // opus-4-6, opus-4-7); earlier 4.5/3.x models expect the
+  // budget-based `type: "enabled"` form. Stella's reasoning role
+  // defaults to sonnet-4-6, so adaptive is correct for the common
+  // case; BYOK orgs that pin a 4-5 model should override at the
+  // call site.
+  const anthropicOptions: JSONObject = {
+    ...buildAnthropicMetadata(orgId),
+    thinking: { type: "adaptive" },
+  };
+  return { providerOptions: { anthropic: anthropicOptions } };
+};
+
+const anthropicNonReasoningDefaults = (
+  role: Exclude<ModelRole, "reasoning">,
+  orgId: SafeId<"organization"> | null,
+): Settings => {
+  const settings: Settings = { temperature: TEMPERATURE_PER_ROLE[role] };
+  if (orgId !== null) {
+    const anthropicOptions: JSONObject = buildAnthropicMetadata(orgId);
+    settings.providerOptions = { anthropic: anthropicOptions };
+  }
+  return settings;
+};
+
+const anthropicDefaults: DefaultsBuilder = (role, orgId) =>
+  role === "reasoning"
+    ? anthropicReasoningDefaults(orgId)
+    : anthropicNonReasoningDefaults(role, orgId);
+
+const openaiDefaults: DefaultsBuilder = (role) => {
+  const settings: Settings = { temperature: TEMPERATURE_PER_ROLE[role] };
+  if (role === "reasoning") {
+    settings.providerOptions = { openai: { reasoningEffort: "medium" } };
+  }
+  return settings;
+};
+
+// Azure's AI SDK provider registers under `azure.*` (not `openai.*`),
+// and the property name is `reasoningEffort` (camelCase, not snake).
+const azureFoundryDefaults: DefaultsBuilder = (role) => {
+  const settings: Settings = { temperature: TEMPERATURE_PER_ROLE[role] };
+  if (role === "reasoning") {
+    settings.providerOptions = { azure: { reasoningEffort: "medium" } };
+  }
+  return settings;
+};
+
+const bareTemperatureDefaults: DefaultsBuilder = (role) => ({
+  temperature: TEMPERATURE_PER_ROLE[role],
+});
+
+// `satisfies Record<AIProvider, ...>` makes adding a new provider to
+// AI_PROVIDERS a compile error here, so no provider can silently
+// fall through to a generic default that ignores its own knobs.
+const DEFAULTS_BUILDERS = {
+  google: googleDefaults,
+  anthropic: anthropicDefaults,
+  openai: openaiDefaults,
+  azure_foundry: azureFoundryDefaults,
+  openrouter: bareTemperatureDefaults,
+  mistral: bareTemperatureDefaults,
+  openai_compatible: bareTemperatureDefaults,
+} as const satisfies Record<AIProvider, DefaultsBuilder>;
+
 export const defaultsForRole = (
   role: ModelRole,
   provider: AIProvider,
   orgId: SafeId<"organization"> | null,
-): Settings => {
-  const settings: Settings = {
-    temperature: TEMPERATURE_PER_ROLE[role],
-  };
-
-  if (provider === "google") {
-    const thinkingLevel = role === "reasoning" ? "high" : "minimal";
-    settings.providerOptions = {
-      google: {
-        thinkingConfig: {
-          thinkingLevel,
-          includeThoughts: false,
-        },
-        safetySettings: GOOGLE_SAFETY_SETTINGS_BASELINE,
-      },
-    };
-    return settings;
-  }
-
-  if (provider === "anthropic") {
-    const anthropicOptions: Record<string, unknown> = {};
-    if (orgId !== null) {
-      anthropicOptions["metadata"] = { user_id: hashOrgId(orgId) };
-    }
-    if (role === "reasoning") {
-      // Adaptive thinking is the supported mode on Claude 4.6+ models
-      // (sonnet-4-6, opus-4-6, opus-4-7). Earlier 4.5 / 3.x models
-      // expect the budget-based `type: "enabled"` form; passing
-      // `adaptive` to them is rejected. Stella's instance reasoning
-      // role defaults to sonnet-4-6, so adaptive is correct for the
-      // common case; BYOK orgs that pin a 4-5 model should override
-      // at the call site.
-      anthropicOptions["thinking"] = { type: "adaptive" };
-    }
-    if (Object.keys(anthropicOptions).length > 0) {
-      settings.providerOptions = { anthropic: anthropicOptions as JSONObject };
-    }
-    return settings;
-  }
-
-  if (provider === "openai" || provider === "azure_foundry") {
-    if (role === "reasoning") {
-      // Azure's AI SDK provider registers under `azure.*` not
-      // `openai.*`, so its providerOptions key is `azure`.
-      const key = provider === "openai" ? "openai" : "azure";
-      settings.providerOptions = {
-        [key]: { reasoningEffort: "medium" },
-      };
-    }
-    return settings;
-  }
-
-  return settings;
-};
+): Settings => DEFAULTS_BUILDERS[provider](role, orgId);
 
 const withInstrumentation = (
   model: WrappableLanguageModel,
