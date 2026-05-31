@@ -52,10 +52,11 @@ const assertApiKey = (apiKey: string): void => {
 };
 
 const buildAuthHeader = (apiKey: string): string => {
-  // HTTP Basic: base64("<key>:"). Bun's runtime exposes a synchronous
-  // `Buffer.from(...).toString("base64")` that is identical to
-  // Node's; we use that to avoid pulling in a Web Crypto round-trip.
-  const token = Buffer.from(`${apiKey}:`, "utf-8").toString("base64");
+  // HTTP Basic: base64("<key>:"). Use the Web standard `btoa` so the
+  // package stays edge-runtime portable (Cloudflare Workers, Deno)
+  // — Companies House keys are ASCII, so the legacy-encoding caveat
+  // does not apply.
+  const token = btoa(`${apiKey}:`);
   return `Basic ${token}`;
 };
 
