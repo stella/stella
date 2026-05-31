@@ -367,6 +367,12 @@ export function prefetchMeasurement(
   scheduleFlush(current);
 }
 
+export function canPrefetchMeasurement(): boolean {
+  return (
+    isWorkerFontMetricsEnabled() && !isDead && isWorkerMeasurementSupported()
+  );
+}
+
 /**
  * Test-only: synchronously drain the pending queue. The caller is
  * expected to have already attached its assertions to the cache or to

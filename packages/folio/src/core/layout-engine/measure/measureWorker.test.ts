@@ -23,9 +23,10 @@ import {
   prefetchMeasurement,
   type MeasureWorkerTransport,
 } from "./measureWorker";
-import type {
-  MeasureWorkerRequest,
-  MeasureWorkerResponse,
+import {
+  WORKER_FONT_FINGERPRINT_TEXT,
+  type MeasureWorkerRequest,
+  type MeasureWorkerResponse,
 } from "./measureWorkerProtocol";
 
 type FakeTransport = MeasureWorkerTransport & {
@@ -102,7 +103,9 @@ function makeFakeTransport(options?: { throwOnPost?: boolean }): FakeTransport {
   return transport;
 }
 
-function installFakeDocument(): void {
+function installFakeDocument(options?: {
+  onMeasureText?: (text: string) => void;
+}): void {
   const fakeDocument = {
     createElement() {
       return {
@@ -110,6 +113,7 @@ function installFakeDocument(): void {
           return {
             font: "",
             measureText(text: string) {
+              options?.onMeasureText?.(text);
               return {
                 width: text.length * 7,
                 actualBoundingBoxAscent: 8,
@@ -385,7 +389,12 @@ describe("response handling (cache fills)", () => {
 
 describe("integration with measureTextWidth", () => {
   test("measureTextWidth still returns identical values when the flag is OFF", () => {
-    installFakeDocument();
+    const measuredTexts: string[] = [];
+    installFakeDocument({
+      onMeasureText: (text) => {
+        measuredTexts.push(text);
+      },
+    });
     const baseline = measureTextWidth("hello", { fontFamily: "Arial" });
     expect(baseline).toBeGreaterThan(0);
 
@@ -397,6 +406,7 @@ describe("integration with measureTextWidth", () => {
     const again = measureTextWidth("hello", { fontFamily: "Arial" });
     expect(again).toBe(baseline);
     expect(transport.posted).toHaveLength(0);
+    expect(measuredTexts).not.toContain(WORKER_FONT_FINGERPRINT_TEXT);
   });
 
   test("measureTextWidth pre-warms the worker on cache miss when the flag is ON", () => {

@@ -22,7 +22,7 @@ import {
   setCachedFontMetrics,
   setCachedTextWidth,
 } from "./cache";
-import { prefetchMeasurement } from "./measureWorker";
+import { canPrefetchMeasurement, prefetchMeasurement } from "./measureWorker";
 import { WORKER_FONT_FINGERPRINT_TEXT } from "./measureWorkerProtocol";
 
 // Constants for OOXML unit conversions
@@ -329,6 +329,10 @@ export function measureTextWidth(text: string, style: FontStyle): number {
 
   const scaledWidth = width * horizontalScale;
   setCachedTextWidth(measuredText, fontCacheKey, letterSpacing, scaledWidth);
+  if (!canPrefetchMeasurement()) {
+    return scaledWidth;
+  }
+
   const fontFingerprintWidth = getWorkerFontFingerprintWidth(ctx, font);
   // Cache miss just cost a main-thread `measureText`. Ask the worker to
   // pre-warm:
