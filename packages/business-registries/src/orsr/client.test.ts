@@ -56,14 +56,20 @@ describe.skipIf(SKIP_LIVE)("lookupByIco live", () => {
   }, 15_000);
 });
 
+// Name search on `sluzby.orsr.sk` regularly takes 6–8s; bun's default
+// 5s test timeout would mark a healthy call as a regression.
+const LIVE_SEARCH_TIMEOUT_MS = 15_000;
+
 describe.skipIf(SKIP_LIVE)("searchByName live", () => {
-  test("finds entities matching `Telekom`", async () => {
-    const results = await searchByName("Telekom", { limit: 10 });
-    expect(results.length).toBeGreaterThan(0);
-    expect(results.some((entry) => /telekom/iu.test(entry.name))).toBe(true);
-  }, // Name search on `sluzby.orsr.sk` regularly takes 6–8s; bun's
-  // default 5s timeout would mark a healthy call as a regression.
-  15_000);
+  test(
+    "finds entities matching `Telekom`",
+    async () => {
+      const results = await searchByName("Telekom", { limit: 10 });
+      expect(results.length).toBeGreaterThan(0);
+      expect(results.some((entry) => /telekom/iu.test(entry.name))).toBe(true);
+    },
+    LIVE_SEARCH_TIMEOUT_MS,
+  );
 });
 
 // ---------------------------------------------------------------------------
