@@ -32,6 +32,11 @@ type CreateCatalogueSetupPlanOptions = {
   entries: readonly CatalogueSetupEntry[];
   practiceJurisdictions: readonly PracticeJurisdiction[];
   selectedSlugs: readonly string[];
+  unavailableNativeToolBackendSlugs?: ReadonlySet<string> | undefined;
+};
+
+type CatalogueEntryAvailabilityOptions = {
+  unavailableNativeToolBackendSlugs?: ReadonlySet<string> | undefined;
 };
 
 type CatalogueSelectionEntry = {
@@ -50,15 +55,19 @@ type CatalogueAutoSelectionEntry = {
   slug: string;
 };
 
-// Onboarding reads the static catalogue before it can ask the API
-// which server-config-gated tools are available for this deployment.
-const ONBOARDING_HIDDEN_NATIVE_TOOL_BACKEND_SLUGS = new Set(["edgar"]);
+// Conservative fallback while the session-scoped deploy availability
+// query is loading. Once the API response arrives, configured EDGAR
+// deployments pass an empty unavailable set and show the tool.
+const DEFAULT_UNAVAILABLE_NATIVE_TOOL_BACKEND_SLUGS = new Set(["edgar"]);
 
 export const isCatalogueEntryAvailableDuringOnboarding = (
   entry: CatalogueSetupEntry,
+  {
+    unavailableNativeToolBackendSlugs = DEFAULT_UNAVAILABLE_NATIVE_TOOL_BACKEND_SLUGS,
+  }: CatalogueEntryAvailabilityOptions = {},
 ): boolean =>
   entry.kind !== "native-tool" ||
-  !ONBOARDING_HIDDEN_NATIVE_TOOL_BACKEND_SLUGS.has(entry.backendSlug);
+  !unavailableNativeToolBackendSlugs.has(entry.backendSlug);
 
 export type CatalogueAutoSelectionPlan = {
   addedSlugs: readonly string[];
@@ -164,6 +173,7 @@ export const createCatalogueSetupPlan = ({
   entries,
   practiceJurisdictions,
   selectedSlugs,
+  unavailableNativeToolBackendSlugs,
 }: CreateCatalogueSetupPlanOptions): CatalogueSetupPlan => {
   const entriesBySlug = new Map(entries.map((entry) => [entry.slug, entry]));
   const installSlugs: string[] = [];
@@ -175,7 +185,12 @@ export const createCatalogueSetupPlan = ({
     seenInstallSlugs.add(slug);
 
     const entry = entriesBySlug.get(slug);
-    if (entry && !isCatalogueEntryAvailableDuringOnboarding(entry)) {
+    if (
+      entry &&
+      !isCatalogueEntryAvailableDuringOnboarding(entry, {
+        unavailableNativeToolBackendSlugs,
+      })
+    ) {
       continue;
     }
 

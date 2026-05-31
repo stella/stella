@@ -53,6 +53,7 @@ import {
   JurisdictionStep,
 } from "@/routes/onboarding/-components/steps/jurisdiction-step";
 import { OrganizationStep } from "@/routes/onboarding/-components/steps/organization-step";
+import { nativeToolDeployAvailabilityOptions } from "@/routes/onboarding/-queries";
 
 type Step =
   | "organization"
@@ -91,6 +92,9 @@ export const OnboardingWizard = () => {
   const invalidateSession = useInvalidateSession();
   const queryClient = useQueryClient();
   const { data: sessionData } = useQuery(sessionOptions);
+  const { data: nativeToolDeployAvailability } = useQuery(
+    nativeToolDeployAvailabilityOptions,
+  );
   const userEmail = sessionData?.user.email ?? "";
   const [step, setStep] = useState<Step>("organization");
   const [catalogueFocusedSlug, setCatalogueFocusedSlug] = useState<
@@ -125,9 +129,24 @@ export const OnboardingWizard = () => {
     readonly ProviderPreview[]
   >([]);
   const [aiPhase, setAiPhase] = useState<"providers" | "models">("providers");
+  const unavailableNativeToolBackendSlugs = useMemo<
+    ReadonlySet<string> | undefined
+  >(() => {
+    if (!nativeToolDeployAvailability) {
+      return undefined;
+    }
+    return new Set(
+      nativeToolDeployAvailability.unavailableNativeToolBackendSlugs,
+    );
+  }, [nativeToolDeployAvailability]);
   const onboardingCatalogueEntries = useMemo(
-    () => loadCatalogue().filter(isCatalogueEntryAvailableDuringOnboarding),
-    [],
+    () =>
+      loadCatalogue().filter((entry) =>
+        isCatalogueEntryAvailableDuringOnboarding(entry, {
+          unavailableNativeToolBackendSlugs,
+        }),
+      ),
+    [unavailableNativeToolBackendSlugs],
   );
 
   useEffect(() => {
@@ -296,6 +315,7 @@ export const OnboardingWizard = () => {
           entries: catalogueEntries,
           practiceJurisdictions: finalData.practiceJurisdictions,
           selectedSlugs: finalData.catalogueSlugs,
+          unavailableNativeToolBackendSlugs,
         });
         const installTasks = catalogueSetupPlan.installSlugs.map(
           async (slug) => {
@@ -421,12 +441,12 @@ export const OnboardingWizard = () => {
           setCreatingProgress(80);
 
           const inviteResults = await Promise.all(
-            // eslint-disable-next-line typescript/promise-function-async
-            finalData.emails.map((email) =>
-              authClient.organization.inviteMember({
-                email,
-                role: "member",
-              }),
+            finalData.emails.map(
+              async (email) =>
+                await authClient.organization.inviteMember({
+                  email,
+                  role: "member",
+                }),
             ),
           );
 
@@ -468,7 +488,14 @@ export const OnboardingWizard = () => {
         replace: true,
       });
     },
-    [analytics, invalidateSession, navigate, queryClient, t],
+    [
+      analytics,
+      invalidateSession,
+      navigate,
+      queryClient,
+      t,
+      unavailableNativeToolBackendSlugs,
+    ],
   );
 
   const showPrices = step === "ai" && aiPhase === "models";
@@ -624,6 +651,9 @@ export const OnboardingWizard = () => {
             practiceJurisdictions={data.practiceJurisdictions}
             removedSlugs={catalogueRemovedSlugs}
             selectedSlugs={data.catalogueSlugs}
+            unavailableNativeToolBackendSlugs={
+              unavailableNativeToolBackendSlugs
+            }
           />
         </OnboardingLayout>
       );

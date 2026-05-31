@@ -14,7 +14,6 @@ import {
   EU_MEMBER_STATES,
   isToggleableNativeToolBackendSlug,
   loadCatalogue,
-  pinnedCatalogueEntries,
   recommendedSlugsForJurisdictions,
   type LoadedCatalogueEntry,
 } from "@stll/catalogue";
@@ -49,6 +48,7 @@ type CatalogueStepProps = {
   onChange: (slugs: readonly string[]) => void;
   onNext: () => void;
   onSkip: () => void;
+  unavailableNativeToolBackendSlugs?: ReadonlySet<string> | undefined;
 };
 
 const PROPOSE_TOOL_URL =
@@ -63,6 +63,7 @@ export const CatalogueStep = ({
   onChange,
   onNext,
   onSkip,
+  unavailableNativeToolBackendSlugs,
 }: CatalogueStepProps) => {
   const t = useTranslations();
   const [query, setQuery] = useState("");
@@ -90,8 +91,13 @@ export const CatalogueStep = ({
   );
 
   const entries = useMemo(
-    () => loadCatalogue().filter(isCatalogueEntryAvailableDuringOnboarding),
-    [],
+    () =>
+      loadCatalogue().filter((entry) =>
+        isCatalogueEntryAvailableDuringOnboarding(entry, {
+          unavailableNativeToolBackendSlugs,
+        }),
+      ),
+    [unavailableNativeToolBackendSlugs],
   );
   const selectableEntries = useMemo(
     () =>
@@ -102,7 +108,11 @@ export const CatalogueStep = ({
       ),
     [entries],
   );
-  const pinnedEntries = useMemo(() => pinnedCatalogueEntries(), []);
+  const pinnedEntries = useMemo(
+    () =>
+      entries.filter((entry) => entry.kind === "native-tool" && entry.pinned),
+    [entries],
+  );
   const pinnedSlugSet = useMemo(
     () => new Set(pinnedEntries.map((entry) => entry.slug)),
     [pinnedEntries],

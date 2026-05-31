@@ -2,10 +2,7 @@ import { useMemo } from "react";
 
 import { useTranslations } from "use-intl";
 
-import {
-  pinnedCatalogueEntries,
-  type LoadedCatalogueEntry,
-} from "@stll/catalogue";
+import type { LoadedCatalogueEntry } from "@stll/catalogue";
 
 import { StellaWordmark } from "@/components/stella-wordmark";
 import { CatalogueEntryIcon } from "@/routes/_protected.settings/-components/catalogue/catalogue-entry-icon";
@@ -56,7 +53,11 @@ export const CatalogueStackPreview = ({
 }: CatalogueStackPreviewProps) => {
   const t = useTranslations();
 
-  const pinned = useMemo(() => pinnedCatalogueEntries(), []);
+  const pinned = useMemo(
+    () =>
+      entries.filter((entry) => entry.kind === "native-tool" && entry.pinned),
+    [entries],
+  );
   const pinnedSlugSet = useMemo(
     () => new Set(pinned.map((entry) => entry.slug)),
     [pinned],
