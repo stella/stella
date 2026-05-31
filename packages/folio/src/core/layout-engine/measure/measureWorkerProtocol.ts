@@ -26,14 +26,23 @@
  *
  * `fontCacheKey` is the main-thread cache identity. It intentionally
  * differs from `font` when scale metadata is appended.
+ *
+ * `fontFingerprintWidth` is the main-thread width for
+ * `WORKER_FONT_FINGERPRINT_TEXT` in the same `font`. The worker checks
+ * the same sentinel before measuring and skips entries whose font
+ * metrics do not match, which prevents worker fallback fonts from
+ * poisoning the main-thread cache.
  */
 export type MeasureRequestEntry = {
   text: string;
   font: string;
   fontCacheKey: string;
+  fontFingerprintWidth: number;
   letterSpacing: number;
   horizontalScale: number;
 };
+
+export const WORKER_FONT_FINGERPRINT_TEXT = "HAMBURGEFONTS ivwqy 0123456789";
 
 /**
  * Worker → main response for a single entry. Echoes the input keys the

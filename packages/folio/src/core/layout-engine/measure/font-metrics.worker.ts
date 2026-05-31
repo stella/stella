@@ -3,8 +3,8 @@
  *
  * The worker holds a single `OffscreenCanvas` 2D context and answers
  * batched `measure` requests. It is a pure function over its inputs —
- * no cache, no state, no font-loading orchestration. The main thread
- * owns all of that.
+ * no cache and no font-loading orchestration. The main thread owns all
+ * of that.
  *
  * On any failure (no `OffscreenCanvas`, no 2D context), it replies with
  * `ok: false` so the proxy disables itself for the session and every
@@ -17,11 +17,12 @@
 
 import { TaggedError } from "better-result";
 
-import type {
-  MeasureRequestEntry,
-  MeasureResponseEntry,
-  MeasureWorkerRequest,
-  MeasureWorkerResponse,
+import {
+  WORKER_FONT_FINGERPRINT_TEXT,
+  type MeasureRequestEntry,
+  type MeasureResponseEntry,
+  type MeasureWorkerRequest,
+  type MeasureWorkerResponse,
 } from "./measureWorkerProtocol";
 
 class WorkerInitError extends TaggedError("WorkerInitError")<{
@@ -35,6 +36,8 @@ type WorkerCanvasContext = {
 
 let ctx: WorkerCanvasContext | null = null;
 let initError: string | null = null;
+
+const FONT_FINGERPRINT_EPSILON = 0.01;
 
 function getCtx(): WorkerCanvasContext {
   if (ctx !== null) {
@@ -60,9 +63,21 @@ function getCtx(): WorkerCanvasContext {
   return ctx;
 }
 
-function measureEntry(entry: MeasureRequestEntry): MeasureResponseEntry {
+function isFontFingerprintMatch(
+  context: WorkerCanvasContext,
+  expectedWidth: number,
+): boolean {
+  const actualWidth = context.measureText(WORKER_FONT_FINGERPRINT_TEXT).width;
+  const tolerance = Math.max(FONT_FINGERPRINT_EPSILON, expectedWidth * 0.0001);
+  return Math.abs(actualWidth - expectedWidth) <= tolerance;
+}
+
+function measureEntry(entry: MeasureRequestEntry): MeasureResponseEntry | null {
   const context = getCtx();
   context.font = entry.font;
+  if (!isFontFingerprintMatch(context, entry.fontFingerprintWidth)) {
+    return null;
+  }
   const raw = context.measureText(entry.text).width;
   let width = raw;
   if (entry.letterSpacing !== 0 && entry.text.length > 1) {
@@ -96,7 +111,13 @@ export function handleMeasureRequest(
   req: MeasureWorkerRequest,
 ): MeasureWorkerResponse {
   try {
-    const entries = req.entries.map(measureEntry);
+    const entries: MeasureResponseEntry[] = [];
+    for (const entry of req.entries) {
+      const measured = measureEntry(entry);
+      if (measured !== null) {
+        entries.push(measured);
+      }
+    }
     return { type: "measure-result", id: req.id, ok: true, entries };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

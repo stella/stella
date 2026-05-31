@@ -18,10 +18,12 @@ import { DOCX_BOLD_FONT_WEIGHT } from "../../utils/fontWeights";
 import {
   getCachedFontMetrics,
   getCachedTextWidth,
+  getTextWidthCacheGeneration,
   setCachedFontMetrics,
   setCachedTextWidth,
 } from "./cache";
 import { prefetchMeasurement } from "./measureWorker";
+import { WORKER_FONT_FINGERPRINT_TEXT } from "./measureWorkerProtocol";
 
 // Constants for OOXML unit conversions
 const TWIPS_PER_INCH = 1440;
@@ -84,6 +86,11 @@ export type RunMeasurement = {
 // Cached canvas context for text measurement
 let canvasContext: CanvasRenderingContext2D | null = null;
 
+const workerFontFingerprintCache = new Map<
+  string,
+  { generation: number; width: number }
+>();
+
 /**
  * Get or create a canvas 2D context for text measurement
  */
@@ -111,6 +118,22 @@ export function getCanvasContext(): CanvasRenderingContext2D {
  */
 export function resetCanvasContext(): void {
   canvasContext = null;
+}
+
+function getWorkerFontFingerprintWidth(
+  ctx: CanvasRenderingContext2D,
+  font: string,
+): number {
+  const generation = getTextWidthCacheGeneration();
+  const cached = workerFontFingerprintCache.get(font);
+  if (cached?.generation === generation) {
+    return cached.width;
+  }
+
+  ctx.font = font;
+  const width = ctx.measureText(WORKER_FONT_FINGERPRINT_TEXT).width;
+  workerFontFingerprintCache.set(font, { generation, width });
+  return width;
 }
 
 /** Cached resolved font data (CSS fallback + single-line ratio) */
@@ -306,6 +329,7 @@ export function measureTextWidth(text: string, style: FontStyle): number {
 
   const scaledWidth = width * horizontalScale;
   setCachedTextWidth(measuredText, fontCacheKey, letterSpacing, scaledWidth);
+  const fontFingerprintWidth = getWorkerFontFingerprintWidth(ctx, font);
   // Cache miss just cost a main-thread `measureText`. Ask the worker to
   // pre-warm:
   //   1) this exact entry (helps future re-layouts after font-ready,
@@ -323,11 +347,13 @@ export function measureTextWidth(text: string, style: FontStyle): number {
     letterSpacing,
     horizontalScale,
     fontCacheKey,
+    fontFingerprintWidth,
   );
   prefetchBinarySearchProbes(
     measuredText,
     font,
     fontCacheKey,
+    fontFingerprintWidth,
     letterSpacing,
     horizontalScale,
   );
@@ -350,6 +376,7 @@ function prefetchBinarySearchProbes(
   text: string,
   font: string,
   fontCacheKey: string,
+  fontFingerprintWidth: number,
   letterSpacing: number,
   horizontalScale: number,
 ): void {
@@ -369,6 +396,7 @@ function prefetchBinarySearchProbes(
       letterSpacing,
       horizontalScale,
       fontCacheKey,
+      fontFingerprintWidth,
     );
   }
 }

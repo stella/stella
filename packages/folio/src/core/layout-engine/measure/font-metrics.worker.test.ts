@@ -16,7 +16,11 @@ import {
   __resetWorkerCtxForTests,
   handleMeasureRequest,
 } from "./font-metrics.worker";
-import type { MeasureWorkerRequest } from "./measureWorkerProtocol";
+import {
+  WORKER_FONT_FINGERPRINT_TEXT,
+  type MeasureRequestEntry,
+  type MeasureWorkerRequest,
+} from "./measureWorkerProtocol";
 
 type CanvasStub = {
   font: string;
@@ -55,17 +59,31 @@ function req(
   return { type: "measure", id, entries };
 }
 
+function entry(overrides: Partial<MeasureRequestEntry>): MeasureRequestEntry {
+  const font = overrides.font ?? "11px Arial";
+  const horizontalScale = overrides.horizontalScale ?? 1;
+  return {
+    text: overrides.text ?? "x",
+    font,
+    fontCacheKey: overrides.fontCacheKey ?? `${font}|scale:${horizontalScale}`,
+    fontFingerprintWidth:
+      overrides.fontFingerprintWidth ?? WORKER_FONT_FINGERPRINT_TEXT.length * 6,
+    letterSpacing: overrides.letterSpacing ?? 0,
+    horizontalScale,
+  };
+}
+
 describe("handleMeasureRequest", () => {
   test("returns widths from the stubbed OffscreenCanvas", () => {
     const reply = handleMeasureRequest(
       req([
-        {
+        entry({
           text: "hello",
           font: "11px Arial",
           fontCacheKey: "11px Arial|scale:1",
           letterSpacing: 0,
           horizontalScale: 1,
-        },
+        }),
       ]),
     );
 
@@ -81,13 +99,13 @@ describe("handleMeasureRequest", () => {
   test("applies letterSpacing for multi-char text", () => {
     const reply = handleMeasureRequest(
       req([
-        {
+        entry({
           text: "abcd",
           font: "11px Arial",
           fontCacheKey: "11px Arial|scale:1",
           letterSpacing: 2,
           horizontalScale: 1,
-        },
+        }),
       ]),
     );
 
@@ -98,13 +116,13 @@ describe("handleMeasureRequest", () => {
   test("does not apply letterSpacing for single-char text", () => {
     const reply = handleMeasureRequest(
       req([
-        {
+        entry({
           text: "a",
           font: "11px Arial",
           fontCacheKey: "11px Arial|scale:1",
           letterSpacing: 99,
           horizontalScale: 1,
-        },
+        }),
       ]),
     );
 
@@ -114,17 +132,33 @@ describe("handleMeasureRequest", () => {
   test("applies horizontalScale multiplicatively", () => {
     const reply = handleMeasureRequest(
       req([
-        {
+        entry({
           text: "abc",
           font: "11px Arial",
           fontCacheKey: "11px Arial|scale:2",
           letterSpacing: 0,
           horizontalScale: 2,
-        },
+        }),
       ]),
     );
 
     expect(reply.ok && reply.entries[0]?.width).toBe(36);
+  });
+
+  test("skips entries when the worker font metrics do not match the main thread", () => {
+    const reply = handleMeasureRequest(
+      req([
+        entry({
+          text: "abc",
+          fontFingerprintWidth: 1,
+        }),
+      ]),
+    );
+
+    expect(reply.ok).toBe(true);
+    if (reply.ok) {
+      expect(reply.entries).toEqual([]);
+    }
   });
 
   test("returns ok:false when OffscreenCanvas is absent", () => {
@@ -135,13 +169,13 @@ describe("handleMeasureRequest", () => {
 
     const reply = handleMeasureRequest(
       req([
-        {
+        entry({
           text: "x",
           font: "11px Arial",
           fontCacheKey: "11px Arial|scale:1",
           letterSpacing: 0,
           horizontalScale: 1,
-        },
+        }),
       ]),
     );
 
@@ -155,13 +189,13 @@ describe("handleMeasureRequest", () => {
     const reply = handleMeasureRequest(
       req(
         [
-          {
+          entry({
             text: "x",
             font: "11px Arial",
             fontCacheKey: "11px Arial|scale:1",
             letterSpacing: 0,
             horizontalScale: 1,
-          },
+          }),
         ],
         42,
       ),
@@ -173,27 +207,27 @@ describe("handleMeasureRequest", () => {
   test("processes batches in input order", () => {
     const reply = handleMeasureRequest(
       req([
-        {
+        entry({
           text: "a",
           font: "11px Arial",
           fontCacheKey: "11px Arial|scale:1",
           letterSpacing: 0,
           horizontalScale: 1,
-        },
-        {
+        }),
+        entry({
           text: "bb",
           font: "11px Arial",
           fontCacheKey: "11px Arial|scale:1",
           letterSpacing: 0,
           horizontalScale: 1,
-        },
-        {
+        }),
+        entry({
           text: "ccc",
           font: "11px Arial",
           fontCacheKey: "11px Arial|scale:1",
           letterSpacing: 0,
           horizontalScale: 1,
-        },
+        }),
       ]),
     );
 

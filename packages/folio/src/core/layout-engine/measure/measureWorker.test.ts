@@ -39,6 +39,8 @@ function makeFontCacheKey(font: string, horizontalScale: number): string {
   return `${font}|scale:${horizontalScale}`;
 }
 
+const TEST_FONT_FINGERPRINT_WIDTH = 123;
+
 function prefetchForTest(
   text: string,
   font: string,
@@ -51,6 +53,7 @@ function prefetchForTest(
     letterSpacing,
     horizontalScale,
     makeFontCacheKey(font, horizontalScale),
+    TEST_FONT_FINGERPRINT_WIDTH,
   );
 }
 
@@ -197,6 +200,7 @@ describe("prefetchMeasurement (flag gating)", () => {
         text: "hello",
         font: "11px Arial",
         fontCacheKey: "11px Arial|scale:1",
+        fontFingerprintWidth: TEST_FONT_FINGERPRINT_WIDTH,
         letterSpacing: 0,
         horizontalScale: 1,
       },
@@ -320,6 +324,23 @@ describe("response handling (cache fills)", () => {
     });
 
     expect(getCachedTextWidth("fresh", "11px Arial|scale:1", 0)).toBe(101);
+  });
+
+  test("drops pending entries queued before a text-cache reset", () => {
+    const transport = makeFakeTransport();
+    __setMeasureWorkerTransport(() => transport);
+
+    prefetchForTest("stale", "11px Arial", 0, 1);
+    clearTextWidthCache();
+    __flushMeasureQueueForTests();
+
+    expect(transport.posted).toHaveLength(0);
+
+    prefetchForTest("fresh", "11px Arial", 0, 1);
+    __flushMeasureQueueForTests();
+
+    expect(transport.posted).toHaveLength(1);
+    expect(transport.posted[0]?.entries[0]?.text).toBe("fresh");
   });
 
   test("disables the proxy on an ok:false response", () => {

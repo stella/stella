@@ -101,11 +101,15 @@ function isWorkerMeasurementSupported(): boolean {
 
 type ProxyState = {
   transport: MeasureWorkerTransport;
-  pending: Map<string, MeasureRequestEntry>;
+  pending: Map<string, PendingMeasureEntry>;
   inFlightGenerations: Map<number, number>;
   flushTimer: ReturnType<typeof setTimeout> | null;
   nextRequestId: number;
   dead: boolean;
+};
+
+type PendingMeasureEntry = MeasureRequestEntry & {
+  cacheGeneration: number;
 };
 
 let state: ProxyState | null = null;
@@ -237,22 +241,37 @@ function flush(current: ProxyState): void {
   if (current.pending.size === 0 || current.dead) {
     return;
   }
+  const cacheGeneration = getTextWidthCacheGeneration();
   // Drain up to MAX_BATCH_SIZE entries; reschedule for any leftovers.
   const entries: MeasureRequestEntry[] = [];
   for (const entry of current.pending.values()) {
-    entries.push(entry);
     if (entries.length >= MAX_BATCH_SIZE) {
       break;
     }
-  }
-  for (const entry of entries) {
     current.pending.delete(
       makeKey(entry.text, entry.fontCacheKey, entry.letterSpacing),
     );
+    if (entry.cacheGeneration !== cacheGeneration) {
+      continue;
+    }
+    entries.push({
+      text: entry.text,
+      font: entry.font,
+      fontCacheKey: entry.fontCacheKey,
+      fontFingerprintWidth: entry.fontFingerprintWidth,
+      letterSpacing: entry.letterSpacing,
+      horizontalScale: entry.horizontalScale,
+    });
+  }
+  if (entries.length === 0) {
+    if (current.pending.size > 0) {
+      scheduleFlush(current);
+    }
+    return;
   }
   const id = current.nextRequestId;
   current.nextRequestId += 1;
-  current.inFlightGenerations.set(id, getTextWidthCacheGeneration());
+  current.inFlightGenerations.set(id, cacheGeneration);
   try {
     // The unicorn `targetOrigin` lint targets `window.postMessage`;
     // `Worker.postMessage` does not accept that argument.
@@ -320,6 +339,7 @@ export function prefetchMeasurement(
   letterSpacing: number,
   horizontalScale: number,
   fontCacheKey: string,
+  fontFingerprintWidth: number,
 ): void {
   if (!isWorkerFontMetricsEnabled()) {
     return;
@@ -339,8 +359,10 @@ export function prefetchMeasurement(
     text,
     font,
     fontCacheKey,
+    fontFingerprintWidth,
     letterSpacing,
     horizontalScale,
+    cacheGeneration: getTextWidthCacheGeneration(),
   });
   scheduleFlush(current);
 }
