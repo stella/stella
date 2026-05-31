@@ -480,8 +480,21 @@ const companiesHouseCompanyToHit = (
   legalForm: company.type,
   address: company.registeredOfficeAddress
     ? {
+        // Surface c/o + PO box ahead of the structured street so
+        // downstream consumers that prefer the structured fields
+        // (e.g. the contact form's `toBillingAddress` mapper, which
+        // reads `line1` directly without falling back to
+        // `textAddress`) still see the delivery identifier for
+        // agent-held or PO-box-only filings. Mirrors the formatting
+        // applied to `textAddress` upstream in the parser.
         line1:
           [
+            company.registeredOfficeAddress.careOf
+              ? `c/o ${company.registeredOfficeAddress.careOf}`
+              : null,
+            company.registeredOfficeAddress.poBox
+              ? `PO Box ${company.registeredOfficeAddress.poBox}`
+              : null,
             company.registeredOfficeAddress.premises,
             company.registeredOfficeAddress.addressLine1,
           ]
