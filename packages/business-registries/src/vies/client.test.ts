@@ -207,6 +207,18 @@ describe("validateVat pre-flight validation", () => {
       ViesValidationError,
     );
   });
+
+  test("short-circuits malformed national part before fetching VIES", () => {
+    // The REST endpoint reports `userError: "INVALID"` for malformed
+    // input, which would otherwise be mapped to `not-registered` —
+    // a misleading "VAT exists but isn't registered" verdict for
+    // what is actually a format violation. Pre-flight the per-
+    // country rule and surface the format error directly.
+    expect(validateVat("DE123")).rejects.toBeInstanceOf(ViesValidationError);
+    expect(validateVat("DEABCDEFGHI")).rejects.toBeInstanceOf(
+      ViesValidationError,
+    );
+  });
 });
 
 // Smoke: ViesAPIError reachable via barrel for consumers that only

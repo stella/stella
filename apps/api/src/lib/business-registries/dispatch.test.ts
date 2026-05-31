@@ -106,12 +106,23 @@ describe("VIES handler wiring", () => {
     expect(handler.isCanonicalId("DE143593636")).toBe(true);
     expect(handler.isCanonicalId(" ie 6388047v ")).toBe(true);
     expect(handler.isCanonicalId("IT00159560366")).toBe(true);
+    expect(handler.isCanonicalId("RO12")).toBe(true);
   });
 
   test("isCanonicalId rejects inputs without a known VAT prefix", () => {
     const handler = BUSINESS_REGISTRY_DISPATCH.vies;
     expect(handler.isCanonicalId("143593636")).toBe(false);
     expect(handler.isCanonicalId("ZZ12345")).toBe(false);
+  });
+
+  test("isCanonicalId rejects ordinary names that start with VAT prefixes", () => {
+    const handler = BUSINESS_REGISTRY_DISPATCH.vies;
+    expect(handler.isCanonicalId("Deutsche Bank")).toBe(false);
+  });
+
+  test("isCanonicalId routes malformed numeric VATs to validation", () => {
+    const handler = BUSINESS_REGISTRY_DISPATCH.vies;
+    expect(handler.isCanonicalId("DE123")).toBe(true);
   });
 
   test("isCanonicalId accepts removed prefixes so lookup can give a tailored error", () => {

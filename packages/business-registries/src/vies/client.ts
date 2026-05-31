@@ -52,10 +52,18 @@ export const validateVat = async (input: string): Promise<ViesValidation> => {
       `${parsed.country} VAT numbers are not in VIES (removed after Brexit on 2021-01-01).`,
     );
   }
-  // Format check is best-effort upstream-mirror; the authoritative
-  // response is still the VIES call below. We forward malformed inputs
-  // to VIES anyway so the upstream's INVALID_INPUT verdict comes back
-  // through the structured status rather than as a thrown error.
+  if (!rule.pattern.test(parsed.vat)) {
+    // Short-circuit malformed national parts before the network
+    // round-trip. The REST endpoint returns `userError: "INVALID"`
+    // for malformed input, and `parseValidation` maps that to
+    // `not-registered` — a misleading "VAT exists but isn't
+    // registered" result for what is actually a format violation.
+    // Throwing here lets the dispatch layer surface a 400 with a
+    // useful message instead.
+    throw new ViesValidationError(
+      `Invalid VAT format for ${parsed.country}: ${parsed.vat}.`,
+    );
+  }
   const url = `${BASE}/ms/${parsed.country}/vat/${encodeURIComponent(parsed.vat)}`;
 
   let response: Response;

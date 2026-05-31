@@ -878,14 +878,14 @@ const VIES_HANDLER: RegistryHandler = {
   nativeToolSlug: "vies",
   // Shape check only — accept inputs whose prefix matches a known
   // VAT country (`isKnownVatCountry` includes historical members
-  // like GB) followed by ≥2 alphanumerics (Romanian VAT numbers can
-  // be as short as 2 digits, e.g. `RO12`). Without the prefix
-  // whitelist a plain name like `Acme Corp` would parse as prefix
-  // `AC` + VAT `MECORP` and route to the lookup path, surfacing a
-  // confusing "unknown country" error instead of the intended
-  // "name search not supported" 400. Removed participants (GB) still
-  // pass the shape check; the lookup handler owns their tailored
-  // `ViesValidationError`.
+  // like GB) followed by ≥2 VAT characters and at least one digit
+  // (Romanian VAT numbers can be as short as 2 digits, e.g. `RO12`).
+  // Without the prefix whitelist and digit check, a plain name like
+  // `Deutsche Bank` would parse as prefix `DE` + VAT `UTSCHEBANK`
+  // and route to the lookup path, surfacing a confusing VAT-format
+  // error instead of the intended "name search not supported" 400.
+  // Removed participants (GB) still pass the shape check; the lookup
+  // handler owns their tailored `ViesValidationError`.
   isCanonicalId: (input) => {
     const parsed = parseVatNumber(input);
     if (!parsed) {
@@ -894,7 +894,7 @@ const VIES_HANDLER: RegistryHandler = {
     if (!isKnownVatCountry(parsed.country)) {
       return false;
     }
-    return /^[A-Z0-9+*]{2,}$/u.test(parsed.vat);
+    return /[0-9]/u.test(parsed.vat) && /^[A-Z0-9+*]{2,}$/u.test(parsed.vat);
   },
   lookup: async (input) => {
     const validation = await validateVat(input);
