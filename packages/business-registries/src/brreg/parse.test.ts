@@ -99,6 +99,15 @@ describe("parseEnhet", () => {
         tvangsopplostPgaMangelfulltStyreDato: "2026-04-07",
       }).status,
     ).toEqual({ type: "compulsory_liquidation", openedAt: "2026-04-07" });
+    // The "missing general manager" reason — Brreg ships it as the
+    // separate `tvangsopplostPgaManglendeDagligLederDato` field.
+    expect(
+      parseEnhet({
+        ...baseRaw,
+        underTvangsavviklingEllerTvangsopplosning: true,
+        tvangsopplostPgaManglendeDagligLederDato: "2026-03-02",
+      }).status,
+    ).toEqual({ type: "compulsory_liquidation", openedAt: "2026-03-02" });
     expect(
       parseEnhet({
         ...baseRaw,

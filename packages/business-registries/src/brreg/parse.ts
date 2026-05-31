@@ -93,6 +93,7 @@ const parseStatus = (raw: BrregRawEnhet): BrregEntityStatus => {
       raw.tvangsopplostPgaManglendeRegnskapDato ??
       raw.tvangsopplostPgaManglendeRevisorDato ??
       raw.tvangsopplostPgaMangelfulltStyreDato ??
+      raw.tvangsopplostPgaManglendeDagligLederDato ??
       raw.tvangsavvikletPgaManglendeSlettingDato ??
       null;
     return { type: "compulsory_liquidation", openedAt };

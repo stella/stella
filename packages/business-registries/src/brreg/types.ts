@@ -54,12 +54,13 @@ export type BrregRawEnhet = {
   underAvvikling?: boolean;
   underAvviklingDato?: string;
   underTvangsavviklingEllerTvangsopplosning?: boolean;
-  // Brreg splits "compulsory liquidation" into four reason-specific
+  // Brreg splits "compulsory liquidation" into five reason-specific
   // date fields rather than a single `tvangsopplosningDato`. We treat
   // the first populated one as the opening date of the proceeding.
   tvangsopplostPgaManglendeRegnskapDato?: string;
   tvangsopplostPgaManglendeRevisorDato?: string;
   tvangsopplostPgaMangelfulltStyreDato?: string;
+  tvangsopplostPgaManglendeDagligLederDato?: string;
   tvangsavvikletPgaManglendeSlettingDato?: string;
   slettedato?: string;
   stiftelsesdato?: string;
