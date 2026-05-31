@@ -141,14 +141,23 @@ describe("parseSubmission (Apple fixture)", () => {
     expect(out.status).toEqual({ type: "active" });
   });
 
-  test("derives delisted status when the most recent filing is stale", () => {
+  test("derives stale status when the most recent filing is old", () => {
     const stale = parseSubmission(apple, {
       now: Date.parse("2030-01-01T00:00:00Z"),
     });
     expect(stale.status).toEqual({
-      type: "delisted",
-      delistedAt: "2026-05-29",
+      type: "stale",
+      lastFilingDate: "2026-05-29",
     });
+  });
+
+  test("treats missing filings as unknown even when entityType is operating", () => {
+    const out = parseSubmission(
+      { cik: "0000000123", name: "No Filings Inc.", entityType: "operating" },
+      { now: APPLE_FIXTURE_NOW },
+    );
+    expect(out.status).toEqual({ type: "unknown" });
+    expect(out.recentFilings).toEqual([]);
   });
 
   test("treats missing filings as unknown when entityType is non-operating", () => {

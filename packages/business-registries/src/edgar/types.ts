@@ -95,13 +95,14 @@ export type EdgarFormerName = {
   to: string | null;
 };
 
-// SEC entity-status surface: EDGAR keeps every issuer it has ever
-// listed forever, including delisted, dissolved, and shell companies.
-// We surface a normalised discriminator so callers can branch without
-// inspecting raw `entityType` strings.
+// SEC entity-status surface. EDGAR keeps every issuer it has ever
+// listed forever, including delisted, dissolved, and shell companies,
+// but the submissions feed does not prove a lifecycle event. We only
+// mark fresh operating filers as active; stale filing history is a
+// review signal rather than a delisting inference.
 export type EdgarEntityStatus =
   | { type: "active" }
-  | { type: "delisted"; delistedAt: string | null }
+  | { type: "stale"; lastFilingDate: string }
   | { type: "unknown" };
 
 export type EdgarCompany = {

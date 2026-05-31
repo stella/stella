@@ -19,10 +19,9 @@ const EDGAR_BROWSE_URL =
 const RECENT_FILINGS_LIMIT = 5;
 
 // "Stale" cutoff for derived status. If the most recent filing is
-// older than this, the entity is treated as delisted/inactive even
-// when EDGAR still reports `entityType: "operating"` — EDGAR keeps
-// every issuer it has ever known forever, so an unfiltered "active"
-// signal is meaningless.
+// older than this, the entity needs caller review. EDGAR keeps every
+// issuer it has ever known forever, so an old filing history is not
+// enough to infer a lifecycle event such as delisting.
 const STALE_FILING_AGE_MS = 365 * 24 * 60 * 60 * 1000;
 
 const nonEmpty = (value: string | null | undefined): string | null => {
@@ -115,16 +114,14 @@ const deriveStatus = (
   // No filings at all -> we can't tell; the issuer may have been
   // registered for a single transaction decades ago.
   if (!mostRecent) {
-    return entityType === "operating"
-      ? { type: "active" }
-      : { type: "unknown" };
+    return { type: "unknown" };
   }
   const filedAt = Date.parse(mostRecent.filingDate);
   if (Number.isNaN(filedAt)) {
     return { type: "unknown" };
   }
   if (now - filedAt > STALE_FILING_AGE_MS) {
-    return { type: "delisted", delistedAt: mostRecent.filingDate };
+    return { type: "stale", lastFilingDate: mostRecent.filingDate };
   }
   if (entityType === "operating") {
     return { type: "active" };
