@@ -1,0 +1,118 @@
+{
+  "cik": "0000320193",
+  "entityType": "operating",
+  "sic": "3571",
+  "sicDescription": "Electronic Computers",
+  "ownerOrg": "06 Technology",
+  "insiderTransactionForOwnerExists": 0,
+  "insiderTransactionForIssuerExists": 1,
+  "name": "Apple Inc.",
+  "tickers": ["AAPL"],
+  "exchanges": ["Nasdaq"],
+  "ein": "942404110",
+  "lei": null,
+  "description": "",
+  "website": "",
+  "investorWebsite": "",
+  "category": "Large accelerated filer",
+  "fiscalYearEnd": "0926",
+  "stateOfIncorporation": "CA",
+  "stateOfIncorporationDescription": "CA",
+  "addresses": {
+    "mailing": {
+      "street1": "ONE APPLE PARK WAY",
+      "street2": null,
+      "city": "CUPERTINO",
+      "stateOrCountry": "CA",
+      "zipCode": "95014",
+      "stateOrCountryDescription": "CA",
+      "isForeignLocation": 0,
+      "foreignStateTerritory": null,
+      "country": null,
+      "countryCode": null
+    },
+    "business": {
+      "street1": "ONE APPLE PARK WAY",
+      "street2": null,
+      "city": "CUPERTINO",
+      "stateOrCountry": "CA",
+      "zipCode": "95014",
+      "stateOrCountryDescription": "CA",
+      "isForeignLocation": null,
+      "foreignStateTerritory": null,
+      "country": null,
+      "countryCode": null
+    }
+  },
+  "phone": "(408) 996-1010",
+  "flags": "",
+  "formerNames": [
+    {
+      "name": "APPLE INC",
+      "from": "2007-01-10T05:00:00.000Z",
+      "to": "2019-08-05T04:00:00.000Z"
+    },
+    {
+      "name": "APPLE COMPUTER INC",
+      "from": "1994-01-26T05:00:00.000Z",
+      "to": "2007-01-04T05:00:00.000Z"
+    },
+    {
+      "name": "APPLE COMPUTER INC/ FA",
+      "from": "1997-07-28T04:00:00.000Z",
+      "to": "1997-07-28T04:00:00.000Z"
+    }
+  ],
+  "filings": {
+    "recent": {
+      "accessionNumber": [
+        "0001140361-26-023363",
+        "0001140361-26-023149",
+        "0001921094-26-000555",
+        "0001140361-26-020871",
+        "0001140361-26-020298"
+      ],
+      "filingDate": [
+        "2026-05-29",
+        "2026-05-28",
+        "2026-05-27",
+        "2026-05-12",
+        "2026-05-08"
+      ],
+      "reportDate": ["2026-05-27", "", "", "2026-05-08", "2026-05-06"],
+      "acceptanceDateTime": [
+        "2026-05-29T22:30:27.000Z",
+        "2026-05-28T20:30:18.000Z",
+        "2026-05-27T20:00:33.000Z",
+        "2026-05-12T22:31:29.000Z",
+        "2026-05-08T22:30:09.000Z"
+      ],
+      "act": ["", "34", "33", "", ""],
+      "form": ["4", "SD", "144", "4", "4"],
+      "fileNumber": ["", "001-36743", "001-36743", "", ""],
+      "filmNumber": ["", "261036676", "261025990", "", ""],
+      "items": ["", "", "", "", ""],
+      "core_type": ["4", "SD", "144", "4", "4"],
+      "size": [6956, 31060, 4960, 4662, 8781],
+      "isXBRL": [0, 0, 0, 0, 0],
+      "isInlineXBRL": [0, 0, 0, 0, 0],
+      "isXBRLNumeric": [0, 0, 0, 0, 0],
+      "primaryDocument": [
+        "xslF345X06/form4.xml",
+        "ef20073373_sd.htm",
+        "xsl144X01/primary_doc.xml",
+        "xslF345X06/form4.xml",
+        "xslF345X06/form4.xml"
+      ],
+      "primaryDocDescription": ["FORM 4", "SD", "", "FORM 4", "FORM 4"]
+    },
+    "files": [
+      {
+        "name": "CIK0000320193-submissions-001.json",
+        "filingCount": 1234,
+        "filingFrom": "1994-01-26",
+        "filingTo": "2015-05-11"
+      }
+    ]
+  }
+}

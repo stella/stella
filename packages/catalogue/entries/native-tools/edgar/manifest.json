@@ -1,0 +1,18 @@
+{
+  "$schema": "../../../schema.json",
+  "kind": "native-tool",
+  "slug": "edgar",
+  "displayName": "SEC EDGAR",
+  "description": "US public-company lookup by Central Index Key (CIK) from the SEC's EDGAR submissions API.",
+  "author": "stella",
+  "authorUrl": "https://github.com/stella",
+  "license": "Apache-2.0",
+  "cost": "free",
+  "setup": "none",
+  "homepage": "https://www.sec.gov/edgar",
+  "tags": ["corporate", "regulatory"],
+  "jurisdictions": ["US"],
+  "backendSlug": "edgar",
+  "url": "https://www.sec.gov/edgar",
+  "documentationUrl": "https://www.sec.gov/os/accessing-edgar-data"
+}

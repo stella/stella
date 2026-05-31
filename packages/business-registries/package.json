@@ -1,7 +1,7 @@
 {
   "name": "@stll/business-registries",
   "version": "0.1.0",
-  "description": "Typed clients for national business / commercial registries (Czech ARES, Norwegian Brreg, Slovak ORSR, Taiwanese GCIS, Finnish PRH, Polish KRS, UK Companies House, French INSEE Sirene, ...)",
+  "description": "Typed clients for national business / commercial registries (Czech ARES, Norwegian Brreg, US SEC EDGAR, Slovak ORSR, Taiwanese GCIS, Finnish PRH, Polish KRS, UK Companies House, French INSEE Sirene, ...)",
   "keywords": [
     "ares",
     "brreg",
@@ -9,6 +9,7 @@
     "commercial-register",
     "companies-house",
     "company-lookup",
+    "edgar",
     "gcis",
     "krs",
     "legal",
@@ -16,6 +17,7 @@
     "orsr",
     "prh",
     "registry",
+    "sec",
     "sirene",
     "vat",
     "vies"
@@ -54,6 +56,11 @@
       "bun": "./src/brreg/index.ts",
       "types": "./src/brreg/index.ts",
       "import": "./dist/brreg/index.js"
+    },
+    "./edgar": {
+      "bun": "./src/edgar/index.ts",
+      "types": "./src/edgar/index.ts",
+      "import": "./dist/edgar/index.js"
     },
     "./gcis": {
       "bun": "./src/gcis/index.ts",

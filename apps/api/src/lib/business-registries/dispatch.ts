@@ -33,6 +33,14 @@ import {
   searchByName as searchBrregByName,
 } from "@stll/business-registries/brreg";
 import {
+  EdgarAPIError,
+  type EdgarCompany,
+  EdgarRequestError,
+  EdgarValidationError,
+  lookupByCik,
+  normalizeCik,
+} from "@stll/business-registries/edgar";
+import {
   GcisAPIError,
   type GcisCompany,
   GcisRequestError,
@@ -117,6 +125,7 @@ export type RegistryJurisdictionCode =
 export const BUSINESS_REGISTRY_SLUGS = [
   "ares",
   "brreg",
+  "edgar",
   "gcis",
   "krs",
   "orsr",
@@ -163,6 +172,7 @@ export type BusinessRegistryHit = {
 export type BusinessRegistryHitDetails =
   | { registry: "ares"; company: AresCompany }
   | { registry: "brreg"; entity: BrregEntity }
+  | { registry: "edgar"; company: EdgarCompany }
   | { registry: "gcis"; company: GcisCompany }
   | { registry: "krs"; entity: KrsEntity }
   | { registry: "orsr"; company: OrsrCompany }
@@ -436,6 +446,106 @@ const BRREG_HANDLER: RegistryHandler = {
     return results.map(brregSearchResultToHit);
   },
   mapError: mapBrregError,
+};
+
+// ---------------------------------------------------------------------------
+// SEC EDGAR (United States)
+// ---------------------------------------------------------------------------
+
+const edgarPickAddress = (
+  company: EdgarCompany,
+): BusinessRegistryAddress | null => {
+  // Prefer the business address; fall back to mailing so the contact
+  // form always gets something for active issuers.
+  const address = company.addresses.business ?? company.addresses.mailing;
+  if (!address) {
+    return null;
+  }
+  return {
+    line1: address.street,
+    line2: null,
+    postalCode: address.postalCode,
+    city: address.city,
+    region: address.region,
+    country: address.country,
+    textAddress: address.textAddress,
+  };
+};
+
+const edgarCompanyToHit = (company: EdgarCompany): BusinessRegistryHit => ({
+  registry: "edgar",
+  id: company.cik,
+  name: company.name,
+  // EDGAR has no notion of legal form on the submissions endpoint;
+  // the closest field is SIC (industry classification), which is not
+  // a legal form. Leave null instead of overloading the field.
+  legalForm: null,
+  address: edgarPickAddress(company),
+  registryUrl: company.registryUrl,
+  // Carry tickers, exchanges, recent filings, status discriminator
+  // and former names so chat callers can answer questions the
+  // cross-registry baseline can't express.
+  details: { registry: "edgar", company },
+});
+
+const mapEdgarError = (error: unknown): HandlerError | null => {
+  if (error instanceof EdgarValidationError) {
+    return new HandlerError({ status: 400, message: error.message });
+  }
+  if (error instanceof EdgarAPIError) {
+    return new HandlerError({
+      status: 502,
+      message: `SEC EDGAR API error: ${error.message}`,
+    });
+  }
+  if (error instanceof EdgarRequestError) {
+    return new HandlerError({
+      status: 502,
+      message: `SEC EDGAR request failed: ${error.message}`,
+    });
+  }
+  return null;
+};
+
+// The handler resolves the SEC-mandated User-Agent at call time
+// rather than at module load. Reading `process.env` directly here
+// (instead of via the centralised `env` import) keeps `dispatch.ts`
+// free of side effects at import time — important because the chat
+// tool catalogue imports this module from contexts that don't run
+// full env validation (workers, scripts, tests). The env schema in
+// `apps/api/src/env.ts` still declares `EDGAR_USER_AGENT` so the
+// API server boot path validates it like the rest of config.
+const EDGAR_USER_AGENT_ENV_VAR = "EDGAR_USER_AGENT";
+
+const requireEdgarUserAgent = (): string => {
+  const userAgent = process.env[EDGAR_USER_AGENT_ENV_VAR]?.trim();
+  if (!userAgent) {
+    throw new EdgarValidationError(
+      "EDGAR_USER_AGENT is not configured. Set it to '<App name> <contact@email>'; the SEC returns 403 without one.",
+    );
+  }
+  return userAgent;
+};
+
+const EDGAR_HANDLER: RegistryHandler = {
+  slug: "edgar",
+  country: "US",
+  nativeToolSlug: "edgar",
+  // SHAPE-only: 1-10 digits after stripping the optional zero
+  // padding. Semantic validation (e.g. the reserved zero CIK) lives
+  // in the adapter and surfaces as EdgarValidationError -> HTTP 400.
+  isCanonicalId: (input) => /^\d{1,10}$/u.test(normalizeCik(input)),
+  lookup: async (input) => {
+    const company = await lookupByCik(input, {
+      userAgent: requireEdgarUserAgent(),
+    });
+    return company ? edgarCompanyToHit(company) : null;
+  },
+  // The cgi-bin EDGAR name search returns Atom XML and is heavy to
+  // parse for the first slice. Surface "canonical-ID only" cleanly
+  // via the existing null-search path; name search lands in a follow-up.
+  search: null,
+  mapError: mapEdgarError,
 };
 
 // ---------------------------------------------------------------------------
@@ -1021,6 +1131,7 @@ export const BUSINESS_REGISTRY_DISPATCH: Record<
 > = {
   ares: ARES_HANDLER,
   brreg: BRREG_HANDLER,
+  edgar: EDGAR_HANDLER,
   gcis: GCIS_HANDLER,
   krs: KRS_HANDLER,
   orsr: ORSR_HANDLER,
