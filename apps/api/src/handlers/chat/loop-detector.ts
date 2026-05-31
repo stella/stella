@@ -10,6 +10,7 @@ const codePointOf = (value: string): number => {
 
 const TOOL_CALL_LOOP_THRESHOLD = 5;
 const LOOP_RECOVERY_INTERVAL = 5;
+const PERSISTENT_LOOP_REPETITION_LIMIT = 15;
 const CONTENT_CHUNK_SIZE = 50;
 const CONTENT_LOOP_THRESHOLD = 10;
 const CONTENT_HISTORY_CHARS = 5000;
@@ -65,6 +66,16 @@ export const shouldInjectLoopRecovery = (
   return detection.repetitionCount % LOOP_RECOVERY_INTERVAL === 0;
 };
 
+export const shouldStopLoopRecovery = (
+  detection: ModelLoopDetection,
+): detection is Exclude<ModelLoopDetection, { type: "none" }> => {
+  if (detection.type === "none") {
+    return false;
+  }
+
+  return detection.repetitionCount >= PERSISTENT_LOOP_REPETITION_LIMIT;
+};
+
 export const createLoopRecoveryMessage = (
   detection: Exclude<ModelLoopDetection, { type: "none" }>,
 ): ModelMessage => ({
@@ -86,12 +97,10 @@ const detectToolCallLoop = (
   }
 
   let repetitionCount = 0;
-  for (let index = signatures.length - 1; index >= 0; index -= 1) {
-    const signature = signatures.at(index);
-    if (!signature || signature.key !== latest.key) {
-      break;
+  for (const signature of signatures) {
+    if (signature.key === latest.key) {
+      repetitionCount += 1;
     }
-    repetitionCount += 1;
   }
 
   if (repetitionCount < TOOL_CALL_LOOP_THRESHOLD) {
@@ -154,7 +163,7 @@ const detectContentLoop = (
     return { type: "none" };
   }
 
-  const chunkIndicesByHash = new Map<string, number[]>();
+  const chunkIndices = new Map<string, number[]>();
   for (
     let index = 0;
     index + CONTENT_CHUNK_SIZE <= assistantText.length;
@@ -165,10 +174,9 @@ const detectContentLoop = (
       continue;
     }
 
-    const chunkHash = hashString(chunk);
-    const indices = chunkIndicesByHash.get(chunkHash);
+    const indices = chunkIndices.get(chunk);
     if (!indices) {
-      chunkIndicesByHash.set(chunkHash, [index]);
+      chunkIndices.set(chunk, [index]);
       continue;
     }
 

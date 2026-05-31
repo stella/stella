@@ -5,6 +5,7 @@ import {
   createLoopRecoveryMessage,
   detectModelLoop,
   shouldInjectLoopRecovery,
+  shouldStopLoopRecovery,
 } from "./loop-detector";
 
 const toolCallMessage = ({
@@ -71,6 +72,22 @@ describe("model loop detection", () => {
     expect(detectModelLoop(messages)).toEqual({ type: "none" });
   });
 
+  test("detects repeated tool calls even when the model alternates tools", () => {
+    const messages = Array.from({ length: 5 }, (_, index) => [
+      toolCallMessage({
+        input: { documentId: `doc_${index}` },
+        toolName: "readDocument",
+      }),
+      toolCallMessage({ input: { query: "termination" } }),
+    ]).flat();
+
+    expect(detectModelLoop(messages)).toEqual({
+      repetitionCount: 5,
+      toolName: "searchMatter",
+      type: "tool-call-loop",
+    });
+  });
+
   test("does not count repeated tool calls across separate user turns", () => {
     const messages = Array.from({ length: 6 }, () => [
       {
@@ -93,6 +110,16 @@ describe("model loop detection", () => {
 
     expect(shouldInjectLoopRecovery(detectModelLoop(sixCalls))).toBe(false);
     expect(shouldInjectLoopRecovery(detectModelLoop(tenCalls))).toBe(true);
+  });
+
+  test("hard-stops persistent loops after repeated recovery attempts", () => {
+    const detection = detectModelLoop(
+      Array.from({ length: 15 }, () =>
+        toolCallMessage({ input: { query: "termination" } }),
+      ),
+    );
+
+    expect(shouldStopLoopRecovery(detection)).toBe(true);
   });
 
   test("detects repeated assistant text chunks", () => {

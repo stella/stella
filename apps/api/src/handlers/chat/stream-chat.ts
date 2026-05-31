@@ -28,6 +28,7 @@ import {
   createLoopRecoveryMessage,
   detectModelLoop,
   shouldInjectLoopRecovery,
+  shouldStopLoopRecovery,
 } from "@/api/handlers/chat/loop-detector";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {
@@ -183,6 +184,14 @@ const runChatStream = async ({
       await Promise.resolve(repairActiveDocxEditToolCall(toolCall)),
     prepareStep: async ({ messages }) => {
       const loopDetection = detectModelLoop(messages);
+      if (shouldStopLoopRecovery(loopDetection)) {
+        throw new HandlerError({
+          status: 502,
+          message:
+            "The AI model is repeating itself and could not recover. Please try again with a narrower request.",
+        });
+      }
+
       const messagesWithLoopRecovery = shouldInjectLoopRecovery(loopDetection)
         ? [...messages, createLoopRecoveryMessage(loopDetection)]
         : messages;
