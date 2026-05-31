@@ -69,6 +69,7 @@ export function __setMeasureWorkerTransport(
   injectedTransportFactory = factory;
   // Reset state so the next enqueue picks up the new factory.
   disposeProxy();
+  isDead = false;
 }
 
 // =============================================================================
@@ -107,15 +108,20 @@ type ProxyState = {
 };
 
 let state: ProxyState | null = null;
+let isDead = false;
 
 /**
  * Dispose any live worker, reset queue. Idempotent. Called when the
  * worker reports an unrecoverable error or when tests swap transports.
  */
-function disposeProxy(): void {
+function disposeProxy(unrecoverable = false): void {
   if (state === null) {
+    if (unrecoverable) {
+      isDead = true;
+    }
     return;
   }
+  state.dead = true;
   if (state.flushTimer !== null) {
     clearTimeout(state.flushTimer);
   }
@@ -125,10 +131,17 @@ function disposeProxy(): void {
     // Worker may already be dead; nothing useful to do.
   }
   state = null;
+  if (unrecoverable) {
+    isDead = true;
+  }
 }
 
-function makeKey(text: string, font: string, letterSpacing: number): string {
-  return `${text}|${font}|${letterSpacing}`;
+function makeKey(
+  text: string,
+  fontCacheKey: string,
+  letterSpacing: number,
+): string {
+  return `${text}|${fontCacheKey}|${letterSpacing}`;
 }
 
 function createTransport(): MeasureWorkerTransport | null {
@@ -154,14 +167,19 @@ function createTransport(): MeasureWorkerTransport | null {
 }
 
 function ensureProxy(): ProxyState | null {
+  if (isDead) {
+    return null;
+  }
   if (state !== null) {
     return state.dead ? null : state;
   }
   if (!isWorkerMeasurementSupported()) {
+    isDead = true;
     return null;
   }
   const transport = createTransport();
   if (transport === null) {
+    isDead = true;
     return null;
   }
   const next: ProxyState = {
@@ -178,7 +196,7 @@ function ensureProxy(): ProxyState | null {
     // Hard error: drop the proxy. Nothing in-flight needs explicit
     // rejection — the main thread already filled the cache directly
     // before we ever enqueued.
-    disposeProxy();
+    disposeProxy(true);
   });
   state = next;
   return state;
@@ -227,7 +245,7 @@ function flush(current: ProxyState): void {
   }
   for (const entry of entries) {
     current.pending.delete(
-      makeKey(entry.text, entry.font, entry.letterSpacing),
+      makeKey(entry.text, entry.fontCacheKey, entry.letterSpacing),
     );
   }
   const id = current.nextRequestId;
@@ -238,7 +256,7 @@ function flush(current: ProxyState): void {
     // eslint-disable-next-line unicorn/require-post-message-target-origin
     current.transport.postMessage({ type: "measure", id, entries });
   } catch {
-    disposeProxy();
+    disposeProxy(true);
     return;
   }
   if (current.pending.size > 0) {
@@ -250,13 +268,13 @@ function handleResponse(message: MeasureWorkerResponse): void {
   if (!message.ok) {
     // Worker self-diagnosed an unrecoverable problem. Disable for the
     // session — main thread continues to handle everything.
-    disposeProxy();
+    disposeProxy(true);
     return;
   }
   for (const entry of message.entries) {
     setCachedTextWidth(
       entry.text,
-      entry.font,
+      entry.fontCacheKey,
       entry.letterSpacing,
       entry.width,
     );
@@ -283,6 +301,7 @@ export function prefetchMeasurement(
   font: string,
   letterSpacing: number,
   horizontalScale: number,
+  fontCacheKey: string,
 ): void {
   if (!isWorkerFontMetricsEnabled()) {
     return;
@@ -294,11 +313,17 @@ export function prefetchMeasurement(
   if (current === null) {
     return;
   }
-  const key = makeKey(text, font, letterSpacing);
+  const key = makeKey(text, fontCacheKey, letterSpacing);
   if (current.pending.has(key)) {
     return;
   }
-  current.pending.set(key, { text, font, letterSpacing, horizontalScale });
+  current.pending.set(key, {
+    text,
+    font,
+    fontCacheKey,
+    letterSpacing,
+    horizontalScale,
+  });
   scheduleFlush(current);
 }
 
@@ -323,6 +348,7 @@ export function __flushMeasureQueueForTests(): void {
  */
 export function __disposeMeasureProxyForTests(): void {
   disposeProxy();
+  isDead = false;
 }
 
 /**

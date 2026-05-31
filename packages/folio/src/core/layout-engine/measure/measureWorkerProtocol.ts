@@ -23,10 +23,14 @@
  *
  * `horizontalScale` is the multiplier (1.0 = 100 %), so the worker can
  * apply it after the canvas measurement and return the final width.
+ *
+ * `fontCacheKey` is the main-thread cache identity. It intentionally
+ * differs from `font` when scale metadata is appended.
  */
 export type MeasureRequestEntry = {
   text: string;
   font: string;
+  fontCacheKey: string;
   letterSpacing: number;
   horizontalScale: number;
 };
@@ -37,7 +41,7 @@ export type MeasureRequestEntry = {
  */
 export type MeasureResponseEntry = {
   text: string;
-  font: string;
+  fontCacheKey: string;
   letterSpacing: number;
   width: number;
 };

@@ -31,6 +31,25 @@ type FakeTransport = MeasureWorkerTransport & {
   terminated: boolean;
 };
 
+function makeFontCacheKey(font: string, horizontalScale: number): string {
+  return `${font}|scale:${horizontalScale}`;
+}
+
+function prefetchForTest(
+  text: string,
+  font: string,
+  letterSpacing: number,
+  horizontalScale: number,
+): void {
+  prefetchMeasurement(
+    text,
+    font,
+    letterSpacing,
+    horizontalScale,
+    makeFontCacheKey(font, horizontalScale),
+  );
+}
+
 function makeFakeTransport(options?: { throwOnPost?: boolean }): FakeTransport {
   const messageListeners: ((event: { data: MeasureWorkerResponse }) => void)[] =
     [];
@@ -129,7 +148,7 @@ describe("prefetchMeasurement (flag gating)", () => {
     const transport = makeFakeTransport();
     __setMeasureWorkerTransport(() => transport);
 
-    prefetchMeasurement("hello", "11px Arial", 0, 1);
+    prefetchForTest("hello", "11px Arial", 0, 1);
 
     expect(__isMeasureProxyLiveForTests()).toBe(false);
     expect(transport.posted).toHaveLength(0);
@@ -140,7 +159,7 @@ describe("prefetchMeasurement (flag gating)", () => {
     const transport = makeFakeTransport();
     __setMeasureWorkerTransport(() => transport);
 
-    prefetchMeasurement("hello", "11px Arial", 0, 1);
+    prefetchForTest("hello", "11px Arial", 0, 1);
 
     expect(__isMeasureProxyLiveForTests()).toBe(false);
     expect(transport.posted).toHaveLength(0);
@@ -155,7 +174,7 @@ describe("prefetchMeasurement (flag gating)", () => {
     const transport = makeFakeTransport();
     __setMeasureWorkerTransport(() => transport);
 
-    prefetchMeasurement("hello", "11px Arial", 0, 1);
+    prefetchForTest("hello", "11px Arial", 0, 1);
 
     expect(__isMeasureProxyLiveForTests()).toBe(false);
   });
@@ -165,7 +184,7 @@ describe("prefetchMeasurement (flag gating)", () => {
     const transport = makeFakeTransport();
     __setMeasureWorkerTransport(() => transport);
 
-    prefetchMeasurement("hello", "11px Arial", 0, 1);
+    prefetchForTest("hello", "11px Arial", 0, 1);
     __flushMeasureQueueForTests();
 
     expect(transport.posted).toHaveLength(1);
@@ -173,6 +192,7 @@ describe("prefetchMeasurement (flag gating)", () => {
       {
         text: "hello",
         font: "11px Arial",
+        fontCacheKey: "11px Arial|scale:1",
         letterSpacing: 0,
         horizontalScale: 1,
       },
@@ -189,9 +209,9 @@ describe("prefetchMeasurement (batching + dedup)", () => {
     const transport = makeFakeTransport();
     __setMeasureWorkerTransport(() => transport);
 
-    prefetchMeasurement("hello", "11px Arial", 0, 1);
-    prefetchMeasurement("hello", "11px Arial", 0, 1);
-    prefetchMeasurement("hello", "11px Arial", 0, 1);
+    prefetchForTest("hello", "11px Arial", 0, 1);
+    prefetchForTest("hello", "11px Arial", 0, 1);
+    prefetchForTest("hello", "11px Arial", 0, 1);
     __flushMeasureQueueForTests();
 
     expect(transport.posted).toHaveLength(1);
@@ -202,9 +222,9 @@ describe("prefetchMeasurement (batching + dedup)", () => {
     const transport = makeFakeTransport();
     __setMeasureWorkerTransport(() => transport);
 
-    prefetchMeasurement("hi", "11px Arial", 0, 1);
-    prefetchMeasurement("hi", "12px Arial", 0, 1);
-    prefetchMeasurement("hi", "11px Arial", 0.5, 1);
+    prefetchForTest("hi", "11px Arial", 0, 1);
+    prefetchForTest("hi", "12px Arial", 0, 1);
+    prefetchForTest("hi", "11px Arial", 0.5, 1);
     __flushMeasureQueueForTests();
 
     expect(transport.posted[0]?.entries).toHaveLength(3);
@@ -214,7 +234,7 @@ describe("prefetchMeasurement (batching + dedup)", () => {
     const transport = makeFakeTransport();
     __setMeasureWorkerTransport(() => transport);
 
-    prefetchMeasurement("", "11px Arial", 0, 1);
+    prefetchForTest("", "11px Arial", 0, 1);
     __flushMeasureQueueForTests();
 
     expect(transport.posted).toHaveLength(0);
@@ -230,7 +250,7 @@ describe("response handling (cache fills)", () => {
     const transport = makeFakeTransport();
     __setMeasureWorkerTransport(() => transport);
 
-    prefetchMeasurement("world", "11px Arial", 0, 1);
+    prefetchForTest("world", "11px Arial", 0, 1);
     __flushMeasureQueueForTests();
 
     const id = transport.posted[0]?.id ?? -1;
@@ -239,18 +259,23 @@ describe("response handling (cache fills)", () => {
       id,
       ok: true,
       entries: [
-        { text: "world", font: "11px Arial", letterSpacing: 0, width: 99 },
+        {
+          text: "world",
+          fontCacheKey: "11px Arial|scale:1",
+          letterSpacing: 0,
+          width: 99,
+        },
       ],
     });
 
-    expect(getCachedTextWidth("world", "11px Arial", 0)).toBe(99);
+    expect(getCachedTextWidth("world", "11px Arial|scale:1", 0)).toBe(99);
   });
 
   test("disables the proxy on an ok:false response", () => {
     const transport = makeFakeTransport();
     __setMeasureWorkerTransport(() => transport);
 
-    prefetchMeasurement("oops", "11px Arial", 0, 1);
+    prefetchForTest("oops", "11px Arial", 0, 1);
     __flushMeasureQueueForTests();
     transport.emit({
       type: "measure-result",
@@ -267,7 +292,7 @@ describe("response handling (cache fills)", () => {
     const transport = makeFakeTransport();
     __setMeasureWorkerTransport(() => transport);
 
-    prefetchMeasurement("oops", "11px Arial", 0, 1);
+    prefetchForTest("oops", "11px Arial", 0, 1);
     __flushMeasureQueueForTests();
     transport.emitError();
 
@@ -279,7 +304,7 @@ describe("response handling (cache fills)", () => {
     const transport = makeFakeTransport({ throwOnPost: true });
     __setMeasureWorkerTransport(() => transport);
 
-    prefetchMeasurement("boom", "11px Arial", 0, 1);
+    prefetchForTest("boom", "11px Arial", 0, 1);
     __flushMeasureQueueForTests();
 
     expect(__isMeasureProxyLiveForTests()).toBe(false);
@@ -313,7 +338,14 @@ describe("integration with measureTextWidth", () => {
 
     expect(value).toBeGreaterThan(0);
     expect(transport.posted).toHaveLength(1);
-    expect(transport.posted[0]?.entries[0]?.text).toBe("hello");
+    const entry = transport.posted[0]?.entries[0];
+    expect(entry).toBeDefined();
+    if (entry === undefined) {
+      return;
+    }
+    expect(entry.text).toBe("hello");
+    expect(entry.font).not.toContain("|scale:");
+    expect(entry.fontCacheKey).toBe(`${entry.font}|scale:1`);
   });
 
   test("measureTextWidth cache hit does not enqueue (no main-thread cost, no worker cost)", () => {
@@ -370,17 +402,22 @@ describe("worker fallback (no OffscreenCanvas)", () => {
     const transport = makeFakeTransport();
     __setMeasureWorkerTransport(() => transport);
 
-    prefetchMeasurement("xyz", "13px Calibri", 1.5, 1);
+    prefetchForTest("xyz", "13px Calibri", 1.5, 1);
     __flushMeasureQueueForTests();
     transport.emit({
       type: "measure-result",
       id: transport.posted[0]?.id ?? -1,
       ok: true,
       entries: [
-        { text: "xyz", font: "13px Calibri", letterSpacing: 1.5, width: 42.5 },
+        {
+          text: "xyz",
+          fontCacheKey: "13px Calibri|scale:1",
+          letterSpacing: 1.5,
+          width: 42.5,
+        },
       ],
     });
 
-    expect(getCachedTextWidth("xyz", "13px Calibri", 1.5)).toBe(42.5);
+    expect(getCachedTextWidth("xyz", "13px Calibri|scale:1", 1.5)).toBe(42.5);
   });
 });

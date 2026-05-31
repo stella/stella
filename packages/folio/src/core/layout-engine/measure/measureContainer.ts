@@ -319,12 +319,14 @@ export function measureTextWidth(text: string, style: FontStyle): number {
   // `OffscreenCanvas`/`Worker`. See `measureWorker.ts`.
   prefetchMeasurement(
     measuredText,
-    fontCacheKey,
+    font,
     letterSpacing,
     horizontalScale,
+    fontCacheKey,
   );
   prefetchBinarySearchProbes(
     measuredText,
+    font,
     fontCacheKey,
     letterSpacing,
     horizontalScale,
@@ -347,6 +349,7 @@ export function measureTextWidth(text: string, style: FontStyle): number {
 function prefetchBinarySearchProbes(
   text: string,
   font: string,
+  fontCacheKey: string,
   letterSpacing: number,
   horizontalScale: number,
 ): void {
@@ -365,6 +368,7 @@ function prefetchBinarySearchProbes(
       font,
       letterSpacing,
       horizontalScale,
+      fontCacheKey,
     );
   }
 }

@@ -69,3 +69,9 @@ export {
   clearAllCaches,
   getTotalCacheSize,
 } from "./cache";
+
+export {
+  isWorkerFontMetricsEnabled,
+  setFolioMeasurementFlags,
+  type FolioMeasurementFeatureFlags,
+} from "./featureFlags";

@@ -32,22 +32,22 @@ import {
   clearAllCaches,
   setFolioMeasurementFlags,
   setTextCacheSize,
-} from "../src/core/layout-bridge/measuring";
-import { handleMeasureRequest } from "../src/core/layout-bridge/measuring/font-metrics.worker";
+} from "../src/core/layout-engine/measure";
+import { handleMeasureRequest } from "../src/core/layout-engine/measure/font-metrics.worker";
 import {
   measureTextWidth,
   resetCanvasContext,
-} from "../src/core/layout-bridge/measuring/measureContainer";
+} from "../src/core/layout-engine/measure/measureContainer";
 import {
   __disposeMeasureProxyForTests,
   __flushMeasureQueueForTests,
   __setMeasureWorkerTransport,
   type MeasureWorkerTransport,
-} from "../src/core/layout-bridge/measuring/measureWorker";
+} from "../src/core/layout-engine/measure/measureWorker";
 import type {
   MeasureWorkerRequest,
   MeasureWorkerResponse,
-} from "../src/core/layout-bridge/measuring/measureWorkerProtocol";
+} from "../src/core/layout-engine/measure/measureWorkerProtocol";
 
 // --- Synthetic OffscreenCanvas for the in-process "worker" -----------
 class BenchOffscreenCanvas {

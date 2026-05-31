@@ -71,7 +71,7 @@ function measureEntry(entry: MeasureRequestEntry): MeasureResponseEntry {
   width *= entry.horizontalScale;
   return {
     text: entry.text,
-    font: entry.font,
+    fontCacheKey: entry.fontCacheKey,
     letterSpacing: entry.letterSpacing,
     width,
   };

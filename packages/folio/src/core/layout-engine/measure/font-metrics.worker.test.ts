@@ -62,6 +62,7 @@ describe("handleMeasureRequest", () => {
         {
           text: "hello",
           font: "11px Arial",
+          fontCacheKey: "11px Arial|scale:1",
           letterSpacing: 0,
           horizontalScale: 1,
         },
@@ -72,6 +73,7 @@ describe("handleMeasureRequest", () => {
     if (reply.ok) {
       expect(reply.entries[0]?.width).toBe("hello".length * 6);
       expect(reply.entries[0]?.text).toBe("hello");
+      expect(reply.entries[0]?.fontCacheKey).toBe("11px Arial|scale:1");
       expect(reply.entries[0]?.letterSpacing).toBe(0);
     }
   });
@@ -82,6 +84,7 @@ describe("handleMeasureRequest", () => {
         {
           text: "abcd",
           font: "11px Arial",
+          fontCacheKey: "11px Arial|scale:1",
           letterSpacing: 2,
           horizontalScale: 1,
         },
@@ -98,6 +101,7 @@ describe("handleMeasureRequest", () => {
         {
           text: "a",
           font: "11px Arial",
+          fontCacheKey: "11px Arial|scale:1",
           letterSpacing: 99,
           horizontalScale: 1,
         },
@@ -113,6 +117,7 @@ describe("handleMeasureRequest", () => {
         {
           text: "abc",
           font: "11px Arial",
+          fontCacheKey: "11px Arial|scale:2",
           letterSpacing: 0,
           horizontalScale: 2,
         },
@@ -130,7 +135,13 @@ describe("handleMeasureRequest", () => {
 
     const reply = handleMeasureRequest(
       req([
-        { text: "x", font: "11px Arial", letterSpacing: 0, horizontalScale: 1 },
+        {
+          text: "x",
+          font: "11px Arial",
+          fontCacheKey: "11px Arial|scale:1",
+          letterSpacing: 0,
+          horizontalScale: 1,
+        },
       ]),
     );
 
@@ -147,6 +158,7 @@ describe("handleMeasureRequest", () => {
           {
             text: "x",
             font: "11px Arial",
+            fontCacheKey: "11px Arial|scale:1",
             letterSpacing: 0,
             horizontalScale: 1,
           },
@@ -161,16 +173,24 @@ describe("handleMeasureRequest", () => {
   test("processes batches in input order", () => {
     const reply = handleMeasureRequest(
       req([
-        { text: "a", font: "11px Arial", letterSpacing: 0, horizontalScale: 1 },
+        {
+          text: "a",
+          font: "11px Arial",
+          fontCacheKey: "11px Arial|scale:1",
+          letterSpacing: 0,
+          horizontalScale: 1,
+        },
         {
           text: "bb",
           font: "11px Arial",
+          fontCacheKey: "11px Arial|scale:1",
           letterSpacing: 0,
           horizontalScale: 1,
         },
         {
           text: "ccc",
           font: "11px Arial",
+          fontCacheKey: "11px Arial|scale:1",
           letterSpacing: 0,
           horizontalScale: 1,
         },

@@ -81,4 +81,4 @@ export {
   isWorkerFontMetricsEnabled,
   setFolioMeasurementFlags,
   type FolioMeasurementFeatureFlags,
-} from "./featureFlags";
+} from "../../layout-engine/measure/featureFlags";
