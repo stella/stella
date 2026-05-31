@@ -192,7 +192,7 @@ describe("searchByName (fixture)", () => {
     expect(results[0]?.status).toEqual({ type: "active" });
   });
 
-  test("forwards $top to upstream and includes the active-status filter", async () => {
+  test("forwards $top to upstream and searches each active status", async () => {
     const captured: string[] = [];
     restore = installFetchStub(async (input) => {
       captured.push(fetchInputToString(input));
@@ -203,12 +203,57 @@ describe("searchByName (fixture)", () => {
     });
 
     await searchByName("台積", { limit: 7 });
-    const url = captured.at(0);
-    expect(url).toBeDefined();
-    expect(url).toContain("%24top=7");
-    expect(url).toContain("Company_Name+like+%27");
-    expect(url).toContain("Company_Status+eq+%2701%27");
-    expect(url).toContain("Company_Status+eq+%2702%27");
+    expect(captured).toHaveLength(2);
+    const status01Url = captured.at(0);
+    const status02Url = captured.at(1);
+    expect(status01Url).toBeDefined();
+    expect(status01Url).toContain("%24top=7");
+    expect(status01Url).toContain("Company_Name+like+%27");
+    expect(status01Url).toContain("Company_Status+eq+%2701%27");
+    expect(status02Url).toBeDefined();
+    expect(status02Url).toContain("%24top=7");
+    expect(status02Url).toContain("Company_Name+like+%27");
+    expect(status02Url).toContain("Company_Status+eq+%2702%27");
+    expect(captured.some((url) => url.includes("+or+"))).toBe(false);
+  });
+
+  test("deduplicates active-status pages and applies the requested limit", async () => {
+    restore = installFetchStub(async (input) => {
+      const url = fetchInputToString(input);
+      if (url.includes("Company_Status+eq+%2702%27")) {
+        return new Response(
+          JSON.stringify([
+            {
+              Business_Accounting_NO: "54900838",
+              Company_Name: "台積電機有限公司",
+              Company_Status: "02",
+            },
+            {
+              Business_Accounting_NO: "90312187",
+              Company_Name: "台積電機二號有限公司",
+              Company_Status: "02",
+            },
+          ]),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(
+        JSON.stringify([
+          {
+            Business_Accounting_NO: "54900838",
+            Company_Name: "台積電機有限公司",
+            Company_Status: "01",
+          },
+        ]),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    });
+
+    const results = await searchByName("台積", { limit: 2 });
+    expect(results.map((result) => result.taxId)).toEqual([
+      "54900838",
+      "90312187",
+    ]);
   });
 
   test("escapes quotes inside OData string literals", async () => {
@@ -238,6 +283,7 @@ describe("searchByName (fixture)", () => {
     });
 
     await searchByName("台積", { activeOnly: false });
+    expect(captured).toHaveLength(1);
     const url = captured.at(0);
     expect(url).toBeDefined();
     expect(url).not.toContain("Company_Status");

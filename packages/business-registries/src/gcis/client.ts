@@ -24,9 +24,10 @@ const DEFAULT_SEARCH_LIMIT = 50;
 const MAX_SEARCH_LIMIT = 100;
 // GCIS filter status codes for active registrations. `01` is 核准設立
 // and `02` is 核准登記 (common for foreign branches); both map to the
-// active domain status in parse.ts.
-const ACTIVE_STATUS_FILTER =
-  "(Company_Status eq '01' or Company_Status eq '02')";
+// active domain status in parse.ts. GCIS returns an empty body for
+// parenthesised `or` filters, so active search issues one request per
+// status code and combines the rows locally.
+const ACTIVE_STATUS_CODES = ["01", "02"] as const;
 
 const odataStringLiteral = (value: string): string =>
   `'${value.replaceAll("'", "''")}'`;
@@ -116,6 +117,42 @@ const gcisGet = async (url: string): Promise<GcisResponse> => {
   return parsed as GcisResponse;
 };
 
+const dedupeRowsByTaxId = (rows: GcisResponse): GcisResponse => {
+  const seen = new Set<string>();
+  const unique: GcisResponse = [];
+  for (const row of rows) {
+    if (seen.has(row.Business_Accounting_NO)) {
+      continue;
+    }
+    seen.add(row.Business_Accounting_NO);
+    unique.push(row);
+  }
+  return unique;
+};
+
+type SearchUrlParams = {
+  name: string;
+  limit: number;
+  statusCode?: (typeof ACTIVE_STATUS_CODES)[number];
+};
+
+const buildSearchUrl = ({
+  name,
+  limit,
+  statusCode,
+}: SearchUrlParams): string => {
+  const quotedName = odataStringLiteral(name);
+  const filter = statusCode
+    ? `Company_Name like ${quotedName} and Company_Status eq ${odataStringLiteral(statusCode)}`
+    : `Company_Name like ${quotedName}`;
+  return buildUrl(SEARCH_DATASET, {
+    $format: "json",
+    $filter: filter,
+    $skip: "0",
+    $top: String(limit),
+  });
+};
+
 /**
  * Look up a Taiwanese entity by 統一編號 (tongbian / 8-digit tax ID).
  *
@@ -179,16 +216,24 @@ export const searchByName = async (
   const requestedLimit = options?.limit ?? DEFAULT_SEARCH_LIMIT;
   const top = Math.min(Math.max(requestedLimit, 1), MAX_SEARCH_LIMIT);
   const activeOnly = options?.activeOnly ?? true;
-  const quotedName = odataStringLiteral(trimmed);
-  const filter = activeOnly
-    ? `Company_Name like ${quotedName} and ${ACTIVE_STATUS_FILTER}`
-    : `Company_Name like ${quotedName}`;
-  const url = buildUrl(SEARCH_DATASET, {
-    $format: "json",
-    $filter: filter,
-    $skip: "0",
-    $top: String(top),
-  });
-  const rows = await gcisGet(url);
-  return rows.map((row) => parseSearchEntry(row));
+  if (!activeOnly) {
+    const rows = await gcisGet(buildSearchUrl({ name: trimmed, limit: top }));
+    return rows.map((row) => parseSearchEntry(row));
+  }
+  const pagePromises: Promise<GcisResponse>[] = [];
+  for (const statusCode of ACTIVE_STATUS_CODES) {
+    pagePromises.push(
+      gcisGet(buildSearchUrl({ name: trimmed, limit: top, statusCode })),
+    );
+  }
+  const pages = await Promise.all(pagePromises);
+  const rows: GcisResponse = [];
+  for (const page of pages) {
+    for (const row of page) {
+      rows.push(row);
+    }
+  }
+  return dedupeRowsByTaxId(rows)
+    .slice(0, top)
+    .map((row) => parseSearchEntry(row));
 };
