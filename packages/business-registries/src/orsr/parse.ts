@@ -391,7 +391,17 @@ const parseStatutoryBodies = (
   terminated: boolean,
 ): OrsrStatutoryBody[] => {
   const members = body.statutoryBody ?? [];
-  const statutoryBodyType = pickCurrent(body.statutoryBodyType)?.value ?? null;
+  // The statutory-body type is the same kind of temporal record as
+  // the company name / legal form / equity — for terminated entities
+  // `current` is wiped from every row, so reading it via `pickCurrent`
+  // alone yields null and downstream emits `position: null` on every
+  // preserved officer. Reuse the terminated-aware fallback so the
+  // last filed type (e.g. `konatelia`) still surfaces.
+  const statutoryBodyTypeRecord = pickActiveRecord(
+    body.statutoryBodyType,
+    terminated,
+  );
+  const statutoryBodyType = statutoryBodyTypeRecord?.value ?? null;
   const capitalized = statutoryBodyType
     ? statutoryBodyType.charAt(0).toUpperCase() + statutoryBodyType.slice(1)
     : null;

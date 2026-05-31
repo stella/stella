@@ -192,6 +192,31 @@ describe("parseExtract status branches", () => {
     expect(company?.stakeholders.length).toBeGreaterThan(0);
   });
 
+  test("preserves the statutory body type on terminated entities", async () => {
+    // The `statutoryBodyType` is a temporal record too. When the
+    // company terminates, every `current` flag flips false; reading
+    // the type via `pickCurrent` alone produces null, and downstream
+    // emits `position: null` on every preserved officer instead of
+    // the last filed body type (e.g. "konatelia").
+    const raw = await readFixture<OrsrRawExtractResponse>("extract-eset.json");
+    if (raw.legalPerson?.corporateBody) {
+      raw.legalPerson.corporateBody.termination = "2020-01-15T00:00:00";
+      for (const member of raw.legalPerson.corporateBody.statutoryBody ?? []) {
+        member.current = false;
+      }
+      for (const entry of raw.legalPerson.corporateBody.statutoryBodyType ??
+        []) {
+        entry.current = false;
+      }
+    }
+    const company = parseExtract(raw);
+    const positions =
+      company?.statutoryBodies[0]?.members.map((member) => member.position) ??
+      [];
+    expect(positions.length).toBeGreaterThan(0);
+    expect(positions.every((position) => position !== null)).toBe(true);
+  });
+
   test("excludes former officers/shareholders who left before dissolution", async () => {
     // A row with an explicit `functionTerminationDate` represents
     // someone who resigned / divested while the company was still
