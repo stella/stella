@@ -24,6 +24,7 @@ import { normalizeOrgnr, validateOrgnr } from "./validation.js";
 
 const BASE = "https://data.brreg.no/enhetsregisteret/api";
 const TIMEOUT_MS = 10_000;
+const MIN_BIRTH_YEAR = 1900;
 
 // ---------------------------------------------------------------------------
 // Raw Brreg roles response shapes
@@ -160,14 +161,16 @@ const composeTrusteeAddress = (raw: BrregRawRoleTrustee): string | null => {
 };
 
 const parseBirthYear = (fodselsdato: string | undefined): number | null => {
-  if (!fodselsdato || fodselsdato.length < 4) {
+  if (!fodselsdato || !/^\d{4}/u.test(fodselsdato)) {
     return null;
   }
   // Brreg returns ISO-style YYYY-MM-DD; take the first four
   // characters. Reject obviously-bogus values — a stray `"95"` would
-  // otherwise parse to 95 AD.
+  // otherwise parse to 95 AD, and a future year is not a valid birth
+  // year for a current registry actor.
   const year = Number.parseInt(fodselsdato.slice(0, 4), 10);
-  return Number.isFinite(year) && year >= 1000 ? year : null;
+  const currentYear = new Date().getUTCFullYear();
+  return year >= MIN_BIRTH_YEAR && year <= currentYear ? year : null;
 };
 
 export const parseOfficer = (
@@ -277,10 +280,19 @@ const brregGetRoles = async (
     });
   }
 
-  // SAFETY: Brreg is a stable, documented public API. Runtime validation
-  // adds little for well-typed JSON responses.
-  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-  return response.json() as Promise<BrregRawRolesResponse>;
+  try {
+    // SAFETY: Brreg is a stable, documented public API. Runtime validation
+    // adds little for well-typed JSON responses.
+    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+    return (await response.json()) as BrregRawRolesResponse;
+  } catch (error) {
+    throw new BrregAPIError({
+      message: `Brreg ${response.status}: invalid JSON payload`,
+      httpStatus: response.status,
+      upstreamMessage: null,
+      cause: error,
+    });
+  }
 };
 
 /**

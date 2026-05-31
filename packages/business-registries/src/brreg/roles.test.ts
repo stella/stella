@@ -3,7 +3,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import bankruptFixture from "./__fixtures__/roles-bankrupt.json" with { type: "json" };
 import brregFixture from "./__fixtures__/roles-brreg.json" with { type: "json" };
 import equinorFixture from "./__fixtures__/roles-equinor.json" with { type: "json" };
-import { BrregValidationError } from "./errors.js";
+import { BrregAPIError, BrregValidationError } from "./errors.js";
 import {
   type BrregRawRolesResponse,
   lookupOfficersByOrgnr,
@@ -63,6 +63,44 @@ describe("parseRolesResponse", () => {
     expect(ceo?.person?.isDeceased).toBe(false);
     expect(ceo?.entity).toBeUndefined();
     expect(ceo?.trustee).toBeUndefined();
+  });
+
+  test("rejects malformed and future birth years", () => {
+    const officers = parseRolesResponse({
+      rollegrupper: [
+        {
+          type: { kode: "STYR" },
+          roller: [
+            {
+              type: { kode: "LEDE" },
+              person: {
+                fodselsdato: "95",
+                navn: { fornavn: "Short", etternavn: "Value" },
+              },
+            },
+            {
+              type: { kode: "LEDE" },
+              person: {
+                fodselsdato: "2999-01-01",
+                navn: { fornavn: "Future", etternavn: "Value" },
+              },
+            },
+            {
+              type: { kode: "LEDE" },
+              person: {
+                fodselsdato: "197x-01-01",
+                navn: { fornavn: "Partial", etternavn: "Value" },
+              },
+            },
+          ],
+        },
+      ],
+    });
+    expect(officers.map((officer) => officer.person?.birthYear)).toEqual([
+      null,
+      null,
+      null,
+    ]);
   });
 
   test("populates `entity` for corporate role holders", () => {
@@ -158,6 +196,34 @@ describe("lookupOfficersByOrgnr fetch", () => {
   test("returns [] when the upstream returns 410 Gone", async () => {
     restore = installFetchStub(async () => new Response(null, { status: 410 }));
     expect(await lookupOfficersByOrgnr("974760673")).toEqual([]);
+  });
+
+  test("preserves API status when non-JSON error bodies are returned", () => {
+    restore = installFetchStub(
+      async () =>
+        new Response("<html>bad gateway</html>", {
+          status: 502,
+          headers: { "Content-Type": "text/html" },
+        }),
+    );
+    expect(lookupOfficersByOrgnr("974760673")).rejects.toMatchObject({
+      name: "BrregAPIError",
+      httpStatus: 502,
+      upstreamMessage: null,
+    });
+  });
+
+  test("surfaces malformed 200 JSON as BrregAPIError", () => {
+    restore = installFetchStub(
+      async () =>
+        new Response("{", {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    expect(lookupOfficersByOrgnr("974760673")).rejects.toBeInstanceOf(
+      BrregAPIError,
+    );
   });
 
   test("normalises spaces and dashes before hitting the API", async () => {
