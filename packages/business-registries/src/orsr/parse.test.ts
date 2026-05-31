@@ -168,6 +168,34 @@ describe("parseExtract status branches", () => {
     }
     expect(parseExtract(raw)?.status).toEqual({ type: "active" });
   });
+
+  test("preserves statutory bodies + stakeholders for terminated entities", async () => {
+    // When a company is dissolved, the upstream stops marking
+    // historical statutory-body / stakeholder rows as `current`. The
+    // parser must mirror the name/address/legal-form fallback and
+    // accept every row so the last-registered officers + cap table
+    // still surface — otherwise a `terminated` lookup returns
+    // empty `statutoryBodies` and `stakeholders` arrays despite the
+    // extract carrying the data.
+    const raw = await readFixture<OrsrRawExtractResponse>("extract-eset.json");
+    if (raw.legalPerson?.corporateBody) {
+      raw.legalPerson.corporateBody.termination = "2020-01-15T00:00:00";
+      // Flip `current` to false on every member row to simulate the
+      // upstream's behaviour for dissolved entities.
+      for (const member of raw.legalPerson.corporateBody.statutoryBody ?? []) {
+        member.current = false;
+      }
+      for (const member of raw.legalPerson.corporateBody.stakeholder ?? []) {
+        member.current = false;
+      }
+    }
+    const company = parseExtract(raw);
+    // ESET's extract carries multiple statutory body members and
+    // stakeholders; both should survive the terminated fallback.
+    expect(company?.statutoryBodies.length).toBeGreaterThan(0);
+    expect(company?.statutoryBodies[0]?.members.length).toBeGreaterThan(0);
+    expect(company?.stakeholders.length).toBeGreaterThan(0);
+  });
 });
 
 describe("parseSearchHit", () => {

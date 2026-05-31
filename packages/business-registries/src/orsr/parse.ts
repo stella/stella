@@ -349,6 +349,7 @@ const buildShareSummary = (
 
 const parseStatutoryBodies = (
   body: OrsrRawCorporateBody,
+  terminated: boolean,
 ): OrsrStatutoryBody[] => {
   const members = body.statutoryBody ?? [];
   const statutoryBodyType = pickCurrent(body.statutoryBodyType)?.value ?? null;
@@ -358,7 +359,13 @@ const parseStatutoryBodies = (
 
   const collected: OrsrStatutoryMember[] = [];
   for (const member of members) {
-    if (member.current !== true) {
+    // For live entities, only rows still flagged `current` count.
+    // Terminated entities lose every `current: true` marker once the
+    // closure is filed, so the same filter would erase the entire
+    // last-registered statutory roster — mirror the name/address
+    // fallback in `pickActiveRecord` and accept every row when the
+    // entity is terminated.
+    if (!terminated && member.current !== true) {
       continue;
     }
     const name = pickPersonName(member);
@@ -384,11 +391,18 @@ const parseStatutoryBodies = (
   return [{ organName: STATUTORY_BODY_ORGAN_NAME, members: collected }];
 };
 
-const parseStakeholders = (body: OrsrRawCorporateBody): OrsrStakeholder[] => {
+const parseStakeholders = (
+  body: OrsrRawCorporateBody,
+  terminated: boolean,
+): OrsrStakeholder[] => {
   const shares = buildSharesByName(body.deposits);
   const result: OrsrStakeholder[] = [];
   for (const member of body.stakeholder ?? []) {
-    if (member.current !== true) {
+    // Same rationale as parseStatutoryBodies: terminated entities lose
+    // the `current: true` markers but the rows still represent the
+    // last filed cap table / supervisory roster, which is what
+    // callers want for a dissolved company.
+    if (!terminated && member.current !== true) {
       continue;
     }
     const name = pickPersonName(member);
@@ -496,8 +510,8 @@ export const parseExtract = (
         : null,
     actingClause: pickActingClause(body.authorizationToExecute, terminated),
     status,
-    statutoryBodies: parseStatutoryBodies(body),
-    stakeholders: parseStakeholders(body),
+    statutoryBodies: parseStatutoryBodies(body, terminated),
+    stakeholders: parseStakeholders(body, terminated),
     registryUrl: courtFile ? buildRegistryUrl(courtFile) : "",
   };
 };
