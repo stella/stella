@@ -32,6 +32,16 @@ import {
   normalizeOrgnr,
   searchByName as searchBrregByName,
 } from "@stll/business-registries/brreg";
+import {
+  PrhAPIError,
+  type PrhCompany,
+  PrhRequestError,
+  type PrhSearchResult,
+  PrhValidationError,
+  lookupByBusinessId,
+  normalizeBusinessId,
+  searchByName as searchPrhByName,
+} from "@stll/business-registries/prh";
 import type { CountryCode } from "@stll/country-codes";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -40,7 +50,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 // Normalised cross-registry shapes
 // ---------------------------------------------------------------------------
 
-export const BUSINESS_REGISTRY_SLUGS = ["ares", "brreg"] as const;
+export const BUSINESS_REGISTRY_SLUGS = ["ares", "brreg", "prh"] as const;
 export type BusinessRegistrySlug = (typeof BUSINESS_REGISTRY_SLUGS)[number];
 
 export type BusinessRegistryAddress = {
@@ -79,7 +89,8 @@ export type BusinessRegistryHit = {
 
 export type BusinessRegistryHitDetails =
   | { registry: "ares"; company: AresCompany }
-  | { registry: "brreg"; entity: BrregEntity };
+  | { registry: "brreg"; entity: BrregEntity }
+  | { registry: "prh"; company: PrhCompany };
 
 export type RegistryLookupResponse =
   | {
@@ -345,6 +356,104 @@ const BRREG_HANDLER: RegistryHandler = {
 };
 
 // ---------------------------------------------------------------------------
+// PRH (Finland)
+// ---------------------------------------------------------------------------
+
+const prhCompanyToHit = (company: PrhCompany): BusinessRegistryHit => {
+  // PRH separates the legal street address (type 1) from the postal
+  // address (type 2). Entities that only file a postal address (PO
+  // boxes, agent-held mail) leave streetAddress null. Fall back to
+  // postalAddress so REST / chat consumers that only read the
+  // baseline `address` field do not lose all address information.
+  const source = company.streetAddress ?? company.postalAddress;
+  return {
+    registry: "prh",
+    id: company.businessId,
+    name: company.name,
+    legalForm: company.legalForm,
+    address: source
+      ? {
+          line1: source.street,
+          line2: null,
+          postalCode: source.postalCode,
+          city: source.city,
+          region: null,
+          country: source.country,
+          textAddress: source.textAddress,
+        }
+      : null,
+    registryUrl: company.registryUrl,
+    // Surface trade-register membership, status, business line, etc.
+    // — the unified chat tool needs more than name+address to answer
+    // questions about Finnish entities.
+    details: { registry: "prh", company },
+  };
+};
+
+const prhSearchResultToHit = (
+  result: PrhSearchResult,
+): BusinessRegistryHit => ({
+  registry: "prh",
+  id: result.businessId,
+  name: result.name,
+  legalForm: null,
+  address: result.address
+    ? {
+        line1: null,
+        line2: null,
+        postalCode: null,
+        city: null,
+        region: null,
+        country: null,
+        textAddress: result.address,
+      }
+    : null,
+  // See parse.ts for why this points at the AvoinData JSON endpoint
+  // rather than the YTJ web portal: yavain/tarkiste is an internal
+  // record key, not the business ID.
+  registryUrl: `https://avoindata.prh.fi/opendata-ytj-api/v3/companies?businessId=${encodeURIComponent(result.businessId)}`,
+});
+
+const mapPrhError = (error: unknown): HandlerError | null => {
+  if (error instanceof PrhValidationError) {
+    return new HandlerError({ status: 400, message: error.message });
+  }
+  if (error instanceof PrhAPIError) {
+    return new HandlerError({
+      status: 502,
+      message: `PRH API error: ${error.message}`,
+    });
+  }
+  if (error instanceof PrhRequestError) {
+    return new HandlerError({
+      status: 502,
+      message: `PRH request failed: ${error.message}`,
+    });
+  }
+  return null;
+};
+
+const PRH_HANDLER: RegistryHandler = {
+  slug: "prh",
+  country: "FI",
+  nativeToolSlug: "prh",
+  // Shape check only — full MOD-11 validation happens in lookupByBusinessId
+  // and surfaces as PrhValidationError → HTTP 400 via mapPrhError. Falling
+  // through to search would silently turn a bad-checksum Y-tunnus into an
+  // empty name-search result.
+  isCanonicalId: (input) => /^\d{7}-\d$/u.test(normalizeBusinessId(input)),
+  lookup: async (input) => {
+    const company = await lookupByBusinessId(input);
+    return company ? prhCompanyToHit(company) : null;
+  },
+  search: async (input, options) => {
+    const results = await searchPrhByName(input, options);
+    return results.map(prhSearchResultToHit);
+  },
+  mapError: mapPrhError,
+};
+
+// ---------------------------------------------------------------------------
 // Registry table + lookups
 // ---------------------------------------------------------------------------
 
@@ -354,6 +463,7 @@ export const BUSINESS_REGISTRY_DISPATCH: Record<
 > = {
   ares: ARES_HANDLER,
   brreg: BRREG_HANDLER,
+  prh: PRH_HANDLER,
 };
 
 const HANDLERS_BY_COUNTRY: ReadonlyMap<CountryCode, RegistryHandler> = new Map(

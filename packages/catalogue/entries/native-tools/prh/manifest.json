@@ -1,0 +1,18 @@
+{
+  "$schema": "../../../schema.json",
+  "kind": "native-tool",
+  "slug": "prh",
+  "displayName": "PRH AvoinData",
+  "description": "Finnish company lookup by Y-tunnus or company name from the Patentti- ja rekisterihallitus (PRH) AvoinData v3 open API.",
+  "author": "stella",
+  "authorUrl": "https://github.com/stella",
+  "license": "Apache-2.0",
+  "cost": "free",
+  "setup": "none",
+  "homepage": "https://www.prh.fi",
+  "tags": ["corporate", "regulatory"],
+  "jurisdictions": ["FI"],
+  "backendSlug": "prh",
+  "url": "https://www.prh.fi",
+  "documentationUrl": "https://avoindata.prh.fi/ytj_en.html"
+}
