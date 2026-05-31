@@ -533,7 +533,7 @@ function isNoteReferenceRun(run: TextRun | TabRun): boolean {
 }
 
 function removeUnderlineTextDecoration(element: HTMLElement): void {
-  const textDecorationLines = element.style.textDecorationLine
+  const textDecorationLines = (element.style.textDecorationLine || "")
     .split(/\s+/u)
     .filter((line) => line && line !== "underline");
   element.style.textDecorationLine = textDecorationLines.join(" ");
