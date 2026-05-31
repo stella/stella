@@ -438,15 +438,9 @@ export function applyFootnotePresentation(
 
   const first = output[0];
   if (first?.kind === "paragraph") {
-    const numberRun: TextRun = {
-      kind: "text",
-      text: `${displayNumber}  `,
-      fontSize: FOOTNOTE_FONT_SIZE,
-      superscript: true,
-    };
     output[0] = {
       ...first,
-      runs: [numberRun, ...first.runs],
+      runs: [createFootnoteNumberRun(displayNumber, first), ...first.runs],
     };
   } else {
     output.unshift({
@@ -464,6 +458,34 @@ export function applyFootnotePresentation(
   }
 
   return output;
+}
+
+function createFootnoteNumberRun(
+  displayNumber: number,
+  paragraph: ParagraphBlock,
+): TextRun {
+  const firstTextRun = paragraph.runs.find((run) => run.kind === "text");
+  const firstFormattedRun = paragraph.runs.find(
+    (run) => run.kind === "text" || run.kind === "tab" || run.kind === "field",
+  );
+  const text = firstTextRun?.text.match(/^\s/u)
+    ? `${displayNumber}`
+    : `${displayNumber} `;
+  const numberRun: TextRun = {
+    kind: "text",
+    text,
+    fontSize:
+      firstFormattedRun?.fontSize ??
+      paragraph.attrs?.defaultFontSize ??
+      FOOTNOTE_FONT_SIZE,
+    superscript: true,
+  };
+  const fontFamily =
+    firstFormattedRun?.fontFamily ?? paragraph.attrs?.defaultFontFamily;
+  if (fontFamily) {
+    numberRun.fontFamily = fontFamily;
+  }
+  return numberRun;
 }
 
 function applyFootnoteBlockPresentation(block: FlowBlock): FlowBlock {
@@ -582,12 +604,10 @@ export function calculateFootnoteReservedHeights(
     }
 
     if (totalHeight > 0) {
-      // Add separator + per-entry margin so the static reservation
-      // matches what `renderFootnoteArea` actually paints (4px
-      // `marginBottom` per fn wrapper). Without this, the painter's
-      // clamp would shift the area upward by `count × margin` and
-      // overlap the body lines the engine laid out against the
-      // smaller reservation.
+      // Add separator + any wrapper margin so the static reservation matches
+      // what `renderFootnoteArea` actually paints. In Word-like rendering the
+      // wrapper margin is zero; paragraph spacing inside each footnote content
+      // carries the source DOCX spacing.
       totalHeight += FOOTNOTE_SEPARATOR_HEIGHT;
       totalHeight += footnoteIds.length * FOOTNOTE_ENTRY_MARGIN_BOTTOM;
       reserved.set(pageNumber, totalHeight);

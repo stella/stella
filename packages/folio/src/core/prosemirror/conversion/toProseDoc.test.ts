@@ -122,6 +122,124 @@ describe("toProseDoc", () => {
     ).toBe(20);
   });
 
+  test("preserves direct run marks on tab nodes", () => {
+    const document: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  type: "run",
+                  formatting: {
+                    underline: { style: "single" },
+                  },
+                  content: [{ type: "tab" }],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const doc = toProseDoc(document);
+    const tab = doc.firstChild?.firstChild;
+
+    expect(tab?.type.name).toBe("tab");
+    expect(
+      tab?.marks.find((mark) => mark.type.name === "underline")?.attrs.style,
+    ).toBe("single");
+  });
+
+  test("does not leak paragraph mark underline onto directly formatted text runs", () => {
+    const document: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              formatting: {
+                runProperties: {
+                  underline: { style: "single" },
+                },
+              },
+              content: [
+                {
+                  type: "run",
+                  formatting: { fontSize: 22 },
+                  content: [{ type: "text", text: "By:" }],
+                },
+                {
+                  type: "run",
+                  formatting: {
+                    underline: { style: "single" },
+                    fontSize: 22,
+                  },
+                  content: [{ type: "tab" }],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const doc = toProseDoc(document);
+    const label = doc.firstChild?.child(0);
+    const tab = doc.firstChild?.child(1);
+
+    expect(label?.marks.some((mark) => mark.type.name === "underline")).toBe(
+      false,
+    );
+    expect(
+      label?.marks.find((mark) => mark.type.name === "runFormattingOverride")
+        ?.attrs.underline,
+    ).toBe("none");
+    expect(
+      tab?.marks.find((mark) => mark.type.name === "underline")?.attrs.style,
+    ).toBe("single");
+  });
+
+  test("does not leak paragraph mark bold onto directly formatted highlighted text", () => {
+    const document: Document = {
+      package: {
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              formatting: {
+                runProperties: {
+                  bold: true,
+                },
+              },
+              content: [
+                {
+                  type: "run",
+                  formatting: {
+                    fontSize: 22,
+                    highlight: "yellow",
+                  },
+                  content: [{ type: "text", text: "COMPANY NAME" }],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const doc = toProseDoc(document);
+    const text = doc.firstChild?.firstChild;
+
+    expect(text?.marks.some((mark) => mark.type.name === "bold")).toBe(false);
+    expect(
+      text?.marks.find((mark) => mark.type.name === "runFormattingOverride")
+        ?.attrs.bold,
+    ).toBe(false);
+  });
+
   test("applies oneNDA table style run properties before direct run properties", () => {
     const document: Document = {
       package: {

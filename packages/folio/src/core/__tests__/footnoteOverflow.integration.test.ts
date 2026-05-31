@@ -131,7 +131,7 @@ const basePage: Page = {
 // Painter constants mirrored in `calculateFootnoteAreaRenderHeight`. Kept
 // local to the test so a drift between painter/helper fails here before it
 // fails in production. See `renderPage.ts` for the source values.
-const PAINTER_FOOTNOTE_ENTRY_MARGIN_BOTTOM = 4;
+const PAINTER_FOOTNOTE_ENTRY_MARGIN_BOTTOM = 0;
 const PAINTER_FOOTNOTE_FALLBACK_LINE_HEIGHT = 13;
 
 describe("calculateFootnoteAreaRenderHeight", () => {
@@ -141,7 +141,7 @@ describe("calculateFootnoteAreaRenderHeight", () => {
     );
   });
 
-  test("sums each footnote content height plus per-entry margin and a single separator", () => {
+  test("sums each footnote content height plus any wrapper margin and a single separator", () => {
     const footnotes: FootnoteRenderItem[] = [
       makeParagraphFootnote(20),
       makeParagraphFootnote(35),
@@ -236,10 +236,10 @@ describe("renderFootnoteArea overflow clamp", () => {
 });
 
 describe("footnote separator height parity", () => {
-  test("painter render height covers paginator reservation plus per-entry margin for 1, 3, and 10 footnotes", () => {
-    // Paginator reserves separator + sum(content). Painter additionally
-    // draws a `marginBottom` between entries, so the clamp helper must
-    // exceed the paginator reservation by exactly `count * margin`.
+  test("painter render height matches paginator reservation for 1, 3, and 10 footnotes", () => {
+    // Paginator reserves separator + sum(content) + any wrapper margin. The
+    // wrapper margin is zero for Word-like footnote spacing, but keep the
+    // parity assertion so a future nonzero value stays accounted for.
     for (const count of [1, 3, 10]) {
       const heights = Array.from({ length: count }, (_, index) => 10 + index);
       const footnotes = heights.map(makeParagraphFootnote);

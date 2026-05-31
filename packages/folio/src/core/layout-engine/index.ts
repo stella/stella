@@ -245,6 +245,9 @@ export function layoutDocument(
     ...(options.footnoteReservedHeights !== undefined
       ? { footnoteReservedHeights: options.footnoteReservedHeights }
       : {}),
+    ...(options.sectionHeaderFooterRefs !== undefined
+      ? { sectionHeaderFooterRefs: options.sectionHeaderFooterRefs }
+      : {}),
   });
 
   // Apply contextual spacing: suppress spaceBefore/spaceAfter between
@@ -342,6 +345,7 @@ export function layoutDocument(
           paginator,
           sectionConfigs[sectionIdx + 1] ?? initialConfig,
           nextType,
+          sectionIdx + 1,
         );
         sectionIdx++;
         break;
@@ -916,6 +920,7 @@ function handleSectionBreak(
   paginator: ReturnType<typeof createPaginator>,
   nextSectionConfig: SectionLayoutConfig,
   nextSectionType: SectionBreakBlock["type"] = "nextPage",
+  nextSectionIndex?: number,
 ): void {
   switch (nextSectionType) {
     case "nextPage":
@@ -923,6 +928,9 @@ function handleSectionBreak(
         nextSectionConfig.pageSize,
         nextSectionConfig.margins,
       );
+      if (nextSectionIndex !== undefined) {
+        paginator.startSection(nextSectionIndex);
+      }
       paginator.forcePageBreak({ coalesceBlankPage: true });
       break;
 
@@ -931,6 +939,9 @@ function handleSectionBreak(
         nextSectionConfig.pageSize,
         nextSectionConfig.margins,
       );
+      if (nextSectionIndex !== undefined) {
+        paginator.startSection(nextSectionIndex);
+      }
       const state = paginator.forcePageBreak({ coalesceBlankPage: true });
       // If landed on odd page, add another page
       if (state.page.number % 2 !== 0) {
@@ -944,6 +955,9 @@ function handleSectionBreak(
         nextSectionConfig.pageSize,
         nextSectionConfig.margins,
       );
+      if (nextSectionIndex !== undefined) {
+        paginator.startSection(nextSectionIndex);
+      }
       const state = paginator.forcePageBreak({ coalesceBlankPage: true });
       // If landed on even page, add another page
       if (state.page.number % 2 === 0) {

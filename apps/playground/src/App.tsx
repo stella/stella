@@ -65,6 +65,7 @@ function createLargeDocument(paragraphCount: number): FolioDocument {
 
 export function App() {
   const editorRef = useRef<DocxEditorRef>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [currentDocument, setCurrentDocument] = useState<FolioDocument | null>(
     null,
   );
@@ -120,6 +121,7 @@ export function App() {
 
   const handleFileSelect = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const input = event.currentTarget;
       const file = event.target.files?.[0];
       if (!file) {
         return;
@@ -130,13 +132,26 @@ export function App() {
         setCurrentDocument(null);
         setDocumentBuffer(buffer);
         setFileName(file.name);
-        setStatus("");
+        setStatus(`Loaded ${file.name}`);
       } catch {
         setStatus("Error loading file");
+      } finally {
+        input.value = "";
       }
     },
     [],
   );
+
+  const handleOpenDocument = useCallback(() => {
+    const input = fileInputRef.current;
+    if (!input) {
+      setStatus("File picker unavailable");
+      return;
+    }
+
+    input.value = "";
+    input.click();
+  }, []);
 
   const handleSave = useCallback(async () => {
     if (!editorRef.current) {
@@ -243,16 +258,11 @@ export function App() {
 
         <Separator orientation="vertical" className="h-5" />
 
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() =>
-            document.querySelector<HTMLInputElement>("#file-input")?.click()
-          }
-        >
+        <Button variant="ghost" size="sm" onClick={handleOpenDocument}>
           Open
         </Button>
         <input
+          ref={fileInputRef}
           aria-label="Open .docx file"
           id="file-input"
           type="file"

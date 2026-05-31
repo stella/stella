@@ -190,10 +190,16 @@ function convertParagraph(
   );
   const getInheritedRunFormatting = (
     formatting: TextFormatting | undefined,
-  ): TextFormatting | undefined =>
-    hasDirectRunFormatting(formatting)
-      ? baseRunFormatting
-      : defaultRunFormatting;
+  ): TextFormatting | undefined => {
+    if (!hasDirectRunFormatting(formatting)) {
+      return defaultRunFormatting;
+    }
+    return suppressParagraphMarkFormatting(
+      baseRunFormatting,
+      paragraphRunFormatting,
+      formatting,
+    );
+  };
   const emitTrackedChange = (
     change: Insertion | Deletion | MoveFrom | MoveTo,
     markType: "insertion" | "deletion",
@@ -736,6 +742,65 @@ function hasDirectRunFormatting(
   return entries.some(
     ([key, value]) => key !== "styleId" && value !== undefined,
   );
+}
+
+function suppressParagraphMarkFormatting(
+  base: TextFormatting | undefined,
+  paragraphMark: TextFormatting | undefined,
+  direct: TextFormatting | undefined,
+): TextFormatting | undefined {
+  if (!paragraphMark) {
+    return base;
+  }
+
+  const result: TextFormatting = { ...base };
+  suppressBooleanParagraphMark(result, paragraphMark, direct, "bold");
+  suppressBooleanParagraphMark(result, paragraphMark, direct, "italic");
+  suppressBooleanParagraphMark(result, paragraphMark, direct, "strike");
+  suppressBooleanParagraphMark(result, paragraphMark, direct, "doubleStrike");
+  suppressBooleanParagraphMark(result, paragraphMark, direct, "allCaps");
+  suppressBooleanParagraphMark(result, paragraphMark, direct, "smallCaps");
+  suppressBooleanParagraphMark(result, paragraphMark, direct, "hidden");
+  suppressBooleanParagraphMark(result, paragraphMark, direct, "emboss");
+  suppressBooleanParagraphMark(result, paragraphMark, direct, "imprint");
+  suppressBooleanParagraphMark(result, paragraphMark, direct, "shadow");
+  suppressBooleanParagraphMark(result, paragraphMark, direct, "outline");
+  suppressBooleanParagraphMark(result, paragraphMark, direct, "rtl");
+
+  if (
+    paragraphMark.underline !== undefined &&
+    direct?.underline === undefined
+  ) {
+    result.underline = { style: "none" };
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function suppressBooleanParagraphMark(
+  result: TextFormatting,
+  paragraphMark: TextFormatting,
+  direct: TextFormatting | undefined,
+  key: keyof Pick<
+    TextFormatting,
+    | "bold"
+    | "italic"
+    | "strike"
+    | "doubleStrike"
+    | "allCaps"
+    | "smallCaps"
+    | "hidden"
+    | "emboss"
+    | "imprint"
+    | "shadow"
+    | "outline"
+    | "rtl"
+  >,
+): void {
+  if (paragraphMark[key] === undefined || direct?.[key] !== undefined) {
+    return;
+  }
+  result[key] = false;
 }
 
 function resolveTextFormatting(
@@ -1814,8 +1879,9 @@ function convertRunContent(
       return [];
 
     case "tab":
-      // Convert to tab node for proper rendering
-      return [withHyperlinkBoundaryMarks(schema.node("tab"), marks)];
+      // Convert to tab node for proper rendering. Keep the run marks because
+      // Word commonly represents signature blanks as underlined tab runs.
+      return [schema.node("tab").mark(marks)];
 
     case "drawing":
       return [

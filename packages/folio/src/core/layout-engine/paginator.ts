@@ -7,7 +7,13 @@
 
 import { panic } from "better-result";
 
-import type { Page, PageMargins, Fragment, ColumnLayout } from "./types";
+import type {
+  Page,
+  PageMargins,
+  Fragment,
+  ColumnLayout,
+  PageHeaderFooterRefs,
+} from "./types";
 import { FOOTNOTE_SEPARATOR_HEIGHT } from "./types";
 
 /**
@@ -64,6 +70,8 @@ export type PaginatorOptions = {
   columns?: ColumnLayout;
   /** Per-page footnote reserved heights (pageNumber → height in pixels). */
   footnoteReservedHeights?: Map<number, number>;
+  /** Header/footer refs by section index. */
+  sectionHeaderFooterRefs?: PageHeaderFooterRefs[];
   /** Callback when a new page is created. */
   onNewPage?: (state: PageState) => void;
 };
@@ -113,6 +121,8 @@ export function createPaginator(options: PaginatorOptions) {
   let columns: ColumnLayout = options.columns ?? { count: 1, gap: 0 };
   let pendingPageSize: { w: number; h: number } | undefined;
   let pendingMargins: PageMargins | undefined;
+  let currentSectionIndex = 0;
+  let currentSectionPageNumber = 0;
 
   const pages: Page[] = [];
   const states: PageState[] = [];
@@ -186,6 +196,7 @@ export function createPaginator(options: PaginatorOptions) {
     }
 
     const pageNumber = pages.length + 1;
+    currentSectionPageNumber += 1;
     // Page 1 of the document may use first-page margins (extended top to
     // clear an overflowing first-page header on a titlePg section) while
     // pages 2+ use the regular section margins. Without this distinction
@@ -217,6 +228,7 @@ export function createPaginator(options: PaginatorOptions) {
       // Set initial columns; may be overwritten by updateColumns() for continuous section breaks
       ...(columns.count > 1 ? { columns: { ...columns } } : {}),
     };
+    applySectionMetadata(page);
 
     const state: PageState = {
       page,
@@ -420,6 +432,10 @@ export function createPaginator(options: PaginatorOptions) {
       current.cursorY === current.topMargin &&
       currentPageUsesActiveLayout(current)
     ) {
+      if (current.page.sectionIndex !== currentSectionIndex) {
+        currentSectionPageNumber = 1;
+        applySectionMetadata(current.page);
+      }
       return current;
     }
     return createNewPage();
@@ -495,6 +511,22 @@ export function createPaginator(options: PaginatorOptions) {
     pendingMargins = undefined;
   }
 
+  function startSection(sectionIndex: number): void {
+    currentSectionIndex = sectionIndex;
+    currentSectionPageNumber = 0;
+  }
+
+  function applySectionMetadata(page: Page): void {
+    page.sectionIndex = currentSectionIndex;
+    page.sectionPageNumber = currentSectionPageNumber;
+    const refs = options.sectionHeaderFooterRefs?.[currentSectionIndex];
+    if (refs) {
+      page.headerFooterRefs = refs;
+    } else {
+      delete page.headerFooterRefs;
+    }
+  }
+
   return {
     /** All pages created so far. */
     pages,
@@ -532,6 +564,8 @@ export function createPaginator(options: PaginatorOptions) {
     updateColumns,
     /** Update page size/margins for subsequent pages. */
     updatePageLayout,
+    /** Mark the next created page as the first page of a new section. */
+    startSection,
   };
 }
 

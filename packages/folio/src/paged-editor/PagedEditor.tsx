@@ -100,6 +100,7 @@ import type {
   SectionBreakBlock,
   TextBoxBlock,
   FootnoteContent,
+  PageHeaderFooterRefs,
 } from "../core/layout-engine/types";
 import { DEFAULT_TEXTBOX_MARGINS } from "../core/layout-engine/types";
 // Layout painter
@@ -902,6 +903,81 @@ function renderHfFromContentOrPm(
   return convertHeaderFooterToContent(hf, contentWidth, metrics, optsWithRId);
 }
 
+function renderHeaderFooterContentByRId(
+  source: Map<string, HeaderFooter> | undefined,
+  hfPMs: HiddenHeaderFooterPMsRef | null,
+  contentWidth: number,
+  metrics: HeaderFooterMetrics,
+  options: ConvertHeaderFooterOptions,
+): Map<string, HeaderFooterContent> | undefined {
+  if (!source || source.size === 0) {
+    return undefined;
+  }
+  const rendered = new Map<string, HeaderFooterContent>();
+  for (const [rId, hf] of source) {
+    const content = renderHfFromContentOrPm(
+      hf,
+      rId,
+      hfPMs,
+      contentWidth,
+      metrics,
+      options,
+    );
+    if (content) {
+      rendered.set(rId, content);
+    }
+  }
+  return rendered.size > 0 ? rendered : undefined;
+}
+
+function getSectionHeaderFooterRefs(
+  documentModel: Document | null | undefined,
+): PageHeaderFooterRefs[] | undefined {
+  const body = documentModel?.package.document;
+  if (!body) {
+    return undefined;
+  }
+  const sections = body.sections;
+  if (sections && sections.length > 0) {
+    return sections.map((section) =>
+      getHeaderFooterRefsFromSectionProperties(section.properties),
+    );
+  }
+  const finalProps = body.finalSectionProperties;
+  if (!finalProps) {
+    return undefined;
+  }
+  return [getHeaderFooterRefsFromSectionProperties(finalProps)];
+}
+
+function getHeaderFooterRefsFromSectionProperties(
+  props: SectionProperties,
+): PageHeaderFooterRefs {
+  const refs: PageHeaderFooterRefs = {};
+  if (props.titlePg !== undefined) {
+    refs.titlePg = props.titlePg;
+  }
+  for (const ref of props.headerReferences ?? []) {
+    if (ref.type === "default") {
+      refs.headerDefault = ref.rId;
+    } else if (ref.type === "first") {
+      refs.headerFirst = ref.rId;
+    } else {
+      refs.headerEven = ref.rId;
+    }
+  }
+  for (const ref of props.footerReferences ?? []) {
+    if (ref.type === "default") {
+      refs.footerDefault = ref.rId;
+    } else if (ref.type === "first") {
+      refs.footerFirst = ref.rId;
+    } else {
+      refs.footerEven = ref.rId;
+    }
+  }
+  return refs;
+}
+
 type LayoutInputSignatureOptions = {
   columns: ColumnLayout | undefined;
   contentWidth: number;
@@ -921,6 +997,7 @@ type LayoutInputSignatureOptions = {
   footerContentRId: string | null | undefined;
   firstPageHeaderContentRId: string | null | undefined;
   firstPageFooterContentRId: string | null | undefined;
+  sectionHeaderFooterRefs: PageHeaderFooterRefs[] | undefined;
   margins: PageMargins;
   pageGap: number;
   pageSize: { h: number; w: number };
@@ -2779,6 +2856,10 @@ export function PagedEditor(
   );
   const contentWidth = pageSize.w - margins.left - margins.right;
   const defaultTabStop = document?.package.settings?.defaultTabStop;
+  const sectionHeaderFooterRefs = useMemo(
+    () => getSectionHeaderFooterRefs(document),
+    [document],
+  );
   const layoutInputSignature = useMemo(
     () =>
       buildLayoutInputSignature({
@@ -2793,6 +2874,7 @@ export function PagedEditor(
         footerContentRId,
         firstPageHeaderContentRId,
         firstPageFooterContentRId,
+        sectionHeaderFooterRefs,
         margins,
         pageGap,
         pageSize,
@@ -2812,6 +2894,7 @@ export function PagedEditor(
       footerContentRId,
       firstPageHeaderContentRId,
       firstPageFooterContentRId,
+      sectionHeaderFooterRefs,
       margins,
       pageGap,
       pageSize,
@@ -2988,6 +3071,20 @@ export function PagedEditor(
               hfOptions,
             )
           : undefined;
+        const headerContentByRId = renderHeaderFooterContentByRId(
+          document?.package.headers,
+          hfPMsRef.current,
+          contentWidth,
+          hfMetricsHeader,
+          hfOptions,
+        );
+        const footerContentByRId = renderHeaderFooterContentByRId(
+          document?.package.footers,
+          hfPMsRef.current,
+          contentWidth,
+          hfMetricsFooter,
+          hfOptions,
+        );
 
         // Default extender — applied to pages 2+ of every section. It
         // ignores firstPage H/F so a `<w:titlePg/>` section's
@@ -3055,6 +3152,9 @@ export function PagedEditor(
         if (bodyBreakType !== undefined) {
           layoutOpts.bodyBreakType = bodyBreakType;
         }
+        if (sectionHeaderFooterRefs !== undefined) {
+          layoutOpts.sectionHeaderFooterRefs = sectionHeaderFooterRefs;
+        }
 
         if (hasFootnotes) {
           // Build footnote content and measure heights up front. The
@@ -3083,21 +3183,19 @@ export function PagedEditor(
           );
 
           const footnoteHeightById = new Map<number, number>();
-          // Per-fn vertical margin applied by the painter
-          // (`renderFootnoteArea` sets `marginBottom` on each fn
-          // entry). Reserved alongside content height so the page
-          // accounts for inter-fn whitespace; constant is owned by
-          // `footnoteLayout` so painter, dynamic, and static paths
-          // stay in lockstep.
+          // Any per-fn wrapper margin applied by the painter is reserved
+          // alongside content height. The value is zero for Word-like footnote
+          // spacing; source paragraph spacing inside each note carries the
+          // visible gaps.
           for (const [id, content] of footnoteContentMap) {
             footnoteHeightById.set(
               id,
               content.height + FOOTNOTE_ENTRY_MARGIN_BOTTOM,
             );
           }
-          // Note: the layout engine adds the divider's height once
-          // per fn-bearing page (in paginator.addFootnoteHeight); we
-          // pass per-fn (content + entry margin) here.
+          // Note: the layout engine adds the divider's height once per
+          // fn-bearing page (in paginator.addFootnoteHeight); we pass per-fn
+          // content plus any wrapper margin here.
 
           newLayout = layoutDocument(newBlocks, newMeasures, {
             ...layoutOpts,
@@ -3176,12 +3274,24 @@ export function PagedEditor(
           if (firstPageFooterForRender) {
             renderOpts.firstPageFooterContent = firstPageFooterForRender;
           }
-          if (sectionProperties?.headerDistance) {
+          if (headerContentByRId) {
+            renderOpts.headerContentByRId = headerContentByRId;
+          }
+          if (footerContentByRId) {
+            renderOpts.footerContentByRId = footerContentByRId;
+          }
+          if (
+            sectionHeaderFooterRefs === undefined &&
+            sectionProperties?.headerDistance
+          ) {
             renderOpts.headerDistance = twipsToPixels(
               sectionProperties.headerDistance,
             );
           }
-          if (sectionProperties?.footerDistance) {
+          if (
+            sectionHeaderFooterRefs === undefined &&
+            sectionProperties?.footerDistance
+          ) {
             renderOpts.footerDistance = twipsToPixels(
               sectionProperties.footerDistance,
             );
@@ -3237,6 +3347,7 @@ export function PagedEditor(
       footerContentRId,
       firstPageHeaderContentRId,
       firstPageFooterContentRId,
+      sectionHeaderFooterRefs,
       _theme,
       sectionProperties,
       document,

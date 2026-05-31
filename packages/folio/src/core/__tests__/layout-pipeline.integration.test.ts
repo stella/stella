@@ -905,6 +905,34 @@ describe("Section Breaks", () => {
     expect(layout.pages[1].fragments.some((f) => f.blockId === 2)).toBe(true);
   });
 
+  test("coalesced blank section page gets the next section header and footer refs", () => {
+    const blocks: FlowBlock[] = [
+      { kind: "sectionBreak", id: 1, type: "nextPage" },
+      makeParagraphBlock(2, "After section", 18),
+    ];
+    const measures: Measure[] = [
+      { kind: "sectionBreak" },
+      makeParagraphMeasure([makeLine(0, 0, 0, 13, 110, 24)]),
+    ];
+
+    const layout = layoutDocument(
+      blocks,
+      measures,
+      makeLayoutOptions({
+        sectionHeaderFooterRefs: [
+          { footerDefault: "previous-footer" },
+          { footerDefault: "next-footer" },
+        ],
+      }),
+    );
+
+    expect(layout.pages.length).toBe(1);
+    expect(layout.pages[0].sectionIndex).toBe(1);
+    expect(layout.pages[0].sectionPageNumber).toBe(1);
+    expect(layout.pages[0].headerFooterRefs?.footerDefault).toBe("next-footer");
+    expect(layout.pages[0].fragments.some((f) => f.blockId === 2)).toBe(true);
+  });
+
   test("continuous section break does not force new page", () => {
     const blocks: FlowBlock[] = [
       makeParagraphBlock(0, "Before section", 1),

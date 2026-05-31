@@ -2010,6 +2010,16 @@ export function toFlowBlocks(
                 left: twipsToPixels(lastSectionMarginsTwips.left),
                 right: twipsToPixels(lastSectionMarginsTwips.right),
               };
+              if (secProps.headerDistance !== undefined) {
+                sectionBreak.margins.header = twipsToPixels(
+                  secProps.headerDistance,
+                );
+              }
+              if (secProps.footerDistance !== undefined) {
+                sectionBreak.margins.footer = twipsToPixels(
+                  secProps.footerDistance,
+                );
+              }
             }
             // Populate columns
             const colCount = secProps.columnCount ?? 1;
