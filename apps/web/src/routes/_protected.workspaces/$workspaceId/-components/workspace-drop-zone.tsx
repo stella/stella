@@ -29,7 +29,6 @@ const WorkspaceDropZoneInner = ({
   const t = useTranslations();
   const [isPending, createFileEntities] = useCreateFileEntities(workspaceId);
   const { ref, isDropTarget, isInnerActive } = useExternalFileDrop({
-    onlyIfInnermost: true,
     onDrop: (files) => {
       if (isPending) {
         return;

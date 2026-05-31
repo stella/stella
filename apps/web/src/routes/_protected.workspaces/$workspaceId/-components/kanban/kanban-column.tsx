@@ -177,14 +177,9 @@ export const KanbanColumn = ({
   const onDropRef = useRef(onDrop);
   onDropRef.current = onDrop;
 
-  // Container drop target: same role as `WorkspaceDropZone`, scoped to
-  // this column. `onlyIfInnermost` is a no-op today (no nested external
-  // targets exist inside a column) but documents the role and is
-  // future-safe if a card ever becomes an external target.
   const { isDropTarget, isInnerActive } = useExternalFileDrop({
     externalRef: columnRef,
     enabled: !!onFileUpload,
-    onlyIfInnermost: true,
     onDrop: (files) => onFileUpload?.(files),
   });
   const isFileDragOver = isDropTarget && !isInnerActive;

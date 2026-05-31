@@ -17,26 +17,12 @@ type ExternalFileDropOptions = {
   /** Optional external ref to use instead of creating a new one */
   externalRef?: React.RefObject<HTMLDivElement | null>;
   /**
-   * Optional pre-drop filter. Called inside Pragmatic DnD's `canDrop`,
-   * which fires outside React's render cycle. The drag info is read
-   * synchronously from `ExternalDragInfoProvider`. Returning false makes
-   * Pragmatic skip this drop target so the drop falls through to the
-   * WorkspaceDropZone instead.
-   *
-   * If omitted, defaults to accepting any external file drag. When info
-   * is unavailable (listener hasn't fired yet) the predicate is treated
-   * as rejecting — better to fall through to the workspace overlay than
-   * to highlight a row that may not match.
+   * Optional filter on the drag info (mime types, file count). Return
+   * false to skip this target so the drop falls through to an outer
+   * container. Omit to accept any external file. If drag info isn't
+   * available yet, the target rejects.
    */
   accept?: (info: ExternalDragInfo) => boolean;
-  /**
-   * When true, `onDrop` only fires if this element is the innermost
-   * drop target. Use this on catch-all container zones (e.g. the
-   * workspace zone) so a drop on a nested leaf target (row, column)
-   * doesn't double-fire — Pragmatic delivers `onDrop` to every target
-   * in the stack, innermost first.
-   */
-  onlyIfInnermost?: boolean;
 };
 
 type ExternalFileDropResult = {
@@ -53,32 +39,28 @@ type ExternalFileDropResult = {
 };
 
 /**
- * Hook for handling external file drops. Used at three layers:
- * - Leaves (rows) that claim drops unconditionally.
- * - Inner containers (kanban columns) that claim drops within their
- *   scope.
- * - Outer catch-all zones (workspace) that use `onlyIfInnermost` to
- *   defer to inner targets and `isInnerActive` to suppress overlays.
+ * Hook for handling external file drops. Always defers to the
+ * innermost drop target: `onDrop` only fires if this element is
+ * innermost (Pragmatic-correct semantics; prevents double-fire when
+ * nested). Containers can read `isInnerActive` to suppress overlays
+ * while a descendant claims the drag.
  */
 export const useExternalFileDrop = ({
   onDrop,
   enabled = true,
   externalRef,
   accept,
-  onlyIfInnermost = false,
 }: ExternalFileDropOptions): ExternalFileDropResult => {
   const internalRef = useRef<HTMLDivElement>(null);
   const ref = externalRef ?? internalRef;
   const [isDropTarget, setIsDropTarget] = useState(false);
   const [isInnerActive, setIsInnerActive] = useState(false);
 
-  // Store callbacks/flags in refs to avoid re-registering the drop target
+  // Store callbacks in refs to avoid re-registering the drop target
   const onDropRef = useRef(onDrop);
   onDropRef.current = onDrop;
   const acceptRef = useRef(accept);
   acceptRef.current = accept;
-  const onlyIfInnermostRef = useRef(onlyIfInnermost);
-  onlyIfInnermostRef.current = onlyIfInnermost;
 
   useEffect(() => {
     const el = ref.current;
@@ -114,10 +96,7 @@ export const useExternalFileDrop = ({
       onDrop: ({ source, location, self }) => {
         setIsDropTarget(false);
         setIsInnerActive(false);
-        if (
-          onlyIfInnermostRef.current &&
-          location.current.dropTargets[0]?.element !== self.element
-        ) {
+        if (location.current.dropTargets[0]?.element !== self.element) {
           return;
         }
         const files = getFiles({ source });
