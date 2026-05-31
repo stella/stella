@@ -169,19 +169,16 @@ describe("parseExtract status branches", () => {
     expect(parseExtract(raw)?.status).toEqual({ type: "active" });
   });
 
-  test("preserves statutory bodies + stakeholders for terminated entities", async () => {
+  test("preserves the last filed roster for terminated entities", async () => {
     // When a company is dissolved, the upstream stops marking
-    // historical statutory-body / stakeholder rows as `current`. The
-    // parser must mirror the name/address/legal-form fallback and
-    // accept every row so the last-registered officers + cap table
-    // still surface — otherwise a `terminated` lookup returns
-    // empty `statutoryBodies` and `stakeholders` arrays despite the
-    // extract carrying the data.
+    // statutory-body / stakeholder rows as `current`. The parser
+    // should still surface the last filed roster — i.e. members who
+    // were in office at the point of dissolution (no
+    // `functionTerminationDate` or a 0001 sentinel) — and NOT every
+    // historical row ever recorded.
     const raw = await readFixture<OrsrRawExtractResponse>("extract-eset.json");
     if (raw.legalPerson?.corporateBody) {
       raw.legalPerson.corporateBody.termination = "2020-01-15T00:00:00";
-      // Flip `current` to false on every member row to simulate the
-      // upstream's behaviour for dissolved entities.
       for (const member of raw.legalPerson.corporateBody.statutoryBody ?? []) {
         member.current = false;
       }
@@ -190,11 +187,40 @@ describe("parseExtract status branches", () => {
       }
     }
     const company = parseExtract(raw);
-    // ESET's extract carries multiple statutory body members and
-    // stakeholders; both should survive the terminated fallback.
     expect(company?.statutoryBodies.length).toBeGreaterThan(0);
     expect(company?.statutoryBodies[0]?.members.length).toBeGreaterThan(0);
     expect(company?.stakeholders.length).toBeGreaterThan(0);
+  });
+
+  test("excludes former officers/shareholders who left before dissolution", async () => {
+    // A row with an explicit `functionTerminationDate` represents
+    // someone who resigned / divested while the company was still
+    // live. They must NOT appear in the final roster.
+    const raw = await readFixture<OrsrRawExtractResponse>("extract-eset.json");
+    if (raw.legalPerson?.corporateBody) {
+      raw.legalPerson.corporateBody.termination = "2020-01-15T00:00:00";
+      const body = raw.legalPerson.corporateBody;
+      for (const [index, member] of (body.statutoryBody ?? []).entries()) {
+        member.current = false;
+        // Mark every OTHER statutory-body row as having departed
+        // before the company terminated.
+        if (index % 2 === 0) {
+          member.functionTerminationDate = "2018-06-01T00:00:00";
+        }
+      }
+      for (const member of body.stakeholder ?? []) {
+        member.current = false;
+        member.functionTerminationDate = "2018-06-01T00:00:00";
+      }
+    }
+    const company = parseExtract(raw);
+    // Half the statutory-body rows had explicit termination dates;
+    // expect the roster to be roughly half size — but always at least
+    // one row, since at least one fixture entry has no termination
+    // date.
+    expect(company?.statutoryBodies[0]?.members.length ?? 0).toBeGreaterThan(0);
+    // Every stakeholder had a termination date → excluded.
+    expect(company?.stakeholders).toEqual([]);
   });
 });
 

@@ -330,7 +330,14 @@ const buildSharesByName = (
   // historical fallback as the body/stakeholder parsers — accept
   // every row, since the upstream stops marking anything as current.
   for (const deposit of deposits) {
-    if (!terminated && deposit.current !== true) {
+    // Same temporal logic as the roster filter: live entities keep
+    // currently filed deposits, terminated entities keep deposits
+    // whose `effectiveTo` is absent or the 0001 sentinel — i.e. the
+    // deposit was still in force when the company closed.
+    const stillInForce = terminated
+      ? sentinelToNull(deposit.effectiveTo ?? null) === null
+      : deposit.current === true;
+    if (!stillInForce) {
       continue;
     }
     const stakeholder = deposit.stakeholder?.at(0);
@@ -359,6 +366,26 @@ const buildShareSummary = (
   return `Výška vkladu: ${size ?? "—"} | Rozsah splatenia: ${paid ?? "—"}`;
 };
 
+// Whether a statutory-body / stakeholder row belongs in the rendered
+// roster:
+//   * Live entity: only currently filed rows (`current: true`).
+//   * Terminated entity: every member who was STILL IN OFFICE at the
+//     point of dissolution. The upstream stops marking anything as
+//     `current` once the entity terminates, so the parser instead
+//     identifies "still in office" as `functionTerminationDate`
+//     being absent or the 0001 sentinel — rows where the person
+//     explicitly resigned before the company closed have a real
+//     termination date and are excluded.
+const includeRosterRow = (
+  member: OrsrRawStatutoryBodyMember | OrsrRawStakeholderMember,
+  terminated: boolean,
+): boolean => {
+  if (!terminated) {
+    return member.current === true;
+  }
+  return sentinelToNull(member.functionTerminationDate ?? null) === null;
+};
+
 const parseStatutoryBodies = (
   body: OrsrRawCorporateBody,
   terminated: boolean,
@@ -371,13 +398,7 @@ const parseStatutoryBodies = (
 
   const collected: OrsrStatutoryMember[] = [];
   for (const member of members) {
-    // For live entities, only rows still flagged `current` count.
-    // Terminated entities lose every `current: true` marker once the
-    // closure is filed, so the same filter would erase the entire
-    // last-registered statutory roster — mirror the name/address
-    // fallback in `pickActiveRecord` and accept every row when the
-    // entity is terminated.
-    if (!terminated && member.current !== true) {
+    if (!includeRosterRow(member, terminated)) {
       continue;
     }
     const name = pickPersonName(member);
@@ -410,11 +431,7 @@ const parseStakeholders = (
   const shares = buildSharesByName(body.deposits, terminated);
   const result: OrsrStakeholder[] = [];
   for (const member of body.stakeholder ?? []) {
-    // Same rationale as parseStatutoryBodies: terminated entities lose
-    // the `current: true` markers but the rows still represent the
-    // last filed cap table / supervisory roster, which is what
-    // callers want for a dissolved company.
-    if (!terminated && member.current !== true) {
+    if (!includeRosterRow(member, terminated)) {
       continue;
     }
     const name = pickPersonName(member);
