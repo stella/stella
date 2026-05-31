@@ -108,12 +108,21 @@ describe("VIES handler wiring", () => {
     expect(handler.isCanonicalId("IT00159560366")).toBe(true);
   });
 
-  test("isCanonicalId rejects inputs without a known prefix or with GB", () => {
+  test("isCanonicalId rejects inputs without a known VAT prefix", () => {
     const handler = BUSINESS_REGISTRY_DISPATCH.vies;
     expect(handler.isCanonicalId("143593636")).toBe(false);
     expect(handler.isCanonicalId("ZZ12345")).toBe(false);
-    // GB was removed from VIES post-Brexit.
-    expect(handler.isCanonicalId("GB123456789")).toBe(false);
+  });
+
+  test("isCanonicalId accepts removed prefixes so lookup can give a tailored error", () => {
+    // GB was removed from VIES after Brexit, but the prefix is still
+    // a known VAT country — `isCanonicalId` must let it through to the
+    // lookup path so `validateVat()` can raise the dedicated
+    // "removed after Brexit" ViesValidationError. Returning false
+    // here would instead surface the generic "name search not
+    // supported" 400.
+    const handler = BUSINESS_REGISTRY_DISPATCH.vies;
+    expect(handler.isCanonicalId("GB123456789")).toBe(true);
   });
 
   test("search is null — VIES has no name-search endpoint", () => {
