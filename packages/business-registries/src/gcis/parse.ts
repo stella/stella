@@ -13,6 +13,7 @@ import type {
 // expires.
 const GCIS_LOOKUP_DATASET = "5F64D864-61CB-4D0D-8AD9-492047CC1EA6";
 const GCIS_API_BASE = "https://data.gcis.nat.gov.tw/od/data/api";
+const TAIWAN_UTC_OFFSET_MS = 8 * 60 * 60 * 1000;
 
 // 公司狀況 codes the GCIS name-search endpoint surfaces. Lookup-only
 // responses (5F64D864-…) omit the numeric code; we then fall back to
@@ -61,7 +62,7 @@ const parseStatus = (
   const susEnd = raw.Sus_End_Date?.trim();
   const startsOn = parseRocDate(susStart);
   const endsOn = parseRocDate(susEnd);
-  const today = now.toISOString().slice(0, 10);
+  const today = getTaiwanCalendarDate(now);
   if (startsOn && startsOn <= today && (!endsOn || today <= endsOn)) {
     return { type: "suspended" };
   }
@@ -81,6 +82,9 @@ const parseStatus = (
   }
   return { type: "unknown" };
 };
+
+const getTaiwanCalendarDate = (date: Date): string =>
+  new Date(date.getTime() + TAIWAN_UTC_OFFSET_MS).toISOString().slice(0, 10);
 
 // ROC-era (民國) date → Gregorian ISO date.
 //

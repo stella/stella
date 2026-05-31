@@ -165,6 +165,30 @@ describe("parseStatus (via parseCompany)", () => {
     );
     expect(company.status).toEqual({ type: "active" });
   });
+
+  test("evaluates suspension windows in Taiwan's calendar day", () => {
+    const startsTodayInTaiwan = parseCompany(
+      {
+        ...baseRaw,
+        Company_Status: "01",
+        Sus_Beg_Date: "1140601",
+        Sus_End_Date: "1140630",
+      },
+      new Date("2025-05-31T16:30:00Z"),
+    );
+    expect(startsTodayInTaiwan.status).toEqual({ type: "suspended" });
+
+    const endedYesterdayInTaiwan = parseCompany(
+      {
+        ...baseRaw,
+        Company_Status: "01",
+        Sus_Beg_Date: "1140501",
+        Sus_End_Date: "1140531",
+      },
+      new Date("2025-05-31T16:30:00Z"),
+    );
+    expect(endedYesterdayInTaiwan.status).toEqual({ type: "active" });
+  });
 });
 
 describe("ROC date parsing (via parseCompany)", () => {
