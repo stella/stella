@@ -198,6 +198,28 @@ describe("lookupBySiret (fixture)", () => {
     expect(company?.matchedEstablishment?.siret).toBe("78012998704037");
     expect(company?.matchedEstablishment?.isHeadOffice).toBe(true);
   });
+
+  test("returns null when the SIRET is not in matching_etablissements", async () => {
+    // Upstream `q=` is a fuzzy multi-field search, so a request for a
+    // non-existent NIC under a real SIREN still resolves the parent
+    // unité légale. Without the establishment-exact check, the
+    // adapter would falsely report the parent company as the
+    // requested establishment. Pin the contract.
+    const body = await readFixture("lookup-siret-renault.json");
+    restore = installFetchStub(
+      async () =>
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+
+    // SIREN 780129987 (Renault) + NIC 99999 + Luhn check digit 5 =
+    // 78012998799995, a Luhn-valid SIRET that does not appear in the
+    // Renault fixture's matching_etablissements list.
+    const company = await lookupBySiret("78012998799995");
+    expect(company).toBeNull();
+  });
 });
 
 describe("searchByName (fixture)", () => {

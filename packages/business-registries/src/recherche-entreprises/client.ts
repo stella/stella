@@ -157,10 +157,20 @@ export const lookupBySiret = async (
     await rechercheEntreprisesGet<RechercheEntreprisesSearchResponse>(
       `${SEARCH_URL}?${params.toString()}`,
     );
-  // SIRET = SIREN (first 9) + NIC (last 5). Require the unité légale's
-  // SIREN to match the SIRET prefix before claiming a hit.
+  // SIRET = SIREN (first 9) + NIC (last 5). Require BOTH the unité
+  // légale's SIREN to match the SIRET prefix AND the establishment
+  // itself to appear in `matching_etablissements`. Without the second
+  // check, a lookup for a non-existent NIC under a known SIREN would
+  // silently fall through to the parent unité légale and report it
+  // as a successful establishment hit.
   const expectedSiren = normalized.slice(0, 9);
-  const hit = data.results.find((entry) => entry.siren === expectedSiren);
+  const hit = data.results.find(
+    (entry) =>
+      entry.siren === expectedSiren &&
+      entry.matching_etablissements?.some(
+        (etablissement) => etablissement.siret === normalized,
+      ),
+  );
   if (!hit) {
     return null;
   }
