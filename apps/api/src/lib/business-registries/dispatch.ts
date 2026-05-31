@@ -42,6 +42,18 @@ import {
   normalizeBusinessId,
   searchByName as searchPrhByName,
 } from "@stll/business-registries/prh";
+import {
+  hasCanonicalShape as hasRechercheEntreprisesShape,
+  lookupBySiren,
+  lookupBySiret,
+  normalizeSiren,
+  RechercheEntreprisesAPIError,
+  type RechercheEntreprisesCompany,
+  RechercheEntreprisesRequestError,
+  type RechercheEntreprisesSearchResult,
+  RechercheEntreprisesValidationError,
+  searchByName as searchRechercheEntreprisesByName,
+} from "@stll/business-registries/recherche-entreprises";
 import type { CountryCode } from "@stll/country-codes";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -50,7 +62,12 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 // Normalised cross-registry shapes
 // ---------------------------------------------------------------------------
 
-export const BUSINESS_REGISTRY_SLUGS = ["ares", "brreg", "prh"] as const;
+export const BUSINESS_REGISTRY_SLUGS = [
+  "ares",
+  "brreg",
+  "prh",
+  "recherche-entreprises",
+] as const;
 export type BusinessRegistrySlug = (typeof BUSINESS_REGISTRY_SLUGS)[number];
 
 export type BusinessRegistryAddress = {
@@ -90,7 +107,8 @@ export type BusinessRegistryHit = {
 export type BusinessRegistryHitDetails =
   | { registry: "ares"; company: AresCompany }
   | { registry: "brreg"; entity: BrregEntity }
-  | { registry: "prh"; company: PrhCompany };
+  | { registry: "prh"; company: PrhCompany }
+  | { registry: "recherche-entreprises"; company: RechercheEntreprisesCompany };
 
 export type RegistryLookupResponse =
   | {
@@ -454,6 +472,110 @@ const PRH_HANDLER: RegistryHandler = {
 };
 
 // ---------------------------------------------------------------------------
+// recherche-entreprises (France)
+// ---------------------------------------------------------------------------
+
+// Upstream is keyed by unité légale (SIREN); on SIRET lookups the
+// adapter additionally surfaces the matched etablissement. Prefer the
+// matched etablissement's address when present so SIRET callers see
+// the specific establishment they asked about; fall back to the head
+// office (siège) for SIREN lookups.
+const rechercheEntreprisesCompanyToHit = (
+  company: RechercheEntreprisesCompany,
+): BusinessRegistryHit => {
+  const source = company.matchedEstablishment ?? company.headOffice;
+  return {
+    registry: "recherche-entreprises",
+    id: company.matchedEstablishment?.siret ?? company.siren,
+    name: company.name,
+    legalForm: company.legalFormCode,
+    address: source?.address
+      ? {
+          line1: source.address.street,
+          line2: null,
+          postalCode: source.address.postalCode,
+          city: source.address.city,
+          region: null,
+          country: source.address.country,
+          textAddress: source.address.textAddress,
+        }
+      : null,
+    registryUrl: company.registryUrl,
+    // Carry directors, head office, matched establishment, etc. — the
+    // unified chat tool needs more than name+address to answer
+    // questions about French entities.
+    details: { registry: "recherche-entreprises", company },
+  };
+};
+
+const rechercheEntreprisesSearchResultToHit = (
+  result: RechercheEntreprisesSearchResult,
+): BusinessRegistryHit => ({
+  registry: "recherche-entreprises",
+  id: result.siren,
+  name: result.name,
+  legalForm: null,
+  address: result.address
+    ? {
+        line1: null,
+        line2: null,
+        postalCode: null,
+        city: null,
+        region: null,
+        country: null,
+        textAddress: result.address,
+      }
+    : null,
+  registryUrl: `https://annuaire-entreprises.data.gouv.fr/entreprise/${encodeURIComponent(result.siren)}`,
+});
+
+const mapRechercheEntreprisesError = (error: unknown): HandlerError | null => {
+  if (error instanceof RechercheEntreprisesValidationError) {
+    return new HandlerError({ status: 400, message: error.message });
+  }
+  if (error instanceof RechercheEntreprisesAPIError) {
+    return new HandlerError({
+      status: 502,
+      message: `recherche-entreprises API error: ${error.message}`,
+    });
+  }
+  if (error instanceof RechercheEntreprisesRequestError) {
+    return new HandlerError({
+      status: 502,
+      message: `recherche-entreprises request failed: ${error.message}`,
+    });
+  }
+  return null;
+};
+
+const RECHERCHE_ENTREPRISES_HANDLER: RegistryHandler = {
+  slug: "recherche-entreprises",
+  country: "FR",
+  nativeToolSlug: "recherche-entreprises",
+  // Shape check only — Luhn validation happens in lookupBy{Siren,Siret}
+  // and surfaces as RechercheEntreprisesValidationError → HTTP 400.
+  // Falling through to search would silently turn a bad-checksum
+  // SIREN/SIRET into an empty name-search result.
+  isCanonicalId: (input) => hasRechercheEntreprisesShape(input),
+  lookup: async (input) => {
+    const normalized = normalizeSiren(input);
+    // Dispatch by length: 9 = SIREN, 14 = SIRET. The shape check
+    // above guarantees one of the two; anything else falls through to
+    // name search and never reaches this branch.
+    const company =
+      normalized.length === 14
+        ? await lookupBySiret(normalized)
+        : await lookupBySiren(normalized);
+    return company ? rechercheEntreprisesCompanyToHit(company) : null;
+  },
+  search: async (input, options) => {
+    const results = await searchRechercheEntreprisesByName(input, options);
+    return results.map(rechercheEntreprisesSearchResultToHit);
+  },
+  mapError: mapRechercheEntreprisesError,
+};
+
+// ---------------------------------------------------------------------------
 // Registry table + lookups
 // ---------------------------------------------------------------------------
 
@@ -464,6 +586,7 @@ export const BUSINESS_REGISTRY_DISPATCH: Record<
   ares: ARES_HANDLER,
   brreg: BRREG_HANDLER,
   prh: PRH_HANDLER,
+  "recherche-entreprises": RECHERCHE_ENTREPRISES_HANDLER,
 };
 
 const HANDLERS_BY_COUNTRY: ReadonlyMap<CountryCode, RegistryHandler> = new Map(

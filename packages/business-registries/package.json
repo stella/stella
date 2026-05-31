@@ -55,6 +55,11 @@
       "types": "./src/prh/index.ts",
       "import": "./dist/prh/index.js"
     },
+    "./recherche-entreprises": {
+      "bun": "./src/recherche-entreprises/index.ts",
+      "types": "./src/recherche-entreprises/index.ts",
+      "import": "./dist/recherche-entreprises/index.js"
+    },
     "./shared": {
       "bun": "./src/shared/index.ts",
       "types": "./src/shared/index.ts",
