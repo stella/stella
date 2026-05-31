@@ -4,6 +4,7 @@ import type {
   QueryClient,
   QueryKey,
 } from "@tanstack/react-query";
+import { TaggedError } from "better-result";
 
 /**
  * Typed input shape for query option factories.
@@ -21,6 +22,26 @@ export type QueryOptionsInput<
 
 const CRITICAL_QUERY_TIMEOUT_MS = 10_000;
 
+export class CriticalQueryTimeoutError extends TaggedError(
+  "CriticalQueryTimeoutError",
+)<{
+  message: string;
+  queryKey: QueryKey;
+  timeoutMs: number;
+}>() {}
+
+type EnsureCriticalQueryDataConfig = {
+  timeoutMs?: number;
+};
+
+const formatQueryKey = (queryKey: QueryKey): string => {
+  try {
+    return JSON.stringify(queryKey);
+  } catch {
+    return "[unserializable query key]";
+  }
+};
+
 export const ensureCriticalQueryData = async <
   TQueryFnData,
   TError = Error,
@@ -29,19 +50,38 @@ export const ensureCriticalQueryData = async <
 >(
   queryClient: QueryClient,
   options: EnsureQueryDataOptions<TQueryFnData, TError, TData, TQueryKey>,
+  config: EnsureCriticalQueryDataConfig = {},
 ): Promise<TData> => {
-  const signal = AbortSignal.timeout(CRITICAL_QUERY_TIMEOUT_MS);
+  const timeoutMs = config.timeoutMs ?? CRITICAL_QUERY_TIMEOUT_MS;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
-  return await Promise.race([
-    queryClient.ensureQueryData(options),
-    new Promise<never>((_resolve, reject) => {
-      signal.addEventListener(
-        "abort",
-        () => reject(new Error("Query timed out", { cause: signal.reason })),
-        { once: true },
-      );
-    }),
-  ]);
+  try {
+    return await Promise.race([
+      queryClient.ensureQueryData(options),
+      new Promise<never>((_resolve, reject) => {
+        timeoutId = setTimeout(() => {
+          void queryClient.cancelQueries(
+            {
+              exact: true,
+              queryKey: options.queryKey,
+            },
+            { revert: false },
+          );
+          reject(
+            new CriticalQueryTimeoutError({
+              message: `Critical query timed out after ${timeoutMs}ms: ${formatQueryKey(options.queryKey)}`,
+              queryKey: options.queryKey,
+              timeoutMs,
+            }),
+          );
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
+  }
 };
 
 export const prefetchNonCriticalQuery = async <
