@@ -2,7 +2,9 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import * as v from "valibot";
 
 import { pageTitle } from "@/lib/page-title";
+import { ensureCriticalQueryData } from "@/lib/react-query";
 import { OnboardingWizard } from "@/routes/onboarding/-components/onboarding-wizard";
+import { nativeToolDeployAvailabilityOptions } from "@/routes/onboarding/-queries";
 
 const isDev = import.meta.env.DEV;
 
@@ -26,6 +28,11 @@ export const Route = createFileRoute("/onboarding")({
       throw redirect({ to: "/", replace: true });
     }
   },
+  loader: async ({ context: { queryClient } }) =>
+    await ensureCriticalQueryData(
+      queryClient,
+      nativeToolDeployAvailabilityOptions,
+    ),
   head: () => ({
     meta: [{ title: pageTitle("onboarding.orgTitle") }],
   }),

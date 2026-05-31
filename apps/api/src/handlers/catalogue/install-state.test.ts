@@ -5,7 +5,7 @@ import { computeCatalogueInstallState } from "@/api/handlers/catalogue/install-s
 const baseOptions = {
   installedMcpUrls: new Set<string>(),
   installedSkillSlugs: new Set<string>(),
-  nativeToolBackendSet: new Set(["ares", "web-search"]),
+  nativeToolBackendSet: new Set(["ares", "edgar", "web-search"]),
   nativeToolOverrides: {},
   practiceJurisdictions: [],
 };
@@ -65,5 +65,20 @@ describe("catalogue install state", () => {
         webSearchDeployAvailable: false,
       }),
     ).toBe("installed");
+  });
+
+  test("marks deploy-gated native tools unavailable when server config is missing", () => {
+    expect(
+      computeCatalogueInstallState({
+        ...baseOptions,
+        entry: {
+          backendSlug: "edgar",
+          kind: "native-tool",
+        },
+        nativeToolDeployAvailable: (backendSlug) => backendSlug !== "edgar",
+        nativeToolOverrides: { edgar: true },
+        webSearchDeployAvailable: true,
+      }),
+    ).toBe("unavailable");
   });
 });

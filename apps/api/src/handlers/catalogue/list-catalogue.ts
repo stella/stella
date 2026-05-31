@@ -16,6 +16,7 @@ import {
 import { NATIVE_TOOL_SLUGS } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { isBusinessRegistryNativeToolDeployAvailable } from "@/api/lib/business-registries/dispatch";
 import { isWebSearchDeployAvailable } from "@/api/lib/web-search/select-provider";
 
 const config = {
@@ -136,6 +137,8 @@ const listCatalogue = createSafeRootHandler(
             installedSkillSlugs,
             installedMcpUrls,
             nativeToolBackendSet,
+            nativeToolDeployAvailable:
+              isBusinessRegistryNativeToolDeployAvailable,
             nativeToolOverrides,
             practiceJurisdictions,
             webSearchDeployAvailable,
@@ -143,7 +146,8 @@ const listCatalogue = createSafeRootHandler(
       response.push({
         ...entry,
         isLocked,
-        isRecommendedForOrg: recommendedSlugs.has(entry.slug),
+        isRecommendedForOrg:
+          installState !== "unavailable" && recommendedSlugs.has(entry.slug),
         installState,
       });
     }

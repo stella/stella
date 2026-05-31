@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -36,6 +36,7 @@ import { CatalogueDetailPreview } from "@/routes/onboarding/-components/catalogu
 import { CatalogueStackPreview } from "@/routes/onboarding/-components/catalogue-stack-preview";
 import {
   createCatalogueSetupPlan,
+  isCatalogueEntryAvailableDuringOnboarding,
   reconcileCatalogueSlugsForJurisdictions,
 } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
 import { OnboardingLayout } from "@/routes/onboarding/-components/onboarding-layout";
@@ -52,6 +53,7 @@ import {
   JurisdictionStep,
 } from "@/routes/onboarding/-components/steps/jurisdiction-step";
 import { OrganizationStep } from "@/routes/onboarding/-components/steps/organization-step";
+import { nativeToolDeployAvailabilityOptions } from "@/routes/onboarding/-queries";
 
 type Step =
   | "organization"
@@ -90,6 +92,9 @@ export const OnboardingWizard = () => {
   const invalidateSession = useInvalidateSession();
   const queryClient = useQueryClient();
   const { data: sessionData } = useQuery(sessionOptions);
+  const { data: nativeToolDeployAvailability } = useQuery(
+    nativeToolDeployAvailabilityOptions,
+  );
   const userEmail = sessionData?.user.email ?? "";
   const [step, setStep] = useState<Step>("organization");
   const [catalogueFocusedSlug, setCatalogueFocusedSlug] = useState<
@@ -124,6 +129,25 @@ export const OnboardingWizard = () => {
     readonly ProviderPreview[]
   >([]);
   const [aiPhase, setAiPhase] = useState<"providers" | "models">("providers");
+  const unavailableNativeToolBackendSlugs = useMemo<
+    ReadonlySet<string> | undefined
+  >(() => {
+    if (!nativeToolDeployAvailability) {
+      return undefined;
+    }
+    return new Set(
+      nativeToolDeployAvailability.unavailableNativeToolBackendSlugs,
+    );
+  }, [nativeToolDeployAvailability]);
+  const onboardingCatalogueEntries = useMemo(
+    () =>
+      loadCatalogue().filter((entry) =>
+        isCatalogueEntryAvailableDuringOnboarding(entry, {
+          unavailableNativeToolBackendSlugs,
+        }),
+      ),
+    [unavailableNativeToolBackendSlugs],
+  );
 
   useEffect(() => {
     const locale =
@@ -162,12 +186,11 @@ export const OnboardingWizard = () => {
   ]);
 
   const continueFromJurisdiction = () => {
-    const catalogueEntries = loadCatalogue();
     setData((currentData) => ({
       ...currentData,
       catalogueSlugs: [
         ...reconcileCatalogueSlugsForJurisdictions({
-          entries: catalogueEntries,
+          entries: onboardingCatalogueEntries,
           practiceJurisdictions: currentData.practiceJurisdictions,
           selectedSlugs: currentData.catalogueSlugs,
         }),
@@ -292,6 +315,7 @@ export const OnboardingWizard = () => {
           entries: catalogueEntries,
           practiceJurisdictions: finalData.practiceJurisdictions,
           selectedSlugs: finalData.catalogueSlugs,
+          unavailableNativeToolBackendSlugs,
         });
         const installTasks = catalogueSetupPlan.installSlugs.map(
           async (slug) => {
@@ -417,12 +441,12 @@ export const OnboardingWizard = () => {
           setCreatingProgress(80);
 
           const inviteResults = await Promise.all(
-            // eslint-disable-next-line typescript/promise-function-async
-            finalData.emails.map((email) =>
-              authClient.organization.inviteMember({
-                email,
-                role: "member",
-              }),
+            finalData.emails.map(
+              async (email) =>
+                await authClient.organization.inviteMember({
+                  email,
+                  role: "member",
+                }),
             ),
           );
 
@@ -464,7 +488,14 @@ export const OnboardingWizard = () => {
         replace: true,
       });
     },
-    [analytics, invalidateSession, navigate, queryClient, t],
+    [
+      analytics,
+      invalidateSession,
+      navigate,
+      queryClient,
+      t,
+      unavailableNativeToolBackendSlugs,
+    ],
   );
 
   const showPrices = step === "ai" && aiPhase === "models";
@@ -489,7 +520,9 @@ export const OnboardingWizard = () => {
     );
   } else if (step === "catalogue") {
     const focusedEntry = catalogueFocusedSlug
-      ? loadCatalogue().find((entry) => entry.slug === catalogueFocusedSlug)
+      ? onboardingCatalogueEntries.find(
+          (entry) => entry.slug === catalogueFocusedSlug,
+        )
       : undefined;
     if (focusedEntry) {
       const installed = data.catalogueSlugs.includes(focusedEntry.slug);
@@ -515,7 +548,7 @@ export const OnboardingWizard = () => {
     } else {
       preview = (
         <CatalogueStackPreview
-          entries={loadCatalogue()}
+          entries={onboardingCatalogueEntries}
           onFocus={setCatalogueFocusedSlug}
           selectedSlugs={data.catalogueSlugs}
         />
@@ -618,6 +651,9 @@ export const OnboardingWizard = () => {
             practiceJurisdictions={data.practiceJurisdictions}
             removedSlugs={catalogueRemovedSlugs}
             selectedSlugs={data.catalogueSlugs}
+            unavailableNativeToolBackendSlugs={
+              unavailableNativeToolBackendSlugs
+            }
           />
         </OnboardingLayout>
       );

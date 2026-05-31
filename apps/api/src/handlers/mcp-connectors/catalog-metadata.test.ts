@@ -109,6 +109,15 @@ describe("mcpConnectorCatalogMetadata", () => {
     expect(toolSlugs).not.toContain("anonymize");
     expect(toolSlugs).not.toContain("create-docx");
   });
+
+  it("hides deploy-unavailable native tools from the MCP settings page", () => {
+    const toolSlugs = getNativeToolCatalog({
+      nativeToolDeployAvailable: (backendSlug) => backendSlug !== "edgar",
+      practiceJurisdictions: [{ countryCode: "US", isPrimary: true }],
+    }).map((tool) => tool.slug);
+
+    expect(toolSlugs).not.toContain("edgar");
+  });
 });
 
 describe("isNativeToolEnabledForOrg", () => {

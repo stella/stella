@@ -22,6 +22,7 @@ type ComputeCatalogueInstallStateOptions = {
   installedSkillSlugs: ReadonlySet<string>;
   installedMcpUrls: ReadonlySet<string>;
   nativeToolBackendSet: ReadonlySet<string>;
+  nativeToolDeployAvailable?: (backendSlug: string) => boolean;
   nativeToolOverrides: Readonly<Record<string, boolean>>;
   practiceJurisdictions: readonly PracticeJurisdiction[];
   webSearchDeployAvailable: boolean;
@@ -34,6 +35,7 @@ export const computeCatalogueInstallState = ({
   installedSkillSlugs,
   installedMcpUrls,
   nativeToolBackendSet,
+  nativeToolDeployAvailable = () => true,
   nativeToolOverrides,
   practiceJurisdictions,
   webSearchDeployAvailable,
@@ -45,6 +47,9 @@ export const computeCatalogueInstallState = ({
     return installedMcpUrls.has(entry.url) ? "installed" : "available";
   }
   if (!nativeToolBackendSet.has(entry.backendSlug)) {
+    return "unavailable";
+  }
+  if (!nativeToolDeployAvailable(entry.backendSlug)) {
     return "unavailable";
   }
   if (

@@ -23,6 +23,14 @@ const businessRegistriesLookup = createSafeRootHandler(
   async function* ({ query, safeDb, session }) {
     const { registry, q } = query;
     const handler = BUSINESS_REGISTRY_DISPATCH[registry];
+    if (!handler.isDeployAvailable()) {
+      return Result.err(
+        new HandlerError({
+          status: 500,
+          message: `Registry '${registry}' is not configured for this deployment`,
+        }),
+      );
+    }
 
     const settings = yield* Result.await(
       safeDb((tx) =>

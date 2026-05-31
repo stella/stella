@@ -657,6 +657,14 @@ export default defineConfig({
               "apps/api/src/handlers/health/routes.ts",
               "apps/api/src/index.ts",
               "apps/api/src/lib/analytics/posthog.ts",
+              // dispatch.ts is imported transitively by the chat tool
+              // catalogue from contexts that do not run full env
+              // validation (workers, scripts, tests). Reading
+              // EDGAR_USER_AGENT directly from process.env keeps the
+              // module side-effect-free at import time; the env
+              // schema in apps/api/src/env.ts still declares the
+              // variable so the API server validates it on boot.
+              "apps/api/src/lib/business-registries/dispatch.ts",
               "apps/api/src/lib/db/assert-migrations-applied.ts",
               "apps/api/src/lib/runtime-worker-path.ts",
               "apps/api/src/lib/s3.ts",

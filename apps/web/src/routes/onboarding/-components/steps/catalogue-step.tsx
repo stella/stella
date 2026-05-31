@@ -14,7 +14,6 @@ import {
   EU_MEMBER_STATES,
   isToggleableNativeToolBackendSlug,
   loadCatalogue,
-  pinnedCatalogueEntries,
   recommendedSlugsForJurisdictions,
   type LoadedCatalogueEntry,
 } from "@stll/catalogue";
@@ -35,7 +34,10 @@ import {
   SetupBadge,
 } from "@/routes/_protected.settings/-components/catalogue/catalogue-badges";
 import { CatalogueEntryIcon } from "@/routes/_protected.settings/-components/catalogue/catalogue-entry-icon";
-import { createCatalogueAutoSelectionPlan } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
+import {
+  createCatalogueAutoSelectionPlan,
+  isCatalogueEntryAvailableDuringOnboarding,
+} from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
 
 type CatalogueStepProps = {
   practiceJurisdictions: readonly PracticeJurisdiction[];
@@ -46,6 +48,7 @@ type CatalogueStepProps = {
   onChange: (slugs: readonly string[]) => void;
   onNext: () => void;
   onSkip: () => void;
+  unavailableNativeToolBackendSlugs?: ReadonlySet<string> | undefined;
 };
 
 const PROPOSE_TOOL_URL =
@@ -60,6 +63,7 @@ export const CatalogueStep = ({
   onChange,
   onNext,
   onSkip,
+  unavailableNativeToolBackendSlugs,
 }: CatalogueStepProps) => {
   const t = useTranslations();
   const [query, setQuery] = useState("");
@@ -86,7 +90,15 @@ export const CatalogueStep = ({
     },
   );
 
-  const entries = useMemo(() => loadCatalogue(), []);
+  const entries = useMemo(
+    () =>
+      loadCatalogue().filter((entry) =>
+        isCatalogueEntryAvailableDuringOnboarding(entry, {
+          unavailableNativeToolBackendSlugs,
+        }),
+      ),
+    [unavailableNativeToolBackendSlugs],
+  );
   const selectableEntries = useMemo(
     () =>
       entries.filter(
@@ -96,7 +108,11 @@ export const CatalogueStep = ({
       ),
     [entries],
   );
-  const pinnedEntries = useMemo(() => pinnedCatalogueEntries(), []);
+  const pinnedEntries = useMemo(
+    () =>
+      entries.filter((entry) => entry.kind === "native-tool" && entry.pinned),
+    [entries],
+  );
   const pinnedSlugSet = useMemo(
     () => new Set(pinnedEntries.map((entry) => entry.slug)),
     [pinnedEntries],

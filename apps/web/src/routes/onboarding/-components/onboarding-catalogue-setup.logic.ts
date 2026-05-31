@@ -32,6 +32,11 @@ type CreateCatalogueSetupPlanOptions = {
   entries: readonly CatalogueSetupEntry[];
   practiceJurisdictions: readonly PracticeJurisdiction[];
   selectedSlugs: readonly string[];
+  unavailableNativeToolBackendSlugs?: ReadonlySet<string> | undefined;
+};
+
+type CatalogueEntryAvailabilityOptions = {
+  unavailableNativeToolBackendSlugs?: ReadonlySet<string> | undefined;
 };
 
 type CatalogueSelectionEntry = {
@@ -49,6 +54,20 @@ type CatalogueAutoSelectionEntry = {
   author: string;
   slug: string;
 };
+
+// Conservative fallback while the session-scoped deploy availability
+// query is loading. Once the API response arrives, configured EDGAR
+// deployments pass an empty unavailable set and show the tool.
+const DEFAULT_UNAVAILABLE_NATIVE_TOOL_BACKEND_SLUGS = new Set(["edgar"]);
+
+export const isCatalogueEntryAvailableDuringOnboarding = (
+  entry: CatalogueSetupEntry,
+  {
+    unavailableNativeToolBackendSlugs = DEFAULT_UNAVAILABLE_NATIVE_TOOL_BACKEND_SLUGS,
+  }: CatalogueEntryAvailabilityOptions = {},
+): boolean =>
+  entry.kind !== "native-tool" ||
+  !unavailableNativeToolBackendSlugs.has(entry.backendSlug);
 
 export type CatalogueAutoSelectionPlan = {
   addedSlugs: readonly string[];
@@ -154,8 +173,29 @@ export const createCatalogueSetupPlan = ({
   entries,
   practiceJurisdictions,
   selectedSlugs,
+  unavailableNativeToolBackendSlugs,
 }: CreateCatalogueSetupPlanOptions): CatalogueSetupPlan => {
-  const installSlugs = Array.from(new Set(selectedSlugs));
+  const entriesBySlug = new Map(entries.map((entry) => [entry.slug, entry]));
+  const installSlugs: string[] = [];
+  const seenInstallSlugs = new Set<string>();
+  for (const slug of selectedSlugs) {
+    if (seenInstallSlugs.has(slug)) {
+      continue;
+    }
+    seenInstallSlugs.add(slug);
+
+    const entry = entriesBySlug.get(slug);
+    if (
+      entry &&
+      !isCatalogueEntryAvailableDuringOnboarding(entry, {
+        unavailableNativeToolBackendSlugs,
+      })
+    ) {
+      continue;
+    }
+
+    installSlugs.push(slug);
+  }
   const selectedSlugSet = new Set(installSlugs);
   const recommendedSlugs = recommendedSlugsForJurisdictions(
     new Set(

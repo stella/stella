@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createCatalogueAutoSelectionPlan,
   createCatalogueSetupPlan,
+  isCatalogueEntryAvailableDuringOnboarding,
   reconcileCatalogueSlugsForJurisdictions,
 } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
 
@@ -18,6 +19,7 @@ const entries = [
   nativeTool("infosoud"),
   nativeTool("boe"),
   nativeTool("brreg"),
+  nativeTool("edgar"),
   nativeTool("create-docx", { pinned: true }),
   { kind: "skill" as const, slug: "summarise-contract" },
 ];
@@ -84,6 +86,64 @@ describe("onboarding catalogue setup plan", () => {
     expect(plan.nativeToolOptOuts).toEqual([
       { backendSlug: "brreg", slug: "brreg" },
     ]);
+  });
+
+  test("opts out of deploy-gated tools hidden during onboarding", () => {
+    const plan = createCatalogueSetupPlan({
+      entries,
+      practiceJurisdictions: [{ countryCode: "US", isPrimary: true }],
+      selectedSlugs: [],
+      unavailableNativeToolBackendSlugs: new Set(["edgar"]),
+    });
+
+    expect(plan.nativeToolOptOuts).toEqual([
+      { backendSlug: "edgar", slug: "edgar" },
+    ]);
+  });
+
+  test("does not install hidden deploy-gated tools from stale selections", () => {
+    const plan = createCatalogueSetupPlan({
+      entries,
+      practiceJurisdictions: [{ countryCode: "US", isPrimary: true }],
+      selectedSlugs: ["edgar"],
+      unavailableNativeToolBackendSlugs: new Set(["edgar"]),
+    });
+
+    expect(plan.installSlugs).toEqual([]);
+    expect(plan.nativeToolOptOuts).toEqual([
+      { backendSlug: "edgar", slug: "edgar" },
+    ]);
+  });
+
+  test("hides deploy-gated native tools during onboarding", () => {
+    const unavailableNativeToolBackendSlugs = new Set(["edgar"]);
+
+    expect(
+      isCatalogueEntryAvailableDuringOnboarding(nativeTool("edgar"), {
+        unavailableNativeToolBackendSlugs,
+      }),
+    ).toBe(false);
+    expect(isCatalogueEntryAvailableDuringOnboarding(nativeTool("ares"))).toBe(
+      true,
+    );
+  });
+
+  test("shows and installs EDGAR when deployment exposes it", () => {
+    const unavailableNativeToolBackendSlugs = new Set<string>();
+    const plan = createCatalogueSetupPlan({
+      entries,
+      practiceJurisdictions: [{ countryCode: "US", isPrimary: true }],
+      selectedSlugs: ["edgar"],
+      unavailableNativeToolBackendSlugs,
+    });
+
+    expect(
+      isCatalogueEntryAvailableDuringOnboarding(nativeTool("edgar"), {
+        unavailableNativeToolBackendSlugs,
+      }),
+    ).toBe(true);
+    expect(plan.installSlugs).toEqual(["edgar"]);
+    expect(plan.nativeToolOptOuts).toEqual([]);
   });
 });
 

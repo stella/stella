@@ -170,6 +170,25 @@ const envApi = createEnv({
      */
     WEB_FETCH_PROVIDER: v.optional(v.picklist(["jina"])),
     JINA_API_KEY: v.optional(v.string()),
+
+    /**
+     * Identifying `User-Agent` header for SEC EDGAR requests. The
+     * SEC mandates a real contact string (e.g. "<App name>
+     * <contact@email>") on every request to data.sec.gov; without it
+     * the API returns 403. Required whenever the EDGAR business
+     * registry adapter is exposed; without it the runtime marks the
+     * adapter unavailable instead of surfacing a tool that will fail.
+     */
+    EDGAR_USER_AGENT: v.optional(
+      v.pipe(
+        v.string(),
+        v.trim(),
+        v.minLength(
+          1,
+          "EDGAR_USER_AGENT must be a non-empty identifying string (e.g. '<App name> <contact@email>') — the SEC returns 403 without one.",
+        ),
+      ),
+    ),
   },
   emptyStringAsUndefined: true,
   runtimeEnv: process.env,
