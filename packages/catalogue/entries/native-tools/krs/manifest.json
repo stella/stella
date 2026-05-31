@@ -1,0 +1,18 @@
+{
+  "$schema": "../../../schema.json",
+  "kind": "native-tool",
+  "slug": "krs",
+  "displayName": "Krajowy Rejestr Sądowy",
+  "description": "Polish company lookup by KRS number from the Ministry of Justice's Krajowy Rejestr Sądowy (KRS) open API. Covers both Rejestr Przedsiębiorców (commercial entities) and Rejestr Stowarzyszeń (associations / foundations).",
+  "author": "stella",
+  "authorUrl": "https://github.com/stella",
+  "license": "Apache-2.0",
+  "cost": "free",
+  "setup": "none",
+  "homepage": "https://www.gov.pl/web/sprawiedliwosc/krajowy-rejestr-sadowy",
+  "tags": ["corporate", "regulatory"],
+  "jurisdictions": ["PL"],
+  "backendSlug": "krs",
+  "url": "https://wyszukiwarka-krs.ms.gov.pl/",
+  "documentationUrl": "https://api-krs.ms.gov.pl/"
+}

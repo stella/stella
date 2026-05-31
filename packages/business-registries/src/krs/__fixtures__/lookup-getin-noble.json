@@ -1,0 +1,807 @@
+{
+  "odpis": {
+    "rodzaj": "Aktualny",
+    "naglowekA": {
+      "rejestr": "RejP",
+      "numerKRS": "0000304735",
+      "dataCzasOdpisu": "31.05.2026 06:14:52",
+      "stanZDnia": "03.01.2026",
+      "dataRejestracjiWKRS": "25.04.2008",
+      "numerOstatniegoWpisu": 119,
+      "dataOstatniegoWpisu": "02.01.2026",
+      "sygnaturaAktSprawyDotyczacejOstatniegoWpisu": "WA.XIII NS-REJ.KRS/38140/23/985/ADE",
+      "oznaczenieSaduDokonujacegoOstatniegoWpisu": "SYSTEM",
+      "stanPozycji": 1
+    },
+    "dane": {
+      "dzial1": {
+        "danePodmiotu": {
+          "formaPrawna": "SPÓŁKA AKCYJNA",
+          "identyfikatory": {
+            "regon": "14133403900000",
+            "nip": "1080004850"
+          },
+          "nazwa": "GETIN NOBLE BANK SPÓŁKA AKCYJNA W UPADŁOŚCI",
+          "daneOWczesniejszejRejestracji": {},
+          "czyProwadziDzialalnoscZInnymiPodmiotami": false,
+          "czyPosiadaStatusOPP": false
+        },
+        "siedzibaIAdres": {
+          "siedziba": {
+            "kraj": "POLSKA",
+            "wojewodztwo": "MAZOWIECKIE",
+            "powiat": "WARSZAWA",
+            "gmina": "WARSZAWA",
+            "miejscowosc": "WARSZAWA"
+          },
+          "adres": {
+            "ulica": "RONDO IGNACEGO DASZYŃSKIEGO",
+            "nrDomu": "2C",
+            "miejscowosc": "WARSZAWA",
+            "kodPocztowy": "00-843",
+            "poczta": "WARSZAWA",
+            "kraj": "POLSKA"
+          },
+          "adresPocztyElektronicznej": "BIURO.ZARZADU@GNB.PL",
+          "adresStronyInternetowej": "WW.GNB.PL",
+          "adresDoDoreczenElektronicznychWpisanyDoBAE": "AE:PL-46771-63615-WWTVA-33"
+        },
+        "umowaStatut": {
+          "informacjaOZawarciuZmianieUmowyStatutu": [
+            {
+              "zawarcieZmianaUmowyStatutu": "AKT NOTARIALNY Z DNIA 5 MARCA 2008 R., NOTARIUSZ ZBIGNIEW WARCHOŁ, KANCELARIA NOTARIALNA PŁASKA & WARCHOŁ, 00-031 WARSZAWA, UL. SZPITALNA 8, REP. A NR 4365/2008.\nAKT NOTARIALNY Z DNIA 17 KWIETNIA 2008 R., NOTARIUSZ ZBIGNIEW WARCHOŁ, KANCELARIA NOTARIALNA PŁASKA & WARCHOŁ, 00-031 WARSZAWA, UL. SZPITALNA 8, REP. A NR 6575/2008 - ZMIANA § 29 UST. 1 ORAZ DODANIE W § 1 UST. 2; I PRZYJĘTO TEKST JEDNOLITY STATUTU SPÓŁKI."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "AKT NOTARIALNY Z DNIA 30 CZERWCA 2008 R., REP.A NR 12898/2008, NOTARIUSZ - ZBIGNIEW WARCHOŁ, KANCELARIA NOTARIALNA PŁASKA & WARCHOŁ, PRZY UL.SZPITALNEJ 8, 00-031 WARSZAWA\nNA PODSTAWIE AKTU NOTARIALNEGO REP.A NR 1298/2008 ZMIENIONO § 29 UST.1 STATUTU ALLIANZ BANK POLSKA S.A."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "AKT NOTARIALNY Z DNIA 10 LIPCA 2008 R., REP. A NR 14350/2008, NOTARIUSZ - ZBIGNIEW WARCHOŁ, KANCELARIA NOTARIALNA PŁASKA & WARCHOŁ, UL. SZPITALNA 8/6, 00-031 WARSZAWA\nDOKONANO ZMIAN, POLEGAJĄCYCH NA:\n1) NADANIU NOWEGO BRZMIENIA § 4 UST. 3 PKT 6)\n2) DODANIU W § 4 UST. 3 PKT 16) ORAZ \nPRZYJĘTO TEKST JEDNOLITY STATUTU SPÓŁKI"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "AKT NOTARIALNY Z DNIA 25 MARCA 2009 R., REP. A NR 4900/2009, NOTARIUSZ  - ZBIGNIEW WARCHOŁ, KANCELARIA NOTARIALNA PŁASKA & WARCHOŁ, UL. SZPITALNA 8/6, 00-031 WARSZAWA ZMIANA § 29  UST. 1"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "AKT NOTARIALNY Z DNIA 10 CZERWCA 2009 R., REP. A NR 8922/2009, NOTARIUSZ - ZBIGNIEW WARCHOŁ, KANCELARIA NOTARIALNA PŁASKA & WARCHOŁ, UL. SZPITALNA 8/6, 00-031 WARSZAWA\nZMIENIONO: § 6 UST. 2, § 6 UST. 7 PKT 5), § 6 UST. 7 PKT 6), § 6 UST. 7 PKT 8), § 9 UST. 2, § 10 UST. 3 PKT 6), § 10 UST. 3 PKT 7), § 10 UST. 3 PKT 8), § 14 UST. 5, § 16 UST. 4, § 17 UST. 4, § 18 UST. 1 PKT 4), § 18 UST. 3, § 36\nUSUNIĘTO: W § 6 UST. 7 PKT 7) ORAZ ZMIENIONO ODPOWIEDNIO NUMERACJĘ NASTĘPNYCH PUNKTÓW, W § 6 UST. 7 PKT 10), W § 17 UST. 5, W § 27 UST. 2"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "AKT NOTARIALNY Z DNIA 14 SIERPNIA 2009 R., REP. A NR 13386/2009, NOTARIUSZ - ZBIGNIEW WARCHOŁ, KANCELARIA NOTARIALNA PŁASKA & WARCHOŁ, UL. SZPITALNA 8/6, 00-031 WARSZAWA, ZMIENIONO § 29 UST. 1"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "23.12.2009 R. - ZBIGNIEW WARCHOŁ - NOTARIUSZ W WARSZAWIE, REP.A - 35223/2009 - ZMIENIONO § 29 UST. 1, PRZYJĘTO TEKST JEDNOLITY."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "AKT NOTARIALNY Z DNIA 26 SIERPNIA 2010 R., REP. A NR 38721/2010, NOTARIUSZ - ZBIGNIEW WARCHOŁ, KANCELARIA NOTARIALNA PŁASKA & WARCHOŁ, UL. SZPITALNA 8/6, 00-031 WARSZAWA\nNA PODSTAWIE AKTU NOTARIALNEGO REP. A NR 38721/2010 DOKONANO ZMIAN STATUTU, POLEGAJĄCYCH NA: NADANIU NOWEGO BRZMIENIA § 29 UST. 1"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "AKT NOTARIALNY Z DNIA 1 GRUDNIA 2010 R., REP. A NR 51343/2010, NOTARIUSZ ZBIGNIEW WARCHOŁ, KANCELARIA NOTARIALNA PŁASKA & WARCHOŁ, UL. SZPITALNA 8/6, 00-031 WARSZAWA\nNA PODSTAWIE AKTU NOTARIALNEGO REP. A NR 51343/2010 DOKONANO ZMIAN STATUTU, POLEGAJĄCYCH NA:  NADANIU NOWEGO BRZMIENIA § 29 UST. 1"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "10.06.2011 R., NOTARIUSZ ZBIGNIEW WARCHOŁ, KANCELARIA NOTARIALNA W WARSZAWIE, REP. A NR 29766/2011, \nZMIANA § 1 UST. 1 I § 2 STATUTU"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "AKT NOTARIALNY Z DNIA 10 CZERWCA 2011 R., REP. A NR 29766/2011, NOTARIUSZ - ZBIGNIEW WARCHOŁ, KANCELARIA NOTARIALNA PŁASKA & WARCHOŁ, UL. SZPITALNA 8/6, 00-031 WARSZAWA NA PODSTAWIE AKTU NOTARIALNEGO REP. A NR 29766/2011:\n1) ZMIENIONO W § 6 UST. 5,\n2) USUNIĘTO W § 6 UST. 7 PKT 5) - 7), ORAZ ZMIENIONO ODPOWIEDNIO NUMERACJĘ PUNKTÓW, \n3) ZMIENIONO W § 6 UST. 8,\n4) W § 10 UST. 3\n- DODANO PKT 1)\n- SKREŚLONO PKT 9)\n- DODANO PKT 10), ORAZ ZMIENIONO ODPOWIEDNIO NUMERACJĘ NASTĘPNYCH PUNKTÓW,\n5) USUNIĘTO W § 11 UST. 5,\n6) ZMIENIONO W § 14 UST. 4,\n7) ZMIENIONO W § 15 UST. 2,\n8) USUNIĘTO W § 16 UST. 4,\n9) ZMIENIONO W § 18 UST. 1 PKT 1),\n10) ZMIENIONO W § 21 UST. 1,\n11) DODANO W § 22 UST. 2, ORAZ ZMIENIONO ODPOWIEDNIO NUMERACJĘ NASTĘPNYCH PUNKTÓW,\n12) ZMIENIONO W § 23 UST. 4 ORAZ UST. 5,\n13) ZMIENIONO § 24,\n14) ZMIENIONO W § 25 UST. 4 PKT 2),\n15) USUNIĘTO W § 26 UST. 1 ORAZ OZNACZENIE UST. 2,\n16) ZMIENIONO W DOTYCHCZASOWYM § 26 UST. 2,\n17) ZMIENIONO W § 29 UST. 1,\n18) ZMIENIONO W § 38 UST. 1, \n19) ZMIENIONO W § 39 UST. 1.\nAKT NOTARIALNY Z DNIA 30 CZERWCA 2011 R., REP. A NR 33788/2011, NOTARIUSZ - ZBIGNIEW WARCHOŁ, KANCELARIA NOTARIALNA PŁASKA & WARCHOŁ, UL. SZPITALNA 8/6, 00-031 WARSZAWA\nNA PODSTAWIE AKTU NOTARIALNEGO REP. A NR 33788/2011:\n1) USUNIĘTO W § 1 UST. 2 ORAZ OZNACZENIE UST. 1,\n2) ZMIENIONO W § 6 UST. 5,\n3) DODANO W § 7 UST. 3,\n4) DODANO W § 29 UST. 6.\nAKT NOTARIALNY Z DNIA 25 LIPCA 2011 R., REP. A NR 39120/2011, NOTARIUSZ - ZBIGNIEW WARCHOŁ, KANCELARIA NOTARIALNA PŁASKA & WARCHOŁ, UL. SZPITALNA 8/6, 00-031 WARSZAWA\nNA PODSTAWIE KTÓREGO ZMIENIONO § 18 UST. 2.\nAKT NOTARIALNY Z DNIA 12 SIERPNIA 2011 R., REP. A NR 41403/2011, NOTARIUSZ - ZBIGNIEW WARCHOŁ, KANCELARIA NOTARIALNA PŁASKA & WARCHOŁ, UL. SZPITALNA 8/6, 00-031 WARSZAWA NA PODSTAWIE KTÓREGO PRZYJĘTO TEKST JEDNOLITY STATUTU."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "13.10.2011R., REPERTORIUM A NR 50173/2011, ZBIGNIEW WARCHOŁ Z KANCELARII NOTARIALNEJ PRZY UL. SZPITALNEJ NR 8 LOK. 6 \nZMIENIONO: § 6 UST. 5 ORAZ UST. 7, § 8 UST. 2, § 10 UST. 2 ORAZ UST. 3, § 13, § 14 UST. 1 ORAZ UST. 5, § 15 UST. 1, § 17 UST. 1, § 21 UST. 1, § 25 UST. 4, § 27, § 29 UST. 1 \nDODANO: § 6 UST. 9 ORAZ UST. 10, § 25 UST. 5, 8 ORAZ 9 \nUSUNIĘTO: § 8 UST. 3 ORAZ UST. 4, § 11 UST. 3 \nOZNACZONO DOTYCHCZASOWY: § 11 UST. 4 JAKO § 11 UST. 3, § 25 UST. 5 ORAZ UST. 6 JAKO § 25 UST. 6 ORAZ UST. 7"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "03.04.2012 R. - ZBIGNIEW WARCHOŁ - NOTARIUSZ W WARSZAWIE, REP. A NR 12151/2012 - ZMIENIONO: TYTUŁ STATUTU, § 1, § 2, § 4 UST. 3 PKT 6), § 13 UST. 1, § 14 UST. 5, § 18 UST. 2, § 27, § 28 UST. 3, § 29 UST. 1, § 30 UST. 1\nDODANO: § 4 UST. 2 PUNKTY 15), 16) I 17), § 4 UST. 3 PUNKTY 17), 18), 19) ORAZ 20, PRZYJĘTO TEKST JEDNOLITY."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "AKT NOTARIALNY Z DNIA 10 LIPCA 2012 R., REP. A NR 7206/2012 NOTARIUSZ TADEUSZ SOJKA - KANCELARIA NOTARIALNA TADEUSZ SOJKA - NOTARIUSZ ROMAN TOKARCZYK - NOTARIUSZ SPÓŁKA CYWILNA NA PODSTAWIE AKTU NOTARIALNEGO REP. A NR 7206/2012 DOKONANO ZMIAN STATUTU, POLEGAJĄCYCH NA: \nNADANIU NOWEGO BRZMIENIA § 29 UST. 1."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "AKT NOTARIALNY Z DNIA 09.10.2014 R., REP. A NR 15709/2014 SPORZĄDZONY PRZEZ NOTARIUSZA MARTĘ KORDAS ZASTĘPCĘ NOTARIALNEGO ANNY LUBIEŃSKIEJ - KANCELARIA NOTARIALNA W WARSZAWIE, PRZY UL. PRZYOKOPOWEJ NR 33, NA PODSTAWIE KTÓREGO DOKONANO ZMIAN W STATUCIE POLEGAJĄCYCH NA:\n- ZMIANIE W §4 UST. 3 POPRZEZ SKREŚLENIE PKT 8), DOKONUJĄC ODPOWIEDNIO ZMIANY NUMERACJI PUNKTÓW NASTĘPNYCH;\n- ZMIANIE W §4 UST. 3 POPRZEZ DODANIE PKT 20) I 21);\n- ZMIANIE W §7 POPRZEZ DODANIE UST. 4-7 W NOWYM BRZMIENIU;\n- UCHYLENIU W §19 UST. 1 I NADANIE MU NOWEGO BRZMIENIA;\n- SKREŚLENIU W §23 UST. 3 A NUMERACJĘ USTĘPÓW NASTĘPNYCH ZMIENIA SIĘ ODPOWIEDNIO;\n- ZMIANIE W §23 POPRZEZ DODANIE UST. 2;\n- ZMIANIE W §23 POPRZEZ DODANIE UST. 4 I 5;\n- UCHYLENIU W §25 UST. 5-9 I NADANIE NOWEGO BRZMIENIA §25 W ZAKRESIE NOWO POWOŁANYCH UST. 5-6;\n- NADANIU NOWEGO BRZMIENIA W §26;\n- UCHYLENIU W §39 UST. 2 I NADANIE MU NOWEGO BRZMIENIA § 39;"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "10.12.2015 R., REP. A NR 30996/2015, KANCELARIA NOTARIALNA ANNA LUBIEŃSKA MARTA FIGURSKA SPÓŁKA CYWILNA Z SIEDZIBĄ W WARSZAWIE PRZY ULICY PRZYOKOPOWEJ 33, WARSZAWA\nDODANO: §29A, §31A\nZMIENIONO: §29 UST.1"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "AKT NOTARIALNY Z DNIA 18.04.2016R., REP. A NR 9509/2016-KANCELARIA NOTARIALNA ANNA LUBIEŃSKA MARTA FIGURSKA SPÓŁKA CYWILNA Z SIEDZIBA W WARSZAWIE, PRZY UL. PRZYOKOPOWEJ NR 33 WARSZAWA, ZMIANA: §29 UST. 1 STATUTU SPÓŁKI, §4 Z INDEKSEM GÓRNYM 1 STATUTU SPÓŁKI, PKT 12 W §10 UST. 3 STATUTU SPÓŁKI, PKT 3 W §22 UST. 1 STATUTU SPÓŁKI, §22 UST. 3 STATUTU SPÓŁKI."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "AKT NOTARIALNY Z DNIA 18 KWIETNIA 2016 R., REP. A NR 9509/2016 - KANCELARIA NOTARIALNA ANNA LUBIEŃSKA MARTA FIGURSKA SPÓŁKA CYWILNA Z SIEDZIBĄ W WARSZAWIE, PRZY ULICY PRZYOKOPOWEJ NUMER 33, WARSZAWA\nNA PODSTAWIE UCHWAŁY NR XXVI/18/04/2016 ZWYCZAJNEGO WALNEGO ZGROMADZENIA Z DNIA 18 KWIETNIA 2016 R., DOKONANO ZMIANY STATUTU SPÓŁKI, POLEGAJĄCEJ NA:\n- ZMIANIE § 29 UST. 1 STATUTU SPÓŁKI\nZŁOŻONO TEKST JEDNOLITY"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "AKT NOTARIALNY Z DNIA 12.05.2015R., REP. A NR 7804/2015 SPORZĄDZONY PRZEZ NOTARIUSZA MARTĘ KORDAS Z KANCELARII NOTARIALNEJ W WARSZAWIE. ZMIANA §3 UST. 2 I 3 STATUTU BANKU, ZMIANA §4 UST. 3 POPRZEZ DODANIE PKT. 22 STATUTU BANKU, ZMIANA §10 UST. 3 POPRZEZ DODANIE PKT. 10 STATUTU BANKU ORAZ DOKONANIE ODPOWIEDNIEJ ZMIANY NUMERACJI KOLEJNYCH PUNKTÓW NINIEJSZEGO USTĘPU."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "11.04.2017R., REP. A NR 13061/2017, NOTARIUSZ MARTA FIGURSKA, KANCELARIA NOTARIALNA ANNA LUBIEŃSKA MARTA FIGURSKA SPÓŁKA CYWILNA Z SIEDZIBĄ W WARSZAWIE, ZMIANA §29 UST. 1."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "09.05.2017 R., REPERTORIUM A NR 15647/2017, NOTARIUSZ MARTA FIGURSKA, KANCELARIA NOTARIALNA W WARSZAWIE, ZMIANA § 18 UST. 2 STATUTU"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "26.01.2018R., REP.A NR 3683/2018, NOTARIUSZ ANNA LUBIEŃSKA, KANCELARIA NOTARIALNA W WARSZAWIE, ZMIANA §29 UST.1."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "25.07.2018R., REP.A NR 34717/2018, NOTARIUSZ MARTA FIGURSKA, KANCELARIA NOTARIALNA W WARSZAWIE, NA PODSTWIE UCHWAŁY NR IV/25/07/2018 NADZWYCZAJNEGO WALNEGO ZGROMADZENIA GETIN NOBLE BANK S.A. Z DNIA 25.07.2018R., DOKONANO ZMIANY STATUTU SPÓŁKI, POLEGAJĄCEJ NA: ZMIANIE §29 UST.1 STATUTU SPÓŁKI.\nNA PODSTWIE UCHWAŁY NR VII/25/07/2018 NADZWYCZAJNEGO WALNEGO ZGROMADZENIA GETIN NOBLE BANK S.A. Z DNIA 25.07.2018R., DOKONANO ZMIANY STATUTU SPÓŁKI, POLEGAJĄCEJ NA: ZMIANIE: §25 UST.2-3; §25 UST.5; §26 UST.1-2 STATUTU SPÓŁKI."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "25.07.2018R., REP.A NR 34717/2018, NOTARIUSZ MARTA FIGURSKA, KANCELARIA NOTARIALNA W WARSZAWIE, NA PODSTAWIE UCHWAŁY NR VI/25/07/2018 NADZWYCZAJNEGO WALNEGO ZGROMADZENIA GETIN NOBLE BANK S.A. Z DNIA 25.07.2018R., DOKONANO ZMIANY STATUTU SPÓŁKI, POLEGAJĄCEJ NA: ZMIANA §29 UST.1 STATUTU SPÓŁKI."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "24.06.2019, REP. A NR 43518/2019, NOTARIUSZ MARTA FIGURSKA, KANCELARIA NOTARIALNA W WARSZAWIE, UCHWAŁA NR XXXVII/24/06/2019 ZWYCZAJNEGO WALNEGO ZGROMADZENIA GETIN NOBLE BANKU S.A. Z DNIA 24 CZERWCA 2019 R. W SPRAWIE ZMIANY STATUTU SPÓŁKI (W ZAKRESIE § 4 UST. 3 PKT 23 I 24).\nNA PODSTAWIE WW. UCHWAŁY ZWYCZAJNEGO WALNEGO ZGROMADZENIA GETIN NOBLE BANKU S.A. Z DNIA 24 CZERWCA 2019 R., DOKONANO ZMIANY STATUTU SPÓŁKI, POLEGAJĄCEJ NA:\n- DODANIU § 4 UST. 3 PKT 23 STATUTU SPÓŁKI,\n- DODANIU § 4 UST. 3 PKT 24 STATUTU SPÓŁKI."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "29 MAJA 2020 R., REP. A NR 19442/2020 - KANCELARIA NOTARIALNA ANNA LUBIEŃSKA MARTA FIGURSKA SPÓŁKA CYWILNA Z SIEDZIBĄ W WARSZAWIE, PRZY ULICY PRZYOKOPOWEJ NUMER 33, WARSZAWA - UCHWAŁA NR XXIX/29/05/2020 ZWYCZAJNEGO WALNEGO ZGROMADZENIA GETIN NOBLE BANKU S.A. Z DNIA 29 MAJA 2020R. W SPRAWIE ZMIANY STATUTU SPÓŁKI (W ZAKRESIE § 4 UST. 3 PKT. 23 I 24)\nNA PODSTAWIE WW. UCHWAŁY ZWYCZAJNEGO WALNEGO ZGROMADZENIA GETIN NOBLE BANKU S.A. Z DNIA 29 MAJA 2020 R., DOKONANO ZMIANY STATUTU SPÓŁKI, POLEGAJĄCEJ NA:\n- ZMIANIE BRZEMIENIA § 4 UST. 3 PKT 23 STATUTU SPÓŁKI\n- ZMIANIE BRZEMIENIA § 4 UST. 3 PKT 24 STATUTU SPÓŁKI"
+            }
+          ]
+        },
+        "pozostaleInformacje": {
+          "czasNaJakiUtworzonyZostalPodmiot": "NIEOZNACZONY",
+          "informacjaOPismieDoOgloszen": "DZIENNIK GAZETA PRAWNA",
+          "czyUmowaStatutPrzyznajeUprawnieniaOsobiste": false,
+          "czyObligatoriuszeMajaPrawoDoUdzialuWZysku": false
+        },
+        "kapital": {
+          "wysokoscKapitaluZakladowego": {
+            "wartosc": "2851630418,91",
+            "waluta": "PLN"
+          },
+          "wysokoscKapitaluDocelowegoZapasowego": {
+            "wartosc": "2,49",
+            "waluta": "PLN"
+          },
+          "lacznaLiczbaAkcjiUdzialow": "1044553267",
+          "wartoscJednejAkcji": {
+            "wartosc": "2,73",
+            "waluta": "PLN"
+          },
+          "czescKapitaluWplaconegoPokrytego": {
+            "wartosc": "2851630418,91",
+            "waluta": "PLN"
+          },
+          "wniesioneAporty": {}
+        },
+        "emisjeAkcji": [
+          {
+            "nazwaSeriiAkcji": "A",
+            "liczbaAkcjiWSerii": "883381106",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "B",
+            "liczbaAkcjiWSerii": "18315019",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "C",
+            "liczbaAkcjiWSerii": "69597068",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "D",
+            "liczbaAkcjiWSerii": "36630037",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "E",
+            "liczbaAkcjiWSerii": "36630037",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "F",
+            "liczbaAkcjiWSerii": "0",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "G",
+            "liczbaAkcjiWSerii": "0",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "H",
+            "liczbaAkcjiWSerii": "0",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "I",
+            "liczbaAkcjiWSerii": "0",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "J",
+            "liczbaAkcjiWSerii": "0",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "K",
+            "liczbaAkcjiWSerii": "0",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          }
+        ],
+        "wzmiankaOUpowaznieniuDoEmisjiWarrantowSubskrypcyjnych": {
+          "czyZarzadJestUprawnionyDoEmisjiWarrantowSubskrypcyjnych": false
+        }
+      },
+      "dzial2": {
+        "reprezentacja": {
+          "nazwaOrganu": "ZARZĄD",
+          "sposobReprezentacji": "DWÓCH CZŁONKÓW ZARZĄDU DZIAŁAJĄCYCH ŁĄCZNIE LUB JEDEN CZŁONEK ZARZĄDU DZIAŁAJĄCY ŁĄCZNIE Z PROKURENTEM"
+        },
+        "organNadzoru": [
+          {
+            "nazwa": "RADA NADZORCZA",
+            "sklad": [
+              {
+                "nazwisko": {
+                  "nazwiskoICzlon": "C********"
+                },
+                "imiona": {
+                  "imie": "L*****",
+                  "imieDrugie": "J*****"
+                },
+                "identyfikator": {
+                  "pesel": "6**********"
+                }
+              },
+              {
+                "nazwisko": {
+                  "nazwiskoICzlon": "L****"
+                },
+                "imiona": {
+                  "imie": "J****",
+                  "imieDrugie": "W*******"
+                },
+                "identyfikator": {
+                  "pesel": "6**********"
+                }
+              },
+              {
+                "nazwisko": {
+                  "nazwiskoICzlon": "G*********"
+                },
+                "imiona": {
+                  "imie": "M******",
+                  "imieDrugie": "C*****"
+                },
+                "identyfikator": {
+                  "pesel": "6**********"
+                }
+              },
+              {
+                "nazwisko": {
+                  "nazwiskoICzlon": "B*********"
+                },
+                "imiona": {
+                  "imie": "B******"
+                },
+                "identyfikator": {
+                  "pesel": "5**********"
+                }
+              },
+              {
+                "nazwisko": {
+                  "nazwiskoICzlon": "H*******"
+                },
+                "imiona": {
+                  "imie": "T******"
+                },
+                "identyfikator": {
+                  "pesel": "6**********"
+                }
+              },
+              {
+                "nazwisko": {
+                  "nazwiskoICzlon": "L*****"
+                },
+                "imiona": {
+                  "imie": "P****"
+                },
+                "identyfikator": {
+                  "pesel": "6**********"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "dzial3": {
+        "przedmiotDzialalnosci": {
+          "przedmiotPrzewazajacejDzialalnosci": [
+            {
+              "opis": "POZOSTAŁE POŚREDNICTWO PIENIĘŻNE",
+              "kodDzial": "64",
+              "kodKlasa": "19",
+              "kodPodklasa": "Z"
+            }
+          ],
+          "przedmiotPozostalejDzialalnosci": [
+            {
+              "opis": "DZIAŁALNOŚĆ MAKLERSKA ZWIĄZANA Z RYNKIEM PAPIERÓW WARTOŚCIOWYCH I TOWARÓW GIEŁDOWYCH",
+              "kodDzial": "66",
+              "kodKlasa": "12",
+              "kodPodklasa": "Z"
+            },
+            {
+              "opis": "DZIAŁALNOŚĆ AGENTÓW I BROKERÓW UBEZPIECZENIOWYCH",
+              "kodDzial": "66",
+              "kodKlasa": "22",
+              "kodPodklasa": "Z"
+            },
+            {
+              "opis": "KUPNO I SPRZEDAŻ NIERUCHOMOŚCI NA WŁASNY RACHUNEK",
+              "kodDzial": "68",
+              "kodKlasa": "10",
+              "kodPodklasa": "Z"
+            },
+            {
+              "opis": "DZIAŁALNOŚĆ ZWIĄZANA Z ZARZĄDZANIEM FUNDUSZAMI",
+              "kodDzial": "66",
+              "kodKlasa": "30",
+              "kodPodklasa": "Z"
+            },
+            {
+              "opis": "POZOSTAŁA DZIAŁALNOŚĆ WSPOMAGAJĄCA USŁUGI FINANSOWE, Z WYŁĄCZENIEM UBEZPIECZEŃ I FUNDUSZÓW EMERYTALNYCH",
+              "kodDzial": "66",
+              "kodKlasa": "19",
+              "kodPodklasa": "Z"
+            },
+            {
+              "opis": "POZOSTAŁA FINANSOWA DZIAŁALNOŚĆ USŁUGOWA, GDZIE INDZIEJ NIESKLASYFIKOWANA, Z WYŁĄCZENIEM UBEZPIECZEŃ I FUNDUSZÓW EMERYTALNYCH",
+              "kodDzial": "64",
+              "kodKlasa": "99",
+              "kodPodklasa": "Z"
+            },
+            {
+              "opis": "DZIAŁALNOŚĆ RACHUNKOWO-KSIĘGOWA; DORADZTWO PODATKOWE",
+              "kodDzial": "69",
+              "kodKlasa": "20",
+              "kodPodklasa": "Z"
+            },
+            {
+              "opis": "POZOSTAŁA DZIAŁALNOŚĆ WSPOMAGAJĄCA UBEZPIECZENIA I FUNDUSZE EMERYTALNE",
+              "kodDzial": "66",
+              "kodKlasa": "29",
+              "kodPodklasa": "Z"
+            },
+            {
+              "opis": "POZOSTAŁE FORMY UDZIELANIA KREDYTÓW",
+              "kodDzial": "64",
+              "kodKlasa": "92",
+              "kodPodklasa": "Z"
+            }
+          ]
+        },
+        "wzmiankiOZlozonychDokumentach": {
+          "wzmiankaOZlozeniuRocznegoSprawozdaniaFinansowego": [
+            {
+              "dataZlozenia": "23.06.2009",
+              "zaOkresOdDo": "05.03.2008 - 31.12.2008"
+            },
+            {
+              "dataZlozenia": "26.05.2010",
+              "zaOkresOdDo": "01.01.2009 - 31.12.2009"
+            },
+            {
+              "dataZlozenia": "14.06.2011",
+              "zaOkresOdDo": "01.01.2010 - 31.12.2010"
+            },
+            {
+              "dataZlozenia": "06.04.2012",
+              "zaOkresOdDo": "01.01.2011 - 31.12.2011"
+            },
+            {
+              "dataZlozenia": "18.06.2013",
+              "zaOkresOdDo": "2012"
+            },
+            {
+              "dataZlozenia": "30.04.2014",
+              "zaOkresOdDo": "OD 01.01.2013 DO 31.12.2013"
+            },
+            {
+              "dataZlozenia": "19.05.2015",
+              "zaOkresOdDo": "OD 01.01.2014 DO 31.12.2014"
+            },
+            {
+              "dataZlozenia": "22.04.2016",
+              "zaOkresOdDo": "OD 01.01.2015 DO 31.12.2015"
+            },
+            {
+              "dataZlozenia": "12.05.2017",
+              "zaOkresOdDo": "OD 01.01.2016 DO 31.12.2016"
+            },
+            {
+              "dataZlozenia": "21.06.2018",
+              "zaOkresOdDo": "OD 01.01.2017 DO 31.12.2017"
+            },
+            {
+              "dataZlozenia": "26.06.2019",
+              "zaOkresOdDo": "OD 01.01.2018 DO 31.12.2018"
+            },
+            {
+              "dataZlozenia": "05.06.2020",
+              "zaOkresOdDo": "OD 01.01.2019 DO 31.12.2019"
+            },
+            {
+              "dataZlozenia": "21.04.2021",
+              "zaOkresOdDo": "OD 01.01.2020 DO 31.12.2020"
+            },
+            {
+              "dataZlozenia": "08.06.2022",
+              "zaOkresOdDo": "OD 01.01.2021 DO 31.12.2021"
+            }
+          ],
+          "wzmiankaOZlozeniuOpiniiBieglegoRewidentaSprawozdaniaZBadania": [
+            {
+              "zaOkresOdDo": "05.03.2008 - 31.12.2008"
+            },
+            {
+              "zaOkresOdDo": "01.01.2009 - 31.12.2009"
+            },
+            {
+              "zaOkresOdDo": "01.01.2010 - 31.12.2010"
+            },
+            {
+              "zaOkresOdDo": "01.01.2011 - 31.12.2011"
+            },
+            {
+              "zaOkresOdDo": "2012"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2013 DO 31.12.2013"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2014 DO 31.12.2014"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2015 DO 31.12.2015"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2016 DO 31.12.2016"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2017 DO 31.12.2017"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2018 DO 31.12.2018"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2019 DO 31.12.2019"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2020 DO 31.12.2020"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2021 DO 31.12.2021"
+            }
+          ],
+          "wzmiankaOZlozeniuUchwalyPostanowieniaOZatwierdzeniuRocznegoSprawozdaniaFinansowego": [
+            {
+              "zaOkresOdDo": "05.03.2008 - 31.12.2008"
+            },
+            {
+              "zaOkresOdDo": "01.01.2009 - 31.12.2009"
+            },
+            {
+              "zaOkresOdDo": "01.01.2010 - 31.12.2010"
+            },
+            {
+              "zaOkresOdDo": "01.01.2011 - 31.12.2011"
+            },
+            {
+              "zaOkresOdDo": "2012"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2013 DO 31.12.2013"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2014 DO 31.12.2014"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2015 DO 31.12.2015"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2016 DO 31.12.2016"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2017 DO 31.12.2017"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2018 DO 31.12.2018"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2019 DO 31.12.2019"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2020 DO 31.12.2020"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2021 DO 31.12.2021"
+            }
+          ],
+          "wzmiankaOZlozeniuSprawozdaniaZDzialalnosci": [
+            {
+              "zaOkresOdDo": "05.03.2008 - 31.12.2008"
+            },
+            {
+              "zaOkresOdDo": "01.01.2009 - 31.12.2009"
+            },
+            {
+              "zaOkresOdDo": "01.01.2010 - 31.12.2010"
+            },
+            {
+              "zaOkresOdDo": "01.01.2011 - 31.12.2011"
+            },
+            {
+              "zaOkresOdDo": "2012"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2013 DO 31.12.2013"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2014 DO 31.12.2014"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2015 DO 31.12.2015"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2016 DO 31.12.2016"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2017 DO 31.12.2017"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2018 DO 31.12.2018"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2019 DO 31.12.2019"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2020 DO 31.12.2020"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2021 DO 31.12.2021"
+            }
+          ]
+        },
+        "sprawozdaniaGrupyKapitalowej": {
+          "wzmiankaOZlozeniuSkonsolidowanegoRocznegoSprawozdaniaFinansowego": [
+            {
+              "dataZlozenia": "18.06.2013",
+              "zaOkresOdDo": "2012"
+            },
+            {
+              "dataZlozenia": "30.04.2014",
+              "zaOkresOdDo": "OD 01.01.2013 DO 31.12.2013"
+            },
+            {
+              "dataZlozenia": "19.05.2015",
+              "zaOkresOdDo": "OD 01.01.2014 DO 31.12.2014"
+            },
+            {
+              "dataZlozenia": "22.04.2016",
+              "zaOkresOdDo": "OD 01.01.2015 DO 31.12.2015"
+            },
+            {
+              "dataZlozenia": "12.05.2017",
+              "zaOkresOdDo": "OD 01.01.2016 DO 31.12.2016"
+            },
+            {
+              "dataZlozenia": "21.06.2018",
+              "zaOkresOdDo": "OD 01.01.2017 DO 31.12.2017"
+            },
+            {
+              "dataZlozenia": "26.06.2019",
+              "zaOkresOdDo": "OD 01.01.2018 DO 31.12.2018"
+            },
+            {
+              "dataZlozenia": "04.06.2020",
+              "zaOkresOdDo": "OD 01.01.2019 DO 31.12.2019"
+            },
+            {
+              "dataZlozenia": "21.04.2021",
+              "zaOkresOdDo": "OD 01.01.2020 DO 31.12.2020"
+            },
+            {
+              "dataZlozenia": "08.06.2022",
+              "zaOkresOdDo": "OD 01.01.2021 DO 31.12.2021"
+            }
+          ],
+          "wzmiankaOZlozeniuOpiniiBieglegoRewidentaSprawozdaniaZBadania": [
+            {
+              "zaOkresOdDo": "2012"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2013 DO 31.12.2013"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2014 DO 31.12.2014"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2015 DO 31.12.2015"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2016 DO 31.12.2016"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2017 DO 31.12.2017"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2018 DO 31.12.2018"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2019 DO 31.12.2019"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2020 DO 31.12.2020"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2021 DO 31.12.2021"
+            }
+          ],
+          "wzmiankaOZlozeniuUchwalyPostanowieniaOZatwierdzeniuSkonsolidowanegoRocznegoSprawozdaniaFinansowego": [
+            {
+              "zaOkresOdDo": "2012"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2013 DO 31.12.2013"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2014 DO 31.12.2014"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2015 DO 31.12.2015"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2016 DO 31.12.2016"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2017 DO 31.12.2017"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2018 DO 31.12.2018"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2019 DO 31.12.2019"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2020 DO 31.12.2020"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2021 DO 31.12.2021"
+            }
+          ],
+          "wzmiankaOZlozeniuSprawozdaniaZDzialalnosciGrupyKapitalowejSpolkiDominujacejLacznie": [
+            {
+              "zaOkresOdDo": "2012"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2013 DO 31.12.2013"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2014 DO 31.12.2014"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2015 DO 31.12.2015"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2016 DO 31.12.2016"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2017 DO 31.12.2017"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2018 DO 31.12.2018"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2019 DO 31.12.2019"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2020 DO 31.12.2020"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2021 DO 31.12.2021"
+            }
+          ]
+        },
+        "informacjaODniuKonczacymRokObrotowy": {
+          "dzienKonczacyPierwszyRokObrotowy": "31.12.2015"
+        }
+      },
+      "dzial4": {},
+      "dzial5": {},
+      "dzial6": {
+        "polaczeniePodzialPrzeksztalcenie": [
+          {
+            "okreslenieOkolicznosci": "PRZEJĘCIE CZĘŚCI MAJĄTKU INNEJ SPÓŁKI W WYNIKU PODZIAŁU",
+            "opisPolaczeniaPodzialuPrzeksztalcenia": "PODZIAŁ NASTĘPUJE STOSOWNIE DO POSTANOWIEŃ ART. 529 § 1 PKT 4 KSH PRZEZ PRZENIESIENIE CZĘŚCI MAJĄTKU GETIN HOLDING SPÓŁKA AKCYJNA Z SIEDZIBĄ WE WROCŁAWIU, ZAREJESTROWANEJ POD NUMEREM KRS 0000004335, (\"SPÓŁKA DZIELONA\" LUB \"GETIN HOLDING S.A.\"), STANOWIĄCEGO ZORGANIZOWANĄ CZĘŚĆ PRZEDSIĘBIORSTWA FUNKCJONUJĄCĄ JAKO ODDZIAŁ W WARSZAWIE I ZAJMUJĄCĄ SIĘ KRAJOWĄ DZIAŁALNOŚCIĄ BANKOWĄ I POWIĄZANĄ, NA ISTNIEJĄCĄ SPÓŁKĘ, TJ. NA GET BANK SPÓŁKA AKCYJNA Z SIEDZIBĄ W WARSZAWIE, ZAREJESTROWANĄ POD NUMEREM KRS 0000304735 (DALEJ \"SPÓŁKA PRZEJMUJĄCA\" LUB \"GET BANK S.A.\"), CO STANOWI PODZIAŁ PRZEZ WYDZIELENIE. \n\nWYDZIELENIE NASTĘPUJE ZGODNIE Z ART. 530 § 2 KSH W DNIU WPISU DO REJESTRU PODWYŻSZENIA KAPITAŁU ZAKŁADOWEGO SPÓŁKI PRZEJMUJĄCEJ (\"DZIEŃ WYDZIELENIA\"). \nNADZWYCZAJNE WALNE ZGROMADZENIE GET BANK S.A. PODJĘŁO UCHWAŁĘ NR 1 W DNIU 13.10.2011 (AKT NOTARIALNY REPERTORIUM A NR 50173/2011 SPORZĄDZONY PRZEZ NOTARIUSZA ZBIGNIEWA WARCHOŁA Z KANCELARII NOTARIALNEJ W WARSZAWIE, UL. SZPITALNA 8 LOK. 6). \nNADZWYCZAJNE WALNE ZGROMADZENIE GETIN HOLDING S.A. PODJĘŁO UCHWAŁĘ NR 3 W DNIU 13.10.2011 (AKT NOTARIALNY REPERTORIUM A NR 80621/2011 SPORZĄDZONY PRZEZ NOTARIUSZA WOJCIECHA KAMIŃSKIEGO Z KANCELARII NOTARIALNEJ WE WROCŁAWIU, UL. RUSKA 3/4).",
+            "podmiotyPrzejmowane": [
+              {
+                "nazwa": "GETIN HOLDING SPÓŁKA AKCYJNA,------",
+                "krajNazwaRejestru": "------,",
+                "identyfikator": {
+                  "regon": "93211723200000"
+                }
+              }
+            ]
+          },
+          {
+            "okreslenieOkolicznosci": "PRZEJĘCIE INNEJ SPÓŁKI",
+            "opisPolaczeniaPodzialuPrzeksztalcenia": "POŁĄCZENIE NASTĘPUJE, STOSOWNIE DO TREŚCI ART. 492 § 1 PKT 1 K.S.H., POPRZEZ PRZENIESIENIE CAŁEGO MAJĄTKU SPÓŁKI GETIN NOBLE BANK SPÓŁKA AKCYJNA Z SIEDZIBĄ W WARSZAWIE, UL.DOMANIEWSKA 39 B, 02-675 WARSZAWA, ZAREJESTROWANEJ POD NUMEREM KRS 0000018507 (DALEJ: \"SPÓŁKA PRZEJMOWANA\") NA SPÓŁKĘ GET BANK SPÓŁKA AKCYJNA Z SIEDZIBĄ W WARSZAWIE, UL.DOMANIEWSKA 39, 02-672 WARSZAWA, ZAREJESTROWANĄ POD NUMEREM KRS 0000304735 (\"SPÓŁKA PRZEJMUJĄCA\") Z RÓWNOCZESNYM PODWYŻSZENIEM KAPITAŁU ZAKŁADOWEGO SPÓŁKI PRZEJMUJĄCEJ POPRZEZ NOWĄ EMISJĘ AKCJI, KTÓRE SPÓŁKA PRZEJMUJĄCA PRZYZNA WSZYSTKIM DOTYCHCZASOWYM AKCJONARIUSZOM SPÓŁKI PRZEJMOWANEJ INNYM NIŻ SPÓŁKA PRZEJMUJĄCA, CO STANOWI POŁĄCZENIE PRZEZ PRZEJĘCIE.\nZWYCZAJNE WALNE ZGROMADZENIE GET BANK SPÓŁKA AKCYJNA PODJĘŁO UCHWAŁĘ W SPRAWIE POŁĄCZENIA ZE SPÓŁKĄ GETIN NOBLE BANK SPÓŁKA AKCYJNA Z DNIA 3 KWIETNIA 2012 R. (REP. A NR 12151/2012). ZWYCZAJNE WALNE ZGROMADZENIE SPÓŁKI GETIN NOBLE BANK SPÓŁKA AKCYJNA PODJĘŁO UCHWAŁĘ W SPRAWIE POŁĄCZENIA ZE SPÓŁKĄ GET BANK SPÓŁKA AKCYJNA DNIA 3 KWIETNIA 2012 R. (REP. A NR 10922/2012).",
+            "podmiotyPrzejmowane": [
+              {
+                "nazwa": "GETIN NOBLE BANK SPÓŁKA AKCYJNA,------",
+                "krajNazwaRejestru": "------,",
+                "identyfikator": {
+                  "regon": "00418410300000"
+                }
+              }
+            ]
+          },
+          {
+            "okreslenieOkolicznosci": "PRZEJĘCIE INNEJ SPÓŁKI",
+            "opisPolaczeniaPodzialuPrzeksztalcenia": "POŁĄCZENIE NASTĄPI, STOSOWNIE DO TREŚCI ART. 492 § 1 PKT 1 ORAZ 515 § 1 W ZWIĄZKU Z ART. 516 § 6 KODEKSU SPÓŁEK HANDLOWYCH (\"KSH\"), POPRZEZ PRZENIESIENIE CAŁEGO MAJĄTKU SPÓŁKI PRZEJMOWANEJ NA SPÓŁKĘ PRZEJMUJĄCĄ (POŁĄCZENIE PRZEZ PRZEJĘCIE) BEZ PODWYŻSZANIA KAPITAŁU ZAKŁADOWEGO SPÓŁKI PRZEJMUJĄCEJ (SPÓŁKA PRZEJMUJĄCA JEST JEDYNYM AKCJONARIUSZEM SPÓŁKI PRZEJMOWANEJ) ORAZ BEZ WYMIANY AKCJI SPÓŁKI PRZEJMOWANEJ NA AKCJE SPÓŁKI PRZEJMUJĄCEJ (SPÓŁKA PRZEJMUJĄCA NIE BĘDZIE OBEJMOWAĆ AKCJI WŁASNYCH W ZWIĄZKU Z POŁĄCZENIEM).\nZ UWAGI NA FAKT, IŻ SPÓŁKA PRZEJMUJĄCA POŁĄCZY SIĘ ZE SPÓŁKĄ, KTÓREJ JEST JEDNYM AKCJONARIUSZEM, POŁĄCZENIE DOKONANE ZOSTANIE W TRYBIE UPROSZCZONYM ZGODNIE Z ART. 516 § 6 KSH\nW DNIU 15 CZERWCA 2018 R. ZWYCZAJNE WALNE ZGROMADZENIE GETIN NOBLE BANK S.A. PODJĘŁO UCHWAŁĘ NR XXV/15/06/2018 Z DNIA 15 CZERWCA 2018 R. W SPRAWIE POŁĄCZENIA GETIN NOBLE BANK SPÓŁKA AKCYJNA ZE SPÓŁKĄ BPI BANK POLSKICH INWESTYCJI SPÓŁKA AKCYJNA.\n\nPLAN POŁĄCZENIA ZOSTAŁ ZŁOŻONY DO AKT SPRAWY POSTANOWIENIEM Z DNIA 25 MAJA 2018 R., SYGNATURA SPRAWY 30919/18/885.",
+            "podmiotyPrzejmowane": [
+              {
+                "nazwa": "BPI BANK POLSKICH INWESTYCJI SPÓŁKA AKCYJNA, SPÓŁKA AKCYJNA",
+                "krajNazwaRejestru": "POLSKA, KRAJOWY REJESTR SĄDOWY",
+                "krs": {
+                  "krs": "0000237641"
+                },
+                "nazwaSadu": "*******",
+                "identyfikator": {
+                  "regon": "14017353900000"
+                }
+              }
+            ]
+          }
+        ],
+        "postepowanieUpadlosciowe": [
+          {
+            "informacjaOOgloszeniuUpadlosci": {
+              "organWydajacy": "SĄD REJONOWY DLA M. ST. WARSZAWY W WARSZAWIE XVIII WYDZIAŁ GOSPODARCZY DLA SPRAW UPADŁOŚCIOWYCH I RESTRUKTURYZACYJNYCH",
+              "sygnatura": "WA1M/GU/188/2023",
+              "data": "20.07.2023"
+            },
+            "opisZakonczeniaProcesuUpadlosci": {},
+            "sposobProwadzeniaPostepowania": "UPADŁOŚĆ",
+            "informacjaOUchyleniuUkladu": {},
+            "daneSyndyka": [
+              {
+                "nazwisko": {
+                  "nazwiskoICzlon": "K*******"
+                },
+                "imiona": {
+                  "imie": "M*****",
+                  "imieDrugie": "M*******"
+                },
+                "identyfikator": {
+                  "pesel": "8**********"
+                }
+              }
+            ]
+          }
+        ],
+        "postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja": [
+          {
+            "otwarciePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji": {
+              "organWydajacy": "BANKOWY FUNDUSZ GWARANCYJNY",
+              "sygnatura": "NR 346/DPR/2022",
+              "dataNadaniaKlauzuliWykonalnosci": "29.09.2022",
+              "rodzajPostepowania": "PRZYMUSOWA RESTRUKTURYZACJA"
+            },
+            "zakonczeniePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji": {},
+            "uchylenieUkladu": {},
+            "nadzorcaZarzadcaReprezentujacyAdministratorZastepcaPelnomocnikZarzadcaNadzwyczajny": [
+              {
+                "nazwisko": {
+                  "nazwiskoICzlon": "M*********"
+                },
+                "imiona": {
+                  "imie": "P****",
+                  "imieDrugie": "K*****"
+                },
+                "identyfikator": {
+                  "pesel": "7**********"
+                },
+                "funkcja": "ADMINISTRATOR"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

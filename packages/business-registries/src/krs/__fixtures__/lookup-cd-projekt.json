@@ -1,0 +1,1192 @@
+{
+  "odpis": {
+    "rodzaj": "Aktualny",
+    "naglowekA": {
+      "rejestr": "RejP",
+      "numerKRS": "0000006865",
+      "dataCzasOdpisu": "31.05.2026 06:13:48",
+      "stanZDnia": "18.02.2026",
+      "dataRejestracjiWKRS": "06.04.2001",
+      "numerOstatniegoWpisu": 165,
+      "dataOstatniegoWpisu": "17.02.2026",
+      "sygnaturaAktSprawyDotyczacejOstatniegoWpisu": "WA.XIV NS-REJ.KRS/916/26/656",
+      "oznaczenieSaduDokonujacegoOstatniegoWpisu": "SĄD REJONOWY DLA M.ST. WARSZAWY W WARSZAWIE, XIV WYDZIAŁ GOSPODARCZY KRAJOWEGO REJESTRU SĄDOWEGO",
+      "stanPozycji": 1
+    },
+    "dane": {
+      "dzial1": {
+        "danePodmiotu": {
+          "formaPrawna": "SPÓŁKA AKCYJNA",
+          "identyfikatory": {
+            "regon": "49270733300000",
+            "nip": "7342867148"
+          },
+          "nazwa": "CD PROJEKT SPÓŁKA AKCYJNA",
+          "daneOWczesniejszejRejestracji": {},
+          "czyProwadziDzialalnoscZInnymiPodmiotami": false,
+          "czyPosiadaStatusOPP": false
+        },
+        "siedzibaIAdres": {
+          "siedziba": {
+            "kraj": "POLSKA",
+            "wojewodztwo": "MAZOWIECKIE",
+            "powiat": "M.ST. WARSZAWA",
+            "gmina": "M.ST. WARSZAWA",
+            "miejscowosc": "WARSZAWA"
+          },
+          "adres": {
+            "ulica": "JAGIELLOŃSKA",
+            "nrDomu": "74",
+            "miejscowosc": "WARSZAWA",
+            "kodPocztowy": "03-301",
+            "poczta": "WARSZAWA",
+            "kraj": "POLSKA"
+          },
+          "adresPocztyElektronicznej": "GIELDA@CDPROJEKT.COM",
+          "adresStronyInternetowej": "WWW.CDPROJEKT.COM",
+          "adresDoDoreczenElektronicznychWpisanyDoBAE": "AE:PL-78699-92156-WWISD-24"
+        },
+        "umowaStatut": {
+          "informacjaOZawarciuZmianieUmowyStatutu": [
+            {
+              "zawarcieZmianaUmowyStatutu": "15-01-2001, NOTARIUSZ: KRZYSZTOF ŁASKI, KANCELARIA NOTARIALNA KRZYSZTOF ŁASKI WARSZAWA UL. SAPIEŻYŃSKA 10, REP.A NR 389/2001\nZMIANA PAR. 5 STATUTU, KRZYSZTOF ŁASKI KANCELARIA NOTARIALNA WARSZAWA \nUL. SAPIEŻYŃSKA 10, REP. A NR 465/2001 DNIA 18-01-2001.\nZMIANA PAR. 5 STATUTU, STANISŁAW CIĄGŁO KANCELARIA NOTARIALNA NOWY SĄCZ UL. DUNAJEWSKIEGO 7, REP.A NR 1467/2001 DNIA 19-03-2001\nZMIANA PAR. 5 STATUTU, STANISŁAW CIĄGŁO KANCELARIA NOTARIALNA NOWY SĄCZ UL. DUNAJEWSKIEGO 7,AKT NOTARIALNY REP. A NR 1875/2001 Z DNIA 2.04.2001"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "AKT NOTARIALNY SPORZĄDZONY W DNIU 23 MAJA 2001 ROKU REPRERTORIUM A NR 5049/2001 PRZEZ NOTARIUSZA KRZYSZTOFA ŁASKIEGO PROWADZACEGO KANCELARIĘ NOTARIALNĄ W WARSZAWIE PRZY ULICY SAPIEŻYŃSKIEJ 10 - ZMIANA PAR. 9 UST. 1 ORAZ PAR. 16 UST. 1"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "AKT NOTARIALNY SPORZĄDZONY W DNIU 21 WRZEŚNIA 2001 ROKU, REPERTORIUM A NR 9314/2001 PRZEZ NOTARIUSZA KRZYSZTOFA ŁASKIEGO PROWADZĄCEGO KANCELARIĘ PRZY ULICY BRACKIEJ 18 LOK. 5 W WARSZAWIE - ZMIANA PAR. 1, PAR.9 UST.1, PAR. 6,PAR.17.3, PAR.17.4, PAR.17.5, PAR. 21 UST. 1, PAR. 38 STATUTU PKT. 5 \nAKT NOTARIALNY SPORZĄDZONY W DNIU 30 PAŹDZIERNIKA 2000 ROKU, REPERTORIUM A NR 10602/2001 PRZEZ NOTARIUSZA KRZYSZTOFA ŁASKIEGO PROWADZĄCEGO KANCELARIĘ PRZY ULICY BRACKIEJ 18 LOK. 5 W WARSZAWIE - ZMIANA PAR. 38 PKT 1 I 5, WYKREŚLENIE 22 STATUTU."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "AKT NOTARIALNY SPORZĄDZONY W DNIU 20 GRUDNIA 2001 ROKU REPERTORIUM A NR 12766/2001 PRZEZ NOTARIUSZA KRZYSZTOFA ŁASKIEGO, PROWADZĄCEGO KANCELARIĘ PRZY UL. BRACKIEJ 18 LOK. 5 W WARSZAWIE - WYKREŚLENIE PAR. 29 STATUTU SPÓŁKI"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "20.12.2002 R. REP. A NR 7543/2002, NOATRIUSZ STANISŁAW CIĄGŁO, KANCELARIA NOTARIALNA W NOWYM SĄCZU UL. DUNAJEWSKIEGO NUMER 7\nPAR. 5, PAR. 6, PAR. 9, PAR. 12, PAR. 14, PAR. 16, PAR. 17, PAR. 18, PAR. 20, PAR. 26, PAR. 27, PAR. 28, PAR. 32, PAR. 33, PAR. 34, PAR. 35, PAR. 37, PAR. 38, PAR. 39 -ZMIENIONE\nPAR. 7, PAR. 10, PAR. 23, PAR. 24, PAR. 25, PAR. 29 - SKREŚLONE\nPAR. 9A - DODANY"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "30.06.2003 R., REP. A NR 5992/2003, NOTARIUSZ KRZYSZTOF ŁASKI, KANCELARIA NOTARIALNA W WARSZAWIE,UL. BRACKA 18 LOK. 5\nZMIENIONO: PAR. 9 I 9A"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "13.12.2005 ROKU - NOTARIUSZ DOROTA KAŁOWSKA Z KANCELARII NOTARIALNEJ W WARSZAWIE, REPERTORIUM A NR 15704/2005 - ZMIANA §16 STATUTU SPÓŁKI"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "12.01.2006 ROKU - NOTARIUSZ DOROTA KAŁOWSKA Z KANCELARII NOTARIALNEJ W WARSZAWIE, REP. A 298/2006 - ZMIANA § 2 STATUTU SPÓŁKI"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "AKT NOTARIALNY Z WALNEGO ZGROMADZENIA AKCJONARIUSZY - ZMIANA STATUTU SPÓŁKI - SPORZĄDZONY 29 CZERWCA 2007 R. (29.06.2007 R.), REPERTORIUM A NUMER 8362/2007 PRZED NOTARIUSZEM TAMARĄ JOANNĄ ŻURAKOWSKĄ PROWADZĄCĄ KANCELARIĘ NOTARIALNĄ W WARSZAWIE, PRZY ULICY ORDYNACKIEJ 9.\n-ZMIANA § 9 UST. 1 STATUTU SPÓŁKI."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "05.11.2007 R. - ASESOR NOTARIALNY RAFAŁ BĄBKA, ZASTĘPCA NOTARIUSZA DOROTY KAŁOWSKIEJ, KANCELARIA NOTARIALNA W WARSZAWIE, UL. GRZYBOWSKA NR 12/14 LOK. B-2, REP. A NR 11607/2007 - ZMIANA §26."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "5.11.2007, ASESOR NOTARIALNY RAFAŁ BĄBKA, ZASTĘPCA NOTARIUSZA DOROTY KAŁOWSKIEJ, KANCELARIA NOTARIALNA W WARSZAWIE, UL. GRZYBOWSKA NR 12/14 LOK. B-2, REP A NR 11607/2007 - DODANO § 9 B STATUTU"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "19.03.2008 R. - ASESOR NOTARIALNY RAFAŁ BĄBKA, ZASTĘPCA DOROTY KAŁOWSKIEJ - NOTARIUSZA W WARSZAWIE, REP. A - 3447/2008 - ZMIENIONO § 9 UST. 1."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "30.06.2009R - NOTARIUSZ W WARSZAWIE DOROTA KAŁOWSKA ZA REP A 5478/2009, ZMIANA: §§ 5, 8-42, TEKST JEDNOLITY"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "AKT NOTARIALNY Z DNIA 19 STYCZNIA 2010 ROKU SPORZĄDZONY PRZED NOTARIUSZEM PIOTREM SKOWORODKO PROWADZĄCYM KANCELARIĘ NOTARIALNĄ PRZY UL. NOWOGRODZKIEJ 51, 00-695 WARSZAWA, REPERTORIUM A NR 497/2010. ZMIENIONO BRZMIENIE § 6, § 7, § 11, § 12, § 13, § 17, § 19 ORAZ § 25 STATUTU SPÓŁKI."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "30.06.2010 ROKU, NOTARIUSZ MONIKA KĘDZIERSKA, KANCELARIA NOTARIALNA PRZY UL. NOWOGRODZKIEJ 51, 00-695 WARSZAWA, REP. A NR 6011/2010, ZMIENIONE: § 7, § 21"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "14.10.2010 R., REP. A NR 10013/2010, NOTARIUSZ PIOTR SKOWORODKO, KANCELARIA NOTARIALNA PIOTR SOROKA, MONIKA KĘDZIERSKA, PIOTR SKOWORODKO, IGOR SOROKA NOTARIUSZE - SPÓŁKA CYWILNA, UL. NOWOGRODZKA 51, WARSZAWA 00-695, ZMIENIONO § 8, PRZYJĘTO TEKST JEDNOLITY."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "03.12.2010 R., NOTARIUSZ JACEK NALEWAJEK, KANCELARIA NOTARIALNA W WARSZAWIE, REP. A 12371/2010\nDOKONANO ZMIANY: § 8, 11, 12, 13"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "DNIA 27 CZERWCA 2011 ROKU, JACEK NALEWAJEK - NOTARIUSZ W WARSZAWIE, PROWADZĄCY KANCELARIĘ NOTARIALNĄ W WARSZAWIE, REP. A NR 5408/2011\nZMIENIONO § 1 STATUTU"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "16.12.2011 R., REP. A NR 11441/2011, NOTARIUSZ JACEK NALEWAJEK, KANCELARIA NOTARIALNA JACEK NALEWAJEK, MAJA MATIAKOWSKA NOTARIUSZE SPÓŁKA CYWILNA, UL. GRZYBOWSKA 2/33, WARSZAWA 00-131,\nZMIENIONO § 8"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "23.11.2012R., NOTARIUSZ JACEK NALEWAJEK, KANCELARIA NOTARIALNA W WARSZAWIE PRZY UL. GRZYBOWSKIEJ 2 LOK. 33, REP. A NR 11113/2012, ZMIANA § 1 STATUTU SPÓŁKI"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "04.12.2015, JACEK NALEWAJEK, NOTARIUSZ W WARSZAWIE, REP A 10526/15, ZMIANA § 12 UST. 1, § 14, § 18 UST. 1, UCHYLONO § 19 UST. 3 PKT A I B. USTALONO TEKST JEDNOLITY STATUTU."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "24.05.2016 R., REP. A NR 4445/2016, NOTARIUSZ JACEK NALEWAJEK, KANCELARIA NOTARIALNA W WARSZAWIE PRZY UL. GRZYBOWSKIEJ 2/33, ZMIENIONO § 8"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "5.12.2016R., NOTARIUSZ JACEK NALEWAJEK, KANCELARIA NOTARIALNA W WARSZAWIE, REPERTORIUM A NR 10264/2016, DODANO § 25A ORAZ §25B DO STATUTU SPÓŁKI."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "11 PAŹDZIERNIKA 2017 ROKU, REP. A NR 9091/2017, NOTARIUSZ JACEK NALEWAJEK, KANCELARIA NOTARIALNA W WARSZAWIE, USUNIĘTO § 21 UST. 3, PRZYJĘTO TEKST JEDNOLITY STATUTU SPÓŁKI."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "22.09.2020 R., NOTARIUSZ JACEK NALEWAJEK, KANCELARIA NOTARIALNA W WARSZAWIE, REP. A NR 7088/2020, ZMIANA § 8 STATUTU SPÓŁKI"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "25.05.2021R., REP. A NR 5748/2021, NOTARIUSZ JACEK NALEWAJEK, KANCELARIA NOTARIALNA W WARSZAWIE, ZMIANA: § 5 UST. 1 STATUTU"
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "28.06.2022 R., REP. A NR 21664/2022, NOTARIUSZ ROBERT BŁASZCZAK, KANCELARIA NOTARIALNA PRZY PLACU BANKOWYM NR 1 W WARSZAWIE, ZMIENIONO § 14, ZMIENIONO § 16, DODANO § 21 UST. 3. PRZYJĘTO TEKST JEDNOLITY STATUTU."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "18.04.2023 R., REP. A NR 10923/2023, NOTARIUSZ ROBERT BŁASZCZAK, KANCELARIA NOTARIALNA W WARSZAWIE.\nZMIENIONO § 7 UST. 1 ORAZ § 8 UST. 1-3 STATUTU SPÓŁKI, DODANO §8 UST. 4-7 STATUTU SPÓŁKI."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "06.06.2023 R., REP. A NR 3347/2023, NOTARIUSZ JACEK NALEWAJEK, KANCELARIA NOTARIALNA W WARSZAWIE. ZMIENIONO §11, §12 ORAZ §19 UST. 3 STATUTU SPÓŁKI. DODANO §28 UST. 6 STATUTU SPÓŁKI."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "28.11.2024 R., REP. A NR 26038/2024, NOTARIUSZ BARTOSZ ŁUSZCZAK, KANCELARIA NOTARIALNA W WARSZAWIE. ZMIENIONO §12 UST. 1, §18 UST. 1, §19 UST. 1 I 2, §20 UST. 1 I 3, §22 ORAZ §28 UST. 5 STATUTU SPÓŁKI."
+            },
+            {
+              "zawarcieZmianaUmowyStatutu": "23.06.2025 R., REP. A NR 9709/2025, NOTARIUSZ BARTOSZ ŁUSZCZAK, KANCELARIA NOTARIALNA W WARSZAWIE. ZMIENIONO § 5 UST. 1, § 8 UST. 6 ORAZ § 21 UST. 2 PKT C STATUTU SPÓŁKI."
+            }
+          ]
+        },
+        "pozostaleInformacje": {
+          "czasNaJakiUtworzonyZostalPodmiot": "NIEOZNACZONY",
+          "czyUmowaStatutPrzyznajeUprawnieniaOsobiste": false,
+          "czyObligatoriuszeMajaPrawoDoUdzialuWZysku": false
+        },
+        "kapital": {
+          "wysokoscKapitaluZakladowego": {
+            "wartosc": "99910510,00",
+            "waluta": "PLN"
+          },
+          "wysokoscKapitaluDocelowegoZapasowego": {
+            "wartosc": "7038081,00",
+            "waluta": "PLN"
+          },
+          "lacznaLiczbaAkcjiUdzialow": "99910510",
+          "wartoscJednejAkcji": {
+            "wartosc": "1,00",
+            "waluta": "PLN"
+          },
+          "czescKapitaluWplaconegoPokrytego": {
+            "wartosc": "99910510,00",
+            "waluta": "PLN"
+          },
+          "wartoscWarunkowegoPodwyzszeniaKapitaluZakladowego": {
+            "wartosc": "5600000,00",
+            "waluta": "PLN"
+          },
+          "wniesioneAporty": {
+            "okreslenieWartosciUdzialowObjetychZaAport": [
+              {
+                "wartosc": "35000000,00",
+                "waluta": "PLN"
+              }
+            ]
+          }
+        },
+        "emisjeAkcji": [
+          {
+            "nazwaSeriiAkcji": "SERIA A",
+            "liczbaAkcjiWSerii": "0",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "SERIA B",
+            "liczbaAkcjiWSerii": "0",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "SERIA C",
+            "liczbaAkcjiWSerii": "0",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "C1",
+            "liczbaAkcjiWSerii": "0",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "SERIA D",
+            "liczbaAkcjiWSerii": "0",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "SERIA E",
+            "liczbaAkcjiWSerii": "0",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "F",
+            "liczbaAkcjiWSerii": "0",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "G",
+            "liczbaAkcjiWSerii": "0",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "H",
+            "liczbaAkcjiWSerii": "0",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "J",
+            "liczbaAkcjiWSerii": "0",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "I",
+            "liczbaAkcjiWSerii": "0",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "K",
+            "liczbaAkcjiWSerii": "0",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "L",
+            "liczbaAkcjiWSerii": "0",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "M",
+            "liczbaAkcjiWSerii": "0",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          },
+          {
+            "nazwaSeriiAkcji": "A – M",
+            "liczbaAkcjiWSerii": "99910510",
+            "czyAkcjeUprzywilejowaneLiczbaAkcjiRodzajUprzywilejowania": "AKCJE NIE SĄ UPRZYWILEJOWANE"
+          }
+        ],
+        "wzmiankaOUpowaznieniuDoEmisjiWarrantowSubskrypcyjnych": {
+          "czyZarzadJestUprawnionyDoEmisjiWarrantowSubskrypcyjnych": true
+        }
+      },
+      "dzial2": {
+        "reprezentacja": {
+          "nazwaOrganu": "ZARZĄD",
+          "sposobReprezentacji": "W PRZYPADKU ZARZĄDU JEDNOOSOBOWEGO DO REPREZENTOWANIA SPÓŁKI UPOWAŻNIONY JEST JEDNOOSOBOWO CZŁONEK ZARZĄDU.\nW PRZYPADKU POWOŁANIA ZARZĄDU WIELOOSOBOWEGO DO REPREZENTOWANIA SPÓŁKI UPOWAŻNIENI SĄ DWAJ CZŁONKOWIE ZARZĄDU DZIAŁAJĄCY ŁĄCZNIE ALBO JEDEN CZŁONEK ZARZĄDU DZIAŁAJĄCY ŁĄCZNIE Z PROKURENTEM.",
+          "sklad": [
+            {
+              "nazwisko": {
+                "nazwiskoICzlon": "N**********"
+              },
+              "imiona": {
+                "imie": "P****",
+                "imieDrugie": "M*****"
+              },
+              "identyfikator": {
+                "pesel": "7**********"
+              },
+              "funkcjaWOrganie": "CZŁONEK ZARZĄDU",
+              "czyZawieszona": false
+            },
+            {
+              "nazwisko": {
+                "nazwiskoICzlon": "B*******"
+              },
+              "imiona": {
+                "imie": "A***",
+                "imieDrugie": "K*****"
+              },
+              "identyfikator": {
+                "pesel": "7**********"
+              },
+              "funkcjaWOrganie": "CZŁONEK ZARZĄDU",
+              "czyZawieszona": false
+            },
+            {
+              "nazwisko": {
+                "nazwiskoICzlon": "N*********"
+              },
+              "imiona": {
+                "imie": "M*****",
+                "imieDrugie": "A******"
+              },
+              "identyfikator": {
+                "pesel": "7**********"
+              },
+              "funkcjaWOrganie": "CZŁONEK ZARZĄDU",
+              "czyZawieszona": false
+            },
+            {
+              "nazwisko": {
+                "nazwiskoICzlon": "K********"
+              },
+              "imiona": {
+                "imie": "P****",
+                "imieDrugie": "P****"
+              },
+              "identyfikator": {
+                "pesel": "8**********"
+              },
+              "funkcjaWOrganie": "CZŁONEK ZARZĄDU",
+              "czyZawieszona": false
+            },
+            {
+              "nazwisko": {
+                "nazwiskoICzlon": "Z******"
+              },
+              "imiona": {
+                "imie": "P****",
+                "imieDrugie": "K********"
+              },
+              "identyfikator": {
+                "pesel": "7**********"
+              },
+              "funkcjaWOrganie": "CZŁONEK ZARZĄDU",
+              "czyZawieszona": false
+            },
+            {
+              "nazwisko": {
+                "nazwiskoICzlon": "C***"
+              },
+              "imiona": {
+                "imie": "J*******",
+                "imieDrugie": "S************"
+              },
+              "identyfikator": {},
+              "funkcjaWOrganie": "CZŁONEK ZARZĄDU",
+              "czyZawieszona": false
+            },
+            {
+              "nazwisko": {
+                "nazwiskoICzlon": "R***********"
+              },
+              "imiona": {
+                "imie": "K*******",
+                "imieDrugie": "K********"
+              },
+              "identyfikator": {
+                "pesel": "7**********"
+              },
+              "funkcjaWOrganie": "CZŁONEK ZARZĄDU",
+              "czyZawieszona": false
+            }
+          ]
+        },
+        "organNadzoru": [
+          {
+            "nazwa": "RADA NADZORCZA",
+            "sklad": [
+              {
+                "nazwisko": {
+                  "nazwiskoICzlon": "I******"
+                },
+                "imiona": {
+                  "imie": "M*****",
+                  "imieDrugie": "P****"
+                },
+                "identyfikator": {
+                  "pesel": "7**********"
+                }
+              },
+              {
+                "nazwisko": {
+                  "nazwiskoICzlon": "K*******"
+                },
+                "imiona": {
+                  "imie": "A***",
+                  "imieDrugie": "M*****"
+                },
+                "identyfikator": {
+                  "pesel": "6**********"
+                }
+              },
+              {
+                "nazwisko": {
+                  "nazwiskoICzlon": "G******"
+                },
+                "imiona": {
+                  "imie": "D****"
+                },
+                "identyfikator": {
+                  "dataUrodzenia": "21.07.1965"
+                }
+              },
+              {
+                "nazwisko": {
+                  "nazwiskoICzlon": "C*******",
+                  "nazwiskoIICzlon": "T*****"
+                },
+                "imiona": {
+                  "imie": "B****"
+                },
+                "identyfikator": {
+                  "pesel": "7**********"
+                }
+              },
+              {
+                "nazwisko": {
+                  "nazwiskoICzlon": "S*****",
+                  "nazwiskoIICzlon": "G**********"
+                },
+                "imiona": {
+                  "imie": "A********",
+                  "imieDrugie": "K********"
+                },
+                "identyfikator": {
+                  "pesel": "7**********"
+                }
+              }
+            ]
+          }
+        ],
+        "prokurenci": [
+          {
+            "nazwisko": {
+              "nazwiskoICzlon": "T**********"
+            },
+            "imiona": {
+              "imie": "A********",
+              "imieDrugie": "M****"
+            },
+            "identyfikator": {
+              "pesel": "7**********"
+            },
+            "rodzajProkury": "ŁĄCZNA Z INNYM PROKURENTEM LUB CZŁONKIEM ZARZĄDU"
+          },
+          {
+            "nazwisko": {
+              "nazwiskoICzlon": "P********"
+            },
+            "imiona": {
+              "imie": "A********",
+              "imieDrugie": "A***"
+            },
+            "identyfikator": {
+              "pesel": "7**********"
+            },
+            "rodzajProkury": "ŁĄCZNA Z INNYM PROKURENTEM LUB CZŁONKIEM ZARZĄDU"
+          }
+        ]
+      },
+      "dzial3": {
+        "przedmiotDzialalnosci": {
+          "przedmiotPrzewazajacejDzialalnosci": [
+            {
+              "opis": "DZIAŁALNOŚĆ W ZAKRESIE PROGRAMOWANIA GIER KOMPUTEROWYCH",
+              "kodDzial": "62",
+              "kodKlasa": "10",
+              "kodPodklasa": "A"
+            }
+          ],
+          "przedmiotPozostalejDzialalnosci": [
+            {
+              "opis": "PRODUKCJA GIER I ZABAWEK",
+              "kodDzial": "32",
+              "kodKlasa": "40",
+              "kodPodklasa": "Z"
+            },
+            {
+              "opis": "DZIAŁALNOŚĆ WYDAWNICZA W ZAKRESIE GIER KOMPUTEROWYCH",
+              "kodDzial": "58",
+              "kodKlasa": "21",
+              "kodPodklasa": "Z"
+            },
+            {
+              "opis": "DZIAŁALNOŚĆ WYDAWNICZA W ZAKRESIE POZOSTAŁEGO OPROGRAMOWANIA",
+              "kodDzial": "58",
+              "kodKlasa": "29",
+              "kodPodklasa": "Z"
+            },
+            {
+              "opis": "DZIERŻAWA WŁASNOŚCI INTELEKTUALNEJ I PODOBNYCH PRODUKTÓW, Z WYŁĄCZENIEM PRAC CHRONIONYCH PRAWEM AUTORSKIM",
+              "kodDzial": "77",
+              "kodKlasa": "40",
+              "kodPodklasa": "Z"
+            },
+            {
+              "opis": "SPRZEDAŻ HURTOWA URZĄDZEŃ TECHNOLOGII INFORMACYJNEJ I KOMUNIKACYJNEJ",
+              "kodDzial": "46",
+              "kodKlasa": "50",
+              "kodPodklasa": "Z"
+            },
+            {
+              "opis": "SPRZEDAŻ DETALICZNA NARZĘDZI TECHNOLOGII INFORMACYJNEJ I KOMUNIKACYJNEJ",
+              "kodDzial": "47",
+              "kodKlasa": "40",
+              "kodPodklasa": "Z"
+            },
+            {
+              "opis": "BADANIA NAUKOWE I PRACE ROZWOJOWE W DZIEDZINIE NAUK PRZYRODNICZYCH I TECHNICZNYCH",
+              "kodDzial": "72",
+              "kodKlasa": "10",
+              "kodPodklasa": "Z"
+            },
+            {
+              "opis": "POZOSTAŁA DZIAŁALNOŚĆ W ZAKRESIE PROGRAMOWANIA",
+              "kodDzial": "62",
+              "kodKlasa": "10",
+              "kodPodklasa": "B"
+            },
+            {
+              "opis": "POZOSTAŁA DZIAŁALNOŚĆ ZWIĄZANA Z DYSTRYBUCJĄ TREŚCI",
+              "kodDzial": "60",
+              "kodKlasa": "39",
+              "kodPodklasa": "Z"
+            }
+          ]
+        },
+        "wzmiankiOZlozonychDokumentach": {
+          "wzmiankaOZlozeniuRocznegoSprawozdaniaFinansowego": [
+            {
+              "dataZlozenia": "26.06.2002",
+              "zaOkresOdDo": "ROK 2001"
+            },
+            {
+              "dataZlozenia": "09.07.2003",
+              "zaOkresOdDo": "1.01.2002 R. - 31.12.2002 R."
+            },
+            {
+              "dataZlozenia": "28.09.2004",
+              "zaOkresOdDo": "01.01.2003 R. - 31.12.2003 R."
+            },
+            {
+              "dataZlozenia": "18.05.2005",
+              "zaOkresOdDo": "01.01.2004 R. - 31.12.2004 R."
+            },
+            {
+              "dataZlozenia": "16.05.2005",
+              "zaOkresOdDo": "01.01.2005 - 31.12.2005"
+            },
+            {
+              "dataZlozenia": "14.12.2007",
+              "zaOkresOdDo": "01.01.2006 - 31.12.2006"
+            },
+            {
+              "dataZlozenia": "09.07.2008",
+              "zaOkresOdDo": "2007"
+            },
+            {
+              "dataZlozenia": "03.07.2009",
+              "zaOkresOdDo": "2008 ROK"
+            },
+            {
+              "dataZlozenia": "07.07.2010",
+              "zaOkresOdDo": "01.01.2009 - 31.12.2009"
+            },
+            {
+              "dataZlozenia": "13.07.2011",
+              "zaOkresOdDo": "01.01.2010 - 31.12.2010"
+            },
+            {
+              "dataZlozenia": "02.07.2012",
+              "zaOkresOdDo": "01.01.2011 - 31.12.2011"
+            },
+            {
+              "dataZlozenia": "14.05.2013",
+              "zaOkresOdDo": "01.01.2012 - 31.12.2012"
+            },
+            {
+              "dataZlozenia": "15.05.2014",
+              "zaOkresOdDo": "OD 01.01.2013 DO 31.12.2013"
+            },
+            {
+              "dataZlozenia": "12.06.2015",
+              "zaOkresOdDo": "OD 01.01.2014 DO 31.12.2014"
+            },
+            {
+              "dataZlozenia": "02.06.2016",
+              "zaOkresOdDo": "OD 01.01.2015 DO 31.12.2015"
+            },
+            {
+              "dataZlozenia": "06.06.2017",
+              "zaOkresOdDo": "OD 01.01.2016 DO 31.12.2016"
+            },
+            {
+              "dataZlozenia": "19.06.2018",
+              "zaOkresOdDo": "OD 01.01.2017 DO 31.12.2017"
+            },
+            {
+              "dataZlozenia": "04.06.2019",
+              "zaOkresOdDo": "OD 01.01.2018 DO 31.12.2018"
+            },
+            {
+              "dataZlozenia": "02.09.2020",
+              "zaOkresOdDo": "OD 01.01.2019 DO 31.12.2019"
+            },
+            {
+              "dataZlozenia": "30.06.2021",
+              "zaOkresOdDo": "OD 01.01.2020 DO 31.12.2020"
+            },
+            {
+              "dataZlozenia": "30.06.2022",
+              "zaOkresOdDo": "OD 01.01.2021 DO 31.12.2021"
+            },
+            {
+              "dataZlozenia": "20.06.2023",
+              "zaOkresOdDo": "OD 01.01.2022 DO 31.12.2022"
+            },
+            {
+              "dataZlozenia": "20.06.2024",
+              "zaOkresOdDo": "OD 01.01.2023 DO 31.12.2023"
+            },
+            {
+              "dataZlozenia": "26.06.2025",
+              "zaOkresOdDo": "OD 01.01.2024 DO 31.12.2024"
+            }
+          ],
+          "wzmiankaOZlozeniuOpiniiBieglegoRewidentaSprawozdaniaZBadania": [
+            {
+              "zaOkresOdDo": "ZA 2001 ROK"
+            },
+            {
+              "zaOkresOdDo": "1.01.2002 R. - 31.12.2002 R."
+            },
+            {
+              "zaOkresOdDo": "01.01.2003 R. - 31.12.2003 R."
+            },
+            {
+              "zaOkresOdDo": "01.01.2004 R. - 31.12.2004 R."
+            },
+            {
+              "zaOkresOdDo": "01.01.2005 - 31.12.2005"
+            },
+            {
+              "zaOkresOdDo": "01.01.2006 - 31.12.2006"
+            },
+            {
+              "zaOkresOdDo": "2007"
+            },
+            {
+              "zaOkresOdDo": "2008 ROK"
+            },
+            {
+              "zaOkresOdDo": "01.01.2009 - 31.12.2009"
+            },
+            {
+              "zaOkresOdDo": "01.01.2010 - 31.12.2010"
+            },
+            {
+              "zaOkresOdDo": "01.01.2011 - 31.12.2011"
+            },
+            {
+              "zaOkresOdDo": "01.01.2012 - 31.12.2012"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2013 DO 31.12.2013"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2014 DO 31.12.2014"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2015 DO 31.12.2015"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2016 DO 31.12.2016"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2017 DO 31.12.2017"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2018 DO 31.12.2018"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2019 DO 31.12.2019"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2020 DO 31.12.2020"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2021 DO 31.12.2021"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2022 DO 31.12.2022"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2023 DO 31.12.2023"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2024 DO 31.12.2024"
+            }
+          ],
+          "wzmiankaOZlozeniuUchwalyPostanowieniaOZatwierdzeniuRocznegoSprawozdaniaFinansowego": [
+            {
+              "zaOkresOdDo": "ZA 2001 ROK"
+            },
+            {
+              "zaOkresOdDo": "1.01.2002 R. - 31.12.2002 R."
+            },
+            {
+              "zaOkresOdDo": "01.01.2003 R. - 31.12.2003 R."
+            },
+            {
+              "zaOkresOdDo": "01.01.2004 R. - 31.12.2004 R."
+            },
+            {
+              "zaOkresOdDo": "01.01.2005 - 31.12.2005"
+            },
+            {
+              "zaOkresOdDo": "01.01.2006 - 31.12.2006"
+            },
+            {
+              "zaOkresOdDo": "2007"
+            },
+            {
+              "zaOkresOdDo": "2008 ROK"
+            },
+            {
+              "zaOkresOdDo": "01.01.2009 - 31.12.2009"
+            },
+            {
+              "zaOkresOdDo": "01.01.2010 - 31.12.2010"
+            },
+            {
+              "zaOkresOdDo": "01.01.2011 - 31.12.2011"
+            },
+            {
+              "zaOkresOdDo": "01.01.2012 - 31.12.2012"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2013 DO 31.12.2013"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2014 DO 31.12.2014"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2015 DO 31.12.2015"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2016 DO 31.12.2016"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2017 DO 31.12.2017"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2018 DO 31.12.2018"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2019 DO 31.12.2019"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2020 DO 31.12.2020"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2021 DO 31.12.2021"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2022 DO 31.12.2022"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2023 DO 31.12.2023"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2024 DO 31.12.2024"
+            }
+          ],
+          "wzmiankaOZlozeniuSprawozdaniaZDzialalnosci": [
+            {
+              "zaOkresOdDo": "ZA 2001 ROK"
+            },
+            {
+              "zaOkresOdDo": "1.01.2002 R. - 31.12.2002 R."
+            },
+            {
+              "zaOkresOdDo": "01.01.2003 R. - 31.12.2003 R."
+            },
+            {
+              "zaOkresOdDo": "01.01.2004 R. - 31.12.2004 R."
+            },
+            {
+              "zaOkresOdDo": "01.01.2005 - 31.12.2005"
+            },
+            {
+              "zaOkresOdDo": "01.01.2006 - 31.12.2006"
+            },
+            {
+              "zaOkresOdDo": "2007"
+            },
+            {
+              "zaOkresOdDo": "2008 ROK"
+            },
+            {
+              "zaOkresOdDo": "01.01.2009 - 31.12.2009"
+            },
+            {
+              "zaOkresOdDo": "01.01.2010 - 31.12.2010"
+            },
+            {
+              "zaOkresOdDo": "01.01.2011 - 31.12.2011"
+            },
+            {
+              "zaOkresOdDo": "01.01.2012 - 31.12.2012"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2013 DO 31.12.2013"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2014 DO 31.12.2014"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2015 DO 31.12.2015"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2016 DO 31.12.2016"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2017 DO 31.12.2017"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2018 DO 31.12.2018"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2019 DO 31.12.2019"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2020 DO 31.12.2020"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2021 DO 31.12.2021"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2022 DO 31.12.2022"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2023 DO 31.12.2023"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2024 DO 31.12.2024"
+            }
+          ],
+          "wzmiankaOZlozeniuSprawozdaniaZAtestacjiSprawozdawczosciZrownowazonegoRozwoju": [
+            {
+              "zaOkresOdDo": "OD 01.01.2024 DO 31.12.2024"
+            }
+          ]
+        },
+        "sprawozdaniaGrupyKapitalowej": {
+          "wzmiankaOZlozeniuSkonsolidowanegoRocznegoSprawozdaniaFinansowego": [
+            {
+              "dataZlozenia": "14.12.2007",
+              "zaOkresOdDo": "01.01.2006 - 31.12.2006"
+            },
+            {
+              "dataZlozenia": "09.07.2008",
+              "zaOkresOdDo": "2007"
+            },
+            {
+              "dataZlozenia": "03.07.2009",
+              "zaOkresOdDo": "2008 ROK"
+            },
+            {
+              "dataZlozenia": "13.07.2011",
+              "zaOkresOdDo": "01.01.2010 - 31.12.2010"
+            },
+            {
+              "dataZlozenia": "02.07.2012",
+              "zaOkresOdDo": "01.01.2011 - 31.12.2011"
+            },
+            {
+              "dataZlozenia": "14.05.2013",
+              "zaOkresOdDo": "01.01.2012 - 31.12.2012"
+            },
+            {
+              "dataZlozenia": "15.05.2014",
+              "zaOkresOdDo": "OD 01.01.2013 DO 31.12.2013"
+            },
+            {
+              "dataZlozenia": "12.06.2015",
+              "zaOkresOdDo": "OD 01.01.2014 DO 31.12.2014"
+            },
+            {
+              "dataZlozenia": "02.06.2016",
+              "zaOkresOdDo": "OD 01.01.2015 DO 31.12.2015"
+            },
+            {
+              "dataZlozenia": "06.06.2017",
+              "zaOkresOdDo": "OD 01.01.2016 DO 31.12.2016"
+            },
+            {
+              "dataZlozenia": "04.06.2019",
+              "zaOkresOdDo": "OD 01.01.2018 DO 31.12.2018"
+            },
+            {
+              "dataZlozenia": "08.09.2020",
+              "zaOkresOdDo": "OD 01.01.2019 DO 31.12.2019"
+            },
+            {
+              "dataZlozenia": "30.06.2021",
+              "zaOkresOdDo": "OD 01.01.2020 DO 31.12.2020"
+            },
+            {
+              "dataZlozenia": "30.06.2022",
+              "zaOkresOdDo": "OD 01.01.2021 DO 31.12.2021"
+            },
+            {
+              "dataZlozenia": "20.06.2023",
+              "zaOkresOdDo": "OD 01.01.2022 DO 31.12.2022"
+            },
+            {
+              "dataZlozenia": "20.06.2024",
+              "zaOkresOdDo": "OD 01.01.2023 DO 31.12.2023"
+            },
+            {
+              "dataZlozenia": "26.06.2025",
+              "zaOkresOdDo": "OD 01.01.2024 DO 31.12.2024"
+            }
+          ],
+          "wzmiankaOZlozeniuOpiniiBieglegoRewidentaSprawozdaniaZBadania": [
+            {
+              "zaOkresOdDo": "01.01.2006 - 31.12.2006"
+            },
+            {
+              "zaOkresOdDo": "2007"
+            },
+            {
+              "zaOkresOdDo": "2008 ROK"
+            },
+            {
+              "zaOkresOdDo": "01.01.2010 - 31.12.2010"
+            },
+            {
+              "zaOkresOdDo": "01.01.2011 - 31.12.2011"
+            },
+            {
+              "zaOkresOdDo": "01.01.2012 - 31.12.2012"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2013 DO 31.12.2013"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2014 DO 31.12.2014"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2015 DO 31.12.2015"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2016 DO 31.12.2016"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2018 DO 31.12.2018"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2019 DO 31.12.2019"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2020 DO 31.12.2020"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2021 DO 31.12.2021"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2022 DO 31.12.2022"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2023 DO 31.12.2023"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2024 DO 31.12.2024"
+            }
+          ],
+          "wzmiankaOZlozeniuUchwalyPostanowieniaOZatwierdzeniuSkonsolidowanegoRocznegoSprawozdaniaFinansowego": [
+            {
+              "zaOkresOdDo": "01.01.2006 - 31.12.2006"
+            },
+            {
+              "zaOkresOdDo": "2007"
+            },
+            {
+              "zaOkresOdDo": "2008 ROK"
+            },
+            {
+              "zaOkresOdDo": "01.01.2010 - 31.12.2010"
+            },
+            {
+              "zaOkresOdDo": "01.01.2011 - 31.12.2011"
+            },
+            {
+              "zaOkresOdDo": "01.01.2012 - 31.12.2012"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2013 DO 31.12.2013"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2014 DO 31.12.2014"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2015 DO 31.12.2015"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2016 DO 31.12.2016"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2018 DO 31.12.2018"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2019 DO 31.12.2019"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2020 DO 31.12.2020"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2021 DO 31.12.2021"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2022 DO 31.12.2022"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2023 DO 31.12.2023"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2024 DO 31.12.2024"
+            }
+          ],
+          "wzmiankaOZlozeniuSprawozdaniaZDzialalnosciGrupyKapitalowejSpolkiDominujacejLacznie": [
+            {
+              "zaOkresOdDo": "2008 ROK"
+            },
+            {
+              "zaOkresOdDo": "01.01.2010 - 31.12.2010"
+            },
+            {
+              "zaOkresOdDo": "01.01.2011 - 31.12.2011"
+            },
+            {
+              "zaOkresOdDo": "01.01.2012 - 31.12.2012"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2013 DO 31.12.2013"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2014 DO 31.12.2014"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2015 DO 31.12.2015"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2016 DO 31.12.2016"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2018 DO 31.12.2018"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2019 DO 31.12.2019"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2020 DO 31.12.2020"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2021 DO 31.12.2021"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2022 DO 31.12.2022"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2023 DO 31.12.2023"
+            },
+            {
+              "zaOkresOdDo": "OD 01.01.2024 DO 31.12.2024"
+            }
+          ]
+        },
+        "informacjaODniuKonczacymRokObrotowy": {
+          "dzienKonczacyPierwszyRokObrotowy": "31.12.2001"
+        }
+      },
+      "dzial4": {},
+      "dzial5": {},
+      "dzial6": {
+        "polaczeniePodzialPrzeksztalcenie": [
+          {
+            "okreslenieOkolicznosci": "PRZEJĘCIE CZĘŚCI MAJĄTKU INNEJ SPÓŁKI W WYNIKU PODZIAŁU",
+            "opisPolaczeniaPodzialuPrzeksztalcenia": "PODZIAŁ SPÓŁKI AKCYJNEJ OPTIMUS S.A. /\"SPÓŁKA DZIELONA\"/ PRZEZ WYDZIELENIE W TRYBIE OKREŚLONYM W ART. 529 PAR. 1 PKT. 4 KODEKSU SPÓŁEK HANDLOWYCH W DRODZE PRZENIESIENIA CZĘŚCI MAJĄTKU SPÓŁKI DZIELONEJ NA OPTIMUS TECHNOLOGIE S.A. /\"SPÓŁKA PRZEJMUJĄCA\"/.\nUCHWAŁA NADZWYCZAJNEGO ZGROMADZENIA AKCJONARIUSZY Z DNIA 21 WRZEŚNIA 2001 ROKU.",
+            "podmiotyPrzejmowane": [
+              {
+                "nazwa": "OPTIMUS SPÓŁKA AKCYJNA,------",
+                "krajNazwaRejestru": "------,",
+                "identyfikator": {
+                  "regon": "00133773000000"
+                }
+              }
+            ]
+          },
+          {
+            "okreslenieOkolicznosci": "PRZEJĘCIE INNEJ SPÓŁKI",
+            "opisPolaczeniaPodzialuPrzeksztalcenia": "POŁĄCZENIE W TRYBIE ART. 492 § 1 PKT 1 W ZWIĄZKU Z ART. 515 § 1 ORAZ ART. 516 § 6 KODEKSU SPÓŁEK HANDLOWYCH (POŁĄCZENIE PRZEZ PRZEJĘCIE) PRZEZ PRZENIESIENIE CAŁEGO MAJĄTKU CDP INVESTMENT SP. Z O.O. (JAKO SPÓŁKI PRZEJMOWANEJ) NA OPTIMUS S.A. (JAKO SPÓŁKĘ PRZEJMUJĄCĄ) BEZ PODWYŻSZENIA KAPITAŁU ZAKŁADOWEGO OPTIMUS S.A. ORAZ BEZ WYMIANY UDZIAŁÓW CDP INVESTMENT SP. Z O.O. NA AKCJE OPTIMUS S.A.\n\nUCHWAŁA NR 3 NADZWYCZAJNEGO ZGROMADZENIA AKCJONARIUSZY OPTIMUS S.A. Z DNIA 3 GRUDNIA 2010 R. W SPRAWIE POŁĄCZENIA ZE SPÓŁKĄ CDP INVESTMENT SP. Z O.O.\nUCHWAŁA ZGROMADZENIA WSPÓLNIKÓW CDP INVESTMENT SP. Z O.O. Z DNIA 3 GRUDNIA 2010 R. W SPRAWIE POŁĄCZENIA ZE SPÓŁKĄ OPTIMUS S.A.",
+            "podmiotyPrzejmowane": [
+              {
+                "nazwa": "CDP INVESTMENT SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ,------",
+                "krajNazwaRejestru": "------,",
+                "identyfikator": {
+                  "regon": "14121461900000"
+                }
+              }
+            ]
+          },
+          {
+            "okreslenieOkolicznosci": "PRZEJĘCIE INNEJ SPÓŁKI",
+            "opisPolaczeniaPodzialuPrzeksztalcenia": "POŁĄCZENIE SPÓŁEK NASTĄPI W TRYBIE ART. 492 § 1 PKT 1 KSH, ART. 515 § 1 KSH ORAZ 516 § 6 KSH, TJ. PRZEZ PRZENIESIENIE CAŁEGO MAJĄTKU SPÓŁKI PRZEJMOWANEJ NA SPÓŁKĘ PRZEJMUJĄCĄ BEZ PODWYŻSZENIA KAPITAŁU ZAKŁADOWEGO SPÓŁKI PRZEJMUJĄCEJ ORAZ BEZ WYMIANY UDZIAŁÓW SPÓŁKI PRZEJMOWANEJ NA AKCJE SPÓŁKI PRZEJMUJĄCEJ.\nNA PODSTAWIE ART. 515 § 1 KSH POŁĄCZENIE ZOSTANIE PRZEPROWADZONE BEZ PODWYŻSZENIA KAPITAŁU ZAKŁADOWEGO SPÓŁKI PRZEJMUJĄCEJ. W WYNIKU POŁĄCZENIA SPÓŁKA PRZEJMOWANA ZOSTANIE ROZWIĄZANA BEZ PRZEPROWADZENIA LIKWIDACJI.\nUCHWAŁA NADZWYCZAJNEGO ZGROMADZENIA WSPÓLNIKÓW CD PROJEKT RED SPÓŁKA AKCYJNA Z DNIA 07.09.2011 NOTARIUSZ JACEK NALEWAJEK, KANCELARIA NOTARIALNA W WARSZAWIE REP. A NR 8425/2011\nUCHWAŁA NADZWYCZAJNEGO ZGROMADZENIA WSPÓLNIKÓW CD PROJEKT RED SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ Z DNIA 07.09.2011 NOTARIUSZ JACEK NALEWAJEK, KANCELARIA NOTARIALNA W WARSZAWIE REP. A NR 8422/2011",
+            "podmiotyPrzejmowane": [
+              {
+                "nazwa": "CD PROJEKT RED SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ,------",
+                "krajNazwaRejestru": "------,",
+                "identyfikator": {
+                  "regon": "01748656400000"
+                }
+              }
+            ]
+          },
+          {
+            "okreslenieOkolicznosci": "PRZEJĘCIE INNEJ SPÓŁKI",
+            "opisPolaczeniaPodzialuPrzeksztalcenia": "POŁĄCZENIE SPÓŁEK W TRYBIE ART. 492 § 1 PKT 1 KSH, ART. 515 § 1 KSH ORAZ ART. 516 § 6 KSH, TJ. PRZEZ PRZENIESIENIE CAŁEGO MAJĄTKU SPÓŁKI PRZEJMOWANEJ NA SPÓŁKĘ PRZEJMUJĄCĄ BEZ PODWYŻSZENIA KAPITAŁU ZAKŁADOWEGO SPÓŁKI PRZEJMUJĄCEJ ORAZ BEZ WYMIANY UDZIAŁÓW SPÓŁKI PRZEJMOWANEJ NA AKCJE SPÓŁKI PRZEJMUJĄCEJ.\n\nNA PODSTAWIE ART. 515 § 1 KSH, POŁĄCZENIE ZOSTANIE PRZEPROWADZONE BEZ PODWYŻSZENIA KAPITAŁU ZAKŁADOWEGO SPÓŁKI PRZEJMUJĄCEJ. W WYNIKU POŁĄCZENIA SPÓŁKA PRZEJMOWANA ZOSTANIE ROZWIĄZANA BEZ PRZEPROWADZENIA LIKWIDACJI.\n\nZGODNIE Z ART. 506 § 1 KSH, POŁĄCZENIE JEST DOKONYWANE NA PODSTAWIE UCHWAŁY NR 3 NADZWYCZAJNEGO WALNEGO ZGROMADZENIA SPÓŁKI PRZEJMUJĄCEJ Z DNIA 4 GRUDNIA 2015 R. ORAZ UCHWAŁY NADZWYCZAJNEGO ZGROMADZENIA WSPÓLNIKÓW SPÓŁKI PRZEJMOWANEJ Z DNIA 4 GRUDNIA 2015 R.",
+            "podmiotyPrzejmowane": [
+              {
+                "nazwa": "BRAND PROJEKT SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ,------",
+                "krajNazwaRejestru": "------,",
+                "identyfikator": {
+                  "regon": "14679175800000"
+                }
+              }
+            ]
+          },
+          {
+            "okreslenieOkolicznosci": "PRZEJĘCIE INNEJ SPÓŁKI",
+            "opisPolaczeniaPodzialuPrzeksztalcenia": "POŁĄCZENIE SPÓŁEK W TRYBIE ART. 492 § 1 PKT 1 KSH, ART. 515 § 1 KSH ORAZ ART. 516 § 6 KSH PRZEZ PRZENIESIENIE CAŁEGO MAJĄTKU SPÓŁKI PRZEJMOWANEJ NA SPÓŁKĘ PRZEJMUJĄCĄ BEZ PODWYŻSZENIA KAPITAŁU ZAKŁADOWEGO SPÓŁKI PRZEJMUJĄCEJ ORAZ BEZ WYMIANY AKCJI SPÓŁKI PRZEJMOWANEJ NA AKCJE SPÓŁKI PRZEJMUJĄCEJ.  \nPOŁĄCZENIE JEST DOKONYWANE NA PODSTAWIE UCHWAŁY NR 5 NADZWYCZAJNEGO WALNEGO ZGROMADZENIA SPÓŁKI PRZEJMUJĄCEJ CD PROJEKT SPÓŁKA AKCYJNA Z DNIA 29 LISTOPADA 2016 R. ORAZ UCHWAŁY NR 1 NADZWYCZAJNEGO WALNEGO ZGROMADZENIA SPÓŁKI PRZEJMOWANEJ CD PROJEKT BRANDS SPÓŁKA AKCYJNA Z DNIA 29 LISTOPADA 2016 R.",
+            "podmiotyPrzejmowane": [
+              {
+                "nazwa": "CD PROJEKT BRANDS SPÓŁKA AKCYJNA,------",
+                "krajNazwaRejestru": "------,",
+                "identyfikator": {
+                  "regon": "14738682400000"
+                }
+              }
+            ]
+          },
+          {
+            "okreslenieOkolicznosci": "PRZEJĘCIE INNEJ SPÓŁKI",
+            "opisPolaczeniaPodzialuPrzeksztalcenia": "POŁĄCZENIE W TRYBIE ART. 492 § 1 PKT 1 KSH W ZWIĄZKU Z ART. 516 § 6 KSH (ŁĄCZENIE SIĘ PRZEZ PRZEJĘCIE) POPRZEZ PRZENIESIENIE CAŁEGO MAJĄTKU CD PROJEKT RED STORE SP. Z O.O. Z SIEDZIBĄ W WARSZAWIE (SPÓŁKA PRZEJMOWANA) NA CD PROJEKT S.A. (SPÓŁKA PRZEJMUJĄCA), BEZ PODWYŻSZENIA KAPITAŁU ZAKŁADOWEGO SPÓŁKI PRZEJMUJĄCEJ ORAZ BEZ WYMIANY UDZIAŁÓW SPÓŁKI PRZEJMOWANEJ NA AKCJE SPÓŁKI PRZEJMUJĄCEJ., 20.12.2022, POŁĄCZENIE NASTĘPUJE ZGODNIE Z UCHWAŁĄ NR 8 NADZWYCZAJNEGO WALNEGO ZGROMADZENIA CD PROJEKT S.A. PODJĘTĄ W DNIU 20.12.2022 R., ZAPROTOKOŁOWANĄ PRZEZ NOTARIUSZA ROBERTA BŁASZCZAKA Z KANCELARII NOTARIALNEJ W WARSZAWIE, REP. A NR 51636/2022 ORAZ UCHWAŁĄ NR 1 NADZWYCZAJNEGO ZGROMADZENIA WSPÓLNIKÓW CD PROJEKT RED STORE SP. Z O.O.\nPODJĘTĄ W DNIU 20.12.2022 R. ZAPROTOKOŁOWANĄ PRZEZ NOTARIUSZA ROBERTA BŁASZCZAKA Z KANCELARII NOTARIALNEJ W WARSZAWIE REP. A NR 51642/2022.",
+            "podmiotyPrzejmowane": [
+              {
+                "nazwa": "CD PROJEKT RED STORE SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ, SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+                "krajNazwaRejestru": "POLSKA, KRAJOWY REJESTR SĄDOWY",
+                "krs": {
+                  "krs": "0000766456"
+                },
+                "nazwaSadu": "*******",
+                "identyfikator": {
+                  "regon": "38231030000000"
+                }
+              }
+            ]
+          },
+          {
+            "okreslenieOkolicznosci": "PRZEJĘCIE INNEJ SPÓŁKI",
+            "opisPolaczeniaPodzialuPrzeksztalcenia": "POŁĄCZENIE W TRYBIE ART. 492 § 1 PKT 1 KSH W ZWIĄZKU Z ART. 516 § 6 KSH (ŁĄCZENIE SIĘ PRZEZ PRZEJĘCIE) POPRZEZ PRZENIESIENIE CAŁEGO MAJĄTKU SPOKKO SP. Z O.O. Z SIEDZIBĄ W WARSZAWIE (SPÓŁKA PRZEJMOWANA) NA CD PROJEKT S.A. (SPÓŁKA PRZEJMUJĄCA), BEZ PODWYŻSZENIA KAPITAŁU ZAKŁADOWEGO SPÓŁKI PRZEJMUJĄCEJ ORAZ BEZ WYMIANY UDZIAŁÓW SPÓŁKI PRZEJMOWANEJ\nNA AKCJE SPÓŁKI PRZEJMUJĄCEJ., 06.06.2023, POŁĄCZENIE NASTĘPUJE ZGODNIE Z UCHWAŁĄ NR 24 ZWYCZAJNEGO WALNEGO ZGROMADZENIA CD PROJEKT S.A. PODJĘTĄ W DNIU 06.06.2023 R., ZAPROTOKOŁOWANĄ PRZEZ NOTARIUSZA JACKA NALEWAJKA Z KANCELARII NOTARIALNEJ W WARSZAWIE, REP. A NR 3347/2023 ORAZ UCHWAŁĄ NR 1 NADZWYCZAJNEGO ZGROMADZENIA WSPÓLNIKÓW SPOKKO\nSP. Z O.O. PODJĘTĄ W DNIU 06.06.2023 R. ZAPROTOKOŁOWANĄ PRZEZ NOTARIUSZA JACKA NALEWAJKA Z KANCELARII NOTARIALNEJ W WARSZAWIE REP. A NR 3352/2023",
+            "podmiotyPrzejmowane": [
+              {
+                "nazwa": "SPOKKO SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ, SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
+                "krajNazwaRejestru": "POLSKA, KRAJOWY REJESTR SĄDOWY",
+                "krs": {
+                  "krs": "0000746503"
+                },
+                "nazwaSadu": "*******",
+                "identyfikator": {
+                  "regon": "381131103"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

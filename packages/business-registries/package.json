@@ -50,6 +50,11 @@
       "types": "./src/brreg/index.ts",
       "import": "./dist/brreg/index.js"
     },
+    "./krs": {
+      "bun": "./src/krs/index.ts",
+      "types": "./src/krs/index.ts",
+      "import": "./dist/krs/index.js"
+    },
     "./prh": {
       "bun": "./src/prh/index.ts",
       "types": "./src/prh/index.ts",
