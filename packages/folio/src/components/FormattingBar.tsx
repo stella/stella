@@ -361,13 +361,34 @@ export function FormattingBar(props: FormattingBarProps) {
       return;
     }
     const target = e.target;
+    // Skip events that bubbled in from portaled descendants (Dialog,
+    // Combobox popups, dropdown menus). React forwards synthetic events
+    // through the parent React tree even when the descendant is rendered
+    // via createPortal; without this guard, preventDefault on the bar
+    // mousedown swallows clicks on portaled items so popups can never
+    // commit a selection.
+    if (barRef.current && !barRef.current.contains(target)) {
+      return;
+    }
     if (target.tagName !== "INPUT" && target.tagName !== "SELECT") {
       e.preventDefault();
     }
   }, []);
 
   const handleBarMouseUp = useCallback(
-    () => requestAnimationFrame(() => onRefocusEditor?.()),
+    (e: React.MouseEvent) => {
+      // See handleBarMouseDown — skip portaled descendants so a popup
+      // selection doesn't immediately punt focus back to the editor and
+      // dismiss the popup before its onValueChange fires.
+      if (
+        e.target instanceof HTMLElement &&
+        barRef.current &&
+        !barRef.current.contains(e.target)
+      ) {
+        return;
+      }
+      requestAnimationFrame(() => onRefocusEditor?.());
+    },
     [onRefocusEditor],
   );
 
