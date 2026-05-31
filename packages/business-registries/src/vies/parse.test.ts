@@ -62,11 +62,13 @@ describe("parseValidation", () => {
     expect(out.status).toEqual({ type: "invalid-format" });
   });
 
-  test("SERVICE_UNAVAILABLE family maps to service-unavailable", () => {
+  test("SERVICE_UNAVAILABLE family (incl. SERVER_BUSY) maps to service-unavailable", () => {
     for (const userError of [
       "SERVICE_UNAVAILABLE",
       "MS_UNAVAILABLE",
       "TIMEOUT",
+      "SERVER_BUSY",
+      "GLOBAL_MAX_CONCURRENT_REQ",
       "MS_MAX_CONCURRENT_REQ",
     ]) {
       const out = parseValidation(baseRaw({ userError }), VAT_NUMBER);
@@ -75,11 +77,24 @@ describe("parseValidation", () => {
     }
   });
 
-  test("unknown userError values collapse to not-registered (safe default)", () => {
+  test("unknown userError values map to service-unavailable, NOT not-registered", () => {
+    // A new transient fault we have not enumerated yet would
+    // otherwise be reported as "VAT does not exist", falsely killing
+    // a real B2B counterparty's compliance check during an outage.
+    // Safer default: surface it as a retryable upstream issue.
     const out = parseValidation(
       baseRaw({ userError: "SOMETHING_NEW_FROM_UPSTREAM" }),
       VAT_NUMBER,
     );
+    expect(out.valid).toBe(false);
+    expect(out.status).toEqual({
+      type: "service-unavailable",
+      userError: "SOMETHING_NEW_FROM_UPSTREAM",
+    });
+  });
+
+  test("only the explicit INVALID userError maps to not-registered", () => {
+    const out = parseValidation(baseRaw({ userError: "INVALID" }), VAT_NUMBER);
     expect(out.valid).toBe(false);
     expect(out.status).toEqual({ type: "not-registered" });
   });

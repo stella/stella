@@ -23,6 +23,7 @@ const SERVICE_UNAVAILABLE_USER_ERRORS = new Set<string>([
   "SERVICE_UNAVAILABLE",
   "MS_UNAVAILABLE",
   "TIMEOUT",
+  "SERVER_BUSY",
   "GLOBAL_MAX_CONCURRENT_REQ",
   "MS_MAX_CONCURRENT_REQ",
 ]);
@@ -37,10 +38,17 @@ const deriveStatus = (raw: ViesRawResponse): ViesValidationStatus => {
   if (SERVICE_UNAVAILABLE_USER_ERRORS.has(raw.userError)) {
     return { type: "service-unavailable", userError: raw.userError };
   }
-  // `INVALID` plus any uncatalogued non-success userError collapses to
-  // not-registered; the upstream `isValid` flag is the authoritative
-  // signal and is already false in those cases.
-  return { type: "not-registered" };
+  // Only the explicit `INVALID` user-error is a real negative
+  // validation. Any uncatalogued non-success value (a new transient
+  // fault we haven't enumerated yet, an `MS_*` variant the upstream
+  // adds in future) is conservatively classified as
+  // service-unavailable — surfacing an unknown outage as
+  // "not-registered" would falsely tell users their counterparty's
+  // VAT is dead.
+  if (raw.userError === "INVALID") {
+    return { type: "not-registered" };
+  }
+  return { type: "service-unavailable", userError: raw.userError };
 };
 
 export const parseValidation = (
