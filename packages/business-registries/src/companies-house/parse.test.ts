@@ -138,6 +138,29 @@ describe("parseCompanyProfile (Tesco PLC fixture)", () => {
     expect(out.accounts?.overdue).toBe(false);
   });
 
+  test("falls back to period_end_on when deprecated date aliases are absent", () => {
+    // Companies House marked `last_accounts.made_up_to` and
+    // top-level `next_made_up_to` as deprecated in favour of
+    // `period_end_on` on `last_accounts` / `next_accounts`.
+    // Profiles served after the cutover omit the deprecated aliases.
+    const out = parseCompanyProfile({
+      company_name: "ACME LTD",
+      company_number: "12345678",
+      company_status: "active",
+      accounts: {
+        next_accounts: {
+          due_on: "2027-01-31",
+          period_end_on: "2026-07-31",
+          overdue: false,
+        },
+        last_accounts: { period_end_on: "2025-07-31" },
+      },
+    });
+    expect(out.accounts?.lastMadeUpTo).toBe("2025-07-31");
+    expect(out.accounts?.nextMadeUpTo).toBe("2026-07-31");
+    expect(out.accounts?.nextDue).toBe("2027-01-31");
+  });
+
   test("parses the confirmation statement", () => {
     const out = parseCompanyProfile(tesco);
     expect(out.confirmationStatement?.nextDue).toMatch(/^\d{4}-\d{2}-\d{2}$/u);

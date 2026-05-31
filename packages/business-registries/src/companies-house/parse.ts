@@ -159,11 +159,16 @@ const parseAccounts = (
   if (!raw) {
     return null;
   }
-  const lastMadeUpTo = nonEmpty(raw.last_accounts?.made_up_to);
-  // Prefer the explicit `next_made_up_to` (the date the next set of
-  // accounts must cover up to); fall back to the deprecated alias on
-  // the legacy top-level surface.
-  const nextMadeUpTo = nonEmpty(raw.next_made_up_to);
+  // Companies House marked `last_accounts.made_up_to` and top-level
+  // `next_made_up_to` as deprecated in favour of `period_end_on` on
+  // `last_accounts` / `next_accounts`. Profiles that omit the
+  // deprecated aliases would otherwise surface as `null` — try the
+  // current field first and fall back to the deprecated one.
+  const lastMadeUpTo =
+    nonEmpty(raw.last_accounts?.period_end_on) ??
+    nonEmpty(raw.last_accounts?.made_up_to);
+  const nextMadeUpTo =
+    nonEmpty(raw.next_accounts?.period_end_on) ?? nonEmpty(raw.next_made_up_to);
   const nextDue = nonEmpty(raw.next_due) ?? nonEmpty(raw.next_accounts?.due_on);
   const overdue = raw.next_accounts?.overdue ?? raw.overdue ?? false;
   if (
