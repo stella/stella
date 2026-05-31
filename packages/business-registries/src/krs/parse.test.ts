@@ -177,9 +177,7 @@ describe("parseStatus", () => {
     ).toEqual({ type: "liquidating" });
   });
 
-  test("reads `rodzajPostepowania` from the closing sub-object as a fallback", () => {
-    // Ended proceedings carry the kind under the `zakonczenie…`
-    // sub-object instead of `otwarcie…`. Either should resolve.
+  test("ignores closed combined proceedings before setting status", () => {
     expect(
       parseStatus(
         {
@@ -193,7 +191,20 @@ describe("parseStatus", () => {
         },
         "ACME SP. Z O.O.",
       ),
-    ).toEqual({ type: "liquidating" });
+    ).toEqual({ type: "active" });
+  });
+
+  test("ignores closed bankruptcy proceedings before setting status", () => {
+    expect(
+      parseStatus(
+        {
+          postepowanieUpadlosciowe: [
+            { opisZakonczeniaProcesuUpadlosci: { data: "01.02.2024" } },
+          ],
+        },
+        "ACME SP. Z O.O.",
+      ),
+    ).toEqual({ type: "active" });
   });
 
   test("an unlabelled proceeding defaults to `restructuring`", () => {

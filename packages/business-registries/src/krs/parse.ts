@@ -40,6 +40,20 @@ const trimToNull = (value: string | undefined): string | null => {
 const hasEntries = (value: unknown[] | undefined): boolean =>
   Array.isArray(value) && value.length > 0;
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isOpenBankruptcyProceeding = (entry: unknown): boolean =>
+  !isRecord(entry) || !isRecord(entry["opisZakonczeniaProcesuUpadlosci"]);
+
+const isOpenCombinedProceeding = (
+  entry: NonNullable<
+    KrsRawDzial6["postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja"]
+  >[number],
+): boolean =>
+  entry.zakonczeniePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji ===
+  undefined;
+
 // Matches the Polish stem `LIKWIDAC` (case- and diacritic-insensitive
 // via toUpperCase + RegExp; values come uppercased from KRS) so both
 // `LIKWIDACJA`, `POSTĘPOWANIE LIKWIDACYJNE`, and `UPORZĄDKOWANA
@@ -65,12 +79,14 @@ export const parseStatus = (
   if (hasEntries(dzial6?.wykreslenia)) {
     return { type: "dissolved" };
   }
-  if (hasEntries(dzial6?.postepowanieUpadlosciowe)) {
+  if (dzial6?.postepowanieUpadlosciowe?.some(isOpenBankruptcyProceeding)) {
     return { type: "bankruptcy" };
   }
-  const proceedings =
-    dzial6?.postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja;
-  if (proceedings && proceedings.length > 0) {
+  const proceedings = (
+    dzial6?.postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja ??
+    []
+  ).filter(isOpenCombinedProceeding);
+  if (proceedings.length > 0) {
     // `rodzajPostepowania` lives one level down, on the
     // `otwarciePostepowania…` (opening) sub-object — KRS does not
     // put it on the proceeding entry itself. Reading from the wrong
