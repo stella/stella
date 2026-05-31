@@ -160,12 +160,14 @@ const composeTrusteeAddress = (raw: BrregRawRoleTrustee): string | null => {
 };
 
 const parseBirthYear = (fodselsdato: string | undefined): number | null => {
-  if (!fodselsdato) {
+  if (!fodselsdato || fodselsdato.length < 4) {
     return null;
   }
-  // Brreg returns ISO-style YYYY-MM-DD; take the first four characters.
+  // Brreg returns ISO-style YYYY-MM-DD; take the first four
+  // characters. Reject obviously-bogus values — a stray `"95"` would
+  // otherwise parse to 95 AD.
   const year = Number.parseInt(fodselsdato.slice(0, 4), 10);
-  return Number.isFinite(year) ? year : null;
+  return Number.isFinite(year) && year >= 1000 ? year : null;
 };
 
 export const parseOfficer = (
@@ -256,13 +258,20 @@ const brregGetRoles = async (
 
   if (!response.ok) {
     let upstreamMessage: string | null = null;
-    try {
-      upstreamMessage = parseUpstreamMessage(await response.json());
-    } catch {
-      // non-JSON error body
+    // Brreg's error envelope is JSON, but upstream proxies
+    // (Cloudflare / nginx) can intercept and return HTML error pages
+    // — feeding those to `response.json()` throws a SyntaxError that
+    // would mask the real status. Guard on Content-Type. The
+    // statusText fallback covers HTTP/2 (where it is typically empty).
+    if (response.headers.get("content-type")?.includes("application/json")) {
+      try {
+        upstreamMessage = parseUpstreamMessage(await response.json());
+      } catch {
+        // non-JSON body despite the header — ignore
+      }
     }
     throw new BrregAPIError({
-      message: `Brreg ${response.status}: ${upstreamMessage ?? response.statusText}`,
+      message: `Brreg ${response.status}: ${upstreamMessage ?? (response.statusText || "API error")}`,
       httpStatus: response.status,
       upstreamMessage,
     });
