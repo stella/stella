@@ -24,6 +24,14 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { getUserFileIdFromPart } from "@/api/handlers/chat/attachment-validation";
 import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
+import {
+  createLoopRecoverySystemPrompt,
+  detectModelLoop,
+  getLoopRecoveryKey,
+  shouldInjectLoopRecovery,
+  shouldSurfaceFinalContentLoop,
+  shouldStopLoopRecovery,
+} from "@/api/handlers/chat/loop-detector";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {
   deanonymizeFromBoundary,
@@ -48,11 +56,12 @@ import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   ChatEmptyCompletionError,
+  ChatLoopDetectedError,
   ChatToolError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 
-const MAX_TOOL_STEPS = 8;
+const MAX_TOOL_STEPS = 100;
 const CHAT_TOOL_ERROR_UNWRAP_DEPTH = 8;
 
 const unwrapChatToolError = (error: unknown): ChatToolError | null => {
@@ -165,6 +174,8 @@ const runChatStream = async ({
   onAiError,
 }: RunChatStreamArgs): Promise<boolean> => {
   let emptyCompletion: ChatEmptyCompletionError | null = null;
+  let finalLoopDetection: ChatLoopDetectedError | null = null;
+  let lastLoopRecoveryKey: string | null = null;
   let flushResolve: (() => void) | null = null;
   const flushed = new Promise<void>((resolve) => {
     flushResolve = resolve;
@@ -177,6 +188,26 @@ const runChatStream = async ({
     experimental_repairToolCall: async ({ toolCall }) =>
       await Promise.resolve(repairActiveDocxEditToolCall(toolCall)),
     prepareStep: async ({ messages }) => {
+      const loopDetection = detectModelLoop(messages);
+      if (shouldStopLoopRecovery(loopDetection)) {
+        throw new ChatLoopDetectedError({
+          message:
+            "The AI model repeated the same work and could not recover. Please try again with a narrower request.",
+        });
+      }
+
+      let nextSystem = system;
+      if (shouldInjectLoopRecovery(loopDetection)) {
+        const recoveryKey = getLoopRecoveryKey(loopDetection);
+        if (recoveryKey !== lastLoopRecoveryKey) {
+          lastLoopRecoveryKey = recoveryKey;
+          nextSystem = createLoopRecoverySystemPrompt({
+            baseSystem: system,
+            detection: loopDetection,
+          });
+        }
+      }
+
       const compactedMessages = await compactModelMessagesForModel({
         abortSignal,
         messages,
@@ -193,14 +224,32 @@ const runChatStream = async ({
       if (Result.isError(compactedMessages)) {
         throw compactedMessages.error;
       }
-      if (compactedMessages.value === messages) {
+      if (compactedMessages.value === messages && nextSystem === system) {
         return undefined;
       }
 
-      return { messages: compactedMessages.value };
+      return {
+        messages: compactedMessages.value,
+        system: nextSystem,
+      };
     },
     stopWhen: [stepCountIs(MAX_TOOL_STEPS), hasToolCall("ask-user")],
     messages: modelMessages,
+    onStepFinish: ({ response, toolCalls }) => {
+      if (toolCalls.length > 0) {
+        return;
+      }
+
+      const loopDetection = detectModelLoop(response.messages);
+      if (!shouldSurfaceFinalContentLoop(loopDetection)) {
+        return;
+      }
+
+      finalLoopDetection = new ChatLoopDetectedError({
+        message:
+          "The AI model repeated the same work and could not recover. Please try again with a narrower request.",
+      });
+    },
     onFinish: ({ finishReason, totalUsage }) => {
       // `outputTokens` is `number | undefined` — only fire when
       // explicitly zero, otherwise providers that omit usage
@@ -247,6 +296,12 @@ const runChatStream = async ({
         controller.enqueue(chunk);
       },
       flush(controller) {
+        if (finalLoopDetection) {
+          controller.enqueue({
+            type: "error",
+            errorText: onAiError(finalLoopDetection),
+          });
+        }
         if (emptyCompletion && emitErrorOnEmpty) {
           controller.enqueue({
             type: "error",

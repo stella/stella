@@ -243,6 +243,7 @@ const ThinkingIndicator = () => {
 // copy.
 const CHAT_ERROR_TRANSLATION_KEYS = {
   insufficient_credits: "chat.sendErrorInsufficientCredits",
+  loop_detected: "chat.sendErrorLoopDetected",
   provider_unavailable: "chat.sendErrorProviderUnavailable",
   quota_exhausted: "chat.sendErrorQuotaExhausted",
 } as const satisfies Record<string, TranslationKey>;
