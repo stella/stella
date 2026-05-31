@@ -63,11 +63,20 @@ const prhGet = async <T>(url: string): Promise<T> => {
     });
   }
 
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch (error) {
+    throw new PrhRequestError(url, "Failed to parse PRH response JSON", {
+      cause: error,
+    });
+  }
+
   // SAFETY: PRH AvoinData v3 is a stable, documented public API and
   // the shape is captured by `PrhCompaniesResponse`. Runtime
   // validation adds little for well-typed JSON responses.
   // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-  return response.json() as Promise<T>;
+  return body as T;
 };
 
 /**
@@ -122,11 +131,14 @@ export const searchByName = async (
   }
   const requestedLimit = options?.limit ?? DEFAULT_SEARCH_LIMIT;
   const limit = Math.min(Math.max(requestedLimit, 1), MAX_SEARCH_LIMIT);
-  const params = new URLSearchParams({ name: trimmed });
+  const params = new URLSearchParams({
+    name: trimmed,
+    maxResults: limit.toString(),
+  });
   const data = await prhGet<PrhCompaniesResponse>(
     `${COMPANIES_URL}?${params.toString()}`,
   );
-  // PRH returns the full page (up to ~100) regardless of caller
-  // limit, so the slice is applied client-side.
+  // Slice defensively in case PRH returns more than the requested
+  // maxResults; callers should still get exactly the clamped limit.
   return data.companies.slice(0, limit).map(parseSearchEntry);
 };

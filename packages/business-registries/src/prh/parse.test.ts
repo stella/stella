@@ -29,6 +29,18 @@ describe("parseAddress", () => {
     expect(address.textAddress).toContain("00100 HELSINKI");
   });
 
+  test("preserves apartment suffixes in Finnish street addresses", () => {
+    const address = parseAddress({
+      ...baseAddress,
+      street: "Mannerheimintie",
+      buildingNumber: "1",
+      entrance: "A",
+      apartmentNumber: "5",
+      apartmentIdSuffix: "B",
+    });
+    expect(address.street).toBe("Mannerheimintie 1 A 5B");
+  });
+
   test("uses PO box prefix when postOfficeBox is set", () => {
     const address = parseAddress({
       ...baseAddress,

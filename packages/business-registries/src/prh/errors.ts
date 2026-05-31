@@ -1,7 +1,5 @@
 import { RegistryError } from "../shared/errors.js";
 
-const PRH_REGISTRY_SLUG = "fi-prh";
-
 export class PrhError extends RegistryError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
@@ -32,21 +30,6 @@ export class PrhAPIError extends PrhError {
     this.httpStatus = httpStatus;
     this.upstreamMessage = upstreamMessage ?? null;
     this.upstreamCode = upstreamCode ?? null;
-  }
-}
-
-export class PrhNotFoundError extends PrhError {
-  readonly businessId: string;
-  readonly canonicalId: string;
-  readonly registrySlug: string = PRH_REGISTRY_SLUG;
-
-  constructor(businessId: string) {
-    super(`Finnish entity not found: ${businessId}`);
-    this.name = "PrhNotFoundError";
-    this.businessId = businessId;
-    // Mirror the field so the shared `isEntityNotFound` predicate
-    // detects PRH not-found alongside `instanceof PrhError`.
-    this.canonicalId = businessId;
   }
 }
 

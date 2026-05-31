@@ -92,6 +92,15 @@ const formatCoPrefix = (co: string | undefined): string | null => {
   return CO_PREFIX_PATTERN.test(trimmed) ? trimmed : `c/o ${trimmed}`;
 };
 
+const formatApartmentSegment = (raw: PrhRawAddress): string | null => {
+  const number = raw.apartmentNumber?.trim();
+  const suffix = raw.apartmentIdSuffix?.trim();
+  if (number && suffix) {
+    return `${number}${suffix}`;
+  }
+  return number || suffix || null;
+};
+
 const formatStreetLine = (raw: PrhRawAddress): string | null => {
   // PRH splits address atoms: street + buildingNumber + entrance +
   // apartmentNumber. Most consumers want the human "Mannerheimintie
@@ -100,7 +109,11 @@ const formatStreetLine = (raw: PrhRawAddress): string | null => {
   if (raw.postOfficeBox) {
     return [coPrefix, `PL ${raw.postOfficeBox}`].filter(Boolean).join(", ");
   }
-  const houseSegment = [raw.buildingNumber, raw.entrance, raw.apartmentNumber]
+  const houseSegment = [
+    raw.buildingNumber,
+    raw.entrance,
+    formatApartmentSegment(raw),
+  ]
     .map((segment) => segment?.trim() ?? "")
     .filter(Boolean)
     .join(" ");

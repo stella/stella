@@ -3,7 +3,6 @@ export type { SearchOptions } from "./client.js";
 export {
   PrhAPIError,
   PrhError,
-  PrhNotFoundError,
   PrhRequestError,
   PrhValidationError,
 } from "./errors.js";

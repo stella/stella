@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { lookupByBusinessId, searchByName } from "./client.js";
-import { PrhAPIError, PrhValidationError } from "./errors.js";
+import { PrhAPIError, PrhRequestError, PrhValidationError } from "./errors.js";
 import type { PrhCompaniesResponse } from "./types.js";
 
 const SKIP_LIVE = process.env["SMOKE_TEST"] !== "1";
@@ -28,6 +28,16 @@ const installFetchStub = (
   return () => {
     globalThis.fetch = original;
   };
+};
+
+const getFetchInputUrl = (input: URL | Request | string): string => {
+  if (typeof input === "string") {
+    return input;
+  }
+  if (input instanceof URL) {
+    return input.toString();
+  }
+  return input.url;
 };
 
 // ---------------------------------------------------------------------------
@@ -137,6 +147,20 @@ describe("lookupByBusinessId (fixture)", () => {
       upstreamCode: 1005,
     });
   });
+
+  test("wraps malformed successful JSON as PrhRequestError", async () => {
+    restore = installFetchStub(
+      async () =>
+        new Response("{not-json", {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+
+    expect(lookupByBusinessId("0112038-9")).rejects.toBeInstanceOf(
+      PrhRequestError,
+    );
+  });
 });
 
 describe("searchByName (fixture)", () => {
@@ -170,16 +194,18 @@ describe("searchByName (fixture)", () => {
 
   test("applies the limit option client-side", async () => {
     const body = await readFixture("search-supercell.json");
-    restore = installFetchStub(
-      async () =>
-        new Response(JSON.stringify(body), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
-    );
+    const requestedUrls: string[] = [];
+    restore = installFetchStub(async (input) => {
+      requestedUrls.push(getFetchInputUrl(input));
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
 
     const results = await searchByName("Supercell", { limit: 1 });
     expect(results).toHaveLength(1);
+    expect(requestedUrls.at(0)).toContain("maxResults=1");
   });
 });
 
