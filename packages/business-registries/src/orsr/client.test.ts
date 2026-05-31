@@ -275,6 +275,36 @@ describe("searchByName (fixture)", () => {
     const results = await searchByName("Telekom", { limit: 2 });
     expect(results).toHaveLength(2);
   });
+
+  test("de-duplicates re-registration rows by IČO before applying the limit", async () => {
+    restore = installFetchStub(async () =>
+      jsonResponse({
+        data: [
+          {
+            id: 1,
+            corporateBodyFullName: "Telekom stale row",
+            registrationNumber: "54303346",
+          },
+          {
+            id: 9,
+            corporateBodyFullName: "Telekom current row",
+            registrationNumber: "54303346",
+          },
+          {
+            id: 2,
+            corporateBodyFullName: "Telekom unique row",
+            registrationNumber: "35763469",
+          },
+        ],
+      }),
+    );
+    const results = await searchByName("Telekom", { limit: 2 });
+    expect(results).toHaveLength(2);
+    expect(results.map((result) => result.name)).toEqual([
+      "Telekom current row",
+      "Telekom unique row",
+    ]);
+  });
 });
 
 describe("searchByName validation", () => {

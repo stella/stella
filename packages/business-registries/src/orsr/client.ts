@@ -109,6 +109,42 @@ const pickLatestHit = (
   return sorted.at(0) ?? null;
 };
 
+const dedupeLatestHitsByIco = (
+  hits: OrsrRawSearchHit[] | undefined,
+): OrsrRawSearchHit[] => {
+  if (!hits || hits.length === 0) {
+    return [];
+  }
+
+  const latestByIco = new Map<string, OrsrRawSearchHit>();
+  for (const hit of hits) {
+    const ico = hit.registrationNumber?.trim();
+    if (!ico) {
+      continue;
+    }
+    const previous = latestByIco.get(ico);
+    if (!previous || hit.id > previous.id) {
+      latestByIco.set(ico, hit);
+    }
+  }
+
+  const seen = new Set<string>();
+  const deduped: OrsrRawSearchHit[] = [];
+  for (const hit of hits) {
+    const ico = hit.registrationNumber?.trim();
+    if (!ico) {
+      deduped.push(hit);
+      continue;
+    }
+    if (seen.has(ico) || latestByIco.get(ico) !== hit) {
+      continue;
+    }
+    seen.add(ico);
+    deduped.push(hit);
+  }
+  return deduped;
+};
+
 /**
  * Look up a Slovak entity by IČO. Implements the two-step contract
  * the Ministry of Justice's JSON API requires:
@@ -185,8 +221,12 @@ export const searchByName = async (
   }
   const requestedLimit = options?.limit ?? DEFAULT_SEARCH_LIMIT;
   const take = Math.min(Math.max(requestedLimit, 1), MAX_SEARCH_LIMIT);
-  const data = await orsrGet<OrsrRawSearchResponse>(
-    buildSearchUrl(trimmed, take),
+  const searchTake = Math.min(
+    Math.max(take, DEFAULT_SEARCH_LIMIT),
+    MAX_SEARCH_LIMIT,
   );
-  return (data.data ?? []).slice(0, take).map(parseSearchHit);
+  const data = await orsrGet<OrsrRawSearchResponse>(
+    buildSearchUrl(trimmed, searchTake),
+  );
+  return dedupeLatestHitsByIco(data.data).slice(0, take).map(parseSearchHit);
 };
