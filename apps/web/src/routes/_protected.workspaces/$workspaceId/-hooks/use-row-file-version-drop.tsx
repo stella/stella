@@ -23,7 +23,7 @@ type UseRowFileVersionDropResult = {
  * Wires external single-file drops on a row to the
  * version-or-new-file dialog. Disabled for folders, tasks, and
  * entities without a file; mismatched MIME types and multi-file
- * drops fall through to the workspace `DropZone`.
+ * drops fall through to the `WorkspaceDropZone`.
  */
 export const useRowFileVersionDrop = ({
   entity,

@@ -24,8 +24,8 @@ import {
 } from "@/lib/react-query";
 import { useWorkspaceSSE } from "@/lib/sse";
 import { useWorkspaceChatMentionRegistration } from "@/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration";
-import { DropZone } from "@/routes/_protected.workspaces/$workspaceId/-components/drop-zone";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { WorkspaceDropZone } from "@/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 import { workflowOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
@@ -269,15 +269,15 @@ function RouteComponent() {
   // mounted at the protected layout level (`_protected.tsx`) so
   // its mount survives matter→matter switches without flinching.
   // Timesheets, invoices, and entity detail bypass the
-  // DropZone (they have their own layouts), but the inspector
+  // WorkspaceDropZone (they have their own layouts), but the inspector
   // pane is still available everywhere inside a workspace.
   if (timesheetsMatch || invoicesMatch || entityDetailMatch) {
     return <Outlet />;
   }
 
   return (
-    <DropZone workspaceId={workspaceId}>
+    <WorkspaceDropZone workspaceId={workspaceId}>
       <Outlet />
-    </DropZone>
+    </WorkspaceDropZone>
   );
 }

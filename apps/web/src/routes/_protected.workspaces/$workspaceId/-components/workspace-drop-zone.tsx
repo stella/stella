@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
 import type { PropsWithChildren } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { dropTargetForExternal } from "@atlaskit/pragmatic-drag-and-drop/external/adapter";
 import {
@@ -16,27 +16,34 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-context/row-drop-target-context";
 import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 
-type DropZoneProps = PropsWithChildren<{
+type WorkspaceDropZoneProps = PropsWithChildren<{
   workspaceId: string;
 }>;
 
-export const DropZone = ({ workspaceId, children }: DropZoneProps) => (
+export const WorkspaceDropZone = ({
+  workspaceId,
+  children,
+}: WorkspaceDropZoneProps) => (
   <ExternalDragInfoProvider>
     <RowDropTargetProvider>
-      <DropZoneInner workspaceId={workspaceId}>{children}</DropZoneInner>
+      <WorkspaceDropZoneInner workspaceId={workspaceId}>
+        {children}
+      </WorkspaceDropZoneInner>
     </RowDropTargetProvider>
   </ExternalDragInfoProvider>
 );
 
-const DropZoneInner = ({ workspaceId, children }: DropZoneProps) => {
+const WorkspaceDropZoneInner = ({
+  workspaceId,
+  children,
+}: WorkspaceDropZoneProps) => {
   const t = useTranslations();
   const dropRef = useRef<HTMLDivElement>(null);
   const [isPending, createFileEntities] = useCreateFileEntities(workspaceId);
   const [isDropTarget, setIsDropTarget] = useState(false);
   const isRowDropTargetActive = useIsRowDropTargetActive();
 
-  // Store isPending in a ref so the effect closure always
-  // sees the latest value without re-registering.
+  // Store isPending in a ref so the effect always sees the latest value.
   const isPendingRef = useRef(isPending);
   isPendingRef.current = isPending;
 
@@ -55,10 +62,11 @@ const DropZoneInner = ({ workspaceId, children }: DropZoneProps) => {
       onDragLeave: () => setIsDropTarget(false),
       onDrop: ({ source, location, self }) => {
         setIsDropTarget(false);
-        // Pragmatic DnD fires onDrop on every drop target in the chain
-        // (bubble-ordered, innermost first). If a row was the innermost
-        // target, it owns the drop; the DropZone must not also create a
-        // duplicate file at the workspace root.
+        // Pragmatic DnD calls `onDrop` on every drop target the pointer is
+        // over. `location.current.dropTargets` is innermost-first, so bail
+        // unless we are the innermost; otherwise a file dropped on a row
+        // would be both added as a new version (by the row) and uploaded
+        // as a new entity (by this WorkspaceDropZone).
         if (location.current.dropTargets[0]?.element !== self.element) {
           return;
         }
@@ -73,7 +81,7 @@ const DropZoneInner = ({ workspaceId, children }: DropZoneProps) => {
     });
   }, []);
 
-  // Suppress overlay when a row-level drop target is active
+  // Suppress the WorkspaceDropZone overlay when a row-level drop target is active
   const showOverlay = isDropTarget && !isRowDropTargetActive;
 
   return (

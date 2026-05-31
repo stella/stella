@@ -24,7 +24,7 @@ type ExternalFileDropOptions = {
    * which fires outside React's render cycle. The drag info is read
    * synchronously from `ExternalDragInfoProvider`. Returning false makes
    * Pragmatic skip this drop target so the drop falls through to the
-   * parent DropZone instead.
+   * WorkspaceDropZone instead.
    *
    * If omitted, defaults to accepting any external file drag. When info
    * is unavailable (listener hasn't fired yet) the predicate is treated
@@ -43,7 +43,7 @@ type ExternalFileDropResult = {
 
 /**
  * Hook for handling external file drops on row elements.
- * Coordinates with RowDropTargetContext to suppress parent DropZone overlay.
+ * Coordinates with RowDropTargetContext to suppress the WorkspaceDropZone overlay.
  */
 export const useExternalFileDrop = ({
   id,

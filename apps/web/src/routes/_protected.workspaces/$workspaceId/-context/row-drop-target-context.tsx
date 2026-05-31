@@ -33,7 +33,7 @@ export const useRowDropTarget = (): RowDropTargetState => {
 
 /**
  * Hook that returns true if any row is currently a drop target.
- * Used by DropZone to suppress its overlay when a row handles the drop.
+ * Used by WorkspaceDropZone to suppress its overlay when a row handles the drop.
  */
 export const useIsRowDropTargetActive = (): boolean => {
   const context = useContext(RowDropTargetContext);
