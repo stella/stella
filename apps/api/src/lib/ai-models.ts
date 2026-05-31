@@ -564,6 +564,7 @@ const createModelFactory = ({
       const client = createOpenAI({
         baseURL: url,
         apiKey: key,
+        name: "huggingface",
       });
       return (id) => client(id);
     }
@@ -1119,6 +1120,7 @@ const DEFAULTS_BUILDERS = {
   openrouter: bareTemperatureDefaults,
   mistral: bareTemperatureDefaults,
   openai_compatible: bareTemperatureDefaults,
+  huggingface: bareTemperatureDefaults,
 } as const satisfies Record<AIProvider, DefaultsBuilder>;
 
 type DefaultsForRoleParams = DefaultsBuilderParams & {

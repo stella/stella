@@ -99,6 +99,29 @@ describe("isOrgAIConfig", () => {
     ).toBe(true);
   });
 
+  test("accepts Hugging Face org AI config with endpoint metadata", () => {
+    expect(
+      isOrgAIConfig({
+        providers: [
+          {
+            provider: "huggingface",
+            apiKey: "hf-test",
+            baseURL: "https://example.endpoints.huggingface.cloud/v1",
+          },
+        ],
+        overrideModels: {
+          chat: { provider: "huggingface", modelId: "customer-chat" },
+          fast: { provider: "huggingface", modelId: "customer-fast" },
+          reasoning: {
+            provider: "huggingface",
+            modelId: "customer-reasoning",
+          },
+          pdf: { provider: "huggingface", modelId: "customer-pdf" },
+        },
+      }),
+    ).toBe(true);
+  });
+
   test("rejects Azure Foundry configs without endpoint metadata", () => {
     expect(
       isOrgAIConfig({
@@ -116,6 +139,28 @@ describe("isOrgAIConfig", () => {
             modelId: "customer-reasoning",
           },
           pdf: { provider: "azure_foundry", modelId: "customer-pdf" },
+        },
+      }),
+    ).toBe(false);
+  });
+
+  test("rejects Hugging Face configs without endpoint metadata", () => {
+    expect(
+      isOrgAIConfig({
+        providers: [
+          {
+            provider: "huggingface",
+            apiKey: "hf-test",
+          },
+        ],
+        overrideModels: {
+          chat: { provider: "huggingface", modelId: "customer-chat" },
+          fast: { provider: "huggingface", modelId: "customer-fast" },
+          reasoning: {
+            provider: "huggingface",
+            modelId: "customer-reasoning",
+          },
+          pdf: { provider: "huggingface", modelId: "customer-pdf" },
         },
       }),
     ).toBe(false);

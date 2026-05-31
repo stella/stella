@@ -35,8 +35,8 @@ const truncateProbeError = (message: string): string =>
  * organization, so the gate is "valid session + user" rather than
  * a permission scope. The provider probe goes through
  * `safeOutboundFetchBytes`, which resolves DNS and pins resolved
- * addresses, so the user-supplied Azure `endpoint` cannot reach
- * private targets.
+ * addresses, so user-supplied Azure/Hugging Face endpoints cannot
+ * reach private targets.
  */
 const validateProvider = createSafeSessionHandler(
   config,

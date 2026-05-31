@@ -33,6 +33,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { normalizeAzureFoundryBaseURL } from "@/api/lib/azure-foundry";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { normalizeHuggingFaceBaseURL } from "@/api/lib/huggingface";
 
 const BYOK_PROVIDER_VALUES = [
   "google",
@@ -313,19 +314,17 @@ const resolveHuggingFaceProviderConfig = ({
   if (!endpoint) {
     return { valid: false, error: "Endpoint is required for huggingface" };
   }
-  const baseURL = endpoint.replace(/\/$/u, "");
-  if (!URL.canParse(baseURL)) {
-    return {
-      valid: false,
-      error: "Hugging Face endpoint must be a valid URL",
-    };
+  const normalized = normalizeHuggingFaceBaseURL(endpoint);
+  if (!normalized.ok) {
+    return { valid: false, error: normalized.error };
   }
+
   return {
     valid: true,
     config: {
       provider: "huggingface",
       apiKey,
-      baseURL,
+      baseURL: normalized.baseURL,
     },
   };
 };

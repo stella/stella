@@ -12,6 +12,7 @@ import {
   AZURE_FOUNDRY_DEFAULT_API_VERSION,
   normalizeAzureFoundryBaseURL,
 } from "@/api/lib/azure-foundry";
+import { normalizeHuggingFaceBaseURL } from "@/api/lib/huggingface";
 import type { SafeOutboundFetchResponse } from "@/api/lib/safe-outbound-fetch";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
@@ -175,15 +176,11 @@ const probeHuggingFace = async (
     };
   }
 
-  let url: URL;
-  try {
-    url = new URL(`${trimmed.replace(/\/$/u, "")}/models`);
-  } catch {
-    return {
-      valid: false,
-      error: "Hugging Face endpoint must be a valid URL",
-    };
+  const normalized = normalizeHuggingFaceBaseURL(trimmed);
+  if (!normalized.ok) {
+    return { valid: false, error: normalized.error };
   }
+  const url = new URL(`${normalized.baseURL}/models`);
 
   const response = await safeOutboundFetchBytes({
     url,

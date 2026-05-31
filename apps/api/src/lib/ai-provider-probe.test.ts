@@ -231,6 +231,67 @@ describe("probeProvider", () => {
     }
   });
 
+  test("Hugging Face probe calls the endpoint models route with bearer auth", async () => {
+    const result = await probeProvider(
+      "huggingface",
+      "hf-test",
+      "https://example.endpoints.huggingface.cloud/v1/",
+    );
+
+    expect(result).toEqual({ valid: true });
+    const call = calls.at(0);
+    if (!call) {
+      throw new Error("expected a captured request");
+    }
+    expect(call.url.toString()).toBe(
+      "https://example.endpoints.huggingface.cloud/v1/models",
+    );
+    expect(call.headers.get("authorization")).toBe("Bearer hf-test");
+  });
+
+  test("Hugging Face probe rejects missing endpoint", async () => {
+    const result = await probeProvider("huggingface", "hf-test");
+
+    expect(result).toEqual({
+      valid: false,
+      error: "Hugging Face endpoint is required",
+    });
+  });
+
+  test("Hugging Face probe rejects unsafe endpoint shape before fetch", async () => {
+    const result = await probeProvider(
+      "huggingface",
+      "hf-test",
+      "http://localhost:8080/v1",
+    );
+
+    expect(result).toEqual({
+      valid: false,
+      error: "Hugging Face endpoint must use HTTPS",
+    });
+    expect(calls).toHaveLength(0);
+  });
+
+  test("Hugging Face probe surfaces a non-2xx response with upstream detail", async () => {
+    nextResponse = {
+      kind: "ok",
+      status: 401,
+      body: { error: { message: "Invalid token" } },
+    };
+
+    const result = await probeProvider(
+      "huggingface",
+      "hf-test",
+      "https://example.endpoints.huggingface.cloud/v1",
+    );
+
+    expect(result).toEqual({
+      valid: false,
+      error:
+        "Hugging Face rejected the key or endpoint (HTTP 401): Invalid token",
+    });
+  });
+
   test("Bearer provider returns valid on 2xx", async () => {
     const result = await probeProvider("openai", "sk-test");
 
