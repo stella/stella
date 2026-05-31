@@ -7,37 +7,42 @@
  * mutation, and on success links the user to the new entity.
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
 import { LanguagesIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import {
+  Combobox,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxPopup,
+} from "@stll/ui/components/combobox";
 import {
   Dialog,
   DialogClose,
   DialogDescription,
   DialogFooter,
   DialogHeader,
+  DialogPanel,
   DialogPopup,
   DialogTitle,
   DialogTrigger,
 } from "@stll/ui/components/dialog";
-import {
-  Select as StSelect,
-  SelectItem as StSelectItem,
-  SelectPopup as StSelectPopup,
-  SelectTrigger as StSelectTrigger,
-  SelectValue as StSelectValue,
-} from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import Tooltip from "@/components/tooltip";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { DEEPL_TARGET_LANGUAGES } from "@/lib/deepl/languages";
+import {
+  DEEPL_TARGET_LANGUAGES,
+  type DeepLTargetLanguageCode,
+} from "@/lib/deepl/languages";
 import { deepLAvailabilityOptions } from "@/lib/deepl/queries";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
@@ -50,7 +55,7 @@ type TranslateDocumentDialogProps = {
   disabled?: boolean | undefined;
 };
 
-const DEFAULT_TARGET_LANG = "EN-GB";
+const DEFAULT_TARGET_LANG: DeepLTargetLanguageCode = "EN-GB";
 
 export const TranslateDocumentDialog = ({
   workspaceId,
@@ -58,6 +63,7 @@ export const TranslateDocumentDialog = ({
   disabled = false,
 }: TranslateDocumentDialogProps) => {
   const t = useTranslations();
+  const locale = useLocale();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -71,7 +77,24 @@ export const TranslateDocumentDialog = ({
   );
 
   const [open, setOpen] = useState(false);
-  const [targetLang, setTargetLang] = useState<string>(DEFAULT_TARGET_LANG);
+  const [targetLang, setTargetLang] =
+    useState<DeepLTargetLanguageCode>(DEFAULT_TARGET_LANG);
+
+  type LanguageOption = {
+    code: DeepLTargetLanguageCode;
+    label: string;
+  };
+
+  const localizedLanguages = useMemo<LanguageOption[]>(() => {
+    const items: LanguageOption[] = DEEPL_TARGET_LANGUAGES.map((lang) => ({
+      code: lang.code,
+      label: t(`common.languages.${lang.code}`),
+    }));
+    return items.sort((a, b) => a.label.localeCompare(b.label, locale));
+  }, [t, locale]);
+
+  const selectedLanguage =
+    localizedLanguages.find((l) => l.code === targetLang) ?? null;
 
   const translateMutation = useMutation({
     mutationFn: async () => {
@@ -154,38 +177,48 @@ export const TranslateDocumentDialog = ({
           </DialogDescription>
         </DialogHeader>
 
-        {isConfigured ? (
-          <div className="flex flex-col gap-3 py-2">
-            <label className="text-sm font-medium" htmlFor="translate-target">
-              {t("translate.dialog.targetLanguage")}
-            </label>
-            <StSelect
-              onValueChange={(value) => {
-                if (value !== null) {
-                  setTargetLang(value);
-                }
-              }}
-              value={targetLang}
-            >
-              <StSelectTrigger id="translate-target">
-                <StSelectValue
+        <DialogPanel>
+          {isConfigured ? (
+            <div className="flex flex-col gap-3">
+              <label className="text-sm font-medium" htmlFor="translate-target">
+                {t("translate.dialog.targetLanguage")}
+              </label>
+              <Combobox<LanguageOption>
+                autoHighlight
+                isItemEqualToValue={(a, b) => a.code === b.code}
+                items={localizedLanguages}
+                itemToStringLabel={(item) => item.label}
+                onValueChange={(option) => {
+                  if (option) {
+                    setTargetLang(option.code);
+                  }
+                }}
+                value={selectedLanguage}
+              >
+                <ComboboxInput
+                  id="translate-target"
                   placeholder={t("translate.dialog.selectPlaceholder")}
                 />
-              </StSelectTrigger>
-              <StSelectPopup>
-                {DEEPL_TARGET_LANGUAGES.map((lang) => (
-                  <StSelectItem key={lang.code} value={lang.code}>
-                    {lang.englishName}
-                  </StSelectItem>
-                ))}
-              </StSelectPopup>
-            </StSelect>
-          </div>
-        ) : (
-          <div className="bg-muted text-muted-foreground rounded-md p-3 text-sm">
-            {t("translate.dialog.notConfigured")}
-          </div>
-        )}
+                <ComboboxPopup>
+                  <ComboboxList>
+                    {(item: LanguageOption) => (
+                      <ComboboxItem key={item.code} value={item}>
+                        {item.label}
+                      </ComboboxItem>
+                    )}
+                  </ComboboxList>
+                  <ComboboxEmpty>
+                    {t("translate.dialog.noLanguagesFound")}
+                  </ComboboxEmpty>
+                </ComboboxPopup>
+              </Combobox>
+            </div>
+          ) : (
+            <div className="bg-muted text-muted-foreground rounded-md p-3 text-sm">
+              {t("translate.dialog.notConfigured")}
+            </div>
+          )}
+        </DialogPanel>
 
         <DialogFooter>
           <DialogClose

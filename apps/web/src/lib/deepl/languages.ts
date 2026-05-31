@@ -8,14 +8,7 @@
  * order.
  */
 
-export type DeepLTargetLanguage = {
-  /** DeepL API language code, sent as the `target_lang` parameter. */
-  code: string;
-  /** English display name, also used as the i18n fallback. */
-  englishName: string;
-};
-
-export const DEEPL_TARGET_LANGUAGES: readonly DeepLTargetLanguage[] = [
+export const DEEPL_TARGET_LANGUAGES = [
   { code: "AR", englishName: "Arabic" },
   { code: "BG", englishName: "Bulgarian" },
   { code: "ZH", englishName: "Chinese (simplified, ZH)" },
@@ -51,4 +44,7 @@ export const DEEPL_TARGET_LANGUAGES: readonly DeepLTargetLanguage[] = [
   { code: "SV", englishName: "Swedish" },
   { code: "TR", englishName: "Turkish" },
   { code: "UK", englishName: "Ukrainian" },
-];
+] as const satisfies readonly { code: string; englishName: string }[];
+
+export type DeepLTargetLanguage = (typeof DEEPL_TARGET_LANGUAGES)[number];
+export type DeepLTargetLanguageCode = DeepLTargetLanguage["code"];
