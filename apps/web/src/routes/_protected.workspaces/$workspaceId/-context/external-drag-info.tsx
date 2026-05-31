@@ -17,7 +17,6 @@ import { useEffect } from "react";
 
 export type ExternalDragInfo = {
   fileCount: number;
-  /** Lowercase MIME types, in DataTransferItem order. */
   mimeTypes: string[];
 };
 
