@@ -274,17 +274,21 @@ export const searchByName = async (
  */
 // Companies House paginates the officer list. The default page size
 // is 35 and the maximum is 100; large boards (FTSE 100, insolvent
-// estates with many liquidators) routinely exceed either. Cap the
-// total pages we'll walk so a pathological company can't pin us
-// against the 600 req / 5 min rate limit on a single call.
+// estates with many liquidators) routinely exceed either.
 const OFFICERS_PAGE_SIZE = 100;
-const OFFICERS_MAX_PAGES = 10;
+// Defensive hard ceiling — covers up to 100k officers, well beyond
+// any company on record. Exists only to guarantee termination if
+// upstream returns a malformed `total_results` that keeps the loop
+// "almost done" forever; the loop normally exits on
+// `fetched >= total_results` long before this.
+const OFFICERS_MAX_PAGES = 1000;
 
 export type OfficersOptions = {
   /**
-   * Maximum number of officers to return across all pages. Defaults
-   * to `OFFICERS_MAX_PAGES * OFFICERS_PAGE_SIZE`; callers that only
-   * need a top-N can request fewer to skip later pages entirely.
+   * Maximum number of officers to return across all pages. Unbounded
+   * by default — the function pages through `total_results`. Callers
+   * that only need a top-N can request fewer to skip later pages
+   * entirely.
    */
   limit?: number;
 };
@@ -301,10 +305,10 @@ export const lookupOfficersByCompanyNumber = async (
       `Invalid UK company number: ${input}`,
     );
   }
-  const limit = Math.max(
-    options?.limit ?? OFFICERS_PAGE_SIZE * OFFICERS_MAX_PAGES,
-    1,
-  );
+  const limit =
+    options?.limit !== undefined
+      ? Math.max(options.limit, 1)
+      : Number.POSITIVE_INFINITY;
   const collected: CompaniesHouseOfficer[] = [];
   for (let page = 0; page < OFFICERS_MAX_PAGES; page++) {
     const params = new URLSearchParams({
@@ -330,5 +334,5 @@ export const lookupOfficersByCompanyNumber = async (
       return collected;
     }
   }
-  return collected.slice(0, limit);
+  return Number.isFinite(limit) ? collected.slice(0, limit) : collected;
 };

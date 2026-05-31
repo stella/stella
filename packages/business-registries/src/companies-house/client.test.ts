@@ -295,6 +295,48 @@ describe("lookupOfficersByCompanyNumber mocked", () => {
     expect(calls[2]).toContain("start_index=200");
   });
 
+  test("pages all the way through total_results when no limit is set", async () => {
+    // Round-2 fix capped the default at OFFICERS_MAX_PAGES *
+    // OFFICERS_PAGE_SIZE = 1000 officers; a company with >1000
+    // officers came back silently truncated. Round-3 fix: no
+    // implicit cap when `limit` is omitted; we page until
+    // total_results.
+    const originalFetch = globalThis.fetch;
+    const calls: string[] = [];
+    const stub = async (input: URL | RequestInfo): Promise<Response> => {
+      const url = readRequestUrl(input);
+      calls.push(url);
+      const startIndex = Number(new URL(url).searchParams.get("start_index"));
+      const total = 1500;
+      const remaining = Math.max(total - startIndex, 0);
+      const pageItems = Math.min(remaining, 100);
+      return new Response(
+        JSON.stringify({
+          items: Array.from({ length: pageItems }, (_, index) => ({
+            name: `Officer ${startIndex + index}`,
+            officer_role: "director",
+          })),
+          items_per_page: 100,
+          start_index: startIndex,
+          total_results: total,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+    restore = (): void => {
+      globalThis.fetch = originalFetch;
+    };
+
+    const result = await lookupOfficersByCompanyNumber("00000001", {
+      apiKey: TEST_API_KEY,
+    });
+    expect(result).toHaveLength(1500);
+    expect(calls).toHaveLength(15);
+  });
+
   test("respects an explicit limit option and stops paging early", async () => {
     const originalFetch = globalThis.fetch;
     const calls: string[] = [];
