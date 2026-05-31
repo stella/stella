@@ -165,7 +165,22 @@ export const createCatalogueSetupPlan = ({
   practiceJurisdictions,
   selectedSlugs,
 }: CreateCatalogueSetupPlanOptions): CatalogueSetupPlan => {
-  const installSlugs = Array.from(new Set(selectedSlugs));
+  const entriesBySlug = new Map(entries.map((entry) => [entry.slug, entry]));
+  const installSlugs: string[] = [];
+  const seenInstallSlugs = new Set<string>();
+  for (const slug of selectedSlugs) {
+    if (seenInstallSlugs.has(slug)) {
+      continue;
+    }
+    seenInstallSlugs.add(slug);
+
+    const entry = entriesBySlug.get(slug);
+    if (entry && !isCatalogueEntryAvailableDuringOnboarding(entry)) {
+      continue;
+    }
+
+    installSlugs.push(slug);
+  }
   const selectedSlugSet = new Set(installSlugs);
   const recommendedSlugs = recommendedSlugsForJurisdictions(
     new Set(
@@ -178,9 +193,6 @@ export const createCatalogueSetupPlan = ({
 
   for (const entry of entries) {
     if (entry.kind !== "native-tool") {
-      continue;
-    }
-    if (!isCatalogueEntryAvailableDuringOnboarding(entry)) {
       continue;
     }
     if (!isToggleableNativeToolBackendSlug(entry.backendSlug)) {

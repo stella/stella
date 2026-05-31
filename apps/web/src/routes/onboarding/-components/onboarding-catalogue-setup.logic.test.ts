@@ -88,14 +88,29 @@ describe("onboarding catalogue setup plan", () => {
     ]);
   });
 
-  test("does not opt out of deploy-gated tools hidden during onboarding", () => {
+  test("opts out of deploy-gated tools hidden during onboarding", () => {
     const plan = createCatalogueSetupPlan({
       entries,
       practiceJurisdictions: [{ countryCode: "US", isPrimary: true }],
       selectedSlugs: [],
     });
 
-    expect(plan.nativeToolOptOuts).toEqual([]);
+    expect(plan.nativeToolOptOuts).toEqual([
+      { backendSlug: "edgar", slug: "edgar" },
+    ]);
+  });
+
+  test("does not install hidden deploy-gated tools from stale selections", () => {
+    const plan = createCatalogueSetupPlan({
+      entries,
+      practiceJurisdictions: [{ countryCode: "US", isPrimary: true }],
+      selectedSlugs: ["edgar"],
+    });
+
+    expect(plan.installSlugs).toEqual([]);
+    expect(plan.nativeToolOptOuts).toEqual([
+      { backendSlug: "edgar", slug: "edgar" },
+    ]);
   });
 
   test("hides deploy-gated native tools during onboarding", () => {

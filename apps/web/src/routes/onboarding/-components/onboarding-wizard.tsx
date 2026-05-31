@@ -291,16 +291,15 @@ export const OnboardingWizard = () => {
         // explicit opt-outs for omitted default-on native tools. Runs
         // in parallel; partial failure surfaces as a toast but doesn't
         // block the rest of setup.
+        const catalogueEntries = loadCatalogue();
         const catalogueSetupPlan = createCatalogueSetupPlan({
-          entries: onboardingCatalogueEntries,
+          entries: catalogueEntries,
           practiceJurisdictions: finalData.practiceJurisdictions,
           selectedSlugs: finalData.catalogueSlugs,
         });
         const installTasks = catalogueSetupPlan.installSlugs.map(
           async (slug) => {
-            const entry = onboardingCatalogueEntries.find(
-              (e) => e.slug === slug,
-            );
+            const entry = catalogueEntries.find((e) => e.slug === slug);
             if (!entry) {
               return;
             }
@@ -469,14 +468,7 @@ export const OnboardingWizard = () => {
         replace: true,
       });
     },
-    [
-      analytics,
-      invalidateSession,
-      navigate,
-      onboardingCatalogueEntries,
-      queryClient,
-      t,
-    ],
+    [analytics, invalidateSession, navigate, queryClient, t],
   );
 
   const showPrices = step === "ai" && aiPhase === "models";
