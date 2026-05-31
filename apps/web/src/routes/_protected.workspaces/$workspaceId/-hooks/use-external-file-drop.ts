@@ -77,6 +77,12 @@ export const useExternalFileDrop = ({
         if (!acceptFn) {
           return true;
         }
+        // Pragmatic's external adapter only invokes canDrop in response
+        // to a real DOM dragenter; our window-level dragenter listener
+        // runs synchronously on the same event and populates `current`
+        // before this fires, so `info` is non-null in practice. Guard
+        // anyway: a null read (e.g. if Pragmatic ever gains a non-DOM
+        // path) should reject rather than crash.
         const info = getCurrentExternalDrag();
         if (!info) {
           return false;
