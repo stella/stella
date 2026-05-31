@@ -130,7 +130,10 @@ const replaceMentionsWithAnchors = (html: string): string => {
         if (!id || !label || !char) {
           return;
         }
-        el.replace(`<a href="${id}">${char}${label}</a>`, { html: true });
+        el.replace(
+          `<a href="${Bun.escapeHTML(id)}">${Bun.escapeHTML(`${char}${label}`)}</a>`,
+          { html: true },
+        );
       },
     })
     .transform(html);
@@ -168,9 +171,11 @@ export const deserializeAITool = (data: AITool): AITool => {
     const text = $(el).text();
     const mentionChar = text.charAt(0);
     const label = text.slice(1);
-    $(el).replaceWith(
-      `<${MENTION_TAG} ${ATTR_ID}="${href}" ${ATTR_LABEL}="${label}" ${ATTR_SUGGESTION_CHAR}="${mentionChar}"></${MENTION_TAG}>`,
-    );
+    const mention = $(`<${MENTION_TAG}></${MENTION_TAG}>`)
+      .attr(ATTR_ID, href)
+      .attr(ATTR_LABEL, label)
+      .attr(ATTR_SUGGESTION_CHAR, mentionChar);
+    $(el).replaceWith(mention);
   });
 
   return { ...data, prompt: $.html().trimEnd() };

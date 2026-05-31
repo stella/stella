@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import * as cheerio from "cheerio";
 
 import { deserializeAITool, serializeAITool } from "@/api/lib/markdown/ai-tool";
 import type { AITool } from "@/api/lib/markdown/ai-tool";
@@ -75,6 +76,24 @@ describe("ai tool", () => {
     expect(deserialized.prompt).not.toContain(
       '<mention-component data-id="https://example.com"',
     );
+  });
+
+  test("deserialize escapes generated mention-component attributes", () => {
+    const toolWithHostileLinkText: AITool = {
+      version: 1,
+      type: "ai-model",
+      prompt: '[@" onmouseover="alert(1)](dep)',
+      dependencies: [{ dependsOnPropertyId: "dep", condition: null }],
+    };
+
+    const deserialized = deserializeAITool(toolWithHostileLinkText);
+    const $ = cheerio.load(deserialized.prompt, undefined, false);
+    const mention = $("mention-component");
+
+    expect(mention.attr("data-id")).toBe("dep");
+    expect(mention.attr("data-label")).toBe('" onmouseover="alert(1)');
+    expect(mention.attr("data-mention-suggestion-char")).toBe("@");
+    expect(mention.attr("onmouseover")).toBeUndefined();
   });
 
   test("serialize handles prompt with no mention-component tags", () => {
