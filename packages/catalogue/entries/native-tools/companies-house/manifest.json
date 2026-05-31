@@ -1,0 +1,18 @@
+{
+  "$schema": "../../../schema.json",
+  "kind": "native-tool",
+  "slug": "companies-house",
+  "displayName": "UK Companies House",
+  "description": "UK company lookup by Companies House registration number or company name from the Companies House public data API. Requires a free API key.",
+  "author": "stella",
+  "authorUrl": "https://github.com/stella",
+  "license": "Apache-2.0",
+  "cost": "free",
+  "setup": "api-key",
+  "homepage": "https://www.gov.uk/government/organisations/companies-house",
+  "tags": ["corporate", "regulatory"],
+  "jurisdictions": ["GB"],
+  "backendSlug": "companies-house",
+  "url": "https://find-and-update.company-information.service.gov.uk",
+  "documentationUrl": "https://developer.company-information.service.gov.uk"
+}

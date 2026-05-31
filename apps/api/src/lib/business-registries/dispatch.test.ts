@@ -153,6 +153,63 @@ describe("VIES handler wiring", () => {
   });
 });
 
+describe("Companies House hit address", () => {
+  // Exercises `companiesHouseCompanyToHit`'s line1 composition via
+  // the dispatch lookup path. Downstream consumers (the contact-form
+  // `toBillingAddress` mapper in apps/web) prefer the structured
+  // address fields before falling back to `textAddress`, so c/o +
+  // PO box need to appear in `line1` too — not just in `textAddress`.
+  const stubCompaniesHouseFetch = (body: unknown): (() => void) => {
+    const original = globalThis.fetch;
+    const stub = async (): Promise<Response> =>
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: original.preconnect,
+    });
+    return (): void => {
+      globalThis.fetch = original;
+    };
+  };
+
+  test("prepends care_of and po_box to line1 for agent-held addresses", async () => {
+    const previous = process.env["COMPANIES_HOUSE_API_KEY"];
+    process.env["COMPANIES_HOUSE_API_KEY"] = "test-key";
+    const restore = stubCompaniesHouseFetch({
+      company_name: "ACME SECRETARIAT LTD",
+      company_number: "12345678",
+      company_status: "active",
+      type: "ltd",
+      jurisdiction: "england-wales",
+      date_of_creation: "2010-01-01",
+      registered_office_address: {
+        care_of: "Acme Secretaries Limited",
+        po_box: "5000",
+        address_line_1: "1 Imaginary Street",
+        locality: "London",
+        postal_code: "EC1A 1AA",
+        country: "United Kingdom",
+      },
+    });
+    try {
+      const handler = BUSINESS_REGISTRY_DISPATCH["companies-house"];
+      const hit = await handler.lookup("12345678");
+      expect(hit?.address?.line1).toBe(
+        "c/o Acme Secretaries Limited PO Box 5000 1 Imaginary Street",
+      );
+    } finally {
+      restore();
+      if (previous === undefined) {
+        delete process.env["COMPANIES_HOUSE_API_KEY"];
+      } else {
+        process.env["COMPANIES_HOUSE_API_KEY"] = previous;
+      }
+    }
+  });
+});
+
 describe("EDGAR deployment gating", () => {
   test("does not expose the US handler when EDGAR_USER_AGENT is missing", () => {
     const previous = process.env["EDGAR_USER_AGENT"];

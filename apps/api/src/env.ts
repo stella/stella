@@ -189,6 +189,27 @@ const envApi = createEnv({
         ),
       ),
     ),
+
+    /**
+     * API key for UK Companies House (https://api.company-information.service.gov.uk).
+     * The upstream authenticates every request via HTTP Basic with
+     * this key as the username and an empty password; missing or
+     * wrong credentials return 401. Free, instant via
+     * https://developer.company-information.service.gov.uk. Required
+     * whenever the Companies House business registry adapter is
+     * exposed; without it the runtime marks the adapter unavailable
+     * instead of surfacing a tool that will fail.
+     */
+    COMPANIES_HOUSE_API_KEY: v.optional(
+      v.pipe(
+        v.string(),
+        v.trim(),
+        v.minLength(
+          1,
+          "COMPANIES_HOUSE_API_KEY must be a non-empty API key from https://developer.company-information.service.gov.uk — the API returns 401 without one.",
+        ),
+      ),
+    ),
   },
   emptyStringAsUndefined: true,
   runtimeEnv: process.env,

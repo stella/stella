@@ -1,0 +1,68 @@
+{
+  "accounts": {
+    "accounting_reference_date": { "day": "26", "month": "02" },
+    "last_accounts": {
+      "made_up_to": "2025-02-26",
+      "period_end_on": "2025-02-26",
+      "period_start_on": "2024-02-25",
+      "type": "group"
+    },
+    "next_accounts": {
+      "due_on": "2026-08-26",
+      "overdue": false,
+      "period_end_on": "2026-02-26",
+      "period_start_on": "2025-02-27"
+    },
+    "next_due": "2026-08-26",
+    "next_made_up_to": "2026-02-26",
+    "overdue": false
+  },
+  "can_file": true,
+  "company_name": "TESCO PLC",
+  "company_number": "00445790",
+  "company_status": "active",
+  "confirmation_statement": {
+    "last_made_up_to": "2025-06-18",
+    "next_due": "2026-07-02",
+    "next_made_up_to": "2026-06-18",
+    "overdue": false
+  },
+  "date_of_creation": "1947-11-27",
+  "etag": "5d8b74d09b14e506e52ceba5a587970d1d50240f",
+  "has_been_liquidated": false,
+  "has_charges": false,
+  "has_insolvency_history": false,
+  "jurisdiction": "england-wales",
+  "last_full_members_list_date": "2013-06-07",
+  "links": {
+    "self": "/company/00445790",
+    "charges": "/company/00445790/charges",
+    "filing_history": "/company/00445790/filing-history",
+    "officers": "/company/00445790/officers",
+    "exemptions": "/company/00445790/exemptions"
+  },
+  "previous_company_names": [
+    {
+      "ceased_on": "1983-08-25",
+      "effective_from": "1981-12-14",
+      "name": "TESCO STORES (HOLDINGS) PUBLIC LIMITED COMPANY"
+    },
+    {
+      "ceased_on": "1981-12-14",
+      "effective_from": "1947-11-27",
+      "name": "TESCO STORES (HOLDINGS) LIMITED"
+    }
+  ],
+  "registered_office_address": {
+    "address_line_1": "Tesco House, Shire Park",
+    "address_line_2": "Kestrel Way",
+    "country": "United Kingdom",
+    "locality": "Welwyn Garden City",
+    "postal_code": "AL7 1GA"
+  },
+  "registered_office_is_in_dispute": false,
+  "sic_codes": ["47110"],
+  "type": "plc",
+  "undeliverable_registered_office_address": false,
+  "has_super_secure_pscs": false
+}

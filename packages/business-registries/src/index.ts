@@ -11,6 +11,7 @@
 //   await ares.lookupByIco("27082440");
 export * as ares from "./ares/index.js";
 export * as brreg from "./brreg/index.js";
+export * as companiesHouse from "./companies-house/index.js";
 export * as edgar from "./edgar/index.js";
 export * as gcis from "./gcis/index.js";
 export * as krs from "./krs/index.js";
