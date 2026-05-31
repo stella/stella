@@ -499,17 +499,19 @@ describe("defaultsForRole", () => {
     ).toBe(true);
   });
 
-  test("anthropic includes hashed metadata.user_id when orgId is given", () => {
+  test("anthropic includes hashed metadata.userId when orgId is given", () => {
     // SAFETY: SafeId is a branded string; the helper only hashes the
     // value, so a raw string is sound at runtime for this unit test.
     const orgId = toSafeId<"organization">("org_test_abc123");
     const settings = defaultsForRole("fast", "anthropic", orgId);
     const anthropic = settings.providerOptions?.["anthropic"] as
-      | { metadata?: { user_id?: string } }
+      | { metadata?: { userId?: string } & Record<string, unknown> }
       | undefined;
-    expect(anthropic?.metadata?.user_id).toBeDefined();
-    expect(anthropic?.metadata?.user_id).not.toBe("org_test_abc123");
-    expect(anthropic?.metadata?.user_id?.length).toBe(16);
+    const metadata = anthropic?.metadata;
+    expect(metadata?.userId).toBeDefined();
+    expect(metadata?.userId).not.toBe("org_test_abc123");
+    expect(metadata?.userId?.length).toBe(16);
+    expect("user_id" in (metadata ?? {})).toBe(false);
   });
 
   test("anthropic reasoning enables adaptive thinking", () => {

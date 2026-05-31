@@ -952,8 +952,8 @@ const googleDefaults: DefaultsBuilder = (role) => ({
 
 const buildAnthropicMetadata = (
   orgId: SafeId<"organization"> | null,
-): { metadata: { user_id: string } } | Record<string, never> =>
-  orgId === null ? {} : { metadata: { user_id: hashOrgId(orgId) } };
+): { metadata: { userId: string } } | Record<string, never> =>
+  orgId === null ? {} : { metadata: { userId: hashOrgId(orgId) } };
 
 // `temperature?: never` makes it a compile error to set temperature
 // here. Anthropic rejects custom temperature when extended thinking
