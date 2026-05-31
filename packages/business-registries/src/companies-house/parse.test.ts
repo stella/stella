@@ -21,18 +21,15 @@ import type {
 // construction; the parser tolerates absent optional fields so the
 // cast narrows JSON `unknown` to the documented response type
 // without runtime risk.
-// eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+/* eslint-disable typescript-eslint/no-unsafe-type-assertion */
 const tesco = tescoFixture as unknown as CompaniesHouseRawCompanyProfile;
-// eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
 const arm = armFixture as unknown as CompaniesHouseRawCompanyProfile;
-// eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
 const dissolved =
   dissolvedFixture as unknown as CompaniesHouseRawCompanyProfile;
-// eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
 const search = searchFixture as unknown as CompaniesHouseRawSearchResponse;
-// eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
 const officers =
   officersFixture as unknown as CompaniesHouseRawOfficersResponse;
+/* eslint-enable typescript-eslint/no-unsafe-type-assertion */
 
 describe("parseAddress", () => {
   test("composes textAddress in UK postal order", () => {
