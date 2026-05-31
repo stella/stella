@@ -3,7 +3,6 @@ export type { SearchOptions } from "./client.js";
 export {
   GcisAPIError,
   GcisError,
-  GcisNotFoundError,
   GcisRequestError,
   GcisValidationError,
 } from "./errors.js";

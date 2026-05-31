@@ -22,11 +22,14 @@ const DEFAULT_SEARCH_LIMIT = 50;
 // model more than it returns. Mirror the brreg/prh ceiling so the
 // dispatch layer can pass any limit through safely.
 const MAX_SEARCH_LIMIT = 100;
-// GCIS filter status code for "active" (核准設立). The name-search
-// dataset is unsorted and seeded with historical entities, including
-// dissolved ones; this filter mirrors the g0v.tw frontend default so
-// the first page is genuinely relevant.
-const ACTIVE_STATUS_CODE = "01";
+// GCIS filter status codes for active registrations. `01` is 核准設立
+// and `02` is 核准登記 (common for foreign branches); both map to the
+// active domain status in parse.ts.
+const ACTIVE_STATUS_FILTER =
+  "(Company_Status eq '01' or Company_Status eq '02')";
+
+const odataStringLiteral = (value: string): string =>
+  `'${value.replaceAll("'", "''")}'`;
 
 const buildUrl = (
   datasetId: string,
@@ -134,7 +137,7 @@ export const lookupByTaxId = async (
   }
   const url = buildUrl(LOOKUP_DATASET, {
     $format: "json",
-    $filter: `Business_Accounting_NO eq ${normalized}`,
+    $filter: `Business_Accounting_NO eq ${odataStringLiteral(normalized)}`,
     $skip: "0",
     $top: "1",
   });
@@ -148,10 +151,10 @@ export type SearchOptions = {
   limit?: number;
   /**
    * When true (default), restrict the search to currently-active
-   * companies (`Company_Status eq 01`). Set to `false` to include
-   * dissolved / suspended entries; the GCIS dataset is large and
-   * mostly returns active hits anyway, so the default trims the
-   * payload without losing relevant matches.
+   * companies (`Company_Status eq '01' or '02'`). Set to `false`
+   * to include dissolved / suspended entries; the GCIS dataset is
+   * large and mostly returns active hits anyway, so the default trims
+   * the payload without losing relevant matches.
    */
   activeOnly?: boolean;
 };
@@ -176,9 +179,10 @@ export const searchByName = async (
   const requestedLimit = options?.limit ?? DEFAULT_SEARCH_LIMIT;
   const top = Math.min(Math.max(requestedLimit, 1), MAX_SEARCH_LIMIT);
   const activeOnly = options?.activeOnly ?? true;
+  const quotedName = odataStringLiteral(trimmed);
   const filter = activeOnly
-    ? `Company_Name like ${trimmed} and Company_Status eq ${ACTIVE_STATUS_CODE}`
-    : `Company_Name like ${trimmed}`;
+    ? `Company_Name like ${quotedName} and ${ACTIVE_STATUS_FILTER}`
+    : `Company_Name like ${quotedName}`;
   const url = buildUrl(SEARCH_DATASET, {
     $format: "json",
     $filter: filter,
@@ -186,5 +190,5 @@ export const searchByName = async (
     $top: String(top),
   });
   const rows = await gcisGet(url);
-  return rows.map(parseSearchEntry);
+  return rows.map((row) => parseSearchEntry(row));
 };

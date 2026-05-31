@@ -1,7 +1,5 @@
 import { RegistryError } from "../shared/errors.js";
 
-const GCIS_REGISTRY_SLUG = "tw-gcis";
-
 export class GcisError extends RegistryError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
@@ -28,21 +26,6 @@ export class GcisAPIError extends GcisError {
     this.name = "GcisAPIError";
     this.httpStatus = httpStatus;
     this.upstreamMessage = upstreamMessage ?? null;
-  }
-}
-
-export class GcisNotFoundError extends GcisError {
-  readonly taxId: string;
-  readonly canonicalId: string;
-  readonly registrySlug: string = GCIS_REGISTRY_SLUG;
-
-  constructor(taxId: string) {
-    super(`Taiwanese entity not found: ${taxId}`);
-    this.name = "GcisNotFoundError";
-    this.taxId = taxId;
-    // Mirror the field so the shared `isEntityNotFound` predicate
-    // detects GCIS not-found alongside `instanceof GcisError`.
-    this.canonicalId = taxId;
   }
 }
 

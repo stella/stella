@@ -78,13 +78,14 @@ describe("lookupByTaxId (fixture)", () => {
 
   test("parses the live TSMC payload", async () => {
     const body = await readFixture("lookup-tsmc.json");
-    restore = installFetchStub(
-      async () =>
-        new Response(JSON.stringify(body), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
-    );
+    let capturedUrl = "";
+    restore = installFetchStub(async (input) => {
+      capturedUrl = fetchInputToString(input);
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
 
     const company = await lookupByTaxId("22099131");
     expect(company).not.toBeNull();
@@ -97,6 +98,7 @@ describe("lookupByTaxId (fixture)", () => {
     expect(company?.lastChangeDate).toBe("2026-05-25");
     expect(company?.status).toEqual({ type: "active" });
     expect(company?.statusDescription).toBe("核准設立");
+    expect(capturedUrl).toContain("Business_Accounting_NO+eq+%2722099131%27");
   });
 
   test("returns null when GCIS responds with an empty array", async () => {
@@ -204,7 +206,25 @@ describe("searchByName (fixture)", () => {
     const url = captured.at(0);
     expect(url).toBeDefined();
     expect(url).toContain("%24top=7");
-    expect(url).toContain("Company_Status+eq+01");
+    expect(url).toContain("Company_Name+like+%27");
+    expect(url).toContain("Company_Status+eq+%2701%27");
+    expect(url).toContain("Company_Status+eq+%2702%27");
+  });
+
+  test("escapes quotes inside OData string literals", async () => {
+    const captured: string[] = [];
+    restore = installFetchStub(async (input) => {
+      captured.push(fetchInputToString(input));
+      return new Response("[]", {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    await searchByName("Bob's 台積", { activeOnly: false });
+    const url = captured.at(0);
+    expect(url).toBeDefined();
+    expect(url).toContain("Bob%27%27s");
   });
 
   test("omits the status filter when activeOnly=false", async () => {

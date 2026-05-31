@@ -464,7 +464,7 @@ const gcisSearchResultToHit = (
   // See gcis/parse.ts for why this points at the dataset API call:
   // GCIS does not host a stable per-entity HTML page; findbiz.nat.gov.tw
   // uses session-bound keys that 404 once the session expires.
-  registryUrl: `https://data.gcis.nat.gov.tw/od/data/api/5F64D864-61CB-4D0D-8AD9-492047CC1EA6?$format=json&$filter=Business_Accounting_NO%20eq%20${encodeURIComponent(`'${result.taxId}'`)}`,
+  registryUrl: `https://data.gcis.nat.gov.tw/od/data/api/5F64D864-61CB-4D0D-8AD9-492047CC1EA6?$format=json&$filter=Business_Accounting_NO%20eq%20%27${encodeURIComponent(result.taxId)}%27`,
 });
 
 const mapGcisError = (error: unknown): HandlerError | null => {

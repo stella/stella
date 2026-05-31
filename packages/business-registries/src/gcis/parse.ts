@@ -48,14 +48,21 @@ const STATUS_TEXT_MAP: Record<string, GcisCompanyStatus> = {
   撤銷: { type: "dissolved" },
 };
 
-const parseStatus = (raw: GcisRawCompany): GcisCompanyStatus => {
-  // A populated suspension start date with no end date overrides the
-  // headline status: GCIS keeps `Company_Status` at "01" / 核准設立
-  // for entities that have only paused operations, but the canonical
-  // semantic state is "suspended".
+const parseStatus = (
+  raw: GcisRawCompany,
+  now: Date = new Date(),
+): GcisCompanyStatus => {
+  // An in-force suspension window overrides the headline status: GCIS
+  // keeps `Company_Status` at "01" / 核准設立 for entities that have
+  // only paused operations, but the canonical semantic state is
+  // "suspended". A future end date still means the suspension is
+  // currently active.
   const susStart = raw.Sus_Beg_Date?.trim();
   const susEnd = raw.Sus_End_Date?.trim();
-  if (susStart && !susEnd) {
+  const startsOn = parseRocDate(susStart);
+  const endsOn = parseRocDate(susEnd);
+  const today = now.toISOString().slice(0, 10);
+  if (startsOn && startsOn <= today && (!endsOn || today <= endsOn)) {
     return { type: "suspended" };
   }
   if (raw.Company_Status) {
@@ -116,7 +123,12 @@ const emptyToNull = (input: string | undefined): string | null => {
 const numberOrNull = (input: number | undefined): number | null =>
   typeof input === "number" && Number.isFinite(input) ? input : null;
 
-export const parseCompany = (raw: GcisRawCompany): GcisCompany => {
+const buildRegistryUrl = (taxId: string): string => {
+  const filter = encodeURIComponent(`Business_Accounting_NO eq '${taxId}'`);
+  return `${GCIS_API_BASE}/${GCIS_LOOKUP_DATASET}?$format=json&$filter=${filter}`;
+};
+
+export const parseCompany = (raw: GcisRawCompany, now?: Date): GcisCompany => {
   const taxId = raw.Business_Accounting_NO;
   return {
     taxId,
@@ -130,15 +142,18 @@ export const parseCompany = (raw: GcisRawCompany): GcisCompany => {
     setupDate: parseRocDate(raw.Company_Setup_Date),
     lastChangeDateRoc: emptyToNull(raw.Change_Of_Approval_Data),
     lastChangeDate: parseRocDate(raw.Change_Of_Approval_Data),
-    status: parseStatus(raw),
+    status: parseStatus(raw, now),
     statusDescription: emptyToNull(raw.Company_Status_Desc),
-    registryUrl: `${GCIS_API_BASE}/${GCIS_LOOKUP_DATASET}?$format=json&$filter=Business_Accounting_NO%20eq%20${encodeURIComponent(taxId)}`,
+    registryUrl: buildRegistryUrl(taxId),
   };
 };
 
-export const parseSearchEntry = (raw: GcisRawCompany): GcisSearchResult => ({
+export const parseSearchEntry = (
+  raw: GcisRawCompany,
+  now?: Date,
+): GcisSearchResult => ({
   taxId: raw.Business_Accounting_NO,
   name: raw.Company_Name?.trim() ?? raw.Business_Accounting_NO,
   location: emptyToNull(raw.Company_Location),
-  status: parseStatus(raw),
+  status: parseStatus(raw, now),
 });

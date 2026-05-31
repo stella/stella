@@ -111,28 +111,47 @@ describe("parseStatus (via parseCompany)", () => {
     expect(parseCompany(baseRaw).status).toEqual({ type: "unknown" });
   });
 
-  test("active code is overridden when an open suspension window is present", () => {
+  test("active code is overridden when a suspension window is in force", () => {
     // GCIS keeps the headline status at "01" for entities that have
     // only paused operations; surfacing that as "active" misreports
     // the running state for entities visibly in 停業.
-    const company = parseCompany({
-      ...baseRaw,
-      Company_Status: "01",
-      Company_Status_Desc: "核准設立",
-      Sus_Beg_Date: "1140601",
-      Sus_End_Date: "",
-    });
+    const company = parseCompany(
+      {
+        ...baseRaw,
+        Company_Status: "01",
+        Company_Status_Desc: "核准設立",
+        Sus_Beg_Date: "1140601",
+        Sus_End_Date: "1141231",
+      },
+      new Date("2025-06-15T00:00:00Z"),
+    );
     expect(company.status).toEqual({ type: "suspended" });
   });
 
   test("ignores closed suspension windows", () => {
     // Suspension that ended → entity returned to normal trading.
-    const company = parseCompany({
-      ...baseRaw,
-      Company_Status: "01",
-      Sus_Beg_Date: "1140101",
-      Sus_End_Date: "1140401",
-    });
+    const company = parseCompany(
+      {
+        ...baseRaw,
+        Company_Status: "01",
+        Sus_Beg_Date: "1140101",
+        Sus_End_Date: "1140401",
+      },
+      new Date("2025-05-01T00:00:00Z"),
+    );
+    expect(company.status).toEqual({ type: "active" });
+  });
+
+  test("ignores future suspension windows", () => {
+    const company = parseCompany(
+      {
+        ...baseRaw,
+        Company_Status: "01",
+        Sus_Beg_Date: "1140601",
+        Sus_End_Date: "1141231",
+      },
+      new Date("2025-05-01T00:00:00Z"),
+    );
     expect(company.status).toEqual({ type: "active" });
   });
 });
@@ -169,18 +188,35 @@ describe("ROC date parsing (via parseCompany)", () => {
 
 describe("parseSearchEntry", () => {
   test("derives a compact row from a name-search hit", () => {
-    const entry = parseSearchEntry({
-      Business_Accounting_NO: "54900838",
-      Company_Name: "台積電機有限公司",
-      Company_Status: "01",
-      Company_Status_Desc: "核准設立",
-      Company_Location: "臺中市南屯區春社里中台路61之3號",
-    });
+    const entry = parseSearchEntry(
+      {
+        Business_Accounting_NO: "54900838",
+        Company_Name: "台積電機有限公司",
+        Company_Status: "01",
+        Company_Status_Desc: "核准設立",
+        Company_Location: "臺中市南屯區春社里中台路61之3號",
+      },
+      new Date("2025-05-01T00:00:00Z"),
+    );
     expect(entry).toEqual({
       taxId: "54900838",
       name: "台積電機有限公司",
       location: "臺中市南屯區春社里中台路61之3號",
       status: { type: "active" },
     });
+  });
+
+  test("uses the same suspension-window parser as full company rows", () => {
+    const entry = parseSearchEntry(
+      {
+        Business_Accounting_NO: "54900838",
+        Company_Name: "台積電機有限公司",
+        Company_Status: "01",
+        Sus_Beg_Date: "1140601",
+        Sus_End_Date: "1141231",
+      },
+      new Date("2025-06-15T00:00:00Z"),
+    );
+    expect(entry.status).toEqual({ type: "suspended" });
   });
 });
