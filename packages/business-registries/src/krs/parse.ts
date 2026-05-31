@@ -61,7 +61,7 @@ export const parseStatus = (
   }
   const proceedings =
     dzial6?.postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja;
-  if (hasEntries(proceedings)) {
+  if (proceedings && proceedings.length > 0) {
     // Inspect each entry's `rodzajPostepowania`. If ANY entry names a
     // liquidation, the entity is liquidating (a more terminal state
     // than restructuring); otherwise it is restructuring. Entries
