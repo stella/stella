@@ -33,6 +33,17 @@ import {
   searchByName as searchBrregByName,
 } from "@stll/business-registries/brreg";
 import {
+  CompaniesHouseAPIError,
+  CompaniesHouseAuthError,
+  type CompaniesHouseCompany,
+  CompaniesHouseRequestError,
+  type CompaniesHouseSearchResult,
+  CompaniesHouseValidationError,
+  lookupByCompanyNumber,
+  normalizeCompanyNumber,
+  searchByName as searchCompaniesHouseByName,
+} from "@stll/business-registries/companies-house";
+import {
   EdgarAPIError,
   type EdgarCompany,
   EdgarRequestError,
@@ -125,6 +136,7 @@ export type RegistryJurisdictionCode =
 export const BUSINESS_REGISTRY_SLUGS = [
   "ares",
   "brreg",
+  "companies-house",
   "edgar",
   "gcis",
   "krs",
@@ -172,6 +184,7 @@ export type BusinessRegistryHit = {
 export type BusinessRegistryHitDetails =
   | { registry: "ares"; company: AresCompany }
   | { registry: "brreg"; entity: BrregEntity }
+  | { registry: "companies-house"; company: CompaniesHouseCompany }
   | { registry: "edgar"; company: EdgarCompany }
   | { registry: "gcis"; company: GcisCompany }
   | { registry: "krs"; entity: KrsEntity }
@@ -452,6 +465,141 @@ const BRREG_HANDLER: RegistryHandler = {
   },
   isDeployAvailable: isAlwaysDeployAvailable,
   mapError: mapBrregError,
+};
+
+// ---------------------------------------------------------------------------
+// Companies House (United Kingdom)
+// ---------------------------------------------------------------------------
+
+const companiesHouseCompanyToHit = (
+  company: CompaniesHouseCompany,
+): BusinessRegistryHit => ({
+  registry: "companies-house",
+  id: company.companyNumber,
+  name: company.name,
+  legalForm: company.type,
+  address: company.registeredOfficeAddress
+    ? {
+        line1:
+          [
+            company.registeredOfficeAddress.premises,
+            company.registeredOfficeAddress.addressLine1,
+          ]
+            .filter(Boolean)
+            .join(" ") || null,
+        line2: company.registeredOfficeAddress.addressLine2,
+        postalCode: company.registeredOfficeAddress.postalCode,
+        city: company.registeredOfficeAddress.locality,
+        region: company.registeredOfficeAddress.region,
+        country: company.registeredOfficeAddress.country,
+        textAddress: company.registeredOfficeAddress.textAddress,
+      }
+    : null,
+  registryUrl: company.registryUrl,
+  // Carry status discriminator, SIC codes, accounts / confirmation
+  // statement timing, previous names, etc. so chat callers can answer
+  // questions the baseline shape cannot.
+  details: { registry: "companies-house", company },
+});
+
+const companiesHouseSearchResultToHit = (
+  result: CompaniesHouseSearchResult,
+): BusinessRegistryHit => ({
+  registry: "companies-house",
+  id: result.companyNumber,
+  name: result.name,
+  legalForm: result.type,
+  address: result.address
+    ? {
+        line1: null,
+        line2: null,
+        postalCode: null,
+        city: null,
+        region: null,
+        country: null,
+        textAddress: result.address,
+      }
+    : null,
+  registryUrl: result.registryUrl,
+});
+
+const mapCompaniesHouseError = (error: unknown): HandlerError | null => {
+  if (error instanceof CompaniesHouseValidationError) {
+    return new HandlerError({ status: 400, message: error.message });
+  }
+  if (error instanceof CompaniesHouseAuthError) {
+    // Auth failure is an operator-configuration bug, not something
+    // the end user can fix. Map to 502 with the upstream-derived
+    // message rather than a 401 the caller cannot act on.
+    return new HandlerError({
+      status: 502,
+      message: `UK Companies House API key not configured: ${error.message}`,
+    });
+  }
+  if (error instanceof CompaniesHouseAPIError) {
+    return new HandlerError({
+      status: 502,
+      message: `UK Companies House API error: ${error.message}`,
+    });
+  }
+  if (error instanceof CompaniesHouseRequestError) {
+    return new HandlerError({
+      status: 502,
+      message: `UK Companies House request failed: ${error.message}`,
+    });
+  }
+  return null;
+};
+
+// The handler resolves the Companies House API key at call time
+// rather than at module load. Reading `process.env` directly here
+// (instead of via the centralised `env` import) keeps `dispatch.ts`
+// free of side effects at import time — the chat tool catalogue imports
+// this module from contexts that don't run full env validation
+// (workers, scripts, tests). The env schema in `apps/api/src/env.ts`
+// still declares `COMPANIES_HOUSE_API_KEY` so the API server boot path
+// validates it like the rest of config.
+const COMPANIES_HOUSE_API_KEY_ENV_VAR = "COMPANIES_HOUSE_API_KEY";
+
+export const isCompaniesHouseDeployAvailable = (): boolean =>
+  Boolean(process.env[COMPANIES_HOUSE_API_KEY_ENV_VAR]?.trim());
+
+const requireCompaniesHouseApiKey = (): string => {
+  const apiKey = process.env[COMPANIES_HOUSE_API_KEY_ENV_VAR]?.trim();
+  if (!apiKey) {
+    throw new CompaniesHouseAuthError(
+      "COMPANIES_HOUSE_API_KEY is not configured. Get a free API key at https://developer.company-information.service.gov.uk and set the env var.",
+    );
+  }
+  return apiKey;
+};
+
+const COMPANIES_HOUSE_HANDLER: RegistryHandler = {
+  slug: "companies-house",
+  country: "GB",
+  nativeToolSlug: "companies-house",
+  // SHAPE-only: matches both two-letter-prefix CRNs (e.g. SC012345,
+  // OC123456) and 6-8 digit numeric CRNs after stripping the optional
+  // padding. Full structural validation runs in lookupByCompanyNumber
+  // and surfaces as CompaniesHouseValidationError → HTTP 400.
+  isCanonicalId: (input) =>
+    /^[A-Z]{0,2}\d{6,8}$/u.test(normalizeCompanyNumber(input)),
+  lookup: async (input) => {
+    const company = await lookupByCompanyNumber(input, {
+      apiKey: requireCompaniesHouseApiKey(),
+    });
+    return company ? companiesHouseCompanyToHit(company) : null;
+  },
+  search: async (input, options) => {
+    const results = await searchCompaniesHouseByName(
+      input,
+      { apiKey: requireCompaniesHouseApiKey() },
+      options,
+    );
+    return results.map(companiesHouseSearchResultToHit);
+  },
+  isDeployAvailable: isCompaniesHouseDeployAvailable,
+  mapError: mapCompaniesHouseError,
 };
 
 // ---------------------------------------------------------------------------
@@ -1147,6 +1295,7 @@ export const BUSINESS_REGISTRY_DISPATCH: Record<
 > = {
   ares: ARES_HANDLER,
   brreg: BRREG_HANDLER,
+  "companies-house": COMPANIES_HOUSE_HANDLER,
   edgar: EDGAR_HANDLER,
   gcis: GCIS_HANDLER,
   krs: KRS_HANDLER,

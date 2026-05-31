@@ -1,0 +1,60 @@
+{
+  "company_name": "ARM HOLDINGS LIMITED",
+  "company_number": "02557590",
+  "company_status": "active",
+  "date_of_creation": "1990-10-16",
+  "jurisdiction": "england-wales",
+  "type": "ltd",
+  "has_charges": false,
+  "has_insolvency_history": false,
+  "sic_codes": ["62012", "70100"],
+  "previous_company_names": [
+    {
+      "name": "ARM HOLDINGS PLC",
+      "effective_from": "1998-03-17",
+      "ceased_on": "2016-09-05"
+    },
+    {
+      "name": "ADVANCED RISC MACHINES HOLDINGS LIMITED",
+      "effective_from": "1990-10-16",
+      "ceased_on": "1998-03-17"
+    }
+  ],
+  "registered_office_address": {
+    "address_line_1": "110 Fulbourn Road",
+    "locality": "Cherry Hinton",
+    "region": "Cambridge",
+    "postal_code": "CB1 9NJ",
+    "country": "England"
+  },
+  "service_address": {
+    "address_line_1": "110 Fulbourn Road",
+    "locality": "Cambridge",
+    "postal_code": "CB1 9NJ",
+    "country": "England"
+  },
+  "accounts": {
+    "next_due": "2026-12-31",
+    "next_made_up_to": "2026-03-31",
+    "last_accounts": {
+      "made_up_to": "2025-03-31",
+      "type": "group"
+    },
+    "next_accounts": {
+      "due_on": "2026-12-31",
+      "overdue": false
+    }
+  },
+  "confirmation_statement": {
+    "last_made_up_to": "2025-10-15",
+    "next_due": "2026-10-29",
+    "next_made_up_to": "2026-10-15",
+    "overdue": false
+  },
+  "links": {
+    "self": "/company/02557590",
+    "filing_history": "/company/02557590/filing-history",
+    "officers": "/company/02557590/officers"
+  },
+  "etag": "0123456789abcdef0123456789abcdef01234567"
+}

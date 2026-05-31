@@ -1,0 +1,25 @@
+{
+  "company_name": "MAPLIN ELECTRONICS LIMITED",
+  "company_number": "01264512",
+  "company_status": "dissolved",
+  "date_of_creation": "1976-04-21",
+  "date_of_cessation": "2018-09-04",
+  "jurisdiction": "england-wales",
+  "type": "ltd",
+  "has_charges": true,
+  "has_insolvency_history": true,
+  "has_been_liquidated": true,
+  "sic_codes": ["47410"],
+  "registered_office_address": {
+    "address_line_1": "Brook Road",
+    "locality": "Rayleigh",
+    "region": "Essex",
+    "postal_code": "SS6 7XJ",
+    "country": "England"
+  },
+  "links": {
+    "self": "/company/01264512",
+    "filing_history": "/company/01264512/filing-history"
+  },
+  "etag": "feedfacecafebeefdeadbeef0123456789abcdef"
+}

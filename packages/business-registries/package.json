@@ -57,6 +57,11 @@
       "types": "./src/brreg/index.ts",
       "import": "./dist/brreg/index.js"
     },
+    "./companies-house": {
+      "bun": "./src/companies-house/index.ts",
+      "types": "./src/companies-house/index.ts",
+      "import": "./dist/companies-house/index.js"
+    },
     "./edgar": {
       "bun": "./src/edgar/index.ts",
       "types": "./src/edgar/index.ts",

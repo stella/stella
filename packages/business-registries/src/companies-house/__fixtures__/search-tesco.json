@@ -1,0 +1,70 @@
+{
+  "etag": "abc123def456",
+  "kind": "search#companies",
+  "start_index": 0,
+  "items_per_page": 5,
+  "total_results": 482,
+  "items": [
+    {
+      "company_number": "00445790",
+      "title": "TESCO PLC",
+      "company_status": "active",
+      "company_type": "plc",
+      "date_of_creation": "1947-11-27",
+      "address_snippet": "Tesco House, Shire Park, Kestrel Way, Welwyn Garden City, AL7 1GA",
+      "address": {
+        "premises": "Tesco House",
+        "address_line_1": "Shire Park",
+        "address_line_2": "Kestrel Way",
+        "locality": "Welwyn Garden City",
+        "postal_code": "AL7 1GA",
+        "country": "England"
+      },
+      "description": "00445790 - Incorporated on 27 November 1947",
+      "description_identifier": ["incorporated-on"],
+      "kind": "searchresults#company",
+      "links": { "self": "/company/00445790" }
+    },
+    {
+      "company_number": "02928619",
+      "title": "TESCO STORES LIMITED",
+      "company_status": "active",
+      "company_type": "ltd",
+      "date_of_creation": "1994-06-23",
+      "address_snippet": "Tesco House, Shire Park, Kestrel Way, Welwyn Garden City, AL7 1GA",
+      "kind": "searchresults#company",
+      "links": { "self": "/company/02928619" }
+    },
+    {
+      "company_number": "SC141819",
+      "title": "TESCO PERSONAL FINANCE PLC",
+      "company_status": "active",
+      "company_type": "plc",
+      "date_of_creation": "1997-07-04",
+      "address_snippet": "Interpoint Building, 22 Haymarket Yards, Edinburgh, EH12 5BH",
+      "kind": "searchresults#company",
+      "links": { "self": "/company/SC141819" }
+    },
+    {
+      "company_number": "01264512",
+      "title": "MAPLIN ELECTRONICS LIMITED",
+      "company_status": "dissolved",
+      "company_type": "ltd",
+      "date_of_creation": "1976-04-21",
+      "date_of_cessation": "2018-09-04",
+      "address_snippet": "Brook Road, Rayleigh, Essex, SS6 7XJ",
+      "kind": "searchresults#company",
+      "links": { "self": "/company/01264512" }
+    },
+    {
+      "company_number": "00081261",
+      "title": "TESCO HOLDINGS LIMITED",
+      "company_status": "active",
+      "company_type": "ltd",
+      "date_of_creation": "1903-11-13",
+      "address_snippet": "Tesco House, Shire Park, Welwyn Garden City, AL7 1GA",
+      "kind": "searchresults#company",
+      "links": { "self": "/company/00081261" }
+    }
+  ]
+}

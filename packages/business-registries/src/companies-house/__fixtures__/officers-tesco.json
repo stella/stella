@@ -1,0 +1,94 @@
+{
+  "active_count": 8,
+  "inactive_count": 0,
+  "resigned_count": 117,
+  "items_per_page": 35,
+  "start_index": 0,
+  "total_results": 125,
+  "kind": "officer-list",
+  "etag": "officers-etag-0123456789abcdef",
+  "links": { "self": "/company/00445790/officers" },
+  "items": [
+    {
+      "name": "MURPHY, Kenneth Anthony",
+      "officer_role": "director",
+      "appointed_on": "2020-10-01",
+      "occupation": "Chief Executive Officer",
+      "nationality": "Irish",
+      "country_of_residence": "England",
+      "date_of_birth": { "month": "8", "year": "1966" },
+      "address": {
+        "premises": "Tesco House",
+        "address_line_1": "Shire Park",
+        "address_line_2": "Kestrel Way",
+        "locality": "Welwyn Garden City",
+        "postal_code": "AL7 1GA",
+        "country": "England"
+      },
+      "links": {
+        "officer": { "appointments": "/officers/abc123/appointments" }
+      }
+    },
+    {
+      "name": "STEWART, Imran",
+      "officer_role": "director",
+      "appointed_on": "2021-04-30",
+      "occupation": "Chief Financial Officer",
+      "nationality": "British",
+      "country_of_residence": "England",
+      "date_of_birth": { "month": "3", "year": "1973" },
+      "address": {
+        "premises": "Tesco House",
+        "address_line_1": "Shire Park",
+        "locality": "Welwyn Garden City",
+        "postal_code": "AL7 1GA",
+        "country": "England"
+      },
+      "links": {
+        "officer": { "appointments": "/officers/def456/appointments" }
+      }
+    },
+    {
+      "name": "ALLAN, Robert James",
+      "officer_role": "director",
+      "appointed_on": "2015-09-01",
+      "resigned_on": "2022-03-31",
+      "occupation": "Non-Executive Director",
+      "nationality": "British",
+      "country_of_residence": "England",
+      "date_of_birth": { "month": "12", "year": "1956" },
+      "address": {
+        "premises": "Tesco House",
+        "address_line_1": "Shire Park",
+        "locality": "Welwyn Garden City",
+        "postal_code": "AL7 1GA",
+        "country": "England"
+      },
+      "links": {
+        "officer": { "appointments": "/officers/ghi789/appointments" }
+      }
+    },
+    {
+      "name": "TESCO CORPORATE SECRETARIES LIMITED",
+      "officer_role": "corporate-secretary",
+      "appointed_on": "2018-01-01",
+      "address": {
+        "premises": "Tesco House",
+        "address_line_1": "Shire Park",
+        "locality": "Welwyn Garden City",
+        "postal_code": "AL7 1GA",
+        "country": "England"
+      },
+      "identification": {
+        "identification_type": "uk-limited-company",
+        "legal_authority": "Companies Act 2006",
+        "legal_form": "Private Limited Company",
+        "place_registered": "England and Wales",
+        "registration_number": "01234567"
+      },
+      "links": {
+        "officer": { "appointments": "/officers/jkl012/appointments" }
+      }
+    }
+  ]
+}
