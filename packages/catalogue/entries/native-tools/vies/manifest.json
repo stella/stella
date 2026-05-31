@@ -1,0 +1,18 @@
+{
+  "$schema": "../../../schema.json",
+  "kind": "native-tool",
+  "slug": "vies",
+  "displayName": "EU VIES VAT validation",
+  "description": "EU-wide VAT identification number validation via the European Commission's VAT Information Exchange System (VIES) REST API. Confirms whether a VAT number is registered in the supplier's member state and returns the registered trader name and address where the member state discloses them.",
+  "author": "stella",
+  "authorUrl": "https://github.com/stella",
+  "license": "Apache-2.0",
+  "cost": "free",
+  "setup": "none",
+  "homepage": "https://ec.europa.eu/taxation_customs/vies/",
+  "tags": ["tax", "regulatory", "corporate"],
+  "jurisdictions": ["EU"],
+  "backendSlug": "vies",
+  "url": "https://ec.europa.eu/taxation_customs/vies/",
+  "documentationUrl": "https://ec.europa.eu/taxation_customs/vies/#/technical-information"
+}

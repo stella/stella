@@ -5,6 +5,7 @@ import type { AresCompany } from "@stll/business-registries/ares";
 import {
   BUSINESS_REGISTRY_DISPATCH,
   executeRegistryLookup,
+  getRegistryHandlerByCountry,
   type RegistryHandler,
 } from "@/api/lib/business-registries/dispatch";
 
@@ -90,5 +91,43 @@ describe("executeRegistryLookup — details channel", () => {
       throw new Error(`expected search result, got ${result.type}`);
     }
     expect(result.hits[0]?.details).toBeUndefined();
+  });
+});
+
+describe("VIES handler wiring", () => {
+  test("is registered under the EU pseudo-jurisdiction", () => {
+    const handler = getRegistryHandlerByCountry("EU");
+    expect(handler).toBeDefined();
+    expect(handler?.slug).toBe("vies");
+  });
+
+  test("isCanonicalId accepts well-formed EU VAT numbers", () => {
+    const handler = BUSINESS_REGISTRY_DISPATCH.vies;
+    expect(handler.isCanonicalId("DE143593636")).toBe(true);
+    expect(handler.isCanonicalId(" ie 6388047v ")).toBe(true);
+    expect(handler.isCanonicalId("IT00159560366")).toBe(true);
+  });
+
+  test("isCanonicalId rejects inputs without a known prefix or with GB", () => {
+    const handler = BUSINESS_REGISTRY_DISPATCH.vies;
+    expect(handler.isCanonicalId("143593636")).toBe(false);
+    expect(handler.isCanonicalId("ZZ12345")).toBe(false);
+    // GB was removed from VIES post-Brexit.
+    expect(handler.isCanonicalId("GB123456789")).toBe(false);
+  });
+
+  test("search is null — VIES has no name-search endpoint", () => {
+    expect(BUSINESS_REGISTRY_DISPATCH.vies.search).toBeNull();
+  });
+
+  test("name search is rejected with a useful error", async () => {
+    const result = await executeRegistryLookup({
+      handler: BUSINESS_REGISTRY_DISPATCH.vies,
+      query: "Acme Corp",
+    });
+    expect(result).toBeInstanceOf(Error);
+    if (result instanceof Error) {
+      expect(result.message).toContain("does not support name search");
+    }
   });
 });

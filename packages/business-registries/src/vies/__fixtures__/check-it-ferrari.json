@@ -1,0 +1,22 @@
+{
+  "isValid": true,
+  "requestDate": "2026-05-31T07:43:04.377Z",
+  "userError": "VALID",
+  "name": "FERRARI S.P.A.",
+  "address": "VIA EMILIA EST 1163 \n41122 MODENA MO\n",
+  "requestIdentifier": "",
+  "originalVatNumber": "00159560366",
+  "vatNumber": "00159560366",
+  "viesApproximate": {
+    "name": "---",
+    "street": "---",
+    "postalCode": "---",
+    "city": "---",
+    "companyType": "---",
+    "matchName": 3,
+    "matchStreet": 3,
+    "matchPostalCode": 3,
+    "matchCity": 3,
+    "matchCompanyType": 3
+  }
+}

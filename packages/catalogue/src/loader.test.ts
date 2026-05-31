@@ -100,6 +100,26 @@ describe("recommendedSlugsForJurisdictions", () => {
     const slugs = recommendedSlugsForJurisdictions(new Set(["JP"]));
     expect(slugs.size).toBe(0);
   });
+
+  it("activates the EU wildcard tier (VIES) for any EU member practice", () => {
+    // FR is a member but has no per-country entry in recommended.json;
+    // the EU wildcard should still surface VIES.
+    expect(recommendedSlugsForJurisdictions(new Set(["FR"])).has("vies")).toBe(
+      true,
+    );
+    expect(recommendedSlugsForJurisdictions(new Set(["CZ"])).has("vies")).toBe(
+      true,
+    );
+  });
+
+  it("does not surface the EU wildcard tier for non-EU practices", () => {
+    expect(recommendedSlugsForJurisdictions(new Set(["JP"])).has("vies")).toBe(
+      false,
+    );
+    expect(recommendedSlugsForJurisdictions(new Set(["NO"])).has("vies")).toBe(
+      false,
+    );
+  });
 });
 
 describe("loadRecommended", () => {

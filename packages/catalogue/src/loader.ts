@@ -59,6 +59,7 @@ export const TOGGLEABLE_NATIVE_TOOL_BACKEND_SLUGS = [
   "orsr",
   "prh",
   "recherche-entreprises",
+  "vies",
   "web-search",
 ] as const;
 export type ToggleableNativeToolBackendSlug =

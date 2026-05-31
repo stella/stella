@@ -1,0 +1,22 @@
+{
+  "isValid": true,
+  "requestDate": "2026-05-31T07:43:05.714Z",
+  "userError": "VALID",
+  "name": "---",
+  "address": "---",
+  "requestIdentifier": "",
+  "originalVatNumber": "811569869",
+  "vatNumber": "811569869",
+  "viesApproximate": {
+    "name": "---",
+    "street": "---",
+    "postalCode": "---",
+    "city": "---",
+    "companyType": "---",
+    "matchName": 3,
+    "matchStreet": 3,
+    "matchPostalCode": 3,
+    "matchCity": 3,
+    "matchCompanyType": 3
+  }
+}

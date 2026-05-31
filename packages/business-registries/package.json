@@ -16,7 +16,9 @@
     "orsr",
     "prh",
     "registry",
-    "sirene"
+    "sirene",
+    "vat",
+    "vies"
   ],
   "homepage": "https://github.com/stella/stella/tree/main/packages/business-registries",
   "bugs": {
@@ -77,6 +79,11 @@
       "bun": "./src/recherche-entreprises/index.ts",
       "types": "./src/recherche-entreprises/index.ts",
       "import": "./dist/recherche-entreprises/index.js"
+    },
+    "./vies": {
+      "bun": "./src/vies/index.ts",
+      "types": "./src/vies/index.ts",
+      "import": "./dist/vies/index.js"
     },
     "./shared": {
       "bun": "./src/shared/index.ts",

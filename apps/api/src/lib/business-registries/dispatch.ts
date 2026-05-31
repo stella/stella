@@ -83,9 +83,32 @@ import {
   RechercheEntreprisesValidationError,
   searchByName as searchRechercheEntreprisesByName,
 } from "@stll/business-registries/recherche-entreprises";
+import {
+  isKnownVatCountry,
+  parseVatNumber,
+  validateVat,
+  type ViesValidation,
+  ViesAPIError,
+  ViesRequestError,
+  ViesValidationError,
+} from "@stll/business-registries/vies";
 import type { CountryCode } from "@stll/country-codes";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+
+// ---------------------------------------------------------------------------
+// Jurisdiction codes
+//
+// VIES is an EU-wide pseudo-jurisdiction, not a real country. We widen
+// the registry jurisdiction type to `CountryCode | "EU"` so the unified
+// dispatch + chat tool can route to the VIES adapter without polluting
+// `CountryCode` (which is structurally the ISO 3166-1 alpha-2 set).
+// ---------------------------------------------------------------------------
+
+export const EU_PSEUDO_JURISDICTION = "EU" as const;
+export type RegistryJurisdictionCode =
+  | CountryCode
+  | typeof EU_PSEUDO_JURISDICTION;
 
 // ---------------------------------------------------------------------------
 // Normalised cross-registry shapes
@@ -99,6 +122,7 @@ export const BUSINESS_REGISTRY_SLUGS = [
   "orsr",
   "prh",
   "recherche-entreprises",
+  "vies",
 ] as const;
 export type BusinessRegistrySlug = (typeof BUSINESS_REGISTRY_SLUGS)[number];
 
@@ -143,7 +167,8 @@ export type BusinessRegistryHitDetails =
   | { registry: "krs"; entity: KrsEntity }
   | { registry: "orsr"; company: OrsrCompany }
   | { registry: "prh"; company: PrhCompany }
-  | { registry: "recherche-entreprises"; company: RechercheEntreprisesCompany };
+  | { registry: "recherche-entreprises"; company: RechercheEntreprisesCompany }
+  | { registry: "vies"; validation: ViesValidation };
 
 export type RegistryLookupResponse =
   | {
@@ -165,11 +190,16 @@ export type RegistryHandler = {
   /** Slug as it appears in the catalogue + the REST `?registry=` param. */
   slug: BusinessRegistrySlug;
   /**
-   * ISO country code the registry covers. The chat tool uses this to
+   * Jurisdiction the registry covers. The chat tool uses this to
    * route a user-supplied jurisdiction to the right adapter
-   * (CZ → ares, NO → brreg, ...).
+   * (CZ → ares, NO → brreg, EU → vies, ...).
+   *
+   * Normally an ISO 3166-1 alpha-2 country code. The special "EU"
+   * value is reserved for EU-wide pseudo-jurisdictions (currently
+   * just VIES, which validates VAT numbers across all member states
+   * from a single endpoint).
    */
-  country: CountryCode;
+  country: RegistryJurisdictionCode;
   /** Catalog slug used by `isNativeToolEnabledForOrg`. */
   nativeToolSlug: string;
   /**
@@ -756,6 +786,72 @@ const mapPrhError = (error: unknown): HandlerError | null => {
   return null;
 };
 
+// ---------------------------------------------------------------------------
+// VIES (EU-wide VAT validation)
+//
+// Special-case: VIES is not a per-country business registry. The input
+// already carries the 2-letter country prefix (e.g. "DE143593636"),
+// so the handler's jurisdiction is the synthetic "EU" pseudo-code and
+// `isCanonicalId` accepts any VAT-shaped input.
+//
+// There is no name-search endpoint: VIES validates a fully-qualified
+// VAT number and that is it. The handler's `search` is null so the
+// dispatch layer surfaces a 400 with a useful message rather than
+// silently returning an empty list.
+// ---------------------------------------------------------------------------
+
+const VIES_HOMEPAGE = "https://ec.europa.eu/taxation_customs/vies/";
+
+const viesValidationToHit = (
+  validation: ViesValidation,
+): BusinessRegistryHit => {
+  const fullVat = `${validation.vatNumber.country}${validation.vatNumber.vat}`;
+  return {
+    registry: "vies",
+    id: fullVat,
+    // Fall back to the VAT itself when the member state suppresses
+    // trader data (DE, ES, AT, …) so callers always have something
+    // to render in the name slot.
+    name: validation.name ?? fullVat,
+    legalForm: null,
+    address: validation.address
+      ? {
+          line1: null,
+          line2: null,
+          postalCode: null,
+          city: null,
+          region: null,
+          country: validation.vatNumber.country,
+          textAddress: validation.address,
+        }
+      : null,
+    registryUrl: VIES_HOMEPAGE,
+    // Carry the structured validation so the chat model can answer
+    // "is VAT DE143593636 valid?" with the registered name + address
+    // and the timestamp VIES stamped.
+    details: { registry: "vies", validation },
+  };
+};
+
+const mapViesError = (error: unknown): HandlerError | null => {
+  if (error instanceof ViesValidationError) {
+    return new HandlerError({ status: 400, message: error.message });
+  }
+  if (error instanceof ViesAPIError) {
+    return new HandlerError({
+      status: 502,
+      message: `VIES API error: ${error.message}`,
+    });
+  }
+  if (error instanceof ViesRequestError) {
+    return new HandlerError({
+      status: 502,
+      message: `VIES request failed: ${error.message}`,
+    });
+  }
+  return null;
+};
+
 const PRH_HANDLER: RegistryHandler = {
   slug: "prh",
   country: "FI",
@@ -774,6 +870,40 @@ const PRH_HANDLER: RegistryHandler = {
     return results.map(prhSearchResultToHit);
   },
   mapError: mapPrhError,
+};
+
+const VIES_HANDLER: RegistryHandler = {
+  slug: "vies",
+  country: EU_PSEUDO_JURISDICTION,
+  nativeToolSlug: "vies",
+  // Shape check only — accept inputs whose prefix matches a known
+  // VAT country (`isKnownVatCountry` includes historical members
+  // like GB) followed by ≥2 alphanumerics. Without the prefix
+  // whitelist a plain name like `Acme Corp` would parse as prefix
+  // `AC` + VAT `MECORP` and route to the lookup path, surfacing a
+  // confusing "unknown country" error instead of the intended
+  // "name search not supported" 400. Removed participants (GB) still
+  // pass the shape check; the lookup handler owns their tailored
+  // `ViesValidationError`.
+  isCanonicalId: (input) => {
+    const parsed = parseVatNumber(input);
+    if (!parsed) {
+      return false;
+    }
+    if (!isKnownVatCountry(parsed.country)) {
+      return false;
+    }
+    return /^[A-Z0-9+*]{2,}$/u.test(parsed.vat);
+  },
+  lookup: async (input) => {
+    const validation = await validateVat(input);
+    return viesValidationToHit(validation);
+  },
+  // VIES has no name-search endpoint — VAT-only validation. Returning
+  // `null` lets `executeRegistryLookup` produce the standard
+  // "name-search not supported" 400 instead of guessing.
+  search: null,
+  mapError: mapViesError,
 };
 
 // ---------------------------------------------------------------------------
@@ -895,9 +1025,13 @@ export const BUSINESS_REGISTRY_DISPATCH: Record<
   orsr: ORSR_HANDLER,
   prh: PRH_HANDLER,
   "recherche-entreprises": RECHERCHE_ENTREPRISES_HANDLER,
+  vies: VIES_HANDLER,
 };
 
-const HANDLERS_BY_COUNTRY: ReadonlyMap<CountryCode, RegistryHandler> = new Map(
+const HANDLERS_BY_JURISDICTION: ReadonlyMap<
+  RegistryJurisdictionCode,
+  RegistryHandler
+> = new Map(
   Object.values(BUSINESS_REGISTRY_DISPATCH).map((handler) => [
     handler.country,
     handler,
@@ -905,13 +1039,17 @@ const HANDLERS_BY_COUNTRY: ReadonlyMap<CountryCode, RegistryHandler> = new Map(
 );
 
 /**
- * Look up the registry handler for a given country code, if Stella
- * has an adapter shipped for it. The chat tool uses this to dispatch
- * from a user-facing jurisdiction (CZ, NO) to the underlying adapter.
+ * Look up the registry handler for a given jurisdiction code, if
+ * Stella has an adapter shipped for it. The chat tool uses this to
+ * dispatch from a user-facing jurisdiction (CZ, NO, EU, …) to the
+ * underlying adapter.
+ *
+ * Accepts the special "EU" pseudo-jurisdiction for EU-wide adapters
+ * (currently just VIES); see `RegistryJurisdictionCode`.
  */
 export const getRegistryHandlerByCountry = (
-  country: CountryCode,
-): RegistryHandler | undefined => HANDLERS_BY_COUNTRY.get(country);
+  country: RegistryJurisdictionCode,
+): RegistryHandler | undefined => HANDLERS_BY_JURISDICTION.get(country);
 
 /**
  * Run the dispatch flow for a registry handler: detect lookup vs.

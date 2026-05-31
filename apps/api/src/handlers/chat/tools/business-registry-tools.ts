@@ -2,11 +2,10 @@ import { valibotSchema } from "@ai-sdk/valibot";
 import { tool } from "ai";
 import * as v from "valibot";
 
-import type { CountryCode } from "@stll/country-codes";
-
 import {
   executeRegistryLookup,
   getRegistryHandlerByCountry,
+  type RegistryJurisdictionCode,
 } from "@/api/lib/business-registries/dispatch";
 
 const BUSINESS_REGISTRY_LOOKUP_TOOL_NAME = "business_registry_lookup" as const;
@@ -17,21 +16,28 @@ const TOOL_DESCRIPTION =
   "Look up companies in official national business registries. " +
   "Use jurisdiction for the country whose registry should be searched, " +
   "for example CZ for the Czech ARES register or NO for " +
-  "Brønnøysundregistrene in Norway. Search by company registration " +
-  "number or company name.";
+  "Brønnøysundregistrene in Norway. Pass EU to validate an EU VAT " +
+  "number against VIES (the VAT Information Exchange System); the " +
+  "query must then be a fully-qualified VAT number including the " +
+  "2-letter country prefix, e.g. DE143593636. Search by company " +
+  "registration number or company name; name search is not supported " +
+  "for VIES.";
 
 type CreateBusinessRegistryToolsArgs = {
   /**
-   * Country codes for the registry adapters the org is permitted to
-   * call on this chat turn. Computed by the caller from the existing
-   * native-tool enablement logic (practice-jurisdiction defaults +
-   * `nativeToolOverrides`). Pass only countries we actually ship an
-   * adapter for.
+   * Jurisdiction codes for the registry adapters the org is permitted
+   * to call on this chat turn. Computed by the caller from the
+   * existing native-tool enablement logic (practice-jurisdiction
+   * defaults + `nativeToolOverrides`). Pass only jurisdictions we
+   * actually ship an adapter for.
+   *
+   * Accepts the special "EU" pseudo-jurisdiction for EU-wide adapters
+   * such as VIES; see `RegistryJurisdictionCode`.
    *
    * Empty array → the tool is not registered (do not surface a
    * jurisdiction picker the model cannot use).
    */
-  enabledJurisdictions: readonly CountryCode[];
+  enabledJurisdictions: readonly RegistryJurisdictionCode[];
 };
 
 /**
@@ -50,28 +56,35 @@ export const createBusinessRegistryTools = ({
   }
 
   // valibot's `picklist` requires a tuple of literals. We can safely
-  // narrow `enabledJurisdictions` (a runtime array of CountryCode) to
-  // a non-empty readonly tuple here because we just checked length.
+  // narrow `enabledJurisdictions` (a runtime array of
+  // RegistryJurisdictionCode) to a non-empty readonly tuple here
+  // because we just checked length.
   const [first, ...rest] = enabledJurisdictions;
   if (first === undefined) {
     return {};
   }
-  const picklistOptions = [first, ...rest] as [CountryCode, ...CountryCode[]];
+  const picklistOptions = [first, ...rest] as [
+    RegistryJurisdictionCode,
+    ...RegistryJurisdictionCode[],
+  ];
 
   const inputSchema = v.strictObject({
     jurisdiction: v.pipe(
       v.picklist(picklistOptions),
       v.description(
-        "ISO 3166-1 alpha-2 country code for the registry to query.",
+        "ISO 3166-1 alpha-2 country code for the registry to query, or " +
+          "the special 'EU' code for the EU-wide VIES VAT-validation " +
+          "service.",
       ),
     ),
     query: v.pipe(
       v.string(),
       v.description(
-        "Company registration number (e.g. Czech IČO, Norwegian orgnr) " +
-          "or company name. Numeric inputs that match the registry's " +
-          "canonical ID format route to a direct lookup; everything " +
-          "else is treated as a name search.",
+        "Company registration number (e.g. Czech IČO, Norwegian orgnr, " +
+          "fully-qualified EU VAT such as DE143593636) or company name. " +
+          "Numeric inputs that match the registry's canonical ID format " +
+          "route to a direct lookup; everything else is treated as a " +
+          "name search (where supported).",
       ),
     ),
     limit: v.optional(
