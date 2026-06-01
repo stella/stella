@@ -85,6 +85,7 @@ export const KNOWN_FIELD_TYPES: readonly FieldType[] = [
   "AUTONUM",
   "AUTONUMLGL",
   "AUTONUMOUT",
+  "LISTNUM",
   // Section info
   "SECTION",
   "SECTIONPAGES",

@@ -797,6 +797,17 @@ function parseFieldChar(element: XmlElement): FieldCharContent {
   if (dirty) {
     content.dirty = true;
   }
+  // Self-numbering fields (LISTNUM, AUTONUM, …) often skip the `separate`
+  // run and stash their last-rendered display value on a `<w:numberingChange
+  // w:original="…"/>` child of the end fldChar instead. Capture it so the
+  // paragraph parser can fall back to it when the field carries no result.
+  const numberingChange = findChild(element, "w", "numberingChange");
+  if (numberingChange) {
+    const original = getAttribute(numberingChange, "w", "original");
+    if (original !== null) {
+      content.originalValue = original;
+    }
+  }
   return content;
 }
 

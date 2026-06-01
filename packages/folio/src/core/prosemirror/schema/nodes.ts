@@ -88,6 +88,20 @@ export type ParagraphAttrs = {
    * space glyph; `nothing` lets body text butt against the marker.
    */
   listMarkerSuffix?: "tab" | "space" | "nothing";
+  /** `w:caps` on the numbering level rPr — render marker in upper case. */
+  listMarkerAllCaps?: boolean;
+  /**
+   * Inline LISTNUM count carried by this paragraph. Each advances the
+   * counter at `ilvl + 1` so a later sibling at that depth renders the
+   * next marker letter.
+   */
+  listImplicitChildLevelAdvances?: number;
+  /**
+   * When the marker text contains a TAB separator, this column offset (in
+   * twips) is where the slot after the tab should land — used to align an
+   * inline LISTNUM "(a)" with the deeper level's marker column.
+   */
+  listMarkerSecondSlotOffsetTwips?: number;
   /** Number format for each level used by multi-level marker templates. */
   listLevelNumFmts?: NumberFormat[];
   /** Abstract numbering ID shared by numbering instances. */
