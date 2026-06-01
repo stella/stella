@@ -557,6 +557,12 @@ const CatalogueRow = ({
         )}
         onClick={onClick}
         onKeyDown={(e) => {
+          // Don't swallow Space/Enter when an interactive descendant
+          // (the Add/Remove button) holds focus — let the descendant
+          // handle its own activation.
+          if (e.target !== e.currentTarget) {
+            return;
+          }
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
             onClick();
@@ -578,7 +584,13 @@ const CatalogueRow = ({
               card and nudge neighbours. */}
           <div className="flex min-h-7 items-center gap-2 sm:min-h-6">
             <span className="text-sm font-medium">{entry.displayName}</span>
-            {focused && onToggleSelection ? (
+            {focused &&
+            onToggleSelection &&
+            // Direct Add bypasses the third-party acknowledgement that
+            // lives in the detail panel; only first-party entries get
+            // the inline Add affordance. Remove is always safe to surface
+            // since it reverses an already-confirmed choice.
+            (selected || isFirstParty) ? (
               <Button
                 className="ms-auto"
                 onClick={(e) => {
