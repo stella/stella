@@ -1,6 +1,4 @@
 // MCP-specific security guardrails.
-// oxlint-disable typescript/no-unsafe-assignment, typescript/no-unsafe-member-access, typescript/no-unsafe-return, typescript/no-unsafe-argument, typescript/no-unsafe-call, typescript/strict-boolean-expressions
-//
 // These rules encode MCP invariants that are hard for TypeScript to infer at
 // persistence/query boundaries:
 //   1. OAuth dynamic registration responses must be redacted before JSONB

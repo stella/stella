@@ -1,6 +1,4 @@
 // Disallow secret-named identifiers or properties inside log / serialize sinks.
-// oxlint-disable typescript/no-unsafe-assignment, typescript/no-unsafe-member-access, typescript/no-unsafe-return, typescript/no-unsafe-argument, typescript/no-unsafe-call, typescript/strict-boolean-expressions
-//
 // The TypeScript ecosystem cannot prove a string isn't a secret. Stella handles
 // privileged legal data; an accidental `console.error(err, { apiKey })`,
 // `JSON.stringify({ refreshToken })`, or `new Error(`probe failed: ${apiKey}`)`

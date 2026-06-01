@@ -1,27 +1,21 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "display": "Default",
+  "display": "stella base",
   "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "target": "ES2024",
-    "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    "allowJs": true,
+    "lib": ["ESNext"],
     "resolveJsonModule": true,
     "moduleDetection": "force",
     "verbatimModuleSyntax": true,
     "noUncheckedSideEffectImports": true,
-
-    "incremental": true,
-    "disableSourceOfProjectReferenceRedirect": true,
-    "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.json",
-
     "module": "Preserve",
     "moduleResolution": "Bundler",
     "noEmit": true,
-
     "strict": true,
-    "checkJs": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitOverride": true,
     "noImplicitReturns": true,

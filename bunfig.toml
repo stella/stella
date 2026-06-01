@@ -7,6 +7,8 @@ minimumReleaseAge = 432_000
 # They share a release cadence and would otherwise be blocked
 # by the quarantine on every publish cycle.
 minimumReleaseAgeExcludes = [
+  "@stll/oxlint-config",
+  "@stll/typescript-config",
   "@stll/aho-corasick-wasm",
   "@stll/anonymize-data",
   "@stll/anonymize-wasm",

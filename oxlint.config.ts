@@ -1,4 +1,10 @@
 import { defineConfig } from "oxlint";
+import {
+  libraryIgnorePatterns,
+  libraryOverrides,
+  libraryRules,
+  stellaLowercasePluginSpecifier,
+} from "@stll/oxlint-config";
 
 import core from "./node_modules/ultracite/config/oxlint/core/index.mjs";
 import react from "./node_modules/ultracite/config/oxlint/react/index.mjs";
@@ -10,6 +16,7 @@ import react from "./node_modules/ultracite/config/oxlint/react/index.mjs";
 export default defineConfig({
   extends: [core, react],
   rules: {
+    ...libraryRules,
     // Override ultracite defaults for Stella
     "no-console": "error",
     "no-shadow": "error",
@@ -235,6 +242,7 @@ export default defineConfig({
     "typescript/non-nullable-type-assertion-style": "off",
   },
   ignorePatterns: [
+    ...libraryIgnorePatterns,
     "**/routeTree.gen.ts",
     "**/*.config.js",
     // Module-augmentation files must use `interface` for declaration
@@ -243,6 +251,7 @@ export default defineConfig({
   ],
 
   jsPlugins: [
+    stellaLowercasePluginSpecifier,
     "@tanstack/eslint-plugin-query",
     "@tanstack/eslint-plugin-router",
     "eslint-plugin-drizzle",
@@ -266,7 +275,6 @@ export default defineConfig({
     "./.oxlint-plugins/mcp-security.ts",
     "./.oxlint-plugins/auth-lifecycle.ts",
     "./.oxlint-plugins/stella-toast.ts",
-    "./.oxlint-plugins/stella-lowercase.ts",
     "./.oxlint-plugins/no-untranslated-jsx-literal.ts",
     "./.oxlint-plugins/forbid-process-env-outside-env-ts.ts",
     "./.oxlint-plugins/no-secret-in-log-sink.ts",
@@ -282,6 +290,7 @@ export default defineConfig({
 
   overrides: [
     ...(core.overrides ?? []),
+    ...libraryOverrides,
     {
       // Custom oxlint plugin rules traverse AST nodes that the runtime
       // delivers as untyped (effectively `any`). Strict any-flow rules
@@ -294,6 +303,8 @@ export default defineConfig({
         "typescript/no-unsafe-return": "off",
         "typescript/no-unsafe-argument": "off",
         "typescript/strict-boolean-expressions": "off",
+        "require-unicode-regexp": "off",
+        "no-nested-ternary": "off",
       },
     },
     {
@@ -461,7 +472,7 @@ export default defineConfig({
               {
                 group: ["@stll/*", "@stll/*/**", "!@stll/ui", "!@stll/ui/**"],
                 message:
-                  "@stll/ui must stay workspace-pure; do not import other Stella workspaces from UI source.",
+                  "@stll/ui must stay workspace-pure; do not import other stella workspaces from UI source.",
               },
             ],
           },

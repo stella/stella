@@ -1,9 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "display": "stella React library",
+  "display": "stella Bun library",
   "extends": "./library.json",
   "compilerOptions": {
-    "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    "jsx": "react-jsx"
+    "types": ["bun-types"]
   }
 }

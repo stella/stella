@@ -1,6 +1,4 @@
 // Disallow raw error values in production log sinks.
-// oxlint-disable typescript/no-unsafe-assignment, typescript/no-unsafe-member-access, typescript/no-unsafe-return, typescript/no-unsafe-argument, typescript/no-unsafe-call, typescript/strict-boolean-expressions
-//
 // Stella logs privileged legal workflows. Production logs should carry
 // structural error information (`errorTag(error)`, `"error.type"`) and
 // correlation IDs, not raw messages, stacks, causes, or stringified errors.

@@ -6,6 +6,7 @@
       "name": "stella",
       "devDependencies": {
         "@fontsource-variable/source-serif-4": "^5.2.9",
+        "@stll/oxlint-config": "0.2.0",
         "@stll/typescript-config": "workspace:^0.0.0",
         "@tanstack/eslint-plugin-query": "catalog:",
         "@tanstack/eslint-plugin-router": "catalog:",
@@ -1658,6 +1659,8 @@
     "@stll/landing": ["@stll/landing@workspace:apps/landing"],
 
     "@stll/money": ["@stll/money@workspace:packages/money"],
+
+    "@stll/oxlint-config": ["@stll/oxlint-config@0.2.0", "", { "peerDependencies": { "oxlint": ">=1.66.0", "oxlint-tsgolint": ">=0.23.0" } }, "sha512-QsxuGX4vpfiwOJgwShpkaXxc35aL/JZECNy8lF+GH6BrDV6wN/K2l76uyPQ3+VEAteAZD1so+17yeE+7oJ64lQ=="],
 
     "@stll/permissions": ["@stll/permissions@workspace:packages/permissions"],
 
