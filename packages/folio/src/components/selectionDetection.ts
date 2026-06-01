@@ -1,7 +1,10 @@
 import { NodeSelection } from "prosemirror-state";
 import type { EditorState } from "prosemirror-state";
 
-import { findChangeAtPosition } from "../core/prosemirror/commands/comments";
+import {
+  findChangeAtPosition,
+  findParagraphBoundaryChangeAtPosition,
+} from "../core/prosemirror/commands/comments";
 import type {
   ActiveTrackedChangeInfo,
   ImageContextInfo,
@@ -50,8 +53,9 @@ export function detectImageContext(
 
 /**
  * If the cursor sits on a text node carrying an `insertion` or `deletion`
- * mark, return the active tracked-change context for the contextual review
- * toolbar; otherwise return `null`. Pure — no state mutation, no DOM access.
+ * mark, or inside a paragraph with a property-only tracked list change,
+ * return the active tracked-change context for the contextual review
+ * toolbar. Pure — no state mutation, no DOM access.
  *
  * The returned `from`/`to` cover the full extent of the change (expanded
  * via `findChangeAtPosition`), not just the cursor's node.
@@ -66,27 +70,40 @@ export function detectActiveTrackedChange(
     return null;
   }
 
-  let trackedChange: ActiveTrackedChangeInfo | null = null;
-  // oxlint-disable-next-line unicorn/no-array-for-each -- ProseMirror Node.forEach
-  node.forEach((child, offset) => {
-    const childStart = $pos.start() + offset;
+  let childOffset = 0;
+  for (let index = 0; index < node.childCount; index += 1) {
+    const child = node.child(index);
+    const childStart = $pos.start() + childOffset;
     const childEnd = childStart + child.nodeSize;
     if (from < childStart || from > childEnd || !child.isText) {
-      return;
+      childOffset += child.nodeSize;
+      continue;
     }
     for (const mark of child.marks) {
       if (mark.type.name !== "insertion" && mark.type.name !== "deletion") {
         continue;
       }
       const range = findChangeAtPosition(state, from, from);
-      trackedChange = {
-        type: mark.type.name as "insertion" | "deletion",
+      return {
+        type: mark.type.name === "insertion" ? "insertion" : "deletion",
         author: (mark.attrs["author"] as string) || "Unknown",
         date: (mark.attrs["date"] as string) || null,
         from: range.from,
         to: range.to,
       };
     }
-  });
-  return trackedChange;
+    childOffset += child.nodeSize;
+  }
+
+  const paragraphChange = findParagraphBoundaryChangeAtPosition(state, from);
+  if (!paragraphChange) {
+    return null;
+  }
+  return {
+    type: paragraphChange.type,
+    author: paragraphChange.author || "Unknown",
+    date: paragraphChange.date || null,
+    from: paragraphChange.from,
+    to: paragraphChange.to,
+  };
 }

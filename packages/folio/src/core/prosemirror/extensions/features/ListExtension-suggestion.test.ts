@@ -78,8 +78,16 @@ describe("ListExtension suggestion mode integration", () => {
     expect(propChange.previousFormatting).toEqual({
       numPr: null,
       listIsBullet: null,
+      listIsLegal: null,
       listNumFmt: null,
       listMarker: null,
+      listMarkerHidden: null,
+      listMarkerFontFamily: null,
+      listMarkerFontSize: null,
+      listMarkerSuffix: null,
+      listLevelNumFmts: null,
+      listAbstractNumId: null,
+      listStartOverride: null,
     });
   });
 

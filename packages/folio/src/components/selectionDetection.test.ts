@@ -13,7 +13,16 @@ import {
 const schema = new Schema({
   nodes: {
     doc: { content: "block+" },
-    paragraph: { group: "block", content: "inline*", toDOM: () => ["p", 0] },
+    paragraph: {
+      group: "block",
+      content: "inline*",
+      attrs: {
+        numPr: { default: null },
+        _propertyChanges: { default: null },
+        pPrMark: { default: null },
+      },
+      toDOM: () => ["p", 0],
+    },
     text: { group: "inline" },
     image: {
       inline: true,
@@ -198,6 +207,34 @@ describe("detectActiveTrackedChange", () => {
       date: null,
       from: 1,
       to: 9,
+    });
+  });
+
+  test("detects a property-only list insertion at the cursor", () => {
+    const doc = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        {
+          numPr: { numId: 1, ilvl: 0 },
+          _propertyChanges: [
+            {
+              type: "paragraphPropertyChange",
+              info: { id: 10, author: "Alice", date: "2026-01-01" },
+              previousFormatting: { numPr: null },
+            },
+          ],
+        },
+        [schema.text("hello")],
+      ),
+    ]);
+    const state = withCursorAt(EditorState.create({ doc }), 3);
+
+    expect(detectActiveTrackedChange(state)).toEqual({
+      type: "insertion",
+      author: "Alice",
+      date: "2026-01-01",
+      from: 6,
+      to: 7,
     });
   });
 });

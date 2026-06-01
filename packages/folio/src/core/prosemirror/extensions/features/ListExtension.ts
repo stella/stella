@@ -59,8 +59,16 @@ function appendParagraphPropertyChange(
 const LIST_FORMATTING_ATTRS = [
   "numPr",
   "listIsBullet",
+  "listIsLegal",
   "listNumFmt",
   "listMarker",
+  "listMarkerHidden",
+  "listMarkerFontFamily",
+  "listMarkerFontSize",
+  "listMarkerSuffix",
+  "listLevelNumFmts",
+  "listAbstractNumId",
+  "listStartOverride",
 ] as const;
 
 function getPreviousListFormatting(

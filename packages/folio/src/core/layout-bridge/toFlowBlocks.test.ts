@@ -469,6 +469,39 @@ describe("toFlowBlocks list numbering", () => {
     });
   });
 
+  test("renders removed numbering as a tracked deletion marker", () => {
+    const doc = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        {
+          _propertyChanges: [
+            {
+              type: "paragraphPropertyChange",
+              info: { id: 13, author: "Reviewer", date: "2026-01-02" },
+              previousFormatting: {
+                numPr: { numId: 1, ilvl: 0 },
+                listIsBullet: false,
+                listNumFmt: "decimal",
+                listMarker: "%1.",
+              },
+            },
+          ],
+        },
+        [schema.text("Removed list item")],
+      ),
+    ]);
+
+    const blocks = toFlowBlocks(doc);
+
+    expect(blocks.at(0)?.attrs?.listMarker).toBe("1.");
+    expect(blocks.at(0)?.attrs?.listMarkerRevision).toEqual({
+      kind: "del",
+      author: "Reviewer",
+      date: "2026-01-02",
+      revisionId: 13,
+    });
+  });
+
   test("does not mark unrelated paragraph property changes as list insertions", () => {
     const doc = schema.node("doc", null, [
       schema.node(
