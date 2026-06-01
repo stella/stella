@@ -49,6 +49,7 @@ import {
   Tooltip as TooltipRoot,
   TooltipTrigger,
 } from "@stll/ui/components/tooltip";
+import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 
 import { renderDragPreview } from "@/components/drag-preview";
@@ -1260,7 +1261,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
         "group/row hover:bg-muted/50 flex items-center gap-3 px-4 py-2.5",
         handleOpen && "w-full cursor-pointer text-start",
       )}
-      onClick={handleOpen}
+      onClick={containedHandler(rowRef, handleOpen)}
       onContextMenu={handleContextMenu}
       onKeyDown={handleKeyDown}
       ref={rowRef}

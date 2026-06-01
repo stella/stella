@@ -17,6 +17,7 @@ import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
 import { stellaToast } from "@stll/ui/components/toast";
+import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
@@ -708,9 +709,9 @@ const TemplateDetail = ({
                   aria-label={t("templates.templateName")}
                   className="h-8 text-lg font-semibold"
                   disabled={rename.saving}
-                  onBlur={() => {
+                  onBlur={containedHandler(renameInputRef, () => {
                     void saveRename();
-                  }}
+                  })}
                   onChange={(e) =>
                     renameDispatch({ type: "setDraft", value: e.target.value })
                   }

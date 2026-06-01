@@ -54,6 +54,7 @@ import {
   SelectTrigger as StSelectTrigger,
   SelectValue as StSelectValue,
 } from "@stll/ui/components/select";
+import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 
 import {
   applyFolioAIEditOperations,
@@ -3286,14 +3287,14 @@ export function DocxEditor({
                   <div
                     ref={editorContentRef}
                     style={{ position: "relative", flex: 1, minWidth: 0 }}
-                    onMouseDown={(e) => {
+                    onMouseDown={containedHandler(editorContentRef, (e) => {
                       // Focus editor when clicking on the background area (not the editor itself)
                       // Using mouseDown for immediate response before focus can be lost
                       if (e.target === e.currentTarget) {
                         e.preventDefault();
                         pagedEditorRef.current?.focus();
                       }
-                    }}
+                    })}
                     onContextMenu={handleEditorContextMenu}
                   >
                     <PagedEditor

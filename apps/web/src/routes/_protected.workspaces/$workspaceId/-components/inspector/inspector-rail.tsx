@@ -13,6 +13,7 @@ import {
 import { useTranslations } from "use-intl";
 
 import { ScrollArea } from "@stll/ui/components/scroll-area";
+import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
@@ -341,7 +342,7 @@ const VerticalTab = ({
                 onClose();
               }
             }}
-            onClick={onActivate}
+            onClick={containedHandler(tabRef, onActivate)}
             onContextMenu={contextMenu.openAt}
             type="button"
           />

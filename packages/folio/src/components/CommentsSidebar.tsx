@@ -21,6 +21,8 @@ import React, {
 import { CheckIcon, MoreVerticalIcon } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
 
+import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
+
 import type { Comment, Paragraph } from "../core/types/content";
 import { closestHtmlElement, queryHtmlElement } from "../core/utils/domGuards";
 
@@ -1049,7 +1051,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
           initialPositionsDone || cardPositions.size > 0 ? "auto" : "none",
         transition: "opacity 0.15s ease",
       }}
-      onMouseDown={(e) => e.stopPropagation()}
+      onMouseDown={containedHandler(sidebarRef, (e) => e.stopPropagation())}
     >
       {/* Cards container — relative for absolute card positioning */}
       <div style={{ position: "relative" }}>

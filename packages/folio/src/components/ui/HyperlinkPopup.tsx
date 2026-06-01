@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
+
 export type HyperlinkPopupData = {
   href: string;
   displayText: string;
@@ -210,7 +212,7 @@ export function HyperlinkPopup({
       <div
         ref={popupRef}
         className="fixed z-[10000] w-80 rounded-lg border border-[var(--doc-border)] bg-[var(--doc-page)] p-3 shadow-lg"
-        onMouseDown={(e) => e.stopPropagation()}
+        onMouseDown={containedHandler(popupRef, (e) => e.stopPropagation())}
         role="presentation"
         style={{ top, left }}
       >
@@ -253,7 +255,7 @@ export function HyperlinkPopup({
     <div
       ref={popupRef}
       className="fixed z-[10000] flex max-w-[400px] items-center gap-2 rounded-lg border border-[var(--doc-border)] bg-[var(--doc-page)] px-3 py-2 shadow-lg"
-      onMouseDown={(e) => e.stopPropagation()}
+      onMouseDown={containedHandler(popupRef, (e) => e.stopPropagation())}
       role="presentation"
       style={{ top, left }}
     >

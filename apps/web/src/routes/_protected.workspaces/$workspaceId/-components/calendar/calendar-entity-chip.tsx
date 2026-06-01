@@ -10,6 +10,7 @@ import {
   TooltipPopup,
   TooltipTrigger,
 } from "@stll/ui/components/tooltip";
+import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 
 import type { DragPreviewData } from "@/components/drag-preview";
@@ -109,7 +110,7 @@ export const CalendarEntityChip = ({
               "border-s-muted-foreground")
           : "border-s-muted-foreground",
       )}
-      onClick={handleClick}
+      onClick={containedHandler(dragRef, handleClick)}
       type="button"
     >
       <span className="flex min-w-0 items-center gap-1">
