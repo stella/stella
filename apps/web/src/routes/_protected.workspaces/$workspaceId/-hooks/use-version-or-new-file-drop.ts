@@ -31,11 +31,13 @@ type UseVersionOrNewFileDropResult = {
 };
 
 /**
- * Wires external single-file drops on a file row to the version-or-new
+ * Wires external file drops on a file row to the version-or-new
  * resolution flow. Returns the drop session state; the caller renders
  * `<VersionOrNewFileDialog>` from it. Disabled for folders, tasks, and
- * entities without a file; mismatched MIME types and multi-file drops
- * fall through to the workspace zone.
+ * entities without a file. Single-file drops open the dialog (which
+ * decides replace-vs-new via extension match); multi-file drops bypass
+ * the dialog and create new file entities directly, since a row
+ * represents one file and cannot be replaced by many.
  */
 export const useVersionOrNewFileDrop = ({
   entity,
@@ -50,21 +52,20 @@ export const useVersionOrNewFileDrop = ({
   const file = getFirstFile(entity);
   const canAcceptDrop =
     entity.kind !== "folder" && entity.kind !== "task" && file !== null;
-  const expectedMimeType = file?.mimeType.toLowerCase() ?? null;
 
   const { isDropTarget } = useExternalFileDrop({
     enabled: canAcceptDrop,
     externalRef: rowRef,
-    accept: (info) =>
-      info.fileCount === 1 &&
-      expectedMimeType !== null &&
-      info.mimeTypes[0] === expectedMimeType,
     onDrop: (files) => {
-      const next = files[0];
-      if (next) {
-        setDroppedFile(next);
-        setIsOpen(true);
+      if (files.length === 1) {
+        const next = files[0];
+        if (next) {
+          setDroppedFile(next);
+          setIsOpen(true);
+        }
+        return;
       }
+      createFileEntities(files);
     },
   });
 

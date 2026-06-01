@@ -64,6 +64,7 @@ import {
   CellMetadataMenuSection,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
 import { CopyToMatterDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog";
+import { getExtension } from "@/routes/_protected.workspaces/$workspaceId/-components/file-extension";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { getPdfDownloadFileName } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
@@ -509,6 +510,14 @@ export const RowActions = ({
 
   // Show "Upload new version" for non-folder, non-bulk entities with a file
   const canUploadVersion = !isBulk && !isFolder && file !== null;
+  // Extension-based filter for the OS file picker. Browser-reported MIME
+  // strings vary across platforms for the same extension; matching by
+  // extension is consistent across Chrome, Safari, Firefox, and Edge.
+  // Falls back to `*/*` for extensionless files (e.g. `Dockerfile`).
+  const versionAcceptExtension = file ? getExtension(file.fileName) : null;
+  const versionAccept = versionAcceptExtension
+    ? `.${versionAcceptExtension}`
+    : "*/*";
 
   return (
     <Menu onOpenChange={onOpenChange} open={open}>
@@ -753,7 +762,7 @@ export const RowActions = ({
       {/* Hidden file input for upload new version */}
       {canUploadVersion && (
         <input
-          accept={file.mimeType}
+          accept={versionAccept}
           className="hidden"
           onChange={handleUploadVersionChange}
           ref={uploadVersionInputRef}

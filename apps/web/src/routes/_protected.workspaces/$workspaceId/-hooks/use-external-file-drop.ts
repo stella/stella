@@ -6,9 +6,6 @@ import {
   getFiles,
 } from "@atlaskit/pragmatic-drag-and-drop/external/file";
 
-import type { ExternalDragInfo } from "@/routes/_protected.workspaces/$workspaceId/-context/external-drag-info";
-import { getCurrentExternalDrag } from "@/routes/_protected.workspaces/$workspaceId/-context/external-drag-info";
-
 type ExternalFileDropOptions = {
   onDrop: (files: File[]) => void;
   enabled?: boolean;
@@ -17,11 +14,6 @@ type ExternalFileDropOptions = {
    * already has an existing ref. If omitted, the hook creates one.
    */
   externalRef?: React.RefObject<HTMLDivElement | null>;
-  /**
-   * Filter on the drag info. Return false to skip this target so the
-   * drop falls through; omit to accept any external file.
-   */
-  accept?: (info: ExternalDragInfo) => boolean;
 };
 
 type ExternalFileDropResult = {
@@ -48,18 +40,15 @@ export const useExternalFileDrop = ({
   onDrop,
   enabled = true,
   externalRef,
-  accept,
 }: ExternalFileDropOptions): ExternalFileDropResult => {
   const internalRef = useRef<HTMLDivElement>(null);
   const ref = externalRef ?? internalRef;
   const [isDropTarget, setIsDropTarget] = useState(false);
   const [isInnerActive, setIsInnerActive] = useState(false);
 
-  // Store callbacks in refs to avoid re-registering the drop target
+  // Store callback in a ref to avoid re-registering the drop target
   const onDropRef = useRef(onDrop);
   onDropRef.current = onDrop;
-  const acceptRef = useRef(accept);
-  acceptRef.current = accept;
 
   useEffect(() => {
     const el = ref.current;
@@ -69,25 +58,7 @@ export const useExternalFileDrop = ({
 
     return dropTargetForExternal({
       element: el,
-      canDrop: ({ source }) => {
-        if (!containsFiles({ source })) {
-          return false;
-        }
-        const acceptFn = acceptRef.current;
-        if (!acceptFn) {
-          return true;
-        }
-        // Our window-level dragenter listener is registered in the
-        // capture phase, so it populates `current` before any
-        // bubble-phase listener (Pragmatic's included) dispatches
-        // canDrop. Guard anyway: a null read should reject rather
-        // than crash if the invariant ever breaks.
-        const info = getCurrentExternalDrag();
-        if (!info) {
-          return false;
-        }
-        return acceptFn(info);
-      },
+      canDrop: ({ source }) => containsFiles({ source }),
       onDragEnter: () => setIsDropTarget(true),
       onDragLeave: () => {
         setIsDropTarget(false);
