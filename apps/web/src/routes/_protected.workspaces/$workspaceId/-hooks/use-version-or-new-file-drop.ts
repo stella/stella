@@ -14,12 +14,14 @@ type UseVersionOrNewFileDropOptions = {
 };
 
 type PendingVersionDrop = {
+  open: boolean;
   droppedFile: File;
   entityFileName: string;
   isReplacePending: boolean;
   onReplaceVersion: () => void;
   onCreateNewFile: () => void;
-  onDismiss: () => void;
+  onOpenChange: (open: boolean) => void;
+  onOpenChangeComplete: (open: boolean) => void;
 };
 
 type UseVersionOrNewFileDropResult = {
@@ -41,6 +43,7 @@ export const useVersionOrNewFileDrop = ({
   rowRef,
 }: UseVersionOrNewFileDropOptions): UseVersionOrNewFileDropResult => {
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
   const uploadVersion = useUploadVersion();
   const [, createFileEntities] = useCreateFileEntities(workspaceId);
 
@@ -60,15 +63,17 @@ export const useVersionOrNewFileDrop = ({
       const next = files[0];
       if (next) {
         setDroppedFile(next);
+        setIsOpen(true);
       }
     },
   });
 
-  const onDismiss = () => setDroppedFile(null);
+  const closeDialog = () => setIsOpen(false);
 
   const pendingDrop: PendingVersionDrop | null =
     droppedFile && file
       ? {
+          open: isOpen,
           droppedFile,
           entityFileName: file.fileName,
           isReplacePending: uploadVersion.isPending,
@@ -80,14 +85,19 @@ export const useVersionOrNewFileDrop = ({
                 entityFileName: file.fileName,
                 file: droppedFile,
               },
-              { onSettled: onDismiss },
+              { onSettled: closeDialog },
             );
           },
           onCreateNewFile: () => {
             createFileEntities([droppedFile]);
-            onDismiss();
+            closeDialog();
           },
-          onDismiss,
+          onOpenChange: setIsOpen,
+          onOpenChangeComplete: (open) => {
+            if (!open) {
+              setDroppedFile(null);
+            }
+          },
         }
       : null;
 

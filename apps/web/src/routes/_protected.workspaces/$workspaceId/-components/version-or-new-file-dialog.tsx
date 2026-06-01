@@ -17,6 +17,7 @@ import { extensionMatches, getExtension } from "./file-extension";
 type VersionOrNewFileDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onOpenChangeComplete: (open: boolean) => void;
   /** The filename of the existing entity's file */
   entityFileName: string | null | undefined;
   /** The file being dropped */
@@ -32,6 +33,7 @@ type VersionOrNewFileDialogProps = {
 export const VersionOrNewFileDialog = ({
   open,
   onOpenChange,
+  onOpenChangeComplete,
   entityFileName,
   droppedFile,
   onReplaceVersion,
@@ -47,19 +49,21 @@ export const VersionOrNewFileDialog = ({
   const uploadExt = getExtension(droppedFile.name);
 
   return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
-      {open ? (
-        <VersionOrNewFileDialogBody
-          canReplace={canReplace}
-          droppedFileName={droppedFile.name}
-          entityExt={entityExt}
-          isReplacePending={isReplacePending}
-          onCancel={() => onOpenChange(false)}
-          onCreateNewFile={onCreateNewFile}
-          onReplaceVersion={onReplaceVersion}
-          uploadExt={uploadExt}
-        />
-      ) : null}
+    <Dialog
+      onOpenChange={onOpenChange}
+      onOpenChangeComplete={onOpenChangeComplete}
+      open={open}
+    >
+      <VersionOrNewFileDialogBody
+        canReplace={canReplace}
+        droppedFileName={droppedFile.name}
+        entityExt={entityExt}
+        isReplacePending={isReplacePending}
+        onCancel={() => onOpenChange(false)}
+        onCreateNewFile={onCreateNewFile}
+        onReplaceVersion={onReplaceVersion}
+        uploadExt={uploadExt}
+      />
     </Dialog>
   );
 };

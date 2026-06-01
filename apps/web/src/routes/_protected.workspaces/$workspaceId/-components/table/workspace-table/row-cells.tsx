@@ -468,13 +468,10 @@ export const DraggableRow = ({
           entityFileName={pendingDrop.entityFileName}
           isReplacePending={pendingDrop.isReplacePending}
           onCreateNewFile={pendingDrop.onCreateNewFile}
-          onOpenChange={(open) => {
-            if (!open) {
-              pendingDrop.onDismiss();
-            }
-          }}
+          onOpenChange={pendingDrop.onOpenChange}
+          onOpenChangeComplete={pendingDrop.onOpenChangeComplete}
           onReplaceVersion={pendingDrop.onReplaceVersion}
-          open
+          open={pendingDrop.open}
         />
       )}
     </>
