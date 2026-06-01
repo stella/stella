@@ -126,6 +126,7 @@ export const MarginNotes = ({
           <button
             className="text-foreground-muted hover:text-foreground-strong-muted absolute start-0 end-0 border-s-[3px] py-1 ps-2.5 text-start transition-colors"
             key={item.id}
+            // oxlint-disable-next-line require-contained-handler/require-contained-handler -- measure callback ref, no portal-bearing descendants
             onClick={() => scrollTo(item.startAnchorId)}
             ref={(el) => measureRef(el, item.id)}
             style={{

@@ -1,23 +1,28 @@
+/* oxlint-disable typescript/no-unsafe-type-assertion --
+   The helper is typed against real DOM interfaces. Bun's default test
+   runtime has no DOM, so the stubs here intentionally narrow to
+   `HTMLElement` to exercise the runtime branches. */
 import { describe, expect, it, mock } from "bun:test";
 
-// Bun's default test runtime has no DOM globals. The helper does a
-// runtime `instanceof Node` check, so we install a minimal Node stand-in
-// before importing it. Real consumers run in the browser where Node is
-// the genuine DOM interface.
+// The helper does a runtime `instanceof Node` check; install a minimal
+// Node stand-in before importing it. Real consumers run in the browser
+// where Node is the genuine DOM interface.
 class FakeNode {
   nodeType = 1;
 }
-(globalThis as unknown as { Node: typeof FakeNode }).Node = FakeNode;
+Object.assign(globalThis, { Node: FakeNode });
 
 const { containedHandler } =
   await import("@stll/ui/hooks/use-contained-handler");
 
-type SyntheticLike = { target: EventTarget | null };
+type SyntheticLike = { target: unknown };
 
 const makeRef = <T>(node: T | null) => ({ current: node });
 
-const makeContainer = (containsImpl: (other: object) => boolean) =>
-  ({ contains: containsImpl }) as unknown as HTMLElement;
+const makeContainer = (containsImpl: (other: unknown) => boolean) => {
+  const stub = { contains: containsImpl };
+  return stub as unknown as HTMLElement;
+};
 
 const node = (): object => new FakeNode();
 
@@ -27,12 +32,7 @@ describe("containedHandler", () => {
     const container = makeContainer((other) => other === target);
     const handler = mock<(e: SyntheticLike) => void>(() => {});
 
-    containedHandler(
-      makeRef(container),
-      handler,
-    )({
-      target: target as unknown as EventTarget,
-    });
+    containedHandler(makeRef(container), handler)({ target });
 
     expect(handler).toHaveBeenCalledTimes(1);
   });
@@ -41,12 +41,7 @@ describe("containedHandler", () => {
     const container = makeContainer(() => false);
     const handler = mock<(e: SyntheticLike) => void>(() => {});
 
-    containedHandler(
-      makeRef(container),
-      handler,
-    )({
-      target: node() as unknown as EventTarget,
-    });
+    containedHandler(makeRef(container), handler)({ target: node() });
 
     expect(handler).not.toHaveBeenCalled();
   });
@@ -54,12 +49,7 @@ describe("containedHandler", () => {
   it("falls through when the ref has not attached yet", () => {
     const handler = mock<(e: SyntheticLike) => void>(() => {});
 
-    containedHandler(
-      makeRef<HTMLElement>(null),
-      handler,
-    )({
-      target: node() as unknown as EventTarget,
-    });
+    containedHandler(makeRef<HTMLElement>(null), handler)({ target: node() });
 
     expect(handler).toHaveBeenCalledTimes(1);
   });
@@ -70,10 +60,7 @@ describe("containedHandler", () => {
     const container = makeContainer(() => true);
 
     expect(() =>
-      containedHandler(
-        makeRef(container),
-        undefined,
-      )({ target: node() as unknown as EventTarget }),
+      containedHandler(makeRef(container), undefined)({ target: node() }),
     ).not.toThrow();
   });
 
@@ -95,12 +82,7 @@ describe("containedHandler", () => {
     const container = makeContainer(() => false);
     const handler = mock<(e: SyntheticLike) => void>(() => {});
 
-    containedHandler(
-      makeRef(container),
-      handler,
-    )({
-      target: { plain: true } as unknown as EventTarget,
-    });
+    containedHandler(makeRef(container), handler)({ target: { plain: true } });
 
     expect(handler).toHaveBeenCalledTimes(1);
   });

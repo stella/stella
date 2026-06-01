@@ -37,7 +37,7 @@ import type * as React from "react";
  *   );
  */
 export const containedHandler =
-  <E extends { target: EventTarget | null }>(
+  <E extends { target: unknown }>(
     ref: React.RefObject<HTMLElement | null> | null | undefined,
     handler: ((event: E) => void) | undefined,
   ) =>
