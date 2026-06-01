@@ -440,6 +440,59 @@ describe("toFlowBlocks list numbering", () => {
     expect(blocks.at(0)?.attrs?.listMarker).toBe("\u2022");
   });
 
+  test("marks newly added numbering as a tracked insertion", () => {
+    const doc = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        {
+          numPr: { numId: 1, ilvl: 0 },
+          listMarker: "%1.",
+          _propertyChanges: [
+            {
+              type: "paragraphPropertyChange",
+              info: { id: 12, author: "Reviewer", date: "2026-01-01" },
+              previousFormatting: { numPr: null },
+            },
+          ],
+        },
+        [schema.text("Inserted list item")],
+      ),
+    ]);
+
+    const blocks = toFlowBlocks(doc);
+
+    expect(blocks.at(0)?.attrs?.listMarkerRevision).toEqual({
+      kind: "ins",
+      author: "Reviewer",
+      date: "2026-01-01",
+      revisionId: 12,
+    });
+  });
+
+  test("does not mark unrelated paragraph property changes as list insertions", () => {
+    const doc = schema.node("doc", null, [
+      schema.node(
+        "paragraph",
+        {
+          numPr: { numId: 1, ilvl: 0 },
+          listMarker: "%1.",
+          _propertyChanges: [
+            {
+              type: "paragraphPropertyChange",
+              info: { id: 12, author: "Reviewer", date: "2026-01-01" },
+              previousFormatting: { alignment: "left" },
+            },
+          ],
+        },
+        [schema.text("Plain list item")],
+      ),
+    ]);
+
+    const blocks = toFlowBlocks(doc);
+
+    expect(blocks.at(0)?.attrs?.listMarkerRevision).toBeUndefined();
+  });
+
   test("formats numbered markers using the paragraph number format", () => {
     const doc = schema.node("doc", null, [
       schema.node(

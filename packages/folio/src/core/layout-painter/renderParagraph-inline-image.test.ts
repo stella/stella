@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { clearTextWidthCache } from "../layout-engine/measure/cache";
+import { resetCanvasContext } from "../layout-engine/measure/measureContainer";
 import type {
   ImageRun,
   MeasuredLine,
@@ -32,6 +34,10 @@ class FakeElement {
 
   append(...children: FakeElement[]): void {
     this.children.push(...children);
+  }
+
+  prepend(...children: FakeElement[]): void {
+    this.children.unshift(...children);
   }
 
   appendChild(child: FakeElement): FakeElement {
@@ -808,6 +814,84 @@ describe("renderLine tab tracking", () => {
 });
 
 describe("renderParagraphFragment indentation handling", () => {
+  test("renders list marker revisions with tracked-change classes", () => {
+    resetAuthorColors();
+    const block: ParagraphBlock = {
+      kind: "paragraph",
+      id: "p1",
+      runs: [{ kind: "text", text: "Item" }],
+      attrs: {
+        listMarker: "1.",
+        listMarkerRevision: {
+          kind: "ins",
+          author: "Reviewer",
+          date: "2026-01-01",
+          revisionId: 12,
+        },
+      },
+    };
+    const measure: ParagraphMeasure = {
+      kind: "paragraph",
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 4,
+          width: 28,
+          ascent: 10,
+          descent: 2,
+          lineHeight: 12,
+        },
+      ],
+      totalHeight: 12,
+    };
+    const fragment: ParagraphFragment = {
+      kind: "paragraph",
+      blockId: "p1",
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 12,
+      fromLine: 0,
+      toLine: 1,
+    };
+
+    const originalDocument = globalThis.document;
+    Object.defineProperty(globalThis, "document", {
+      value: fakeDocument,
+      configurable: true,
+    });
+    clearTextWidthCache();
+    resetCanvasContext();
+    let fragmentEl: HTMLElement;
+    try {
+      fragmentEl = renderParagraphFragment(
+        fragment,
+        block,
+        measure,
+        { pageNumber: 1, totalPages: 1, section: "body" },
+        { document: fakeDocument },
+      );
+    } finally {
+      clearTextWidthCache();
+      resetCanvasContext();
+      Object.defineProperty(globalThis, "document", {
+        value: originalDocument,
+        configurable: true,
+      });
+    }
+    const lineEl = fragmentEl.children[0] as HTMLElement | undefined;
+    const markerEl = lineEl?.children[0] as HTMLElement | undefined;
+
+    expect(markerEl?.className).toContain("layout-list-marker");
+    expect(markerEl?.className).toContain("docx-insertion");
+    expect(markerEl?.style.color).toBe(AUTHOR_COLORS[0]);
+    expect(markerEl?.style.textDecorationLine).toBe("underline");
+    expect(markerEl?.dataset["tcAuthorIdx"]).toBe("0");
+    expect(markerEl?.dataset["changeAuthor"]).toBe("Reviewer");
+  });
+
   test("negative side indents shift and widen line boxes", () => {
     const block: ParagraphBlock = {
       kind: "paragraph",

@@ -1047,6 +1047,43 @@ function paragraphToRuns(
 /**
  * Convert PM paragraph attrs to layout engine paragraph attrs.
  */
+type ListMarkerRevision = NonNullable<ParagraphAttrs["listMarkerRevision"]>;
+
+type ListPropertyChange = {
+  info?: { id?: unknown; author?: unknown; date?: unknown };
+  previousFormatting?: Record<string, unknown> | null;
+};
+
+function toListMarkerRevision(
+  kind: ListMarkerRevision["kind"],
+  info: ListPropertyChange["info"],
+): ListMarkerRevision {
+  const revision: ListMarkerRevision = { kind };
+  if (typeof info?.author === "string") {
+    revision.author = info.author;
+  }
+  if (typeof info?.date === "string") {
+    revision.date = info.date;
+  }
+  if (typeof info?.id === "number") {
+    revision.revisionId = info.id;
+  }
+  return revision;
+}
+
+function isAddedNumberingChange(
+  change: ListPropertyChange,
+): change is ListPropertyChange & {
+  previousFormatting: Record<string, unknown>;
+} {
+  const previousFormatting = change.previousFormatting;
+  return (
+    previousFormatting != null &&
+    Object.hasOwn(previousFormatting, "numPr") &&
+    previousFormatting["numPr"] == null
+  );
+}
+
 function convertParagraphAttrs(
   pmAttrs: PMParagraphAttrs,
   theme?: Theme | null,
@@ -1289,17 +1326,27 @@ function convertParagraphAttrs(
     }
     attrs.numPr = numPr;
 
-    // List-marker tracked-change state
-    const pPrChange = pmAttrs._propertyChanges as
-      | { previousFormatting?: { numPr?: unknown } }[]
-      | null;
-    const numberingAdded =
-      Array.isArray(pPrChange) &&
-      pPrChange.some((c) => !c.previousFormatting?.numPr);
     if (pmAttrs.pPrMark?.kind === "del") {
-      attrs.listMarkerRevision = "del";
-    } else if (pmAttrs.pPrMark?.kind === "ins" || numberingAdded) {
-      attrs.listMarkerRevision = "ins";
+      attrs.listMarkerRevision = toListMarkerRevision(
+        "del",
+        pmAttrs.pPrMark.info,
+      );
+    } else if (pmAttrs.pPrMark?.kind === "ins") {
+      attrs.listMarkerRevision = toListMarkerRevision(
+        "ins",
+        pmAttrs.pPrMark.info,
+      );
+    } else {
+      const pPrChange = pmAttrs._propertyChanges as ListPropertyChange[] | null;
+      const numberingAddedChange = Array.isArray(pPrChange)
+        ? pPrChange.find(isAddedNumberingChange)
+        : undefined;
+      if (numberingAddedChange) {
+        attrs.listMarkerRevision = toListMarkerRevision(
+          "ins",
+          numberingAddedChange.info,
+        );
+      }
     }
   }
   const resolvedMarker = listCounters

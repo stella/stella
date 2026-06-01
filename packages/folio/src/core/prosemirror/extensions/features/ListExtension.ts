@@ -56,6 +56,23 @@ function appendParagraphPropertyChange(
   };
 }
 
+const LIST_FORMATTING_ATTRS = [
+  "numPr",
+  "listIsBullet",
+  "listNumFmt",
+  "listMarker",
+] as const;
+
+function getPreviousListFormatting(
+  attrs: Record<string, unknown>,
+): Record<string, unknown> {
+  const previousFormatting: Record<string, unknown> = {};
+  for (const key of LIST_FORMATTING_ATTRS) {
+    previousFormatting[key] = attrs[key] ?? null;
+  }
+  return previousFormatting;
+}
+
 // ============================================================================
 // LIST COMMANDS
 // ============================================================================
@@ -85,7 +102,6 @@ function toggleList(numId: number): Command {
       if (node.type.name === "paragraph" && !seen.has(pos)) {
         seen.add(pos);
 
-        const priorNumPr = node.attrs["numPr"];
         let nextAttrs: Record<string, unknown>;
 
         if (isInSameList) {
@@ -110,7 +126,7 @@ function toggleList(numId: number): Command {
         if (rev) {
           nextAttrs = appendParagraphPropertyChange(
             nextAttrs,
-            { numPr: priorNumPr ?? null },
+            getPreviousListFormatting(node.attrs),
             rev,
           );
         }

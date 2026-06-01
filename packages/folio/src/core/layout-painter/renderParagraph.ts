@@ -23,6 +23,7 @@ import type {
   FieldRun,
   MathRun,
   TabStop,
+  ParagraphAttrs,
 } from "../layout-engine/types";
 import { calculateTabWidth } from "../prosemirror/utils/tabCalculator";
 import type {
@@ -2329,7 +2330,7 @@ function renderListMarker(
   doc: Document,
   fontFamily?: string,
   fontSize?: number,
-  revision?: "ins" | "del",
+  revision?: ParagraphAttrs["listMarkerRevision"],
 ): HTMLElement {
   const span = doc.createElement("span");
   span.className = "layout-list-marker";
@@ -2352,11 +2353,38 @@ function renderListMarker(
     span.style.minWidth = `${minWidth}px`;
   }
 
-  if (revision === "ins") {
-    span.style.color = "#2e7d32";
-  } else if (revision === "del") {
-    span.style.color = "#c62828";
-    span.style.textDecoration = "line-through";
+  if (revision) {
+    const authorIdx = getAuthorColorIdx(revision.author ?? "");
+    const authorColor = AUTHOR_COLORS[authorIdx]!; // SAFETY: getAuthorColorIdx returns index within AUTHOR_COLORS bounds
+    span.style.color = authorColor;
+    span.style.textDecorationColor = authorColor;
+    span.dataset["tcAuthorIdx"] = String(authorIdx);
+    if (revision.author) {
+      span.dataset["changeAuthor"] = revision.author;
+    }
+    if (revision.date) {
+      span.dataset["changeDate"] = revision.date;
+    }
+    if (revision.revisionId !== undefined) {
+      span.dataset["revisionId"] = String(revision.revisionId);
+    }
+    const titleParts = [
+      revision.author,
+      revision.date ? new Date(revision.date).toLocaleDateString() : "",
+    ].filter(Boolean);
+    if (revision.kind === "ins") {
+      span.classList.add("docx-insertion");
+      span.style.textDecorationLine = "underline";
+      if (titleParts.length > 0) {
+        span.title = `Inserted: ${titleParts.join(", ")}`;
+      }
+    } else {
+      span.classList.add("docx-deletion");
+      span.style.textDecorationLine = "line-through";
+      if (titleParts.length > 0) {
+        span.title = `Deleted: ${titleParts.join(", ")}`;
+      }
+    }
   }
 
   return span;

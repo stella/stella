@@ -381,7 +381,12 @@ export type ParagraphAttrs = {
    * deletion color so an inserted list item's number reads as part of the
    * suggestion, matching Word. `undefined` = numbering is not a pending change.
    */
-  listMarkerRevision?: "ins" | "del";
+  listMarkerRevision?: {
+    kind: "ins" | "del";
+    author?: string;
+    date?: string;
+    revisionId?: number;
+  };
   // Default font for empty paragraphs (from style's rPr / pPr/rPr)
   defaultFontSize?: number; // in points
   defaultFontFamily?: string;

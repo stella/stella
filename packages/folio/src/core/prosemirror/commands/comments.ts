@@ -115,7 +115,11 @@ function resolveChange(
               }[]
             | undefined;
 
-          if (Array.isArray(propertyChanges) && propertyChanges.length > 0) {
+          if (
+            Array.isArray(propertyChanges) &&
+            propertyChanges.length > 0 &&
+            rangeCoversParagraphBoundary(from, to, pos, node)
+          ) {
             const matches = propertyChanges.filter(
               (c) =>
                 revisionSet === null || (c.info && revisionSet.has(c.info.id)),

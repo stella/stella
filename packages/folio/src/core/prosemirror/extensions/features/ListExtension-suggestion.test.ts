@@ -75,7 +75,12 @@ describe("ListExtension suggestion mode integration", () => {
     const propChange = updatedPara.attrs._propertyChanges[0];
     expect(propChange.type).toBe("paragraphPropertyChange");
     expect(propChange.info.author).toBe("Jane");
-    expect(propChange.previousFormatting).toEqual({ numPr: null });
+    expect(propChange.previousFormatting).toEqual({
+      numPr: null,
+      listIsBullet: null,
+      listNumFmt: null,
+      listMarker: null,
+    });
   });
 
   test("accept bullet list suggestion clears property changes and keeps list formatting", () => {
@@ -150,5 +155,95 @@ describe("ListExtension suggestion mode integration", () => {
     para = state.doc.child(0);
     expect(para.attrs.numPr).toBeNull();
     expect(para.attrs._propertyChanges).toBeNull();
+  });
+
+  test("reject list removal restores list rendering attrs", () => {
+    const plugin = createSuggestionModePlugin(true, "Jane");
+
+    let state = EditorState.create({
+      doc: schema.node("doc", null, [
+        schema.node(
+          "paragraph",
+          {
+            numPr: { numId: 1, ilvl: 0 },
+            listIsBullet: true,
+            listMarker: "bullet",
+          },
+          [schema.text("Hello")],
+        ),
+      ]),
+      plugins: [plugin],
+    });
+
+    const sel = TextSelection.create(state.doc, 3);
+    state = state.apply(state.tr.setSelection(sel));
+
+    toggleBulletList(state, (tr) => {
+      state = state.apply(tr);
+    });
+
+    let para = state.doc.child(0);
+    expect(para.attrs.numPr).toBeNull();
+    expect(para.attrs._propertyChanges).not.toBeNull();
+
+    let rejected = false;
+    rejectChange(0, state.doc.content.size)(state, (tr) => {
+      state = state.apply(tr);
+      rejected = true;
+    });
+
+    expect(rejected).toBe(true);
+
+    para = state.doc.child(0);
+    expect(para.attrs.numPr).toEqual({ numId: 1, ilvl: 0 });
+    expect(para.attrs.listIsBullet).toBe(true);
+    expect(para.attrs.listMarker).toBe("bullet");
+    expect(para.attrs._propertyChanges).toBeNull();
+  });
+
+  test("accepting an inline change does not clear a list property suggestion", () => {
+    const insertionMark = schema.marks.insertion.create({
+      revisionId: 2,
+      author: "Jane",
+      date: "2026-01-01",
+    });
+    let state = EditorState.create({
+      doc: schema.node("doc", null, [
+        schema.node(
+          "paragraph",
+          {
+            numPr: { numId: 1, ilvl: 0 },
+            listIsBullet: true,
+            _propertyChanges: [
+              {
+                type: "paragraphPropertyChange",
+                info: { id: 1, author: "Jane", date: "2026-01-01" },
+                previousFormatting: { numPr: null },
+              },
+            ],
+          },
+          [
+            schema.text("A "),
+            schema.text("new", [insertionMark]),
+            schema.text(" word"),
+          ],
+        ),
+      ]),
+    });
+
+    let accepted = false;
+    acceptChange(3, 6)(state, (tr) => {
+      state = state.apply(tr);
+      accepted = true;
+    });
+
+    expect(accepted).toBe(true);
+    expect(state.doc.child(0).attrs._propertyChanges).toEqual([
+      {
+        type: "paragraphPropertyChange",
+        info: { id: 1, author: "Jane", date: "2026-01-01" },
+        previousFormatting: { numPr: null },
+      },
+    ]);
   });
 });
