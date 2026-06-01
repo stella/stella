@@ -9,19 +9,17 @@ import type { TranslationKey } from "@/i18n/types";
 import { catalogueOptions } from "@/routes/_protected.settings/-queries/catalogue";
 
 import { CatalogueEntryCard } from "./catalogue-entry-card";
-import type { CatalogueKind } from "./catalogue-types";
 import { InstallPackButton } from "./install-pack-button";
 
-type FilterKind = CatalogueKind | "all";
+type FilterKind = "all" | "skill" | "mcp";
 
 const KIND_LABEL_KEY = {
   all: "catalogue.filter.all",
   skill: "catalogue.filter.skills",
   mcp: "catalogue.filter.mcps",
-  "native-tool": "catalogue.filter.nativeTools",
 } as const satisfies Record<FilterKind, TranslationKey>;
 
-const FILTERS: readonly FilterKind[] = ["all", "skill", "mcp", "native-tool"];
+const FILTERS: readonly FilterKind[] = ["all", "skill", "mcp"];
 
 type CatalogueBrowserProps = {
   organizationId: string;

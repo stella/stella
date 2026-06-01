@@ -90,7 +90,7 @@ export const InboxQuickJump = ({ email }: { email: string }) => {
   const t = useTranslations();
   const providers = getProvidersForEmail(email);
   return (
-    <div className="flex flex-wrap justify-center gap-2">
+    <div className="flex flex-wrap justify-center gap-1">
       {providers.map((p) => (
         <Button
           key={p.name}
@@ -105,7 +105,7 @@ export const InboxQuickJump = ({ email }: { email: string }) => {
             </a>
           }
           size="sm"
-          variant="outline"
+          variant="ghost"
         />
       ))}
     </div>

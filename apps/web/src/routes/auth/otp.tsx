@@ -11,7 +11,6 @@ import {
   FrameDescription,
   FrameHeader,
   FramePanel,
-  FrameTitle,
 } from "@stll/ui/components/frame";
 import {
   InputOTP,
@@ -19,8 +18,10 @@ import {
   InputOTPSlot,
 } from "@stll/ui/components/input-otp";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
+import { usePulse } from "@/hooks/use-pulse";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient, HTTP_TOO_MANY_REQUESTS } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
@@ -62,6 +63,7 @@ function OTP() {
   const [otp, setOtp] = useState("");
   const invalidateSession = useInvalidateSession();
   const isOtpComplete = otp.length === OTP_LENGTH;
+  const { isPulsing: isOtpPulsing, pulse: pulseOtp } = usePulse(600);
 
   const resendOtp = useMutation({
     mutationFn: async () => {
@@ -83,6 +85,7 @@ function OTP() {
 
       setOtp("");
       stellaToast.add({
+        description: t("auth.checkSpamHint"),
         title: t("auth.codeSentAgain"),
         type: "success",
       });
@@ -138,12 +141,12 @@ function OTP() {
           analytics.captureError(error);
         });
 
+      // Invalidating the session re-runs this route's beforeLoad,
+      // which already redirects authenticated users to
+      // /auth/organization with the original redirectTo. A second
+      // explicit navigate here would queue a duplicate transition
+      // and flash the route's pending state twice.
       await invalidateSession.mutateAsync();
-      await navigate({
-        to: "/auth/organization",
-        search: { redirectTo },
-        replace: true,
-      });
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -151,15 +154,38 @@ function OTP() {
   });
 
   return (
-    <Frame className="w-full max-w-sm">
+    <Frame className="w-full max-w-md">
       <FrameHeader>
-        <FrameTitle>{t("auth.enterTheCode")}</FrameTitle>
-        <FrameDescription>{t("auth.weSentCodeTo", { email })}</FrameDescription>
+        <FrameDescription>
+          {t("auth.weSentCodeTo", { email })}
+          {" · "}
+          <Button
+            className="h-auto p-0 align-baseline text-sm font-normal text-inherit underline"
+            disabled={verifyOtp.isPending || resendOtp.isPending}
+            onClick={() => {
+              void navigate({
+                to: "/auth",
+                search: { redirectTo },
+                replace: true,
+              });
+            }}
+            variant="link"
+          >
+            {t("auth.useDifferentEmail")}
+          </Button>
+        </FrameDescription>
+        <div className="mt-2">
+          <InboxQuickJump email={email} />
+        </div>
       </FrameHeader>
       <FramePanel>
-        <div className="flex flex-col items-center gap-2 px-5 pb-4">
+        <div className="mx-auto flex w-fit flex-col items-stretch gap-2">
           <InputOTP
             autoFocus
+            containerClassName={cn(
+              "rounded-md transition-shadow",
+              isOtpPulsing && "ring-primary ring-2",
+            )}
             maxLength={OTP_LENGTH}
             onChange={setOtp}
             onComplete={(code: string) =>
@@ -176,41 +202,31 @@ function OTP() {
               <InputOTPSlot index={5} />
             </InputOTPGroup>
           </InputOTP>
-        </div>
-        <Button
-          className="w-full"
-          disabled={!isOtpComplete || verifyOtp.isPending}
-          loading={verifyOtp.isPending}
-          onClick={() => verifyOtp.mutate({ email, otp })}
-        >
-          {t("common.verify")}
-        </Button>
-        <div className="mt-3">
-          <InboxQuickJump email={email} />
-        </div>
-        <div className="mt-3 flex flex-col gap-1">
           <Button
-            className="h-auto min-h-9 w-full py-2 text-center leading-snug break-words whitespace-normal"
+            aria-disabled={!isOtpComplete || undefined}
+            className={cn(!isOtpComplete && "cursor-not-allowed opacity-64")}
+            disabled={verifyOtp.isPending}
+            loading={verifyOtp.isPending}
+            onClick={() => {
+              if (!isOtpComplete) {
+                pulseOtp();
+                return;
+              }
+              verifyOtp.mutate({ email, otp });
+            }}
+          >
+            {t("common.verify")}
+          </Button>
+        </div>
+        <div className="mt-3 flex justify-center">
+          <Button
             disabled={verifyOtp.isPending || resendOtp.isPending}
             loading={resendOtp.isPending}
             onClick={() => resendOtp.mutate()}
+            size="sm"
             variant="link"
           >
             {t("auth.resendCode", { email })}
-          </Button>
-          <Button
-            className="w-full"
-            disabled={verifyOtp.isPending || resendOtp.isPending}
-            onClick={() => {
-              void navigate({
-                to: "/auth",
-                search: { redirectTo },
-                replace: true,
-              });
-            }}
-            variant="link"
-          >
-            {t("auth.useDifferentEmail")}
           </Button>
         </div>
       </FramePanel>

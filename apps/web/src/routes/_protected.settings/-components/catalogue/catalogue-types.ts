@@ -21,6 +21,14 @@ type CommonFields = {
   isRecommendedForOrg: boolean;
   installState: CatalogueInstallState;
   isLocked: boolean;
+  /**
+   * Per-installation identifiers used by the uninstall path. Populated
+   * only when `installState === "installed"` and the kind matches; null
+   * otherwise. Native-tools uninstall via `backendSlug` so they don't
+   * need a separate handle here.
+   */
+  installedSkillId: string | null;
+  installedConnectorSlug: string | null;
 };
 
 export type CatalogueSkill = CommonFields & {

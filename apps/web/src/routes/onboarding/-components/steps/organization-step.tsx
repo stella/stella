@@ -8,7 +8,9 @@ import { Button } from "@stll/ui/components/button";
 import { Field, FieldError, FieldLabel } from "@stll/ui/components/field";
 import { Form } from "@stll/ui/components/form";
 import { Input } from "@stll/ui/components/input";
+import { cn } from "@stll/ui/lib/utils";
 
+import { usePulse } from "@/hooks/use-pulse";
 import { toFormErrors } from "@/lib/schema";
 import { createSlug } from "@/routes/_protected.organization/-utils";
 
@@ -48,17 +50,12 @@ export const OrganizationStep = ({
   const formErrors = useStore(form.store, (s) => toFormErrors(s.fieldMeta));
   const currentName = useStore(form.store, (s) => s.values.name);
 
+  const { isPulsing: isInputPulsing, pulse } = usePulse(600);
+
   const flashInput = useCallback(() => {
-    const el = inputRef.current;
-    if (!el) {
-      return;
-    }
-    el.focus();
-    el.classList.add("ring-2", "ring-primary");
-    setTimeout(() => {
-      el.classList.remove("ring-2", "ring-primary");
-    }, 600);
-  }, []);
+    inputRef.current?.focus();
+    pulse();
+  }, [pulse]);
 
   return (
     <>
@@ -87,6 +84,10 @@ export const OrganizationStep = ({
               <FieldLabel>{t("onboarding.orgNameLabel")}</FieldLabel>
               <Input
                 autoFocus
+                className={cn(
+                  "transition-shadow",
+                  isInputPulsing && "ring-primary ring-2",
+                )}
                 maxLength={50}
                 onBlur={field.handleBlur}
                 onChange={(e) => {
@@ -103,6 +104,10 @@ export const OrganizationStep = ({
         </form.Field>
         <div className="mt-auto flex items-center justify-end pt-8">
           <Button
+            aria-disabled={!currentName.trim() || undefined}
+            className={cn(
+              !currentName.trim() && "cursor-not-allowed opacity-64",
+            )}
             onClick={() => {
               if (!currentName.trim()) {
                 flashInput();

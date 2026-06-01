@@ -638,11 +638,30 @@ export const OnboardingWizard = () => {
         >
           <CatalogueStep
             focusedSlug={catalogueFocusedSlug}
+            onAdd={(slug) => {
+              setCatalogueSlugRemoved(slug, false);
+              setData((d) => {
+                if (d.catalogueSlugs.includes(slug)) {
+                  return d;
+                }
+                return { ...d, catalogueSlugs: [...d.catalogueSlugs, slug] };
+              });
+            }}
             onChange={(catalogueSlugs) =>
               setData((d) => ({ ...d, catalogueSlugs: [...catalogueSlugs] }))
             }
             onFocusChange={setCatalogueFocusedSlug}
             onNext={() => setStep("ai")}
+            onRemove={(slug) => {
+              setCatalogueSlugRemoved(slug, true);
+              setData((d) => ({
+                ...d,
+                catalogueSlugs: d.catalogueSlugs.filter((s) => s !== slug),
+              }));
+              if (catalogueFocusedSlug === slug) {
+                setCatalogueFocusedSlug(null);
+              }
+            }}
             onSkip={() => {
               markCatalogueSlugsRemoved(data.catalogueSlugs);
               setData((d) => ({ ...d, catalogueSlugs: [] }));
