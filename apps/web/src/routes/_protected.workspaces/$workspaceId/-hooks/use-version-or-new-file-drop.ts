@@ -51,7 +51,10 @@ export const useVersionOrNewFileDrop = ({
 
   const file = getFirstFile(entity);
   const canAcceptDrop =
-    entity.kind !== "folder" && entity.kind !== "task" && file !== null;
+    entity.kind !== "folder" &&
+    entity.kind !== "task" &&
+    !entity.readOnly &&
+    file !== null;
 
   const { isDropTarget } = useExternalFileDrop({
     enabled: canAcceptDrop,

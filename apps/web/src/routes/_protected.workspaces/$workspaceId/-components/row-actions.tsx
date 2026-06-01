@@ -509,7 +509,8 @@ export const RowActions = ({
     : isFolder;
 
   // Show "Upload new version" for non-folder, non-bulk entities with a file
-  const canUploadVersion = !isBulk && !isFolder && file !== null;
+  const canUploadVersion =
+    !isBulk && !isFolder && !entity.readOnly && file !== null;
   // Extension-based filter for the OS file picker. Browser-reported MIME
   // strings vary across platforms for the same extension; matching by
   // extension is consistent across Chrome, Safari, Firefox, and Edge.
