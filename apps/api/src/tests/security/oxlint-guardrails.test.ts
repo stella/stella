@@ -44,6 +44,14 @@ describe("custom oxlint guardrails", () => {
     // element — see the `findRefDisplayName` fallback branches.
     expect(pluginSource).toContain("memberExpressionPath");
     expect(pluginSource).toContain('return "ref"');
+
+    // Void / leaf form elements cannot have a React subtree, so the
+    // portal scenario cannot apply. They are excluded by name so a
+    // `<input ref={…} onMouseDown={…} />` autofocus pattern is left
+    // alone instead of acquiring a redundant wrap.
+    expect(pluginSource).toContain("LEAF_ELEMENTS");
+    expect(pluginSource).toContain('"input"');
+    expect(pluginSource).toContain('"textarea"');
   });
 
   test("containedHandler helper uses Node, not Element, for containment", () => {

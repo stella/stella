@@ -866,6 +866,14 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
     const yPos =
       cardPositions.get(cardId) ??
       lastKnownCardPositionsRef.current.get(cardId);
+    // Map-tracked refs can't be passed to `containedHandler` directly,
+    // so wrap the Map lookup in a thin getter that satisfies the
+    // RefObject shape and stays current as cards mount/unmount.
+    const cardRef: React.RefObject<HTMLDivElement | null> = {
+      get current() {
+        return cardRefs.current.get(cardId) ?? null;
+      },
+    };
 
     return (
       // oxlint-disable-next-line jsx-a11y/no-static-element-interactions
@@ -880,13 +888,15 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
         }}
         data-comment-id={comment.id}
         className="docx-comment-card"
-        onClick={() => handleCardClick(cardId, comment.id)}
+        onClick={containedHandler(cardRef, () =>
+          handleCardClick(cardId, comment.id),
+        )}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             handleCardClick(cardId, comment.id);
           }
         }}
-        onMouseDown={(e) => e.stopPropagation()}
+        onMouseDown={containedHandler(cardRef, (e) => e.stopPropagation())}
         style={{
           ...cardContainerStyle(cardId, isExpanded, yPos),
           opacity: comment.done ? 0.6 : 1,

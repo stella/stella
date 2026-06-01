@@ -56,6 +56,28 @@ const WATCHED_HANDLERS = new Set([
   "onTouchEnd",
 ]);
 
+// Void/leaf form elements cannot have React-tree descendants, so a
+// portaled popup can never bubble through them. Wrapping their handlers
+// would be inert at best and obscure intent at worst. The rule treats
+// them as out of scope even when they carry a ref (e.g. for autofocus).
+const LEAF_ELEMENTS = new Set([
+  "input",
+  "textarea",
+  "select",
+  "area",
+  "base",
+  "br",
+  "col",
+  "embed",
+  "hr",
+  "img",
+  "link",
+  "meta",
+  "source",
+  "track",
+  "wbr",
+]);
+
 const HELPER_NAME = "containedHandler";
 
 const jsxAttrName = (attr) =>
@@ -167,6 +189,14 @@ export default {
       },
       create(context) {
         const checkOpening = (opening) => {
+          const elementName =
+            opening.name?.type === "JSXIdentifier" ? opening.name.name : null;
+          if (
+            typeof elementName === "string" &&
+            LEAF_ELEMENTS.has(elementName)
+          ) {
+            return;
+          }
           const refName = findRefDisplayName(opening.attributes);
           if (refName === null) {
             return;
