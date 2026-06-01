@@ -84,6 +84,12 @@ describe("custom oxlint guardrails", () => {
     expect(pluginSource).toContain("TSIndexedAccessType");
     expect(pluginSource).toContain("objectType");
     expect(pluginSource).toContain("indexType");
+    expect(pluginSource).toContain("TSConditionalType");
+    expect(pluginSource).toContain("checkType");
+    expect(pluginSource).toContain("extendsType");
+    expect(pluginSource).toContain("trueType");
+    expect(pluginSource).toContain("falseType");
+    expect(pluginSource).toContain("TSMappedType");
     expect(pluginSource).toContain("TSTypeLiteral");
     expect(pluginSource).toContain("TSInterfaceDeclaration");
     expect(pluginSource).toContain("TSInterfaceBody");

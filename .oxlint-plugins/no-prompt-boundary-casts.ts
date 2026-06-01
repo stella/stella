@@ -256,6 +256,44 @@ const hasPromptBoundaryType = (
     );
   }
 
+  if (typeAnnotation.type === "TSConditionalType") {
+    return (
+      hasPromptBoundaryType(
+        typeAnnotation.checkType,
+        promptBoundaryTypeNames,
+        namedTypeAnnotations,
+        seenTypeNames,
+      ) ||
+      hasPromptBoundaryType(
+        typeAnnotation.extendsType,
+        promptBoundaryTypeNames,
+        namedTypeAnnotations,
+        seenTypeNames,
+      ) ||
+      hasPromptBoundaryType(
+        typeAnnotation.trueType,
+        promptBoundaryTypeNames,
+        namedTypeAnnotations,
+        seenTypeNames,
+      ) ||
+      hasPromptBoundaryType(
+        typeAnnotation.falseType,
+        promptBoundaryTypeNames,
+        namedTypeAnnotations,
+        seenTypeNames,
+      )
+    );
+  }
+
+  if (typeAnnotation.type === "TSMappedType") {
+    return hasPromptBoundaryType(
+      typeAnnotation.typeAnnotation,
+      promptBoundaryTypeNames,
+      namedTypeAnnotations,
+      seenTypeNames,
+    );
+  }
+
   if (typeAnnotation.type === "TSTypeLiteral") {
     return typeAnnotation.members.some((member) =>
       hasPromptBoundaryMemberType(

@@ -1,4 +1,4 @@
-/* oxlint-disable typescript/array-type, typescript/consistent-type-assertions, typescript/consistent-type-definitions, typescript/consistent-type-imports, typescript/no-unsafe-type-assertion */
+/* oxlint-disable typescript/array-type, typescript/consistent-indexed-object-style, typescript/consistent-type-assertions, typescript/consistent-type-definitions, typescript/consistent-type-imports, typescript/no-unsafe-type-assertion */
 // Passive regression fixture for
 // `no-prompt-boundary-casts/no-prompt-boundary-casts`.
 //
@@ -19,6 +19,10 @@ type ChatSafePromptImportType =
   import("../../apps/api/src/handlers/chat/chat-prompt").ChatSafePrompt;
 type ChatSafePromptIndexedBox = { readonly prompt: ChatSafePrompt };
 type ChatSafePromptIndexedAlias = ChatSafePromptIndexedBox["prompt"];
+type ChatSafePromptConditional = string extends string ? ChatSafePrompt : never;
+type ChatSafePromptMappedBox = {
+  readonly [PromptKey in "prompt"]: ChatSafePrompt;
+};
 
 interface ChatSafePromptInterface {
   readonly prompt: ChatSafePrompt;
@@ -128,6 +132,17 @@ const indexedAccessLiteral = raw as {
 }["prompt"];
 
 // oxlint-disable-next-line no-prompt-boundary-casts/no-prompt-boundary-casts
+const conditional = raw as ChatSafePromptConditional;
+
+// oxlint-disable-next-line no-prompt-boundary-casts/no-prompt-boundary-casts
+const mappedContainer = raw as ChatSafePromptMappedBox;
+
+// oxlint-disable-next-line no-prompt-boundary-casts/no-prompt-boundary-casts
+const mappedLiteral = raw as {
+  readonly [PromptKey in "prompt"]: ChatSafePrompt;
+};
+
+// oxlint-disable-next-line no-prompt-boundary-casts/no-prompt-boundary-casts
 const interfaceContainer = raw as ChatSafePromptInterface;
 
 // oxlint-disable-next-line no-prompt-boundary-casts/no-prompt-boundary-casts
@@ -145,6 +160,7 @@ export const __noPromptBoundaryCastsFixture = {
   allowedUse,
   array,
   cache,
+  conditional,
   constructorType,
   forwardTypeAlias,
   full,
@@ -160,6 +176,8 @@ export const __noPromptBoundaryCastsFixture = {
   interfaceExtends,
   interfaceGeneric,
   interfaceMethod,
+  mappedContainer,
+  mappedLiteral,
   namedTuple,
   objectCallSignature,
   objectConstructSignature,
