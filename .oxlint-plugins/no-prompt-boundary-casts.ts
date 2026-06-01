@@ -230,6 +230,23 @@ const hasPromptBoundaryType = (
     );
   }
 
+  if (typeAnnotation.type === "TSIndexedAccessType") {
+    return (
+      hasPromptBoundaryType(
+        typeAnnotation.objectType,
+        promptBoundaryTypeNames,
+        namedTypeAnnotations,
+        seenTypeNames,
+      ) ||
+      hasPromptBoundaryType(
+        typeAnnotation.indexType,
+        promptBoundaryTypeNames,
+        namedTypeAnnotations,
+        seenTypeNames,
+      )
+    );
+  }
+
   if (typeAnnotation.type === "TSTypeLiteral") {
     return typeAnnotation.members.some((member) =>
       hasPromptBoundaryMemberType(
