@@ -7004,7 +7004,7 @@ export function PagedEditor(
       role="textbox"
       aria-multiline
       onFocus={containedHandler(containerRef, handleContainerFocus)}
-      onBlur={containedHandler(containerRef, handleContainerBlur)}
+      onBlur={handleContainerBlur}
       onKeyDown={handleKeyDown}
       onMouseDown={containedHandler(containerRef, handleContainerMouseDown)}
     >

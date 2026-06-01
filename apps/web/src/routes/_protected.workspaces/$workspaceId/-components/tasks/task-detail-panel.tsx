@@ -9,7 +9,6 @@ import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { Skeleton } from "@stll/ui/components/skeleton";
-import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 
 import { api } from "@/lib/api";
@@ -293,7 +292,7 @@ export const TaskDetailPanel = ({
             <Input
               autoFocus
               className="text-base font-semibold"
-              onBlur={containedHandler(nameInputRef, commitName)}
+              onBlur={commitName}
               onChange={(e) => setEditNameValue(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {

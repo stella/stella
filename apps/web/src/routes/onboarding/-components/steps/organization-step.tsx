@@ -8,7 +8,6 @@ import { Button } from "@stll/ui/components/button";
 import { Field, FieldError, FieldLabel } from "@stll/ui/components/field";
 import { Form } from "@stll/ui/components/form";
 import { Input } from "@stll/ui/components/input";
-import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 
 import { toFormErrors } from "@/lib/schema";
 import { createSlug } from "@/routes/_protected.organization/-utils";
@@ -89,7 +88,7 @@ export const OrganizationStep = ({
               <Input
                 autoFocus
                 maxLength={50}
-                onBlur={containedHandler(inputRef, field.handleBlur)}
+                onBlur={field.handleBlur}
                 onChange={(e) => {
                   field.handleChange(e.target.value);
                   onNameChange(e.target.value);

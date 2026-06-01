@@ -23,7 +23,6 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { Input } from "@stll/ui/components/input";
-import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 
 import { getFindReplaceOverlayStyle } from "./findReplaceDialogLayout";
 import { getFindEnterAction } from "./findReplaceInteraction";
@@ -367,11 +366,11 @@ export function FindReplaceDialog({
               value={searchText}
               onChange={handleSearchChange}
               onKeyDown={handleSearchKeyDown}
-              onBlur={containedHandler(searchInputRef, () => {
+              onBlur={() => {
                 if (searchText.trim() && !result) {
                   performSearch();
                 }
-              })}
+              }}
               placeholder={t("findReplace.findPlaceholder")}
               aria-label={t("findReplace.findText")}
             />

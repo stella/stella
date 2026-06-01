@@ -41,6 +41,10 @@
 // the plain `Identifier` that shared utilities recognise; we read
 // `attr.name.name` directly.
 
+// `onBlur` is intentionally absent: blur's `target` is the element losing
+// focus, not the new focus destination, so the DOM-containment check the
+// helper performs cannot answer "did focus leave for a portaled child?".
+// Authors needing that signal should test `event.relatedTarget` inline.
 const WATCHED_HANDLERS = new Set([
   "onMouseDown",
   "onMouseUp",
@@ -48,7 +52,6 @@ const WATCHED_HANDLERS = new Set([
   "onPointerDown",
   "onPointerUp",
   "onFocus",
-  "onBlur",
   "onTouchStart",
   "onTouchEnd",
 ]);
@@ -105,7 +108,29 @@ const isSafeHandlerValue = (expr) => {
   return false;
 };
 
-const findRefIdentifierAmongAttributes = (attributes) => {
+// Reconstruct a dotted path from a MemberExpression so reports can echo
+// the actual ref expression (`refs.container`) rather than a placeholder.
+// Falls back to `null` if any segment isn't a static identifier (e.g. a
+// computed index like `refs[name]`).
+const memberExpressionPath = (node) => {
+  if (node?.type !== "MemberExpression" || node.computed === true) {
+    return null;
+  }
+  if (node.property?.type !== "Identifier") {
+    return null;
+  }
+  const head =
+    node.object?.type === "Identifier"
+      ? node.object.name
+      : memberExpressionPath(node.object);
+  return head === null ? null : `${head}.${node.property.name}`;
+};
+
+// Find the `ref={…}` attribute and return a display string for the ref
+// expression. Returns `null` only when there is no ref attribute at all
+// — every other shape (Identifier, MemberExpression, callback, merged
+// refs) yields a string so the rule still enforces on the element.
+const findRefDisplayName = (attributes) => {
   if (!Array.isArray(attributes)) {
     return null;
   }
@@ -117,7 +142,10 @@ const findRefIdentifierAmongAttributes = (attributes) => {
     if (expr?.type === "Identifier" && typeof expr.name === "string") {
       return expr.name;
     }
-    return null;
+    if (expr?.type === "MemberExpression") {
+      return memberExpressionPath(expr) ?? "ref";
+    }
+    return "ref";
   }
   return null;
 };
@@ -139,7 +167,7 @@ export default {
       },
       create(context) {
         const checkOpening = (opening) => {
-          const refName = findRefIdentifierAmongAttributes(opening.attributes);
+          const refName = findRefDisplayName(opening.attributes);
           if (refName === null) {
             return;
           }
