@@ -3,13 +3,17 @@
  */
 
 import { describe, test, expect } from "bun:test";
+import { history, undo } from "prosemirror-history";
 import { Schema } from "prosemirror-model";
 import { EditorState, TextSelection } from "prosemirror-state";
+import type { Transaction } from "prosemirror-state";
+import type { EditorView } from "prosemirror-view";
 
 import {
   createSuggestionModePlugin,
   suggestionModeKey,
   setSuggestionMode,
+  handleSuggestionEnter,
 } from "./suggestionMode";
 
 // Minimal schema with insertion/deletion marks
@@ -195,6 +199,74 @@ describe("SuggestionMode Plugin", () => {
       const worldEntry = marks.find((m) => m.text.includes("World"));
       expect(worldEntry).toBeDefined();
       expect(worldEntry?.marks).toContain("deletion");
+    });
+  });
+
+  describe("history undo/redo", () => {
+    test("does not mark text as inserted when undoing a tracked Enter split (issue #633)", () => {
+      const plugin = createSuggestionModePlugin(true, "TestUser");
+      const doc = schema.node("doc", null, [
+        schema.node("paragraph", null, [schema.text("abcdef")]),
+      ]);
+
+      let state = EditorState.create({
+        doc,
+        plugins: [history(), plugin],
+      });
+
+      // Mocks the EditorView's minimal state/dispatch interface for testing.
+      // SAFETY: This mock implements only the subset of EditorView needed by the suggestion mode plugin.
+      const mockView = {
+        state,
+        dispatch(tr: Transaction) {
+          state = state.apply(tr);
+          this.state = state;
+        },
+      } as unknown as EditorView;
+
+      // Move cursor between "abc" and "def" (position 4)
+      const sel = TextSelection.create(state.doc, 4);
+      state = state.apply(state.tr.setSelection(sel));
+      mockView.state = state;
+
+      // Press Enter 3 times
+      for (let i = 0; i < 3; i++) {
+        const pluginState = suggestionModeKey.getState(state);
+        handleSuggestionEnter(mockView, pluginState);
+      }
+
+      // Check document structure
+      expect(state.doc.childCount).toBe(4);
+      expect(getText(state)).toBe("abcdef");
+
+      // Verify no insertion marks exist before undo
+      const marksBeforeUndo = getMarks(state);
+      expect(
+        marksBeforeUndo.filter((m) => m.marks.includes("insertion")).length,
+      ).toBe(0);
+
+      // Helper function to perform undo and capture state update without function-in-loop warning
+      function performUndo() {
+        let undoDispatched = false;
+        undo(state, (undoTr) => {
+          state = state.apply(undoTr);
+          undoDispatched = true;
+        });
+        return undoDispatched;
+      }
+
+      // Undo all Enters in a loop
+      while (state.doc.childCount > 1) {
+        expect(performUndo()).toBe(true);
+      }
+
+      // The text should still be intact and NOT carry any insertion marks
+      expect(getText(state)).toBe("abcdef");
+      const marksAfterUndo = getMarks(state);
+      const insertedText = marksAfterUndo.filter((m) =>
+        m.marks.includes("insertion"),
+      );
+      expect(insertedText.length).toBe(0);
     });
   });
 });

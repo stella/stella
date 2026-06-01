@@ -106,6 +106,49 @@ function resolveChange(
           if (op) {
             pPrMarkOps.push(op);
           }
+
+          // Process paragraph property changes (w:pPrChange)
+          const propertyChanges = node.attrs["_propertyChanges"] as
+            | {
+                info?: { id: number; author: string; date: string };
+                previousFormatting?: Record<string, unknown>;
+              }[]
+            | undefined;
+
+          if (
+            Array.isArray(propertyChanges) &&
+            propertyChanges.length > 0 &&
+            rangeCoversParagraphBoundary(from, to, pos, node)
+          ) {
+            const matches = propertyChanges.filter(
+              (c) =>
+                revisionSet === null || (c.info && revisionSet.has(c.info.id)),
+            );
+            if (matches.length > 0) {
+              const remaining = propertyChanges.filter(
+                (c) =>
+                  revisionSet !== null &&
+                  (!c.info || !revisionSet.has(c.info.id)),
+              );
+              const nextAttrs: Record<string, unknown> = {
+                ...node.attrs,
+                _propertyChanges: remaining.length > 0 ? remaining : null,
+              };
+              if (mode === "reject") {
+                for (const change of matches.toReversed()) {
+                  if (change.previousFormatting) {
+                    for (const [key, val] of Object.entries(
+                      change.previousFormatting,
+                    )) {
+                      nextAttrs[key] = val;
+                    }
+                  }
+                }
+              }
+              tr.setNodeMarkup(pos, undefined, nextAttrs);
+            }
+          }
+
           return true;
         }
         // Text AND inline atoms (image, shape, hardBreak, tab) can carry
@@ -183,6 +226,26 @@ type PPrMarkOp = {
   action: "clear" | "join";
 };
 
+export type ParagraphBoundaryChange = {
+  from: number;
+  to: number;
+  type: "insertion" | "deletion";
+  author?: string;
+  date?: string;
+  revisionId?: number;
+};
+
+type RevisionInfoAttrs = {
+  id?: unknown;
+  author?: unknown;
+  date?: unknown;
+};
+
+type ParagraphPropertyChangeAttrs = {
+  info?: RevisionInfoAttrs;
+  previousFormatting?: Record<string, unknown> | null;
+};
+
 function collectPPrMarkOp(
   node: { attrs: Record<string, unknown>; nodeSize: number },
   pos: number,
@@ -234,6 +297,116 @@ function isPPrMarkAttr(
     return false;
   }
   return typeof (info as { id?: unknown }).id === "number";
+}
+
+function readRevisionInfo(info: RevisionInfoAttrs | undefined): {
+  author?: string;
+  date?: string;
+  revisionId?: number;
+} {
+  const revision: { author?: string; date?: string; revisionId?: number } = {};
+  if (typeof info?.author === "string") {
+    revision.author = info.author;
+  }
+  if (typeof info?.date === "string") {
+    revision.date = info.date;
+  }
+  if (typeof info?.id === "number") {
+    revision.revisionId = info.id;
+  }
+  return revision;
+}
+
+function getListPropertyChangeType(
+  attrs: Record<string, unknown>,
+  change: ParagraphPropertyChangeAttrs,
+): ParagraphBoundaryChange["type"] | null {
+  const previousFormatting = change.previousFormatting;
+  if (
+    previousFormatting == null ||
+    !Object.hasOwn(previousFormatting, "numPr")
+  ) {
+    return null;
+  }
+
+  const currentNumPr = attrs["numPr"];
+  const previousNumPr = previousFormatting["numPr"];
+  if (previousNumPr == null && currentNumPr != null) {
+    return "insertion";
+  }
+  if (previousNumPr != null && currentNumPr == null) {
+    return "deletion";
+  }
+  if (!areNumPrValuesEqual(previousNumPr, currentNumPr)) {
+    return currentNumPr == null ? "deletion" : "insertion";
+  }
+  return null;
+}
+
+function areNumPrValuesEqual(left: unknown, right: unknown): boolean {
+  if (left == null || right == null) {
+    return left == right;
+  }
+  if (!isObjectRecord(left) || !isObjectRecord(right)) {
+    return Object.is(left, right);
+  }
+  return left["numId"] === right["numId"] && left["ilvl"] === right["ilvl"];
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function toParagraphBoundaryChange(
+  node: PMNode,
+  pos: number,
+  type: ParagraphBoundaryChange["type"],
+  info?: RevisionInfoAttrs,
+): ParagraphBoundaryChange {
+  return {
+    from: pos + node.nodeSize - 1,
+    to: pos + node.nodeSize,
+    type,
+    ...readRevisionInfo(info),
+  };
+}
+
+export function findParagraphBoundaryChangeAtPosition(
+  state: EditorState,
+  pos: number,
+): ParagraphBoundaryChange | null {
+  const $pos = state.doc.resolve(pos);
+  const node = $pos.parent;
+  if (node.type.name !== "paragraph") {
+    return null;
+  }
+
+  const paragraphPos = $pos.before($pos.depth);
+  const pPrMark = node.attrs["pPrMark"];
+  if (isPPrMarkAttr(pPrMark)) {
+    return toParagraphBoundaryChange(
+      node,
+      paragraphPos,
+      pPrMark.kind === "ins" ? "insertion" : "deletion",
+      pPrMark.info,
+    );
+  }
+
+  const propertyChanges = node.attrs["_propertyChanges"] as
+    | ParagraphPropertyChangeAttrs[]
+    | undefined;
+  if (!Array.isArray(propertyChanges)) {
+    return null;
+  }
+
+  for (const change of propertyChanges) {
+    const type = getListPropertyChangeType(node.attrs, change);
+    if (type) {
+      return toParagraphBoundaryChange(node, paragraphPos, type, change.info);
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -420,7 +593,10 @@ export function findChangeAtPosition(
   });
 
   if (foundMark === undefined) {
-    return { from, to };
+    const paragraphChange = findParagraphBoundaryChangeAtPosition(state, from);
+    return paragraphChange
+      ? { from: paragraphChange.from, to: paragraphChange.to }
+      : { from, to };
   }
 
   // Expand to adjacent nodes carrying the *same* mark instance (matching

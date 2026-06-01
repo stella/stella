@@ -375,6 +375,18 @@ export type ParagraphAttrs = {
    * one space glyph; `nothing` lets body text butt against the marker.
    */
   listMarkerSuffix?: "tab" | "space" | "nothing";
+  /**
+   * Tracked-change state of the list numbering itself. When a list is applied
+   * (or removed) under suggesting mode, the marker paints in the insertion /
+   * deletion color so an inserted list item's number reads as part of the
+   * suggestion, matching Word. `undefined` = numbering is not a pending change.
+   */
+  listMarkerRevision?: {
+    kind: "ins" | "del";
+    author?: string;
+    date?: string;
+    revisionId?: number;
+  };
   // Default font for empty paragraphs (from style's rPr / pPr/rPr)
   defaultFontSize?: number; // in points
   defaultFontFamily?: string;

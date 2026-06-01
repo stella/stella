@@ -71,6 +71,7 @@ import type {
   NumberFormat,
   TextFormatting,
 } from "../types/document";
+import { NUMBER_FORMAT_VALUES } from "../types/documentEnumValues";
 import { resolveColor, resolveHighlightToCss } from "../utils/colorResolver";
 import {
   pointsToPixels,
@@ -1047,6 +1048,275 @@ function paragraphToRuns(
 /**
  * Convert PM paragraph attrs to layout engine paragraph attrs.
  */
+type ListMarkerRevision = NonNullable<ParagraphAttrs["listMarkerRevision"]>;
+
+type ListPropertyChange = {
+  info?: { id?: unknown; author?: unknown; date?: unknown };
+  previousFormatting?: Record<string, unknown> | null;
+};
+
+function toListMarkerRevision(
+  kind: ListMarkerRevision["kind"],
+  info: ListPropertyChange["info"],
+): ListMarkerRevision {
+  const revision: ListMarkerRevision = { kind };
+  if (typeof info?.author === "string") {
+    revision.author = info.author;
+  }
+  if (typeof info?.date === "string") {
+    revision.date = info.date;
+  }
+  if (typeof info?.id === "number") {
+    revision.revisionId = info.id;
+  }
+  return revision;
+}
+
+function isAddedNumberingChange(
+  change: ListPropertyChange,
+): change is ListPropertyChange & {
+  previousFormatting: Record<string, unknown>;
+} {
+  const previousFormatting = change.previousFormatting;
+  return (
+    previousFormatting != null &&
+    Object.hasOwn(previousFormatting, "numPr") &&
+    previousFormatting["numPr"] == null
+  );
+}
+
+function isRemovedNumberingChange(
+  change: ListPropertyChange,
+): change is ListPropertyChange & {
+  previousFormatting: Record<string, unknown>;
+} {
+  const previousFormatting = change.previousFormatting;
+  return (
+    previousFormatting != null &&
+    Object.hasOwn(previousFormatting, "numPr") &&
+    isListNumPr(previousFormatting["numPr"])
+  );
+}
+
+function isChangedNumberingChange(
+  currentNumPr: NonNullable<PMParagraphAttrs["numPr"]>,
+  change: ListPropertyChange,
+): change is ListPropertyChange & {
+  previousFormatting: Record<string, unknown>;
+} {
+  const previousFormatting = change.previousFormatting;
+  return (
+    previousFormatting != null &&
+    Object.hasOwn(previousFormatting, "numPr") &&
+    isListNumPr(previousFormatting["numPr"]) &&
+    !areListNumPrEqual(previousFormatting["numPr"], currentNumPr)
+  );
+}
+
+function areListNumPrEqual(
+  left: NonNullable<PMParagraphAttrs["numPr"]>,
+  right: NonNullable<PMParagraphAttrs["numPr"]>,
+): boolean {
+  return left.numId === right.numId && left.ilvl === right.ilvl;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isListNumPr(
+  value: unknown,
+): value is NonNullable<PMParagraphAttrs["numPr"]> {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const numId = value["numId"];
+  const ilvl = value["ilvl"];
+  return (
+    (numId === undefined || typeof numId === "number") &&
+    (ilvl === undefined || typeof ilvl === "number")
+  );
+}
+
+function isNumberFormat(value: unknown): value is NumberFormat {
+  return NUMBER_FORMAT_VALUES.some((format) => format === value);
+}
+
+function readNumberFormats(value: unknown): NumberFormat[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const formats: NumberFormat[] = [];
+  for (const item of value) {
+    if (!isNumberFormat(item)) {
+      return undefined;
+    }
+    formats.push(item);
+  }
+  return formats;
+}
+
+function readListMarkerSuffix(
+  value: unknown,
+): PMParagraphAttrs["listMarkerSuffix"] | undefined {
+  if (value === "tab" || value === "space" || value === "nothing") {
+    return value;
+  }
+  return undefined;
+}
+
+function toPreviousListAttrs(
+  previousFormatting: Record<string, unknown>,
+): PMParagraphAttrs {
+  const attrs: PMParagraphAttrs = {};
+  const numPr = previousFormatting["numPr"];
+  if (isListNumPr(numPr)) {
+    attrs.numPr = numPr;
+  }
+
+  const listIsBullet = previousFormatting["listIsBullet"];
+  if (typeof listIsBullet === "boolean") {
+    attrs.listIsBullet = listIsBullet;
+  }
+
+  const listIsLegal = previousFormatting["listIsLegal"];
+  if (typeof listIsLegal === "boolean") {
+    attrs.listIsLegal = listIsLegal;
+  }
+
+  const listMarker = previousFormatting["listMarker"];
+  if (typeof listMarker === "string") {
+    attrs.listMarker = listMarker;
+  }
+
+  const listNumFmt = previousFormatting["listNumFmt"];
+  if (isNumberFormat(listNumFmt)) {
+    attrs.listNumFmt = listNumFmt;
+  }
+
+  const listLevelNumFmts = readNumberFormats(
+    previousFormatting["listLevelNumFmts"],
+  );
+  if (listLevelNumFmts) {
+    attrs.listLevelNumFmts = listLevelNumFmts;
+  }
+
+  const listAbstractNumId = previousFormatting["listAbstractNumId"];
+  if (typeof listAbstractNumId === "number") {
+    attrs.listAbstractNumId = listAbstractNumId;
+  }
+
+  const listStartOverride = previousFormatting["listStartOverride"];
+  if (typeof listStartOverride === "number") {
+    attrs.listStartOverride = listStartOverride;
+  }
+
+  const listMarkerHidden = previousFormatting["listMarkerHidden"];
+  if (typeof listMarkerHidden === "boolean") {
+    attrs.listMarkerHidden = listMarkerHidden;
+  }
+
+  const listMarkerFontFamily = previousFormatting["listMarkerFontFamily"];
+  if (typeof listMarkerFontFamily === "string") {
+    attrs.listMarkerFontFamily = listMarkerFontFamily;
+  }
+
+  const listMarkerFontSize = previousFormatting["listMarkerFontSize"];
+  if (typeof listMarkerFontSize === "number") {
+    attrs.listMarkerFontSize = listMarkerFontSize;
+  }
+
+  const listMarkerSuffix = readListMarkerSuffix(
+    previousFormatting["listMarkerSuffix"],
+  );
+  if (listMarkerSuffix) {
+    attrs.listMarkerSuffix = listMarkerSuffix;
+  }
+
+  return attrs;
+}
+
+function cloneListCounterMap(
+  counters: Map<number, number[]>,
+): Map<number, number[]> {
+  const cloned = new Map<number, number[]>();
+  for (const [key, value] of counters) {
+    cloned.set(key, [...value]);
+  }
+  return cloned;
+}
+
+function resolveDeletedListMarker(
+  previousListAttrs: PMParagraphAttrs,
+  listCounters: Map<number, number[]> | undefined,
+  listAbstractCounters: Map<number, number[]> | undefined,
+  listSeenNumIds: Set<string> | undefined,
+): string | null {
+  if (listCounters && previousListAttrs.numPr) {
+    const marker = computeListMarker(
+      previousListAttrs,
+      cloneListCounterMap(listCounters),
+      cloneListCounterMap(listAbstractCounters ?? new Map<number, number[]>()),
+      new Set(listSeenNumIds),
+    );
+    if (marker) {
+      return marker;
+    }
+  }
+
+  if (previousListAttrs.listMarker) {
+    return previousListAttrs.listIsBullet
+      ? convertBulletToUnicode(previousListAttrs.listMarker)
+      : previousListAttrs.listMarker;
+  }
+
+  if (previousListAttrs.listIsBullet) {
+    return "\u2022";
+  }
+
+  return null;
+}
+
+function applyDeletedListMarkerAttrs(
+  attrs: ParagraphAttrs,
+  change: ListPropertyChange & {
+    previousFormatting: Record<string, unknown>;
+  },
+  listCounters: Map<number, number[]> | undefined,
+  listAbstractCounters: Map<number, number[]> | undefined,
+  listSeenNumIds: Set<string> | undefined,
+): void {
+  const previousListAttrs = toPreviousListAttrs(change.previousFormatting);
+  const marker = resolveDeletedListMarker(
+    previousListAttrs,
+    listCounters,
+    listAbstractCounters,
+    listSeenNumIds,
+  );
+  if (!marker) {
+    return;
+  }
+
+  attrs.listMarker = marker;
+  attrs.listMarkerRevision = toListMarkerRevision("del", change.info);
+  if (previousListAttrs.listIsBullet !== undefined) {
+    attrs.listIsBullet = previousListAttrs.listIsBullet;
+  }
+  if (previousListAttrs.listMarkerHidden !== undefined) {
+    attrs.listMarkerHidden = previousListAttrs.listMarkerHidden;
+  }
+  if (previousListAttrs.listMarkerFontFamily) {
+    attrs.listMarkerFontFamily = previousListAttrs.listMarkerFontFamily;
+  }
+  if (previousListAttrs.listMarkerFontSize) {
+    attrs.listMarkerFontSize = previousListAttrs.listMarkerFontSize;
+  }
+  if (previousListAttrs.listMarkerSuffix) {
+    attrs.listMarkerSuffix = previousListAttrs.listMarkerSuffix;
+  }
+}
+
 function convertParagraphAttrs(
   pmAttrs: PMParagraphAttrs,
   theme?: Theme | null,
@@ -1279,6 +1549,8 @@ function convertParagraphAttrs(
   }
 
   // List properties
+  const pPrChange = pmAttrs._propertyChanges as ListPropertyChange[] | null;
+  const propertyChanges = Array.isArray(pPrChange) ? pPrChange : [];
   if (pmAttrs.numPr) {
     const numPr: ParagraphAttrs["numPr"] & object = {};
     if (pmAttrs.numPr.numId !== undefined) {
@@ -1288,6 +1560,32 @@ function convertParagraphAttrs(
       numPr.ilvl = pmAttrs.numPr.ilvl;
     }
     attrs.numPr = numPr;
+
+    if (pmAttrs.pPrMark?.kind === "del") {
+      attrs.listMarkerRevision = toListMarkerRevision(
+        "del",
+        pmAttrs.pPrMark.info,
+      );
+    } else if (pmAttrs.pPrMark?.kind === "ins") {
+      attrs.listMarkerRevision = toListMarkerRevision(
+        "ins",
+        pmAttrs.pPrMark.info,
+      );
+    } else {
+      const numberingAddedChange = propertyChanges.find(isAddedNumberingChange);
+      const currentNumPr = pmAttrs.numPr;
+      const numberingChangedChange = propertyChanges.find((change) =>
+        isChangedNumberingChange(currentNumPr, change),
+      );
+      const numberingInsertionChange =
+        numberingAddedChange ?? numberingChangedChange;
+      if (numberingInsertionChange) {
+        attrs.listMarkerRevision = toListMarkerRevision(
+          "ins",
+          numberingInsertionChange.info,
+        );
+      }
+    }
   }
   const resolvedMarker = listCounters
     ? computeListMarker(
@@ -1318,6 +1616,20 @@ function convertParagraphAttrs(
   }
   if (pmAttrs.listMarkerSuffix) {
     attrs.listMarkerSuffix = pmAttrs.listMarkerSuffix;
+  }
+  if (!pmAttrs.numPr) {
+    const numberingRemovedChange = propertyChanges.find(
+      isRemovedNumberingChange,
+    );
+    if (numberingRemovedChange) {
+      applyDeletedListMarkerAttrs(
+        attrs,
+        numberingRemovedChange,
+        listCounters,
+        listAbstractCounters,
+        listSeenNumIds,
+      );
+    }
   }
   if (defaultTabStopTwips !== undefined) {
     attrs.defaultTabStopTwips = defaultTabStopTwips;
