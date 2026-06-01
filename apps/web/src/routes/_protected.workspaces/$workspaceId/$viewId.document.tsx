@@ -42,6 +42,7 @@ import {
 import "@stll/folio/editor.css";
 import { cn } from "@stll/ui/lib/utils";
 
+import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { ClientOperationError, toAPIError } from "@/lib/errors";
@@ -458,6 +459,12 @@ function RouteComponentInner({
             >
               <PdfViewerControls
                 currentPage={pageNumber}
+                extraControls={
+                  <TranslateDocumentDialog
+                    fieldId={fieldId}
+                    workspaceId={workspaceId}
+                  />
+                }
                 fieldId={fieldId}
                 workspaceId={workspaceId}
               />
@@ -504,6 +511,12 @@ function RouteComponentInner({
                         actionBarControls={
                           <PdfViewerControls
                             currentPage={pageNumber}
+                            extraControls={
+                              <TranslateDocumentDialog
+                                fieldId={fieldId}
+                                workspaceId={workspaceId}
+                              />
+                            }
                             fieldId={fieldId}
                             variant="inline"
                             workspaceId={workspaceId}

@@ -32,10 +32,14 @@ import releaseDesktopEditLock from "@/api/handlers/entities/release-desktop-edit
 import renameEntity from "@/api/handlers/entities/rename";
 import requestDesktopEditTakeover from "@/api/handlers/entities/request-desktop-edit-takeover";
 import restoreVersion from "@/api/handlers/entities/restore-version";
+import translateEntity from "@/api/handlers/entities/translate";
 import updateVersionDescription from "@/api/handlers/entities/update-version-description";
 import updateVersionLabel from "@/api/handlers/entities/update-version-label";
 import uploadEntity from "@/api/handlers/entities/upload";
-import { isUploadRateLimitedPath } from "@/api/handlers/entities/upload-rate-limit";
+import {
+  isTranslateRateLimitedPath,
+  isUploadRateLimitedPath,
+} from "@/api/handlers/entities/upload-rate-limit";
 import uploadVersion from "@/api/handlers/entities/upload-version";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
@@ -59,6 +63,16 @@ export const entitiesRoute = new Elysia({
       generator: scopedGenerator("upload"),
       context: new InMemoryRateLimitContext(),
       skip: (req) => !isUploadRateLimitedPath(new URL(req.url).pathname),
+    }),
+  )
+  .use(
+    rateLimit({
+      scoping: "scoped",
+      duration: API_RATE_LIMITS.translate.duration,
+      max: API_RATE_LIMITS.translate.max,
+      generator: scopedGenerator("translate"),
+      context: new InMemoryRateLimitContext(),
+      skip: (req) => !isTranslateRateLimitedPath(new URL(req.url).pathname),
     }),
   )
   .guard({
@@ -236,4 +250,9 @@ export const entitiesRoute = new Elysia({
     body: uploadVersion.config.body,
     invalidateQuery: true,
     permissions: uploadVersion.config.permissions,
+  })
+  .post("/translate", translateEntity.handler, {
+    body: translateEntity.config.body,
+    invalidateQuery: true,
+    permissions: translateEntity.config.permissions,
   });
