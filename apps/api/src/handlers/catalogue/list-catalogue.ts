@@ -32,6 +32,13 @@ type CatalogueEntryResponse = LoadedCatalogueEntry & {
    * controls and renders the entry in the "Baseline" section.
    */
   isLocked: boolean;
+  /**
+   * Per-installation identifiers used by the uninstall path. Set only
+   * when the entry is installed; `null` otherwise. Native-tools uninstall
+   * via `backendSlug` so they don't need a separate handle here.
+   */
+  installedSkillId: string | null;
+  installedConnectorSlug: string | null;
 };
 
 const listCatalogue = createSafeRootHandler(
@@ -63,7 +70,11 @@ const listCatalogue = createSafeRootHandler(
         : yield* Result.await(
             safeDb((tx) =>
               tx
-                .select({ slug: agentSkills.slug })
+                .select({
+                  id: agentSkills.id,
+                  slug: agentSkills.slug,
+                  scope: agentSkills.scope,
+                })
                 .from(agentSkills)
                 .where(
                   and(
@@ -87,7 +98,11 @@ const listCatalogue = createSafeRootHandler(
         : yield* Result.await(
             safeDb((tx) =>
               tx
-                .select({ url: mcpConnectors.url })
+                .select({
+                  url: mcpConnectors.url,
+                  slug: mcpConnectors.slug,
+                  organizationId: mcpConnectors.organizationId,
+                })
                 .from(mcpConnectors)
                 .where(
                   and(
@@ -117,6 +132,24 @@ const listCatalogue = createSafeRootHandler(
       visibleSkillRows.map((row) => row.slug),
     );
     const installedMcpUrls = new Set(installedMcps.map((row) => row.url));
+
+    // Prefer the team-scope row when both team and user-scope installs
+    // exist for the same skill; org-scope MCP connector when both an
+    // org-owned and a globally-curated connector match.
+    const skillIdBySlug = new Map<string, string>();
+    for (const row of visibleSkillRows) {
+      const existing = skillIdBySlug.get(row.slug);
+      if (!existing || row.scope === "team") {
+        skillIdBySlug.set(row.slug, row.id);
+      }
+    }
+    const connectorSlugByUrl = new Map<string, string>();
+    for (const row of installedMcps) {
+      const existing = connectorSlugByUrl.get(row.url);
+      if (!existing || row.organizationId !== null) {
+        connectorSlugByUrl.set(row.url, row.slug);
+      }
+    }
     const nativeToolBackendSet = new Set(NATIVE_TOOL_SLUGS);
     const webSearchDeployAvailable = isWebSearchDeployAvailable();
 
@@ -143,12 +176,22 @@ const listCatalogue = createSafeRootHandler(
             practiceJurisdictions,
             webSearchDeployAvailable,
           });
+      const installedSkillId =
+        entry.kind === "skill" && installState === "installed"
+          ? (skillIdBySlug.get(entry.slug) ?? null)
+          : null;
+      const installedConnectorSlug =
+        entry.kind === "mcp" && installState === "installed"
+          ? (connectorSlugByUrl.get(entry.url) ?? null)
+          : null;
       response.push({
         ...entry,
         isLocked,
         isRecommendedForOrg:
           installState !== "unavailable" && recommendedSlugs.has(entry.slug),
         installState,
+        installedSkillId,
+        installedConnectorSlug,
       });
     }
 

@@ -54,21 +54,44 @@ export const CatalogueEntryCard = ({
     });
   };
 
-  // Native-tool is the only kind with a clean catalogue-slug -> backend
-  // toggle. Skill and MCP uninstall need either a per-installation ID
-  // we don't currently expose on CatalogueEntry, or a backend lookup
-  // step; deferred until those backend hooks land.
+  // Routes per kind:
+  //   - native-tool → PATCH /mcp/native-tools/:backendSlug { enabled: false }
+  //   - mcp        → DELETE /mcp/connectors/:installedConnectorSlug
+  //   - skill      → DELETE /skills/:installedSkillId
   const uninstall = useMutation({
     mutationFn: async () => {
-      if (entry.kind !== "native-tool") {
+      if (entry.kind === "native-tool") {
+        const response = await api.mcp["native-tools"]({
+          slug: entry.backendSlug,
+        }).patch({
+          enabled: false,
+          queryKey: ["mcp"],
+        });
+        if (response.error) {
+          throw toAPIError(response.error);
+        }
         return;
       }
-      const response = await api.mcp["native-tools"]({
-        slug: entry.backendSlug,
-      }).patch({
-        enabled: false,
-        queryKey: ["mcp"],
-      });
+
+      if (entry.kind === "mcp") {
+        if (!entry.installedConnectorSlug) {
+          return;
+        }
+        const response = await api.mcp
+          .connectors({ slug: entry.installedConnectorSlug })
+          .delete({ queryKey: ["mcp"] });
+        if (response.error) {
+          throw toAPIError(response.error);
+        }
+        return;
+      }
+
+      if (!entry.installedSkillId) {
+        return;
+      }
+      const response = await api
+        .skills({ skillId: entry.installedSkillId })
+        .delete({ queryKey: ["skills"] });
       if (response.error) {
         throw toAPIError(response.error);
       }
@@ -78,6 +101,7 @@ export const CatalogueEntryCard = ({
         queryKey: catalogueKeys.list(organizationId),
       });
       void queryClient.invalidateQueries({ queryKey: ["mcp"] });
+      void queryClient.invalidateQueries({ queryKey: ["skills"] });
       stellaToast.add({
         title: t("common.remove"),
         type: "success",
@@ -95,8 +119,10 @@ export const CatalogueEntryCard = ({
   const installable = entry.installState === "available";
   const canUninstall =
     entry.installState === "installed" &&
-    entry.kind === "native-tool" &&
-    !entry.isLocked;
+    !entry.isLocked &&
+    (entry.kind === "native-tool" ||
+      (entry.kind === "mcp" && entry.installedConnectorSlug !== null) ||
+      (entry.kind === "skill" && entry.installedSkillId !== null));
 
   const homepageUrl = sanitizeHref(entry.homepage ?? entry.authorUrl);
   const isFirstParty = entry.author === "stella";
