@@ -67,26 +67,6 @@ export type ChatThirdPartyBoundary =
 
 const ANON_RESTORATIONS_DATA_PART_TYPE = "data-stella-anon-restorations";
 
-/**
- * System-prompt note appended when anonymized mode is active.
- *
- * The model only sees placeholders (`[PERSON_1]`, `[ORGANIZATION_1]`,
- * …) in user input and tool output. Without this hint the model
- * tends to (a) refuse to act on a placeholder ("PERSON_1 doesn't
- * make sense"), or (b) strip the brackets when copying the value
- * into a JSON tool argument. The note tells the model that
- * placeholders are valid identifiers for *Stella's* internal
- * tools — Stella swaps them back to the real values before
- * executing the lookup, and re-anonymizes any output before the
- * model sees it again.
- */
-export const buildAnonymizedSystemHint = (): string =>
-  [
-    "ANONYMIZED MODE: Names, organizations and other identifying entities the user mentions have been replaced with stable placeholders such as `[PERSON_1]`, `[ORGANIZATION_1]`, `[DATE_1]`. The same placeholder always refers to the same real entity within this conversation.",
-    'When you call a stella internal tool (run-stella-query, listContacts, listMatters, etc.), pass the placeholder verbatim — including the square brackets — as if it were the real name. stella deanonymizes the placeholder back to the real value before the lookup runs and re-anonymizes the result before you see it. So `read.listContacts({ query: "[PERSON_1]" })` is the correct shape; the lookup will hit the real record.',
-    'Do not try to invent the real value behind a placeholder, ask the user for it, or refuse to proceed because the placeholder "isn\'t a real name". External (non-stella) tools, by contrast, only ever receive the placeholder.',
-  ].join(" ");
-
 export const createChatThirdPartyBoundary = ({
   anonymizeFields,
   anonymizationScopeId,

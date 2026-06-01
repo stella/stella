@@ -5,6 +5,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 
 import {
+  appendAnonymizedModeHintToChatSafePrompt,
   appendActiveFilePromptIfEntityExists,
   buildChatPromptCacheKey,
   buildGlobalPrompt,
@@ -13,6 +14,11 @@ import {
   buildWorkspacePromptParts,
   buildWorkspacePromptText,
   extractTitle,
+} from "./chat-prompt";
+import type {
+  ChatCacheStablePrefix,
+  ChatSafePrompt,
+  ChatUntrustedPromptSuffix,
 } from "./chat-prompt";
 import type { ChatMessage } from "./types";
 
@@ -120,6 +126,47 @@ describe("chat prompt builders", () => {
     expect(buildChatPromptCacheKey(first.cacheStablePrefix)).toBe(
       buildChatPromptCacheKey(second.cacheStablePrefix),
     );
+  });
+
+  test("brands assembled prompt parts at compile time", () => {
+    const prompt = buildGlobalPromptParts({
+      skillMetadata: SKILL_METADATA,
+      userContext: null,
+    });
+    const acceptsCacheStablePrefix = (value: ChatCacheStablePrefix) => value;
+    const acceptsSafePrompt = (value: ChatSafePrompt) => value;
+    const acceptsUntrustedSuffix = (value: ChatUntrustedPromptSuffix) => value;
+
+    expect(acceptsCacheStablePrefix(prompt.cacheStablePrefix)).toBe(
+      prompt.cacheStablePrefix,
+    );
+    expect(acceptsSafePrompt(prompt.safePrompt)).toBe(prompt.safePrompt);
+    expect(acceptsUntrustedSuffix(prompt.untrustedSuffix)).toBe(
+      prompt.untrustedSuffix,
+    );
+
+    // @ts-expect-error plain strings must not be accepted as cache-stable prefixes
+    buildChatPromptCacheKey("raw prompt text");
+    // @ts-expect-error prompt parts are not interchangeable
+    acceptsSafePrompt(prompt.untrustedSuffix);
+    // @ts-expect-error prompt parts are not interchangeable
+    acceptsUntrustedSuffix(prompt.safePrompt);
+  });
+
+  test("keeps anonymized-mode guidance in the safe prompt half", () => {
+    const prompt = buildGlobalPromptParts({
+      skillMetadata: SKILL_METADATA,
+      userContext: null,
+    });
+    const extended = appendAnonymizedModeHintToChatSafePrompt(
+      prompt.safePrompt,
+    );
+    const acceptsSafePrompt = (value: ChatSafePrompt) => value;
+
+    expect(acceptsSafePrompt(extended)).toBe(extended);
+    expect(extended).toContain(prompt.safePrompt);
+    expect(extended).toContain("ANONYMIZED MODE");
+    expect(extended).toContain("External (non-stella) tools");
   });
 
   test("routes installed skill metadata through the untrusted suffix", () => {

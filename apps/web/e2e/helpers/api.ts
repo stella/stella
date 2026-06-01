@@ -29,6 +29,16 @@ export const apiGet = async <T = unknown>(
   return (await response.json()) as T;
 };
 
+export const apiStatus = async (
+  request: APIRequestContext,
+  path: string,
+): Promise<number> => {
+  const response = await request.get(url(path));
+  const status = response.status();
+  await response.dispose();
+  return status;
+};
+
 // Mutations behind the `invalidateQuery` macro require a non-empty
 // `queryKey` array; the frontend's Eden client wires this automatically
 // (apps/api/src/lib/invalidate-query-macro.ts:8). Tests don't care which

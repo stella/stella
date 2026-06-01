@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { apiGet, apiUploadDocx } from "../helpers/api";
+import { apiGet, apiStatus, apiUploadDocx } from "../helpers/api";
 import {
   type TestWorkspace,
   createTestWorkspace,
@@ -14,20 +14,30 @@ const DOCX_MIME =
 const DOCX_PATH = resolve(import.meta.dirname, "../fixtures/simple.docx");
 
 test.describe("DOCX upload + inspector", () => {
-  let workspace: TestWorkspace;
+  let workspace: TestWorkspace | null = null;
 
   test.beforeEach(async ({ request }) => {
     workspace = await createTestWorkspace(request, "upload-docx");
   });
 
   test.afterEach(async ({ request }) => {
+    if (workspace === null) {
+      return;
+    }
+
     await deleteTestWorkspace(request, workspace.id);
+    workspace = null;
   });
 
   test("uploaded DOCX renders in the document view", async ({
     page,
     request,
   }) => {
+    const testWorkspace = workspace;
+    if (testWorkspace === null) {
+      throw new Error("Test workspace was not created");
+    }
+
     const docxBuffer = await readFile(DOCX_PATH);
 
     // Catch ANY error — uncaught exceptions AND console.error. Render-loop
@@ -47,8 +57,8 @@ test.describe("DOCX upload + inspector", () => {
 
     const uploaded = await apiUploadDocx(
       request,
-      workspace.id,
-      workspace.filePropertyId,
+      testWorkspace.id,
+      testWorkspace.filePropertyId,
       {
         name: "stella-e2e.docx",
         mimeType: DOCX_MIME,
@@ -66,16 +76,31 @@ test.describe("DOCX upload + inspector", () => {
         propertyId: string;
         content: { type: string };
       }[];
-    }>(request, `/entities/${workspace.id}/entity/${uploaded.entityId}`);
+    }>(request, `/entities/${testWorkspace.id}/entity/${uploaded.entityId}`);
 
     const fileField = entity.fields.find(
       (f) =>
-        f.propertyId === workspace.filePropertyId && f.content.type === "file",
+        f.propertyId === testWorkspace.filePropertyId &&
+        f.content.type === "file",
     );
     expect(fileField, "uploaded file field present on entity").toBeTruthy();
 
+    const { cookies } = await request.storageState();
+    await page.context().addCookies(cookies);
+
+    await expect
+      .poll(
+        async () =>
+          await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
+        {
+          message: "browser context can read the created workspace",
+          timeout: 10_000,
+        },
+      )
+      .toBe(200);
+
     await page.goto(
-      `/workspaces/${workspace.id}/${workspace.viewId}/document?entity=${uploaded.entityId}&field=${fileField!.id}`,
+      `/workspaces/${testWorkspace.id}/${testWorkspace.viewId}/document?entity=${uploaded.entityId}&field=${fileField!.id}`,
     );
 
     // The route stays mounted (didn't redirect to /auth or the workspace
@@ -84,7 +109,7 @@ test.describe("DOCX upload + inspector", () => {
     // open.
     await expect(page).toHaveURL(
       new RegExp(
-        `/workspaces/${workspace.id}/${workspace.viewId}/document(\\?|$)`,
+        `/workspaces/${testWorkspace.id}/${testWorkspace.viewId}/document(\\?|$)`,
         "u",
       ),
     );

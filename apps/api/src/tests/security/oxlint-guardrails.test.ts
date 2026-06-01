@@ -65,4 +65,37 @@ describe("custom oxlint guardrails", () => {
     expect(helperSource).toContain("instanceof Node");
     expect(helperSource).not.toContain("instanceof Element");
   });
+
+  test("prompt boundary cast rule protects chat prompt brands", () => {
+    const pluginSource = readRootFixture(
+      ".oxlint-plugins/no-prompt-boundary-casts.ts",
+    );
+
+    expect(pluginSource).toContain("ChatCacheStablePrefix");
+    expect(pluginSource).toContain("ChatSafePrompt");
+    expect(pluginSource).toContain("ChatUntrustedPromptSuffix");
+    expect(pluginSource).toContain("apps/api/src/handlers/chat/chat-prompt.ts");
+    expect(pluginSource).toContain("TSUnionType");
+    expect(pluginSource).toContain("TSIntersectionType");
+    expect(pluginSource).toContain("TSArrayType");
+    expect(pluginSource).toContain("TSTupleType");
+    expect(pluginSource).toContain("TSTypeLiteral");
+    expect(pluginSource).toContain("TSInterfaceDeclaration");
+    expect(pluginSource).toContain("TSInterfaceBody");
+    expect(pluginSource).toContain("TSFunctionType");
+    expect(pluginSource).toContain("TSConstructorType");
+    expect(pluginSource).toContain("TSMethodSignature");
+    expect(pluginSource).toContain("TSCallSignatureDeclaration");
+    expect(pluginSource).toContain("TSConstructSignatureDeclaration");
+    expect(pluginSource).toContain("returnType");
+    expect(pluginSource).toContain("params");
+    expect(pluginSource).toContain("TSParenthesizedType");
+    expect(pluginSource).toContain("ImportDeclaration");
+    expect(pluginSource).toContain("TSTypeAliasDeclaration");
+    expect(pluginSource).toContain("namedTypeAnnotations");
+    expect(pluginSource).toContain("Program:exit");
+    expect(pluginSource).toContain("TSImportType");
+    expect(pluginSource).toContain("typeArguments");
+    expect(pluginSource).toContain("TSTypeAssertion");
+  });
 });
