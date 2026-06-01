@@ -1,6 +1,4 @@
 // Disallow new request-level offset pagination in API handlers.
-// oxlint-disable typescript/no-unsafe-assignment, typescript/no-unsafe-member-access, typescript/no-unsafe-return, typescript/no-unsafe-argument, typescript/no-unsafe-call, typescript/strict-boolean-expressions
-//
 // Large list endpoints should use cursor pagination and the standard Page<T>
 // envelope. Legacy offset endpoints must be listed explicitly in oxlint.config.ts
 // with a justification.

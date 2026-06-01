@@ -1,6 +1,4 @@
 // Disallow untranslated user-facing JSX text in product UI.
-// oxlint-disable typescript/no-unsafe-assignment, typescript/no-unsafe-member-access, typescript/no-unsafe-return, typescript/no-unsafe-argument, typescript/no-unsafe-call, typescript/strict-boolean-expressions
-//
 // Stella uses use-intl for runtime translations. Raw JSX text children
 // regress i18n coverage because they do not appear in locale JSON files
 // and are easy for generated UI code to introduce.

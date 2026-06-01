@@ -1,6 +1,4 @@
 // Disallow ownership IDs sourced from the request body or query.
-// oxlint-disable typescript/no-unsafe-assignment, typescript/no-unsafe-member-access, typescript/no-unsafe-return, typescript/no-unsafe-argument, typescript/no-unsafe-call, typescript/strict-boolean-expressions
-//
 // IDs that control data ownership or scoping (workspaceId,
 // organizationId) must come from a server-validated source
 // (SafeId from validateWorkspaceAccess, or

@@ -1,6 +1,4 @@
 // Disallow user ID request schemas typed as raw strings.
-// oxlint-disable typescript/no-unsafe-assignment, typescript/no-unsafe-member-access, typescript/no-unsafe-return, typescript/no-unsafe-argument, typescript/no-unsafe-call, typescript/strict-boolean-expressions
-//
 // User IDs are auth-provider strings, but handlers should still use the
 // branded `tUserId` schema at boundaries. That prevents ownership-like fields
 // from degrading back into arbitrary strings and makes follow-up membership

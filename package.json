@@ -50,6 +50,7 @@
   },
   "devDependencies": {
     "@fontsource-variable/source-serif-4": "^5.2.9",
+    "@stll/oxlint-config": "0.2.0",
     "@stll/typescript-config": "workspace:^0.0.0",
     "@tanstack/eslint-plugin-query": "catalog:",
     "@tanstack/eslint-plugin-router": "catalog:",

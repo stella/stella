@@ -1,6 +1,4 @@
 // Disallow unvalidated process.env access outside approved env boundaries.
-// oxlint-disable typescript/no-unsafe-assignment, typescript/no-unsafe-member-access, typescript/no-unsafe-return, typescript/no-unsafe-argument, typescript/no-unsafe-call, typescript/strict-boolean-expressions
-//
 // Environment variables should be read through env.ts/env-base.ts so
 // validation and normalization happen once at process startup. Direct
 // process.env access in product code bypasses config safety and tends to

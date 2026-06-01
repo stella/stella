@@ -1,6 +1,4 @@
 // Auth lifecycle guardrails.
-// oxlint-disable typescript/no-unsafe-assignment, typescript/no-unsafe-member-access, typescript/no-unsafe-return, typescript/no-unsafe-argument, typescript/no-unsafe-call, typescript/strict-boolean-expressions
-//
 // Membership removal must clear every org-scoped auth artifact through
 // revokeOrganizationMemberAuthArtifacts(). TypeScript cannot infer that a
 // Better Auth organization hook, Stella sessions, and OAuth token rows are one

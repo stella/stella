@@ -1,4 +1,4 @@
-// Enforce Stella's single toast integration surface.
+// Enforce stella's single toast integration surface.
 //
 // Product code should use `stellaToast` from `@stll/ui/components/toast`.
 // That wrapper applies default timeouts and keeps app code away from
@@ -54,7 +54,7 @@ export default {
           rawToast:
             "Use `stellaToast` from `@stll/ui/components/toast` instead of raw Base UI toast APIs.",
           restrictedStellaImport:
-            "Use `stellaToast` from `@stll/ui/components/toast`; `{{name}}` bypasses Stella toast guarantees.",
+            "Use `stellaToast` from `@stll/ui/components/toast`; `{{name}}` bypasses stella toast guarantees.",
         },
       },
       create(context: RuleContext) {
