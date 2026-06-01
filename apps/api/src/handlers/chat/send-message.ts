@@ -11,9 +11,9 @@ import { chatMessages, chatThreads } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
 import {
+  appendAnonymizedModeHintToChatSafePrompt,
   buildChatPromptCacheKey,
   buildChatSystemPromptParts,
-  extendChatSafePrompt,
   extendChatUntrustedPromptSuffix,
   extractTitle,
 } from "@/api/handlers/chat/chat-prompt";
@@ -49,10 +49,7 @@ import {
   planMessagePersistence,
 } from "@/api/handlers/chat/persist-message";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
-import {
-  buildAnonymizedSystemHint,
-  createChatThirdPartyBoundary,
-} from "@/api/handlers/chat/third-party-boundary";
+import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { shouldRefreshEmptyThreadTitle } from "@/api/handlers/chat/thread-title";
 import {
   intersectAccessibleWorkspaceIds,
@@ -510,18 +507,16 @@ const sendMessage = createSafeRootHandler(
     const externalMcpSystemHint = buildExternalMcpSystemHint(
       externalMcpTools.connectors,
     );
-    const anonymizedSystemHint =
-      body.sendMode === CHAT_SEND_MODE.anonymized
-        ? buildAnonymizedSystemHint()
-        : null;
     // The "safe" half is whatever the prompt builder declared
-    // safe plus our own static anonymized-mode instructions. The
-    // external MCP catalog is organization/user-configured text, so
-    // it rides with the dynamic suffix and crosses the boundary in
+    // safe. The anonymized-mode hint is a fixed assembler-owned
+    // addition, so callers cannot brand arbitrary strings as safe.
+    // The external MCP catalog is organization/user-configured text,
+    // so it rides with the dynamic suffix and crosses the boundary in
     // anonymized mode.
-    const systemSafe = extendChatSafePrompt(chatContext.systemSafe, [
-      anonymizedSystemHint,
-    ]);
+    const systemSafe =
+      body.sendMode === CHAT_SEND_MODE.anonymized
+        ? appendAnonymizedModeHintToChatSafePrompt(chatContext.systemSafe)
+        : chatContext.systemSafe;
     const systemUntrusted = extendChatUntrustedPromptSuffix(
       chatContext.systemUntrusted,
       [externalMcpSystemHint],

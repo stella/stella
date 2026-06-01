@@ -5,6 +5,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 
 import {
+  appendAnonymizedModeHintToChatSafePrompt,
   appendActiveFilePromptIfEntityExists,
   buildChatPromptCacheKey,
   buildGlobalPrompt,
@@ -150,6 +151,22 @@ describe("chat prompt builders", () => {
     acceptsSafePrompt(prompt.untrustedSuffix);
     // @ts-expect-error prompt parts are not interchangeable
     acceptsUntrustedSuffix(prompt.safePrompt);
+  });
+
+  test("keeps anonymized-mode guidance in the safe prompt half", () => {
+    const prompt = buildGlobalPromptParts({
+      skillMetadata: SKILL_METADATA,
+      userContext: null,
+    });
+    const extended = appendAnonymizedModeHintToChatSafePrompt(
+      prompt.safePrompt,
+    );
+    const acceptsSafePrompt = (value: ChatSafePrompt) => value;
+
+    expect(acceptsSafePrompt(extended)).toBe(extended);
+    expect(extended).toContain(prompt.safePrompt);
+    expect(extended).toContain("ANONYMIZED MODE");
+    expect(extended).toContain("External (non-stella) tools");
   });
 
   test("routes installed skill metadata through the untrusted suffix", () => {

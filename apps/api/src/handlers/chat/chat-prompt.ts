@@ -150,6 +150,12 @@ const brandChatFullPrompt = (text: string): ChatFullPrompt =>
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   text as ChatFullPrompt;
 
+const ANONYMIZED_MODE_SYSTEM_HINT = [
+  "ANONYMIZED MODE: Names, organizations and other identifying entities the user mentions have been replaced with stable placeholders such as `[PERSON_1]`, `[ORGANIZATION_1]`, `[DATE_1]`. The same placeholder always refers to the same real entity within this conversation.",
+  'When you call a stella internal tool (run-stella-query, listContacts, listMatters, etc.), pass the placeholder verbatim — including the square brackets — as if it were the real name. stella deanonymizes the placeholder back to the real value before the lookup runs and re-anonymizes the result before you see it. So `read.listContacts({ query: "[PERSON_1]" })` is the correct shape; the lookup will hit the real record.',
+  'Do not try to invent the real value behind a placeholder, ask the user for it, or refuse to proceed because the placeholder "isn\'t a real name". External (non-stella) tools, by contrast, only ever receive the placeholder.',
+].join(" ");
+
 const buildChatFullPrompt = ({
   safePrompt,
   untrustedSuffix,
@@ -161,13 +167,10 @@ const buildChatFullPrompt = ({
 const nonEmptyPromptPart = (part: string | null | undefined): part is string =>
   part !== null && part !== undefined && part.length > 0;
 
-export const extendChatSafePrompt = (
+export const appendAnonymizedModeHintToChatSafePrompt = (
   base: ChatSafePrompt,
-  additions: readonly (string | null | undefined)[],
-): ChatSafePrompt => {
-  const parts = [base, ...additions].filter(nonEmptyPromptPart);
-  return brandChatSafePrompt(parts.join("\n\n"));
-};
+): ChatSafePrompt =>
+  brandChatSafePrompt(joinPromptSections([base, ANONYMIZED_MODE_SYSTEM_HINT]));
 
 export const extendChatUntrustedPromptSuffix = (
   base: ChatUntrustedPromptSuffix,
