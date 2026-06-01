@@ -18,7 +18,11 @@ import {
   type LoadedCatalogueEntry,
 } from "@stll/catalogue";
 import { Button } from "@stll/ui/components/button";
-import { Input } from "@stll/ui/components/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@stll/ui/components/input-group";
 import {
   Popover,
   PopoverPopup,
@@ -26,6 +30,7 @@ import {
 } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
 
+import { ContextMenu, type ContextMenuAction } from "@/components/context-menu";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import {
   FirstPartyBadge,
@@ -46,6 +51,7 @@ type CatalogueStepProps = {
   focusedSlug: string | null;
   onFocusChange: (slug: string | null) => void;
   onChange: (slugs: readonly string[]) => void;
+  onRemove: (slug: string) => void;
   onNext: () => void;
   onSkip: () => void;
   unavailableNativeToolBackendSlugs?: ReadonlySet<string> | undefined;
@@ -61,6 +67,7 @@ export const CatalogueStep = ({
   focusedSlug,
   onFocusChange,
   onChange,
+  onRemove,
   onNext,
   onSkip,
   unavailableNativeToolBackendSlugs,
@@ -246,25 +253,29 @@ export const CatalogueStep = ({
           clicking opens a multi-select checklist with an explicit
           "Vše" reset at the top. */}
       <div className="mt-6 flex items-center gap-2">
-        <div className="relative flex-1">
-          <SearchIcon className="text-muted-foreground pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2" />
-          <Input
-            className="ps-9"
+        <InputGroup className="flex-1">
+          <InputGroupAddon>
+            <SearchIcon className="text-muted-foreground" />
+          </InputGroupAddon>
+          <InputGroupInput
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t("onboarding.catalogueSearchPlaceholder")}
             value={query}
           />
           {query.length > 0 && (
-            <button
-              aria-label={t("onboarding.catalogueClearSearch")}
-              className="text-muted-foreground hover:text-foreground absolute end-2 top-1/2 -translate-y-1/2"
-              onClick={() => setQuery("")}
-              type="button"
-            >
-              <XIcon className="size-3.5" />
-            </button>
+            <InputGroupAddon align="inline-end">
+              <Button
+                aria-label={t("onboarding.catalogueClearSearch")}
+                onClick={() => setQuery("")}
+                size="icon-xs"
+                type="button"
+                variant="ghost"
+              >
+                <XIcon />
+              </Button>
+            </InputGroupAddon>
           )}
-        </div>
+        </InputGroup>
         <Popover>
           <PopoverTrigger
             render={
@@ -279,16 +290,18 @@ export const CatalogueStep = ({
           </PopoverTrigger>
           <PopoverPopup align="end" className="w-60" side="bottom">
             <div className="border-border border-b p-2">
-              <div className="relative">
-                <SearchIcon className="text-muted-foreground pointer-events-none absolute start-2 top-1/2 size-3.5 -translate-y-1/2" />
-                <Input
+              <InputGroup>
+                <InputGroupAddon>
+                  <SearchIcon className="text-muted-foreground" />
+                </InputGroupAddon>
+                <InputGroupInput
                   autoFocus
-                  className="h-8 ps-7 text-sm"
                   onChange={(e) => setFilterQuery(e.target.value)}
                   placeholder={t("common.search")}
+                  size="sm"
                   value={filterQuery}
                 />
-              </div>
+              </InputGroup>
             </div>
             <div className="flex max-h-[260px] flex-col overflow-y-auto p-1">
               {/* "ALL" — only shown when not filtering, so the user
@@ -398,6 +411,13 @@ export const CatalogueStep = ({
                   focused={focusedSlug === entry.slug}
                   key={`${entry.kind}-${entry.slug}`}
                   onClick={() => handleRowClick(entry)}
+                  onRemove={
+                    selectedSet.has(entry.slug) &&
+                    !pinnedSlugSet.has(entry.slug)
+                      ? () => onRemove(entry.slug)
+                      : undefined
+                  }
+                  removeLabel={t("common.remove")}
                   selected={selectedSet.has(entry.slug)}
                 />
               ))}
@@ -421,9 +441,28 @@ export const CatalogueStep = ({
                   focused={focusedSlug === entry.slug}
                   key={`${entry.kind}-${entry.slug}`}
                   onClick={() => handleRowClick(entry)}
+                  onRemove={
+                    selectedSet.has(entry.slug) &&
+                    !pinnedSlugSet.has(entry.slug)
+                      ? () => onRemove(entry.slug)
+                      : undefined
+                  }
+                  removeLabel={t("common.remove")}
                   selected={selectedSet.has(entry.slug)}
                 />
               ))}
+            {jurisdictionFilter.size > 0 && (
+              <div className="flex justify-center py-2">
+                <Button
+                  onClick={() => setJurisdictionFilter(new Set())}
+                  size="sm"
+                  type="button"
+                  variant="link"
+                >
+                  {t("common.showAll")}
+                </Button>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -464,6 +503,8 @@ type CatalogueRowProps = {
   selected: boolean;
   focused: boolean;
   onClick: () => void;
+  onRemove?: (() => void) | undefined;
+  removeLabel: string;
 };
 
 const CatalogueRow = ({
@@ -471,50 +512,68 @@ const CatalogueRow = ({
   selected,
   focused,
   onClick,
+  onRemove,
+  removeLabel,
 }: CatalogueRowProps) => {
   const isFirstParty = entry.author === "stella";
 
+  const actions: readonly ContextMenuAction[] = onRemove
+    ? [
+        {
+          label: removeLabel,
+          onClick: onRemove,
+          variant: "destructive",
+        },
+      ]
+    : [];
+
   return (
-    <button
-      aria-pressed={focused}
-      className={cn(
-        "flex items-start gap-3 rounded-lg border p-3 text-start transition-colors",
-        focused && "border-foreground bg-accent/60 ring-foreground/20 ring-1",
-        !focused && selected && "border-foreground-disabled bg-accent/20",
-        !focused && !selected && "border-border hover:bg-muted/40",
-      )}
-      onClick={onClick}
-      type="button"
-    >
-      <CatalogueEntryIcon
-        className="text-muted-foreground mt-0.5 shrink-0"
-        icon={entry.icon}
-        iconUrl={entry.iconUrl ?? null}
-        size={20}
-        slug={entry.slug}
-      />
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">{entry.displayName}</span>
-          {selected && (
-            <CheckIcon className="text-foreground ms-auto size-4 shrink-0" />
-          )}
+    <ContextMenu actions={actions}>
+      <button
+        aria-pressed={focused}
+        className={cn(
+          "flex items-start gap-3 rounded-lg border p-3 text-start transition-colors",
+          focused && "border-foreground bg-accent/60 ring-foreground/20 ring-1",
+          !focused && selected && "border-foreground-disabled bg-accent/20",
+          !focused && !selected && "border-border hover:bg-muted/40",
+        )}
+        onClick={onClick}
+        type="button"
+      >
+        <CatalogueEntryIcon
+          className="text-muted-foreground mt-0.5 shrink-0"
+          icon={entry.icon}
+          iconUrl={entry.iconUrl ?? null}
+          size={20}
+          slug={entry.slug}
+        />
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">{entry.displayName}</span>
+            {selected && (
+              <CheckIcon className="text-foreground ms-auto size-4 shrink-0" />
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {isFirstParty && <FirstPartyBadge />}
+            <CostBadge cost={entry.cost} />
+            <SetupBadge setup={entry.setup} />
+            <LicenseBadge license={entry.license} />
+            {entry.jurisdictions.length > 0 && (
+              <div className="ms-auto flex flex-wrap items-center gap-1.5">
+                {entry.jurisdictions.map((code) => (
+                  <span
+                    className="bg-muted text-muted-foreground inline-flex items-center rounded-md px-1.5 py-0.5 text-xs"
+                    key={code}
+                  >
+                    {code}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {isFirstParty && <FirstPartyBadge />}
-          <CostBadge cost={entry.cost} />
-          <SetupBadge setup={entry.setup} />
-          <LicenseBadge license={entry.license} />
-          {entry.jurisdictions.map((code) => (
-            <span
-              className="bg-muted text-muted-foreground inline-flex items-center rounded-md px-1.5 py-0.5 text-xs"
-              key={code}
-            >
-              {code}
-            </span>
-          ))}
-        </div>
-      </div>
-    </button>
+      </button>
+    </ContextMenu>
   );
 };

@@ -4,7 +4,11 @@ import { CheckIcon, SearchIcon, StarIcon } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
 
 import type { CountryCode } from "@stll/country-codes";
-import { Input } from "@stll/ui/components/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@stll/ui/components/input-group";
 import { cn } from "@stll/ui/lib/utils";
 
 import { createCountryOptions, removeJurisdiction } from "@/lib/jurisdictions";
@@ -92,16 +96,17 @@ export const JurisdictionPicker = ({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="relative">
-        <SearchIcon className="text-muted-foreground pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2" />
-        <Input
+      <InputGroup>
+        <InputGroupAddon>
+          <SearchIcon className="text-muted-foreground" />
+        </InputGroupAddon>
+        <InputGroupInput
           aria-label={t("onboarding.jurisdictionSearchLabel")}
-          className="ps-9"
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t("onboarding.jurisdictionSearchPlaceholder")}
           value={query}
         />
-      </div>
+      </InputGroup>
 
       <div className="border-border max-h-[310px] overflow-y-auto rounded-lg border">
         {filteredCountries.map((country) => {

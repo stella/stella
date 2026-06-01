@@ -66,6 +66,7 @@ type Messages = {
   "auth": {
     "betaNoticeBody": "As a precaution during beta, do not upload sensitive, privileged, personal, irreplaceable, or production-critical data. Cloud is a demo service.";
     "betaNoticeTitle": "Beta";
+    "checkSpamHint": "If you don't see it, check your spam folder.";
     "chooseOrganization": "Choose which organization to work in";
     "codeSentAgain": "We sent a new code.";
     "continueWithEmail": "Continue";
@@ -75,7 +76,6 @@ type Messages = {
     "createOrganization": "Create an organization";
     "createOrganizationButton": "Create organization";
     "emailPlaceholder": "you@example.com";
-    "enterTheCode": "Enter the code";
     "headline": "Clarity for every case.";
     "invitation": {
       "declined": "Invitation declined";
@@ -315,7 +315,7 @@ type Messages = {
       "nativeTools": "Built-in tools";
       "skills": "Skills";
     };
-    "firstParty": "First-party";
+    "firstParty": "stella";
     "install": "Install";
     "installFailed": "Install failed";
     "installPack": "Install {count, plural, one {# tool} other {# tools}}";
@@ -698,6 +698,7 @@ type Messages = {
     "deleteConfirmDescription": "Are you sure you want to delete \"{name}\"? This action cannot be undone.";
     "deletedCount": "{count, plural, one {# item} other {# items}} deleted";
     "description": "Description";
+    "details": "Details";
     "documentation": "Documentation";
     "done": "Done";
     "download": "Download";
@@ -797,6 +798,7 @@ type Messages = {
     "selectARole": "Select a role";
     "sessions": "Sessions";
     "settings": "Settings";
+    "showAll": "Show all";
     "showMore": "Show more";
     "signOut": "Sign out";
     "somethingWentWrong": "Something went wrong";
@@ -1531,16 +1533,10 @@ type Messages = {
     "catalogueCommunityHeading": "Others";
     "catalogueContinueWithCount": "Continue with {count, plural, one {# tool} other {# tools}}";
     "catalogueDetailAbout": "About";
-    "catalogueDetailAccess": "Access";
-    "catalogueDetailAdd": "Add to stack";
     "catalogueDetailAuthor": "Author";
     "catalogueDetailCost": "Cost";
-    "catalogueDetailCoverage": "Coverage";
-    "catalogueDetailFirstParty": "stella (first-party)";
     "catalogueDetailJurisdictions": "Jurisdictions";
     "catalogueDetailLicense": "License";
-    "catalogueDetailProvenance": "Provenance";
-    "catalogueDetailRemove": "Remove from stack";
     "catalogueDetailSetup": "Setup";
     "catalogueFootnote": "You can write your own skills later in the app, or <link>request a third-party integration on GitHub</link>.";
     "cataloguePartial": "Installed {installed}, {failed} failed";

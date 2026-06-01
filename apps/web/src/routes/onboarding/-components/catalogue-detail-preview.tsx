@@ -85,30 +85,19 @@ export const CatalogueDetailPreview = ({
           <div className="mt-auto flex flex-col gap-5">
             <Divider />
 
-            <Section title={t("onboarding.catalogueDetailProvenance")}>
+            <Section title={t("common.details")}>
               <div className="grid grid-cols-2 gap-3">
                 <AuthorField
                   ariaLabel={t("onboarding.catalogueDetailAuthor")}
                   authorUrl={entry.authorUrl}
                   isFirstParty={isFirstParty}
-                  value={
-                    isFirstParty
-                      ? t("onboarding.catalogueDetailFirstParty")
-                      : entry.author
-                  }
+                  value={isFirstParty ? "stella" : entry.author}
                 />
                 <Field
                   ariaLabel={t("onboarding.catalogueDetailLicense")}
                   icon={ScaleIcon}
                   value={entry.license}
                 />
-              </div>
-            </Section>
-
-            <Divider />
-
-            <Section title={t("onboarding.catalogueDetailAccess")}>
-              <div className="grid grid-cols-2 gap-3">
                 <Field
                   ariaLabel={t("onboarding.catalogueDetailCost")}
                   icon={BanknoteIcon}
@@ -120,20 +109,14 @@ export const CatalogueDetailPreview = ({
                   value={t(`catalogue.setup.${setupKey(entry.setup)}`)}
                 />
               </div>
+              {entry.jurisdictions.length > 0 && (
+                <ChipRow
+                  ariaLabel={t("onboarding.catalogueDetailJurisdictions")}
+                  icon={TagIcon}
+                  values={entry.jurisdictions}
+                />
+              )}
             </Section>
-
-            {entry.jurisdictions.length > 0 && (
-              <>
-                <Divider />
-                <Section title={t("onboarding.catalogueDetailCoverage")}>
-                  <ChipRow
-                    ariaLabel={t("onboarding.catalogueDetailJurisdictions")}
-                    icon={TagIcon}
-                    values={entry.jurisdictions}
-                  />
-                </Section>
-              </>
-            )}
 
             {!isFirstParty && (
               <div className="border-warning/40 bg-warning/10 flex gap-2 rounded-md border p-3">
@@ -157,12 +140,12 @@ export const CatalogueDetailPreview = ({
               type="button"
               variant="destructive-outline"
             >
-              {t("onboarding.catalogueDetailRemove")}
+              {t("common.remove")}
             </Button>
           ) : (
             <Button className="w-full" onClick={onConfirm} type="button">
               {isFirstParty
-                ? t("onboarding.catalogueDetailAdd")
+                ? t("common.add")
                 : t("onboarding.catalogueThirdPartyConfirm")}
             </Button>
           )}

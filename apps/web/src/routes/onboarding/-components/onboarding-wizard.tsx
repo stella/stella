@@ -643,6 +643,16 @@ export const OnboardingWizard = () => {
             }
             onFocusChange={setCatalogueFocusedSlug}
             onNext={() => setStep("ai")}
+            onRemove={(slug) => {
+              setCatalogueSlugRemoved(slug, true);
+              setData((d) => ({
+                ...d,
+                catalogueSlugs: d.catalogueSlugs.filter((s) => s !== slug),
+              }));
+              if (catalogueFocusedSlug === slug) {
+                setCatalogueFocusedSlug(null);
+              }
+            }}
             onSkip={() => {
               markCatalogueSlugsRemoved(data.catalogueSlugs);
               setData((d) => ({ ...d, catalogueSlugs: [] }));
