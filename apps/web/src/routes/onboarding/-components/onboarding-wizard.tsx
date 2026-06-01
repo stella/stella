@@ -638,6 +638,15 @@ export const OnboardingWizard = () => {
         >
           <CatalogueStep
             focusedSlug={catalogueFocusedSlug}
+            onAdd={(slug) => {
+              setCatalogueSlugRemoved(slug, false);
+              setData((d) => {
+                if (d.catalogueSlugs.includes(slug)) {
+                  return d;
+                }
+                return { ...d, catalogueSlugs: [...d.catalogueSlugs, slug] };
+              });
+            }}
             onChange={(catalogueSlugs) =>
               setData((d) => ({ ...d, catalogueSlugs: [...catalogueSlugs] }))
             }

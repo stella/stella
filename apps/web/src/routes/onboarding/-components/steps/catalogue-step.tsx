@@ -50,6 +50,7 @@ type CatalogueStepProps = {
   focusedSlug: string | null;
   onFocusChange: (slug: string | null) => void;
   onChange: (slugs: readonly string[]) => void;
+  onAdd: (slug: string) => void;
   onRemove: (slug: string) => void;
   onNext: () => void;
   onSkip: () => void;
@@ -66,6 +67,7 @@ export const CatalogueStep = ({
   focusedSlug,
   onFocusChange,
   onChange,
+  onAdd,
   onRemove,
   onNext,
   onSkip,
@@ -406,15 +408,21 @@ export const CatalogueStep = ({
               .filter((entry) => recommendedSet.has(entry.slug))
               .map((entry) => (
                 <CatalogueRow
+                  addLabel={t("common.add")}
                   entry={entry}
                   focused={focusedSlug === entry.slug}
                   key={`${entry.kind}-${entry.slug}`}
                   onClick={() => handleRowClick(entry)}
-                  onRemove={
-                    selectedSet.has(entry.slug) &&
-                    !pinnedSlugSet.has(entry.slug)
-                      ? () => onRemove(entry.slug)
-                      : undefined
+                  onToggleSelection={
+                    pinnedSlugSet.has(entry.slug)
+                      ? undefined
+                      : () => {
+                          if (selectedSet.has(entry.slug)) {
+                            onRemove(entry.slug);
+                          } else {
+                            onAdd(entry.slug);
+                          }
+                        }
                   }
                   removeLabel={t("common.remove")}
                   selected={selectedSet.has(entry.slug)}
@@ -436,15 +444,21 @@ export const CatalogueStep = ({
               .filter((entry) => !recommendedSet.has(entry.slug))
               .map((entry) => (
                 <CatalogueRow
+                  addLabel={t("common.add")}
                   entry={entry}
                   focused={focusedSlug === entry.slug}
                   key={`${entry.kind}-${entry.slug}`}
                   onClick={() => handleRowClick(entry)}
-                  onRemove={
-                    selectedSet.has(entry.slug) &&
-                    !pinnedSlugSet.has(entry.slug)
-                      ? () => onRemove(entry.slug)
-                      : undefined
+                  onToggleSelection={
+                    pinnedSlugSet.has(entry.slug)
+                      ? undefined
+                      : () => {
+                          if (selectedSet.has(entry.slug)) {
+                            onRemove(entry.slug);
+                          } else {
+                            onAdd(entry.slug);
+                          }
+                        }
                   }
                   removeLabel={t("common.remove")}
                   selected={selectedSet.has(entry.slug)}
@@ -502,7 +516,8 @@ type CatalogueRowProps = {
   selected: boolean;
   focused: boolean;
   onClick: () => void;
-  onRemove?: (() => void) | undefined;
+  onToggleSelection?: (() => void) | undefined;
+  addLabel: string;
   removeLabel: string;
 };
 
@@ -511,33 +526,44 @@ const CatalogueRow = ({
   selected,
   focused,
   onClick,
-  onRemove,
+  onToggleSelection,
+  addLabel,
   removeLabel,
 }: CatalogueRowProps) => {
   const isFirstParty = entry.author === "stella";
 
-  const actions: readonly ContextMenuAction[] = onRemove
-    ? [
-        {
-          label: removeLabel,
-          onClick: onRemove,
-          variant: "destructive",
-        },
-      ]
-    : [];
+  const actions: readonly ContextMenuAction[] =
+    onToggleSelection && selected
+      ? [
+          {
+            label: removeLabel,
+            onClick: onToggleSelection,
+            variant: "destructive",
+          },
+        ]
+      : [];
 
+  // Use div + role=button so we can nest the Add/Remove button without
+  // hitting the HTML "no button-in-button" rule.
   return (
     <ContextMenu actions={actions}>
-      <button
+      <div
         aria-pressed={focused}
         className={cn(
-          "flex items-start gap-3 rounded-lg border p-3 text-start transition-colors",
+          "flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-start transition-colors",
           focused && "border-foreground bg-accent/60 ring-foreground/20 ring-1",
           !focused && selected && "border-foreground-disabled bg-accent/20",
           !focused && !selected && "border-border hover:bg-muted/40",
         )}
         onClick={onClick}
-        type="button"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onClick();
+          }
+        }}
+        role="button"
+        tabIndex={0}
       >
         <CatalogueEntryIcon
           className="text-muted-foreground mt-0.5 shrink-0"
@@ -549,8 +575,23 @@ const CatalogueRow = ({
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">{entry.displayName}</span>
-            {selected && (
-              <CheckIcon className="text-foreground ms-auto size-4 shrink-0" />
+            {focused && onToggleSelection ? (
+              <Button
+                className="ms-auto"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleSelection();
+                }}
+                size="xs"
+                type="button"
+                variant={selected ? "destructive-outline" : "outline"}
+              >
+                {selected ? removeLabel : addLabel}
+              </Button>
+            ) : (
+              selected && (
+                <CheckIcon className="text-foreground ms-auto size-4 shrink-0" />
+              )
             )}
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
@@ -571,7 +612,7 @@ const CatalogueRow = ({
             )}
           </div>
         </div>
-      </button>
+      </div>
     </ContextMenu>
   );
 };
