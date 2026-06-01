@@ -1535,7 +1535,7 @@
     "catalogueDetailJurisdictions": "Joghatóságok",
     "catalogueDetailLicense": "Licenc",
     "catalogueDetailSetup": "Beállítás",
-    "catalogueFootnote": "Saját készségeket később közvetlenül az alkalmazásban hozhat létre, vagy <link>külső integrációt kérhet a GitHubon</link>.",
+    "catalogueFootnote": "Saját eszközöket később közvetlenül az alkalmazásban hozhat létre, vagy <link>kérheti hozzáadásukat GitHubon keresztül</link>.",
     "cataloguePartial": "{installed} telepítve, {failed} sikertelen",
     "cataloguePreviewBaseline": "Beépített",
     "cataloguePreviewCount": "{count, plural, =0 {Nincs képesség} one {# képesség} other {# képesség}}",

@@ -13,7 +13,6 @@ import { catalogueKeys } from "@/routes/_protected.settings/-queries/catalogue";
 
 import {
   FirstPartyBadge,
-  LicenseBadge,
   CostBadge,
   SetupBadge,
   RecommendedBadge,
@@ -159,7 +158,6 @@ export const CatalogueEntryCard = ({
           {isFirstParty && <FirstPartyBadge />}
           <CostBadge cost={entry.cost} />
           <SetupBadge setup={entry.setup} />
-          <LicenseBadge license={entry.license} />
           {entry.isRecommendedForOrg && <RecommendedBadge />}
         </div>
 

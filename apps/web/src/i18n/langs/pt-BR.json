@@ -1535,7 +1535,7 @@
     "catalogueDetailJurisdictions": "Jurisdições",
     "catalogueDetailLicense": "Licença",
     "catalogueDetailSetup": "Configuração",
-    "catalogueFootnote": "Você pode criar suas próprias skills mais tarde dentro do app ou <link>solicitar uma integração de terceiros no GitHub</link>.",
+    "catalogueFootnote": "Você pode criar suas próprias ferramentas mais tarde diretamente no app, ou <link>solicitar a adição via GitHub</link>.",
     "cataloguePartial": "{installed} instaladas, {failed} falharam",
     "cataloguePreviewBaseline": "Integradas",
     "cataloguePreviewCount": "{count, plural, =0 {Nenhum recurso} one {# recurso} other {# recursos}}",

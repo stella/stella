@@ -34,7 +34,6 @@ import { ContextMenu, type ContextMenuAction } from "@/components/context-menu";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import {
   FirstPartyBadge,
-  LicenseBadge,
   CostBadge,
   SetupBadge,
 } from "@/routes/_protected.settings/-components/catalogue/catalogue-badges";
@@ -558,7 +557,6 @@ const CatalogueRow = ({
             {isFirstParty && <FirstPartyBadge />}
             <CostBadge cost={entry.cost} />
             <SetupBadge setup={entry.setup} />
-            <LicenseBadge license={entry.license} />
             {entry.jurisdictions.length > 0 && (
               <div className="ms-auto flex flex-wrap items-center gap-1.5">
                 {entry.jurisdictions.map((code) => (

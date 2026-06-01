@@ -1535,7 +1535,7 @@
     "catalogueDetailJurisdictions": "Jurisdikcijos",
     "catalogueDetailLicense": "Licencija",
     "catalogueDetailSetup": "Nustatymas",
-    "catalogueFootnote": "Savo įgūdžius galite sukurti vėliau pačioje programoje arba <link>paprašyti trečiosios šalies integracijos GitHub</link>.",
+    "catalogueFootnote": "Savo įrankius galite sukurti vėliau tiesiogiai programoje arba <link>paprašyti juos pridėti per GitHub</link>.",
     "cataloguePartial": "Įdiegta {installed}, nepavyko {failed}",
     "cataloguePreviewBaseline": "Integruota",
     "cataloguePreviewCount": "{count, plural, =0 {Nėra galimybių} one {# galimybė} few {# galimybės} other {# galimybių}}",

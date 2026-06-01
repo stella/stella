@@ -1535,7 +1535,7 @@
     "catalogueDetailJurisdictions": "Jurisdikcijas",
     "catalogueDetailLicense": "Licence",
     "catalogueDetailSetup": "Iestatīšana",
-    "catalogueFootnote": "Savas prasmes vēlāk varat izveidot tieši lietotnē vai <link>pieprasīt trešās puses integrāciju GitHub</link>.",
+    "catalogueFootnote": "Savus rīkus varat izveidot vēlāk tieši lietotnē vai <link>pieprasīt to pievienošanu, izmantojot GitHub</link>.",
     "cataloguePartial": "Instalēti {installed}, neizdevās {failed}",
     "cataloguePreviewBaseline": "Iebūvēti",
     "cataloguePreviewCount": "{count, plural, =0 {Nav iespēju} one {# iespēja} other {# iespējas}}",

@@ -1538,7 +1538,7 @@ type Messages = {
     "catalogueDetailJurisdictions": "Jurisdictions";
     "catalogueDetailLicense": "License";
     "catalogueDetailSetup": "Setup";
-    "catalogueFootnote": "You can write your own skills later in the app, or <link>request a third-party integration on GitHub</link>.";
+    "catalogueFootnote": "You can build your own tools later directly in the app, or <link>request adding one via GitHub</link>.";
     "cataloguePartial": "Installed {installed}, {failed} failed";
     "cataloguePreviewBaseline": "Built-in";
     "cataloguePreviewCount": "{count, plural, =0 {No capabilities} one {# capability} other {# capabilities}}";

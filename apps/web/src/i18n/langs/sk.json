@@ -1535,7 +1535,7 @@
     "catalogueDetailJurisdictions": "Jurisdikcie",
     "catalogueDetailLicense": "Licencia",
     "catalogueDetailSetup": "Nastavenie",
-    "catalogueFootnote": "Vlastné zručnosti môžete vytvoriť neskôr priamo v aplikácii, alebo si <link>vyžiadať integráciu tretej strany na GitHube</link>.",
+    "catalogueFootnote": "Vlastné nástroje môžete vytvoriť neskôr priamo v aplikácii, alebo <link>požiadať o ich pridanie cez GitHub</link>.",
     "cataloguePartial": "Nainštalované {installed}, zlyhalo {failed}",
     "cataloguePreviewBaseline": "Vstavané",
     "cataloguePreviewCount": "{count, plural, =0 {Žiadne schopnosti} one {# schopnosť} few {# schopnosti} other {# schopností}}",
