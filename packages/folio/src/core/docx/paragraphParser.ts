@@ -1923,7 +1923,21 @@ export function parseParagraph(
         const foldedMarkerSuffix: string[] = [];
         const filteredContent: ParagraphContent[] = [];
         let dropNextTab = false;
+        // Word inserts paragraph-mark / bookmark / comment-range metadata
+        // between a LISTNUM field and its trailing tab. Skip those when
+        // hunting for the tab to drop, otherwise `dropNextTab` clears on
+        // the metadata node and the tab survives, breaking alignment.
+        const isMetadataContent = (content: ParagraphContent): boolean =>
+          content.type === "bookmarkStart" ||
+          content.type === "bookmarkEnd" ||
+          content.type === "commentRangeStart" ||
+          content.type === "commentRangeEnd" ||
+          content.type === "commentReference";
         for (const content of paragraph.content) {
+          if (dropNextTab && isMetadataContent(content)) {
+            filteredContent.push(content);
+            continue;
+          }
           if (dropNextTab) {
             dropNextTab = false;
             if (
