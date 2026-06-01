@@ -2,6 +2,11 @@
  * Tracks external file drags into the page, exposing how many files are
  * being dragged and their MIME types.
  *
+ * Why this exists: Pragmatic DnD's `canDrop` callback does not surface
+ * per-file MIME types or counts on its `source` argument, so we read
+ * `dataTransfer.items` ourselves off the raw DOM `dragenter` event and
+ * stash the result where `canDrop` can read it synchronously.
+ *
  * Notes:
  *   - Window listeners (dragenter, dragend, drop) update `current`.
  *     `dragenter` bubbles up from every nested element, so it rewrites
@@ -46,11 +51,17 @@ const reset = () => {
   current = null;
 };
 
+// Capture phase: guarantees these run before any descendant or other
+// window-level bubble-phase listener (including Pragmatic DnD's), so
+// `current` is populated before any `canDrop` reads it. Without this,
+// ordering would depend on listener registration order.
+const LISTENER_OPTIONS = { capture: true } as const;
+
 const attach = () => {
   if (mountCount === 0) {
-    window.addEventListener("dragenter", onDragEnter);
-    window.addEventListener("dragend", reset);
-    window.addEventListener("drop", reset);
+    window.addEventListener("dragenter", onDragEnter, LISTENER_OPTIONS);
+    window.addEventListener("dragend", reset, LISTENER_OPTIONS);
+    window.addEventListener("drop", reset, LISTENER_OPTIONS);
   }
   mountCount++;
 };
@@ -58,9 +69,9 @@ const attach = () => {
 const detach = () => {
   mountCount--;
   if (mountCount === 0) {
-    window.removeEventListener("dragenter", onDragEnter);
-    window.removeEventListener("dragend", reset);
-    window.removeEventListener("drop", reset);
+    window.removeEventListener("dragenter", onDragEnter, LISTENER_OPTIONS);
+    window.removeEventListener("dragend", reset, LISTENER_OPTIONS);
+    window.removeEventListener("drop", reset, LISTENER_OPTIONS);
     current = null;
   }
 };
