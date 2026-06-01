@@ -7,6 +7,10 @@
 
 import type { Command, EditorState } from "prosemirror-state";
 
+import {
+  makeRevisionInfo,
+  SUGGESTION_META,
+} from "../../plugins/suggestionMode";
 import { createExtension } from "../create";
 import { goToNextCell, goToPrevCell } from "../nodes/TableExtension";
 import { Priority } from "../types";
@@ -24,6 +28,31 @@ function chainCommands(...commands: Command[]): Command {
       }
     }
     return false;
+  };
+}
+
+// ============================================================================
+// TRACKED PARAGRAPH-PROPERTY CHANGE (suggesting mode)
+// ============================================================================
+
+function appendParagraphPropertyChange(
+  attrs: Record<string, unknown>,
+  previousFormatting: Record<string, unknown>,
+  rev: { id: number; author: string; date: string },
+): Record<string, unknown> {
+  const existing = Array.isArray(attrs._propertyChanges)
+    ? attrs._propertyChanges
+    : [];
+  return {
+    ...attrs,
+    _propertyChanges: [
+      ...existing,
+      {
+        type: "paragraphPropertyChange",
+        info: { id: rev.id, author: rev.author, date: rev.date },
+        previousFormatting,
+      },
+    ],
   };
 }
 
@@ -50,40 +79,59 @@ function toggleList(numId: number): Command {
     let tr = state.tr;
     const seen = new Set<number>();
 
+    const rev = makeRevisionInfo(state);
+
     state.doc.nodesBetween($from.pos, $to.pos, (node, pos) => {
       if (node.type.name === "paragraph" && !seen.has(pos)) {
         seen.add(pos);
 
+        const priorNumPr = node.attrs["numPr"];
+        let nextAttrs: Record<string, unknown>;
+
         if (isInSameList) {
-          tr = tr.setNodeMarkup(pos, undefined, {
+          nextAttrs = {
             ...node.attrs,
             numPr: null,
             listIsBullet: null,
             listNumFmt: null,
             listMarker: null,
-          });
+          };
         } else {
           const isBullet = numId === 1;
-          tr = tr.setNodeMarkup(pos, undefined, {
+          nextAttrs = {
             ...node.attrs,
             numPr: { numId, ilvl: node.attrs["numPr"]?.ilvl || 0 },
             listIsBullet: isBullet,
             listNumFmt: isBullet ? null : "decimal",
             listMarker: null,
-          });
+          };
         }
+
+        if (rev) {
+          nextAttrs = appendParagraphPropertyChange(
+            nextAttrs,
+            { numPr: priorNumPr ?? null },
+            rev,
+          );
+        }
+
+        tr = tr.setNodeMarkup(pos, undefined, nextAttrs);
       }
     });
+
+    if (rev) {
+      tr.setMeta(SUGGESTION_META, true);
+    }
 
     dispatch(tr.scrollIntoView());
     return true;
   };
 }
 
-const toggleBulletList: Command = (state, dispatch) =>
+export const toggleBulletList: Command = (state, dispatch) =>
   toggleList(1)(state, dispatch);
 
-const toggleNumberedList: Command = (state, dispatch) =>
+export const toggleNumberedList: Command = (state, dispatch) =>
   toggleList(2)(state, dispatch);
 
 const increaseListLevel: Command = (state, dispatch) => {

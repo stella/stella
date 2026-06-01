@@ -1288,6 +1288,19 @@ function convertParagraphAttrs(
       numPr.ilvl = pmAttrs.numPr.ilvl;
     }
     attrs.numPr = numPr;
+
+    // List-marker tracked-change state
+    const pPrChange = pmAttrs._propertyChanges as
+      | { previousFormatting?: { numPr?: unknown } }[]
+      | null;
+    const numberingAdded =
+      Array.isArray(pPrChange) &&
+      pPrChange.some((c) => !c.previousFormatting?.numPr);
+    if (pmAttrs.pPrMark?.kind === "del") {
+      attrs.listMarkerRevision = "del";
+    } else if (pmAttrs.pPrMark?.kind === "ins" || numberingAdded) {
+      attrs.listMarkerRevision = "ins";
+    }
   }
   const resolvedMarker = listCounters
     ? computeListMarker(

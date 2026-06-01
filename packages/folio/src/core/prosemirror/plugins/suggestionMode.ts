@@ -11,6 +11,7 @@
  *   (retracting your own suggestion)
  */
 
+import { isHistoryTransaction } from "prosemirror-history";
 import type { Node as PMNode, MarkType } from "prosemirror-model";
 import { Plugin, PluginKey, TextSelection } from "prosemirror-state";
 import type { EditorState, Transaction } from "prosemirror-state";
@@ -22,7 +23,8 @@ import { splitBlockClearBorders } from "../extensions/features/BaseKeymapExtensi
 export const suggestionModeKey = new PluginKey<SuggestionModeState>(
   "suggestionMode",
 );
-const SUGGESTION_META = "suggestionModeApplied";
+export const SUGGESTION_META = "suggestionModeApplied";
+export const SUGGESTION_BYPASS_META = "suggestionModeBypass";
 
 type SuggestionModeState = {
   active: boolean;
@@ -42,6 +44,21 @@ function makeMarkAttrs(pluginState: SuggestionModeState): MarkAttrs {
     revisionId: nextRevisionId++,
     author: pluginState.author,
     date: new Date().toISOString(),
+  };
+}
+
+export function makeRevisionInfo(
+  state: EditorState,
+): { id: number; author: string; date: string } | null {
+  const pluginState = suggestionModeKey.getState(state);
+  if (!pluginState?.active) {
+    return null;
+  }
+  const attrs = makeMarkAttrs(pluginState);
+  return {
+    id: attrs.revisionId,
+    author: attrs.author,
+    date: attrs.date,
   };
 }
 
@@ -239,7 +256,7 @@ function applySuggestionInsert(
  * If the source paragraph already carries a `pPrMark`, leave it alone — a
  * prior author's revision must not be silently overwritten.
  */
-function handleSuggestionEnter(
+export function handleSuggestionEnter(
   view: EditorView,
   pluginState: SuggestionModeState,
 ): boolean {
@@ -604,7 +621,11 @@ export function createSuggestionModePlugin(
       }
 
       const userTr = transactions.find(
-        (tr) => tr.docChanged && !tr.getMeta(SUGGESTION_META),
+        (tr) =>
+          tr.docChanged &&
+          !tr.getMeta(SUGGESTION_META) &&
+          !tr.getMeta(SUGGESTION_BYPASS_META) &&
+          !isHistoryTransaction(tr),
       );
       if (!userTr) {
         return null;

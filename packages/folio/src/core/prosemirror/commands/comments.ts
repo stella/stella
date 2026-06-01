@@ -106,6 +106,41 @@ function resolveChange(
           if (op) {
             pPrMarkOps.push(op);
           }
+
+          // Process paragraph property changes (w:pPrChange)
+          if (
+            Array.isArray(node.attrs._propertyChanges) &&
+            node.attrs._propertyChanges.length > 0
+          ) {
+            const matches = node.attrs._propertyChanges.filter(
+              (c) =>
+                revisionSet === null || (c.info && revisionSet.has(c.info.id)),
+            );
+            if (matches.length > 0) {
+              const remaining = node.attrs._propertyChanges.filter(
+                (c) =>
+                  revisionSet !== null &&
+                  (!c.info || !revisionSet.has(c.info.id)),
+              );
+              const nextAttrs = {
+                ...node.attrs,
+                _propertyChanges: remaining.length > 0 ? remaining : null,
+              };
+              if (mode === "reject") {
+                for (const change of matches.toReversed()) {
+                  if (change.previousFormatting) {
+                    for (const [key, val] of Object.entries(
+                      change.previousFormatting,
+                    )) {
+                      nextAttrs[key] = val;
+                    }
+                  }
+                }
+              }
+              tr.setNodeMarkup(pos, undefined, nextAttrs);
+            }
+          }
+
           return true;
         }
         // Text AND inline atoms (image, shape, hardBreak, tab) can carry

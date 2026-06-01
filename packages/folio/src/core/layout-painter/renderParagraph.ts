@@ -2303,6 +2303,7 @@ export function renderParagraphFragment(
         doc,
         markerFontFamily,
         markerFontSize,
+        block.attrs.listMarkerRevision,
       );
       lineEl.prepend(marker);
     }
@@ -2328,6 +2329,7 @@ function renderListMarker(
   doc: Document,
   fontFamily?: string,
   fontSize?: number,
+  revision?: "ins" | "del",
 ): HTMLElement {
   const span = doc.createElement("span");
   span.className = "layout-list-marker";
@@ -2348,6 +2350,13 @@ function renderListMarker(
   span.style.boxSizing = "border-box";
   if (minWidth > 0) {
     span.style.minWidth = `${minWidth}px`;
+  }
+
+  if (revision === "ins") {
+    span.style.color = "#2e7d32";
+  } else if (revision === "del") {
+    span.style.color = "#c62828";
+    span.style.textDecoration = "line-through";
   }
 
   return span;
