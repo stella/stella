@@ -573,7 +573,10 @@ const CatalogueRow = ({
           slug={entry.slug}
         />
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <div className="flex items-center gap-2">
+          {/* Title row reserves the button-sized height so the
+              CheckIcon ↔ Button swap on focus doesn't reflow the
+              card and nudge neighbours. */}
+          <div className="flex min-h-7 items-center gap-2 sm:min-h-6">
             <span className="text-sm font-medium">{entry.displayName}</span>
             {focused && onToggleSelection ? (
               <Button
